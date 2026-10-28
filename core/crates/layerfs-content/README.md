@@ -105,8 +105,9 @@ enabled or disabled changes no product work and no result.
 ## Checks
 
 ```sh
-cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-content --tests
-cargo +1.96.0 clippy --manifest-path core/Cargo.toml --workspace --locked --all-targets -- -D warnings
+cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-content --tests --no-run
+timeout 120 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-content --tests
+cargo +1.85.1 clippy --manifest-path Cargo.toml --workspace --locked --all-targets -- -D warnings
 ```
 
 External targets: `object_identity`, `file_complete`, `file_read`, `streaming`,

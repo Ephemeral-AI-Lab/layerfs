@@ -1,1 +1,0 @@
-{"arm":"sandbox-disk","dir":"ftruncate","root":"/tmp","ms":78.473,"exitCode":0,"truncated":false,"tap":"sandbox-disk-ftruncate-1792450026450.tap","stdout_bytes":162,"stderr":"","started":["ftruncate/11.t"],"deferred":[]}

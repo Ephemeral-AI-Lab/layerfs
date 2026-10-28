@@ -62,19 +62,25 @@ def register(args):
     source = Path(args.worktree).resolve()
     if Path(git(source, "rev-parse", "--show-toplevel").decode().strip()).resolve() != source:
         raise Refused("Select a Git checkout root")
-    if not (source / "core/Cargo.toml").is_file():
-        raise Refused("Worktree has no active core manifest")
+    if not (source / "Cargo.toml").is_file():
+        raise Refused("Worktree has no active workspace manifest")
     state = Path(args.root).expanduser().resolve() / identity(source)
     if overlaps(state, source):
         raise Refused("Resource state must be outside the worktree")
     images = {k: image_id(getattr(args, k + "_image")) for k in ("build", "runtime", "sandbox")}
-    record = {"version": 1, "id": identity(source), "owner": args.owner,
-              "worktree": str(source), "state": str(state), "toolchain": TOOLCHAIN,
-              "macos_target": str(source / "core/target"),
-              "macos_cargo_home": str(state / "cargo-home-macos"),
-              "linux_target_volume": "lfs-dev-" + identity(source) + "-target",
-              "linux_cargo_volume": "lfs-dev-" + identity(source) + "-cargo",
-              "images": images}
+    record = {
+        "version": 1,
+        "id": identity(source),
+        "owner": args.owner,
+        "worktree": str(source),
+        "state": str(state),
+        "toolchain": TOOLCHAIN,
+        "macos_target": str(source / "target"),
+        "macos_cargo_home": str(state / "cargo-home-macos"),
+        "linux_target_volume": "lfs-dev-" + identity(source) + "-target",
+        "linux_cargo_volume": "lfs-dev-" + identity(source) + "-cargo",
+        "images": images,
+    }
     path = state / "resources.json"
     if path.exists():
         if load(path) != record:
@@ -108,10 +114,20 @@ def lease(record, platform):
 
 def volume(record, key):
     name = record[key]
-    names = run(["docker", "volume", "ls", "--format", "{{.Name}}"] ).stdout.decode().splitlines()
+    names = run(["docker", "volume", "ls", "--format", "{{.Name}}"]).stdout.decode().splitlines()
     if name not in names:
-        run(["docker", "volume", "create", "--label", f"{LABEL}={record['id']}",
-             "--label", "layerfs.dev.role=" + key, name])
+        run(
+            [
+                "docker",
+                "volume",
+                "create",
+                "--label",
+                f"{LABEL}={record['id']}",
+                "--label",
+                "layerfs.dev.role=" + key,
+                name,
+            ]
+        )
     info = json.loads(run(["docker", "volume", "inspect", name]).stdout)[0]
     labels = info.get("Labels") or {}
     if labels.get(LABEL) != record["id"] or labels.get("layerfs.dev.role") != key or info["Driver"] != "local":
@@ -134,9 +150,8 @@ def environment(record, platform):
     if platform == "macos":
         if os.uname().sysname != "Darwin":
             raise Refused("macos builds require a macOS host")
-        return {**os.environ, "CARGO_HOME": record["macos_cargo_home"],
-                "CARGO_TARGET_DIR": record["macos_target"]}
-    return {"CARGO_HOME": "/cargo-home", "CARGO_TARGET_DIR": "/work/core/target"}
+        return {**os.environ, "CARGO_HOME": record["macos_cargo_home"], "CARGO_TARGET_DIR": record["macos_target"]}
+    return {"CARGO_HOME": "/cargo-home", "CARGO_TARGET_DIR": "/work/target"}
 
 
 def docker_build(record, command, extra=(), network="none"):
@@ -144,13 +159,31 @@ def docker_build(record, command, extra=(), network="none"):
         volume(record, key)
     Path(record["macos_target"]).mkdir(parents=True, exist_ok=True)
     env = environment(record, "linux")
-    return ["docker", "run", "--rm", "--pull", "never", "--network", network,
-            "--label", f"{LABEL}={record['id']}",
-            "--mount", f"type=bind,src={record['worktree']},dst=/work,readonly",
-            "--mount", f"type=volume,src={record['linux_target_volume']},dst=/work/core/target,volume-nocopy",
-            "--mount", f"type=volume,src={record['linux_cargo_volume']},dst=/cargo-home,volume-nocopy",
-            *[v for k, value in env.items() for v in ("-e", k + "=" + value)],
-            *extra, "-w", "/work", "--entrypoint", command[0], record["images"]["build"], *command[1:]]
+    return [
+        "docker",
+        "run",
+        "--rm",
+        "--pull",
+        "never",
+        "--network",
+        network,
+        "--label",
+        f"{LABEL}={record['id']}",
+        "--mount",
+        f"type=bind,src={record['worktree']},dst=/work,readonly",
+        "--mount",
+        f"type=volume,src={record['linux_target_volume']},dst=/work/target,volume-nocopy",
+        "--mount",
+        f"type=volume,src={record['linux_cargo_volume']},dst=/cargo-home,volume-nocopy",
+        *[v for k, value in env.items() for v in ("-e", k + "=" + value)],
+        *extra,
+        "-w",
+        "/work",
+        "--entrypoint",
+        command[0],
+        record["images"]["build"],
+        *command[1:],
+    ]
 
 
 def execute(command, cwd, env=None, timeout=None, log=None):
@@ -163,9 +196,10 @@ def execute(command, cwd, env=None, timeout=None, log=None):
         write(Path(log).parent / "container.json", {"id": container, "create": create})
         command = ["docker", "start", "--attach", container]
     try:
-        with (Path(log).open("wb") if log else open(os.devnull, "wb")) as stream:
-            process = subprocess.Popen(command, cwd=cwd, env=env, stdout=stream, stderr=subprocess.STDOUT,
-                                       start_new_session=True)
+        with Path(log).open("wb") if log else open(os.devnull, "wb") as stream:
+            process = subprocess.Popen(
+                command, cwd=cwd, env=env, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True
+            )
             try:
                 status = process.wait(timeout=timeout)
             except BaseException:
@@ -188,8 +222,21 @@ def execute(command, cwd, env=None, timeout=None, log=None):
 
 def inputs(record):
     root = Path(record["worktree"])
-    selected = [".cargo", "core/Cargo.toml", "core/Cargo.lock", "core/crates", "core/vendor",
-                "sdk/js/src", "sdk/js/operator", "sdk/js/test", "sdk/js/native", "sdk/js/package.json"]
+    selected = [
+        ".cargo",
+        "Cargo.toml",
+        "Cargo.lock",
+        "core/crates",
+        "engine/vendor",
+        "engine/crates",
+        "api/agent",
+        "api/backend",
+        "api/runtime",
+        "api/package.json",
+        "api/cli/src",
+        "api/cli/test",
+        "api/cli/package.json",
+    ]
     result = {}
     for relative in selected:
         source = root / relative
@@ -200,16 +247,20 @@ def inputs(record):
             for base, dirs, files in os.walk(source):
                 if any((Path(base) / d).is_symlink() for d in dirs):
                     raise Refused("Source directory symlinks need explicit handling: " + base)
-                dirs[:] = [d for d in dirs if not d.startswith("target")
-                           and d not in {"node_modules", ".git", "__pycache__"}]
+                dirs[:] = [
+                    d for d in dirs if not d.startswith("target") and d not in {"node_modules", ".git", "__pycache__"}
+                ]
                 paths.extend(Path(base) / name for name in sorted(files))
         for path in paths:
             if path.is_symlink():
                 raise Refused("Build inputs require explicit handling of source symlinks: " + str(path))
             result[str(path.relative_to(root))] = digest(path)
     encoded = json.dumps(result, sort_keys=True).encode()
-    return {"head": git(root, "rev-parse", "HEAD").decode().strip(),
-            "files": result, "sha256": hashlib.sha256(encoded).hexdigest()}
+    return {
+        "head": git(root, "rev-parse", "HEAD").decode().strip(),
+        "files": result,
+        "sha256": hashlib.sha256(encoded).hexdigest(),
+    }
 
 
 def copy_dependencies(seed, destination):

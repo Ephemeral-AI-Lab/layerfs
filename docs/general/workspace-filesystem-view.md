@@ -155,9 +155,9 @@ before the daemon is contacted.
 ## 3. Global Store ownership belongs to layerfs-persistence
 
 The global Store provider comes from
-[`layerfs-persistence`](../../core/crates/layerfs-persistence/src/store/open.rs).
+[`layerfs-persistence`](../../engine/crates/layerfs-persistence/src/store/open.rs).
 The host application selects
-[`PersistenceConfig`](../../core/crates/layerfs-persistence/src/store/config.rs) and
+[`PersistenceConfig`](../../engine/crates/layerfs-persistence/src/store/config.rs) and
 creates or opens `Handles`. Those handles supply storage and history providers
 over one combined host database.
 

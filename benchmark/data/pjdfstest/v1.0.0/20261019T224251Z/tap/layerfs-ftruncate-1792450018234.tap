@@ -1,5 +1,0 @@
-### group dir=ftruncate cwd=/workspaces/1/pjd/ftruncate fs=fuse uid=501:20
-### begin ftruncate/11.t
-1..1
-ok 1
-### end ftruncate/11.t exit=0 ms=4 quick_exit=1 residue=0

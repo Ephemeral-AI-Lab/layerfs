@@ -40,14 +40,10 @@ TOOLCHAIN = "+1.85.1"
 
 def run(command, cwd):
     started = time.monotonic()
-    result = subprocess.run(
-        command, cwd=cwd, capture_output=True, text=True, timeout=120
-    )
+    result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, timeout=120)
     wall = time.monotonic() - started
     if result.returncode != 0:
-        raise SystemExit(
-            f"command failed ({result.returncode}): {' '.join(command)}\n{result.stderr}"
-        )
+        raise SystemExit(f"command failed ({result.returncode}): {' '.join(command)}\n{result.stderr}")
     return result.stdout, wall
 
 
@@ -79,19 +75,16 @@ def main():
     arguments = parser.parse_args()
     if not (ROOT / "Cargo.toml").is_file():
         raise SystemExit(
-            "the reference arm's root workspace is retired (R9c); "
-            "run this driver at local tag reference-v0.1.6-final"
+            "the reference arm's root workspace is retired (R9c); run this driver at local tag reference-v0.1.6-final"
         )
     output = pathlib.Path(arguments.output)
     if output.exists():
         raise SystemExit(f"refusing to reuse an existing output directory: {output}")
     output.mkdir(parents=True)
 
-    commit = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-    ).strip()
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(
-        ["git", "status", "--porcelain", "--", "core/crates", "crates"],
+        ["git", "status", "--porcelain", "--", "core/crates", "engine/crates", "api", "crates"],
         cwd=ROOT,
         text=True,
     ).strip()
@@ -112,31 +105,35 @@ def main():
             ),
             (
                 "candidate",
-                "core/Cargo.toml",
+                "Cargo.toml",
                 "layerfs-content",
                 "filesystem_primitives_candidate",
             ),
         ):
-            command = [
-                "cargo",
-                TOOLCHAIN,
-                "run",
-                "--locked",
-                "--manifest-path",
-                manifest,
-                "-p",
-                package,
-                "--example",
-                example,
-            ] + build_flags + [
-                "--",
-                "--files",
-                str(files),
-                "--changes",
-                str(changes),
-                "--samples",
-                "1",
-            ]
+            command = (
+                [
+                    "cargo",
+                    TOOLCHAIN,
+                    "run",
+                    "--locked",
+                    "--manifest-path",
+                    manifest,
+                    "-p",
+                    package,
+                    "--example",
+                    example,
+                ]
+                + build_flags
+                + [
+                    "--",
+                    "--files",
+                    str(files),
+                    "--changes",
+                    str(changes),
+                    "--samples",
+                    "1",
+                ]
+            )
             stdout, wall = run(command, ROOT)
             fields = parse(stdout)
             row[arm] = {"fields": fields, "wall_s": round(wall, 3), "command": command}
@@ -150,9 +147,7 @@ def main():
             "root",
         )
         mismatch = [
-            key
-            for key in identity_keys
-            if row["reference"]["fields"].get(key) != row["candidate"]["fields"].get(key)
+            key for key in identity_keys if row["reference"]["fields"].get(key) != row["candidate"]["fields"].get(key)
         ]
         if mismatch:
             row["identity"] = "MISMATCH"
@@ -163,10 +158,7 @@ def main():
             reference_ns = row["reference"]["fields"]["elapsed_ns"]
             candidate_ns = row["candidate"]["fields"]["elapsed_ns"]
             row["candidate_over_reference"] = round(candidate_ns / reference_ns, 6)
-            print(
-                f"case {name} identity MATCH candidate_over_reference "
-                f"{row['candidate_over_reference']}"
-            )
+            print(f"case {name} identity MATCH candidate_over_reference {row['candidate_over_reference']}")
         receipts.append(row)
 
     sealed = {
@@ -174,8 +166,7 @@ def main():
         "working_tree_dirty": bool(dirty),
         "profile": arguments.profile,
         "toolchain": TOOLCHAIN,
-        "scope": "component comparison: sorted directory merge, sorted inline-inode "
-        "merge and root encoding",
+        "scope": "component comparison: sorted directory merge, sorted inline-inode merge and root encoding",
         "excluded_on_both_arms": [
             "input normalization",
             "deriving final reference counts",
@@ -183,8 +174,7 @@ def main():
             "reference ordering preparation",
             "physical persistence",
         ],
-        "cache_state": "warm in-process fixture; the base tree is built in the arm "
-        "process before the timed region",
+        "cache_state": "warm in-process fixture; the base tree is built in the arm process before the timed region",
         "samples": "one per case per arm",
         "cases": receipts,
     }

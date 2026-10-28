@@ -1,0 +1,25 @@
+[package]
+name = "layerfs-project"
+description = "Namespace construction and Store Init/seal/install composition."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-history = { path = "../../../core/crates/layerfs-history", default-features = false }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+
+layerfs-persistence = { path = "../layerfs-persistence" }
+layerfs-bridge = { path = "../layerfs-bridge" }
+
+[dev-dependencies]
+sha2 = "=0.11.0"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# The audited host-identity probe; CreateFileW is additionally gated on
+# Win32_Security by its SECURITY_ATTRIBUTES parameter. windows-sys is
+# already in the locked graph.
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem"] }

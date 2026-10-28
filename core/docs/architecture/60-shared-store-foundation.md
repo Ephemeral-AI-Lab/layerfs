@@ -12,7 +12,7 @@ logical history, unique canonical locator lengths, complete pack lengths and
 metadata-domain bodies, maintained inside original insert/publication transactions.
 Read statistics add occupied SQL-page overhead without an object scan. `file` is
 logical SQLite pages including pages in WAL, not extra WAL allocation. Definitions
-and the passed retention screen are in [the SDK guide](../../../sdk/js/README.md)
+and the passed retention screen are in [the backend guide](../../../api/docs/backend.md#storage-figures)
 and [counter receipt](../issues/327/COUNTER-SCREEN-20261015.md).
 
 The macOS 3.51.0 component verifier observed CannotOpen on native read-only open

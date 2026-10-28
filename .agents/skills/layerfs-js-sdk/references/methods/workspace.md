@@ -3,7 +3,8 @@
 > **Status:** Current general guide. Part of the `layerfs-js-sdk` skill. Result
 > examples were captured live in issue #334 Phase A at `b30e4fb8f` through the
 > older per-Sandbox calls; the Workspace API (#373) returns the same result
-> shapes. Opaque IDs are shortened.
+> shapes. Opaque IDs are shortened. Mounting into a chosen Sandbox, and `status`
+> moving to `@layerfs/backend`, are #428's.
 
 A Workspace is a complete, writable view of a Branch where ordinary commands run.
 **Use a Workspace for Bash commands** (install, build, test, run, generators, changes
@@ -16,15 +17,16 @@ a mounted Workspace of the Branch `"work"`, as `mount` returned it.
 
 - A Workspace is `{ sandbox, path }`: the number of the Sandbox that holds it and its
   path there. It persists: any later process with the same `LAYERFS_HOME` can use it.
-- **LayerFS places Workspaces.** A project's Sandboxes are numbered `1`, `2`, …; each is
-  a container with one LayerFS daemon and holds up to 16 Workspaces, of any Branches of
-  the project. Each runs one image, and one project's Sandboxes may run different
-  images. `mount` takes the lowest-numbered running Sandbox of the mount's image with
-  room and starts the next one, on that image, when every such one is full. You never
-  create, pick or close a Sandbox.
+- **A mount names its Sandbox; there is no placement.** A project's Sandboxes are
+  numbered `1`, `2`, …; each is a container with one LayerFS daemon and holds up to 16
+  Workspaces, of any Branches of the project. Each runs one image, set when
+  `sandbox.create()` starts it; one project's Sandboxes may run different images.
+  `sandbox.create()` is the only call that starts a Sandbox; `mount(sandbox, branch)`
+  never does ([sandbox](sandbox.md)).
 - **A Sandbox closes itself when idle:** its daemon ends two minutes after its last
-  Workspace is unmounted, with no call in flight. The next mount or
-  `operator.sandbox.list()` reclaims it, and its number is used again.
+  Workspace is unmounted, with no call in flight. A mount there is then refused
+  `NoSuchSandbox`; the next `sandbox.create()` reclaims it, and its number is used
+  again.
 - Keep each Workspace's operations sequential.
 - No restart recovery: if the container dies, its Workspaces are gone. Stop and report.
 
@@ -35,7 +37,7 @@ in more detail:
 
 - **Each mount is a new Workspace.** `mount` returns a fresh `{ sandbox, path }` (such
   as `{ sandbox: "1", path: "/workspaces/3" }`; paths are numbered per Sandbox). Pass it
-  to `exec`, `status`, `commit` and `unmount`. Two mounts of one Branch are two separate
+  to `exec`, `commit` and `unmount`. Two mounts of one Branch are two separate
   Workspaces, each with its own uncommitted changes. Keep the Workspace from the result;
   never build one yourself, and never use one after its unmount.
 - **A Workspace per Bash call is the default:** mount, exec, commit, unmount. Mounting
@@ -55,7 +57,7 @@ in more detail:
 One Bash call as one Workspace:
 
 ```js
-const ws = await layerfs.workspace.mount("work");                  // a NEW Workspace
+const ws = await layerfs.workspace.mount(sandbox, "work");         // a NEW Workspace in your Sandbox
 try {
   const run = await layerfs.workspace.exec(ws, "timeout 110 npm test 2>&1", "step 12");
   await layerfs.workspace.commit(ws, `step 12: npm test (exit ${run.exitCode})`);
@@ -64,32 +66,34 @@ try {
 }
 ```
 
-## `workspace.mount(branch, options?)`
+## `workspace.mount(sandbox, branch)`
 
-Mounts a Workspace showing the Branch head at this moment, in a Sandbox LayerFS
-places it in. Doesn't scan or copy the tree.
+Mounts a Workspace showing the Branch head at this moment, in the running Sandbox
+`sandbox` names, and nowhere else: it never starts a Sandbox. Doesn't scan or copy the
+tree.
 
 | Arg | Type | Required | Meaning |
 | --- | --- | --- | --- |
+| `sandbox` | string | yes | A running Sandbox's number, such as `"1"` from `sandbox.create()` or `project.list_sandboxes()`. The Sandbox fixes the image |
 | `branch` | string | yes | Branch to mount. Not `main`: fork a Branch from it |
-| `options.image` | string | no | The Sandbox image, an exact local digest `sha256:<64 hex>`; default `LAYERFS_IMAGE`. Only a Sandbox of this image is used |
 
 **Returns:** the Workspace, `{ sandbox, path, image }`, such as
-`{ sandbox: "1", path: "/workspaces/1", image: "sha256:…" }`. Pass it to `exec`, `status`, `commit` and
-`unmount`; `status` tells which Commit it shows.
+`{ sandbox: "1", path: "/workspaces/1", image: "sha256:…" }`. Pass it to `exec`, `commit` and
+`unmount`; the backend's `workspace.status` tells which Commit it shows (the
+`layerfs-sdk-observe` skill).
 
 **Refusals**
 
 | Code | Meaning | Do |
 | --- | --- | --- |
 | `NoSuchBranch` | No such Branch, or `main` | Fork first |
-| `Busy` | Another process held the project's placement lock for 60 seconds | Wait, then mount again |
-| `InvalidInput` | A missing `LAYERFS_*` deployment variable, or an image that isn't a digest | Check the environment ([SKILL.md](../../SKILL.md#connect-to-a-project)) |
-| `Failed` | Starting a new Sandbox failed. With `detail.removed: true` its container is already removed and nothing of it is left, and `detail.log` holds its daemon's last log lines (also in the message); otherwise it names what stays | Stop and report the message |
-| `Unknown` | An earlier Sandbox start of this project has an unknown outcome; every start is refused until it is resolved | Stop and report the message, which says what a person must remove; don't remove or retry anything yourself |
+| `InvalidInput` | A missing or bad `sandbox` or `branch`, or an options object (there are none) | Pass `mount(sandbox, branch)` with a Sandbox number |
+| `NoSuchSandbox` | The Sandbox isn't running (it closed itself, or was closed). The message says what to do | `sandbox.create()` a new one and mount there |
+| `Capacity` | The Sandbox already holds 16 Workspaces. The message says what to do | `sandbox.create()` a new one and mount there, or `sandbox.list_workspaces(sandbox)` and `workspace.unmount` the ones you're done with |
+| `Failed` | The mount failed in the daemon | Stop and report the message |
 
 ```js
-const ws = await layerfs.workspace.mount("work");   // a NEW Workspace: { sandbox: "1", path: "/workspaces/1" }; never hard-code it
+const ws = await layerfs.workspace.mount("1", "work");   // a NEW Workspace: { sandbox: "1", path: "/workspaces/1" }; never hard-code it
 ```
 
 **Notes:** every call mounts a new Workspace, even on the same Branch (see
@@ -193,44 +197,13 @@ const run = await layerfs.workspace.exec(ws, `printf '%s' ${b64} | base64 -d > s
 if (run.exitCode !== 0) console.log(run.stderr);
 ```
 
-## `workspace.status(ws)`
+## Checking a Workspace
 
-Describes a mounted Workspace without reading the Store.
-
-**Returns**
-
-| Field | Meaning |
-| --- | --- |
-| `base` | Commit the Workspace is based on |
-| `branchHead` | The Branch's current head |
-| `headMovedSinceMount` | True if a Commit now would merge first |
-| `activity` | The daemon's activity state for the Workspace |
-| `overlay` | `{ inodes, entries, pendingMerge }`: changed files and directory entries |
-| `branch` | Branch name |
-
-**Refusals:** `NotMounted`, `NoSuchSandbox`.
-
-```js
-// ws: from workspace.mount. Every mount creates a new Workspace; never hard-code one.
-const s = await layerfs.workspace.status(ws);
-if (s.headMovedSinceMount) console.log("the next commit will merge with", s.branchHead);
-```
-```json
-{
-  "kind": "ok",
-  "base": "123648aa594a…",
-  "baseLayer": "32a35edb1f9f…",
-  "branchHead": "123648aa594a…",
-  "headMovedSinceMount": false,
-  "activity": "Idle",
-  "overlay": {
-    "inodes": 0,
-    "entries": 0,
-    "pendingMerge": false
-  },
-  "branch": "work"
-}
-```
+`status` moved to `@layerfs/backend` as `backend.daemon.workspace.status(ws)`: base
+Commit, whether the Branch head moved since mount, activity and overlay counts. See the
+`layerfs-sdk-observe` skill's backend reference, and Scenario 5 of
+[resolving conflicts](../rules/conflicts.md) for its one use in an agent's flow.
+Background processes (`backend.daemon.process.start`, `list`, `cancel`) are there too.
 
 ## `workspace.commit(ws, message?, force?)`
 
@@ -255,7 +228,7 @@ moved since the mount, it merges first. The Workspace stays mounted.
 | Code | Meaning | Do |
 | --- | --- | --- |
 | `Conflict` | The merge with the moved head overlaps. Markers are written into the Workspace; nothing is committed | See [resolving conflicts](../rules/conflicts.md#commit-conflicts) |
-| `NotMounted`, `HeadMoved` | As elsewhere | Check the Workspace; commit again after a look at `status` |
+| `NotMounted`, `HeadMoved` | As elsewhere | Check the Workspace; commit again after a look at the backend's `workspace.status` |
 
 ```js
 // ws: from workspace.mount. Every mount creates a new Workspace; never hard-code one.
@@ -301,7 +274,7 @@ conflict detail also exposes `conflictsTruncated`, and individual conflicts mark
 their text. Inspect those files with bounded `workspace.exec` commands and Commit
 each command. The omission flags never mean the unresolved source is safe to drop.
 
-## `workspace.unmount(ws, discard?)`
+## `workspace.unmount(ws, discard?, force?)`
 
 Unmounts a Workspace. A Sandbox left with no Workspace closes itself two minutes later.
 
@@ -309,16 +282,19 @@ Unmounts a Workspace. A Sandbox left with no Workspace closes itself two minutes
 | --- | --- |
 | `ws` | The Workspace from `mount` |
 | `discard` | `true` to drop uncommitted changes instead of refusing |
+| `force` | `true` to abort the Workspace's kernel connection instead; drops uncommitted changes. Use it only for an unmount that stalled (below) |
 
-**Returns:** `{ kind: "Unmounted" }`.
+**Returns:** `{ kind: "Unmounted" }`, or with `force`
+`{ kind: "ForceUnmounted", abort, detach, cleanup }`.
 
 **Refusals**
 
 | Code | Meaning | Do |
 | --- | --- | --- |
 | `Dirty` | Uncommitted changes; `detail.changed` lists paths | Commit them, so the step is recorded; discard only a Workspace you're abandoning |
-| `Busy` | A background process still runs there | Stop it, or wait for it |
+| `Busy` | A background process still runs there | Stop it (`backend.daemon.process.cancel`, in the observe skill), or wait for it |
 | `NotMounted` | Already unmounted, or the wrong Workspace | Use the Workspace from `mount` |
+| `Failed` with `TeardownCustody { stage: Join` in the message | The mount is gone but its connection did not end, so the unmount stalled; every later plain unmount answers the same | `workspace.unmount(ws, true, true)` once |
 
 ```js
 // ws: from workspace.mount. Every mount creates a new Workspace; never hard-code one.
@@ -331,21 +307,22 @@ Nothing unmounts a Workspace for you: a script that exits, throws or is cut off 
 its `unmount` leaves it mounted, and its Sandbox never closes. Put every `unmount` in a
 `finally` block.
 
-To clear leftovers, scan each running Sandbox's paths with `status` (paths are
-numbered per Sandbox) and unmount only the Workspaces that are idle, have nothing
-uncommitted, and that no agent is keeping on purpose, such as a build Workspace or one
-running a dev server:
+To clear leftovers, list each running Sandbox's Workspaces and unmount only the ones
+that are idle, have nothing uncommitted, and that no agent is keeping on purpose, such
+as a build Workspace or one running a dev server:
 
 ```js
-const { LayerFSOperator } = await import("@layerfs/sdk/operator");
-const operator = new LayerFSOperator(layerfs);
 const keep = new Set([/* "<sandbox>:<path>" of Workspaces agents said they're keeping */]);
-for (const sandbox of await operator.sandbox.list()) for (let n = 1; n <= 1024; n++) {
-  const ws = { sandbox: sandbox.id, path: `/workspaces/${n}` };
-  let s;
-  try { s = await layerfs.workspace.status(ws); } catch (e) { if (e.code === "NotMounted") continue; throw e; }
-  const clean = !s.overlay.inodes && !s.overlay.entries && !s.overlay.pendingMerge;
-  if (s.activity === "Idle" && clean && !keep.has(`${ws.sandbox}:${ws.path}`)) await layerfs.workspace.unmount(ws);
+for (const { sandbox } of (await layerfs.project.list_sandboxes()).items) {
+  for (let pos = 0; pos !== null; ) {
+    const page = await layerfs.sandbox.list_workspaces(sandbox, 100, pos);
+    for (const w of page.items) {
+      if (w.activity === "Idle" && w.changed === false && !w.pendingMerge && !keep.has(`${w.sandbox}:${w.path}`)) {
+        await layerfs.workspace.unmount({ sandbox: w.sandbox, path: w.path });
+      }
+    }
+    pos = page.nextPagePos;
+  }
 }
 ```
 
@@ -354,13 +331,22 @@ with uncommitted changes is refused `Dirty` and stays mounted for its owner to c
 
 ## Daemon logs
 
-A Sandbox's container is `<prefix><project>-<n>` (`layerfs-shop-1` by default); its
-id is in `$LAYERFS_HOME/<project>/sandboxes/<n>/container`. When `LAYERFS_TRACE` is
-set, save its daemon log while the Sandbox runs, for example before your last
-unmount: on the host, `docker logs <container-id> > <run>/daemon-<container-id>.log
-2>&1`, where `<run>` is the folder containing `LAYERFS_TRACE`. A Sandbox that closed
-itself is deleted at the next mount or listing, and its log with it. This is
-diagnostic collection; project reads and changes still use the SDK.
+When `LAYERFS_TRACE` is set, save each Sandbox's daemon log while it runs, for example
+before your last unmount, with `@layerfs/backend`:
+
+```js
+import { writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { LayerFSBackend } from "@layerfs/backend";
+
+const log = await LayerFSBackend.of(layerfs).daemon.sandbox.get_log(ws.sandbox, { lines: 2000 });
+writeFileSync(`${dirname(process.env.LAYERFS_TRACE)}/daemon-${log.container}.log`, log.text);
+```
+
+It reads the last lines (at most 2000 and 64 KiB) through Docker where the SDK runs, so
+it works on macOS and Windows too. A Sandbox that closed itself is deleted at the next
+mount, and its log with it. This is diagnostic collection; project reads and changes
+still use the SDK.
 
 A Workspace call to a Sandbox whose container no longer runs is refused
 `NoSuchSandbox` with `detail.containerGone: true`: Docker no longer has the container

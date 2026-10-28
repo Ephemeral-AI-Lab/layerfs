@@ -1,5 +1,0 @@
-system,configuration,filesystem_used_bytes,external_state_bytes,combined_bytes,verified_states,completed,measured,source
-btrfs_uncompressed,"one read-only snapshot per checkpoint, no compression",3209113600,0,3209113600,157,yes,2026-09-09,docs/research/layerfs-vs-btrfs-157/REPORT.md §2.1
-btrfs_zstd,"one read-only snapshot per checkpoint, compress=zstd:3",1994596352,0,1994596352,157,yes,2026-09-09,docs/research/layerfs-vs-btrfs-157/REPORT.md §2.1-2.2
-btrfs_zstd_duperemove,"zstd:3 + duperemove v0.15.2, 4 KiB partial lookup, external hashfile",2027601920,406827008,2434428928,55,no (interrupted),2026-09-09,docs/research/layerfs-vs-btrfs-157/REPORT.md §2.1-2.2
-btrfs_zstd_bees,"zstd:3 + bees 2d53565c, extent scan mode 4, 32 MiB hash table, 300 s catch-up",2035290112,33570816,2068860928,157,yes,2026-09-09,docs/research/layerfs-vs-btrfs-157/REPORT.md §2.1-2.2

@@ -1,1 +1,0 @@
-{"arm":"sandbox-disk","dir":"mkfifo","root":"/tmp","ms":2144.564,"exitCode":0,"truncated":false,"tap":"sandbox-disk-mkfifo-1792450076947.tap","stdout_bytes":5687,"stderr":"","started":["mkfifo/00.t","mkfifo/01.t","mkfifo/02.t","mkfifo/03.t","mkfifo/04.t","mkfifo/05.t","mkfifo/06.t","mkfifo/07.t","mkfifo/08.t","mkfifo/09.t","mkfifo/10.t","mkfifo/11.t","mkfifo/12.t"],"deferred":[]}

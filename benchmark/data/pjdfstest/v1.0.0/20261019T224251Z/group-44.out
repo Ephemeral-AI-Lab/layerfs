@@ -1,1 +1,0 @@
-{"arm":"sandbox-disk","dir":"truncate","root":"/tmp","ms":69.935,"exitCode":0,"truncated":false,"tap":"sandbox-disk-truncate-1792450223603.tap","stdout_bytes":158,"stderr":"","started":["truncate/11.t"],"deferred":[]}

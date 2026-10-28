@@ -20,8 +20,9 @@ def run(args, data=None, env=None, allowed=(0,), timeout=115):
     except subprocess.TimeoutExpired as error:
         raise Refused(f"Command exceeded {timeout} seconds; no retry: {args!r}") from error
     if result.returncode not in allowed:
-        raise Refused(f"Command failed ({result.returncode}): {args!r}: "
-                      + result.stderr.decode(errors="replace")[-4000:])
+        raise Refused(
+            f"Command failed ({result.returncode}): {args!r}: " + result.stderr.decode(errors="replace")[-4000:]
+        )
     return result
 
 
@@ -47,7 +48,7 @@ def host_bind_path(raw):
     if sys.platform == "darwin":
         for prefix in ("/host_mnt", "/run/desktop/mnt/host"):
             if raw.startswith(prefix + "/"):
-                raw = raw[len(prefix):]
+                raw = raw[len(prefix) :]
                 break
     return Path(raw).resolve()
 
@@ -63,17 +64,25 @@ def inventory(path, checkout=False):
         relative = str(item.relative_to(path))
         if "\n" in str(item) or "\r" in str(item):
             raise Refused(f"Unsupported newline in path: {item!r}")
-        if not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)
-                or stat.S_ISLNK(info.st_mode)):
+        if not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode)):
             raise Refused(f"Special file is not disposable: {item}")
         if info.st_dev != root_device:
             raise Refused(f"Nested filesystem: {item}")
-        rows.append({"path": relative, "mode": info.st_mode, "size": info.st_size,
-                     "mtime_ns": info.st_mtime_ns, "ctime_ns": info.st_ctime_ns,
-                     "inode": info.st_ino, "device": info.st_dev,
-                     "uid": info.st_uid, "gid": info.st_gid,
-                     "allocated": info.st_blocks * 512,
-                     "target": os.readlink(item) if stat.S_ISLNK(info.st_mode) else None})
+        rows.append(
+            {
+                "path": relative,
+                "mode": info.st_mode,
+                "size": info.st_size,
+                "mtime_ns": info.st_mtime_ns,
+                "ctime_ns": info.st_ctime_ns,
+                "inode": info.st_ino,
+                "device": info.st_dev,
+                "uid": info.st_uid,
+                "gid": info.st_gid,
+                "allocated": info.st_blocks * 512,
+                "target": os.readlink(item) if stat.S_ISLNK(info.st_mode) else None,
+            }
+        )
         if stat.S_ISDIR(info.st_mode):
             for child in sorted(item.iterdir()):
                 if child.name == ".git":
@@ -85,8 +94,7 @@ def inventory(path, checkout=False):
 
     visit(path)
     digest = hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
-    return rows, {"fingerprint": digest, "files": len(rows),
-                  "allocated_bytes": sum(x["allocated"] for x in rows)}
+    return rows, {"fingerprint": digest, "files": len(rows), "allocated_bytes": sum(x["allocated"] for x in rows)}
 
 
 def worktrees(repo):
@@ -109,11 +117,19 @@ def docker_state():
     ids = run(["docker", "ps", "-aq"]).stdout.decode().split()
     containers = []
     for offset in range(0, len(ids), 100):
-        containers.extend(json.loads(run(["docker", "inspect", *ids[offset:offset + 100]]).stdout))
-    return [{"id": c["Id"], "name": c["Name"], "running": c["State"]["Running"],
-             "status": c["State"]["Status"], "image": c["Image"],
-             "labels": c["Config"].get("Labels") or {},
-             "mounts": c.get("Mounts", [])} for c in containers]
+        containers.extend(json.loads(run(["docker", "inspect", *ids[offset : offset + 100]]).stdout))
+    return [
+        {
+            "id": c["Id"],
+            "name": c["Name"],
+            "running": c["State"]["Running"],
+            "status": c["State"]["Status"],
+            "image": c["Image"],
+            "labels": c["Config"].get("Labels") or {},
+            "mounts": c.get("Mounts", []),
+        }
+        for c in containers
+    ]
 
 
 def open_files():

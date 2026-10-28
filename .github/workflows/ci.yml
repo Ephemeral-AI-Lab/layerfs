@@ -1,0 +1,125 @@
+# Fast lane: runs after a push and reports. It is never a required check and
+# never blocks a push or merge; agents do not wait for it (AGENTS.md §4).
+# Slow and FUSE mount tests run in nightly.yml. Selection: tools/ci_tests.py.
+# The Node binding (engine/crates/layerfs-node) and the JavaScript packages in
+# api/ stay outside CI (owner, 2026-10-23): no path trigger, excluded from
+# Clippy/tests and skipped by the guard. The Rust layerfs-api crate is included.
+name: ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "core/**"
+      - "engine/**"
+      - "!engine/crates/layerfs-node/**"
+      - "Cargo.*"
+      - ".config/**"
+      - "tools/**"
+      - ".cargo/**"
+      - ".github/workflows/ci.yml"
+      - "!**/*.md"
+      - "!core/docs/**"
+  pull_request:
+    paths:
+      - "core/**"
+      - "engine/**"
+      - "!engine/crates/layerfs-node/**"
+      - "Cargo.*"
+      - ".config/**"
+      - "tools/**"
+      - ".cargo/**"
+      - ".github/workflows/ci.yml"
+      - "!**/*.md"
+      - "!core/docs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  # CI needs no debugger: smaller objects, much shorter links for ~345 test binaries.
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
+jobs:
+  checks:
+    name: fmt and guards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: rustup toolchain install 1.85.1 --profile minimal --component rustfmt
+      - run: cargo +1.85.1 fmt --manifest-path Cargo.toml --all -- --check
+      # Each check reports even when an earlier one failed.
+      - if: ${{ !cancelled() }}
+        run: python3 -B tools/check_product_boundary.py --skip-sdk
+      - if: ${{ !cancelled() }}
+        run: python3 -B tools/check_fuser_integrity.py
+      - if: ${{ !cancelled() }}
+        run: python3 -B -m unittest discover -s tools -p 'test_*.py'
+
+  clippy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: rustup toolchain install 1.85.1 --profile minimal --component clippy
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: . -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo +1.85.1 clippy --manifest-path Cargo.toml --locked --workspace --exclude layerfs-node --all-targets -- -D warnings
+
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # Link the ~345 test binaries with mold instead of GNU ld. Scoped to this
+      # target, so the repository's aarch64 rustflags (.cargo/config.toml) stay.
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: rustup toolchain install 1.85.1 --profile minimal
+      - name: Install mold
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends mold
+          mold --version
+      - uses: taiki-e/install-action@v2.87.24
+        with:
+          tool: cargo-nextest@0.9.146
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: . -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Build first so compile time is never counted against the test ceiling.
+      # Only the fast lane's test targets are built (one --test per name), since
+      # building is where this job's time goes. Examples are left out (Clippy
+      # checks them) and so are the empty lib unit-test harnesses (src/ holds
+      # no tests). --timings writes where build time goes, per unit.
+      - name: Build test binaries
+        run: |
+          targets="$(python3 -B tools/ci_tests.py targets fast)"
+          # shellcheck disable=SC2086 # one --test flag per word
+          cargo +1.85.1 test --manifest-path Cargo.toml --locked \
+            --workspace --exclude layerfs-node $targets --no-run --timings
+      - name: Upload build timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: test-build-timings
+          path: target/cargo-timings/cargo-timing.html
+          retention-days: 14
+      - name: Run fast tests (whole run capped at 120 s)
+        run: |
+          targets="$(python3 -B tools/ci_tests.py targets fast)"
+          filter="$(python3 -B tools/ci_tests.py filter fast)"
+          # shellcheck disable=SC2086 # one --test flag per word
+          timeout 120 cargo +1.85.1 nextest run --manifest-path Cargo.toml --locked \
+            --workspace --exclude layerfs-node $targets --profile ci -E "$filter"

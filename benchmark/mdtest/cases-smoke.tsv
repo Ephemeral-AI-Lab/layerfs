@@ -1,7 +1,0 @@
-# case	procs	items_per_proc	mdtest args (besides -P -i 1 -n and -d)
-files-1p-shared	1	200	-F
-files-4p-unique	4	200	-F -u
-dirs-1p-shared	1	200	-D
-dirs-4p-unique	4	200	-D -u
-tree-4p-shared	4	210	-z 2 -b 4
-commit	1	200	-F

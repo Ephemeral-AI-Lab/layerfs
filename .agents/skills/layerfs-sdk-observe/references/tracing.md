@@ -1,15 +1,15 @@
 # Call trace
 
 > **Status:** Current general guide. Part of the `layerfs-sdk-observe` skill. Describes the
-> #333 trace, merged to `main` in `62b225766`. Its source of truth is the "Call trace"
-> section of [`sdk/js/README.md`](../../../../sdk/js/README.md).
+> #333 trace, merged to `main` in `62b225766`. Its source of truth is the call trace
+> section of [`api/docs/backend.md`](../../../../api/docs/backend.md#the-call-trace).
 
 ## Turning it on
 
 | Setting | Effect |
 | --- | --- |
-| `LAYERFS_TRACE=<file>`, or `new LayerFS(project, { trace: file })` | Append one JSON line per SDK and operator call. The option wins |
-| `LAYERFS_TRACE_STEP=<label>`, or `{ traceStep }`, or `layerfs.options.traceStep` | Put `step` on each line; read at every call; cut to 200 characters |
+| `LAYERFS_TRACE=<file>` | Append one JSON line per agent and backend call; read when the client is made (`LayerFS.open` takes no options) |
+| `LAYERFS_TRACE_STEP=<label>` | Put `step` on each line; read at every call; cut to 200 characters |
 
 Off (unset) means no file, no daemon observation, no recording cost and byte-identical
 replies. A failed trace write is dropped and never changes a result. A step label alone
@@ -241,7 +241,8 @@ traces nothing.
 | `layerfs_trace` | Format version, `1` |
 | `id` | `<run>-<n>`: per-process run prefix and sequence number. Join by `id`; lines are in completion order |
 | `step` | Your step label, when set |
-| `method` | Binding method, for example `fs.write`, `workspace.commit`, `operator.store.stats` |
+| `method` | Binding method, for example `fs.write`, `workspace.commit`, `backend.store.project.get_storage`. Lines written before #428 use the older `operator.*` names; `RENAMED_METHODS` in `@layerfs/agent` maps them |
+| `project` | The project the call names, when it names one |
 | `args` | Summary: paths, refs, names, Sandbox number, command, message (cut to 200 characters); contents only as byte counts (`contentBytes`, `oldTextBytes`, `changes`/`changeBytes`) |
 | `start`, `ms` | Wall start and elapsed milliseconds in the calling process, including the native queue and daemon round trip |
 | `ok` | `true`, or `false` with `code` and `message` |
@@ -258,7 +259,7 @@ Each `daemon` entry:
 | `timing` | Phase trees `{ name, ms, children }` (`outcome`, `incomplete` only when they apply), at most 256 nodes; `omitted` counts the rest |
 | `sql` | Every exchange: Store SQL work as `writer` and `readers` deltas of 27 `SqlWork` counters (`statements`, `vm_steps`, `fullscan_steps`, `sorts`, `autoindex_rows`, …); includes concurrent calls' work on the same sessions |
 | `delta` | On calls that finished a Save: delta selection work after minus before; `payload` (whole-file and chunk counts, `depth_capped`, `work_exceeded`, `whole_file_depths`, `chunk_depths`) and `metadata` (pooled leaves, `depths`); slot d of a histogram = objects stored at chain depth d |
-| `fuse` | On `workspace.status` / `workspace.unmount` of an attached Workspace: its kernel opcode counts since attach (`lookup`, `getattr`, `read`, `write`, …, `served`, `largest_read`), plus `lookup_missing` (ENOENT lookups) and `served_ns` (request-service wall time) |
+| `fuse` | On `backend.daemon.workspace.status` / `workspace.unmount` of an attached Workspace: its kernel opcode counts since attach (`lookup`, `getattr`, `read`, `write`, …, `served`, `largest_read`), plus `lookup_missing` (ENOENT lookups) and `served_ns` (request-service wall time) |
 | `storage` | On a committing exchange: 42 Save storage counters (`pack_write_bytes`, `locator_hits`, `pack_misses`, …) |
 | `construction` | On a committing exchange: 31 captured-namespace construction counters (`files_constructed`, `inode_rows`, …) |
 | `diagnosticError` | `{ kind, message }` if the daemon couldn't write its records or the telemetry didn't fit (`Oversized`); the call is unaffected |

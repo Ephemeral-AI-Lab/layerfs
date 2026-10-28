@@ -1,1 +1,0 @@
-passthrough_ll /tmp/pt fuse.passthrough_ll rw,nosuid,nodev,relatime,user_id=0,group_id=0,allow_other 0 0

@@ -67,9 +67,9 @@ Gathering the reading for one file, with `base` and `head` copied from the refus
 
 ```js
 // inspect.mjs
-import { LayerFS } from "@layerfs/sdk";
+import { LayerFS } from "@layerfs/agent";
 
-const layerfs = new LayerFS("shop");
+const layerfs = await LayerFS.open("shop");   // end with await layerfs.close()
 // sandbox, wsPath: the Workspace whose commit conflicted, from its workspace.mount. Don't mount
 // again to inspect: a new mount is a new Workspace, without the markers.
 const [sandbox, wsPath, base, head, path] = process.argv.slice(2);
@@ -131,9 +131,14 @@ the other side's. Check **before** committing, and force only then:
 ```js
 // ws: the Workspace holding your changes. Don't mount again: a new mount is a new Workspace,
 // without these changes or any conflict markers.
-const s = await layerfs.workspace.status(ws);
+import { LayerFS } from "@layerfs/agent";
+import { LayerFSBackend } from "@layerfs/backend";
+
+const shop = await LayerFS.open("shop");
+const backend = LayerFSBackend.of(shop);
+const s = await backend.daemon.workspace.status(ws);
 if (s.headMovedSinceMount) {
-  const c = await layerfs.workspace.commit(ws, "step 15: full rebuild", true);
+  const c = await shop.workspace.commit(ws, "step 15: full rebuild", true);
   console.log(c.kind, "displaced", c.displacedHead);
 }
 ```
@@ -165,9 +170,9 @@ original Branches:
 
 ```js
 // merge-fix.mjs: cart and checkout both changed /src/price.js
-import { LayerFS } from "@layerfs/sdk";
+import { LayerFS } from "@layerfs/agent";
 
-const layerfs = new LayerFS("shop");
+const layerfs = await LayerFS.open("shop");   // end with await layerfs.close()
 const [mergeBase, path] = process.argv.slice(2);   // from the refusal's detail
 
 const checkoutChange = await layerfs.fs.diff_files(mergeBase, path, "checkout", path);
@@ -179,9 +184,9 @@ console.log("cart:\n" + cartChange.hunks.map((h) => h.op + h.text).join(""));
 
 ```js
 // merge-apply.mjs: after deciding, write the reviewed result on two working forks
-import { LayerFS } from "@layerfs/sdk";
+import { LayerFS } from "@layerfs/agent";
 
-const layerfs = new LayerFS("shop");
+const layerfs = await LayerFS.open("shop");   // end with await layerfs.close()
 const combined = "export const rate = 9;\nexport const cartRounding = true;\n"; // replace with your reviewed resolution
 
 await layerfs.branch.fork("cart-fix", "cart");

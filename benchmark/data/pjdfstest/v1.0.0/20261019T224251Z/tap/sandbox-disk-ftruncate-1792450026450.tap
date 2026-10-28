@@ -1,5 +1,0 @@
-### group dir=ftruncate cwd=/tmp/pjd/ftruncate fs=overlay uid=501:20
-### begin ftruncate/11.t
-1..1
-ok 1
-### end ftruncate/11.t exit=0 ms=5 quick_exit=1 residue=0

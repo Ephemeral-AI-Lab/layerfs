@@ -1,0 +1,20 @@
+{
+  "name": "layerfs-js",
+  "version": "1.1.0",
+  "description": "The LayerFS JavaScript packages (#428): @layerfs/agent, @layerfs/backend and @layerfs/runtime, which load the engine's native addon (engine/crates/layerfs-node). `npm install` here links them; it downloads nothing.",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "agent",
+    "backend",
+    "runtime"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build:native": "node scripts/build-native.mjs",
+    "build:isolated": "python3 ../tools/worktree.py build",
+    "test:isolated": "python3 ../tools/worktree.py run"
+  }
+}

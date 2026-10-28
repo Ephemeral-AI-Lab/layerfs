@@ -9,8 +9,8 @@
 //! Run with:
 //!
 //! ```text
-//! cargo run --manifest-path core/Cargo.toml --example timer_composition
-//! cargo run --manifest-path core/Cargo.toml --example timer_composition -- /tmp/run-1/timing.json
+//! cargo run --manifest-path Cargo.toml --example timer_composition
+//! cargo run --manifest-path Cargo.toml --example timer_composition -- /tmp/run-1/timing.json
 //! ```
 
 use std::fs::OpenOptions;

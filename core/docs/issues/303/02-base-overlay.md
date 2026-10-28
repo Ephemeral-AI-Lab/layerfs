@@ -60,7 +60,7 @@ object; it is not a field of `BranchSnapshot`,
 `core/crates/layerfs-history/src/records.rs:58-73`). The binding is replaced
 only by install. The base needs no lease: cluster one has no deletion path, so
 a root stays readable ([source-verified] pack rows are immutable by trigger,
-`core/crates/layerfs-persistence/sql/sqlite/objects.sql:9-12`). The day a
+`engine/crates/layerfs-persistence/sql/sqlite/objects.sql:9-12`). The day a
 collector exists, a lease becomes mandatory; that is recorded in
 [06 §7](06-cluster-one-integration.md#10-failure-boundaries).
 

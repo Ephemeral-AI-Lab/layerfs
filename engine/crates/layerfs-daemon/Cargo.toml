@@ -1,0 +1,26 @@
+[package]
+name = "layerfs-daemon"
+description = "Workspace-owned overlay service with typed kernel mount and Store calls."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-overlay = { path = "../layerfs-overlay" }
+layerfs-store-service = { path = "../layerfs-store-service" }
+layerfs-workspace = { path = "../layerfs-workspace" }
+layerfs-fuse = { path = "../layerfs-fuse" }
+layerfs-bridge = { path = "../layerfs-bridge" }
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+# Concrete Store opening stays in application bootstrap, outside store/.
+layerfs-persistence = { path = "../layerfs-persistence" }
+
+nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
+
+[dev-dependencies]
+blake3 = { version = "=1.8.5", default-features = false }
+layerfs-project = { path = "../layerfs-project" }

@@ -1,1 +1,0 @@
-{"arm":"layerfs","dir":"ftruncate","root":"/workspaces/1","ms":74.17,"exitCode":0,"truncated":false,"tap":"layerfs-ftruncate-1792450018234.tap","stdout_bytes":168,"stderr":"","started":["ftruncate/11.t"],"deferred":[]}

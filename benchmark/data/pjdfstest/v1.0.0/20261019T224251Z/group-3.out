@@ -1,1 +1,0 @@
-{"arm":"layerfs","dir":"chmod","root":"/workspaces/1","ms":13221.251,"exitCode":0,"truncated":false,"tap":"layerfs-chmod-1792449796390.tap","stdout_bytes":22520,"stderr":"","started":["chmod/00.t","chmod/01.t","chmod/02.t","chmod/03.t","chmod/04.t","chmod/05.t","chmod/06.t","chmod/07.t","chmod/08.t","chmod/09.t","chmod/10.t","chmod/11.t","chmod/12.t"],"deferred":[]}

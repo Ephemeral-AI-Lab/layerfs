@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "LayerFS × DSH",
-    "description": "Agents fork, mount and merge LayerFS projects from bash; the conversation shows who did what"
-  }
-}

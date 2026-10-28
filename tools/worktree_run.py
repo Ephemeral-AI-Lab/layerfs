@@ -59,7 +59,9 @@ def finish(record, success, deadline):
         record["released"] = True
     else:
         record["released"] = False
-        record["release_condition"] = "Owner finishes diagnosis; explicitly release exact stopped containers and Store volume"
+        record["release_condition"] = (
+            "Owner finishes diagnosis; explicitly release exact stopped containers and Store volume"
+        )
 
 
 def check_store(record, deadline):
@@ -92,20 +94,39 @@ def launch(args):
     prefix = "lfs-e2e-" + resources["id"] + "-" + token + "-"
     directory = Path(resources["state"]) / "runs" / token
     directory.mkdir(mode=0o700)
-    state = {"version": 1, "status": "starting", "at": timestamp(), "worktree_id": resources["id"],
-             "run_id": token,
-             "bundle": str(bundle), "bundle_manifest_sha256": digest(bundle / "manifest.json"),
-             "prefix": prefix, "store_volume": prefix + "store", "command": command,
-             "timeout_seconds": args.timeout, "store_profile": "Disposable (SDK native route)",
-             "released": False}
+    state = {
+        "version": 1,
+        "status": "starting",
+        "at": timestamp(),
+        "worktree_id": resources["id"],
+        "run_id": token,
+        "bundle": str(bundle),
+        "bundle_manifest_sha256": digest(bundle / "manifest.json"),
+        "prefix": prefix,
+        "store_volume": prefix + "store",
+        "command": command,
+        "timeout_seconds": args.timeout,
+        "store_profile": "Disposable (SDK native route)",
+        "released": False,
+    }
     receipt = directory / "receipt.json"
     write(receipt, state)
     # Refuse an existing exact name, so create can never adopt someone else's mutable state.
-    names = run(["docker", "volume", "ls", "--format", "{{.Name}}"] ).stdout.decode().splitlines()
+    names = run(["docker", "volume", "ls", "--format", "{{.Name}}"]).stdout.decode().splitlines()
     if state["store_volume"] in names:
         raise Refused("Run volume already exists")
-    run(["docker", "volume", "create", "--label", f"{LABEL}={resources['id']}",
-         "--label", "layerfs.dev.run=" + token, state["store_volume"]])
+    run(
+        [
+            "docker",
+            "volume",
+            "create",
+            "--label",
+            f"{LABEL}={resources['id']}",
+            "--label",
+            "layerfs.dev.run=" + token,
+            state["store_volume"],
+        ]
+    )
     info = json.loads(run(["docker", "volume", "inspect", state["store_volume"]]).stdout)[0]
     state["volume_created_at"] = info.get("CreatedAt")
     write(receipt, state)
@@ -114,25 +135,53 @@ def launch(args):
         raise Refused("E2E needs a local Unix Docker daemon")
     # Docker Desktop's context endpoint is a macOS proxy socket. Containers need
     # the Linux engine socket, as the existing SDK verification helper uses.
-    socket = "/var/run/docker.sock" if os.uname().sysname == "Darwin" else endpoint[len("unix://"):]
-    env = {"LAYERFS_HOME": "/layerfs-store/sdk-home", "LAYERFS_STORE_PATH": "/layerfs-store/global/store.sqlite",
-           "LAYERFS_DOCKER": "/var/run/docker.sock", "LAYERFS_IMAGE": resources["images"]["sandbox"],
-           "LAYERFS_VOLUME": state["store_volume"], "LAYERFS_DAEMON": str(bundle / "layerfs-daemon"),
-           "LAYERFS_NATIVE": str(bundle / "layerfs.node"), "LAYERFS_CONTAINER_PREFIX": prefix,
-           "LAYERFS_CONSTRUCTION_WORKERS": "1", "LAYERFS_TRACE": "/receipts/trace.jsonl",
-           "LAYERFS_DAEMON_HOST": "host.docker.internal" if os.uname().sysname == "Darwin" else "127.0.0.1"}
+    socket = "/var/run/docker.sock" if os.uname().sysname == "Darwin" else endpoint[len("unix://") :]
+    env = {
+        "LAYERFS_HOME": "/layerfs-store/sdk-home",
+        "LAYERFS_STORE_PATH": "/layerfs-store/global/store.sqlite",
+        "LAYERFS_DOCKER": "/var/run/docker.sock",
+        "LAYERFS_IMAGE": resources["images"]["sandbox"],
+        "LAYERFS_VOLUME": state["store_volume"],
+        "LAYERFS_DAEMON": str(bundle / "layerfs-daemon"),
+        "LAYERFS_NATIVE": str(bundle / "layerfs.node"),
+        "LAYERFS_CONTAINER_PREFIX": prefix,
+        "LAYERFS_CONSTRUCTION_WORKERS": "1",
+        "LAYERFS_TRACE": "/receipts/trace.jsonl",
+        "LAYERFS_DAEMON_HOST": "host.docker.internal" if os.uname().sysname == "Darwin" else "127.0.0.1",
+    }
     # The same absolute bundle path is visible to host, client and Docker API callers.
     script = 'umask 077; mkdir -p /layerfs-store/sdk-home /layerfs-store/global; umask 022; exec "$@"'
-    create = ["docker", "create", "--pull", "never", "--name", prefix + "client",
-              "--label", f"{LABEL}={resources['id']}", "--label", "layerfs.dev.run=" + token,
-              "--mount", f"type=bind,src={bundle},dst={bundle},readonly",
-              "--mount", f"type=bind,src={directory},dst=/receipts",
-              "--mount", f"type=bind,src={socket},dst=/var/run/docker.sock",
-              "--mount", f"type=volume,src={state['store_volume']},dst=/layerfs-store,volume-nocopy",
-              *[v for k, value in env.items() for v in ("-e", k + "=" + value)],
-              *(["--network", "host"] if os.uname().sysname == "Linux" else []),
-              "-w", str(bundle), "--entrypoint", "/bin/sh", resources["images"]["runtime"],
-              "-c", script, "sh", *command]
+    create = [
+        "docker",
+        "create",
+        "--pull",
+        "never",
+        "--name",
+        prefix + "client",
+        "--label",
+        f"{LABEL}={resources['id']}",
+        "--label",
+        "layerfs.dev.run=" + token,
+        "--mount",
+        f"type=bind,src={bundle},dst={bundle},readonly",
+        "--mount",
+        f"type=bind,src={directory},dst=/receipts",
+        "--mount",
+        f"type=bind,src={socket},dst=/var/run/docker.sock",
+        "--mount",
+        f"type=volume,src={state['store_volume']},dst=/layerfs-store,volume-nocopy",
+        *[v for k, value in env.items() for v in ("-e", k + "=" + value)],
+        *(["--network", "host"] if os.uname().sysname == "Linux" else []),
+        "-w",
+        str(bundle),
+        "--entrypoint",
+        "/bin/sh",
+        resources["images"]["runtime"],
+        "-c",
+        script,
+        "sh",
+        *command,
+    ]
     success = False
     deadline = time.monotonic() + 120
     try:
@@ -141,10 +190,13 @@ def launch(args):
         state["status"] = "running"
         write(receipt, state)
         with (directory / "output.log").open("wb") as output:
-            process = subprocess.Popen(["docker", "start", "--attach", state["client_id"]],
-                                       stdout=output, stderr=subprocess.STDOUT)
+            process = subprocess.Popen(
+                ["docker", "start", "--attach", state["client_id"]], stdout=output, stderr=subprocess.STDOUT
+            )
             try:
-                state["attach_exit_code"] = process.wait(timeout=min(args.timeout, max(0, deadline - time.monotonic() - 20)))
+                state["attach_exit_code"] = process.wait(
+                    timeout=min(args.timeout, max(0, deadline - time.monotonic() - 20))
+                )
             except BaseException:
                 process.kill()
                 process.wait()
@@ -187,8 +239,10 @@ def export_scope(args, resources):
         for profile in ("debug", "release"):
             target = Path(resources["macos_target"])
             if (target / profile).exists():
-                actions.append({**base, "kind": "cargo-cache", "path": str(target / profile), "target_root": str(target)})
-        names = run(["docker", "volume", "ls", "--format", "{{.Name}}"] ).stdout.decode().splitlines()
+                actions.append(
+                    {**base, "kind": "cargo-cache", "path": str(target / profile), "target_root": str(target)}
+                )
+        names = run(["docker", "volume", "ls", "--format", "{{.Name}}"]).stdout.decode().splitlines()
         for key in ("linux_target_volume", "linux_cargo_volume"):
             if resources[key] in names:
                 info = json.loads(run(["docker", "volume", "inspect", resources[key]]).stdout)[0]
@@ -201,8 +255,13 @@ def export_scope(args, resources):
         disposed = any(json.loads(p.read_text()).get("released") for p in receipt.parent.glob("disposal-*.json"))
         if not run_state.get("released") and not disposed:
             protected_volumes.append(run_state["store_volume"])
-    scope = {"version": 1, "protected_paths": [str(state)], "protected_volumes": protected_volumes,
-             "scan_roots": [], "actions": actions}
+    scope = {
+        "version": 1,
+        "protected_paths": [str(state)],
+        "protected_volumes": protected_volumes,
+        "scan_roots": [],
+        "actions": actions,
+    }
     destination = Path(args.out).resolve()
     if destination.exists():
         raise Refused("Scope output already exists")

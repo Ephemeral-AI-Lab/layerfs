@@ -94,6 +94,23 @@ impl StorageError {
             _ => false,
         }
     }
+
+    /// True when persistence definitely refused the write for lack of space,
+    /// such as a full Store disk. Nothing was written by the refused attempt.
+    pub fn is_capacity_refusal(&self) -> bool {
+        match self {
+            Self::Io(error) => matches!(
+                error
+                    .get_ref()
+                    .and_then(|inner| inner.downcast_ref::<crate::port::PersistenceError>()),
+                Some(crate::port::PersistenceError::Refused { status }) if status == "Capacity"
+            ),
+            Self::CleanupFailed { original, cleanup } => {
+                !cleanup.is_unknown_outcome() && original.is_capacity_refusal()
+            }
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for StorageError {

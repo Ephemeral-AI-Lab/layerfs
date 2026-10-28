@@ -21,8 +21,9 @@ def file_hashes(repo, files, write=False):
     def flush():
         flags = ["-w"] if write else []
         data = "".join(str(path) + "\n" for path in batch).encode()
-        result.extend(git(repo, "hash-object", "--no-filters", *flags,
-                          "--stdin-paths", data=data).decode().splitlines())
+        result.extend(
+            git(repo, "hash-object", "--no-filters", *flags, "--stdin-paths", data=data).decode().splitlines()
+        )
 
     for path in files:
         size = path.stat().st_size
@@ -47,20 +48,28 @@ def archive(repo, path, output, pass_id, checkout=False):
         # re-encoding tens of thousands of immutable tracked files per checkout.
         head = git(path, "rev-parse", "HEAD").decode().strip()
         git(repo, "cat-file", "-e", head + "^{tree}")
-        selected = set(os.fsdecode(value).rstrip("/") for value in (
-            git(path, "ls-files", "--others", "-z") +
-            git(path, "diff", "HEAD", "--name-only", "-z", "--no-ext-diff", "--no-textconv")
-        ).split(b"\0") if value)
+        selected = set(
+            os.fsdecode(value).rstrip("/")
+            for value in (
+                git(path, "ls-files", "--others", "-z")
+                + git(path, "diff", "HEAD", "--name-only", "-z", "--no-ext-diff", "--no-textconv")
+            ).split(b"\0")
+            if value
+        )
         kept = []
         for row in file_rows:
             relative = Path(row["path"])
-            if (".git" in relative.parts or row["path"] in selected
-                    or any(str(parent) in selected for parent in relative.parents)):
+            if (
+                ".git" in relative.parts
+                or row["path"] in selected
+                or any(str(parent) in selected for parent in relative.parents)
+            ):
                 kept.append(row)
             else:
                 row["from_head"] = True
         file_rows = kept
     regular = [r for r in file_rows if r["target"] is None]
+
     # For a single file, wrap it under its original leaf name in the recovery tree.
     def name(row):
         raw = path.name if row["path"] == "." else row["path"]
@@ -86,11 +95,11 @@ def archive(repo, path, output, pass_id, checkout=False):
         row["oid"] = oid
     for row in file_rows:
         if row["target"] is not None:
-            row["oid"] = git(repo, "hash-object", "-w", "--stdin",
-                             data=os.fsencode(row["target"])).decode().strip()
+            row["oid"] = git(repo, "hash-object", "-w", "--stdin", data=os.fsencode(row["target"])).decode().strip()
     sizes = {r["oid"]: r["size"] for r in file_rows}
-    checks = git(repo, "cat-file", "--batch-check",
-                 data="".join(oid + "\n" for oid in sizes).encode()).decode().splitlines()
+    checks = (
+        git(repo, "cat-file", "--batch-check", data="".join(oid + "\n" for oid in sizes).encode()).decode().splitlines()
+    )
     if len(checks) != len(sizes):
         raise Refused("Archive object count mismatch")
     for line in checks:
@@ -104,8 +113,7 @@ def archive(repo, path, output, pass_id, checkout=False):
         git(repo, "read-tree", "--empty", env=env)
         entries = []
         for row in file_rows:
-            mode = "120000" if row["target"] is not None else (
-                "100755" if row["mode"] & stat.S_IXUSR else "100644")
+            mode = "120000" if row["target"] is not None else ("100755" if row["mode"] & stat.S_IXUSR else "100644")
             entries.append(f"{mode} {row['oid']}\t{name(row)}\0")
         git(repo, "update-index", "-z", "--index-info", data="".join(entries).encode(), env=env)
         tree = git(repo, "write-tree", env=env).decode().strip()
@@ -136,16 +144,22 @@ def archive(repo, path, output, pass_id, checkout=False):
         row["xattrs_base64"] = attributes(source(row))
     if inventory(path, checkout)[1] != snapshot:
         raise Refused("Source metadata changed during attribute capture")
-    manifest = {"version": 2 if checkout else 1, "original_path": str(path), "repository": str(repo),
-                "recovery_ref": reference, "tree": tree, "rows": rows,
-                "tracked_head": head,
-                "snapshot": snapshot,
-                "limits": "Raw bytes, symlinks, modes, ownership IDs and times recorded. "
-                          "Git archive does not restore empty dirs, metadata or ACLs automatically. "
-                          "Restore xattrs_base64 with base64 decoding and os.setxattr. "
-                          "For worktrees, restore tracked_head and staged/unstaged patches first, "
-                          "then overlay raw archived edits/untracked/ignored files. Rows marked "
-                          "from_head are backed by the pinned commit, not duplicated in this tree."}
+    manifest = {
+        "version": 2 if checkout else 1,
+        "original_path": str(path),
+        "repository": str(repo),
+        "recovery_ref": reference,
+        "tree": tree,
+        "rows": rows,
+        "tracked_head": head,
+        "snapshot": snapshot,
+        "limits": "Raw bytes, symlinks, modes, ownership IDs and times recorded. "
+        "Git archive does not restore empty dirs, metadata or ACLs automatically. "
+        "Restore xattrs_base64 with base64 decoding and os.setxattr. "
+        "For worktrees, restore tracked_head and staged/unstaged patches first, "
+        "then overlay raw archived edits/untracked/ignored files. Rows marked "
+        "from_head are backed by the pinned commit, not duplicated in this tree.",
+    }
     raw = json.dumps(manifest, sort_keys=True).encode()
     dest = output / (key + ".json.gz")
     with gzip.open(dest, "wb", compresslevel=1) as stream:
@@ -153,6 +167,11 @@ def archive(repo, path, output, pass_id, checkout=False):
     with gzip.open(dest, "rb") as stream:
         if stream.read() != raw:
             raise Refused("Archive manifest readback mismatch")
-    return {"manifest": str(dest), "manifest_sha256": hashlib.sha256(raw).hexdigest(),
-            "recovery_ref": reference, "tree": tree, "snapshot": snapshot,
-            "tracked_head": head}
+    return {
+        "manifest": str(dest),
+        "manifest_sha256": hashlib.sha256(raw).hexdigest(),
+        "recovery_ref": reference,
+        "tree": tree,
+        "snapshot": snapshot,
+        "tracked_head": head,
+    }

@@ -1,6 +1,0 @@
-packages:
-  - packages/*
-# @deepseek-ai/* peers resolve from the dsh installation that loads the
-# bundle, never from this workspace.
-autoInstallPeers: false
-strictPeerDependencies: false

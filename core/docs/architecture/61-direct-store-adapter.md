@@ -33,7 +33,7 @@ rows that never change once visible and never an absence. The Store's control
 reader (session 0), which serves every SDK call, keeps none of its own.
 
 The daemon's CanonicalCache budget is the `cache_bytes` the SDK passes at
-Sandbox create (`sdk/js/native/src/sandbox.rs`): **64 MiB**, by owner decision
+Sandbox create (`engine/crates/layerfs-node/src/sandbox.rs`): **64 MiB**, by owner decision
 2026-10-19 (#359, [fix record 031](../issues/352/fixes/031-359-warm-daemon-cache.md));
 it was 8 MiB, which one `find`, vitest or `ls -l` of 10,000 entries overran, so
 a later Workspace on the same daemon read it all again. The RCA LOOKUP facts

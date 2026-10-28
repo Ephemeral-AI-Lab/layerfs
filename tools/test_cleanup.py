@@ -40,18 +40,27 @@ class CleanupTests(unittest.TestCase):
         return git(self.repo, *args)
 
     def action(self, path, kind="archive-tree"):
-        return {"kind": kind, "path": str(path), "owner": "fixture",
-                "reason": "completed disposable fixture", "released": True}
+        return {
+            "kind": kind,
+            "path": str(path),
+            "owner": "fixture",
+            "reason": "completed disposable fixture",
+            "released": True,
+        }
 
     def apply(self, action, protected=None):
         path = Path(action["path"])
         action["snapshot"] = inventory(path, action["kind"] == "worktree")[1]
         if action["kind"] == "worktree":
             action["git_head"] = git(path, "rev-parse", "HEAD").decode().strip()
-            action["staged_sha256"] = hashlib.sha256(git(
-                path, "diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "--no-textconv")).hexdigest()
+            action["staged_sha256"] = hashlib.sha256(
+                git(path, "diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "--no-textconv")
+            ).hexdigest()
         plan = {"pass_id": "fixture", "scope": {"protected_paths": protected or []}}
-        with patch.object(cleanup, "docker_state", return_value=[]), patch.object(cleanup, "open_files", return_value=[]):
+        with (
+            patch.object(cleanup, "docker_state", return_value=[]),
+            patch.object(cleanup, "open_files", return_value=[]),
+        ):
             return cleanup.apply_action(self.repo, self.output, plan, action)
 
     def test_raw_archive_roundtrip_including_symlink_and_executable(self):
@@ -110,7 +119,10 @@ class CleanupTests(unittest.TestCase):
         action = self.action(source)
         action["snapshot"] = inventory(source)[1]
         file.write_text("after")
-        with patch.object(cleanup, "docker_state", return_value=[]), patch.object(cleanup, "open_files", return_value=[]):
+        with (
+            patch.object(cleanup, "docker_state", return_value=[]),
+            patch.object(cleanup, "open_files", return_value=[]),
+        ):
             with self.assertRaises(Refused):
                 cleanup.apply_action(self.repo, self.output, {"scope": {}, "pass_id": "fixture"}, action)
         self.assertEqual(file.read_text(), "after")
@@ -157,19 +169,23 @@ class CleanupTests(unittest.TestCase):
         self.assertEqual(self.git("rev-parse", result["head_ref"]).decode().strip(), result["head"])
 
     def test_volume_consumer_even_stopped_is_protected(self):
-        stopped = {"name": "stopped", "running": False,
-                   "mounts": [{"Type": "volume", "Name": "cache"}]}
+        stopped = {"name": "stopped", "running": False, "mounts": [{"Type": "volume", "Name": "cache"}]}
         with self.assertRaises(Refused):
             ensure_volume_idle("cache", [], [stopped])
         with self.assertRaises(Refused):
             ensure_volume_idle("cache", ["cache"], [])
-        self.assertFalse(same_volume({"Name": "cache", "CreatedAt": "old"},
-                                     {"Name": "cache", "CreatedAt": "new"}))
+        self.assertFalse(same_volume({"Name": "cache", "CreatedAt": "old"}, {"Name": "cache", "CreatedAt": "new"}))
 
     def test_apply_is_single_attempt_and_stops_after_failure(self):
-        plan = {"version": 1, "pass_directory": str(self.output), "repository": str(self.repo),
-                "scope": {}, "actions": [{"kind": "archive-file"}, {"kind": "archive-tree"}],
-                "protected_presence": {}, "blocked": []}
+        plan = {
+            "version": 1,
+            "pass_directory": str(self.output),
+            "repository": str(self.repo),
+            "scope": {},
+            "actions": [{"kind": "archive-file"}, {"kind": "archive-tree"}],
+            "protected_presence": {},
+            "blocked": [],
+        }
         path = self.output / "plan.json"
         path.write_text(json.dumps(plan))
         args = type("Args", (), {"plan": str(path)})()
@@ -183,10 +199,13 @@ class CleanupTests(unittest.TestCase):
             cleanup.apply_plan(args)
 
     def test_default_plan_has_no_actions(self):
-        args = type("Args", (), {"repo": str(self.repo), "scope": None,
-                                  "reclaim_gb": 0,
-                                  "out": str(self.root / "plan-only")})()
-        with patch.object(cleanup, "docker_state", return_value=[]), patch.object(cleanup, "open_files", return_value=[]):
+        args = type(
+            "Args", (), {"repo": str(self.repo), "scope": None, "reclaim_gb": 0, "out": str(self.root / "plan-only")}
+        )()
+        with (
+            patch.object(cleanup, "docker_state", return_value=[]),
+            patch.object(cleanup, "open_files", return_value=[]),
+        ):
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(cleanup.make_plan(args), 0)
         plan = json.loads((Path(args.out) / "plan.json").read_text())
@@ -202,9 +221,16 @@ class CleanupTests(unittest.TestCase):
         self.assertEqual(cleanup.byte_target(300), 300_000_000_000)
 
     def test_recovery_shortfall_returns_two_and_reports_actual_delta(self):
-        plan = {"version": 1, "pass_directory": str(self.output), "repository": str(self.repo),
-                "scope": {}, "actions": [], "reclaim_target_bytes": 300_000_000_000,
-                "protected_presence": {}, "blocked": []}
+        plan = {
+            "version": 1,
+            "pass_directory": str(self.output),
+            "repository": str(self.repo),
+            "scope": {},
+            "actions": [],
+            "reclaim_target_bytes": 300_000_000_000,
+            "protected_presence": {},
+            "blocked": [],
+        }
         path = self.output / "plan.json"
         path.write_text(json.dumps(plan))
         args = type("Args", (), {"plan": str(path)})()
@@ -216,18 +242,34 @@ class CleanupTests(unittest.TestCase):
         self.assertFalse(report["reclaim_target_met"])
 
     def test_changed_volume_identity_refused_before_remove(self):
-        action = {"kind": "docker-volume", "name": "exact-fixture", "released": True,
-                  "owner": "fixture", "reason": "closed", "identity": {"CreatedAt": "old"}}
-        with patch.object(cleanup, "docker_state", return_value=[]), patch.object(cleanup, "volume_identity", return_value={"CreatedAt": "new"}):
+        action = {
+            "kind": "docker-volume",
+            "name": "exact-fixture",
+            "released": True,
+            "owner": "fixture",
+            "reason": "closed",
+            "identity": {"CreatedAt": "old"},
+        }
+        with (
+            patch.object(cleanup, "docker_state", return_value=[]),
+            patch.object(cleanup, "volume_identity", return_value={"CreatedAt": "new"}),
+        ):
             with patch.object(cleanup, "run") as operation:
                 with self.assertRaises(Refused):
                     cleanup.apply_action(self.repo, self.output, {"scope": {}}, action)
                 operation.assert_not_called()
 
     def test_no_space_target_does_not_fail_for_concurrent_writes(self):
-        plan = {"version": 1, "pass_directory": str(self.output), "repository": str(self.repo),
-                "scope": {}, "actions": [], "reclaim_target_bytes": 0,
-                "protected_presence": {}, "blocked": []}
+        plan = {
+            "version": 1,
+            "pass_directory": str(self.output),
+            "repository": str(self.repo),
+            "scope": {},
+            "actions": [],
+            "reclaim_target_bytes": 0,
+            "protected_presence": {},
+            "blocked": [],
+        }
         path = self.output / "plan.json"
         path.write_text(json.dumps(plan))
         args = type("Args", (), {"plan": str(path)})()
@@ -242,8 +284,9 @@ class CleanupTests(unittest.TestCase):
         self.git("worktree", "add", "--detach", str(active), "HEAD")
         (idle / "uncommitted").write_text("recover me")
         registered = {str(p): {"worktree": str(p)} for p in (self.repo, idle, active)}
-        scope, skipped = discover(self.repo, {}, registered, [],
-                                  [(os.getpid() + 10000, str(active / "tracked"))], "user cleanup")
+        scope, skipped = discover(
+            self.repo, {}, registered, [], [(os.getpid() + 10000, str(active / "tracked"))], "user cleanup"
+        )
         self.assertEqual([a["path"] for a in scope["actions"]], [str(idle)])
         self.assertEqual(skipped[0]["path"], str(active))
         with self.assertRaises(Refused):
@@ -251,17 +294,25 @@ class CleanupTests(unittest.TestCase):
 
     def test_discovery_keeps_unrelated_and_running_containers(self):
         def container(name, running, mounts):
-            return {"id": name, "name": "/" + name, "running": running,
-                    "status": "running" if running else "exited", "mounts": mounts}
+            return {
+                "id": name,
+                "name": "/" + name,
+                "running": running,
+                "status": "running" if running else "exited",
+                "mounts": mounts,
+            }
+
         store = [{"Type": "volume", "Destination": "/layerfs-store"}]
-        containers = [container("closed", False, store), container("live", True, store),
-                      container("unrelated", False, [])]
+        containers = [
+            container("closed", False, store),
+            container("live", True, store),
+            container("unrelated", False, []),
+        ]
         scope, _ = discover(self.repo, {}, {}, containers, [], "authorized")
         self.assertEqual([a["name"] for a in scope["actions"]], ["closed"])
 
     def test_running_container_retirement_refuses_exec_descendant(self):
-        info = {"Id": "exact", "Name": "/daemon", "Mounts": [],
-                "State": {"Running": True}}
+        info = {"Id": "exact", "Name": "/daemon", "Mounts": [], "State": {"Running": True}}
         with self.assertRaises(Refused):
             guard_container(info, {}, {})
         with patch("cleanup_docker.run") as operation:
@@ -277,14 +328,18 @@ class CleanupTests(unittest.TestCase):
             operation.assert_called_once_with(["docker", "top", "exact", "-eo", "pid,args"])
 
     def test_container_using_pinned_volume_cannot_be_retired(self):
-        info = {"Id": "exact", "Name": "/daemon", "Mounts": [{"Name": "pinned"}],
-                "State": {"Running": False, "Status": "exited"}}
+        info = {
+            "Id": "exact",
+            "Name": "/daemon",
+            "Mounts": [{"Name": "pinned"}],
+            "State": {"Running": False, "Status": "exited"},
+        }
         with self.assertRaises(Refused):
             guard_container(info, {}, {"protected_volumes": ["pinned"]})
 
     def test_caches_discovery_keeps_helpers_and_active_profile(self):
         tree = self.root / "linked"
-        target = tree / "core/target/linux"
+        target = tree / "target/linux"
         profile = target / "debug"
         (profile / "deps").mkdir(parents=True)
         (target / ".rustc_info.json").write_text("{}")
@@ -292,9 +347,15 @@ class CleanupTests(unittest.TestCase):
         registered = {str(tree): {"worktree": str(tree)}}
         scope, _ = discover(self.repo, {}, registered, [], [], "cleanup", caches_only=True)
         self.assertEqual(scope["actions"][0]["path"], str(profile))
-        scope, skipped = discover(self.repo, {}, registered, [],
-                                  [(os.getpid() + 10000, str(profile / "deps/file"))],
-                                  "cleanup", caches_only=True)
+        scope, skipped = discover(
+            self.repo,
+            {},
+            registered,
+            [],
+            [(os.getpid() + 10000, str(profile / "deps/file"))],
+            "cleanup",
+            caches_only=True,
+        )
         self.assertEqual(scope["actions"], [])
         self.assertEqual(skipped[0]["kind"], "cargo-cache")
         self.assertEqual((profile / "helper").read_text(), "preserve")
@@ -310,9 +371,15 @@ class CleanupTests(unittest.TestCase):
         os.link(first / "object.o", second / "object.o")
         (profile / "helper").write_bytes(b"keep")
         action = self.action(profile, "cargo-cache")
-        action.update(target_root=str(target), guard_path=str(profile),
-                      cache_snapshots={str(p): inventory(p)[1] for p in (first, second)})
-        with patch.object(cleanup, "docker_state", return_value=[]), patch.object(cleanup, "open_files", return_value=[]):
+        action.update(
+            target_root=str(target),
+            guard_path=str(profile),
+            cache_snapshots={str(p): inventory(p)[1] for p in (first, second)},
+        )
+        with (
+            patch.object(cleanup, "docker_state", return_value=[]),
+            patch.object(cleanup, "open_files", return_value=[]),
+        ):
             cleanup.apply_action(self.repo, self.output, {"scope": {}}, action)
         self.assertFalse(first.exists())
         self.assertFalse(second.exists())
@@ -327,9 +394,12 @@ class CleanupTests(unittest.TestCase):
         (profile / "daemon").write_bytes(b"pinned")
         (target / ".rustc_info.json").write_text("{}")
         action = self.action(profile, "cargo-cache")
-        action.update(target_root=str(target), guard_path=str(profile),
-                      retire_idle_sessions=True,
-                      cache_snapshots={str(cache): inventory(cache)[1]})
+        action.update(
+            target_root=str(target),
+            guard_path=str(profile),
+            retire_idle_sessions=True,
+            cache_snapshots={str(cache): inventory(cache)[1]},
+        )
         return action, profile, cache
 
     def test_retired_cargo_profile_filters_cached_vm_handles_at_plan_and_apply(self):
@@ -337,14 +407,17 @@ class CleanupTests(unittest.TestCase):
         scope = self.root / "scope.json"
         scope.write_text(json.dumps({"version": 1, "actions": [action]}))
         self.output.rmdir()
-        args = type("Args", (), {"repo": str(self.repo), "scope": str(scope),
-                                 "out": str(self.output), "reclaim_gb": 0})()
+        args = type(
+            "Args", (), {"repo": str(self.repo), "scope": str(scope), "out": str(self.output), "reclaim_gb": 0}
+        )()
         disk = self.root / "Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw"
         opened = [(4242, str(cache / "object.o")), (4242, str(disk))]
-        with patch("cleanup_retirement.Path.home", return_value=self.root), \
-                patch("cleanup_retirement.run") as process, \
-                patch.object(cleanup, "docker_state", return_value=[]), \
-                patch.object(cleanup, "open_files", return_value=opened):
+        with (
+            patch("cleanup_retirement.Path.home", return_value=self.root),
+            patch("cleanup_retirement.run") as process,
+            patch.object(cleanup, "docker_state", return_value=[]),
+            patch.object(cleanup, "open_files", return_value=opened),
+        ):
             process.return_value.stdout = b"4242 1 S /System/com.apple.Virtualization.VirtualMachine\n"
             with contextlib.redirect_stdout(io.StringIO()):
                 cleanup.make_plan(args)
@@ -361,16 +434,22 @@ class CleanupTests(unittest.TestCase):
         vm = [(4242, str(cache / "object.o")), (4242, str(disk))]
         ordinary = [(4343, str(cache / "object.o"))]
         bound = {"name": "live", "mounts": [{"Type": "bind", "Source": str(self.repo)}]}
-        cases = [(False, vm, [[], []]), (True, ordinary, [[], []]),
-                 (True, vm, [[bound], [bound]]), (True, vm, [[], [bound]])]
-        with patch("cleanup_retirement.Path.home", return_value=self.root), \
-                patch("cleanup_retirement.run") as process:
-            process.return_value.stdout = (b"4242 1 S /System/com.apple.Virtualization.VirtualMachine\n"
-                                           b"4343 1 S /usr/bin/active-command\n")
+        cases = [
+            (False, vm, [[], []]),
+            (True, ordinary, [[], []]),
+            (True, vm, [[bound], [bound]]),
+            (True, vm, [[], [bound]]),
+        ]
+        with patch("cleanup_retirement.Path.home", return_value=self.root), patch("cleanup_retirement.run") as process:
+            process.return_value.stdout = (
+                b"4242 1 S /System/com.apple.Virtualization.VirtualMachine\n4343 1 S /usr/bin/active-command\n"
+            )
             for enabled, opened, containers in cases:
-                with self.subTest(enabled=enabled, opened=opened, containers=containers), \
-                        patch.object(cleanup, "docker_state", side_effect=containers), \
-                        patch.object(cleanup, "open_files", return_value=opened):
+                with (
+                    self.subTest(enabled=enabled, opened=opened, containers=containers),
+                    patch.object(cleanup, "docker_state", side_effect=containers),
+                    patch.object(cleanup, "open_files", return_value=opened),
+                ):
                     action["retire_idle_sessions"] = enabled
                     with self.assertRaises(Refused):
                         cleanup.apply_action(self.repo, self.output, {"scope": {}}, action)
@@ -394,8 +473,7 @@ class CleanupTests(unittest.TestCase):
         result = self.apply(self.action(tree, "worktree"))
         manifest = json.loads(gzip.open(result["manifest"], "rb").read())
         row = next(r for r in manifest["rows"] if r["path"] == "dependency/.git/config")
-        self.assertEqual(self.git("show", result["tree"] + ":" + row["archive_path"]),
-                         b"nested repository recovery\n")
+        self.assertEqual(self.git("show", result["tree"] + ":" + row["archive_path"]), b"nested repository recovery\n")
 
     def test_retirement_allows_idle_agent_cwd_but_preserves_busy_agent_and_open_files(self):
         sessions = self.root / ".claude/sessions"
@@ -420,8 +498,7 @@ class CleanupTests(unittest.TestCase):
 
     def test_retirement_keeps_handles_of_virtual_machines_without_docker_backing(self):
         opened = [(4242, str(self.repo / "in-use"))]
-        with patch("cleanup_retirement.Path.home", return_value=self.root), \
-                patch("cleanup_retirement.run") as process:
+        with patch("cleanup_retirement.Path.home", return_value=self.root), patch("cleanup_retirement.run") as process:
             process.return_value.stdout = b"4242 1 S /System/com.apple.Virtualization.VirtualMachine\n"
             self.assertEqual(retirement_open_files(self.repo, opened, True), opened)
 
@@ -430,11 +507,16 @@ class CleanupTests(unittest.TestCase):
         self.git("worktree", "add", "--detach", str(tree), "HEAD")
         info = tree.stat()
         action = self.action(tree, "worktree")
-        action.update(snapshot={"device": info.st_dev, "inode": info.st_ino},
-                      git_head=git(tree, "rev-parse", "HEAD").decode().strip(),
-                      staged_sha256=hashlib.sha256(b"").hexdigest())
+        action.update(
+            snapshot={"device": info.st_dev, "inode": info.st_ino},
+            git_head=git(tree, "rev-parse", "HEAD").decode().strip(),
+            staged_sha256=hashlib.sha256(b"").hexdigest(),
+        )
         (tree / "new-helper").write_text("latest uncommitted contents\n")
-        with patch.object(cleanup, "docker_state", return_value=[]), patch.object(cleanup, "open_files", return_value=[]):
+        with (
+            patch.object(cleanup, "docker_state", return_value=[]),
+            patch.object(cleanup, "open_files", return_value=[]),
+        ):
             result = cleanup.apply_action(self.repo, self.output, {"scope": {}, "pass_id": "fixture"}, action)
         self.assertEqual(self.git("show", result["tree"] + ":new-helper"), b"latest uncommitted contents\n")
         self.assertFalse(tree.exists())
@@ -445,7 +527,10 @@ class CleanupTests(unittest.TestCase):
         info = tree.stat()
         action = self.action(tree, "worktree")
         action["snapshot"] = {"device": info.st_dev, "inode": info.st_ino + 1}
-        with patch.object(cleanup, "docker_state", return_value=[]), patch.object(cleanup, "open_files", return_value=[]):
+        with (
+            patch.object(cleanup, "docker_state", return_value=[]),
+            patch.object(cleanup, "open_files", return_value=[]),
+        ):
             with self.assertRaisesRegex(Refused, "root was replaced"):
                 cleanup.apply_action(self.repo, self.output, {"scope": {}}, action)
         self.assertTrue((tree / "tracked").exists())
@@ -465,6 +550,7 @@ class CleanupTests(unittest.TestCase):
         result = self.apply(self.action(source))
         manifest = json.loads(gzip.open(result["manifest"], "rb").read())
         import base64
+
         row = next(row for row in manifest["rows"] if row["path"] == "file")
         self.assertEqual(base64.b64decode(row["xattrs_base64"][key]), b"attribute bytes")
 
@@ -477,8 +563,12 @@ class CleanupTests(unittest.TestCase):
             with patch("cleanup_state.sys.platform", "darwin"):
                 with self.assertRaisesRegex(Refused, "bind overlapping"):
                     ensure_idle([source], [], [container], [])
-                info = {"Id": "fixture", "Name": "/active", "Mounts": [mount],
-                        "State": {"Running": False, "Status": "exited"}}
+                info = {
+                    "Id": "fixture",
+                    "Name": "/active",
+                    "Mounts": [mount],
+                    "State": {"Running": False, "Status": "exited"},
+                }
                 with self.assertRaisesRegex(Refused, "protected path"):
                     guard_container(info, {}, {"protected_paths": [str(source)]})
 
@@ -486,17 +576,23 @@ class CleanupTests(unittest.TestCase):
         other = self.root / "linked"
         self.git("worktree", "add", "--detach", str(other), "HEAD")
         for tree in (self.repo, other):
-            target = tree / "core/target"
+            target = tree / "target"
             (target / "debug/deps").mkdir(parents=True)
             (target / ".rustc_info.json").write_text("{}")
         registered = {str(p): {} for p in (self.repo, other)}
-        scope, _ = discover(self.repo, {}, registered, [], [], "user authorized caches",
-                            caches_only=True, cache_worktrees=[str(self.repo)])
-        self.assertEqual([a["path"] for a in scope["actions"]],
-                         [str(self.repo / "core/target/debug")])
+        scope, _ = discover(
+            self.repo,
+            {},
+            registered,
+            [],
+            [],
+            "user authorized caches",
+            caches_only=True,
+            cache_worktrees=[str(self.repo)],
+        )
+        self.assertEqual([a["path"] for a in scope["actions"]], [str(self.repo / "target/debug")])
         default, _ = discover(self.repo, {}, registered, [], [], "user authorized caches", caches_only=True)
-        self.assertEqual([a["path"] for a in default["actions"]],
-                         [str(other / "core/target/debug")])
+        self.assertEqual([a["path"] for a in default["actions"]], [str(other / "target/debug")])
 
     def test_archive_across_hash_batches_preserves_every_file(self):
         source = self.root / "many-files"
@@ -506,8 +602,7 @@ class CleanupTests(unittest.TestCase):
         with patch("cleanup_archive.HASH_BATCH_BYTES", 8192):
             result = self.apply(self.action(source))
         manifest = json.loads(gzip.open(result["manifest"], "rb").read())
-        self.assertEqual(sum(row.get("target") is None and row["path"] != "."
-                             for row in manifest["rows"]), 4097)
+        self.assertEqual(sum(row.get("target") is None and row["path"] != "." for row in manifest["rows"]), 4097)
         self.assertEqual(self.git("show", result["tree"] + ":0"), b"0")
         self.assertEqual(self.git("show", result["tree"] + ":4096"), b"4096")
         self.assertFalse(source.exists())
@@ -549,12 +644,22 @@ class CleanupTests(unittest.TestCase):
             action = self.action(source)
             action["snapshot"] = inventory(source)[1]
             actions.append(action)
-        plan = {"version": 1, "pass_directory": str(self.output), "repository": str(self.repo),
-                "scope": {}, "actions": actions, "protected_presence": {}, "blocked": []}
+        plan = {
+            "version": 1,
+            "pass_directory": str(self.output),
+            "repository": str(self.repo),
+            "scope": {},
+            "actions": actions,
+            "protected_presence": {},
+            "blocked": [],
+        }
         path = self.output / "plan.json"
         path.write_text(json.dumps(plan))
         args = type("Args", (), {"plan": str(path), "jobs": 2})()
-        with patch.object(cleanup, "docker_state", return_value=[]), patch.object(cleanup, "open_files", return_value=[]):
+        with (
+            patch.object(cleanup, "docker_state", return_value=[]),
+            patch.object(cleanup, "open_files", return_value=[]),
+        ):
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(cleanup.apply_plan(args), 0)
         report = json.loads((self.output / "report.json").read_text())
@@ -566,9 +671,15 @@ class CleanupTests(unittest.TestCase):
         self.assertEqual(report["uncertain_actions"], [])
 
     def test_interrupted_attempt_is_uncertain_and_never_requeued(self):
-        plan = {"version": 1, "pass_directory": str(self.output), "repository": str(self.repo),
-                "scope": {}, "actions": [{"kind": "archive-file"}, {"kind": "archive-tree"}],
-                "protected_presence": {}, "blocked": []}
+        plan = {
+            "version": 1,
+            "pass_directory": str(self.output),
+            "repository": str(self.repo),
+            "scope": {},
+            "actions": [{"kind": "archive-file"}, {"kind": "archive-tree"}],
+            "protected_presence": {},
+            "blocked": [],
+        }
         path = self.output / "plan.json"
         path.write_text(json.dumps(plan))
         args = type("Args", (), {"plan": str(path)})()
@@ -583,6 +694,7 @@ class CleanupTests(unittest.TestCase):
 
     def test_protected_cargo_volume_never_starts_helper(self):
         import cleanup_volume_cache
+
         action = {"kind": "docker-cargo-cache", "name": "pinned"}
         with patch.object(cleanup_volume_cache, "helper") as helper:
             with self.assertRaisesRegex(Refused, "Protected volume"):
@@ -591,10 +703,18 @@ class CleanupTests(unittest.TestCase):
 
     def test_changed_cargo_volume_preserved_before_helper(self):
         import cleanup_volume_cache
-        action = {"kind": "docker-cargo-cache", "name": "cache",
-                  "identity": {"CreatedAt": "old"},
-                  "helper_sha256": hashlib.sha256(cleanup_volume_cache.SCRIPT.read_bytes()).hexdigest()}
-        with patch.object(cleanup_volume_cache, "docker_state", return_value=[]), patch.object(cleanup_volume_cache, "volume_identity", return_value={"CreatedAt": "new"}), patch.object(cleanup_volume_cache, "helper") as helper:
+
+        action = {
+            "kind": "docker-cargo-cache",
+            "name": "cache",
+            "identity": {"CreatedAt": "old"},
+            "helper_sha256": hashlib.sha256(cleanup_volume_cache.SCRIPT.read_bytes()).hexdigest(),
+        }
+        with (
+            patch.object(cleanup_volume_cache, "docker_state", return_value=[]),
+            patch.object(cleanup_volume_cache, "volume_identity", return_value={"CreatedAt": "new"}),
+            patch.object(cleanup_volume_cache, "helper") as helper,
+        ):
             with self.assertRaisesRegex(Refused, "identity changed"):
                 cleanup_volume_cache.clear(action, {}, self.output, lambda *a, **k: None)
             helper.assert_not_called()
@@ -602,33 +722,49 @@ class CleanupTests(unittest.TestCase):
     def test_nested_cargo_target_mount_stays_inside_selected_directory(self):
         import cleanup_volume_cache
         from types import SimpleNamespace
-        for mode in ('plan', 'apply'):
+
+        for mode in ("plan", "apply"):
             calls = []
+
             def run(args, **kwargs):
                 calls.append(args)
-                data = (b'[{"State":{"Running":false,"ExitCode":0}}]'
-                        if args[1] == 'inspect' else b'{"version":1}'
-                        if args[1] == 'start' else b'fixture')
+                data = (
+                    b'[{"State":{"Running":false,"ExitCode":0}}]'
+                    if args[1] == "inspect"
+                    else b'{"version":1}'
+                    if args[1] == "start"
+                    else b"fixture"
+                )
                 return SimpleNamespace(stdout=data)
-            with patch.object(cleanup_volume_cache, 'run', side_effect=run), patch.object(cleanup_volume_cache, 'docker_state', return_value=[]):
-                result = cleanup_volume_cache.helper('cache', 'pinned-image', self.output,
-                    mode, cache={'version': 1} if mode == 'apply' else None,
-                    target_subdir='plain')
-            self.assertEqual(result, {'version': 1})
+
+            with (
+                patch.object(cleanup_volume_cache, "run", side_effect=run),
+                patch.object(cleanup_volume_cache, "docker_state", return_value=[]),
+            ):
+                result = cleanup_volume_cache.helper(
+                    "cache",
+                    "pinned-image",
+                    self.output,
+                    mode,
+                    cache={"version": 1} if mode == "apply" else None,
+                    target_subdir="plain",
+                )
+            self.assertEqual(result, {"version": 1})
             create = calls[0]
-            mounts = [create[i + 1] for i, x in enumerate(create) if x == '--mount']
-            self.assertIn('type=volume,src=cache,dst=/target,volume-subpath=plain'
-                          + (',readonly' if mode == 'plan' else ''), mounts)
-            self.assertFalse(any(x == 'type=volume,src=cache,dst=/target' for x in mounts))
+            mounts = [create[i + 1] for i, x in enumerate(create) if x == "--mount"]
+            self.assertIn(
+                "type=volume,src=cache,dst=/target,volume-subpath=plain" + (",readonly" if mode == "plan" else ""),
+                mounts,
+            )
+            self.assertFalse(any(x == "type=volume,src=cache,dst=/target" for x in mounts))
 
     def test_nested_cargo_target_rejects_escape_before_container_creation(self):
         import cleanup_volume_cache
-        with patch.object(cleanup_volume_cache, 'run') as run:
-            for path in ('', '..', '.', '../other', '/plain', 'plain/child',
-                         'plain,readonly', 1):
-                with self.assertRaisesRegex(Refused, 'one literal directory name'):
-                    cleanup_volume_cache.helper('cache', 'image', self.output,
-                                                'plan', target_subdir=path)
+
+        with patch.object(cleanup_volume_cache, "run") as run:
+            for path in ("", "..", ".", "../other", "/plain", "plain/child", "plain,readonly", 1):
+                with self.assertRaisesRegex(Refused, "one literal directory name"):
+                    cleanup_volume_cache.helper("cache", "image", self.output, "plan", target_subdir=path)
             run.assert_not_called()
 
 

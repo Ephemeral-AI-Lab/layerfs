@@ -1,2 +1,0 @@
-message,files_left,commit_ms,kind,commit,base,logical,newCanonical,newStored,newMetadata,load
-mdtest: files left by the create-only pass,20000,2591.431,Committed,1289070bfcf25f96d9e55b7c157067747f8622abf36fc7287bca32b377f4e287a9,32b5a8038254b952e00fb8ab0c96bad565d53db2b1427d3156786ebff1a630efc5,60,2238515,168282,168282,6.72

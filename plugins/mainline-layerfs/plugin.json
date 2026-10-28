@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "mainline-layerfs",
+  "name": "Mainline for LayerFS",
+  "summary": "Git-native engineering memory for coding agents in LayerFS Workspaces.",
+  "authors": [{ "name": "Mainline contributors", "github": "mainline-org" }],
+  "license": "Apache-2.0",
+  "repository": "https://github.com/mainline-org/mainline",
+  "tags": ["agents", "memory", "git", "workspaces", "multi-agent"],
+  "platforms": ["linux", "macos", "windows-wsl2"],
+  "uses": ["agent", "runtime"],
+  "host": { "name": "Mainline", "url": "https://github.com/mainline-org/mainline" },
+  "status": "preview",
+  "versions": [
+    {
+      "version": "0.1.0",
+      "commit": "2c146816d4bc0d88c85138ed8f63bdcb128f6d38",
+      "date": "2026-10-25",
+      "layerfs": { "version": "v1.1.0", "commit": "9f97a7ec95b662e9cb288704afa165feff132cfa" },
+      "notes": "Initial adapter, worker launcher and agent skills; 29 tests pass without Docker."
+    }
+  ]
+}

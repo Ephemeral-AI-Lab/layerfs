@@ -1,3 +1,0 @@
-#!/bin/sh
-# docker inside the #352 runner: the Engine API shim (docker-shim.mjs)
-exec node "$(dirname "$0")/docker-shim.mjs" "$@"

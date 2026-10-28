@@ -4,8 +4,9 @@
 //! Open validates the row before any work and refuses conflicting overrides; a
 //! Store is never silently migrated, and objects are never re-interpreted against
 //! another construction cutoff. Threshold selection, maximum stored-object
-//! validity, chain-work budgets and live-memory budgets are separate: raising the
-//! cutoff or a depth never raises the others.
+//! validity and live-memory budgets are separate: raising the cutoff or a depth
+//! never raises the others. Chain-work budgets scale with the cutoff alone, so
+//! the largest whole file fits a chain; a depth never raises them.
 
 use layerfs_content::{ConstructionPolicy, ContentError};
 
@@ -84,12 +85,14 @@ pub const SINGLETON_FRAMING_SLACK: usize = 4_096;
 /// Largest assembled singleton pack: one maximum canonical record plus framing.
 pub const SINGLETON_PACK_LIMIT: usize = CANONICAL_LIMIT + SINGLETON_FRAMING_SLACK;
 
-/// Chain-work budgets. These are separate from the cutoff and the depths: a
-/// deeper chain is still bounded by the bytes it may decode and encode.
-/// Canonical bytes one dependency chain may reconstruct.
-pub const CHAIN_CANONICAL_LIMIT: u64 = 512 * 1024;
-/// Encoded bytes one dependency chain may read.
-pub const CHAIN_ENCODED_LIMIT: u64 = 256 * 1024;
+/// Chain-work budgets, in multiples of the construction cutoff, so the largest
+/// whole file always fits a chain alone. A depth never raises them: a deeper
+/// chain is still bounded by the bytes it may decode and encode. At the default
+/// 128 KiB cutoff they are 512 KiB canonical and 256 KiB encoded.
+/// Cutoffs of canonical bytes one dependency chain may reconstruct.
+pub const CHAIN_CANONICAL_CUTOFFS: u64 = 4;
+/// Cutoffs of encoded bytes one dependency chain may read.
+pub const CHAIN_ENCODED_CUTOFFS: u64 = 2;
 /// Complete bodies or selected encoded groups one operation may retain.
 ///
 /// Owner: the save operation that fills it. Bound: this many bytes of pack bodies.
@@ -315,6 +318,14 @@ impl StorageCapacities {
     pub fn from_policy(policy: StoragePolicy) -> StorageResult<Self> {
         let policy = policy.validated()?;
         let construction = policy.construction().capacities();
+        let chain = |cutoffs: u64| {
+            policy
+                .small_file_threshold_bytes()
+                .checked_mul(cutoffs)
+                .ok_or(StorageError::UnsupportedPolicy {
+                    field: "small_file_threshold_bytes",
+                })
+        };
         Ok(Self {
             small_file_threshold_bytes: policy.small_file_threshold_bytes(),
             whole_file_canonical_limit: construction.whole_file_canonical_limit,
@@ -328,8 +339,8 @@ impl StorageCapacities {
             metadata_delta_max_depth: policy.metadata_delta_max_depth(),
             metadata_chain_canonical_limit: METADATA_CHAIN_CANONICAL_LIMIT,
             metadata_chain_encoded_limit: METADATA_CHAIN_ENCODED_LIMIT,
-            chain_canonical_limit: CHAIN_CANONICAL_LIMIT,
-            chain_encoded_limit: CHAIN_ENCODED_LIMIT,
+            chain_canonical_limit: chain(CHAIN_CANONICAL_CUTOFFS)?,
+            chain_encoded_limit: chain(CHAIN_ENCODED_CUTOFFS)?,
             batch_objects: BATCH_OBJECT_LIMIT,
             batch_bytes: WAVE_CANONICAL_BYTES_LIMIT,
             transaction_rows: TRANSACTION_ROW_LIMIT,

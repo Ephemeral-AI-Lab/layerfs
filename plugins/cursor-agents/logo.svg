@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="LayerFS for Cursor">
+  <rect width="64" height="64" rx="14" fill="#1b2430"/>
+  <rect x="8" y="12" width="40" height="10" rx="2" fill="#6fbfb0"/>
+  <rect x="12" y="26" width="40" height="10" rx="2" fill="#d9d3c7"/>
+  <rect x="16" y="40" width="40" height="10" rx="2" fill="#8aa0b4"/>
+  <path d="M26 22h8l6 10-6 10h-8l6-10z" fill="#e2a325"/>
+</svg>

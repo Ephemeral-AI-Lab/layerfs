@@ -2,26 +2,39 @@
 """Count first-party production source lines for the per-commit LOC rule.
 
 Production code is nonblank, non-comment first-party product implementation:
-the replacement product under core/crates/*/src and the reference product under
-crates/*/src, plus the runtime SQL that ships with either product under
+the product under core/crates/*/src and engine/crates/*/src (layerfs-api and the
+layerfs-node binding were api/layerfs-api and api/binding before the api/
+regrouping, and are counted there too), and the reference product under crates/*/src, plus shipped runtime SQL under
 <crate>/sql/. Tests, examples, benches, fixtures, benchmark harnesses,
 development tools, docs, manifests and generated artifacts are excluded. Legacy
 inline #[cfg(test)] items are removed before counting, because the reference tree
 keeps tests inside src/.
 
-The JavaScript SDK is its own scope, `sdk`: the Node binding's Rust under
-sdk/js/native/src and the package's JavaScript under sdk/js/src and
-sdk/js/operator. JavaScript comments are blanked by a scanner that knows line
-and block comments and single, double and template strings. Current regex
+Rust crates are assigned by name to core or engine in every layout: the
+layerfs-api method surface and the layerfs-node binding are engine crates
+wherever they sit. Unknown historical crates remain counted in core.
+
+The `api` scope is the published JavaScript (#428): the src/ JavaScript of
+each package under api/ (api/agent is @layerfs/agent, api/cli is @layerfs/cli,
+api/backend and api/runtime; api/agent/sdk and api/agent/cli before the
+regrouping), one crate per package, named by its package.json. Tests and
+node_modules are excluded. The layouts before the move to api/ are still
+counted, so trees on either side compare: sdk/js/native/src, sdk/js/packages/<name>/src, the
+older single package @layerfs/sdk under sdk/js/src and sdk/js/operator, and
+the layerfs command under cli/src. Those were the separate `sdk` and `cli`
+scopes. JavaScript comments are blanked by a scanner that knows line and
+block comments and single, double and template strings. Current regex
 literals contain no comment delimiters or string quotes.
 
 The deepseek-harness plugin is its own scope, `dsh`: the JavaScript and
 TypeScript under dsh/packages/<package>/src, one crate per package
 (@dsh-layerfs/<package>, and the dsh-layerfs bundle). Its tests, build output
-and the untracked dsh/assets art are excluded. TypeScript comments are blanked
+and the untracked dsh/assets art are excluded. The plugin moved to the
+dsh-layerfs repository on 2026-10-23 (#428); the scope stays so trees before
+the move still count it, and reads 0 after it. TypeScript comments are blanked
 by the same JavaScript scanner.
 
-Runtime SQL is counted for both scopes: a candidate package that ships schema or
+Runtime SQL is counted for every product scope: a candidate package that ships schema or
 query text under <crate>/sql/ contributes it exactly like the reference schema.
 Per-file reporting uses the same classification as the totals, and prints the
 physical line count separately so the two measures are never confused.
@@ -36,6 +49,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -212,9 +226,7 @@ def declared_modules(path: Path, text: str) -> list:
     file is itself test only, which is what makes the exclusion transitive.
     """
     declarations = []
-    pattern = re.compile(
-        r"(?P<attributes>(?:#\[[^\]]*\]\s*)*)mod\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*;"
-    )
+    pattern = re.compile(r"(?P<attributes>(?:#\[[^\]]*\]\s*)*)mod\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*;")
     directory = path.parent if path.stem in {"mod", "lib", "main"} else path.parent / path.stem
     for match in pattern.finditer(text):
         attributes = match.group("attributes")
@@ -222,19 +234,14 @@ def declared_modules(path: Path, text: str) -> list:
             implies_test(attribute[attribute.find("(") + 1 : -2])
             for attribute in re.findall(r"#\[cfg\([^\]]*\)\]", attributes)
         ) or any(
-            "test" in attribute and "cfg(" not in attribute
-            for attribute in re.findall(r"#\[[^\]]*\]", attributes)
+            "test" in attribute and "cfg(" not in attribute for attribute in re.findall(r"#\[[^\]]*\]", attributes)
         )
         explicit = re.search(r'#\[path\s*=\s*"([^"]+)"\]', attributes)
         if explicit:
             target = path.parent / explicit.group(1)
         else:
             candidate = directory / match.group("name")
-            target = (
-                candidate.with_suffix(".rs")
-                if (candidate.with_suffix(".rs")).exists()
-                else candidate / "mod.rs"
-            )
+            target = candidate.with_suffix(".rs") if (candidate.with_suffix(".rs")).exists() else candidate / "mod.rs"
         declarations.append((test_only, target))
     return declarations
 
@@ -345,29 +352,101 @@ def counted_lines(path: Path) -> int:
     return sum(1 for line in text.splitlines() if line.strip())
 
 
-SCOPES = ("core", "reference", "sdk", "dsh")
+SCOPES = ("core", "engine", "reference", "api", "dsh")
+ENGINE_CRATES = {
+    "layerfs-bridge",
+    "layerfs-daemon",
+    "layerfs-fuse",
+    "layerfs-overlay",
+    "layerfs-persistence",
+    "layerfs-project",
+    "layerfs-sandbox",
+    "layerfs-store-service",
+    "layerfs-workspace",
+    "layerfs-api",
+    "layerfs-node",
+}
+# Crate folders directly under api/ before the regrouping, by folder name.
+OLD_API_CRATES = {"layerfs-api": "layerfs-api", "binding": "layerfs-node"}
+
+
+def crate_layer(name: str) -> str:
+    if name in ENGINE_CRATES:
+        return "engine"
+    # Historical and synthetic crates remain counted rather than disappearing.
+    return "core"
+
+
+def replacement_packages(root: Path) -> list:
+    return sorted(
+        [p for base in (root / "core/crates", root / "engine/crates") for p in base.glob("*") if p.is_dir()]
+        + [root / "api" / folder for folder in OLD_API_CRATES if (root / "api" / folder).is_dir()]
+    )
+
+
+def package_crate(root: Path, package: Path) -> str:
+    """The crate name of a package folder; api/binding was layerfs-node."""
+    return OLD_API_CRATES[package.name] if package.parent == root / "api" else package.name
 
 
 def scope_base(root: Path, scope: str) -> Path:
-    if scope == "core":
-        return root / "core" / "crates"
-    if scope == "sdk":
-        return root / "sdk" / "js"
+    if scope in {"core", "engine"}:
+        return root
+    if scope == "api":
+        return root
     if scope == "dsh":
         return root / "dsh" / "packages"
     return root / "crates"
 
 
-def sdk_files(base: Path) -> list:
-    """The binding's Rust and the package's JavaScript."""
+def kept(paths: list, base: Path) -> list:
+    return [path for path in paths if not any(part in SKIP_DIRS for part in path.relative_to(base).parts)]
+
+
+def api_packages(api: Path) -> list:
+    """Each directory under api/ holding a package.json and a src/ folder."""
+    found = []
+    for base, dirs, files in os.walk(api):
+        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and d != "src")
+        if "package.json" in files and (Path(base) / "src").is_dir():
+            found.append(Path(base))
+    return found
+
+
+def api_files(root: Path) -> list:
+    """The binding's Rust and each package's src/ JavaScript, in either layout."""
     files = []
-    if (base / "native" / "src").is_dir():
-        files += sorted((base / "native" / "src").rglob("*.rs"))
-    if (base / "src").is_dir():
-        files += sorted((base / "src").rglob("*.js"))
-    if (base / "operator").is_dir():
-        files += sorted((base / "operator").rglob("*.js"))
-    return [path for path in files if not any(part in SKIP_DIRS for part in path.relative_to(base).parts)]
+    api = root / "api"
+    if api.is_dir():
+        for package in api_packages(api):
+            files += kept(sorted((package / "src").rglob("*.js")), package)
+    # Before the move to api/ (#428): the `sdk` and `cli` scopes.
+    sdk = root / "sdk" / "js"
+    if (sdk / "native" / "src").is_dir():
+        files += kept(sorted((sdk / "native" / "src").rglob("*.rs")), sdk)
+    for folder in ("src", "operator"):
+        if (sdk / folder).is_dir():
+            files += kept(sorted((sdk / folder).rglob("*.js")), sdk)
+    if (sdk / "packages").is_dir():
+        for package in sorted(p for p in (sdk / "packages").iterdir() if (p / "src").is_dir()):
+            files += kept(sorted((package / "src").rglob("*.js")), sdk)
+    if (root / "cli" / "src").is_dir():
+        files += kept(sorted((root / "cli" / "src").rglob("*.js")), root / "cli")
+    return files
+
+
+def api_crate(root: Path, path: Path) -> str:
+    parts = path.relative_to(root).parts
+    if parts[:3] == ("sdk", "js", "native"):
+        return "layerfs-node"
+    if parts[0] == "cli":
+        return "@layerfs/cli"
+    if parts[:2] == ("sdk", "js"):
+        return f"@layerfs/{parts[3]}" if parts[2] == "packages" else "@layerfs/sdk"
+    package = path.parent
+    while not ((package / "package.json").is_file() and (package / "src").is_dir()):
+        package = package.parent
+    return json.loads((package / "package.json").read_text(encoding="utf-8"))["name"]
 
 
 def dsh_files(base: Path) -> list:
@@ -386,26 +465,18 @@ def dsh_crate(base: Path, path: Path) -> str:
 
 def crate_of(root: Path, scope: str, path: Path) -> str:
     base = scope_base(root, scope)
-    if scope == "sdk":
-        return sdk_crate(base, path)
+    if scope == "api":
+        return api_crate(root, path)
     if scope == "dsh":
         return dsh_crate(base, path)
     parts = path.relative_to(root).parts
-    return parts[2] if scope == "core" else parts[1]
+    if scope in {"core", "engine"}:
+        return OLD_API_CRATES[parts[1]] if parts[0] == "api" else parts[2]
+    return parts[1]
 
 
-def sdk_crate(base: Path, path: Path) -> str:
-    return "layerfs-node" if path.relative_to(base).parts[0] == "native" else "@layerfs/sdk"
-
-
-def scope_files(root: Path, scope: str) -> list:
-    base = scope_base(root, scope)
-    if not base.is_dir():
-        return []
-    if scope == "sdk":
-        return sdk_files(base)
-    if scope == "dsh":
-        return dsh_files(base)
+def rust_files(base: Path) -> list:
+    """Product Rust/runtime SQL under a crate collection, including old API nesting."""
     files = []
     for path in sorted(base.rglob("*")):
         if not path.is_file():
@@ -414,12 +485,10 @@ def scope_files(root: Path, scope: str) -> list:
         if any(part in SKIP_DIRS for part in parts):
             continue
         source = (len(parts) > 2 and parts[1] == "src") or (
-            len(parts) > 3 and parts[0] == "layerfs-api"
-            and parts[1] in ("core", "sdk") and parts[2] == "src"
+            len(parts) > 3 and parts[0] == "layerfs-api" and parts[1] in ("core", "sdk") and parts[2] == "src"
         )
         sql = (len(parts) > 2 and parts[1] == "sql") or (
-            len(parts) > 3 and parts[0] == "layerfs-api"
-            and parts[1] in ("core", "sdk") and parts[2] == "sql"
+            len(parts) > 3 and parts[0] == "layerfs-api" and parts[1] in ("core", "sdk") and parts[2] == "sql"
         )
         if source and path.suffix in CODE_SUFFIXES:
             files.append(path)
@@ -428,6 +497,26 @@ def scope_files(root: Path, scope: str) -> list:
             files.append(path)
     excluded = test_only_files(files)
     return [path for path in files if path not in excluded]
+
+
+def scope_files(root: Path, scope: str) -> list:
+    if scope in {"core", "engine", "api"}:
+        files = []
+        packages = replacement_packages(root)
+        for base in sorted({package.parent for package in packages}):
+            names = {
+                package.name
+                for package in packages
+                if package.parent == base and crate_layer(package_crate(root, package)) == scope
+            }
+            files.extend(path for path in rust_files(base) if path.relative_to(base).parts[0] in names)
+        if scope == "api":
+            files.extend(api_files(root))
+        return sorted(set(files))
+    base = scope_base(root, scope)
+    if not base.is_dir():
+        return []
+    return dsh_files(base) if scope == "dsh" else rust_files(base)
 
 
 def physical_lines(path: Path) -> int:
@@ -486,12 +575,12 @@ def main() -> int:
     args = parser.parse_args()
     if args.files:
         report = per_file(Path(args.root).resolve())
+        if args.json:
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0
         print(f"{'path':<78} {'scope':<9} {'prod':>7} {'physical':>9}")
         for entry in report["files"]:
-            print(
-                f"{entry['path']:<78} {entry['scope']:<9} "
-                f"{entry['production_loc']:>7} {entry['physical_lines']:>9}"
-            )
+            print(f"{entry['path']:<78} {entry['scope']:<9} {entry['production_loc']:>7} {entry['physical_lines']:>9}")
         return 0
     result = scan(Path(args.root).resolve())
     if args.json:

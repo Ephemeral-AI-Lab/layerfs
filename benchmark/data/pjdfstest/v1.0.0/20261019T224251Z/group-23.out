@@ -1,1 +1,0 @@
-{"arm":"sandbox-disk","dir":"mknod","root":"/tmp","ms":1956.601,"exitCode":0,"truncated":false,"tap":"sandbox-disk-mknod-1792450093850.tap","stdout_bytes":33560,"stderr":"","started":["mknod/00.t","mknod/01.t","mknod/02.t","mknod/03.t","mknod/04.t","mknod/05.t","mknod/06.t","mknod/07.t","mknod/08.t","mknod/09.t","mknod/10.t"],"deferred":["mknod/11.t"]}

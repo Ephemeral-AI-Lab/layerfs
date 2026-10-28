@@ -1,5 +1,0 @@
-### group dir=posix_fallocate cwd=/tmp/pjd/posix_fallocate fs=overlay uid=501:20
-### begin posix_fallocate/00.t
-1..1
-ok 1
-### end posix_fallocate/00.t exit=0 ms=3 quick_exit=1 residue=0

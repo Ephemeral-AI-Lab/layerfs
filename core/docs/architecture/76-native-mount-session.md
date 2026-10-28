@@ -197,9 +197,11 @@ Any step that is not established leaves the entry `Retained` with its stage
 (`Detach`, `Join`, `Owner`, `Requests`, `Lane`, `Revoke`, `Close` or `Registry`),
 the observer and the original evidence. The reply is `Retained` with
 `TeardownCustody`; it is not reported as an uncertain mutation and nothing is
-replayed. Later Attach, Unmount or ForceUnmount on that entry returns the same
-custody. The normal path never uses the abort control and never sets the
-terminal fence.
+replayed. Later Attach or Unmount on that entry returns the same custody, and
+so does ForceUnmount, except after a detached drain stopped at `Join`: that one
+[stalled normal unmount](80-forced-teardown.md#stalled-normal-unmount) is ended
+by one forced unmount. The normal path never uses the abort control and never
+sets the terminal fence.
 
 ## Forced unmount
 
@@ -286,7 +288,7 @@ create and on reopen, so a Sandbox created by an earlier build is refused and
 must be closed and created again. A backend other than this Docker one has to
 give the same contract, with its own init (Podman's catatonit, a VM's init) or
 an equivalent. The real-Docker check is
-[`reap_real.mjs`](../../../sdk/js/test/verify/reap_real.mjs): orphans that exit
+[`reap_real.mjs`](../../../api/agent/test/verify/reap_real.mjs): orphans that exit
 are gone, PID 1 is not the daemon, and `exit 7` still answers 7. The record is
 [fix 039](../issues/352/fixes/039-f054-sandbox-init-reaper.md).
 

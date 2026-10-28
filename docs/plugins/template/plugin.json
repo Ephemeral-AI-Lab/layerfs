@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "<your-plugin-id>",
+  "name": "<Plugin name>",
+  "summary": "<What it does, in one line of at most 90 characters.>",
+  "authors": [{ "name": "<Your name or team>", "github": "<your-github-account>" }],
+  "license": "MIT",
+  "repository": "https://github.com/<owner>/<repo>",
+  "tags": ["<tag>", "<another-tag>"],
+  "platforms": ["linux"],
+  "uses": ["agent"],
+  "host": { "name": "<The tool it plugs into; delete this line if none>", "url": "https://<…>" },
+  "status": "preview",
+  "versions": [
+    {
+      "version": "0.1.0",
+      "commit": "<40-character commit SHA of this version in your repository>",
+      "date": "<YYYY-MM-DD>",
+      "layerfs": { "version": "v1.1.0", "commit": "<40-character LayerFS commit SHA you tested with>" },
+      "notes": "<One line: what this version adds.>"
+    }
+  ]
+}

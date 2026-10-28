@@ -97,7 +97,7 @@ the report.
 ## 3. Running a measurement
 
 **Scoped SDK Init profile (owner direction, 2026-09-24):**
-`core/benchmark/fs-bench-pro` measures `init_namespace` with locked Cargo
+fs-bench-pro (in layerfs-benchmark) measures `init_namespace` with locked Cargo
 **release** binaries only. Build with `--release` and use the driver and
 independent verifier from `target/release/examples/`; a debug binary or
 unmarked/debug build cache is forbidden for every new SDK Init measurement.
@@ -105,7 +105,7 @@ Historical debug receipts retain their original profile and status and must
 never be relabeled, pooled with release rows, or used as a release speed arm.
 The SDK selection's mandatory separate verifier is a scoped exception to the
 exploratory performance-only default below; see
-[`core/benchmark/fs-bench-pro/AGENTS.md`](../../core/benchmark/fs-bench-pro/AGENTS.md).
+[`fs-bench-pro/AGENTS.md`](https://github.com/Ephemeral-AI-Lab/layerfs-benchmark/blob/main/fs-bench-pro/AGENTS.md).
 
 1. **One sample per case per arm, and do not sample.** No n3, no best-of
    selection, and no second run of an arm to confirm stability, to characterise

@@ -1,4 +1,0 @@
-stride,states,logical_bytes,store_allocated_bytes,store_payload_bytes,store_metadata_bytes,store_other_bytes,git_pack_bytes,git_index_bytes,logical_per_store_byte,logical_per_git_byte,store_vs_git,old_inprocess_20261007_bytes,delta_vs_old_bytes,delta_vs_old_pct,old_approved_ceiling_bytes,within_old_ceiling
-10,17,561010345,53125120,41472751,1325047,10327322,40240616,1556920,10.56,13.42,1.271,50692096,2433024,4.8,54278964,True
-3,53,1676767835,69455872,51897185,2457063,15101624,45911624,2257760,24.14,34.81,1.4419,64245760,5210112,8.11,70427034,True
-1,157,4936693030,100085760,67488833,5507608,27089319,51985325,3083340,49.32,89.65,1.8175,85172224,14913536,17.51,92342273,False

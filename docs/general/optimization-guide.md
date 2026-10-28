@@ -257,8 +257,8 @@ are not automatically a profile of one Workspace or phase.
 
 The current global provider already records actual VM steps and inclusive
 statement/transaction/BLOB observations in
-[SqlWork](../../core/crates/layerfs-persistence/src/backend/sqlite/connection.rs)
-and its [query execution](../../core/crates/layerfs-persistence/src/backend/sqlite/query.rs).
+[SqlWork](../../engine/crates/layerfs-persistence/src/backend/sqlite/connection.rs)
+and its [query execution](../../engine/crates/layerfs-persistence/src/backend/sqlite/query.rs).
 Confirm observation coverage and aggregation before using it for a statement
 claim. Global-provider profiling does not automatically profile the daemon's
 separate overlay engine.

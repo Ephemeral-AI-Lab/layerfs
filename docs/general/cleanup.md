@@ -257,19 +257,14 @@ termination to reclaim space. Labels help identify ownership; exact acknowledged
 ids and the run ledger decide what is removed. A still-running resource is not
 disposable merely because its original shell exited.
 
-Keep host and Docker guest headroom separate. Check host free space at assignment
-start, at least every 30 minutes during sustained work, before large builds,
-target copies or fixture creation, after build/E2E batches, and at handoff.
-**Below 100 GB of host free space, run the reusable
-cleanup procedure with a target of reclaiming at least 300 GB of net host free
-space across that cleanup episode** (owner direction 2026-10-18). These GB values
-are decimal: 100 GB = 100,000,000,000 bytes and 300 GB = 300,000,000,000 bytes.
-This is a recovery target, not merely a final-free-space target. Keep at least
-20 GiB free inside Docker; below 10 GiB there is urgent cleanup. These thresholds
-are not product limits, test verdicts, or permission to delete protected state.
-Before a large new fixture, cache clone, or image build, account for its additional
-allocation. If confirmed disposable data cannot meet the recovery target, report
-the actual recovery, shortfall and remaining protected/uncertain allocation.
+Keep host and Docker guest headroom separate. How often to check free space, the
+low-space trigger and the recovery target, for the host and inside Docker, depend
+on the machine; set them in your own agent instructions, not in this repository.
+Thresholds are not product limits, test verdicts, or permission to delete
+protected state. Before a large new fixture, cache clone, or image build, account
+for its additional allocation. If confirmed disposable data cannot meet the
+recovery target you set, report the actual recovery, shortfall and remaining
+protected/uncertain allocation.
 
 After removal, record actual free-byte changes in both filesystems where
 applicable. APFS clone totals and Docker object totals are not additive physical
@@ -290,10 +285,9 @@ Check the host filesystem holding the repository:
 python3 tools/cleanup.py check
 ```
 
-Exit 0 means at least 100 GB free; exit 2 means cleanup is required. A low-space
-episode targets at least 300 GB of net recovery. This is a cheap check suitable
-for the regular checkpoints above; it does not scan every worktree or delete
-anything. Record its initial free-byte value when tracking recovery across more
+Exit 0 means free space is at or above `--min-free-gb` (decimal GB, default 100);
+exit 2 means it is below. This is a cheap check; it does not scan every worktree
+or delete anything. Record its initial free-byte value when tracking recovery across more
 than one pass. Do not add overlapping directory or Docker allocation estimates.
 
 Create a fresh inventory pass, even before selecting any removals:
@@ -322,9 +316,9 @@ only in this retirement mode; every current container bind is checked separately
 Idle agents are left running, and their removed checkout paths require restoration
 or reattachment before reuse. Record active assignments
 and their dependency paths with `--protect-path`; a process check alone cannot
-identify future reuse. Inspect the saved exact plan before applying it. Explicit
-user cleanup authorization is sufficient release authority for confirmed idle
-resources; do not demand an additional handoff file or confirmation.
+identify future reuse. Inspect the saved exact plan before applying it, and apply
+it only with the user's authorization for that cleanup. Whether an authorization
+carries over to later passes belongs in the user's own agent instructions.
 
 For a cache pass, use `--discover-caches --authorization "..."` instead. It finds
 real Cargo targets below each linked checkout's target roots, including nested
@@ -370,8 +364,8 @@ or the user authorization recorded by discovery. Example selections:
   "actions": [
     {
       "kind": "cargo-cache",
-      "path": "/absolute/path/to/completed-worktree/core/target/debug",
-      "target_root": "/absolute/path/to/completed-worktree/core/target",
+      "path": "/absolute/path/to/completed-worktree/target/debug",
+      "target_root": "/absolute/path/to/completed-worktree/target",
       "owner": "completed assignment owner",
       "reason": "assignment handed off; cache released",
       "released": true

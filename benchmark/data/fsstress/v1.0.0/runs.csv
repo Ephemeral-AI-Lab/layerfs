@@ -1,5 +1,0 @@
-case,arm,seed,procs,ops,exit,wall_ms,ops_per_s,errors_total
-c1,sandbox-disk,365001,1,10000,0,2453.899,4075.1,2150
-c1,layerfs,365001,1,10000,0,3824.872,2614.5,3621
-c2,sandbox-disk,365002,4,10000,0,3962.413,10094.9,8443
-c2,layerfs,365002,4,10000,0,6931.989,5770.3,14638

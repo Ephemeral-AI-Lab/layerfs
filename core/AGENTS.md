@@ -2,462 +2,59 @@
 
 > **Status:** Current general guide.
 
-Read [repository instructions](../AGENTS.md) first. This file adds implementation
-boundaries for both current workstreams under `core/`; it does not repeat the
-product mental model or campaign-specific benchmark procedures.
+Read [repository instructions](../AGENTS.md) first. Core contains the four
+algorithm and contract crates: Content, History, Storage and Telemetry. The
+[root workspace manifest](../Cargo.toml) decides membership.
 
-## Scope and ownership
+## Scope and dependencies
 
-- Implement cluster one and cluster two in `core/`. The v0.1.6 reference under
-  root `crates/` and the archived `core/reference-tests` were retired by R9c
-  (2026-10-10) and are absent at HEAD; recover them at
-  local tag `reference-v0.1.6-final` (`d296981ac`, `crates` tree `498dd1917812`).
-  Neither was a dependency, source include or fallback; do not restore them.
-- Active cluster-one members are content, storage, history, persistence, project
-  Init and telemetry. The initial cluster-two SQLite engine is `layerfs-overlay`;
-  its active membership does not complete Workspace/FUSE/daemon integration.
-  [core/Cargo.toml](Cargo.toml) is the membership authority.
-  Workspace now exposes immutable base binding/read, effective source-qualified
-  lookup/stat/paged name merge, prepared actor install and atomic ordinary
-  namespace operations, bounded writes/truncate/regrow and composed payload
-  reads. Independent file/captured/operation custody and bounded live reclamation
-  are implemented through S6, including indexed automatic reclamation (its
-  physical reservation and headroom were removed by #321: no space is reserved
-  ahead of use, and a full device rolls the write back as no space);
-  native/runtime/integrated exits remain
-  unfinished. See [S6 audit](docs/issues/307/S6-EXIT-AUDIT.md). Its relocated
-  predecessor `layerfs-workspace-legacy` was removed by R7-retire.
-  Since #321 the daemon holds one overlay file and connection per mounted
-  Workspace, each behind its own lock, with the calling thread running each
-  short job; the fair SQL owner thread, its queue, credits and shared memory
-  budget are removed. See the [terminology guide](docs/architecture/64-overlay-terminology.md)
-  and the [#321 record](docs/issues/321/CHECKLIST.md).
-  Daemon also exposes a direct global Store adapter with a
-  mount-time reader per Workspace, exact quarantine and read-only bind snapshots,
-  one immutable cache shared across Workspaces, bounded root
-  binding and operation-owned exact failures. Concrete opening stays outside
-  the provider-independent adapter; see the
-  [direct Store boundary](docs/architecture/61-direct-store-adapter.md).
-  The host-mediated SDK/upstream transport is retired; see
-  [the retirement record](docs/issues/307/PRE-S8-F12-20261007.md).
-  Workspace calls return typed values directly and count SQL/payload/allocation
-  work under the same lock. Exact attempted failures retain their cause and
-  backing; before-effect refusals retain their original input. Overlay/Daemon
-  also expose bounded indexed operation records in the same database, with guarded atomic changes and automatic last-owner
-  cleanup. Content now exposes a backed file editor over these records and
-  Workspace supplies an explicit operation/file adapter with first-original
-  failure custody. Run-aware localized edits reuse the frozen sparse scanner
-  and bounded positive immutable zero evidence. Streamed directory inputs share
-  the canonical filesystem algorithm; backed serial state supplies new-parent
-  membership, rebuilt roots and initial counts/final row streams. On the backed
-  route validation classifies in 64-row windows and keeps its topology evidence
-  in indexed records; resident routes keep their resource-derived limits.
-  Captured local inode/run points retain exact reader root/floor and bounded
-  forward metadata progress. Captured regular-file normalization now derives
-  authenticated base facts, coalesces final changes into indexed records and
-  consumes them once through the retained FileView/fallible edit source. Backed
-  reference reduction/release uses fixed rows, sealed membership passes and
-  guarded FIFO/cursor transitions. Captured namespace normalization is the
-  `CapturedNamespace` producer
-  ([captured namespace construction](docs/architecture/78-captured-namespace-construction.md));
-  the product Commit constructor calls it
-  ([product Commit](docs/architecture/79-product-commit.md)). The Store
-  half of Commit is implemented with exact original failure/unknown custody;
-  see [Store Commit](docs/architecture/65-store-commit-composition.md).
-  The external E01 example records original startup work, diagnostics and Stop
-  without creating a Workspace route. It supplies diagnostic receipt consistency,
-  not E1/E2 performance admission. Its relocated predecessor was removed by
-  R7-retire; standalone native executable/Exec integration is unfinished.
-  Pre-S8 direct-operation accounting now has actual registered macOS/Linux engine
-  and Store-half Commit runs, independent family/count validation, and supported
-  phase observations. Numerical latency/residency and exact continuous peaks
-  remain unqualified; see the [accounting scope](docs/issues/307/PRE-S8-F14-20261007.md).
-  SDK creates/imports the initial Store, publishes the first Branch and consumes
-  seal, returning a closed file plus explicit provider/locator/profile metadata.
-  It retains no Store handle or data service. Native install now streams the
-  sealed file once, opens it in the daemon and returns both actual SQLite versions;
-  see [F5 handoff](docs/issues/307/PRE-S8-F5-20261007.md). Authenticated mount
-  binding, Store-half Commit, status, terminal close, fork and history now compose
-  the direct ports; see [native control](docs/architecture/68-native-workspace-control.md).
-  The prior client/runtime, daemon upstream, Bridge logical data framing and
-  excluded API-core are retired. Historical receipts keep their original topology
-  and verdicts. R7-retire (2026-10-10)
-  removed all seven excluded directories as retirement: `layerfs-server`,
-  `layerfs-fuse-legacy`, `layerfs-sandbox-legacy`, `layerfs-sdk-legacy`,
-  `layerfs-daemon-legacy`, `layerfs-bridge-legacy` and
-  `layerfs-workspace-legacy`. `core/crates` now holds only the 13 active
-  members; the boundary guard refuses the return of a removed directory or
-  package name, and each source is recoverable from the commit named in the
-  [R7-retire record](docs/issues/307/R7-RETIRE-COMPLETION-20261010.md).
-  Pinned read-only SDK views (303/08 O-10) are deferred, not dropped: no
-  implementation is in the tree, and a kept feature needs a new design on the
-  SQLite overlay. Do not restore the predecessor code to supply them.
-  Project native import preserves opaque symlinks, complete membership and hard
-  links, with indexed acquisition state. The accepted host WAL baseline retains
-  its recorded speed FAIL; no new timing is implied by SDK composition.
-  Bridge retains pinned authenticated KK channels, bounded native records and
-  independent fences and bounded native install/control. FUSE/Exec qualification
-  and complete kernel mount readiness remain S8.
-  The replacement Sandbox is an active member with ordinary Engine execution,
-  owned lifecycle and authenticated SDK/daemon startup. Optional privileged
-  command cancellation/client provenance is outside the current owner scope.
-  The replacement Fuse is now active with a fixed shared dispatcher, actual
-  deferred Owner/Store ports, a read-path callback adapter with complete opcode
-  accounting, direct mount/session ownership and connection drain.
-  Its predecessor `layerfs-fuse-legacy` was removed by R7-retire; the last
-  commit holding that source is `15e33e22c`. The daemon
-  composes Attach/Locate/Ready and reversible normal unmount; see
-  [native request service](docs/architecture/75-native-request-service.md) and
-  [native mount session](docs/architecture/76-native-mount-session.md).
-  Ordinary native mutation is served through the existing Workspace plan and
-  one publishing Overlay job, with no notification and no writeback cache; see
-  [native mutation and kernel coherence](docs/architecture/77-native-mutation-coherence.md).
-  A control Commit runs the captured namespace producer through the unchanged
-  driver, and takes the Workspace's overlay lock for each of its jobs; the mounted
-  proofs and their limits are in the
-  [R5 record](docs/issues/307/R5-COMPLETION-20261009.md). Forced unmount of one
-  Workspace is implemented as `ForceUnmount`: a before-effect guard, one abort
-  write on the connection's own control, the terminal fence, the local drain,
-  one plain detach, then Revoke and Close; see
-  [forced teardown](docs/architecture/80-forced-teardown.md). It is refused where
-  no abort control is bound, which includes the current Sandbox topology, and a
-  stop after an effect is `Retained` with no way back. No daemon-wide graceful
-  drain exists and none is planned. Source acquisitions have their own owner
-  slots, and a failed cold read ends its own request with `EIO` while the
-  mount keeps serving; the concurrency, teardown and failure-scope proofs and
-  their limits are in the [R6 record](docs/issues/307/R6-COMPLETION-20261009.md).
-  A create that leaves fewer unconsumed inode serials than the daemon's
-  configured low-water makes one early reservation; every deployment and
-  harness sets 0 today, which makes none. A new Mount is refused `Capacity` at
-  `mount:debt` while maintenance is stopped. Both, the proofs added around
-  them and the rows still open are in the
-  [R8b record](docs/issues/307/R8B-COMPLETION-20261010.md). R8b closed not
-  qualified and R9b without removal. R8c then closed qualified on function,
-  counts and resources at the owner-rescoped scope, with the deployed
-  low-water at 256 ([R8c record](docs/issues/307/R8C-COMPLETION-20261010.md)),
-  and R9c retired the root reference
-  ([R9c record](docs/issues/307/R9C-COMPLETION-20261010.md)).
-  Add members only with real product boundaries and implementation.
-- Cluster-one work starts with the [handbook](../docs/general/cluster_one_handbook.md) and
-  [CAS/CDC/delta guide](../docs/general/cas_cdc_deltaencoding_handbook.md). Use public contracts,
-  source pins and limitations; preserve canonical compatibility.
-- Cluster-two work starts with the [current design index](docs/issues/303/README.md)
-  and relevant primary operation/engine/FUSE contracts plus
-  [runtime integration](docs/issues/303/06-cluster-one-integration.md).
-  Required corrections are real engineering scope; research candidates are not
-  implemented features or excuses for accumulated workload caps.
-- Closed Stage 0–6 handoffs and prior server/backend plans are historical.
-  Consult them for a selected compatibility/reference question; do not restart
-  their loops or inherit their retired topology. Do not revive `layerfs-server`.
-- Keep unrelated work intact. Migration, source moves and retirement are explicit
-  changes, not side effects of implementing a component.
+Core depends only on core, including build and dev dependencies and test source
+includes. It has no rusqlite dependency. The
+[boundary guard](../tools/check_product_boundary.py) checks every crate against
+one layer map and exact production-edge allowlist; unknown crates fail closed.
+Engine composition belongs under [engine/](../engine/AGENTS.md), and public SDK
+composition belongs under [api/](../api/AGENTS.md). Neither layer is a fallback
+implementation for core. The retired v0.1.6 reference remains absent; its recovery
+tag and historical evidence are described in the root guide.
 
-## Architecture and public contracts
+Start with the [cluster-one handbook](../docs/general/cluster_one_handbook.md)
+and [CAS/CDC/delta guide](../docs/general/cas_cdc_deltaencoding_handbook.md).
+Preserve canonical compatibility, public ports, source pins and limitations.
+For Workspace integration also read the
+[current design index](docs/issues/303/README.md) and the relevant primary
+contracts. Research and old Stage handoffs do not select new algorithms or
+reopen a closed campaign.
 
-Overlay schema19 uses `directory_entry` and `operation_record` terminology,
-including owned/indexed variants, throughout SQL and the active public ports.
-Through schema 33 Workspaces shared physical tables partitioned by namespace;
-since #321 (schema 34) every mounted Workspace has its own file with the same
-tables, copied from a closed empty template at mount and deleted at terminal
-unmount. The naming
-change authorizes no physical table redesign; generic temporary buffers and
-historical receipts retain their distinct terms. See the
-[terminology guide](docs/architecture/64-overlay-terminology.md).
-The #320 product sweep (2026-10-14, schema 37) removes accounting triggers,
-Workspace/allocator SQL rows and generic caller-minted leases. Workspace
-lifecycle/frontier/dirty/base-reader counters are one journaled runtime value,
-restored only after known whole-job rollback; unknown outcomes retain custody.
-Commit runs/readers/base pins are journaled owner maps; captured generation
-holds use a count index. Daemon-bound routing is checked once per call; Overlay
-accepts no Route and stores no namespace. Cleanup debt remains SQL-backed after
-the [memory-placement review](docs/issues/320/CLEANUP-MEMORY-DESIGN-20261014.md).
-Resources computes row/length totals on demand and
-retains exact owner counts from memory. See the current
-[runtime state](docs/architecture/64-overlay-terminology.md#runtime-workspace-state-and-remembered-sql-custody).
+## Construction and completion boundaries
 
-Schema17 adds native mount/source/lookup/read associations, atomic Workspace
-read observations and bounded revoked-lookup retirement. Schema18 adds native
-file associations over the existing OpenFile owner and atomic open decisions; see
-[native read custody](docs/architecture/73-native-read-custody.md). This component
-does not establish Ready, kernel service or full drain. Schema19 adds native
-directory ownership, exact name-boundary cookies, retained parent updates and
-bounded live cleanup; see [directory custody](docs/architecture/74-native-directory-custody.md).
+Content owns canonical filesystem/file construction. Storage owns encoding,
+packing and object read/write ports. History owns publication and mutable
+history contracts. Telemetry owns observations and timing. Project adapts native
+inputs; Workspace adapts an immutable base plus captured Overlay changes. They
+reuse the same Content and Storage pipeline. See the engine guide's
+[shared construction boundaries](../engine/AGENTS.md#shared-construction-and-completion-boundaries).
+Do not add a second encoder, constructor or source include to supply integration.
 
-`docs/architecture/` describes product source, not release qualification.
-A source change to boundaries, canonical/physical format, algorithm or named
-bound updates the affected architecture/API document in the same change.
-Record source pins and advance them explicitly; never silently re-date evidence.
-Keep implementation description separate from target proposal and research.
-
-Public content/storage/history/persistence contracts govern integrated callers.
-Stable capture/input, Store-derived policy, backpressure, Save completion and
-atomic history publication are separate obligations. Branch Commit overwrites the
-head and keeps its captured parent; see the [owner supersession](docs/issues/307/BRANCH-OVERWRITE-DECISION-20261007.md). Immutable objects do
-not replace authority, reference closure, mutable history or safe GC.
-
-Engine-independent Project logic may consume SQLite-backed acquisition through
-an owning backend-neutral port. Concrete SQL and database ownership belong in
-Persistence/application composition along the permitted dependency direction.
-A guard refusal of Project's direct engine dependency identifies wrong placement;
-resolve that boundary before proceeding. It does not require replacing indexed
-backing with a custom sorter. The port and its SQLite provider now exist as an
-opt-in Store schema ([acquisition backing](docs/architecture/44-acquisition-backing.md)),
-and Project's import runs on that port alone
-([backed acquisition](docs/architecture/43-backed-initial-acquisition.md)). Do not
-weaken the boundary guard, give Project an engine dependency or reintroduce a
-second acquisition algorithm.
-See the [S7/S9 remaining plan](docs/issues/307/IMPLEMENTATION-PLAN-S7-S9-20261006.md).
-
-### Filesystem access and execution ownership
-
-Owner clarification 2026-10-08: these are implementation and proof requirements,
-not a claim that S8 or S10 is qualified. FUSE serves any permitted process that
-can see the mount. Request admission and Workspace mutation/capture must not
-require an Exec identity, registered command or LayerFS-launched parent.
-Apply the same permissions, filesystem semantics and ownership to external
-executors, interactive shells and ordinary Sandbox execution.
-
-Sandbox setup or the external executor establishes command identity, mount
-visibility and protection of Store, Overlay and daemon credentials. Ordinary
-runtime execution owns standard I/O, exit status and caller-requested cancellation.
-SDK public organization is the eleven operations documented in
-[the implemented SDK surface](../docs/general/sdk.md), with operation files under
-[layerfs-api/src](crates/layerfs-api/src/). Project offers init/fork/
-branches/commits; Sandbox offers create/close; Workspace offers mount/exec/
-commit/status/unmount. Shared control/recovery/diagnostic plumbing lives in
-base/ and the hidden internal module. Optional WorkspaceApi.exec selects the
-mounted directory and delegates the existing Sandbox launcher;
-the daemon has no exec/supervisor, launcher mode, per-Exec cgroups, command
-registration or custom Exec stream/status/cancellation protocol.
-
-FUSE owns exact request/open/lookup/capture/Commit lifetimes and complete
-filesystem/daemon-work drain. Zero registered commands or shell exit is never
-evidence of released descriptors, mappings, kernel references or daemon jobs.
-Forced filesystem teardown does not implicitly kill caller-owned processes.
-Normal unmount uses a reversible kernel busy probe while ordinary service stays
-usable. Force refuses active namespace control producers before any effect.
-
-Commit consumes the Workspace's published frontier through the shared Content,
-Storage and Persistence pipeline regardless of launch route. stdout/stderr are
-not filesystem state unless the command writes them to a file in the Workspace.
-The old proposed managed-daemon Exec selections are withdrawn prospectively;
-retain their original IDs, source pins, receipts and verdicts. Ordinary runtime
-stream/result correctness and filesystem-lifetime proofs keep their real owners.
-
-S8 verification must include a process launched outside the Exec API, with no
-Exec registration, reading and mutating the mount and retaining a filesystem
-reference during an unmount attempt. S10 must prove that such changes survive
-Commit and a fresh mount. Use ordinary public filesystem access in these proofs.
-
-Reviewed target source ownership2026-10-08: the replacement `layerfs-fuse` owns
-its complete native connection/request service, including bounded dispatch,
-parking/resumption, kernel handlers/replies and coherence. Daemon assembles one
-shared Fuse service with its existing SQL/Store services, retaining registry,
-overall Ready/unmount and Commit composition. Dependency is daemon -> fuse ->
-workspace, never Fuse -> daemon. Request dispatch/read ports, mount/Ready and
-per-Workspace normal drain are implemented ([R2 record](docs/issues/307/R2-COMPLETION-20261008.md)),
-as is ordinary native mutation ([R3 record](docs/issues/307/R3-COMPLETION-20261008.md));
-as is the captured namespace producer with its bounded validation
-([R4 record](docs/issues/307/R4-COMPLETION-20261008.md)), which the Commit
-driver reaches through the product constructor
-([product Commit](docs/architecture/79-product-commit.md)). See the
-[reviewed ownership](docs/issues/307/R2-R5-SOURCE-OWNERSHIP-REVIEW-20261008.md).
-Moving blocking OwnerClient calls behind a port does not establish deferred service.
-
-### Shared construction and completion boundaries
-
-Source checked at `5747f0119`, guidance updated 2026-10-08. Namespace Init and
-daemon construction share Content, Storage and Persistence through their public
-ports. Their input adapters and publication lifecycles have distinct owners:
-
-| Input/operation | Existing route |
-| --- | --- |
-| Native Init file | Project import calls Content `construct_stream`; bounded output batches feed `Save::accept` |
-| New captured file | Workspace `CapturedFileEdits` calls Content `construct_runs` over data/zero windows |
-| Existing captured file | The same adapter calls `apply_indexed_edits_view_backed` over an authenticated retained `FileView` and normalized final edits |
-| Initial namespace | Project streams acquired bindings/inodes through Content directory/table builders |
-| Captured namespace | Workspace `CapturedNamespace` seals headers, typed values and fresh ranks into indexed records and calls Content `update_filesystem_streamed_backed`; names come from the retained captured reader |
-| Captured symlink and metadata | The same producer calls Content `emit_symlink` for a fresh target and patches or builds the portable attribute tree; a stored symlink keeps its base content root |
-| Object output | Content emits `FinalizedObject`; Storage `SaveSink` implements `FinalizedConsumer` by forwarding to `Save::accept` |
-
-Use the actual Store-derived construction policy and bounded capacities on
-both routes. Fresh construction and incremental edits use appropriate public
-entrypoints and common canonical formats; do not assume an incremental file root
-must equal a fresh full reconstruction, since retained chunk boundaries can differ.
-Overlay owns mutable payload, metadata, operation records and construction scratch
-under Workspace prefixes. Content owns canonical algorithms; Storage owns
-deduplication, encoding and packs; Persistence owns global Store writes. Keep
-SQLite types and paths out of Content and the daemon's provider-independent
-`store/` adapter. Do not materialize a native tree or invoke Project Init to
-implement a Workspace Commit. Native Init acquisition backing remains a separate
-host provisioning facility.
-
-Current source has captured-file normalization and the Store half of Commit.
-`BoundWorkspace::commit` captures once, begins a Save, invokes a caller-supplied
-Content constructor, finishes the Save, publishes through History and installs
-the known root locally. Full captured namespace assembly, including names,
-links, metadata and changed file roots, is
-[`CapturedNamespace`](crates/layerfs-workspace/src/construction/driver.rs).
-The product constructor `BoundWorkspace::commit_captured` runs it inside that
-driver: it acquires the captured reader and one operation owner, hands the
-driver the original cause on failure, and releases both owners only after the
-driver's outcome is known, keeping them with the failure when it is not
-([product Commit](docs/architecture/79-product-commit.md)). A control Commit
-uses it; `Service::execute` still takes a caller's constructor for driver tests.
-See [captured-file construction](crates/layerfs-workspace/src/construction/captured/owner.rs),
-[the shared Save sink](crates/layerfs-storage/src/save/operation.rs) and
-[Store Commit composition](docs/architecture/65-store-commit-composition.md).
-
-Keep completion boundaries explicit: `Save::finish()` completes object storage;
-Init then initializes history, while Commit calls `commit_branch` against its
-expected head before local base installation. SDK Init subsequently calls `Handles::seal()` to
-checkpoint, close and hand off one Store file. The macOS allocation correction
-runs only at this sole-owner Store seal; it is not a Content/pack format change
-or live-daemon maintenance. Linux daemons keep their shared Store open. The
-[seal proof](docs/issues/307/SEAL-ALLOCATION-STRIDE1-20261007.md) retains its exact
-platform and benchmark scope; it does not qualify daemon allocation or S10.
-
-## Optimization and performance debugging
-
-Before changing a performance-sensitive path or diagnosing a performance finding,
-read the [optimization guide](../docs/general/optimization-guide.md). Its FUSE,
-SQLite and complexity rules are mandatory: reject quadratic or worse scaling,
-use SQLite-backed mutable indexes/state rather than custom duplicate trees/graphs,
-and account for request/SQL/IO/copy/residency/cleanup work. Preserve cluster one's
-canonical formats and public APIs; use count-driven evidence and the existing
-measurement policy. SQLite debugging/optimization claims require both database
-EXPLAIN and correlated runtime database profiling; overall wall time or a plan
-alone is insufficient. An unrelated/docs-only change does not require a campaign.
-The [optimization handbook](../docs/general/optimization-handbook.md) is the
-working procedure on top of those rules: the counters that already exist, the
-diagnostic groups, the scaling checks and the current candidate list.
-
-## Product source and external verification
-
-`core/crates/<package>/src/` contains production code exclusively, including
-included/generated implementation. Runtime SQL and other shipped implementation
-have the same ownership rules.
-
-Forbidden in product source: inline tests/benches, test-only cfg/features,
-fixtures, mocks, fake clocks, fault injection, test/benchmark drivers, test-only
-public APIs, benchmark-selected algorithms and executable rustdoc test blocks.
-Platform cfgs, real features, production validation/invariants and actual telemetry
-remain legitimate. Put API documentation with the API; examples outside src.
-
-| Content | Location |
-| --- | --- |
-| Product implementation | `core/crates/<package>/src/` and required runtime source |
-| Public-API tests and their helpers/fixtures | Package `tests/` |
-| Runnable examples | Package `examples/` |
-| Package benchmarks | Package `benches/` |
-| Product-wide harness/diagnostics | root `benchmark/`; inspect the actual harness manifest/entrypoint |
-| Development checks | `core/tools/` |
-
-Tests exercise the production library that normal consumers use. Do not
-include/recompile private source, redirect target paths into test directories,
-import helpers into production or expose an API only to enable a test.
-Test-only dependencies belong in dev-dependencies; retain component-specific
-restrictions, including std-only telemetry.
-
-Prefer deterministic public behavior and external observations. Telemetry tests
-can use completed reports and structural ordering; do not add a product fake-clock
-interface or narrow sleep-based wall thresholds. Verify disabled behavior through
-its actual allocation/clock path. Scaffold no empty placeholder directories.
-
-## Production file size and responsibility
-
-All new replacement/application-adapter production files have at most **999
-physical lines**, including comments/blanks. This includes required runtime SQL
-or other shipped formats outside Rust src. Extend guard coverage for new formats;
-moving implementation does not evade the rule. The legacy root source is
-retired; do not recreate a root `crates/` for product work.
-
-Every product `lib.rs`/`mod.rs` has at most **200 physical lines**. These files
-contain attributes, declarations, imports/reexports, API docs and thin forwarding.
-Definitions, impls, state/constants encoding behavior, branching, loops, conversions,
-validation, formatting and I/O belong in focused named implementation files.
-
-Split by responsibility before the ceiling: lookup, transactions, reconstruction,
-placement and ownership, not numbered files or a renamed god module. Use ordinary
-functions/concrete types; do not add a factory/interface per algorithm or a
-service locator. Keep actual process/provider boundaries independently usable.
-Do not minify, expand macros or add includes to evade size/ownership rules.
-
-Physical line ceilings differ from production LOC. Follow the root
-[per-commit LOC policy](../AGENTS.md#production-loc-comparison-for-every-commit)
-using exact parent/staged/committed trees and migration subtotals. Docs, tests,
-fixtures, examples and tools do not contribute to production LOC.
-
-## Failure, persistence and dependencies
-
-- One attempted operation; no automatic retry, busy handler, refresh/reprepare,
-  error-driven algorithm/backend/reference substitution or guessed recovery.
-  Readiness waits and explicit cancellation have their own state before an
-  attempt; they do not permit replay after failed/unknown publication.
-- Preserve definite-failure atomicity, original errors and exact uncertain
-  custody. No resend, rollback/delete or success claim based on an unfenced read.
-- Global Persistence uses **Disposable/WAL/OFF only**, on macOS and Linux,
-  under the [owner's active-profile rule](../AGENTS.md#active-persistence-profile--owner-direction-2026-10-07).
-  Durable execution is disabled indefinitely until explicit owner reauthorization;
-  retained Durable source may compile but no test, diagnostic, measurement or
-  application invocation may execute it. Select Disposable explicitly rather than
-  relying on a default argument. Disposable claims process-crash survival only.
-  Open verifies WAL and never converts an
-  existing Store. Select profile/layout before open; Postgres stays unavailable.
-  Owner supersession2026-10-07 keeps WAL throughout Init and Commit; no private
-  MEMORY import or journal promotion remains. The measured host Init regression
-  is retained as FAIL and accepted as the new baseline for that exact scope.
-  Host seal consumes sole ownership, checkpoints, closes and verifies one file.
-  Its macOS completion releases unused extents beyond logical EOF through the
-  existing safe nix API, preserving the original file's bytes and identity.
-  This narrow seal-only correction does not restore per-pack preallocation or
-  the allocation owner, and is never invoked on a live shared daemon Store; see
-  the [seal boundary](docs/architecture/60-shared-store-foundation.md).
-  See the [foundation checkpoint](docs/issues/307/PRE-S8-F1-F4-20261007.md).
-- Target (owner direction 2026-10-07): the same Store opened directly by every
-  Linux daemon from a shared volume, several writer processes, no host in the
-  data path, using only Disposable/WAL/OFF. A contended
-  write still has one SQL attempt and exact failure/unknown custody. Owner
-  clarification2026-10-12 requires one ongoing Commit per Workspace and allows
-  concurrent Commits on different Workspaces. Bounded before-effect admission
-  now queues SQL work within a Session and coordinates short Linux writer jobs
-  on the existing local Store parent-directory inode; multiple Store files in
-  one directory share this coarse short-transaction lane. Do not open/close a
-  separate main/WAL/SHM descriptor for advisory ownership: closing a main-file
-  descriptor can cancel SQLite's own process POSIX locks. This admission does
-  not gate whole Saves or Commits or replay
-  a failed SQL attempt. macOS has Session admission only; separate macOS writers
-  and uncoordinated raw SQLite writers retain exact Busy refusal. Follow the
-  [integration contract](docs/issues/303/06-cluster-one-integration.md) and its
-  [deepest-file plan](docs/issues/307/SERVERLESS-STORE-PLAN-20261007.md); do not
-  extend the host-mediated SDK runtime, Bridge data codec or daemon upstream.
-- Store concurrency (owner decision 2026-10-18): one global database and one
-  writer at a time are the design, not a limitation to engineer around. Keep
-  the existing admission, directory lock and publication lane; shorten what
-  runs inside the lane (only head check, merge and publish) instead of adding
-  writers or databases. Judge speed on uncontended calls; contention must stay
-  correct, bounded and exact. See the
-  [Store concurrency model](docs/architecture/83-store-concurrency-model.md).
-- The daemon overlay is a separate owner/profile from global persistence:
-  one local database file per mounted Workspace, opened MEMORY/OFF/EXCLUSIVE by
-  one connection behind that Workspace's lock. Workspaces share no overlay
-  connection, page cache or memory budget. It is not an implemented distributed Store or a universal
-  global-Store rule; reader-pool alternatives need their own proofs.
-- WAL/sync are permitted for a declared global Store profile. Do not add
-  fsync/fdatasync/sync_data/sync_all on disposable Workspace backing. Memory
-  hints do not prove bounds. Claim only actual completion/durability contracts.
-- No third-party patch, fork, vendor, registry edit or replacement dependency,
-  except the owner's fuser 0.18.0 signed-timestamp correction below.
-  Use existing capabilities and locked builds; report an incompatible required
-  dependency with source evidence. Unsupported required platforms/capabilities
-  fail explicitly, not via a silent no-op or fallback.
+Storage keeps its narrowly audited FFI module `src/encoding/codec.rs` under
+`deny(unsafe_code)`; Content and Telemetry forbid unsafe code. Preserve the
+existing unsafe boundaries and extend guard coverage when required shipped
+formats are introduced. No third-party source or dependency changes are implied.
 
 ## Checks and completion
 
-Run commands from the repository root with the actual core manifest. For product,
-API, manifest or runtime-source changes, cover tests/examples, warning-denying
-Clippy and formatting, plus the boundary guard and its self-tests:
+All product layers follow the
+[production size and responsibility rules](../engine/AGENTS.md#production-file-size-and-responsibility)
+and [verification rules](../engine/AGENTS.md#checks-and-completion). Build and
+test through the selected worktree's registered private resources from the root
+manifest. Build tests first with `--no-run`, then execute each selection under an
+explicit wall timeout of at most 120 seconds. Preserve repository ARM64 flags,
+locked dependencies, exact failure custody, the Disposable-only execution policy
+and per-commit production LOC comparisons. Migrations retain cheap tests of
+surviving behavior and delete tests that require retired scaffolding, with the
+root guide's required behavior coverage and deletion record.
 
+For docs-only changes verify local links/anchors, status, claims and whitespace;
+Rust/runtime checks do not apply. CI reports after a push and never gates it.
 ```sh
 cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --all-targets
 cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings
@@ -582,8 +179,7 @@ changes, manual sidecar deletion or other FFI. See the
 
 Owner direction 2026-10-25 (route 2, Windows-native Store; root AGENTS.md)
 adds audited Windows FFI beside the macOS seal wrapper. The guard
-(`core/tools/check_product_boundary.py`) and its tests enforce the exact
-paths:
+(`tools/check_product_boundary.py`) and its tests enforce the exact paths:
 
 - Persistence keeps `deny(unsafe_code)` with two allowed modules:
   `src/backend/sqlite/file_control.rs` (the macOS seal wrapper, unchanged)
@@ -593,8 +189,8 @@ paths:
   `src/import/windows_identity.rs` (`GetFileInformationByHandle`: volume
   serial, file index, creation time).
 - layerfs-overlay moves forbid→deny with one allowed module,
-  `src/database/windows_identity.rs` (handle/path identity and
-  `GetDiskFreeSpaceExW`).
+  `src/database/windows_identity.rs` (handle/path identity,
+  `GetFileInformationByHandleEx` allocation, `GetDiskFreeSpaceExW`).
 - Storage's `src/encoding/codec.rs` authorization is unchanged.
 
 Acquisition rows are keyed by dev+inode. On Windows the identity MUST be
@@ -606,3 +202,4 @@ read it".
 that does not parse can pass on Windows and still break Linux. Code touched
 for this route is cross-checked with `cargo check --locked` in the pinned
 Linux container (`rust:1.85.1-bookworm`) before any "it builds" claim.
+

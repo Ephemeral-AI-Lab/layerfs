@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "id": "cursor-agents",
+  "name": "LayerFS for Cursor",
+  "summary": "Cursor coding agents work on LayerFS Branches and Workspaces instead of git worktrees.",
+  "authors": [
+    {
+      "name": "Earson",
+      "github": "earsonlau"
+    }
+  ],
+  "license": "MIT",
+  "repository": "https://github.com/earsonlau/layerfs-cursor-agents",
+  "tags": [
+    "cursor",
+    "agents",
+    "branches",
+    "workspaces"
+  ],
+  "platforms": [
+    "linux",
+    "macos",
+    "windows-wsl2"
+  ],
+  "uses": [
+    "agent",
+    "runtime"
+  ],
+  "host": {
+    "name": "Cursor",
+    "url": "https://cursor.com"
+  },
+  "status": "preview",
+  "versions": [
+    {
+      "version": "0.1.0",
+      "commit": "1802b525cca2ff9730678c01f8aefcc107223940",
+      "date": "2026-10-25",
+      "layerfs": {
+        "version": "v1.1.0",
+        "commit": "ad78914e36b258b360daf13aec164b5655814689"
+      },
+      "notes": "First listing: Cursor skill, layerfs-cursor-setup, and one Branch per task; LayerFS pin ad78914e (#436 overlay fix)."
+    }
+  ]
+}

@@ -1,2 +1,0 @@
-message,files,commit_ms,load,kind,commit,base,logical,newCanonical,newStored,newMetadata
-smallfile: files after create,100000,10430.529,7.37,Committed,12a20c18329c30666cdae8644df9b070dea21d33434e4a7f95d9795a121bfddc2c,328b7345a7d48c346333ed6855af8b40f1c7010a351d439a8a9ecb3a1782890e42,409600076,12300831,976730,968168

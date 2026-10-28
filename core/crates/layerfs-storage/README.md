@@ -1,13 +1,14 @@
-> **Status:** Historical native-provider detail below; current C2 owns only the
-> shared bounded save/read/encoding/pack flow. Persistence moved to
-> [layerfs-persistence](../layerfs-persistence/README.md), with an atomic
-> PackPersistence port and the new separately qualified WAL/FULL profile. Old
-> MEMORY/OFF and private-save descriptions/receipts retain their historical scope.
-
 # layerfs-storage (C2)
 
-> **Status:** Implemented slice; FULL and PREFIX payload records, pooled physical
-> metadata and an explicit multi-lane format matrix.
+> **Status:** Current general guide; historical native-provider details below
+> retain their original scope and receipts.
+
+Storage owns the shared bounded save/read, encoding and pack flow. Database
+ownership belongs to [Persistence](../../../engine/crates/layerfs-persistence/README.md).
+The original FULL/PREFIX slice and pooled physical metadata details below include
+historical provider descriptions. MEMORY/OFF, WAL/FULL and private-save receipts
+retain their original verdicts; current execution follows the root guide's
+[Disposable-only profile](../../../AGENTS.md#active-persistence-profile--owner-direction-2026-10-07).
 
 Content-addressed physical storage. C2 accepts already-finalized canonical
 objects, performs exact CAS reuse, writes supported FULL records into framed
@@ -30,7 +31,7 @@ needs no Workspace, branch, commit, mount or daemon.
 | Group body | `<= 64 KiB` (v1/v2/v4), `<= 16 KiB` (v6) |
 | Records per group | `<= 8191`; `1` in the compact and singleton lanes |
 | Groups per pack | `<= 256`; `1` in the singleton lane |
-| Chain budgets | `512 KiB` canonical and `256 KiB` encoded per chain, independent of the accepted depths |
+| Chain budgets | `4 × cutoff` canonical and `2 × cutoff` encoded per chain (`512 KiB` / `256 KiB` at the default cutoff), so the largest whole file fits a chain alone; independent of the accepted depths (#472) |
 | Metadata pooling | implemented: supplied canonical inode leaves are stored pooled; each 73-byte inode value is one stored row under its ordinal (issue 320 design B, 2026-10-13), 100 rows per leaf page; a row keeps the ordinal its value has in a named base leaf, a new value takes the next ordinal of the Save's reserved block |
 | Pooled record grammar | `0 | physical body` (FULL) or `1 | base id | output length | instruction count | program` (COPY/INSERT), the ordinary lane's tags read under the `InodeLeaf` role; an `InodeBranch` uses the same program against its canonical predecessor page (#360 item 3) |
 | Pooled chain budgets | depth `0..=50` (own persisted field); 64 KiB canonical and 139 KiB encoded per chain; 8 KiB per pooled record; match budget 128 KiB per trial |
@@ -140,7 +141,8 @@ destructor.
 ## Checks
 
 ```sh
-cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --tests
+cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-storage --tests --no-run
+timeout 120 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-storage --tests
 ```
 
 The aggregate `tools/preflight.sh` gate is permanently retired (ledger L32) and runs

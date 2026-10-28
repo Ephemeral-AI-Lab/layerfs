@@ -28,7 +28,7 @@ dependencies, caches and output. No numerical result here qualifies that path.
 
 | Name | What it is | What it is not |
 | --- | --- | --- |
-| Product on `main` | A private copy-on-write page store, one file per 4,096-byte page (`core/crates/layerfs-workspace/src/backing/active/pages.rs:130-131`), mounted with zero TTL and direct I/O (`core/crates/layerfs-fuse/src/adapter.rs:22`, `:228-234`) | Not a SQLite overlay. Never timed by #305 or #306 |
+| Product on `main` | A private copy-on-write page store, one file per 4,096-byte page (`engine/crates/layerfs-workspace/src/backing/active/pages.rs:130-131`), mounted with zero TTL and direct I/O (`engine/crates/layerfs-fuse/src/adapter.rs:22`, `:228-234`) | Not a SQLite overlay. Never timed by #305 or #306 |
 | A1 | A throwaway ext4 passthrough daemon mounted with the product's profile values | Not the product: it shares none of the Workspace code |
 | A2 | The same passthrough with a 60 s entry/attribute lifetime, `FOPEN_KEEP_CACHE` and `fsync` accepted as a no-op | No overlay, no generations, no capture, no Commit, no base acquisition, no cluster one work, no invalidation of any kind |
 | B | A throwaway four-table SQLite prototype over a local directory, under the A1 profile | Not the design in this set. Its only non-trivial cell FAILED |
@@ -59,7 +59,7 @@ Experiment source is `core/experiment/real-tree/src/` on the same branch.
 - A1 and A2 differ in three coupled settings (lifetime, cache mode, `fsync`).
   No arm separates them.
 - A2 runs as uid/gid 1000 with `allow_other`; the product mounts owner-only as
-  uid 0 (`core/crates/layerfs-fuse/src/mount.rs:209`, `:400-427`).
+  uid 0 (`engine/crates/layerfs-fuse/src/mount.rs:209`, `:400-427`).
 
 ### 1.2 Owner decisions on record
 

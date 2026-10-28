@@ -22,14 +22,135 @@ class CounterTests(unittest.TestCase):
     def tearDown(self):
         self._temporary.cleanup()
 
+    def test_layer_classification_survives_relocation(self):
+        import shutil
+
+        for name in ("layerfs-content", "layerfs-project", "layerfs-api"):
+            write(self.root, f"core/crates/{name}/src/lib.rs", "pub fn value() {}\n")
+            write(self.root, f"core/crates/{name}/sql/schema.sql", "CREATE TABLE value(id INTEGER);\n")
+        before = production_loc.scan(self.root)
+        (self.root / "engine/crates").mkdir(parents=True)
+        (self.root / "api").mkdir()
+        shutil.move(self.root / "core/crates/layerfs-project", self.root / "engine/crates/layerfs-project")
+        shutil.move(self.root / "core/crates/layerfs-api", self.root / "api/layerfs-api")
+        after = production_loc.scan(self.root)
+        self.assertEqual(before, after)
+        self.assertEqual(after["scopes"]["core"]["crates"], {"layerfs-content": 2})
+        # layerfs-api is an engine crate wherever it sits.
+        self.assertEqual(after["scopes"]["engine"]["crates"], {"layerfs-project": 2, "layerfs-api": 2})
+        shutil.move(self.root / "api/layerfs-api", self.root / "engine/crates/layerfs-api")
+        self.assertEqual(production_loc.scan(self.root), after)
+
+    def test_api_regrouping_keeps_every_crate_and_count(self):
+        import shutil
+
+        write(self.root, "engine/crates/layerfs-daemon/src/lib.rs", "pub fn value() {}\n")
+        write(self.root, "api/layerfs-api/src/lib.rs", "pub fn value() {}\n")
+        write(self.root, "api/binding/src/lib.rs", "pub fn value() {}\npub fn other() {}\n")
+        for folder, name in (
+            ("agent/sdk", "@layerfs/agent"),
+            ("agent/cli", "@layerfs/cli"),
+            ("backend", "@layerfs/backend"),
+        ):
+            write(self.root, f"api/{folder}/package.json", f'{{"name": "{name}"}}\n')
+            write(self.root, f"api/{folder}/src/index.js", "export const value = 1;\n")
+        before = production_loc.scan(self.root)
+        shutil.move(self.root / "api/layerfs-api", self.root / "engine/crates/layerfs-api")
+        shutil.move(self.root / "api/binding", self.root / "engine/crates/layerfs-node")
+        shutil.move(self.root / "api/agent/cli", self.root / "api/cli")
+        shutil.move(self.root / "api/agent/sdk", self.root / "api/agent-sdk")
+        (self.root / "api/agent").rmdir()
+        shutil.move(self.root / "api/agent-sdk", self.root / "api/agent")
+        after = production_loc.scan(self.root)
+        self.assertEqual(before, after)
+        self.assertEqual(
+            after["scopes"]["engine"]["crates"], {"layerfs-daemon": 1, "layerfs-api": 1, "layerfs-node": 2}
+        )
+        self.assertEqual(
+            after["scopes"]["api"]["crates"], {"@layerfs/agent": 1, "@layerfs/cli": 1, "@layerfs/backend": 1}
+        )
+
     def test_nested_api_members_count_only_product_source(self):
-        for name in ("core/src/lib.rs", "sdk/src/client.rs", "sdk/tests/route.rs",
-                     "mcp/src/lib.rs", "cli/src/main.rs"):
+        for name in ("core/src/lib.rs", "sdk/src/client.rs", "sdk/tests/route.rs", "mcp/src/lib.rs", "cli/src/main.rs"):
             write(self.root, f"core/crates/layerfs-api/{name}", "pub fn value() {}\n")
-        files = production_loc.scope_files(self.root, "core")
-        self.assertEqual([str(path.relative_to(self.root / "core/crates/layerfs-api"))
-                          for path in files], ["core/src/lib.rs", "sdk/src/client.rs"])
-        self.assertEqual(production_loc.scan(self.root)["scopes"]["core"]["lines"], 2)
+        files = production_loc.scope_files(self.root, "engine")
+        self.assertEqual(
+            [str(path.relative_to(self.root / "core/crates/layerfs-api")) for path in files],
+            ["core/src/lib.rs", "sdk/src/client.rs"],
+        )
+        self.assertEqual(production_loc.scan(self.root)["scopes"]["engine"]["lines"], 2)
+
+    def test_api_counts_each_package_by_its_name_and_the_binding_as_engine(self):
+        write(self.root, "api/package.json", '{"name": "layerfs-js"}\n')
+        for folder, name in (
+            ("agent/sdk", "@layerfs/agent"),
+            ("agent/cli", "@layerfs/cli"),
+            ("backend", "@layerfs/backend"),
+            ("runtime", "@layerfs/runtime"),
+        ):
+            write(self.root, f"api/{folder}/package.json", f'{{"name": "{name}"}}\n')
+            write(self.root, f"api/{folder}/src/index.js", "export const value = 1;\n// a comment\n")
+            write(self.root, f"api/{folder}/test/index.test.mjs", "export const test = 1;\n")
+            write(self.root, f"api/{folder}/test/fixture/fake.js", "export const fake = 1;\n")
+        write(self.root, "api/backend/src/store/get.js", "export const get = 1;\n")
+        write(self.root, "api/agent/cli/node_modules/x/package.json", '{"name": "x"}\n')
+        write(self.root, "api/agent/cli/node_modules/x/src/index.js", "export const dep = 1;\n")
+        write(self.root, "api/binding/src/lib.rs", "pub fn value() {}\n")
+        write(self.root, "api/binding/tests/unit/admission.rs", "pub fn test() {}\n")
+        write(self.root, "api/binding/examples/restore_record.rs", "pub fn example() {}\n")
+        files = production_loc.scope_files(self.root, "api")
+        self.assertEqual(
+            sorted(str(path.relative_to(self.root / "api")) for path in files),
+            [
+                "agent/cli/src/index.js",
+                "agent/sdk/src/index.js",
+                "backend/src/index.js",
+                "backend/src/store/get.js",
+                "runtime/src/index.js",
+            ],
+        )
+        scan = production_loc.scan(self.root)
+        scope = scan["scopes"]["api"]
+        self.assertEqual(
+            (scope["lines"], scope["crates"]),
+            (
+                5,
+                {
+                    "@layerfs/agent": 1,
+                    "@layerfs/backend": 2,
+                    "@layerfs/cli": 1,
+                    "@layerfs/runtime": 1,
+                },
+            ),
+        )
+        # The binding's Rust is an engine crate, tests and examples excluded.
+        self.assertEqual(scan["scopes"]["engine"]["crates"], {"layerfs-node": 1})
+
+    def test_api_still_counts_the_layouts_before_the_move(self):
+        """sdk/js and cli/ (the former `sdk` and `cli` scopes) count as `api`."""
+        for name in (
+            "native/src/lib.rs",
+            "src/index.js",
+            "operator/index.js",
+            "packages/agent/src/index.js",
+            "packages/backend/src/store/get.js",
+            "packages/agent/test/trace.mjs",
+            "packages/agent/test/fake.js",
+        ):
+            write(
+                self.root,
+                f"sdk/js/{name}",
+                "export const value = 1;\n" if name.endswith(".js") else "pub fn value() {}\n",
+            )
+        write(self.root, "cli/src/main.js", "export const value = 1;\n// a comment\n")
+        write(self.root, "cli/src/sub/argv.js", "export const other = 2;\n")
+        write(self.root, "cli/test/cli.test.mjs", "export const test = 1;\n")
+        write(self.root, "cli/node_modules/x/src/index.js", "export const dep = 1;\n")
+        crates = production_loc.scan(self.root)["scopes"]["api"]["crates"]
+        self.assertEqual(
+            crates,
+            {"@layerfs/agent": 1, "@layerfs/backend": 1, "@layerfs/cli": 2, "@layerfs/sdk": 2, "layerfs-node": 1},
+        )
 
     def test_blank_and_comment_lines_do_not_count(self):
         path = write(
@@ -79,7 +200,7 @@ class CounterTests(unittest.TestCase):
             "#[cfg(not(test))]\npub fn production_only() -> u8 {\n    1\n}\n\n"
             '#[cfg(any(test, feature = "test-instrumentation"))]\n'
             "pub fn instrumented() -> u8 {\n    2\n}\n\n"
-            "#[cfg(any(debug_assertions, feature = \"test-instrumentation\"))]\n"
+            '#[cfg(any(debug_assertions, feature = "test-instrumentation"))]\n'
             "pub fn counted() -> u8 {\n    3\n}\n",
         )
         self.assertEqual(production_loc.counted_lines(path), 12)
@@ -170,19 +291,13 @@ class CounterTests(unittest.TestCase):
         write(self.root, "crates/example/tests/it.rs", "pub const T: u8 = 1;\n")
         write(self.root, "crates/example/examples/demo.rs", "pub const E: u8 = 1;\n")
         write(self.root, "crates/example/benches/bench.rs", "pub const B: u8 = 1;\n")
-        relative = [
-            str(path.relative_to(self.root))
-            for path in production_loc.scope_files(self.root, "reference")
-        ]
+        relative = [str(path.relative_to(self.root)) for path in production_loc.scope_files(self.root, "reference")]
         self.assertEqual(relative, ["crates/example/src/lib.rs"])
 
     def test_target_directories_are_excluded(self):
         write(self.root, "crates/example/src/lib.rs", "pub const N: u8 = 1;\n")
         write(self.root, "crates/example/target/generated.rs", "pub const G: u8 = 1;\n")
-        relative = [
-            str(path.relative_to(self.root))
-            for path in production_loc.scope_files(self.root, "reference")
-        ]
+        relative = [str(path.relative_to(self.root)) for path in production_loc.scope_files(self.root, "reference")]
         self.assertEqual(relative, ["crates/example/src/lib.rs"])
 
     def test_scan_separates_scopes_and_reports_a_combined_total(self):

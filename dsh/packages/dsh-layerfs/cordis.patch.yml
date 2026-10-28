@@ -1,9 +1,0 @@
-# LayerFS × DSH. The Host plugin gives bash calls in sessions bound to a
-# LayerFS project the SDK's settings and a per-agent trace file, and writes
-# each traced call to the calling agent's session. Deployment settings
-# (image, daemon) are per machine: set them in the profile's own patch.
-- insert:
-    - id: layerfs-host
-      name: '@dsh-layerfs/host'
-    - id: layerfs-client
-      name: '@dsh-layerfs/client'

@@ -4,7 +4,7 @@
 //! that belongs to the reference implementation and is not part of core. It is
 //! pinned, by blob and recovery commit, in `tests/fixtures/filesystem.generator`,
 //! with its two contract properties: it is `#[ignore]`d, and it refuses to run
-//! without `LAYERFS_SEAL_FIXTURES=1`. This file reads nothing outside `core/`
+//! without `LAYERFS_SEAL_FIXTURES=1`. This file reads first-party product/tooling source
 //! and never writes into the checkout. On every ordinary `cargo test` it
 //!
 //! - hashes the sealed directory and compares it with the frozen list in
@@ -12,7 +12,7 @@
 //!   or changed;
 //! - compares the generator record with the constants below, so the pin and
 //!   the two contract strings cannot drift silently;
-//! - reads every Rust source under `core/` and fails when one that could
+//! - reads every Rust source in the product layers and tools and fails when one that could
 //!   reseal (it names the gate, or names the sealed directory and writes
 //!   files) lacks either contract string. No such source exists today.
 //!
@@ -238,24 +238,26 @@ fn the_generator_record_is_the_pinned_one() {
 }
 
 #[test]
-fn no_source_in_core_can_reseal_during_an_ordinary_test_run() {
+fn no_product_source_can_reseal_during_an_ordinary_test_run() {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let core = manifest
-        .parent()
-        .and_then(Path::parent)
-        .expect("core directory");
+    let root = manifest.ancestors().nth(3).expect("repository root");
     assert!(
-        core.join("Cargo.toml").is_file() && core.join("crates").is_dir(),
-        "the scan root is not the core workspace"
+        root.join("Cargo.toml").is_file() && root.join("core/crates").is_dir(),
+        "the scan root is not the workspace"
     );
-    let sources = rust_sources(core);
+    let roots = ["core", "engine", "tools"].map(|relative| root.join(relative));
+    let sources: Vec<_> = roots.iter().flat_map(|path| rust_sources(path)).collect();
     let guard = manifest.join("tests/fixture_seal.rs");
     assert!(
         sources.contains(&guard),
         "the scan did not reach this guard's own source"
     );
+    let writers: Vec<_> = roots
+        .iter()
+        .flat_map(|path| ungated_writers(path, &guard))
+        .collect();
     assert_eq!(
-        ungated_writers(core, &guard),
+        writers,
         Vec::<PathBuf>::new(),
         "a source could rewrite the sealed fixtures without the ignore and the gate"
     );

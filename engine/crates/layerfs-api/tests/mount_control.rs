@@ -1,0 +1,784 @@
+//! Authenticated control over an actually installed Store and one real owner.
+#[path = "../../layerfs-daemon/tests/support/control_fixture.rs"]
+mod fixture;
+#[path = "../../layerfs-daemon/tests/support/held_writer.rs"]
+mod held_writer;
+#[allow(dead_code)]
+#[path = "../../layerfs-daemon/tests/support/host_install.rs"]
+mod support;
+use layerfs_api::{internal::Control, OperationCause};
+use layerfs_bridge::control::{Activity, ControlCode, Reply, Request, WorkspaceToken};
+use layerfs_daemon::control::Service;
+use layerfs_history::{BranchId, CommitOutcome, WorkspaceId};
+use std::sync::{
+    atomic::{AtomicU8, Ordering},
+    mpsc, Arc,
+};
+use std::time::Duration;
+fn identity(tag: u8) -> WorkspaceId {
+    WorkspaceId::from_authority([tag; 32]).unwrap()
+}
+fn mount(
+    client: &mut Control,
+    workspace: WorkspaceId,
+    branch: BranchId,
+) -> (WorkspaceToken, layerfs_history::BranchSnapshot) {
+    let bound = layerfs_api::internal::workspace(client)
+        .bind(workspace, branch)
+        .unwrap();
+    (bound.token, bound.binding)
+}
+fn committed(client: &mut Control, token: WorkspaceToken) -> layerfs_history::CommitRecord {
+    match layerfs_api::internal::workspace(client)
+        .commit(token)
+        .unwrap()
+    {
+        CommitOutcome::Committed { record: value, .. } => *value,
+        other => panic!("{other:?}"),
+    }
+}
+fn status(client: &mut Control, token: WorkspaceToken) -> layerfs_bridge::control::WorkspaceStatus {
+    layerfs_api::internal::workspace(client)
+        .status(token)
+        .unwrap()
+}
+fn close(client: &mut Control, token: WorkspaceToken) {
+    layerfs_api::internal::workspace(client)
+        .unmount(token, false)
+        .unwrap();
+}
+
+fn serve(
+    service: Arc<Service>,
+    tag: Arc<AtomicU8>,
+    last: WorkspaceId,
+    policy: layerfs_content::ConstructionPolicy,
+) -> (Control, support::Worker<usize>) {
+    let (channel, worker) = support::pair(move |connection| {
+        let mut count = 0;
+        loop {
+            let served = service
+                .serve_one(connection, |save, _, snapshot| {
+                    fixture::construct(save, snapshot, tag.load(Ordering::Acquire), policy)
+                })
+                .unwrap();
+            count += 1;
+            if let Ok(success) = &served.outcome {
+                if let Some(commit) = &success.commit {
+                    println!(
+                        "CONTROL_COMMIT writes={} initial={} refills={} publication={} history=1",
+                        commit.storage.reserve + commit.storage.publish + 1,
+                        commit.storage.initial_reservations,
+                        commit.storage.reservation_refills,
+                        commit.storage.publish
+                    );
+                }
+            }
+            let done = matches!(served.call.request,Request::Unmount(layerfs_bridge::control::UnmountControl { token, .. }) if token.workspace==last)
+                && served.outcome.is_ok();
+            drop(served);
+            if done {
+                return count;
+            }
+        }
+    });
+    (Control::new(channel), worker)
+}
+#[test]
+fn control_busy_keeps_the_channel_healthy_for_a_later_explicit_call() {
+    let f = fixture::Fixture::new("control-busy");
+    let branch = f.host.project.branch.branch.id;
+    let last = identity(81);
+    let tag = Arc::new(AtomicU8::new(b'Q'));
+    let (mut client, worker) = serve(
+        f.service.clone(),
+        tag,
+        last,
+        f.installed.opened.store.policy().construction(),
+    );
+    let (token, _) = mount(&mut client, last, branch);
+    fixture::write(&f.service, token, b'Q');
+    let writer =
+        held_writer::HeldWriter::acquire(&std::path::PathBuf::from(&f.installed.manifest.locator));
+    assert!(
+        matches!(layerfs_api::internal::workspace(&mut client).commit(token).unwrap_err().cause, OperationCause::Remote(value) if value.code==ControlCode::Busy)
+    );
+    writer.release();
+    let observed = status(&mut client, token);
+    assert_eq!(observed.activity, Activity::Idle);
+    assert!(observed.local.as_ref().unwrap().dirty_inodes > 0);
+    committed(&mut client, token);
+    close(&mut client, token);
+    assert_eq!(worker.join(), 5);
+    f.cleanup();
+}
+#[test]
+fn original_lost_control_reply_is_not_replayed_or_settled_by_an_observer() {
+    let f = fixture::Fixture::new("control-lost");
+    let branch = f.host.project.branch.branch.id;
+    let last = identity(85);
+    let service = f.service.clone();
+    let (send_entered, entered) = mpsc::sync_channel(1);
+    let (send_release, release) = mpsc::sync_channel(1);
+    let (send_fence, fence) = mpsc::sync_channel(1);
+    let policy = f.installed.opened.store.policy().construction();
+    let (channel, worker) = support::pair(move |connection| {
+        send_fence.send(connection.close_handle().unwrap()).unwrap();
+        let mounted = service
+            .serve_one(connection, |_, _, _| unreachable!())
+            .unwrap();
+        assert!(mounted.outcome.is_ok());
+        drop(mounted);
+        service.serve_one(connection, |save, _, snapshot| {
+            send_entered.send(()).unwrap();
+            release.recv_timeout(Duration::from_secs(3)).unwrap();
+            fixture::construct(save, snapshot, b'L', policy)
+        })
+    });
+    let mut client = Control::new(channel);
+    let (token, _) = mount(&mut client, last, branch);
+    fixture::write(&f.service, token, b'L');
+    let server_fence = fence.recv_timeout(Duration::from_secs(3)).unwrap();
+    let calling =
+        std::thread::spawn(move || layerfs_api::internal::workspace(&mut client).commit(token));
+    entered.recv_timeout(Duration::from_secs(3)).unwrap();
+    server_fence.close().unwrap();
+    send_release.send(()).unwrap();
+    let failure = calling.join().unwrap().unwrap_err();
+    assert_eq!(
+        failure.request,
+        Request::Commit(layerfs_bridge::control::CommitControl {
+            token,
+            force: false,
+            message: None,
+        })
+    );
+    let OperationCause::Exchange(original) = &failure.cause else {
+        panic!("expected original exchange custody: {failure:?}");
+    };
+    assert_eq!(original.call.request, failure.request);
+    assert!(original.attempted && original.received.is_none());
+    let delivery = worker.join().unwrap_err();
+    let served = delivery.original.as_ref().unwrap();
+    let success = served.outcome.as_ref().unwrap();
+    let published = success.commit.as_ref().unwrap();
+    assert!(matches!(
+        published.history,
+        Some(CommitOutcome::Committed { .. })
+    ));
+    let observer = f
+        .installed
+        .opened
+        .store
+        .history()
+        .branch_snapshot(branch)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        observer.effective_root,
+        match &published.history {
+            Some(CommitOutcome::Committed { record, .. }) => record.root,
+            _ => unreachable!(),
+        }
+    );
+    assert!(
+        original.received.is_none(),
+        "observer cannot settle original lost reply"
+    );
+    println!(
+        "CONTROL_LOST_ORIGINAL client={original:?} daemon_reply={:?} capture={:?}",
+        success.reply, published.capture
+    );
+    println!("CONTROL_LOST_REPLY client_original_unknown=true daemon_original_known_commit=true replay=false observer_does_not_settle=true");
+    drop((delivery, failure));
+    f.cleanup();
+}
+
+#[test]
+fn another_control_channel_observes_running_commit_and_refuses_unmount_before_effect() {
+    let f = fixture::Fixture::new("control-concurrent");
+    let branch = f.host.project.branch.branch.id;
+    let service = f.service.clone();
+    let policy = f.installed.opened.store.policy().construction();
+    let (send_entered, entered) = mpsc::sync_channel(1);
+    let (send_release, release) = mpsc::sync_channel(1);
+    let (channel, worker) = support::pair(move |connection| {
+        let mounted = service
+            .serve_one(connection, |_, _, _| unreachable!())
+            .unwrap();
+        drop(mounted);
+        service.serve_one(connection, |save, _, snapshot| {
+            send_entered.send(()).unwrap();
+            release.recv_timeout(Duration::from_secs(3)).unwrap();
+            fixture::construct(save, snapshot, b'R', policy)
+        })
+    });
+    let mut client = Control::new(channel);
+    let (token, original) = mount(&mut client, identity(88), branch);
+    fixture::write(&f.service, token, b'R');
+    let calling = std::thread::spawn(move || {
+        client.call(Request::Commit(layerfs_bridge::control::CommitControl {
+            token,
+            force: false,
+            message: None,
+        }))
+    });
+    entered.recv_timeout(Duration::from_secs(3)).unwrap();
+    let service = f.service.clone();
+    let (channel, observing) = support::pair(move |connection| {
+        for _ in 0..2 {
+            let served = service
+                .serve_one(connection, |_, _, _| unreachable!())
+                .unwrap();
+            drop(served);
+        }
+    });
+    let mut observer = Control::new(channel);
+    let sql = f.statements();
+    let observed = status(&mut observer, token);
+    assert_eq!(observed.activity, Activity::Committing);
+    assert_eq!(observed.binding, original);
+    assert!(observed.local.as_ref().unwrap().captured.is_some());
+    assert_eq!(f.statements(), sql);
+    assert!(
+        matches!(observer.call(Request::Unmount(layerfs_bridge::control::UnmountControl { token, discard: true })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Busy)
+    );
+    observing.join();
+    send_release.send(()).unwrap();
+    assert!(matches!(
+        calling.join().unwrap().unwrap(),
+        Reply::Committed(CommitOutcome::Committed { .. })
+    ));
+    let completed = worker.join().unwrap();
+    assert!(completed.outcome.is_ok());
+    drop(completed);
+    println!("CONTROL_CONCURRENT status_while_constructing=true Store_SQL_for_status=0 unmount=Busy_before_effect later_commit=Committed");
+    f.cleanup();
+}
+
+#[test]
+fn an_original_unknown_blocks_another_commit_and_normal_unmount() {
+    let f = fixture::Fixture::new("control-unknown");
+    let branch = f.host.project.branch.branch.id;
+    let service = f.service.clone();
+    let (channel, worker) = support::pair(move |connection| {
+        drop(
+            service
+                .serve_one(connection, |_, _, _| unreachable!())
+                .unwrap(),
+        );
+        let original = service
+            .serve_one(connection, |_, _, _| {
+                Err(layerfs_daemon::store::CommitError::Storage(
+                    layerfs_storage::StorageError::UnknownOutcome {
+                        original: Box::new(layerfs_storage::StorageError::Integrity(
+                            "original producer uncertainty",
+                        )),
+                    },
+                ))
+            })
+            .unwrap();
+        for _ in 0..3 {
+            drop(
+                service
+                    .serve_one(connection, |_, _, _| {
+                        unreachable!("unresolved constructor cannot enter")
+                    })
+                    .unwrap(),
+            );
+        }
+        original
+    });
+    let mut client = Control::new(channel);
+    let (token, binding) = mount(&mut client, identity(89), branch);
+    fixture::write(&f.service, token, b'U');
+    assert!(
+        matches!(client.call(Request::Commit(layerfs_bridge::control::CommitControl { token, force: false, message: None, })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
+    );
+    let observed = status(&mut client, token);
+    assert_eq!(observed.activity, Activity::Uncertain);
+    assert_eq!(observed.binding, binding);
+    assert!(observed.published.is_none());
+    assert!(observed.local.unwrap().captured.is_some());
+    assert!(
+        matches!(f.service.execute_control(&Request::Commit(layerfs_bridge::control::CommitControl { token, force: false, message: None, })),
+        Err(layerfs_daemon::control::Failure::Custody(value)) if value.code == ControlCode::Unknown && value.published.is_none())
+    );
+    assert!(
+        matches!(client.call(Request::Unmount(layerfs_bridge::control::UnmountControl { token, discard: true })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
+    );
+    assert!(
+        matches!(client.call(Request::Commit(layerfs_bridge::control::CommitControl { token, force: false, message: None, })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
+    );
+    let retained = worker.join();
+    assert!(retained.outcome.is_err());
+    println!("CONTROL_UNKNOWN producer_original_retained=true normal_unmount=Unknown another_commit=Unknown no_reentry=true");
+    drop(retained);
+    f.cleanup();
+}
+#[test]
+fn status_retains_known_publication_when_the_engine_is_unavailable() {
+    let f = fixture::Fixture::new("control-local-failure");
+    let branch = f.host.project.branch.branch.id;
+    let service = f.service.clone();
+    let policy = f.installed.opened.store.policy().construction();
+    let (send_entered, entered) = mpsc::sync_channel(1);
+    let (send_release, release) = mpsc::sync_channel(1);
+    let (channel, worker) = support::pair(move |connection| {
+        drop(
+            service
+                .serve_one(connection, |_, _, _| unreachable!())
+                .unwrap(),
+        );
+        let original = service
+            .serve_one(connection, |save, _, snapshot| {
+                let root = fixture::construct(save, snapshot, b'V', policy)?;
+                send_entered.send(()).unwrap();
+                release.recv_timeout(Duration::from_secs(3)).unwrap();
+                Ok(root)
+            })
+            .unwrap();
+        let status = service
+            .serve_one(connection, |_, _, _| unreachable!())
+            .unwrap();
+        assert!(status
+            .outcome
+            .as_ref()
+            .unwrap()
+            .observation_failure
+            .is_some());
+        drop(status);
+        drop(
+            service
+                .serve_one(connection, |_, _, _| unreachable!())
+                .unwrap(),
+        );
+        original
+    });
+    let mut client = Control::new(channel);
+    let (token, binding) = mount(&mut client, identity(90), branch);
+    fixture::write(&f.service, token, b'V');
+    let calling = std::thread::spawn(move || {
+        let reply = client.call(Request::Commit(layerfs_bridge::control::CommitControl {
+            token,
+            force: false,
+            message: None,
+        }));
+        (client, reply)
+    });
+    entered.recv_timeout(Duration::from_secs(3)).unwrap();
+    f.owner.stop().unwrap();
+    send_release.send(()).unwrap();
+    let (mut client, reply) = calling.join().unwrap();
+    let publication = match reply.unwrap() {
+        Reply::Refused(value) => value.published.expect("original known history"),
+        other => panic!("{other:?}"),
+    };
+    let before = f.installed.opened.diagnostics().unwrap().writer.statements;
+    let observed = status(&mut client, token);
+    assert_eq!(observed.activity, Activity::LocalFailure);
+    assert_eq!(observed.binding, binding);
+    assert_eq!(observed.published, Some(publication));
+    assert!(observed.local.is_none() && observed.local_failure.is_some());
+    assert_eq!(
+        f.installed.opened.diagnostics().unwrap().writer.statements,
+        before
+    );
+    assert!(
+        matches!(client.call(Request::Unmount(layerfs_bridge::control::UnmountControl { token, discard: true })).unwrap(),Reply::Refused(value) if value.code==ControlCode::Unknown)
+    );
+    let original = worker.join();
+    assert!(original.outcome.is_err());
+    println!("CONTROL_LOCAL_FAILURE known_publication=retained engine=unavailable Store_SQL_for_status=0 normal_unmount=Unknown");
+    drop((original, f.service, f.installed));
+    f.host.cleanup();
+}
+
+#[test]
+fn product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_up_to_date() {
+    let f = fixture::Fixture::new("product-producer");
+    let branch = f.host.project.branch.branch.id;
+    let success = f
+        .service
+        .execute_control(&Request::Mount {
+            workspace: identity(87),
+            branch,
+        })
+        .unwrap();
+    let (token, bound) = match &success.reply {
+        Reply::Bound { token, binding } => (*token, binding.clone()),
+        other => panic!("{other:?}"),
+    };
+    drop(success);
+    fixture::write(&f.service, token, b'Q');
+    let status = |token| match f
+        .service
+        .execute_control(&Request::Status(token))
+        .unwrap()
+        .reply
+    {
+        Reply::Status(v) => v,
+        other => panic!("{other:?}"),
+    };
+    let before = status(token);
+    // A stale namespace is refused before admission, capture or Save.
+    let sql = f.statements();
+    assert!(matches!(
+        f.service
+            .execute_control(&Request::Commit(layerfs_bridge::control::CommitControl {
+                token: WorkspaceToken {
+                    namespace: token.namespace + 1,
+                    ..token
+                },
+                force: false,
+                message: None,
+            })),
+        Err(layerfs_daemon::control::Failure::Rejected(
+            ControlCode::Invalid,
+            _
+        ))
+    ));
+    assert_eq!(status(token), before, "no epoch, capture or install effect");
+    assert_eq!(f.statements(), sql, "no Store SQL for a refused token");
+    // The product route: no caller constructor exists on this path.
+    let done = f
+        .service
+        .execute_control(&Request::Commit(layerfs_bridge::control::CommitControl {
+            token,
+            force: false,
+            message: None,
+        }))
+        .unwrap();
+    let record = match &done.reply {
+        Reply::Committed(CommitOutcome::Committed { record, .. }) => record.clone(),
+        other => panic!("{other:?}"),
+    };
+    assert_ne!(record.root, bound.effective_root);
+    assert_eq!(record.parent, bound.branch.head_commit);
+    let commit = done.commit.as_ref().expect("original Commit receipt");
+    let namespace = commit.namespace.as_ref().expect("product constructor ran");
+    assert!(!namespace.retained(), "{namespace:?}");
+    assert_eq!(namespace.released.len(), 2, "reader, then operation owner");
+    assert!(namespace.release_error.is_none() && namespace.custody.is_none());
+    let work = namespace.work.expect("producer work");
+    assert!(
+        work.inode_rows > 0 && work.files_constructed > 0,
+        "{work:?}"
+    );
+    assert!(namespace.counters.is_some());
+    println!(
+        "PRODUCT_COMMIT inode_rows={} entry_rows={} files={} record_jobs={} released=2",
+        work.inode_rows, work.entry_rows, work.files_constructed, work.record_jobs
+    );
+    drop(done);
+    let after = status(token);
+    assert_eq!(after.activity, Activity::Idle);
+    assert_eq!(after.binding.effective_root, record.root);
+    assert_eq!(after.binding.branch.head_commit, Some(record.id));
+    // Unchanged: the same head and root, no new Commit record.
+    let again = f
+        .service
+        .execute_control(&Request::Commit(layerfs_bridge::control::CommitControl {
+            token,
+            force: false,
+            message: None,
+        }))
+        .unwrap();
+    assert!(
+        matches!(&again.reply, Reply::Committed(CommitOutcome::UpToDate { head: Some(head), root }) if *head == record.id && *root == record.root),
+        "{:?}",
+        again.reply
+    );
+    // Answered before capture (#352 c04): no constructor, owner or Save.
+    let unchanged = again.commit.as_ref().unwrap();
+    assert!(unchanged.namespace.is_none() && unchanged.capture.is_none());
+    assert_eq!(unchanged.saved, Default::default());
+    drop(again);
+    // A new Workspace binds the published root. Only the root identity is
+    // compared here; the committed bytes are read back in product_commit.
+    let other = match f
+        .service
+        .execute_control(&Request::Mount {
+            workspace: identity(88),
+            branch,
+        })
+        .unwrap()
+        .reply
+    {
+        Reply::Bound { token, binding } => {
+            assert_eq!(binding.effective_root, record.root);
+            token
+        }
+        other => panic!("{other:?}"),
+    };
+    f.service
+        .execute_control(&Request::Unmount(layerfs_bridge::control::UnmountControl {
+            token: other,
+            discard: true,
+        }))
+        .unwrap();
+    f.service
+        .execute_control(&Request::Unmount(layerfs_bridge::control::UnmountControl {
+            token,
+            discard: true,
+        }))
+        .unwrap();
+    f.cleanup();
+}
+#[test]
+fn forced_unmount_refuses_a_workspace_without_a_connection_before_any_effect() {
+    use layerfs_daemon::control::Failure;
+    let f = fixture::Fixture::new("control-force-unattached");
+    let branch = f.host.project.branch.branch.id;
+    let last = identity(91);
+    let (mut client, worker) = serve(
+        f.service.clone(),
+        Arc::new(AtomicU8::new(b'F')),
+        last,
+        f.installed.opened.store.policy().construction(),
+    );
+    let (token, binding) = mount(&mut client, last, branch);
+    let before = status(&mut client, token);
+    // Over the wire, with and without the relinquish flag: the typed phase.
+    for relinquish_unknown in [false, true] {
+        match client
+            .call(Request::ForceUnmount {
+                token,
+                relinquish_unknown,
+            })
+            .unwrap()
+        {
+            Reply::Refused(value) => {
+                assert_eq!(value.code, ControlCode::Invalid);
+                assert_eq!(value.phase, "force:admission");
+                assert!(value.published.is_none());
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+    // The SDK operation carries the same refusal.
+    assert!(
+        matches!(layerfs_api::internal::workspace(&mut client).unmount(token, true).unwrap_err().cause, OperationCause::Remote(value) if value.code == ControlCode::Invalid && value.phase == "force:admission")
+    );
+    // At the control owner: the original typed failure, and the ordinary
+    // token refusals ahead of it.
+    let force = |token| {
+        f.service.execute_control(&Request::ForceUnmount {
+            token,
+            relinquish_unknown: false,
+        })
+    };
+    assert!(matches!(
+        force(token),
+        Err(Failure::Kernel(value)) if value.code == ControlCode::Invalid
+            && value.phase == "force:admission"
+
+    ));
+    assert!(matches!(
+        force(WorkspaceToken {
+            namespace: token.namespace + 1,
+            ..token
+        }),
+        Err(Failure::Rejected(ControlCode::Invalid, _))
+    ));
+    assert!(matches!(
+        force(WorkspaceToken {
+            workspace: identity(92),
+            ..token
+        }),
+        Err(Failure::Rejected(ControlCode::Missing, _))
+    ));
+    // No effect: the same idle binding at the same epoch, and a normal close.
+    let after = status(&mut client, token);
+    assert_eq!(after.activity, Activity::Idle);
+    assert_eq!(after.epoch, before.epoch);
+    assert_eq!(after.binding, binding);
+    println!(
+        "CONTROL_FORCE_UNATTACHED code=Invalid phase=force:admission relinquish_unknown=both stale_namespace=Invalid absent=Missing epoch_unchanged={} activity={:?}",
+        after.epoch == before.epoch,
+        after.activity
+    );
+    close(&mut client, token);
+    assert_eq!(worker.join(), 7);
+    f.cleanup();
+}
+#[test]
+fn a_definite_commit_failure_whose_capture_is_not_resolved_answers_unknown() {
+    use layerfs_daemon::{
+        control::Failure,
+        store::{CommitError, CommitPhase},
+    };
+    let f = fixture::Fixture::new("control-unresolved");
+    let branch = f.host.project.branch.branch.id;
+    let service = f.service.clone();
+    let (send_entered, entered) = mpsc::sync_channel(1);
+    let (send_release, release) = mpsc::sync_channel(1);
+    let (channel, worker) = support::pair(move |connection| {
+        drop(
+            service
+                .serve_one(connection, |_, _, _| unreachable!())
+                .unwrap(),
+        );
+        // A definite refusal by itself: it maps to Busy. The engine is gone
+        // when the driver makes its one local resolution of the capture.
+        let original = service
+            .serve_one(connection, |_, _, _| {
+                send_entered.send(()).unwrap();
+                release.recv_timeout(Duration::from_secs(3)).unwrap();
+                Err(CommitError::Storage(layerfs_storage::StorageError::Busy))
+            })
+            .unwrap();
+        for _ in 0..2 {
+            drop(
+                service
+                    .serve_one(connection, |_, _, _| {
+                        unreachable!("unresolved constructor cannot enter")
+                    })
+                    .unwrap(),
+            );
+        }
+        original
+    });
+    let mut client = Control::new(channel);
+    let (token, binding) = mount(&mut client, identity(93), branch);
+    fixture::write(&f.service, token, b'W');
+    let calling = std::thread::spawn(move || {
+        let reply = client.call(Request::Commit(layerfs_bridge::control::CommitControl {
+            token,
+            force: false,
+            message: None,
+        }));
+        (client, reply)
+    });
+    entered.recv_timeout(Duration::from_secs(3)).unwrap();
+    f.owner.stop().unwrap();
+    send_release.send(()).unwrap();
+    let (mut client, reply) = calling.join().unwrap();
+    let refusal = match reply.unwrap() {
+        Reply::Refused(value) => value,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(refusal.code, ControlCode::Unknown, "{refusal:?}");
+    assert!(refusal.published.is_none() && refusal.moved.is_none());
+    assert_eq!(refusal.phase, "Commit Construct");
+    // The registry recorded the same thing the reply now says.
+    let observed = status(&mut client, token);
+    assert_eq!(observed.activity, Activity::Uncertain);
+    assert_eq!(observed.binding, binding);
+    assert!(observed.published.is_none());
+    // With no connection Force has no exit either, flag or not (plan D10).
+    assert!(
+        matches!(client.call(Request::ForceUnmount { token, relinquish_unknown: true }).unwrap(), Reply::Refused(value) if value.code == ControlCode::Invalid && value.phase == "force:admission")
+    );
+    let original = worker.join();
+    let failed = match &original.outcome {
+        Err(Failure::Commit(failed)) => failed,
+        other => panic!("{other:?}"),
+    };
+    assert!(matches!(
+        failed.error,
+        CommitError::Storage(layerfs_storage::StorageError::Busy)
+    ));
+    assert_eq!(failed.phase, CommitPhase::Construct);
+    assert!(!failed.locally_settled && failed.published.is_none());
+    assert!(failed.capture.is_some() && failed.namespace.is_none());
+    println!(
+        "CONTROL_UNRESOLVED original_error={:?} locally_settled={} local_done={} local_error={:?} published=None reply_code={:?} reply_phase={} registry={:?} force_unattached=Invalid",
+        failed.error,
+        failed.locally_settled,
+        failed.locally_settled,
+        failed.local_error,
+        refusal.code,
+        refusal.phase,
+        observed.activity
+    );
+    drop((original, f.service, f.installed));
+    f.host.cleanup();
+}
+
+/// The same unresolved capture after a moved-head answer: the reply is
+/// rewritten to `Unknown`, so it must not carry the moved state a moved-head
+/// answer alone may carry. The moved state stays in the detail text.
+#[test]
+fn an_unresolved_moved_head_failure_is_answered_and_not_dropped() {
+    use layerfs_daemon::{control::Failure, store::CommitError};
+    use layerfs_history::{error::MovedState, HistoryError};
+    let f = fixture::Fixture::new("control-unresolved-moved");
+    let record = f.host.project.branch.branch.clone();
+    let branch = record.id;
+    let moved = MovedState {
+        expected_head: record.head_commit,
+        actual_head: record.head_commit,
+        expected_base: record.base_layer,
+        actual_base: record.base_layer,
+    };
+    let service = f.service.clone();
+    let (send_entered, entered) = mpsc::sync_channel(1);
+    let (send_release, release) = mpsc::sync_channel(1);
+    let (channel, worker) = support::pair(move |connection| {
+        drop(
+            service
+                .serve_one(connection, |_, _, _| unreachable!())
+                .unwrap(),
+        );
+        // A definite moved-head refusal by itself: it maps to HeadMoved with
+        // its state. The engine is gone when the capture is resolved.
+        let original = service
+            .serve_one(connection, |_, _, _| {
+                send_entered.send(()).unwrap();
+                release.recv_timeout(Duration::from_secs(3)).unwrap();
+                Err(CommitError::History(HistoryError::HeadMoved(Box::new(
+                    moved,
+                ))))
+            })
+            .unwrap();
+        drop(
+            service
+                .serve_one(connection, |_, _, _| {
+                    unreachable!("unresolved constructor cannot enter")
+                })
+                .unwrap(),
+        );
+        original
+    });
+    let mut client = Control::new(channel);
+    let (token, _) = mount(&mut client, identity(94), branch);
+    fixture::write(&f.service, token, b'W');
+    let calling = std::thread::spawn(move || {
+        let reply = client.call(Request::Commit(layerfs_bridge::control::CommitControl {
+            token,
+            force: false,
+            message: None,
+        }));
+        (client, reply)
+    });
+    entered.recv_timeout(Duration::from_secs(3)).unwrap();
+    f.owner.stop().unwrap();
+    send_release.send(()).unwrap();
+    let (mut client, reply) = calling.join().unwrap();
+    let refusal = match reply.unwrap() {
+        Reply::Refused(value) => value,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(refusal.code, ControlCode::Unknown, "{refusal:?}");
+    assert!(refusal.moved.is_none() && refusal.published.is_none());
+    assert!(refusal.detail.contains("head moved"), "{refusal:?}");
+    // The connection is still answered: the registry says the same thing.
+    assert_eq!(status(&mut client, token).activity, Activity::Uncertain);
+    let original = worker.join();
+    let failed = match &original.outcome {
+        Err(Failure::Commit(failed)) => failed,
+        other => panic!("{other:?}"),
+    };
+    assert!(matches!(
+        &failed.error,
+        CommitError::History(HistoryError::HeadMoved(state)) if **state == moved
+    ));
+    assert!(!failed.locally_settled && failed.published.is_none());
+    println!(
+        "CONTROL_UNRESOLVED_MOVED original_error={:?} locally_settled={} reply_code={:?} reply_moved=None reply_phase={} detail_keeps_moved_state=true registry=Uncertain",
+        failed.error, failed.locally_settled, refusal.code, refusal.phase
+    );
+    drop((original, f.service, f.installed));
+    f.host.cleanup();
+}

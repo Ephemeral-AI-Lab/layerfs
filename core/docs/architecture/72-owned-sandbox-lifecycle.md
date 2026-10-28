@@ -31,8 +31,10 @@ The upload is incremental extraction. A failed/lost response never proves an emp
 destination and never authorizes another upload, adoption, automatic deletion or
 Start. Original declared executable/tar sizes, source bytes read, buffer-accepted
 archive bytes, positive socket body/wire bytes and two disjoint pending windows
-remain separate. Pending bytes and HTTP diagnostic prefixes have redacted Debug.
-The caller retains the original file/config; SDK failure retains original inputs.
+remain separate. Pending request bytes stay redacted in Debug. HTTP error diagnostics
+show only the retained prefix (at most 1024 bytes) as lossy UTF-8 with controls
+escaped, alongside explicit prefix/count/completion metadata. The caller retains the
+original file/config; SDK failure retains original inputs.
 
 Each original upload, Start, listener wait, stop and delete has a one-attempt flag.
 Known acknowledgments are distinct from attempted/unknown outcomes. Explicit
@@ -50,7 +52,8 @@ this path; the lock adds normal socket-feature transitives memoffset0.9.1 and
 autocfg1.5.1, with no new direct third-party crate or third-party modification.
 
 The listener waits for the actual complete stdout line from this fresh exact
-container with RestartPolicy=no and non-TTY json-file logging. Stdout line state
+container with RestartPolicy=no and non-TTY json-file logging (capped at two
+10 MB files since #423). Stdout line state
 spans frames/windows, stderr cannot satisfy the marker, and giant unrelated lines
 are discarded without collection. A marker inside an unfinished frame remains
 an observed marker fact, while truncated-frame/timeout failure prevents readiness

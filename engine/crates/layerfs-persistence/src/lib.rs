@@ -1,0 +1,37 @@
+//! Shared SQLite adapter with explicit Durable and disk-backed Disposable profiles.
+#![deny(unsafe_code)]
+#![deny(missing_docs)]
+mod backend;
+mod storage;
+mod store;
+pub(crate) use store::config;
+pub(crate) use store::handles;
+mod history;
+pub use backend::sqlite::connection::{ConnectionProfile, SqlWork};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub use backend::sqlite::headroom::STORE_HEADROOM_BYTES;
+pub use backend::sqlite::reclamation::{SpaceReclamation, RECLAMATION_PAGE_LIMIT};
+pub use backend::sqlite::statement_work::StatementPhaseWork;
+pub use backend::sqlite::thread_work::thread_work;
+#[cfg(target_os = "windows")]
+#[cfg(target_os = "windows")]
+pub use backend::sqlite::windows_volume_filesystem;
+pub use config::{
+    BackendSelection, PersistenceConfig, SqliteAcquisitionSchema, SqlitePackLayout,
+    SqlitePersistenceProfile,
+};
+pub use handles::Handles;
+
+pub use history::HistoryProvider;
+pub use storage::acquisition::AcquisitionProvider;
+pub use storage::merge_records::{
+    MergeRecords, MergeRecordsWork, MergeScratch, BUFFER_BYTES, MERGE_LEASE, RESIDENT_BYTES,
+};
+pub(crate) use storage::provider as storage_provider;
+pub(crate) use storage::publication;
+pub use storage_provider::StorageProvider;
+pub use store::seal::SealedStore;
+pub use store::lane::{store_lane, StoreLane};
+
+mod metadata;
+mod objects;

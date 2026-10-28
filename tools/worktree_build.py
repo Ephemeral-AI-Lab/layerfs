@@ -6,9 +6,22 @@ from pathlib import Path
 import shutil
 
 from cleanup_state import Refused, ensure_idle, open_files, docker_state, run
-from worktree_resources import (TOOLCHAIN, closed_volumes, copy_dependencies, digest,
-                                docker_build, environment, execute, inputs, lease,
-                                load, operation, timestamp, volume, write)
+from worktree_resources import (
+    TOOLCHAIN,
+    closed_volumes,
+    copy_dependencies,
+    digest,
+    docker_build,
+    environment,
+    execute,
+    inputs,
+    lease,
+    load,
+    operation,
+    timestamp,
+    volume,
+    write,
+)
 
 
 def prepare(args):
@@ -21,7 +34,7 @@ def prepare(args):
                 home.mkdir(mode=0o700, exist_ok=True)
                 if args.dependency_seed:
                     copy_dependencies(args.dependency_seed, home)
-                command = ["cargo", "+" + TOOLCHAIN, "fetch", "--manifest-path", "core/Cargo.toml", "--locked"]
+                command = ["cargo", "+" + TOOLCHAIN, "fetch", "--manifest-path", "Cargo.toml", "--locked"]
                 execute(command, record["worktree"], environment(record, "macos"), log=receipt / "output.log")
             else:
                 for key in ("linux_cargo_volume", "linux_target_volume"):
@@ -29,18 +42,27 @@ def prepare(args):
                 closed_volumes([record["linux_cargo_volume"], record["linux_target_volume"]])
                 if args.dependency_seed:
                     seed = Path(args.dependency_seed).resolve()
-                    ensure_idle([seed / n for n in ("registry", "git") if (seed / n).exists()],
-                                [], docker_state(), open_files())
-                    script = ('set -eu; for d in registry git; do if [ -d "/seed/$d" ]; then '
-                              'test ! -e "/cargo-home/$d"; cp -a "/seed/$d" "/cargo-home/$d"; fi; done')
-                    command = docker_build(record, ["sh", "-c", script],
-                                           ["--mount", f"type=bind,src={seed},dst=/seed,readonly"])
+                    ensure_idle(
+                        [seed / n for n in ("registry", "git") if (seed / n).exists()], [], docker_state(), open_files()
+                    )
+                    script = (
+                        'set -eu; for d in registry git; do if [ -d "/seed/$d" ]; then '
+                        'test ! -e "/cargo-home/$d"; cp -a "/seed/$d" "/cargo-home/$d"; fi; done'
+                    )
+                    command = docker_build(
+                        record, ["sh", "-c", script], ["--mount", f"type=bind,src={seed},dst=/seed,readonly"]
+                    )
                     execute(command, record["worktree"], log=receipt / "seed.log")
-                command = docker_build(record, ["cargo", "+" + TOOLCHAIN, "fetch", "--manifest-path",
-                                                "core/Cargo.toml", "--locked"], network="default")
+                command = docker_build(
+                    record,
+                    ["cargo", "+" + TOOLCHAIN, "fetch", "--manifest-path", "Cargo.toml", "--locked"],
+                    network="default",
+                )
                 execute(command, record["worktree"], log=receipt / "output.log")
-            write(receipt / "receipt.json", {"status": "prepared", "at": timestamp(), "resources": record,
-                                               "dependency_seed": args.dependency_seed})
+            write(
+                receipt / "receipt.json",
+                {"status": "prepared", "at": timestamp(), "resources": record, "dependency_seed": args.dependency_seed},
+            )
         except BaseException as error:
             write(receipt / "receipt.json", {"status": "failed", "error": str(error), "at": timestamp()})
             raise
@@ -60,8 +82,16 @@ def cargo_arguments(arguments):
         raise Refused("fs-bench-pro is frozen")
     if not any(a in {"-p", "--package"} or a.startswith("--package=") for a in arguments):
         raise Refused("Cargo invocation needs explicit package selection")
-    return ["cargo", "+" + TOOLCHAIN, arguments[0], "--manifest-path", "core/Cargo.toml",
-            "--locked", "--offline", *arguments[1:]]
+    return [
+        "cargo",
+        "+" + TOOLCHAIN,
+        arguments[0],
+        "--manifest-path",
+        "Cargo.toml",
+        "--locked",
+        "--offline",
+        *arguments[1:],
+    ]
 
 
 def cargo(args):
@@ -76,16 +106,24 @@ def cargo(args):
             if args.platform == "linux":
                 closed_volumes([record["linux_cargo_volume"], record["linux_target_volume"]])
             if is_test:
-                compile_command = command[:command.index("--")] if "--" in command else list(command)
+                compile_command = command[: command.index("--")] if "--" in command else list(command)
                 compile_command.append("--no-run")
                 compile_command = docker_build(record, compile_command) if args.platform == "linux" else compile_command
-                execute(compile_command, record["worktree"],
-                        environment(record, "macos") if args.platform == "macos" else None,
-                        log=receipt / "compile.log")
+                execute(
+                    compile_command,
+                    record["worktree"],
+                    environment(record, "macos") if args.platform == "macos" else None,
+                    log=receipt / "compile.log",
+                )
             if args.platform == "linux":
                 command = docker_build(record, command)
-            execute(command, record["worktree"], environment(record, "macos") if args.platform == "macos" else None,
-                    timeout=args.timeout if is_test else None, log=receipt / "output.log")
+            execute(
+                command,
+                record["worktree"],
+                environment(record, "macos") if args.platform == "macos" else None,
+                timeout=args.timeout if is_test else None,
+                log=receipt / "output.log",
+            )
             outcome = "passed"
         except BaseException as error:
             outcome = "failed"
@@ -96,12 +134,47 @@ def cargo(args):
 
 
 def copy_sdk(root, bundle):
-    destination = bundle / "sdk/js"
+    """The JavaScript packages and the `layerfs` command, in the repository's
+    own layout: api/package.json, api/agent (@layerfs/agent),
+    api/backend, api/runtime and api/cli. A bundle holds no symlink, so
+    each package resolves by name through a re-export shim under
+    api/node_modules/@layerfs/<name> that imports its one real copy."""
+    destination = bundle / "api"
     destination.mkdir(parents=True)
-    for child in ("src", "operator", "test"):
-        shutil.copytree(root / "sdk/js" / child, destination / child,
-                        ignore=shutil.ignore_patterns("node_modules", "__pycache__", "target"))
-    shutil.copy2(root / "sdk/js/package.json", destination / "package.json")
+    ignore = shutil.ignore_patterns("node_modules", "__pycache__", "target")
+    packages = [destination / folder for folder in ("agent", "backend", "runtime")]
+    for package in packages:
+        shutil.copytree(root / "api" / package.relative_to(destination), package, ignore=ignore)
+    shutil.copy2(root / "api/package.json", destination / "package.json")
+    for package in sorted(packages):
+        shim(destination / "node_modules", package)
+    if (root / "api/cli/package.json").is_file():
+        cli = destination / "cli"
+        cli.mkdir()
+        for folder in ("src", "test"):
+            if (root / "api/cli" / folder).is_dir():
+                shutil.copytree(root / "api/cli" / folder, cli / folder, ignore=ignore)
+        shutil.copy2(root / "api/cli/package.json", cli / "package.json")
+        shim(cli / "node_modules", destination / "agent")
+
+
+def shim(node_modules, package):
+    """node_modules/<name>: re-exports each of `package`'s JavaScript exports."""
+    manifest = json.loads((package / "package.json").read_text())
+    name = manifest["name"]
+    shim = node_modules / name
+    shim.mkdir(parents=True)
+    exports = {}
+    for subpath, target in manifest.get("exports", {}).items():
+        if not target.endswith(".js"):
+            continue
+        file = "index.js" if subpath == "." else subpath.removeprefix("./") + ".js"
+        real = os.path.relpath(package / target, shim)
+        (shim / file).write_text(f'export * from "{real}";\n')
+        exports[subpath] = f"./{file}"
+    (shim / "package.json").write_text(
+        json.dumps({"name": name, "type": "module", "exports": exports}, indent=2) + "\n"
+    )
 
 
 def verify_bundle(path):
@@ -134,19 +207,37 @@ def build(args):
         bundle.mkdir(mode=0o700)
         before = inputs(record)
         write(receipt / "inputs.json", before)
-        command = ["cargo", "+" + TOOLCHAIN, "build", "--manifest-path", "core/Cargo.toml", "--locked", "--offline",
-                   "-p", "layerfs-daemon", "-p", "layerfs-node", "-j", str(args.jobs)]
+        command = [
+            "cargo",
+            "+" + TOOLCHAIN,
+            "build",
+            "--manifest-path",
+            "Cargo.toml",
+            "--locked",
+            "--offline",
+            "-p",
+            "layerfs-daemon",
+            "-p",
+            "layerfs-node",
+            "-j",
+            str(args.jobs),
+        ]
         if args.profile == "release":
             command.append("--release")
         try:
             if args.platform == "linux":
                 closed_volumes([record["linux_cargo_volume"], record["linux_target_volume"]])
                 execute(docker_build(record, command), record["worktree"], log=receipt / "output.log")
-                script = ('set -eu; cp "/work/core/target/$1/layerfs-daemon" /export/layerfs-daemon; '
-                          'cp "/work/core/target/$1/liblayerfs_node.so" /export/layerfs.node; '
-                          'chown "$2:$3" /export/layerfs-daemon /export/layerfs.node')
-                export = docker_build(record, ["sh", "-c", script, "sh", args.profile, str(os.getuid()), str(os.getgid())],
-                                      ["--mount", f"type=bind,src={bundle},dst=/export"])
+                script = (
+                    'set -eu; cp "/work/target/$1/layerfs-daemon" /export/layerfs-daemon; '
+                    'cp "/work/target/$1/liblayerfs_node.so" /export/layerfs.node; '
+                    'chown "$2:$3" /export/layerfs-daemon /export/layerfs.node'
+                )
+                export = docker_build(
+                    record,
+                    ["sh", "-c", script, "sh", args.profile, str(os.getuid()), str(os.getgid())],
+                    ["--mount", f"type=bind,src={bundle},dst=/export"],
+                )
                 execute(export, record["worktree"], log=receipt / "export.log")
             else:
                 execute(command, record["worktree"], environment(record, "macos"), log=receipt / "output.log")
@@ -157,10 +248,20 @@ def build(args):
             if inputs(record) != before:
                 raise Refused("Source changed during build; partial bundle is not eligible for E2E")
             files = {str(p.relative_to(bundle)): digest(p) for p in bundle.rglob("*") if p.is_file()}
-            manifest = {"version": 1, "status": "sealed", "build_id": build_id, "at": timestamp(),
-                        "worktree_id": record["id"], "platform": args.platform, "profile": args.profile,
-                        "source": {"head": before["head"], "sha256": before["sha256"]},
-                        "toolchain": TOOLCHAIN, "images": record["images"], "command": command, "files": files}
+            manifest = {
+                "version": 1,
+                "status": "sealed",
+                "build_id": build_id,
+                "at": timestamp(),
+                "worktree_id": record["id"],
+                "platform": args.platform,
+                "profile": args.profile,
+                "source": {"head": before["head"], "sha256": before["sha256"]},
+                "toolchain": TOOLCHAIN,
+                "images": record["images"],
+                "command": command,
+                "files": files,
+            }
             write(bundle / "manifest.json", manifest)
             verify_bundle(bundle)
             for path in bundle.rglob("*"):
@@ -179,7 +280,7 @@ def seed(args):
         raise Refused("Seed source and destination must be different worktrees")
     if record["images"] != source["images"]:
         raise Refused("Seed images differ")
-    for relative in ("core/Cargo.lock", ".cargo/config.toml"):
+    for relative in ("Cargo.lock", ".cargo/config.toml"):
         if digest(Path(record["worktree"]) / relative) != digest(Path(source["worktree"]) / relative):
             raise Refused("Seed lockfile or build configuration differs")
     with lease(record, args.platform), lease(source, args.platform):
@@ -188,10 +289,15 @@ def seed(args):
             for owner in (record, source):
                 volume(owner, "linux_target_volume")
             closed_volumes([record["linux_target_volume"], source["linux_target_volume"]])
-            script = ('set -eu; test ! -e "/work/core/target/$1"; cp -a "/seed/$1" "/work/core/target/$1"; '
-                      'for f in .rustc_info.json CACHEDIR.TAG; do if [ -f "/seed/$f" ]; then cp -a "/seed/$f" /work/core/target/; fi; done')
-            command = docker_build(record, ["sh", "-c", script, "sh", args.profile],
-                                   ["--mount", f"type=volume,src={source['linux_target_volume']},dst=/seed,readonly"])
+            script = (
+                'set -eu; test ! -e "/work/target/$1"; cp -a "/seed/$1" "/work/target/$1"; '
+                'for f in .rustc_info.json CACHEDIR.TAG; do if [ -f "/seed/$f" ]; then cp -a "/seed/$f" /work/target/; fi; done'
+            )
+            command = docker_build(
+                record,
+                ["sh", "-c", script, "sh", args.profile],
+                ["--mount", f"type=volume,src={source['linux_target_volume']},dst=/seed,readonly"],
+            )
             execute(command, record["worktree"], log=receipt / "output.log")
         else:
             environment(record, "macos")
@@ -205,6 +311,8 @@ def seed(args):
             for name in (".rustc_info.json", "CACHEDIR.TAG"):
                 if (original / name).is_file():
                     shutil.copy2(original / name, dest / name)
-        write(receipt / "receipt.json", {"status": "seeded", "source": source["id"],
-                                           "profile": args.profile, "at": timestamp()})
+        write(
+            receipt / "receipt.json",
+            {"status": "seeded", "source": source["id"], "profile": args.profile, "at": timestamp()},
+        )
     print(receipt)

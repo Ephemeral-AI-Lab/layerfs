@@ -1,4 +1,0 @@
-{"file":"seq","arm":"sandbox-disk","exec_ms":101.77,"exec_exit":0}
-{"file":"seq","arm":"passthrough-fuse","exec_ms":134.082,"exec_exit":0}
-{"file":"sync","arm":"sandbox-disk","exec_ms":80.982,"exec_exit":0}
-{"file":"sync","arm":"passthrough-fuse","exec_ms":86.442,"exec_exit":0}

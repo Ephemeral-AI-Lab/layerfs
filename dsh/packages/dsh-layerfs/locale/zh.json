@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "LayerFS × DSH",
-    "description": "智能体通过 bash 分叉、挂载并合并 LayerFS 项目；对话中显示每一步由谁完成"
-  }
-}

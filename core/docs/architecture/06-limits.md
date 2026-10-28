@@ -553,7 +553,7 @@ not declared product contracts.
 | directory moved under a parent | at most 256 levels deep | `kernel_mutation::ANCESTRY_STEPS` |
 | LWW rule include files | 16; later includes are ignored | `lww::MAXIMUM_RULE_FILES` |
 | writer wait | none since F-040: queued writers wait their turn with no time limit ([record 038](../issues/352/fixes/038-f040-untimed-writer-admission.md); audit A8 and A11 removed) | admission queue, Linux directory lock |
-| SDK `project.init` | 60 s | `INIT_DEADLINE` |
+| SDK `project.init` | the caller's required `timeoutMs`; `@layerfs/agent` sends 300 s unless given one (`INIT_TIMEOUT_MS`); no unlimited option (#431; the fixed 60 s `INIT_DEADLINE` is deleted) | `engine/crates/layerfs-node/src/project.rs` `deadline`, `api/agent/src/project/init.js` |
 | mounts per SDK Sandbox / control connections | 16 / 8 (fixed by the SDK) | `sandbox.rs` `DaemonLimits` |
 
 ### Service/Bridge — final file save (#252)

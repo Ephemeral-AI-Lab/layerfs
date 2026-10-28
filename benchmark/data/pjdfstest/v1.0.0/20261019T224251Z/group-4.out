@@ -1,1 +1,0 @@
-{"arm":"sandbox-disk","dir":"chmod","root":"/tmp","ms":13200.581,"exitCode":0,"truncated":false,"tap":"sandbox-disk-chmod-1792449826417.tap","stdout_bytes":16714,"stderr":"","started":["chmod/00.t","chmod/01.t","chmod/02.t","chmod/03.t","chmod/04.t","chmod/05.t","chmod/06.t","chmod/07.t","chmod/08.t","chmod/09.t","chmod/10.t","chmod/11.t","chmod/12.t"],"deferred":[]}

@@ -1,0 +1,101 @@
+# Nightly lane: the tests the fast lane leaves out. Report only; never a
+# required check. Selection: tools/ci_tests.py.
+#  - slow:  binaries that take 5 s or more to run, plus the "heavy" ones that
+#           take 5 s or more of build CPU (left out of the push job), on the
+#           runner
+#  - mount: Linux-only daemon and SDK targets that mount FUSE. Each binary runs
+#           in its own fresh container with /dev/fuse and SYS_ADMIN, as the
+#           existing native proofs do: forced_unavailable needs fusectl absent,
+#           and fp2_negotiation_flags needs one test thread.
+name: nightly
+
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
+jobs:
+  slow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: rustup toolchain install 1.85.1 --profile minimal
+      - uses: taiki-e/install-action@v2.87.24
+        with:
+          tool: cargo-nextest@0.9.146
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: . -> target
+      - name: Build test binaries
+        run: |
+          targets="$(python3 -B tools/ci_tests.py targets nightly)"
+          # shellcheck disable=SC2086 # one --test flag per word
+          cargo +1.85.1 test --manifest-path Cargo.toml --locked \
+            --workspace --exclude layerfs-node $targets --no-run
+      - name: Run slow and heavy tests (whole run capped at 120 s)
+        run: |
+          targets="$(python3 -B tools/ci_tests.py targets nightly)"
+          filter="$(python3 -B tools/ci_tests.py filter nightly)"
+          # shellcheck disable=SC2086 # one --test flag per word
+          timeout 120 cargo +1.85.1 nextest run --manifest-path Cargo.toml --locked \
+            --workspace --exclude layerfs-node $targets --profile ci -E "$filter"
+
+  mount:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: rustup toolchain install 1.85.1 --profile minimal
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: . -> target
+      - name: Build mount test binaries
+        run: |
+          targets="$(python3 -B tools/ci_tests.py mount-targets)"
+          # shellcheck disable=SC2086 # one --test flag per word
+          cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-daemon -p layerfs-api \
+            $targets --no-run --message-format json > "$RUNNER_TEMP/build.json"
+          python3 -B tools/ci_tests.py executables < "$RUNNER_TEMP/build.json" > "$RUNNER_TEMP/mount.tsv"
+          test -s "$RUNNER_TEMP/mount.tsv"
+          wc -l < "$RUNNER_TEMP/mount.tsv"
+      - name: Prepare FUSE and the test image
+        run: |
+          sudo modprobe fuse
+          ls -l /dev/fuse
+          # Same Ubuntu release as the runner, so the host-built binaries' glibc matches.
+          printf '%s\n' 'FROM ubuntu:24.04' \
+            'RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*' \
+            | docker build -t layerfs-mount-test -
+      - name: Run each mount binary in its own container (each capped at 120 s)
+        run: |
+          status=0
+          while IFS=$'\t' read -r dir exe; do
+            name="$(basename "$exe")"
+            echo "::group::$name"
+            # A fresh /tmp on the runner's ext4 disk, not the container overlay.
+            scratch="$RUNNER_TEMP/tmp-$name"
+            mkdir -p "$scratch"
+            chmod 1777 "$scratch"  # like /tmp: the tests' non-root scripts write here
+            if ! docker run --rm --device /dev/fuse --cap-add SYS_ADMIN \
+                --security-opt apparmor=unconfined \
+                -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -v "$scratch:/tmp" -w "$dir" \
+                layerfs-mount-test timeout 120 "$exe" --test-threads=1; then
+              echo "::error title=mount test failed::$name"
+              status=1
+            fi
+            echo "::endgroup::"
+          done < "$RUNNER_TEMP/mount.tsv"
+          exit "$status"

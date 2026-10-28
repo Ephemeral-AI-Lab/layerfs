@@ -2,6 +2,11 @@
 
 > **Status:** Current documentation entry point; v0.1.7 release documentation.
 
+## LayerFS 1.1.0 (release candidate)
+
+- [Release record, compatibility and the owner waiver](release-notes/1.1.0/README.md)
+- [JavaScript packages wiki](../api/README.md) and its [how-to guides](../api/docs/)
+
 ## Use LayerFS v0.1.7
 
 - [Manual](versioned/0.1.7/README.md)
@@ -65,6 +70,7 @@
 - [Documentation policy](general/documentation-policy.md)
 - [Development workspace cleanup](general/cleanup.md): ownership checks, verified recovery, evidence retention, and disk-space reporting
 - [Parallel worktree development](general/parallel-worktrees.md): private Cargo resources, prepared dependencies, pinned SDK builds, and per-run Docker E2E state
+- [Plugin listings](plugins/README.md): how a plugin built on LayerFS is listed in `plugins/<plugin-id>/`, with the template to copy and the checker
 
 ## Explore
 
@@ -75,6 +81,7 @@ The directory classes are deliberately small:
 ```text
 versioned/    immutable released manuals
 general/      version-independent concepts and policies
+plugins/      the plugin listing guide, its template and checker
 research/     informative studies and historical design material
 assets/       images used by maintained documentation
 ```

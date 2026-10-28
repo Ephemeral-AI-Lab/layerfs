@@ -7,7 +7,8 @@
 
 Each Sandbox daemon writes to its stderr, which Docker keeps as the container log. The
 container is `<prefix><project>-<n>` (`layerfs-<project>-<n>` by default), and its
-identifier is in the plain-text file `$LAYERFS_HOME/<project>/sandboxes/<n>/container`.
+identifier is `get_log`'s `container` (also in the plain-text file
+`$LAYERFS_HOME/<project>/sandboxes/<n>/container`).
 
 - **Failures:** a fatal startup cause, or a control-connection failure.
 - **Observation records (tracing on):** for every traced control exchange,
@@ -20,10 +21,22 @@ identifier is in the plain-text file `$LAYERFS_HOME/<project>/sandboxes/<n>/cont
 
 There is no general log level or logging framework.
 
-## Decoding and joining
+## Saving and decoding
+
+Save each Sandbox's log through the backend; it reads Docker where the SDK's binding
+runs, so it also works on macOS and Windows:
+
+```js
+import { writeFileSync } from "node:fs";
+const log = await backend.daemon.sandbox.get_log(ws.sandbox, { lines: 2000 });   // { sandbox, container, text, bytes }
+writeFileSync(`${run}/daemon-${log.container}.log`, log.text);
+```
+
+`get_log` keeps the last 2000 lines and at most 64 KiB. For a whole log of a long run,
+where your process can reach Docker, `docker logs <container> >
+<run>/daemon-<container>.log 2>&1` still works. Then decode:
 
 ```bash
-docker logs <container> > <run>/daemon-<container>.log 2>&1
 # from the LayerFS checkout
 python3 tools/decode_observations.py --trace <run>/trace.jsonl < <run>/daemon-<container>.log > <run>/daemon-<container>.jsonl
 ```
@@ -35,7 +48,7 @@ subtract the previous call's values to get per-call work.
 
 Save the logs while the Sandbox runs. A Sandbox closes itself two minutes after its
 last Workspace is unmounted (its daemon writes `LAYERFS_DAEMON_IDLE_EXIT` last), and the
-next mount or `operator.sandbox.list()` deletes the stopped container and its log.
+next mount or the runtime's `sandbox.reclaim` deletes the stopped container and its log.
 
 ## When a diagnostic write fails
 

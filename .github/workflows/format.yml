@@ -1,0 +1,35 @@
+# Format lane: checks that the Python tools are formatted (ruff.toml). Reports
+# only, like ci.yml: never a required check and never blocks a push or merge
+# (AGENTS.md §4). Lint findings are not checked. The Ruff version matches the
+# command in ruff.toml.
+name: format
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/**/*.py"
+      - "ruff.toml"
+      - ".github/workflows/format.yml"
+  pull_request:
+    paths:
+      - "tools/**/*.py"
+      - "ruff.toml"
+      - ".github/workflows/format.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: format-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ruff:
+    name: ruff (Python tools)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: pipx run --spec ruff==0.17.2 ruff format --diff

@@ -337,7 +337,7 @@ chunk the base payload covering its byte range:
 | Producer | Base offered | Source |
 | --- | --- | --- |
 | Localized edit of a file the base holds (#352 F-005) | the same file's base mapping, through the edit's `Aligner` | [edit apply](../../core/crates/layerfs-content/src/file/edit/apply.rs) |
-| Workspace Commit of a fresh file that a rename put in place of another (#352 F-063) | the replaced file, through the same `Aligner`, via `construct_runs_with_predecessor` | [run constructor](../../core/crates/layerfs-content/src/file/construction/runs.rs), [captured file](../../core/crates/layerfs-workspace/src/construction/captured/owner.rs) |
+| Workspace Commit of a fresh file that a rename put in place of another (#352 F-063) | the replaced file, through the same `Aligner`, via `construct_runs_with_predecessor` | [run constructor](../../core/crates/layerfs-content/src/file/construction/runs.rs), [captured file](../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
 | `construct_bytes_with_predecessor` with a caller's base | the supplied root, positionally | [byte constructor](../../core/crates/layerfs-content/src/file/construction/bytes.rs) |
 
 The F-063 route exists because git, editors and package managers save by
@@ -360,6 +360,8 @@ nothing. Only fresh files at or above the chunking cutoff ask for one.
              missing / ineligible? ----> independent result
                        |
                     eligible
+                       |
+         base chain alone exceeds budget? --> independent result
                        |
              acquire/authenticate base chain
                        |
@@ -464,19 +466,31 @@ edges; an independent object has depth zero.
 | Default whole-file maximum depth | 16 edges (8 before #352; a Store keeps the depth it was created with) |
 | Default chunk maximum depth | 8 edges (4 before #352) |
 | Accepted configurable depth range | 0–50; zero disables prospective deltas for the role |
-| Chain canonical work budget | 512 KiB |
-| Chain encoded work budget | 256 KiB |
+| Chain canonical work budget | 4 × cutoff: 512 KiB at the default 128 KiB cutoff |
+| Chain encoded work budget | 2 × cutoff: 256 KiB at the default 128 KiB cutoff |
 
-Increasing a supported depth or cutoff does not increase these separate work
-budgets. Payload selection conservatively tests:
+The work budgets scale with the Store's cutoff `T` and nothing else (#472):
+increasing a supported depth does not increase them. Scaling keeps the largest
+whole file a cutoff admits inside both budgets on its own, so a larger cutoff
+still gives its larger whole files deltas; one read may then reconstruct up to
+`4 × T`, 4 MiB at the 1 MiB cutoff. Chunk chains stay bounded by their depth
+first. Payload selection conservatively tests:
 
 ```text
-  base-chain decoded canonical bytes + target canonical length <= 512 KiB
-  base-chain encoded record bytes    + target canonical length <= 256 KiB
+  base-chain decoded canonical bytes + target canonical length <= 4 × T
+  base-chain encoded record bytes    + target canonical length <= 2 × T
 ```
 
 The second test adds target canonical length, not a predicted delta frame size.
-This bounds prospective dependency work before storing a dependent. Reader also
+This bounds prospective dependency work before storing a dependent. Both tests are
+applied once the base is acquired and authenticated. A base whose own chain already
+exceeds either budget is decided earlier, from the stored sizes of its records and
+before dependency reconstruction/authentication, because reading it as a dependency
+charges the same budgets and fails when the chain alone exceeds them: such a base is
+an independent result, not a failed Save, and is neither reconstructed nor
+authenticated; with budgets scaled to the cutoff a Store's own producer never
+stores such a chain. A base whose chain fits is authenticated first, so a corrupt one
+fails the Save even when the dependent then tips the chain over. Reader also
 enforces its own declared chain limits. These are dependency-work constraints,
 not a blanket 512 KiB maximum on every standalone FULL object; the larger canonical
 object limit is a separate bound. Caches can avoid some

@@ -2,7 +2,7 @@
 
 > **Status:** Current general guide. Part of the `layerfs-js-sdk` skill. Examples were
 > captured live in issue #334 Phase A at `b30e4fb8f`. Opaque IDs are shortened;
-> the full replies and trace are in `core/target/issue334/phase-a/`.
+> the full replies and trace are in `target/issue334/phase-a/`.
 
 Examples use `layerfs` as connected in [SKILL.md](../../SKILL.md#connect-to-a-project) and work on the Branch
 `"work"`.
@@ -156,7 +156,9 @@ const page = await layerfs.fs.list("work", "/src");
 
 Describes one path.
 
-**Returns:** `{ kind: "ok", snapshot, root, path, type, inode, size }`.
+**Returns:** `{ kind: "ok", snapshot, root, path, type, inode, size }`. `size` is
+a file's length in bytes, a symlink's target length (as `lstat` reports it in a
+mounted Workspace) and 0 for a folder.
 
 ```js
 const exists = await layerfs.fs.stat("work", "/package.json").then(() => true, (e) => { if (isRefusal(e, "NoSuchPath")) return false; throw e; });
@@ -240,7 +242,7 @@ The output above preserves the Phase A capture at `b30e4fb8f`, which exposed
 issue #334 BUG-001 by omitting a direct child. After the matcher fix, Phase B
 step 005 checked `fs.glob('work', 'test/**/*.test.js', '/')` against the new
 project and returned `items: ['/test/health.test.js']`; its full reply is retained
-in `core/target/issue334/phase-b/005-test-m1.out`. The external matcher regression
+in `target/issue334/phase-b/005-test-m1.out`. The external matcher regression
 also covers direct children and several nested levels.
 
 ## `fs.diff_files(leftRef, leftPath, rightRef, rightPath)`

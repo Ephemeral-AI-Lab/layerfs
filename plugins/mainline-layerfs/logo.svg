@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="230 260 940 940" role="img" aria-labelledby="title desc">
+  <title id="title">Monkey hanging mark</title>
+  <desc id="desc">Transparent vector mark of a black monkey hanging from a bar with a small scroll and orange seal.</desc>
+  <!-- bar and limbs -->
+  <line x1="335" y1="358" x2="1075" y2="358" stroke="#000" stroke-width="56" stroke-linecap="round"/>
+  <path d="M655 358 C610 425 576 496 591 580" fill="none" stroke="#000" stroke-width="88" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M842 740 C949 782 1006 862 1001 947" fill="none" stroke="#000" stroke-width="84" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- ears and head -->
+  <circle cx="506" cy="610" r="78" fill="#000"/>
+  <circle cx="515" cy="617" r="44" fill="#fff"/>
+  <circle cx="889" cy="610" r="78" fill="#000"/>
+  <circle cx="879" cy="617" r="44" fill="#fff"/>
+  <circle cx="697" cy="720" r="202" fill="#000"/>
+  <circle cx="697" cy="720" r="151" fill="#fff"/>
+
+  <!-- face -->
+  <circle cx="623" cy="716" r="25" fill="#000"/>
+  <circle cx="767" cy="716" r="25" fill="#000"/>
+  <ellipse cx="695" cy="764" rx="22" ry="14" fill="#000"/>
+  <path d="M651 799 Q696 833 740 800" fill="none" stroke="#000" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- scroll -->
+  <g fill="#fff" stroke="#000" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M848 1083 L863 933 C866 910 884 895 907 895 H1038 C1066 895 1086 917 1086 950 C1086 981 1067 1000 1038 1000 H1015 V1085"/>
+    <path d="M1036 913 C1054 913 1065 926 1065 945 C1065 964 1052 977 1034 977 H1016" fill="none"/>
+    <path d="M833 1082 H992 C1011 1082 1023 1097 1021 1114 C1019 1130 1005 1140 986 1140 H833 C813 1140 799 1127 799 1108 C799 1093 813 1082 833 1082Z"/>
+    <line x1="833" y1="1082" x2="992" y2="1082"/>
+  </g>
+  <circle cx="945" cy="1021" r="43" fill="#ff8700"/>
+
+  <!-- hand on top of the bar -->
+  <path d="M604 362 C604 327 627 303 655 309 C669 293 696 293 711 310 C733 303 763 316 775 340 C795 343 807 361 804 382 C801 401 779 411 758 401 C746 416 722 416 708 402 C693 419 668 416 656 400 C631 408 608 391 604 362Z" fill="#000"/>
+  <rect x="622" y="323" width="34" height="63" rx="17" fill="#fff"/>
+  <rect x="671" y="318" width="34" height="73" rx="17" fill="#fff"/>
+  <rect x="719" y="324" width="34" height="66" rx="17" fill="#fff"/>
+  <rect x="760" y="340" width="26" height="48" rx="13" fill="#fff"/>
+</svg>
