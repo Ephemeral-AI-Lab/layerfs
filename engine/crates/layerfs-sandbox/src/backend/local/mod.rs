@@ -29,5 +29,7 @@ mod search;
 pub use create::{Local, LocalCreateFailure, LocalPaths, LocalPhase};
 pub use exec::LocalExit;
 pub use process::LocalProcess;
-pub use provider::{NativeMacosInstance, NativeMacosProvider};
+pub use provider::{
+    NativeLinuxInstance, NativeLinuxProvider, NativeMacosInstance, NativeMacosProvider,
+};
 pub use sandbox::Sandbox;

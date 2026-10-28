@@ -9,33 +9,60 @@ use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
 use std::{io::Write, net::SocketAddr, path::Path};
 
 #[derive(Clone, Debug)]
-pub struct NativeMacosProvider {
+pub struct NativeProvider<const LINUX: bool> {
     local: Local,
 }
-/// The same runtime owner and Darwin process facts as the original native route.
+/// Native macOS processes with loopback NFS and the caller's identity.
+pub type NativeMacosProvider = NativeProvider<false>;
+/// Native Linux processes with FUSE and a separate nonroot command identity.
+pub type NativeLinuxProvider = NativeProvider<true>;
+/// The existing local owner, using Darwin process facts.
 pub type NativeMacosInstance = Sandbox;
-impl NativeMacosProvider {
+/// The existing local owner, using Linux `/proc` process facts.
+pub type NativeLinuxInstance = Sandbox;
+impl<const LINUX: bool> NativeProvider<LINUX> {
     /// Refuses other platforms before accessing the root or launching anything.
     pub fn new(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {
-        if !cfg!(target_os = "macos") {
-            return Err(RuntimeError::Unsupported("native macOS provider"));
+        if (LINUX && !cfg!(target_os = "linux")) || (!LINUX && !cfg!(target_os = "macos")) {
+            return Err(RuntimeError::Unsupported("native provider platform"));
+        }
+        if LINUX && !nix::unistd::Uid::effective().is_root() {
+            return Err(RuntimeError::Unsupported(
+                "native Linux provider requires root",
+            ));
         }
         Ok(Self {
-            local: Local::native(root)?,
+            local: if LINUX {
+                Local::new(root)?
+            } else {
+                Local::native(root)?
+            },
         })
     }
     pub fn paths(&self, name: &str) -> Result<super::LocalPaths, RuntimeError> {
         self.local.clone().naming(name)?.paths()
     }
 }
-impl SandboxProvider for NativeMacosProvider {
+impl<const LINUX: bool> SandboxProvider for NativeProvider<LINUX> {
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
-            name: "native-macos",
+            name: if LINUX {
+                "native-linux"
+            } else {
+                "native-macos"
+            },
             isolation: IsolationModel::HostProcess,
-            mount_driver: MountDriver::LoopbackNfs,
+            mount_driver: if LINUX {
+                MountDriver::Fuse
+            } else {
+                MountDriver::LoopbackNfs
+            },
             requires_image: false,
-            search_path_policy: SearchPathPolicy::InheritHost,
+            search_path_policy: if LINUX {
+                SearchPathPolicy::FixedContainer
+            } else {
+                SearchPathPolicy::InheritHost
+            },
             supports_resource_limits: false,
             direct_store_access: true,
         }
@@ -59,14 +86,15 @@ impl SandboxProvider for NativeMacosProvider {
             mut environment,
         } = request.options;
         command_identity.check().map_err(fail)?;
-        if command_identity.uid != nix::unistd::Uid::effective().as_raw()
-            || command_identity.gid != nix::unistd::Gid::effective().as_raw()
+        if (!LINUX
+            && (command_identity.uid != nix::unistd::Uid::effective().as_raw()
+                || command_identity.gid != nix::unistd::Gid::effective().as_raw()))
             || environment.iter().any(|(key, value)| {
                 key.is_empty()
                     || key.contains(['=', '\0'])
                     || value.contains('\0')
                     || key == "PATH"
-                    || (key == "LAYERFS_KERNEL" && value != "nfs")
+                    || (key == "LAYERFS_KERNEL" && value != if LINUX { "fuse" } else { "nfs" })
             })
         {
             return Err(fail(RuntimeError::Protocol(
@@ -74,7 +102,10 @@ impl SandboxProvider for NativeMacosProvider {
             )));
         }
         environment.retain(|(key, _)| key != "LAYERFS_KERNEL");
-        environment.push(("LAYERFS_KERNEL".into(), "nfs".into()));
+        environment.push((
+            "LAYERFS_KERNEL".into(),
+            if LINUX { "fuse" } else { "nfs" }.into(),
+        ));
         let local = self
             .local
             .clone()

@@ -1,7 +1,10 @@
 //! Real provider lifecycle and partial launch custody through the public port.
-#![cfg(target_os = "macos")]
+#![cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(target_os = "linux")]
+use layerfs_sandbox::backend::local::NativeLinuxProvider as NativeProvider;
+#[cfg(target_os = "macos")]
+use layerfs_sandbox::backend::local::NativeMacosProvider as NativeProvider;
 use layerfs_sandbox::{
-    backend::local::NativeMacosProvider,
     provider::{LaunchPhase, LaunchRequest, ProviderLaunchOptions, SandboxProvider},
     CommandIdentity,
 };
@@ -9,6 +12,10 @@ use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
 
 #[test]
 fn provider_preserves_partial_launch_owner_and_reopens_the_exact_process() {
+    if cfg!(target_os = "linux") && !nix::unistd::Uid::effective().is_root() {
+        assert!(NativeProvider::new("/no-access-required").is_err());
+        return;
+    }
     let base = std::env::temp_dir()
         .canonicalize()
         .unwrap()
@@ -22,7 +29,15 @@ fn provider_preserves_partial_launch_owner_and_reopens_the_exact_process() {
     )
     .unwrap();
     fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
-    let provider = NativeMacosProvider::new(&base).unwrap();
+    let provider = NativeProvider::new(&base).unwrap();
+    assert_eq!(
+        provider.capabilities().name,
+        if cfg!(target_os = "linux") {
+            "native-linux"
+        } else {
+            "native-macos"
+        }
+    );
     let request = |name: &str| LaunchRequest {
         name: name.into(),
         daemon_executable: binary.clone(),
@@ -31,8 +46,16 @@ fn provider_preserves_partial_launch_owner_and_reopens_the_exact_process() {
         startup_timeout: Duration::from_secs(2),
         options: ProviderLaunchOptions::Local {
             command_identity: CommandIdentity {
-                uid: nix::unistd::Uid::effective().as_raw(),
-                gid: nix::unistd::Gid::effective().as_raw(),
+                uid: if cfg!(target_os = "linux") {
+                    501
+                } else {
+                    nix::unistd::Uid::effective().as_raw()
+                },
+                gid: if cfg!(target_os = "linux") {
+                    20
+                } else {
+                    nix::unistd::Gid::effective().as_raw()
+                },
             },
             environment: vec![],
         },
