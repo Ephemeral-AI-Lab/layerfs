@@ -199,15 +199,17 @@ its existing Commit-custody admission and then, for an attached Workspace:
 5. **Close and registry removal** through the existing terminal Close.
 
 Any step that is not established leaves the entry `Retained` with its stage
-(`Detach`, `Join`, `Owner`, `Requests`, `Lane`, `Revoke`, `Close` or `Registry`),
+(`Detach`, `Join`, `Abort`, `Owner`, `Requests`, `Lane`, `Revoke`, `Close` or `Registry`),
 the observer and the original evidence. The reply is `Retained` with
 `TeardownCustody`; it is not reported as an uncertain mutation and nothing is
 replayed. Later Attach or Unmount on that entry returns the same custody, and
 so does ForceUnmount, except for the one kind of stop that can still be ended:
 a detached drain stopped at `Join` whose abort control is bound and unused
 ([stalled normal unmount](80-forced-teardown.md#stalled-normal-unmount)). The
-normal path uses the abort control only there, and never sets the terminal
-fence.
+normal path uses the abort control only there. An accepted abort sets the
+terminal service fence before the second drain. A failed or short abort reports
+`Abort` with its original errno or byte count; later drain, Revoke and Close
+failures retain the recorded abort effects in `TeardownCustody.forced`.
 
 ## Forced unmount
 

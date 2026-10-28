@@ -282,7 +282,7 @@ Unmounts a Workspace. A Sandbox left with no Workspace closes itself two minutes
 | --- | --- |
 | `ws` | The Workspace from `mount` |
 | `discard` | `true` to drop uncommitted changes instead of refusing |
-| `force` | `true` to abort the Workspace's kernel connection instead; drops uncommitted changes. A normal unmount that stalls at `Join` ends itself with one abort write, so this is for an entry that kept its custody because no abort control was usable |
+| `force` | `true` to abort the Workspace's kernel connection instead; drops uncommitted changes. A normal unmount that stalls at `Join` ends itself with one abort write, use `force` for a live connection with a usable abort control, not to replay an attempted abort |
 
 **Returns:** `{ kind: "Unmounted" }`, or with `force`
 `{ kind: "ForceUnmounted", abort, detach, cleanup }`.
@@ -294,7 +294,8 @@ Unmounts a Workspace. A Sandbox left with no Workspace closes itself two minutes
 | `Dirty` | Uncommitted changes; `detail.changed` lists paths | Commit them, so the step is recorded; discard only a Workspace you're abandoning |
 | `Busy` | A background process still runs there | Stop it (`backend.daemon.process.cancel`, in the observe skill), or wait for it |
 | `NotMounted` | Already unmounted, or the wrong Workspace | Use the Workspace from `mount` |
-| `Failed` with `TeardownCustody { stage: Join` in the message | The mount is gone, its connection did not end, and no abort write could be made, so every later plain unmount answers the same; `force` is refused too | Stop: the Sandbox holds a connection the engine cannot abort; replace the Sandbox |
+| `Failed` with `TeardownCustody { stage: Join` in the message | The mount is gone but its drain did not finish; the custody records whether an abort was attempted. Later unmounts retain that custody | Preserve the custody; do not retry an attempted abort. Replace the Sandbox if its connection cannot be ended |
+| `Failed` with `TeardownCustody { stage: Abort` in the message | The one abort write failed or returned a short count; the original cause and abort facts are retained | Preserve the custody and replace the Sandbox; neither normal nor forced unmount repeats the abort |
 
 ```js
 // ws: from workspace.mount. Every mount creates a new Workspace; never hard-code one.

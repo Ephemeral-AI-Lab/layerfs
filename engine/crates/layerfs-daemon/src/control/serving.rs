@@ -58,8 +58,8 @@ pub(super) struct Kept {
     pub observer: Option<SessionObserver>,
     /// The original owner, exactly as the stopping boundary left it.
     pub evidence: Evidence,
-    /// Effects of a forced teardown as recorded where it stopped; absent for
-    /// a normal unmount or an Attach.
+    /// Abort effects as recorded where teardown stopped, including a normal
+    /// unmount's stalled connection. Absent when no abort was attempted.
     pub forced: Option<ForcedFacts>,
 }
 impl fmt::Debug for Kept {

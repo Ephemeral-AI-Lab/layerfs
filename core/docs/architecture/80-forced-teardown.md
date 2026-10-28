@@ -128,12 +128,17 @@ ends the connection, so its receive loops stay blocked in their reads
 (`NativeSession::abort_detached`) and drains again, so the connection ends and
 the unmount completes with `Unmounted`.
 
-Only when that write cannot be made — no abort control is bound, or the write
-is short or refused — does the entry keep the undrained session as `Retained`
-at `Join`, and every later normal `Unmount` returns that custody unchanged.
-Such a custody is not forceable either: the guard admits only a stalled entry
-whose control is bound and unused, which the normal path has then already
-used.
+When no abort control is bound, the entry stays `Retained` at `Join` with
+no abort facts. A failed or short write stops at `Abort`, preserving the
+original errno or count in `detail` and the disposition in `forced`. An accepted
+write followed by a failed second drain keeps that drain's stage and records
+`abort: Written`. Revoke and Close failures also retain these facts. Every
+attempted abort records `detach: Detached` and `commit: Absent`, since normal
+admission established no Commit custody before the plain detach.
+
+A later normal or forced unmount returns the retained stage, detail and abort
+facts unchanged. An unavailable control cannot be forced, and a consumed
+control is never written again. Successful completion still replies `Unmounted`.
 
 `ForceUnmount` remains for a stalled custody that is still forceable (one
 whose abort was not attempted) and for a live connection. It takes the session back and makes the
