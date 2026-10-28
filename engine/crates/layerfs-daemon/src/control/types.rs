@@ -22,6 +22,10 @@ pub struct Success {
     pub observation_failure: Option<Box<Failure>>,
     /// Original kernel connection receipt of a terminal unmount.
     pub kernel: Option<Box<KernelEvidence>>,
+    /// The normal unmount's abort path, when its stalled drain took it. A
+    /// caller-visible observation only: it is encoded in no reply field and
+    /// authorizes no retry or second abort.
+    pub abort: Option<Box<super::UnmountAbort>>,
 }
 /// A kernel attach or unmount refusal, or a Mount refused while maintenance
 /// is stopped, with its original evidence.
@@ -61,6 +65,7 @@ impl Success {
             commit: None,
             observation_failure: None,
             kernel: None,
+            abort: None,
         }
     }
 }

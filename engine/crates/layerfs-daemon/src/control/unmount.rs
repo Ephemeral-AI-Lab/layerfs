@@ -2,7 +2,8 @@
 use super::{
     kernel::Kernel,
     registry::{bound_mut, idle},
-    Failure, KernelEvidence, Service, Success,
+    serving::Stop,
+    Failure, KernelEvidence, Service, Success, UnmountAbort,
 };
 use crate::store::BoundWorkspace;
 use layerfs_bridge::control::{Activity, ForcedFacts, Reply, UnmountControl, WorkspaceToken};
@@ -35,7 +36,7 @@ impl Service {
                 return self.unmount_kernel(token, workspace, *attached)
             }
         };
-        self.close(token, &workspace, None)
+        self.close(token, &workspace, None, None)
     }
     /// One short registry step: no effect unless the entry is idle and its
     /// kernel half is either absent or a serving connection with no request.
@@ -77,13 +78,14 @@ impl Service {
         token: WorkspaceToken,
         workspace: &BoundWorkspace,
         kernel: Receipt,
+        abort: Option<Box<UnmountAbort>>,
     ) -> Result<Success, Failure> {
         #[cfg(target_os = "linux")]
         let forced =
             super::detach::detached_abort_facts(kernel.as_ref().and_then(|done| done.forced));
         #[cfg(not(target_os = "linux"))]
         let forced = None;
-        let kernel = self.closed(token, workspace, kernel, forced)?;
+        let kernel = self.closed(token, workspace, kernel, forced, abort.clone())?;
         self.depart(
             token,
             Success {
@@ -91,6 +93,7 @@ impl Service {
                 commit: None,
                 observation_failure: None,
                 kernel,
+                abort,
             },
         )
     }
@@ -102,6 +105,7 @@ impl Service {
         workspace: &BoundWorkspace,
         kernel: Receipt,
         forced: Option<ForcedFacts>,
+        abort: Option<Box<UnmountAbort>>,
     ) -> Result<Receipt, Failure> {
         match workspace.close() {
             Ok(()) => Ok(kernel),
@@ -112,7 +116,7 @@ impl Service {
                         layerfs_workspace::WorkspaceError::Service(Box::new(cause)),
                     ),
                 };
-                Err(self.unclosed(token, failure, kernel, forced))
+                Err(self.unclosed(token, failure, kernel, forced, abort))
             }
         }
     }
@@ -149,20 +153,29 @@ impl Service {
         failure: Failure,
         kernel: Receipt,
         forced: Option<ForcedFacts>,
+        mut abort: Option<Box<UnmountAbort>>,
     ) -> Failure {
         #[cfg(target_os = "linux")]
         if kernel.is_some() {
+            // Close stopped with the abort path already recorded: the retained
+            // observation names this boundary, not the drain that preceded it.
+            if let Some(abort) = abort.as_mut() {
+                abort.stage = layerfs_bridge::control::TeardownStage::Close;
+            }
             return self.retain(
                 token,
-                layerfs_bridge::control::TeardownStage::Close,
-                failure.wire().detail,
-                None,
+                Stop {
+                    stage: layerfs_bridge::control::TeardownStage::Close,
+                    detail: failure.wire().detail,
+                    observer: None,
+                    forced,
+                    abort,
+                },
                 Box::new((failure, kernel)),
-                forced,
             );
         }
         #[cfg(not(target_os = "linux"))]
-        let _ = (kernel, forced);
+        let _ = (kernel, forced, abort);
         if let Ok(mut entries) = self.entries.lock() {
             if let Ok(binding) = bound_mut(&mut entries, token) {
                 binding.activity = if failure.uncertain() {
