@@ -124,7 +124,9 @@ A normal unmount can detach successfully and still stop at `Join`: when
 another mount of the same superblock outlives the detach, for example a copy
 in a mount namespace made by a process outside the Sandbox, the kernel never
 ends the connection, so its receive loops stay blocked in their reads
-(issues #426 and #460). The unmount now makes one abort write itself
+(issues #426 and #460). The join is observed for one second (`JOIN_WAIT`)
+after the requests are quiescent, not for the whole drain wait, so the stall
+is recognised promptly. The unmount now makes one abort write itself
 (`NativeSession::abort_detached`) and drains again, so the connection ends and
 the unmount completes with `Unmounted`.
 

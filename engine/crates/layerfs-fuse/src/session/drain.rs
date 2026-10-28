@@ -5,6 +5,14 @@ use fuser::SessionPhase;
 use nix::errno::Errno;
 use std::{any::Any, fs, sync::atomic::Ordering, time::Instant};
 
+/// How long the join of the receive loops may take once every request
+/// is quiescent. A healthy join follows the detach in milliseconds; a
+/// connection kept alive by another mount namespace of the same
+/// superblock never joins (#426, #460). Keeping this bound shorter
+/// than `drain_wait` lets a stalled connection be aborted promptly,
+/// while requests still get the whole `drain_wait`.
+const JOIN_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Detach {
     /// The kernel acknowledged the detach; kernel admission is now terminal.
@@ -76,9 +84,13 @@ impl KernelSession {
             }
         }
         if let (Some(monitor), true) = (&self.monitor, self.owner.is_some()) {
+            // Requests are quiescent; from here the wait is only the loops'
+            // join, which a healthy connection finishes in milliseconds and a
+            // stalled one never does. Bound it by JOIN_WAIT, not drain_wait.
+            let join_deadline = deadline.min(Instant::now() + JOIN_WAIT);
             let mut loops = monitor.snapshot();
             while loops.phase != SessionPhase::Joined {
-                let remaining = deadline.saturating_duration_since(Instant::now());
+                let remaining = join_deadline.saturating_duration_since(Instant::now());
                 if remaining.is_zero() {
                     return Err(stop(DrainStage::Join, None));
                 }

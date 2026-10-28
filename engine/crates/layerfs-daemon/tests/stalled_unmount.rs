@@ -7,7 +7,8 @@
 //! the kernel never ends the connection: the receive loops stay blocked and
 //! the drain stops at Join. The normal unmount then makes the same single
 //! abort write a forced unmount would, drains again, revokes and closes, so it
-//! ends the connection itself. Removing the mount directory then detaches the
+//! ends the connection itself; the join is bounded by a short grace, not the
+//! whole drain wait. Removing the mount directory then detaches the
 //! copy's mount too (Linux detaches the mounts on a removed mount point in
 //! every namespace), so the connection's control entry goes while the copy
 //! still runs, and the copy finds no mount there.
@@ -138,11 +139,19 @@ fn a_normal_unmount_stalled_at_join_ends_itself_with_one_abort_write() {
     let mut copy = Copy::spawn(root(&ready));
 
     // The plain detach succeeds here; the connection outlives it, so the drain
-    // stops at Join and the normal unmount ends it with one abort write.
+    // stops at Join and the normal unmount ends it with one abort write. The
+    // join is observed for JOIN_WAIT (1 s), not the whole DRAIN_WAIT, so this
+    // returns in about a second; without the grace it would take about five.
+    let started = Instant::now();
     let done = match rig.harness.try_unmount(token) {
         Ok(done) => done,
         Err(failure) => panic!("normal unmount of a copied mount: {failure:?}"),
     };
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(3),
+        "the stalled unmount waited {elapsed:?}, not the 1 s join grace"
+    );
     println!("STALLED plain unmount={:?}", done.reply);
     assert_eq!(done.reply, Reply::Unmounted(token));
     let drained = done.kernel.as_ref().expect("drain receipt");

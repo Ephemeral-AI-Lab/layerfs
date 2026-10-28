@@ -189,12 +189,15 @@ its existing Commit-custody admission and then, for an attached Workspace:
 3. **Drain.** [`drain`](../../crates/layerfs-fuse/src/session/drain.rs)
    establishes that every created loop is joined, the owner and watcher
    returned, no received, admitted or retained request remains, and releases the
-   lane. `drain_wait` is an observation deadline. A stop at `Join` means the
-   connection outlived its mount (another mount namespace holds a copy of it,
-   #426 and #460): the unmount makes one abort write on the already-detached
-   connection and drains again, so the stalled connection still ends. A write
-   that is not accepted whole, or a second stop, keeps the entry `Retained`
-   exactly as any other stop does.
+   lane. `drain_wait` is an observation deadline for the requests. Once they
+   are quiescent, the join of the receive loops is observed only for the
+   shorter `JOIN_WAIT` (1 s): a healthy join follows the detach in
+   milliseconds. A stop at `Join` means the connection outlived its mount
+   (another mount namespace holds a copy of it, #426 and #460): the unmount
+   then makes one abort write on the already-detached connection and drains
+   again, so the stalled connection still ends. A write that is not accepted
+   whole, or a second stop, keeps the entry `Retained` exactly as any other
+   stop does.
 4. **Revocation.** `NativeJob::Revoke` logically revokes the engine mount.
 5. **Close and registry removal** through the existing terminal Close.
 
