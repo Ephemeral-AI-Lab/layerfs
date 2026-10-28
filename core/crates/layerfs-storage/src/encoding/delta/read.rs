@@ -427,6 +427,34 @@ impl<'a> ChainBases<'a> {
             location,
         )
     }
+
+    /// [`Self::base_of`] together with the width a read charges the record.
+    ///
+    /// The width comes from the same group directory, through the same function,
+    /// as the one `Resolver::decode_at` charges: a chain's stored cost can be added
+    /// up from its records before any of it is reconstructed.
+    pub fn edge(
+        &mut self,
+        connection: &dyn Source,
+        workspace: &mut DecompressionWorkspace,
+        location: &ObjectLocation,
+    ) -> StorageResult<ChainEdge> {
+        let base = self.base_of(connection, workspace, location)?;
+        let (selected, _) = group_of(self.packs, connection, location)?;
+        Ok(ChainEdge {
+            base,
+            width: selected_record_width(selected, location)?,
+        })
+    }
+}
+
+/// One stored record of a chain, as a cost walk meets it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChainEdge {
+    /// The direct base the record names, or `None` when it is FULL.
+    pub base: Option<ObjectId>,
+    /// What a read of the record charges the chain's encoded budget.
+    pub width: u64,
 }
 
 /// The direct base identity one stored locator names, read from its own record.

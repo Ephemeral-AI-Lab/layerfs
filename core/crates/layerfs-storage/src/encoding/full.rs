@@ -15,7 +15,9 @@ use crate::encoding::codec::{CodecProfile, CompressionWorkspace};
 use crate::encoding::delta::record;
 use crate::error::{StorageError, StorageResult};
 use crate::pack::assemble::FULL_TAG;
-use crate::pack::layout::{directory_capacity, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN};
+use crate::pack::layout::{
+    directory_capacity, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN, WHOLE_FILE_COMPACT_DROP,
+};
 use crate::policy::{StorageCapacities, CANONICAL_LIMIT};
 use crate::save::SaveProfile;
 
@@ -38,6 +40,19 @@ impl EncodedRecord {
     /// Stored width of this record in its lane's grammar.
     pub fn width(&self) -> usize {
         self.record.len()
+    }
+
+    /// What a read charges the chain's encoded budget for this **payload** record
+    /// (whole-file, chunk or singleton lane) once its group is assembled: the
+    /// compact whole-file lane drops its two length fields there, so its record is
+    /// narrower than its grammar's width. This serves payload selection only. It
+    /// is not the charge for an ordinary-lane record, which a reader charges, in a
+    /// compressed group, the group's whole decoded body.
+    pub fn charged_width(&self) -> usize {
+        match self.lane {
+            PackLane::WholeFile => self.width().saturating_sub(WHOLE_FILE_COMPACT_DROP),
+            _ => self.width(),
+        }
     }
 
     /// True when this record carries its payload verbatim.

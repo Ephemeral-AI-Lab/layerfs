@@ -235,6 +235,7 @@ fn run(forced: bool, device: bool) {
             owner_gid: 0,
             ready_wait: Duration::from_secs(3),
             drain_wait: Duration::from_secs(3),
+            control: layerfs_fuse::mount::CONTROL.into(),
         },
         queue.clone(),
         Arc::new(ObserveMount {

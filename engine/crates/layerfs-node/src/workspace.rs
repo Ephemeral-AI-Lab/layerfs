@@ -11,7 +11,7 @@ use crate::job::{failed, Outcome};
 use crate::registry::{lock, naming, random, sandbox, sandbox_live, text, Mount};
 use crate::sandbox::{operation, WORKSPACES};
 use layerfs_api::internal::workspace;
-use layerfs_api::sandbox::values;
+use layerfs_api::sandbox::{values, Unmounted};
 use layerfs_bridge::control::{CommitControl, SdkRefusal, SdkValue};
 use layerfs_history::WorkspaceId;
 use std::path::Path;
@@ -252,7 +252,7 @@ pub(crate) fn commit(args: &SdkValue) -> Outcome {
     values::commit(&reply)
 }
 
-/// `workspace.unmount(ws, { discard? })`: `Busy` while a background
+/// `workspace.unmount(ws, { discard?, force? })`: `Busy` while a background
 /// process this binding started still runs there, then the daemon's answer.
 pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;
@@ -293,9 +293,19 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     let outcome = (|| {
         let mut control = crate::trace::control(&state.controls)?;
         sent = true;
-        match workspace(&mut control).unmount_checked(token, args.get_bool("discard")) {
-            Ok(answer) => values::unmounted(&answer),
-            Err(error) => Err(operation(error)),
+        let mut api = workspace(&mut control);
+        // Forced: one abort write ends the connection, also after a normal
+        // unmount stalled at Join; uncommitted changes are dropped.
+        if args.get_bool("force") {
+            match api.unmount(token, true).map_err(operation)? {
+                Some(outcome) => Ok(values::force_unmounted(&outcome)),
+                None => values::unmounted(&Unmounted::Closed),
+            }
+        } else {
+            match api.unmount_checked(token, args.get_bool("discard")) {
+                Ok(answer) => values::unmounted(&answer),
+                Err(error) => Err(operation(error)),
+            }
         }
     })();
     let outcome = match outcome {

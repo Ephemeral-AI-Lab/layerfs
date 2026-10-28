@@ -153,7 +153,9 @@ agent tool call
   go to the Workspace's own overlay until a Commit saves them. Unmount deletes
   the overlay, never history.
 - **Conflict.** Two Commits that change the same file are refused with
-  `Conflict`, unless a `.lww` rule says the newest edit wins.
+  `Conflict`, unless a `.lww` rule says the newest edit wins. Publishing a
+  stale Branch is different: it may skip newer `main` Layers; merge `main` into
+  the Branch first ([publish semantics](.agents/skills/layerfs-js-sdk/references/methods/branch.md)).
 
 ## Prior art
 

@@ -10,7 +10,7 @@ use std::{
     io::{self, BufReader, Read, Write},
     net::Shutdown,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 /// How long an idle kept Engine connection may wait for its next request.
@@ -28,6 +28,9 @@ pub struct Docker {
     /// Exec create and inspect (#352): each takes it, or connects when it is
     /// absent, stale or in use, and returns it after reading its whole body.
     pub(super) kept: Kept,
+    /// The Engine API minor version every request of this client and its
+    /// clones uses, set by the first request (see `version.rs`).
+    pub(super) minor: Arc<OnceLock<u32>>,
 }
 #[derive(Clone, Default)]
 pub(super) struct Kept(Arc<Mutex<Option<(Socket, Instant)>>>);
@@ -75,6 +78,7 @@ impl Docker {
             deadline: None,
             container_name: None,
             kept: Kept::default(),
+            minor: Arc::default(),
         })
     }
     /// Names the containers this client creates `name`: an ASCII letter or
@@ -135,6 +139,18 @@ impl Docker {
         self.send(method, path, mode, media, length, encode)
     }
     fn send(
+        &self,
+        method: &str,
+        path: &str,
+        mode: Mode,
+        media: &str,
+        length: u64,
+        encode: impl FnOnce(&mut dyn Write) -> io::Result<()>,
+    ) -> Result<Response, Box<WireFailure>> {
+        let path = format!("/v1.{}{path}", self.minor()?);
+        self.transmit(method, &path, mode, media, length, encode)
+    }
+    pub(super) fn transmit(
         &self,
         method: &str,
         path: &str,
@@ -235,7 +251,7 @@ impl Docker {
 }
 /// The connection header a request sends.
 #[derive(Clone, Copy)]
-enum Mode {
+pub(super) enum Mode {
     Close,
     Upgrade,
     Keep,

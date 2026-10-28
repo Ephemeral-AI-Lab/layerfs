@@ -2,7 +2,7 @@
 use super::{
     kernel::Kernel,
     registry::{bound_mut, idle},
-    serving::{ready, stage, Attached, Kept, KernelServing},
+    serving::{ready, stage, Attached, Evidence, Kept, KernelServing},
     types::KernelFailure,
     Failure, Service, Success,
 };
@@ -169,6 +169,7 @@ impl Service {
                 owner_gid: config.owner_gid,
                 ready_wait: config.ready_wait,
                 drain_wait: config.drain_wait,
+                control: config.control.clone(),
             },
             queue,
             Arc::new(crate::service::Mounted(workspace.clone())),
@@ -189,7 +190,7 @@ impl Service {
                         stage: TeardownStage::Detach,
                         detail: "serving session without negotiation receipt".into(),
                         observer: Some(session.observer()),
-                        evidence: Box::new(session),
+                        evidence: Evidence::Other(Box::new(session)),
                         forced: None,
                     }))),
                 };
@@ -210,7 +211,7 @@ impl Service {
                 stage,
                 detail,
                 observer,
-                evidence: Box::new((failure, mount)),
+                evidence: Evidence::Other(Box::new((failure, mount))),
                 forced: None,
             })));
         }
@@ -241,7 +242,7 @@ impl Service {
                 stage: TeardownStage::Revoke,
                 detail: failure.detail.clone(),
                 observer: None,
-                evidence: Box::new((failure, mount, other)),
+                evidence: Evidence::Other(Box::new((failure, mount, other))),
                 forced: None,
             })),
         }

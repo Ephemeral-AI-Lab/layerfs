@@ -21,6 +21,32 @@ pub struct Fixture {
     pub directory: PathBuf,
     pub project: SealedProject,
 }
+/// The kernel's shared FUSE control tree, mounted once in this namespace.
+/// An actual daemon binds abort controls from it; without it the daemon
+/// mounts its own beside its Overlay file, inside this fixture, where it
+/// outlives the daemon and blocks the fixture's removal. Needs root.
+#[cfg(target_os = "linux")]
+#[allow(dead_code)]
+pub fn shared_control() {
+    use std::process::{Command, Stdio};
+    // Once per test process: parallel tests would otherwise race to mount it.
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let shared = layerfs_fuse::mount::CONTROL;
+        let table = fs::read_to_string("/proc/self/mountinfo").unwrap();
+        let mounted = table
+            .lines()
+            .any(|line| line.split(' ').nth(4) == Some(shared) && line.contains(" - fusectl "));
+        if !mounted {
+            let status = Command::new("mount")
+                .args(["-t", "fusectl", "none", shared])
+                .stdin(Stdio::null())
+                .status()
+                .unwrap();
+            assert!(status.success(), "mount fusectl at {shared}: {status:?}");
+        }
+    });
+}
 impl Fixture {
     pub fn new(label: &str, locator: Option<&str>) -> Self {
         let directory = std::env::temp_dir().join(format!(

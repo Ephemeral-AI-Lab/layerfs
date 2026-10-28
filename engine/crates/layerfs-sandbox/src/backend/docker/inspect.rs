@@ -12,7 +12,7 @@ impl Docker {
         exec: ExecId,
     ) -> Result<ExecInspection, Box<WireFailure>> {
         let mut response = self
-            .exchange_kept("GET", &format!("/v1.54/exec/{exec}/json"), |_| Ok(()))
+            .exchange_kept("GET", &format!("/exec/{exec}/json"), |_| Ok(()))
             .map_err(|mut failure| {
                 failure.requested_container = Some(container);
                 failure.requested_exec = Some(exec);

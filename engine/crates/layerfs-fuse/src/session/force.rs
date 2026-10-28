@@ -18,6 +18,25 @@ impl KernelSession {
         if self.is_detached() || self.aborted.get().is_some() {
             return Err(ForceRefusal::NotServing);
         }
+        self.write_abort()
+    }
+    /// The single abort write for a connection whose plain detach succeeded
+    /// but whose drain stopped at `Join`: another mount of the same
+    /// superblock outlived the detach, so the kernel never ended the
+    /// connection and the receive loops stay blocked. That detach is the
+    /// connection's one detach; `force_drain` makes none after this. Refused
+    /// before any effect unless detached and not yet aborted.
+    pub fn abort_detached(&mut self) -> Result<AbortWrite, ForceRefusal> {
+        if !self.is_detached() || self.aborted.get().is_some() {
+            return Err(ForceRefusal::NotServing);
+        }
+        if self.abort.is_none() {
+            return Err(ForceRefusal::AbortUnavailable);
+        }
+        self.forced_detach = DetachAttempt::Detached;
+        self.write_abort()
+    }
+    fn write_abort(&mut self) -> Result<AbortWrite, ForceRefusal> {
         let Some(control) = self.abort.take() else {
             return Err(ForceRefusal::AbortUnavailable);
         };
@@ -36,7 +55,8 @@ impl KernelSession {
     /// is attempted only once the local drain held, and never again: `EBUSY`
     /// or any other errno stops at `Detach` with the connection aborted and
     /// still mounted. Called again, it observes the same predicate; a
-    /// recorded failed detach is returned as it was, with no syscall.
+    /// recorded failed detach is returned as it was, with no syscall. After
+    /// `abort_detached` the earlier plain detach is that one detach.
     pub fn force_drain(mut self) -> Result<Box<Drained>, Box<Undrained>> {
         let attempted = match self.forced_detach {
             DetachAttempt::Failed(_) => return Err(self.undrained(DrainStage::Detach, None)),

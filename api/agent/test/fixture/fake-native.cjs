@@ -60,7 +60,7 @@ function answer(op, args) {
       return { value: { kind: `exit:${code}`, exitCode: code, stdout: `out:${args.command}`, stderr: "err", truncated: false } };
     }
     case "workspace.commit": return { value: committed };
-    case "workspace.unmount": return { value: { kind: "Unmounted" } };
+    case "workspace.unmount": return { value: args.force ? { kind: "ForceUnmounted", abort: "Written", detach: "Detached", cleanup: "Queued" } : { kind: "Unmounted" } };
     case "backend.daemon.process.start": return { value: { kind: "running", process: "proc_1_ab", command: args.command } };
     case "backend.store.project.get_history": return { value: exports.history ?? { kind: "ok", version: "h1", project: "website", branches: [], commits: [], more: {}, layers: [], workspaces: [] } };
     case "backend.store.project.get_storage": return { value: { dedupe: "2", compression: null } };

@@ -145,6 +145,18 @@ PUT acknowledgements precede registration; a failed or uncertain operation is
 terminal and causes neither resend nor guessed cleanup. A later failed save can
 leave previously acknowledged independent batches and unreferenced payloads.
 
+**Free-space guard (#379).** Nothing deletes those batches, so on a disk that
+fills during a save the Store used to reach 0 free bytes and refuse every later
+write. The SQLite provider now checks the Store's filesystem (`statvfs`) before
+each publication that carries packs. It refuses `Capacity`, before any effect,
+when the batch would leave less than `STORE_HEADROOM_BYTES` (64 MiB) available.
+Pack bytes count twice, because the WAL holds them until a checkpoint copies
+them into the file. Metadata-only publications and history writes are not
+checked, so they may use the margin. The check is best effort: other writers
+share the disk, and a miss ends in SQLite's own `DiskFull`, also `Capacity`.
+The guard does not reclaim the packs a refused save left; that cleanup is a
+separate proposal on #379.
+
 A first-wins physical base must be acknowledged before a dependent's PREFIX
 selection: its winning chain may differ in depth from this producer's private
 copy. Candidate-triggered seals therefore register their closed prerequisites
@@ -615,20 +627,48 @@ was chosen rather than only that it was.
 **Chain bounds are separate from depths**, and the source says so explicitly: "a
 deeper chain is still bounded by the bytes it may decode and encode."
 
+The payload chain bounds scale with the Store's construction cutoff `T` (#472):
+`StorageCapacities::from_policy` multiplies `T` by `CHAIN_CANONICAL_CUTOFFS = 4`
+and `CHAIN_ENCODED_CUTOFFS = 2`. At the default 128 KiB cutoff they are 512 KiB
+and 256 KiB. The largest whole file a cutoff admits (`T + 22` canonical bytes, a
+frame under about `1.01 × T + 1 KiB`) therefore always fits a chain alone, so a
+Save never meets a declared base whose own chain a read could not charge, and a
+larger cutoff keeps whole-file deltas for the larger whole files it creates. The
+cost is read work: one read may reconstruct up to `4 × T` canonical bytes, 4 MiB
+at the 1 MiB cutoff. A depth never raises the bounds. Chunk chains are bounded by
+their depth first (32 KiB chunks).
+
 | Bound | Value |
 | --- | ---: |
-| `CHAIN_CANONICAL_LIMIT` | 512 KiB |
-| `CHAIN_ENCODED_LIMIT` | 256 KiB |
+| `chain_canonical_limit` | `4 × T` (512 KiB at the default cutoff) |
+| `chain_encoded_limit` | `2 × T` (256 KiB at the default cutoff) |
 | `DEPENDENCY_PACK_CACHE_BYTES` | 4 MiB |
 | `METADATA_DECODED_WORK_LIMIT` | 32 MiB |
 | `METADATA_CHAIN_CANONICAL_LIMIT` | 8 × 8,192 |
 | `METADATA_CHAIN_ENCODED_LIMIT` | 17 × 8,193 |
 
 The per-save `DepthCache` holds at most `DEPTH_CACHE_ENTRIES = 4_096` live
-`ChainCost { depth, canonical }` entries. Its purpose is prospective: it records
-"exactly what a read of that object charges its chain budget: the object itself and
-every dependency, **so a producer can refuse to create a dependency a later read
-could not reconstruct**."
+`ChainCost { depth, canonical, encoded }` entries. Its purpose is prospective: it
+records "exactly what a read of that object charges its chain budgets: the object
+itself and every dependency, **so a producer can refuse to create a dependency a
+later read could not reconstruct**." `encoded` is the stored record width the read
+charges, taken from the same group directory the reader uses; a pooled metadata
+chain keeps its own account in its reader.
+
+The budget is judged in two steps. First, from that cost and **before dependency
+reconstruction/authentication**: reading a base as a dependency charges both bounds
+for its whole chain and fails when the base's own chain does not fit them, so a
+candidate that cannot fit alone is a `work_exceeded` FULL like any chain that
+outgrows its budget and not a failed Save. Such a candidate is neither
+reconstructed nor authenticated. Since the bounds scale with the cutoff, a Store's
+own producer never stores such a chain; under the earlier fixed bounds a whole file
+above 512 KiB canonical or 256 KiB encoded, possible only above the default cutoff,
+was one (#472, #473). Second, a candidate
+whose chain fits is acquired and authenticated, and then the prospective chain, the
+base chain plus the dependent's canonical length, is tested against both bounds; a
+chain that fills a bound exactly is admitted. A corrupt base whose own chain fits
+therefore fails the Save (`Integrity("dependency identity")`) even when the
+dependent tips the chain over a bound.
 
 ### 6.9 Pooled metadata — the inode-value lane
 

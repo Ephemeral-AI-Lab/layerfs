@@ -5,7 +5,7 @@ use layerfs_bridge::control::{
     WorkspaceToken,
 };
 use layerfs_fuse::{
-    session::{DrainStage, KernelSession, SessionFacts, SessionObserver},
+    session::{DrainStage, KernelSession, SessionFacts, SessionObserver, Undrained},
     DispatchError, MountRequests,
 };
 use layerfs_overlay::KernelMount;
@@ -56,9 +56,8 @@ pub(super) struct Kept {
     pub stage: TeardownStage,
     pub detail: String,
     pub observer: Option<SessionObserver>,
-    /// The original owner: an undrained session, a drained receipt or a
-    /// refused engine completion, exactly as the stopping boundary left it.
-    pub evidence: Box<dyn fmt::Debug + Send>,
+    /// The original owner, exactly as the stopping boundary left it.
+    pub evidence: Evidence,
     /// Effects of a forced teardown as recorded where it stopped; absent for
     /// a normal unmount or an Attach.
     pub forced: Option<ForcedFacts>,
@@ -75,7 +74,33 @@ impl fmt::Debug for Kept {
             .finish()
     }
 }
+/// What a retained entry owns. Only `Stalled` can still be ended, by one
+/// forced unmount; every other owner is kept as it is.
+pub(super) enum Evidence {
+    /// A normal unmount's drain that stopped at `Join` after its plain detach.
+    Stalled(Box<Undrained>),
+    /// An undrained session, a drained receipt or a refused engine completion.
+    Other(Box<dyn fmt::Debug + Send>),
+}
+/// Shows the owner itself, as the retained-owner observation always has.
+impl fmt::Debug for Evidence {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Stalled(undrained) => undrained.fmt(f),
+            Self::Other(owner) => owner.fmt(f),
+        }
+    }
+}
 impl Kept {
+    /// A stalled normal unmount whose abort control is bound and unused.
+    pub(super) fn forceable(&self) -> bool {
+        let facts = self.observer.as_ref().map(SessionObserver::facts);
+        matches!(self.evidence, Evidence::Stalled(_))
+            && self.forced.is_none()
+            && self.ready.is_some()
+            && facts
+                .is_some_and(|facts| facts.detached && facts.abort_bound && facts.aborted.is_none())
+    }
     pub(super) fn custody(&self, token: WorkspaceToken) -> TeardownCustody {
         let facts = self.observer.as_ref().map(SessionObserver::facts);
         TeardownCustody {

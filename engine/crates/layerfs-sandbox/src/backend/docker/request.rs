@@ -119,11 +119,10 @@ impl Docker {
                     error_body: None,
                 })
             })?;
-            let mut response = self.exchange_kept(
-                "POST",
-                &format!("/v1.54/containers/{container}/exec"),
-                |w| request.encode(w),
-            )?;
+            let mut response =
+                self.exchange_kept("POST", &format!("/containers/{container}/exec"), |w| {
+                    request.encode(w)
+                })?;
             if response.status != 201 {
                 return Err(response.fail(RuntimeError::Http(response.status), None));
             }

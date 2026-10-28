@@ -261,6 +261,17 @@ impl Ctx<'_, '_> {
         let one_sided = same(c.i, c.b);
         match (c.b, c.f, c.i) {
             (_, Some(f), _) if f.kind == InodeKind::Directory => {
+                if let (Some(b), None) = (c.b, c.i) {
+                    if let Some((path, there)) = self.replacement(c.serial, b, f)? {
+                        let facts = |value| EntryFacts {
+                            serial: c.serial,
+                            value,
+                        };
+                        if self.absorb_replaced(&path, facts(b), facts(f), there)? {
+                            return Ok(());
+                        }
+                    }
+                }
                 let mut listing = self.listing_of(c, PathSlot::Name(self.from, c.serial));
                 self.names(&mut listing, Mode::Decide)?;
                 if c.i.is_none() && c.b.is_some() {
@@ -396,8 +407,9 @@ impl Ctx<'_, '_> {
                 let mut listing = self.listing_of(c, PathSlot::Name(self.from, s));
                 self.names(&mut listing, Mode::Emit)?;
             }
-            // A new file decided at a name already carries its result.
-            (None, Some(f), None) if !self.plan.assigned(s)? => {
+            // A new file keeps `from`'s value, unless a decision at a name
+            // gave this serial its result.
+            (None, Some(f), None) if !self.plan.valued(s)? => {
                 self.plan.fresh(s)?;
                 self.plan.value(s, f)?;
             }
@@ -442,6 +454,9 @@ impl Ctx<'_, '_> {
             return Ok(());
         }
         if f.value.kind == InodeKind::Directory {
+            if let Some((path, there)) = self.replacement(s, b.value, f.value)? {
+                return self.replaced_directory(&path, b, f, there);
+            }
             let c = Change {
                 serial: s,
                 b: Some(b.value),
@@ -455,15 +470,8 @@ impl Ctx<'_, '_> {
             return Ok(());
         }
         let from_path = self.path(self.from, s)?;
-        let base_path = self.path(BASE, s)?;
-        let replaced = if from_path == base_path {
-            self.resolver.entry(self.into, &base_path)?
-        } else {
-            None
-        };
-        if let Some(there) = replaced {
-            // `into` bound another inode at this path: decided at the path.
-            return self.replaced(&base_path, b, f, there);
+        if let Some(there) = self.rebound_at(s, &from_path)? {
+            return self.replaced(&from_path, b, f, there);
         }
         let result = self.decide(&from_path, [Some(b), Some(f), None])?;
         let c = Change {
@@ -478,6 +486,31 @@ impl Ctx<'_, '_> {
             self.place(s, &from_path)?;
         }
         Ok(())
+    }
+
+    /// The inode `into` binds at `path`, `from`'s path of a serial `into`
+    /// lacks, when that is the serial's base path: another inode `into`
+    /// put there, decided at the path.
+    fn rebound_at(&mut self, serial: u64, path: &str) -> ContentResult<Option<EntryFacts>> {
+        if path != self.path(BASE, serial)? {
+            return Ok(None);
+        }
+        self.resolver.entry(self.into, path)
+    }
+
+    /// A directory `from` changed the names of and `into` lacks: its path
+    /// and the inode `into` put there instead, if any.
+    fn replacement(
+        &mut self,
+        serial: u64,
+        b: InodeValue,
+        f: InodeValue,
+    ) -> ContentResult<Option<(String, EntryFacts)>> {
+        if f.content_root == b.content_root {
+            return Ok(None);
+        }
+        let path = self.path(self.from, serial)?;
+        Ok(self.rebound_at(serial, &path)?.map(|there| (path, there)))
     }
 
     /// A deferred file whose path `into` rebound to `there`.
@@ -515,7 +548,7 @@ impl Ctx<'_, '_> {
                 &self.resolver,
                 self.into,
                 &mut self.writer,
-                like.serial,
+                like,
                 value,
                 here,
             )?),
