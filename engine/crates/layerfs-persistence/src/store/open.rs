@@ -88,6 +88,7 @@ impl Handles {
             session.add_lineage(crate::history::backfill_lineage)?;
             session.add_merge_scratch()?;
             session.add_file_digests()?;
+            session.add_change_log()?;
         }
         let handles = Self::validated(session, directory, binding, cursor_key)?;
         if writable {
