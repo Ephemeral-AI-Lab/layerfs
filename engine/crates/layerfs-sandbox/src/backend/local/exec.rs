@@ -5,7 +5,7 @@
 //! the Sandbox until it is empty, so what it leaves running ends with the
 //! Sandbox.
 use super::{groups, process, process::LocalProcess, sandbox::Sandbox, search::search_path};
-use crate::{backend::docker::ExecRequest, RuntimeError, WireFailure};
+use crate::{ExecRequest, RuntimeError, WireFailure};
 use nix::sys::signal::{killpg, Signal};
 use std::{
     io::{self, Read, Write},

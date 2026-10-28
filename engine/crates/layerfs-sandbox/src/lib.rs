@@ -4,8 +4,9 @@
 #![deny(unsafe_code)]
 #[cfg(unix)]
 pub mod backend;
+pub mod provider;
 mod types;
 pub use types::{
-    CommandIdentity, ContainerId, ErrorDiagnostic, ExecId, ExecInspection, PendingRequest,
-    RuntimeError, WireFailure,
+    CommandIdentity, ContainerId, ErrorDiagnostic, ExecId, ExecInspection, ExecRequest,
+    PendingRequest, RuntimeError, WireFailure,
 };
