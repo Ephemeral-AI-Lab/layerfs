@@ -34,6 +34,7 @@ fn run(
         vec![HOME.to_owned()],
         directory.to_owned(),
         false,
+        state.ns_pid_file.as_deref(),
     )
     .map_err(failed)?;
     let attached = created.start().map_err(failed)?;

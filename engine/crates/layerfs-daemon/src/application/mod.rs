@@ -7,6 +7,8 @@ mod diagnostics;
 mod failure;
 mod filesystem;
 mod idle;
+#[cfg(target_os = "linux")]
+mod ns_exec;
 mod owner;
 mod serve;
 pub use cli::main;

@@ -56,6 +56,7 @@ fn main() {
         environment: vec![],
         directory: "/tmp".into(),
         stdin: true,
+        root_launcher: false,
     };
     let created = docker.create_exec(container, request).unwrap();
     let (cid, eid) = created.identity();

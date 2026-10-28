@@ -371,6 +371,10 @@ pub(crate) fn save_sandbox(
             ("secret", SdkValue::Bytes(secret.to_vec())),
             ("peer", SdkValue::Bytes(peer.to_vec())),
             ("instance", SdkValue::Bytes(instance.to_vec())),
+            (
+                "nsExecPidFile",
+                SdkValue::opt_text(state.ns_pid_file.clone()),
+            ),
         ]),
     )
 }
@@ -471,6 +475,8 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
         directory,
         runtime,
         identity: CommandIdentity { uid: 501, gid: 20 },
+        // absent in a record written before the private-namespace prototype
+        ns_pid_file: value.get_text("nsExecPidFile").map(str::to_owned),
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),
         processes: Default::default(),

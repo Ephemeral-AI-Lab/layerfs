@@ -141,6 +141,8 @@ pub fn parts(
 
 /// The same ordinary launcher for external host commands and disjoint concurrent proof borrows.
 #[cfg(unix)]
+/// `ns_pid_file` names a daemon's private-namespace pid file: the command then
+/// runs through that daemon's `ns-exec` helper. `None` keeps the command as it is.
 pub fn exec(
     sandbox: &layerfs_sandbox::backend::docker::Sandbox,
     identity: layerfs_sandbox::CommandIdentity,
@@ -148,9 +150,18 @@ pub fn exec(
     environment: Vec<String>,
     directory: String,
     stdin: bool,
+    ns_pid_file: Option<&str>,
 ) -> Result<
     layerfs_sandbox::backend::docker::ExecCreated,
     Box<layerfs_sandbox::backend::docker::ExecCreateFailure>,
 > {
-    crate::sandbox::exec::launch(sandbox, identity, arguments, environment, directory, stdin)
+    crate::sandbox::exec::launch(
+        sandbox,
+        identity,
+        arguments,
+        environment,
+        directory,
+        stdin,
+        ns_pid_file,
+    )
 }

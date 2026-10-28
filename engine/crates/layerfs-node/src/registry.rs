@@ -47,6 +47,9 @@ pub(crate) struct SandboxState {
     pub(crate) directory: std::path::PathBuf,
     pub(crate) runtime: Sandbox,
     pub(crate) identity: CommandIdentity,
+    /// The pid file of a daemon that serves from a private mount namespace, or
+    /// `None` for one whose mounts are in the container's initial namespace.
+    pub(crate) ns_pid_file: Option<String>,
     pub(crate) controls: crate::pool::Controls,
     pub(crate) mounts: Mutex<BTreeMap<String, Mount>>,
     pub(crate) processes: Mutex<BTreeMap<String, Process>>,

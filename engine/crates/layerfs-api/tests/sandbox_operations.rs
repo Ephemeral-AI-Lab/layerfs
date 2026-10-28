@@ -47,6 +47,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
             idle_exit_s: 0,
         },
         existing_store: None,
+        private_mount_ns: false,
     }
 }
 
