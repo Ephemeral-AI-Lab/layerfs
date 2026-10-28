@@ -11,6 +11,10 @@ use std::fs::Metadata;
 use std::io;
 use std::path::{Path, PathBuf};
 
+#[cfg(windows)]
+#[path = "host_wtf8_inner.rs"]
+mod name_bytes;
+
 /// One host name's bytes.
 pub(super) fn os_to_bytes(value: &OsStr) -> Vec<u8> {
     #[cfg(unix)]
@@ -20,7 +24,7 @@ pub(super) fn os_to_bytes(value: &OsStr) -> Vec<u8> {
     }
     #[cfg(windows)]
     {
-        value.to_string_lossy().into_owned().into_bytes()
+        name_bytes::encode(value)
     }
 }
 
@@ -33,7 +37,7 @@ pub(super) fn bytes_to_os(value: &[u8]) -> OsString {
     }
     #[cfg(windows)]
     {
-        OsString::from(String::from_utf8_lossy(value).into_owned())
+        name_bytes::decode(value)
     }
 }
 

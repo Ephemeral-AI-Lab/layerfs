@@ -118,8 +118,9 @@ mutexes live in the `Local\` namespace, so a session-0 service and a user
 session would each hold its own lane (Linux's directory flock crosses
 sessions); the product opens its Store within one login session today, and
 cross-session coordination would need the `Global\` namespace with a
-privilege evaluation (K3 review F2); Windows Init carries non-UTF-8 names
-lossily, synthesizes the mode from the read-only attribute, has no hard-link
+privilege evaluation (K3 review F2); Windows Init carries names as
+lossless WTF-8 (an unpaired surrogate included, byte-exact round trip),
+synthesizes the mode from the read-only attribute, has no hard-link
 membership, and its backing-inside-source check resolves the placement's
 spelling (a subst drive or unresolvable alias is not recognised); overlay
 allocation is the logical length. Last-owner overlay-file deletion applies
