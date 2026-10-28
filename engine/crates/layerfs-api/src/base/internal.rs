@@ -101,22 +101,6 @@ pub fn into_connection(control: Control) -> Connection {
 pub fn control(sandbox: &mut crate::sandbox::ProviderSandbox) -> &mut Control {
     &mut sandbox.control
 }
-/// Deprecated: use control(&mut ProviderSandbox) instead; retained for layerfs-node until H27.
-#[cfg(unix)]
-pub fn control_managed(sandbox: &mut crate::ManagedSandbox) -> &mut Control {
-    &mut sandbox.control
-}
-/// Deprecated: use split_provider instead; retained for layerfs-node until H27.
-#[cfg(unix)]
-pub fn split(
-    sandbox: crate::ManagedSandbox,
-) -> (
-    layerfs_sandbox::backend::docker::Sandbox,
-    Control,
-    layerfs_sandbox::CommandIdentity,
-) {
-    (sandbox.runtime, sandbox.control, sandbox.command_identity)
-}
 /// Transfers provider runtime, original channel and admitted command identity.
 #[cfg(unix)]
 pub fn split_provider(
@@ -153,27 +137,4 @@ pub fn sandbox_status(
     wait_for_store: bool,
 ) -> Result<layerfs_bridge::control::DaemonStatus, Box<OperationFailure>> {
     sandbox.status(wait_for_store)
-}
-
-/// The same ordinary launcher for external host commands and disjoint concurrent proof borrows.
-/// Deprecated: retained for legacy layerfs-node until its migration in H27.
-#[cfg(unix)]
-pub fn exec(
-    sandbox: &layerfs_sandbox::backend::docker::Sandbox,
-    identity: layerfs_sandbox::CommandIdentity,
-    arguments: Vec<String>,
-    environment: Vec<String>,
-    directory: String,
-    stdin: bool,
-) -> Result<
-    layerfs_sandbox::backend::docker::ExecCreated,
-    Box<layerfs_sandbox::backend::docker::ExecCreateFailure>,
-> {
-    sandbox.create_exec(layerfs_sandbox::ExecRequest {
-        identity,
-        arguments,
-        environment,
-        directory,
-        stdin,
-    })
 }

@@ -10,12 +10,11 @@ use layerfs_bridge::{
     provision::StoreManifest,
 };
 use layerfs_persistence::{SealedStore, SqlitePersistenceProfile};
+use layerfs_sandbox::backend::docker::{Docker, DockerProvider, SandboxRequest};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_sandbox::backend::local::{self, LocalProcess};
-use layerfs_sandbox::{
-    backend::docker::{Docker, Sandbox, SandboxRequest},
-    CommandIdentity, ContainerId, WireFailure,
-};
+use layerfs_sandbox::provider::{SandboxProvider, SandboxRecord};
+use layerfs_sandbox::{CommandIdentity, ContainerId, WireFailure};
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -372,12 +371,21 @@ pub(crate) fn save_sandbox(
         ),
     ];
     match &state.runtime {
-        Runtime::Docker(runtime) => fields.extend([
-            ("docker", SdkValue::text(registry::text(deploy, "docker")?)),
-            ("image", SdkValue::text(&runtime.request().image)),
-            ("volume", SdkValue::text(&runtime.request().store_volume)),
-            ("labels", labels(&runtime.request().labels)),
-        ]),
+        Runtime::Docker(runtime) => {
+            let record = runtime
+                .record()
+                .and_then(|r| match r {
+                    SandboxRecord::Docker(d) => Some(d),
+                    _ => None,
+                })
+                .ok_or_else(|| refused("Failed", "Docker Sandbox has no deployment record"))?;
+            fields.extend([
+                ("docker", SdkValue::text(registry::text(deploy, "docker")?)),
+                ("image", SdkValue::text(&record.image)),
+                ("volume", SdkValue::text(&record.store_volume)),
+                ("labels", labels(&record.labels)),
+            ]);
+        }
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Runtime::Local(runtime) => {
             let record = runtime
@@ -469,7 +477,7 @@ fn labels(value: &SdkValue) -> Result<Vec<(String, String)>> {
     }
 }
 /// The Engine, container and deployment a Docker Sandbox record names.
-fn runtime(value: &SdkValue) -> Result<(Docker, ContainerId, SandboxRequest)> {
+fn runtime(value: &SdkValue) -> Result<(DockerProvider, ContainerId, SandboxRecord)> {
     let docker =
         Docker::new(registry::text(value, "docker")?, Duration::from_secs(30)).map_err(failed)?;
     let request = SandboxRequest {
@@ -479,12 +487,13 @@ fn runtime(value: &SdkValue) -> Result<(Docker, ContainerId, SandboxRequest)> {
         labels: labels(value)?,
     };
     let container = ContainerId::parse(registry::text(value, "container")?).map_err(failed)?;
-    Ok((docker, container, request))
+    let provider = DockerProvider::new(docker);
+    Ok((provider, container, SandboxRecord::Docker(request.into())))
 }
 /// What a Sandbox record names: a Docker container, or (`runtime` `native`)
 /// a local daemon process, its directory and port.
 pub(crate) enum Recorded {
-    Docker(Docker, ContainerId, SandboxRequest),
+    Docker(DockerProvider, ContainerId, SandboxRecord),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     Local {
         directory: PathBuf,
@@ -593,9 +602,7 @@ impl Recorded {
     /// The runtime, observed running once (it starts nothing).
     pub(crate) fn reopen(self) -> std::result::Result<Runtime, Box<WireFailure>> {
         match self {
-            Self::Docker(docker, id, request) => {
-                Sandbox::reopen(docker, id, request).map(|s| Runtime::Docker(Box::new(s)))
-            }
+            Self::Docker(provider, id, record) => provider.reopen(id, &record).map(Runtime::Docker),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Local {
                 directory,
@@ -610,8 +617,12 @@ impl Recorded {
     /// The runtime found stopped: only its one Delete is admitted.
     pub(crate) fn stopped(self) -> Runtime {
         match self {
-            Self::Docker(docker, id, request) => {
-                Runtime::Docker(Box::new(Sandbox::stopped(docker, id, request)))
+            Self::Docker(provider, id, record) => {
+                let instance = provider
+                    .reopen_stopped(id, &record)
+                    .map_err(failed)
+                    .expect("validated record");
+                Runtime::Docker(instance)
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Local {

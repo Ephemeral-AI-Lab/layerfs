@@ -14,15 +14,14 @@
 //! the caller's behalf.
 use crate::job::{failed, refused, Outcome};
 use crate::registry::{lock, text, SandboxState, SANDBOXES};
-use layerfs_api::internal::split;
-use layerfs_api::sandbox::values;
-use layerfs_api::{
-    OperationFailure, SandboxApi, SandboxCause, SandboxCreate, SandboxFailure, SandboxPhase,
-};
+use layerfs_api::internal::split_provider;
+use layerfs_api::sandbox::{values, ProviderCreate, ProviderFailure};
+use layerfs_api::{OperationFailure, SandboxApi, SandboxCause, SandboxPhase};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonSetup};
 use layerfs_bridge::provision::StoreManifest;
-use layerfs_sandbox::backend::docker::{CreatePhase, Docker, SandboxRequest};
+use layerfs_sandbox::backend::docker::{CreatePhase, Docker, DockerProvider};
+use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -223,25 +222,30 @@ fn start_claimed(
         .map_err(failed)?
         .naming(&container_name)
         .map_err(|_| refused("InvalidInput", format!("container name {container_name}")))?;
+    let provider = Arc::new(DockerProvider::new(docker));
     // Read only if this process ends before the intent is resolved.
     crate::discovery::save(
         &directory.join("create.intent"),
         SdkValue::text(format!("creation of Sandbox {id} began and never finished")),
     )?;
-    let created = SandboxApi::new(docker).create_file(
-        SandboxCreate {
-            deployment: SandboxRequest {
-                image,
-                store_volume,
-                port: PORT,
+    let created = SandboxApi::with_provider(provider).create_provider_file(
+        ProviderCreate {
+            launch: LaunchRequest {
+                name: container_name.clone(),
+                daemon_executable: executable,
+                daemon_config: Vec::new(),
                 labels: labels(name, id),
+                startup_timeout: STARTUP,
+                options: ProviderLaunchOptions::Docker {
+                    image,
+                    store_volume,
+                    port: PORT,
+                    connect_host: crate::pool::daemon_host(args),
+                },
             },
             setup: daemon_setup,
-            executable,
             controller_private: controller.private,
             daemon_peer: daemon.public,
-            startup_wait: STARTUP,
-            connect_host: crate::pool::daemon_host(args),
         },
         &project.store,
         &project.manifest,
@@ -249,7 +253,7 @@ fn start_claimed(
     let owner = created.map_err(|failure| abandon(directory, id, failure))?;
     let container = owner.runtime.identity().to_string();
     let instance = owner.startup.instance;
-    let (runtime, control, identity) = split(owner);
+    let (runtime, control, identity) = split_provider(owner);
     let dial = crate::pool::Dial {
         endpoint: runtime.endpoint().map_err(failed)?,
         host: crate::pool::daemon_host(args),
@@ -262,7 +266,7 @@ fn start_claimed(
         project: name.to_owned(),
         name: container_name,
         directory: saved_directory.to_owned(),
-        runtime: crate::runtime::Runtime::Docker(Box::new(runtime)),
+        runtime: crate::runtime::Runtime::Docker(runtime),
         identity,
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),
@@ -286,33 +290,46 @@ fn start_claimed(
 
 /// Whether a failed create's every effect is known: nothing reached the
 /// Store volume, and any container it made is acknowledged by identity.
-fn settled(failure: &SandboxFailure) -> bool {
+fn settled(failure: &ProviderFailure) -> bool {
     // A Create the Engine refused (409: the container name is taken) made no container.
-    let unknown_container = matches!(
-        &failure.cause,
-        SandboxCause::Create(create) if create.phase == CreatePhase::Create
-            && !matches!(create.transfer.cause, layerfs_sandbox::RuntimeError::Http(409))
-    );
+    let unknown_container = match &failure.cause {
+        SandboxCause::Provider(launch) => match &launch.cause {
+            layerfs_sandbox::RuntimeError::Docker(docker_failure) => {
+                match docker_failure.as_ref() {
+                    layerfs_sandbox::backend::docker::ProviderFailure::Create(create) => {
+                        create.phase == CreatePhase::Create
+                            && !matches!(
+                                create.transfer.cause,
+                                layerfs_sandbox::RuntimeError::Http(409)
+                            )
+                    }
+                    _ => false,
+                }
+            }
+            _ => false,
+        },
+        _ => false,
+    };
     failure.phase != SandboxPhase::Install && failure.installed.is_none() && !unknown_container
 }
 
 /// The refusal for a failed create. A settled one reads its container's log
 /// tail once, removes the container (stop, then delete, each once) and its
 /// intent; otherwise the intent stays, rewritten to say what is left.
-fn abandon(directory: &Path, id: &str, mut failure: Box<SandboxFailure>) -> SdkRefusal {
+fn abandon(directory: &Path, id: &str, mut failure: Box<ProviderFailure>) -> SdkRefusal {
     let mut cause = format!(
         "sandbox create stopped at {:?}: {:?}",
         failure.phase, failure.cause
     );
     let container = failure
-        .sandbox
+        .runtime
         .as_ref()
         .map(|sandbox| sandbox.identity().to_string());
     drop(failure.control.take());
     let mut log = None;
     let left = if !settled(&failure) {
         Some("its effect on the Store volume or the Engine is unknown".to_owned())
-    } else if let Some(sandbox) = failure.sandbox.as_mut() {
+    } else if let Some(sandbox) = failure.runtime.as_mut() {
         match sandbox.log_tail(LOG_LINES, LOG_BYTES) {
             Ok(bytes) => {
                 let text = String::from_utf8_lossy(&bytes).trim_end().to_owned();

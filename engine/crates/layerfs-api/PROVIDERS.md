@@ -1,6 +1,6 @@
 # Sandbox runtime providers
 
-Status: Current general guide. Native macOS is implemented and host-verified; H21 adds Linux native support, pending Linux host qualification; H24/H26 completes Docker provider integration in layerfs-sandbox and layerfs-api.
+Status: Current general guide. Native macOS is implemented and host-verified; H21 adds Linux native support, pending Linux host qualification; H24/H26 completes Docker provider integration in layerfs-sandbox and layerfs-api; H27 completes layerfs-node migration to DockerProvider and removes deprecated compatibility forwarders.
 
 `layerfs-sandbox::provider` defines object-safe `SandboxProvider` and `SandboxInstance` ports, capabilities, launch inputs, exact partial launch ownership and non-HTTP error construction. `ExecRequest` lives in the shared types layer; its Docker re-export remains compatible. `SandboxId` aliases the existing `ContainerId`, preserving encoded identities and records. The runtime layer has no daemon control dependency.
 
@@ -8,6 +8,6 @@ Status: Current general guide. Native macOS is implemented and host-verified; H2
 
 `SandboxApi::with_provider(Arc<dyn SandboxProvider>)` and `create_provider_file(ProviderCreate, store, manifest)` (or `create(ProviderCreate, project)`) launch a provider and return `ProviderSandbox`. Both Docker (via `DockerProvider`) and native local runtimes route through this single unified API path. `WorkspaceApi::exec` delegates ordinary execution through `sandbox.runtime.run(...)` with streaming stdout/stderr buffers, and `api.close` drains and removes instances via `sandbox.runtime.stop(1)` and `sandbox.runtime.delete()`. Before launch, API validates authentication identities, selected Store, command identity and local resource ownership: overlay and mount home must belong to the instance, Store must live outside it, and native listen uses dynamic loopback. API encodes daemon configuration, then uses the shared TCP/Noise/Hello and Store-install pipeline in `sandbox/connection.rs`. Failures retain their phase, original cause, runtime, control, observed status, installation acknowledgement and handshake work. No automatic retry or cleanup occurs in API.
 
-For compatibility with `layerfs-node` until its migration in H27, `SandboxApi::new(Docker)`, `SandboxCreate`, `ManagedSandbox`, and `internal::split/exec` are retained as deprecated thin forwarders. `layerfs-api` internally and all its tests/examples use `DockerProvider` and `ProviderCreate`/`ProviderSandbox` exclusively.
+In H27, `layerfs-node` was migrated to `DockerProvider` and `ProviderCreate`/`ProviderSandbox` exclusively, and legacy deprecated forwarders (`SandboxApi::new(Docker)`, `SandboxCreate`, `ManagedSandbox`, `from_managed`, `internal::split/exec/control_managed`) were removed. `layerfs-api` and `layerfs-node` now use unified runtime provider pipelines exclusively.
 
 The Store remains explicitly Disposable/WAL/OFF. Native macOS keeps #427’s direct Store access without a worker; this refactor does not change persistence authorization or filesystem semantics.

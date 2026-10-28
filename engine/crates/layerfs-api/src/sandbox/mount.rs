@@ -23,11 +23,6 @@ impl<'a> WorkspaceApi<'a> {
             observation_scope: None,
         }
     }
-    /// Deprecated: use WorkspaceApi::new(&mut ProviderSandbox) instead; retained for layerfs-node until H27.
-    #[cfg(unix)]
-    pub fn from_managed(sandbox: &'a mut crate::ManagedSandbox) -> Self {
-        Self::from_control(&mut sandbox.control)
-    }
     pub(crate) fn exchange(
         &mut self,
         request: Request,

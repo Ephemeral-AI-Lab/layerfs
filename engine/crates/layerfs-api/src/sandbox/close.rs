@@ -1,8 +1,5 @@
 //! Explicit stop then delete of the exact acknowledged Sandbox runtime owner.
-use super::{
-    ManagedSandbox, ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause, SandboxFailure,
-    SandboxPhase,
-};
+use super::{ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause, SandboxPhase};
 
 impl SandboxApi {
     /// Stops once, then deletes once after acknowledged stop. No Workspace drain is inferred.
@@ -24,25 +21,6 @@ impl SandboxApi {
         }
         Ok(())
     }
-
-    /// Deprecated: use close(ProviderSandbox) instead; retained for layerfs-node until H27.
-    pub fn close_managed(&self, mut sandbox: ManagedSandbox) -> Result<(), Box<SandboxFailure>> {
-        if let Err(cause) = sandbox.runtime.stop(1) {
-            return Err(managed_failure(
-                sandbox,
-                SandboxPhase::Stop,
-                SandboxCause::Runtime(cause),
-            ));
-        }
-        if let Err(cause) = sandbox.runtime.delete() {
-            return Err(managed_failure(
-                sandbox,
-                SandboxPhase::Delete,
-                SandboxCause::Runtime(cause),
-            ));
-        }
-        Ok(())
-    }
 }
 fn failure(
     sandbox: ProviderSandbox,
@@ -53,22 +31,6 @@ fn failure(
         request: sandbox.request,
         phase,
         runtime: Some(sandbox.runtime),
-        control: Some(sandbox.control),
-        handshake: sandbox.handshake,
-        observed: Some(sandbox.startup),
-        installed: sandbox.installed,
-        cause,
-    })
-}
-fn managed_failure(
-    sandbox: ManagedSandbox,
-    phase: SandboxPhase,
-    cause: SandboxCause,
-) -> Box<SandboxFailure> {
-    Box::new(SandboxFailure {
-        request: sandbox.request,
-        phase,
-        sandbox: Some(sandbox.runtime),
         control: Some(sandbox.control),
         handshake: sandbox.handshake,
         observed: Some(sandbox.startup),

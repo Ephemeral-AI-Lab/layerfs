@@ -102,10 +102,7 @@ impl ProviderSandbox {
 impl SandboxApi {
     /// Uses a dynamically selected runtime provider.
     pub fn with_provider(provider: Arc<dyn SandboxProvider>) -> Self {
-        Self {
-            docker: None,
-            provider: Some(provider),
-        }
+        Self { provider }
     }
     /// Creates, privately configures, starts and authenticates once, preserving partial ownership on failure.
     pub fn create(
@@ -123,12 +120,7 @@ impl SandboxApi {
         let mut progress = Startup::new();
         let mut runtime = None;
         let result = (|| {
-            let provider = self
-                .provider
-                .as_ref()
-                .ok_or(SandboxCause::Setup(ControlError(
-                    "provider API requires provider selection",
-                )))?;
+            let provider = &self.provider;
             if let Some(directory) =
                 provider
                     .local_directory(&request.launch.name)
@@ -239,12 +231,7 @@ impl SandboxApi {
         let mut runtime = None;
         let mut installed = None;
         let result = (|| {
-            let provider = self
-                .provider
-                .as_ref()
-                .ok_or(SandboxCause::Setup(ControlError(
-                    "provider API requires provider selection",
-                )))?;
+            let provider = &self.provider;
             if let Some(directory) =
                 provider
                     .local_directory(&request.launch.name)
