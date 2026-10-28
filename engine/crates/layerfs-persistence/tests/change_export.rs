@@ -319,6 +319,36 @@ fn a_replica_from_the_base_and_its_bundles_holds_the_live_rows() {
 }
 
 #[test]
+fn applying_a_bundle_logs_nothing_and_leaves_no_free_pages_on_the_replica() {
+    let t = Temp::new("change-export-quiet");
+    let live = initialized(&t, "live");
+    let base = mark_base(&live, [6; 32]).unwrap();
+    let replica = t.join("replica");
+    std::fs::copy(&live, &replica).unwrap();
+    let handles = writable(&live);
+    let storage = Storage::new(handles.storage.clone()).unwrap();
+    // Enough rows for the log to span many pages.
+    for i in 0..1500u32 {
+        save(&storage, format!("object {i}").as_bytes());
+    }
+    drop(handles);
+    let bundle = t.join("bundle");
+    let one = export_changes(&live, base, &bundle).unwrap();
+    assert!(one.log_entries >= 1500, "{one:?}");
+    apply_changes(&replica, &bundle).unwrap();
+    assert_eq!(rows(&replica), rows(&live));
+    assert_eq!(read_state(&replica).unwrap(), Some(one.after));
+    let sql = rusqlite::Connection::open(&replica).unwrap();
+    let count = |q: &str| -> i64 { sql.query_row(q, [], |r| r.get(0)).unwrap() };
+    assert_eq!(
+        count("SELECT count(*) FROM change_log"),
+        1,
+        "only the marker"
+    );
+    assert_eq!(count("PRAGMA freelist_count"), 0, "no pages freed by a log");
+}
+
+#[test]
 fn a_locked_replica_is_refused_at_once_and_left_unchanged() {
     let t = Temp::new("change-locked");
     let live = initialized(&t, "live");

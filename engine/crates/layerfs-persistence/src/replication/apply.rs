@@ -159,6 +159,11 @@ fn verify(c: &Connection, catalog: &[u8], meta: &BundleMeta) -> Result<(), Chang
 /// Installs a verified bundle's rows and deletions and records its ending
 /// cursor.
 fn install(c: &Connection, meta: &BundleMeta) -> Result<(), ChangeError> {
+    // Pause logging for the installed rows: every trigger fires only while
+    // `change_state` has its row. Logging them and deleting the log afterwards
+    // would leave the replica with free pages as large as the log (about
+    // 0.6 MB per 14k objects).
+    c.execute("DELETE FROM main.change_state", [])?;
     let order = LOGGED
         .iter()
         .filter(|t| t.code != TOTALS)
@@ -193,14 +198,14 @@ fn install(c: &Connection, meta: &BundleMeta) -> Result<(), ChangeError> {
             [],
         )?;
     }
-    // The installed rows logged themselves; the replica now stands at `after`.
+    // Resume logging; the replica now stands at `after`.
     c.execute("DELETE FROM main.change_log", [])?;
     c.execute(
         "INSERT INTO main.change_log(seq,tbl) VALUES(?1,0)",
         [meta.after.seq as i64],
     )?;
     c.execute(
-        "UPDATE main.change_state SET state=?1,seq=?2 WHERE id=1",
+        "INSERT INTO main.change_state(id,state,seq) VALUES(1,?1,?2)",
         params![&meta.after.state[..], meta.after.seq as i64],
     )?;
     Ok(())
