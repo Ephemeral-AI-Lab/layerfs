@@ -1,5 +1,5 @@
 use super::*;
-/// The Engine at `home/docker.sock`, answering one request with `status` and `body`.
+/// The Engine at `home/docker.sock`, answering one business request with `status` and `body`.
 pub fn engine(home: &Path, status: u16, body: &str) -> JoinHandle<String> {
     let engine = engines(home, vec![(status, body.to_owned())]);
     thread::spawn(move || engine.join().unwrap().remove(0))
@@ -7,6 +7,7 @@ pub fn engine(home: &Path, status: u16, body: &str) -> JoinHandle<String> {
 
 /// The Engine at `home/docker.sock`, answering each request, one connection
 /// each, with the next `(status, body)`; it returns their request heads.
+/// Version probes get API 1.54 without consuming a response or calling `before`.
 pub fn engines(home: &Path, responses: Vec<(u16, String)>) -> JoinHandle<Vec<String>> {
     engines_before(home, responses, || {})
 }
@@ -22,11 +23,9 @@ pub fn engines_before(
         let mut before = Some(before);
         let deadline = Instant::now() + Duration::from_secs(3);
         let mut requests = Vec::new();
-        for (status, body) in responses {
-            let response = format!(
-                "HTTP/1.1 {status} test\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
-                body.len()
-            );
+        let mut responses = responses.into_iter().peekable();
+        while responses.peek().is_some() {
+            assert!(Instant::now() < deadline, "bounded engine request deadline");
             let stream = loop {
                 match listener.accept() {
                     Ok((stream, _)) => break stream,
@@ -43,6 +42,9 @@ pub fn engines_before(
             stream
                 .set_read_timeout(Some(Duration::from_secs(2)))
                 .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
             let mut reader = BufReader::new(stream.try_clone().unwrap());
             let mut request = String::new();
             loop {
@@ -52,11 +54,23 @@ pub fn engines_before(
                 }
                 request.push_str(&line);
             }
-            if let Some(before) = before.take() {
-                before();
-            }
+            let probe = request.split_whitespace().nth(1) == Some("/version");
+            let (status, body) = if probe {
+                (200, r#"{"ApiVersion":"1.54"}"#.to_owned())
+            } else {
+                if let Some(before) = before.take() {
+                    before();
+                }
+                responses.next().unwrap()
+            };
+            let response = format!(
+                "HTTP/1.1 {status} test\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
             (&stream).write_all(response.as_bytes()).unwrap();
-            requests.push(request);
+            if !probe {
+                requests.push(request);
+            }
         }
         requests
     })
