@@ -148,7 +148,8 @@ pub struct TeardownCustody {
     pub work: Option<MountWork>,
     /// Bounded original cause description; never parsed to decide custody.
     pub detail: String,
-    /// Forced-teardown effects; absent from a normal unmount or Attach custody.
+    /// Abort effects, including a normal unmount's stalled connection; absent
+    /// when no abort was attempted.
     pub forced: Option<crate::control_forced::ForcedFacts>,
 }
 fn put_receipt(out: &mut Writer, value: &MountReceipt) -> Result<(), ControlError> {
