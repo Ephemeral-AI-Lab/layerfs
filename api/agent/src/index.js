@@ -100,10 +100,11 @@ export class LayerFS {
    * settings read LAYERFS_HOME, _DOCKER, _IMAGE, _VOLUME and _DAEMON; a
    * Sandbox this client starts runs _IMAGE
    * on _VOLUME. LAYERFS_CONTAINER_PREFIX (default `layerfs-`) names every
-   * container it starts `<prefix><project>-<n>`. LAYERFS_SANDBOX=local
-   * starts each Sandbox as a daemon process on this machine instead of a
-   * container, in a directory under LAYERFS_LOCAL_DIR (no Docker setting is
-   * read; it isolates nothing, so use it only inside a VM or CI box).
+   * container it starts `<prefix><project>-<n>`. On macOS,
+   * LAYERFS_SANDBOX=native starts each Sandbox as a daemon process of this
+   * user instead of a container, in a directory under LAYERFS_LOCAL_DIR,
+   * its Workspaces mounted over loopback NFS (no Docker setting is read; it
+   * isolates nothing beyond the caller's own sandbox).
    * LAYERFS_DAEMON_HOST is the host this process
    * dials for a daemon's port, published on the Docker host's 127.0.0.1 only;
    * set it when the client runs in a container (`host.docker.internal` on

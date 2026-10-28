@@ -25,12 +25,14 @@ number replacement during inspection, and discovery-lock release while a forked
 child retains the descriptor. Its C fixture interposes `flock` only in the child
 Node process; the fixture's fork is bounded and released on test unwinding.
 
-`native_local` covers local Sandbox records (`LAYERFS_SANDBOX=local`) through
+`native_local` covers native Sandbox records (`LAYERFS_SANDBOX=native`) through
 `runtime.sandbox.reclaim`: a record naming any directory other than where its
 deployment puts that Sandbox is refused and nothing is deleted, the configured
-`localDir` must be absolute and plain, a stopped local Sandbox is deleted and its
-number freed, a damaged boot or port is refused, and local and native
-(`LAYERFS_SANDBOX=native`) records are never used by the other's deployment.
+`localDir` must be absolute and plain, a stopped native Sandbox is deleted and its
+number freed, a damaged boot or port is refused, a native record is used only by
+a native deployment, and a record of the former `local` runtime is never used or
+deleted. Record handling is the same code on Linux and macOS, so it runs here;
+starting a native Sandbox is macOS only.
 
 `native_admission` covers initial connection admission and its `Busy` deadline.
 The deadline test pays the product's full 60-second readiness wait. The mock

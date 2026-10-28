@@ -1,9 +1,10 @@
 // Which runtime a Sandbox uses. No real addon, Store or Docker (the
 // stand-in binding answers the client's calls):
-//   node api/agent/sdk/test/local_deployment.mjs
+//   node api/agent/test/native_deployment.mjs
 // LAYERFS_SANDBOX unset or `docker` gives exactly the Docker deployment it
-// always gave; `local` needs only the daemon and LAYERFS_LOCAL_DIR (no Docker
-// setting); any other value is refused rather than taken as either.
+// always gave; `native` (macOS) needs only the daemon and LAYERFS_LOCAL_DIR
+// (no Docker setting); any other value, the former `local` included, is
+// refused rather than taken as either.
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -41,30 +42,25 @@ assert.deepEqual(deployment(), docker);
 delete process.env.LAYERFS_IMAGE;
 assert.throws(() => deployment(), (e) => e.code === "InvalidInput" && /LAYERFS_IMAGE/.test(e.message));
 
-// local: daemon + localDir, no Docker setting read or required
+// native: daemon + localDir, no Docker setting read or required
 clear();
-process.env.LAYERFS_SANDBOX = "local";
+process.env.LAYERFS_SANDBOX = "native";
 process.env.LAYERFS_DAEMON = "/opt/layerfs-daemon";
-process.env.LAYERFS_LOCAL_DIR = "/store/local";
-assert.deepEqual(deployment(), { sandbox: "local", daemon: "/opt/layerfs-daemon", localDir: "/store/local" });
-// an image (sandbox.create's option) does not change a local deployment
-assert.deepEqual(deployment({ image: docker.image }), { sandbox: "local", daemon: "/opt/layerfs-daemon", localDir: "/store/local" });
-// the container prefix names local Sandbox directories too
+process.env.LAYERFS_LOCAL_DIR = "/Users/me/lfs";
+assert.deepEqual(deployment(), { sandbox: "native", daemon: "/opt/layerfs-daemon", localDir: "/Users/me/lfs" });
+// an image (sandbox.create's option) does not change a native deployment
+assert.deepEqual(deployment({ image: docker.image }), { sandbox: "native", daemon: "/opt/layerfs-daemon", localDir: "/Users/me/lfs" });
+// the container prefix names native Sandbox directories too
 process.env.LAYERFS_CONTAINER_PREFIX = "ci-";
 assert.equal(deployment().containerPrefix, "ci-");
 delete process.env.LAYERFS_CONTAINER_PREFIX;
 // each required setting is named when missing
 delete process.env.LAYERFS_LOCAL_DIR;
 assert.throws(() => deployment(), (e) => e.code === "InvalidInput" && /LAYERFS_LOCAL_DIR/.test(e.message));
-process.env.LAYERFS_LOCAL_DIR = "/store/local";
+process.env.LAYERFS_LOCAL_DIR = "/Users/me/lfs";
 delete process.env.LAYERFS_DAEMON;
 assert.throws(() => deployment(), (e) => e.code === "InvalidInput" && /LAYERFS_DAEMON/.test(e.message));
-// native: the same two settings, its own runtime name
-clear();
-process.env.LAYERFS_SANDBOX = "native";
 process.env.LAYERFS_DAEMON = "/opt/layerfs-daemon";
-process.env.LAYERFS_LOCAL_DIR = "/Users/me/lfs";
-assert.deepEqual(deployment(), { sandbox: "native", daemon: "/opt/layerfs-daemon", localDir: "/Users/me/lfs" });
 // a DSH_LAYERFS_NFS_ name is not mapped (an integration maps its own names)
 process.env.DSH_LAYERFS_NFS_MOUNT = "/bin/true";
 deployment();
@@ -72,12 +68,12 @@ assert.equal(process.env.LAYERFS_NFS_MOUNT, undefined);
 // since #428 the SDK reads LAYERFS_ names only: a DSH_LAYERFS_ twin selects nothing
 clear();
 setDocker();
-process.env.DSH_LAYERFS_SANDBOX = "local";
+process.env.DSH_LAYERFS_SANDBOX = "native";
 process.env.DSH_LAYERFS_LOCAL_DIR = "/l";
 assert.deepEqual(deployment(), docker);
 
-// anything else is refused, never silently Docker
-for (const typo of ["Local", "lokal", "LOCAL", "podman"]) {
+// anything else, the former `local` included, is refused, never silently Docker
+for (const typo of ["local", "Native", "nativ", "NATIVE", "podman"]) {
   clear();
   setDocker();
   process.env.LAYERFS_SANDBOX = typo;
@@ -85,22 +81,22 @@ for (const typo of ["Local", "lokal", "LOCAL", "podman"]) {
 }
 
 // a client reads LAYERFS_SANDBOX and LAYERFS_LOCAL_DIR once, and
-// sandbox.create sends the local deployment (no Docker setting)
+// sandbox.create sends the native deployment (no Docker setting)
 clear();
 store();
-process.env.LAYERFS_SANDBOX = "local";
+process.env.LAYERFS_SANDBOX = "native";
 process.env.LAYERFS_DAEMON = "/opt/layerfs-daemon";
-process.env.LAYERFS_LOCAL_DIR = "/store/local";
+process.env.LAYERFS_LOCAL_DIR = "/Users/me/lfs";
 const { LayerFS } = await import("../src/index.js");
 const client = await LayerFS.open("website");
-assert.equal(client.options.deploy.sandbox, "local");
-assert.equal(client.options.deploy.localDir, "/store/local");
+assert.equal(client.options.deploy.sandbox, "native");
+assert.equal(client.options.deploy.localDir, "/Users/me/lfs");
 const before = native.deploys.length;
 await client.sandbox.create();
-assert.deepEqual(native.deploys.slice(before), [{ sandbox: "local", daemon: "/opt/layerfs-daemon", localDir: "/store/local" }]);
+assert.deepEqual(native.deploys.slice(before), [{ sandbox: "native", daemon: "/opt/layerfs-daemon", localDir: "/Users/me/lfs" }]);
 // an image given to sandbox.create does not turn it into a Docker deployment
 await client.sandbox.create({ image: docker.image });
-assert.deepEqual(native.deploys.at(-1), { sandbox: "local", daemon: "/opt/layerfs-daemon", localDir: "/store/local" });
+assert.deepEqual(native.deploys.at(-1), { sandbox: "native", daemon: "/opt/layerfs-daemon", localDir: "/Users/me/lfs" });
 await client.close();
 // unset: the client carries no new key
 clear();
@@ -110,4 +106,4 @@ const plain = await LayerFS.open("website");
 assert.equal("sandbox" in plain.options.deploy, false);
 assert.equal("localDir" in plain.options.deploy, false);
 await plain.close();
-console.log("local_deployment: ok");
+console.log("native_deployment: ok");

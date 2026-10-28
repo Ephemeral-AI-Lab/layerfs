@@ -72,12 +72,6 @@ pub(crate) fn directory(path: &Path) -> Result<()> {
     }
     private(path, true)
 }
-/// Whether this process runs as root, which the local runtime needs: its
-/// daemon mounts FUSE and its commands run as another uid/gid.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub(crate) fn root() -> bool {
-    unsafe { geteuid() == 0 }
-}
 /// This process's effective uid and gid: a native Sandbox's command
 /// identity (its commands run as this user).
 pub(crate) fn user() -> (u32, u32) {
@@ -393,14 +387,7 @@ pub(crate) fn save_sandbox(
                 .boot
                 .ok_or_else(|| refused("Failed", "local Sandbox daemon has no boot id"))?;
             fields.extend([
-                (
-                    "runtime",
-                    SdkValue::text(if crate::runtime::native(deploy) {
-                        crate::runtime::NATIVE
-                    } else {
-                        crate::runtime::LOCAL
-                    }),
-                ),
+                ("runtime", SdkValue::text(crate::runtime::NATIVE)),
                 ("uid", SdkValue::Int(i64::from(state.identity.uid))),
                 ("gid", SdkValue::Int(i64::from(state.identity.gid))),
                 (
@@ -490,7 +477,7 @@ fn runtime(value: &SdkValue) -> Result<(Docker, ContainerId, SandboxRequest)> {
     let container = ContainerId::parse(registry::text(value, "container")?).map_err(failed)?;
     Ok((docker, container, request))
 }
-/// What a Sandbox record names: a Docker container, or (`runtime` `local`)
+/// What a Sandbox record names: a Docker container, or (`runtime` `native`)
 /// a local daemon process, its directory and port.
 pub(crate) enum Recorded {
     Docker(Docker, ContainerId, SandboxRequest),
@@ -541,20 +528,22 @@ fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
             ),
         ));
     }
-    // with no placement (#428), a mount names its Sandbox: local and native
-    // Sandboxes are still never mixed, so a record is used only by a
-    // deployment of its own runtime
-    let wanted = match args.get("deploy").map(crate::runtime::native) {
-        Some(true) => crate::runtime::NATIVE,
-        _ => crate::runtime::LOCAL,
-    };
-    if value.get_text("runtime") != Some(wanted) {
+    // with no placement (#428), a mount names its Sandbox: a record is used
+    // only by a native deployment, and only a native record is. A record of
+    // the `local` runtime (an earlier, unmerged build) is never used, so
+    // nothing it names is deleted
+    let native = args.get("deploy").is_some_and(crate::runtime::native);
+    if !native || value.get_text("runtime") != Some(crate::runtime::NATIVE) {
         return Err(refused(
             "InvalidInput",
             format!(
-                "Sandbox {id} is a {} Sandbox, but this deployment is {wanted} \
-                 (LAYERFS_SANDBOX): local and native Sandboxes are never mixed",
-                value.get_text("runtime").unwrap_or_default()
+                "Sandbox {id} is a {} Sandbox, but only a native deployment \
+                 (LAYERFS_SANDBOX=native) uses a native record and none uses another; \
+                 Sandboxes of other runtimes are never mixed, so the record is neither used \
+                 nor deleted. Remove what it left by hand, then delete \
+                 LAYERFS_HOME/{}/sandboxes/{id}/sandbox.record",
+                value.get_text("runtime").unwrap_or_default(),
+                registry::text(args, "project")?
             ),
         ));
     }
@@ -591,7 +580,7 @@ fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
 fn local_record(_: &SdkValue, id: &str, _: &SdkValue) -> Result<Recorded> {
     Err(refused(
         "Unsupported",
-        format!("Sandbox {id} is a local Sandbox (LAYERFS_SANDBOX=local), which needs Linux"),
+        format!("Sandbox {id} is a native Sandbox (LAYERFS_SANDBOX=native), which needs macOS"),
     ))
 }
 impl Recorded {

@@ -1,7 +1,6 @@
-//! Local Sandboxes (`deploy.sandbox` `local`, LAYERFS_SANDBOX=local): the
-//! project's daemon runs as a process of this kernel instead of in a
-//! container, for a VM or CI box that is itself the isolation boundary. It
-//! isolates nothing from the rest of that machine.
+//! Native Sandboxes (`deploy.sandbox` `native`, LAYERFS_SANDBOX=native, macOS):
+//! the project's daemon runs as a process of this user instead of in a
+//! container. It isolates nothing beyond the caller's own sandbox.
 //!
 //! Each Sandbox gets a directory `<LAYERFS_LOCAL_DIR>/<prefix><project>-<n>`
 //! with what a container held at fixed paths: its setup
@@ -9,10 +8,9 @@
 //! Workspace mounts (`/workspaces`). The daemon opens the installed Store
 //! where this process opens it (`storePath`), so the daemon setup and the
 //! Store's locator name that path instead of `/layerfs-store`. The daemon
-//! listens on 127.0.0.1 only. Commands run as the same nonroot identity as
-//! in a container. A native Sandbox (`deploy.sandbox` `native`) needs no
-//! root: its daemon serves Workspaces over loopback NFS (`LAYERFS_KERNEL=nfs`)
-//! to this host's own client, and its commands run as this user. Start,
+//! listens on 127.0.0.1 only. A native Sandbox needs no root: its daemon
+//! serves Workspaces over loopback NFS (`LAYERFS_KERNEL=nfs`) to this host's
+//! own client, and its commands run as this user. Start,
 //! failure and reclaim follow the Docker route: one attempt, a creation intent while the outcome is open, and a failed start's
 //! daemon stopped and its directory deleted, each once.
 use crate::job::{failed, refused};
@@ -28,7 +26,8 @@ use std::net::{SocketAddr, TcpStream};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
-/// Starts the project's next Sandbox as a local daemon. Called by
+/// Starts the project's next Sandbox as a native daemon (macOS only;
+/// elsewhere refused before any effect). Called by
 /// [`crate::sandbox::start`] under the project's guard, with the project
 /// and its installed manifest already read.
 pub(crate) fn start(
@@ -39,27 +38,23 @@ pub(crate) fn start(
     let deploy = args
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
-    let native = crate::runtime::native(deploy);
     // Inputs are read first, so a refused request leaves no creation intent.
-    if !native && !crate::discovery::root() {
+    if !cfg!(target_os = "macos") {
         return Err(refused(
             "Unsupported",
-            "LAYERFS_SANDBOX=local needs root: its daemon mounts FUSE and its commands run as \
-             uid 501, gid 20. Run it as root inside the VM or CI box that isolates it",
+            "LAYERFS_SANDBOX=native mounts its Workspaces with this host's own NFS client and \
+             runs commands as this user, which is supported on macOS only; use Docker here",
         ));
     }
     let root = deploy.get_text("localDir").ok_or_else(|| {
         refused(
             "InvalidInput",
-            "deploy.localDir is not configured (LAYERFS_LOCAL_DIR); a local Sandbox needs it",
+            "deploy.localDir is not configured (LAYERFS_LOCAL_DIR); a native Sandbox needs it",
         )
     })?;
-    let local = if native {
-        Local::native(root).map(|local| local.environment(native_environment()))
-    } else {
-        Local::new(root)
-    }
-    .map_err(|error| refused("InvalidInput", format!("LAYERFS_LOCAL_DIR {root}: {error}")))?;
+    let local = Local::native(root)
+        .map(|local| local.environment(native_environment()))
+        .map_err(|error| refused("InvalidInput", format!("LAYERFS_LOCAL_DIR {root}: {error}")))?;
     let executable = PathBuf::from(text(deploy, "daemon")?);
     let store = match args.get_text("storePath") {
         Some(path) if Path::new(path).is_absolute() => path.to_owned(),
@@ -81,7 +76,7 @@ pub(crate) fn start(
         &saved_directory,
         &id,
         project,
-        (local, executable, store, native),
+        (local, executable, store),
     );
     if made.is_err() {
         let _ = std::fs::remove_dir(&saved_directory);
@@ -97,7 +92,7 @@ fn start_claimed(
     saved_directory: &Path,
     id: &str,
     (project, installed): (&crate::registry::Project, StoreManifest),
-    (local, executable, store, native): (Local, PathBuf, String, bool),
+    (local, executable, store): (Local, PathBuf, String),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
     let sandbox_name = sandbox_name(args, id)?;
@@ -113,10 +108,8 @@ fn start_claimed(
     let controller = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let mut setup = crate::sandbox::setup(daemon.private, controller.public);
-    if native {
-        // the native route's commands run as this user, unconfined
-        (setup.command_uid, setup.command_gid) = crate::discovery::user();
-    }
+    // the native route's commands run as this user, unconfined
+    (setup.command_uid, setup.command_gid) = crate::discovery::user();
     setup.listen = "127.0.0.1:0".into();
     setup.store = store.clone();
     setup.overlay = path_text(&paths.overlay)?;

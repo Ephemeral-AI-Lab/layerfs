@@ -1,5 +1,5 @@
-//! External tests of the built Node binding's local Sandbox records
-//! (LAYERFS_SANDBOX=local or native). No private Rust source is included: every case
+//! External tests of the built Node binding's native Sandbox records
+//! (LAYERFS_SANDBOX=native). No private Rust source is included: every case
 //! writes a Sandbox record as a previous call would have, then calls the
 //! addon's public `runtime.sandbox.reclaim` and observes the reply and the
 //! files it left. Neither Docker, FUSE, nor a Store is needed.
@@ -22,7 +22,7 @@ fn boot() -> String {
         .replace('-', "")
 }
 
-/// Sandbox 1 of `proj` recorded as a `runtime` (local or native) Sandbox
+/// Sandbox 1 of `proj` recorded as a `runtime` (native, or the former local) Sandbox
 /// in `directory` named `name`, its daemon long gone (no process has id
 /// u32::MAX). `edit` changes the fields before the record is written.
 fn record(
@@ -93,7 +93,7 @@ fn own(root: &Path) -> PathBuf {
     own
 }
 
-/// The public reclaim of a `sandbox` (local or native) deployment, with
+/// The public reclaim of a `sandbox` (native or docker) deployment, with
 /// `localDir` when given, followed by `then` (JavaScript, `r` is the reply).
 fn reclaim(home: &Home, sandbox: &str, local_dir: Option<&str>, then: &str) {
     let deploy = match local_dir {
@@ -118,7 +118,7 @@ fn text(path: &Path) -> &str {
 }
 
 #[test]
-fn a_local_record_naming_another_directory_is_neither_used_nor_deleted() {
+fn a_native_record_naming_another_directory_is_neither_used_nor_deleted() {
     let home = Home::new();
     let root = root(&home);
     // a data directory a damaged or edited record names by its own name
@@ -140,8 +140,8 @@ fn a_local_record_naming_another_directory_is_neither_used_nor_deleted() {
         (format!("{r}/../etc/layerfs-proj-1"), "layerfs-proj-1"),
         ("/".to_owned(), ""),
     ] {
-        record(&home, "local", &directory, name, |_| {});
-        reclaim(&home, "local", Some(r), NEITHER);
+        record(&home, "native", &directory, name, |_| {});
+        reclaim(&home, "native", Some(r), NEITHER);
         assert!(
             home.0.join("proj/sandboxes/1/sandbox.record").exists(),
             "the record of {directory} was removed"
@@ -156,17 +156,17 @@ fn a_local_record_naming_another_directory_is_neither_used_nor_deleted() {
 }
 
 #[test]
-fn a_local_record_is_used_only_with_its_deployment_s_absolute_local_dir() {
+fn a_native_record_is_used_only_with_its_deployment_s_absolute_local_dir() {
     let home = Home::new();
     let root = root(&home);
     let own = own(&root);
-    record(&home, "local", text(&own), "layerfs-proj-1", |_| {});
+    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
     let refused = "assert.equal(r.refused?.code, 'InvalidInput', JSON.stringify(r));";
-    reclaim(&home, "local", None, refused);
-    reclaim(&home, "local", Some("relative"), refused);
+    reclaim(&home, "native", None, refused);
+    reclaim(&home, "native", Some("relative"), refused);
     reclaim(
         &home,
-        "local",
+        "native",
         Some(&format!("{}/../local", text(&root))),
         refused,
     );
@@ -175,12 +175,12 @@ fn a_local_record_is_used_only_with_its_deployment_s_absolute_local_dir() {
 }
 
 #[test]
-fn a_stopped_local_sandbox_where_its_deployment_puts_it_is_deleted_and_reclaimed() {
+fn a_stopped_native_sandbox_where_its_deployment_puts_it_is_deleted_and_reclaimed() {
     let home = Home::new();
     let root = root(&home);
     let own = own(&root);
-    record(&home, "local", text(&own), "layerfs-proj-1", |_| {});
-    reclaim(&home, "local", Some(text(&root)), RECLAIMED);
+    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
+    reclaim(&home, "native", Some(text(&root)), RECLAIMED);
     assert!(!own.exists(), "the stopped Sandbox's directory is deleted");
     assert!(
         !home.0.join("proj/sandboxes/1").exists(),
@@ -196,12 +196,12 @@ fn a_record_from_before_boot_ids_is_read_without_one() {
     let own = own(&root);
     record(
         &home,
-        "local",
+        "native",
         text(&own),
         "layerfs-proj-1",
         set("boot", None),
     );
-    reclaim(&home, "local", Some(text(&root)), RECLAIMED);
+    reclaim(&home, "native", Some(text(&root)), RECLAIMED);
     assert!(!home.0.join("proj/sandboxes/1").exists());
 }
 
@@ -216,14 +216,14 @@ fn a_damaged_boot_or_port_is_refused_and_removes_nothing() {
     ] {
         record(
             &home,
-            "local",
+            "native",
             text(&own),
             "layerfs-proj-1",
             set(key, Some(value)),
         );
         reclaim(
             &home,
-            "local",
+            "native",
             Some(text(&root)),
             &format!("assert.equal(r.refused?.code, {code:?}, JSON.stringify(r));"),
         );
@@ -236,14 +236,14 @@ fn a_damaged_boot_or_port_is_refused_and_removes_nothing() {
 }
 
 #[test]
-fn a_docker_record_stays_docker_without_a_local_deployment() {
+fn a_docker_record_stays_docker_under_a_native_deployment() {
     // the default record of Home is a Docker one: with no Engine at its
-    // socket it is neither reclaimed nor read as a local Sandbox
+    // socket it is neither reclaimed nor read as a native Sandbox
     let home = Home::new();
     let root = root(&home);
     reclaim(
         &home,
-        "local",
+        "native",
         Some(text(&root)),
         "assert.equal(r.refused?.code, 'Failed', JSON.stringify(r));",
     );
@@ -251,22 +251,23 @@ fn a_docker_record_stays_docker_without_a_local_deployment() {
 }
 
 #[test]
-fn local_and_native_sandboxes_are_never_mixed() {
+fn a_record_of_the_former_local_runtime_is_never_used_nor_deleted() {
     let home = Home::new();
     let root = root(&home);
     let own = own(&root);
     let mixed = "assert.equal(r.refused?.code, 'InvalidInput', JSON.stringify(r));
-    assert.match(r.refused.message, /never mixed/);";
-    // a native record is not used by a local deployment
-    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
-    reclaim(&home, "local", Some(text(&root)), mixed);
-    // nor a local record by a native deployment
+    assert.match(r.refused.message, /never mixed/);
+    assert.match(r.refused.message, /neither used nor deleted/);";
+    // a record of the former `local` runtime is used by no deployment
     record(&home, "local", text(&own), "layerfs-proj-1", |_| {});
     reclaim(&home, "native", Some(text(&root)), mixed);
+    reclaim(&home, "docker", Some(text(&root)), mixed);
+    // nor is a native record by any deployment but a native one
+    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
+    reclaim(&home, "docker", Some(text(&root)), mixed);
     assert!(own.join("daemon.log").exists());
     assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
     // a native deployment uses its own record: stopped, it is reclaimed
-    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
     reclaim(&home, "native", Some(text(&root)), RECLAIMED);
     assert!(!own.exists());
     assert!(!home.0.join("proj/sandboxes/1").exists());

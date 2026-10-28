@@ -1,12 +1,10 @@
-//! A Sandbox's runtime: a Docker container (the default), or with
-//! `deploy.sandbox` `local` (LAYERFS_SANDBOX=local) a daemon process on this
-//! kernel, for a VM or CI box that is itself the isolation boundary. Both run
-//! the same daemon and answer the same calls; only how it is started, how
-//! commands are launched and how it is observed differ. With `native`
-//! (LAYERFS_SANDBOX=native) the local daemon serves its Workspaces over
-//! loopback NFS to this host's own client and commands run as this user,
-//! with no root (macOS). The local runtimes run on Linux and macOS;
-//! elsewhere selecting one is refused as Unsupported.
+//! A Sandbox's runtime: a Docker container (the default), or on macOS with
+//! `deploy.sandbox` `native` (LAYERFS_SANDBOX=native) a local daemon process
+//! of this user that serves its Workspaces over loopback NFS to this host's
+//! own client, its commands run as this user, with no root. Both run the
+//! same daemon and answer the same calls; only how it is started, how
+//! commands are launched and how it is observed differ. Off macOS selecting
+//! `native` is refused as Unsupported before anything is made.
 use crate::job::{failed, refused};
 use crate::output::Spool;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -16,7 +14,8 @@ use layerfs_sandbox::backend::local;
 use layerfs_sandbox::{CommandIdentity, ContainerId, WireFailure};
 use std::net::SocketAddr;
 
-/// A local Sandbox record's `runtime`, and the image it records (a Docker
+/// The image a native Sandbox records and reports, and the `runtime` of a
+/// record from the former `local` runtime, which is never used (a Docker
 /// record has no `runtime`).
 pub(crate) const LOCAL: &str = "local";
 /// A native Sandbox record's `runtime` (LAYERFS_SANDBOX=native): a local
@@ -31,15 +30,15 @@ pub(crate) enum Runtime {
 }
 
 /// Whether the deployment selects a local daemon: `deploy.sandbox` unset or
-/// `docker` is Docker, `local` and `native` are a local daemon; anything
-/// else is refused before any effect.
+/// `docker` is Docker, `native` is a local daemon; anything else (the
+/// former `local` included) is refused before any effect.
 pub(crate) fn local(deploy: &SdkValue) -> Result<bool, SdkRefusal> {
     match deploy.get_text("sandbox") {
         None | Some("docker") => Ok(false),
-        Some(LOCAL) | Some(NATIVE) => Ok(true),
+        Some(NATIVE) => Ok(true),
         Some(other) => Err(refused(
             "InvalidInput",
-            format!("deploy.sandbox (LAYERFS_SANDBOX) is docker or local (or native), not {other}"),
+            format!("deploy.sandbox (LAYERFS_SANDBOX) is docker or native (macOS), not {other}"),
         )),
     }
 }

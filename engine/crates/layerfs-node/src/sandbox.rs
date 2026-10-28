@@ -121,8 +121,8 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         return Err(refused(
             "Unsupported",
-            "LAYERFS_SANDBOX=local runs its daemon as a process of this kernel, which needs \
-             Linux; run it inside a Linux VM or CI box, or use Docker",
+            "LAYERFS_SANDBOX=native runs its daemon as a process of this user and mounts its \
+             Workspaces with this host's own NFS client, which needs macOS; use Docker",
         ));
     }
     let docker = text(deploy, "docker")?;
@@ -364,8 +364,8 @@ fn abandon(directory: &Path, id: &str, mut failure: Box<SandboxFailure>) -> SdkR
 /// `sandbox.create({ image })`: under the project's guard, reclaims the
 /// project's idle-closed Sandboxes, then starts the lowest free number on
 /// the call's image (`deploy.image`) and waits for its daemon:
-/// `{ sandbox, name, image }`. With `deploy.sandbox` `local` it starts a
-/// daemon process instead of a container; its `image` is `local`. The only call that starts a Sandbox. Failures
+/// `{ sandbox, name, image }`. With `deploy.sandbox` `native` (macOS) it
+/// starts a daemon process instead of a container; its `image` is `local`. The only call that starts a Sandbox. Failures
 /// are `Failed` or `Unknown`, never retried.
 pub(crate) fn create(args: &SdkValue) -> Outcome {
     let project = crate::discovery::project_dir(args)?;
