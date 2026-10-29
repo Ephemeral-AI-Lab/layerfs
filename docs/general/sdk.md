@@ -85,6 +85,15 @@ history method. It sends the unchanged History request and returns one anchored,
 bounded ancestry page, newest first. Cursor authentication, captured-head scope,
 publication semantics and original control bytes are unchanged.
 
+[Graph](../../engine/crates/layerfs-api/src/branch/graph.rs) returns a Branch's own
+first-parent Commits up to, but excluding, a Commit fork point, together with the
+fork point and publication state derived from main's current Layer stack. Main's
+graph instead walks Layer-source Commits and skips genesis.
+[Changed paths](../../engine/crates/layerfs-api/src/branch/changed_paths.rs) uses the
+existing comparison encoder against a Commit's first parent, its base Layer for a
+parentless merge, or an empty tree for a root Commit. Neither operation changes the
+Store schema.
+
 ## Sandbox
 
 [Create](../../engine/crates/layerfs-api/src/sandbox/create.rs) uses the original

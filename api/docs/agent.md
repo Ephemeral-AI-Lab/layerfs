@@ -271,7 +271,7 @@ trace line covers the command's run.
 | project (2) | `list_branches(pageSize?, pagePos?)`, `list_sandboxes(pageSize?, pagePos?)` |
 | fs reads (7) | `read(ref, path, startLine?, endLine?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
 | fs writes (7) | `write(branch, path, content, message? \| { message?, mode? })`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message? \| { message?, mode? })`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
-| branch (6) | `fork(name, fromRef?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
+| branch (8) | `fork(name, fromRef?)`, `graph(branch, pageSize?, pagePos?)`, `changed_paths(commit, pageSize?, pagePos?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
 | sandbox (3) | `create({ image }?)` → `{ sandbox, image }`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
 | workspace (4) | `mount(sandbox, branch)` → `{ sandbox, path, image }`, `exec(ws, command, message?, { stdout?, stderr? }?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?, force?)` |
 
@@ -359,6 +359,19 @@ windows linearly. Names use byte order; recursive paths use deterministic
 component-by-component byte order, then line number for grep. Commit history is
 newest first along first parents. Every call resolves each live ref once; separate
 calls against live heads can shift numeric positions.
+
+`branch.graph` returns the Branch record, its resolved `forkPoint`, and `commits`
+in the `list_commits` shape plus `published`. The walk stops before a Commit fork
+point; a Layer or absent fork point runs to the root. A fresh Commit fork therefore
+has no own Commits. For `main`, it returns the source Commits of the current Layer
+stack, skipping genesis, all published. Publication is derived from that stack on
+every call, not stored on a Commit. `pagePos` counts the bounded walk.
+
+`branch.changed_paths` returns one Commit's path-level changes without line hunks.
+It compares against the first parent when present, against the base Layer for a
+parentless merge, and against an empty tree for a true root Commit. It accepts only
+a Commit identity: malformed text and Layer identities are `InvalidInput`, and an
+absent Commit is `NoSuchCommit`.
 
 Read/blame use 1-based inclusive line positions, no byte offsets or byte-read
 method. Responses fit the authenticated control frame: at most 2000 lines and
@@ -496,6 +509,8 @@ table differs, and when a family's files stop matching the SDK's.
 | `project.list_branches` | `layerfs project list_branches [--page-size <n>] [--page-pos <n>]` |
 | `project.list_sandboxes` | `layerfs project list_sandboxes [--page-size <n>] [--page-pos <n>]` |
 | `branch.fork` | `layerfs branch fork <name> [<from-ref>]` |
+| `branch.graph` | `layerfs branch graph <branch> [--page-size <n>] [--page-pos <n>]` |
+| `branch.changed_paths` | `layerfs branch changed_paths <commit> [--page-size <n>] [--page-pos <n>]` |
 | `branch.list_commits` | `layerfs branch list_commits <branch> [--page-size <n>] [--page-pos <n>]` |
 | `branch.diff_commits` | `layerfs branch diff_commits <from-commit> <to-commit> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--no-hunks]` |
 | `branch.diff_branches` | `layerfs branch diff_branches <from-branch> <to-branch> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--no-hunks]` |
