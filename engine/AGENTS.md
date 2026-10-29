@@ -587,8 +587,9 @@ historically rejected unmodified Git candidate are in
 Owner authorization 2026-10-07: "Approve the narrowly audited seal wrapper".
 The system macOS SQLite enables persistent WAL and otherwise leaves empty
 sidecars after checked close. Persistence uses `deny(unsafe_code)` with one
-allowed module, `src/backend/sqlite/file_control.rs`, compiled on macOS only.
-It sets and reads back `SQLITE_FCNTL_PERSIST_WAL` under sole seal ownership.
+allowed module, `src/backend/sqlite/lifecycle/file_control.rs`, compiled on macOS
+only. It sets and reads back `SQLITE_FCNTL_PERSIST_WAL` under sole seal
+ownership, and on a live-Store snapshot's own new destination connection (#506).
 No other Persistence module may contain unsafe Rust; the guard and its tests
 enforce the exact path. This does not authorize third-party patches, dependency
 changes, manual sidecar deletion or other FFI. See the

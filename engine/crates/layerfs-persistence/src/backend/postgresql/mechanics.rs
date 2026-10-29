@@ -13,7 +13,7 @@ use layerfs_storage::{
 
 impl HistoryStatements for Transaction<'_> {
     fn history(&self, key: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError> {
-        self.query(history::statement(key)?, params)
+        self.query(history::statements::statement(key)?, params)
     }
 }
 

@@ -22,7 +22,7 @@ UNSAFE = re.compile(r"\bunsafe\b")
 # never trip the scan once comments are stripped.
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
-    "layerfs-persistence": "src/backend/sqlite/file_control.rs",
+    "layerfs-persistence": "src/backend/sqlite/lifecycle/file_control.rs",
 }
 UNSAFE_FREE_CRATES = (
     "layerfs-content",
