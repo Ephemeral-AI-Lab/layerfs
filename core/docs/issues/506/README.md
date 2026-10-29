@@ -196,7 +196,7 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
 
 | Call | Does |
 | --- | --- |
-| `runtime.store.list()` | Stores in the home: `{ name, kind: 'sqlite' \| 'postgresql', volume?, connection?, schema?, synchronousCommit?, remote, legacy, created, projects: [names], copies: [copy] }`; a copy is `{ remote, pushed: { at, bytes, sha256 } \| null, pulled: { at, bytes, sha256 } \| null }`, the latest of each per remote (the binding also records each transfer in `HOME/remote-state/<store>`) |
+| `runtime.store.list()` | Stores in the home: `{ name, kind: 'sqlite' \| 'postgresql', volume?, connection?, schema?, synchronousCommit?, remote, legacy, created, projects: [names], copies: [copy], bytes, open, heads, importedFrom }`; a copy is `{ remote, pushed: { at, bytes, sha256, heads } \| null, pulled: { at, bytes, sha256, heads } \| null }`, the latest of each per remote (the binding also records each transfer in `HOME/remote-state/<store>`). For a local SQLite Store, `bytes: { file, wal }` and `open` (its `-shm` exists) come from stat calls, and `heads` is its history heads digest (below), all from one `runtime.store.stat` binding call in the process that sees the volume (the worker on macOS and Windows); null when that call fails, and always null for a PostgreSQL Store. `importedFrom: { store, at, bytes }` names the SQLite Store a PostgreSQL Store was imported from (null otherwise) |
 | `runtime.store.create(name)` | a new empty local SQLite Store in its own volume `<prefix>store-<name>` |
 | `runtime.store.remove(name, { confirm, stopSandboxes })` | deletes a local Store's volume (every project in it; Busy while a Sandbox runs on it, unless `stopSandboxes`), or forgets a PostgreSQL Store (its schema stays) |
 | `runtime.project.start_init(name, folder, { store })` | Inits a project into the live Store `store` through its writer lane and admission (Exists for a taken name, Busy while another add runs, Unsupported for a Store without acquisition tables or a PostgreSQL Store); without `store`, into a new Store of the same name, as before |
@@ -208,10 +208,34 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
 | `runtime.store.start_clone(remote, { from, store, credentials })` | a new local Store `store` from the remote copy of `from` (default `store`); `{ store, as }` (`store` on the remote, `as` here) is accepted too |
 | `runtime.store.attach_postgresql({ name, connection, url, schema, synchronousCommit })` | registers the PostgreSQL Store `name` after checking it opens: a schema this home imported keeps its recorded identity; any other LayerFS schema is read for its binding and gets a fresh cursor key |
 | `runtime.store.start_import_postgresql(store, { name, connection, url, schema, synchronousCommit })` | copies a SQLite Store (every project, the same ids) into a new schema and registers it as the PostgreSQL Store `name` (default `<store>-pg`) |
-| `runtime.sync.get(id)` | a push, pull, clone or import job: `{ id, kind, store, remote, step: 'running' \| 'done' \| 'failed', bytes, total, error: { code, message }, started, ended, result }`; `error.message` is readable as is (for example a push's free-space refusal, code Capacity, or a pull refused while the Store is open) |
+| `runtime.sync.get(id)` | a push, pull, clone or import job: `{ id, kind, store, remote, step: 'running' \| 'done' \| 'failed', phase, bytes, total, pieces, error: { code, message }, started, ended, result }`; `error.message` is readable as is (for example a push's free-space refusal, code Capacity, or a pull refused while the Store is open). While it runs, `phase` and the phase's `bytes` of `total` (and `pieces: { done, of }` for a file stored as pieces) are the native call's progress cell, which it updates at most every 250 ms for bytes (a new phase at once): push `check`, `snapshot` (bytes copied of the copy's size), `hash`, `upload`, `record`; pull `check`, `download`, `verify`, `install`, `record`; clone the same without `check`; import `copy` (no byte count) and `record`. Once done, `phase` and `pieces` are null and `bytes` is what moved; `result.transfer` carries `heads` |
+| `runtime.store.check(store, { remote, credentials })` | one HEAD of `<prefix>/<store>/store.sqlite`: `{ store, remote, present, bytes, sha256, heads, modified, checkedAt }` (times in ms since the epoch; `bytes` is the whole file's, also for a copy stored as pieces); failures keep their code (`Unavailable`, `Denied` for 401/403, `Unknown` when the outcome is unknown) |
+| `runtime.remote.list_stores(remote, { credentials })` | every Store copy in the remote: `[{ store, bytes, sha256, heads, modified }]`, from one paged ListObjectsV2 pass plus a HEAD per copy where the listing lacks its metadata (S3 listings never carry it), at most 64; beyond that `sha256` and `heads` are null |
+| `runtime.remote.providers()` | the providers this build can add: `[{ id: 'minio' \| 'r2' \| 'local_folder', label, available, reason, fields: [{ name, label, kind, required }] }]`; R2 is available only in a build with `tls` |
+| `runtime.postgresql.status({ url, schemas })` | one connection, made once: `{ reachable: true, serverVersion, latencyMs, latencyUs, schemas: { [schema]: bytes \| null } }` (the `SHOW server_version` round trip; the sum of `pg_total_relation_size` over the schema's tables and materialized views; null for a schema the server lacks), or `{ reachable: false, error: { code: 'Unavailable' \| 'Denied', message } }`; a failed query after connecting is refused `Failed` |
 
 - **Credentials:** `credentials` is `{ accessKey, secretKey }` for that call
-  only; without it the remote's reference is read. A PostgreSQL `url` is
+  only; without it the remote's reference is read.
+- **History heads digest (#506 E2).** The lowercase hex sha256 of the
+  sorted lines `stack <name> <head_layer_id>` (from `layer_stack`) and
+  `branch <project> <name> <base_layer_id> <head_commit_id or ->` (from
+  `branch`), each followed by a newline, ids in lowercase hex
+  (`layerfs_persistence::read_heads`). It changes exactly when history a
+  pull would bring changes (a project added or removed, a Branch made,
+  moved, merged or deleted, every Commit) and is equal on two machines with
+  the same history. `store.list` reads it only for a Store whose file or
+  WAL changed (size or mtime) since that process last read it, on a
+  connection of its own that is closed before the call returns: never
+  through the clients the runtime or worker keeps open, so it never leaves
+  the Store open for a pull to find. SQLite cannot open a WAL Store
+  read-only while no process holds it, so that connection opens read-write
+  as `query_only` and writes nothing; the last opener's close removes the
+  sidecars it made. Reads are serialized with that process's pull and
+  clone of the Store: while either runs the remembered value is answered.
+  Push reads it from its snapshot, records it and sends it as the copy's
+  `layerfs-heads` metadata; pull and clone read it from the downloaded file
+  before installing it. Every upload also records the whole file's size as
+  `layerfs-bytes`. A PostgreSQL `url` is
   passed per call and is never written to the home or kept in a job.
 - **PostgreSQL Stores** are not pushed or pulled. `@layerfs/agent` opens one
   with `LAYERFS_STORE` and `LAYERFS_STORE_POSTGRESQL` (`{ "url": … }`);

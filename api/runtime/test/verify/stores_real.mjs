@@ -7,7 +7,11 @@
 // the schema (#506 d), and the PostgreSQL Store attaches again, also by its
 // schema alone. One
 // project of a shared Store, and the project a Store was made by, are
-// removed while the Store and its other projects stay.
+// removed while the Store and its other projects stay. The Connect Storage
+// asks (#506 E1-E9): Store sizes and heads in store.list, heads that move
+// with a Commit and equal the pushed copy's, store.check against MinIO,
+// remote.list_stores, remote.providers, push progress phases sampled while
+// a larger Store goes up, and postgresql.status.
 //
 //   node api/runtime/test/verify/stores_real.mjs macos <bundle> <image digest>
 //       on a Mac: the runtime's worker container makes every Store call
@@ -125,7 +129,17 @@ async function run({ platform, bundle, image, home, prefix, work, svc }) {
       await c.workspace.unmount(ws);
       await c.sandbox.close(box.sandbox);
     });
+    step("store.list: sizes, open state and heads (#506 E1, E2)");
+    const teamNow = async () => (await runtime.store.list()).find((s) => s.name === "team");
+    const before = await teamNow();
+    assert.ok(before.bytes.file > 0 && Number.isInteger(before.bytes.wal), JSON.stringify(before.bytes));
+    assert.equal(typeof before.open, "boolean");
+    assert.match(before.heads, /^[0-9a-f]{64}$/);
+    assert.equal((await teamNow()).heads, before.heads, "unchanged history, unchanged heads");
     await use("docs", "team", async (c) => { await c.branch.fork("draft", "main"); await c.fs.write("draft", "/new.md", "new\n"); });
+    const afterCommit = await teamNow();
+    assert.notEqual(afterCommit.heads, before.heads, "a fork and a Commit change the heads");
+    console.log(`  team ${afterCommit.bytes.file} + ${afterCommit.bytes.wal} WAL bytes, open ${afterCommit.open}`);
     const team = { shop: await history("shop", "team"), docs: await history("docs", "team") };
     assert.ok(team.shop.commits.feature.length >= 1);
 
@@ -135,6 +149,21 @@ async function run({ platform, bundle, image, home, prefix, work, svc }) {
     const credentials = { accessKey: svc.minio.accessKey, secretKey: svc.minio.secretKey };
     const pushed = await ended(await runtime.store.start_push("team", { remote: "minio-a", credentials }));
     assert.equal(pushed.result.object, "team/store.sqlite");
+
+    step("after the push: recorded heads, store.check and list_stores against MinIO (#506 E2, E3, E9)");
+    const recorded = (await teamNow()).copies.find((c) => c.remote === "minio-a").pushed;
+    assert.equal(recorded.heads, pushed.result.transfer.heads);
+    assert.equal((await teamNow()).heads, recorded.heads, "the pushed snapshot has the Store's heads");
+    const checked = await runtime.store.check("team", { remote: "minio-a", credentials });
+    assert.deepEqual([checked.present, checked.bytes, checked.sha256, checked.heads], [true, pushed.result.transfer.bytes, pushed.result.transfer.sha256, recorded.heads]);
+    assert.ok(checked.modified > 0 && checked.checkedAt >= checked.modified - 120_000, JSON.stringify(checked));
+    assert.equal((await runtime.store.check("nothere", { remote: "minio-a", credentials })).present, false);
+    await assert.rejects(runtime.store.check("team", { remote: "minio-a", credentials: { accessKey: credentials.accessKey, secretKey: "wrong" } }), { code: "Denied" });
+    const onRemote = await runtime.remote.list_stores("minio-a", { credentials });
+    assert.deepEqual(onRemote.map((c) => [c.store, c.bytes, c.sha256, c.heads]), [["team", pushed.result.transfer.bytes, pushed.result.transfer.sha256, recorded.heads]]);
+    const providers = await runtime.remote.providers();
+    assert.deepEqual(providers.find((p) => p.id === "minio").available, true);
+    console.log(`  providers ${providers.map((p) => `${p.id}:${p.available}`).join(" ")}`);
     const cloned = await ended(await runtime.store.start_clone("minio-a", { from: "team", store: "copy", credentials }));
     assert.deepEqual(cloned.result.projects.sort(), ["docs", "shop"]);
     assert.equal(cloned.result.transfer.sha256, pushed.result.transfer.sha256);
@@ -149,11 +178,47 @@ async function run({ platform, bundle, image, home, prefix, work, svc }) {
     assert.deepEqual(await history("shop", "team"), team.shop, "the pull put back the pushed history");
     const copies = (await runtime.store.list()).find((s) => s.name === "team").copies;
     assert.deepEqual(copies.map((c) => [c.remote, c.pushed.sha256, c.pulled.sha256]), [["minio-a", pushed.result.transfer.sha256, pushed.result.transfer.sha256]]);
+    // the pulled file has the pushed history: its heads are the push's, and the Store's now
+    assert.equal(copies[0].pulled.heads, recorded.heads);
+    assert.equal((await teamNow()).heads, recorded.heads);
+
+    step("a larger Store's push reports its phases while it runs (#506 E4)");
+    await runtime.store.create("big");
+    const bulk = join(work, "src-big");
+    mkdirSync(bulk, { recursive: true });
+    // incompressible bytes, so the Store holds them whole
+    const { randomBytes } = await import("node:crypto");
+    for (let i = 0; i < 6; i++) writeFileSync(join(bulk, `blob-${i}.bin`), randomBytes(16 * 1024 * 1024));
+    await ended(await runtime.project.start_init("bulk", bulk, { store: "big" }));
+    const big = await runtime.store.start_push("big", { remote: "minio-a", credentials });
+    const samples = [];
+    for (let i = 0; i < 6000; i++) {
+      const now = await runtime.sync.get(big.id);
+      if (now.ended) { assert.equal(now.step, "done", JSON.stringify(now.error)); break; }
+      samples.push([now.phase, now.bytes, now.total]);
+      await new Promise((next) => setTimeout(next, 20));
+    }
+    const phases = [...new Set(samples.map(([phase]) => phase))];
+    console.log(`  ${samples.length} samples, phases ${phases.join(" ")}`);
+    assert.ok(phases.some((p) => ["snapshot", "hash", "upload"].includes(p)), `no byte phase sampled: ${phases}`);
+    assert.ok(samples.every(([phase]) => [null, "check", "snapshot", "hash", "upload", "record"].includes(phase)), JSON.stringify(phases));
+    assert.ok(samples.some(([phase, bytes, total]) => ["snapshot", "hash", "upload"].includes(phase) && Number.isInteger(bytes) && total >= 96 * 1024 * 1024), "a byte phase with its total");
+    await runtime.store.remove("big", { confirm: "big" });
 
     step("import the shared Store into PostgreSQL: the same Commit ids");
     const imported = await ended(await runtime.store.start_import_postgresql("team", { name: "team-pg", connection: "pg-local", url: svc.url, schema: "lfc_team" }));
     assert.deepEqual(imported.result.created.projects.sort(), ["docs", "shop"]);
     assert.ok(!readFileSync(join(home, "stores.json"), "utf8").includes("lfspg"), "no PostgreSQL password in stores.json");
+    assert.equal((await runtime.store.list()).find((s) => s.name === "team-pg").importedFrom.store, "team", "#506 E6");
+
+    step("postgresql.status: version, latency and schema sizes on one connection (#506 E5, E7)");
+    const pgStatus = await runtime.postgresql.status({ url: svc.url, schemas: ["lfc_team", "lfc_none"] });
+    assert.equal(pgStatus.reachable, true);
+    assert.match(pgStatus.serverVersion, /^17\./);
+    assert.ok(pgStatus.schemas.lfc_team > 0 && pgStatus.schemas.lfc_none === null, JSON.stringify(pgStatus.schemas));
+    console.log(`  PostgreSQL ${pgStatus.serverVersion}, ${pgStatus.latencyUs} us, lfc_team ${pgStatus.schemas.lfc_team} bytes`);
+    const refusedPg = await runtime.postgresql.status({ url: svc.url.replace("lfspg", "wrong"), schemas: [] });
+    assert.deepEqual([refusedPg.reachable, refusedPg.error.code], [false, "Denied"]);
     const { LayerFS } = await import("@layerfs/agent");
     const env = { LAYERFS_HOME: home, LAYERFS_STORE: "team-pg", LAYERFS_STORE_PATH: "postgresql:team-pg", LAYERFS_STORE_POSTGRESQL: JSON.stringify({ url: svc.url }) };
     const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
