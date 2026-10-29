@@ -444,8 +444,8 @@ fn product_control_commit_captures_the_frontier_releases_its_owners_and_is_then_
                 },
                 force: false,
                 message: None,
-            author: None,
-            labels: Vec::new(),
+                author: None,
+                labels: Vec::new(),
             })),
         Err(layerfs_daemon::control::Failure::Rejected(
             ControlCode::Invalid,

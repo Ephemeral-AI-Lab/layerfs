@@ -102,13 +102,7 @@ fn assert_text(value: &SdkValue, expected: &str) {
     assert!(value.get("bytes").is_none(), "text and bytes: {value:?}");
 }
 
-fn assert_refusal(
-    fixture: &Fixture,
-    reference: &str,
-    path: &str,
-    code: &str,
-    message: &str,
-) {
+fn assert_refusal(fixture: &Fixture, reference: &str, path: &str, code: &str, message: &str) {
     let refusal = refusal(fixture, reference, path);
     assert_eq!(
         (refusal.code.as_str(), refusal.message.as_str()),
@@ -299,10 +293,7 @@ fn commit_and_layer_reads_cover_binary_windows_and_exact_refusals() {
         missing.message,
         format!("/absent does not exist at {}", &commit[2..14])
     );
-    assert_eq!(
-        missing.detail,
-        SdkValue::map([("path", text("/absent"))])
-    );
+    assert_eq!(missing.detail, SdkValue::map([("path", text("/absent"))]));
     assert_refusal(
         &fixture,
         &commit,

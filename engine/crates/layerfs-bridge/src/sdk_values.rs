@@ -156,9 +156,8 @@ pub fn commit_value_with_budget(
         if let SdkValue::Map(fields) = &mut value {
             if fields.iter().any(|(name, _)| name == "units") {
                 fields.retain(|(name, _)| name != "units");
-                if let Some((_, truncated)) = fields
-                    .iter_mut()
-                    .find(|(name, _)| name == "unitsTruncated")
+                if let Some((_, truncated)) =
+                    fields.iter_mut().find(|(name, _)| name == "unitsTruncated")
                 {
                     *truncated = SdkValue::Bool(true);
                 }

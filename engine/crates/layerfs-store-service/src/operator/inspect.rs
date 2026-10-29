@@ -94,10 +94,33 @@ fn workspace_value(
     ])
 }
 
+/// One Branch's name and head, from the per-call memo or, on a miss, from a
+/// single point read. Snapshot callers use this for names outside the
+/// displayed page: mounted Workspaces, budgeted Layer sources, and returned
+/// Commits. The memo lives for one call only, so nothing persists and
+/// nothing needs invalidation.
+fn branch_name(
+    store: &Arc<Store>,
+    names: &mut BTreeMap<BranchId, (String, Option<CommitId>)>,
+    id: BranchId,
+) -> Result<Option<String>, layerfs_bridge::control::SdkRefusal> {
+    if let Some((name, _)) = names.get(&id) {
+        return Ok(Some(name.clone()));
+    }
+    match store.history().branch(id).map_err(args::history)? {
+        Some(branch) => {
+            let name = branch.name.as_str().to_owned();
+            names.insert(id, (name.clone(), branch.head_commit));
+            Ok(Some(name))
+        }
+        None => Ok(None),
+    }
+}
+
 /// The snapshot answer, or `unchanged` when `since` names its version.
 pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) -> Answer {
     let stack = super::args::project(store, args)?;
-    let mut page = store
+    let page = store
         .history()
         .branches(
             stack.id,
@@ -114,30 +137,17 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
         .filter(|branch| branch.name.as_str() != MAIN)
         .cloned()
         .collect::<Vec<_>>();
+    // Names are seeded from the displayed page only. The snapshot used to
+    // follow every Branch continuation here, so a cheap status call paid
+    // one provider page per ~81 Branches before answering anything. Names
+    // outside the page resolve lazily, at the single site that needs them.
     let mut names = BTreeMap::new();
-    loop {
-        names.extend(page.records.iter().map(|branch| {
-            (
-                branch.id,
-                (branch.name.as_str().to_owned(), branch.head_commit),
-            )
-        }));
-        match page.continuation.take() {
-            Some(cursor) => {
-                page = store
-                    .history()
-                    .branches(
-                        stack.id,
-                        &layerfs_history::Page {
-                            cursor: Some(cursor),
-                            limit: MAXIMUM_PAGE_RECORDS,
-                        },
-                    )
-                    .map_err(args::history)?;
-            }
-            None => break,
-        }
-    }
+    names.extend(page.records.iter().map(|branch| {
+        (
+            branch.id,
+            (branch.name.as_str().to_owned(), branch.head_commit),
+        )
+    }));
     // The page is bounded, but a Workspace may be mounted on a Branch outside
     // it. Resolve just those mounted identities, so the listing does not
     // depend on how many Branches the project has. The page still reports
@@ -146,13 +156,7 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
         if view.binding.branch.stack != stack.id {
             continue;
         }
-        let id = view.binding.branch.id;
-        if names.contains_key(&id) {
-            continue;
-        }
-        if let Some(branch) = store.history().branch(id).map_err(args::history)? {
-            names.insert(id, (branch.name.as_str().to_owned(), branch.head_commit));
-        }
+        branch_name(store, &mut names, view.binding.branch.id)?;
     }
     let mut spent = 0usize;
     let mut take = |value: SdkValue| {
@@ -190,9 +194,10 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
     let mut next: Option<LayerId> = Some(stack.head_layer);
     while let Some(id) = next {
         let record = args::layer(store, id)?;
-        let source = record
-            .source_branch
-            .and_then(|branch| names.get(&branch).map(|(name, _)| name.clone()));
+        let source = match record.source_branch {
+            Some(branch) => branch_name(store, &mut names, branch)?,
+            None => None,
+        };
         let value = layer_value(&record, source.as_deref());
         if layer_spent + value_cost(&value) > LAYER_BUDGET {
             break;
@@ -238,12 +243,11 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
         let mut rejected = false;
         for record in &page.records {
             if seen.insert(record.id) {
-                let name = record
-                    .meta
-                    .branch
-                    .and_then(|id| names.get(&id))
-                    .map(|n| n.0.as_str());
-                let value = commit_value_with_budget(record, name, BUDGET);
+                let name = match record.meta.branch {
+                    Some(id) => branch_name(store, &mut names, id)?,
+                    None => None,
+                };
+                let value = commit_value_with_budget(record, name.as_deref(), BUDGET);
                 if spent + value_cost(&value) > BUDGET {
                     rejected = true;
                     break;

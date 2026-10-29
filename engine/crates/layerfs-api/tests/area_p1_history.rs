@@ -197,7 +197,7 @@ fn graph_budget_short_pages_traverse_the_bounded_walk() {
     expected.reverse();
     let first = graph(&fixture, "budget", 1000, 0);
     assert!(graph_ids(&first).len() < 1000);
-    assert_eq!(first.get_bool("hasMore"), true);
+    assert!(first.get_bool("hasMore"));
     assert_eq!(
         first.get_int("nextPagePos"),
         Some(graph_ids(&first).len() as i64)
@@ -208,7 +208,7 @@ fn graph_budget_short_pages_traverse_the_bounded_walk() {
         1000,
         first.get_int("nextPagePos").unwrap(),
     );
-    assert_eq!(second.get_bool("hasMore"), false);
+    assert!(!second.get_bool("hasMore"));
     assert_eq!(second.get("nextPagePos"), Some(&SdkValue::Null));
     assert_eq!([graph_ids(&first), graph_ids(&second)].concat(), expected);
     fixture.cleanup();
@@ -272,7 +272,7 @@ fn changed_paths_uses_parent_base_layer_or_empty_tree() {
             ("name", text("parentless")),
         ],
     );
-    assert_eq!(merged.get_bool("fastForward"), false);
+    assert!(!merged.get_bool("fastForward"));
     let merge_id = merged.get_text("head").unwrap();
     let merge_changed = changed(&fixture, merge_id, 50, 0);
     assert_eq!(merge_changed.get("parent"), Some(&SdkValue::Null));
@@ -324,7 +324,7 @@ fn changed_paths_budget_short_pages_return_every_root_path() {
         .to_owned();
     let first = changed(&fixture, &commit, 1000, 0);
     assert!(support::items(&first).len() < 1000);
-    assert_eq!(first.get_bool("hasMore"), true);
+    assert!(first.get_bool("hasMore"));
     assert_eq!(
         first.get_int("nextPagePos"),
         Some(support::items(&first).len() as i64)
@@ -335,7 +335,7 @@ fn changed_paths_budget_short_pages_return_every_root_path() {
         1000,
         first.get_int("nextPagePos").unwrap(),
     );
-    assert_eq!(second.get_bool("hasMore"), false);
+    assert!(!second.get_bool("hasMore"));
     assert_eq!(second.get("nextPagePos"), Some(&SdkValue::Null));
     assert_eq!(
         [support::paths(&first), support::paths(&second)].concat(),
