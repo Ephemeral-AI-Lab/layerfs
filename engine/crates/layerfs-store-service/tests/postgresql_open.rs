@@ -1,8 +1,8 @@
 //! #506: the Store service opens a PostgreSQL Store through the same path as
 //! a SQLite one. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it.
 #![cfg(feature = "postgresql")]
-use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_history::records::StackInitialization;
+use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{
     BackendSelection, Handles, PersistenceConfig, PostgresHandles, PostgresSelection,
     SqlitePersistenceProfile,
@@ -66,7 +66,13 @@ fn a_postgresql_store_opens_through_the_store_open_path() {
         .unwrap();
         assert!(opened.sqlite_version.starts_with("postgresql "));
         assert_eq!(
-            opened.store.history().layer_stack(stack).unwrap().unwrap().id,
+            opened
+                .store
+                .history()
+                .layer_stack(stack)
+                .unwrap()
+                .unwrap()
+                .id,
             stack
         );
         opened.store.producer().unwrap();
