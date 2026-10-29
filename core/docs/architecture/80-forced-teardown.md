@@ -14,8 +14,10 @@ The daemon half is [`control/force.rs`](../../crates/layerfs-daemon/src/control/
 The connection half (the abort write, the terminal fence and the forced drain)
 belongs to Fuse and is described in
 [native request service](75-native-request-service.md#terminal-fence-and-gated-ports).
-The normal path is unchanged; see
-[native mount session](76-native-mount-session.md#normal-unmount).
+A normal unmount that stalls at `Join` makes the same single abort write
+itself ([stalled normal unmount](#stalled-normal-unmount)); `ForceUnmount`
+remains for the one stalled custody that could not be aborted, and for
+aborting a live connection without waiting for its processes.
 
 ## Request and replies
 
@@ -122,11 +124,24 @@ A normal unmount can detach successfully and still stop at `Join`: when
 another mount of the same superblock outlives the detach, for example a copy
 in a mount namespace made by a process outside the Sandbox, the kernel never
 ends the connection, so its receive loops stay blocked in their reads
-(issues #426 and #460). The entry keeps that undrained session as `Retained`
-at `Join` with no forced facts, and every later normal `Unmount` returns that
-custody unchanged.
+(issues #426 and #460). The unmount now makes one abort write itself
+(`NativeSession::abort_detached`) and drains again, so the connection ends and
+the unmount completes with `Unmounted`.
 
-`ForceUnmount` is the one way out. It takes the session back and makes the
+When no abort control is bound, the entry stays `Retained` at `Join` with
+no abort facts. A failed or short write stops at `Abort`, preserving the
+original errno or count in `detail` and the disposition in `forced`. An accepted
+write followed by a failed second drain keeps that drain's stage and records
+`abort: Written`. Revoke and Close failures also retain these facts. Every
+attempted abort records `detach: Detached` and `commit: Absent`, since normal
+admission established no Commit custody before the plain detach.
+
+A later normal or forced unmount returns the retained stage, detail and abort
+facts unchanged. An unavailable control cannot be forced, and a consumed
+control is never written again. Successful completion still replies `Unmounted`.
+
+`ForceUnmount` remains for a stalled custody that is still forceable (one
+whose abort was not attempted) and for a live connection. It takes the session back and makes the
 same sequence with two differences. Step 1 is `NativeSession::abort_detached`,
 which refuses unless the connection is detached and not yet aborted. Step 2
 makes no detach, because the normal unmount's plain detach is the

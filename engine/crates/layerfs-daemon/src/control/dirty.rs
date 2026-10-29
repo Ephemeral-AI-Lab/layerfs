@@ -9,7 +9,9 @@
 //! no change: an inode created locally that no name binds any more, and a
 //! base directory whose mode equals the base, since its names are their own
 //! rows and Commit ignores its mtime. A path is found among the active
-//! bindings first, then by a bounded walk of the local base. At most
+//! bindings first, then by a bounded walk of the local base. Both indexed
+//! windows are streamed to the end in bounded pages and only paths are
+//! retained, so the number of no-op rows is not a cap on the check. At most
 //! [`PATHS`] paths are named; the report says when some are not. The check is
 //! an observation before terminal admission, so a write that lands after it
 //! is closed with the Workspace.
@@ -23,8 +25,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Paths one report names.
 const PATHS: usize = 256;
-/// Changed rows one report reads, inodes and names each.
-const ROWS: usize = 4096;
 /// Base directories one path walk may list.
 const WALK: usize = 4096;
 /// Deepest local path resolved.
@@ -82,25 +82,40 @@ impl Service {
             return Ok(None);
         }
         let mut truncated = false;
+        // A changed name binding is a change a Commit keeps: a new name, a
+        // rename or a whiteout. One row names one path, so more than [`PATHS`]
+        // rows prove the report cannot list them all and the scan stops.
         let mut names = Vec::new();
         let mut after: Option<(u64, Vec<u8>)> = None;
-        while names.len() < ROWS {
+        while !truncated {
             let window = self.job(route, |client, route| {
                 client.active_directory_entries(route, after.clone())
             })?;
             let Some(last) = window.last() else { break };
             after = Some((last.parent, last.name.clone()));
             names.extend(window);
+            truncated = names.len() > PATHS;
         }
+        let reader = self.store.ports(binding.scope);
+        let failed = |error: layerfs_content::ContentError| {
+            Failure::Workspace(layerfs_workspace::WorkspaceError::Service(Box::new(error)))
+        };
+        let base = ObjectId::from_bytes(&state.base_root).map_err(failed)?;
+        let tree = TreeTable::open(reader.as_ref(), FilesystemRootId(base)).map_err(failed)?;
+        let mut work = AttributeReadWork::default();
+        // Changed inodes are streamed to the end too. A locally created inode
+        // nothing binds any more, and a base directory whose mode equals the
+        // base, are no change, and however many such rows exist they neither
+        // refuse the Unmount nor mark the report truncated. Base directories
+        // are looked up one window of serials at a time.
         let mut files = Vec::new();
-        let mut directories = Vec::new();
-        let mut rows = 0;
+        let mut modes = Vec::new();
         let mut cursor = 0;
-        while rows < ROWS {
+        while !truncated {
             let window = self.job(route, |client, route| client.active_inodes(route, cursor))?;
             let Some(last) = window.last() else { break };
             cursor = last.serial;
-            rows += window.len();
+            let mut directories = Vec::new();
             for inode in window {
                 let created = inode.born > state.installed as u64;
                 if inode.kind != layerfs_overlay::InodeKind::Directory {
@@ -111,29 +126,26 @@ impl Service {
                     directories.push((inode.serial, u32::from(inode.mode)));
                 }
             }
-        }
-        truncated |= names.len() >= ROWS || rows >= ROWS;
-        let reader = self.store.ports(binding.scope);
-        let failed = |error: layerfs_content::ContentError| {
-            Failure::Workspace(layerfs_workspace::WorkspaceError::Service(Box::new(error)))
-        };
-        let base = ObjectId::from_bytes(&state.base_root).map_err(failed)?;
-        let tree = TreeTable::open(reader.as_ref(), FilesystemRootId(base)).map_err(failed)?;
-        let mut work = AttributeReadWork::default();
-        let mut modes = Vec::new();
-        for (serial, mode) in directories {
-            let same = match tree.value(reader.as_ref(), serial).map_err(failed)? {
-                Some(value) => {
-                    read_portable(reader.as_ref(), value.metadata_root, value.kind, &mut work)
-                        .map_err(failed)?
-                        .mode
-                        == mode
+            let serials = directories
+                .iter()
+                .map(|(serial, _)| *serial)
+                .collect::<Vec<_>>();
+            let values = tree.values(reader.as_ref(), &serials).map_err(failed)?;
+            for ((serial, mode), value) in directories.into_iter().zip(values) {
+                let same = match value {
+                    Some(value) => {
+                        read_portable(reader.as_ref(), value.metadata_root, value.kind, &mut work)
+                            .map_err(failed)?
+                            .mode
+                            == mode
+                    }
+                    None => false,
+                };
+                if !same {
+                    modes.push(serial);
                 }
-                None => false,
-            };
-            if !same {
-                modes.push(serial);
             }
+            truncated = files.len() + modes.len() > PATHS;
         }
         if names.is_empty()
             && files.is_empty()

@@ -1,4 +1,7 @@
 //! Linux half of normal unmount: plain detach once, then the drain barrier.
+//! A drain that stops at `Join` makes the one abort write a forced unmount
+//! would and drains again, so a connection that outlived its mount is ended
+//! rather than kept (#426, #460).
 use super::{
     kernel::Kernel,
     registry::bound_mut,
@@ -7,10 +10,29 @@ use super::{
 };
 use crate::store::BoundWorkspace;
 use layerfs_bridge::control::{
-    Activity, ControlCode, ForcedFacts, MountPhase, TeardownStage, WorkspaceToken,
+    AbortDisposition, Activity, CommitKnowledge, ControlCode, DetachDisposition, ForcedFacts,
+    MountPhase, TeardownStage, WorkspaceToken,
 };
-use layerfs_fuse::session::{Detach, DrainStage, SessionObserver};
+use layerfs_fuse::{
+    mount::AbortWrite,
+    session::{Detach, DrainStage, Forced, SessionObserver},
+};
 use std::{fmt, sync::Arc};
+
+/// Abort effects after normal admission, which established no Commit custody
+/// and completed the one plain detach before attempting the write.
+pub(super) fn detached_abort_facts(forced: Option<Forced>) -> Option<ForcedFacts> {
+    forced.map(|forced| ForcedFacts {
+        abort: match forced.abort {
+            AbortWrite::Written => AbortDisposition::Written,
+            AbortWrite::Short(_) => AbortDisposition::Short,
+            AbortWrite::Failed(_) => AbortDisposition::Failed,
+        },
+        detach: DetachDisposition::Detached,
+        commit: CommitKnowledge::Absent,
+        fenced: forced.terminal_replies,
+    })
+}
 
 /// Terminal admission over a connection-owning entry. No daemon-side request
 /// count refuses here: the kernel's own reversible answer is the fence, because
@@ -89,21 +111,42 @@ impl Service {
         self.leaving(token, MountPhase::Draining);
         let drained = match session.drain() {
             Ok(drained) => drained,
-            Err(undrained) => {
-                let stopped = stage(undrained.stage);
-                let detail = format!(
-                    "connection drain stopped at {:?}: loops {:?}, work {:?}",
-                    undrained.stage, undrained.loops, undrained.work
-                );
-                // Detached yet unjoined: the connection outlived its mount,
-                // and one forced unmount may still end it.
-                let evidence = match undrained.stage {
-                    DrainStage::Join => Evidence::Stalled(undrained),
-                    _ => Evidence::Other(undrained),
-                };
-                return Err(self.keep(token, stopped, detail, Some(observer), evidence, None));
-            }
+            // Detached yet unjoined: the connection outlived its mount because
+            // another mount namespace holds a copy of it (an engine or VM agent
+            // outside the Sandbox). Make the same one abort write a forced
+            // unmount makes, then drain again; a connection whose control is
+            // unusable, or one that still stops, keeps its custody (#426, #460).
+            Err(undrained) => match undrained.end_stalled() {
+                Ok(drained) => drained,
+                Err(undrained) => {
+                    let facts = detached_abort_facts(undrained.forced);
+                    let (stopped, detail) = match undrained.forced.map(|forced| forced.abort) {
+                        Some(AbortWrite::Failed(errno)) => (
+                            TeardownStage::Abort,
+                            format!("abort write: {errno}; nothing further attempted"),
+                        ),
+                        Some(AbortWrite::Short(count)) => (
+                            TeardownStage::Abort,
+                            format!("abort write returned {count} of 1 byte; nothing further attempted"),
+                        ),
+                        abort => (
+                            stage(undrained.stage),
+                            format!(
+                                "connection drain stopped at {:?}: abort {abort:?}, abort_bound {}, loops {:?}, work {:?}",
+                                undrained.stage, observer.facts().abort_bound,
+                                undrained.loops, undrained.work
+                            ),
+                        ),
+                    };
+                    let evidence = match undrained.stage {
+                        DrainStage::Join => Evidence::Stalled(undrained),
+                        _ => Evidence::Other(undrained),
+                    };
+                    return Err(self.keep(token, stopped, detail, Some(observer), evidence, facts));
+                }
+            },
         };
+        let facts = detached_abort_facts(drained.forced);
         // Drain barrier holds: one fixed logical mark, then indexed retirement.
         match self.job(
             workspace.route(),
@@ -117,7 +160,7 @@ impl Service {
                     failure.wire().detail,
                     Some(observer),
                     Box::new((failure, drained)),
-                    None,
+                    facts,
                 ));
             }
         };
