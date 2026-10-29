@@ -381,6 +381,190 @@ fn attributed_cost_makes_short_list_and_graph_pages() {
     fixture.cleanup();
 }
 
+fn merge_meta(units: Vec<layerfs_content::merge::MergeUnit>) -> CommitMeta {
+    CommitMeta {
+        message: Some("merge with diagnostics".into()),
+        lww: (0..32)
+            .map(|n| layerfs_content::merge::LwwDecision {
+                path: format!("/source/{n}/{}", "p".repeat(80)),
+                kept_ours: true,
+                deleted: false,
+                rule: format!("rule-{n}-{}", "r".repeat(32)),
+            })
+            .collect(),
+        units,
+        ..CommitMeta::new(CommitVia::Merge)
+    }
+}
+
+fn small_units(commit: usize) -> Vec<layerfs_content::merge::MergeUnit> {
+    (0..4)
+        .map(|unit| layerfs_content::merge::MergeUnit {
+            name: format!("unit-{commit}-{unit}"),
+            patterns: (0..8)
+                .map(|pattern| format!("/unit/{unit}/{pattern}/{}", "u".repeat(180)))
+                .collect(),
+        })
+        .collect()
+}
+
+fn merge_pages(
+    fixture: &Fixture,
+    branch: &str,
+    graphed: bool,
+    limit: i64,
+    expected: &[String],
+) -> Vec<SdkValue> {
+    let mut ids = std::collections::HashSet::new();
+    let mut found = Vec::new();
+    let mut pages = Vec::new();
+    let mut pos = 0;
+    loop {
+        assert!(pages.len() <= expected.len(), "paging did not terminate");
+        let page = if graphed {
+            fixture.call(
+                "branch.graph",
+                vec![
+                    ("branch", text(branch)),
+                    ("pageSize", SdkValue::Int(limit)),
+                    ("pagePos", SdkValue::Int(pos)),
+                ],
+            )
+        } else {
+            fixture.call(
+                "branch.list_commits",
+                vec![
+                    ("branch", text(branch)),
+                    ("pageSize", SdkValue::Int(limit)),
+                    ("pagePos", SdkValue::Int(pos)),
+                ],
+            )
+        };
+        let answer = Answer {
+            id: 1,
+            reply: Reply::Sdk(page.clone()),
+        };
+        let encoded = answer.encode().unwrap();
+        assert!(encoded.len() <= 65_519, "control bytes: {}", encoded.len());
+        assert_eq!(Answer::decode(&encoded).unwrap(), answer);
+        let values = if graphed {
+            match page.get("commits") {
+                Some(SdkValue::List(values)) => values,
+                other => panic!("graph commits: {other:?}"),
+            }
+        } else {
+            support::items(&page)
+        };
+        assert!(!values.is_empty(), "empty page at {pos}: {page:?}");
+        for value in values {
+            let id = value.get_text("id").unwrap().to_owned();
+            assert!(ids.insert(id.clone()), "repeated Commit {id}");
+            found.push(id);
+        }
+        match page.get_int("nextPagePos") {
+            Some(next) => {
+                assert!(page.get_bool("hasMore"));
+                assert!(next > pos, "cursor stalled at {pos}");
+                pos = next;
+            }
+            None => {
+                assert!(!page.get_bool("hasMore"));
+                pages.push(page);
+                break;
+            }
+        }
+        pages.push(page);
+    }
+    assert_eq!(found, expected);
+    pages
+}
+
+#[test]
+fn merge_diagnostics_use_actual_cost_and_page_without_repeats() {
+    let fixture = Fixture::new("area-p7-merge-budget", |_source| 0);
+    fixture.fork("merge-budget");
+    let branch = BranchId::named(
+        LayerStackId::from_authority([23; 16]),
+        &HistoryName::new("merge-budget").unwrap(),
+    );
+    let mut expected = Vec::new();
+    for n in 0..8 {
+        let record = direct_commit(
+            &fixture,
+            branch,
+            ObjectId::for_bytes(format!("P7 merge budget root {n}").as_bytes()),
+            merge_meta(small_units(n)),
+        )
+        .unwrap();
+        expected.push(record.id.to_string());
+    }
+    expected.reverse();
+    for graphed in [false, true] {
+        let pages = merge_pages(&fixture, "merge-budget", graphed, 1000, &expected);
+        assert!(pages.len() > 1, "actual costs must shorten the pages");
+        for page in pages {
+            let values = if graphed {
+                match page.get("commits") {
+                    Some(SdkValue::List(values)) => values,
+                    other => panic!("graph commits: {other:?}"),
+                }
+            } else {
+                support::items(&page)
+            };
+            for value in values {
+                assert!(matches!(value.get("units"), Some(SdkValue::List(units)) if !units.is_empty()));
+                assert_eq!(value.get("unitsTruncated"), Some(&SdkValue::Bool(false)));
+                assert!(matches!(value.get("lww"), Some(SdkValue::List(lww)) if !lww.is_empty()));
+            }
+        }
+    }
+    fixture.cleanup();
+}
+
+#[test]
+fn oversized_units_are_disclosed_and_single_item_pages_advance() {
+    let fixture = Fixture::new("area-p7-oversized-units", |_source| 0);
+    fixture.fork("oversized-units");
+    let branch = BranchId::named(
+        LayerStackId::from_authority([23; 16]),
+        &HistoryName::new("oversized-units").unwrap(),
+    );
+    let small = direct_commit(
+        &fixture,
+        branch,
+        ObjectId::for_bytes(b"P7 small merge root"),
+        merge_meta(small_units(0)),
+    )
+    .unwrap();
+    let oversized = direct_commit(
+        &fixture,
+        branch,
+        ObjectId::for_bytes(b"P7 oversized merge root"),
+        merge_meta(vec![layerfs_content::merge::MergeUnit {
+            name: "oversized".into(),
+            patterns: vec![format!("/{}", "u".repeat(70 * 1024))],
+        }]),
+    )
+    .unwrap();
+    let expected = vec![oversized.id.to_string(), small.id.to_string()];
+    for graphed in [false, true] {
+        let pages = merge_pages(&fixture, "oversized-units", graphed, 1, &expected);
+        assert_eq!(pages.len(), 2);
+        let first = if graphed {
+            match pages[0].get("commits") {
+                Some(SdkValue::List(values)) => &values[0],
+                other => panic!("graph commits: {other:?}"),
+            }
+        } else {
+            &support::items(&pages[0])[0]
+        };
+        assert_eq!(first.get("units"), None);
+        assert_eq!(first.get("unitsTruncated"), Some(&SdkValue::Bool(true)));
+        assert!(matches!(first.get("lww"), Some(SdkValue::List(lww)) if !lww.is_empty()));
+    }
+    fixture.cleanup();
+}
+
 #[test]
 fn maximal_commit_record_matches_declared_encoded_width() {
     let record = CommitRecord {

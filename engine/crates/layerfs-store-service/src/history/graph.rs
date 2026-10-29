@@ -1,8 +1,9 @@
 //! Branch-owning history, its fork point and current main publication state.
 use super::branch::{item, main_item};
-use super::lookup::{self as args, commit_value, hex, history, Answer};
+use super::lookup::{self as args, hex, history, Answer};
 use crate::store::Store;
 use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::sdk_values::{commit_value_with_budget, value_cost};
 use layerfs_history::{
     CommitHistoryRequest, CommitId, CommitRecord, LayerHistoryRequest, LayerStackRecord, NodeId,
     MAXIMUM_PAGE_RECORDS,
@@ -48,20 +49,24 @@ impl<'a> Page<'a> {
             self.seen += 1;
             return true;
         }
-        let cost = record.meta.message.as_ref().map_or(0, String::len)
-            + record.meta.author.as_ref().map_or(0, String::len)
-            + layerfs_history::labels::encode(&record.meta.labels).len()
-            + 1024;
-        if self.items.len() == self.limit || self.spent + cost > crate::read::reads::REPLY_BUDGET {
+        let published = self.all_published || self.published.contains(&record.id);
+        let mut value = commit_value_with_budget(
+            record,
+            Some(self.branch),
+            crate::read::reads::REPLY_BUDGET,
+        );
+        if let SdkValue::Map(fields) = &mut value {
+            fields.push(("published".into(), SdkValue::Bool(published)));
+        }
+        let cost = value_cost(&value);
+        if !self.items.is_empty()
+            && (self.items.len() == self.limit
+                || self.spent + cost > crate::read::reads::REPLY_BUDGET)
+        {
             self.more = true;
             return false;
         }
         self.spent += cost;
-        let published = self.all_published || self.published.contains(&record.id);
-        let mut value = commit_value(record, Some(self.branch));
-        if let SdkValue::Map(fields) = &mut value {
-            fields.push(("published".into(), SdkValue::Bool(published)));
-        }
         self.items.push(value);
         true
     }

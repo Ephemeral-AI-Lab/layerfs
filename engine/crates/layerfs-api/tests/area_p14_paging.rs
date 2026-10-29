@@ -8,7 +8,11 @@ mod installed;
 mod support;
 
 use layerfs_bridge::control::SdkValue;
-use layerfs_history::{BranchId, HistoryName, LayerStackId};
+use layerfs_bridge::sdk_values::hex;
+use layerfs_history::{
+    BranchId, CommitHistoryRequest, CommitId, CommitMeta, CommitOutcome, CommitVia, HistoryName,
+    LayerStackId,
+};
 use layerfs_store_service::operator::{self, WorkspaceView};
 use support::Fixture;
 
@@ -121,6 +125,219 @@ fn branch_pages_include_main_and_resume_after_returned_items() {
         branch_names(&first).len(),
         first.get_int("nextPagePos").unwrap()
     );
+    fixture.cleanup();
+}
+
+#[test]
+fn operator_snapshot_discloses_oversized_units_within_the_control_budget() {
+    let fixture = Fixture::new("area-p14-commit-budget", |_source| 0);
+    fixture.fork("operator-budget");
+    let branch = BranchId::named(
+        LayerStackId::from_authority([23; 16]),
+        &HistoryName::new("operator-budget").unwrap(),
+    );
+    let binding = fixture
+        .service
+        .store
+        .history()
+        .branch_snapshot(branch)
+        .unwrap()
+        .unwrap();
+    let outcome = fixture
+        .service
+        .store
+        .history()
+        .commit_branch(&layerfs_history::CommitRequest {
+            branch,
+            expected_head: binding.branch.head_commit,
+            expected_base: binding.branch.base_layer,
+            expected_root: binding.effective_root,
+            candidate_root: layerfs_content::ObjectId::for_bytes(b"P14 oversized units"),
+            profile: binding.profile,
+            scope: binding.scope,
+            second_parent: None,
+            meta: layerfs_history::CommitMeta {
+                units: vec![layerfs_content::merge::MergeUnit {
+                    name: "oversized".into(),
+                    patterns: vec![format!("/{}", "u".repeat(70 * 1024))],
+                }],
+                ..layerfs_history::CommitMeta::new(layerfs_history::CommitVia::Merge)
+            },
+            force: false,
+        })
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        layerfs_history::CommitOutcome::Committed { .. }
+    ));
+    let value = snapshot(&fixture, &[]);
+    let answer = layerfs_bridge::control::Answer {
+        id: 1,
+        reply: layerfs_bridge::control::Reply::Sdk(value.clone()),
+    };
+    let encoded = answer.encode().unwrap();
+    assert!(encoded.len() <= 65_519, "control bytes: {}", encoded.len());
+    assert_eq!(layerfs_bridge::control::Answer::decode(&encoded).unwrap(), answer);
+    let commits = match value.get("commits") {
+        Some(SdkValue::List(commits)) => commits,
+        other => panic!("commits: {other:?}"),
+    };
+    assert_eq!(commits.len(), 1);
+    assert_eq!(commits[0].get("units"), None);
+    assert_eq!(commits[0].get("unitsTruncated"), Some(&SdkValue::Bool(true)));
+    fixture.cleanup();
+}
+
+fn branch_id(name: &str) -> BranchId {
+    BranchId::named(
+        LayerStackId::from_authority([23; 16]),
+        &HistoryName::new(name).unwrap(),
+    )
+}
+
+fn small_meta() -> CommitMeta {
+    CommitMeta::new(CommitVia::Merge)
+}
+
+fn big_meta() -> CommitMeta {
+    CommitMeta {
+        message: Some("m".repeat(4000)),
+        author: Some("a".repeat(4000)),
+        labels: vec!["l".repeat(1000); 3],
+        ..CommitMeta::new(CommitVia::Merge)
+    }
+}
+
+fn commit_to(fixture: &Fixture, name: &str, meta: CommitMeta, root: &[u8]) -> CommitId {
+    let branch = branch_id(name);
+    let binding = fixture
+        .service
+        .store
+        .history()
+        .branch_snapshot(branch)
+        .unwrap()
+        .unwrap();
+    let outcome = fixture
+        .service
+        .store
+        .history()
+        .commit_branch(&layerfs_history::CommitRequest {
+            branch,
+            expected_head: binding.branch.head_commit,
+            expected_base: binding.branch.base_layer,
+            expected_root: binding.effective_root,
+            candidate_root: layerfs_content::ObjectId::for_bytes(root),
+            profile: binding.profile,
+            scope: binding.scope,
+            second_parent: None,
+            meta,
+            force: false,
+        })
+        .unwrap();
+    match outcome {
+        CommitOutcome::Committed { record, .. } => record.id,
+        other => panic!("commit to {name} was not committed: {other:?}"),
+    }
+}
+
+fn snapshot_commit_ids(value: &SdkValue) -> Vec<String> {
+    match value.get("commits") {
+        Some(SdkValue::List(commits)) => commits
+            .iter()
+            .map(|commit| commit.get_text("id").unwrap().to_owned())
+            .collect(),
+        other => panic!("commits: {other:?}"),
+    }
+}
+
+/// Retro finding 1 review, BLOCKING: when a Branch's newest Commit does not
+/// fit the remaining snapshot budget and older Commits remain, the snapshot
+/// previously pushed both restart (Null) and the provider cursor for the
+/// same Branch, a duplicate map key the control decoder rejects. The fix
+/// pushes exactly one continuation: restart, which is exact here because
+/// provider pages hold one Commit each, so nothing was emitted for the
+/// Branch yet and restart yields the rejected Commit first.
+#[test]
+fn snapshot_rejected_commit_yields_one_restart_continuation() {
+    let fixture = Fixture::new("area-p14-rejected-continuation", |_source| 0);
+    fixture.fork("mmm-target");
+    let old = commit_to(&fixture, "mmm-target", small_meta(), b"rejected-old");
+    let rejected = commit_to(&fixture, "mmm-target", big_meta(), b"rejected-new");
+    fixture.fork("zzz-control");
+    let control = commit_to(&fixture, "zzz-control", small_meta(), b"rejected-control");
+    // Add small-commit branches (name order before the target) until the
+    // snapshot rejects the target's newest Commit while still emitting the
+    // control Commit. Control's presence proves room >= 1 at the target's
+    // turn, so the target's absence proves rejection, not a zero room.
+    let mut added = 0;
+    let value = loop {
+        let value = snapshot(&fixture, &[]);
+        let ids = snapshot_commit_ids(&value);
+        let has_rejected = ids.iter().any(|id| id == &hex(rejected.as_slice()));
+        let has_control = ids.iter().any(|id| id == &hex(control.as_slice()));
+        if !has_rejected && has_control {
+            break value;
+        }
+        // Control missing while the target is still emitted is transient:
+        // the emitted target Commit itself consumes the room control needs.
+        // Once the target is rejected, its cost stops accruing and control
+        // is emitted again. Only both missing means room hit zero at the
+        // target itself, i.e. a real overshoot.
+        assert!(
+            has_rejected || has_control,
+            "overshot: neither target nor control emitted after {added} small branches"
+        );
+        let name = format!("aaa-s{added:03}");
+        fixture.fork(&name);
+        let root = format!("rejected-small-{added}");
+        commit_to(&fixture, &name, small_meta(), root.as_bytes());
+        added += 1;
+        assert!(added <= 60, "never reached the rejection regime");
+    };
+    // 1. The whole reply decodes: no duplicate map key anywhere.
+    let answer = layerfs_bridge::control::Answer {
+        id: 1,
+        reply: layerfs_bridge::control::Reply::Sdk(value.clone()),
+    };
+    let encoded = answer.encode().unwrap();
+    assert_eq!(
+        layerfs_bridge::control::Answer::decode(&encoded).unwrap(),
+        answer
+    );
+    // 2. Exactly one continuation, for the target, and it is restart.
+    let more = match value.get("more") {
+        Some(SdkValue::Map(entries)) => entries,
+        other => panic!("more: {other:?}"),
+    };
+    assert_eq!(more.len(), 1, "more: {more:?}");
+    assert_eq!(more[0].0, "mmm-target");
+    assert_eq!(more[0].1, SdkValue::Null);
+    // 3. Restart yields the rejected Commit first, then the older one, each
+    // exactly once: neither skipped nor repeated.
+    let mut ids = Vec::new();
+    let mut cursor = None;
+    for _ in 0..16 {
+        let page = fixture
+            .service
+            .store
+            .history()
+            .commit_history(&CommitHistoryRequest {
+                branch: branch_id("mmm-target"),
+                start: None,
+                cursor,
+                limit: 128,
+            })
+            .unwrap();
+        ids.extend(page.records.iter().map(|record| record.id));
+        match page.continuation {
+            Some(next) => cursor = Some(next),
+            None => break,
+        }
+    }
+    assert_eq!(&ids[..2], &[rejected, old]);
+    let unique: std::collections::HashSet<_> = ids.iter().collect();
+    assert_eq!(unique.len(), ids.len(), "restart repeated a commit");
+    println!("P14_REJECTED target_more=Null restart_first_is_rejected=true small_branches={added}");
     fixture.cleanup();
 }
 
