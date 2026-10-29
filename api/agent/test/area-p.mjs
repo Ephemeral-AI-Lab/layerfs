@@ -1,11 +1,11 @@
-// P1 + P14 SDK/CLI agreement over the stand-in binding. Real-Store coverage:
-// layerfs-api/tests/area_p1_history.rs and area_p14_paging.rs.
+// Area P SDK/CLI agreement over the stand-in binding. Real-Store coverage:
+// layerfs-api/tests/area_p*.rs.
 //   /usr/bin/node api/agent/test/area-p.mjs
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { ENV, contains, plain } from "./fixture/cases.mjs";
-import { BUDGET_BRANCH_NAMES, CASES } from "./fixture/cases-area-p.mjs";
+import { BUDGET_BRANCH_NAMES, CASES, P8_REFS } from "./fixture/cases-area-p.mjs";
 
 const FAKE = fileURLToPath(new URL("./fixture/fake-native.cjs", import.meta.url));
 Object.assign(process.env, ENV, { LAYERFS_NATIVE: FAKE });
@@ -23,16 +23,25 @@ for (const c of CASES) {
   const before = native.calls.length;
   let result;
   let error;
+  process.env.CLI_FAKE_REFUSE = (c.refuse ?? []).join(",");
   try {
     result = await c.sdk(lf);
   } catch (thrown) {
     error = thrown;
+  } finally {
+    delete process.env.CLI_FAKE_REFUSE;
   }
   try {
-    assert.equal(error, undefined, `threw ${error?.message}`);
-    assert.deepEqual(native.calls.slice(before), [c.op], "binding calls");
-    assert.ok(contains(plain(native.args[before]), c.sent), `sent ${JSON.stringify(plain(native.args[before]))}`);
-    assert.deepEqual(plain(result), c.result);
+    assert.deepEqual(native.calls.slice(before), c.op ? [c.op] : [], "binding calls; no Workspace operation");
+    if (c.op) assert.ok(contains(plain(native.args[before]), c.sent), `sent ${JSON.stringify(plain(native.args[before]))}`);
+    if (c.refused) {
+      assert.ok(error, `no refusal; returned ${JSON.stringify(plain(result))}`);
+      assert.equal(error.name, "LayerFSError");
+      assert.deepEqual({ code: error.code, message: error.message, detail: plain(error.detail) }, c.refused);
+    } else {
+      assert.equal(error, undefined, `threw ${error?.message}`);
+      assert.deepEqual(plain(result), c.result);
+    }
   } catch (failure) {
     failures.push(`${c.name}: ${failure.message}`);
   }
@@ -65,6 +74,16 @@ try {
   assert.deepEqual(result.commit.labels, labels);
 } catch (failure) {
   failures.push(`P7 option boundaries: ${failure.message}`);
+}
+
+try {
+  const before = native.calls.length;
+  for (const options of [{ unknown: true }, { binary: "yes" }, null, [], "yes"]) {
+    await assert.rejects(lf.fs.read(P8_REFS.commit, "/file.txt", 1, 1, options), { code: "InvalidInput" });
+  }
+  assert.equal(native.calls.length, before, "invalid P8 options send nothing");
+} catch (failure) {
+  failures.push(`P8 option validation: ${failure.message}`);
 }
 
 native.branchList = BUDGET_BRANCH_NAMES;
@@ -100,7 +119,7 @@ try {
 
 await lf.close();
 if (failures.length) {
-  console.error(`FAIL area-p: ${failures.length} of ${CASES.length + 3}\n${failures.join("\n")}`);
+  console.error(`FAIL area-p: ${failures.length} of ${CASES.length + 4}\n${failures.join("\n")}`);
   process.exit(1);
 }
-console.log(`PASS area-p (${CASES.length} cases + 2 P7 validation groups + 1 budget traversal)`);
+console.log(`PASS area-p (${CASES.length} cases + 2 P7 validation groups + 1 P8 validation group + 1 budget traversal)`);

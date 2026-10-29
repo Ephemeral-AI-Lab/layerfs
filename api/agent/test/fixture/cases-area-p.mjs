@@ -1,6 +1,5 @@
-// P14 branch/workspace paging matrices + P1 graph/changed_paths cases, in the
-// shared op/sent/result triple shape. `prepare` selects the stand-in's data;
-// `sdk` makes the one binding call described by the triple.
+// Area P SDK/CLI cases in the shared op/sent/result triple shape. `prepare`
+// selects the stand-in's data; `sdk` makes the one binding call in the triple.
 
 const branchNames = (count) => [
   ...Array.from({ length: count - 1 }, (_, n) => `branch-${String(n).padStart(3, "0")}`),
@@ -179,4 +178,85 @@ export const P7_CASES = [
   },
 ];
 
-export const CASES = [...branches, ...workspaces, ...P1_CASES, ...P7_CASES];
+export const P8_REFS = {
+  commit: `12${"a".repeat(64)}`,
+  layer: `32${"b".repeat(64)}`,
+  unknownCommit: `12${"c".repeat(64)}`,
+  unknownLayer: `32${"d".repeat(64)}`,
+  badTag: `99${"e".repeat(64)}`,
+  nonhex: "z".repeat(66),
+};
+
+const p8Text = (ref) => ref === P8_REFS.commit ? "v1\n" : "v2\n";
+const p8Header = (ref, path) => ({ kind: "ok", snapshot: ref.slice(2, 14), root: `${ref === P8_REFS.commit ? "aa" : "bb"}`.repeat(33), path });
+const p8Items = (path) => {
+  const names = path === "/dir" ? [["inside.txt", "file"]] : [["binary.bin", "file"], ["dir", "dir"], ["file.txt", "file"], ["link", "symlink"], ["same.txt", "file"]];
+  return names.map(([name, type], index) => ({ name, path: `${path === "/" ? "" : path}/${name}`, type, inode: index + 2 }));
+};
+const p8List = (ref, path, pageSize, pagePos) => {
+  const items = p8Items(path).slice(pagePos, pagePos + pageSize);
+  const hasMore = pagePos + items.length < p8Items(path).length;
+  return { ...p8Header(ref, path), items, hasMore, nextPagePos: hasMore ? pagePos + items.length : null };
+};
+const p8Read = (ref, path, binary) => {
+  const content = path === "/binary.bin" ? Buffer.from([0, 255, 1, 10]) : Buffer.from(path === "/same.txt" ? "same\n" : p8Text(ref));
+  return { ...p8Header(ref, path), ...(binary ? { bytes: { base64: content.toString("base64") } } : { text: content.toString("utf8") }), startLine: 1, endLine: 1, lineTruncated: false, truncated: false, nextLine: null, size: content.length };
+};
+const p8ListCase = (ref, path, pageSize = 1, pagePos = 0) => ({
+  name: `P8 list ${ref.slice(2, 14)} ${path}`,
+  argv: ["fs", "list", ref, path, "--page-size", String(pageSize), "--page-pos", String(pagePos)],
+  sdk: (lf) => lf.fs.list(ref, path, pageSize, pagePos),
+  op: "fs.list",
+  sent: { branch: ref, path, pageSize, pagePos },
+  result: p8List(ref, path, pageSize, pagePos),
+});
+const p8StatCase = (ref) => ({
+  name: `P8 stat ${ref.slice(2, 14)}`,
+  argv: ["fs", "stat", ref, "/file.txt"],
+  sdk: (lf) => lf.fs.stat(ref, "/file.txt"),
+  op: "fs.stat",
+  sent: { branch: ref, path: "/file.txt" },
+  result: { ...p8Header(ref, "/file.txt"), type: "file", inode: 2, size: Buffer.byteLength(p8Text(ref)), mode: 420 },
+});
+const p8ReadCase = (name, ref, path, options = {}) => ({
+  name: `P8 ${name}`,
+  argv: ["fs", "read", ref, path, "--start-line", "1", "--end-line", "1", ...(options.binary ? ["--binary"] : [])],
+  sdk: (lf) => lf.fs.read(ref, path, 1, 1, options),
+  op: "fs.read",
+  sent: { branch: ref, path, startLine: 1, endLine: 1, binary: options.binary ?? false },
+  result: p8Read(ref, path, options.binary ?? false),
+});
+const p8Refusal = (name, ref, path, code, message, detail = null, options = {}) => ({
+  name: `P8 ${name}`,
+  argv: ["fs", "read", ref, path],
+  sdk: (lf) => lf.fs.read(ref, path, undefined, undefined, options),
+  op: "fs.read",
+  sent: { branch: ref, path, binary: false },
+  refused: { code, message: `${code}: ${message}`, detail },
+});
+
+export const P8_CASES = [
+  p8ListCase(P8_REFS.commit, "/"),
+  p8ListCase(P8_REFS.commit, "/dir"),
+  p8ListCase(P8_REFS.layer, "/"),
+  p8ListCase(P8_REFS.layer, "/dir"),
+  p8StatCase(P8_REFS.commit),
+  p8StatCase(P8_REFS.layer),
+  p8ReadCase("read Commit text", P8_REFS.commit, "/file.txt"),
+  p8ReadCase("read Layer text", P8_REFS.layer, "/file.txt"),
+  p8ReadCase("read Commit binary", P8_REFS.commit, "/binary.bin", { binary: true }),
+  p8ReadCase("read text as binary", P8_REFS.commit, "/file.txt", { binary: true }),
+  p8Refusal("binary=false refuses binary", P8_REFS.commit, "/binary.bin", "Binary", "text contains NUL or invalid UTF-8", null, { binary: false }),
+  p8Refusal("omitted binary refuses binary", P8_REFS.commit, "/binary.bin", "Binary", "text contains NUL or invalid UTF-8"),
+  p8Refusal("unknown Branch", "p8-unknown-branch", "/file.txt", "NoSuchBranch", "Branch p8-unknown-branch does not exist"),
+  p8Refusal("bad identity tag", P8_REFS.badTag, "/file.txt", "InvalidInput", `\`${P8_REFS.badTag}\` is not a Commit or Layer identity`),
+  p8Refusal("66-nonhex is a Branch", P8_REFS.nonhex, "/file.txt", "NoSuchBranch", `Branch ${P8_REFS.nonhex} does not exist`),
+  p8Refusal("unknown Commit", P8_REFS.unknownCommit, "/file.txt", "NoSuchCommit", `Commit ${P8_REFS.unknownCommit} does not exist`),
+  p8Refusal("unknown Layer", P8_REFS.unknownLayer, "/file.txt", "NotFound", `Layer ${P8_REFS.unknownLayer} does not exist`),
+  p8Refusal("missing path at Commit", P8_REFS.commit, "/missing", "NoSuchPath", `/missing does not exist at ${P8_REFS.commit.slice(2, 14)}`, { path: "/missing" }),
+  p8Refusal("directory read", P8_REFS.commit, "/dir", "IsDirectory", "expected a regular file"),
+  p8Refusal("symlink read", P8_REFS.commit, "/link", "NotFile", "expected a regular file"),
+  p8Refusal("invalid path", P8_REFS.commit, "bad", "InvalidInput", "expected an absolute path without empty, dot or parent components"),
+];
+
+export const CASES = [...branches, ...workspaces, ...P1_CASES, ...P7_CASES, ...P8_CASES];
