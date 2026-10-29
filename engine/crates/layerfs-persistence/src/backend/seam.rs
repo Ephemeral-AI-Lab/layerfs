@@ -20,6 +20,22 @@ pub(crate) enum Engine {
 /// Named history statements in one open engine transaction.
 pub(crate) trait HistoryStatements {
     fn history(&self, key: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError>;
+    /// One statement over parallel column arrays, where the engine binds
+    /// arrays (PostgreSQL: one round trip for many rows). `None`: the
+    /// engine has no such statement and the caller runs its per-row one.
+    fn history_arrays(
+        &self,
+        _key: &str,
+        _columns: Vec<Column>,
+    ) -> Option<Result<Vec<Record>, BackendError>> {
+        None
+    }
+}
+
+/// One column of an array statement.
+pub(crate) enum Column {
+    I64(Vec<i64>),
+    Bytes(Vec<Vec<u8>>),
 }
 
 /// Engine statements under the shared Metadata and Objects bounds; every

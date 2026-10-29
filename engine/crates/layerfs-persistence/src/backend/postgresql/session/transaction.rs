@@ -21,11 +21,16 @@ pub(crate) enum Mode {
     Write,
     /// A write of new immutable rows only (pack bodies), without the lane.
     Stage,
+    /// Reads of immutable rows only, each statement on its own (autocommit):
+    /// no `BEGIN`/`COMMIT` round trips. Statements name the schema.
+    Immutable,
 }
 
 pub(crate) struct Transaction<'a> {
     state: RefCell<&'a mut State>,
     uncertain: Cell<bool>,
+    /// The Store's checked schema, for statements that name it.
+    pub(crate) schema: &'a str,
 }
 
 impl Transaction<'_> {
@@ -134,12 +139,13 @@ impl Session {
         self.run_as(mode, body)
     }
 
-    /// Immutable rows read in one snapshot like any other read.
+    /// Immutable rows (packs, locations, inode values) read without a
+    /// transaction, as on SQLite: no row they read ever changes.
     pub(crate) fn read_immutable<T, E: From<BackendError> + OutcomeError>(
         &self,
         body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
     ) -> Result<T, E> {
-        self.run_as(Mode::Read, body)
+        self.run_as(Mode::Immutable, body)
     }
 
     pub(crate) fn run_as<T, E: From<BackendError> + OutcomeError>(
@@ -147,7 +153,7 @@ impl Session {
         mode: Mode,
         body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
     ) -> Result<T, E> {
-        if mode != Mode::Read && !self.writable {
+        if !matches!(mode, Mode::Read | Mode::Immutable) && !self.writable {
             return Err(BackendError::ReadOnly.into());
         }
         let start = Instant::now();
@@ -169,7 +175,13 @@ impl Session {
             Mode::Read => self.settings.read_begin(),
             Mode::Write => self.settings.write_begin(!turn.nested),
             Mode::Stage => self.settings.write_begin(false),
+            Mode::Immutable => {
+                let result = immutable(state, &self.settings.schema, body);
+                state.work.transaction_ns += start.elapsed().as_nanos() as u64;
+                return result;
+            }
         };
+        let schema = self.settings.schema.as_str();
         let result = (|| {
             if let Err(e) = state.client.batch_execute(&begin) {
                 let error = rows::error(&e);
@@ -188,6 +200,7 @@ impl Session {
                 let tx = Transaction {
                     state: RefCell::new(&mut *state),
                     uncertain: Cell::new(false),
+                    schema,
                 };
                 let result = body(&tx);
                 let uncertain = tx.uncertain.get()
@@ -237,6 +250,29 @@ impl Session {
         state.work.transaction_ns += start.elapsed().as_nanos() as u64;
         result
     }
+}
+
+/// A body of autocommit statements; a lost reply still quarantines.
+fn immutable<T, E: From<BackendError> + OutcomeError>(
+    state: &mut State,
+    schema: &str,
+    body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+) -> Result<T, E> {
+    let (result, uncertain) = {
+        let tx = Transaction {
+            state: RefCell::new(&mut *state),
+            uncertain: Cell::new(false),
+            schema,
+        };
+        let result = body(&tx);
+        let uncertain = tx.uncertain.get();
+        (result, uncertain)
+    };
+    if uncertain || result.as_ref().err().is_some_and(OutcomeError::uncertain) {
+        state.quarantined = true;
+        return Err(BackendError::Unknown.into());
+    }
+    result
 }
 
 fn rollback(state: &mut State) -> Result<(), postgres::Error> {

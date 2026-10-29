@@ -1,6 +1,6 @@
 //! Shared history transaction facade; backend owns acknowledgement and errors.
 use super::{bindings::Parameters, provider::HistoryProvider};
-use crate::backend::{records::Record, Engine, HistoryStatements};
+use crate::backend::{records::Record, Column, Engine, HistoryStatements};
 use layerfs_history::HistoryResult;
 pub(crate) struct Transaction<'a> {
     backend: &'a dyn HistoryStatements,
@@ -16,6 +16,16 @@ impl<'a> Transaction<'a> {
     }
     pub(crate) fn execute(&self, key: &str, params: impl Parameters) -> HistoryResult<usize> {
         self.query(key, params).map(|r| r.len())
+    }
+    /// The engine's array form of a statement, if it has one.
+    pub(crate) fn arrays(
+        &self,
+        key: &str,
+        columns: Vec<Column>,
+    ) -> Option<HistoryResult<Vec<Record>>> {
+        self.backend
+            .history_arrays(key, columns)
+            .map(|result| result.map_err(Into::into))
     }
 }
 impl HistoryProvider {

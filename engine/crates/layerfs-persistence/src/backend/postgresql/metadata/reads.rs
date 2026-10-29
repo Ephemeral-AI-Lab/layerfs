@@ -35,9 +35,8 @@ pub(crate) fn cursor(tx: &Transaction<'_>) -> Result<(i64, i64), BackendError> {
     Ok((r.get(0)?, r.get(1)?))
 }
 
-const LOCATE: &str = "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id = ANY($1::bytea[])";
-
-/// Every stored location among `ids`, in one statement.
+/// Every stored location among `ids`, in one statement that names the
+/// schema, so it also runs outside a transaction.
 pub(crate) fn locate(
     tx: &Transaction<'_>,
     ids: &[ObjectId],
@@ -50,7 +49,11 @@ pub(crate) fn locate(
         .into_iter()
         .map(|id| id.as_bytes().to_vec())
         .collect();
-    let rows = tx.typed(LOCATE, &[&ids], ids.len() as u64 * 32)?;
+    let sql = format!(
+        "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM {s}.object_location o JOIN {s}.pack p ON p.pack_id=o.pack_id WHERE o.object_id = ANY($1::bytea[])",
+        s = tx.schema
+    );
+    let rows = tx.typed(&sql, &[&ids], ids.len() as u64 * 32)?;
     for row in rows {
         let r = super::super::session::rows::record(&row)?;
         out.push(location(&r)?);
@@ -86,11 +89,11 @@ pub(crate) fn inode_values(
     out: &mut Vec<InodeValueRow>,
 ) -> Result<(), PersistenceError> {
     let ordinals: Vec<i64> = ordinals.iter().map(|o| i64::from(*o)).collect();
-    let rows = tx.typed(
-        "SELECT ordinal,value FROM inode_value WHERE ordinal = ANY($1::bigint[]) ORDER BY ordinal",
-        &[&ordinals],
-        ordinals.len() as u64 * 8,
-    )?;
+    let sql = format!(
+        "SELECT ordinal,value FROM {}.inode_value WHERE ordinal = ANY($1::bigint[]) ORDER BY ordinal",
+        tx.schema
+    );
+    let rows = tx.typed(&sql, &[&ordinals], ordinals.len() as u64 * 8)?;
     for row in rows {
         let r = super::super::session::rows::record(&row)?;
         let ordinal = u32::try_from(r.get::<i64>(0)?).map_err(|_| BackendError::Integrity)?;

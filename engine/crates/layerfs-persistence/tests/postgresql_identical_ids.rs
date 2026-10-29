@@ -11,8 +11,8 @@ mod support;
 
 use layerfs_content::{construct_bytes, read_range, ObjectId};
 use layerfs_history::records::{
-    CommitMeta, CommitOutcome, CommitRecord, CommitVia, ForkRequest, ForkSource,
-    StackInitialization,
+    BindingHint, CommitMeta, CommitOutcome, CommitRecord, CommitVia, FileDigest, ForkRequest,
+    ForkSource, StackInitialization,
 };
 use layerfs_history::{BranchId, HistoryCatalog, HistoryCatalogConfig};
 use layerfs_persistence::{
@@ -348,4 +348,83 @@ fn a_held_lane_makes_another_writer_wait_then_fail_busy_once() {
     fork(&other.history, 2).unwrap();
     assert!(other.history.branch(branch_id(1)).unwrap().is_some());
     drop(schema);
+}
+
+/// Binding hints and file digests go to PostgreSQL as array statements
+/// (#506 d): many rows, repeats and a window boundary read back as on SQLite.
+#[test]
+fn hints_and_digests_in_arrays_read_back_as_on_sqlite() {
+    let Ok(url) = std::env::var("LAYERFS_TEST_POSTGRES_URL") else {
+        eprintln!("NOT_RUN: LAYERFS_TEST_POSTGRES_URL is unset");
+        return;
+    };
+    let temp = Temp::new("postgresql-arrays");
+    let created = Handles::create(
+        sqlite(temp.join("store")),
+        StoragePolicy::frozen_default(),
+        &HistoryCatalogConfig {
+            binding_key: BINDING.to_vec(),
+            cursor_key: CURSOR,
+            incarnation: 9,
+        },
+    )
+    .unwrap();
+    let saved = save(
+        &Storage::new(created.storage.clone()).unwrap(),
+        b"a saved file",
+    );
+    let copy = created.snapshot(&temp.join("copy")).unwrap();
+    let schema = Schema {
+        url: url.clone(),
+        name: format!("lfs506_arrays_{}", std::process::id()),
+    };
+    let selection = PostgresSelection::new(&url, &schema.name);
+    PostgresHandles::import(sqlite(copy.path), &selection, BINDING, CURSOR).unwrap();
+    let pg = PostgresHandles::open_writable(&selection, BINDING, CURSOR).unwrap();
+    let engines: [&dyn HistoryCatalog; 2] = [&created.history, &pg.history];
+
+    let mut hints: Vec<BindingHint> = (0..1500u64)
+        .map(|i| BindingHint {
+            child: 1 + i % 700,
+            parent: 2 + i % 3,
+            name: format!("n{}", i % 1100).into_bytes(),
+        })
+        .collect();
+    hints.extend(hints[..10].to_vec());
+    for engine in engines {
+        engine.record_bindings(&hints).unwrap();
+    }
+    for child in [1, 5, 699] {
+        let mut found = engines.map(|engine| engine.bindings_of(child).unwrap());
+        for rows in &mut found {
+            rows.sort_by(|a, b| (a.parent, &a.name).cmp(&(b.parent, &b.name)));
+        }
+        assert!(!found[0].is_empty());
+        assert_eq!(found[0], found[1]);
+    }
+
+    // Content 0 first names a root the Store lacks, then (past the first
+    // array of 1024 rows) the saved root: the later row wins.
+    let content = |i: u32| *ObjectId::for_bytes(&i.to_le_bytes()).as_bytes();
+    let missing = *root(77).as_bytes();
+    let mut digests: Vec<FileDigest> = (0..1100u32)
+        .map(|i| FileDigest {
+            root: missing,
+            length: u64::from(i),
+            digest: content(i),
+        })
+        .collect();
+    digests[1050] = FileDigest {
+        root: *saved.as_bytes(),
+        length: 0,
+        digest: content(0),
+    };
+    let asked = [(content(0), 0), (content(1), 1), (content(5000), 5000)];
+    for engine in engines {
+        engine.record_file_digests(&digests).unwrap();
+        assert_eq!(
+            engine.file_roots(&asked).unwrap(),
+            vec![Some(*saved.as_bytes()), None, None]
+        );
+    }
 }
