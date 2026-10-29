@@ -41,9 +41,9 @@ fn a_call_behind_a_held_connection_is_refused_busy() {
             "\"Ports\":{}",
             &format!(r#""Ports":{{"30421/tcp":[{{"HostIp":"127.0.0.1","HostPort":"{port}"}}]}}"#),
         );
-    // Discovery for the first call inspects the container three times; the
-    // second call checks it once.
-    let engine = engines(&home.0, vec![(200, running); 4]);
+    // Discovery for the first call inspects the container twice; the second
+    // call checks it once.
+    let engine = engines(&home.0, vec![(200, running); 3]);
     let stopped = Arc::new(AtomicBool::new(false));
     let stop = stopped.clone();
     let server = thread::spawn(move || {
@@ -134,7 +134,7 @@ fn a_call_behind_a_held_connection_is_refused_busy() {
     });
     stopped.store(true, Ordering::SeqCst);
     let refused = server.join().unwrap();
-    assert_eq!(engine.join().unwrap().len(), 4);
+    assert_eq!(engine.join().unwrap().len(), 3);
     if let Err(error) = result {
         std::panic::resume_unwind(error);
     }
