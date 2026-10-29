@@ -42,6 +42,7 @@ impl Handles {
             config.sqlite_profile,
             config.sqlite_pack_layout,
             config.sqlite_acquisition,
+            None,
         )?);
         session.initialize(policy, history, catalog_id)?;
         let directory = config.path.parent().map(Path::to_path_buf);
@@ -82,6 +83,7 @@ impl Handles {
             config.sqlite_profile,
             config.sqlite_pack_layout,
             config.sqlite_acquisition,
+            None,
         )?);
         if writable {
             session.add_binding_hints()?;
@@ -94,6 +96,27 @@ impl Handles {
             crate::backend::sqlite::storage::merge_records::sweep(&handles.storage.session)?;
         }
         Ok(handles)
+    }
+    /// Opens a Store file read in place from a remote (#510): one read-only,
+    /// immutable session (Disposable) over `file`'s block cache, with no
+    /// acquisition directory. Every write is refused before SQL, and SQLite
+    /// refuses any that reach it `ReadOnly`.
+    pub fn open_remote(
+        file: &Arc<crate::remote::RemoteFile>,
+        binding: &[u8],
+        cursor_key: [u8; 32],
+    ) -> Result<Self, PersistenceError> {
+        let defaults = PersistenceConfig::sqlite(file.name());
+        let session = Arc::new(Session::connect(
+            Path::new(file.name()),
+            false,
+            false,
+            crate::SqlitePersistenceProfile::Disposable,
+            defaults.sqlite_pack_layout,
+            defaults.sqlite_acquisition,
+            Some(file),
+        )?);
+        Self::validated(session, None, binding, cursor_key)
     }
     fn validated(
         session: Arc<Session>,

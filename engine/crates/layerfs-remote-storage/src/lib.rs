@@ -1,5 +1,6 @@
 //! Whole-file remote storage: a remote holds files by name, and a driver
 //! uploads, downloads (whole or a byte range), describes and deletes them.
+//! A [`PinnedFile`] reads byte ranges of one version of a file (#510).
 //!
 //! This crate knows nothing about Stores. Every request is attempted once: a
 //! request that was sent and whose outcome is unknown is reported
@@ -14,6 +15,7 @@ pub mod driver;
 pub mod error;
 pub mod limits;
 pub mod pieces;
+pub mod pinned;
 pub mod progress;
 pub mod time;
 
@@ -27,6 +29,7 @@ pub mod minio;
 pub mod s3_api;
 
 pub use credentials::{CredentialRef, Credentials};
-pub use driver::{Driver, Listed, Metadata, Span, Stat};
+pub use driver::{Condition, Driver, Listed, Metadata, Ranged, Span, Stat};
 pub use error::RemoteError;
 pub use limits::Limits;
+pub use pinned::PinnedFile;

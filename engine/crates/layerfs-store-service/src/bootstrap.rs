@@ -237,6 +237,46 @@ pub fn open_store_observed(
     })
 }
 
+/// A read-only view of a Store file on a remote (#510): every session is
+/// read-only over `file`'s block cache, the "writer" included; a view has
+/// one control reader, no Workspace readers and no merge records.
+pub fn open_remote_store(
+    file: &Arc<layerfs_persistence::remote::RemoteFile>,
+    binding: &[u8],
+    cursor_key: [u8; 32],
+    cache_bytes: usize,
+) -> StorageResult<OpenedStore> {
+    let writer = Handles::open_remote(file, binding, cursor_key)?;
+    let sqlite_version = writer.profile().sqlite_version.clone();
+    let (file, binding) = (file.clone(), binding.to_vec());
+    let factory: crate::store::ReaderFactory = Arc::new(move |_| {
+        let opened = Handles::open_remote(&file, &binding, cursor_key)?;
+        Ok(StoreReader::new(
+            Storage::new(opened.storage)?,
+            Arc::new(opened.history),
+        ))
+    });
+    let control = factory(0)?;
+    let store = Arc::new(Store::new(
+        writer.storage.clone(),
+        Arc::new(writer.history),
+        control,
+        factory,
+        cache_bytes,
+        ReservationBlocks::default(),
+        1,
+    )?);
+    Ok(OpenedStore {
+        store,
+        sqlite_version,
+        writer: Writer::Sqlite(writer.storage),
+        readers: Arc::new(Mutex::new(ReaderObservations {
+            live: BTreeMap::new(),
+            retired: Some(SqlWork::default()),
+        })),
+    })
+}
+
 /// A PostgreSQL Store (#506): one writer session and one read-only session
 /// per Workspace reader. A merge's records live in the writer connection's
 /// temporary tables (#506 d); reader counters are not observed.

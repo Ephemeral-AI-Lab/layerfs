@@ -1,8 +1,9 @@
 //! The S3 API driver: single PUT up to the part size, multipart above it,
-//! ranged GET, HEAD, DELETE and ListObjectsV2 paging. One connection and
-//! one attempt per request.
+//! ranged GET (conditional on the file's version, #510), HEAD, DELETE and
+//! ListObjectsV2 paging. One connection and one attempt per request.
 use crate::driver::{
-    check_metadata, open_span, Driver, Listed, Metadata, Span, Stat, MAX_LIST_PAGES,
+    check_metadata, open_span, Condition, Driver, Listed, Metadata, Ranged, Span, Stat,
+    MAX_LIST_PAGES,
 };
 use crate::error::{local, RemoteError};
 use crate::limits::Limits;
@@ -85,6 +86,62 @@ impl S3Client {
     /// Aborts the multipart upload `upload` of `name`.
     pub fn abort_upload(&self, name: &str, upload: &str) -> Result<(), RemoteError> {
         multipart::abort(self, &self.config.object_path(name)?, upload)
+    }
+
+    /// One GET of `name` (or `span` of it) with `headers`, its body
+    /// streamed to `out`. A failed precondition (412) is `Changed`.
+    fn get(
+        &self,
+        name: &str,
+        span: Option<Span>,
+        mut headers: BTreeMap<String, String>,
+        out: &mut dyn Write,
+    ) -> Result<Reply, RemoteError> {
+        let object = self.config.object_path(name)?;
+        if let Some(span) = span {
+            let end = span
+                .offset
+                .checked_add(span.length)
+                .filter(|_| span.length > 0)
+                .ok_or_else(|| RemoteError::Invalid(format!("span {span:?}")))?;
+            headers.insert(
+                "range".to_owned(),
+                format!("bytes={}-{}", span.offset, end - 1),
+            );
+        }
+        let expected = if span.is_some() { 206 } else { 200 };
+        let sink = Sink {
+            status: expected,
+            out,
+        };
+        let reply = self.send(
+            "GET",
+            &object,
+            &[],
+            headers,
+            Body::Empty,
+            sign::hash(&[]),
+            Some(sink),
+        )?;
+        match reply.status {
+            404 => return Err(RemoteError::Missing),
+            412 => return Err(RemoteError::Changed),
+            status if status != expected => return Err(refused(&reply)),
+            _ => {}
+        }
+        let integrity = |why: &str| RemoteError::Integrity(format!("GET {name}: {why}"));
+        if let Some(span) = span {
+            let prefix = format!("bytes {}-{}/", span.offset, span.offset + span.length - 1);
+            reply
+                .headers
+                .get("content-range")
+                .filter(|range| range.starts_with(&prefix))
+                .ok_or_else(|| integrity("content-range"))?;
+            if reply.streamed != span.length {
+                return Err(integrity("range length"));
+            }
+        }
+        Ok(reply)
     }
 }
 
@@ -187,52 +244,29 @@ impl Driver for S3Client {
         span: Option<Span>,
         out: &mut dyn Write,
     ) -> Result<u64, RemoteError> {
-        let object = self.config.object_path(name)?;
-        let mut headers = BTreeMap::new();
-        if let Some(span) = span {
-            let end = span
-                .offset
-                .checked_add(span.length)
-                .filter(|_| span.length > 0)
-                .ok_or_else(|| RemoteError::Invalid(format!("span {span:?}")))?;
-            headers.insert(
-                "range".to_owned(),
-                format!("bytes={}-{}", span.offset, end - 1),
-            );
-        }
-        let expected = if span.is_some() { 206 } else { 200 };
-        let sink = Sink {
-            status: expected,
-            out,
-        };
-        let reply = self.send(
-            "GET",
-            &object,
-            &[],
-            headers,
-            Body::Empty,
-            sign::hash(&[]),
-            Some(sink),
-        )?;
-        if reply.status == 404 {
-            return Err(RemoteError::Missing);
-        }
-        if reply.status != expected {
-            return Err(refused(&reply));
-        }
-        let integrity = |why: &str| RemoteError::Integrity(format!("GET {name}: {why}"));
-        if let Some(span) = span {
-            let prefix = format!("bytes {}-{}/", span.offset, span.offset + span.length - 1);
-            reply
-                .headers
-                .get("content-range")
-                .filter(|range| range.starts_with(&prefix))
-                .ok_or_else(|| integrity("content-range"))?;
-            if reply.streamed != span.length {
-                return Err(integrity("range length"));
+        self.get(name, span, BTreeMap::new(), out)
+            .map(|reply| reply.streamed)
+    }
+
+    fn download_range(
+        &self,
+        name: &str,
+        span: Span,
+        condition: &Condition,
+        out: &mut dyn Write,
+    ) -> Result<Ranged, RemoteError> {
+        let header = match condition {
+            Condition::Match(etag) => ("if-match", etag.clone()),
+            Condition::UnmodifiedSince(millis) => {
+                ("if-unmodified-since", crate::time::http_date_text(*millis))
             }
-        }
-        Ok(reply.streamed)
+        };
+        let headers = BTreeMap::from([(header.0.to_owned(), header.1)]);
+        let reply = self.get(name, Some(span), headers, out)?;
+        Ok(Ranged {
+            bytes: reply.streamed,
+            etag: reply.headers.get("etag").cloned(),
+        })
     }
 
     fn stat(&self, name: &str) -> Result<Option<Stat>, RemoteError> {
@@ -267,6 +301,7 @@ impl Driver for S3Client {
                     bytes,
                     metadata,
                     modified,
+                    etag: reply.headers.get("etag").cloned(),
                 }))
             }
             _ => Err(refused(&reply)),

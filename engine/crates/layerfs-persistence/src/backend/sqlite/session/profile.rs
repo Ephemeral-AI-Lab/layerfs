@@ -24,11 +24,16 @@ impl SqlitePersistenceProfile {
         i64::from(self == Self::Durable)
     }
 }
+/// The VFS selection of a remote Store read in place (#510). Its
+/// connection is immutable, so it reports no WAL journal; the file is
+/// never written, and the journal mode is not checked.
+pub(crate) const REMOTE_VFS: &str = "layerfs-remote, read-only, immutable";
 pub(crate) fn apply(
     c: &Connection,
     create: bool,
     selected: SqlitePersistenceProfile,
     acquisition: crate::SqliteAcquisitionSchema,
+    remote: bool,
     w: &RefCell<SqlWork>,
 ) -> Result<(), BackendError> {
     // WAL selection and acquisition setup can write before schema creation.
@@ -46,7 +51,7 @@ pub(crate) fn apply(
             // an existing Store never changes its physical format.
             query::run(c, "PRAGMA auto_vacuum=INCREMENTAL", vec![], w)?;
         }
-    } else {
+    } else if !remote {
         let mode = query::run(c, "PRAGMA journal_mode", vec![], w)?
             .first()
             .ok_or(BackendError::Integrity)?
@@ -84,7 +89,7 @@ pub(crate) fn apply(
 }
 pub(crate) fn check(p: &ConnectionProfile) -> Result<(), BackendError> {
     let selected = p.persistence;
-    if p.journal_mode != selected.journal()
+    if (p.journal_mode != selected.journal() && p.vfs_selection != REMOTE_VFS)
         || p.synchronous != selected.synchronous()
         || p.foreign_keys != 1
         || p.fullfsync != selected.fullfsync()

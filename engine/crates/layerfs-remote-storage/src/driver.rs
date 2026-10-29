@@ -24,6 +24,27 @@ pub struct Stat {
     /// When the file was last written, in milliseconds since the Unix
     /// epoch, when the remote says.
     pub modified: Option<u64>,
+    /// The version of the file the remote holds (its entity tag), when the
+    /// remote says; a conditional read pins it (#510).
+    pub etag: Option<String>,
+}
+
+/// What a conditional ranged read requires of the remote file (#510).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Condition {
+    /// The file is still the version with this entity tag (`If-Match`).
+    Match(String),
+    /// The file was not written after this time, in milliseconds since the
+    /// Unix epoch (`If-Unmodified-Since`, second resolution).
+    UnmodifiedSince(u64),
+}
+
+/// What a conditional ranged read wrote.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Ranged {
+    pub bytes: u64,
+    /// The entity tag of the version read, when the remote says.
+    pub etag: Option<String>,
 }
 
 /// One file of a listing.
@@ -62,6 +83,22 @@ pub trait Driver: Send + Sync {
         span: Option<Span>,
         out: &mut dyn Write,
     ) -> Result<u64, RemoteError>;
+
+    /// Writes `span` of `name` to `out` only while `condition` holds; a file
+    /// that no longer meets it is [`RemoteError::Changed`]. One request,
+    /// never resent. A driver without conditional reads refuses `Unsupported`.
+    fn download_range(
+        &self,
+        name: &str,
+        span: Span,
+        condition: &Condition,
+        out: &mut dyn Write,
+    ) -> Result<Ranged, RemoteError> {
+        let _ = (name, span, condition, out);
+        Err(RemoteError::Unsupported(
+            "conditional ranged reads on this remote".to_owned(),
+        ))
+    }
 
     /// The file's size and metadata, or `None` when it is absent.
     fn stat(&self, name: &str) -> Result<Option<Stat>, RemoteError>;

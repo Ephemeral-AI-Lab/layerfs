@@ -1,6 +1,8 @@
 //! Files under `root/objects/<name>`, metadata under `root/metadata/<name>`.
 //! An upload writes a `.uploading` sibling and renames it into place.
-use crate::driver::{check_metadata, check_name, open_span, Driver, Listed, Metadata, Span, Stat};
+use crate::driver::{
+    check_metadata, check_name, open_span, Condition, Driver, Listed, Metadata, Ranged, Span, Stat,
+};
 use crate::error::{local, RemoteError};
 use crate::limits::Limits;
 use std::fs::{self, File, OpenOptions};
@@ -47,6 +49,17 @@ fn modified(found: &fs::Metadata) -> Option<u64> {
         .duration_since(std::time::UNIX_EPOCH)
         .ok()?;
     u64::try_from(since.as_millis()).ok()
+}
+
+/// A file's version tag: its size and last change to the nanosecond. An
+/// upload renames a new file into place, so each upload gets a new tag.
+fn etag(found: &fs::Metadata) -> Option<String> {
+    let since = found
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?;
+    Some(format!("\"{}-{}\"", found.len(), since.as_nanos()))
 }
 
 /// The metadata kept at `meta`; none when absent.
@@ -168,7 +181,42 @@ impl Driver for LocalFolder {
             bytes: found.len(),
             metadata: read_metadata(&meta)?,
             modified: modified(&found),
+            etag: etag(&found),
         }))
+    }
+
+    fn download_range(
+        &self,
+        name: &str,
+        span: Span,
+        condition: &Condition,
+        out: &mut dyn Write,
+    ) -> Result<Ranged, RemoteError> {
+        let (data, _) = self.paths(name)?;
+        let (mut file, span) = match open_span(&data, Some(span)) {
+            Err(_) if !data.is_file() => return Err(RemoteError::Missing),
+            opened => opened?,
+        };
+        let found = file.metadata().map_err(|e| local("stat", e))?;
+        let held = match condition {
+            Condition::Match(tag) => etag(&found).as_ref() == Some(tag),
+            Condition::UnmodifiedSince(millis) => {
+                modified(&found).is_some_and(|at| at / 1000 <= millis / 1000)
+            }
+        };
+        if !held {
+            return Err(RemoteError::Changed);
+        }
+        file.seek(SeekFrom::Start(span.offset))
+            .map_err(|e| local("seek", e))?;
+        let n = io::copy(&mut file.take(span.length), out).map_err(|e| local("copy", e))?;
+        if n != span.length {
+            return Err(RemoteError::Integrity(format!("{name} shrank while read")));
+        }
+        Ok(Ranged {
+            bytes: n,
+            etag: etag(&found),
+        })
     }
 
     fn list(&self, prefix: &str) -> Result<Vec<Listed>, RemoteError> {

@@ -77,3 +77,41 @@ pub fn iso8601(text: &str) -> Option<u64> {
     };
     millis((year, month, day), time, fraction)
 }
+
+/// The civil date of `days` since 1970-01-01 (proleptic Gregorian).
+fn civil(days: i64) -> (i64, i64, i64) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let of_era = z - era * 146_097;
+    let year_of_era = (of_era - of_era / 1460 + of_era / 36_524 - of_era / 146_096) / 365;
+    let of_year = of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let shifted = (5 * of_year + 2) / 153;
+    let day = of_year - (153 * shifted + 2) / 5 + 1;
+    let month = if shifted < 10 {
+        shifted + 3
+    } else {
+        shifted - 9
+    };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    (year, month, day)
+}
+
+/// `millis` (since the Unix epoch) as an HTTP date, `Wed, 21 Oct 2015
+/// 07:28:00 GMT`, to the whole second below; [`http_date`] reads it back.
+pub fn http_date_text(millis: u64) -> String {
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    const WEEKDAYS: [&str; 7] = ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"];
+    let seconds = (millis / 1000) as i64;
+    let (days, of_day) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
+    let (year, month, day) = civil(days);
+    format!(
+        "{}, {day:02} {} {year:04} {:02}:{:02}:{:02} GMT",
+        WEEKDAYS[days.rem_euclid(7) as usize],
+        MONTHS[(month - 1) as usize],
+        of_day / 3600,
+        of_day / 60 % 60,
+        of_day % 60
+    )
+}
