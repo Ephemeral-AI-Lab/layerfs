@@ -139,7 +139,7 @@ pub(crate) struct State {
     pub(crate) writer_hold: Option<crate::backend::sqlite::lane::writer_admission::Writer>,
 }
 pub(crate) struct Session {
-    pub(crate) admission: crate::backend::sqlite::lane::admission::Admission,
+    pub(crate) admission: crate::backend::admission::Admission,
     pub(crate) state: Mutex<State>,
     pub(crate) writable: bool,
     pub(crate) profile: ConnectionProfile,
@@ -248,7 +248,7 @@ impl Session {
         profile::check(&profile)?;
         super::thread_work::add(&work.borrow());
         Ok(Self {
-            admission: crate::backend::sqlite::lane::admission::Admission::default(),
+            admission: crate::backend::admission::Admission::default(),
             path: path.to_path_buf(),
             state: Mutex::new(State {
                 connection,

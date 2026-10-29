@@ -5,9 +5,9 @@ use crate::backend::{
 };
 use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_storage::{
-    location::{LocatedObject, ObjectLocation, PackDomain, PackInfo},
+    location::{LocatedObject, ObjectLocation, PackInfo},
     policy,
-    port::{ObjectKey, PersistenceError},
+    port::PersistenceError,
 };
 use std::collections::BTreeSet;
 const LOCATE_PREFIX: &str = "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM object_location o JOIN pack p ON p.pack_id=o.pack_id WHERE o.object_id IN";
@@ -23,7 +23,7 @@ fn locate_sql(count: usize) -> String {
 }
 
 pub(crate) fn info(r: &Record, start: usize) -> Result<PackInfo, BackendError> {
-    checked_info(
+    crate::backend::records::pack_info(
         r.get(start)?,
         r.get(start + 1)?,
         &r.get::<Vec<u8>>(start + 2)?,
@@ -31,7 +31,7 @@ pub(crate) fn info(r: &Record, start: usize) -> Result<PackInfo, BackendError> {
     )
 }
 pub(crate) fn typed_info(r: &rusqlite::Row<'_>, start: usize) -> Result<PackInfo, BackendError> {
-    checked_info(
+    crate::backend::records::pack_info(
         r.get(start)
             .map_err(crate::backend::sqlite::session::rows::error)?,
         r.get(start + 1)
@@ -40,32 +40,6 @@ pub(crate) fn typed_info(r: &rusqlite::Row<'_>, start: usize) -> Result<PackInfo
         r.get(start + 3)
             .map_err(crate::backend::sqlite::session::rows::error)?,
     )
-}
-fn checked_info(
-    pack_id: i64,
-    domain: i64,
-    digest: &[u8],
-    length: i64,
-) -> Result<PackInfo, BackendError> {
-    let domain = match domain {
-        0 => PackDomain::Metadata,
-        1 => PackDomain::Payload,
-        _ => return Err(BackendError::Integrity),
-    };
-    let digest = digest.try_into().map_err(|_| BackendError::Integrity)?;
-    let length = usize::try_from(length).map_err(|_| BackendError::Integrity)?;
-    if pack_id <= 0
-        || !(32..=policy::SINGLETON_PACK_LIMIT).contains(&length)
-        || domain == PackDomain::Metadata && length > policy::PACK_LIMIT
-    {
-        return Err(BackendError::Integrity);
-    }
-    Ok(PackInfo {
-        pack_id,
-        domain,
-        key: ObjectKey::from_bytes(digest),
-        length,
-    })
 }
 pub(crate) fn read(
     tx: &Transaction<'_>,

@@ -3,11 +3,51 @@
 > **Status:** Current implementation under qualification; no release admission.
 
 `layerfs-persistence` replaces `layerfs-metadata`. It composes the physical
-Objects/Metadata provider and one shared history flow over a single host-local
-SQLite Store. The domain crates have no engine dependencies. PostgreSQL is an
-explicit `BackendSelection::Postgres` refusal before filesystem or SQL work;
-there is no PostgreSQL implementation or fallback. MinIO/S3 are outside the
-active product.
+Objects/Metadata provider and one shared history flow over one global Store:
+a host-local SQLite file, or (#506, `postgresql` feature) a PostgreSQL schema.
+The domain crates have no engine dependencies. An engine is selected
+explicitly; there is no error-driven fallback between them.
+
+## Engines (#506)
+
+`src/backend/` holds the engines. `sqlite/` is grouped by role: `session/`,
+`lane/`, `objects/`, `metadata/`, `storage/` (merge records), `acquisition/`,
+`lifecycle/`, plus `schema.rs` and `snapshot.rs`. `postgresql/` mirrors it:
+`session/`, `lane/`, `objects/`, `metadata/`, `history/`, `storage/`,
+`schema.rs` and `import.rs`. Code above `backend/` holds no SQL: history,
+the Metadata/Objects bounds and publication validation are shared and reach
+an engine through two traits (`Mechanics`, `HistoryStatements`). History
+statements are named; the shipped SQLite texts are portable and run on
+PostgreSQL unchanged except `hint_insert_binding` and `statistics_totals`.
+
+- **Snapshot.** `Handles::snapshot` (and `StorageProvider::snapshot`) copies a
+  live SQLite Store to a new file with the online backup API in one step, on
+  its own read-only connection: one consistent state, closed, no sidecar.
+  Remote push uploads it.
+- **PostgreSQL Store.** `PostgresHandles::open_writable`/`open_read_only` over
+  a `PostgresSelection` (URL, schema, `synchronous_commit`, lane
+  `lock_timeout`). Opening validates the schema and binding and never
+  creates or migrates anything. Init stays SQLite only:
+  `PostgresHandles::import` copies a SQLite Store (any pack layout) into a new
+  schema in one PostgreSQL transaction over one SQLite snapshot, keeping every
+  object, root, Commit and inode serial.
+- **Transactions.** Reads are `REPEATABLE READ READ ONLY`; writes are `READ
+  COMMITTED`, never SERIALIZABLE, with `SET LOCAL synchronous_commit` (default
+  `off`) in the same round trip as `BEGIN`. Every write first locks the
+  Store's `store_lane` row `FOR UPDATE` under `SET LOCAL lock_timeout`, so
+  writes of every process run one at a time, as on SQLite; a held
+  publication lane owns the row on a second connection and this thread's
+  writes inside it skip the wait. A wait that times out is `Busy`; nothing is
+  retried; a COMMIT whose reply was lost is `Unknown` and quarantines the
+  session.
+- **Objects.** Pack bodies are whole `bytea` values stored `EXTERNAL`;
+  ranged reads use `substring`. A publication copies its pack bodies with
+  `COPY BINARY` in a write that does not wait for the lane, then adds
+  locations, values, signatures and totals in the short lane transaction. A
+  failed second step leaves unreferenced packs, never reused ids.
+- **Not on PostgreSQL in this phase:** Init and acquisition, merge records
+  (merges are refused), seal/snapshot/reclamation (no file), and the host
+  SQLite cache #420 found necessary for one round trip per Commit.
 
 The twelve logical tables are `pack`; `store_policy`, `object_location`,
 `inode_value`, `content_signature`; and `history_meta`,

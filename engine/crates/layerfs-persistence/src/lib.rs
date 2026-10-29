@@ -1,4 +1,5 @@
-//! Shared SQLite adapter with explicit Durable and disk-backed Disposable profiles.
+//! The global Store: embedded SQLite (explicit Durable and disk-backed
+//! Disposable profiles) or, with the `postgresql` feature, PostgreSQL (#506).
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 mod backend;
@@ -18,14 +19,16 @@ pub use backend::sqlite::storage::merge_records::{
     MergeRecords, MergeRecordsWork, MergeScratch, BUFFER_BYTES, MERGE_LEASE, RESIDENT_BYTES,
 };
 pub use config::{
-    BackendSelection, PersistenceConfig, SqliteAcquisitionSchema, SqlitePackLayout,
-    SqlitePersistenceProfile,
+    BackendSelection, PersistenceConfig, PostgresSelection, SqliteAcquisitionSchema,
+    SqlitePackLayout, SqlitePersistenceProfile, SynchronousCommit,
 };
 pub use handles::Handles;
 pub use history::HistoryProvider;
 pub(crate) use storage::provider as storage_provider;
 pub(crate) use storage::publication;
 pub use storage_provider::StorageProvider;
+#[cfg(feature = "postgresql")]
+pub use store::postgresql::{PostgresHandles, PostgresLaneHold, PostgresStorage};
 pub use store::seal::SealedStore;
 
 mod metadata;

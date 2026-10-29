@@ -60,7 +60,10 @@ fn wal_full_settings_and_unavailable_engine_are_explicit() {
     let t = Temp::new("durable-profile");
     let path = t.join("db");
     let mut c = PersistenceConfig::sqlite(&path);
-    c.backend = BackendSelection::Postgres;
+    c.backend = BackendSelection::Postgres(layerfs_persistence::PostgresSelection::new(
+        "host=localhost",
+        "store",
+    ));
     assert_eq!(
         Handles::create(c, StoragePolicy::frozen_default(), &config()).err(),
         Some(PersistenceError::BackendUnavailable)

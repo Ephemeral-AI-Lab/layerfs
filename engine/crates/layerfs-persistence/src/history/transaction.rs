@@ -1,12 +1,12 @@
 //! Shared history transaction facade; backend owns acknowledgement and errors.
 use super::{bindings::Parameters, provider::HistoryProvider};
-use crate::backend::{records::Record, Transaction as BackendTransaction};
+use crate::backend::{records::Record, Engine, HistoryStatements};
 use layerfs_history::HistoryResult;
 pub(crate) struct Transaction<'a> {
-    backend: &'a BackendTransaction<'a>,
+    backend: &'a dyn HistoryStatements,
 }
 impl<'a> Transaction<'a> {
-    pub(crate) fn new(backend: &'a BackendTransaction<'a>) -> Self {
+    pub(crate) fn new(backend: &'a dyn HistoryStatements) -> Self {
         Self { backend }
     }
     pub(crate) fn query(&self, key: &str, params: impl Parameters) -> HistoryResult<Vec<Record>> {
@@ -23,12 +23,20 @@ impl HistoryProvider {
         &self,
         f: impl FnOnce(&Transaction<'_>) -> HistoryResult<T>,
     ) -> HistoryResult<T> {
-        self.session.run(false, |b| f(&Transaction { backend: b }))
+        match &self.engine {
+            Engine::Sqlite(session) => session.run(false, |b| f(&Transaction { backend: b })),
+            #[cfg(feature = "postgresql")]
+            Engine::Postgres(session) => session.run(false, |b| f(&Transaction { backend: b })),
+        }
     }
     pub(crate) fn write<T>(
         &self,
         f: impl FnOnce(&Transaction<'_>) -> HistoryResult<T>,
     ) -> HistoryResult<T> {
-        self.session.run(true, |b| f(&Transaction { backend: b }))
+        match &self.engine {
+            Engine::Sqlite(session) => session.run(true, |b| f(&Transaction { backend: b })),
+            #[cfg(feature = "postgresql")]
+            Engine::Postgres(session) => session.run(true, |b| f(&Transaction { backend: b })),
+        }
     }
 }

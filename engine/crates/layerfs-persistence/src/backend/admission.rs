@@ -1,4 +1,5 @@
-//! FIFO connection ownership before a single SQL attempt (#352 F-040).
+//! FIFO connection ownership before a single SQL attempt (#352 F-040),
+//! shared by both engines (#506).
 //!
 //! A queued caller waits for its turn with no time limit: waiting is
 //! readiness, never a retry, and correct queued work is not refused for

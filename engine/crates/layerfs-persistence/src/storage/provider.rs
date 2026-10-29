@@ -41,7 +41,7 @@ impl StorageProvider {
 }
 impl PackPersistence for StorageProvider {
     fn policy(&self) -> Result<StoragePolicy, PersistenceError> {
-        self.session.run(false, metadata::policy::read)
+        self.session.run(false, |tx| metadata::policy::read(tx))
     }
     fn locate(
         &self,

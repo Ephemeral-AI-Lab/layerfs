@@ -153,8 +153,15 @@ impl HistoryCatalog for HistoryProvider {
     }
 
     fn publish_lane(&self) -> HistoryResult<PublishLane> {
-        let hold = self.session.hold_lane()?;
-        Ok(PublishLane::new(Box::new(hold)))
+        match &self.engine {
+            crate::backend::Engine::Sqlite(session) => {
+                Ok(PublishLane::new(Box::new(session.hold_lane()?)))
+            }
+            #[cfg(feature = "postgresql")]
+            crate::backend::Engine::Postgres(session) => {
+                Ok(PublishLane::new(Box::new(session.hold_lane()?)))
+            }
+        }
     }
 
     fn commit_branch(&self, request: &CommitRequest) -> HistoryResult<CommitOutcome> {

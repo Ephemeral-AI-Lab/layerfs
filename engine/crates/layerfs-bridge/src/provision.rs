@@ -6,6 +6,9 @@ use std::fmt;
 pub enum ProviderKind {
     /// A SQLite Store on one kernel's local filesystem or shared volume.
     Sqlite,
+    /// A PostgreSQL Store (#506). It is opened in its server schema, never
+    /// installed from a sealed file, so an install manifest refuses it.
+    Postgres,
 }
 /// Global Store completion profile, independent of local overlay configuration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,6 +48,9 @@ impl StoreManifest {
     /// Checks protocol metadata bounds before a file or channel attempt.
     /// These are control/OS path bounds, not file or namespace size limits.
     pub fn check(&self) -> Result<(), &'static str> {
+        if self.provider == ProviderKind::Postgres {
+            return Err("a PostgreSQL Store has no sealed file to install");
+        }
         check_destination(&self.locator, &self.binding, self.cursor_key)?;
         if self.bytes == 0 || !version(&self.host_sqlite) {
             return Err("sealed Store identity");

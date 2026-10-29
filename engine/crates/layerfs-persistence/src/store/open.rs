@@ -113,7 +113,7 @@ impl Handles {
             storage,
             acquisition: AcquisitionProvider::new(session.clone(), directory),
             history: HistoryProvider {
-                session,
+                engine: crate::backend::Engine::Sqlite(session),
                 catalog_id,
                 incarnation,
                 cursor_key,

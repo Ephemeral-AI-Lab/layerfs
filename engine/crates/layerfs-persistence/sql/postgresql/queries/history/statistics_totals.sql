@@ -1,0 +1,1 @@
+SELECT logical,canonical,stored,metadata,(SELECT coalesce(sum(pg_total_relation_size(c.oid)),0)::bigint/8192 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relkind='r'),0::bigint,8192::bigint,init_entries,init_files,init_bytes,init_canonical,init_stored,init_metadata,init_millis FROM store_totals WHERE id=1;

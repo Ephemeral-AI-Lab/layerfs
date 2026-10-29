@@ -1,11 +1,11 @@
 //! Shared signature-ring count/stamp validation.
-use crate::backend::{metadata_signatures, Transaction};
+use crate::backend::Mechanics;
 use layerfs_storage::{location::SignatureRow, port::PersistenceError};
-pub(crate) fn read(
-    tx: &Transaction<'_>,
+pub(crate) fn read<T: Mechanics + ?Sized>(
+    tx: &T,
     out: &mut Vec<SignatureRow>,
 ) -> Result<(), PersistenceError> {
-    metadata_signatures::read(tx, out)?;
+    tx.signatures(out)?;
     if out.len() > 8192
         || out.iter().any(|r| {
             r.slot >= 8192

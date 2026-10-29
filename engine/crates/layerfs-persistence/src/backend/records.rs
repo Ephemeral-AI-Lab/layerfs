@@ -73,6 +73,38 @@ impl Record {
             .ok_or(BackendError::Integrity)
     }
 }
+use layerfs_storage::{
+    location::{PackDomain, PackInfo},
+    policy,
+    port::ObjectKey,
+};
+/// One checked pack descriptor from its stored columns, on either engine.
+pub(crate) fn pack_info(
+    pack_id: i64,
+    domain: i64,
+    digest: &[u8],
+    length: i64,
+) -> Result<PackInfo, BackendError> {
+    let domain = match domain {
+        0 => PackDomain::Metadata,
+        1 => PackDomain::Payload,
+        _ => return Err(BackendError::Integrity),
+    };
+    let digest = digest.try_into().map_err(|_| BackendError::Integrity)?;
+    let length = usize::try_from(length).map_err(|_| BackendError::Integrity)?;
+    if pack_id <= 0
+        || !(32..=policy::SINGLETON_PACK_LIMIT).contains(&length)
+        || domain == PackDomain::Metadata && length > policy::PACK_LIMIT
+    {
+        return Err(BackendError::Integrity);
+    }
+    Ok(PackInfo {
+        pack_id,
+        domain,
+        key: ObjectKey::from_bytes(digest),
+        length,
+    })
+}
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum BackendError {
     Busy,

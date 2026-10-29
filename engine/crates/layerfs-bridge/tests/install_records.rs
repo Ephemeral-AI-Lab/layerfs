@@ -37,6 +37,16 @@ fn bounded_manifest_is_exact_and_does_not_cap_stream_length() {
     assert!(oversized.encode().is_err());
 }
 #[test]
+fn a_postgresql_provider_is_never_an_install_manifest() {
+    let mut value = manifest();
+    value.provider = ProviderKind::Postgres;
+    assert!(value.encode().is_err());
+    let mut encoded = manifest().encode().unwrap();
+    assert_eq!(encoded[5], 1);
+    encoded[5] = 2;
+    assert!(StoreManifest::decode(&encoded).is_err());
+}
+#[test]
 fn installed_and_refused_keep_original_publication_knowledge() {
     let mut installed = manifest();
     installed.daemon_sqlite = Some("3.53.2".into());

@@ -3,6 +3,7 @@
 pub(crate) mod acquisition;
 pub(crate) mod lane;
 pub(crate) mod lifecycle;
+mod mechanics;
 pub(crate) mod metadata;
 pub(crate) mod objects;
 pub(crate) mod schema;
