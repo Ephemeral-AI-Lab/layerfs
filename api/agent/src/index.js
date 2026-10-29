@@ -62,10 +62,21 @@ async function opened(client) {
   client[STATE].closed = false;
 }
 
+/** LAYERFS_STORE_POSTGRESQL's { url }, or none when it is unset. */
+function postgresqlOf(text) {
+  if (text === undefined) return undefined;
+  let value;
+  try { value = JSON.parse(text); } catch { value = null; }
+  if (value === null || typeof value !== "object" || typeof value.url !== "string" || !value.url) {
+    throw new LayerFSError("InvalidInput", "LAYERFS_STORE_POSTGRESQL must be a JSON object { url }", null);
+  }
+  return { url: value.url };
+}
+
 /** The removed options argument (#431 follow-up) is refused, never ignored. */
 function noOptions(method, given) {
   if (given) {
-    throw new LayerFSError("InvalidInput", `${method} takes no options: settings come from the environment (LAYERFS_STORE_PATH, LAYERFS_DAEMON_HOST, LAYERFS_TRACE, LAYERFS_TRACE_STEP, LAYERFS_STORE_POLICY)`, null);
+    throw new LayerFSError("InvalidInput", `${method} takes no options: settings come from the environment (LAYERFS_STORE_PATH, LAYERFS_STORE, LAYERFS_STORE_POSTGRESQL, LAYERFS_DAEMON_HOST, LAYERFS_TRACE, LAYERFS_TRACE_STEP, LAYERFS_STORE_POLICY)`, null);
   }
 }
 
@@ -110,7 +121,11 @@ export class LayerFS {
    * filesystem the daemons share, or the calls fail `Unsupported`.
    * LAYERFS_STORE_POLICY, a JSON object { smallFileThreshold,
    * wholeFileDepth, chunkDepth, metadataDepth }, is the Store policy
-   * `LayerFS.init` records instead of the default. */
+   * `LayerFS.init` records instead of the default.
+   * LAYERFS_STORE names the Store that holds the project when the Store
+   * holds several (#506); unset, the project has a Store of its own.
+   * LAYERFS_STORE_POSTGRESQL, a JSON object { url }, opens a PostgreSQL
+   * Store: its URL is sent with each Store call and never stored. */
   constructor(projectName, token = undefined) {
     if (token !== FACTORY) {
       throw new LayerFSError("InvalidInput", "use `await LayerFS.open(name)` or `await LayerFS.init(name, folder)`; there is no public constructor", null);
@@ -133,6 +148,8 @@ export class LayerFS {
       },
       storePolicy: env("STORE_POLICY"),
       storePath: env("STORE_PATH"),
+      store: env("STORE"),
+      postgresql: postgresqlOf(env("STORE_POSTGRESQL")),
     };
     // not open until a factory has opened its Store; the binding is chosen now, once
     this[STATE] = { closed: null, transport: binding() };

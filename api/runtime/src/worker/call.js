@@ -5,7 +5,10 @@
 const PAGE = 1 << 20;
 
 /** The Store a call names, as the binding's storeOpen and storeClose take it. */
-export const storeOf = (args) => ({ project: args.project, home: args.home, storePath: args.storePath });
+export const storeOf = (args) => ({
+  project: args.project, home: args.home, storePath: args.storePath,
+  ...(args.store ? { store: args.store } : {}), ...(args.postgresql ? { postgresql: args.postgresql } : {}),
+});
 
 /** Makes the call once: its answer, `{ value }` or `{ refused }`. */
 export async function made(binding, fn, op, args) {

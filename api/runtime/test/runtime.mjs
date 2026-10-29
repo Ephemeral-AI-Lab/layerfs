@@ -1,6 +1,6 @@
 // @layerfs/runtime with the agent's stand-in binding and a stub Docker (#428):
 // no Store, Docker or daemon. One case per command:
-//   node api/runtime/test/runtime.mjs surface|home-mode|projects|init|state|events|leftovers|sandboxes|volumes|transport-order|macos-worker|worker-frames|docker-default|worker-docker
+//   node api/runtime/test/runtime.mjs surface|home-mode|projects|init|state|events|leftovers|sandboxes|volumes|transport-order|macos-worker|worker-frames|docker-default|worker-docker|stores
 import assert from "node:assert/strict";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -488,8 +488,120 @@ try {
       process.env.PATH = path;
       worker.close();
     }
+  } else if (selected === "stores") {
+    // #506 Store-first: a home holds many Stores, a Store many projects
+    project("alpha");
+    mkdirSync(join(home, ".runtime", "projects"), { recursive: true });
+    writeFileSync(join(home, ".runtime", "projects", "alpha.json"), JSON.stringify({ name: "alpha", volume: "layerfs-alpha-store-1", source: "/src/alpha", created: 1 }));
+    let sandboxRows = "";
+    const { runtime, calls } = await opened((args) => {
+      if (args[0] === "volume" && args[1] === "inspect") throw Object.assign(new Error("no such volume"), { stderr: "Error: No such volume" });
+      if (args[0] === "ps" && args.includes("label=layerfs.role=sandbox")) return sandboxRows;
+      return "";
+    });
+    const methods = (group) => Object.keys(group).sort();
+    assert.deepEqual(methods(runtime.store), ["attach_postgresql", "create", "list", "remove", "start_clone", "start_import_postgresql", "start_pull", "start_push"]);
+    assert.deepEqual(methods(runtime.remote), ["add", "list", "remove"]);
+    assert.deepEqual(methods(runtime.sync), ["get"]);
+    const ended = async (job) => {
+      for (let i = 0; i < 200; i++) {
+        const now = (await runtime.sync.get(job.id)) ?? (await runtime.project.get_init(job.id));
+        if (now.ended) return now;
+        await new Promise((next) => setTimeout(next, 10));
+      }
+      throw new Error(`job ${job.id} did not end`);
+    };
+    const nativeArgs = (op) => native.args[native.calls.lastIndexOf(op)];
+    const work_dir = () => runtime.settings.volumes;
+    // a new empty Store: its own labelled volume, then the binding's create there
+    const work = await runtime.store.create("work");
+    assert.deepEqual([work.name, work.kind, work.volume, work.projects], ["work", "sqlite", "layerfs-store-work", []]);
+    assert.ok(calls.some((a) => a.join(" ") === `volume create --label layerfs.role=store --label layerfs.home=${home} --label layerfs.store=work layerfs-store-work`));
+    assert.equal(nativeArgs("runtime.store.create").storePath, join(work_dir(), "layerfs-store-work", "_data/global/store.sqlite"));
+    await assert.rejects(runtime.store.create("work"), { code: "Exists" });
+    await assert.rejects(runtime.store.create("alpha"), { code: "Exists" }, "a project's own Store has its name");
+    // the project made by its own Init is a Store holding it
+    assert.deepEqual((await runtime.store.list()).map((s) => [s.name, s.legacy, s.projects]), [["alpha", true, ["alpha"]], ["work", false, []]]);
+    // two projects into one Store: no volume each, the binding adds each stack
+    const folder = join(tmpdir(), `layerfs-runtime-src-${process.pid}`);
+    mkdirSync(join(folder, "src"), { recursive: true });
+    writeFileSync(join(folder, "src", "a.txt"), "a");
+    const volumesBefore = calls.filter((a) => a[0] === "volume" && a[1] === "create").length;
+    for (const name of ["shop", "api"]) {
+      const job = await runtime.project.start_init(name, folder, { store: "work" });
+      assert.equal((await ended(job)).step, "done", name);
+      assert.deepEqual([nativeArgs("runtime.store.add_project").store, nativeArgs("runtime.store.add_project").name], ["work", name]);
+      assert.ok(nativeArgs("runtime.store.add_project").timeoutMs > 0);
+    }
+    assert.equal(calls.filter((a) => a[0] === "volume" && a[1] === "create").length, volumesBefore, "no volume per added project");
+    await assert.rejects(runtime.project.start_init("shop", folder, { store: "work" }), { code: "Exists" });
+    await assert.rejects(runtime.project.start_init("x", folder, { store: "nowhere" }), { code: "NoSuchStore" });
+    // a second project in the project's own Store
+    assert.equal((await ended(await runtime.project.start_init("web", folder, { store: "alpha" }))).step, "done");
+    assert.deepEqual((await runtime.store.list()).map((s) => [s.name, s.projects]), [["alpha", ["alpha", "web"]], ["work", ["shop", "api"]]]);
+    const listed = (await runtime.project.list()).map((p) => [p.name, p.store, p.shared]);
+    assert.deepEqual(listed, [["alpha", "alpha", false], ["api", "work", true], ["shop", "work", true], ["web", "alpha", true]]);
+    // remotes: references only, never keys
+    await assert.rejects(runtime.remote.add({ name: "minio-a", provider: "minio", endpoint: "http://h:9000", bucket: "b", credentials: { accessKey: "k", secretKey: "s" } }), { code: "InvalidInput" });
+    assert.equal((await runtime.remote.add({ name: "minio-a", provider: "minio", endpoint: "http://h:9000", bucket: "b" })).credentials, "env:LAYERFS_REMOTE");
+    await assert.rejects(runtime.remote.remove("minio-a"), { code: "InvalidInput", message: /confirm/ });
+    // push: one job, keys for this call only
+    const push = await runtime.store.start_push("work", { remote: "minio-a", credentials: { accessKey: "AK", secretKey: "SECRET-1" } });
+    assert.deepEqual([push.kind, push.store, push.remote, push.step], ["push", "work", "minio-a", "running"]);
+    const pushed = await ended(push);
+    assert.deepEqual([pushed.step, pushed.bytes, pushed.result.kind], ["done", 8192, "Pushed"]);
+    assert.equal(nativeArgs("runtime.store.push").credentials.secretKey, "SECRET-1");
+    assert.ok(!JSON.stringify(pushed).includes("SECRET-1"), "a job keeps no key");
+    const afterPush = (await runtime.store.list()).find((s) => s.name === "work");
+    assert.deepEqual([afterPush.remote, afterPush.copies.map((c) => c.direction)], ["minio-a", ["push"]]);
+    // pull replaces every project: confirm names the Store
+    await assert.rejects(runtime.store.start_pull("work", { remote: "minio-a" }), { code: "InvalidInput", message: /confirm/ });
+    native.pullAdded = ["cart"];
+    assert.equal((await ended(await runtime.store.start_pull("work", { remote: "minio-a", confirm: "work" }))).step, "done");
+    const pulled = (await runtime.store.list()).find((s) => s.name === "work");
+    assert.deepEqual([pulled.projects, pulled.copies.map((c) => c.direction)], [["shop", "api", "cart"], ["pull"]]);
+    // clone: a new Store and volume from the remote copy
+    const clone = await ended(await runtime.store.start_clone("minio-a", { store: "work", as: "copy" }));
+    assert.equal(clone.step, "done");
+    assert.deepEqual([nativeArgs("runtime.store.clone").from, nativeArgs("runtime.store.clone").store], ["work", "copy"]);
+    const copy = (await runtime.store.list()).find((s) => s.name === "copy");
+    assert.deepEqual([copy.volume, copy.remote, copy.projects], ["layerfs-store-copy", "minio-a", ["docs", "web"]]);
+    await assert.rejects(runtime.store.start_clone("minio-a", { store: "work", as: "copy" }), { code: "Exists" });
+    // PostgreSQL: an import makes a schema Store; the URL is never written
+    native.storeProjects = [{ name: "api", stack: "s1", headLayer: "l1" }, { name: "shop", stack: "s2", headLayer: "l2" }];
+    const url = "postgresql://lfc:PG-SECRET@host.docker.internal:5432/layerfs";
+    await assert.rejects(runtime.store.start_import_postgresql("work", { name: "main", connection: "pg-local", url, schema: "Bad-Schema" }), { code: "InvalidInput" });
+    const imported = await ended(await runtime.store.start_import_postgresql("work", { name: "main", connection: "pg-local", url, schema: "lfc_main" }));
+    assert.equal(imported.step, "done", JSON.stringify(imported.error));
+    assert.equal(nativeArgs("runtime.store.import_postgresql").postgresql.url, url);
+    const pg = (await runtime.store.list()).find((s) => s.name === "main");
+    assert.deepEqual([pg.kind, pg.connection, pg.schema, pg.synchronousCommit, pg.projects], ["postgresql", "pg-local", "lfc_main", "off", ["api", "shop"]]);
+    assert.ok(!readFileSync(join(home, "stores.json"), "utf8").includes("PG-SECRET"), "stores.json holds no URL");
+    const attached = await runtime.store.attach_postgresql({ name: "main", connection: "pg-local", url, schema: "lfc_main", synchronousCommit: "local" });
+    assert.equal(attached.synchronousCommit, "local");
+    // the same project name in two Stores: calls name the Store
+    await assert.rejects(runtime.project.get_state("shop"), { code: "InvalidInput", message: /Stores main, work/ });
+    await assert.rejects(runtime.project.start_init("shop", folder, { store: "main" }), { code: "Unsupported" });
+    await assert.rejects(runtime.store.start_push("main", { remote: "minio-a" }), { code: "Unsupported" });
+    // removing one project of a shared Store drops its stack; the Store and its other projects stay
+    sandboxRows = "layerfs-work.api-1\trunning\tUp 1 minute\tapi\t1\timg\twork\nlayerfs-work.shop-1\trunning\tUp\tshop\t1\timg\twork\n";
+    await assert.rejects(runtime.project.remove("api", { store: "work", confirm: "api" }), { code: "Busy", message: /1 running Sandbox/ });
+    sandboxRows = "layerfs-work.api-1\texited\tExited (0)\tapi\t1\timg\twork\n";
+    assert.deepEqual(await runtime.project.remove("api", { store: "work", confirm: "api" }), { kind: "Removed", project: "api", store: "work", stack: "5e", packsKept: true });
+    assert.equal(nativeArgs("runtime.store.remove_project").project, "api");
+    assert.ok(calls.some((a) => a.join(" ") === "rm layerfs-work.api-1"), "its stopped Sandbox goes with it");
+    sandboxRows = "";
+    assert.deepEqual((await runtime.store.list()).find((s) => s.name === "work").projects, ["shop", "cart"]);
+    // removing a Store names it, and takes its volume
+    await assert.rejects(runtime.store.remove("copy"), { code: "InvalidInput", message: /confirm/ });
+    assert.deepEqual(await runtime.store.remove("copy", { confirm: "copy" }), { kind: "Removed", store: "copy", volume: "layerfs-store-copy" });
+    assert.ok(calls.some((a) => a.join(" ") === "volume rm layerfs-store-copy"));
+    assert.equal(nativeArgs("runtime.store.forget").store, "copy");
+    assert.deepEqual((await runtime.store.list()).map((s) => s.name), ["alpha", "main", "work"]);
+    rmSync(folder, { recursive: true, force: true });
+    await runtime.close();
   } else {
-    throw new Error("select surface, home-mode, projects, init, state, events, leftovers, sandboxes, volumes, transport-order, macos-worker, worker-frames, docker-default or worker-docker");
+    throw new Error("select surface, home-mode, projects, init, state, events, leftovers, sandboxes, volumes, transport-order, macos-worker, worker-frames, docker-default, worker-docker or stores");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });

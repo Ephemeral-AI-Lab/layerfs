@@ -188,22 +188,53 @@ api/runtime/src/store/                  stores.json, store volumes, Store-level 
 
 ## 6. Runtime calls (contract for integrations such as Connect)
 
-All calls are made once; destructive calls take `confirm`.
+Built by session c (`@layerfs/runtime`). All calls are made once, with no
+retry; destructive calls take `confirm` set to the name they destroy. A
+job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
+`runtime.project.get_init(id)` for an Init) reads it until `ended`.
 
 | Call | Does |
 | --- | --- |
-| `runtime.store.list()` | Stores in the home: `{ name, kind: 'sqlite' \| 'postgresql', volume?, connection?, schema?, remote?, projects: [...], copies: [...] }` |
-| `runtime.store.create(name)` | a new empty local SQLite Store in its own volume |
-| `runtime.store.remove(name, { confirm })` | deletes a local Store's volume, or forgets a PostgreSQL Store |
-| `runtime.project.start_init(name, folder, { store })` | Inits a project into `store`; without `store`, into a new Store of the same name, as today |
-| `runtime.project.remove(name, { store, confirm })` | drops the project's stack |
-| `runtime.remote.list() / add(r) / remove(name, { confirm })` | remotes in the home, with no secret |
-| `runtime.store.start_push(store, { remote, credentials })` | whole-Store upload job |
-| `runtime.store.start_pull(store, { remote, credentials, confirm })` | replace-the-Store job |
-| `runtime.store.start_clone(remote, { store, credentials })` | a new local Store from a remote copy |
-| `runtime.store.attach_postgresql({ name, connection, schema, synchronousCommit })` | registers a PostgreSQL Store; the URL with its secret is passed per call |
-| `runtime.store.start_import_postgresql(store, { url, schema, synchronousCommit })` | copies a SQLite Store into a PostgreSQL schema |
-| `runtime.sync.get(id)` | a push, pull, clone or import job: `{ id, step, bytes, total, error, started, ended }` |
+| `runtime.store.list()` | Stores in the home: `{ name, kind: 'sqlite' \| 'postgresql', volume?, connection?, schema?, synchronousCommit?, remote, legacy, created, projects: [names], copies: [transfer] }`; a transfer is `{ remote, direction: 'push' \| 'pull', at, sha256, bytes }`, the latest per remote |
+| `runtime.store.create(name)` | a new empty local SQLite Store in its own volume `<prefix>store-<name>` |
+| `runtime.store.remove(name, { confirm, stopSandboxes })` | deletes a local Store's volume (every project in it; Busy while a Sandbox runs on it, unless `stopSandboxes`), or forgets a PostgreSQL Store (its schema stays) |
+| `runtime.project.start_init(name, folder, { store })` | Inits a project into the live Store `store` through its writer lane and admission (Exists for a taken name, Busy while another add runs, Unsupported for a Store without acquisition tables or a PostgreSQL Store); without `store`, into a new Store of the same name, as before |
+| `runtime.project.remove(name, { store, confirm, stopSandboxes })` | in a Store that holds others: removes the project's Sandboxes (Busy while one runs, unless `stopSandboxes`) and drops its stack, answering `{ kind: 'Removed', project, store, stack, packsKept: true }`; packs stay until A8 (#411). A project alone in its own Store is removed whole, with its volume, as before |
+| `runtime.project.list()`, `get_state(name, since, { store })`, `runtime.sandbox.reclaim(name, { store })` | `list` items carry `store` and `shared`; `{ store }` names the Store when a project name is in several (InvalidInput otherwise) |
+| `runtime.remote.list() / add(r) / remove(name, { confirm })` | remotes in the home; `add({ name, provider: 'minio', endpoint, bucket, prefix?, region?, credentials?, partSize? })` takes a credential reference (`env:LAYERFS_…` or `file:/path`, default `env:LAYERFS_REMOTE`), never keys |
+| `runtime.store.start_push(store, { remote, credentials, force })` | whole-Store upload job; Conflict when the remote moved since this home's last transfer with it, unless `force` |
+| `runtime.store.start_pull(store, { remote, credentials, confirm })` | replace-the-Store job (all of its projects); closes this process's clients first, refuses Busy while anything else holds the Store |
+| `runtime.store.start_clone(remote, { store, as, credentials })` | a new local Store `as` (default `store`) from the remote copy of `store` |
+| `runtime.store.attach_postgresql({ name, connection, url, schema, synchronousCommit })` | registers the PostgreSQL Store `name` after checking it opens: a schema this home imported keeps its recorded identity; any other LayerFS schema is read for its binding and gets a fresh cursor key |
+| `runtime.store.start_import_postgresql(store, { name, connection, url, schema, synchronousCommit })` | copies a SQLite Store (every project, the same ids) into a new schema and registers it as the PostgreSQL Store `name` (default `<store>-pg`) |
+| `runtime.sync.get(id)` | a push, pull, clone or import job: `{ id, kind, store, remote, step: 'running' \| 'done' \| 'failed', bytes, total, error: { code, message }, started, ended, result }` |
+
+- **Credentials:** `credentials` is `{ accessKey, secretKey }` for that call
+  only; without it the remote's reference is read. A PostgreSQL `url` is
+  passed per call and is never written to the home or kept in a job.
+- **PostgreSQL Stores** have no Sandboxes (a daemon opens SQLite only) and
+  are not pushed or pulled. `@layerfs/agent` opens one with `LAYERFS_STORE`
+  and `LAYERFS_STORE_POSTGRESQL` (`{ "url": … }`).
+- **Opening a project of a shared Store:** `LayerFS.open(project)` with
+  `LAYERFS_STORE` (or the `store` option) and that Store's path.
+- **Home layout.** `<home>/stores.json` lists the Stores the runtime made or
+  registered (`{ version: 1, stores: [...] }`, no secret). A Store made by
+  its project's own Init (before #506, or with no `store`) is listed from
+  that project's record as `legacy`, and gets an entry once another project
+  joins it or its first project is removed. Native records:
+  `<home>/<project>/project.record` for a project alone in its own Store;
+  `<home>/.stores/<store>/store.record` (kind, binding, cursor key; schema
+  and `synchronous_commit` for PostgreSQL) and
+  `<home>/.stores/<store>/projects/<project>/project.record` for a shared
+  Store. Sandboxes of a shared Store's project are named
+  `<prefix><store>.<project>-<n>` and labelled `layerfs.store`.
+- **Linux, macOS, Windows.** On Linux every call runs in the caller's
+  process. On macOS and Windows the calls go to the worker, which reaches
+  MinIO and PostgreSQL by the endpoint and URL it is given (use
+  `host.docker.internal` for a service on the host's loopback). The worker's
+  sealed Linux build takes the PostgreSQL engine with
+  `python3 tools/worktree.py build --resources <resources.json> --platform linux --profile debug|release --jobs N --features layerfs-node/postgresql`;
+  MinIO is on by default in `layerfs-remote-storage`.
 
 ## 7. Work split
 
@@ -227,8 +258,9 @@ All calls are made once; destructive calls take `confirm`.
 
 ## 8. Open items
 
-- Init into a live Store: admission, and how it uses the parallel construction
-  profile that Namespace Init keeps.
+- Init into a live Store: built through the writer lane and admission, one
+  add at a time per Store (Busy otherwise); how it uses the parallel
+  construction profile that Namespace Init keeps is open.
 - Reclaiming a removed project's packs (A8, #411).
 - Incremental push with #495's bundles.
 - The host SQLite cache for PostgreSQL Stores (#420).

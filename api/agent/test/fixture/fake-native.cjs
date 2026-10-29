@@ -68,6 +68,20 @@ function answer(op, args) {
     case "sandbox.list_workspaces": return { value: { kind: "ok", version: "1", workspaces: exports.workspaceList } };
     case "sandbox.close": return { value: { kind: "Closed", sandbox: args.sandbox } };
     case "runtime.sandbox.reclaim": return { value: { kind: "ok", reclaimed: exports.reclaimed ?? [] } };
+    // #506 Store-first: Stores, their projects, remotes and transfers
+    case "runtime.store.create": return { value: { kind: "Created", store: args.store, storePath: args.storePath, bytes: 4096, sqlite: "3.50.0" } };
+    case "runtime.store.add_project": return { value: { kind: "Initialized", project: args.name, store: args.store, layer: "lay0", root: "r00t", storePath: args.storePath } };
+    case "runtime.store.list_projects": return { value: exports.storeProjects ?? [] };
+    case "runtime.store.remove_project": return { value: { stack: "5e", packsKept: true } };
+    case "runtime.store.forget": return { value: { removed: true } };
+    case "runtime.store.push": return { value: { kind: "Pushed", store: args.store, object: `${args.store}/store.sqlite`, pieces: 0, transfer: { remote: args.remote, direction: "push", at: 1, sha256: "ab".repeat(32), bytes: 8192 } } };
+    case "runtime.store.pull": return { value: { kind: "Pulled", store: args.store, replaced: true, added: exports.pullAdded ?? [], missing: [], transfer: { remote: args.remote, direction: "pull", at: 2, sha256: "cd".repeat(32), bytes: 8192 } } };
+    case "runtime.store.clone": return { value: { kind: "Cloned", store: args.store, from: args.from, projects: ["docs", "web"], transfer: { remote: args.remote, direction: "pull", at: 3, sha256: "ab".repeat(32), bytes: 8192 } } };
+    case "runtime.store.import_postgresql": return { value: { kind: "Imported", store: args.target, schema: args.postgresql.schema, tables: [], packBytes: 512 } };
+    case "runtime.store.attach_postgresql": return { value: { kind: "Attached", store: args.store, schema: args.postgresql.schema, synchronousCommit: args.postgresql.synchronousCommit, projects: exports.storeProjects ?? [] } };
+    case "runtime.remote.list": return { value: exports.remoteList ?? [] };
+    case "runtime.remote.add": return { value: { ...args.remote, credentials: args.remote.credentials ?? "env:LAYERFS_REMOTE" } };
+    case "runtime.remote.remove": return { value: { removed: args.name } };
     default:
       if (/^fs\.(write|edit|apply|mkdir|cp|mv)$/.test(op)) return { value: committed };
       return { value: { items: [], hasMore: false, nextPagePos: null } };

@@ -1,0 +1,55 @@
+#!/usr/bin/env node
+// A test-only stand-in for the Docker CLI in an image that has none
+// (stores_real.mjs `linux`): the few calls @layerfs/runtime makes on Linux
+// for Store volumes, over the Engine API on the -H unix socket. Anything
+// else exits 2. Not product code.
+import { request } from "node:http";
+
+let args = process.argv.slice(2);
+let socket = "/var/run/docker.sock";
+if (args[0] === "-H") { socket = args[1].replace(/^unix:\/\//, ""); args = args.slice(2); }
+const api = (method, path, body) => new Promise((resolve, reject) => {
+  const req = request({ socketPath: socket, method, path: `/v1.43${path}`, headers: body ? { "content-type": "application/json" } : {} }, (res) => {
+    let text = "";
+    res.on("data", (c) => (text += c));
+    res.on("end", () => resolve({ status: res.statusCode, text }));
+  });
+  req.on("error", reject);
+  req.end(body ? JSON.stringify(body) : undefined);
+});
+const fail = (text) => { process.stderr.write(`${text}\n`); process.exit(1); };
+const flag = (name) => { const at = args.indexOf(name); return at < 0 ? [] : [args[at + 1]]; };
+const all = (name) => args.flatMap((a, i) => (a === name ? [args[i + 1]] : []));
+
+const [group, verb] = args;
+if (group === "volume" && verb === "inspect") {
+  const r = await api("GET", `/volumes/${encodeURIComponent(args.at(-1))}`);
+  if (r.status !== 200) fail(`Error: No such volume: ${args.at(-1)}`);
+  console.log(JSON.parse(r.text).Name);
+} else if (group === "volume" && verb === "create") {
+  const labels = Object.fromEntries(all("--label").map((l) => l.split(/=(.*)/s).slice(0, 2)));
+  const r = await api("POST", "/volumes/create", { Name: args.at(-1), Labels: labels });
+  if (r.status !== 201) fail(r.text);
+  console.log(args.at(-1));
+} else if (group === "volume" && verb === "rm") {
+  const r = await api("DELETE", `/volumes/${encodeURIComponent(args.at(-1))}`);
+  if (r.status !== 204) fail(r.text);
+} else if (group === "ps") {
+  const filters = {};
+  for (const f of all("--filter")) { const [k, v] = f.split(/=(.*)/s); (filters[k] ??= []).push(v); }
+  const r = await api("GET", `/containers/json?all=1&filters=${encodeURIComponent(JSON.stringify(filters))}`);
+  if (r.status !== 200) fail(r.text);
+  const rows = JSON.parse(r.text);
+  const format = flag("--format")[0];
+  const field = { ID: (c) => c.Id.slice(0, 12), Names: (c) => c.Names[0].replace(/^\//, ""), State: (c) => c.State, Status: (c) => c.Status, Image: (c) => c.Image };
+  const shown = (c) => (format ? format.replace(/\{\{\.(\w+)\}\}|\{\{\.Label "([^"]+)"\}\}/g, (_, key, label) => (label ? c.Labels?.[label] ?? "" : field[key](c))) : c.Id);
+  for (const c of rows) console.log(shown(c));
+} else if (group === "rm") {
+  for (const id of args.slice(1).filter((a) => !a.startsWith("-"))) {
+    const r = await api("DELETE", `/containers/${id}?force=${args.includes("-f") ? 1 : 0}`);
+    if (r.status !== 204) fail(r.text);
+  }
+} else {
+  process.stderr.write(`docker shim: unsupported ${args.join(" ")}\n`);
+  process.exit(2);
+}

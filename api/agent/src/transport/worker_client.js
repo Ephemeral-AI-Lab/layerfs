@@ -145,7 +145,8 @@ export function workerClient(file) {
     };
     const sent = info.daemonHost || info.docker ? { ...args, deploy } : args;
     const request = { fn, op, args: sent, open: opened.has(args.storePath) };
-    if (fn === "call" && op === "project.init" && info.init) return initRun(info.init, request);
+    // an Init reads its source folder, which only its own container mounts
+    if (info.init && ((fn === "call" && op === "project.init") || (fn === "backendCall" && op === "runtime.store.add_project"))) return initRun(info.init, request);
     return connection(info).call(request);
   }
   return {

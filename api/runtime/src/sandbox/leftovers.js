@@ -1,21 +1,23 @@
 // Sandbox containers of this home that no project owns, or that were left
 // stopped, and their removal. From part of the dsh Host's runtime.js (#428).
 import { LayerFSError } from "@layerfs/agent";
+import { keyOf } from "../project/list.js";
 
 /** This home's Sandbox containers (`<prefix><project>-<n>`, label layerfs.role=sandbox), running or not. */
 export async function containers(runtime) {
   const { settings, platform } = runtime;
-  const out = await platform.docker(settings, ["ps", "-a", "--no-trunc", "--filter", "label=layerfs.role=sandbox", "--format", "{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Label \"layerfs.project\"}}\t{{.Label \"layerfs.sandbox\"}}\t{{.Image}}"]);
+  const out = await platform.docker(settings, ["ps", "-a", "--no-trunc", "--filter", "label=layerfs.role=sandbox", "--format", "{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Label \"layerfs.project\"}}\t{{.Label \"layerfs.sandbox\"}}\t{{.Image}}\t{{.Label \"layerfs.store\"}}"]);
   return out.split("\n").filter(Boolean).map((row) => {
-    const [name, state, status, project, sandbox, image] = row.split("\t");
-    return { name, state, running: state === "running", status, project, sandbox, image };
+    const [name, state, status, project, sandbox, image, store] = row.split("\t");
+    // a Sandbox of a shared Store's project (#506) is `<prefix><store>.<project>-<n>`
+    return { name, state, running: state === "running", status, project, sandbox, image, store: store || null, key: store ? `${store}/${project}` : project };
   }).filter((c) => c.name.startsWith(settings.containerPrefix));
 }
 
 /** Containers of no project of this home, or stopped: `[{ name, project, running, status }]`. */
 export async function leftovers(runtime) {
-  const known = new Set((await runtime.project.list()).map((p) => p.name));
-  return (await containers(runtime)).filter((c) => !known.has(c.project) || !c.running).map(({ name, project, running, status }) => ({ name, project, running, status }));
+  const known = new Set((await runtime.project.list()).map(keyOf));
+  return (await containers(runtime)).filter((c) => !known.has(c.key) || !c.running).map(({ name, project, running, status }) => ({ name, project, running, status }));
 }
 
 /** runtime.sandbox.clean_leftovers(names): one `docker rm` per named stopped leftover; a running one is refused. */

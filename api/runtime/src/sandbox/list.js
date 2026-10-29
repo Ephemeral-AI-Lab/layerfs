@@ -5,6 +5,7 @@
 // there). It goes only when the container is deleted (sandbox.close, an idle
 // close followed by a reclaim, or runtime.sandbox.sweep). One `docker ps`
 // and one `docker inspect --size`; it changes nothing.
+import { keyOf } from "../project/list.js";
 
 /** A container gone between the listing and the inspection is left out: inspect still prints the others. */
 async function inspect(runtime, ids) {
@@ -23,15 +24,17 @@ export async function list(runtime) {
   const { settings, platform } = runtime;
   const ids = (await platform.docker(settings, ["ps", "-a", "-q", "--no-trunc", "--filter", "label=layerfs.role=sandbox"])).split("\n").filter(Boolean);
   if (!ids.length) return [];
-  const known = new Set((await runtime.project.list()).map((p) => p.name));
+  const known = new Set((await runtime.project.list()).map(keyOf));
   return (await inspect(runtime, ids)).map((c) => {
     const labels = c.Config?.Labels ?? {};
     const project = labels["layerfs.project"] ?? null;
+    const store = labels["layerfs.store"] ?? null;
     const running = c.State?.Running === true;
     const finished = c.State?.FinishedAt;
     return {
       name: String(c.Name ?? "").replace(/^\//, ""),
       project,
+      store,
       sandbox: labels["layerfs.sandbox"] ?? null,
       state: c.State?.Status ?? "unknown",
       running,
@@ -40,7 +43,7 @@ export async function list(runtime) {
       image: c.Config?.Image ?? null,
       ports: Object.entries(c.NetworkSettings?.Ports ?? {}).flatMap(([port, bound]) => (bound ?? []).map((b) => ({ container: port, host: b.HostIp, port: Number(b.HostPort) }))),
       scratch: typeof c.SizeRw === "number" ? c.SizeRw : null,
-      owned: project !== null && known.has(project),
+      owned: project !== null && known.has(store ? `${store}/${project}` : project),
     };
   }).filter((c) => c.name.startsWith(settings.containerPrefix)).sort((a, b) => a.name.localeCompare(b.name));
 }

@@ -104,20 +104,28 @@ export function invokeClientBackend(client, op, args) {
  * deployment, whose daemonHost the binding dials when it reopens a Sandbox
  * from its record and whose settings start a new one. */
 export function projectArgs(client) {
-  return { project: client.projectName, home: client.options.home, deploy: client.options.deploy };
+  return { project: client.projectName, home: client.options.home, deploy: client.options.deploy, ...(client.options.store ? { store: client.options.store } : {}) };
 }
 
-export const storeArgs = (client) => (client.options.storePath ? { storePath: client.options.storePath } : {});
+/** The Store fields of a client's calls: its Store file (or a PostgreSQL
+ * Store's key) and, for a PostgreSQL Store, its per-call `postgresql: { url }`. */
+export const storeArgs = (client) => ({
+  ...(client.options.storePath ? { storePath: client.options.storePath } : {}),
+  ...(client.options.postgresql ? { postgresql: client.options.postgresql } : {}),
+});
 
 /** Opens the client's Store in this process (one more client of it). */
 export async function storeOpen(client) {
-  return outcome(await transportOf(client).storeOpen({ project: client.projectName, home: client.options.home, ...storeArgs(client) }));
+  return outcome(await transportOf(client).storeOpen(storeOf(client)));
 }
 
 /** Releases the client's Store; the last client of the process closes it. */
 export async function storeClose(client) {
-  return outcome(await transportOf(client).storeClose({ project: client.projectName, home: client.options.home, ...storeArgs(client) }));
+  return outcome(await transportOf(client).storeClose(storeOf(client)));
 }
+
+/** The fields that name a client's Store when it is opened or closed. */
+const storeOf = (client) => ({ project: client.projectName, home: client.options.home, ...(client.options.store ? { store: client.options.store } : {}), ...storeArgs(client) });
 
 export function page(pageSize = 50, pagePos = 0) {
   if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 1000 || !Number.isSafeInteger(pagePos) || pagePos < 0) {
