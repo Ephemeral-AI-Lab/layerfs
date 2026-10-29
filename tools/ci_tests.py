@@ -44,6 +44,8 @@ SLOW = {
     ("layerfs-daemon", "stalled_unmount"): 21.28,
     # Linux native binding proof, owner-excluded from CI; run explicitly.
     ("layerfs-node", "native_admission"): 60.52,
+    # Linux native binding proof (#508), run in the runtime image, 2026-10-30.
+    ("layerfs-node", "native_connection_wait"): 66.11,
     # Linux SDK mount proof after the ownership move, 2026-10-27.
     ("layerfs-api", "observed_application"): 6.30,
     # Linux functional run at the relocated tree, 2026-10-27.

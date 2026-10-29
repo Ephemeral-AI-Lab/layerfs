@@ -12,6 +12,7 @@ cargo +1.85.1 build --manifest-path Cargo.toml --locked -p layerfs-node
 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-node --tests --no-run
 timeout 30 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-node --test native_discovery
 timeout 90 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-node --test native_admission
+timeout 100 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-node --test native_connection_wait
 ```
 
 Use the worktree's registered Cargo resources for these commands. Node 20 or
@@ -25,7 +26,10 @@ child retains the descriptor. Its C fixture interposes `flock` only in the child
 Node process; the fixture's fork is bounded and released on test unwinding.
 
 `native_admission` covers initial connection admission and its `Busy` deadline.
-The deadline test pays the product's full 60-second readiness wait. The mock
+The deadline test pays the product's full 60-second readiness wait.
+`native_connection_wait` covers a call that finds every connection of its
+process lent: it is refused `Busy` after the same 60-second wait (#508), and
+waits about 64 seconds in all. The mock
 daemon has bounded socket waits and stops independently of a test assertion.
 Neither target needs Docker, FUSE, or a Store. The JavaScript API remains outside
 the CI lanes under the owner's existing policy; run these targets explicitly.

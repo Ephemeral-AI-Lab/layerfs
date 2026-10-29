@@ -28,6 +28,38 @@ impl fmt::Display for PortError {
         write!(f, "Store port: {self:?}")
     }
 }
+impl PortError {
+    /// This failure as an object demand's Content error. A missing object and
+    /// a Content failure keep their own errors; every other failure is named
+    /// by its kind, so a refusal says which one it was (#508).
+    pub fn object_demand(&self) -> ContentError {
+        use ReadAdmissionError as Admission;
+        let what = match self {
+            Self::Storage(StorageError::ObjectMissing(_)) => return ContentError::MissingObject,
+            Self::Storage(StorageError::Content(error)) => return error.clone(),
+            Self::ConcurrentDemand => "Store object demand: concurrent demand in one operation",
+            Self::Poisoned => "Store object demand: operation state poisoned",
+            Self::History(_) => "Store object demand: history failure",
+            Self::ReadAdmission(Admission::Capacity) => "Store object demand: no reader capacity",
+            Self::ReadAdmission(Admission::Stopped) => "Store object demand: Store reader stopped",
+            Self::ReadAdmission(Admission::NoReaders) => "Store object demand: no Store readers",
+            Self::ReadAdmission(Admission::Poisoned) => "Store object demand: reader poisoned",
+            Self::Storage(StorageError::Io(_)) => "Store object demand: storage I/O failure",
+            Self::Storage(StorageError::Integrity(_)) => "Store object demand: storage integrity",
+            Self::Storage(StorageError::Unpublished(_)) => {
+                "Store object demand: unpublished object"
+            }
+            Self::Storage(StorageError::VisibilityCeiling { .. }) => {
+                "Store object demand: beyond the visibility ceiling"
+            }
+            Self::Storage(StorageError::CapacityExceeded { .. }) => {
+                "Store object demand: storage capacity exceeded"
+            }
+            Self::Storage(_) => "Store object demand: storage failure",
+        };
+        ContentError::ProviderFailure { what }
+    }
+}
 impl std::error::Error for PortError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
@@ -165,13 +197,7 @@ impl AuthenticatedObjects for StorePorts {
             let reader = self.reader()?;
             reader.objects(ids)
         })
-        .map_err(|error| match error.as_ref() {
-            PortError::Storage(StorageError::ObjectMissing(_)) => ContentError::MissingObject,
-            PortError::Storage(StorageError::Content(error)) => error.clone(),
-            _ => ContentError::ProviderFailure {
-                what: "Store object demand",
-            },
-        })
+        .map_err(|error| error.object_demand())
     }
 }
 impl FileLengths for StorePorts {
