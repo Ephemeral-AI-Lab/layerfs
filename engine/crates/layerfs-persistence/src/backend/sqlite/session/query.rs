@@ -135,6 +135,33 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "lineage_reach_insert" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/lineage_reach_insert.sql"
         )),
+        "removal_totals" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/removal_totals.sql"
+        )),
+        "removal_absorbed" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/removal_absorbed.sql"
+        )),
+        "removal_reach" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/removal_reach.sql"
+        )),
+        "removal_commit_lineage" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/removal_commit_lineage.sql"
+        )),
+        "removal_layer_lineage" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/removal_layer_lineage.sql"
+        )),
+        "removal_branches" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/removal_branches.sql"
+        )),
+        "removal_commits" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/removal_commits.sql"
+        )),
+        "removal_layers" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/removal_layers.sql"
+        )),
+        "removal_stack" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/removal_stack.sql"
+        )),
         _ => Err(BackendError::Integrity),
     }
 }

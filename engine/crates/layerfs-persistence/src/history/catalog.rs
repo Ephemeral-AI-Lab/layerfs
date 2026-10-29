@@ -152,6 +152,10 @@ impl HistoryCatalog for HistoryProvider {
         self.write(|tx| branch::fork(tx, request))
     }
 
+    fn remove_layerstack(&self, stack: LayerStackId) -> HistoryResult<()> {
+        self.write(|tx| super::removal::remove_layerstack(tx, stack))
+    }
+
     fn publish_lane(&self) -> HistoryResult<PublishLane> {
         match &self.engine {
             crate::backend::Engine::Sqlite(session) => {

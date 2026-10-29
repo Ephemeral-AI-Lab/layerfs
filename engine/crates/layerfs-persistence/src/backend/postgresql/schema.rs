@@ -62,15 +62,7 @@ pub(crate) fn validate(
     catalog_id: layerfs_history::CatalogId,
     binding: &[u8],
 ) -> Result<u64, BackendError> {
-    let tables = tx.query(
-        "SELECT table_name::text FROM information_schema.tables \
-         WHERE table_schema = current_schema() AND table_type = 'BASE TABLE' ORDER BY table_name",
-        vec![],
-    )?;
-    let actual: Vec<String> = tables.iter().map(|r| r.get(0)).collect::<Result<_, _>>()?;
-    if actual != TABLES {
-        return Err(BackendError::Integrity);
-    }
+    tables(tx)?;
     let rows = tx.query(
         "SELECT catalog_id,catalog_incarnation,binding_key,identity_format,schema_version,schema_source,schema_definition FROM history_meta WHERE id=1",
         vec![],
@@ -105,4 +97,28 @@ pub(crate) fn record(tx: &Transaction<'_>) -> Result<(), BackendError> {
         ],
     )?;
     Ok(())
+}
+
+/// Refuses a schema whose tables are not exactly a LayerFS Store's.
+fn tables(tx: &Transaction<'_>) -> Result<(), BackendError> {
+    let tables = tx.query(
+        "SELECT table_name::text FROM information_schema.tables \
+         WHERE table_schema = current_schema() AND table_type = 'BASE TABLE' ORDER BY table_name",
+        vec![],
+    )?;
+    let actual: Vec<String> = tables.iter().map(|r| r.get(0)).collect::<Result<_, _>>()?;
+    if actual != TABLES {
+        return Err(BackendError::Integrity);
+    }
+    Ok(())
+}
+
+/// The binding key recorded in a LayerFS schema; opening checks the rest.
+pub(crate) fn binding(tx: &Transaction<'_>) -> Result<Vec<u8>, BackendError> {
+    tables(tx)?;
+    let rows = tx.query("SELECT binding_key FROM history_meta WHERE id=1", vec![])?;
+    match rows.as_slice() {
+        [row] => row.get(0),
+        _ => Err(BackendError::Integrity),
+    }
 }

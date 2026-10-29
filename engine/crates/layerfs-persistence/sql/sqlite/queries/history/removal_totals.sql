@@ -1,0 +1,1 @@
+UPDATE store_totals SET logical = logical - (SELECT coalesce(sum(logical), 0) FROM layer WHERE layer_stack_id = $1) - (SELECT coalesce(sum(logical), 0) FROM "commit" WHERE layer_stack_id = $1) WHERE id = 1;

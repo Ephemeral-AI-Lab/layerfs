@@ -45,6 +45,13 @@ PostgreSQL unchanged except `hint_insert_binding` and `statistics_totals`.
   `COPY BINARY` in a write that does not wait for the lane, then adds
   locations, values, signatures and totals in the short lane transaction. A
   failed second step leaves unreferenced packs, never reused ids.
+- **Removing a project.** `HistoryCatalog::remove_layerstack` deletes one
+  stack's Layers, Branches, Commits and lineage, and their logical bytes from
+  the totals, in one write transaction on either engine; the write holds the
+  writer for time that grows with that project's history. Packs, objects,
+  file digests and the stack's allocator scope stay; reclaiming packs is #411.
+- **Attaching a schema.** `PostgresHandles::binding` reads the binding key a
+  LayerFS schema records, so a home that did not import it can open it.
 - **Not on PostgreSQL in this phase:** Init and acquisition, merge records
   (merges are refused), seal/snapshot/reclamation (no file), and the host
   SQLite cache #420 found necessary for one round trip per Commit.

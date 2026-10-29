@@ -44,6 +44,14 @@ impl PostgresHandles {
         Self::open(selection, binding, cursor_key, false)
     }
 
+    /// The binding key recorded in the schema `selection.schema`, read in one
+    /// read-only session, so a home that did not import the schema can open
+    /// it. Only the table set is checked here; opening checks the rest.
+    pub fn binding(selection: &PostgresSelection) -> Result<Vec<u8>, PersistenceError> {
+        let session = Session::connect(selection, false)?;
+        Ok(session.run::<_, BackendError>(false, schema::binding)?)
+    }
+
     fn open(
         selection: &PostgresSelection,
         binding: &[u8],
