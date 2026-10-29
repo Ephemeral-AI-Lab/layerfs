@@ -2,21 +2,18 @@
 use super::branch::{item, main_item};
 use super::lookup::{self as args, hex, history, Answer};
 use crate::store::Store;
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::{commit_value_with_budget, value_cost};
 use layerfs_history::{
-    CommitHistoryRequest, CommitId, CommitRecord, LayerHistoryRequest, LayerStackRecord, NodeId,
+    CommitHistoryRequest, CommitRecord, LayerHistoryRequest, LayerStackRecord, NodeId,
     MAXIMUM_PAGE_RECORDS,
 };
-use std::collections::HashSet;
 use std::sync::Arc;
 
 struct Page<'a> {
     branch: &'a str,
     limit: usize,
     pos: u64,
-    published: &'a HashSet<CommitId>,
-    all_published: bool,
     seen: u64,
     spent: usize,
     items: Vec<SdkValue>,
@@ -24,19 +21,11 @@ struct Page<'a> {
 }
 
 impl<'a> Page<'a> {
-    fn new(
-        branch: &'a str,
-        limit: usize,
-        pos: u64,
-        published: &'a HashSet<CommitId>,
-        all_published: bool,
-    ) -> Self {
+    fn new(branch: &'a str, limit: usize, pos: u64) -> Self {
         Self {
             branch,
             limit,
             pos,
-            published,
-            all_published,
             seen: 0,
             spent: 0,
             items: Vec::new(),
@@ -44,12 +33,23 @@ impl<'a> Page<'a> {
         }
     }
 
-    fn push(&mut self, record: &CommitRecord) -> bool {
+    fn skip(&mut self) -> bool {
         if self.seen < self.pos {
             self.seen += 1;
             return true;
         }
-        let published = self.all_published || self.published.contains(&record.id);
+        false
+    }
+
+    fn push(
+        &mut self,
+        record: &CommitRecord,
+        published: impl FnOnce() -> Result<bool, SdkRefusal>,
+    ) -> Result<bool, SdkRefusal> {
+        if self.skip() {
+            return Ok(true);
+        }
+        let published = published()?;
         let mut value =
             commit_value_with_budget(record, Some(self.branch), crate::read::reads::REPLY_BUDGET);
         if let SdkValue::Map(fields) = &mut value {
@@ -61,48 +61,15 @@ impl<'a> Page<'a> {
                 || self.spent + cost > crate::read::reads::REPLY_BUDGET)
         {
             self.more = true;
-            return false;
+            return Ok(false);
         }
         self.spent += cost;
         self.items.push(value);
-        true
+        Ok(true)
     }
 
     fn finish(self) -> (Vec<SdkValue>, bool) {
         (self.items, self.more)
-    }
-}
-
-fn published(
-    store: &Arc<Store>,
-    stack: &LayerStackRecord,
-    include_commits: bool,
-) -> Result<(HashSet<CommitId>, Vec<CommitRecord>), layerfs_bridge::control::SdkRefusal> {
-    let mut cursor = None;
-    let mut published = HashSet::new();
-    let mut commits = Vec::new();
-    loop {
-        let page = store
-            .history()
-            .layer_history(&LayerHistoryRequest {
-                stack: stack.id,
-                start: Some(stack.head_layer),
-                cursor,
-                limit: MAXIMUM_PAGE_RECORDS,
-            })
-            .map_err(history)?;
-        for layer in page.records {
-            if let Some(commit) = layer.source_commit {
-                published.insert(commit);
-                if include_commits {
-                    commits.push(args::commit(store, commit)?);
-                }
-            }
-        }
-        match page.continuation {
-            Some(next) => cursor = Some(next),
-            None => return Ok((published, commits)),
-        }
     }
 }
 
@@ -131,12 +98,34 @@ pub fn graph(
     } else {
         Some(args::branch(store, stack, name)?)
     };
-    let (published, main_commits) = published(store, stack, main)?;
-    let mut page = Page::new(name, limit, pos, &published, main);
+    let mut page = Page::new(name, limit, pos);
     if main {
-        for record in &main_commits {
-            if !page.push(record) {
-                break;
+        let mut cursor = None;
+        'pages: loop {
+            let found = store
+                .history()
+                .layer_history(&LayerHistoryRequest {
+                    stack: stack.id,
+                    start: Some(stack.head_layer),
+                    cursor,
+                    limit: MAXIMUM_PAGE_RECORDS,
+                })
+                .map_err(history)?;
+            for layer in found.records {
+                let Some(commit) = layer.source_commit else {
+                    continue;
+                };
+                if page.skip() {
+                    continue;
+                }
+                let record = args::commit(store, commit)?;
+                if !page.push(&record, || Ok(true))? {
+                    break 'pages;
+                }
+            }
+            match found.continuation {
+                Some(next) => cursor = Some(next),
+                None => break,
             }
         }
     } else if let Some(branch) = &branch {
@@ -159,7 +148,12 @@ pub fn graph(
                 if Some(record.id) == fork {
                     break 'pages;
                 }
-                if !page.push(&record) {
+                if !page.push(&record, || {
+                    store
+                        .history()
+                        .is_published(stack.head_layer, &record)
+                        .map_err(history)
+                })? {
                     break 'pages;
                 }
             }

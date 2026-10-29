@@ -113,6 +113,11 @@ pub trait HistoryCatalog: Send + Sync {
     /// One Layer by identity.
     fn layer(&self, id: LayerId) -> HistoryResult<Option<LayerRecord>>;
 
+    /// True when `commit` is the direct source of a Layer in the current chain
+    /// ending at `head`. Commits merely absorbed into a Layer's ancestry are
+    /// not direct sources.
+    fn is_published(&self, head: LayerId, commit: &CommitRecord) -> HistoryResult<bool>;
+
     /// Ancestry walk of one Branch, newest first, one bounded page at a time.
     fn commit_history(
         &self,

@@ -121,6 +121,7 @@ impl HistoryCatalog for Gated {
         branches(stack: LayerStackId, page: &Page) -> HistoryResult<PageResult<BranchRecord>>;
         commit(id: CommitId) -> HistoryResult<Option<CommitRecord>>;
         layer(id: LayerId) -> HistoryResult<Option<LayerRecord>>;
+        is_published(head: LayerId, commit: &CommitRecord) -> HistoryResult<bool>;
         commit_history(request: &CommitHistoryRequest) -> HistoryResult<PageResult<CommitRecord>>;
         layer_history(request: &LayerHistoryRequest) -> HistoryResult<PageResult<LayerRecord>>;
         merge_base(left: NodeId, right: NodeId) -> HistoryResult<Option<NodeId>>;
