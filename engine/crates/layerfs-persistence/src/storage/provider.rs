@@ -24,8 +24,8 @@ impl StorageProvider {
         }
     }
     /// One consistent copy of the live Store to `destination`, which must not
-    /// exist, through the SQLite online backup API in one step on a separate
-    /// read-only connection. The result is closed, has no sidecar and keeps
+    /// exist, through the SQLite online backup API in steps that share one
+    /// read transaction on a separate read-only connection. The result is closed, has no sidecar and keeps
     /// the source's schema version, ready for the sealed-Store install. A
     /// busy source is reported `Busy`, never retried; on failure an
     /// incomplete destination may remain for the caller to remove.
@@ -33,7 +33,16 @@ impl StorageProvider {
         &self,
         destination: &std::path::Path,
     ) -> Result<crate::SealedStore, PersistenceError> {
-        self.session.snapshot(destination)
+        self.session.snapshot(destination, &mut |_, _| ())
+    }
+    /// [`Self::snapshot`], calling `progress(done, total)` with the bytes
+    /// copied and the copy's size after each backup step (#506 E4).
+    pub fn snapshot_observed(
+        &self,
+        destination: &std::path::Path,
+        progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<crate::SealedStore, PersistenceError> {
+        self.session.snapshot(destination, progress)
     }
     /// Read-only counters from this already-open session, without a SQL query.
     /// Application observers need no history or acquisition capability.

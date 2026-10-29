@@ -9,4 +9,5 @@ pub(crate) mod metadata;
 pub(crate) mod objects;
 pub(crate) mod schema;
 pub(crate) mod session;
+pub(crate) mod status;
 pub(crate) mod storage;

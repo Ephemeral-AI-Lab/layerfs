@@ -16,11 +16,27 @@ pub struct Span {
     pub length: u64,
 }
 
-/// A remote file's size and user metadata.
+/// A remote file's size, user metadata and last change.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Stat {
     pub bytes: u64,
     pub metadata: Metadata,
+    /// When the file was last written, in milliseconds since the Unix
+    /// epoch, when the remote says.
+    pub modified: Option<u64>,
+}
+
+/// One file of a listing.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Listed {
+    /// Its name, as the other calls take it.
+    pub name: String,
+    pub bytes: u64,
+    /// Milliseconds since the Unix epoch, when the remote says.
+    pub modified: Option<u64>,
+    /// Its user metadata when the listing carries it; `None` when a stat
+    /// is needed to read it.
+    pub metadata: Option<Metadata>,
 }
 
 /// One remote. Each call sends each of its requests once; a sent request
@@ -52,7 +68,14 @@ pub trait Driver: Send + Sync {
 
     /// Removes `name`. An absent file is not an error.
     fn delete(&self, name: &str) -> Result<(), RemoteError>;
+
+    /// Every file whose name starts with `prefix`, in name order, in one
+    /// paged pass. A remote that cannot list refuses `Unsupported`.
+    fn list(&self, prefix: &str) -> Result<Vec<Listed>, RemoteError>;
 }
+
+/// Most pages one listing reads (1000 names each on S3) before it refuses.
+pub const MAX_LIST_PAGES: usize = 10_000;
 
 /// Longest file name a driver accepts.
 pub const MAX_NAME: usize = 512;

@@ -70,10 +70,22 @@ impl OpenedStore {
         &self,
         destination: &std::path::Path,
     ) -> StorageResult<layerfs_persistence::SealedStore> {
+        self.snapshot_observed(destination, &mut |_, _| ())
+    }
+    /// [`Self::snapshot`], calling `progress(done, total)` with the bytes
+    /// copied and the copy's size after each backup step (#506 E4).
+    pub fn snapshot_observed(
+        &self,
+        destination: &std::path::Path,
+        progress: &mut dyn FnMut(u64, u64),
+    ) -> StorageResult<layerfs_persistence::SealedStore> {
         match &self.writer {
-            Writer::Sqlite(provider) => provider.snapshot(destination),
+            Writer::Sqlite(provider) => provider.snapshot_observed(destination, progress),
             #[cfg(feature = "postgresql")]
-            Writer::Postgres(_) => Err(PersistenceError::BackendUnavailable),
+            Writer::Postgres(_) => {
+                let _ = progress;
+                Err(PersistenceError::BackendUnavailable)
+            }
         }
         .map_err(StorageError::from)
     }

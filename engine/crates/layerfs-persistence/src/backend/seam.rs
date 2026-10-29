@@ -32,7 +32,8 @@ pub(crate) trait HistoryStatements {
     }
 }
 
-/// One column of an array statement.
+/// One column of an array statement; only PostgreSQL reads them.
+#[cfg_attr(not(feature = "postgresql"), allow(dead_code))]
 pub(crate) enum Column {
     I64(Vec<i64>),
     Bytes(Vec<Vec<u8>>),

@@ -2,10 +2,12 @@
 //!
 //! The copy runs on its own read-only connection, so the shared session and
 //! its writer stay free: writers in this and other processes continue under
-//! WAL while the copy reads one snapshot. The whole database is copied in a
-//! single backup step, which holds one read transaction for the full copy;
-//! the result is the Store exactly as of that transaction. A busy or locked
-//! step is reported, never retried.
+//! WAL while the copy reads one snapshot. That connection opens one read
+//! transaction before the first backup step and holds it across all of
+//! them, so later commits by other connections never restart the copy; the
+//! result is the Store exactly as of that transaction. Steps of
+//! [`STEP_PAGES`] report the bytes copied so far (#506 E4). A busy or
+//! locked step is reported, never retried.
 use super::session::connection::Session;
 use super::session::query;
 use super::session::rows;
@@ -14,12 +16,21 @@ use layerfs_storage::port::PersistenceError;
 use rusqlite::{backup::Backup, backup::StepResult, Connection, OpenFlags};
 use std::{fs::OpenOptions, path::Path};
 
+/// Pages one backup step copies before it reports progress.
+pub(crate) const STEP_PAGES: i32 = 1024;
+
 impl Session {
     /// Copies this Store to `destination`, which must not exist. The file is
     /// left closed with no sidecar, in WAL mode with the source's schema
     /// version, ready for the sealed-Store install. On failure an incomplete
     /// destination file may remain; it is the caller's to remove.
-    pub(crate) fn snapshot(&self, destination: &Path) -> Result<SealedStore, PersistenceError> {
+    /// `progress(done, total)` is called after each step with the bytes
+    /// copied and the copy's whole size.
+    pub(crate) fn snapshot(
+        &self,
+        destination: &Path,
+        progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<SealedStore, PersistenceError> {
         OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -57,15 +68,31 @@ impl Session {
         }
         #[cfg(target_os = "macos")]
         super::lifecycle::file_control::disable_persistent_wal(&copy)?;
+        // the read transaction every step shares: one snapshot of the source
+        let page_size = query::run(&source, "PRAGMA page_size", vec![], &work)?
+            .first()
+            .ok_or(PersistenceError::Malformed)?
+            .get::<i64>(0)?;
+        let page_size = u64::try_from(page_size).map_err(|_| PersistenceError::Malformed)?;
+        query::run(&source, "BEGIN", vec![], &work)?;
+        query::run(&source, "SELECT count(*) FROM sqlite_schema", vec![], &work)?;
         {
             let backup = Backup::new(&source, &mut copy).map_err(rows::error)?;
-            match backup.step(-1).map_err(rows::error)? {
-                StepResult::Done => (),
-                StepResult::Busy | StepResult::Locked => return Err(PersistenceError::Busy),
-                // One unbounded step either finishes or fails.
-                _ => return Err(PersistenceError::Uncertain),
+            loop {
+                let step = backup.step(STEP_PAGES).map_err(rows::error)?;
+                let done = backup.progress();
+                let pages = u64::try_from(done.pagecount).unwrap_or(0);
+                let left = u64::try_from(done.remaining).unwrap_or(0);
+                progress((pages - left.min(pages)) * page_size, pages * page_size);
+                match step {
+                    StepResult::Done => break,
+                    StepResult::More => continue,
+                    StepResult::Busy | StepResult::Locked => return Err(PersistenceError::Busy),
+                    _ => return Err(PersistenceError::Uncertain),
+                }
             }
         }
+        query::run(&source, "COMMIT", vec![], &work)?;
         source.close().map_err(|(_, error)| rows::error(error))?;
         let checkpoint = query::run(&copy, "PRAGMA wal_checkpoint(TRUNCATE)", vec![], &work)?;
         if checkpoint

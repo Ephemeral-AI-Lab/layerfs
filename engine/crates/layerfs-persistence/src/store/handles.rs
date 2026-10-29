@@ -45,6 +45,15 @@ impl Handles {
     ) -> Result<crate::SealedStore, PersistenceError> {
         self.storage.snapshot(destination)
     }
+    /// [`Self::snapshot`], reporting the bytes copied after each backup step;
+    /// see [`StorageProvider::snapshot_observed`].
+    pub fn snapshot_observed(
+        &self,
+        destination: &std::path::Path,
+        progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<crate::SealedStore, PersistenceError> {
+        self.storage.snapshot_observed(destination, progress)
+    }
     /// Read-back settings from the actual shared connection.
     pub fn profile(&self) -> &ConnectionProfile {
         &self.storage.session.profile

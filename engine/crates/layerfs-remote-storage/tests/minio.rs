@@ -468,3 +468,33 @@ fn file_over_max_goes_up_as_pieces() {
         None
     );
 }
+
+#[test]
+#[ignore = "needs MinIO: tests/minio_service.sh"]
+fn listing_and_last_modified() {
+    let settings = settings("listing");
+    let remote = client(&settings);
+    let root = scratch("listing");
+    fs::write(root.join("file"), bytes(3000, 2)).unwrap();
+    let before = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    for name in ["a/store.sqlite", "b/store.sqlite", "b/note"] {
+        pieces::upload(&remote, name, &root.join("file"), &Metadata::new()).unwrap();
+    }
+    let stat = remote.stat("a/store.sqlite").unwrap().unwrap();
+    assert_eq!(stat.metadata[pieces::BYTES], "3000");
+    // second resolution, on the server's clock
+    let modified = stat.modified.expect("Last-Modified");
+    assert!(modified + 60_000 > before && modified < before + 60_000);
+    let listed = remote.list("").unwrap();
+    let names: Vec<_> = listed.iter().map(|l| l.name.as_str()).collect();
+    assert_eq!(names, ["a/store.sqlite", "b/note", "b/store.sqlite"]);
+    assert!(listed
+        .iter()
+        .all(|l| l.bytes == 3000 && l.metadata.is_none() && l.modified.is_some()));
+    let b: Vec<_> = remote.list("b/").unwrap().into_iter().map(|l| l.name).collect();
+    assert_eq!(b, ["b/note", "b/store.sqlite"]);
+    assert!(remote.list("c/").unwrap().is_empty());
+}

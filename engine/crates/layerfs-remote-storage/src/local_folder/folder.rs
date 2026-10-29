@@ -1,6 +1,6 @@
 //! Files under `root/objects/<name>`, metadata under `root/metadata/<name>`.
 //! An upload writes a `.uploading` sibling and renames it into place.
-use crate::driver::{check_metadata, check_name, open_span, Driver, Metadata, Span, Stat};
+use crate::driver::{check_metadata, check_name, open_span, Driver, Listed, Metadata, Span, Stat};
 use crate::error::{local, RemoteError};
 use crate::limits::Limits;
 use std::fs::{self, File, OpenOptions};
@@ -36,6 +36,44 @@ impl LocalFolder {
             self.root.join("objects").join(name),
             self.root.join("metadata").join(name),
         ))
+    }
+}
+
+/// A file's last change, in milliseconds since the Unix epoch.
+fn modified(found: &fs::Metadata) -> Option<u64> {
+    let since = found
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?;
+    u64::try_from(since.as_millis()).ok()
+}
+
+/// The metadata kept at `meta`; none when absent.
+fn read_metadata(meta: &Path) -> Result<Metadata, RemoteError> {
+    let text = match fs::read_to_string(meta) {
+        Ok(text) => text,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(local("read metadata", error)),
+    };
+    Ok(text
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .map(|(k, v)| (k.to_owned(), v.to_owned()))
+        .collect())
+}
+
+/// A writer that reports what it writes to the thread's transfer progress.
+struct Counted<'a>(&'a mut File);
+
+impl Write for Counted<'_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        let n = self.0.write(bytes)?;
+        crate::progress::add(n as u64);
+        Ok(n)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
     }
 }
 
@@ -86,7 +124,7 @@ impl Driver for LocalFolder {
         replace(&meta, |file| file.write_all(text.as_bytes()))
             .map_err(|e| local("write metadata", e))?;
         replace(&data, |file| {
-            let n = io::copy(&mut source.take(span.length), file)?;
+            let n = io::copy(&mut source.take(span.length), &mut Counted(file))?;
             if n != span.length {
                 return Err(io::Error::new(
                     io::ErrorKind::UnexpectedEof,
@@ -120,23 +158,58 @@ impl Driver for LocalFolder {
 
     fn stat(&self, name: &str) -> Result<Option<Stat>, RemoteError> {
         let (data, meta) = self.paths(name)?;
-        let bytes = match fs::metadata(&data) {
-            Ok(found) if found.is_file() => found.len(),
+        let found = match fs::metadata(&data) {
+            Ok(found) if found.is_file() => found,
             Ok(_) => return Ok(None),
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(local("stat", error)),
         };
-        let text = match fs::read_to_string(&meta) {
-            Ok(text) => text,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
-            Err(error) => return Err(local("read metadata", error)),
-        };
-        let metadata = text
-            .lines()
-            .filter_map(|line| line.split_once('='))
-            .map(|(k, v)| (k.to_owned(), v.to_owned()))
-            .collect();
-        Ok(Some(Stat { bytes, metadata }))
+        Ok(Some(Stat {
+            bytes: found.len(),
+            metadata: read_metadata(&meta)?,
+            modified: modified(&found),
+        }))
+    }
+
+    fn list(&self, prefix: &str) -> Result<Vec<Listed>, RemoteError> {
+        let objects = self.root.join("objects");
+        let mut found = Vec::new();
+        let mut pending = vec![String::new()];
+        while let Some(directory) = pending.pop() {
+            let entries = match fs::read_dir(objects.join(&directory)) {
+                Ok(entries) => entries,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(local("list", error)),
+            };
+            for entry in entries {
+                let entry = entry.map_err(|e| local("list", e))?;
+                let file = entry.file_name().to_string_lossy().into_owned();
+                let name = if directory.is_empty() {
+                    file
+                } else {
+                    format!("{directory}/{file}")
+                };
+                let kind = entry.file_type().map_err(|e| local("list", e))?;
+                if kind.is_dir() {
+                    pending.push(name);
+                } else if kind.is_file()
+                    && name.starts_with(prefix)
+                    && !name.ends_with(".uploading")
+                    && check_name(&name).is_ok()
+                {
+                    let (_, meta) = self.paths(&name)?;
+                    let stat = entry.metadata().map_err(|e| local("list", e))?;
+                    found.push(Listed {
+                        bytes: stat.len(),
+                        modified: modified(&stat),
+                        metadata: Some(read_metadata(&meta)?),
+                        name,
+                    });
+                }
+            }
+        }
+        found.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(found)
     }
 
     fn delete(&self, name: &str) -> Result<(), RemoteError> {

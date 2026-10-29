@@ -14,6 +14,8 @@ pub mod driver;
 pub mod error;
 pub mod limits;
 pub mod pieces;
+pub mod progress;
+pub mod time;
 
 #[cfg(feature = "s3_api")]
 pub mod cloudflare_r2;
@@ -25,6 +27,6 @@ pub mod minio;
 pub mod s3_api;
 
 pub use credentials::{CredentialRef, Credentials};
-pub use driver::{Driver, Metadata, Span, Stat};
+pub use driver::{Driver, Listed, Metadata, Span, Stat};
 pub use error::RemoteError;
 pub use limits::Limits;

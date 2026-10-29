@@ -6,7 +6,8 @@
 //! Failures before the first byte is written, the TLS handshake included,
 //! are `Unavailable`; after it,
 //! any failure to complete the exchange is `Uncertain`, and the request is
-//! never sent again.
+//! never sent again. A file body's bytes are reported to the thread's
+//! transfer progress as they are written.
 use crate::driver::Span;
 use crate::error::{local, RemoteError};
 use crate::s3_api::config::S3Config;
@@ -177,6 +178,7 @@ pub(crate) fn exchange(
                 writer
                     .write_all(&buffer[..n])
                     .map_err(|e| uncertain(format!("send: {e}")))?;
+                crate::progress::add(n as u64);
                 left -= n as u64;
             }
         }

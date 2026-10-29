@@ -1,6 +1,9 @@
 //! The S3 API driver: single PUT up to the part size, multipart above it,
-//! ranged GET, HEAD and DELETE. One connection and one attempt per request.
-use crate::driver::{check_metadata, open_span, Driver, Metadata, Span, Stat};
+//! ranged GET, HEAD, DELETE and ListObjectsV2 paging. One connection and
+//! one attempt per request.
+use crate::driver::{
+    check_metadata, open_span, Driver, Listed, Metadata, Span, Stat, MAX_LIST_PAGES,
+};
 use crate::error::{local, RemoteError};
 use crate::limits::Limits;
 use crate::s3_api::config::S3Config;
@@ -256,10 +259,83 @@ impl Driver for S3Client {
                     .iter()
                     .filter_map(|(k, v)| Some((k.strip_prefix(META)?.to_owned(), v.clone())))
                     .collect();
-                Ok(Some(Stat { bytes, metadata }))
+                let modified = reply
+                    .headers
+                    .get("last-modified")
+                    .and_then(|text| crate::time::http_date(text));
+                Ok(Some(Stat {
+                    bytes,
+                    metadata,
+                    modified,
+                }))
             }
             _ => Err(refused(&reply)),
         }
+    }
+
+    fn list(&self, prefix: &str) -> Result<Vec<Listed>, RemoteError> {
+        if !prefix.is_empty() {
+            self.config.object_path(prefix.trim_end_matches('/'))?;
+        }
+        let key = self.config.key(prefix);
+        // the namespace's own prefix is cut from each key listed
+        let namespace = self.config.key("");
+        let mut found = Vec::new();
+        let mut token: Option<String> = None;
+        for _ in 0..MAX_LIST_PAGES {
+            let mut query = vec![("list-type", "2".to_owned()), ("prefix", key.clone())];
+            if let Some(token) = &token {
+                query.push(("continuation-token", token.clone()));
+            }
+            let reply = self.send(
+                "GET",
+                &format!("/{}", self.config.bucket),
+                &query,
+                BTreeMap::new(),
+                Body::Empty,
+                sign::hash(&[]),
+                None,
+            )?;
+            if reply.status != 200 {
+                return Err(refused(&reply));
+            }
+            let text = String::from_utf8_lossy(&reply.body);
+            for entry in text.split("<Contents>").skip(1) {
+                let entry = entry.split("</Contents>").next().unwrap_or_default();
+                let name = xml_text(entry, "Key")
+                    .and_then(|key| key.strip_prefix(namespace.as_str()).map(str::to_owned))
+                    .ok_or_else(|| {
+                        RemoteError::Uncertain("listing: a key outside the prefix".to_owned())
+                    })?;
+                let bytes = xml_text(entry, "Size")
+                    .and_then(|size| parse_length(&size).ok())
+                    .ok_or_else(|| {
+                        RemoteError::Uncertain(format!("listing: {name} has no size"))
+                    })?;
+                found.push(Listed {
+                    modified: xml_text(entry, "LastModified")
+                        .and_then(|t| crate::time::iso8601(&t)),
+                    metadata: None,
+                    bytes,
+                    name,
+                });
+            }
+            if xml_text(&text, "IsTruncated").as_deref() != Some("true") {
+                return Ok(found);
+            }
+            token = Some(
+                xml_text(&text, "NextContinuationToken")
+                    .filter(|token| !token.is_empty())
+                    .ok_or_else(|| {
+                        RemoteError::Uncertain(
+                            "listing: truncated with no continuation token".to_owned(),
+                        )
+                    })?,
+            );
+        }
+        Err(RemoteError::Invalid(format!(
+            "the listing of {prefix:?} has more than {MAX_LIST_PAGES} pages"
+        )))
     }
 
     fn delete(&self, name: &str) -> Result<(), RemoteError> {

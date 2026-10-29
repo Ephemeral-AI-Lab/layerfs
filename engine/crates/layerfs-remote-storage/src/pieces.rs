@@ -7,9 +7,15 @@
 //! sha256 (`layerfs-sha256`). Pieces go up first and the manifest last, so a
 //! manifest is published only after all its pieces. Nothing here is atomic
 //! across requests: a download racing an upload fails its sha256 check
-//! instead of returning mixed bytes.
+//! instead of returning mixed bytes. The whole file's size goes with it
+//! (`layerfs-bytes`), so one stat tells it even for a manifest.
+//!
+//! Progress (#506 E4): an upload reports `hash` (bytes hashed of the file)
+//! then `upload` (bytes sent, by the driver) and its pieces; a download
+//! reports `download` (bytes received) and its pieces.
 use crate::driver::{open_span, Driver, Metadata, Span};
 use crate::error::{local, RemoteError};
+use crate::progress;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -19,6 +25,8 @@ use std::path::{Path, PathBuf};
 pub const SHA256: &str = "layerfs-sha256";
 /// Metadata key of the layout: `whole` or `pieces`.
 pub const LAYOUT: &str = "layerfs-layout";
+/// Metadata key of the whole file's size in bytes (decimal).
+pub const BYTES: &str = "layerfs-bytes";
 const WHOLE: &str = "whole";
 const PIECES: &str = "pieces";
 /// Largest manifest a download reads into memory.
@@ -141,13 +149,22 @@ pub fn upload(
 ) -> Result<Moved, RemoteError> {
     let limits = driver.limits();
     limits.validate()?;
-    if metadata.contains_key(SHA256) || metadata.contains_key(LAYOUT) {
+    if [SHA256, LAYOUT, BYTES]
+        .iter()
+        .any(|key| metadata.contains_key(*key))
+    {
         return Err(RemoteError::Invalid("reserved metadata key".to_owned()));
     }
-    let (bytes, sha256) = sha256_file(path, None)?;
+    let size = fs::metadata(path)
+        .map_err(|e| local("stat upload source", e))?
+        .len();
+    progress::begin("hash", Some(size));
+    let (bytes, sha256) = hash_file(path, None, true)?;
     let mut tagged = metadata.clone();
     tagged.insert(SHA256.to_owned(), hex(&sha256));
+    tagged.insert(BYTES.to_owned(), bytes.to_string());
     let count = limits.pieces(bytes);
+    progress::begin("upload", Some(bytes));
     if count == 0 {
         tagged.insert(LAYOUT.to_owned(), WHOLE.to_owned());
         driver.upload_file(name, path, None, &tagged)?;
@@ -158,13 +175,14 @@ pub fn upload(
             piece_size: limits.piece_size,
             pieces: Vec::new(),
         };
+        progress::pieces(0, count);
         for index in 0..count {
             let offset = index * limits.piece_size;
             let span = Span {
                 offset,
                 length: limits.piece_size.min(bytes - offset),
             };
-            let (length, digest) = sha256_file(path, Some(span))?;
+            let (length, digest) = hash_file(path, Some(span), false)?;
             let mut piece = Metadata::new();
             piece.insert(SHA256.to_owned(), hex(&digest));
             driver.upload_file(&piece_name(name, index), path, Some(span), &piece)?;
@@ -172,10 +190,12 @@ pub fn upload(
                 bytes: length,
                 sha256: digest,
             });
+            progress::pieces(index + 1, count);
         }
         tagged.insert(LAYOUT.to_owned(), PIECES.to_owned());
         let staged = Staged::write(path, manifest.encode().as_bytes())?;
-        driver.upload_file(name, &staged.0, None, &tagged)?;
+        // the manifest is not the file's bytes
+        progress::quiet(|| driver.upload_file(name, &staged.0, None, &tagged))?;
     }
     Ok(Moved {
         bytes,
@@ -195,8 +215,10 @@ pub fn download(driver: &dyn Driver, name: &str, out: &mut File) -> Result<Moved
         .and_then(|text| parse_hex32(text))
         .ok_or_else(|| RemoteError::Integrity(format!("{name} has no {SHA256}")))?;
     let mut whole = Hashing::new(out);
+    whole.report = true;
     let pieces = match stat.metadata.get(LAYOUT).map(String::as_str) {
         Some(WHOLE) => {
+            progress::begin("download", Some(stat.bytes));
             let n = driver.download_file(name, None, &mut whole)?;
             if n != stat.bytes || whole.count != stat.bytes {
                 return Err(RemoteError::Integrity(format!(
@@ -219,6 +241,9 @@ pub fn download(driver: &dyn Driver, name: &str, out: &mut File) -> Result<Moved
             if manifest.sha256 != sha256 {
                 return Err(RemoteError::Integrity("manifest sha256".to_owned()));
             }
+            let count = manifest.pieces.len() as u64;
+            progress::begin("download", Some(manifest.bytes));
+            progress::pieces(0, count);
             for (index, piece) in manifest.pieces.iter().enumerate() {
                 let piece_remote = piece_name(name, index as u64);
                 let mut one = Hashing::new(&mut whole);
@@ -228,6 +253,7 @@ pub fn download(driver: &dyn Driver, name: &str, out: &mut File) -> Result<Moved
                         "{piece_remote} does not match the manifest"
                     )));
                 }
+                progress::pieces(index as u64 + 1, count);
             }
             manifest.pieces.len() as u64
         }
@@ -263,10 +289,26 @@ fn remove_pieces_from(driver: &dyn Driver, name: &str, from: u64) -> Result<(), 
 
 /// The byte count and sha256 of `path` (or `span` of it).
 pub fn sha256_file(path: &Path, span: Option<Span>) -> Result<(u64, [u8; 32]), RemoteError> {
+    hash_file(path, span, false)
+}
+
+/// The sha256 of `bytes`.
+pub fn sha256(bytes: &[u8]) -> [u8; 32] {
+    Sha256::digest(bytes).into()
+}
+
+/// [`sha256_file`], reporting the bytes hashed to this thread's progress
+/// when `report`.
+fn hash_file(
+    path: &Path,
+    span: Option<Span>,
+    report: bool,
+) -> Result<(u64, [u8; 32]), RemoteError> {
     let (mut file, span) = open_span(path, span)?;
     file.seek(SeekFrom::Start(span.offset))
         .map_err(|e| local("seek", e))?;
     let mut digest = Hashing::new(io::sink());
+    digest.report = report;
     let n = io::copy(&mut file.take(span.length), &mut digest).map_err(|e| local("read", e))?;
     if n != span.length {
         return Err(RemoteError::Local(format!(
@@ -306,11 +348,13 @@ pub fn parse_hex32(text: &str) -> Option<[u8; 32]> {
     Some(out)
 }
 
-/// A writer that counts and hashes what passes through it.
+/// A writer that counts and hashes what passes through it, and reports
+/// the bytes to this thread's progress when `report`.
 struct Hashing<W> {
     inner: W,
     digest: Sha256,
     count: u64,
+    report: bool,
 }
 
 impl<W: Write> Hashing<W> {
@@ -319,6 +363,7 @@ impl<W: Write> Hashing<W> {
             inner,
             digest: Sha256::new(),
             count: 0,
+            report: false,
         }
     }
     fn finish(self) -> [u8; 32] {
@@ -331,6 +376,9 @@ impl<W: Write> Write for Hashing<W> {
         let n = self.inner.write(bytes)?;
         self.digest.update(&bytes[..n]);
         self.count += n as u64;
+        if self.report {
+            progress::add(n as u64);
+        }
         Ok(n)
     }
     fn flush(&mut self) -> io::Result<()> {

@@ -1,6 +1,7 @@
 //! SQLite-only connection, transaction, query, schema and physical mechanics,
 //! grouped by role (#506 A1).
 pub(crate) mod acquisition;
+pub(crate) mod heads;
 pub(crate) mod lane;
 pub(crate) mod lifecycle;
 mod mechanics;

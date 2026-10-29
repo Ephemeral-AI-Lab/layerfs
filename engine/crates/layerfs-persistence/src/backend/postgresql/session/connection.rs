@@ -48,6 +48,10 @@ impl Connector {
             tls: MakeTlsConnector::new(tls),
         })
     }
+    /// One new client, with the driver's own error (for a status read).
+    pub(crate) fn connect_raw(&self) -> Result<Client, postgres::Error> {
+        self.config.connect(self.tls.clone())
+    }
     pub(crate) fn connect(&self) -> Result<Client, BackendError> {
         self.config
             .connect(self.tls.clone())

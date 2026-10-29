@@ -8,7 +8,12 @@ mod store;
 pub(crate) use store::config;
 pub(crate) use store::handles;
 mod history;
+#[cfg(feature = "postgresql")]
+pub use backend::postgresql::status::{
+    status as postgresql_status, PostgresStatus, PostgresStatusError,
+};
 pub use backend::sqlite::acquisition::AcquisitionProvider;
+pub use backend::sqlite::heads::read_heads;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use backend::sqlite::lifecycle::headroom::STORE_HEADROOM_BYTES;
 pub use backend::sqlite::lifecycle::reclamation::{SpaceReclamation, RECLAMATION_PAGE_LIMIT};
