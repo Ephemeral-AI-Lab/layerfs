@@ -1,7 +1,8 @@
 // @layerfs/agent (#428): what an agent's script calls. A client is opened by
-// `LayerFS.open(name)` (an existing project) or `LayerFS.init(name, folder,
-// timeout?)` (a new one) and released by `close()`; there is no public
-// constructor and no options argument: settings come from the environment.
+// `LayerFS.open(name, options?)` (an existing project) or `LayerFS.init(name,
+// folder, timeout?, options?)` (a new one) and released by `close()`; there
+// is no public constructor. Settings come from the options object, else the
+// environment, resolved once at construction.
 // Calls name their Branch. `sandbox.create()` starts a Sandbox (the only
 // call that does) and `sandbox.close` stops it; `workspace.mount(sandbox,
 // branch)` returns a Workspace, `{ sandbox, path }`, in the Sandbox it names
@@ -62,18 +63,90 @@ async function opened(client) {
   client[STATE].closed = false;
 }
 
-/** The removed options argument (#431 follow-up) is refused, never ignored. */
-function noOptions(method, given) {
-  if (given) {
-    throw new LayerFSError("InvalidInput", `${method} takes no options: settings come from the environment (LAYERFS_STORE_PATH, LAYERFS_DAEMON_HOST, LAYERFS_TRACE, LAYERFS_TRACE_STEP, LAYERFS_STORE_POLICY)`, null);
+/** True for a plain object (not null, not an array). */
+const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+/** One string option field: explicit value wins, else the environment. */
+function optionField(given, field, envName, env) {
+  const value = given?.[field];
+  if (value === undefined) return env(envName);
+  if (typeof value !== "string" || !value) {
+    throw new LayerFSError("InvalidInput", `LayerFS option "${field}" must be a non-empty string`, null);
   }
+  return value;
+}
+
+/** The client's settings, resolved once from options over environment.
+ * The result is a fresh snapshot: mutating the caller's object, or the
+ * environment, after construction changes nothing. LAYERFS_TRACE_STEP and
+ * LAYERFS_TRACE_START are not settings and are never snapshotted: trace.js
+ * reads them at each call. */
+function resolveOptions(given) {
+  if (given !== undefined && !isPlainObject(given)) {
+    throw new LayerFSError("InvalidInput", "LayerFS options must be a plain object", null);
+  }
+  for (const key of Object.keys(given ?? {})) {
+    if (!["home", "trace", "deploy", "storePolicy", "storePath"].includes(key)) {
+      throw new LayerFSError("InvalidInput", `unknown LayerFS option "${key}"`, null);
+    }
+  }
+  const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
+  const deployGiven = given?.deploy;
+  if (deployGiven !== undefined && !isPlainObject(deployGiven)) {
+    throw new LayerFSError("InvalidInput", `LayerFS option "deploy" must be a plain object`, null);
+  }
+  for (const key of Object.keys(deployGiven ?? {})) {
+    if (!["docker", "image", "volume", "daemon", "containerPrefix", "daemonHost"].includes(key)) {
+      throw new LayerFSError("InvalidInput", `unknown LayerFS deploy option "${key}"`, null);
+    }
+  }
+  const deployField = (field, envName) => {
+    const value = deployGiven?.[field];
+    if (value === undefined) return env(envName);
+    if (typeof value !== "string" || !value) {
+      throw new LayerFSError("InvalidInput", `LayerFS option "deploy.${field}" must be a non-empty string`, null);
+    }
+    return value;
+  };
+  const containerPrefix = deployField("containerPrefix", "CONTAINER_PREFIX");
+  const daemonHost = deployField("daemonHost", "DAEMON_HOST");
+  let storePolicy = given?.storePolicy;
+  if (storePolicy === undefined) {
+    storePolicy = env("STORE_POLICY");
+  } else if (typeof storePolicy === "string") {
+    if (!storePolicy) throw new LayerFSError("InvalidInput", `LayerFS option "storePolicy" must be JSON text or a plain object`, null);
+  } else if (isPlainObject(storePolicy)) {
+    try {
+      storePolicy = JSON.stringify(storePolicy);
+    } catch {
+      throw new LayerFSError("InvalidInput", `LayerFS option "storePolicy" must be JSON text or a plain object`, null);
+    }
+  } else {
+    throw new LayerFSError("InvalidInput", `LayerFS option "storePolicy" must be JSON text or a plain object`, null);
+  }
+  return {
+    home: optionField(given, "home", "HOME", env),
+    trace: optionField(given, "trace", "TRACE", env),
+    deploy: {
+      docker: deployField("docker", "DOCKER") ?? "/var/run/docker.sock",
+      image: deployField("image", "IMAGE"),
+      volume: deployField("volume", "VOLUME"),
+      daemon: deployField("daemon", "DAEMON"),
+      ...(containerPrefix ? { containerPrefix } : {}),
+      ...(daemonHost ? { daemonHost } : {}),
+    },
+    storePolicy,
+    storePath: optionField(given, "storePath", "STORE_PATH", env),
+  };
 }
 
 export class LayerFS {
   /** A ready client of the existing project `projectName`; the constructor lists its settings. */
   static async open(projectName, ...rest) {
-    noOptions("LayerFS.open(name)", rest.some((value) => value !== undefined));
-    const client = new LayerFS(projectName, FACTORY);
+    if (rest.length > 1 || (rest.length === 1 && rest[0] !== undefined && !isPlainObject(rest[0]))) {
+      throw new LayerFSError("InvalidInput", "LayerFS.open(name, options?) takes one options object at most", null);
+    }
+    const client = new LayerFS(projectName, FACTORY, rest[0]);
     await opened(client);
     return client;
   }
@@ -84,8 +157,13 @@ export class LayerFS {
    * number; default INIT_TIMEOUT_MS, 300 s; no unlimited option) bounds
    * Init, which then fails `Failed` (Deadline) when it runs longer. */
   static async init(projectName, folder, timeout = undefined, ...rest) {
-    noOptions("LayerFS.init(name, folder, timeout?)", (timeout !== null && typeof timeout === "object") || rest.some((value) => value !== undefined));
-    const client = new LayerFS(projectName, FACTORY);
+    if (timeout !== null && typeof timeout === "object") {
+      throw new LayerFSError("InvalidInput", "LayerFS.init(name, folder, timeout?, options?) takes options as the fourth argument, not in the timeout position", null);
+    }
+    if (rest.length > 1 || (rest.length === 1 && rest[0] !== undefined && !isPlainObject(rest[0]))) {
+      throw new LayerFSError("InvalidInput", "LayerFS.init(name, folder, timeout?, options?) takes one options object at most", null);
+    }
+    const client = new LayerFS(projectName, FACTORY, rest[0]);
     const created = await init(client, folder, timeout);
     await opened(client);
     client.created = created;
@@ -93,8 +171,10 @@ export class LayerFS {
   }
 
   /** Not public: `LayerFS.open` and `LayerFS.init` make clients. Every
-   * setting is read from the environment once, here, into `options`, by its
-   * LAYERFS_ name. LAYERFS_TRACE names a
+   * setting is resolved once, here, into `options`: an explicit option
+   * wins, else its LAYERFS_ name, else the built-in default.
+   * LAYERFS_TRACE_STEP and LAYERFS_TRACE_START are not settings: trace.js
+   * reads them at each call. LAYERFS_TRACE names a
    * per-call trace file; LAYERFS_TRACE_STEP, read at each call, labels its
    * lines. Deployment
    * settings read LAYERFS_HOME, _DOCKER, _IMAGE, _VOLUME and _DAEMON; a
@@ -111,7 +191,7 @@ export class LayerFS {
    * LAYERFS_STORE_POLICY, a JSON object { smallFileThreshold,
    * wholeFileDepth, chunkDepth, metadataDepth }, is the Store policy
    * `LayerFS.init` records instead of the default. */
-  constructor(projectName, token = undefined) {
+  constructor(projectName, token = undefined, givenOptions = undefined) {
     if (token !== FACTORY) {
       throw new LayerFSError("InvalidInput", "use `await LayerFS.open(name)` or `await LayerFS.init(name, folder)`; there is no public constructor", null);
     }
@@ -119,21 +199,7 @@ export class LayerFS {
       throw new LayerFSError("InvalidInput", "a project name is required", null);
     }
     this.projectName = projectName;
-    const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
-    this.options = {
-      home: env("HOME"),
-      trace: env("TRACE"),
-      deploy: {
-        docker: env("DOCKER"),
-        image: env("IMAGE"),
-        volume: env("VOLUME"),
-        daemon: env("DAEMON"),
-        ...(env("CONTAINER_PREFIX") ? { containerPrefix: env("CONTAINER_PREFIX") } : {}),
-        ...(env("DAEMON_HOST") ? { daemonHost: env("DAEMON_HOST") } : {}),
-      },
-      storePolicy: env("STORE_POLICY"),
-      storePath: env("STORE_PATH"),
-    };
+    this.options = resolveOptions(givenOptions);
     // not open until a factory has opened its Store; the binding is chosen now, once
     this[STATE] = { closed: null, transport: binding() };
     this.fs = bind(this, fsMethods);
