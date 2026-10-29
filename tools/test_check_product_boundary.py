@@ -83,6 +83,17 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(unsafe_violations(base / "lib.rs", "#![deny(unsafe_code)]"))
         self.assertTrue(unsafe_violations(base / "lib.rs", "pub mod store;"))
 
+    def test_node_discovery_ffi_is_limited_to_the_two_audited_modules(self):
+        base = Path("engine/crates/layerfs-node/src")
+        ffi = "fn turn() { unsafe { WaitForSingleObject(handle, 0); } }"
+        # Both discovery twins are audited: unix flock/geteuid, Windows mutexes.
+        self.assertFalse(unsafe_violations(base / "discovery.rs", ffi))
+        self.assertFalse(unsafe_violations(base / "discovery_windows.rs", ffi))
+        for sibling in ["dispatch.rs", "direct.rs", "project.rs", "job.rs"]:
+            self.assertTrue(unsafe_violations(base / sibling, ffi))
+        self.assertFalse(unsafe_violations(base / "lib.rs", "#![deny(unsafe_code)]\nmod dispatch;"))
+        self.assertTrue(unsafe_violations(base / "lib.rs", "mod dispatch;"))
+
     def test_retired_transport_paths_cannot_return(self):
         for relative in (
             "layerfs-api/src/client/call.rs",

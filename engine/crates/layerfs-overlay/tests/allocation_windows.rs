@@ -18,7 +18,10 @@ fn allocated_bytes_report_the_ondisk_footprint_of_the_written_tail() {
     let mut file = File::new(&db, source, 3, pattern(300_001, 5));
     let _ = file.read(0, 16);
     let state = db.allocation().unwrap();
-    assert!(state.allocated_bytes > 0, "a written overlay holds clusters");
+    assert!(
+        state.allocated_bytes > 0,
+        "a written overlay holds clusters"
+    );
     assert!(
         state.allocated_bytes >= state.logical_bytes,
         "cluster rounding keeps the footprint at or above the tail"

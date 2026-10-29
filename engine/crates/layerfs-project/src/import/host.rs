@@ -1,7 +1,7 @@
 //! Host byte encoding of paths and names, and the metadata identity Init
-//! reads. Unix uses the raw bytes and the stat identity; Windows has no raw
-//! byte spelling, so names are carried as their UTF-8 bytes (a name outside
-//! UTF-8 becomes lossy — a recorded limitation of this route), and the
+//! reads. Unix uses the raw bytes and the stat identity; Windows names
+//! travel as lossless WTF-8 (an unpaired surrogate included, byte-exact
+//! round trip through the codec and the audited probes), and the
 //! identity is the entry's real volume serial number and file index, its
 //! length, timestamps and a mode synthesized from the read-only attribute.
 //! Hard-link membership is not detected on Windows (the format supports it;

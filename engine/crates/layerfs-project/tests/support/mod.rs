@@ -10,6 +10,8 @@ use layerfs_storage::{
     Storage,
 };
 use layerfs_telemetry::timer::Timing;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 use std::{
     collections::BTreeMap,
     fs,
@@ -20,8 +22,6 @@ use std::{
     },
     time::{Duration, Instant},
 };
-#[cfg(unix)]
-use std::os::unix::fs::MetadataExt;
 pub mod memory_acquisition;
 pub mod memory_history;
 #[path = "../../../../../core/crates/layerfs-storage/tests/support/memory_metadata.rs"]

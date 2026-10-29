@@ -1,4 +1,5 @@
 //! Node entry points for the public SDK and its backend table (#428).
+#![deny(unsafe_code)]
 mod convert;
 mod direct;
 #[cfg(unix)]

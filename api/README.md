@@ -41,7 +41,7 @@ On Windows there is also the native direct route (owner direction
 itself — fs, branch, project and operator calls in this process, no
 worker and no daemon; workspace, exec and daemon calls refuse
 `Unsupported`. See
-[the Windows-native route](../engine/docs/issues/352/DIRECT_STORE.md).
+[the Windows-native route](../core/docs/issues/352/DIRECT_STORE.md).
 
 ## The folder
 

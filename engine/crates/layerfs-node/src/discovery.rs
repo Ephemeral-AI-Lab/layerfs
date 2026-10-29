@@ -1,4 +1,7 @@
 //! Private, permission-authorized project and Sandbox discovery. No mutation replay.
+// One audited unsafe surface with the Windows twin: uid/flock calls std does
+// not expose; the boundary guard admits only the two discovery modules.
+#![allow(unsafe_code)]
 use crate::{
     job::{failed, refused},
     registry::{self, Mount, Process, Project, SandboxState},

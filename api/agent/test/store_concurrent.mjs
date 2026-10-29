@@ -6,10 +6,11 @@
 // serialize them; every write must land. The parent reads all four files
 // back and counts the Commits. No Docker, no daemon, no WSL2; on Linux the
 // Store sits on the E2E launcher's volume (LAYERFS_STORE_PATH):
-//   node sdk/js/test/store_concurrent.mjs            # parent run
-//   node sdk/js/test/store_concurrent.mjs --child <home> <store> <name>
+//   node api/agent/test/store_concurrent.mjs            # parent run
+//   node api/agent/test/store_concurrent.mjs --child <home> <store> <name>
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -55,7 +56,7 @@ try {
 
   const children = [];
   for (let n = 1; n <= WRITERS; n++) {
-    children.push(spawn(process.execPath, [import.meta.url.pathname ?? process.argv[1], "--child", home, store, `w${n}`], {
+    children.push(spawn(process.execPath, [fileURLToPath(import.meta.url), "--child", home, store, `w${n}`], {
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, LAYERFS_STORE_PATH: store },
     }));

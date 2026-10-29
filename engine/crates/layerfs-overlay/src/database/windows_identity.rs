@@ -26,16 +26,17 @@ pub fn windows_handle_identity(file: &File) -> io::Result<WindowsIdentity> {
     use windows_sys::Win32::Storage::FileSystem::GetFileInformationByHandle;
     let mut information = BY_HANDLE_FILE_INFORMATION::default();
     let read = unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut information) };
-    finish(read, information)
+    if read == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(identity_of(information))
 }
 
-/// The identity of `path`'s entry, read as attributes only: no data access,
-/// no link traversal; directories need the backup-semantics flag.
 /// The entry's on-disk allocation in bytes (compression/sparse aware),
 /// read through FileStandardInfo on the open handle.
 pub fn windows_allocation_size(file: &File) -> io::Result<u64> {
     use windows_sys::Win32::Storage::FileSystem::{
-        GetFileInformationByHandleEx, FILE_STANDARD_INFO, FileStandardInfo,
+        FileStandardInfo, GetFileInformationByHandleEx, FILE_STANDARD_INFO,
     };
     let mut info = FILE_STANDARD_INFO::default();
     let ok = unsafe {
@@ -52,16 +53,22 @@ pub fn windows_allocation_size(file: &File) -> io::Result<u64> {
     Ok(info.AllocationSize.max(0) as u64)
 }
 
+/// The identity of `path`'s entry, read as attributes only: no data access,
+/// no link traversal; directories need the backup-semantics flag, and a
+/// reparse point is opened itself, never followed, matching unix's
+/// `symlink_metadata` refusal of a substituted overlay file.
 pub fn windows_path_identity(path: &Path) -> io::Result<WindowsIdentity> {
+    use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::Storage::FileSystem::{
-        CreateFileW, GetFileInformationByHandle, FILE_FLAG_BACKUP_SEMANTICS, FILE_SHARE_DELETE,
-        FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+        CreateFileW, GetFileInformationByHandle, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+        OPEN_EXISTING,
     };
+    // Raw units, not a lossy string: names stay byte-exact (K3-R3 F7).
     let wide: Vec<u16> = path
         .as_os_str()
-        .to_string_lossy()
-        .encode_utf16()
+        .encode_wide()
         .chain(std::iter::once(0))
         .collect();
     let handle = unsafe {
@@ -71,7 +78,7 @@ pub fn windows_path_identity(path: &Path) -> io::Result<WindowsIdentity> {
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             std::ptr::null(),
             OPEN_EXISTING,
-            FILE_FLAG_BACKUP_SEMANTICS,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
             std::ptr::null_mut(),
         )
     };
@@ -80,28 +87,30 @@ pub fn windows_path_identity(path: &Path) -> io::Result<WindowsIdentity> {
     }
     let mut information = BY_HANDLE_FILE_INFORMATION::default();
     let read = unsafe { GetFileInformationByHandle(handle, &mut information) };
+    // Capture the failure before another syscall can overwrite it (K3-R3 F9).
+    let failure = (read == 0).then(io::Error::last_os_error);
     unsafe { CloseHandle(handle) };
-    finish(read, information)
+    match failure {
+        Some(error) => Err(error),
+        None => Ok(identity_of(information)),
+    }
 }
 
-fn finish(read: i32, information: BY_HANDLE_FILE_INFORMATION) -> io::Result<WindowsIdentity> {
-    if read == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(WindowsIdentity {
+fn identity_of(information: BY_HANDLE_FILE_INFORMATION) -> WindowsIdentity {
+    WindowsIdentity {
         device: u64::from(information.dwVolumeSerialNumber),
         index: (u64::from(information.nFileIndexHigh) << 32) | u64::from(information.nFileIndexLow),
         links: u64::from(information.nNumberOfLinks),
-    })
+    }
 }
 
 /// The bytes available to the caller on `directory`'s volume.
 pub(crate) fn windows_free_bytes(directory: &Path) -> io::Result<u64> {
+    use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
     let wide: Vec<u16> = directory
         .as_os_str()
-        .to_string_lossy()
-        .encode_utf16()
+        .encode_wide()
         .chain(std::iter::once(0))
         .collect();
     let mut free: u64 = 0;

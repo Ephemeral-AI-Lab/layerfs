@@ -5,7 +5,7 @@
 // daemon, no WSL2. The Store's volume is LAYERFS_STORE_PATH's parent when
 // the E2E launcher provides one (Linux); otherwise this machine's temporary
 // volume, which the Windows route guards as NTFS:
-//   node sdk/js/test/store_lifecycle.mjs
+//   node api/agent/test/store_lifecycle.mjs
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

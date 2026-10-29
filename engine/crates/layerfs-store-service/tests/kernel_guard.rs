@@ -50,10 +50,9 @@ fn direct_access_is_unsupported_on_a_non_local_spelling() {
     let store = Path::new(r"\\localhost\c$\layerfs-guard-nonlocal\store.sqlite");
     let template = Path::new(r"\\localhost\c$\layerfs-guard-nonlocal\overlay.sqlite");
     match StoreService::open_direct(store, b"binding", [7; 32], template) {
-        Err(OpenRefusal::Unsupported(reason)) => assert!(
-            reason.0.contains("cannot be examined"),
-            "{reason}"
-        ),
+        Err(OpenRefusal::Unsupported(reason)) => {
+            assert!(reason.0.contains("cannot be examined"), "{reason}")
+        }
         Err(other) => panic!("expected Unsupported, got {other:?}"),
         Ok(_) => panic!("expected Unsupported, the Store opened"),
     }

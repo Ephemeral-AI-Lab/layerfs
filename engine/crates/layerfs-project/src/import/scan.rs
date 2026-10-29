@@ -17,7 +17,10 @@ use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
 use layerfs_content::filesystem::FilesystemObjects;
 use layerfs_content::{inode_leaf::InodeKind, PathName};
 use layerfs_storage::port::acquisition::{EntryKey, NewEntry, Placed};
-use std::{fs::{self, Metadata}, path::Path};
+use std::{
+    fs::{self, Metadata},
+    path::Path,
+};
 
 /// What one completed scan placed in backing.
 pub(crate) struct Scanned {

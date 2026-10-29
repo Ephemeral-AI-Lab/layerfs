@@ -165,9 +165,10 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   Linux-only Store sentence above for this route only; Workspace, FUSE, Exec
   and daemon calls still refuse `Unsupported` on Windows, and the dsh macOS
   and WSL2 exceptions are unchanged. Recorded limitations: Windows Init has
-  no hard-link membership and no backing-inside-source alias check, carries
-  non-UTF-8 names lossily and synthesizes the mode from the read-only
-  attribute; overlay allocation is the logical length. See
+  no hard-link membership and synthesizes the mode from the read-only
+  attribute; names travel as lossless WTF-8 (the backing-inside-source check
+  walks the audited volume-serial + file-index identity, and overlay
+  allocation is the real on-disk footprint). See
   [the Windows-native route](core/docs/issues/352/DIRECT_STORE.md).
 - **Plugin-neutral LayerFS (owner, 2026-10-24).** LayerFS is agnostic to dsh
   and every other plugin. The macOS and Windows worker routes above are open

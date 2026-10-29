@@ -50,19 +50,23 @@ fn a_dead_lane_holder_does_not_block_the_next_writer() {
         let digest = Sha256::digest(resolved.as_os_str().as_encoded_bytes());
         let mut tag = [0u8; 8];
         tag.copy_from_slice(&digest[..8]);
-        let name: Vec<u16> = format!("Local\\layerfs-writer-lane-{:016x}", u64::from_be_bytes(tag))
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
+        let name: Vec<u16> = format!(
+            "Local\\layerfs-writer-lane-{:016x}",
+            u64::from_be_bytes(tag)
+        )
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
         let handle = unsafe {
-            windows_sys::Win32::System::Threading::CreateMutexW(
-                std::ptr::null(),
-                0,
-                name.as_ptr(),
-            )
+            windows_sys::Win32::System::Threading::CreateMutexW(std::ptr::null(), 0, name.as_ptr())
         };
         assert!(!handle.is_null());
-        let waited = unsafe { windows_sys::Win32::System::Threading::WaitForSingleObject(handle, windows_sys::Win32::System::Threading::INFINITE) };
+        let waited = unsafe {
+            windows_sys::Win32::System::Threading::WaitForSingleObject(
+                handle,
+                windows_sys::Win32::System::Threading::INFINITE,
+            )
+        };
         assert_eq!(waited, windows_sys::Win32::Foundation::WAIT_OBJECT_0);
         // The thread owns the mutex and now ends without ReleaseMutex: the
         // kernel marks it abandoned for the next waiter.
@@ -74,4 +78,3 @@ fn a_dead_lane_holder_does_not_block_the_next_writer() {
     reopened.storage.reserve(reserve()).unwrap();
     reopened.shutdown();
 }
-

@@ -115,8 +115,8 @@ impl Backing {
             // link) before the removal. The retained handle was opened with
             // FILE_SHARE_DELETE (std's share mode), so the removal takes
             // effect when Drop closes that last handle, immediately after.
-            let path_identity = layerfs_overlay::windows_path_identity(&self.path)
-                .map_err(|error| {
+            let path_identity =
+                layerfs_overlay::windows_path_identity(&self.path).map_err(|error| {
                     io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!("overlay deletion identity: {error}"),

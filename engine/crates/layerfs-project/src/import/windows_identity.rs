@@ -20,18 +20,22 @@ pub(crate) struct WindowsFileIdentity {
 
 /// Reads `path`'s volume, file index and creation time without opening the
 /// entry's data: attributes only, with traversal of neither links nor
-/// content. Directories need the backup-semantics flag.
+/// content — a reparse point answers with its own identity, so a dangling
+/// link still stamps like unix lstat. Directories need the
+/// backup-semantics flag.
 pub(crate) fn windows_file_identity(path: &Path) -> io::Result<WindowsFileIdentity> {
     use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::Storage::FileSystem::{
         CreateFileW, GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
-        FILE_FLAG_BACKUP_SEMANTICS, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
-        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE,
+        FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
     };
+    // Raw units, not a lossy string: an unpaired surrogate is a legal NTFS
+    // name and must reach CreateFileW unchanged (K3-R3 F2).
+    use std::os::windows::ffi::OsStrExt;
     let wide: Vec<u16> = path
         .as_os_str()
-        .to_string_lossy()
-        .encode_utf16()
+        .encode_wide()
         .chain(std::iter::once(0))
         .collect();
     let handle = unsafe {
@@ -41,7 +45,7 @@ pub(crate) fn windows_file_identity(path: &Path) -> io::Result<WindowsFileIdenti
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             std::ptr::null(),
             OPEN_EXISTING,
-            FILE_FLAG_BACKUP_SEMANTICS,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
             std::ptr::null_mut(),
         )
     };
@@ -50,9 +54,11 @@ pub(crate) fn windows_file_identity(path: &Path) -> io::Result<WindowsFileIdenti
     }
     let mut information = BY_HANDLE_FILE_INFORMATION::default();
     let read = unsafe { GetFileInformationByHandle(handle, &mut information) };
+    // Capture the failure before another syscall can overwrite it (K3-R3 F9).
+    let failure = (read == 0).then(io::Error::last_os_error);
     unsafe { CloseHandle(handle) };
-    if read == 0 {
-        return Err(io::Error::last_os_error());
+    if let Some(error) = failure {
+        return Err(error);
     }
     // FILETIME is 100ns ticks since 1601-01-01; Unix time starts
     // 11644473600 seconds later.

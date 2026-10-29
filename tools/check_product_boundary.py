@@ -28,6 +28,7 @@ UNSAFE_AUDITED_MODULE = {
     ),
     "layerfs-project": ("src/import/windows_identity.rs",),
     "layerfs-overlay": ("src/database/windows_identity.rs",),
+    "layerfs-node": ("src/discovery.rs", "src/discovery_windows.rs"),
 }
 UNSAFE_FREE_CRATES = (
     "layerfs-content",
@@ -47,6 +48,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-persistence": "#![deny(unsafe_code)]",
     "layerfs-project": "#![deny(unsafe_code)]",
     "layerfs-overlay": "#![deny(unsafe_code)]",
+    "layerfs-node": "#![deny(unsafe_code)]",
     "layerfs-workspace": "#![forbid(unsafe_code)]",
     "layerfs-store-service": "#![forbid(unsafe_code)]",
     "layerfs-fuse": "#![forbid(unsafe_code)]",

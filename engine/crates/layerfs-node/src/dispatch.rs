@@ -2,9 +2,9 @@
 //! public table (`call`: project, branch, fs, sandbox, workspace) and the
 //! backend table (`backendCall`: `backend.store.*`, `backend.daemon.*` and the
 //! runtime's `runtime.*` reads and actions).
-use crate::job::{refused, Job, Outcome};
 #[cfg(unix)]
 use crate::job;
+use crate::job::{refused, Job, Outcome};
 use crate::{convert, direct, project};
 #[cfg(unix)]
 use crate::{exec, output, registry, workspace};
@@ -34,29 +34,29 @@ fn dispatch(op: &str, args: SdkValue) -> Outcome {
     }
     #[cfg(unix)]
     {
-    match op {
-        "project.init" => project::init(&args),
-        "project.list_sandboxes" => workspace::sandboxes(&args),
-        "sandbox.list_workspaces" => listed(daemon_backend(op, args)?),
-        "sandbox.create" => crate::sandbox::create(&args),
-        "sandbox.close" => crate::sandbox::close(&args),
-        "workspace.mount" => workspace::mount(&args),
-        "workspace.commit" => workspace::commit(&args),
-        "workspace.unmount" => workspace::unmount(&args),
-        "workspace.exec" if args.get_bool("background") => Err(refused(
-            "InvalidInput",
-            "background launch is backend.daemon.process.start",
-        )),
-        "workspace.exec" => exec::exec(&args),
-        "workspace.exec_release" => output::release(&args),
-        _ if op.starts_with("backend.") || op.starts_with("runtime.") => Err(refused(
-            "UnknownMethod",
-            "backend and runtime methods require backendCall",
-        )),
-        // Store calls run in this process; there is no other route.
-        _ if op.contains('.') => direct::call(op, args, false),
-        _ => Err(refused("UnknownMethod", format!("no operation {op}"))),
-    }
+        match op {
+            "project.init" => project::init(&args),
+            "project.list_sandboxes" => workspace::sandboxes(&args),
+            "sandbox.list_workspaces" => listed(daemon_backend(op, args)?),
+            "sandbox.create" => crate::sandbox::create(&args),
+            "sandbox.close" => crate::sandbox::close(&args),
+            "workspace.mount" => workspace::mount(&args),
+            "workspace.commit" => workspace::commit(&args),
+            "workspace.unmount" => workspace::unmount(&args),
+            "workspace.exec" if args.get_bool("background") => Err(refused(
+                "InvalidInput",
+                "background launch is backend.daemon.process.start",
+            )),
+            "workspace.exec" => exec::exec(&args),
+            "workspace.exec_release" => output::release(&args),
+            _ if op.starts_with("backend.") || op.starts_with("runtime.") => Err(refused(
+                "UnknownMethod",
+                "backend and runtime methods require backendCall",
+            )),
+            // Store calls run in this process; there is no other route.
+            _ if op.contains('.') => direct::call(op, args, false),
+            _ => Err(refused("UnknownMethod", format!("no operation {op}"))),
+        }
     }
     #[cfg(windows)]
     {
@@ -200,10 +200,20 @@ pub(crate) fn backend_call(op: String, args: JsUnknown) -> napi::Result<AsyncTas
                     | "backend.store.branch.list_commit_storage"
                     | "backend.store.fs.get_storage"
                     | "backend.store.fs.list_revisions" => direct::call(&op, args, true),
-                    _ => Err(refused(
+                    // Daemon-only operations say so by name; an unknown
+                    // operation is still unknown here, as on unix (K3-R3 F13).
+                    "backend.daemon.workspace.status"
+                    | "backend.daemon.process.start"
+                    | "backend.daemon.process.list"
+                    | "backend.daemon.process.cancel"
+                    | "backend.daemon.sandbox.get_log"
+                    | "backend.daemon.workspace.get_storage"
+                    | "backend.daemon.workspace.list_changes"
+                    | "runtime.sandbox.reclaim" => Err(refused(
                         "Unsupported",
                         "this backend call needs a daemon; the Windows-native Store route serves Store calls in-process",
                     )),
+                    _ => Err(refused("UnknownMethod", format!("no backend operation {op}"))),
                 }
             }
         })

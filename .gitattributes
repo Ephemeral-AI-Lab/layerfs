@@ -1,3 +1,2 @@
-* text=auto eol=lf
-*.bin binary
-poc/evidence/**/*.typescript -text
+# Sealed fixtures are hashed byte-exactly by tests; no line-ending conversion.
+core/crates/layerfs-content/tests/fixtures/filesystem/** -text

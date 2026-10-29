@@ -31,12 +31,9 @@ pub(super) fn read_link(path: &Path, scanned: &Metadata) -> Result<Vec<u8>, Proj
 /// is begun or changed: a backing inside the source would both alter the source
 /// while it is read and be acquired as part of it.
 ///
-/// Windows carries no path-independent identity here, so the check is
-/// containment of the resolved placement inside the resolved source: a
-/// spelling that resolves into the source is refused whatever named it,
-/// while a spelling that does not resolve to the source's own path (a subst
-/// drive, an unresolvable alias) is not recognised — a recorded limitation
-/// of this route.
+/// On Windows the same walk runs on the audited volume-serial + file-index
+/// identity: a subst drive or junction whose directories carry the real
+/// volume's identity is recognised and refused, like unix.
 pub(super) fn outside_source(
     source: &Path,
     metadata: &Metadata,

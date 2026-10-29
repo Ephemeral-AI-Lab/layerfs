@@ -159,7 +159,9 @@ pub fn install_local(
         let directory = destination
             .parent()
             .ok_or("the Store destination has no directory")?;
-        crate::kernel_guard::check(directory).map_err(|reason| reason.0)?;
+        // check takes the Store file and strips the parent itself, like
+        // every caller.
+        crate::kernel_guard::check(destination).map_err(|reason| reason.0)?;
         installer_user()?;
         let text = |error: io::Error| error.to_string();
         if !directory.exists() {
@@ -227,7 +229,7 @@ fn installer_user() -> Result<(), String> {
             .uid();
         if uid != DAEMON_UID {
             return Err(format!(
-                "the Store install runs as user {uid}; it must run as user {DAEMON_UID}, the                  daemons' user, which opens only a Store it owns"
+                "the Store install runs as user {uid}; it must run as user {DAEMON_UID}, the daemons' user, which opens only a Store it owns"
             ));
         }
         Ok(())

@@ -1,6 +1,10 @@
 target/
 # The Node addon that api/scripts/build-native.mjs builds beside its crate.
 /engine/crates/layerfs-node/layerfs.node
+# Dead post-restructure paths where only local build output ever lands
+# (K3-R3 F1: a stale addon copy and pnpm trees entered a merge once).
+/sdk/js/native/layerfs.node
+/dsh/
 /target-linux/
 /eval/runs/
 /eval/datasets/

@@ -119,14 +119,17 @@ session would each hold its own lane (Linux's directory flock crosses
 sessions); the product opens its Store within one login session today, and
 cross-session coordination would need the `Global\` namespace with a
 privilege evaluation (K3 review F2); Windows Init carries names as
-lossless WTF-8 (an unpaired surrogate included, byte-exact round trip),
-synthesizes the mode from the read-only attribute, has no hard-link
-membership, and its backing-inside-source check resolves the placement's
-spelling (a subst drive or unresolvable alias is not recognised); overlay
-allocation is the logical length. Last-owner overlay-file deletion applies
-the same audited identity on Windows as on Linux (volume serial + file
-index, sole link, checked on both the path's entry and the retained
-handle).
+lossless WTF-8 end to end (an unpaired surrogate included, byte-exact
+round trip through the codec and the audited identity probes) and
+synthesizes the mode from the read-only attribute, and has no hard-link
+membership. The backing-inside-source check walks the audited
+volume-serial + file-index identity of every ancestor (a subst drive or
+junction into the source is recognised and refused, as on Linux), and
+overlay allocation is the entry's real on-disk footprint. Last-owner
+overlay-file deletion applies the same audited identity on Windows as on
+Linux (volume serial + file index, sole link, checked on both the path's
+entry and the retained handle), opening the path itself, never a
+substituted reparse point.
 
 When the owner merges this branch, the observation period runs by a
 fixed checklist (each step reads a mechanism that already exists, none

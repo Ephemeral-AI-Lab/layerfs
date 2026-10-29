@@ -184,13 +184,16 @@ adds audited Windows FFI beside the macOS seal wrapper. The guard
 - Persistence keeps `deny(unsafe_code)` with two allowed modules:
   `src/backend/sqlite/file_control.rs` (the macOS seal wrapper, unchanged)
   and `src/backend/sqlite/windows_lane.rs` (the named kernel mutex writer
-  lane and `GetVolumeInformationW` volume filesystem).
+  lane and `GetVolumeInformationByHandleW` volume filesystem).
 - layerfs-project moves forbid→deny with one allowed module,
   `src/import/windows_identity.rs` (`GetFileInformationByHandle`: volume
   serial, file index, creation time).
 - layerfs-overlay moves forbid→deny with one allowed module,
   `src/database/windows_identity.rs` (handle/path identity,
   `GetFileInformationByHandleEx` allocation, `GetDiskFreeSpaceExW`).
+- layerfs-node declares deny with two allowed discovery modules:
+  `src/discovery.rs` (unix uid/flock, upstream's) and
+  `src/discovery_windows.rs` (the named kernel mutex discovery turn).
 - Storage's `src/encoding/codec.rs` authorization is unchanged.
 
 Acquisition rows are keyed by dev+inode. On Windows the identity MUST be

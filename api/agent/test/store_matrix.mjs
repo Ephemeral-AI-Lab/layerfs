@@ -6,7 +6,7 @@
 // (merge, publish) — plus the Windows refusal of the daemon-only workspace
 // surface. No Docker, no daemon, no WSL2; on Linux the Store sits on the
 // E2E launcher's volume (LAYERFS_STORE_PATH):
-//   node sdk/js/test/store_matrix.mjs
+//   node api/agent/test/store_matrix.mjs
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

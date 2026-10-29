@@ -82,8 +82,12 @@ fn attempt(
 
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 fn create(store: &std::path::Path, acquisition: SqliteAcquisitionSchema) -> Handles {
+    // Disposable is the sole permitted execution profile (owner 2026-10-07);
+    // the constructor's default is Durable, which this suite never executes.
     Handles::create(
-        PersistenceConfig::sqlite(store).with_sqlite_acquisition(acquisition),
+        PersistenceConfig::sqlite(store)
+            .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+            .with_sqlite_acquisition(acquisition),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: b"init-sqlite".to_vec(),
@@ -170,18 +174,17 @@ fn a_junction_spelling_of_the_source_is_refused_as_inside_it() {
     );
     let junction = fixture.path.join("alias");
     std::process::Command::new("cmd")
-        .args([
-            "/c",
-            "mklink",
-            "/J",
-        ])
+        .args(["/c", "mklink", "/J"])
         .arg(&junction)
         .arg(&fixture.source)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
         .unwrap();
-    assert!(junction.join("d0").is_dir(), "the junction names the source");
+    assert!(
+        junction.join("d0").is_dir(),
+        "the junction names the source"
+    );
     let storage = storage(handles.storage.clone());
     let error = layerfs_telemetry::timer::Timing::disabled("project.init", |scope| {
         layerfs_project::init(
@@ -205,6 +208,56 @@ fn a_junction_spelling_of_the_source_is_refused_as_inside_it() {
         "{error:?}"
     );
     std::fs::remove_dir(&fixture.path.join("alias")).unwrap();
+}
+
+/// A dangling link initializes with the rest of the tree: the scan stamps a
+/// reparse point's own identity and never follows it to a target that is
+/// gone (unix lstat parity; std classifies a junction as a symlink).
+#[cfg(target_os = "windows")]
+#[test]
+fn a_dangling_junction_initializes_with_the_rest_of_the_tree() {
+    use layerfs_history::{HistoryName, LayerStackId};
+    use layerfs_project::{init, InitRequest};
+    use support::memory_acquisition::MemoryAcquisition;
+    let fixture = Fixture::new(5);
+    let target = fixture.path.join("gone");
+    std::fs::create_dir_all(&target).unwrap();
+    let link = fixture.source.join("dangling");
+    std::process::Command::new("cmd")
+        .args(["/c", "mklink", "/J"])
+        .arg(&link)
+        .arg(&target)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    std::fs::remove_dir(&target).unwrap();
+    let volume = fixture.path.join("volume");
+    std::fs::create_dir_all(&volume).unwrap();
+    let handles = create(
+        &fixture.path.join("store.sqlite"),
+        SqliteAcquisitionSchema::Tables,
+    );
+    let storage = storage(handles.storage.clone());
+    let initialized = layerfs_telemetry::timer::Timing::disabled("project.init", |scope| {
+        layerfs_project::init(
+            &storage,
+            &handles.history,
+            InitRequest {
+                source: &fixture.source,
+                acquisition: &MemoryAcquisition::placed_in(volume),
+                stack: LayerStackId::from_authority([43; 16]),
+                name: HistoryName::new("main").unwrap(),
+                scope_seed: [47; 32],
+                deadline: std::time::Instant::now() + std::time::Duration::from_secs(60),
+            },
+            scope,
+        )
+    })
+    .0
+    .unwrap();
+    // 5 directories + 5 files + the dangling link itself.
+    assert!(initialized.entries >= 11, "{}", initialized.entries);
 }
 
 /// Owner direction 2026-10-07: Disposable is the sole active development

@@ -30,7 +30,9 @@ impl std::fmt::Display for Unsupported {
 }
 
 /// Checks the platform and the filesystem holding `store`'s directory,
-/// before anything is opened. Returns the filesystem's name.
+/// before anything is opened. `store` is the Store **file** path — the
+/// directory is its parent, taken here once so every caller agrees.
+/// Returns the filesystem's name.
 pub fn check(store: &Path) -> Result<&'static str, Unsupported> {
     #[cfg(target_os = "linux")]
     {

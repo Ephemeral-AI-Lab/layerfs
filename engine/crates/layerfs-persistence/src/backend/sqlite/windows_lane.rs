@@ -22,6 +22,7 @@ use windows_sys::Win32::System::Threading::{
 /// The Store directory's cooperative writer lane.
 pub(crate) struct LaneMutex {
     handle: usize,
+    closed: bool,
 }
 
 /// The lane's kernel object name: SHA-256 of the resolved directory's
@@ -33,7 +34,10 @@ pub(crate) fn lane_name(directory: &Path) -> String {
     let digest = Sha256::digest(resolved.as_os_str().as_encoded_bytes());
     let mut tag = [0u8; 8];
     tag.copy_from_slice(&digest[..8]);
-    format!("Local\\layerfs-writer-lane-{:016x}", u64::from_be_bytes(tag))
+    format!(
+        "Local\\layerfs-writer-lane-{:016x}",
+        u64::from_be_bytes(tag)
+    )
 }
 
 impl LaneMutex {
@@ -54,6 +58,7 @@ impl LaneMutex {
         if waited == WAIT_OBJECT_0 || waited == WAIT_ABANDONED {
             Ok(Self {
                 handle: handle as usize,
+                closed: false,
             })
         } else {
             unsafe { CloseHandle(handle) };
@@ -62,47 +67,109 @@ impl LaneMutex {
     }
 
     /// Releases the lane and destroys this handle; a failed release returns
-    /// the retained lane unchanged.
-    pub(crate) fn release(self) -> Result<(), Self> {
+    /// the retained lane unchanged, so the quarantining caller keeps holding
+    /// it, and its eventual drop retries the release after SQLite teardown.
+    pub(crate) fn release(mut self) -> Result<(), Self> {
         let handle = self.handle as windows_sys::Win32::Foundation::HANDLE;
         if unsafe { ReleaseMutex(handle) } == 0 {
             return Err(Self {
                 handle: self.handle,
+                closed: false,
             });
         }
+        self.closed = true;
         unsafe { CloseHandle(handle) };
         Ok(())
     }
 }
 
-/// The filesystem name of the local volume holding `directory`, for the
-/// kernel guard's allowlist. Only a local drive letter is examined: UNC,
-/// device and verbatim prefixes are network or device paths whose locks do
-/// not coordinate Store writers.
-pub fn windows_volume_filesystem(directory: &Path) -> io::Result<String> {
-    use std::path::{Component, Prefix};
-    let root = match directory.components().next() {
-        Some(Component::Prefix(prefix)) => match prefix.kind() {
-            Prefix::Disk(letter) => format!("{}:\\", letter as char),
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "a network or device path is not a local volume",
-                ))
-            }
-        },
-        _ => {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "the directory has no volume prefix",
-            ))
+impl Drop for LaneMutex {
+    /// Best-effort release of a lane an error or panic path left unreleased
+    /// (K3-R3 F6): the release can fail on a thread that does not own the
+    /// mutex — the owner exits into the kernel's abandoned-mutex handoff —
+    /// while the descriptor closes exactly once either way. Linux gets this
+    /// for free from `Flock`'s own drop.
+    fn drop(&mut self) {
+        if self.closed {
+            return;
         }
+        let handle = self.handle as windows_sys::Win32::Foundation::HANDLE;
+        self.closed = true;
+        unsafe { ReleaseMutex(handle) };
+        unsafe { CloseHandle(handle) };
+    }
+}
+
+/// The filesystem name of the volume actually holding `directory`, for the
+/// kernel guard's allowlist. The directory's own handle answers, and its
+/// final path decides locality: the spelling is irrelevant (a verbatim
+/// local path, a junction or a mapped drive all resolve), and a final path
+/// that lands on a share (`\\?\UNC\...`) is refused — its locks travel the
+/// SMB redirector, not this kernel's lock manager (K3-R3 F4).
+pub fn windows_volume_filesystem(directory: &Path) -> io::Result<String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, GetFinalPathNameByHandleW, GetVolumeInformationByHandleW,
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+        OPEN_EXISTING, VOLUME_NAME_DOS,
     };
-    let wide: Vec<u16> = root.encode_utf16().chain(std::iter::once(0)).collect();
+    let wide: Vec<u16> = directory
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let handle = unsafe {
+        CreateFileW(
+            wide.as_ptr(),
+            0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS,
+            std::ptr::null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!(
+                "the directory {} cannot be opened to examine its volume: {}",
+                directory.display(),
+                io::Error::last_os_error()
+            ),
+        ));
+    }
+    let mut final_path = [0u16; 1024];
+    let mut written = unsafe {
+        GetFinalPathNameByHandleW(
+            handle,
+            final_path.as_mut_ptr(),
+            final_path.len() as u32,
+            VOLUME_NAME_DOS,
+        )
+    };
+    if written as usize > final_path.len() {
+        final_path = vec![0u16; written as usize].try_into().unwrap_or([0; 1024]);
+        written = unsafe {
+            GetFinalPathNameByHandleW(
+                handle,
+                final_path.as_mut_ptr(),
+                final_path.len() as u32,
+                VOLUME_NAME_DOS,
+            )
+        };
+    }
+    let share = written != 0
+        && final_path
+            .iter()
+            .take(8)
+            .zip(r"\\?\UNC\".encode_utf16())
+            .all(|(unit, expected)| *unit == expected);
     let mut filesystem = [0u16; 16];
     let examined = unsafe {
-        windows_sys::Win32::Storage::FileSystem::GetVolumeInformationW(
-            wide.as_ptr(),
+        GetVolumeInformationByHandleW(
+            handle,
             std::ptr::null_mut(),
             0,
             std::ptr::null_mut(),
@@ -112,10 +179,35 @@ pub fn windows_volume_filesystem(directory: &Path) -> io::Result<String> {
             filesystem.len() as u32,
         )
     };
-    if examined == 0 {
+    // Capture the failure before another syscall can overwrite it.
+    let failure = (examined == 0).then(io::Error::last_os_error);
+    unsafe { CloseHandle(handle) };
+    if written == 0 {
         return Err(io::Error::new(
             io::ErrorKind::Unsupported,
-            format!("the volume {root} cannot be examined"),
+            format!(
+                "the final path of {} cannot be read: {}",
+                directory.display(),
+                io::Error::last_os_error()
+            ),
+        ));
+    }
+    if share {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!(
+                "the directory {} resolves onto a network share; the Store needs a local volume",
+                directory.display()
+            ),
+        ));
+    }
+    if let Some(error) = failure {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!(
+                "the volume of {} cannot be examined: {error}",
+                directory.display()
+            ),
         ));
     }
     let end = filesystem.iter().position(|&wide| wide == 0).unwrap_or(0);

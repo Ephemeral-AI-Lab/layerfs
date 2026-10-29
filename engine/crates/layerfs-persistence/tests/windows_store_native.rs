@@ -77,7 +77,8 @@ fn finish(mut child: std::process::Child) {
 }
 
 #[test]
-fn windows_native_store_serves_sessions_and_serializes_foreign_processes() {    dispatch_child();
+fn windows_native_store_serves_sessions_and_serializes_foreign_processes() {
+    dispatch_child();
     let temp = support::Temp::new("windows-store-native");
     let path = temp.join("store.sqlite");
     let catalog = authority(b"windows-store-native");

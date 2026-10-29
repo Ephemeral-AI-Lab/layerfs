@@ -9,6 +9,7 @@
 //! unix discipline: this process's calls take turns on one directory, and
 //! between processes one named kernel mutex per directory is held, released
 //! by the kernel when its holder exits.
+#![allow(unsafe_code)]
 use crate::{
     job::{failed, refused},
     registry::{self, Project},

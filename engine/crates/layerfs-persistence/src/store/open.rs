@@ -101,13 +101,12 @@ impl Handles {
             // a raw second hold here would self-deadlock on Linux, where
             // flock is held per open file description.
             let lane = session.hold_lane()?;
-            let setup =
-                (|| -> Result<(), crate::backend::records::BackendError> {
-                    session.add_binding_hints()?;
-                    session.add_lineage(crate::history::backfill_lineage)?;
-                    session.add_merge_scratch()?;
-                    session.add_file_digests()
-                })();
+            let setup = (|| -> Result<(), crate::backend::records::BackendError> {
+                session.add_binding_hints()?;
+                session.add_lineage(crate::history::backfill_lineage)?;
+                session.add_merge_scratch()?;
+                session.add_file_digests()
+            })();
             drop(lane);
             setup?;
         }
