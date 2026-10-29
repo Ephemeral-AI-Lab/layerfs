@@ -501,7 +501,7 @@ try {
     });
     const methods = (group) => Object.keys(group).sort();
     assert.deepEqual(methods(runtime.store), ["attach_postgresql", "check", "create", "list", "remove", "start_import_postgresql", "start_load", "start_publish", "start_pull", "start_push", "start_send", "unlink"]);
-    assert.deepEqual(methods(runtime.remote), ["add", "list", "list_stores", "providers", "remove"]);
+    assert.deepEqual(methods(runtime.remote), ["add", "close_view", "list", "list_stores", "open_view", "providers", "remove", "view_stats"]);
     assert.deepEqual(methods(runtime.postgresql), ["status"]);
     assert.deepEqual(methods(runtime.sync), ["get"]);
     const ended = async (job) => {
@@ -697,8 +697,31 @@ try {
     assert.equal(JSON.parse(readFileSync(join(home, "stores.json"), "utf8")).version, 2);
     rmSync(folder, { recursive: true, force: true });
     await runtime.close();
+  } else if (selected === "views") {
+    // #510: a live read-only view of a remote Store file; its projects read through the view's store path
+    const { runtime } = await opened();
+    await assert.rejects(runtime.remote.open_view("minio-a", {}), { code: "InvalidInput", message: /file/ });
+    const keys = { accessKey: "a", secretKey: "b" };
+    const view = await runtime.remote.open_view("minio-a", { file: "work", credentials: keys });
+    assert.equal(view.storePath, "remote:minio-a/work#v1");
+    const opening = native.args.find((a) => a.file === "work" && a.remote === "minio-a");
+    assert.deepEqual(opening.credentials, keys);
+    assert.deepEqual((await runtime.project.list({ view: view.view })).map((p) => [p.name, p.kind, p.store, p.readOnly]), [["docs", "view", "view:v1", true], ["web", "view", "view:v1", true]]);
+    const before = native.calls.length;
+    const state = await runtime.project.get_state("web", undefined, { view: view.view });
+    assert.deepEqual([state.kind, state.sandboxes, state.gone], ["ok", [], []]);
+    const made = native.calls.slice(before);
+    assert.ok(made.includes("backend.store.project.get_history"));
+    assert.ok(!made.includes("project.list_sandboxes"), "a view lists no Sandboxes");
+    assert.ok(native.stores.some(([what, path]) => what === "open" && path === view.storePath), "its client opens the view's store path");
+    await assert.rejects(runtime.project.get_state("nope", undefined, { view: view.view }), { code: "NoSuchProject" });
+    assert.equal((await runtime.remote.view_stats(view.view)).requests, 3);
+    assert.deepEqual(await runtime.remote.close_view(view.view), { closed: true });
+    assert.ok(native.stores.some(([what, path]) => what === "close" && path === view.storePath), "closing the view closes its clients");
+    await assert.rejects(runtime.project.list({ view: view.view }), { code: "NoSuchView" });
+    await runtime.close();
   } else {
-    throw new Error("select surface, home-mode, projects, init, state, events, leftovers, sandboxes, volumes, transport-order, macos-worker, worker-frames, docker-default, worker-docker or stores");
+    throw new Error("select surface, home-mode, projects, init, state, events, leftovers, sandboxes, volumes, transport-order, macos-worker, worker-frames, docker-default, worker-docker, stores or views");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });

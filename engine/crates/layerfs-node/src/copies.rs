@@ -23,6 +23,7 @@ pub(crate) fn remote_refusal(error: &RemoteError) -> SdkRefusal {
         RemoteError::Refused { status: 404, .. } => "NoSuchBucket",
         RemoteError::Uncertain(_) | RemoteError::PartsLeft { .. } => "Unknown",
         RemoteError::Unsupported(_) => "Unsupported",
+        RemoteError::Changed => "Changed",
         _ => "Failed",
     };
     refused(code, error.to_string())

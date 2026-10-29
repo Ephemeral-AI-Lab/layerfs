@@ -23,9 +23,10 @@ async function live(client, sandbox) {
   return { answer };
 }
 
-export async function get_state(client, since) {
+/** `{ sandboxes: false }` (a remote view, #510) reads the history alone. */
+export async function get_state(client, since, options = {}) {
   const history = await invokeClientBackend(client, "backend.store.project.get_history", {});
-  const listed = (await invokeClient(client, "project.list_sandboxes", {})).items.map(({ sandbox, ...rest }) => ({ id: sandbox, ...rest }));
+  const listed = options.sandboxes === false ? [] : (await invokeClient(client, "project.list_sandboxes", {})).items.map(({ sandbox, ...rest }) => ({ id: sandbox, ...rest }));
   const reads = await Promise.all(listed.map(({ id }) => live(client, id)));
   const version = [history.version, ...reads.map((read, index) => read.answer?.version ?? `gone-${listed[index].id}`)].join(".");
   if (since === version) return { kind: "unchanged", version };

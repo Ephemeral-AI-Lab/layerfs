@@ -17,6 +17,7 @@ mod sandbox;
 mod stores;
 mod sync;
 mod trace;
+mod views;
 mod workspace;
 
 use job::Job;

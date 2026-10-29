@@ -90,6 +90,10 @@ function answer(op, args) {
     case "runtime.remote.list": return { value: exports.remoteList ?? [] };
     case "runtime.remote.add": return { value: { ...args.remote, credentials: args.remote.credentials ?? "env:LAYERFS_REMOTE" } };
     case "runtime.remote.remove": return { value: { removed: args.name } };
+    // #510: live read-only views of a remote Store file
+    case "runtime.remote.open_view": return { value: { view: "v1", storePath: `remote:${args.remote}/${args.file}#v1`, remote: args.remote, file: args.file, bytes: 8192, etag: '"e1"', sha256: "ab".repeat(32), heads: "11".repeat(32), modified: 1000, projects: ["docs", "web"] } };
+    case "runtime.remote.close_view": return { value: { closed: true } };
+    case "runtime.remote.view_stats": return { value: { requests: 3, bytes: 2 << 20, fileBytes: 8192, hits: 10, misses: 2, fetches: 2, fetched: 2 << 20, resident: 2 << 20, capacity: 64 << 20 } };
     default:
       if (/^fs\.(write|edit|apply|mkdir|cp|mv)$/.test(op)) return { value: committed };
       return { value: { items: [], hasMore: false, nextPagePos: null } };
