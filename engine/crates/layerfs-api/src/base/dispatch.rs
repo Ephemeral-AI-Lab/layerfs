@@ -21,6 +21,8 @@ pub fn call(service: &StoreService, call: &SdkCall) -> Answer {
     match call.method.as_str() {
         "project.list_branches" => project::list_branches(service, args),
         "branch.fork" => branch::fork(service, args),
+        "branch.graph" => branch::graph(service, args),
+        "branch.changed_paths" => branch::changed_paths(service, args),
         "branch.list_commits" => branch::list_commits(service, args),
         "branch.merge" => branch::merge(service, args),
         "branch.publish" => branch::publish(service, args),

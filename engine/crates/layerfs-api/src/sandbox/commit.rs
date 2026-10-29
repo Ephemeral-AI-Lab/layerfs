@@ -30,6 +30,8 @@ impl WorkspaceApi<'_> {
             token,
             force: false,
             message: None,
+            author: None,
+            labels: Vec::new(),
         });
         match self.exchange(request.clone())? {
             Reply::Committed(outcome) => Ok(outcome),

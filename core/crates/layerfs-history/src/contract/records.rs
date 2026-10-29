@@ -120,9 +120,17 @@ impl CommitVia {
 /// Maximum encoded UTF-8 bytes in a Commit or execution message.
 pub const MAXIMUM_MESSAGE_BYTES: usize = 4096;
 
+/// Largest encoded UTF-8 bytes in a Commit author or one label.
+pub const MAXIMUM_ATTRIBUTION_BYTES: usize = 4096;
+/// Largest number of labels on one Commit.
+pub const MAXIMUM_LABELS: usize = 64;
+/// Largest encoded UTF-8 bytes of the complete labels JSON array.
+pub const MAXIMUM_LABELS_JSON_BYTES: usize = 4096;
+
 /// Commit provenance and publication facts. Branch, via, message, merge origin
-/// and displaced head participate in identity; time, byte statistics, LWW
-/// details and merge units are persisted facts outside that identity.
+/// and displaced head participate in identity; author, labels, time, byte
+/// statistics, LWW details and merge units are creation-time annotations or
+/// persisted facts outside that identity.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommitMeta {
     /// Branch the Commit was made on; the catalog sets it from the request.
@@ -131,6 +139,10 @@ pub struct CommitMeta {
     pub via: CommitVia,
     /// Description of the filesystem change; participates in Commit identity.
     pub message: Option<String>,
+    /// Person or agent that made the Commit; outside Commit identity.
+    pub author: Option<String>,
+    /// Free-form creation-time labels, preserving order and duplicates.
+    pub labels: Vec<String>,
     /// Head a merge-on-commit started from, when one ran.
     pub merged_from: Option<NodeId>,
     /// Persisted newer-write-wins decisions.
@@ -155,6 +167,8 @@ impl CommitMeta {
             branch: None,
             via,
             message: None,
+            author: None,
+            labels: Vec::new(),
             merged_from: None,
             lww: Vec::new(),
             lww_truncated: false,
@@ -165,17 +179,34 @@ impl CommitMeta {
         }
     }
 
-    /// Checks the attribution bounds: at most
-    /// [`MAXIMUM_MESSAGE_BYTES`] bytes and no control character.
+    /// Checks message, author and label bounds before storage or transport.
     pub fn check(&self) -> crate::error::HistoryResult<()> {
-        for field in [&self.message].into_iter().flatten() {
-            if field.len() > MAXIMUM_MESSAGE_BYTES
+        fn text(field: &str, what: &'static str) -> crate::error::HistoryResult<()> {
+            if field.len() > MAXIMUM_ATTRIBUTION_BYTES
                 || field
                     .chars()
                     .any(|c| c.is_control() && c != '\n' && c != '\t')
             {
-                return Err(crate::error::HistoryError::InvalidInput("Commit message"));
+                return Err(crate::error::HistoryError::InvalidInput(what));
             }
+            Ok(())
+        }
+        if let Some(message) = &self.message {
+            text(message, "Commit message")?;
+        }
+        if let Some(author) = &self.author {
+            text(author, "Commit author")?;
+        }
+        if self.labels.len() > MAXIMUM_LABELS {
+            return Err(crate::error::HistoryError::InvalidInput("Commit labels"));
+        }
+        for label in &self.labels {
+            text(label, "Commit label")?;
+        }
+        if crate::labels::encode(&self.labels).len() > MAXIMUM_LABELS_JSON_BYTES {
+            return Err(crate::error::HistoryError::InvalidInput(
+                "Commit labels JSON",
+            ));
         }
         Ok(())
     }
@@ -539,7 +570,7 @@ macro_rules! encoded_width {
 
 encoded_width!(LayerStackRecord, 179);
 encoded_width!(BranchRecord, 200);
-encoded_width!(CommitRecord, 4510);
+encoded_width!(CommitRecord, 12608);
 encoded_width!(LayerRecord, 176);
 
 /// Byte facts acknowledged by a construction producer and stored at publication.
