@@ -2,17 +2,18 @@
 //!
 //! The same shared history and Metadata semantics as the SQLite Store run
 //! over the PostgreSQL engine. Opening never creates or migrates a schema;
-//! a schema is made only by an import from a SQLite Store (next step).
+//! a schema is made only by [`PostgresHandles::import`] from a SQLite Store.
 use crate::backend::{
-    postgresql::{schema, session::connection::Session, storage::provider},
+    postgresql::{import::import, schema, session::connection::Session, storage::provider},
     records::BackendError,
     Engine,
 };
-use crate::{HistoryProvider, PostgresSelection, SqlWork};
+use crate::{Handles, HistoryProvider, PersistenceConfig, PostgresSelection, SqlWork};
 use layerfs_history::CatalogId;
 use layerfs_storage::port::PersistenceError;
 use std::sync::Arc;
 
+pub use crate::backend::postgresql::import::ImportReceipt;
 pub use crate::backend::postgresql::lane::lane::LaneHold as PostgresLaneHold;
 pub use provider::PostgresStorage;
 
@@ -67,6 +68,23 @@ impl PostgresHandles {
                 cursor_key,
             },
         })
+    }
+
+    /// Copies the SQLite Store `source` into the new schema `target.schema`,
+    /// which must not exist, in one PostgreSQL transaction over one SQLite
+    /// snapshot. The source's binding is checked at open; nothing is written to it.
+    pub fn import(
+        source: PersistenceConfig,
+        target: &PostgresSelection,
+        binding: &[u8],
+        cursor_key: [u8; 32],
+    ) -> Result<ImportReceipt, PersistenceError> {
+        // A read-only SQLite connection cannot open a closed WAL Store that
+        // has no `-shm` sidecar (a sealed or snapshot file), so the source
+        // opens writable; the import itself only reads, in one snapshot.
+        let sqlite = Handles::open_writable(source, binding, cursor_key)?;
+        let session = Session::connect(target, true)?;
+        sqlite.storage.session.run(false, |tx| import(tx, &session))
     }
 
     /// Refuses every queued and later call with `Closed`; see [`Handles::close`].

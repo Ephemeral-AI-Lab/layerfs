@@ -9,7 +9,7 @@
 //! merge-record and acquisition tables are absent: group-row layouts are
 //! SQLite physical choices, merges and Init stay SQLite-only in this phase.
 use super::session::transaction::Transaction;
-use crate::backend::records::BackendError;
+use crate::backend::records::{BackendError, Param};
 
 pub(crate) const SCHEMA: &str = include_str!("../../../sql/postgresql/schema.sql");
 /// The engine-scoped schema version in `store_policy` and `history_meta`.
@@ -91,4 +91,18 @@ pub(crate) fn validate(
         return Err(BackendError::Integrity);
     }
     Ok(incarnation as u64)
+}
+
+/// Records this engine's schema after rows were imported from another engine.
+pub(crate) fn record(tx: &Transaction<'_>) -> Result<(), BackendError> {
+    let definition = definition(tx)?;
+    tx.query(
+        "UPDATE history_meta SET schema_version=$1,schema_source=$2,schema_definition=$3 WHERE id=1",
+        vec![
+            Param::I64(SCHEMA_VERSION),
+            Param::Text(SCHEMA.to_owned()),
+            Param::Text(definition),
+        ],
+    )?;
+    Ok(())
 }

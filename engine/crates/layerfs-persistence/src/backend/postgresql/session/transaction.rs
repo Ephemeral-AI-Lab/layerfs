@@ -113,6 +113,15 @@ impl Transaction<'_> {
         drop(state);
         self.checked(result)
     }
+
+    /// A script of statements without parameters (schema creation).
+    pub(crate) fn batch(&self, sql: &str) -> Result<(), BackendError> {
+        let mut state = self.state.borrow_mut();
+        let result = state.client.batch_execute(sql);
+        state.work.statements += 1;
+        drop(state);
+        self.checked(result)
+    }
 }
 
 impl Session {
