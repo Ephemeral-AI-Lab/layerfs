@@ -16,9 +16,9 @@ import { CALLS, INIT } from "../src/calls.js";
 import { usage } from "../src/help.js";
 import { tables, written } from "./doc-tables.mjs";
 import { CASES, ENV, contains, made, plain } from "../../agent/test/fixture/cases.mjs";
-import { P1_CASES, P7_CASES } from "../../agent/test/fixture/cases-area-p.mjs";
+import { P1_CASES, P7_CASES, P8_CASES } from "../../agent/test/fixture/cases-area-p.mjs";
 
-const AGREEMENT_CASES = [...CASES, ...P1_CASES, ...P7_CASES];
+const AGREEMENT_CASES = [...CASES, ...P1_CASES, ...P7_CASES, ...P8_CASES];
 
 const CLI = fileURLToPath(new URL("../src/layerfs.js", import.meta.url));
 const FAKE = fileURLToPath(new URL("../../agent/test/fixture/fake-native.cjs", import.meta.url));
@@ -131,6 +131,7 @@ for (const [why, argv, message] of [
   ["unknown short option", ["fs", "stat", "main", "/a", "-x"], "unknown option -x"],
   ["duplicate option", ["fs", "mkdir", "cart", "/d", "-m", "a", "--message", "b"], "--message is given twice"],
   ["bool with a value", ["branch", "diff_branches", "a", "b", "--no-hunks=yes"], "--no-hunks takes no value"],
+  ["binary with a value", ["fs", "read", "main", "/a", "--binary=yes"], "--binary takes no value"],
   ["int that is not a whole number", ["project", "list_branches", "--page-size", "x"], "--page-size takes a whole number"],
   ["bad JSON option", ["branch", "merge", "a", "b", "ab", "--units", "{"], "--units is not JSON"],
   ["malformed labels JSON", ["workspace", "commit", WS, "--labels", "{"], "--labels is not JSON"],

@@ -282,7 +282,7 @@ trace line covers the command's run.
 | --- | --- |
 | `LayerFS` (2) | `LayerFS.open(name)`, `LayerFS.init(name, folder, timeout?)`: static, each returns a ready client |
 | project (2) | `list_branches(pageSize?, pagePos?)`, `list_sandboxes(pageSize?, pagePos?)` |
-| fs reads (7) | `read(ref, path, startLine?, endLine?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
+| fs reads (7) | `read(ref, path, startLine?, endLine?, { binary? }?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
 | fs writes (7) | `write(branch, path, content, message? \| { message?, mode? })`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message? \| { message?, mode? })`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
 | branch (8) | `fork(name, fromRef?)`, `graph(branch, pageSize?, pagePos?)`, `changed_paths(commit, pageSize?, pagePos?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
 | sandbox (3) | `create({ image }?)` → `{ sandbox, image }`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
@@ -292,10 +292,12 @@ A Workspace's status is not an agent call: it is `backend.daemon.workspace.statu
 in [`@layerfs/backend`](backend.md).
 
 Every grouped method returns a Promise and takes positional arguments; only
-the trailing `{ ... }?` arguments shown above are options objects. A ref is `main`, a Branch name, a Commit
-id or a Layer id. Filesystem paths are absolute in that view. Main changes only
-through publish. There is no `remove` alias, harness export, agent/call attribution,
-public inspect or public process-control method.
+the trailing `{ ... }?` arguments shown above are options objects. A ref is `main`,
+a Branch name, or a 66-character hex Commit or Layer identity. Reads at any of
+these refs need no mounted Workspace and do not move Branch heads. Filesystem
+paths are absolute in that view. Main changes only through publish. There is no
+`remove` alias, harness export, agent/call attribution, public inspect or public
+process-control method.
 
 ### Messages
 
@@ -354,9 +356,11 @@ binary `content` is sent as `bytes`. Bytes in a `SharedArrayBuffer` or a
 detached `ArrayBuffer` are refused as InvalidInput, and so is anything else,
 such as an array of numbers. The bytes are copied once the call starts, after
 the client's Store is open, so do not change them until the call settles.
-Reads are text only: `fs.read` refuses a file that is not UTF-8 text as
-`Binary`, and `fs.stat` reports its size. `node api/agent/test/binary_write.mjs`
-checks these forms and refusals on Linux.
+By default `fs.read` returns `text` and refuses NUL or invalid UTF-8 as `Binary`.
+With `{ binary: true }` it returns `bytes` as a `Buffer` instead of `text`, using
+the same line window and 48 KiB raw-byte budget without UTF-8 validation. The CLI
+flag is `--binary`. `fs.read` reports the full file size in either mode.
+`node api/agent/test/binary_write.mjs` checks the write forms and refusals on Linux.
 
 ### Pages and reads
 
@@ -386,14 +390,15 @@ parentless merge, and against an empty tree for a true root Commit. It accepts o
 a Commit identity: malformed text and Layer identities are `InvalidInput`, and an
 absent Commit is `NoSuchCommit`.
 
-Read/blame use 1-based inclusive line positions, no byte offsets or byte-read
-method. Responses fit the authenticated control frame: at most 2000 lines and
-48 KiB of text/value payload, below the selected 256 KiB ceiling. LF separates
-lines; CRLF text is preserved, and a final LF creates no phantom line. Read reports
-`startLine`, `endLine`, `truncated`, `lineTruncated` and `nextLine`. Huge lines return
-a UTF-8 prefix, with no within-line continuation; the remainder is explicitly
-omitted and the next window starts at the following line. NUL/invalid UTF-8 in the
-scanned text is Binary. Grep scans chunks and matches across chunk boundaries.
+Read/blame use 1-based inclusive line positions, with no byte-offset windows.
+Responses fit the authenticated control frame: at most 2000 lines and 48 KiB of
+text/byte payload, below the selected 256 KiB ceiling. LF separates lines; CRLF
+text is preserved, and a final LF creates no phantom line. Read reports `startLine`,
+`endLine`, `truncated`, `lineTruncated` and `nextLine`. Huge lines return a UTF-8
+prefix in text mode or a raw byte prefix in binary mode, with no within-line
+continuation; the remainder is explicitly omitted and the next window starts at
+the following line. NUL/invalid UTF-8 in scanned text is Binary only in text mode.
+Grep scans chunks and matches across chunk boundaries.
 Blame uses bounded LCS and exact common edges. In coarse comparisons, a line
 is inherited from the common suffix only when it starts at a corresponding
 line boundary in both versions, and from the common prefix only when it ends at
@@ -529,7 +534,7 @@ table differs, and when a family's files stop matching the SDK's.
 | `branch.diff_branches` | `layerfs branch diff_branches <from-branch> <to-branch> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--no-hunks]` |
 | `branch.merge` | `layerfs branch merge <a> <b> <name> [-m <text>] [--units <json>]` |
 | `branch.publish` | `layerfs branch publish <branch> [<commit>]` |
-| `fs.read` | `layerfs fs read <ref> <path> [--start-line <n>] [--end-line <n>]` |
+| `fs.read` | `layerfs fs read <ref> <path> [--start-line <n>] [--end-line <n>] [--binary]` |
 | `fs.list` | `layerfs fs list <ref> [<path>] [--page-size <n>] [--page-pos <n>]` |
 | `fs.stat` | `layerfs fs stat <ref> <path>` |
 | `fs.grep` | `layerfs fs grep <ref> <pattern> [<path>] [--page-size <n>] [--page-pos <n>]` |

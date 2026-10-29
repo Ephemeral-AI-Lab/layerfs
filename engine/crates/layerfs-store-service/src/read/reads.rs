@@ -1,5 +1,5 @@
 //! Positional reads of one snapshot, with numeric paging and bounded
-//! streaming text windows.
+//! streaming text or raw-byte windows.
 use super::{
     cached::{self, Cached},
     search,
@@ -23,13 +23,14 @@ use layerfs_content::{
 pub const REPLY_BUDGET: usize = window::BYTES;
 
 /// One window of the file at `path`: lines `start` through `end`, as far as
-/// the reply budget allows.
+/// the reply budget allows. Binary mode returns the same window as raw bytes.
 pub fn read(
     reader: &StorePorts,
     snap: &Snap,
     path: &str,
     start: Arg<u64>,
     end: Arg<u64>,
+    binary: bool,
 ) -> Answer {
     // The lookup's pages are memoized over the call's caches; the file's
     // own objects are read through the caches only.
@@ -41,25 +42,39 @@ pub fn read(
     }
     let requested_end = end;
     let end = end.min(start.saturating_add(window::LINES as u64 - 1));
-    let (mut content, mut next, mut clipped) = (String::new(), None, false);
+    let (mut content, mut next, mut clipped) = (Vec::new(), None, false);
     let mut last = None;
-    window::lines(&cached, &entry, REPLY_BUDGET, start, |n, line| {
+    window::lines(&cached, &entry, REPLY_BUDGET, start, binary, |n, line| {
         if n > requested_end {
             return Ok(false);
         }
-        if n > end || (!content.is_empty() && content.len() + line.text.len() > REPLY_BUDGET) {
+        let line_truncated = line.truncated;
+        let shown = if binary {
+            line.prefix
+        } else {
+            line.text().into_bytes()
+        };
+        if n > end || (!content.is_empty() && content.len() + shown.len() > REPLY_BUDGET) {
             next = Some(n);
             return Ok(false);
         }
-        clipped |= line.truncated;
+        clipped |= line_truncated;
         last = Some(n);
-        content.push_str(&line.text);
+        content.extend_from_slice(&shown);
         Ok(true)
     })?;
-    // Return either aggregate text or per-line data, avoiding duplicate payload on the wire.
+    // Return either aggregate text or bytes, avoiding duplicate payload on the wire.
+    let (name, content) = if binary {
+        ("bytes", SdkValue::Bytes(content))
+    } else {
+        (
+            "text",
+            SdkValue::Text(String::from_utf8(content).expect("validated text window")),
+        )
+    };
     let mut fields = header(snap, path);
     fields.extend([
-        ("text", SdkValue::text(content)),
+        (name, content),
         ("startLine", SdkValue::Int(start as i64)),
         (
             "endLine",
@@ -280,7 +295,7 @@ impl Page<'_> {
             self.found += 1;
             return true;
         }
-        let cost = file.len() + line.text.len() + 160;
+        let cost = file.len() + line.prefix.len() + 160;
         if self.items.len() == self.limit || self.spent + cost > REPLY_BUDGET {
             self.more = true;
             return false;
@@ -289,7 +304,7 @@ impl Page<'_> {
         self.items.push(SdkValue::map([
             ("path", SdkValue::text(file)),
             ("line", SdkValue::Int(n as i64)),
-            ("text", SdkValue::text(line.text)),
+            ("text", SdkValue::text(line.text())),
             ("lineTruncated", SdkValue::Bool(line.truncated)),
         ]));
         true

@@ -1115,7 +1115,9 @@ fn fixed() {
         snapshot::size(&reader, &entry).unwrap();
         let m3 = mark(&p);
         // A refusal (Binary) is an answer too.
-        let _ = window::lines(&cached, &entry, 48 * 1024, 1, |n, _| Ok(n < 2000));
+        let _ = window::lines(&cached, &entry, 48 * 1024, 1, false, |n, _| {
+            Ok(n < 2000)
+        });
         let m4 = mark(&p);
         add(&mut steps[0], &m0, &m1);
         add(&mut steps[1], &m1, &m2);
