@@ -331,8 +331,20 @@ fn a_daemon_that_ends_is_the_stopped_observation_and_only_its_delete_remains() {
     };
     assert!(failure.container_stopped(), "{failure:?}");
     assert!(!failure.container_gone());
+    // Stopped can be observed before the child is reapable. Keep observing
+    // through its owner so try_wait reaps it once all its threads have ended.
+    let deadline = Instant::now() + WAIT;
+    let stat = loop {
+        let failure = sandbox.endpoint().unwrap_err();
+        assert!(failure.container_stopped(), "{failure:?}");
+        assert!(!failure.container_gone());
+        let stat = fs::read_to_string(format!("/proc/{}/stat", process.pid));
+        if stat.as_ref().map_or(true, |stat| !stat.contains(") Z ")) || Instant::now() >= deadline {
+            break stat;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
     // this process reaped its child: no zombie remains
-    let stat = fs::read_to_string(format!("/proc/{}/stat", process.pid));
     assert!(stat.is_err() || !stat.unwrap().contains(") Z "));
     // a reopen from the record observes the same
     let reopened = Sandbox::reopen(
