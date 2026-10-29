@@ -13,6 +13,26 @@ use support::*;
 const LINEAGE: &str = include_str!("../sql/sqlite/lineage.sql");
 const SCRATCH: &str = include_str!("../sql/sqlite/merge_scratch.sql");
 const DIGESTS: &str = include_str!("../sql/sqlite/file_digest.sql");
+const CHANGES: &str = include_str!("../sql/sqlite/change_log.sql");
+const CHANGE_UNITS: &str = include_str!("../sql/sqlite/change_log_units.sql");
+
+/// Drops the change log tables and every logging trigger.
+fn drop_change_log(sql: &rusqlite::Connection) {
+    let triggers: Vec<String> = sql
+        .prepare(
+            "SELECT name FROM sqlite_schema WHERE type='trigger' AND substr(name,1,7)='change_'",
+        )
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    for name in triggers {
+        sql.execute_batch(&format!("DROP TRIGGER {name}")).unwrap();
+    }
+    sql.execute_batch("DROP TABLE change_log; DROP TABLE change_state;")
+        .unwrap();
+}
 
 fn definition(sql: &rusqlite::Connection) -> String {
     let mut statement = sql
@@ -26,7 +46,8 @@ fn definition(sql: &rusqlite::Connection) -> String {
 }
 
 /// Rewrites a Store into the format written before #353: each Layer lists
-/// the Layers it overwrote, newest first, and the lineage tables are absent.
+/// the Layers it overwrote, newest first, and the lineage tables (and the
+/// later merge, digest and change log tables) are absent.
 fn make_old(path: &std::path::Path) {
     let sql = rusqlite::Connection::open(path).unwrap();
     let layers: Vec<(Vec<u8>, Vec<u8>, i64, i64)> = sql
@@ -54,6 +75,7 @@ fn make_old(path: &std::path::Path) {
         )
         .unwrap();
     }
+    drop_change_log(&sql);
     sql.execute_batch(
         "DROP TABLE layer_lineage; DROP TABLE commit_lineage; DROP TABLE absorbed; DROP TABLE reach; \
          DROP TABLE merge_operation; DROP TABLE merge_record; DROP TABLE file_digest;",
@@ -65,7 +87,9 @@ fn make_old(path: &std::path::Path) {
     let old = source
         .replacen(LINEAGE, "", 1)
         .replacen(SCRATCH, "", 1)
-        .replacen(DIGESTS, "", 1);
+        .replacen(DIGESTS, "", 1)
+        .replacen(CHANGES, "", 1)
+        .replacen(CHANGE_UNITS, "", 1);
     assert_ne!(old, source, "the schema holds the lineage tables");
     sql.execute(
         "UPDATE history_meta SET schema_source=?1, schema_definition=?2",

@@ -80,6 +80,21 @@ adding a table or index is a schema-version change with an additive migration
 | Accounting | `store_totals` (kept by `commit_logical` and `layer_logical` triggers), `store_policy`, `scope_allocator`, `history_meta` | logical sizes, the frozen storage policy, inode-serial allocation, schema metadata |
 | Hints and rings | `binding_hint` (#352, additive), `content_signature` (bounded ring, ≤ 8,192 rows) | parent bindings for O(changed) diffs; similarity signatures for delta bases |
 | Init | `init_entry`, `init_host_file`, `init_operation` | Project Init's resumable records |
+| Change export | `change_state`, `change_log` (additive; AFTER INSERT/UPDATE/DELETE triggers on the replicated tables) | the export cursor and the key of every row written since the Store was marked as an export base |
+
+**Change export** (`replication/`) [impl]. The triggers log only while
+`change_state` has its row, so a Store that was never marked with `mark_base`
+logs nothing. `export_changes` reads one snapshot of a live Store and writes the
+rows changed after a cursor into a bundle file; it takes no writer and stops no
+writer. It writes the bundle under a temporary name and links it into place, so
+the bundle path names a complete file or nothing. `apply_changes` installs a
+bundle into an offline replica in one transaction, and refuses a bundle whose
+meta, starting state, digest or ending state does not match. A bundle is a
+transfer file, not a second database: the Store never reads it, and the caller
+deletes it once it is applied. `mark_base` and `apply_changes` checkpoint after
+they commit; when another connection's read blocks the checkpoint, they report
+`NotCheckpointed`, and the Store file holds the change only together with its
+write-ahead log.
 
 ## 5. Objects inside the file
 

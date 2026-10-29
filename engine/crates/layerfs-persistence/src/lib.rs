@@ -7,6 +7,7 @@ mod store;
 pub(crate) use store::config;
 pub(crate) use store::handles;
 mod history;
+pub mod replication;
 pub use backend::sqlite::connection::{ConnectionProfile, SqlWork};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use backend::sqlite::headroom::STORE_HEADROOM_BYTES;
