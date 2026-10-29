@@ -11,7 +11,7 @@ layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-history = { path = "../../../core/crates/layerfs-history", default-features = false }
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
-rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob", "backup"] }
+rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
 
 # PostgreSQL Store engine (#506), off by default. Owner-authorized new
 # dependencies for this issue: the sync `postgres` client (pinned as in the

@@ -45,7 +45,7 @@ impl Handles {
     ) -> Result<crate::SealedStore, PersistenceError> {
         self.storage.snapshot(destination)
     }
-    /// [`Self::snapshot`], reporting the bytes copied after each backup step;
+    /// [`Self::snapshot`], reporting the bytes written while it runs;
     /// see [`StorageProvider::snapshot_observed`].
     pub fn snapshot_observed(
         &self,

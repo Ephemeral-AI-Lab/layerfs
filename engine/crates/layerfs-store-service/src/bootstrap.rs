@@ -73,7 +73,7 @@ impl OpenedStore {
         self.snapshot_observed(destination, &mut |_, _| ())
     }
     /// [`Self::snapshot`], calling `progress(done, total)` with the bytes
-    /// copied and the copy's size after each backup step (#506 E4).
+    /// written and a bound of the copy's size while it runs (#506 E4).
     pub fn snapshot_observed(
         &self,
         destination: &std::path::Path,

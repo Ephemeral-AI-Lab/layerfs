@@ -24,8 +24,9 @@ impl StorageProvider {
         }
     }
     /// One consistent copy of the live Store to `destination`, which must not
-    /// exist, through the SQLite online backup API in steps that share one
-    /// read transaction on a separate read-only connection. The result is closed, has no sidecar and keeps
+    /// exist, written by `VACUUM INTO` in one read transaction on a separate
+    /// read-only connection, so each table is one contiguous run (#510).
+    /// The result is closed, in WAL mode, has no sidecar and keeps
     /// the source's schema version, ready for the sealed-Store install. A
     /// busy source is reported `Busy`, never retried; on failure an
     /// incomplete destination may remain for the caller to remove.
@@ -36,7 +37,7 @@ impl StorageProvider {
         self.session.snapshot(destination, &mut |_, _| ())
     }
     /// [`Self::snapshot`], calling `progress(done, total)` with the bytes
-    /// copied and the copy's size after each backup step (#506 E4).
+    /// written and a bound of the copy's size while it runs (#506 E4).
     pub fn snapshot_observed(
         &self,
         destination: &std::path::Path,

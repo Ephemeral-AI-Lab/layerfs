@@ -98,7 +98,7 @@ What follows from the Store being the unit:
  Push (whole Store file)                        Pull (replaces one Store)
  ───────────────────────                        ─────────────────────────
  live Store                                     remote copy (sha, size)
-   │ backup API snapshot (consistent,             │ download → temp file
+   │ VACUUM INTO snapshot (consistent,            │ download → temp file
    │ writers keep going)                          │ beside the Store
    ▼                                              ▼
  temp copy beside Store ── free-space check    verify sha256
