@@ -500,8 +500,9 @@ try {
       return "";
     });
     const methods = (group) => Object.keys(group).sort();
-    assert.deepEqual(methods(runtime.store), ["attach_postgresql", "create", "list", "remove", "start_clone", "start_import_postgresql", "start_pull", "start_push"]);
-    assert.deepEqual(methods(runtime.remote), ["add", "list", "remove"]);
+    assert.deepEqual(methods(runtime.store), ["attach_postgresql", "check", "create", "list", "remove", "start_clone", "start_import_postgresql", "start_pull", "start_push"]);
+    assert.deepEqual(methods(runtime.remote), ["add", "list", "list_stores", "providers", "remove"]);
+    assert.deepEqual(methods(runtime.postgresql), ["status"]);
     assert.deepEqual(methods(runtime.sync), ["get"]);
     const ended = async (job) => {
       for (let i = 0; i < 200; i++) {
@@ -522,6 +523,15 @@ try {
     await assert.rejects(runtime.store.create("alpha"), { code: "Exists" }, "a project's own Store has its name");
     // the project made by its own Init is a Store holding it
     assert.deepEqual((await runtime.store.list()).map((s) => [s.name, s.legacy, s.projects]), [["alpha", true, ["alpha"]], ["work", false, []]]);
+    // #506 E1/E2: sizes, open state and heads, from one stat call for every SQLite Store with a volume
+    const stat = nativeArgs("runtime.store.stat");
+    assert.deepEqual(stat.stores, [{ store: "alpha", storePath: join(work_dir(), "layerfs-alpha-store-1", "_data/global/store.sqlite") }, { store: "work", storePath: join(work_dir(), "layerfs-store-work", "_data/global/store.sqlite") }]);
+    const sized = (await runtime.store.list()).find((s) => s.name === "work");
+    assert.deepEqual([sized.bytes, sized.open, sized.heads, sized.importedFrom], [{ file: 4096, wal: 512 }, false, "11".repeat(32), null]);
+    // a stat call that fails leaves the fields null; the list still answers
+    process.env.CLI_FAKE_REFUSE = "runtime.store.stat";
+    assert.deepEqual((await runtime.store.list()).map((s) => [s.name, s.bytes, s.open, s.heads]), [["alpha", null, null, null], ["work", null, null, null]]);
+    delete process.env.CLI_FAKE_REFUSE;
     // two projects into one Store: no volume each, the binding adds each stack
     const folder = join(tmpdir(), `layerfs-runtime-src-${process.pid}`);
     mkdirSync(join(folder, "src"), { recursive: true });
@@ -552,15 +562,45 @@ try {
     assert.deepEqual([pushed.step, pushed.bytes, pushed.result.kind], ["done", 8192, "Pushed"]);
     assert.equal(nativeArgs("runtime.store.push").credentials.secretKey, "SECRET-1");
     assert.ok(!JSON.stringify(pushed).includes("SECRET-1"), "a job keeps no key");
+    assert.equal(nativeArgs("runtime.store.push").job, push.id, "the native call reports to the job's progress cell");
     const afterPush = (await runtime.store.list()).find((s) => s.name === "work");
     assert.deepEqual([afterPush.remote, afterPush.copies.map((c) => [c.remote, !!c.pushed, c.pulled])], ["minio-a", [["minio-a", true, null]]]);
-    assert.deepEqual(Object.keys(afterPush.copies[0].pushed).sort(), ["at", "bytes", "sha256"]);
+    assert.deepEqual(afterPush.copies[0].pushed, { at: 1, bytes: 8192, sha256: "ab".repeat(32), heads: "11".repeat(32) });
+    // #506 E4: a running job's phase and bytes come from the binding's progress cell
+    let release;
+    native.hold = new Promise((next) => { release = next; });
+    const slow = await runtime.store.start_push("work", { remote: "minio-a", force: true });
+    assert.deepEqual([slow.phase, slow.bytes, slow.pieces], [null, null, null]);
+    native.progress = { [slow.id]: { phase: "upload", bytes: 4096, total: 8192, pieces: { done: 1, of: 2 } } };
+    const sampled = await runtime.sync.get(slow.id);
+    assert.deepEqual([sampled.step, sampled.phase, sampled.bytes, sampled.total, sampled.pieces], ["running", "upload", 4096, 8192, { done: 1, of: 2 }]);
+    assert.equal(nativeArgs("runtime.sync.progress").job, slow.id);
+    // a sample that fails keeps the last one
+    process.env.CLI_FAKE_REFUSE = "runtime.sync.progress";
+    assert.equal((await runtime.sync.get(slow.id)).phase, "upload");
+    delete process.env.CLI_FAKE_REFUSE;
+    release();
+    native.hold = null;
+    const slowDone = await ended(slow);
+    assert.deepEqual([slowDone.step, slowDone.phase, slowDone.bytes, slowDone.pieces], ["done", null, 8192, null]);
+    assert.equal(nativeArgs("runtime.store.push").force, true);
+    // #506 E3/E8/E9: copy check, providers and bucket listing go to the binding once each
+    await assert.rejects(runtime.store.check("work", {}), { code: "InvalidInput", message: /remote/ });
+    const checked = await runtime.store.check("work", { remote: "minio-a", credentials: { accessKey: "AK", secretKey: "SECRET-2" } });
+    assert.deepEqual([checked.present, checked.bytes, checked.sha256, checked.heads, checked.modified, checked.checkedAt], [true, 8192, "ab".repeat(32), "11".repeat(32), 1000, 2000]);
+    assert.deepEqual([nativeArgs("runtime.store.check").store, nativeArgs("runtime.store.check").remote, nativeArgs("runtime.store.check").credentials.secretKey], ["work", "minio-a", "SECRET-2"]);
+    assert.deepEqual((await runtime.remote.list_stores("minio-a")).map((c) => [c.store, c.bytes]), [["work", 8192]]);
+    assert.equal(nativeArgs("runtime.remote.list_stores").remote, "minio-a");
+    await assert.rejects(runtime.remote.list_stores(""), { code: "InvalidInput" });
+    assert.deepEqual((await runtime.remote.providers()).map((p) => [p.id, p.available]), [["minio", true]]);
     // pull replaces every project: confirm names the Store
     await assert.rejects(runtime.store.start_pull("work", { remote: "minio-a" }), { code: "InvalidInput", message: /confirm/ });
     native.pullAdded = ["cart"];
     assert.equal((await ended(await runtime.store.start_pull("work", { remote: "minio-a", confirm: "work" }))).step, "done");
     const pulled = (await runtime.store.list()).find((s) => s.name === "work");
     assert.deepEqual([pulled.projects, pulled.copies.map((c) => [c.remote, !!c.pushed, !!c.pulled])], [["shop", "api", "cart"], [["minio-a", true, true]]]);
+    assert.equal(pulled.copies[0].pulled.heads, "22".repeat(32));
+    assert.ok(nativeArgs("runtime.store.pull").job);
     // clone: a new Store and volume from the remote copy
     const clone = await ended(await runtime.store.start_clone("minio-a", { store: "work", as: "copy" }));
     assert.equal(clone.step, "done");
@@ -577,6 +617,16 @@ try {
     assert.equal(nativeArgs("runtime.store.import_postgresql").postgresql.url, url);
     const pg = (await runtime.store.list()).find((s) => s.name === "main");
     assert.deepEqual([pg.kind, pg.connection, pg.schema, pg.synchronousCommit, pg.projects], ["postgresql", "pg-local", "lfc_main", "off", ["api", "shop"]]);
+    // #506 E6: the import's origin is recorded; a PostgreSQL Store has no file sizes
+    assert.deepEqual([pg.importedFrom.store, pg.importedFrom.bytes, typeof pg.importedFrom.at, pg.bytes, pg.heads], ["work", 4096, "number", null, null]);
+    assert.ok(nativeArgs("runtime.store.import_postgresql").job);
+    // #506 E5/E7: one status call per connection, the URL for that call only
+    await assert.rejects(runtime.postgresql.status({ schemas: ["lfc_main"] }), { code: "InvalidInput", message: /url/ });
+    await assert.rejects(runtime.postgresql.status({ url, schemas: ["Bad"] }), { code: "InvalidInput" });
+    const pgStatus = await runtime.postgresql.status({ url, schemas: ["lfc_main"] });
+    assert.deepEqual([pgStatus.reachable, pgStatus.serverVersion, pgStatus.schemas], [true, "17.6", { lfc_main: 4096 }]);
+    assert.equal(nativeArgs("runtime.postgresql.status").url, url);
+    assert.ok(!readFileSync(join(home, "stores.json"), "utf8").includes("PG-SECRET"), "stores.json holds no URL");
     assert.ok(!readFileSync(join(home, "stores.json"), "utf8").includes("PG-SECRET"), "stores.json holds no URL");
     const attached = await runtime.store.attach_postgresql({ name: "main", connection: "pg-local", url, schema: "lfc_main", synchronousCommit: "local" });
     assert.equal(attached.synchronousCommit, "local");

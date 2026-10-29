@@ -3,7 +3,10 @@
 //     synchronousCommit?, remote, legacy?, created,
 //     projects: [{ name, source?, created? }], copies: [copy] }
 // where a copy is the Store's latest push and pull with one remote,
-// { remote, pushed: { at, bytes, sha256 } | null, pulled: … | null }; the
+// { remote, pushed: { at, bytes, sha256, heads } | null, pulled: … | null }
+// (`heads`, the Store's history heads digest at that transfer, since #506
+// E2; null for a transfer recorded before); a PostgreSQL Store made by an
+// import records `importedFrom: { store, at, bytes }` (#506 E6); the
 // binding also records each transfer in HOME/remote-state/<store>. A Store made by its project's own
 // Init (before #506, or start_init with no `store`) is listed too, from that
 // project's record, as a Store of the project's name holding it (`legacy`);
@@ -51,10 +54,10 @@ export function update(settings, name, change) {
 }
 
 /** Records a completed transfer as the remote's latest push or pull; the Store is bound to that remote. */
-export function withCopy(store, { remote, direction, at, sha256, bytes }) {
+export function withCopy(store, { remote, direction, at, sha256, bytes, heads = null }) {
   const copies = store.copies ?? [];
   const copy = { remote, pushed: null, pulled: null, ...copies.find((c) => c.remote === remote) };
-  copy[direction === "push" ? "pushed" : "pulled"] = { at, bytes, sha256 };
+  copy[direction === "push" ? "pushed" : "pulled"] = { at, bytes, sha256, heads };
   return { ...store, remote, copies: [...copies.filter((c) => c.remote !== remote), copy] };
 }
 

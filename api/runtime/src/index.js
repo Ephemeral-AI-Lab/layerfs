@@ -5,7 +5,7 @@
 //   const runtime = await LayerFSRuntime.open({ home, image, docker, bundle, … });
 //   try { await runtime.status(); } finally { await runtime.close(); }
 // A home holds many Stores and a Store many projects (#506): runtime.store,
-// runtime.remote and runtime.sync are the Store-level calls of
+// runtime.remote, runtime.sync and runtime.postgresql are the Store-level calls of
 // core/docs/issues/506/README.md section 6.
 // Destructive calls name what they destroy (`confirm`); every call is one
 // attempt; an uncertain outcome keeps what exists and reports Unknown.
@@ -27,7 +27,7 @@ import windows from "./platform/windows/index.js";
 import { find, list } from "./project/list.js";
 import * as stores from "./store/calls.js";
 import * as sync from "./store/sync.js";
-import { SyncJobs } from "./store/sync.js";
+import { SyncJobs, progressOf } from "./store/sync.js";
 import { InitJobs } from "./project/jobs.js";
 import { prepare, runInit } from "./project/init.js";
 import { get_state } from "./project/state.js";
@@ -103,13 +103,17 @@ export class LayerFSRuntime {
       start_pull: live((name, options) => sync.start_pull(this, syncs, name, options)),
       start_clone: live((remote, options) => sync.start_clone(this, syncs, remote, options)),
       start_import_postgresql: live((name, options) => sync.start_import_postgresql(this, syncs, name, options)),
+      check: live((name, options) => stores.check(this, name, options)),
     };
     this.remote = {
       list: live(() => stores.remotes(this)),
       add: live((remote) => stores.addRemote(this, remote)),
       remove: live((name, options) => stores.removeRemote(this, name, options)),
+      list_stores: live((remote, options) => stores.listStores(this, remote, options)),
+      providers: live(() => stores.providers(this)),
     };
-    this.sync = { get: live(async (job) => syncs.get(job)) };
+    this.postgresql = { status: live((options) => stores.postgresqlStatus(this, options)) };
+    this.sync = { get: live((job) => syncs.get(job, progressOf(this))) };
     this.sandbox = {
       reclaim: live(async (name, options) => reclaim(this, await known(name, options?.store, options?.url))),
       list_leftovers: live(() => leftovers(this)),

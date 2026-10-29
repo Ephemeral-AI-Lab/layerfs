@@ -1,5 +1,9 @@
-// runtime.store.list/create/remove/attach_postgresql and runtime.remote.*
-// (#506, doc section 6). A local SQLite Store is one Docker volume
+// runtime.store.list/create/remove/attach_postgresql/check,
+// runtime.remote.* and runtime.postgresql.status (#506, doc section 6).
+// store.list adds each local SQLite Store's sizes, open state and history
+// heads (one runtime.store.stat call, E1/E2); store.check is one HEAD of a
+// copy (E3), remote.list_stores one listing (E9), remote.providers the
+// build's providers (E8) and postgresql.status one connection (E5/E7). A local SQLite Store is one Docker volume
 // (`<prefix>store-<name>`, labelled layerfs.role=store, layerfs.home,
 // layerfs.store) whose `global/store.sqlite` the binding creates; a
 // PostgreSQL Store is a schema behind a named connection. Every call is one
@@ -15,16 +19,68 @@ const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
 const SYNC = new Set(["off", "local", "remote_write", "on", "remote_apply"]);
 const call = (op, args) => invokeBackend(op, args, {});
 
-/** What store.list shows of one Store. */
-export const shown = (s) => ({
+/** What store.list shows of one Store; `local` is its runtime.store.stat entry (#506 E1, E2). */
+export const shown = (s, local = null) => ({
   name: s.name, kind: s.kind,
   ...(s.kind === "sqlite" ? { volume: s.volume ?? null } : { connection: s.connection, schema: s.schema, synchronousCommit: s.synchronousCommit }),
   remote: s.remote ?? null, legacy: !!s.legacy, created: s.created ?? null,
   projects: (s.projects ?? []).map((p) => p.name), copies: s.copies ?? [],
+  bytes: local?.bytes ?? null, open: local?.open ?? null, heads: local?.heads ?? null,
+  importedFrom: s.importedFrom ?? null,
 });
 
+/** Each local SQLite Store's sizes, open state and heads, from the process that sees its volume
+ * (this one on Linux, the worker on macOS and Windows). One call for all; a call that fails
+ * (no worker yet, a volume this process cannot read) leaves them null. */
+async function locals(runtime, stores) {
+  const asked = stores.filter((s) => s.kind === "sqlite" && s.volume).map((s) => ({ store: s.name, storePath: storeFields(runtime, s).storePath }));
+  if (!asked.length) return new Map();
+  try {
+    const answer = await call("runtime.store.stat", { home: callHome(runtime.settings), stores: asked });
+    return new Map(answer.map((entry) => [entry.store, entry]));
+  } catch {
+    return new Map();
+  }
+}
+
 export async function list(runtime) {
-  return (await all(runtime)).map(shown);
+  const stores = await all(runtime);
+  const local = await locals(runtime, stores);
+  return stores.map((s) => shown(s, local.get(s.name)));
+}
+
+/** runtime.store.check(store, { remote, credentials }): one HEAD of the Store's copy on the remote (#506 E3). */
+export async function check(runtime, name, options = {}) {
+  if (typeof name !== "string" || !NAME.test(name)) throw refuse("InvalidInput", "a Store name is 1-63 lowercase letters, digits, _ . - and starts and ends alphanumeric");
+  return call("runtime.store.check", { home: callHome(runtime.settings), store: name, ...remoteOf(options) });
+}
+
+/** runtime.remote.list_stores(remote, { credentials }): every Store copy in the remote (#506 E9). */
+export async function listStores(runtime, remote, options = {}) {
+  return call("runtime.remote.list_stores", { home: callHome(runtime.settings), ...remoteOf({ ...options, remote }) });
+}
+
+/** runtime.remote.providers(): the providers this LayerFS build can add (#506 E8). */
+export async function providers(runtime) {
+  return call("runtime.remote.providers", { home: callHome(runtime.settings) });
+}
+
+/** runtime.postgresql.status({ url, schemas }): server version, reachability and latency, schema sizes (#506 E5, E7). */
+export async function postgresqlStatus(runtime, given = {}) {
+  const { url, schemas = [] } = given ?? {};
+  if (typeof url !== "string" || !url) throw refuse("InvalidInput", "url is the PostgreSQL URL, passed per call and never stored");
+  if (!Array.isArray(schemas) || !schemas.every((s) => typeof s === "string" && SCHEMA.test(s))) throw refuse("InvalidInput", "schemas is a list of PostgreSQL schema names");
+  return call("runtime.postgresql.status", { home: callHome(runtime.settings), url, schemas });
+}
+
+/** A transfer's remote and its per-call keys: `{ remote, credentials? }`. */
+export function remoteOf(options) {
+  if (typeof options?.remote !== "string" || !options.remote) throw refuse("InvalidInput", "remote names one of the home's remotes");
+  const credentials = options.credentials;
+  if (credentials !== undefined && credentials !== null && (typeof credentials.accessKey !== "string" || typeof credentials.secretKey !== "string")) {
+    throw refuse("InvalidInput", "credentials is { accessKey, secretKey }, used for this call only");
+  }
+  return { remote: options.remote, ...(credentials ? { credentials } : {}) };
 }
 
 /** Refuses a Store name in use, or not a name. */

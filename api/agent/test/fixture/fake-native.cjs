@@ -74,10 +74,17 @@ function answer(op, args) {
     case "runtime.store.list_projects": return { value: exports.storeProjects ?? [] };
     case "runtime.store.remove_project": return { value: { stack: "5e", packsKept: true } };
     case "runtime.store.forget": return { value: { removed: true } };
-    case "runtime.store.push": return { value: { kind: "Pushed", store: args.store, object: `${args.store}/store.sqlite`, pieces: 0, transfer: { remote: args.remote, direction: "push", at: 1, sha256: "ab".repeat(32), bytes: 8192 } } };
-    case "runtime.store.pull": return { value: { kind: "Pulled", store: args.store, replaced: true, added: exports.pullAdded ?? [], missing: [], transfer: { remote: args.remote, direction: "pull", at: 2, sha256: "cd".repeat(32), bytes: 8192 } } };
+    case "runtime.store.push": return { value: { kind: "Pushed", store: args.store, object: `${args.store}/store.sqlite`, pieces: 0, transfer: { remote: args.remote, direction: "push", at: 1, sha256: "ab".repeat(32), bytes: 8192, heads: "11".repeat(32) } } };
+    case "runtime.store.pull": return { value: { kind: "Pulled", store: args.store, replaced: true, added: exports.pullAdded ?? [], missing: [], transfer: { remote: args.remote, direction: "pull", at: 2, sha256: "cd".repeat(32), bytes: 8192, heads: "22".repeat(32) } } };
     case "runtime.store.clone": return { value: { kind: "Cloned", store: args.store, from: args.from, projects: ["docs", "web"], transfer: { remote: args.remote, direction: "pull", at: 3, sha256: "ab".repeat(32), bytes: 8192 } } };
-    case "runtime.store.import_postgresql": return { value: { kind: "Imported", store: args.target, schema: args.postgresql.schema, tables: [], packBytes: 512 } };
+    case "runtime.store.import_postgresql": return { value: { sourceBytes: 4096, kind: "Imported", store: args.target, schema: args.postgresql.schema, tables: [], packBytes: 512 } };
+    // #506 E1-E9: local stats, copy checks, listing, providers, PostgreSQL status, job progress
+    case "runtime.store.stat": return { value: args.stores.map((s) => exports.storeStat?.[s.store] ?? { store: s.store, bytes: { file: 4096, wal: 512 }, open: false, heads: "11".repeat(32) }) };
+    case "runtime.store.check": return { value: { store: args.store, remote: args.remote, present: true, bytes: 8192, sha256: "ab".repeat(32), heads: "11".repeat(32), modified: 1000, checkedAt: 2000 } };
+    case "runtime.remote.list_stores": return { value: [{ store: "work", bytes: 8192, sha256: "ab".repeat(32), heads: "11".repeat(32), modified: 1000 }] };
+    case "runtime.remote.providers": return { value: [{ id: "minio", label: "MinIO", available: true, reason: null, fields: [{ name: "endpoint", label: "Endpoint", kind: "url", required: true }] }] };
+    case "runtime.postgresql.status": return { value: { reachable: true, serverVersion: "17.6", latencyMs: 1, latencyUs: 900, schemas: Object.fromEntries(args.schemas.map((name) => [name, 4096])) } };
+    case "runtime.sync.progress": return { value: exports.progress?.[args.job] ?? null };
     case "runtime.store.attach_postgresql": return { value: { kind: "Attached", store: args.store, schema: args.postgresql.schema, synchronousCommit: args.postgresql.synchronousCommit, projects: exports.storeProjects ?? [] } };
     case "runtime.remote.list": return { value: exports.remoteList ?? [] };
     case "runtime.remote.add": return { value: { ...args.remote, credentials: args.remote.credentials ?? "env:LAYERFS_REMOTE" } };
@@ -116,4 +123,8 @@ exports.stores = [];
 exports.storeOpen = async (args) => { log("store.open", args); exports.stores.push(["open", args.storePath]); return { value: { clients: 1 } }; };
 exports.storeClose = async (args) => { log("store.close", args); exports.stores.push(["close", args.storePath]); return { value: { clients: 0 } }; };
 exports.call = async (op, args) => traced(op, args);
-exports.backendCall = async (op, args) => traced(op, args);
+// `hold`, when set, is a promise a push waits on before it answers, so a test can sample it running
+exports.backendCall = async (op, args) => {
+  if (op === "runtime.store.push" && exports.hold) await exports.hold;
+  return traced(op, args);
+};
