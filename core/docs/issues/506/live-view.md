@@ -1,6 +1,10 @@
 # #506 Live view of a Store in S3: implementation spec
 
-> **Status:** Owner-approved direction (2026-10-30), not implemented. Builds on
+> **Status:** Owner-approved direction (2026-10-30); A–D implemented on PR #507
+> (`26eb1b975d`–`2f2b1deaf5`), E in Connect's working tree. Acceptance §7.6 is
+> partly met: reads identical and the state read in 4 GETs, but Connect's
+> History diffs every Commit (20.78% of the file on `r2-examples-clone`); see
+> the #510 verification comment. Builds on
 > [one link per Store](links.md) (#509). The Connect part is in Connect's own
 > repository, `docs/ui/storage-links.md` §8.
 
