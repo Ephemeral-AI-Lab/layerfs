@@ -9,9 +9,9 @@ mod support;
 use layerfs_bridge::control::{Answer, Reply, SdkValue};
 use layerfs_content::ObjectId;
 use layerfs_history::{
-    BranchId, CommitHistoryRequest, CommitId, CommitMeta, CommitOutcome, CommitRecord, CommitRequest,
-    CommitStatistics, CommitVia, HistoryError, HistoryName, LayerId, LayerStackId, NodeId, PageResult,
-    WorkspaceId, MAXIMUM_ATTRIBUTION_BYTES, MAXIMUM_LABELS,
+    BranchId, CommitHistoryRequest, CommitId, CommitMeta, CommitOutcome, CommitRecord,
+    CommitRequest, CommitStatistics, CommitVia, HistoryError, HistoryName, LayerId, LayerStackId,
+    NodeId, PageResult, WorkspaceId, MAXIMUM_ATTRIBUTION_BYTES, MAXIMUM_LABELS,
 };
 use layerfs_store_service::store::{BindRequest, CommitOptions, CommitSuccess};
 use std::fs;
@@ -93,18 +93,22 @@ fn direct_commit(
         .history()
         .branch_snapshot(branch)?
         .unwrap();
-    match fixture.service.store.history().commit_branch(&CommitRequest {
-        branch,
-        expected_head: snapshot.branch.head_commit,
-        expected_base: snapshot.branch.base_layer,
-        expected_root: snapshot.effective_root,
-        candidate_root: root,
-        profile: snapshot.profile,
-        scope: snapshot.scope,
-        second_parent: None,
-        meta,
-        force: false,
-    })? {
+    match fixture
+        .service
+        .store
+        .history()
+        .commit_branch(&CommitRequest {
+            branch,
+            expected_head: snapshot.branch.head_commit,
+            expected_base: snapshot.branch.base_layer,
+            expected_root: snapshot.effective_root,
+            candidate_root: root,
+            profile: snapshot.profile,
+            scope: snapshot.scope,
+            second_parent: None,
+            meta,
+            force: false,
+        })? {
         CommitOutcome::Committed { record, .. } => Ok(*record),
         other => panic!("direct Commit outcome: {other:?}"),
     }
@@ -138,11 +142,9 @@ fn workspace_attribution_round_trips_and_null_columns_read_as_unset() {
     );
     let graphed = graph(&fixture, "p7", 0);
     match graphed.get("commits") {
-        Some(SdkValue::List(commits)) => attribution(
-            &commits[0],
-            Some("agent-p7"),
-            &["call-7", "call-7", "last"],
-        ),
+        Some(SdkValue::List(commits)) => {
+            attribution(&commits[0], Some("agent-p7"), &["call-7", "call-7", "last"])
+        }
         other => panic!("graph commits: {other:?}"),
     }
 
@@ -340,7 +342,11 @@ fn collect_pages(fixture: &Fixture, branch: &str, graphed: bool) -> (Vec<String>
             support::items(&page)
         };
         assert!((1..=3).contains(&values.len()), "page width: {page:?}");
-        ids.extend(values.iter().map(|value| value.get_text("id").unwrap().to_owned()));
+        ids.extend(
+            values
+                .iter()
+                .map(|value| value.get_text("id").unwrap().to_owned()),
+        );
         match page.get_int("nextPagePos") {
             Some(next) => pos = next,
             None => return (ids, pages),
@@ -512,7 +518,9 @@ fn merge_diagnostics_use_actual_cost_and_page_without_repeats() {
                 support::items(&page)
             };
             for value in values {
-                assert!(matches!(value.get("units"), Some(SdkValue::List(units)) if !units.is_empty()));
+                assert!(
+                    matches!(value.get("units"), Some(SdkValue::List(units)) if !units.is_empty())
+                );
                 assert_eq!(value.get("unitsTruncated"), Some(&SdkValue::Bool(false)));
                 assert!(matches!(value.get("lww"), Some(SdkValue::List(lww)) if !lww.is_empty()));
             }
@@ -573,18 +581,14 @@ fn maximal_commit_record_matches_declared_encoded_width() {
         root: ObjectId::for_bytes(b"P7 maximum record"),
         parent: Some(CommitId::from_bytes([0x12; 33]).unwrap()),
         base_layer: LayerId::from_bytes([0x32; 33]).unwrap(),
-        second_parent: Some(NodeId::Layer(
-            LayerId::from_bytes([0x32; 33]).unwrap(),
-        )),
+        second_parent: Some(NodeId::Layer(LayerId::from_bytes([0x32; 33]).unwrap())),
         meta: CommitMeta {
             branch: Some(BranchId::from_authority([0x11; 16])),
             via: CommitVia::Workspace,
             message: Some("m".repeat(MAXIMUM_ATTRIBUTION_BYTES)),
             author: Some("a".repeat(MAXIMUM_ATTRIBUTION_BYTES)),
             labels: boundary_labels(),
-            merged_from: Some(NodeId::Layer(
-                LayerId::from_bytes([0x32; 33]).unwrap(),
-            )),
+            merged_from: Some(NodeId::Layer(LayerId::from_bytes([0x32; 33]).unwrap())),
             lww: Vec::new(),
             lww_truncated: true,
             units: Vec::new(),

@@ -256,7 +256,8 @@ impl super::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = before_attribution(source((self.layout, self.acquisition))).replacen(DIGESTS, "", 1);
+            let current = before_attribution(source((self.layout, self.acquisition)))
+                .replacen(DIGESTS, "", 1);
             if row.get::<String>(0)? != current.replacen(SCRATCH, "", 1)
                 || row.get::<String>(1)? != definition(tx.connection, tx.work)?
             {
@@ -310,10 +311,10 @@ impl super::connection::Session {
     pub(crate) fn add_commit_attribution(&self) -> Result<(), BackendError> {
         self.run::<_, BackendError>(true, |tx| {
             let columns = tx.query("PRAGMA table_info(\"commit\")", vec![])?;
-            if columns.iter().any(|row| {
-                row.get::<String>(1)
-                    .is_ok_and(|name| name == "author")
-            }) {
+            if columns
+                .iter()
+                .any(|row| row.get::<String>(1).is_ok_and(|name| name == "author"))
+            {
                 return Ok(());
             }
             let rows = tx.query(

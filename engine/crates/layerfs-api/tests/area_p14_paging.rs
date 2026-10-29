@@ -108,13 +108,13 @@ fn branch_pages_include_main_and_resume_after_returned_items() {
         .collect::<Vec<_>>();
     let first = list_branches(&fixture, 1000, 0);
     assert!(branch_names(&first).len() < 1000);
-    assert_eq!(first.get_bool("hasMore"), true);
+    assert!(first.get_bool("hasMore"));
     assert_eq!(
         first.get_int("nextPagePos"),
         Some(branch_names(&first).len() as i64)
     );
     let second = list_branches(&fixture, 1000, first.get_int("nextPagePos").unwrap());
-    assert_eq!(second.get_bool("hasMore"), false);
+    assert!(!second.get_bool("hasMore"));
     assert_eq!(second.get("nextPagePos"), Some(&SdkValue::Null));
     assert_eq!(
         [branch_names(&first), branch_names(&second)].concat(),
@@ -177,14 +177,20 @@ fn operator_snapshot_discloses_oversized_units_within_the_control_budget() {
     };
     let encoded = answer.encode().unwrap();
     assert!(encoded.len() <= 65_519, "control bytes: {}", encoded.len());
-    assert_eq!(layerfs_bridge::control::Answer::decode(&encoded).unwrap(), answer);
+    assert_eq!(
+        layerfs_bridge::control::Answer::decode(&encoded).unwrap(),
+        answer
+    );
     let commits = match value.get("commits") {
         Some(SdkValue::List(commits)) => commits,
         other => panic!("commits: {other:?}"),
     };
     assert_eq!(commits.len(), 1);
     assert_eq!(commits[0].get("units"), None);
-    assert_eq!(commits[0].get("unitsTruncated"), Some(&SdkValue::Bool(true)));
+    assert_eq!(
+        commits[0].get("unitsTruncated"),
+        Some(&SdkValue::Bool(true))
+    );
     fixture.cleanup();
 }
 
@@ -383,6 +389,98 @@ fn workspace_branches(value: &SdkValue) -> Vec<Option<String>> {
             .collect(),
         other => panic!("workspaces: {other:?}"),
     }
+}
+
+/// Retro finding 2: a snapshot used to build the full Branch-name map
+/// before answering, so a cheap status call paid one provider page per ~81
+/// Branches. Names now resolve lazily, so the SQL work of a small-output
+/// snapshot must not grow with the Branch count, while a name outside the
+/// displayed page still resolves. The counters are SQLite statements and
+/// returned rows from `Fixture::work`, not wall time: identical query
+/// shapes give identical counts, so the bound is exact up to a small
+/// slack for the statistics aggregates, which scan more Branch rows at
+/// the larger size.
+#[test]
+fn snapshot_lazy_branch_names_bound_sql_work() {
+    let fixture = Fixture::new("area-p14-lazy-names", |_source| 0);
+    let names = (0..130).map(branch_name).collect::<Vec<_>>();
+    for name in &names {
+        fixture.fork(name);
+    }
+    let view130 = workspace_view(&fixture, &names[129], 129);
+    let before = fixture.work();
+    let value130 = snapshot(&fixture, &[view130]);
+    let work130 = fixture.since(before);
+    assert_eq!(
+        workspace_branches(&value130),
+        [Some(names[129].clone())],
+        "late workspace name must resolve at 130 branches"
+    );
+    let more = (130..260).map(branch_name).collect::<Vec<_>>();
+    for name in &more {
+        fixture.fork(name);
+    }
+    let view260 = workspace_view(&fixture, &more[129], 259);
+    let before = fixture.work();
+    let value260 = snapshot(&fixture, &[view260]);
+    let work260 = fixture.since(before);
+    assert_eq!(
+        workspace_branches(&value260),
+        [Some(more[129].clone())],
+        "late workspace name must resolve at 260 branches"
+    );
+    println!(
+        "P14_LAZY rows_130={} rows_260={} statements_130={} statements_260={}",
+        work130.rows, work260.rows, work130.statements, work260.statements
+    );
+    assert!(
+        work260.rows <= work130.rows + 16,
+        "snapshot rows grew with branch count: 130->{}, 260->{}",
+        work130.rows,
+        work260.rows
+    );
+    assert!(
+        work260.statements <= work130.statements + 2,
+        "snapshot statements grew with branch count: 130->{}, 260->{}",
+        work130.statements,
+        work260.statements
+    );
+    fixture.cleanup();
+}
+
+/// Retro finding 2, Layer site: a Layer published from a Branch outside
+/// the displayed page must still show that Branch's name as its source.
+#[test]
+fn snapshot_lazy_layer_source_name() {
+    let fixture = Fixture::new("area-p14-lazy-layer", |_source| 0);
+    let names = (0..130).map(branch_name).collect::<Vec<_>>();
+    for name in &names {
+        fixture.fork(name);
+    }
+    let late = &names[129];
+    let commit = commit_to(&fixture, late, small_meta(), b"lazy-layer-source");
+    fixture.call(
+        "branch.publish",
+        vec![
+            ("branch", SdkValue::text(late)),
+            ("commit", SdkValue::text(hex(commit.as_slice()))),
+        ],
+    );
+    let value = snapshot(&fixture, &[]);
+    let layers = match value.get("layers") {
+        Some(SdkValue::List(layers)) => layers,
+        other => panic!("layers: {other:?}"),
+    };
+    assert!(
+        !layers.is_empty(),
+        "published layer must be the newest layer"
+    );
+    assert_eq!(
+        layers[0].get_text("sourceBranch"),
+        Some(late.as_str()),
+        "newest layer source must resolve past the displayed page"
+    );
+    fixture.cleanup();
 }
 
 #[test]

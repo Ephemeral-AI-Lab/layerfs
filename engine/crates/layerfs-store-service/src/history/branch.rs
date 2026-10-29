@@ -265,8 +265,7 @@ pub fn list_commits(
             );
             let cost = value_cost(&value);
             if !items.is_empty()
-                && (items.len() == limit
-                    || spent + cost > crate::read::reads::REPLY_BUDGET)
+                && (items.len() == limit || spent + cost > crate::read::reads::REPLY_BUDGET)
             {
                 more = true;
                 break 'pages;

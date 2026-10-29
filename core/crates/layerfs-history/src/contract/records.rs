@@ -204,7 +204,9 @@ impl CommitMeta {
             text(label, "Commit label")?;
         }
         if crate::labels::encode(&self.labels).len() > MAXIMUM_LABELS_JSON_BYTES {
-            return Err(crate::error::HistoryError::InvalidInput("Commit labels JSON"));
+            return Err(crate::error::HistoryError::InvalidInput(
+                "Commit labels JSON",
+            ));
         }
         Ok(())
     }

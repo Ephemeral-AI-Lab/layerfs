@@ -50,11 +50,8 @@ impl<'a> Page<'a> {
             return true;
         }
         let published = self.all_published || self.published.contains(&record.id);
-        let mut value = commit_value_with_budget(
-            record,
-            Some(self.branch),
-            crate::read::reads::REPLY_BUDGET,
-        );
+        let mut value =
+            commit_value_with_budget(record, Some(self.branch), crate::read::reads::REPLY_BUDGET);
         if let SdkValue::Map(fields) = &mut value {
             fields.push(("published".into(), SdkValue::Bool(published)));
         }
