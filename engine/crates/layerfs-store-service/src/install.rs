@@ -70,7 +70,14 @@ pub fn claim(destination: &Path, temporary: &Path) -> io::Result<File> {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
-    options.open(temporary)
+    #[cfg(windows)]
+    {
+        let claimed = options.open(temporary)?;
+        crate::windows_acl::restrict_to_owner(temporary)?;
+        return Ok(claimed);
+    }
+    #[cfg(not(windows))]
+    Ok(options.open(temporary)?)
 }
 
 /// Why an installed Store's initial Branch is not the sealed one.
@@ -176,6 +183,8 @@ pub fn install_local(
             #[cfg(not(unix))]
             {
                 fs::DirBuilder::new().create(directory).map_err(text)?;
+                #[cfg(windows)]
+                crate::windows_acl::restrict_to_owner(directory).map_err(text)?;
             }
         }
         let (target, temporary) = paths(destination).map_err(text)?;

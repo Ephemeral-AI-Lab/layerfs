@@ -10,7 +10,7 @@
 //! Sandbox. Each Workspace owns one overlay connection behind one lock; a
 //! caller runs its own short typed call under it and keeps exact failure
 //! custody.
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 pub mod bootstrap;
 pub mod history;
@@ -23,6 +23,8 @@ pub mod service;
 pub mod store;
 mod store_service;
 pub mod telemetry;
+#[cfg(target_os = "windows")]
+pub mod windows_acl;
 pub mod write;
 
 pub use overlay::owner;

@@ -118,7 +118,12 @@ mutexes live in the `Local\` namespace, so a session-0 service and a user
 session would each hold its own lane (Linux's directory flock crosses
 sessions); the product opens its Store within one login session today, and
 cross-session coordination would need the `Global\` namespace with a
-privilege evaluation (K3 review F2); Windows Init carries names as
+privilege evaluation (K3 review F2). Inside one session the named mutexes
+can in principle be squatted by another process of that session before
+this product creates them (the directory ACL is not the capability there,
+as Linux flock's is); the discovery turn waits bounded (60s `Busy`) and
+the writer lane's wait is the readiness wait of the lock model, as
+Linux's blocking flock is. Windows Init carries names as
 lossless WTF-8 end to end (an unpaired surrogate included, byte-exact
 round trip through the codec and the audited identity probes) and
 synthesizes the mode from the read-only attribute, and has no hard-link
@@ -129,7 +134,11 @@ overlay allocation is the entry's real on-disk footprint. Last-owner
 overlay-file deletion applies the same audited identity on Windows as on
 Linux (volume serial + file index, sole link, checked on both the path's
 entry and the retained handle), opening the path itself, never a
-substituted reparse point.
+substituted reparse point. Homes, discovery records, the install volume
+directory and Store files carry owner-only protected DACLs (the audited
+ACL module): what this route creates is restricted to its owner, and an
+existing entry whose DACL grants Everyone, Users or Authenticated Users
+is refused — the parity of unix's 0700/0600 discipline.
 
 When the owner merges this branch, the observation period runs by a
 fixed checklist (each step reads a mechanism that already exists, none

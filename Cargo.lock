@@ -710,6 +710,7 @@ dependencies = [
  "layerfs-telemetry",
  "layerfs-workspace",
  "nix",
+ "windows-sys",
 ]
 
 [[package]]

@@ -94,6 +94,15 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(unsafe_violations(base / "lib.rs", "#![deny(unsafe_code)]\nmod dispatch;"))
         self.assertTrue(unsafe_violations(base / "lib.rs", "mod dispatch;"))
 
+    def test_store_service_acl_ffi_is_limited_to_the_audited_module(self):
+        base = Path("engine/crates/layerfs-store-service/src")
+        ffi = "fn seal() { unsafe { SetNamedSecurityInfoW(); } }"
+        self.assertFalse(unsafe_violations(base / "windows_acl.rs", ffi))
+        for sibling in ["install.rs", "kernel_guard.rs", "store_service.rs", "overlay/backing.rs"]:
+            self.assertTrue(unsafe_violations(base / sibling, ffi))
+        self.assertFalse(unsafe_violations(base / "lib.rs", "#![deny(unsafe_code)]\npub mod store;"))
+        self.assertTrue(unsafe_violations(base / "lib.rs", "pub mod store;"))
+
     def test_retired_transport_paths_cannot_return(self):
         for relative in (
             "layerfs-api/src/client/call.rs",
@@ -201,7 +210,7 @@ class ProductBoundaryTests(unittest.TestCase):
         )
         root = Path("engine/crates/layerfs-store-service/src/lib.rs")
         self.assertTrue(unsafe_violations(root, "pub mod store;"))
-        self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\npub mod store;"))
+        self.assertFalse(unsafe_violations(root, "#![deny(unsafe_code)]\npub mod store;"))
         self.assertFalse(
             dependency_violations(
                 '[package]\nname="layerfs-persistence"\n[dependencies]\nlayerfs-telemetry={path="../layerfs-telemetry"}\n'

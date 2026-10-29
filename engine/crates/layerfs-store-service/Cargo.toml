@@ -17,3 +17,7 @@ layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 # Concrete Store opening (bootstrap) and the kernel guard's open.
 layerfs-persistence = { path = "../layerfs-persistence" }
 nix = { version = "=0.31.3", default-features = false, features = ["fs"] }
+
+[target.'cfg(windows)'.dependencies]
+# The audited owner-only DACL module; windows-sys is already in the locked graph.
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization"] }

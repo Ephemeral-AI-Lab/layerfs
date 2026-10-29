@@ -4,8 +4,10 @@
 //! project, fs and branch calls in-process.
 //!
 //! Windows cannot express the unix entry's owner/mode privacy check; a
-//! symlink and an unexpected entry kind are still refused, and hardening the
-//! home tree's ACLs is an open owner question. The discovery turn keeps the
+//! symlink and an unexpected entry kind are still refused, and the audited
+//! ACL module (layerfs-store-service) both restricts what this module
+//! creates to its owner and refuses an existing entry whose DACL grants
+//! access beyond the owner. The discovery turn keeps the
 //! unix discipline: this process's calls take turns on one directory, and
 //! between processes one named kernel mutex per directory is held, released
 //! by the kernel when its holder exits.
@@ -43,9 +45,9 @@ pub(crate) fn home(args: &SdkValue) -> Result<PathBuf> {
     Ok(home)
 }
 
-/// A private entry on Windows: no symlink and the expected kind. Owner and
-/// mode bits have no Windows reading here; hardening the home tree's ACLs is
-/// an open owner question.
+/// A private entry on Windows: no symlink, the expected kind, and a DACL
+/// that grants nothing beyond its owner — the unix arm reads the same
+/// intent from group/other mode bits.
 fn private(path: &Path, dir: bool) -> Result<()> {
     let meta = fs::symlink_metadata(path).map_err(failed)?;
     if meta.file_type().is_symlink() || meta.is_dir() != dir {
@@ -58,15 +60,18 @@ fn private(path: &Path, dir: bool) -> Result<()> {
             ),
         ));
     }
+    if let Err(error) = layerfs_store_service::windows_acl::require_owner_only(path) {
+        return Err(refused("Unauthorized", error.to_string()));
+    }
     Ok(())
 }
 
 pub(crate) fn directory(path: &Path) -> Result<()> {
     match fs::DirBuilder::new().create(path) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(e) => return Err(failed(e)),
-    }
+        Ok(()) => layerfs_store_service::windows_acl::restrict_to_owner(path).map_err(failed),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(e) => Err(failed(e)),
+    }?;
     private(path, true)
 }
 
@@ -211,6 +216,7 @@ pub(crate) fn save(path: &Path, value: SdkValue) -> Result<()> {
         .map_err(failed)?;
     file.write_all(&bytes).map_err(failed)?;
     drop(file);
+    layerfs_store_service::windows_acl::restrict_to_owner(&temp).map_err(failed)?;
     fs::rename(temp, path).map_err(failed)
 }
 

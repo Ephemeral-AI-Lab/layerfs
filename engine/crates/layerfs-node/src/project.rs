@@ -70,6 +70,8 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
         std::fs::Permissions::from_mode(0o700)
     })
     .map_err(failed)?;
+    #[cfg(windows)]
+    layerfs_store_service::windows_acl::restrict_to_owner(&directory).map_err(failed)?;
     let _guard = crate::discovery::guard(&directory)?;
     let history = |text: &str| HistoryName::new(text).map_err(failed);
     let request = InitRequest {

@@ -194,6 +194,9 @@ adds audited Windows FFI beside the macOS seal wrapper. The guard
 - layerfs-node declares deny with two allowed discovery modules:
   `src/discovery.rs` (unix uid/flock, upstream's) and
   `src/discovery_windows.rs` (the named kernel mutex discovery turn).
+- layerfs-store-service moves forbid→deny with one allowed module,
+  `src/windows_acl.rs` (owner-only DACLs for homes, discovery records and
+  Stores; `SetEntriesInAclW`/`SetNamedSecurityInfoW`/`GetNamedSecurityInfoW`).
 - Storage's `src/encoding/codec.rs` authorization is unchanged.
 
 Acquisition rows are keyed by dev+inode. On Windows the identity MUST be

@@ -168,7 +168,8 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   no hard-link membership and synthesizes the mode from the read-only
   attribute; names travel as lossless WTF-8 (the backing-inside-source check
   walks the audited volume-serial + file-index identity, and overlay
-  allocation is the real on-disk footprint). See
+  allocation is the real on-disk footprint); homes, discovery records and
+  Stores carry owner-only DACLs. See
   [the Windows-native route](core/docs/issues/352/DIRECT_STORE.md).
 - **Plugin-neutral LayerFS (owner, 2026-10-24).** LayerFS is agnostic to dsh
   and every other plugin. The macOS and Windows worker routes above are open
