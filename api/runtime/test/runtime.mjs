@@ -553,20 +553,21 @@ try {
     assert.equal(nativeArgs("runtime.store.push").credentials.secretKey, "SECRET-1");
     assert.ok(!JSON.stringify(pushed).includes("SECRET-1"), "a job keeps no key");
     const afterPush = (await runtime.store.list()).find((s) => s.name === "work");
-    assert.deepEqual([afterPush.remote, afterPush.copies.map((c) => c.direction)], ["minio-a", ["push"]]);
+    assert.deepEqual([afterPush.remote, afterPush.copies.map((c) => [c.remote, !!c.pushed, c.pulled])], ["minio-a", [["minio-a", true, null]]]);
+    assert.deepEqual(Object.keys(afterPush.copies[0].pushed).sort(), ["at", "bytes", "sha256"]);
     // pull replaces every project: confirm names the Store
     await assert.rejects(runtime.store.start_pull("work", { remote: "minio-a" }), { code: "InvalidInput", message: /confirm/ });
     native.pullAdded = ["cart"];
     assert.equal((await ended(await runtime.store.start_pull("work", { remote: "minio-a", confirm: "work" }))).step, "done");
     const pulled = (await runtime.store.list()).find((s) => s.name === "work");
-    assert.deepEqual([pulled.projects, pulled.copies.map((c) => c.direction)], [["shop", "api", "cart"], ["pull"]]);
+    assert.deepEqual([pulled.projects, pulled.copies.map((c) => [c.remote, !!c.pushed, !!c.pulled])], [["shop", "api", "cart"], [["minio-a", true, true]]]);
     // clone: a new Store and volume from the remote copy
     const clone = await ended(await runtime.store.start_clone("minio-a", { store: "work", as: "copy" }));
     assert.equal(clone.step, "done");
     assert.deepEqual([nativeArgs("runtime.store.clone").from, nativeArgs("runtime.store.clone").store], ["work", "copy"]);
     const copy = (await runtime.store.list()).find((s) => s.name === "copy");
     assert.deepEqual([copy.volume, copy.remote, copy.projects], ["layerfs-store-copy", "minio-a", ["docs", "web"]]);
-    await assert.rejects(runtime.store.start_clone("minio-a", { store: "work", as: "copy" }), { code: "Exists" });
+    await assert.rejects(runtime.store.start_clone("minio-a", { from: "work", store: "copy" }), { code: "Exists" });
     // PostgreSQL: an import makes a schema Store; the URL is never written
     native.storeProjects = [{ name: "api", stack: "s1", headLayer: "l1" }, { name: "shop", stack: "s2", headLayer: "l2" }];
     const url = "postgresql://lfc:PG-SECRET@host.docker.internal:5432/layerfs";

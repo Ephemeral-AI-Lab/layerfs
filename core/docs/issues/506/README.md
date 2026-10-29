@@ -195,7 +195,7 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
 
 | Call | Does |
 | --- | --- |
-| `runtime.store.list()` | Stores in the home: `{ name, kind: 'sqlite' \| 'postgresql', volume?, connection?, schema?, synchronousCommit?, remote, legacy, created, projects: [names], copies: [transfer] }`; a transfer is `{ remote, direction: 'push' \| 'pull', at, sha256, bytes }`, the latest per remote |
+| `runtime.store.list()` | Stores in the home: `{ name, kind: 'sqlite' \| 'postgresql', volume?, connection?, schema?, synchronousCommit?, remote, legacy, created, projects: [names], copies: [copy] }`; a copy is `{ remote, pushed: { at, bytes, sha256 } \| null, pulled: { at, bytes, sha256 } \| null }`, the latest of each per remote (the binding also records each transfer in `HOME/remote-state/<store>`) |
 | `runtime.store.create(name)` | a new empty local SQLite Store in its own volume `<prefix>store-<name>` |
 | `runtime.store.remove(name, { confirm, stopSandboxes })` | deletes a local Store's volume (every project in it; Busy while a Sandbox runs on it, unless `stopSandboxes`), or forgets a PostgreSQL Store (its schema stays) |
 | `runtime.project.start_init(name, folder, { store })` | Inits a project into the live Store `store` through its writer lane and admission (Exists for a taken name, Busy while another add runs, Unsupported for a Store without acquisition tables or a PostgreSQL Store); without `store`, into a new Store of the same name, as before |
@@ -204,10 +204,10 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
 | `runtime.remote.list() / add(r) / remove(name, { confirm })` | remotes in the home; `add({ name, provider: 'minio', endpoint, bucket, prefix?, region?, credentials?, partSize? })` takes a credential reference (`env:LAYERFS_…` or `file:/path`, default `env:LAYERFS_REMOTE`), never keys |
 | `runtime.store.start_push(store, { remote, credentials, force })` | whole-Store upload job; Conflict when the remote moved since this home's last transfer with it, unless `force` |
 | `runtime.store.start_pull(store, { remote, credentials, confirm })` | replace-the-Store job (all of its projects); closes this process's clients first, refuses Busy while anything else holds the Store |
-| `runtime.store.start_clone(remote, { store, as, credentials })` | a new local Store `as` (default `store`) from the remote copy of `store` |
+| `runtime.store.start_clone(remote, { from, store, credentials })` | a new local Store `store` from the remote copy of `from` (default `store`); `{ store, as }` (`store` on the remote, `as` here) is accepted too |
 | `runtime.store.attach_postgresql({ name, connection, url, schema, synchronousCommit })` | registers the PostgreSQL Store `name` after checking it opens: a schema this home imported keeps its recorded identity; any other LayerFS schema is read for its binding and gets a fresh cursor key |
 | `runtime.store.start_import_postgresql(store, { name, connection, url, schema, synchronousCommit })` | copies a SQLite Store (every project, the same ids) into a new schema and registers it as the PostgreSQL Store `name` (default `<store>-pg`) |
-| `runtime.sync.get(id)` | a push, pull, clone or import job: `{ id, kind, store, remote, step: 'running' \| 'done' \| 'failed', bytes, total, error: { code, message }, started, ended, result }` |
+| `runtime.sync.get(id)` | a push, pull, clone or import job: `{ id, kind, store, remote, step: 'running' \| 'done' \| 'failed', bytes, total, error: { code, message }, started, ended, result }`; `error.message` is readable as is (for example a push's free-space refusal, code Capacity, or a pull refused while the Store is open) |
 
 - **Credentials:** `credentials` is `{ accessKey, secretKey }` for that call
   only; without it the remote's reference is read. A PostgreSQL `url` is

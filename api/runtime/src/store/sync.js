@@ -100,10 +100,12 @@ export async function start_pull(runtime, jobs, name, options = {}) {
   });
 }
 
-/** runtime.store.start_clone(remote, { store, as, credentials }): a new local Store from the remote copy of `store`, named `as` (default `store`). */
+/** runtime.store.start_clone(remote, { from, store, credentials }): a new local
+ * Store `store` from the remote copy of `from` (default `store`). The older
+ * `{ store, as }` (`store` on the remote, `as` here) is accepted too. */
 export async function start_clone(runtime, jobs, remoteName, options = {}) {
-  const from = options?.store;
-  const name = options?.as ?? from;
+  const from = options?.from ?? options?.store;
+  const name = options?.as ?? (options?.from !== undefined ? options?.store ?? options.from : from);
   if (typeof from !== "string" || !from) throw refuse("InvalidInput", "store names the Store on the remote");
   await unused(runtime, name);
   const remote = remoteOf({ ...options, remote: remoteName });

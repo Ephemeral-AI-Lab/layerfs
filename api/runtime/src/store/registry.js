@@ -1,9 +1,10 @@
 // The home's Stores (#506): `<home>/stores.json`, one entry per Store,
 //   { name, kind: sqlite | postgresql, volume?, connection?, schema?,
 //     synchronousCommit?, remote, legacy?, created,
-//     projects: [{ name, source?, created? }], copies: [transfer] }
-// where a transfer is the Store's last push or pull with one remote,
-// { remote, direction, at, sha256, bytes }. A Store made by its project's own
+//     projects: [{ name, source?, created? }], copies: [copy] }
+// where a copy is the Store's latest push and pull with one remote,
+// { remote, pushed: { at, bytes, sha256 } | null, pulled: … | null }; the
+// binding also records each transfer in HOME/remote-state/<store>. A Store made by its project's own
 // Init (before #506, or start_init with no `store`) is listed too, from that
 // project's record, as a Store of the project's name holding it (`legacy`);
 // it gets an entry here only once another project is added to it. The file
@@ -49,12 +50,13 @@ export function update(settings, name, change) {
   return put(settings, change({ ...found }));
 }
 
-/** Records a completed transfer: one per remote, the latest; the Store is bound to that remote. */
-export const withCopy = (store, transfer) => ({
-  ...store,
-  remote: transfer.remote,
-  copies: [...(store.copies ?? []).filter((c) => c.remote !== transfer.remote), transfer],
-});
+/** Records a completed transfer as the remote's latest push or pull; the Store is bound to that remote. */
+export function withCopy(store, { remote, direction, at, sha256, bytes }) {
+  const copies = store.copies ?? [];
+  const copy = { remote, pushed: null, pulled: null, ...copies.find((c) => c.remote === remote) };
+  copy[direction === "push" ? "pushed" : "pulled"] = { at, bytes, sha256 };
+  return { ...store, remote, copies: [...copies.filter((c) => c.remote !== remote), copy] };
+}
 
 /** Every Store of the home: registered ones, and each legacy project's own. */
 export async function all(runtime) {

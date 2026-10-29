@@ -133,7 +133,7 @@ async function run({ platform, bundle, image, home, prefix, work, svc }) {
     const credentials = { accessKey: svc.minio.accessKey, secretKey: svc.minio.secretKey };
     const pushed = await ended(await runtime.store.start_push("team", { remote: "minio-a", credentials }));
     assert.equal(pushed.result.object, "team/store.sqlite");
-    const cloned = await ended(await runtime.store.start_clone("minio-a", { store: "team", as: "copy", credentials }));
+    const cloned = await ended(await runtime.store.start_clone("minio-a", { from: "team", store: "copy", credentials }));
     assert.deepEqual(cloned.result.projects.sort(), ["docs", "shop"]);
     assert.equal(cloned.result.transfer.sha256, pushed.result.transfer.sha256);
     for (const name of ["shop", "docs"]) assert.deepEqual(await history(name, "copy"), team[name], `${name}: the clone's history is the pushed Store's`);
@@ -146,7 +146,7 @@ async function run({ platform, bundle, image, home, prefix, work, svc }) {
     await ended(await runtime.store.start_pull("team", { remote: "minio-a", credentials, confirm: "team" }));
     assert.deepEqual(await history("shop", "team"), team.shop, "the pull put back the pushed history");
     const copies = (await runtime.store.list()).find((s) => s.name === "team").copies;
-    assert.deepEqual(copies.map((c) => [c.remote, c.direction]), [["minio-a", "pull"]]);
+    assert.deepEqual(copies.map((c) => [c.remote, c.pushed.sha256, c.pulled.sha256]), [["minio-a", pushed.result.transfer.sha256, pushed.result.transfer.sha256]]);
 
     step("import the shared Store into PostgreSQL: the same Commit ids");
     const imported = await ended(await runtime.store.start_import_postgresql("team", { name: "team-pg", connection: "pg-local", url: svc.url, schema: "lfc_team" }));
