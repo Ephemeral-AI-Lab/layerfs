@@ -51,6 +51,12 @@ fn noise(n: usize, mut state: u64) -> Vec<u8> {
         .collect()
 }
 
+/// Whether this process is the daemons' user, which a Store install needs.
+fn root() -> bool {
+    use std::os::unix::fs::MetadataExt;
+    fs::metadata("/proc/self").is_ok_and(|m| m.uid() == 0)
+}
+
 fn write(f: &support::Fixture, branch: &str, path: &str, content: &str) {
     f.call(
         "fs.write",
@@ -126,13 +132,23 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
     // a project volume; the pull creates its global/ directory
     fs::create_dir(work.join("volume")).unwrap();
     let destination = work.join("volume/global/store.sqlite");
-    let pulled = remote::pull(
+    let outcome = remote::pull(
         driver.as_ref(),
         &destination,
         installed::BINDING,
         installed::CURSOR,
-    )
-    .unwrap();
+    );
+    if !root() {
+        // as a Store install, a pull runs as the daemons' user only
+        let failure = outcome.unwrap_err();
+        assert!(failure.cause.contains("must run as user 0"), "{failure}");
+        assert!(failure.left.is_none() && !destination.exists());
+        pieces::delete(driver.as_ref(), STORE_OBJECT).unwrap();
+        source.cleanup();
+        fs::remove_dir_all(work).unwrap();
+        return;
+    }
+    let pulled = outcome.unwrap();
     assert_eq!((pulled.bytes, pulled.sha256), (pushed.bytes, pushed.sha256));
     assert!(!pulled.replaced);
     let opened = open(&destination, &work.join("first"));

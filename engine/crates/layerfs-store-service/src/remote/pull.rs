@@ -17,8 +17,10 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-/// SQLite's sidecars of a Store in WAL mode. Each exists while the Store is
-/// open; the last opener to close removes both.
+/// SQLite's sidecars of a Store in WAL mode. On Linux, where a pull runs,
+/// each exists while the Store is open and the last opener to close removes
+/// both. (macOS's system SQLite keeps empty ones; the kernel guard refuses
+/// a pull there before this check.)
 const SIDECARS: [&str; 2] = ["-wal", "-shm"];
 
 /// What a pull installed.
