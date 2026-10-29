@@ -16,6 +16,9 @@ import { CALLS, INIT } from "../src/calls.js";
 import { usage } from "../src/help.js";
 import { tables, written } from "./doc-tables.mjs";
 import { CASES, ENV, contains, made, plain } from "../../agent/test/fixture/cases.mjs";
+import { P1_CASES } from "../../agent/test/fixture/cases-area-p.mjs";
+
+const AGREEMENT_CASES = [...CASES, ...P1_CASES];
 
 const CLI = fileURLToPath(new URL("../src/layerfs.js", import.meta.url));
 const FAKE = fileURLToPath(new URL("../../agent/test/fixture/fake-native.cjs", import.meta.url));
@@ -62,6 +65,7 @@ after(() => sdk?.lf.close());
 
 /** One case through the SDK in this process: the binding calls it made, and its result or refusal. */
 async function throughSdk(c) {
+  c.prepare?.(native);
   const first = native.args.length;
   process.env.CLI_FAKE_REFUSE = (c.refuse ?? []).join(",");
   try {
@@ -76,11 +80,11 @@ async function throughSdk(c) {
 }
 
 test("every table entry has a case", () => {
-  const covered = new Set(CASES.map((c) => c.argv.slice(0, c.argv[0] === "init" ? 1 : 2).join(" ")));
+  const covered = new Set(AGREEMENT_CASES.map((c) => c.argv.slice(0, c.argv[0] === "init" ? 1 : 2).join(" ")));
   for (const entry of [INIT, ...CALLS]) assert.ok(covered.has(command(entry).join(" ")), key(entry));
 });
 
-for (const c of CASES) {
+for (const c of AGREEMENT_CASES) {
   test(`${c.name}: the command matches the SDK`, async () => {
     const want = await throughSdk(c);
     const r = cli(c.argv, { input: c.input, env: { CLI_FAKE_REFUSE: (c.refuse ?? []).join(",") } });

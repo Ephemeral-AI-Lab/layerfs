@@ -8,7 +8,9 @@ import { readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { CASES, ENV, contains, made, plain } from "./fixture/cases.mjs";
+import { P1_CASES } from "./fixture/cases-area-p.mjs";
 
+const ALL_CASES = [...CASES, ...P1_CASES];
 const FAKE = fileURLToPath(new URL("./fixture/fake-native.cjs", import.meta.url));
 Object.assign(process.env, ENV, { LAYERFS_NATIVE: FAKE });
 delete process.env.CLI_FAKE_LOG;
@@ -19,11 +21,12 @@ const { LayerFS } = await import("../src/index.js");
 const SRC = fileURLToPath(new URL("../src/", import.meta.url));
 const files = ["project", "branch", "fs", "workspace", "sandbox"].flatMap((family) =>
   readdirSync(`${SRC}${family}`).filter((f) => !["index.js", "body.js"].includes(f)).map((f) => `${family}.${f.slice(0, -3)}`));
-assert.deepEqual([...new Set(CASES.map((c) => c.op).filter(Boolean))].sort(), files.sort(), "a case for every SDK call");
+assert.deepEqual([...new Set(ALL_CASES.map((c) => c.op).filter(Boolean))].sort(), files.sort(), "a case for every SDK call");
 
 const lf = await LayerFS.open("site");
 const failures = [];
-for (const c of CASES) {
+for (const c of ALL_CASES) {
+  c.prepare?.(native);
   const before = native.args.length;
   process.env.CLI_FAKE_REFUSE = (c.refuse ?? []).join(",");
   let result;
@@ -53,7 +56,7 @@ for (const c of CASES) {
 }
 await lf.close();
 if (failures.length) {
-  console.error(`FAIL calls: ${failures.length} of ${CASES.length}\n${failures.join("\n")}`);
+  console.error(`FAIL calls: ${failures.length} of ${ALL_CASES.length}\n${failures.join("\n")}`);
   process.exit(1);
 }
-console.log(`PASS calls (${CASES.length} cases)`);
+console.log(`PASS calls (${ALL_CASES.length} cases)`);
