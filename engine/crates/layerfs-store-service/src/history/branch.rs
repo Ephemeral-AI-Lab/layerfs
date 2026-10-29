@@ -136,7 +136,7 @@ pub fn list(
 }
 
 /// The listed form of the project's main line.
-fn main_item(stack: &layerfs_history::LayerStackRecord) -> SdkValue {
+pub(super) fn main_item(stack: &layerfs_history::LayerStackRecord) -> SdkValue {
     SdkValue::map([
         ("name", SdkValue::text(MAIN)),
         ("id", SdkValue::Null),
@@ -146,7 +146,7 @@ fn main_item(stack: &layerfs_history::LayerStackRecord) -> SdkValue {
 }
 
 /// The listed form of one Branch.
-fn item(branch: &layerfs_history::BranchRecord) -> SdkValue {
+pub(super) fn item(branch: &layerfs_history::BranchRecord) -> SdkValue {
     SdkValue::map([
         ("name", SdkValue::text(branch.name.as_str())),
         ("id", SdkValue::text(hex(branch.id.as_slice()))),

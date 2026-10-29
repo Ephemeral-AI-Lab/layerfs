@@ -1,5 +1,5 @@
-// P14 SDK paging over the stand-in binding. The real-Store coverage is
-// engine/crates/layerfs-api/tests/area_p14_paging.rs.
+// P1 + P14 SDK/CLI agreement over the stand-in binding. Real-Store coverage:
+// layerfs-api/tests/area_p1_history.rs and area_p14_paging.rs.
 //   /usr/bin/node api/agent/test/area-p.mjs
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -19,7 +19,7 @@ for (const c of CASES) {
   native.branchList = null;
   native.branchReplyBudget = null;
   native.workspaceList = [];
-  c.prepare(native);
+  c.prepare?.(native);
   const before = native.calls.length;
   let result;
   let error;

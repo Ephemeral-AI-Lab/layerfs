@@ -5,8 +5,9 @@
 //! and descends below a path only through [`ChangeWalk::enter`], so a caller
 //! filters and pages the pairs it is handed.
 //!
-//! [`ChangeWalk::full`] lists both trees completely. [`Plan::make`] reads
-//! only what changed: the inodes whose stored values differ come from the
+//! [`ChangeWalk::full`] lists both trees completely, and
+//! [`ChangeWalk::full_from_empty`] lists the right tree against an empty left.
+//! [`Plan::make`] reads only what changed: the inodes whose stored values differ come from the
 //! page-skipping difference of the two inode tables, and each one's paths from
 //! the caller's [`BindingHints`], every hint checked against the tree it is used
 //! for, up to the root. The walk then enters a directory only when its listing
@@ -87,7 +88,7 @@ pub struct Plan {
 /// A path-ordered walk over two roots.
 pub struct ChangeWalk<'a> {
     reader: &'a dyn AuthenticatedObjects,
-    sides: [&'a TreeTable; 2],
+    sides: [Option<&'a TreeTable>; 2],
     /// The changed entries; `None` lists every directory instead.
     plan: Option<&'a Plan>,
     stack: Vec<Frame>,
@@ -204,6 +205,23 @@ impl<'a> ChangeWalk<'a> {
         Ok(walk)
     }
 
+    /// The walk of an empty left tree against `right`. A resumed walk names
+    /// the first component of its resume path as `from`.
+    pub fn full_from_empty(
+        reader: &'a dyn AuthenticatedObjects,
+        right: &'a TreeTable,
+        from: Option<&PathName>,
+    ) -> ContentResult<Self> {
+        let mut walk = Self {
+            reader,
+            sides: [None, Some(right)],
+            plan: None,
+            stack: Vec::new(),
+        };
+        walk.start(from)?;
+        Ok(walk)
+    }
+
     /// The walk of the changed entries `plan` holds. A resumed walk names the
     /// first component of its resume path as `from`, and the root visits only
     /// the names at or after it.
@@ -227,7 +245,7 @@ impl<'a> ChangeWalk<'a> {
     ) -> Self {
         Self {
             reader,
-            sides: [left, right],
+            sides: [Some(left), Some(right)],
             plan,
             stack: Vec::new(),
         }
@@ -235,7 +253,8 @@ impl<'a> ChangeWalk<'a> {
 
     /// Enters the two root directories; the roots themselves are not yielded.
     fn start(&mut self, from: Option<&PathName>) -> ContentResult<()> {
-        let root = |tree: &TreeTable| -> ContentResult<Option<EntryFacts>> {
+        let root = |tree: Option<&TreeTable>| -> ContentResult<Option<EntryFacts>> {
+            let Some(tree) = tree else { return Ok(None) };
             let serial = tree.root_serial();
             Ok(tree
                 .value(self.reader, serial)?
@@ -249,11 +268,14 @@ impl<'a> ChangeWalk<'a> {
     fn bound(&self, names: Vec<Bound>) -> ContentResult<VecDeque<Child>> {
         let mut values: [Vec<Option<InodeValue>>; 2] = [Vec::new(), Vec::new()];
         for (side, values) in values.iter_mut().enumerate() {
+            let Some(tree) = self.sides[side] else {
+                continue;
+            };
             let serials = names
                 .iter()
                 .filter_map(|(_, serials)| serials[side])
                 .collect::<Vec<_>>();
-            *values = self.sides[side].values(self.reader, &serials)?;
+            *values = tree.values(self.reader, &serials)?;
         }
         let mut cursor = [values[0].iter(), values[1].iter()];
         let mut out = VecDeque::with_capacity(names.len());

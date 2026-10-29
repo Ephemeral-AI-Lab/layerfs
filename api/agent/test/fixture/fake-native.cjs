@@ -66,6 +66,20 @@ function answer(op, args) {
     }
     case "project.list_sandboxes": return { value: { kind: "ok", items: exports.sandboxList } };
     case "branch.fork": return { value: { kind: "Forked", branch: args.name, base: "lay0", head: "not-a-publication" } };
+    case "branch.graph": return { value: {
+      branch: { name: args.branch, id: "branch1234567890ab", base: "base1234567890ab", head: "head1234567890ab", forkedFrom: "c0ffee" },
+      forkPoint: { kind: "commit", id: "c0ffee" },
+      commits: [{ ...commit, id: "decaf", branch: args.branch, parent: "parent1234567890", published: true }],
+      hasMore: true,
+      nextPagePos: (args.pagePos ?? 0) + 1,
+    } };
+    case "branch.changed_paths": return { value: {
+      commit: args.commit,
+      parent: "parent1234567890",
+      items: [{ path: "/changed.txt", kind: "Modified", type: "file", before: { type: "file", inode: 7 }, after: { type: "file", inode: 7 }, content: true, identity: false, metadata: false, hunks: null, hunksOmitted: false }],
+      hasMore: false,
+      nextPagePos: null,
+    } };
     case "branch.merge": return { value: { kind: "Merged", branch: args.name, head: "m3rge", root: "r00t" } };
     case "branch.publish": return { value: { kind: "Added", source: { branch: "feature", commit: "pub1" }, publishedLayer: { id: "lay1" } } };
     case "fs.read": return { value: args.startLine === 1 ? { text: "a\n", nextLine: 2 } : { text: "b\n", nextLine: null } };

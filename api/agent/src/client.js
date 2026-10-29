@@ -58,18 +58,18 @@ export function sandboxArg(sandbox) {
   return sandbox;
 }
 
-/** Deployment settings from the client options, else the environment
- * (LAYERFS_<NAME>). A Workspace's Sandbox needs
+/** Deployment settings from the client's resolved options (the constructor
+ * already applied the environment fallback and defaults, so nothing here
+ * re-reads the environment). A Workspace's Sandbox needs
  * every one but the container prefix and daemon host. */
 export function deployment(options = {}) {
-  const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
   const deploy = {
-    docker: options.docker ?? env("DOCKER") ?? "/var/run/docker.sock",
-    image: options.image ?? env("IMAGE"),
-    volume: options.volume ?? env("VOLUME"),
-    daemon: options.daemon ?? env("DAEMON"),
-    containerPrefix: options.containerPrefix ?? env("CONTAINER_PREFIX"),
-    daemonHost: options.daemonHost ?? env("DAEMON_HOST"),
+    docker: options.docker ?? "/var/run/docker.sock",
+    image: options.image,
+    volume: options.volume,
+    daemon: options.daemon,
+    containerPrefix: options.containerPrefix,
+    daemonHost: options.daemonHost,
   };
   for (const [name, value] of Object.entries(deploy)) {
     if (name === "containerPrefix" || name === "daemonHost") continue;
