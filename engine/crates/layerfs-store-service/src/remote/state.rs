@@ -1,6 +1,8 @@
 //! The last push or pull of each Store, kept in a small file per Store in
 //! the LayerFS home (`remote-state/NAME`), outside the Store: a pull
 //! replaces the Store file, so state inside it would be overwritten.
+//! Since #506 E2 a transfer also records the Store's history heads digest
+//! (`heads`), read from the file that moved; a record from before has none.
 use layerfs_remote_storage::pieces::{hex, parse_hex32};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
@@ -26,6 +28,8 @@ pub struct Transfer {
     pub at: u64,
     pub sha256: [u8; 32],
     pub bytes: u64,
+    /// The history heads digest of the file that moved, when known.
+    pub heads: Option<[u8; 32]>,
 }
 
 impl Transfer {
@@ -39,7 +43,14 @@ impl Transfer {
                 .map_or(0, |elapsed| elapsed.as_secs()),
             sha256,
             bytes,
+            heads: None,
         }
+    }
+
+    /// This transfer with the moved file's heads digest.
+    pub fn with_heads(mut self, heads: Option<[u8; 32]>) -> Self {
+        self.heads = heads;
+        self
     }
 
     fn encode(&self) -> String {
@@ -47,13 +58,17 @@ impl Transfer {
             Direction::Push => "push",
             Direction::Pull => "pull",
         };
-        format!(
+        let mut text = format!(
             "remote {}\ndirection {direction}\nat {}\nsha256 {}\nbytes {}\n",
             self.remote,
             self.at,
             hex(&self.sha256),
             self.bytes
-        )
+        );
+        if let Some(heads) = &self.heads {
+            text.push_str(&format!("heads {}\n", hex(heads)));
+        }
+        text
     }
 
     fn decode(text: &str) -> Result<Self, String> {
@@ -72,12 +87,28 @@ impl Transfer {
             other => return Err(format!("remote state: direction {other:?}")),
         };
         let number = |text: String| text.parse::<u64>().map_err(|_| "remote state: number");
+        let at = number(field("at")?)?;
+        let sha256 = parse_hex32(&field("sha256")?).ok_or("remote state: sha256")?;
+        let bytes = number(field("bytes")?)?;
+        // optional: a record from before #506 E2 ends here
+        let heads = match lines.next() {
+            None => None,
+            Some(line) => Some(
+                line.strip_prefix("heads ")
+                    .and_then(parse_hex32)
+                    .ok_or("remote state: heads")?,
+            ),
+        };
+        if lines.next().is_some() {
+            return Err("remote state: trailing lines".to_owned());
+        }
         Ok(Self {
             remote,
             direction,
-            at: number(field("at")?)?,
-            sha256: parse_hex32(&field("sha256")?).ok_or("remote state: sha256")?,
-            bytes: number(field("bytes")?)?,
+            at,
+            sha256,
+            bytes,
+            heads,
         })
     }
 }

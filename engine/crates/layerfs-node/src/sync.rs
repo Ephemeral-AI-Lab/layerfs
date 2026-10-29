@@ -8,6 +8,12 @@
 //! last push or pull of each Store is recorded in the home, outside the
 //! Store, since a pull replaces the Store file. Each transfer is one
 //! attempt: an uncertain outcome is reported, never resent.
+//!
+//! #506 E2/E4: each transfer records the moved file's history heads
+//! digest (`heads`), and a call naming its runtime job (`job`) reports its
+//! phases to that job's progress cell (`progress.rs`). Pull and clone hold
+//! their Store's gate (`local.rs`), so this process's heads reads wait for
+//! neither and never open the Store under them.
 use crate::discovery;
 use crate::job::{failed, refused, Outcome};
 use crate::registry::{random, text};
@@ -217,7 +223,7 @@ fn minio_config(settings: &MinioSettings, credentials: Credentials) -> S3Config 
 }
 
 /// The driver of the call's `remote`, with its per-call `credentials` when given.
-fn driver(args: &SdkValue) -> Result<(String, Box<dyn Driver>)> {
+pub(crate) fn driver(args: &SdkValue) -> Result<(String, Box<dyn Driver>)> {
     let name = text(args, "remote")?;
     let remotes = load(args)?;
     let provider = remotes.get(name).ok_or_else(|| {
@@ -254,6 +260,7 @@ fn driver(args: &SdkValue) -> Result<(String, Box<dyn Driver>)> {
 /// Records a completed transfer of `store`; a record that fails is reported
 /// beside the transfer, which completed.
 fn record(home: &Path, store: &str, transfer: &Transfer) -> Option<SdkValue> {
+    crate::progress::begin("record");
     let saved = state::state_path(home, store).and_then(|path| state::save(&path, transfer));
     saved.err().map(SdkValue::text)
 }
@@ -271,6 +278,12 @@ fn transfer_value(transfer: &Transfer) -> SdkValue {
         ("at", SdkValue::Int(transfer.at as i64)),
         ("sha256", SdkValue::text(hex(&transfer.sha256))),
         ("bytes", SdkValue::Int(transfer.bytes as i64)),
+        (
+            "heads",
+            transfer
+                .heads
+                .map_or(SdkValue::Null, |heads| SdkValue::text(hex(&heads))),
+        ),
     ])
 }
 
@@ -299,6 +312,10 @@ fn answer(kind: &str, store: &str, transfer: &Transfer, more: Vec<(&str, SdkValu
 /// one consistent snapshot of the live Store, uploaded whole as
 /// `<prefix>/<store>/store.sqlite`.
 pub(crate) fn push(args: &SdkValue) -> Outcome {
+    crate::progress::observed(args, || push_once(args))
+}
+
+fn push_once(args: &SdkValue) -> Outcome {
     let store = text(args, "store")?;
     let identity = stores::identity(args)?;
     stores::sqlite_only(&identity, "push")?;
@@ -316,7 +333,8 @@ pub(crate) fn push(args: &SdkValue) -> Outcome {
         )
         .map_err(|failure| refused(push_code(&failure), failure.to_string()))
     })?;
-    let transfer = Transfer::now(&remote, Direction::Push, pushed.sha256, pushed.bytes);
+    let transfer = Transfer::now(&remote, Direction::Push, pushed.sha256, pushed.bytes)
+        .with_heads(pushed.heads);
     let mut more = vec![
         ("object", SdkValue::text(&pushed.object)),
         ("pieces", SdkValue::Int(pushed.pieces as i64)),
@@ -364,6 +382,13 @@ fn push_code(failure: &remote::PushFailure) -> &'static str {
 /// in the pulled Store get entries; an entry whose project the pulled Store
 /// lacks is listed in `missing` and kept.
 pub(crate) fn pull(args: &SdkValue) -> Outcome {
+    let path = stores::store_path(args)?;
+    crate::local::exclusive(&path, || {
+        crate::progress::observed(args, || pull_once(args))
+    })
+}
+
+fn pull_once(args: &SdkValue) -> Outcome {
     let store = text(args, "store")?;
     let identity = stores::identity(args)?;
     stores::sqlite_only(&identity, "pull")?;
@@ -383,7 +408,8 @@ pub(crate) fn pull(args: &SdkValue) -> Outcome {
         identity.cursor_key,
     )
     .map_err(|failure| refused("Failed", failure.to_string()))?;
-    let transfer = Transfer::now(&remote, Direction::Pull, pulled.sha256, pulled.bytes);
+    let transfer = Transfer::now(&remote, Direction::Pull, pulled.sha256, pulled.bytes)
+        .with_heads(pulled.heads);
     let (added, missing) = register(args, &identity)?;
     let mut more = vec![
         ("replaced", SdkValue::Bool(pulled.replaced)),
@@ -400,6 +426,13 @@ pub(crate) fn pull(args: &SdkValue) -> Outcome {
 /// a new local Store `store` (at `storePath`, which must not exist) from the
 /// remote copy of `from` (default `store`), with an entry for each project.
 pub(crate) fn clone(args: &SdkValue) -> Outcome {
+    let path = stores::store_path(args)?;
+    crate::local::exclusive(&path, || {
+        crate::progress::observed(args, || clone_once(args))
+    })
+}
+
+fn clone_once(args: &SdkValue) -> Outcome {
     let home = discovery::home(args)?;
     let store = text(args, "store")?;
     let from = args.get_text("from").unwrap_or(store);
@@ -421,7 +454,8 @@ pub(crate) fn clone(args: &SdkValue) -> Outcome {
         cursor_key,
     };
     stores::save_record(&home, store, &identity)?;
-    let transfer = Transfer::now(&remote, Direction::Pull, cloned.sha256, cloned.bytes);
+    let transfer = Transfer::now(&remote, Direction::Pull, cloned.sha256, cloned.bytes)
+        .with_heads(cloned.heads);
     let (added, _) = register(args, &identity)?;
     let mut more = vec![("from", SdkValue::text(from)), ("projects", added)];
     if let Some(error) = record(&home, store, &transfer) {

@@ -2,11 +2,16 @@
 //! checked against the remote's limits, then one upload of the whole file
 //! (as pieces when it is larger than the remote holds as one object) with
 //! its sha256, under the Store's name.
+//!
+//! The snapshot's history heads digest goes with it as `layerfs-heads`
+//! (#506 E2). Progress (#506 E4) reports `check`, `snapshot` (bytes copied),
+//! then the upload's `hash` and `upload` to the thread's transfer progress.
 use crate::bootstrap::OpenedStore;
+use crate::remote::heads::{heads, HEADS};
 use crate::remote::settings::store_object;
 use layerfs_persistence::STORE_HEADROOM_BYTES;
 use layerfs_remote_storage::pieces::{self, MAX_MANIFEST};
-use layerfs_remote_storage::{Driver, Metadata, RemoteError};
+use layerfs_remote_storage::{progress, Driver, Metadata, RemoteError};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -42,6 +47,9 @@ pub struct Pushed {
     pub sha256: [u8; 32],
     /// 0 when the Store went up as one object.
     pub pieces: u64,
+    /// The snapshot's history heads digest; `None` when it could not be
+    /// read, and then no `layerfs-heads` was sent.
+    pub heads: Option<[u8; 32]>,
     /// Stale pieces of an earlier, larger push that could not be removed;
     /// the pushed Store itself is complete.
     pub cleanup: Option<RemoteError>,
@@ -172,9 +180,8 @@ pub fn push(
     let local = |error: io::Error| PushFailure::Invalid(format!("{}: {error}", store.display()));
     let mut wal = store.as_os_str().to_owned();
     wal.push("-wal");
-    let needed = length(store).map_err(local)?
-        + length(Path::new(&wal)).map_err(local)?
-        + STORE_HEADROOM_BYTES;
+    let live = length(store).map_err(local)? + length(Path::new(&wal)).map_err(local)?;
+    let needed = live + STORE_HEADROOM_BYTES;
     let filesystem = nix::sys::statvfs::statvfs(directory)
         .map_err(|error| PushFailure::Invalid(format!("{}: {error}", directory.display())))?;
     let available =
@@ -187,11 +194,22 @@ pub fn push(
             available,
         });
     }
+    progress::begin("check", None);
     check_expected(driver, &object, expected)?;
     let result = (|| {
+        progress::begin("snapshot", Some(live));
+        let mut copied: Option<u64> = None;
         let sealed = opened
-            .snapshot(&staged)
+            .snapshot_observed(&staged, &mut |done, total| {
+                if copied.is_none() {
+                    // the copy's own size replaces the live estimate
+                    progress::begin("snapshot", Some(total));
+                }
+                progress::add(done - copied.unwrap_or(0).min(done));
+                copied = Some(done);
+            })
             .map_err(|error| PushFailure::Snapshot(error.to_string()))?;
+        let digest = heads(&staged).ok();
         let count = limits.pieces(sealed.bytes);
         if count.saturating_mul(MANIFEST_LINE) > MAX_MANIFEST {
             return Err(PushFailure::Remote(RemoteError::TooLarge {
@@ -199,10 +217,13 @@ pub fn push(
                 max: MAX_MANIFEST / MANIFEST_LINE * limits.piece_size,
             }));
         }
-        let metadata = Metadata::from([
+        let mut metadata = Metadata::from([
             (SQLITE_VERSION.to_owned(), sealed.sqlite_version),
             (BINDING.to_owned(), binding.clone()),
         ]);
+        if let Some(digest) = &digest {
+            metadata.insert(HEADS.to_owned(), pieces::hex(digest));
+        }
         check_expected(driver, &object, expected)?;
         let moved =
             pieces::upload(driver, &object, &staged, &metadata).map_err(PushFailure::Remote)?;
@@ -216,11 +237,18 @@ pub fn push(
             bytes: moved.bytes,
             sha256: moved.sha256,
             pieces: moved.pieces,
+            heads: digest,
             cleanup: moved.cleanup,
         })
     })();
     // This call's own copy, not data of record. A snapshot that failed may
-    // leave an incomplete file there; it is this call's too.
+    // leave an incomplete file there, and reading its heads sidecars that
+    // its close removes; all are this call's.
     let _ = fs::remove_file(&staged);
+    for suffix in ["-wal", "-shm"] {
+        let mut sidecar = staged.as_os_str().to_owned();
+        sidecar.push(suffix);
+        let _ = fs::remove_file(PathBuf::from(sidecar));
+    }
     result
 }

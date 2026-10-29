@@ -9,11 +9,15 @@
 //! compare-and-swap, by owner decision): a pull racing a push fails its
 //! sha256 check instead of installing mixed bytes. Each request is sent
 //! once; nothing is resent after an uncertain outcome.
+pub mod copies;
+pub mod heads;
 pub mod pull;
 pub mod push;
 pub mod settings;
 pub mod state;
 
+pub use copies::{check, list_stores, Checked, Copy};
+pub use heads::{heads, HEADS};
 pub use layerfs_remote_storage as storage;
 pub use pull::{clone_store, pull, Cloned, PullFailure, Pulled};
 pub use push::{push, Expected, PushFailure, Pushed};

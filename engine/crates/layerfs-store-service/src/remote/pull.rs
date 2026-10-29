@@ -12,14 +12,19 @@
 //! Like the sealed-Store install (`install.rs`), the destination must pass
 //! the kernel guard and the installer must be the daemons' user. One
 //! attempt: a failure keeps the temporary file it left, named in its report.
+//!
+//! The downloaded Store's history heads digest is read before it is
+//! installed (#506 E2). Progress (#506 E4) reports `check` (pull only),
+//! `download` (bytes received), `verify` and `install`.
 use crate::bootstrap::open_store_observed;
 use crate::install::{installer_user, paths};
 use crate::kernel_guard;
+use crate::remote::heads::heads;
 use crate::remote::push::BINDING;
 use crate::remote::settings::store_object;
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_remote_storage::pieces::{self, hex};
-use layerfs_remote_storage::Driver;
+use layerfs_remote_storage::{progress, Driver};
 use layerfs_storage::ReservationBlocks;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
@@ -39,6 +44,8 @@ pub struct Pulled {
     pub pieces: u64,
     /// Whether a local Store was replaced (else the destination was absent).
     pub replaced: bool,
+    /// The installed Store's history heads digest, when it could be read.
+    pub heads: Option<[u8; 32]>,
 }
 
 /// What a clone installed: a new Store and the binding it opens with.
@@ -49,6 +56,8 @@ pub struct Cloned {
     pub bytes: u64,
     pub sha256: [u8; 32],
     pub pieces: u64,
+    /// The installed Store's history heads digest, when it could be read.
+    pub heads: Option<[u8; 32]>,
 }
 
 /// A failed pull or clone: its cause and the temporary file it left, if any.
@@ -116,6 +125,7 @@ pub fn pull(
         sha256: fetched.sha256,
         pieces: fetched.pieces,
         replaced,
+        heads: fetched.heads,
     })
 }
 
@@ -187,6 +197,9 @@ fn fetch(
             ));
         }
         refuse_open(&target)?;
+        if !cloning {
+            progress::begin("check", None);
+        }
         // the copy's recorded binding: a clone's, and a pull's early refusal
         let stat = driver
             .stat(&object)
@@ -222,6 +235,7 @@ fn fetch(
         drop(file);
         // The verified bytes must open as this Store before they are
         // installed; closing it removes the sidecars it created.
+        progress::begin("verify", None);
         let opened = open_store_observed(
             PersistenceConfig::sqlite(&temporary)
                 .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
@@ -233,11 +247,13 @@ fn fetch(
         )
         .map_err(|error| format!("the pulled Store does not open: {error}"))?;
         drop(opened);
+        let digest = heads(&temporary).ok();
         for suffix in SIDECARS {
             if exists(&sidecar(&temporary, suffix)).map_err(text)? {
                 return Err(format!("the pulled Store kept its {suffix} after closing"));
             }
         }
+        progress::begin("install", None);
         let replaced = if cloning {
             // a link fails if anything appeared at the target: never replaced
             fs::hard_link(&temporary, &target).map_err(|error| {
@@ -268,6 +284,7 @@ fn fetch(
                 bytes: moved.bytes,
                 sha256: moved.sha256,
                 pieces: moved.pieces,
+                heads: digest,
             },
             replaced,
         ))

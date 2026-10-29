@@ -107,7 +107,27 @@ fn stores_are_keyed_by_name_and_their_state_kept_in_the_home() {
         ..pushed
     };
     state::save(&path, &pulled).unwrap();
-    assert_eq!(state::load(&path).unwrap(), Some(pulled));
+    assert_eq!(state::load(&path).unwrap(), Some(pulled.clone()));
+    // #506 E2: the heads digest of the moved file round-trips; a record
+    // from before it has none
+    let headed = pulled.clone().with_heads(Some([3; 32]));
+    state::save(&path, &headed).unwrap();
+    assert_eq!(state::load(&path).unwrap(), Some(headed));
+    assert!(std::fs::read_to_string(&path)
+        .unwrap()
+        .ends_with(&format!("heads {}\n", "03".repeat(32))));
+    let old = format!(
+        "remote origin\ndirection pull\nat 7\nsha256 {}\nbytes 4096\n",
+        "09".repeat(32)
+    );
+    std::fs::write(&path, old).unwrap();
+    assert_eq!(state::load(&path).unwrap().unwrap().heads, None);
+    std::fs::write(
+        &path,
+        format!("{}heads zz\n", std::fs::read_to_string(&path).unwrap()),
+    )
+    .unwrap();
+    assert!(state::load(&path).is_err());
     std::fs::write(&path, "remote origin\ndirection sideways\n").unwrap();
     assert!(state::load(&path).is_err());
     std::fs::remove_dir_all(home).unwrap();

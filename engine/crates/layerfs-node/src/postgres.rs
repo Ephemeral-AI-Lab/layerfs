@@ -113,6 +113,10 @@ pub(crate) fn open(
 /// `store` (every project, the same ids) into the new schema, then records
 /// the PostgreSQL Store `target` with the source's binding.
 pub(crate) fn import(args: &SdkValue) -> Outcome {
+    crate::progress::observed(args, || import_once(args))
+}
+
+fn import_once(args: &SdkValue) -> Outcome {
     let home = discovery::home(args)?;
     let target = text(args, "target")?;
     let (url, schema, sync) = (url(args)?, schema(args)?, setting(args)?);
@@ -121,6 +125,9 @@ pub(crate) fn import(args: &SdkValue) -> Outcome {
     let store_file = stores::store_path(args)?;
     let directory = stores::claim(&home, target)?;
     let _guard = discovery::guard(&directory)?;
+    let source_bytes = std::fs::metadata(&store_file).map(|m| m.len()).ok();
+    // the copy is one transaction with no byte count of its own
+    crate::progress::begin("copy");
     let imported = copy(&store_file, url, &schema, &sync, &source);
     let receipt = match imported {
         Ok(receipt) => receipt,
@@ -137,8 +144,13 @@ pub(crate) fn import(args: &SdkValue) -> Outcome {
         binding: source.binding,
         cursor_key: source.cursor_key,
     };
+    crate::progress::begin("record");
     stores::save_record(&home, target, &identity)?;
     Ok(SdkValue::map([
+        (
+            "sourceBytes",
+            source_bytes.map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
+        ),
         ("kind", SdkValue::text("Imported")),
         ("store", SdkValue::text(target)),
         ("schema", SdkValue::text(schema)),
@@ -313,4 +325,78 @@ pub(crate) fn sandbox_store(
         binding: identity.binding,
         cursor_key: identity.cursor_key,
     }))
+}
+
+/// `runtime.postgresql.status { home, url, schemas }`: one connection, made
+/// once: `{ reachable: true, serverVersion, latencyMs, latencyUs, schemas: {
+/// name: bytes | null } }` (null for a schema the server lacks), or, when
+/// the server is not reached or refuses the login, `{ reachable: false,
+/// error: { code: Unavailable | Denied, message } }`. A failed query after
+/// connecting is refused `Failed`.
+pub(crate) fn status(args: &SdkValue) -> Outcome {
+    let url = text(args, "url")?;
+    let schemas = match args.get("schemas") {
+        None | Some(SdkValue::Null) => Vec::new(),
+        Some(SdkValue::List(items)) => items
+            .iter()
+            .map(|item| match item {
+                SdkValue::Text(name) => Ok(name.clone()),
+                _ => Err(refused("InvalidInput", "schemas is a list of schema names")),
+            })
+            .collect::<Result<_, _>>()?,
+        Some(_) => return Err(refused("InvalidInput", "schemas is a list of schema names")),
+    };
+    #[cfg(feature = "postgresql")]
+    {
+        use layerfs_persistence::PostgresStatusError as E;
+        let unreached = |code: &str, message: String| {
+            SdkValue::map([
+                ("reachable", SdkValue::Bool(false)),
+                (
+                    "error",
+                    SdkValue::map([
+                        ("code", SdkValue::text(code)),
+                        ("message", SdkValue::text(message)),
+                    ]),
+                ),
+            ])
+        };
+        match layerfs_persistence::postgresql_status(url, &schemas) {
+            Ok(status) => Ok(SdkValue::map([
+                ("reachable", SdkValue::Bool(true)),
+                ("serverVersion", SdkValue::text(status.server_version)),
+                (
+                    "latencyMs",
+                    SdkValue::Int(status.latency.as_millis() as i64),
+                ),
+                (
+                    "latencyUs",
+                    SdkValue::Int(status.latency.as_micros() as i64),
+                ),
+                (
+                    "schemas",
+                    SdkValue::Map(
+                        status
+                            .schemas
+                            .into_iter()
+                            .map(|(name, bytes)| {
+                                (
+                                    name,
+                                    bytes.map_or(SdkValue::Null, |b| SdkValue::Int(b as i64)),
+                                )
+                            })
+                            .collect(),
+                    ),
+                ),
+            ])),
+            Err(error @ E::Unreachable(_)) => Ok(unreached("Unavailable", error.to_string())),
+            Err(error @ E::Denied(_)) => Ok(unreached("Denied", error.to_string())),
+            Err(error @ E::Failed(_)) => Err(refused("Failed", error.to_string())),
+        }
+    }
+    #[cfg(not(feature = "postgresql"))]
+    {
+        let _ = (url, schemas);
+        Err(refused("Unsupported", UNBUILT))
+    }
 }
