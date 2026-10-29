@@ -22,7 +22,7 @@ use layerfs_persistence::{PersistenceConfig, SqliteAcquisitionSchema, SqlitePers
 use layerfs_store_service::remote::state::{self, Direction, Transfer};
 use layerfs_store_service::remote::storage::minio::MinioSettings;
 use layerfs_store_service::remote::storage::pieces;
-use layerfs_store_service::remote::{self, store_object, Provider, Remotes};
+use layerfs_store_service::remote::{self, store_object, Expected, Provider, PushFailure, Remotes};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -122,7 +122,17 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
 
     let driver = provider.driver().unwrap();
     let store = source.host.config.path.clone();
-    let pushed = remote::push(&source.service.opened, &store, driver.as_ref(), STORE).unwrap();
+    let push = |name: &str, expected| {
+        remote::push(
+            &source.service.opened,
+            &store,
+            driver.as_ref(),
+            name,
+            installed::BINDING,
+            expected,
+        )
+    };
+    let pushed = push(STORE, Expected::Absent).unwrap();
     assert!(pushed.bytes as usize > big, "{pushed:?}");
     assert!(pushed.cleanup.is_none());
     assert_eq!(pushed.object, "alpha/store.sqlite");
@@ -136,12 +146,22 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
     assert_eq!(stat.bytes, pushed.bytes);
     assert_eq!(stat.metadata[pieces::SHA256], pieces::hex(&pushed.sha256));
     // one remote holds many Stores
-    let beta = remote::push(&source.service.opened, &store, driver.as_ref(), "beta").unwrap();
+    let beta = push("beta", Expected::Any).unwrap();
     assert_eq!(
         driver.stat("beta/store.sqlite").unwrap().unwrap().bytes,
         beta.bytes
     );
     pieces::delete(driver.as_ref(), "beta/store.sqlite").unwrap();
+    // a push whose remote copy moved since this home's last transfer is
+    // refused before anything is uploaded
+    let moved = push(STORE, Expected::Sha256([5; 32])).unwrap_err();
+    assert!(
+        matches!(moved, PushFailure::RemoteMoved { found: Some(sha), .. } if sha == pushed.sha256),
+        "{moved}"
+    );
+    let moved = push(STORE, Expected::Absent).unwrap_err();
+    assert!(matches!(moved, PushFailure::RemoteMoved { .. }), "{moved}");
+    assert_eq!(driver.stat(&object).unwrap().unwrap(), stat);
     // the home records the last transfer of each Store, outside the Store
     let home = work.join("home");
     let recorded = Transfer::now("origin", Direction::Push, pushed.sha256, pushed.bytes);
@@ -173,6 +193,19 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
         return;
     }
     let pulled = outcome.unwrap();
+    // a clone makes a new Store with the remote copy's binding
+    fs::create_dir(work.join("clone")).unwrap();
+    let fresh = work.join("clone/global/store.sqlite");
+    let cloned = remote::clone_store(driver.as_ref(), STORE, &fresh, [77; 32]).unwrap();
+    assert_eq!(cloned.binding, installed::BINDING);
+    assert_eq!((cloned.bytes, cloned.sha256), (pushed.bytes, pushed.sha256));
+    let clone = open(&fresh, &work.join("clone-overlay"));
+    assert_eq!(history(&clone), before);
+    clone.close();
+    // a clone never replaces a Store
+    let refused = remote::clone_store(driver.as_ref(), STORE, &fresh, [77; 32]).unwrap_err();
+    assert!(refused.cause.contains("a Store exists"), "{refused}");
+    assert!(refused.left.is_none());
     assert_eq!((pulled.bytes, pulled.sha256), (pushed.bytes, pushed.sha256));
     assert!(!pulled.replaced);
     let opened = open(&destination, &work.join("first"));
@@ -221,7 +254,8 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
     fs::create_dir_all(work.join("other")).unwrap();
     let other = work.join("other/global/store.sqlite");
     let refused = remote::pull(driver.as_ref(), STORE, &other, b"another", [1; 32]).unwrap_err();
-    assert!(refused.cause.contains("does not open"), "{refused}");
+    assert!(refused.cause.contains("another binding"), "{refused}");
+    assert!(refused.left.is_none());
     assert!(!other.exists());
     let _ = fs::remove_file(work.join("other/global/store.sqlite.pulling"));
 

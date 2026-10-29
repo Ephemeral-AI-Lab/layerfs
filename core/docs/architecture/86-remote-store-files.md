@@ -103,7 +103,12 @@ the caller records a transfer after it completes.
 
 ## 7. Push
 
-`remote::push(opened, store, driver, name)`:
+`remote::push(opened, store, driver, name, binding, expected)`:
+
+0. `expected` (`Any`, `Absent` or `Sha256`, from this home's last push or
+   pull) must match the remote copy; otherwise `RemoteMoved`, before the
+   snapshot and again just before the upload. This is not atomic: a push by
+   another machine between that check and the upload is not detected.
 
 1. Check that the Store's filesystem has room for one Store-sized copy (main
    file plus WAL) and the Store's own write headroom; refuse `Space`,
@@ -114,8 +119,9 @@ the caller records a transfer after it completes.
    continue.
 3. The size is checked against the driver's limits; a Store above max file
    goes up as pieces, and the manifest must fit what a pull reads (16 MiB).
-4. `pieces::upload` sends it as `NAME/store.sqlite` with its sha256 and
-   SQLite version as metadata.
+4. `pieces::upload` sends it as `NAME/store.sqlite` with its sha256, SQLite
+   version and binding key (`layerfs-binding`, hex; not a secret) as
+   metadata. The cursor key never leaves its holder.
 5. The staged snapshot is removed.
 
 ## 8. Pull
@@ -137,8 +143,16 @@ the volume and the process is the daemons' user.
    new opener between this check and the rename.
 5. Rename the pulled file over the destination: one rename.
 
-A failure keeps the temporary file and names it in the report; nothing is
-deleted or tried again.
+Before downloading, a pull also refuses a remote copy whose recorded
+binding is another Store's. A failure keeps the temporary file and names it
+in the report; nothing is deleted or tried again.
+
+**Clone** (`remote::clone_store(driver, name, destination, cursor_key)`) is
+the same download into a new Store: the destination must be absent, the
+binding comes from the remote copy and is returned, and `cursor_key` is the
+new Store's own authority (the Store checks only the binding). The file is
+hard-linked into place, so a Store that appeared meanwhile is never
+replaced, then its temporary name is removed.
 
 ## 9. Tests
 

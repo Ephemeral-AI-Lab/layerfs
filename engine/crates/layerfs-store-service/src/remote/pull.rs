@@ -4,15 +4,22 @@
 //! it over the local Store, which happens only when no opener holds it. The
 //! whole Store is replaced, with every project in it.
 //!
+//! A clone (`clone_store`) is the same download into a new Store: the
+//! destination must be absent, the binding comes from the remote copy, and
+//! the file is linked into place so a Store that appeared meanwhile is never
+//! replaced.
+//!
 //! Like the sealed-Store install (`install.rs`), the destination must pass
 //! the kernel guard and the installer must be the daemons' user. One
 //! attempt: a failure keeps the temporary file it left, named in its report.
 use crate::bootstrap::open_store_observed;
 use crate::install::{installer_user, paths};
 use crate::kernel_guard;
+use crate::remote::push::BINDING;
 use crate::remote::settings::store_object;
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
-use layerfs_remote_storage::{pieces, Driver};
+use layerfs_remote_storage::pieces::{self, hex};
+use layerfs_remote_storage::Driver;
 use layerfs_storage::ReservationBlocks;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
@@ -34,7 +41,17 @@ pub struct Pulled {
     pub replaced: bool,
 }
 
-/// A failed pull: its cause and the temporary file it left, if any.
+/// What a clone installed: a new Store and the binding it opens with.
+#[derive(Debug)]
+pub struct Cloned {
+    /// The Store's binding key, read from the remote copy.
+    pub binding: Vec<u8>,
+    pub bytes: u64,
+    pub sha256: [u8; 32],
+    pub pieces: u64,
+}
+
+/// A failed pull or clone: its cause and the temporary file it left, if any.
 #[derive(Debug)]
 pub struct PullFailure {
     pub cause: String,
@@ -94,6 +111,56 @@ pub fn pull(
     binding: &[u8],
     cursor_key: [u8; 32],
 ) -> Result<Pulled, PullFailure> {
+    fetch(driver, name, destination, Some(binding), cursor_key).map(|(fetched, replaced)| Pulled {
+        bytes: fetched.bytes,
+        sha256: fetched.sha256,
+        pieces: fetched.pieces,
+        replaced,
+    })
+}
+
+/// Clones the Store named `name` from `driver` into the new Store
+/// `destination`, which must not exist. The binding comes from the remote
+/// copy (recorded by push); `cursor_key` is the new Store's own cursor
+/// authority, held by its caller as for any Store. A Store that appears at
+/// `destination` meanwhile is never replaced.
+pub fn clone_store(
+    driver: &dyn Driver,
+    name: &str,
+    destination: &Path,
+    cursor_key: [u8; 32],
+) -> Result<Cloned, PullFailure> {
+    fetch(driver, name, destination, None, cursor_key).map(|(fetched, _)| fetched)
+}
+
+/// The remote copy's recorded binding, if push recorded one.
+fn remote_binding(metadata: &layerfs_remote_storage::Metadata) -> Result<Option<Vec<u8>>, String> {
+    let Some(text) = metadata.get(BINDING) else {
+        return Ok(None);
+    };
+    let digits = text.as_bytes();
+    let value = |b: u8| (b as char).to_digit(16).map(|d| d as u8);
+    if digits.len() % 2 != 0 {
+        return Err(format!("the remote Store's {BINDING} is malformed"));
+    }
+    digits
+        .chunks(2)
+        .map(|pair| Some((value(pair[0])? << 4) | value(pair[1])?))
+        .collect::<Option<Vec<u8>>>()
+        .map(Some)
+        .ok_or_else(|| format!("the remote Store's {BINDING} is malformed"))
+}
+
+/// Downloads, verifies, opens and installs. With `binding`, replaces an
+/// unopened local Store (pull); without it, installs a new Store (clone).
+/// Returns what was installed and whether a Store was replaced.
+fn fetch(
+    driver: &dyn Driver,
+    name: &str,
+    destination: &Path,
+    binding: Option<&[u8]>,
+    cursor_key: [u8; 32],
+) -> Result<(Cloned, bool), PullFailure> {
     let mut left = None;
     let result = (|| {
         let text = |error: io::Error| error.to_string();
@@ -112,7 +179,35 @@ pub fn pull(
                 .map_err(text)?;
         }
         let (target, _) = paths(destination).map_err(text)?;
+        let cloning = binding.is_none();
+        if cloning && exists(&target).map_err(text)? {
+            return Err(format!(
+                "a Store exists at {}; a clone makes a new Store (pull replaces one)",
+                target.display()
+            ));
+        }
         refuse_open(&target)?;
+        // the copy's recorded binding: a clone's, and a pull's early refusal
+        let stat = driver
+            .stat(&object)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("no Store {name} on the remote: remote file missing"))?;
+        let recorded = remote_binding(&stat.metadata)?;
+        let binding = match (binding, recorded) {
+            (Some(expected), Some(recorded)) if recorded != expected => {
+                return Err(format!(
+                    "the remote Store {name} has another binding ({}), not this Store's",
+                    hex(&recorded)
+                ));
+            }
+            (Some(expected), _) => expected.to_vec(),
+            (None, Some(recorded)) => recorded,
+            (None, None) => {
+                return Err(format!(
+                    "the remote Store {name} records no {BINDING}; push it again to clone it"
+                ));
+            }
+        };
         let temporary = sidecar(&target, ".pulling");
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
@@ -125,12 +220,12 @@ pub fn pull(
         let moved = pieces::download(driver, &object, &mut file).map_err(|e| e.to_string())?;
         file.flush().map_err(text)?;
         drop(file);
-        // The verified bytes must open as this Store before they
-        // replace anything; closing it removes the sidecars it created.
+        // The verified bytes must open as this Store before they are
+        // installed; closing it removes the sidecars it created.
         let opened = open_store_observed(
             PersistenceConfig::sqlite(&temporary)
                 .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
-            binding,
+            &binding,
             cursor_key,
             1,
             64 * 1024,
@@ -143,16 +238,39 @@ pub fn pull(
                 return Err(format!("the pulled Store kept its {suffix} after closing"));
             }
         }
-        let replaced = exists(&target).map_err(text)?;
-        refuse_open(&target)?;
-        fs::rename(&temporary, &target).map_err(text)?;
-        left = None;
-        Ok(Pulled {
-            bytes: moved.bytes,
-            sha256: moved.sha256,
-            pieces: moved.pieces,
+        let replaced = if cloning {
+            // a link fails if anything appeared at the target: never replaced
+            fs::hard_link(&temporary, &target).map_err(|error| {
+                format!(
+                    "the new Store {} could not be placed: {error}",
+                    target.display()
+                )
+            })?;
+            left = None;
+            fs::remove_file(&temporary).map_err(|error| {
+                format!(
+                    "the Store is installed at {}, but its temporary name {} remains: {error}",
+                    target.display(),
+                    temporary.display()
+                )
+            })?;
+            false
+        } else {
+            let replaced = exists(&target).map_err(text)?;
+            refuse_open(&target)?;
+            fs::rename(&temporary, &target).map_err(text)?;
+            left = None;
+            replaced
+        };
+        Ok((
+            Cloned {
+                binding,
+                bytes: moved.bytes,
+                sha256: moved.sha256,
+                pieces: moved.pieces,
+            },
             replaced,
-        })
+        ))
     })();
     result.map_err(|cause: String| PullFailure {
         cause,

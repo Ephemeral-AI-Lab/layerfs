@@ -13,6 +13,23 @@ use std::path::{Path, PathBuf};
 
 /// Metadata key of the SQLite version that wrote the pushed Store.
 pub const SQLITE_VERSION: &str = "layerfs-sqlite";
+/// Metadata key of the Store's binding key (hex), which a clone opens with.
+/// The binding is not a secret; the cursor key never leaves its holder.
+pub const BINDING: &str = "layerfs-binding";
+
+/// What the remote must hold for a push to go ahead: the copy this home
+/// last pushed or pulled. Checked before the snapshot and again just before
+/// the upload; not atomic (no compare-and-swap on the remote), so a push by
+/// another machine in between is not detected.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Expected {
+    /// No check: overwrite whatever is there.
+    Any,
+    /// The remote holds no copy of this Store.
+    Absent,
+    /// The remote copy has this sha256.
+    Sha256([u8; 32]),
+}
 /// A bound on one manifest line, so a manifest never exceeds what a pull reads.
 const MANIFEST_LINE: u64 = 96;
 
@@ -35,6 +52,13 @@ pub struct Pushed {
 pub enum PushFailure {
     /// Bad input; nothing was written or sent.
     Invalid(String),
+    /// The remote copy is not the expected one: it moved since this home's
+    /// last push or pull. `found` is its sha256, `None` when absent or
+    /// unrecorded. Nothing was uploaded.
+    RemoteMoved {
+        expected: Expected,
+        found: Option<[u8; 32]>,
+    },
     /// The Store's filesystem lacks room for the staged snapshot; nothing
     /// was written or sent.
     Space {
@@ -53,6 +77,12 @@ impl std::fmt::Display for PushFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Invalid(cause) => write!(f, "Store push: {cause}"),
+            Self::RemoteMoved { found, .. } => write!(
+                f,
+                "Store push: the remote copy moved since this home's last push or pull (it \
+                 now holds {}); pull it first, or push without the check to overwrite it",
+                found.map_or_else(|| "nothing".to_owned(), |sha| pieces::hex(&sha))
+            ),
             Self::Space {
                 directory,
                 needed,
@@ -77,8 +107,39 @@ fn length(path: &Path) -> io::Result<u64> {
     }
 }
 
-/// Pushes the live Store `opened`, whose file is `store`, to `driver` as the
-/// Store named `name`. The snapshot is staged at `store` + `.pushing`, on
+/// Refuses when the remote copy of `object` is not `expected`.
+fn check_expected(
+    driver: &dyn Driver,
+    object: &str,
+    expected: Expected,
+) -> Result<(), PushFailure> {
+    if expected == Expected::Any {
+        return Ok(());
+    }
+    let stat = driver.stat(object).map_err(PushFailure::Remote)?;
+    let found = stat.as_ref().map(|stat| {
+        stat.metadata
+            .get(pieces::SHA256)
+            .and_then(|text| pieces::parse_hex32(text))
+    });
+    let matches = match expected {
+        Expected::Any => true,
+        Expected::Absent => found.is_none(),
+        Expected::Sha256(sha) => found == Some(Some(sha)),
+    };
+    if matches {
+        Ok(())
+    } else {
+        Err(PushFailure::RemoteMoved {
+            expected,
+            found: found.flatten(),
+        })
+    }
+}
+
+/// Pushes the live Store `opened`, whose file is `store` and whose binding
+/// key is `binding`, to `driver` as the Store named `name`, if the remote
+/// holds the `expected` copy. The snapshot is staged at `store` + `.pushing`, on
 /// the Store's own filesystem, after checking room for one Store-sized copy
 /// plus the Store's write headroom;
 /// it is this call's own copy and is removed when the call ends.
@@ -87,8 +148,16 @@ pub fn push(
     store: &Path,
     driver: &dyn Driver,
     name: &str,
+    binding: &[u8],
+    expected: Expected,
 ) -> Result<Pushed, PushFailure> {
     let object = store_object(name).map_err(PushFailure::Invalid)?;
+    let binding = pieces::hex(binding);
+    if binding.is_empty() || binding.len() > 256 {
+        return Err(PushFailure::Invalid(
+            "the Store binding must be 1 to 128 bytes".to_owned(),
+        ));
+    }
     let directory = store
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -108,8 +177,8 @@ pub fn push(
         + STORE_HEADROOM_BYTES;
     let filesystem = nix::sys::statvfs::statvfs(directory)
         .map_err(|error| PushFailure::Invalid(format!("{}: {error}", directory.display())))?;
-    let available = u128::from(filesystem.blocks_available())
-        * u128::from(filesystem.fragment_size());
+    let available =
+        u128::from(filesystem.blocks_available()) * u128::from(filesystem.fragment_size());
     let available = u64::try_from(available).unwrap_or(u64::MAX);
     if available < needed {
         return Err(PushFailure::Space {
@@ -118,6 +187,7 @@ pub fn push(
             available,
         });
     }
+    check_expected(driver, &object, expected)?;
     let result = (|| {
         let sealed = opened
             .snapshot(&staged)
@@ -129,7 +199,11 @@ pub fn push(
                 max: MAX_MANIFEST / MANIFEST_LINE * limits.piece_size,
             }));
         }
-        let metadata = Metadata::from([(SQLITE_VERSION.to_owned(), sealed.sqlite_version)]);
+        let metadata = Metadata::from([
+            (SQLITE_VERSION.to_owned(), sealed.sqlite_version),
+            (BINDING.to_owned(), binding.clone()),
+        ]);
+        check_expected(driver, &object, expected)?;
         let moved =
             pieces::upload(driver, &object, &staged, &metadata).map_err(PushFailure::Remote)?;
         if moved.bytes != sealed.bytes {
