@@ -112,3 +112,57 @@ fn stores_are_keyed_by_name_and_their_state_kept_in_the_home() {
     assert!(state::load(&path).is_err());
     std::fs::remove_dir_all(home).unwrap();
 }
+
+/// Cloudflare R2: the settings file keeps the account, jurisdiction and a
+/// credential reference; the endpoint is derived from them, region `auto`,
+/// and a malformed account or jurisdiction is refused before anything is sent.
+#[test]
+fn r2_remotes_round_trip_and_derive_their_endpoint() {
+    use layerfs_store_service::remote::storage::cloudflare_r2::R2Settings;
+    use layerfs_store_service::remote::storage::Credentials;
+    let r2 = |jurisdiction: &str| R2Settings {
+        account: "0123456789abcdef0123456789abcdef".to_owned(),
+        jurisdiction: jurisdiction.to_owned(),
+        bucket: "layerfs-stores".to_owned(),
+        prefix: "team".to_owned(),
+        credentials: CredentialRef::parse("env:LAYERFS_REMOTE").unwrap(),
+        part_size: DEFAULT_PART_SIZE,
+    };
+    let mut remotes = Remotes::default();
+    remotes.set("cloud", Provider::R2(r2(""))).unwrap();
+    remotes.set("cloud-eu", Provider::R2(r2("eu"))).unwrap();
+    let text = remotes.encode();
+    assert!(text.contains("provider r2\naccount 0123456789abcdef0123456789abcdef\njurisdiction \n"));
+    assert_eq!(Remotes::decode(&text).unwrap(), remotes);
+    assert_eq!(
+        r2("").endpoint(),
+        "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com"
+    );
+    assert_eq!(
+        r2("eu").endpoint(),
+        "https://0123456789abcdef0123456789abcdef.eu.r2.cloudflarestorage.com"
+    );
+    let keys = || Credentials {
+        access_key: "a".into(),
+        secret_key: "s".into(),
+    };
+    let config = r2("").config(keys()).unwrap();
+    assert_eq!(config.region, "auto");
+    assert!(
+        config.validate().is_ok() == cfg!(feature = "tls"),
+        "https needs the tls feature"
+    );
+    for bad in [
+        R2Settings {
+            account: "0123456789ABCDEF0123456789ABCDEF".to_owned(),
+            ..r2("")
+        },
+        R2Settings {
+            account: "short".to_owned(),
+            ..r2("")
+        },
+        r2("us"),
+    ] {
+        assert!(bad.config(keys()).is_err(), "{bad:?}");
+    }
+}

@@ -143,10 +143,10 @@ lfc-worker (Linux container)
     store/open → layerfs-persistence
                    backend/sqlite/      (rusqlite, flock lane)
                    backend/postgresql/  (postgres crate, row-lock lane)
-    remote/    → layerfs-remote-storage: s3_api/, minio/, local_folder/
+    remote/    → layerfs-remote-storage: s3_api/, minio/, cloudflare_r2/, local_folder/
         │ volumes                 │ TCP                  │ HTTP(S)
         ▼                         ▼                      ▼
-  Store volumes              PostgreSQL            MinIO sources
+  Store volumes              PostgreSQL            MinIO / R2 sources
                          (host.docker.internal or a shared Docker network)
 Sandboxes: each daemon opens its Store and mounts Workspace(store, project, branch)
 ```
@@ -173,7 +173,8 @@ Remote storage, one folder per provider:
 engine/crates/layerfs-remote-storage/src/
   driver.rs limits.rs pieces.rs error.rs
   s3_api/ local_folder/ minio/          (first)
-  aws_s3/ cloudflare_r2/ google_drive/ … (later)
+  cloudflare_r2/                        (HTTPS, `tls` feature)
+  aws_s3/ google_drive/ …               (later)
 engine/crates/layerfs-store-service/src/remote/   settings, push, pull, clone
 ```
 
@@ -201,7 +202,7 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
 | `runtime.project.start_init(name, folder, { store })` | Inits a project into the live Store `store` through its writer lane and admission (Exists for a taken name, Busy while another add runs, Unsupported for a Store without acquisition tables or a PostgreSQL Store); without `store`, into a new Store of the same name, as before |
 | `runtime.project.remove(name, { store, confirm, stopSandboxes, url })` | in a Store that holds others: removes the project's Sandboxes (Busy while one runs, unless `stopSandboxes`) and drops its stack (a PostgreSQL Store's `url` is passed for the call), answering `{ kind: 'Removed', project, store, stack, packsKept: true }`; packs stay until A8 (#411). A project alone in its own Store is removed whole, with its volume, as before |
 | `runtime.project.list()`, `get_state(name, since, { store })`, `runtime.sandbox.reclaim(name, { store })` | `list` items carry `store` and `shared`; `{ store }` names the Store when a project name is in several (InvalidInput otherwise) |
-| `runtime.remote.list() / add(r) / remove(name, { confirm })` | remotes in the home; `add({ name, provider: 'minio', endpoint, bucket, prefix?, region?, credentials?, partSize? })` takes a credential reference (`env:LAYERFS_…` or `file:/path`, default `env:LAYERFS_REMOTE`), never keys |
+| `runtime.remote.list() / add(r) / remove(name, { confirm })` | remotes in the home; `add({ name, provider: 'minio', endpoint, bucket, prefix?, region?, credentials?, partSize? })` or `add({ name, provider: 'r2', account, jurisdiction?, bucket, prefix?, credentials?, partSize? })` takes a credential reference (`env:LAYERFS_…` or `file:/path`, default `env:LAYERFS_REMOTE`), never keys. R2 is reached at `https://<account>[.<jurisdiction>].r2.cloudflarestorage.com`, region `auto`, and needs a build with the `tls` feature |
 | `runtime.store.start_push(store, { remote, credentials, force })` | whole-Store upload job; Conflict when the remote moved since this home's last transfer with it, unless `force` |
 | `runtime.store.start_pull(store, { remote, credentials, confirm })` | replace-the-Store job (all of its projects); closes this process's clients first, refuses Busy while anything else holds the Store |
 | `runtime.store.start_clone(remote, { from, store, credentials })` | a new local Store `store` from the remote copy of `from` (default `store`); `{ store, as }` (`store` on the remote, `as` here) is accepted too |
@@ -234,7 +235,9 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
   `host.docker.internal` for a service on the host's loopback). The worker's
   sealed Linux build takes the PostgreSQL engine with
   `python3 tools/worktree.py build --resources <resources.json> --platform linux --profile debug|release --jobs N --features layerfs-node/postgresql`;
-  MinIO is on by default in `layerfs-remote-storage`.
+  MinIO is on by default in `layerfs-remote-storage`. HTTPS remotes
+  (Cloudflare R2, MinIO behind TLS) need `--features layerfs-node/tls`, which
+  uses the `native-tls` already pinned for PostgreSQL.
 
 ## 7. Work split
 

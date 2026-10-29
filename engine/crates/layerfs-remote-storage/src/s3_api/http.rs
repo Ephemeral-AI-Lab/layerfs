@@ -1,8 +1,10 @@
 //! One HTTP/1.1 request per TCP connection (`Connection: close`), with a
 //! streamed file body and a streamed reply body. Revived from the retired
-//! `layerfs-s3` framing; bodies no longer have to fit in memory.
+//! `layerfs-s3` framing; bodies no longer have to fit in memory. An
+//! `https://` endpoint runs the same exchange over TLS (`tls` feature).
 //!
-//! Failures before the first byte is written are `Unavailable`; after it,
+//! Failures before the first byte is written, the TLS handshake included,
+//! are `Unavailable`; after it,
 //! any failure to complete the exchange is `Uncertain`, and the request is
 //! never sent again.
 use crate::driver::Span;
@@ -17,6 +19,61 @@ const HEADER_LIMIT: usize = 16 * 1024;
 /// Largest reply body read into memory (error and XML replies).
 pub(crate) const SMALL_BODY: u64 = 4 * 1024 * 1024;
 const BUFFER: usize = 256 * 1024;
+
+/// The one connection of a request: TCP, or TLS over it.
+enum Connection {
+    Plain(TcpStream),
+    #[cfg(feature = "tls")]
+    Tls(Box<native_tls::TlsStream<TcpStream>>),
+}
+
+impl Connection {
+    /// Wraps `socket` in TLS for `host` when `tls`; the handshake checks the
+    /// certificate against the system's roots and `host`.
+    fn open(socket: TcpStream, host: &str, tls: bool) -> Result<Self, String> {
+        if !tls {
+            return Ok(Self::Plain(socket));
+        }
+        #[cfg(feature = "tls")]
+        {
+            let connector = native_tls::TlsConnector::new().map_err(|e| format!("TLS: {e}"))?;
+            let stream = connector
+                .connect(host, socket)
+                .map_err(|e| format!("TLS handshake with {host}: {e}"))?;
+            Ok(Self::Tls(Box::new(stream)))
+        }
+        #[cfg(not(feature = "tls"))]
+        Err(format!("TLS to {host}: this build has no tls feature"))
+    }
+}
+
+impl Read for Connection {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::Plain(socket) => socket.read(buffer),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.read(buffer),
+        }
+    }
+}
+
+impl Write for Connection {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        match self {
+            Self::Plain(socket) => socket.write(buffer),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.write(buffer),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            Self::Plain(socket) => socket.flush(),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.flush(),
+        }
+    }
+}
 
 /// A request body.
 pub(crate) enum Body<'a> {
@@ -67,7 +124,7 @@ pub(crate) fn exchange(
     mut body: Body<'_>,
     sink: Option<Sink<'_>>,
 ) -> Result<Reply, RemoteError> {
-    let (host, port, _) = config.address()?;
+    let (host, port, _, tls) = config.address()?;
     let unavailable = |e: io::Error| RemoteError::Unavailable(format!("{host}:{port}: {e}"));
     let address = (host.as_str(), port)
         .to_socket_addrs()
@@ -86,6 +143,7 @@ pub(crate) fn exchange(
         socket.set_write_timeout(Some(config.io_timeout))
     };
     configure(&socket).map_err(unavailable)?;
+    let mut connection = Connection::open(socket, &host, tls).map_err(RemoteError::Unavailable)?;
     let what = format!("{method} {}", target.split('?').next().unwrap_or(target));
     let uncertain = |why: String| RemoteError::Uncertain(format!("{what}: {why}"));
     let mut head = format!("{method} {target} HTTP/1.1\r\n");
@@ -96,7 +154,7 @@ pub(crate) fn exchange(
         "content-length: {}\r\nconnection: close\r\n\r\n",
         body.length()
     ));
-    let mut writer = &socket;
+    let writer = &mut connection;
     writer
         .write_all(head.as_bytes())
         .map_err(|e| uncertain(format!("send: {e}")))?;
@@ -126,7 +184,7 @@ pub(crate) fn exchange(
     writer
         .flush()
         .map_err(|e| uncertain(format!("send: {e}")))?;
-    let mut reader = BufReader::with_capacity(BUFFER, &socket);
+    let mut reader = BufReader::with_capacity(BUFFER, &mut connection);
     let (status, headers) = read_head(&mut reader).map_err(uncertain)?;
     let framing = if method == "HEAD" || status == 204 || status == 304 {
         Framing::None

@@ -1,6 +1,6 @@
 [package]
 name = "layerfs-remote-storage"
-description = "Whole-file remote storage drivers (local folder, S3 API, MinIO): upload, ranged download, stat and delete, each request attempted once, with pieces and a sha256 manifest for files larger than a provider holds. Knows nothing about Stores."
+description = "Whole-file remote storage drivers (local folder, S3 API, MinIO, Cloudflare R2): upload, ranged download, stat and delete, each request attempted once, with pieces and a sha256 manifest for files larger than a provider holds. Knows nothing about Stores."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,10 +10,15 @@ license.workspace = true
 default = ["local_folder", "minio"]
 # A folder on the local filesystem, for tests.
 local_folder = []
-# The shared S3 API client: one-attempt SigV4 over plain HTTP/1.1, multipart.
+# The shared S3 API client: one-attempt SigV4 over HTTP/1.1, multipart.
 s3_api = []
+# https:// endpoints (Cloudflare R2, MinIO behind TLS), checked against the
+# system's roots. Off by default; the sealed Linux build the worker runs
+# turns it on.
+tls = ["s3_api", "dep:native-tls"]
 # The MinIO provider over the S3 API.
 minio = ["s3_api"]
 
 [dependencies]
 sha2 = "=0.11.0"
+native-tls = { version = "=0.2.18", optional = true }

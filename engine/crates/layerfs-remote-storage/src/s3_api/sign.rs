@@ -109,7 +109,7 @@ pub(crate) fn authorize(
     headers: &mut BTreeMap<String, String>,
     payload: &[u8; 32],
 ) -> Result<(), RemoteError> {
-    let (_, _, host) = config.address()?;
+    let (_, _, host, _) = config.address()?;
     let stamp = timestamp()?;
     let date = &stamp[..8];
     headers.insert("host".to_owned(), host);

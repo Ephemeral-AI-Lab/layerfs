@@ -2,8 +2,9 @@
 
 > **Status:** Current implementation description, #506 area R first phase
 > (2026-10-29), from the code on branch `issue506-store-backends-remote`.
-> MinIO is the only remote provider in this phase. It adds no requirement
-> beyond the owner direction recorded on #506.
+> MinIO and Cloudflare R2 are the remote providers (R2 over HTTPS, added
+> 2026-10-30). They add no requirement beyond the owner direction recorded
+> on #506.
 > Companion notes: [global SQLite Store](84-global-sqlite-store.md),
 > [Store concurrency model](83-store-concurrency-model.md).
 
@@ -37,6 +38,7 @@ named files and has no first-party dependency; its only dependency is `sha2`.
 | `local_folder/` | a folder remote (feature `local_folder`), for tests |
 | `s3_api/` | the S3 API client (feature `s3_api`): `config`, `sign` (SigV4), `http`, `multipart`, `client` |
 | `minio/` | the MinIO provider (feature `minio`) |
+| `cloudflare_r2/` | the Cloudflare R2 provider: account id (and jurisdiction) to its endpoint, region `auto`, R2's limits; connects only with `tls` |
 
 `layerfs-store-service/src/remote/` uses it for Stores: `settings.rs` (a
 home's named remotes and `store_object`), `push.rs`, `pull.rs` and `state.rs`
@@ -81,11 +83,20 @@ too, the error is `PartsLeft` with the upload id; `S3Client::pending_uploads`
 lists such uploads and `abort_upload` removes one.
 
 MinIO limits: 50 TiB object, 5 TiB single PUT, 5 TiB pieces above 50 TiB.
-An endpoint is `http://` with any host name (a container on a Docker
-network, such as the macOS worker, reaches MinIO by container name), IPv4 or
-bracketed IPv6 address, and an optional trailing `/`; nothing assumes
-localhost. An `https://` endpoint is `Unsupported`. TLS, which Cloudflare R2
-and AWS S3 need, is a later phase.
+R2 limits: 4.995 TiB object, 4.995 GiB single PUT (multipart above the part
+size, parts equal-sized but the last), 4.995 TiB pieces above that.
+An endpoint is `http://` or `https://` with any host name (a container on a
+Docker network, such as the macOS worker, reaches MinIO by container name),
+IPv4 or bracketed IPv6 address, and an optional trailing `/`; nothing
+assumes localhost. `https://` needs the `tls` feature (off by default; the
+worker's sealed build turns it on with `layerfs-node/tls`), which uses the
+`native-tls` already pinned for PostgreSQL: OpenSSL on Linux, checking the
+server's certificate and name against the system's roots (`SSL_CERT_FILE`
+adds one, as the TLS MinIO test does). The handshake comes before the
+request, so a refused certificate is `Unavailable` and nothing was sent.
+Without `tls`, an `https://` endpoint is `Unsupported` when the remote is
+added. An R2 remote is `https://ACCOUNT[.JURISDICTION].r2.cloudflarestorage.com`,
+path-style, region `auto`.
 
 ## 6. Named remotes and transfer state
 
@@ -94,7 +105,10 @@ lines, each followed by `key value` lines (`provider`, then the provider's
 keys). Credentials are a reference (`env:LAYERFS_REMOTE` reads
 `LAYERFS_REMOTE_ACCESS_KEY` and `LAYERFS_REMOTE_SECRET_KEY`); any other key,
 and so any secret, is refused. The file is written owner-only.
-`MinioSettings::from_env` reads `LAYERFS_REMOTE_*`.
+`MinioSettings::from_env` reads `LAYERFS_REMOTE_*`. An R2 remote's keys
+are `provider r2`, `account` (32 lowercase hex digits), `jurisdiction`
+(empty, `eu` or `fedramp`), `bucket`, `prefix`, `credentials` and
+`part-size`.
 
 The last push or pull of each Store (remote name, direction, time, sha256,
 size) is kept in `HOME/remote-state/NAME`, outside the Store, because a pull
@@ -162,8 +176,13 @@ replaced, then its temporary name is removed.
   above the part size, pieces, and failed multiparts (a refused part, a lost
   part reply, a failed abort) through a fault proxy, against a pinned MinIO
   started by `tests/minio_service.sh`. The service tests are `#[ignore]`d.
+  `multipart_direct_round_trip` uploads three parts with no proxy. With
+  `MINIO_TLS_DIR` the script serves HTTPS with a fresh self-signed
+  certificate, and the suite built `--features tls` runs over TLS; the fault
+  proxy reads plain HTTP, so its four tests print that they were skipped.
 - `layerfs-store-service/tests/remote_settings.rs`: settings round trip and
-  refusals, Store names and the transfer state file.
+  refusals, Store names, the transfer state file, and R2 remotes (round
+  trip, endpoint per jurisdiction, region `auto`, account refusals).
 - `layerfs-api/tests/remote_store.rs` (Linux): a Store with Branches and
   Commits pushed and pulled into a fresh volume has identical history, over
   the folder remote and (ignored) MinIO; two Stores on one remote; an open
@@ -172,7 +191,8 @@ replaced, then its temporary name is removed.
 ## 10. Not in this phase
 
 The free-space refusal has no automated test (it needs a full filesystem).
-TLS and the other providers (AWS S3, Cloudflare R2, Google Drive, Dropbox,
-OneDrive, Box); SDK methods and a `layerfs` command for remotes; incremental
+The other providers (AWS S3, Google Cloud Storage, Google Drive, Dropbox,
+OneDrive, Box); a run against a real R2 account (the TLS path is checked
+against a TLS MinIO); SDK methods and a `layerfs` command for remotes; incremental
 push (row bundles, #495); a PostgreSQL Store's remote (it pulls a SQLite
 Store and imports it).

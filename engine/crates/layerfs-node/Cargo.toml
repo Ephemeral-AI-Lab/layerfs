@@ -16,6 +16,9 @@ path = "src/lib.rs"
 # PostgreSQL Stores (#506): open, import and attach. Off by default; the
 # sealed Linux build the worker runs turns it on.
 postgresql = ["layerfs-persistence/postgresql", "layerfs-store-service/postgresql"]
+# https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
+# sealed Linux build the worker runs turns it on.
+tls = ["layerfs-store-service/tls"]
 
 [dependencies]
 layerfs-project = { path = "../layerfs-project" }

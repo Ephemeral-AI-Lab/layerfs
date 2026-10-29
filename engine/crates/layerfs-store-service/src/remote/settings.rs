@@ -7,7 +7,10 @@
 //! Each remote is a `remote NAME` line followed by `key value` lines:
 //! `provider minio` with `endpoint http://host:port`, `bucket`, `prefix`,
 //! `region`, `credentials env:LAYERFS_REMOTE` (or `file:/path`) and
+//! `part-size`; `provider r2` (Cloudflare R2) with `account`, `jurisdiction`
+//! (empty, `eu` or `fedramp`), `bucket`, `prefix`, `credentials` and
 //! `part-size`; or `provider local_folder` with `path /absolute/dir`.
+use layerfs_remote_storage::cloudflare_r2::{self, R2Settings};
 use layerfs_remote_storage::local_folder::LocalFolder;
 use layerfs_remote_storage::minio::{self, MinioSettings, DEFAULT_PART_SIZE};
 use layerfs_remote_storage::{CredentialRef, Driver, Limits, RemoteError};
@@ -43,6 +46,8 @@ const HEADER: &str = "# LayerFS remotes; credentials are references, never secre
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Provider {
     Minio(MinioSettings),
+    /// Cloudflare R2, over HTTPS (a build with the `tls` feature).
+    R2(R2Settings),
     /// A local directory, for tests and local copies.
     LocalFolder(PathBuf),
 }
@@ -52,6 +57,7 @@ impl Provider {
     pub fn driver(&self) -> Result<Box<dyn Driver>, RemoteError> {
         Ok(match self {
             Self::Minio(settings) => Box::new(minio::connect(settings)?),
+            Self::R2(settings) => Box::new(cloudflare_r2::connect(settings)?),
             Self::LocalFolder(path) => Box::new(LocalFolder::new(
                 path,
                 Limits {
@@ -135,6 +141,18 @@ impl Remotes {
                         s.part_size
                     ));
                 }
+                Provider::R2(s) => {
+                    text.push_str(&format!(
+                        "provider r2\naccount {}\njurisdiction {}\nbucket {}\nprefix {}\n\
+                         credentials {}\npart-size {}\n",
+                        s.account,
+                        s.jurisdiction,
+                        s.bucket,
+                        s.prefix,
+                        s.credentials.text(),
+                        s.part_size
+                    ));
+                }
                 Provider::LocalFolder(path) => {
                     text.push_str(&format!("provider local_folder\npath {}\n", path.display()));
                 }
@@ -184,6 +202,18 @@ impl Remotes {
                         Err(_) => DEFAULT_PART_SIZE,
                     },
                 }),
+                "r2" => Provider::R2(R2Settings {
+                    account: take("account")?,
+                    jurisdiction: take("jurisdiction")?,
+                    bucket: take("bucket")?,
+                    prefix: take("prefix")?,
+                    credentials: CredentialRef::parse(&take("credentials")?)
+                        .map_err(|e| e.to_string())?,
+                    part_size: match take("part-size") {
+                        Ok(size) => size.parse().map_err(|_| "part-size".to_owned())?,
+                        Err(_) => DEFAULT_PART_SIZE,
+                    },
+                }),
                 "local_folder" => Provider::LocalFolder(PathBuf::from(take("path")?)),
                 other => return Err(format!("remote {name}: unknown provider {other:?}")),
             };
@@ -202,6 +232,12 @@ impl Remotes {
                     ("bucket", s.bucket.clone()),
                     ("prefix", s.prefix.clone()),
                     ("region", s.region.clone()),
+                ],
+                Provider::R2(s) => vec![
+                    ("account", s.account.clone()),
+                    ("jurisdiction", s.jurisdiction.clone()),
+                    ("bucket", s.bucket.clone()),
+                    ("prefix", s.prefix.clone()),
                 ],
                 Provider::LocalFolder(path) => vec![("path", path.display().to_string())],
             };

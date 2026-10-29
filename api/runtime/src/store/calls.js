@@ -106,7 +106,7 @@ export async function remotes(runtime) {
   return call("runtime.remote.list", { home: callHome(runtime.settings) });
 }
 
-/** runtime.remote.add({ name, provider: "minio", endpoint, bucket, prefix?, region?, credentials?, partSize? }). */
+/** runtime.remote.add({ name, provider: "minio", endpoint, bucket, prefix?, region?, credentials?, partSize? } | { name, provider: "r2", account, jurisdiction?, bucket, prefix?, credentials?, partSize? }). */
 export async function addRemote(runtime, remote) {
   if (remote === null || typeof remote !== "object") throw refuse("InvalidInput", "a remote is { name, provider, … }");
   if (typeof remote.credentials === "object" && remote.credentials !== null) throw refuse("InvalidInput", "credentials is a reference (env:LAYERFS_… or file:/path), never the keys; pass keys per call to push, pull and clone");

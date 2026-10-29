@@ -9,6 +9,8 @@ license.workspace = true
 [features]
 # PostgreSQL Store engine (#506), off by default.
 postgresql = ["layerfs-persistence/postgresql", "dep:postgres"]
+# https:// remotes (Cloudflare R2, MinIO behind TLS), off by default.
+tls = ["layerfs-remote-storage/tls"]
 
 [dependencies]
 layerfs-overlay = { path = "../layerfs-overlay" }

@@ -1,6 +1,8 @@
 //! The S3 API driver against a real MinIO: single PUT, ranged GET, HEAD,
 //! DELETE, multipart above the part size, pieces, and a failed multipart
-//! that is aborted and leaves no parts.
+//! that is aborted and leaves no parts. Against an `https://` MinIO (built
+//! with `--features tls`) the same tests run over TLS, except the ones that
+//! inject faults through a plain-HTTP proxy, which say they were skipped.
 //!
 //! The service tests are ignored by default: start a MinIO with
 //! `tests/minio_service.sh start NAME`, eval its exports, then run
@@ -68,11 +70,17 @@ enum Fault {
 }
 
 /// A one-request-per-connection proxy in front of MinIO that records each
-/// request line and injects `fault`.
-fn proxy(upstream: &str, fault: Option<Fault>) -> (String, Arc<Mutex<Vec<String>>>) {
+/// request line and injects `fault`. It reads plain HTTP, so an `https://`
+/// MinIO has none: the caller says so and skips (these tests run against an
+/// `http://` MinIO; `multipart_direct_round_trip` covers multipart over TLS).
+fn proxy(upstream: &str, fault: Option<Fault>) -> Option<(String, Arc<Mutex<Vec<String>>>)> {
+    let Some(upstream) = upstream.strip_prefix("http://") else {
+        eprintln!("skipped: the fault proxy reads plain HTTP; {upstream} is not http://");
+        return None;
+    };
+    let upstream = upstream.to_owned();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
-    let upstream = upstream.strip_prefix("http://").unwrap().to_owned();
     let seen = Arc::new(Mutex::new(Vec::new()));
     let log = seen.clone();
     thread::spawn(move || {
@@ -83,7 +91,7 @@ fn proxy(upstream: &str, fault: Option<Fault>) -> (String, Arc<Mutex<Vec<String>
             thread::spawn(move || relay(client, &upstream, fault, &log));
         }
     });
-    (endpoint, seen)
+    Some((endpoint, seen))
 }
 
 fn relay(client: TcpStream, upstream: &str, fault: Option<Fault>, log: &Mutex<Vec<String>>) {
@@ -189,10 +197,22 @@ fn part_sizes_and_config_refusals() {
         part_size: MIN_PART,
         limits: minio::limits(),
     };
-    assert!(matches!(
-        S3Client::new(config("https://example.com")),
-        Err(RemoteError::Unsupported(_))
-    ));
+    // https:// needs the tls feature; without it the endpoint is refused before anything is sent
+    if cfg!(feature = "tls") {
+        assert!(S3Client::new(config("https://example.com")).is_ok());
+        assert_eq!(
+            S3Client::new(config("https://example.com"))
+                .unwrap()
+                .config()
+                .endpoint,
+            "https://example.com"
+        );
+    } else {
+        assert!(matches!(
+            S3Client::new(config("https://example.com")),
+            Err(RemoteError::Unsupported(_))
+        ));
+    }
     assert!(matches!(
         S3Client::new(config("ftp://example.com")),
         Err(RemoteError::Invalid(_))
@@ -274,7 +294,9 @@ fn single_put_ranged_get_stat_delete() {
 #[ignore = "needs MinIO: tests/minio_service.sh"]
 fn multipart_above_the_part_size() {
     let mut settings = settings("multipart");
-    let (endpoint, seen) = proxy(&settings.endpoint, None);
+    let Some((endpoint, seen)) = proxy(&settings.endpoint, None) else {
+        return;
+    };
     settings.endpoint = endpoint;
     let remote = client(&settings);
     let root = scratch("multipart");
@@ -310,6 +332,35 @@ fn multipart_above_the_part_size() {
     assert_eq!(fs::read(root.join("down")).unwrap(), data);
 }
 
+/// Multipart straight to the service, over whichever scheme it serves
+/// (`https://` with the `tls` feature): three parts, nothing left pending,
+/// and the same bytes back.
+#[test]
+#[ignore = "needs MinIO: tests/minio_service.sh"]
+fn multipart_direct_round_trip() {
+    let remote = client(&settings("direct"));
+    let root = scratch("direct");
+    let data = bytes(2 * MIN_PART + 3 * MIB + 3, 17);
+    fs::write(root.join("file"), &data).unwrap();
+    let sent = pieces::upload(
+        &remote,
+        "store.sqlite",
+        &root.join("file"),
+        &Metadata::new(),
+    )
+    .unwrap();
+    assert_eq!(sent.pieces, 0);
+    assert_eq!(
+        remote.stat("store.sqlite").unwrap().unwrap().bytes,
+        data.len() as u64
+    );
+    assert!(remote.pending_uploads("store.sqlite").unwrap().is_empty());
+    let mut out = fs::File::create(root.join("down")).unwrap();
+    let got = pieces::download(&remote, "store.sqlite", &mut out).unwrap();
+    assert_eq!(got.sha256, sent.sha256);
+    assert_eq!(fs::read(root.join("down")).unwrap(), data);
+}
+
 /// The same namespace, reached directly instead of through the proxy.
 fn settings_direct(proxied: &MinioSettings) -> MinioSettings {
     MinioSettings {
@@ -320,7 +371,9 @@ fn settings_direct(proxied: &MinioSettings) -> MinioSettings {
 
 fn failed_multipart(fault: Fault) {
     let mut settings = settings("abort");
-    let (endpoint, seen) = proxy(&settings.endpoint, Some(fault));
+    let Some((endpoint, seen)) = proxy(&settings.endpoint, Some(fault)) else {
+        return;
+    };
     settings.endpoint = endpoint;
     let remote = client(&settings);
     let root = scratch("abort");

@@ -8,9 +8,11 @@ use std::time::Duration;
 /// Connection and namespace inputs for one S3-compatible remote.
 #[derive(Clone, Debug)]
 pub struct S3Config {
-    /// `http://host[:port]` with any host name, IPv4 or bracketed IPv6
-    /// address (a container on a Docker network reaches MinIO by its
-    /// container name), an optional trailing `/`, no path or credentials.
+    /// `http://host[:port]` or `https://host[:port]` with any host name,
+    /// IPv4 or bracketed IPv6 address (a container on a Docker network
+    /// reaches MinIO by its container name), an optional trailing `/`, no
+    /// path or credentials. `https://` needs the `tls` feature; the server's
+    /// certificate is checked against the system's roots.
     pub endpoint: String,
     /// Existing bucket; this client does not create buckets.
     pub bucket: String,
@@ -64,15 +66,22 @@ impl S3Config {
         Ok(())
     }
 
-    /// Host, port and the `Host` header value.
-    pub(crate) fn address(&self) -> Result<(String, u16, String), RemoteError> {
-        if self.endpoint.starts_with("https://") {
-            return Err(RemoteError::Unsupported(
-                "TLS endpoints come in a later phase; MinIO runs plain HTTP locally".to_owned(),
-            ));
-        }
+    /// Host, port, the `Host` header value and whether the endpoint is TLS.
+    pub(crate) fn address(&self) -> Result<(String, u16, String, bool), RemoteError> {
         let invalid = || RemoteError::Invalid(format!("S3 endpoint {:?}", self.endpoint));
-        let authority = self.endpoint.strip_prefix("http://").ok_or_else(invalid)?;
+        let (authority, tls) = match self.endpoint.strip_prefix("https://") {
+            Some(authority) if cfg!(feature = "tls") => (authority, true),
+            Some(_) => {
+                return Err(RemoteError::Unsupported(
+                    "an https:// endpoint needs a build with the tls feature".to_owned(),
+                ))
+            }
+            None => (
+                self.endpoint.strip_prefix("http://").ok_or_else(invalid)?,
+                false,
+            ),
+        };
+        let default_port = if tls { 443 } else { 80 };
         let authority = authority.strip_suffix('/').unwrap_or(authority);
         let (host, port) = match authority.strip_prefix('[') {
             // [IPv6] or [IPv6]:port
@@ -87,7 +96,7 @@ impl S3Config {
                 }
                 let port = match after.strip_prefix(':') {
                     Some(port) => port.parse::<u16>().map_err(|_| invalid())?,
-                    None if after.is_empty() => 80,
+                    None if after.is_empty() => default_port,
                     None => return Err(invalid()),
                 };
                 (address, port)
@@ -95,7 +104,7 @@ impl S3Config {
             None => {
                 let (host, port) = match authority.rsplit_once(':') {
                     Some((host, port)) => (host, port.parse::<u16>().map_err(|_| invalid())?),
-                    None => (authority, 80),
+                    None => (authority, default_port),
                 };
                 if host.is_empty()
                     || !host
@@ -110,7 +119,7 @@ impl S3Config {
         if port == 0 {
             return Err(invalid());
         }
-        Ok((host.to_owned(), port, authority.to_owned()))
+        Ok((host.to_owned(), port, authority.to_owned(), tls))
     }
 
     /// The path-style object key path of `name`.

@@ -6,7 +6,7 @@
 //! [`RemoteError::Uncertain`] and never resent. A file larger than a
 //! provider holds as one object goes up as fixed-size pieces plus a sha256
 //! manifest ([`pieces`]), reassembled and verified on download. Each
-//! provider is behind its own Cargo feature.
+//! provider is behind its own Cargo feature; R2 needs `tls` to connect.
 #![forbid(unsafe_code)]
 
 pub mod credentials;
@@ -15,6 +15,8 @@ pub mod error;
 pub mod limits;
 pub mod pieces;
 
+#[cfg(feature = "s3_api")]
+pub mod cloudflare_r2;
 #[cfg(feature = "local_folder")]
 pub mod local_folder;
 #[cfg(feature = "minio")]

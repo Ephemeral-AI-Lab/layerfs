@@ -16,9 +16,10 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::HistoryName;
 use layerfs_store_service::remote::storage::{
+    cloudflare_r2::R2Settings,
     minio::{self, MinioSettings, DEFAULT_PART_SIZE},
     s3_api::{S3Client, S3Config},
-    CredentialRef, Credentials, Driver,
+    CredentialRef, Credentials, Driver, RemoteError,
 };
 use layerfs_store_service::remote::{self, state, Direction, Provider, Remotes, Transfer};
 use std::path::{Path, PathBuf};
@@ -47,6 +48,18 @@ fn shown(name: &str, provider: &Provider) -> SdkValue {
             ("credentials", SdkValue::text(s.credentials.text())),
             ("partSize", SdkValue::Int(s.part_size as i64)),
         ]),
+        Provider::R2(s) => SdkValue::map([
+            ("name", SdkValue::text(name)),
+            ("provider", SdkValue::text("r2")),
+            ("account", SdkValue::text(&s.account)),
+            ("jurisdiction", SdkValue::text(&s.jurisdiction)),
+            ("endpoint", SdkValue::text(s.endpoint())),
+            ("bucket", SdkValue::text(&s.bucket)),
+            ("prefix", SdkValue::text(&s.prefix)),
+            ("region", SdkValue::text("auto")),
+            ("credentials", SdkValue::text(s.credentials.text())),
+            ("partSize", SdkValue::Int(s.part_size as i64)),
+        ]),
         Provider::LocalFolder(path) => SdkValue::map([
             ("name", SdkValue::text(name)),
             ("provider", SdkValue::text("local_folder")),
@@ -68,7 +81,8 @@ pub(crate) fn list(args: &SdkValue) -> Outcome {
 
 /// `runtime.remote.add { home, remote: { name, provider: minio, endpoint,
 /// bucket, prefix?, region?, credentials?, partSize? } | { name, provider:
-/// local_folder, path } }`. `credentials` is a reference (`env:LAYERFS_…` or
+/// r2, account, jurisdiction?, bucket, prefix?, credentials?, partSize? } |
+/// { name, provider: local_folder, path } }`. `credentials` is a reference (`env:LAYERFS_…` or
 /// `file:/path`; default `env:LAYERFS_REMOTE`), never a secret. A name in
 /// use is refused `Exists`.
 pub(crate) fn add(args: &SdkValue) -> Outcome {
@@ -76,28 +90,39 @@ pub(crate) fn add(args: &SdkValue) -> Outcome {
         .get("remote")
         .ok_or_else(|| refused("InvalidInput", "remote { name, provider, … } is required"))?;
     let name = text(given, "name")?;
+    let credentials = CredentialRef::parse(
+        given
+            .get_text("credentials")
+            .unwrap_or("env:LAYERFS_REMOTE"),
+    )
+    .map_err(|error| refused("InvalidInput", error.to_string()));
+    let part_size = match given.get("partSize") {
+        None | Some(SdkValue::Null) => Ok(DEFAULT_PART_SIZE),
+        Some(SdkValue::Int(n)) if *n > 0 => Ok(*n as u64),
+        Some(_) => Err(refused(
+            "InvalidInput",
+            "partSize is a whole number of bytes",
+        )),
+    };
     let provider = match text(given, "provider")? {
         "minio" => Provider::Minio(MinioSettings {
             endpoint: text(given, "endpoint")?.to_owned(),
             bucket: text(given, "bucket")?.to_owned(),
             prefix: given.get_text("prefix").unwrap_or_default().to_owned(),
             region: given.get_text("region").unwrap_or("us-east-1").to_owned(),
-            credentials: CredentialRef::parse(
-                given
-                    .get_text("credentials")
-                    .unwrap_or("env:LAYERFS_REMOTE"),
-            )
-            .map_err(|error| refused("InvalidInput", error.to_string()))?,
-            part_size: match given.get("partSize") {
-                None | Some(SdkValue::Null) => DEFAULT_PART_SIZE,
-                Some(SdkValue::Int(n)) if *n > 0 => *n as u64,
-                Some(_) => {
-                    return Err(refused(
-                        "InvalidInput",
-                        "partSize is a whole number of bytes",
-                    ))
-                }
-            },
+            credentials: credentials?,
+            part_size: part_size?,
+        }),
+        "r2" => Provider::R2(R2Settings {
+            account: text(given, "account")?.to_owned(),
+            jurisdiction: given
+                .get_text("jurisdiction")
+                .unwrap_or_default()
+                .to_owned(),
+            bucket: text(given, "bucket")?.to_owned(),
+            prefix: given.get_text("prefix").unwrap_or_default().to_owned(),
+            credentials: credentials?,
+            part_size: part_size?,
         }),
         "local_folder" => {
             let path = PathBuf::from(text(given, "path")?);
@@ -112,14 +137,17 @@ pub(crate) fn add(args: &SdkValue) -> Outcome {
         other => {
             return Err(refused(
                 "Unsupported",
-                format!("remote provider {other}: MinIO (and local_folder) only in this phase"),
+                format!("remote provider {other}: minio, r2 or local_folder"),
             ))
         }
     };
-    if let Provider::Minio(settings) = &provider {
-        config(settings, placeholder())
-            .validate()
-            .map_err(|error| refused("InvalidInput", error.to_string()))?;
+    // checked as a connection would be, without keys; an https:// endpoint
+    // in a build without TLS is refused here, before it is saved
+    if let Some(config) = s3_config(&provider, placeholder())? {
+        config.validate().map_err(|error| match error {
+            RemoteError::Unsupported(why) => refused("Unsupported", why),
+            other => refused("InvalidInput", other.to_string()),
+        })?;
     }
     let home = discovery::home(args)?;
     let _guard = discovery::guard(&home)?;
@@ -159,8 +187,22 @@ fn placeholder() -> Credentials {
     }
 }
 
+/// The S3 client inputs of an S3 provider (MinIO or R2), as its `connect`
+/// makes them, with `credentials`; none for a local folder.
+fn s3_config(provider: &Provider, credentials: Credentials) -> Result<Option<S3Config>> {
+    Ok(match provider {
+        Provider::Minio(settings) => Some(minio_config(settings, credentials)),
+        Provider::R2(settings) => Some(
+            settings
+                .config(credentials)
+                .map_err(|error| refused("InvalidInput", error.to_string()))?,
+        ),
+        Provider::LocalFolder(_) => None,
+    })
+}
+
 /// The MinIO client of `settings`, as `minio::connect` makes it, with `credentials`.
-fn config(settings: &MinioSettings, credentials: Credentials) -> S3Config {
+fn minio_config(settings: &MinioSettings, credentials: Credentials) -> S3Config {
     S3Config {
         endpoint: settings.endpoint.clone(),
         bucket: settings.bucket.clone(),
@@ -187,18 +229,22 @@ fn driver(args: &SdkValue) -> Result<(String, Box<dyn Driver>)> {
     let given = args
         .get("credentials")
         .filter(|v| !matches!(v, SdkValue::Null));
-    let driver: Box<dyn Driver> = match (provider, given) {
-        (Provider::Minio(settings), Some(given)) => Box::new(
-            S3Client::new(config(
-                settings,
-                Credentials {
-                    access_key: text(given, "accessKey")?.to_owned(),
-                    secret_key: text(given, "secretKey")?.to_owned(),
-                },
-            ))
-            .map_err(|error| refused("InvalidInput", error.to_string()))?,
+    let keys = match given {
+        Some(given) => Some(Credentials {
+            access_key: text(given, "accessKey")?.to_owned(),
+            secret_key: text(given, "secretKey")?.to_owned(),
+        }),
+        None => None,
+    };
+    let driver: Box<dyn Driver> = match keys
+        .map(|keys| s3_config(provider, keys))
+        .transpose()?
+        .flatten()
+    {
+        Some(config) => Box::new(
+            S3Client::new(config).map_err(|error| refused("InvalidInput", error.to_string()))?,
         ),
-        (provider, _) => provider
+        None => provider
             .driver()
             .map_err(|error| refused("InvalidInput", error.to_string()))?,
     };
