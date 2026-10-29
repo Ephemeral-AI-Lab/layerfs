@@ -592,6 +592,10 @@ try {
     assert.ok(calls.some((a) => a.join(" ") === "rm layerfs-work.api-1"), "its stopped Sandbox goes with it");
     sandboxRows = "";
     assert.deepEqual((await runtime.store.list()).find((s) => s.name === "work").projects, ["shop", "cart"]);
+    // a PostgreSQL Store's project: the URL is passed for the call
+    await assert.rejects(runtime.project.remove("api", { store: "main", confirm: "api" }), { code: "InvalidInput", message: /url/ });
+    await runtime.project.remove("api", { store: "main", confirm: "api", url });
+    assert.equal(nativeArgs("runtime.store.remove_project").postgresql.url, url);
     // removing a Store names it, and takes its volume
     await assert.rejects(runtime.store.remove("copy"), { code: "InvalidInput", message: /confirm/ });
     assert.deepEqual(await runtime.store.remove("copy", { confirm: "copy" }), { kind: "Removed", store: "copy", volume: "layerfs-store-copy" });

@@ -1,4 +1,4 @@
-// runtime.project.remove(name, { store, confirm, stopSandboxes, volume }).
+// runtime.project.remove(name, { store, confirm, stopSandboxes, volume, url }).
 // Copied from the dsh Host's remove.js (#428); Store-first since #506.
 // `confirm` must equal the name; `store` names the project's Store when the
 // name is in several.
@@ -11,7 +11,8 @@
 //   runs, unless `stopSandboxes`), then its stack is dropped from the Store
 //   (the binding's runtime.store.remove_project: its Layers, Branches and
 //   Commits); the volume and the other projects stay. Its packs stay in the
-//   Store until reclamation (A8, #411).
+//   Store until reclamation (A8, #411). A PostgreSQL Store's `url` is
+//   passed for the call.
 // One attempt each, no retry; a failed step leaves the rest in place.
 import { LayerFSError } from "@layerfs/agent";
 import { invokeBackend } from "@layerfs/agent/internal";
@@ -63,7 +64,10 @@ async function dropStack(runtime, project, options) {
   if (running && !options.stopSandboxes) throw refuse("Busy", `${running} running Sandbox(es) of ${project.name} use Store ${store.name}; a Sandbox closes 2 minutes after its last Workspace is unmounted, or pass stopSandboxes`);
   if (sandboxes.length) await platform.docker(settings, ["rm", ...(running ? ["-f"] : []), ...sandboxes.map((c) => c.name)], { timeout: 30_000 });
   await runtime.clients.forget(keyOf(project));
-  const answer = await invokeBackend("runtime.store.remove_project", { ...storeFields(runtime, store), project: project.name }, {});
+  // a PostgreSQL Store's URL is passed per call
+  if (store.kind === "postgresql" && (typeof options.url !== "string" || !options.url)) throw refuse("InvalidInput", `Store ${store.name} is a PostgreSQL schema: pass its { url } for this call`);
+  const postgresql = store.kind === "postgresql" ? { postgresql: { url: options.url } } : {};
+  const answer = await invokeBackend("runtime.store.remove_project", { ...storeFields(runtime, store), ...postgresql, project: project.name }, {});
   const rest = store.projects.filter((p) => p.name !== project.name);
   if (own) {
     put(settings, { ...store, legacy: false, projects: rest });

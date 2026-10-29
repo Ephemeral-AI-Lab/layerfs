@@ -173,6 +173,8 @@ async function run({ platform, bundle, image, home, prefix, work, svc }) {
     await runtime.store.remove("team-pg", { confirm: "team-pg" });
     const again = await runtime.store.attach_postgresql({ name: "team-pg2", connection: "pg-local", url: svc.url, schema: "lfc_team" });
     assert.deepEqual(again.projects.sort(), ["docs", "shop"]);
+    await runtime.project.remove("docs", { store: "team-pg2", confirm: "docs", url: svc.url });
+    assert.deepEqual((await runtime.store.list()).find((s) => s.name === "team-pg2").projects, ["shop"]);
 
     step("remove one project of a shared Store, and the project a Store was made by");
     const removed = await runtime.project.remove("docs", { store: "team", confirm: "docs" });
