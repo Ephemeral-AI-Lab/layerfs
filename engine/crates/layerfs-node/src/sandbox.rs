@@ -20,7 +20,7 @@ use layerfs_api::{
     OperationFailure, SandboxApi, SandboxCause, SandboxCreate, SandboxFailure, SandboxPhase,
 };
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonSetup};
+use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonPostgres, DaemonSetup};
 use layerfs_bridge::provision::StoreManifest;
 use layerfs_sandbox::backend::docker::{CreatePhase, Docker, SandboxRequest};
 use std::path::{Path, PathBuf};
@@ -80,6 +80,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
             idle_exit_s: IDLE_EXIT_S,
         },
         existing_store: None,
+        postgresql: None,
     }
 }
 
@@ -101,26 +102,43 @@ pub(crate) fn labels(project: &str, store: Option<&str>, id: &str) -> Vec<(Strin
     .collect()
 }
 
-/// Starts the project's next Sandbox (the lowest free number) on the
-/// deployment's image (`deploy.image`). Called under the guard of the
-/// project's directory `directory`, so no other start runs meanwhile.
-pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxState>, SdkRefusal> {
+/// The Store a Sandbox's daemon opens: the project's installed Store file,
+/// or a PostgreSQL Store (#506), whose Sandbox mounts no volume.
+pub(crate) enum DaemonStore {
+    File(Box<(crate::registry::Project, StoreManifest)>),
+    Postgres(DaemonPostgres),
+}
+
+/// The installed Store file of the project a call names.
+fn installed(args: &SdkValue) -> Result<DaemonStore, SdkRefusal> {
     let name = text(args, "project")?;
-    let deploy = args
-        .get("deploy")
-        .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     if args.get_text("store").is_some() {
         let identity = crate::stores::identity(args)?;
-        crate::stores::sqlite_only(&identity, "a Sandbox (its daemon opens a Store file)")?;
+        crate::stores::sqlite_only(&identity, "a Sandbox of a Store file")?;
     }
     let project = crate::discovery::project(args)?;
-    // Inputs are read first, so a refused request leaves no creation intent.
     let Some(installed) = project.installed.clone() else {
         return Err(refused(
             "NoStore",
             format!("project {name} has no installed Store: its Import did not finish, so import it again"),
         ));
     };
+    Ok(DaemonStore::File(Box::new((project, installed))))
+}
+
+/// Starts the project's next Sandbox (the lowest free number) on the
+/// deployment's image (`deploy.image`), its daemon on `store`. Called under
+/// the guard of the project's directory `directory`, so no other start runs
+/// meanwhile.
+pub(crate) fn start(
+    args: &SdkValue,
+    directory: &Path,
+    store: DaemonStore,
+) -> Result<Arc<SandboxState>, SdkRefusal> {
+    let deploy = args
+        .get("deploy")
+        .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
+    // Inputs are read first, so a refused request leaves no creation intent.
     let docker = text(deploy, "docker")?;
     let image = deploy
         .get_text("image")
@@ -144,7 +162,10 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
             format!("image must be an exact local image digest, sha256:<64 hex>, not {image}"),
         ));
     }
-    let store_volume = text(deploy, "volume")?.to_owned();
+    let store_volume = match &store {
+        DaemonStore::File(_) => Some(text(deploy, "volume")?.to_owned()),
+        DaemonStore::Postgres(_) => None,
+    };
     let executable = PathBuf::from(text(deploy, "daemon")?);
     // A creation whose outcome is unknown is never silently attempted again.
     let intent = directory.join("create.intent");
@@ -158,7 +179,11 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
             format!(
                 "a prior Sandbox creation has an unresolved discovery intent: {state}. Its outcome \
                  is unknown, so it is neither retried nor taken as done. Remove any container it \
-                 left (docker ps -a --filter volume={store_volume}), then delete {}",
+                 left (docker ps -a --filter {}), then delete {}",
+                match &store_volume {
+                    Some(volume) => format!("volume={volume}"),
+                    None => format!("label=layerfs.project={}", text(args, "project")?),
+                },
                 intent.display()
             ),
         ));
@@ -171,7 +196,7 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
         directory,
         &saved_directory,
         &id,
-        (&project, installed),
+        store,
         (docker, image, store_volume, executable),
     );
     if made.is_err() {
@@ -187,16 +212,22 @@ fn start_claimed(
     directory: &Path,
     saved_directory: &Path,
     id: &str,
-    (project, installed): (&crate::registry::Project, StoreManifest),
-    (docker, image, store_volume, executable): (&str, String, String, PathBuf),
+    opened: DaemonStore,
+    (docker, image, store_volume, executable): (&str, String, Option<String>, PathBuf),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
     let controller = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let mut daemon_setup = setup(daemon.private, controller.public);
-    let mut existing = project.manifest.clone();
-    existing.daemon_sqlite = installed.daemon_sqlite;
-    daemon_setup.existing_store = Some(existing);
+    match &opened {
+        DaemonStore::File(file) => {
+            let (project, installed) = &**file;
+            let mut existing = project.manifest.clone();
+            existing.daemon_sqlite = installed.daemon_sqlite.clone();
+            daemon_setup.existing_store = Some(existing);
+        }
+        DaemonStore::Postgres(selected) => daemon_setup.postgresql = Some(selected.clone()),
+    }
     // The container is `<prefix><project>-<n>`: the deployment's prefix
     // (`layerfs-` by default; another LayerFS home on the same Engine sets
     // its own), so `docker ps` says what each one is and whose.
@@ -220,24 +251,25 @@ fn start_claimed(
         &directory.join("create.intent"),
         SdkValue::text(format!("creation of Sandbox {id} began and never finished")),
     )?;
-    let created = SandboxApi::new(docker).create_file(
-        SandboxCreate {
-            deployment: SandboxRequest {
-                image,
-                store_volume,
-                port: PORT,
-                labels: labels(name, store.as_deref(), id),
-            },
-            setup: daemon_setup,
-            executable,
-            controller_private: controller.private,
-            daemon_peer: daemon.public,
-            startup_wait: STARTUP,
-            connect_host: crate::pool::daemon_host(args),
+    let request = SandboxCreate {
+        deployment: SandboxRequest {
+            image,
+            store_volume,
+            port: PORT,
+            labels: labels(name, store.as_deref(), id),
         },
-        &project.store,
-        &project.manifest,
-    );
+        setup: daemon_setup,
+        executable,
+        controller_private: controller.private,
+        daemon_peer: daemon.public,
+        startup_wait: STARTUP,
+        connect_host: crate::pool::daemon_host(args),
+    };
+    let api = SandboxApi::new(docker);
+    let created = match &opened {
+        DaemonStore::File(file) => api.create_file(request, &file.0.store, &file.0.manifest),
+        DaemonStore::Postgres(_) => api.create_postgres(request),
+    };
     let owner = created.map_err(|failure| abandon(directory, id, failure))?;
     let container = owner.runtime.identity().to_string();
     let instance = owner.startup.instance;
@@ -358,10 +390,15 @@ fn abandon(directory: &Path, id: &str, mut failure: Box<SandboxFailure>) -> SdkR
 /// `{ sandbox, name, image }`. The only call that starts a Sandbox. Failures
 /// are `Failed` or `Unknown`, never retried.
 pub(crate) fn create(args: &SdkValue) -> Outcome {
+    // a PostgreSQL Store's URL is the call's; its project's entry is made here
+    let store = match crate::postgres::sandbox_store(args)? {
+        Some(selected) => DaemonStore::Postgres(selected),
+        None => installed(args)?,
+    };
     let project = crate::discovery::project_dir(args)?;
     let _placing = crate::discovery::guard(&project)?;
     crate::workspace::reclaim_gone(args)?;
-    let state = start(args, &project)?;
+    let state = start(args, &project, store)?;
     Ok(SdkValue::map([
         ("sandbox", SdkValue::text(&state.id)),
         ("name", SdkValue::text(&state.name)),

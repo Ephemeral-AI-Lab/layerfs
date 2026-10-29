@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+# Serve a PostgreSQL Store (#506), off by default.
+postgresql = ["layerfs-store-service/postgresql"]
+
 [dependencies]
 layerfs-overlay = { path = "../layerfs-overlay" }
 layerfs-store-service = { path = "../layerfs-store-service" }

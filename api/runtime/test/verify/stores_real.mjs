@@ -2,8 +2,10 @@
 // Store holds two projects beside a second Store and a project's own Store;
 // a Sandbox mounts a project of the shared Store; the shared Store pushes to
 // MinIO, clones into a fresh Store with identical history, and pulls back
-// over a later Commit; it imports into PostgreSQL with the same Commit ids,
-// and the PostgreSQL Store attaches again, also by its schema alone. One
+// over a later Commit; it imports into PostgreSQL with the same Commit ids;
+// a Sandbox on the PostgreSQL Store mounts, runs commands and Commits into
+// the schema (#506 d), and the PostgreSQL Store attaches again, also by its
+// schema alone. One
 // project of a shared Store, and the project a Store was made by, are
 // removed while the Store and its other projects stay.
 //
@@ -166,7 +168,37 @@ async function run({ platform, bundle, image, home, prefix, work, svc }) {
     } finally {
       await pg.close();
     }
-    const attached = await runtime.store.attach_postgresql({ name: "team-pg", connection: "pg-local", url: svc.url, schema: "lfc_team", synchronousCommit: "local" });
+
+    step("a Sandbox on the PostgreSQL Store mounts, runs a command and Commits into the schema");
+    const pgShop = await project("shop", "team-pg");
+    await assert.rejects(runtime.project.get_state("shop", undefined, { store: "team-pg" }), { code: "InvalidInput" });
+    await runtime.clients.use({ ...pgShop, url: svc.url }, async (c) => {
+      const box = await c.sandbox.create();
+      const named = must(["ps", "--filter", "label=layerfs.store=team-pg", "--filter", "label=layerfs.project=shop", "--format", "{{.Names}}"]);
+      assert.match(named, new RegExp(`^${prefix}team-pg\\.shop-${box.sandbox}$`));
+      const ws = await c.workspace.mount(box.sandbox, "feature");
+      console.log(`  Sandbox ${box.sandbox}, mounted ${ws.path}`);
+      assert.equal((await c.workspace.exec(ws, "cat src/cart.js")).stdout, "export const cart = [];\n// paid\n");
+      // no Store volume, and the daemon's config (with the URL) is out of a command's reach
+      const peek = await c.workspace.exec(ws, "grep -c ' /layerfs-store' /proc/mounts; cat /layerfs-local/config/daemon.setup; grep -l lfspg /proc/*/environ /proc/*/cmdline; echo end");
+      assert.match(peek.stdout, /^0\n/);
+      assert.ok(!`${peek.stdout}${peek.stderr}`.includes("lfspg"), "a command read the PostgreSQL password");
+      assert.equal((await c.workspace.exec(ws, "echo '// shipped' >> src/cart.js")).exitCode, 0);
+      const begun = Date.now();
+      assert.equal((await c.workspace.commit(ws, "ship")).kind, "Committed");
+      console.log(`  Commit ${Date.now() - begun} ms (diagnostic, not a measurement)`);
+      await c.workspace.unmount(ws);
+      const state = await runtime.project.get_state("shop", undefined, { store: "team-pg", url: svc.url });
+      assert.deepEqual(state.sandboxes.map((s) => s.id), [box.sandbox]);
+      await c.sandbox.close(box.sandbox);
+    });
+    await runtime.clients.use({ ...pgShop, url: svc.url }, async (c) => {
+      const commits = (await c.branch.list_commits("feature")).items.map((x) => x.id ?? x.commit ?? x);
+      assert.equal(commits.length, team.shop.commits.feature.length + 1);
+      assert.deepEqual(commits.filter((id) => team.shop.commits.feature.includes(id)), team.shop.commits.feature);
+      assert.equal((await c.fs.read("feature", "/src/cart.js")).text, "export const cart = [];\n// paid\n// shipped\n");
+    });
+    const attached =await runtime.store.attach_postgresql({ name: "team-pg", connection: "pg-local", url: svc.url, schema: "lfc_team", synchronousCommit: "local" });
     assert.deepEqual([attached.kind, attached.synchronousCommit, attached.projects.sort()], ["postgresql", "local", ["docs", "shop"]]);
 
     step("a schema this home forgot attaches again by the binding it records");

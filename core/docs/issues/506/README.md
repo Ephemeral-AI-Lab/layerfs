@@ -201,7 +201,7 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
 | `runtime.store.remove(name, { confirm, stopSandboxes })` | deletes a local Store's volume (every project in it; Busy while a Sandbox runs on it, unless `stopSandboxes`), or forgets a PostgreSQL Store (its schema stays) |
 | `runtime.project.start_init(name, folder, { store })` | Inits a project into the live Store `store` through its writer lane and admission (Exists for a taken name, Busy while another add runs, Unsupported for a Store without acquisition tables or a PostgreSQL Store); without `store`, into a new Store of the same name, as before |
 | `runtime.project.remove(name, { store, confirm, stopSandboxes, url })` | in a Store that holds others: removes the project's Sandboxes (Busy while one runs, unless `stopSandboxes`) and drops its stack (a PostgreSQL Store's `url` is passed for the call), answering `{ kind: 'Removed', project, store, stack, packsKept: true }`; packs stay until A8 (#411). A project alone in its own Store is removed whole, with its volume, as before |
-| `runtime.project.list()`, `get_state(name, since, { store })`, `runtime.sandbox.reclaim(name, { store })` | `list` items carry `store` and `shared`; `{ store }` names the Store when a project name is in several (InvalidInput otherwise) |
+| `runtime.project.list()`, `get_state(name, since, { store, url })`, `runtime.sandbox.reclaim(name, { store, url })` | `list` items carry `store` and `shared`; `{ store }` names the Store when a project name is in several (InvalidInput otherwise); a project of a PostgreSQL Store needs its connection's `url` for that call (InvalidInput without it), and its client is opened for the call and closed after it |
 | `runtime.remote.list() / add(r) / remove(name, { confirm })` | remotes in the home; `add({ name, provider: 'minio', endpoint, bucket, prefix?, region?, credentials?, partSize? })` or `add({ name, provider: 'r2', account, jurisdiction?, bucket, prefix?, credentials?, partSize? })` takes a credential reference (`env:LAYERFS_…` or `file:/path`, default `env:LAYERFS_REMOTE`), never keys. R2 is reached at `https://<account>[.<jurisdiction>].r2.cloudflarestorage.com`, region `auto`, and needs a build with the `tls` feature |
 | `runtime.store.start_push(store, { remote, credentials, force })` | whole-Store upload job; Conflict when the remote moved since this home's last transfer with it, unless `force` |
 | `runtime.store.start_pull(store, { remote, credentials, confirm })` | replace-the-Store job (all of its projects); closes this process's clients first, refuses Busy while anything else holds the Store |
@@ -213,9 +213,29 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
 - **Credentials:** `credentials` is `{ accessKey, secretKey }` for that call
   only; without it the remote's reference is read. A PostgreSQL `url` is
   passed per call and is never written to the home or kept in a job.
-- **PostgreSQL Stores** have no Sandboxes (a daemon opens SQLite only) and
-  are not pushed or pulled. `@layerfs/agent` opens one with `LAYERFS_STORE`
-  and `LAYERFS_STORE_POSTGRESQL` (`{ "url": … }`).
+- **PostgreSQL Stores** are not pushed or pulled. `@layerfs/agent` opens one
+  with `LAYERFS_STORE` and `LAYERFS_STORE_POSTGRESQL` (`{ "url": … }`);
+  `LAYERFS_VOLUME` is not needed.
+- **Sandboxes on a PostgreSQL Store** (#506 d). `sandbox.create` sends the
+  client's URL once, into the daemon's private config file
+  (`/layerfs-local/config/daemon.setup`, 0600, daemon uid, non-dumpable
+  daemon); it is never in the container's env, argv or labels, the Sandbox
+  record or a log, and commands (uid 501, no capabilities) cannot read it.
+  The daemon opens the schema with the Store record's binding, cursor key
+  and `synchronous_commit`, starts ready with no install, and mounts no
+  Store volume. Each Workspace overlay stays its own local SQLite file.
+  Mount, Exec, Commit and unmount work as on SQLite; a Commit publishes in
+  the schema through the per-Store `FOR UPDATE` lane. The daemon dials the
+  URL from the container's network: `host.docker.internal` reaches the
+  host's loopback on Docker Desktop; on a Linux Docker Engine the URL must
+  name an address containers reach. Demand-loaded reads and Commit lookups
+  go to the server, behind the daemon's 64 MiB shared object cache, with no
+  host SQLite cache yet (#420). Merges are refused on PostgreSQL, so a
+  Commit whose Branch moved since mount fails instead of merging. Build the
+  bundle with `--features layerfs-node/postgresql,layerfs-daemon/postgresql`;
+  a daemon built without it refuses the Store (`BackendUnavailable`). The
+  open-time sweep skips PostgreSQL projects (it holds no URL); reclaim them
+  with `runtime.sandbox.reclaim(name, { store, url })`.
 - **Opening a project of a shared Store:** `LayerFS.open(project)` with
   `LAYERFS_STORE` (or the `store` option) and that Store's path.
 - **Home layout.** `<home>/stores.json` lists the Stores the runtime made or
@@ -234,7 +254,7 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
   MinIO and PostgreSQL by the endpoint and URL it is given (use
   `host.docker.internal` for a service on the host's loopback). The worker's
   sealed Linux build takes the PostgreSQL engine with
-  `python3 tools/worktree.py build --resources <resources.json> --platform linux --profile debug|release --jobs N --features layerfs-node/postgresql`;
+  `python3 tools/worktree.py build --resources <resources.json> --platform linux --profile debug|release --jobs N --features layerfs-node/postgresql,layerfs-daemon/postgresql`;
   MinIO is on by default in `layerfs-remote-storage`. HTTPS remotes
   (Cloudflare R2, MinIO behind TLS) need `--features layerfs-node/tls`, which
   uses the `native-tls` already pinned for PostgreSQL.
@@ -266,6 +286,10 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
   construction profile that Namespace Init keeps is open.
 - Reclaiming a removed project's packs (A8, #411).
 - Incremental push with #495's bundles.
-- The host SQLite cache for PostgreSQL Stores (#420).
+- The host SQLite cache for PostgreSQL Stores (#420); until then a PostgreSQL
+  Sandbox pays the server round trips of cold reads and Commits.
+- Merges on PostgreSQL Stores (a Commit whose Branch moved is refused).
+- A PostgreSQL Sandbox on a Linux Docker Engine reaching a database on the
+  host's loopback (no `host-gateway` mapping is added).
 - Moving a project between Stores (cross-Store import).
 - More providers (R2, AWS S3, Google Drive) and TLS for the S3 client.

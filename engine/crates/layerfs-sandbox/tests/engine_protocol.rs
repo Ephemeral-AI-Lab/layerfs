@@ -25,7 +25,7 @@ fn request() -> ExecRequest {
 fn sandbox_request() -> SandboxRequest {
     SandboxRequest {
         image: format!("sha256:{}", "d".repeat(64)),
-        store_volume: "project-store".into(),
+        store_volume: Some("project-store".into()),
         port: 30421,
         labels: vec![("layerfs.role".into(), "sandbox".into())],
     }
@@ -404,4 +404,23 @@ fn wrong_upgrade_media_and_malformed_status_trailers_extensions_refuse() {
         assert!(docker.inspect_exec(container(), exec()).is_err());
         server.finish();
     }
+}
+#[test]
+fn a_sandbox_with_no_store_volume_mounts_nothing_and_reads_no_volume() {
+    let mut request = sandbox_request();
+    request.store_volume = None;
+    let (docker, server) = peer::Peer::scripted(
+        vec![peer::fixed(200, br#"{"ApiVersion":"1.54"}"#), created()],
+        8192,
+    );
+    docker.create_sandbox(request).unwrap();
+    let requests = server.finish();
+    let texts: Vec<_> = requests
+        .iter()
+        .map(|r| String::from_utf8_lossy(r).into_owned())
+        .collect();
+    assert_eq!(texts.len(), 2);
+    assert!(texts[1].starts_with("POST /v1.54/containers/create HTTP/1.1"));
+    assert!(texts[1].contains("\"Mounts\":[],"));
+    assert!(!texts[1].contains("/layerfs-store"));
 }

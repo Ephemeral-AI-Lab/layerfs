@@ -66,10 +66,14 @@ export class LayerFSRuntime {
       if (this.closed) throw new LayerFSError("InvalidInput", "this LayerFS runtime is closed; open another with LayerFSRuntime.open", null);
       return method(...args);
     };
-    /** A project this runtime knows (of `store` when its name is in several Stores) with a Store volume. */
-    const known = async (name, store = undefined) => {
+    /** A project this runtime knows (of `store` when its name is in several Stores) with a Store volume,
+     * or of a PostgreSQL Store with the call's `url`, which the runtime holds for that call only. */
+    const known = async (name, store = undefined, url = undefined) => {
       const found = await find(this, name, store);
-      if (found.kind === "postgresql") throw new LayerFSError("Unsupported", `${name} is in the PostgreSQL Store ${found.store}: its Store calls take the URL per call (@layerfs/agent with LAYERFS_STORE_POSTGRESQL), which the runtime does not hold`, null);
+      if (found.kind === "postgresql") {
+        if (typeof url !== "string" || !url) throw new LayerFSError("InvalidInput", `${name} is in the PostgreSQL Store ${found.store}: pass its connection's { url } with the call (never stored)`, null);
+        return { ...found, url };
+      }
       if (!found.volume) throw new LayerFSError("InvalidInput", `the runtime has no record of ${name}'s volume (made outside this runtime)`, null);
       return found;
     };
@@ -86,7 +90,7 @@ export class LayerFSRuntime {
       list: live(() => list(this)),
       start_init: live(async (name, folder, options) => jobs.begin(await prepare(this, name, folder, options, jobs.pending()))),
       get_init: live(async (job) => jobs.get(job?.id ?? job)),
-      get_state: live(async (name, since, options) => this.clients.use(await known(name, options?.store), (client) => get_state(client, since))),
+      get_state: live(async (name, since, options) => this.clients.use(await known(name, options?.store, options?.url), (client) => get_state(client, since))),
       remove: live((name, options) => remove(this, name, options)),
     };
     // #506 Store-first (doc section 6): a home holds many Stores, a Store many projects
@@ -107,7 +111,7 @@ export class LayerFSRuntime {
     };
     this.sync = { get: live(async (job) => syncs.get(job)) };
     this.sandbox = {
-      reclaim: live(async (name, options) => reclaim(this, await known(name, options?.store))),
+      reclaim: live(async (name, options) => reclaim(this, await known(name, options?.store, options?.url))),
       list_leftovers: live(() => leftovers(this)),
       clean_leftovers: live((names) => clean_leftovers(this, names)),
       list: live(() => listSandboxes(this)),

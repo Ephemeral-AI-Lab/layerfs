@@ -183,6 +183,15 @@ pub(crate) fn store_path(args: &SdkValue) -> Result<PathBuf> {
     }
 }
 
+/// Whether the Store a call names is a PostgreSQL Store (#506): its record says so.
+pub(crate) fn postgresql(args: &SdkValue) -> Result<bool> {
+    let Some(store) = args.get_text("store") else {
+        return Ok(false);
+    };
+    let path = record_path(&discovery::home(args)?, store)?;
+    Ok(path.exists() && discovery::load(&path)?.get_text("kind") == Some("postgresql"))
+}
+
 /// Refuses a call on a PostgreSQL Store that needs a Store file.
 pub(crate) fn sqlite_only(identity: &Identity, what: &str) -> Result<()> {
     match identity.kind {

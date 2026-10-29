@@ -584,6 +584,11 @@ try {
     await assert.rejects(runtime.project.get_state("shop"), { code: "InvalidInput", message: /Stores main, work/ });
     await assert.rejects(runtime.project.start_init("shop", folder, { store: "main" }), { code: "Unsupported" });
     await assert.rejects(runtime.store.start_push("main", { remote: "minio-a" }), { code: "Unsupported" });
+    // a PostgreSQL project's state (its Sandboxes too) takes the URL for that call only
+    await assert.rejects(runtime.project.get_state("shop", undefined, { store: "main" }), { code: "InvalidInput", message: /url/ });
+    await runtime.project.get_state("shop", undefined, { store: "main", url });
+    assert.equal(nativeArgs("project.list_sandboxes").postgresql.url, url);
+    assert.equal(nativeArgs("project.list_sandboxes").storePath, "postgresql:main");
     // removing one project of a shared Store drops its stack; the Store and its other projects stay
     sandboxRows = "layerfs-work.api-1\trunning\tUp 1 minute\tapi\t1\timg\twork\nlayerfs-work.shop-1\trunning\tUp\tshop\t1\timg\twork\n";
     await assert.rejects(runtime.project.remove("api", { store: "work", confirm: "api" }), { code: "Busy", message: /1 running Sandbox/ });

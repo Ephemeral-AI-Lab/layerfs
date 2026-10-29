@@ -47,6 +47,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
             idle_exit_s: 0,
         },
         existing_store: None,
+        postgresql: None,
     }
 }
 
@@ -140,7 +141,7 @@ impl Fixture {
         let request = SandboxCreate {
             deployment: layerfs_sandbox::backend::docker::SandboxRequest {
                 image: IMAGE.into(),
-                store_volume: "lfs-test-borrowed".into(),
+                store_volume: Some("lfs-test-borrowed".into()),
                 port: 30421,
                 labels: vec![],
             },
@@ -438,7 +439,7 @@ fn create_mismatched_existing_project_refuses_before_any_deployment_or_control_e
         SandboxCreate {
             deployment: layerfs_sandbox::backend::docker::SandboxRequest {
                 image: IMAGE.into(),
-                store_volume: "lfs-test-borrowed".into(),
+                store_volume: Some("lfs-test-borrowed".into()),
                 port: 30421,
                 labels: vec![],
             },

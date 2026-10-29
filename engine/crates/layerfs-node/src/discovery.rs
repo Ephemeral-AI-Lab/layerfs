@@ -92,6 +92,10 @@ pub(crate) fn sandbox_dir(args: &SdkValue, id: &str) -> Result<PathBuf> {
 }
 /// The project's Sandbox numbers that have a directory, lowest first.
 pub(crate) fn sandbox_ids(args: &SdkValue) -> Result<Vec<String>> {
+    // a project of a PostgreSQL Store has an entry once it had a Sandbox
+    if !project_entry(args)?.exists() && crate::stores::postgresql(args)? {
+        return Ok(Vec::new());
+    }
     let mut ids = Vec::new();
     for item in fs::read_dir(sandboxes(args)?).map_err(failed)? {
         let name = item.map_err(failed)?.file_name();
@@ -371,7 +375,7 @@ pub(crate) fn save_sandbox(
             ("image", SdkValue::text(&state.runtime.request().image)),
             (
                 "volume",
-                SdkValue::text(&state.runtime.request().store_volume),
+                SdkValue::opt_text(state.runtime.request().store_volume.clone()),
             ),
             (
                 "labels",
@@ -430,7 +434,8 @@ pub(crate) fn runtime(value: &SdkValue) -> Result<(Docker, ContainerId, SandboxR
         Docker::new(registry::text(value, "docker")?, Duration::from_secs(30)).map_err(failed)?;
     let request = SandboxRequest {
         image: registry::text(value, "image")?.to_owned(),
-        store_volume: registry::text(value, "volume")?.to_owned(),
+        // a PostgreSQL Store's Sandbox mounts no volume (#506)
+        store_volume: value.get_text("volume").map(str::to_owned),
         port: 30421,
         // a record written before #373 has no labels, nor has its container
         labels: match value.get("labels") {

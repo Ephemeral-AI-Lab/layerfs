@@ -30,7 +30,7 @@ const LABELS: [(&str, &str); 3] = [
 fn request(labels: &[(&str, &str)]) -> SandboxRequest {
     SandboxRequest {
         image: IMAGE.into(),
-        store_volume: "lfs-test-borrowed".into(),
+        store_volume: Some("lfs-test-borrowed".into()),
         port: 30421,
         labels: (labels.iter())
             .map(|(k, v)| ((*k).into(), (*v).into()))

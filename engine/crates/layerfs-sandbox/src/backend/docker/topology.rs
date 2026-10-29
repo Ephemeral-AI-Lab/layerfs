@@ -146,8 +146,9 @@ fn fuse_device<R: Read>(j: &mut Json<R>) -> Result<bool, RuntimeError> {
     })?;
     Ok(count == 1 && valid)
 }
-/// Exactly the Store mount, read-write at `/layerfs-store`; any other,
-/// missing or repeated mount is a topology mismatch.
+/// Exactly the Store mount, read-write at `/layerfs-store`, or none for a
+/// request with no Store volume; any other, missing or repeated mount is a
+/// topology mismatch.
 pub(super) fn mounts<R: Read>(
     j: &mut Json<R>,
     request: &SandboxRequest,
@@ -165,7 +166,13 @@ pub(super) fn mounts<R: Read>(
                 volume = j.string_equals("volume")?;
             } else if key.equals("Name") {
                 once(&mut bits, 2)?;
-                name = j.string_equals(&request.store_volume)?;
+                name = match &request.store_volume {
+                    Some(volume) => j.string_equals(volume)?,
+                    None => {
+                        j.skip(3)?;
+                        false
+                    }
+                };
             } else if key.equals("Destination") {
                 once(&mut bits, 4)?;
                 destination = j.string_equals("/layerfs-store")?;
@@ -183,7 +190,7 @@ pub(super) fn mounts<R: Read>(
         valid &= bits == 31 && volume && name && destination && rw && local;
         Ok(())
     })?;
-    Ok(valid && count == 1)
+    Ok(valid && count == usize::from(request.store_volume.is_some()))
 }
 fn strings<R: Read>(j: &mut Json<R>, expected: &[&str]) -> Result<bool, RuntimeError> {
     let mut index = 0;

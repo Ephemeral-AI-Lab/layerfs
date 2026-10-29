@@ -60,8 +60,9 @@ export function sandboxArg(sandbox) {
 
 /** Deployment settings from the client options, else the environment
  * (LAYERFS_<NAME>). A Workspace's Sandbox needs
- * every one but the container prefix and daemon host. */
-export function deployment(options = {}) {
+ * every one but the container prefix and daemon host, and, on a PostgreSQL
+ * Store (`postgresql`), the volume: its daemon opens the server. */
+export function deployment(options = {}, postgresql = false) {
   const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
   const deploy = {
     docker: options.docker ?? env("DOCKER") ?? "/var/run/docker.sock",
@@ -72,9 +73,10 @@ export function deployment(options = {}) {
     daemonHost: options.daemonHost ?? env("DAEMON_HOST"),
   };
   for (const [name, value] of Object.entries(deploy)) {
-    if (name === "containerPrefix" || name === "daemonHost") continue;
+    if (name === "containerPrefix" || name === "daemonHost" || (postgresql && name === "volume")) continue;
     if (!value) throw new LayerFSError("InvalidInput", `deploy.${name} is not configured (LAYERFS_${name.toUpperCase()})`, null);
   }
+  if (!deploy.volume) delete deploy.volume;
   if (!deploy.containerPrefix) delete deploy.containerPrefix;
   if (!deploy.daemonHost) delete deploy.daemonHost;
   return deploy;

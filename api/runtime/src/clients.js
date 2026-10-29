@@ -9,8 +9,24 @@ import { callHome } from "./settings.js";
 
 const IDLE_MS = 60_000;
 
-/** The environment one project's client (and its agents' bash calls) use. */
+/** The environment one project's client (and its agents' bash calls) use.
+ * A project of a PostgreSQL Store (#506) has no volume; its Store path is
+ * `postgresql:<store>`, and its connection's URL is added only when the
+ * call gave one (`project.url`). */
 export function deploymentEnv(settings, platform, project) {
+  if (project.kind === "postgresql") {
+    return {
+      HOME: callHome(settings),
+      DOCKER: settings.docker,
+      IMAGE: project.image ?? settings.image ?? "",
+      DAEMON: settings.daemon ?? "",
+      VOLUME: "",
+      STORE_PATH: `postgresql:${project.store}`,
+      STORE: project.store,
+      ...(project.url ? { STORE_POSTGRESQL: JSON.stringify({ url: project.url }) } : {}),
+      CONTAINER_PREFIX: settings.containerPrefix,
+    };
+  }
   return {
     HOME: callHome(settings),
     DOCKER: settings.docker,
@@ -45,8 +61,19 @@ export class Clients {
     this.held = new Map();
   }
 
-  /** Runs `work(client)` with the project's open client. */
+  /** Runs `work(client)` with the project's open client. A project of a
+   * PostgreSQL Store gets a client for this call alone, closed after it,
+   * so its URL is never held between calls. */
   async use(project, work) {
+    if (project.kind === "postgresql") {
+      const { settings, platform } = this.runtime;
+      const client = await withEnv(deploymentEnv(settings, platform, project), () => LayerFS.open(project.name));
+      try {
+        return await work(client);
+      } finally {
+        await client.close();
+      }
+    }
     const key = keyOf(project);
     let held = this.held.get(key);
     if (!held) {

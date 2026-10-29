@@ -270,3 +270,47 @@ pub(crate) fn attach(args: &SdkValue) -> Outcome {
         ("projects", projects),
     ]))
 }
+
+/// The PostgreSQL Store a `sandbox.create` call's daemon opens (#506), or
+/// None when the call's Store is not one. The URL is the call's
+/// (`postgresql.url`) and goes only into the daemon's private config. The
+/// project must be in the schema; its home entry, which holds its Sandbox
+/// records, is made here (owner-only) the first time.
+pub(crate) fn sandbox_store(
+    args: &SdkValue,
+) -> Result<Option<layerfs_bridge::daemon_setup::DaemonPostgres>, SdkRefusal> {
+    if !stores::postgresql(args)? {
+        return Ok(None);
+    }
+    let identity = stores::identity(args)?;
+    let Kind::Postgresql {
+        schema,
+        synchronous_commit,
+    } = identity.kind
+    else {
+        return Err(refused("InvalidInput", "not a PostgreSQL Store"));
+    };
+    let url = url(args)?.to_owned();
+    let name = text(args, "project")?;
+    let listed = stores::list_projects(args)?;
+    let found = matches!(&listed, SdkValue::List(items)
+        if items.iter().any(|p| p.get_text("name") == Some(name)));
+    if !found {
+        return Err(refused(
+            "NoSuchProject",
+            format!("no project {name} in the PostgreSQL Store's schema {schema}"),
+        ));
+    }
+    let entry = discovery::project_entry(args)?;
+    if let Some(projects) = entry.parent() {
+        discovery::directory(projects)?;
+    }
+    discovery::directory(&entry)?;
+    Ok(Some(layerfs_bridge::daemon_setup::DaemonPostgres {
+        url,
+        schema,
+        synchronous_commit,
+        binding: identity.binding,
+        cursor_key: identity.cursor_key,
+    }))
+}
