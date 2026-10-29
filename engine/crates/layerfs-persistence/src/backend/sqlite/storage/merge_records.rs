@@ -14,6 +14,10 @@
 //! statement. Nothing here takes the publication lane. The merge removes its records when it ends, a window
 //! at a time. A writable open removes the records of owners that made no call
 //! for [`MERGE_LEASE`]: a live merge refreshes its owner well within it.
+//!
+//! On a PostgreSQL Store (#506 d) the same records live in temporary tables
+//! of the writer's connection (`backend/postgresql/merge_records.rs`): only
+//! the statements differ, and the connection's end removes them.
 
 use crate::backend::{records::BackendError, Session, Transaction};
 use layerfs_content::{
@@ -112,35 +116,33 @@ impl MergeRecordsWork {
     }
 }
 
+/// The writable session a merge's records live in.
+#[derive(Clone)]
+pub(crate) enum Scratch {
+    /// The SQLite Store file's `merge_*` tables.
+    Sqlite(Arc<Session>),
+    /// A PostgreSQL writer connection's temporary tables (#506 d).
+    #[cfg(feature = "postgresql")]
+    Postgres(Arc<crate::backend::postgresql::session::connection::Session>),
+}
+
+/// A key window: keys after a bound, or every key but one.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum Window {
+    After,
+    Excluding,
+}
+
 /// Opens merge records over the Store's writable session.
 pub struct MergeScratch {
-    pub(crate) session: Arc<Session>,
+    pub(crate) session: Scratch,
 }
 
 impl MergeScratch {
     /// Registers one merge and returns its records.
     pub fn begin(&self) -> Result<MergeRecords, PersistenceError> {
         let start = Instant::now();
-        let (operation, token) = self.session.run(true, |tx| {
-            let row = tx.mapped(
-                "INSERT INTO merge_operation(token,touched) VALUES(randomblob(16),?1)
-                 RETURNING operation,token",
-                &[&now_ms()],
-                8,
-                1,
-                |row| {
-                    let token: Vec<u8> = row
-                        .get(1)
-                        .map_err(crate::backend::sqlite::session::rows::error)?;
-                    Ok((
-                        row.get::<_, i64>(0)
-                            .map_err(crate::backend::sqlite::session::rows::error)?,
-                        token,
-                    ))
-                },
-            )?;
-            row.into_iter().next().ok_or(BackendError::Integrity)
-        })?;
+        let (operation, token) = self.session.register()?;
         let mut work = MergeRecordsWork::default();
         work.write(start);
         Ok(MergeRecords {
@@ -160,7 +162,7 @@ impl MergeScratch {
 /// One merge's records. A first failure ends every later call; the caller
 /// reads it with [`MergeRecords::failure`] and calls [`MergeRecords::end`].
 pub struct MergeRecords {
-    session: Arc<Session>,
+    session: Scratch,
     operation: i64,
     token: Vec<u8>,
     refreshed: Instant,
@@ -191,32 +193,12 @@ impl MergeRecords {
         self.pending.clear();
         loop {
             let start = Instant::now();
-            let removed = self.session.run(true, |tx| {
-                self.owned(tx)?;
-                tx.borrowed(REMOVE, &[&self.operation, &REMOVE_ROWS], 16)?;
-                let changed = changes(tx)?;
-                if changed == 0 {
-                    tx.borrowed(
-                        "DELETE FROM merge_operation WHERE operation=?1",
-                        &[&self.operation],
-                        8,
-                    )?;
-                }
-                Ok::<_, PersistenceError>(changed)
-            })?;
+            let removed = self.session.remove(self.operation, &self.token)?;
             self.work.write(start);
             if removed == 0 {
                 return Ok(self.work);
             }
         }
-    }
-
-    fn owned(&self, tx: &Transaction<'_>) -> Result<(), PersistenceError> {
-        let rows = tx.borrowed(OWNER, &[&self.operation, &self.token], 24)?;
-        if rows.is_empty() {
-            return Err(PersistenceError::Missing);
-        }
-        Ok(())
     }
 
     /// Runs one job, ending this merge's calls at its first failure.
@@ -241,38 +223,10 @@ impl MergeRecords {
 
     fn refresh(&mut self) -> Result<(), PersistenceError> {
         let start = Instant::now();
-        self.session.run(true, |tx| {
-            self.owned(tx)?;
-            tx.borrowed(
-                "UPDATE merge_operation SET touched=?2 WHERE operation=?1",
-                &[&self.operation, &now_ms()],
-                16,
-            )?;
-            Ok::<_, PersistenceError>(())
-        })?;
+        self.session.refresh(self.operation, &self.token)?;
         self.work.write(start);
         self.refreshed = Instant::now();
         Ok(())
-    }
-
-    /// One owner-checked statement: no rows means the owner is gone.
-    fn owned_rows(
-        &mut self,
-        sql: &str,
-        extra: &[&dyn ToSql],
-    ) -> Result<Vec<Option<Vec<u8>>>, PersistenceError> {
-        let mut values: Vec<&dyn ToSql> = vec![&self.operation, &self.token];
-        values.extend_from_slice(extra);
-        let rows = self.session.read_mapped(sql, &values, 64, WINDOW, |row| {
-            row.get::<_, Option<Vec<u8>>>(0).map(Some).map_err(|error| {
-                PersistenceError::from(crate::backend::sqlite::session::rows::error(error))
-            })
-        })?;
-        self.work.reads += 1;
-        if rows.is_empty() {
-            return Err(PersistenceError::Missing);
-        }
-        Ok(rows)
     }
 
     /// Values in the file of at most [`WINDOW`] keys, in the order asked, in
@@ -281,31 +235,7 @@ impl MergeRecords {
         if keys.is_empty() {
             return Ok(Vec::new());
         }
-        let rows = (0..keys.len())
-            .map(|i| format!("(?{},?{},?{})", 3 * i + 3, 3 * i + 4, 3 * i + 5))
-            .collect::<Vec<_>>()
-            .join(",");
-        let sql = format!(
-            "WITH k(i,kind,key) AS (VALUES {rows}) SELECT k.i, r.value FROM merge_operation o
-             JOIN k LEFT JOIN merge_record r
-             ON r.operation=o.operation AND r.kind=k.kind AND r.key=k.key
-             WHERE o.operation=?1 AND o.token=?2 ORDER BY k.i"
-        );
-        let indexes: Vec<i64> = (0..keys.len() as i64).collect();
-        let kinds: Vec<i64> = keys.iter().map(|key| i64::from(key.kind)).collect();
-        let mut values: Vec<&dyn ToSql> = vec![&self.operation, &self.token];
-        for (i, key) in keys.iter().enumerate() {
-            values.push(&indexes[i]);
-            values.push(&kinds[i]);
-            values.push(&key.key);
-        }
-        let error =
-            |error| PersistenceError::from(crate::backend::sqlite::session::rows::error(error));
-        let found = self
-            .session
-            .read_mapped(&sql, &values, 64, keys.len(), |row| {
-                Ok::<_, PersistenceError>(Some(row.get::<_, Option<Vec<u8>>>(1).map_err(error)?))
-            })?;
+        let found = self.session.stored(self.operation, &self.token, keys)?;
         self.work.reads += 1;
         if found.len() != keys.len() {
             return Err(if found.is_empty() {
@@ -341,7 +271,7 @@ impl MergeRecords {
 
     fn keys(
         &mut self,
-        sql: &str,
+        window: Window,
         kind: u32,
         bound: &[u8],
     ) -> Result<Vec<[u8; 32]>, PersistenceError> {
@@ -353,16 +283,22 @@ impl MergeRecords {
                 .range(first..)
                 .take_while(|(key, _)| key.kind == kind)
                 .map(|(key, _)| key.key)
-                .filter(|key| match sql {
-                    KEYS_EXCLUDING => key.as_slice() != bound,
-                    _ => key.as_slice() > bound,
+                .filter(|key| match window {
+                    Window::Excluding => key.as_slice() != bound,
+                    Window::After => key.as_slice() > bound,
                 })
                 .take(WINDOW)
                 .collect());
         }
         self.flush()?;
-        self.owned_rows(sql, &[&i64::from(kind), &bound])?
-            .into_iter()
+        let rows = self
+            .session
+            .keys(self.operation, &self.token, window, kind, bound)?;
+        self.work.reads += 1;
+        if rows.is_empty() {
+            return Err(PersistenceError::Missing);
+        }
+        rows.into_iter()
             .flatten()
             .map(|key| <[u8; 32]>::try_from(key).map_err(|_| PersistenceError::Malformed))
             .collect()
@@ -429,26 +365,209 @@ impl MergeRecords {
         let start = Instant::now();
         let pending = std::mem::take(&mut self.pending);
         self.pending_bytes = 0;
-        self.session.run(true, |tx| {
-            self.owned(tx)?;
-            for (key, value) in &pending {
+        self.session.flush(self.operation, &self.token, &pending)?;
+        self.work.write(start);
+        self.work.flushes += 1;
+        Ok(())
+    }
+}
+
+impl Scratch {
+    /// Registers one merge's owner: `(operation, token)`.
+    fn register(&self) -> Result<(i64, Vec<u8>), PersistenceError> {
+        let session = match self {
+            Self::Sqlite(session) => session,
+            #[cfg(feature = "postgresql")]
+            Self::Postgres(session) => {
+                return crate::backend::postgresql::merge_records::register(session)
+            }
+        };
+        session
+            .run(true, |tx| {
+                let row = tx.mapped(
+                    "INSERT INTO merge_operation(token,touched) VALUES(randomblob(16),?1)
+                 RETURNING operation,token",
+                    &[&now_ms()],
+                    8,
+                    1,
+                    |row| {
+                        let token: Vec<u8> = row
+                            .get(1)
+                            .map_err(crate::backend::sqlite::session::rows::error)?;
+                        Ok((
+                            row.get::<_, i64>(0)
+                                .map_err(crate::backend::sqlite::session::rows::error)?,
+                            token,
+                        ))
+                    },
+                )?;
+                row.into_iter().next().ok_or(BackendError::Integrity)
+            })
+            .map_err(Into::into)
+    }
+
+    /// Removes one window of the merge's records, then, once none is left,
+    /// its owner: the records removed (0 once the owner went).
+    fn remove(&self, operation: i64, token: &[u8]) -> Result<i64, PersistenceError> {
+        let session = match self {
+            Self::Sqlite(session) => session,
+            #[cfg(feature = "postgresql")]
+            Self::Postgres(session) => {
+                return crate::backend::postgresql::merge_records::remove(session, operation, token)
+            }
+        };
+        session.run(true, |tx| {
+            owned(tx, operation, token)?;
+            tx.borrowed(REMOVE, &[&operation, &REMOVE_ROWS], 16)?;
+            let changed = changes(tx)?;
+            if changed == 0 {
+                tx.borrowed(
+                    "DELETE FROM merge_operation WHERE operation=?1",
+                    &[&operation],
+                    8,
+                )?;
+            }
+            Ok::<_, PersistenceError>(changed)
+        })
+    }
+
+    /// Marks the owner live now.
+    fn refresh(&self, operation: i64, token: &[u8]) -> Result<(), PersistenceError> {
+        let session = match self {
+            Self::Sqlite(session) => session,
+            #[cfg(feature = "postgresql")]
+            Self::Postgres(session) => {
+                return crate::backend::postgresql::merge_records::refresh(
+                    session, operation, token,
+                )
+            }
+        };
+        session.run(true, |tx| {
+            owned(tx, operation, token)?;
+            tx.borrowed(
+                "UPDATE merge_operation SET touched=?2 WHERE operation=?1",
+                &[&operation, &now_ms()],
+                16,
+            )?;
+            Ok::<_, PersistenceError>(())
+        })
+    }
+
+    /// One owner-checked key window: no rows means the owner is gone, and a
+    /// NULL row means no keys.
+    fn keys(
+        &self,
+        operation: i64,
+        token: &[u8],
+        window: Window,
+        kind: u32,
+        bound: &[u8],
+    ) -> Result<Vec<Option<Vec<u8>>>, PersistenceError> {
+        let session = match self {
+            Self::Sqlite(session) => session,
+            #[cfg(feature = "postgresql")]
+            Self::Postgres(session) => {
+                return crate::backend::postgresql::merge_records::keys(
+                    session, operation, token, window, kind, bound,
+                )
+            }
+        };
+        let sql = match window {
+            Window::After => KEYS_AFTER,
+            Window::Excluding => KEYS_EXCLUDING,
+        };
+        let kind = i64::from(kind);
+        let values: Vec<&dyn ToSql> = vec![&operation, &token, &kind, &bound];
+        session.read_mapped(sql, &values, 64, WINDOW, |row| {
+            row.get::<_, Option<Vec<u8>>>(0).map(Some).map_err(|error| {
+                PersistenceError::from(crate::backend::sqlite::session::rows::error(error))
+            })
+        })
+    }
+
+    /// The stored values of `keys`, in order, in one owner-checked
+    /// statement; no rows means the owner is gone.
+    fn stored(
+        &self,
+        operation: i64,
+        token: &[u8],
+        keys: &[EditRecordKey],
+    ) -> Result<Vec<Option<Vec<u8>>>, PersistenceError> {
+        let session = match self {
+            Self::Sqlite(session) => session,
+            #[cfg(feature = "postgresql")]
+            Self::Postgres(session) => {
+                return crate::backend::postgresql::merge_records::stored(
+                    session, operation, token, keys,
+                )
+            }
+        };
+        let rows = (0..keys.len())
+            .map(|i| format!("(?{},?{},?{})", 3 * i + 3, 3 * i + 4, 3 * i + 5))
+            .collect::<Vec<_>>()
+            .join(",");
+        let sql = format!(
+            "WITH k(i,kind,key) AS (VALUES {rows}) SELECT k.i, r.value FROM merge_operation o
+             JOIN k LEFT JOIN merge_record r
+             ON r.operation=o.operation AND r.kind=k.kind AND r.key=k.key
+             WHERE o.operation=?1 AND o.token=?2 ORDER BY k.i"
+        );
+        let indexes: Vec<i64> = (0..keys.len() as i64).collect();
+        let kinds: Vec<i64> = keys.iter().map(|key| i64::from(key.kind)).collect();
+        let mut values: Vec<&dyn ToSql> = vec![&operation, &token];
+        for (i, key) in keys.iter().enumerate() {
+            values.push(&indexes[i]);
+            values.push(&kinds[i]);
+            values.push(&key.key);
+        }
+        let error =
+            |error| PersistenceError::from(crate::backend::sqlite::session::rows::error(error));
+        session.read_mapped(&sql, &values, 64, keys.len(), |row| {
+            Ok::<_, PersistenceError>(Some(row.get::<_, Option<Vec<u8>>>(1).map_err(error)?))
+        })
+    }
+
+    /// Writes buffered changes in one owner-checked write transaction.
+    fn flush(
+        &self,
+        operation: i64,
+        token: &[u8],
+        pending: &BTreeMap<EditRecordKey, Option<Vec<u8>>>,
+    ) -> Result<(), PersistenceError> {
+        let session = match self {
+            Self::Sqlite(session) => session,
+            #[cfg(feature = "postgresql")]
+            Self::Postgres(session) => {
+                return crate::backend::postgresql::merge_records::flush(
+                    session, operation, token, pending,
+                )
+            }
+        };
+        session.run(true, |tx| {
+            owned(tx, operation, token)?;
+            for (key, value) in pending {
                 let kind = i64::from(key.kind);
                 let bytes = key.key.as_slice();
                 match value {
                     Some(value) => tx.borrowed(
                         PUT,
-                        &[&self.operation, &kind, &bytes, &value.as_slice()],
+                        &[&operation, &kind, &bytes, &value.as_slice()],
                         48 + value.len() as u64,
                     )?,
-                    None => tx.borrowed(DELETE, &[&self.operation, &kind, &bytes], 48)?,
+                    None => tx.borrowed(DELETE, &[&operation, &kind, &bytes], 48)?,
                 };
             }
             Ok::<_, PersistenceError>(())
-        })?;
-        self.work.write(start);
-        self.work.flushes += 1;
-        Ok(())
+        })
     }
+}
+
+fn owned(tx: &Transaction<'_>, operation: i64, token: &[u8]) -> Result<(), PersistenceError> {
+    let rows = tx.borrowed(OWNER, &[&operation, &token], 24)?;
+    if rows.is_empty() {
+        return Err(PersistenceError::Missing);
+    }
+    Ok(())
 }
 
 fn changes(tx: &Transaction<'_>) -> Result<i64, BackendError> {
@@ -505,15 +624,15 @@ impl IndexedEditBacking for MergeRecords {
         excluded: Option<[u8; 32]>,
     ) -> ContentResult<Vec<[u8; 32]>> {
         self.job(|records| match excluded {
-            Some(root) => records.keys(KEYS_EXCLUDING, kind, &root),
-            None => records.keys(KEYS_AFTER, kind, &[]),
+            Some(root) => records.keys(Window::Excluding, kind, &root),
+            None => records.keys(Window::After, kind, &[]),
         })
     }
 
     fn keys_after(&mut self, kind: u32, after: Option<[u8; 32]>) -> ContentResult<Vec<[u8; 32]>> {
         self.job(|records| match after {
-            Some(after) => records.keys(KEYS_AFTER, kind, &after),
-            None => records.keys(KEYS_AFTER, kind, &[]),
+            Some(after) => records.keys(Window::After, kind, &after),
+            None => records.keys(Window::After, kind, &[]),
         })
     }
 }

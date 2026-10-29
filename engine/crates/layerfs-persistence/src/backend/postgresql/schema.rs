@@ -5,9 +5,10 @@
 //! history names collate `"C"` so ordering and paging match SQLite's byte
 //! order; pack bodies are whole `bytea` values stored `EXTERNAL`
 //! (uncompressed, out of line) for ranged `substring` reads; `store_lane`
-//! holds the one row writers lock for the publication lane. The pack-unit,
-//! merge-record and acquisition tables are absent: group-row layouts are
-//! SQLite physical choices, merges and Init stay SQLite-only in this phase.
+//! holds the one row writers lock for the publication lane. The pack-unit
+//! and acquisition tables are absent: group-row layouts are SQLite physical
+//! choices, and Init stays SQLite-only in this phase. A merge's records live
+//! in the writer connection's temporary tables (`merge_records.rs`), not here.
 use super::session::transaction::Transaction;
 use crate::backend::records::{BackendError, Param};
 

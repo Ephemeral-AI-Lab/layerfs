@@ -230,8 +230,11 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
   host's loopback on Docker Desktop; on a Linux Docker Engine the URL must
   name an address containers reach. Demand-loaded reads and Commit lookups
   go to the server, behind the daemon's 64 MiB shared object cache, with no
-  host SQLite cache yet (#420). Merges are refused on PostgreSQL, so a
-  Commit whose Branch moved since mount fails instead of merging. Build the
+  host SQLite cache yet (#420). Merges work as on SQLite: a merge's working
+  records live in temporary tables of the writer's connection (outside the
+  checked Store schema, gone with the connection, written without the
+  publication lane), so a Commit whose Branch moved since mount merges, and
+  so do `branch.merge` calls. Build the
   bundle with `--features layerfs-node/postgresql,layerfs-daemon/postgresql`;
   a daemon built without it refuses the Store (`BackendUnavailable`). The
   open-time sweep skips PostgreSQL projects (it holds no URL); reclaim them
@@ -288,7 +291,6 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
 - Incremental push with #495's bundles.
 - The host SQLite cache for PostgreSQL Stores (#420); until then a PostgreSQL
   Sandbox pays the server round trips of cold reads and Commits.
-- Merges on PostgreSQL Stores (a Commit whose Branch moved is refused).
 - A PostgreSQL Sandbox on a Linux Docker Engine reaching a database on the
   host's loopback (no `host-gateway` mapping is added).
 - Moving a project between Stores (cross-Store import).

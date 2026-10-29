@@ -18,7 +18,9 @@ impl StorageProvider {
     /// Merge build records over this session (#355); writable sessions only.
     pub fn merge_scratch(&self) -> crate::MergeScratch {
         crate::MergeScratch {
-            session: self.session.clone(),
+            session: crate::backend::sqlite::storage::merge_records::Scratch::Sqlite(
+                self.session.clone(),
+            ),
         }
     }
     /// One consistent copy of the live Store to `destination`, which must not

@@ -226,8 +226,8 @@ pub fn open_store_observed(
 }
 
 /// A PostgreSQL Store (#506): one writer session and one read-only session
-/// per Workspace reader. Merges are refused (no merge records on PostgreSQL
-/// in this phase) and reader counters are not observed.
+/// per Workspace reader. A merge's records live in the writer connection's
+/// temporary tables (#506 d); reader counters are not observed.
 #[cfg(feature = "postgresql")]
 fn open_postgres(
     selection: &layerfs_persistence::PostgresSelection,
@@ -249,15 +249,18 @@ fn open_postgres(
         ))
     });
     let control = factory(0)?;
-    let store = Arc::new(Store::new(
-        writer.storage.clone(),
-        Arc::new(writer.history),
-        control,
-        factory,
-        cache_bytes,
-        reservations,
-        workspace_capacity,
-    )?);
+    let store = Arc::new(
+        Store::new(
+            writer.storage.clone(),
+            Arc::new(writer.history),
+            control,
+            factory,
+            cache_bytes,
+            reservations,
+            workspace_capacity,
+        )?
+        .with_merge_scratch(writer.storage.merge_scratch()),
+    );
     Ok(OpenedStore {
         store,
         sqlite_version: version,

@@ -4,6 +4,7 @@ pub(crate) mod history;
 pub(crate) mod import;
 pub(crate) mod lane;
 mod mechanics;
+pub(crate) mod merge_records;
 pub(crate) mod metadata;
 pub(crate) mod objects;
 pub(crate) mod schema;

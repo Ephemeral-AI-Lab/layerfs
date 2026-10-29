@@ -22,6 +22,15 @@ impl PostgresStorage {
     pub fn diagnostics(&self) -> Result<SqlWork, PersistenceError> {
         self.session.diagnostics().map_err(Into::into)
     }
+    /// Merge build records over this writer connection's temporary tables
+    /// (#506 d); writable sessions only.
+    pub fn merge_scratch(&self) -> crate::MergeScratch {
+        crate::MergeScratch {
+            session: crate::backend::sqlite::storage::merge_records::Scratch::Postgres(
+                self.session.clone(),
+            ),
+        }
+    }
     /// The server's reported version.
     pub fn server_version(&self) -> &str {
         &self.session.server_version
