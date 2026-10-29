@@ -1,12 +1,11 @@
-// P1 SDK/CLI agreement over the stand-in binding. Real-Store coverage:
-// layerfs-api/tests/area_p1_history.rs. P14's budget traversal joins this
-// runner when the P14 slice merges.
+// P1 + P14 SDK/CLI agreement over the stand-in binding. Real-Store coverage:
+// layerfs-api/tests/area_p1_history.rs and area_p14_paging.rs.
 //   /usr/bin/node api/agent/test/area-p.mjs
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { ENV, contains, plain } from "./fixture/cases.mjs";
-import { CASES } from "./fixture/cases-area-p.mjs";
+import { BUDGET_BRANCH_NAMES, CASES } from "./fixture/cases-area-p.mjs";
 
 const FAKE = fileURLToPath(new URL("./fixture/fake-native.cjs", import.meta.url));
 Object.assign(process.env, ENV, { LAYERFS_NATIVE: FAKE });
@@ -39,9 +38,40 @@ for (const c of CASES) {
   }
 }
 
+native.branchList = BUDGET_BRANCH_NAMES;
+native.branchReplyBudget = 48 * 1024;
+const before = native.calls.length;
+const found = [];
+let first;
+let pagePos = 0;
+let pages = 0;
+let terminated = false;
+while (pages <= BUDGET_BRANCH_NAMES.length && !terminated) {
+  const page = await lf.project.list_branches(1000, pagePos);
+  first ??= page;
+  pages += 1;
+  found.push(...page.items.map((item) => item.name));
+  if (page.nextPagePos === null) {
+    terminated = true;
+  } else {
+    pagePos = page.nextPagePos;
+  }
+}
+try {
+  assert.ok(first.items.length < 1000, "the reply budget makes a short page");
+  assert.equal(first.hasMore, true);
+  assert.equal(first.nextPagePos, first.items.length);
+  assert.equal(terminated, true);
+  assert.deepEqual(found, BUDGET_BRANCH_NAMES);
+  assert.equal(native.calls.length - before, pages, "one binding call per page");
+  assert.equal(pages, 2);
+} catch (failure) {
+  failures.push(`P14 list_branches budget traversal: ${failure.message}`);
+}
+
 await lf.close();
 if (failures.length) {
-  console.error(`FAIL area-p: ${failures.length} of ${CASES.length}\n${failures.join("\n")}`);
+  console.error(`FAIL area-p: ${failures.length} of ${CASES.length + 1}\n${failures.join("\n")}`);
   process.exit(1);
 }
-console.log(`PASS area-p (${CASES.length} cases)`);
+console.log(`PASS area-p (${CASES.length} cases + 1 budget traversal)`);
