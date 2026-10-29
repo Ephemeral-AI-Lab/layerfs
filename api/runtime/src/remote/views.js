@@ -7,7 +7,8 @@
 // `remote:<connection>/<file>#<view>`, opens agent clients on it. Every
 // call that would change it is refused ReadOnly. A view is never a Store
 // of the home and is never linked. It closes with close_view, after a quiet
-// minute here, and after a quiet minute in the process that holds it.
+// minute here (any call naming it is use), and after a quiet minute in the
+// process that holds it.
 import { invokeBackend } from "@layerfs/agent/internal";
 import { callHome } from "../settings.js";
 import { credentialsOf } from "../store/calls.js";
@@ -37,10 +38,11 @@ export class Views {
     return view;
   }
 
-  /** The open view `id`; NoSuchView when it was closed. */
+  /** The open view `id`, which a call naming it keeps open another quiet minute; NoSuchView when it was closed. */
   view(id) {
     const held = this.held.get(typeof id === "string" ? id : id?.view);
     if (!held) throw refuse("NoSuchView", `no open view ${id?.view ?? id}: it was closed or unused for a minute; open it again`);
+    if (held.users === 0) this.#idle(held.view.view, held);
     return held.view;
   }
 
