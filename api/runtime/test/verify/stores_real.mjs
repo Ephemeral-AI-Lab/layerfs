@@ -1,15 +1,18 @@
 // The Store-first calls end to end (#506 c), with the real binding: one
 // Store holds two projects beside a second Store and a project's own Store;
-// a Sandbox mounts a project of the shared Store; the shared Store pushes to
-// MinIO, clones into a fresh Store with identical history, and pulls back
-// over a later Commit; it imports into PostgreSQL with the same Commit ids;
+// a Sandbox mounts a project of the shared Store; the shared Store publishes
+// to MinIO (#509: linked to one remote file), sends a copy to a second file
+// that loads into a fresh Store with identical history, pushes through its
+// link after the send (the wrong-conflict case of links.md section 2), and
+// pulls back over a later Commit; unlink, publish elsewhere and remote
+// remove InUse; it imports into PostgreSQL with the same Commit ids;
 // a Sandbox on the PostgreSQL Store mounts, runs commands and Commits into
 // the schema (#506 d), and the PostgreSQL Store attaches again, also by its
 // schema alone. One
 // project of a shared Store, and the project a Store was made by, are
 // removed while the Store and its other projects stay. The Connect Storage
 // asks (#506 E1-E9): Store sizes and heads in store.list, heads that move
-// with a Commit and equal the pushed copy's, store.check against MinIO,
+// with a Commit and equal the pushed file's, store.check against MinIO,
 // remote.list_stores, remote.providers, push progress phases sampled while
 // a larger Store goes up, and postgresql.status.
 //
@@ -143,44 +146,76 @@ async function run({ platform, bundle, image, home, prefix, work, svc }) {
     const team = { shop: await history("shop", "team"), docs: await history("docs", "team") };
     assert.ok(team.shop.commits.feature.length >= 1);
 
-    step("push the whole Store to MinIO, then clone it into a fresh Store");
+    step("publish the whole Store to MinIO: a new file, linked (#509)");
     const remote = await runtime.remote.add({ name: "minio-a", provider: "minio", endpoint: svc.minio.endpoint, bucket: "layerfs", prefix: "lfc" });
     assert.equal(remote.credentials, "env:LAYERFS_REMOTE");
+    await runtime.remote.add({ name: "minio-b", provider: "minio", endpoint: svc.minio.endpoint, bucket: "layerfs", prefix: "lfc-b" });
     const credentials = { accessKey: svc.minio.accessKey, secretKey: svc.minio.secretKey };
-    const pushed = await ended(await runtime.store.start_push("team", { remote: "minio-a", credentials }));
+    await assert.rejects(runtime.store.start_push("team", { credentials }), { code: "NotLinked" });
+    const pushed = await ended(await runtime.store.start_publish("team", { remote: "minio-a", credentials }));
     assert.equal(pushed.result.object, "team/store.sqlite");
+    assert.deepEqual([pushed.result.transfer.remote, pushed.result.transfer.file], ["minio-a", "team"]);
 
-    step("after the push: recorded heads, store.check and list_stores against MinIO (#506 E2, E3, E9)");
-    const recorded = (await teamNow()).copies.find((c) => c.remote === "minio-a").pushed;
+    step("after the publish: the link's heads, store.check and list_stores against MinIO (#506 E2, E3, E9)");
+    const recorded = (await teamNow()).link.last;
+    assert.deepEqual([(await teamNow()).link.remote, (await teamNow()).link.file, recorded.direction], ["minio-a", "team", "push"]);
     assert.equal(recorded.heads, pushed.result.transfer.heads);
+    assert.ok(recorded.at > 1e12, "times in ms");
     assert.equal((await teamNow()).heads, recorded.heads, "the pushed snapshot has the Store's heads");
-    const checked = await runtime.store.check("team", { remote: "minio-a", credentials });
-    assert.deepEqual([checked.present, checked.bytes, checked.sha256, checked.heads], [true, pushed.result.transfer.bytes, pushed.result.transfer.sha256, recorded.heads]);
+    const checked = await runtime.store.check("team", { credentials });
+    assert.deepEqual([checked.file, checked.present, checked.bytes, checked.sha256, checked.heads], ["team", true, pushed.result.transfer.bytes, pushed.result.transfer.sha256, recorded.heads]);
     assert.ok(checked.modified > 0 && checked.checkedAt >= checked.modified - 120_000, JSON.stringify(checked));
-    assert.equal((await runtime.store.check("nothere", { remote: "minio-a", credentials })).present, false);
-    await assert.rejects(runtime.store.check("team", { remote: "minio-a", credentials: { accessKey: credentials.accessKey, secretKey: "wrong" } }), { code: "Denied" });
-    const onRemote = await runtime.remote.list_stores("minio-a", { credentials });
-    assert.deepEqual(onRemote.map((c) => [c.store, c.bytes, c.sha256, c.heads]), [["team", pushed.result.transfer.bytes, pushed.result.transfer.sha256, recorded.heads]]);
+    await assert.rejects(runtime.store.check("team", { credentials: { accessKey: credentials.accessKey, secretKey: "wrong" } }), { code: "Denied" });
     const providers = await runtime.remote.providers();
     assert.deepEqual(providers.find((p) => p.id === "minio").available, true);
     console.log(`  providers ${providers.map((p) => `${p.id}:${p.available}`).join(" ")}`);
-    const cloned = await ended(await runtime.store.start_clone("minio-a", { from: "team", store: "copy", credentials }));
+
+    step("send a copy to a new file, then push through the link: no wrong conflict (links.md section 2)");
+    await assert.rejects(runtime.store.start_send("team", { remote: "minio-a", file: "team", credentials }), { code: "Exists" });
+    const sent = await ended(await runtime.store.start_send("team", { remote: "minio-a", file: "team-snap", credentials }));
+    assert.equal(sent.step, "done", JSON.stringify(sent.error));
+    assert.deepEqual([sent.result.remote, sent.result.file, sent.result.sha256], ["minio-a", "team-snap", pushed.result.transfer.sha256]);
+    assert.deepEqual((await teamNow()).link.last, recorded, "a send changes no record of the Store");
+    const relinked = await ended(await runtime.store.start_push("team", { credentials }));
+    assert.equal(relinked.step, "done", JSON.stringify(relinked.error));
+    const onRemote = await runtime.remote.list_stores("minio-a", { credentials });
+    assert.deepEqual(onRemote.map((c) => [c.file, c.linkedBy]), [["team", "team"], ["team-snap", null]]);
+
+    step("load the sent file into a fresh Store, linked to it");
+    await assert.rejects(runtime.store.start_load("minio-a", { file: "team", store: "other", credentials }), { code: "Linked", message: /team/ });
+    const cloned = await ended(await runtime.store.start_load("minio-a", { file: "team-snap", store: "copy", credentials }));
+    assert.equal(cloned.step, "done", JSON.stringify(cloned.error));
     assert.deepEqual(cloned.result.projects.sort(), ["docs", "shop"]);
     assert.equal(cloned.result.transfer.sha256, pushed.result.transfer.sha256);
-    for (const name of ["shop", "docs"]) assert.deepEqual(await history(name, "copy"), team[name], `${name}: the clone's history is the pushed Store's`);
+    assert.deepEqual([(await runtime.store.list()).find((s) => s.name === "copy").link.file], ["team-snap"]);
+    for (const name of ["shop", "docs"]) assert.deepEqual(await history(name, "copy"), team[name], `${name}: the loaded Store's history is the pushed Store's`);
     await use("shop", "copy", async (c) => assert.equal((await c.fs.read("feature", "/src/cart.js")).text, "export const cart = [];\n// paid\n"));
+    const linkedCopy = await runtime.store.check("copy", { credentials });
+    assert.deepEqual([linkedCopy.file, linkedCopy.present], ["team-snap", true], "a loaded Store checks the file it came from");
 
-    step("a Commit after the push is replaced by a pull of the pushed copy");
+    step("a Commit after the push is replaced by a pull through the link");
     await use("shop", "team", (c) => c.fs.write("feature", "/late.txt", "after the push\n"));
     assert.notDeepEqual(await history("shop", "team"), team.shop);
-    await assert.rejects(runtime.store.start_pull("team", { remote: "minio-a", credentials }), { code: "InvalidInput" });
-    await ended(await runtime.store.start_pull("team", { remote: "minio-a", credentials, confirm: "team" }));
+    await assert.rejects(runtime.store.start_pull("team", { credentials }), { code: "InvalidInput" });
+    await ended(await runtime.store.start_pull("team", { credentials, confirm: "team" }));
     assert.deepEqual(await history("shop", "team"), team.shop, "the pull put back the pushed history");
-    const copies = (await runtime.store.list()).find((s) => s.name === "team").copies;
-    assert.deepEqual(copies.map((c) => [c.remote, c.pushed.sha256, c.pulled.sha256]), [["minio-a", pushed.result.transfer.sha256, pushed.result.transfer.sha256]]);
+    const link = (await runtime.store.list()).find((s) => s.name === "team").link;
+    assert.deepEqual([link.remote, link.file, link.last.direction, link.last.sha256], ["minio-a", "team", "pull", relinked.result.transfer.sha256]);
     // the pulled file has the pushed history: its heads are the push's, and the Store's now
-    assert.equal(copies[0].pulled.heads, recorded.heads);
+    assert.equal(link.last.heads, recorded.heads);
     assert.equal((await teamNow()).heads, recorded.heads);
+
+    step("unlink, publish elsewhere; a connection a Store links to is not removed");
+    await assert.rejects(runtime.store.unlink("copy", {}), { code: "InvalidInput" });
+    assert.equal((await runtime.store.unlink("copy", { confirm: "copy" })).file, "team-snap");
+    await assert.rejects(runtime.store.check("copy", { credentials }), { code: "NotLinked" });
+    // the unlinked file is still there: a publish onto it is refused by its HEAD, nothing overwritten
+    const onto = await ended(await runtime.store.start_publish("copy", { remote: "minio-a", file: "team-snap", credentials }));
+    assert.deepEqual([onto.step, onto.error?.code], ["failed", "Exists"], JSON.stringify(onto.error));
+    const elsewhere = await ended(await runtime.store.start_publish("copy", { remote: "minio-b", file: "copy", credentials }));
+    assert.equal(elsewhere.step, "done", JSON.stringify(elsewhere.error));
+    await assert.rejects(runtime.remote.remove("minio-b", { confirm: "minio-b" }), { code: "InUse", message: /copy/ });
+    assert.deepEqual((await runtime.remote.list_stores("minio-a", { credentials })).map((c) => [c.file, c.linkedBy]), [["team", "team"], ["team-snap", null]], "the unlinked file stays, loadable");
 
     step("a larger Store's push reports its phases while it runs (#506 E4)");
     await runtime.store.create("big");
@@ -190,7 +225,7 @@ async function run({ platform, bundle, image, home, prefix, work, svc }) {
     const { randomBytes } = await import("node:crypto");
     for (let i = 0; i < 6; i++) writeFileSync(join(bulk, `blob-${i}.bin`), randomBytes(16 * 1024 * 1024));
     await ended(await runtime.project.start_init("bulk", bulk, { store: "big" }));
-    const big = await runtime.store.start_push("big", { remote: "minio-a", credentials });
+    const big = await runtime.store.start_publish("big", { remote: "minio-a", credentials });
     const samples = [];
     for (let i = 0; i < 6000; i++) {
       const now = await runtime.sync.get(big.id);

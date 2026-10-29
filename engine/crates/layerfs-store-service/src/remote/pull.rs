@@ -1,13 +1,14 @@
-//! Pull: download the Store named `NAME` to a temporary sibling of the local
+//! Pull: download the remote Store file `FILE` to a temporary sibling of the local
 //! Store (on its filesystem, so the swap is one rename), verify its sha256
 //! (and each piece's), check it opens with the Store's binding, then rename
 //! it over the local Store, which happens only when no opener holds it. The
 //! whole Store is replaced, with every project in it.
 //!
-//! A clone (`clone_store`) is the same download into a new Store: the
-//! destination must be absent, the binding comes from the remote copy, and
-//! the file is linked into place so a Store that appeared meanwhile is never
-//! replaced.
+//! A load (`load`, #509; a clone before) is the same download into a new
+//! Store: the destination must be absent, the binding comes from the remote
+//! file, and the file is linked into place so a Store that appeared
+//! meanwhile is never replaced. Both name the remote file explicitly: the
+//! file a local Store links to, whatever the Store's own name.
 //!
 //! Like the sealed-Store install (`install.rs`), the destination must pass
 //! the kernel guard and the installer must be the daemons' user. One
@@ -48,9 +49,9 @@ pub struct Pulled {
     pub heads: Option<[u8; 32]>,
 }
 
-/// What a clone installed: a new Store and the binding it opens with.
+/// What a load installed: a new Store and the binding it opens with.
 #[derive(Debug)]
-pub struct Cloned {
+pub struct Loaded {
     /// The Store's binding key, read from the remote copy.
     pub binding: Vec<u8>,
     pub bytes: u64,
@@ -60,7 +61,7 @@ pub struct Cloned {
     pub heads: Option<[u8; 32]>,
 }
 
-/// A failed pull or clone: its cause and the temporary file it left, if any.
+/// A failed pull or load: its cause and the temporary file it left, if any.
 #[derive(Debug)]
 pub struct PullFailure {
     pub cause: String,
@@ -108,19 +109,19 @@ fn refuse_open(target: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Pulls the Store named `name` from `driver` into `destination` (a Store
+/// Pulls the remote Store file `file` from `driver` into `destination` (a Store
 /// volume's `global/store.sqlite`), which opens with `binding` and
 /// `cursor_key`. An existing local Store is replaced only when no opener
 /// holds it, checked before the download and again before the rename;
 /// nothing here prevents a new opener in between.
 pub fn pull(
     driver: &dyn Driver,
-    name: &str,
+    file: &str,
     destination: &Path,
     binding: &[u8],
     cursor_key: [u8; 32],
 ) -> Result<Pulled, PullFailure> {
-    fetch(driver, name, destination, Some(binding), cursor_key).map(|(fetched, replaced)| Pulled {
+    fetch(driver, file, destination, Some(binding), cursor_key).map(|(fetched, replaced)| Pulled {
         bytes: fetched.bytes,
         sha256: fetched.sha256,
         pieces: fetched.pieces,
@@ -129,18 +130,18 @@ pub fn pull(
     })
 }
 
-/// Clones the Store named `name` from `driver` into the new Store
+/// Loads the remote Store file `file` from `driver` into the new Store
 /// `destination`, which must not exist. The binding comes from the remote
-/// copy (recorded by push); `cursor_key` is the new Store's own cursor
+/// file (recorded by push); `cursor_key` is the new Store's own cursor
 /// authority, held by its caller as for any Store. A Store that appears at
 /// `destination` meanwhile is never replaced.
-pub fn clone_store(
+pub fn load(
     driver: &dyn Driver,
-    name: &str,
+    file: &str,
     destination: &Path,
     cursor_key: [u8; 32],
-) -> Result<Cloned, PullFailure> {
-    fetch(driver, name, destination, None, cursor_key).map(|(fetched, _)| fetched)
+) -> Result<Loaded, PullFailure> {
+    fetch(driver, file, destination, None, cursor_key).map(|(fetched, _)| fetched)
 }
 
 /// The remote copy's recorded binding, if push recorded one.
@@ -162,7 +163,7 @@ fn remote_binding(metadata: &layerfs_remote_storage::Metadata) -> Result<Option<
 }
 
 /// Downloads, verifies, opens and installs. With `binding`, replaces an
-/// unopened local Store (pull); without it, installs a new Store (clone).
+/// unopened local Store (pull); without it, installs a new Store (load).
 /// Returns what was installed and whether a Store was replaced.
 fn fetch(
     driver: &dyn Driver,
@@ -170,7 +171,7 @@ fn fetch(
     destination: &Path,
     binding: Option<&[u8]>,
     cursor_key: [u8; 32],
-) -> Result<(Cloned, bool), PullFailure> {
+) -> Result<(Loaded, bool), PullFailure> {
     let mut left = None;
     let result = (|| {
         let text = |error: io::Error| error.to_string();
@@ -192,7 +193,7 @@ fn fetch(
         let cloning = binding.is_none();
         if cloning && exists(&target).map_err(text)? {
             return Err(format!(
-                "a Store exists at {}; a clone makes a new Store (pull replaces one)",
+                "a Store exists at {}; a load makes a new Store (pull replaces one)",
                 target.display()
             ));
         }
@@ -200,7 +201,7 @@ fn fetch(
         if !cloning {
             progress::begin("check", None);
         }
-        // the copy's recorded binding: a clone's, and a pull's early refusal
+        // the file's recorded binding: a load's, and a pull's early refusal
         let stat = driver
             .stat(&object)
             .map_err(|e| e.to_string())?
@@ -217,7 +218,7 @@ fn fetch(
             (None, Some(recorded)) => recorded,
             (None, None) => {
                 return Err(format!(
-                    "the remote Store {name} records no {BINDING}; push it again to clone it"
+                    "the remote Store {name} records no {BINDING}; push it again to load it"
                 ));
             }
         };
@@ -279,7 +280,7 @@ fn fetch(
             replaced
         };
         Ok((
-            Cloned {
+            Loaded {
                 binding,
                 bytes: moved.bytes,
                 sha256: moved.sha256,

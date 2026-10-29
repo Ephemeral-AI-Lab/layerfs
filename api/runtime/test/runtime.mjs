@@ -500,7 +500,7 @@ try {
       return "";
     });
     const methods = (group) => Object.keys(group).sort();
-    assert.deepEqual(methods(runtime.store), ["attach_postgresql", "check", "create", "list", "remove", "start_clone", "start_import_postgresql", "start_pull", "start_push"]);
+    assert.deepEqual(methods(runtime.store), ["attach_postgresql", "check", "create", "list", "remove", "start_import_postgresql", "start_load", "start_publish", "start_pull", "start_push", "start_send", "unlink"]);
     assert.deepEqual(methods(runtime.remote), ["add", "list", "list_stores", "providers", "remove"]);
     assert.deepEqual(methods(runtime.postgresql), ["status"]);
     assert.deepEqual(methods(runtime.sync), ["get"]);
@@ -555,22 +555,30 @@ try {
     await assert.rejects(runtime.remote.add({ name: "minio-a", provider: "minio", endpoint: "http://h:9000", bucket: "b", credentials: { accessKey: "k", secretKey: "s" } }), { code: "InvalidInput" });
     assert.equal((await runtime.remote.add({ name: "minio-a", provider: "minio", endpoint: "http://h:9000", bucket: "b" })).credentials, "env:LAYERFS_REMOTE");
     await assert.rejects(runtime.remote.remove("minio-a"), { code: "InvalidInput", message: /confirm/ });
-    // push: one job, keys for this call only
-    const push = await runtime.store.start_push("work", { remote: "minio-a", credentials: { accessKey: "AK", secretKey: "SECRET-1" } });
-    assert.deepEqual([push.kind, push.store, push.remote, push.step], ["push", "work", "minio-a", "running"]);
-    const pushed = await ended(push);
-    assert.deepEqual([pushed.step, pushed.bytes, pushed.result.kind], ["done", 8192, "Pushed"]);
-    assert.equal(nativeArgs("runtime.store.push").credentials.secretKey, "SECRET-1");
-    assert.ok(!JSON.stringify(pushed).includes("SECRET-1"), "a job keeps no key");
-    assert.equal(nativeArgs("runtime.store.push").job, push.id, "the native call reports to the job's progress cell");
-    const afterPush = (await runtime.store.list()).find((s) => s.name === "work");
-    assert.deepEqual([afterPush.remote, afterPush.copies.map((c) => [c.remote, !!c.pushed, c.pulled])], ["minio-a", [["minio-a", true, null]]]);
-    assert.deepEqual(afterPush.copies[0].pushed, { at: 1, bytes: 8192, sha256: "ab".repeat(32), heads: "11".repeat(32) });
-    // #506 E4: a running job's phase and bytes come from the binding's progress cell
+    // #509: an unlinked Store has nothing to push to; push and pull take no remote
+    await assert.rejects(runtime.store.start_push("work", {}), { code: "NotLinked" });
+    await assert.rejects(runtime.store.start_push("work", { remote: "minio-a" }), { code: "InvalidInput", message: /link/ });
+    await assert.rejects(runtime.store.check("work", {}), { code: "NotLinked" });
+    // publish: one job, keys for this call only, a new file (default the Store's name) linked
+    await assert.rejects(runtime.store.start_publish("work", { remote: "minio-a", file: ".bad" }), { code: "InvalidInput" });
+    const publish = await runtime.store.start_publish("work", { remote: "minio-a", credentials: { accessKey: "AK", secretKey: "SECRET-1" } });
+    assert.deepEqual([publish.kind, publish.store, publish.remote, publish.file, publish.step], ["publish", "work", "minio-a", "work", "running"]);
+    const published = await ended(publish);
+    assert.deepEqual([published.step, published.bytes, published.result.kind], ["done", 8192, "Published"], JSON.stringify(published.error));
+    assert.deepEqual([nativeArgs("runtime.store.publish").remote, nativeArgs("runtime.store.publish").file, nativeArgs("runtime.store.publish").credentials.secretKey], ["minio-a", "work", "SECRET-1"]);
+    assert.ok(!JSON.stringify(published).includes("SECRET-1"), "a job keeps no key");
+    assert.equal(nativeArgs("runtime.store.publish").job, publish.id, "the native call reports to the job's progress cell");
+    const afterPublish = (await runtime.store.list()).find((s) => s.name === "work");
+    assert.deepEqual([afterPublish.link.remote, afterPublish.link.file, typeof afterPublish.link.linked, "copies" in afterPublish, "remote" in afterPublish], ["minio-a", "work", "number", false, false]);
+    assert.deepEqual(afterPublish.link.last, { direction: "push", at: 1, bytes: 8192, sha256: "ab".repeat(32), heads: "11".repeat(32) });
+    // one link per Store; one Store per file
+    await assert.rejects(runtime.store.start_publish("work", { remote: "minio-a", file: "other" }), { code: "Linked" });
+    await assert.rejects(runtime.store.start_publish("alpha", { remote: "minio-a", file: "work" }), { code: "Exists", message: /linked to the Store work/ });
+    // push goes to the link; #506 E4: a running job's phase and bytes come from the binding's progress cell
     let release;
     native.hold = new Promise((next) => { release = next; });
-    const slow = await runtime.store.start_push("work", { remote: "minio-a", force: true });
-    assert.deepEqual([slow.phase, slow.bytes, slow.pieces], [null, null, null]);
+    const slow = await runtime.store.start_push("work", { force: true });
+    assert.deepEqual([slow.remote, slow.file, slow.phase, slow.bytes, slow.pieces], ["minio-a", "work", null, null, null]);
     native.progress = { [slow.id]: { phase: "upload", bytes: 4096, total: 8192, pieces: { done: 1, of: 2 } } };
     const sampled = await runtime.sync.get(slow.id);
     assert.deepEqual([sampled.step, sampled.phase, sampled.bytes, sampled.total, sampled.pieces], ["running", "upload", 4096, 8192, { done: 1, of: 2 }]);
@@ -583,31 +591,51 @@ try {
     native.hold = null;
     const slowDone = await ended(slow);
     assert.deepEqual([slowDone.step, slowDone.phase, slowDone.bytes, slowDone.pieces], ["done", null, 8192, null]);
-    assert.equal(nativeArgs("runtime.store.push").force, true);
-    // #506 E3/E8/E9: copy check, providers and bucket listing go to the binding once each
-    await assert.rejects(runtime.store.check("work", {}), { code: "InvalidInput", message: /remote/ });
-    const checked = await runtime.store.check("work", { remote: "minio-a", credentials: { accessKey: "AK", secretKey: "SECRET-2" } });
-    assert.deepEqual([checked.present, checked.bytes, checked.sha256, checked.heads, checked.modified, checked.checkedAt], [true, 8192, "ab".repeat(32), "11".repeat(32), 1000, 2000]);
-    assert.deepEqual([nativeArgs("runtime.store.check").store, nativeArgs("runtime.store.check").remote, nativeArgs("runtime.store.check").credentials.secretKey], ["work", "minio-a", "SECRET-2"]);
-    assert.deepEqual((await runtime.remote.list_stores("minio-a")).map((c) => [c.store, c.bytes]), [["work", 8192]]);
+    assert.deepEqual([nativeArgs("runtime.store.push").force, nativeArgs("runtime.store.push").remote, nativeArgs("runtime.store.push").file], [true, "minio-a", "work"]);
+    // #506 E3/E8/E9: link check, providers and bucket listing go to the binding once each
+    const checked = await runtime.store.check("work", { credentials: { accessKey: "AK", secretKey: "SECRET-2" } });
+    assert.deepEqual([checked.file, checked.present, checked.bytes, checked.sha256, checked.heads, checked.modified, checked.checkedAt], ["work", true, 8192, "ab".repeat(32), "11".repeat(32), 1000, 2000]);
+    assert.deepEqual([nativeArgs("runtime.store.check").store, nativeArgs("runtime.store.check").remote, nativeArgs("runtime.store.check").file, nativeArgs("runtime.store.check").credentials.secretKey], ["work", "minio-a", "work", "SECRET-2"]);
+    assert.deepEqual((await runtime.remote.list_stores("minio-a")).map((c) => [c.file, c.bytes, c.linkedBy]), [["work-snap", 8192, null], ["work", 8192, "work"]]);
     assert.equal(nativeArgs("runtime.remote.list_stores").remote, "minio-a");
     await assert.rejects(runtime.remote.list_stores(""), { code: "InvalidInput" });
     assert.deepEqual((await runtime.remote.providers()).map((p) => [p.id, p.available]), [["minio", true]]);
-    // pull replaces every project: confirm names the Store
-    await assert.rejects(runtime.store.start_pull("work", { remote: "minio-a" }), { code: "InvalidInput", message: /confirm/ });
+    // pull replaces every project from the link: confirm names the Store
+    await assert.rejects(runtime.store.start_pull("work", {}), { code: "InvalidInput", message: /confirm/ });
     native.pullAdded = ["cart"];
-    assert.equal((await ended(await runtime.store.start_pull("work", { remote: "minio-a", confirm: "work" }))).step, "done");
+    assert.equal((await ended(await runtime.store.start_pull("work", { confirm: "work" }))).step, "done");
     const pulled = (await runtime.store.list()).find((s) => s.name === "work");
-    assert.deepEqual([pulled.projects, pulled.copies.map((c) => [c.remote, !!c.pushed, !!c.pulled])], [["shop", "api", "cart"], [["minio-a", true, true]]]);
-    assert.equal(pulled.copies[0].pulled.heads, "22".repeat(32));
+    assert.deepEqual([pulled.projects, pulled.link.last.direction, pulled.link.last.heads, pulled.link.linked], [["shop", "api", "cart"], "pull", "22".repeat(32), afterPublish.link.linked]);
+    assert.deepEqual([nativeArgs("runtime.store.pull").remote, nativeArgs("runtime.store.pull").file], ["minio-a", "work"]);
     assert.ok(nativeArgs("runtime.store.pull").job);
-    // clone: a new Store and volume from the remote copy
-    const clone = await ended(await runtime.store.start_clone("minio-a", { store: "work", as: "copy" }));
-    assert.equal(clone.step, "done");
-    assert.deepEqual([nativeArgs("runtime.store.clone").from, nativeArgs("runtime.store.clone").store], ["work", "copy"]);
+    // send: a copy to a new file, linked to nothing; the Store's link does not change
+    await assert.rejects(runtime.store.start_send("work", { remote: "minio-a", file: "work" }), { code: "Exists" });
+    const sent = await ended(await runtime.store.start_send("work", { remote: "minio-a", file: "work-snap" }));
+    assert.deepEqual([sent.step, sent.result.remote, sent.result.file, sent.result.bytes, sent.result.sha256, sent.result.heads], ["done", "minio-a", "work-snap", 8192, "ab".repeat(32), "11".repeat(32)]);
+    assert.deepEqual((await runtime.store.list()).find((s) => s.name === "work").link, pulled.link);
+    // load: a new Store and volume from a file, linked to it; a linked file is refused, naming its Store
+    await assert.rejects(runtime.store.start_load("minio-a", { file: "work", store: "again" }), { code: "Linked", message: /work/ });
+    await assert.rejects(runtime.store.start_load("minio-a", { file: "work-snap", store: "work" }), { code: "Exists" });
+    native.hold = new Promise((next) => { release = next; });
+    const loading = await runtime.store.start_load("minio-a", { file: "work-snap", store: "copy" });
+    // two loads of one file: the second is refused while the first runs
+    await assert.rejects(runtime.store.start_load("minio-a", { file: "work-snap", store: "copy2" }), { code: "Exists" });
+    release();
+    native.hold = null;
+    const loaded = await ended(loading);
+    assert.equal(loaded.step, "done", JSON.stringify(loaded.error));
+    assert.deepEqual([nativeArgs("runtime.store.load").remote, nativeArgs("runtime.store.load").file, nativeArgs("runtime.store.load").store], ["minio-a", "work-snap", "copy"]);
     const copy = (await runtime.store.list()).find((s) => s.name === "copy");
-    assert.deepEqual([copy.volume, copy.remote, copy.projects], ["layerfs-store-copy", "minio-a", ["docs", "web"]]);
-    await assert.rejects(runtime.store.start_clone("minio-a", { from: "work", store: "copy" }), { code: "Exists" });
+    assert.deepEqual([copy.volume, copy.link.remote, copy.link.file, copy.link.last.direction, copy.projects], ["layerfs-store-copy", "minio-a", "work-snap", "pull", ["docs", "web"]]);
+    await assert.rejects(runtime.store.start_load("minio-a", { file: "work-snap", store: "copy2" }), { code: "Linked", message: /copy/ });
+    // a connection a Store links to cannot be removed
+    await assert.rejects(runtime.remote.remove("minio-a", { confirm: "minio-a" }), { code: "InUse", message: /copy, work/ });
+    // unlink: the Store becomes local only; the file stays
+    await assert.rejects(runtime.store.unlink("copy", {}), { code: "InvalidInput", message: /confirm/ });
+    assert.deepEqual(await runtime.store.unlink("copy", { confirm: "copy" }), { kind: "Unlinked", store: "copy", remote: "minio-a", file: "work-snap" });
+    assert.equal(nativeArgs("runtime.store.unlink").store, "copy");
+    assert.equal((await runtime.store.list()).find((s) => s.name === "copy").link, null);
+    await assert.rejects(runtime.store.unlink("copy", { confirm: "copy" }), { code: "NotLinked" });
     // PostgreSQL: an import makes a schema Store; the URL is never written
     native.storeProjects = [{ name: "api", stack: "s1", headLayer: "l1" }, { name: "shop", stack: "s2", headLayer: "l2" }];
     const url = "postgresql://lfc:PG-SECRET@host.docker.internal:5432/layerfs";
@@ -633,7 +661,7 @@ try {
     // the same project name in two Stores: calls name the Store
     await assert.rejects(runtime.project.get_state("shop"), { code: "InvalidInput", message: /Stores main, work/ });
     await assert.rejects(runtime.project.start_init("shop", folder, { store: "main" }), { code: "Unsupported" });
-    await assert.rejects(runtime.store.start_push("main", { remote: "minio-a" }), { code: "Unsupported" });
+    await assert.rejects(runtime.store.start_push("main", {}), { code: "Unsupported" });
     // a PostgreSQL project's state (its Sandboxes too) takes the URL for that call only
     await assert.rejects(runtime.project.get_state("shop", undefined, { store: "main" }), { code: "InvalidInput", message: /url/ });
     await runtime.project.get_state("shop", undefined, { store: "main", url });
@@ -658,6 +686,15 @@ try {
     assert.ok(calls.some((a) => a.join(" ") === "volume rm layerfs-store-copy"));
     assert.equal(nativeArgs("runtime.store.forget").store, "copy");
     assert.deepEqual((await runtime.store.list()).map((s) => s.name), ["alpha", "main", "work"]);
+    // a version 1 registry (per-remote copies) is read with no link; the first write keeps it as stores.v1.json
+    const v2 = JSON.parse(readFileSync(join(home, "stores.json"), "utf8"));
+    assert.equal(v2.version, 2);
+    const v1 = JSON.stringify({ version: 1, stores: v2.stores.map(({ link, ...s }) => ({ ...s, remote: "minio-a", copies: [{ remote: "minio-a", pushed: null, pulled: null }] })) });
+    writeFileSync(join(home, "stores.json"), v1);
+    assert.deepEqual((await runtime.store.list()).map((s) => [s.name, s.link, "copies" in s]), [["alpha", null, false], ["main", null, false], ["work", null, false]]);
+    await runtime.store.create("fresh");
+    assert.equal(readFileSync(join(home, "stores.v1.json"), "utf8"), v1);
+    assert.equal(JSON.parse(readFileSync(join(home, "stores.json"), "utf8")).version, 2);
     rmSync(folder, { recursive: true, force: true });
     await runtime.close();
   } else {

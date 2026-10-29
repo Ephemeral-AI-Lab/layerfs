@@ -99,9 +99,13 @@ export class LayerFSRuntime {
       create: live((name) => stores.create(this, name)),
       remove: live((name, options) => stores.remove(this, name, options)),
       attach_postgresql: live((options) => stores.attach_postgresql(this, options)),
+      // #509: one link per SQLite Store
+      start_publish: live((name, options) => sync.start_publish(this, syncs, name, options)),
       start_push: live((name, options) => sync.start_push(this, syncs, name, options)),
       start_pull: live((name, options) => sync.start_pull(this, syncs, name, options)),
-      start_clone: live((remote, options) => sync.start_clone(this, syncs, remote, options)),
+      start_send: live((name, options) => sync.start_send(this, syncs, name, options)),
+      start_load: live((remote, options) => sync.start_load(this, syncs, remote, options)),
+      unlink: live((name, options) => stores.unlink(this, name, options)),
       start_import_postgresql: live((name, options) => sync.start_import_postgresql(this, syncs, name, options)),
       check: live((name, options) => stores.check(this, name, options)),
     };

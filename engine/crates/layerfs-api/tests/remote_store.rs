@@ -1,6 +1,7 @@
 //! A Store pushed to a remote and pulled into a fresh location has
 //! identical history (#506 R): the same Branches, Commits and files. The
-//! remote keys it by the Store's name and holds many Stores.
+//! remote keys each Store file by a file name (#509: the one the Store
+//! links to) and holds many.
 //! The push is a consistent snapshot (a Commit after it is not pulled); a
 //! pull refuses to replace a Store that is open and replaces it once closed.
 //!
@@ -164,10 +165,48 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
     assert_eq!(driver.stat(&object).unwrap().unwrap(), stat);
     // the home records the last transfer of each Store, outside the Store
     let home = work.join("home");
-    let recorded = Transfer::now("origin", Direction::Push, pushed.sha256, pushed.bytes);
+    let recorded = Transfer::now(
+        "origin",
+        STORE,
+        Direction::Push,
+        pushed.sha256,
+        pushed.bytes,
+    );
     let state_file = state::state_path(&home, STORE).unwrap();
     state::save(&state_file, &recorded).unwrap();
     assert_eq!(state::load(&state_file).unwrap(), Some(recorded));
+    // #509, the team-examples case: a send of the Store to another file
+    // leaves its link record alone, so the next push through the link checks
+    // the linked file against that link's own record and goes ahead
+    let sent = push("alpha-sent", Expected::Absent).unwrap();
+    assert_eq!(sent.object, "alpha-sent/store.sqlite");
+    // a publish or send onto an existing file is refused before any upload
+    let exists = push("alpha-sent", Expected::Absent).unwrap_err();
+    assert!(
+        matches!(exists, PushFailure::RemoteMoved { found: Some(sha), .. } if sha == sent.sha256),
+        "{exists}"
+    );
+    let expected = state::expected(&state_file, "origin", STORE).unwrap();
+    assert_eq!(expected, Expected::Sha256(pushed.sha256));
+    let pushed = push(STORE, expected).unwrap();
+    let recorded = Transfer::now(
+        "origin",
+        STORE,
+        Direction::Push,
+        pushed.sha256,
+        pushed.bytes,
+    );
+    state::save(&state_file, &recorded).unwrap();
+    // another link's record never vouches for a file
+    assert_eq!(
+        state::expected(&state_file, "origin", "alpha-sent").unwrap(),
+        Expected::Absent
+    );
+    assert_eq!(
+        state::expected(&state_file, "r2", STORE).unwrap(),
+        Expected::Absent
+    );
+    pieces::delete(driver.as_ref(), "alpha-sent/store.sqlite").unwrap();
     // a Commit after the push is not in the pushed Store
     write(&source, "work", "/notes.txt", "after the push\n");
     assert_ne!(history(&source), before);
@@ -193,24 +232,30 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
         return;
     }
     let pulled = outcome.unwrap();
-    // a clone makes a new Store with the remote copy's binding
+    // a load makes a new Store with the remote file's binding
     fs::create_dir(work.join("clone")).unwrap();
     let fresh = work.join("clone/global/store.sqlite");
-    let cloned = remote::clone_store(driver.as_ref(), STORE, &fresh, [77; 32]).unwrap();
+    let cloned = remote::load(driver.as_ref(), STORE, &fresh, [77; 32]).unwrap();
     assert_eq!(cloned.binding, installed::BINDING);
     assert_eq!((cloned.bytes, cloned.sha256), (pushed.bytes, pushed.sha256));
     let clone = open(&fresh, &work.join("clone-overlay"));
     assert_eq!(history(&clone), before);
     clone.close();
-    // a clone never replaces a Store
-    let refused = remote::clone_store(driver.as_ref(), STORE, &fresh, [77; 32]).unwrap_err();
+    // a load never replaces a Store
+    let refused = remote::load(driver.as_ref(), STORE, &fresh, [77; 32]).unwrap_err();
     assert!(refused.cause.contains("a Store exists"), "{refused}");
     assert!(refused.left.is_none());
     assert_eq!((pulled.bytes, pulled.sha256), (pushed.bytes, pushed.sha256));
     assert!(!pulled.replaced);
     let opened = open(&destination, &work.join("first"));
     assert_eq!(history(&opened), before);
-    let pulled = Transfer::now("origin", Direction::Pull, pulled.sha256, pulled.bytes);
+    let pulled = Transfer::now(
+        "origin",
+        STORE,
+        Direction::Pull,
+        pulled.sha256,
+        pulled.bytes,
+    );
     state::save(&state_file, &pulled).unwrap();
     assert_eq!(state::load(&state_file).unwrap(), Some(pulled));
     assert_eq!(fs::read_dir(home.join("remote-state")).unwrap().count(), 1);

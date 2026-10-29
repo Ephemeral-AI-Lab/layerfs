@@ -1,8 +1,15 @@
-//! The last push or pull of each Store, kept in a small file per Store in
-//! the LayerFS home (`remote-state/NAME`), outside the Store: a pull
-//! replaces the Store file, so state inside it would be overwritten.
-//! Since #506 E2 a transfer also records the Store's history heads digest
-//! (`heads`), read from the file that moved; a record from before has none.
+//! The link of each SQLite Store and its last push or pull, kept in a small
+//! file per Store in the LayerFS home (`remote-state/NAME`), outside the
+//! Store: a pull replaces the Store file, so state inside it would be
+//! overwritten. Since #506 E2 a transfer also records the Store's history
+//! heads digest (`heads`), read from the file that moved; a record from
+//! before has none.
+//!
+//! Since #509 a record names the remote file it moved (`file`; the object
+//! `<prefix>/<file>/store.sqlite`) and its time in milliseconds. A record
+//! written before has no `file` line: its file is the Store's own name (the
+//! object path then) and its time, in seconds, is read as milliseconds.
+use crate::remote::push::Expected;
 use layerfs_remote_storage::pieces::{hex, parse_hex32};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
@@ -23,8 +30,10 @@ pub enum Direction {
 pub struct Transfer {
     /// The remote's name in the home's settings.
     pub remote: String,
+    /// The remote file's name: the object `<prefix>/<file>/store.sqlite`.
+    pub file: String,
     pub direction: Direction,
-    /// Completion time, in seconds since the Unix epoch.
+    /// Completion time, in milliseconds since the Unix epoch.
     pub at: u64,
     pub sha256: [u8; 32],
     pub bytes: u64,
@@ -34,13 +43,20 @@ pub struct Transfer {
 
 impl Transfer {
     /// A transfer that completed now.
-    pub fn now(remote: &str, direction: Direction, sha256: [u8; 32], bytes: u64) -> Self {
+    pub fn now(
+        remote: &str,
+        file: &str,
+        direction: Direction,
+        sha256: [u8; 32],
+        bytes: u64,
+    ) -> Self {
         Self {
             remote: remote.to_owned(),
+            file: file.to_owned(),
             direction,
             at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map_or(0, |elapsed| elapsed.as_secs()),
+                .map_or(0, |elapsed| elapsed.as_millis() as u64),
             sha256,
             bytes,
             heads: None,
@@ -59,8 +75,9 @@ impl Transfer {
             Direction::Pull => "pull",
         };
         let mut text = format!(
-            "remote {}\ndirection {direction}\nat {}\nsha256 {}\nbytes {}\n",
+            "remote {}\nfile {}\ndirection {direction}\nat {}\nsha256 {}\nbytes {}\n",
             self.remote,
+            self.file,
             self.at,
             hex(&self.sha256),
             self.bytes
@@ -71,16 +88,15 @@ impl Transfer {
         text
     }
 
-    fn decode(text: &str) -> Result<Self, String> {
-        let mut lines = text.lines();
-        let mut field = |name: &str| {
-            lines
-                .next()
-                .and_then(|line| line.strip_prefix(name)?.strip_prefix(' '))
-                .map(str::to_owned)
-                .ok_or_else(|| format!("remote state: {name}"))
+    /// Reads a record; `store` is the file of a record from before #509.
+    fn decode(text: &str, store: &str) -> Result<Self, String> {
+        let mut lines = text.lines().peekable();
+        let remote = line(&mut lines, "remote")?;
+        let named = match lines.peek() {
+            Some(next) if next.starts_with("file ") => Some(line(&mut lines, "file")?),
+            _ => None,
         };
-        let remote = field("remote")?;
+        let mut field = |name: &str| line(&mut lines, name);
         let direction = match field("direction")?.as_str() {
             "push" => Direction::Push,
             "pull" => Direction::Pull,
@@ -88,6 +104,14 @@ impl Transfer {
         };
         let number = |text: String| text.parse::<u64>().map_err(|_| "remote state: number");
         let at = number(field("at")?)?;
+        // a record from before #509 counts seconds
+        let at = if named.is_some() {
+            at
+        } else {
+            at.saturating_mul(1000)
+        };
+        let file = named.unwrap_or_else(|| store.to_owned());
+        crate::remote::settings::store_object(&file)?;
         let sha256 = parse_hex32(&field("sha256")?).ok_or("remote state: sha256")?;
         let bytes = number(field("bytes")?)?;
         // optional: a record from before #506 E2 ends here
@@ -104,6 +128,7 @@ impl Transfer {
         }
         Ok(Self {
             remote,
+            file,
             direction,
             at,
             sha256,
@@ -111,6 +136,15 @@ impl Transfer {
             heads,
         })
     }
+}
+
+/// The next line, which must be `name value`: its value.
+fn line<'a>(lines: &mut impl Iterator<Item = &'a str>, name: &str) -> Result<String, String> {
+    lines
+        .next()
+        .and_then(|line| line.strip_prefix(name)?.strip_prefix(' '))
+        .map(str::to_owned)
+        .ok_or_else(|| format!("remote state: {name}"))
 }
 
 /// The state file of the Store named `store` in the home `home`.
@@ -122,8 +156,32 @@ pub fn state_path(home: &Path, store: &str) -> Result<PathBuf, String> {
 /// The last transfer recorded at `path`, or `None` when there is none.
 pub fn load(path: &Path) -> Result<Option<Transfer>, String> {
     match fs::read_to_string(path) {
-        Ok(text) => Transfer::decode(&text).map(Some),
+        Ok(text) => {
+            let store = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            Transfer::decode(&text, store).map(Some)
+        }
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("{}: {error}", path.display())),
+    }
+}
+
+/// What the linked file `(remote, file)` must hold for a push through the
+/// link whose record is at `path`: the sha256 the record names when it is
+/// that link's, whatever its direction; no file when the record names
+/// another file or there is none (a push then never overwrites a file this
+/// home did not move).
+pub fn expected(path: &Path, remote: &str, file: &str) -> Result<Expected, String> {
+    Ok(match load(path)? {
+        Some(last) if last.remote == remote && last.file == file => Expected::Sha256(last.sha256),
+        _ => Expected::Absent,
+    })
+}
+
+/// Removes the record at `path` (an unlinked Store's); `false` when there was none.
+pub fn remove(path: &Path) -> Result<bool, String> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(format!("{}: {error}", path.display())),
     }
 }

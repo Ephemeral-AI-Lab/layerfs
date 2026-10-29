@@ -1,5 +1,6 @@
 //! What a home's remotes hold, without downloading (#506 E3, E8, E9): one
-//! stat of a Store's copy, one listing of every Store copy on a remote, and
+//! stat of a Store's linked file (#509), one listing of every Store file on
+//! a remote, and
 //! the providers this build can add. Each request is sent once; a failure
 //! is answered with a stable code (Unavailable, Denied, Unknown, …).
 use crate::job::{refused, Outcome};
@@ -59,16 +60,19 @@ fn record(fields: Vec<(&'static str, SdkValue)>) -> SdkValue {
     )
 }
 
-/// `runtime.store.check { home, store, remote, credentials? }`: one stat of
-/// the Store's copy: `{ store, remote, present, bytes, sha256, heads,
-/// modified, checkedAt }` (times in ms since the epoch).
+/// `runtime.store.check { home, store, remote, file, credentials? }`: one
+/// stat of the remote file the Store links to: `{ store, remote, file,
+/// present, bytes, sha256, heads, modified, checkedAt }` (times in ms since
+/// the epoch).
 pub(crate) fn check(args: &SdkValue) -> Outcome {
     let store = text(args, "store")?;
+    let file = text(args, "file")?;
     let (name, driver) = driver(args)?;
-    let checked = remote::check(driver.as_ref(), store).map_err(|e| remote_refusal(&e))?;
+    let checked = remote::check(driver.as_ref(), file).map_err(|e| remote_refusal(&e))?;
     let mut fields = vec![
         ("store", SdkValue::text(store)),
         ("remote", SdkValue::text(&name)),
+        ("file", SdkValue::text(file)),
     ];
     match checked {
         Checked::Absent => fields.extend([
@@ -88,7 +92,7 @@ pub(crate) fn check(args: &SdkValue) -> Outcome {
 }
 
 /// `runtime.remote.list_stores { home, remote, credentials? }`: every Store
-/// copy on the remote, `[{ store, bytes, sha256, heads, modified }]`.
+/// file on the remote, `[{ file, bytes, sha256, heads, modified }]`.
 pub(crate) fn list_stores(args: &SdkValue) -> Outcome {
     let (_, driver) = driver(args)?;
     let copies = remote::list_stores(driver.as_ref()).map_err(|e| remote_refusal(&e))?;
@@ -96,7 +100,7 @@ pub(crate) fn list_stores(args: &SdkValue) -> Outcome {
         copies
             .iter()
             .map(|copy| {
-                let mut fields = vec![("store", SdkValue::text(&copy.store))];
+                let mut fields = vec![("file", SdkValue::text(&copy.file))];
                 fields.extend(copy_fields(copy));
                 record(fields)
             })

@@ -59,7 +59,7 @@ fn check_and_list_store_copies() {
     let listed = list_stores(&remote).unwrap();
     let shown: Vec<_> = listed
         .iter()
-        .map(|c| (c.store.as_str(), c.bytes, c.sha256, c.heads))
+        .map(|c| (c.file.as_str(), c.bytes, c.sha256, c.heads))
         .collect();
     assert_eq!(
         shown,

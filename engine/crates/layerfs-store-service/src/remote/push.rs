@@ -1,7 +1,8 @@
 //! Push: one consistent snapshot of a live Store, staged beside it, its size
 //! checked against the remote's limits, then one upload of the whole file
 //! (as pieces when it is larger than the remote holds as one object) with
-//! its sha256, under the Store's name.
+//! its sha256, as the remote file the caller names (#509: the Store's link,
+//! or a new file for a publish or a send).
 //!
 //! The snapshot's history heads digest goes with it as `layerfs-heads`
 //! (#506 E2). Progress (#506 E4) reports `check`, `snapshot` (bytes copied),
@@ -18,14 +19,15 @@ use std::path::{Path, PathBuf};
 
 /// Metadata key of the SQLite version that wrote the pushed Store.
 pub const SQLITE_VERSION: &str = "layerfs-sqlite";
-/// Metadata key of the Store's binding key (hex), which a clone opens with.
+/// Metadata key of the Store's binding key (hex), which a load opens with.
 /// The binding is not a secret; the cursor key never leaves its holder.
 pub const BINDING: &str = "layerfs-binding";
 
-/// What the remote must hold for a push to go ahead: the copy this home
-/// last pushed or pulled. Checked before the snapshot and again just before
-/// the upload; not atomic (no compare-and-swap on the remote), so a push by
-/// another machine in between is not detected.
+/// What the remote must hold for a push to go ahead: the file this home
+/// last pushed or pulled through the Store's link, or nothing for a publish
+/// or a send to a new file. Checked before the snapshot and again just
+/// before the upload; not atomic (no compare-and-swap, which not every
+/// provider has), so a push by another machine in between is not detected.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Expected {
     /// No check: overwrite whatever is there.
@@ -41,7 +43,7 @@ const MANIFEST_LINE: u64 = 96;
 /// What a push uploaded.
 #[derive(Debug)]
 pub struct Pushed {
-    /// The remote file, `NAME/store.sqlite`.
+    /// The remote object, `FILE/store.sqlite`.
     pub object: String,
     pub bytes: u64,
     pub sha256: [u8; 32],
@@ -146,7 +148,7 @@ fn check_expected(
 }
 
 /// Pushes the live Store `opened`, whose file is `store` and whose binding
-/// key is `binding`, to `driver` as the Store named `name`, if the remote
+/// key is `binding`, to `driver` as the remote file `name`, if the remote
 /// holds the `expected` copy. The snapshot is staged at `store` + `.pushing`, on
 /// the Store's own filesystem, after checking room for one Store-sized copy
 /// plus the Store's write headroom;

@@ -106,14 +106,21 @@ What follows from the Store being the unit:
    │ ≤ provider max? single PUT / multipart       │ Workspace or worker
    │ > max file?     split into pieces            │ holds the Store open
    ▼                                              ▼
- <prefix>/<store>/store.sqlite                 one rename: the Store is replaced
- record push (store, remote, at, sha, bytes)   (all of its projects)
+ <prefix>/<file>/store.sqlite (the link's file) one rename: the Store is replaced
+ record push (remote, file, at ms, sha, bytes) (all of its projects)
  in the home, not in the Store                 record pull in the home
 
- Clone (pull into a NEW Store)                 Import SQLite Store → PostgreSQL
- ─────────────────────────────                 ────────────────────────────────
+ Load (pull into a NEW Store)                  Import SQLite Store → PostgreSQL
+ ────────────────────────────                  ────────────────────────────────
  remote file ──download──► new volume          sealed SQLite Store ──import──►
- ──► register as a Store bound to the remote   one schema (all stacks, same ids)
+ ──► register a Store linked to that file      one schema (all stacks, same ids)
+
+ One link per SQLite Store (#509, links.md)
+ ──────────────────────────────────────────
+ connection (provider, endpoint, bucket, prefix, keys ref)   binds no Store
+ local Store ──link──► one remote file      a file is linked by ≤ 1 Store
+ Publish: unlinked Store → new file, linked    Send: a copy → new file, unlinked
+ Load: file → new Store, linked                Unlink: the file stays, loadable
 
  Two machines, one remote (whole file)
  ─────────────────────────────────────
@@ -121,8 +128,10 @@ What follows from the Store being the unit:
   B: pull team ─ work on docs ─ push ✘ the remote moved since B's pull
 ```
 
-- **Push and pull state:** the record of each push and pull lives in a home
-  file, keyed by Store, because a pull replaces the Store file.
+- **Link and push/pull state:** each SQLite Store's link (remote, file) and
+  its last push or pull live in a home file, keyed by Store
+  (`remote-state/<store>`, twin of the runtime's `stores.json` link),
+  because a pull replaces the Store file.
 - **Pull refuses while the Store is open:** any daemon, mounted Workspace, or
   SDK or worker handle on it. On macOS the worker keeps a Store open for a
   quiet minute after use.
@@ -133,7 +142,7 @@ What follows from the Store being the unit:
 
 ```text
 LayerFS Connect (Electron)
-  Storage page: Stores list → Store detail (projects, copies, Push/Pull/Import)
+  Storage page: Stores list → Store detail (projects, link, Push/Pull/Import)
   host/ (Node): storage.js keeps remote keys and PostgreSQL URLs, owner-only
         │ @layerfs/runtime: store.* · project.* · remote.* · sync jobs
         │ @layerfs/agent:   fs, branch, workspace on (store, project)
@@ -175,7 +184,7 @@ engine/crates/layerfs-remote-storage/src/
   s3_api/ local_folder/ minio/          (first)
   cloudflare_r2/                        (HTTPS, `tls` feature)
   aws_s3/ google_drive/ …               (later)
-engine/crates/layerfs-store-service/src/remote/   settings, push, pull, clone
+engine/crates/layerfs-store-service/src/remote/   settings, push, pull, load, link state
 ```
 
 Store-first API layer:
@@ -196,21 +205,24 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
 
 | Call | Does |
 | --- | --- |
-| `runtime.store.list()` | Stores in the home: `{ name, kind: 'sqlite' \| 'postgresql', volume?, connection?, schema?, synchronousCommit?, remote, legacy, created, projects: [names], copies: [copy], bytes, open, heads, importedFrom }`; a copy is `{ remote, pushed: { at, bytes, sha256, heads } \| null, pulled: { at, bytes, sha256, heads } \| null }`, the latest of each per remote (the binding also records each transfer in `HOME/remote-state/<store>`). For a local SQLite Store, `bytes: { file, wal }` and `open` (its `-shm` exists) come from stat calls, and `heads` is its history heads digest (below), all from one `runtime.store.stat` binding call in the process that sees the volume (the worker on macOS and Windows); null when that call fails, and always null for a PostgreSQL Store. `importedFrom: { store, at, bytes }` names the SQLite Store a PostgreSQL Store was imported from (null otherwise) |
+| `runtime.store.list()` | Stores in the home: `{ name, kind: 'sqlite' \| 'postgresql', volume?, connection?, schema?, synchronousCommit?, link, legacy, created, projects: [names], bytes, open, heads, importedFrom }`. A SQLite Store's `link` (#509, [links.md](links.md)) is `{ remote, file, linked, last } \| null`: the connection, the remote file (object `<prefix>/<file>/store.sqlite`), when it was linked (ms) and its last transfer `{ direction: 'push' \| 'pull', at (ms), bytes, sha256, heads } \| null`; a PostgreSQL Store's is null. The binding keeps the link's twin in `HOME/remote-state/<store>`. `stores.json` is version 2; a version 1 file (per-remote `copies`) is read with no links and kept as `stores.v1.json` at the first write. For a local SQLite Store, `bytes: { file, wal }` and `open` (its `-shm` exists) come from stat calls, and `heads` is its history heads digest (below), all from one `runtime.store.stat` binding call in the process that sees the volume (the worker on macOS and Windows); null when that call fails, and always null for a PostgreSQL Store. `importedFrom: { store, at, bytes }` names the SQLite Store a PostgreSQL Store was imported from (null otherwise) |
 | `runtime.store.create(name)` | a new empty local SQLite Store in its own volume `<prefix>store-<name>` |
 | `runtime.store.remove(name, { confirm, stopSandboxes })` | deletes a local Store's volume (every project in it; Busy while a Sandbox runs on it, unless `stopSandboxes`), or forgets a PostgreSQL Store (its schema stays) |
 | `runtime.project.start_init(name, folder, { store })` | Inits a project into the live Store `store` through its writer lane and admission (Exists for a taken name, Busy while another add runs, Unsupported for a Store without acquisition tables or a PostgreSQL Store); without `store`, into a new Store of the same name, as before |
 | `runtime.project.remove(name, { store, confirm, stopSandboxes, url })` | in a Store that holds others: removes the project's Sandboxes (Busy while one runs, unless `stopSandboxes`) and drops its stack (a PostgreSQL Store's `url` is passed for the call), answering `{ kind: 'Removed', project, store, stack, packsKept: true }`; packs stay until A8 (#411). A project alone in its own Store is removed whole, with its volume, as before |
 | `runtime.project.list()`, `get_state(name, since, { store, url })`, `runtime.sandbox.reclaim(name, { store, url })` | `list` items carry `store` and `shared`; `{ store }` names the Store when a project name is in several (InvalidInput otherwise); a project of a PostgreSQL Store needs its connection's `url` for that call (InvalidInput without it), and its client is opened for the call and closed after it |
-| `runtime.remote.list() / add(r) / remove(name, { confirm })` | remotes in the home; `add({ name, provider: 'minio', endpoint, bucket, prefix?, region?, credentials?, partSize? })` or `add({ name, provider: 'r2', account, jurisdiction?, bucket, prefix?, credentials?, partSize? })` takes a credential reference (`env:LAYERFS_…` or `file:/path`, default `env:LAYERFS_REMOTE`), never keys. R2 is reached at `https://<account>[.<jurisdiction>].r2.cloudflarestorage.com`, region `auto`, and needs a build with the `tls` feature |
-| `runtime.store.start_push(store, { remote, credentials, force })` | whole-Store upload job; Conflict when the remote moved since this home's last transfer with it, unless `force` |
-| `runtime.store.start_pull(store, { remote, credentials, confirm })` | replace-the-Store job (all of its projects); closes this process's clients first, refuses Busy while anything else holds the Store |
-| `runtime.store.start_clone(remote, { from, store, credentials })` | a new local Store `store` from the remote copy of `from` (default `store`); `{ store, as }` (`store` on the remote, `as` here) is accepted too |
+| `runtime.remote.list() / add(r) / remove(name, { confirm })` | remotes in the home; `add({ name, provider: 'minio', endpoint, bucket, prefix?, region?, credentials?, partSize? })` or `add({ name, provider: 'r2', account, jurisdiction?, bucket, prefix?, credentials?, partSize? })` takes a credential reference (`env:LAYERFS_…` or `file:/path`, default `env:LAYERFS_REMOTE`), never keys. R2 is reached at `https://<account>[.<jurisdiction>].r2.cloudflarestorage.com`, region `auto`, and needs a build with the `tls` feature. A connection binds no Store; `remove` is refused `InUse`, naming them, while a Store links to it (#509) |
+| `runtime.store.start_publish(store, { remote, file = store, credentials })` | job: uploads an **unlinked** SQLite Store to a **new** remote file and links it. `Linked` when the Store has a link; `Exists` when a Store of the home links to `(remote, file)`, a running job of this process is making it, or an object is there (one HEAD before the snapshot and again before the upload; never overwritten). A race with another home between that HEAD and the upload is not detected (no conditional PUT on every provider) |
+| `runtime.store.start_push(store, { credentials, force })` | job: whole-Store upload to the Store's link; no `remote` argument (`InvalidInput`). `NotLinked` without a link; `Conflict` when the file is not what the link's record names (sha256, whatever the record's direction; no file when there is no record), unless `force` |
+| `runtime.store.start_send(store, { remote, file, credentials })` | job: uploads a copy of any SQLite Store to a **new** file; links nothing and changes no record of the Store. `Exists` as for publish. `result` names `{ remote, file, bytes, sha256, heads }` |
+| `runtime.store.start_pull(store, { credentials, confirm })` | job: replaces the Store (all of its projects) from its link; no `remote` argument. `NotLinked` without a link; closes this process's clients first, refuses Busy while anything else holds the Store |
+| `runtime.store.start_load(remote, { file, store = file, credentials })` | job: a new local Store `store` from the remote file, linked to it (replaces `start_clone`). `Linked`, naming the Store, when a Store of the home links to the file; `Exists` for a taken Store name or while another job of this process loads or links the file |
+| `runtime.store.unlink(store, { confirm })` | drops the Store's link and its `remote-state` record; the remote file stays and can be loaded. `confirm` is the Store's name; `NotLinked` without a link |
 | `runtime.store.attach_postgresql({ name, connection, url, schema, synchronousCommit })` | registers the PostgreSQL Store `name` after checking it opens: a schema this home imported keeps its recorded identity; any other LayerFS schema is read for its binding and gets a fresh cursor key |
 | `runtime.store.start_import_postgresql(store, { name, connection, url, schema, synchronousCommit })` | copies a SQLite Store (every project, the same ids) into a new schema and registers it as the PostgreSQL Store `name` (default `<store>-pg`) |
-| `runtime.sync.get(id)` | a push, pull, clone or import job: `{ id, kind, store, remote, step: 'running' \| 'done' \| 'failed', phase, bytes, total, pieces, error: { code, message }, started, ended, result }`; `error.message` is readable as is (for example a push's free-space refusal, code Capacity, or a pull refused while the Store is open). While it runs, `phase` and the phase's `bytes` of `total` (and `pieces: { done, of }` for a file stored as pieces) are the native call's progress cell, which it updates at most every 250 ms for bytes (a new phase at once): push `check`, `snapshot` (bytes copied of the copy's size), `hash`, `upload`, `record`; pull `check`, `download`, `verify`, `install`, `record`; clone the same without `check`; import `copy` (no byte count) and `record`. Once done, `phase` and `pieces` are null and `bytes` is what moved; `result.transfer` carries `heads` |
-| `runtime.store.check(store, { remote, credentials })` | one HEAD of `<prefix>/<store>/store.sqlite`: `{ store, remote, present, bytes, sha256, heads, modified, checkedAt }` (times in ms since the epoch; `bytes` is the whole file's, also for a copy stored as pieces); failures keep their code (`Unavailable`, `Denied` for 401/403, `Unknown` when the outcome is unknown) |
-| `runtime.remote.list_stores(remote, { credentials })` | every Store copy in the remote: `[{ store, bytes, sha256, heads, modified }]`, from one paged ListObjectsV2 pass plus a HEAD per copy where the listing lacks its metadata (S3 listings never carry it), at most 64; beyond that `sha256` and `heads` are null |
+| `runtime.sync.get(id)` | a publish, push, pull, send, load or import job: `{ id, kind, store, remote, file, step: 'running' \| 'done' \| 'failed', phase, bytes, total, pieces, error: { code, message }, started, ended, result }`; `error.message` is readable as is (for example a push's free-space refusal, code Capacity, or a pull refused while the Store is open). While it runs, `phase` and the phase's `bytes` of `total` (and `pieces: { done, of }` for a file stored as pieces) are the native call's progress cell, which it updates at most every 250 ms for bytes (a new phase at once): publish, push and send `check`, `snapshot` (bytes copied of the copy's size), `hash`, `upload`, `record` (send without `record`); pull `check`, `download`, `verify`, `install`, `record`; load the same without `check`; import `copy` (no byte count) and `record`. Once done, `phase` and `pieces` are null and `bytes` is what moved; `result.transfer` carries `heads` |
+| `runtime.store.check(store, { credentials })` | one HEAD of the Store's linked file `<prefix>/<file>/store.sqlite`: `{ store, remote, file, present, bytes, sha256, heads, modified, checkedAt }` (times in ms since the epoch; `bytes` is the whole file's, also for a file stored as pieces); `NotLinked` without a link; failures keep their code (`Unavailable`, `Denied` for 401/403, `Unknown` when the outcome is unknown) |
+| `runtime.remote.list_stores(remote, { credentials })` | every Store file in the remote: `[{ file, bytes, sha256, heads, modified, linkedBy }]` (`linkedBy`: the home's Store linked to it, or null; a fact of this home only, never written to the bucket), from one paged ListObjectsV2 pass plus a HEAD per file where the listing lacks its metadata (S3 listings never carry it), at most 64; beyond that `sha256` and `heads` are null |
 | `runtime.remote.providers()` | the providers this build can add: `[{ id: 'minio' \| 'r2' \| 'local_folder', label, available, reason, fields: [{ name, label, kind, required }] }]`; R2 is available only in a build with `tls` |
 | `runtime.postgresql.status({ url, schemas })` | one connection, made once: `{ reachable: true, serverVersion, latencyMs, latencyUs, schemas: { [schema]: bytes \| null } }` (the `SHOW server_version` round trip; the sum of `pg_total_relation_size` over the schema's tables and materialized views; null for a schema the server lacks), or `{ reachable: false, error: { code: 'Unavailable' \| 'Denied', message } }`; a failed query after connecting is refused `Failed` |
 
@@ -231,9 +243,9 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
   read-only while no process holds it, so that connection opens read-write
   as `query_only` and writes nothing; the last opener's close removes the
   sidecars it made. Reads are serialized with that process's pull and
-  clone of the Store: while either runs the remembered value is answered.
+  load of the Store: while either runs the remembered value is answered.
   Push reads it from its snapshot, records it and sends it as the copy's
-  `layerfs-heads` metadata; pull and clone read it from the downloaded file
+  `layerfs-heads` metadata; pull and load read it from the downloaded file
   before installing it. Every upload also records the whole file's size as
   `layerfs-bytes`. A PostgreSQL `url` is
   passed per call and is never written to the home or kept in a job.

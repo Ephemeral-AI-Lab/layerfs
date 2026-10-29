@@ -3,6 +3,7 @@
 use layerfs_store_service::remote::state::{self, Direction, Transfer};
 use layerfs_store_service::remote::storage::minio::{MinioSettings, DEFAULT_PART_SIZE};
 use layerfs_store_service::remote::storage::CredentialRef;
+use layerfs_store_service::remote::Expected;
 use layerfs_store_service::remote::{store_object, Provider, Remotes};
 use std::path::PathBuf;
 
@@ -99,15 +100,34 @@ fn stores_are_keyed_by_name_and_their_state_kept_in_the_home() {
     let path = state::state_path(&home, "alpha").unwrap();
     assert_eq!(path, home.join("remote-state/alpha"));
     assert_eq!(state::load(&path).unwrap(), None);
-    let pushed = Transfer::now("origin", Direction::Push, [9; 32], 4096);
+    let pushed = Transfer::now("origin", "alpha-file", Direction::Push, [9; 32], 4096);
+    // #509: the record names its file and counts milliseconds
+    assert!(pushed.at > 1_000_000_000_000, "{}", pushed.at);
     state::save(&path, &pushed).unwrap();
     assert_eq!(state::load(&path).unwrap(), Some(pushed.clone()));
+    assert!(std::fs::read_to_string(&path)
+        .unwrap()
+        .starts_with("remote origin\nfile alpha-file\ndirection push\n"));
     let pulled = Transfer {
         direction: Direction::Pull,
         ..pushed
     };
     state::save(&path, &pulled).unwrap();
     assert_eq!(state::load(&path).unwrap(), Some(pulled.clone()));
+    // a push through the link expects what the link's own record says,
+    // whatever its direction; another link's record vouches for nothing
+    assert_eq!(
+        state::expected(&path, "origin", "alpha-file").unwrap(),
+        Expected::Sha256([9; 32])
+    );
+    assert_eq!(
+        state::expected(&path, "origin", "alpha").unwrap(),
+        Expected::Absent
+    );
+    assert_eq!(
+        state::expected(&path, "r2", "alpha-file").unwrap(),
+        Expected::Absent
+    );
     // #506 E2: the heads digest of the moved file round-trips; a record
     // from before it has none
     let headed = pulled.clone().with_heads(Some([3; 32]));
@@ -116,12 +136,22 @@ fn stores_are_keyed_by_name_and_their_state_kept_in_the_home() {
     assert!(std::fs::read_to_string(&path)
         .unwrap()
         .ends_with(&format!("heads {}\n", "03".repeat(32))));
+    // a record from before #509: no file line (the file is the Store's
+    // name, the object path then) and its time in seconds
     let old = format!(
         "remote origin\ndirection pull\nat 7\nsha256 {}\nbytes 4096\n",
         "09".repeat(32)
     );
     std::fs::write(&path, old).unwrap();
-    assert_eq!(state::load(&path).unwrap().unwrap().heads, None);
+    let read = state::load(&path).unwrap().unwrap();
+    assert_eq!(
+        (read.file.as_str(), read.at, read.heads),
+        ("alpha", 7000, None)
+    );
+    assert_eq!(
+        state::expected(&path, "origin", "alpha").unwrap(),
+        Expected::Sha256([9; 32])
+    );
     std::fs::write(
         &path,
         format!("{}heads zz\n", std::fs::read_to_string(&path).unwrap()),
@@ -130,6 +160,12 @@ fn stores_are_keyed_by_name_and_their_state_kept_in_the_home() {
     assert!(state::load(&path).is_err());
     std::fs::write(&path, "remote origin\ndirection sideways\n").unwrap();
     assert!(state::load(&path).is_err());
+    std::fs::write(&path, "remote origin\nfile ../x\ndirection push\nat 7\n").unwrap();
+    assert!(state::load(&path).is_err());
+    // unlinking drops the record; the second time there is none
+    assert!(state::remove(&path).unwrap());
+    assert!(!state::remove(&path).unwrap());
+    assert_eq!(state::load(&path).unwrap(), None);
     std::fs::remove_dir_all(home).unwrap();
 }
 
