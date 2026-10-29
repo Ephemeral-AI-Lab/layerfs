@@ -31,6 +31,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-overlay",
     "layerfs-workspace",
     "layerfs-store-service",
+    "layerfs-remote-storage",
     "layerfs-fuse",
     "layerfs-daemon",
     "layerfs-api",
@@ -46,6 +47,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-overlay": "#![forbid(unsafe_code)]",
     "layerfs-workspace": "#![forbid(unsafe_code)]",
     "layerfs-store-service": "#![forbid(unsafe_code)]",
+    "layerfs-remote-storage": "#![forbid(unsafe_code)]",
     "layerfs-fuse": "#![forbid(unsafe_code)]",
     "layerfs-daemon": "#![forbid(unsafe_code)]",
     "layerfs-api": "#![forbid(unsafe_code)]",
@@ -84,6 +86,8 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-overlay": set(),
     "layerfs-workspace": {"layerfs-content", "layerfs-overlay", "layerfs-telemetry"},
     "layerfs-fuse": {"layerfs-content", "layerfs-overlay", "layerfs-workspace"},
+    # Whole-file remote drivers; they know nothing about Stores.
+    "layerfs-remote-storage": set(),
     # The Store engine (#352 F-020): the SDK's Store calls in-process and the
     # Store/overlay ports daemon Workspace Commits use; it opens the Store.
     "layerfs-store-service": {
@@ -140,6 +144,7 @@ LAYER = {
     "layerfs-project": ENGINE,
     "layerfs-sandbox": ENGINE,
     "layerfs-store-service": ENGINE,
+    "layerfs-remote-storage": ENGINE,
     "layerfs-workspace": ENGINE,
     # The SDK method surface and the Node binding are engine crates; api/ holds
     # only the published JavaScript packages, so no crate is in the api layer.

@@ -362,6 +362,7 @@ ENGINE_CRATES = {
     "layerfs-project",
     "layerfs-sandbox",
     "layerfs-store-service",
+    "layerfs-remote-storage",
     "layerfs-workspace",
     "layerfs-api",
     "layerfs-node",
