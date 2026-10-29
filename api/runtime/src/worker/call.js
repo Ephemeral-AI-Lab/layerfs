@@ -5,7 +5,12 @@
 const PAGE = 1 << 20;
 
 /** The Store a call names, as the binding's storeOpen and storeClose take it. */
-export const storeOf = (args) => ({ project: args.project, home: args.home, storePath: args.storePath });
+export const storeOf = (args) => ({
+  project: args.project, home: args.home, storePath: args.storePath,
+  ...(args.readOnly ? { readOnly: true } : {}),
+});
+/** One worker Store slot: path and whether it was opened read-only. */
+export const storeKey = (args) => `${args.storePath}\0${args.readOnly ? "1" : "0"}`;
 
 /** Makes the call once: its answer, `{ value }` or `{ refused }`. */
 export async function made(binding, fn, op, args) {

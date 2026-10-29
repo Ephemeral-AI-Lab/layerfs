@@ -49,3 +49,48 @@ fn direct_access_is_unsupported_on_a_filesystem_outside_the_allowlist() {
     assert_eq!(before, after);
     std::fs::remove_dir_all(directory).unwrap();
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_read_only_open_is_unsupported_on_a_filesystem_outside_the_allowlist() {
+    let directory = scratch(Path::new("/dev/shm"), "tmpfs-ro");
+    let store = directory.join("store.sqlite");
+    std::fs::write(&store, b"not opened").unwrap();
+    let before = std::fs::read(&store).unwrap();
+    let outcome = StoreService::open_read_only(&store, b"binding", [7; 32]);
+    let reason = match outcome {
+        Err(OpenRefusal::Unsupported(reason)) => reason.0,
+        Err(other) => panic!("expected Unsupported, got {other:?}"),
+        Ok(_) => panic!("expected Unsupported, the Store opened"),
+    };
+    assert!(reason.contains("ext4, xfs or btrfs"), "{reason}");
+    assert_eq!(before, std::fs::read(&store).unwrap());
+    let extras: Vec<_> = std::fs::read_dir(&directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(extras, [std::ffi::OsString::from("store.sqlite")]);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_read_only_open_names_a_missing_store() {
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("layerfs-missing-ro-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let store = directory.join("store.sqlite");
+    match StoreService::open_read_only(&store, b"binding", [7; 32]) {
+        Err(OpenRefusal::Missing(reason)) => {
+            assert!(reason.contains("no installed Store"), "{reason}");
+        }
+        Err(OpenRefusal::Unsupported(_)) => {
+            // The target directory is not on ext4/xfs/btrfs; the guard still
+            // ran before any file was created.
+        }
+        Err(other) => panic!("expected Missing or Unsupported, got {other:?}"),
+        Ok(_) => panic!("expected Missing or Unsupported, the Store opened"),
+    }
+    assert!(!store.exists());
+    std::fs::remove_dir_all(directory).unwrap();
+}

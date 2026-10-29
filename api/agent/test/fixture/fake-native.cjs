@@ -36,6 +36,9 @@ function answer(op, args) {
   if (refuse.includes(op)) return refusal(process.env.CLI_FAKE_CODE || "Conflict", `${op} refused by the fake`, { op });
   if (args.storePath === "/missing") return refusal("NoSuchProject", "no such project");
   if (args.path === "/missing") return refusal("NoSuchPath", "/missing does not exist");
+  if (args.readOnly && /^(fs\.(write|edit|apply|mkdir|rm|cp|mv)|branch\.(fork|merge|publish))$/.test(op)) {
+    return refusal("ReadOnly", "this Store is open read-only");
+  }
   switch (op) {
     case "project.init":
       if (exports.initRefusal) return { refused: exports.initRefusal };
@@ -99,7 +102,7 @@ const traced = (op, args) => {
 };
 exports.stores = [];
 // The in-process Store (#352 F-020): opened once per client, never traced.
-exports.storeOpen = async (args) => { log("store.open", args); exports.stores.push(["open", args.storePath]); return { value: { clients: 1 } }; };
+exports.storeOpen = async (args) => { log("store.open", args); exports.stores.push(args.readOnly ? ["open", args.storePath, true] : ["open", args.storePath]); return { value: { clients: 1 } }; };
 exports.storeClose = async (args) => { log("store.close", args); exports.stores.push(["close", args.storePath]); return { value: { clients: 0 } }; };
 exports.call = async (op, args) => traced(op, args);
 exports.backendCall = async (op, args) => traced(op, args);
