@@ -355,6 +355,8 @@ fn commit_held(
                     token,
                     force: false,
                     message: None,
+                    author: None,
+                    labels: Vec::new(),
                 }))
                 .map(|done| done.reply)
                 .map_err(|failure| format!("{failure:?}"))
@@ -391,6 +393,8 @@ fn commit_plain(fixture: &Fixture, token: layerfs_bridge::control::WorkspaceToke
             token,
             force: false,
             message: None,
+                    author: None,
+                    labels: Vec::new(),
         }))
         .map(|done| done.reply)
         .map_err(|failure| format!("{failure:?}"));

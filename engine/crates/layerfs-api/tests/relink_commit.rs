@@ -191,6 +191,8 @@ fn relink(
             &layerfs_store_service::store::CommitOptions {
                 force: false,
                 message: Some("relink".to_owned()),
+                author: None,
+                labels: Vec::new(),
             },
             CommitVia::Files,
         )

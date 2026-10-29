@@ -96,7 +96,9 @@ removed/added blocks with comparisonCoarse. Diff hunks may be omitted
 explicitly under comparison/reply bounds; equality uses immutable identity.
 
 Commit-v3 includes the message and operation/origin/displacement metadata in
-identity, excluding time/counters/LWW details. History persists fork origins,
+identity, excluding author/labels/time/counters/LWW details. Author and labels
+are bounded creation-time annotations; a repeated derived id keeps the first
+stored annotations. History persists fork origins,
 second parents, merge origins, displacement, LWW facts and overwritten Layers.
 The UI consumes those facts. Store accounting is maintained in original atomic
 publication/insertion transactions and read from one fixed row plus page PRAGMAs;
@@ -128,7 +130,9 @@ The Dirty detail is bounded. Busy still represents held runtime/kernel/operation
 ownership. Reaping and requests on replaced inodes retain the owner's deferral.
 
 Disposable/WAL/OFF only; Durable is NOT_RUN pending explicit owner reauthorization.
-New Store schema/identity records reject old Disposable Stores without migration.
+New Store schema/identity records reject old Disposable Stores without migration;
+P7's nullable Commit author/labels columns instead use the additive writable-open
+migration described in [the global Store](84-global-sqlite-store.md).
 
 Issue #352 source update, 2026-10-19 (api shape recovery). Since F-020 the
 `fs`, `branch` and `project.list_branches` methods are not daemon calls: they
@@ -242,8 +246,9 @@ layerfs-store-service/src/        [3706 shown]  (partial: the engine)
 
 The public `sandbox` group (`create`, `mount`, `exec`, `status`, `commit`,
 `unmount`, `close`) is replaced by `workspace`: `mount(branch)`,
-`exec(ws, command, message?)`, `status(ws)`, `commit(ws, message?, force?)`,
-`unmount(ws, discard?)`. A Workspace is `{ sandbox, path }`. The binding
+`exec(ws, command, message?)`, `status(ws)`,
+`commit(ws, message?, force?, { author?, labels? }?)`, `unmount(ws, discard?)`.
+A Workspace is `{ sandbox, path }`. The binding
 places each mount in the project's numbered Sandboxes under the project's
 placement lock (the lowest-numbered running one of the mount's image,
 `deploy.image` or the mount's `{ image }`, with fewer than 16 Workspaces, else

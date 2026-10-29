@@ -8,9 +8,9 @@ import { readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { CASES, ENV, contains, made, plain } from "./fixture/cases.mjs";
-import { P1_CASES } from "./fixture/cases-area-p.mjs";
+import { P1_CASES, P7_CASES } from "./fixture/cases-area-p.mjs";
 
-const ALL_CASES = [...CASES, ...P1_CASES];
+const ALL_CASES = [...CASES, ...P1_CASES, ...P7_CASES];
 const FAKE = fileURLToPath(new URL("./fixture/fake-native.cjs", import.meta.url));
 Object.assign(process.env, ENV, { LAYERFS_NATIVE: FAKE });
 delete process.env.CLI_FAKE_LOG;

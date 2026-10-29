@@ -77,6 +77,11 @@ pub fn commit_value(record: &CommitRecord, branch: Option<&str>) -> SdkValue {
         ("root", SdkValue::text(hex(record.root.as_bytes()))),
         ("via", SdkValue::text(via(meta.via))),
         ("message", SdkValue::opt_text(meta.message.clone())),
+        ("author", SdkValue::opt_text(meta.author.clone())),
+        (
+            "labels",
+            SdkValue::List(meta.labels.iter().map(SdkValue::text).collect()),
+        ),
         (
             "mergedFrom",
             SdkValue::opt_text(meta.merged_from.map(|id| hex(id.as_slice()))),

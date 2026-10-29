@@ -1063,6 +1063,8 @@ fn simultaneous_mounts_over_related_roots_are_isolated_and_a_stale_token_never_r
                 token,
                 force: false,
                 message: None,
+                author: None,
+                labels: Vec::new(),
             }),
             Request::Attach(token),
             Request::Unmount(layerfs_bridge::control::UnmountControl {

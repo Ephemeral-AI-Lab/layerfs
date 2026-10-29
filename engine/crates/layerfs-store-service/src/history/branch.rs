@@ -257,7 +257,10 @@ pub fn list_commits(
                 seen += 1;
                 continue;
             }
-            let cost = record.meta.message.as_ref().map_or(0, String::len) + 1024;
+            let cost = record.meta.message.as_ref().map_or(0, String::len)
+                + record.meta.author.as_ref().map_or(0, String::len)
+                + layerfs_history::labels::encode(&record.meta.labels).len()
+                + 1024;
             if items.len() == limit || spent + cost > crate::read::reads::REPLY_BUDGET {
                 more = true;
                 break 'pages;

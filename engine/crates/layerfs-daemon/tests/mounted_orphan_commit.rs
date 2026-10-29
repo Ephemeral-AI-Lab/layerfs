@@ -360,6 +360,8 @@ fn commit(service: Arc<Service>, token: WorkspaceToken) -> JoinHandle<Finished> 
             token,
             force: false,
             message: None,
+            author: None,
+            labels: Vec::new(),
         });
         match service.execute_control(&request) {
             Ok(done) => Finished {

@@ -16,9 +16,9 @@ import { CALLS, INIT } from "../src/calls.js";
 import { usage } from "../src/help.js";
 import { tables, written } from "./doc-tables.mjs";
 import { CASES, ENV, contains, made, plain } from "../../agent/test/fixture/cases.mjs";
-import { P1_CASES } from "../../agent/test/fixture/cases-area-p.mjs";
+import { P1_CASES, P7_CASES } from "../../agent/test/fixture/cases-area-p.mjs";
 
-const AGREEMENT_CASES = [...CASES, ...P1_CASES];
+const AGREEMENT_CASES = [...CASES, ...P1_CASES, ...P7_CASES];
 
 const CLI = fileURLToPath(new URL("../src/layerfs.js", import.meta.url));
 const FAKE = fileURLToPath(new URL("../../agent/test/fixture/fake-native.cjs", import.meta.url));
@@ -133,6 +133,9 @@ for (const [why, argv, message] of [
   ["bool with a value", ["branch", "diff_branches", "a", "b", "--no-hunks=yes"], "--no-hunks takes no value"],
   ["int that is not a whole number", ["project", "list_branches", "--page-size", "x"], "--page-size takes a whole number"],
   ["bad JSON option", ["branch", "merge", "a", "b", "ab", "--units", "{"], "--units is not JSON"],
+  ["malformed labels JSON", ["workspace", "commit", WS, "--labels", "{"], "--labels is not JSON"],
+  ["labels that are not an array", ["workspace", "commit", WS, "--labels", "null"], "--labels must be a JSON array of strings"],
+  ["a non-string label", ["workspace", "commit", WS, "--labels", '["call",7]'], "--labels must be a JSON array of strings"],
   ["option with no value", ["fs", "mkdir", "cart", "/d", "-m"], "-m needs a value"],
   ["bad Workspace handle", ["workspace", "commit", "1/workspaces/w1"], "a Workspace is <sandbox>:<path>"],
   ["Workspace handle with no path", ["workspace", "commit", "1:"], "a Workspace is <sandbox>:<path>"],
@@ -211,7 +214,7 @@ test("exec --stream passes the command's output and exit code through", () => {
 
 test("--text prints readable results", () => {
   const r = cli(["--text", "workspace", "commit", WS]);
-  assert.equal(r.out, "kind: Committed\nhead: c0ffee\ncommit:\n  id: c0ffee\n  logical: 120\n  newCanonical: 40\n  newStored: 30\n  newMetadata: 8\n");
+  assert.equal(r.out, "kind: Committed\nhead: c0ffee\ncommit:\n  id: c0ffee\n  author: -\n  labels: (none)\n  logical: 120\n  newCanonical: 40\n  newStored: 30\n  newMetadata: 8\n");
   assert.equal(cli(["--text", "fs", "read", "main", "/a"]).out, "text: |\n  a\nnextLine: 2\n");
 });
 

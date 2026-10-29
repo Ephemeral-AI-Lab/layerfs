@@ -135,7 +135,10 @@ Any other permitted process can use the same mount through ordinary filesystem
 calls; the filesystem daemon supervises no commands.
 
 [Commit](../../engine/crates/layerfs-api/src/sandbox/commit.rs) captures the shared
-published frontier and returns Committed or UpToDate. It does not filter mutations
+published frontier and returns Committed or UpToDate. `CommitControl` also carries
+optional author text and an ordered label list; both are bounded creation-time
+annotations outside Commit identity and are returned in every Commit value.
+It does not filter mutations
 by launch route or command completion. [Status](../../engine/crates/layerfs-api/src/sandbox/status.rs)
 retains the existing maintained-state scope and never resolves an unknown operation.
 

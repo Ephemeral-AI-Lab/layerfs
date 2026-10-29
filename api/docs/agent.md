@@ -195,7 +195,20 @@ base, activity, changed }` (`activity` Idle or Busy) plus the daemon's record. A
 `{ sandbox, path }`, its Sandbox's number and its path in that Sandbox
 (`/workspaces/1`, `/workspaces/2`, … numbered per Sandbox); `exec`, `status`,
 `commit` and `unmount` take it. Every Workspace of a project sees the same
-Store, so which Sandbox holds it changes nothing a command sees. A Sandbox's
+Store, so which Sandbox holds it changes nothing a command sees.
+
+`workspace.commit(ws, message?, force?, options?)` accepts trailing
+`{ author?, labels? }`: one author string and an array of label strings,
+preserving label order and duplicates. Author and each label are at most 4096
+UTF-8 bytes with no controls except newline/tab; there are at most 64 labels
+and their complete JSON array is at most 4096 bytes. Null options/fields,
+unknown keys and wrong shapes are refused `InvalidInput` before the binding.
+The CLI equivalents are `--author <text>` and `--labels <json-array>`.
+Commit results and every history read carry `author` (string or null) and
+`labels` (always an array). These creation-time annotations do not participate
+in Commit identity; a repeated derived Commit keeps its original attribution.
+
+A Sandbox's
 container is `<prefix><project>-<n>`, labelled `layerfs.role=sandbox`,
 `layerfs.project` and `layerfs.sandbox=<n>`; its only mount is the project's
 Store volume. Its records are `LAYERFS_HOME/<project>/sandboxes/<n>/`, with
@@ -532,7 +545,7 @@ table differs, and when a family's files stop matching the SDK's.
 | `fs.mv` | `layerfs fs mv <branch> <from-path> <to-path> [-m <text>]` |
 | `workspace.mount` | `layerfs workspace mount <sandbox> <branch>` |
 | `workspace.exec` | `layerfs workspace exec <ws> <command> [-m <text>] [--stream]` |
-| `workspace.commit` | `layerfs workspace commit <ws> [-m <text>] [--force]` |
+| `workspace.commit` | `layerfs workspace commit <ws> [-m <text>] [--force] [--author <text>] [--labels <json>]` |
 | `workspace.unmount` | `layerfs workspace unmount <ws> [--discard] [--force]` |
 | `sandbox.create` | `layerfs sandbox create [--image <text>]` |
 | `sandbox.list_workspaces` | `layerfs sandbox list_workspaces <sandbox> [--page-size <n>] [--page-pos <n>]` |

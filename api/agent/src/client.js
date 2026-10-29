@@ -139,12 +139,35 @@ export function diffOptions({ cursor, hunks } = {}) {
   return { ...(cursor == null ? {} : { cursor }), ...(hunks === undefined ? {} : { hunks }) };
 }
 
-export function checkedMessage(message) {
-  if (message === undefined) return undefined;
-  if (typeof message !== "string" || Buffer.byteLength(message) > 4096 || [...message].some((c) => (c.codePointAt(0) < 32 && c !== "\n" && c !== "\t") || (c.codePointAt(0) >= 127 && c.codePointAt(0) <= 159) || (c.codePointAt(0) >= 0xd800 && c.codePointAt(0) <= 0xdfff))) {
-    throw new LayerFSError("InvalidInput", "message must be UTF-8, at most 4096 bytes, with no controls except newline/tab", null);
+function checkedText(value, name) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || Buffer.byteLength(value) > 4096 || [...value].some((c) => (c.codePointAt(0) < 32 && c !== "\n" && c !== "\t") || (c.codePointAt(0) >= 127 && c.codePointAt(0) <= 159) || (c.codePointAt(0) >= 0xd800 && c.codePointAt(0) <= 0xdfff))) {
+    throw new LayerFSError("InvalidInput", `${name} must be UTF-8, at most 4096 bytes, with no controls except newline/tab`, null);
   }
-  return message;
+  return value;
+}
+
+export function checkedMessage(message) {
+  return checkedText(message, "message");
+}
+
+export function commitOptions(options = {}) {
+  if (options === null || typeof options !== "object" || Array.isArray(options)) {
+    throw new LayerFSError("InvalidInput", "options must be { author?, labels? }", null);
+  }
+  for (const key of Object.keys(options)) {
+    if (!["author", "labels"].includes(key)) throw new LayerFSError("InvalidInput", `unknown workspace.commit option "${key}"`, null);
+  }
+  const author = checkedText(options.author, "author");
+  const labels = options.labels;
+  if (labels !== undefined && (!Array.isArray(labels) || labels.length > 64 || [...labels].some((label) => typeof label !== "string"))) {
+    throw new LayerFSError("InvalidInput", "labels must be an array of at most 64 strings", null);
+  }
+  const checked = labels?.map((label) => checkedText(label, "each label"));
+  if (checked !== undefined && Buffer.byteLength(JSON.stringify(checked)) > 4096) {
+    throw new LayerFSError("InvalidInput", "labels JSON must be at most 4096 bytes", null);
+  }
+  return { ...(author === undefined ? {} : { author }), ...(checked === undefined ? {} : { labels: checked }) };
 }
 
 /** A write's last argument as call fields: a Commit message string, or
