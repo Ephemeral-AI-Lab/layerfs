@@ -230,7 +230,14 @@ job call answers `{ id, … }` at once; `runtime.sync.get(id)` (or
   host's loopback on Docker Desktop; on a Linux Docker Engine the URL must
   name an address containers reach. Demand-loaded reads and Commit lookups
   go to the server, behind the daemon's 64 MiB shared object cache, with no
-  host SQLite cache yet (#420). Merges work as on SQLite: a merge's working
+  host SQLite cache yet (#420). Each server statement is a round trip, so
+  the engine keeps them few: immutable reads (locations, inode values,
+  packs) run outside a transaction, a pack's descriptor comes with the
+  first 64 KiB of its body, and binding hints and file digests go as array
+  statements (up to 1024 rows each). A server in a container on the same
+  Docker engine is best reached at its bridge address (Connect does this);
+  through `host.docker.internal` a round trip on Docker Desktop costs about
+  0.75 ms instead of about 0.13 ms. Merges work as on SQLite: a merge's working
   records live in temporary tables of the writer's connection (outside the
   checked Store schema, gone with the connection, written without the
   publication lane), so a Commit whose Branch moved since mount merges, and
