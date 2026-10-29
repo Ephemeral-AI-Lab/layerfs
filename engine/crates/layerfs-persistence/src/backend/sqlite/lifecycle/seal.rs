@@ -1,5 +1,7 @@
 //! Sole-owner host seal; never available through the daemon's Store ports.
-use super::{connection::Session, query, rows};
+use crate::backend::sqlite::session::connection::Session;
+use crate::backend::sqlite::session::query;
+use crate::backend::sqlite::session::rows;
 use crate::{backend::records::BackendError, SealedStore};
 use layerfs_storage::port::PersistenceError;
 
@@ -18,7 +20,8 @@ impl Session {
         #[cfg(target_os = "linux")]
         let state = {
             let mut state = state;
-            state.writer_hold = Some(super::writer_admission::Writer::acquire(&self.path)?);
+            state.writer_hold =
+                Some(crate::backend::sqlite::lane::writer_admission::Writer::acquire(&self.path)?);
             state
         };
         #[cfg(target_os = "macos")]

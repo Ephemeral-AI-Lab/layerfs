@@ -67,7 +67,7 @@ impl PackPersistence for StorageProvider {
         plan: &mut dyn PackReadPlan,
     ) -> Result<PersistedPackRead, PersistenceError> {
         self.session
-            .read_immutable(|tx| crate::backend::sqlite::objects_selection::read(tx, id, plan))
+            .read_immutable(|tx| crate::backend::sqlite::objects::selection::read(tx, id, plan))
     }
     fn read_scoped_pack(
         &self,
@@ -75,7 +75,7 @@ impl PackPersistence for StorageProvider {
         plan: &mut dyn PackReadPlan,
     ) -> Result<AcquiredPackRead, PersistenceError> {
         self.session.read_immutable(|tx| {
-            crate::backend::sqlite::objects_selection::read_scoped(tx, id, plan)
+            crate::backend::sqlite::objects::selection::read_scoped(tx, id, plan)
         })
     }
     fn inode_values(
@@ -103,20 +103,20 @@ impl PackPersistence for StorageProvider {
         match self.session.layout {
             crate::SqlitePackLayout::Monolithic => Ok((1, pack.body.len() as u64)),
             crate::SqlitePackLayout::GroupRows | crate::SqlitePackLayout::GroupRowsIndexed => {
-                crate::backend::sqlite::unit_layout::cost(pack)
+                crate::backend::sqlite::objects::unit_layout::cost(pack)
             }
         }
     }
     fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError> {
         publication::validate(batch)?;
         if self.session.layout.uses_units() {
-            crate::backend::sqlite::unit_layout::validate_batch(batch)?;
+            crate::backend::sqlite::objects::unit_layout::validate_batch(batch)?;
         }
         // Only pack bytes are guarded; metadata-only batches may use the margin.
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         if !batch.packs.is_empty() {
             let bytes = batch.packs.iter().map(|pack| pack.body.len() as u64).sum();
-            crate::backend::sqlite::headroom::admit(&self.session.path, bytes)?;
+            crate::backend::sqlite::lifecycle::headroom::admit(&self.session.path, bytes)?;
         }
         self.session.run(true, |tx| publication::publish(tx, batch))
     }

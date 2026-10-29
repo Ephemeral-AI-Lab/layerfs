@@ -79,7 +79,7 @@ impl Writer {
     }
 }
 
-impl super::connection::State {
+impl crate::backend::sqlite::session::connection::State {
     pub(crate) fn finish_writer(&mut self) -> Result<(), BackendError> {
         if self.quarantined {
             // Connection is declared before this retained owner in State, so

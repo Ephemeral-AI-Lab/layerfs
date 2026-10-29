@@ -2,8 +2,9 @@
 //! cooperative writer lock, held by one thread across a short read-decide-write
 //! sequence. Its own SQL work runs as ordinary transactions inside the held
 //! turn; no other publication of any process can interleave.
-use super::{connection::Session, writer_admission::Writer};
+use super::writer_admission::Writer;
 use crate::backend::records::BackendError;
+use crate::backend::sqlite::session::connection::Session;
 use std::{marker::PhantomData, sync::Arc};
 
 /// A held lane; dropping it releases the writer lock, then the turn.

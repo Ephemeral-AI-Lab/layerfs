@@ -1,6 +1,6 @@
 //! Immutable bodies and bounded multi-row locator statements in one transaction.
-use super::transaction::Transaction;
 use crate::backend::records::{BackendError, Param};
+use crate::backend::sqlite::session::transaction::Transaction;
 use layerfs_content::ObjectId;
 use layerfs_storage::{location::PackDomain, port::*};
 use std::collections::BTreeSet;
@@ -65,14 +65,14 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
     if canonical != 0 || stored != 0 || metadata != 0 {
         tx.query("UPDATE store_totals SET canonical=canonical+?1,stored=stored+?2,metadata=metadata+?3 WHERE id=1", vec![Param::I64(canonical as i64),Param::I64(stored as i64),Param::I64(metadata as i64)])?;
     }
-    super::metadata_values::write(tx, &batch.inode_values)?;
+    crate::backend::sqlite::metadata::values::write(tx, &batch.inode_values)?;
     if let Some((first, count)) = batch.release_ordinals {
         tx.query(
             "UPDATE store_policy SET next_ordinal=?1 WHERE id=1 AND next_ordinal=?1+?2",
             vec![Param::I64(i64::from(first)), Param::I64(count as i64)],
         )?;
     }
-    super::metadata_signatures::write(tx, &batch.signatures)?;
+    crate::backend::sqlite::metadata::signatures::write(tx, &batch.signatures)?;
     Ok(Published {
         lost: batch
             .objects

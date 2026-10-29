@@ -1,5 +1,7 @@
 //! Combined schema identity and deterministic definition validation.
-use super::{connection::SqlWork, query, transaction::Transaction};
+use super::session::connection::SqlWork;
+use super::session::query;
+use super::session::transaction::Transaction;
 use crate::backend::records::{BackendError, Param, Record};
 use rusqlite::Connection;
 use std::cell::RefCell;
@@ -122,7 +124,7 @@ pub(crate) fn check(
     Ok(())
 }
 
-impl super::connection::Session {
+impl super::session::connection::Session {
     pub(crate) fn initialize(
         &self,
         policy: layerfs_storage::StoragePolicy,

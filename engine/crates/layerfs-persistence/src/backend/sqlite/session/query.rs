@@ -1,138 +1,139 @@
 //! Closed statement selection and measured SQLite execution.
-use super::{connection::SqlWork, rows};
+use super::connection::SqlWork;
+use super::rows;
 use crate::backend::records::{BackendError, Param, Record};
 use rusqlite::{Connection, StatementStatus};
 use std::{cell::RefCell, time::Instant};
 pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
     match key {
         "statistics_totals" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/statistics_totals.sql"
+            "../../../../sql/sqlite/queries/history/statistics_totals.sql"
         )),
         "statistics_record_init" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/statistics_record_init.sql"
+            "../../../../sql/sqlite/queries/history/statistics_record_init.sql"
         )),
         "allocation_advance_scope" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/allocation_advance_scope.sql"
+            "../../../../sql/sqlite/queries/history/allocation_advance_scope.sql"
         )),
         "allocation_insert_scope" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/allocation_insert_scope.sql"
+            "../../../../sql/sqlite/queries/history/allocation_insert_scope.sql"
         )),
         "allocation_scope_by_id" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/allocation_scope_by_id.sql"
+            "../../../../sql/sqlite/queries/history/allocation_scope_by_id.sql"
         )),
         "hint_insert_binding" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/hint_insert_binding.sql"
+            "../../../../sql/sqlite/queries/history/hint_insert_binding.sql"
         )),
         "hint_bindings_of" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/hint_bindings_of.sql"
+            "../../../../sql/sqlite/queries/history/hint_bindings_of.sql"
         )),
         "digest_insert" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/digest_insert.sql"
+            "../../../../sql/sqlite/queries/history/digest_insert.sql"
         )),
         "digest_of" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/digest_of.sql"
+            "../../../../sql/sqlite/queries/history/digest_of.sql"
         )),
         "branch_branch_by_id" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/branch_branch_by_id.sql"
+            "../../../../sql/sqlite/queries/history/branch_branch_by_id.sql"
         )),
         "branch_branch_by_name" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/branch_branch_by_name.sql"
+            "../../../../sql/sqlite/queries/history/branch_branch_by_name.sql"
         )),
         "branch_branch_first_page" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/branch_branch_first_page.sql"
+            "../../../../sql/sqlite/queries/history/branch_branch_first_page.sql"
         )),
         "branch_branch_name_taken" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/branch_branch_name_taken.sql"
+            "../../../../sql/sqlite/queries/history/branch_branch_name_taken.sql"
         )),
         "branch_branch_next_page" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/branch_branch_next_page.sql"
+            "../../../../sql/sqlite/queries/history/branch_branch_next_page.sql"
         )),
         "branch_insert_branch" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/branch_insert_branch.sql"
+            "../../../../sql/sqlite/queries/history/branch_insert_branch.sql"
         )),
         "commit_advance_branch" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/commit_advance_branch.sql"
+            "../../../../sql/sqlite/queries/history/commit_advance_branch.sql"
         )),
         "commit_commit_by_id" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/commit_commit_by_id.sql"
+            "../../../../sql/sqlite/queries/history/commit_commit_by_id.sql"
         )),
         "commit_insert_commit" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/commit_insert_commit.sql"
+            "../../../../sql/sqlite/queries/history/commit_insert_commit.sql"
         )),
         "layerstack_advance_stack" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/layerstack_advance_stack.sql"
+            "../../../../sql/sqlite/queries/history/layerstack_advance_stack.sql"
         )),
         "layerstack_insert_layer" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/layerstack_insert_layer.sql"
+            "../../../../sql/sqlite/queries/history/layerstack_insert_layer.sql"
         )),
         "layerstack_insert_stack" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/layerstack_insert_stack.sql"
+            "../../../../sql/sqlite/queries/history/layerstack_insert_stack.sql"
         )),
         "layerstack_layer_by_id" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/layerstack_layer_by_id.sql"
+            "../../../../sql/sqlite/queries/history/layerstack_layer_by_id.sql"
         )),
         "layerstack_layer_by_source" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/layerstack_layer_by_source.sql"
+            "../../../../sql/sqlite/queries/history/layerstack_layer_by_source.sql"
         )),
         "layerstack_layer_root" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/layerstack_layer_root.sql"
+            "../../../../sql/sqlite/queries/history/layerstack_layer_root.sql"
         )),
         "layerstack_stack_by_id" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/layerstack_stack_by_id.sql"
+            "../../../../sql/sqlite/queries/history/layerstack_stack_by_id.sql"
         )),
         "layerstack_stack_first_page" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/layerstack_stack_first_page.sql"
+            "../../../../sql/sqlite/queries/history/layerstack_stack_first_page.sql"
         )),
         "layerstack_stack_head" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/layerstack_stack_head.sql"
+            "../../../../sql/sqlite/queries/history/layerstack_stack_head.sql"
         )),
         "layerstack_stack_by_name" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/layerstack_stack_by_name.sql"
+            "../../../../sql/sqlite/queries/history/layerstack_stack_by_name.sql"
         )),
         "layerstack_stack_name_taken" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/layerstack_stack_name_taken.sql"
+            "../../../../sql/sqlite/queries/history/layerstack_stack_name_taken.sql"
         )),
         "layerstack_stack_next_page" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/layerstack_stack_next_page.sql"
+            "../../../../sql/sqlite/queries/history/layerstack_stack_next_page.sql"
         )),
         "lineage_commit" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_commit.sql"
+            "../../../../sql/sqlite/queries/history/lineage_commit.sql"
         )),
         "lineage_layer" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_layer.sql"
+            "../../../../sql/sqlite/queries/history/lineage_layer.sql"
         )),
         "lineage_layers_above" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_layers_above.sql"
+            "../../../../sql/sqlite/queries/history/lineage_layers_above.sql"
         )),
         "lineage_commit_at" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_commit_at.sql"
+            "../../../../sql/sqlite/queries/history/lineage_commit_at.sql"
         )),
         "lineage_insert_commit" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_insert_commit.sql"
+            "../../../../sql/sqlite/queries/history/lineage_insert_commit.sql"
         )),
         "lineage_insert_layer" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_insert_layer.sql"
+            "../../../../sql/sqlite/queries/history/lineage_insert_layer.sql"
         )),
         "lineage_merges" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_merges.sql"
+            "../../../../sql/sqlite/queries/history/lineage_merges.sql"
         )),
         "lineage_absorbed_below" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_absorbed_below.sql"
+            "../../../../sql/sqlite/queries/history/lineage_absorbed_below.sql"
         )),
         "lineage_absorbed_height" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_absorbed_height.sql"
+            "../../../../sql/sqlite/queries/history/lineage_absorbed_height.sql"
         )),
         "lineage_absorb" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_absorb.sql"
+            "../../../../sql/sqlite/queries/history/lineage_absorb.sql"
         )),
         "lineage_reach" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_reach.sql"
+            "../../../../sql/sqlite/queries/history/lineage_reach.sql"
         )),
         "lineage_reach_prune" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_reach_prune.sql"
+            "../../../../sql/sqlite/queries/history/lineage_reach_prune.sql"
         )),
         "lineage_reach_insert" => Ok(include_str!(
-            "../../../sql/sqlite/queries/history/lineage_reach_insert.sql"
+            "../../../../sql/sqlite/queries/history/lineage_reach_insert.sql"
         )),
         _ => Err(BackendError::Integrity),
     }

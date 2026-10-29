@@ -129,10 +129,12 @@ impl MergeScratch {
                 8,
                 1,
                 |row| {
-                    let token: Vec<u8> = row.get(1).map_err(crate::backend::sqlite::rows::error)?;
+                    let token: Vec<u8> = row
+                        .get(1)
+                        .map_err(crate::backend::sqlite::session::rows::error)?;
                     Ok((
                         row.get::<_, i64>(0)
-                            .map_err(crate::backend::sqlite::rows::error)?,
+                            .map_err(crate::backend::sqlite::session::rows::error)?,
                         token,
                     ))
                 },
@@ -262,9 +264,9 @@ impl MergeRecords {
         let mut values: Vec<&dyn ToSql> = vec![&self.operation, &self.token];
         values.extend_from_slice(extra);
         let rows = self.session.read_mapped(sql, &values, 64, WINDOW, |row| {
-            row.get::<_, Option<Vec<u8>>>(0)
-                .map(Some)
-                .map_err(|error| PersistenceError::from(crate::backend::sqlite::rows::error(error)))
+            row.get::<_, Option<Vec<u8>>>(0).map(Some).map_err(|error| {
+                PersistenceError::from(crate::backend::sqlite::session::rows::error(error))
+            })
         })?;
         self.work.reads += 1;
         if rows.is_empty() {
@@ -297,7 +299,8 @@ impl MergeRecords {
             values.push(&kinds[i]);
             values.push(&key.key);
         }
-        let error = |error| PersistenceError::from(crate::backend::sqlite::rows::error(error));
+        let error =
+            |error| PersistenceError::from(crate::backend::sqlite::session::rows::error(error));
         let found = self
             .session
             .read_mapped(&sql, &values, 64, keys.len(), |row| {
@@ -451,7 +454,7 @@ impl MergeRecords {
 fn changes(tx: &Transaction<'_>) -> Result<i64, BackendError> {
     tx.mapped("SELECT changes()", &[], 0, 1, |row| {
         row.get::<_, i64>(0)
-            .map_err(crate::backend::sqlite::rows::error)
+            .map_err(crate::backend::sqlite::session::rows::error)
     })?
     .into_iter()
     .next()
@@ -529,7 +532,7 @@ pub(crate) fn sweep(session: &Session) -> Result<(), BackendError> {
                 16,
                 1,
                 |row| {
-                    let error = crate::backend::sqlite::rows::error;
+                    let error = crate::backend::sqlite::session::rows::error;
                     Ok((
                         row.get::<_, i64>(0).map_err(error)?,
                         row.get::<_, bool>(1).map_err(error)?,

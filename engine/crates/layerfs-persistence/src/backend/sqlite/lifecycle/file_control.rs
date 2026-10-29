@@ -1,11 +1,11 @@
 //! Audited macOS seal-only SQLite file control, authorized 2026-10-07; also
 //! applied to a snapshot's own new destination connection (#506).
-use super::rows;
 use crate::backend::records::BackendError;
+use crate::backend::sqlite::session::rows;
 use rusqlite::{ffi, Connection};
 use std::ffi::c_int;
 
-pub(super) fn disable_persistent_wal(connection: &Connection) -> Result<(), BackendError> {
+pub(crate) fn disable_persistent_wal(connection: &Connection) -> Result<(), BackendError> {
     control(connection, &mut 0)?;
     let mut observed = -1;
     control(connection, &mut observed)?;

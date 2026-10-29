@@ -1,5 +1,5 @@
 //! Explicit bounded reclamation of free pages in a reclaimable Store.
-use super::connection::Session;
+use crate::backend::sqlite::session::connection::Session;
 use crate::backend::{records::BackendError, Transaction};
 
 /// Largest physical page-removal job, independent of total Store size.

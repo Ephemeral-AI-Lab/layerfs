@@ -1,5 +1,7 @@
 //! Durable host connection and recorded work; no busy retry or fallback.
-use super::{profile, query, rows};
+use super::profile;
+use super::query;
+use super::rows;
 use crate::backend::records::BackendError;
 use crate::SqlitePersistenceProfile;
 use rusqlite::{limits::Limit, Connection, OpenFlags};
@@ -134,10 +136,10 @@ pub(crate) struct State {
     pub(crate) connection: Connection,
     pub(crate) quarantined: bool,
     pub(crate) work: RefCell<SqlWork>,
-    pub(crate) writer_hold: Option<super::writer_admission::Writer>,
+    pub(crate) writer_hold: Option<crate::backend::sqlite::lane::writer_admission::Writer>,
 }
 pub(crate) struct Session {
-    pub(crate) admission: super::admission::Admission,
+    pub(crate) admission: crate::backend::sqlite::lane::admission::Admission,
     pub(crate) state: Mutex<State>,
     pub(crate) writable: bool,
     pub(crate) profile: ConnectionProfile,
@@ -246,7 +248,7 @@ impl Session {
         profile::check(&profile)?;
         super::thread_work::add(&work.borrow());
         Ok(Self {
-            admission: super::admission::Admission::default(),
+            admission: crate::backend::sqlite::lane::admission::Admission::default(),
             path: path.to_path_buf(),
             state: Mutex::new(State {
                 connection,

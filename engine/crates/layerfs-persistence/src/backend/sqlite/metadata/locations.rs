@@ -32,10 +32,13 @@ pub(crate) fn info(r: &Record, start: usize) -> Result<PackInfo, BackendError> {
 }
 pub(crate) fn typed_info(r: &rusqlite::Row<'_>, start: usize) -> Result<PackInfo, BackendError> {
     checked_info(
-        r.get(start).map_err(super::rows::error)?,
-        r.get(start + 1).map_err(super::rows::error)?,
-        super::rows::blob(r, start + 2)?,
-        r.get(start + 3).map_err(super::rows::error)?,
+        r.get(start)
+            .map_err(crate::backend::sqlite::session::rows::error)?,
+        r.get(start + 1)
+            .map_err(crate::backend::sqlite::session::rows::error)?,
+        crate::backend::sqlite::session::rows::blob(r, start + 2)?,
+        r.get(start + 3)
+            .map_err(crate::backend::sqlite::session::rows::error)?,
     )
 }
 fn checked_info(
@@ -123,17 +126,23 @@ pub(crate) fn read(
 }
 
 fn typed_location(r: &rusqlite::Row<'_>) -> Result<LocatedObject, BackendError> {
-    let object_id =
-        ObjectId::from_bytes(super::rows::blob(r, 0)?).map_err(|_| BackendError::Integrity)?;
+    let object_id = ObjectId::from_bytes(crate::backend::sqlite::session::rows::blob(r, 0)?)
+        .map_err(|_| BackendError::Integrity)?;
     let pack = typed_info(r, 5)?;
     let role = ObjectRole::from_code(
-        u8::try_from(r.get::<_, i64>(1).map_err(super::rows::error)?)
-            .map_err(|_| BackendError::Integrity)?,
+        u8::try_from(
+            r.get::<_, i64>(1)
+                .map_err(crate::backend::sqlite::session::rows::error)?,
+        )
+        .map_err(|_| BackendError::Integrity)?,
     )
     .map_err(|_| BackendError::Integrity)?;
     let number = |index| {
-        usize::try_from(r.get::<_, i64>(index).map_err(super::rows::error)?)
-            .map_err(|_| BackendError::Integrity)
+        usize::try_from(
+            r.get::<_, i64>(index)
+                .map_err(crate::backend::sqlite::session::rows::error)?,
+        )
+        .map_err(|_| BackendError::Integrity)
     };
     Ok(LocatedObject {
         location: ObjectLocation {

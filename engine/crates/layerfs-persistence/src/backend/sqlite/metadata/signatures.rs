@@ -18,15 +18,15 @@ pub(crate) fn read(
         |r| {
             let number = |index| {
                 r.get::<_, i64>(index)
-                    .map_err(super::rows::error)
+                    .map_err(crate::backend::sqlite::session::rows::error)
                     .and_then(|value| u64::try_from(value).map_err(|_| BackendError::Integrity))
             };
             Ok(SignatureRow {
                 slot: usize::try_from(number(0)?).map_err(|_| BackendError::Integrity)?,
                 stamp: number(1)?,
-                object_id: ObjectId::from_bytes(super::rows::blob(r, 2)?)
+                object_id: ObjectId::from_bytes(crate::backend::sqlite::session::rows::blob(r, 2)?)
                     .map_err(|_| BackendError::Integrity)?,
-                signature: super::rows::blob(r, 3)?
+                signature: crate::backend::sqlite::session::rows::blob(r, 3)?
                     .try_into()
                     .map_err(|_| BackendError::Integrity)?,
             })
@@ -42,7 +42,7 @@ pub(crate) fn read(
 
 /// Bounded ordered UPSERT pages share the enclosing publication transaction.
 pub(crate) fn write(
-    tx: &super::transaction::Transaction<'_>,
+    tx: &crate::backend::sqlite::session::transaction::Transaction<'_>,
     rows: &[SignatureRow],
 ) -> Result<(), BackendError> {
     if rows.is_empty() {

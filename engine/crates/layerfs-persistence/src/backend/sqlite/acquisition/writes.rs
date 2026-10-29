@@ -5,7 +5,7 @@ use super::statements::{
     signed, unsigned, Failure, ADVANCE, BEGIN, BIND_HOST_FILE, CLAIM_EPOCH, COMPLETE_FILE,
     PLACE_ENTRY, SET_DIRECTORY_ROOT,
 };
-use crate::backend::sqlite::prepared::Prepared;
+use crate::backend::sqlite::session::prepared::Prepared;
 use crate::backend::{records::BackendError, Transaction};
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_storage::port::acquisition::{Begin, HostIdentity, NewEntry, Owner, Phase, Placed};

@@ -12,3 +12,5 @@ pub(crate) mod statements;
 pub(crate) mod writes;
 
 pub(crate) use metadata::{metadata_blob, metadata_parse};
+mod provider;
+pub use provider::AcquisitionProvider;

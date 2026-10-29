@@ -6,7 +6,9 @@
 //! single backup step, which holds one read transaction for the full copy;
 //! the result is the Store exactly as of that transaction. A busy or locked
 //! step is reported, never retried.
-use super::{connection::Session, query, rows};
+use super::session::connection::Session;
+use super::session::query;
+use super::session::rows;
 use crate::{backend::records::BackendError, SealedStore};
 use layerfs_storage::port::PersistenceError;
 use rusqlite::{backup::Backup, backup::StepResult, Connection, OpenFlags};
@@ -54,7 +56,7 @@ impl Session {
             return Err(PersistenceError::Malformed);
         }
         #[cfg(target_os = "macos")]
-        super::file_control::disable_persistent_wal(&copy)?;
+        super::lifecycle::file_control::disable_persistent_wal(&copy)?;
         {
             let backup = Backup::new(&source, &mut copy).map_err(rows::error)?;
             match backup.step(-1).map_err(rows::error)? {

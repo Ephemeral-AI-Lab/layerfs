@@ -1,5 +1,7 @@
 //! A scoped cached statement lease with per-execution work and exact errors.
-use super::{connection::SqlWork, rows, statement_work};
+use super::connection::SqlWork;
+use super::rows;
+use super::statement_work;
 use crate::backend::records::{BackendError, OutcomeError, Record};
 use rusqlite::{CachedStatement, Connection, StatementStatus};
 use std::{

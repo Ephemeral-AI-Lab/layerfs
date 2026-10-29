@@ -1,5 +1,7 @@
 //! Logical pack offsets mapped to independent immutable unit BLOBs, one transaction.
-use super::{rows, transaction::Transaction, unit_io};
+use super::unit_io;
+use crate::backend::sqlite::session::rows;
+use crate::backend::sqlite::session::transaction::Transaction;
 use crate::backend::{metadata_locations::typed_info, records::BackendError};
 use layerfs_storage::{location::PackInfo, pack::layout, port::*};
 pub(super) struct Unit {

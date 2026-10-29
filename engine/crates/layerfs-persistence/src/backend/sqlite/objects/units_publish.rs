@@ -1,6 +1,7 @@
 //! Immutable control/unit INSERTs in the existing publication transaction.
-use super::{transaction::Transaction, unit_layout};
+use super::unit_layout;
 use crate::backend::records::BackendError;
+use crate::backend::sqlite::session::transaction::Transaction;
 use layerfs_storage::{location::PackDomain, port::PublishedPack};
 pub(crate) fn write(tx: &Transaction<'_>, packs: &[PublishedPack]) -> Result<(), BackendError> {
     for pack in packs {

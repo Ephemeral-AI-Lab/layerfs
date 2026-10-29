@@ -1,5 +1,7 @@
 //! One bounded acquisition owns one read-only unit cursor and checked close.
-use super::{rows, transaction::Transaction, units_read::Unit};
+use super::units_read::Unit;
+use crate::backend::sqlite::session::rows;
+use crate::backend::sqlite::session::transaction::Transaction;
 use layerfs_storage::port::PersistenceError;
 use std::time::Instant;
 pub(super) fn read(

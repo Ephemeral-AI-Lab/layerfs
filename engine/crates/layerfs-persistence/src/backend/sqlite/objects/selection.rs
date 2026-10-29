@@ -1,5 +1,6 @@
 //! Exact incremental BLOB I/O; C2 plans and authenticates selected acquisition.
-use super::{rows, transaction::Transaction};
+use crate::backend::sqlite::session::rows;
+use crate::backend::sqlite::session::transaction::Transaction;
 use crate::backend::{metadata_locations::info, records::Param};
 use layerfs_storage::{
     location::PackInfo,

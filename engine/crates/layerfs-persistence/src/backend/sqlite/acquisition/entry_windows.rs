@@ -6,7 +6,7 @@ use super::{
     },
     writes::{packed, put_one, well_formed},
 };
-use crate::backend::{records::BackendError, sqlite::rows, Transaction};
+use crate::backend::{records::BackendError, sqlite::session::rows, Transaction};
 use layerfs_content::inode_leaf::InodeKind;
 use layerfs_storage::port::acquisition::{NewEntry, Owner};
 use std::collections::BTreeSet;

@@ -1,8 +1,6 @@
 //! Explicit immutable connection profile; no automatic Store conversion.
-use super::{
-    connection::{ConnectionProfile, SqlWork},
-    query,
-};
+use super::connection::{ConnectionProfile, SqlWork};
+use super::query;
 use crate::{backend::records::BackendError, SqlitePersistenceProfile};
 use rusqlite::Connection;
 use std::cell::RefCell;

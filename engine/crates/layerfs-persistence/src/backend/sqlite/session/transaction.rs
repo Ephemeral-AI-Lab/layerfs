@@ -1,8 +1,6 @@
 //! One-attempt transaction ownership and quarantine on uncertain outcomes.
-use super::{
-    connection::{Session, SqlWork},
-    query,
-};
+use super::connection::{Session, SqlWork};
+use super::query;
 use crate::backend::records::{BackendError, OutcomeError, Param, Record};
 use rusqlite::Connection;
 use std::{
@@ -254,8 +252,10 @@ impl Session {
             // A held publication lane already owns the writer for its nested work.
             if writable && !turn.nested {
                 // State owns this before BEGIN, including across a poisoned unwind.
-                s.writer_hold =
-                    Some(super::writer_admission::Writer::acquire(&self.path).map_err(E::from)?);
+                s.writer_hold = Some(
+                    crate::backend::sqlite::lane::writer_admission::Writer::acquire(&self.path)
+                        .map_err(E::from)?,
+                );
             }
             let tx = Transaction {
                 connection: &s.connection,
