@@ -17,7 +17,8 @@ const runtime = await LayerFSRuntime.open({ home, image, daemon, bundle, docker,
 try {
   await runtime.status();                  // { platform, missing, docker, worker, disk, sweep }
   const job = await runtime.project.start_init("shop", "/src/shop", { timeout }); // timeout optional: LayerFS.init's 300 s default
-  await runtime.project.get_init(job.id);  // { step, scanned, totals, imported, project, error, ended }
+  await runtime.project.get_init(job.id);  // one-shot read; do not loop when watching
+  const initEvents = await runtime.project.subscribe_init(job); // live init.progress events
   await runtime.project.list();            // [{ name, volume, image, source, created, initialized }]
   await runtime.project.get_state("shop", since);
   await runtime.sandbox.reclaim("shop");   // { reclaimed: [ids] }
@@ -69,6 +70,60 @@ including the root; `files` and `bytes` count regular-file identities
 constructed and their bytes, a hardlinked file once. The counts say how far
 Init has come, not its totals; a caller that wants a fraction counts the source
 itself. Init then installs the Store into the volume in the same process.
+
+### Watching an Init job
+
+`await runtime.project.subscribe_init(job)` accepts the object returned by
+`start_init` or its ID. It returns `{ cursor: 0, snapshot, poll, close }` and
+is also an async iterator. `get_init` remains a compatible one-shot read; a
+host watching progress uses the subscription instead of a `get_init` loop.
+An unknown or expired ID is refused `InvalidInput` "unknown Init job".
+Subscribing to a terminal job returns its terminal snapshot. An active watcher
+retains its last snapshot if the job later ages out of lookup retention.
+
+The initial and every event snapshot is an immutable copy of the complete
+current job:
+
+```js
+{
+  id, name, source, started,
+  step: "scan" | "volume" | "import" | "done" | "failed",
+  scanned: null | { entries, files, bytes },
+  totals: null | { entries, files, bytes },
+  imported: null | {
+    step: "scan" | "files" | "tree" | "publish" | "seal",
+    entries, files, bytes
+  },
+  project: null | { /* project record */ },
+  error: null | { code, message },
+  ended: null | number // milliseconds since epoch
+}
+```
+
+Every accepted outer report and terminal `done` or `failed` emits
+`{ seq, type: "init.progress", source: "runtime", payload: { job } }` after the
+job update. There are no synthetic start or completion events. A failed Init
+is a terminal progress event carrying `job.error`, not a watcher transport
+refusal. Initial state is in `snapshot`, not replayed as an event.
+
+`poll(timeoutMs = 0)` accepts 0 through 30000 ms and returns pages of at most
+50 `{ seq, ... }` events with the same cursor, `hasMore`, stale, and closed
+semantics as opened-project subscriptions. One outstanding poll is allowed.
+These waits run in JavaScript: native threadpool admission and the `SdkValue`
+event-page byte budget do not apply. The 1024-event queue drops oldest events
+on overflow; a stale poll supplies a fresh complete job snapshot and advances
+the cursor. Async iteration waits 1000 ms while idle, pages immediately through
+`hasMore`, returns normally on close, and throws `InvalidInput` "stream went
+stale; resubscribe" on staleness. It never retries a refusal. `close()` wakes
+an outstanding poll and is idempotent; `runtime.close()` closes every watcher
+the runtime owns. There is no automatic reconnect or replay.
+
+All platforms report outer `scan`, `volume`, `import`, and terminal progress.
+On Linux and Windows the existing internal runtime bridge reads native
+`imported` phases every 250 ms; `subscribe_init` removes the host's job polling,
+not that internal counter bridge. macOS Init runs in a separate container whose
+counters this runtime cannot read, so its stream reports outer progress with
+`imported: null`. Opened-project `lf.events` deliberately has no Init events.
 
 ## Removing a project
 

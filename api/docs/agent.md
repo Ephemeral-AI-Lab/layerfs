@@ -131,6 +131,88 @@ once. The binding sets `UV_THREADPOOL_SIZE` to 64 when the process has not set
 it, because every call, a long `exec` included, holds a Node worker thread.
 Keep each agent's operations on a Workspace sequential.
 
+### Opened-project events
+
+`await layerfs.events.subscribe()` opens one live, in-memory event queue for
+that client. It returns `{ cursor: 0, snapshot, poll, close }` and is also an
+async iterator. The native subscription ID is private: after subscribing, the
+client attaches it to each later operation automatically. Only successful
+operations made through that same client emit events. Operations by another
+client or process and spontaneous daemon changes do not; this is not a global
+watch, persisted log, or replay across reconnect. Init finished before the
+client exists, so it produces no opened-project events; use
+`runtime.project.subscribe_init` for Init progress.
+
+The initial snapshot is current state, not event history or a complete
+`ProjectState` replacement:
+
+```js
+{
+  branches: [{ name, head }],
+  workspaces: [{ sandbox, path, branch }],
+  sandboxes: [{ sandbox }]
+}
+```
+
+It includes every Branch page and every running Sandbox and mounted Workspace.
+Snapshot assembly is not atomic across those systems; an operation during
+assembly can appear both in the snapshot and in the queue. Snapshots are
+complete and are not subject to the event-page byte budget.
+
+Every event is `{ seq, type, source, payload }`, with a per-subscription safe
+integer sequence starting at 1. The nine types are:
+
+| Type | Source | Payload and successful outcome |
+| --- | --- | --- |
+| `commit.created` | `store` | Workspace Commit `{ branch, workspace: { sandbox, path }, commit }`, with the complete Commit; `Committed` only |
+| `fs.committed` | `store` | `{ branch, method, path, from, to, commit }` for a Committed `fs.write`, `apply`, `edit`, `mkdir`, `rm`, `mv`, or `cp`; move/copy uses `from`/`to`, `fs.apply` has all three paths null |
+| `branch.forked` | `store` | `{ branch, forkPoint: { kind: "commit" \| "layer", id } }` |
+| `branch.merged` | `store` | `{ merge }`, the complete result of either fast-forward or Commit-producing merge; never a duplicate `commit.created` |
+| `branch.published` | `store` | `{ branch, commit, layer, basedOn }`; publish `Added` only |
+| `workspace.mounted` | `daemon` | `{ workspace: { sandbox, path }, branch }` |
+| `workspace.unmounted` | `daemon` | `{ workspace: { sandbox, path } }` after normal or forced unmount |
+| `sandbox.created` | `daemon` | `{ sandbox }` |
+| `sandbox.closed` | `daemon` | `{ sandbox }` |
+
+Workspace/file `UpToDate`, publish `UpToDate`/`NoChanges`, refusals, and
+`workspace.exec` alone emit nothing. Workspace Commit has source `store` even
+though its SDK operation is daemon-mediated.
+
+`subscription.poll(timeoutMs = 0)` accepts an integer from 0 through 30000 ms
+and returns `{ events, cursor, hasMore, stale, closed }`. One outstanding poll
+is allowed per subscription. Returned sequences are strictly increasing safe
+integers; the subscription advances its public `cursor` from each answer. A
+normal page contains at most 50 events and budgets their encoded envelopes to
+49,152 bytes, stopping with `hasMore: true` when necessary. One oversized event
+is returned alone so the cursor still advances. The snapshot in a subscribe or
+stale answer is exempt from this budget.
+
+Positive-timeout polls wait for an event, staleness, close, or their fixed
+deadline. Native admission allows at most `min(16, UV_THREADPOOL_SIZE - 1)`
+simultaneous waiting polls (SDK/worker default 64 threads, direct Node default
+4); immediate polls need no slot. If no slot is available, the call fails
+`Busy` at once rather than waiting for admission. Neither polling nor async
+iteration retries this or any other refusal.
+
+The queue holds 1024 events. Overflow drops oldest events without reusing
+sequence numbers. The next poll from an undeliverable cursor returns
+`stale: true`, no events, a fresh complete snapshot, and the sequence captured
+before snapshot assembly; the subscription replaces its snapshot and advances
+to that cursor. Polling from the new cursor resumes normally. Manual polling
+returns this stale answer so resynchronization cannot be missed. Async
+iteration applies it and then throws `InvalidInput` "stream went stale;
+resubscribe". It otherwise polls for 1000 ms while idle, pages immediately
+through `hasMore`, yields in sequence order, and returns normally on close.
+
+`subscription.close()` unsubscribes once and later calls are local no-ops.
+Closing the client also closes its subscription; closing the subscription does
+not close the client. A second `subscribe()` on one client closes the previous
+queue and starts at cursor 0 with a fresh snapshot, never the old backlog. On
+the worker route, socket close drops that socket's queues. A later poll with
+the old ID fails `InvalidInput` "unknown subscription"; subscribe again for a
+fresh snapshot. There is no automatic reconnect or replay. The `layerfs`
+command has no event-stream command.
+
 ### Settings
 
 | Environment | Meaning |
@@ -287,6 +369,7 @@ trace line covers the command's run.
 | branch (8) | `fork(name, fromRef?)`, `graph(branch, pageSize?, pagePos?)`, `changed_paths(commit, pageSize?, pagePos?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
 | sandbox (3) | `create({ image }?)` → `{ sandbox, image }`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
 | workspace (4) | `mount(sandbox, branch)` → `{ sandbox, path, image }`, `exec(ws, command, message?, { stdout?, stderr? }?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?, force?)` |
+| events (1) | `subscribe()` → an opened-project subscription with `poll`, `close`, and async iteration |
 
 A Workspace's status is not an agent call: it is `backend.daemon.workspace.status(ws)`
 in [`@layerfs/backend`](backend.md).
@@ -411,7 +494,9 @@ represent them; equal content is decided by immutable content identity.
 
 Merge diagnostics also use byte windows within the unchanged control frame.
 `branch.merge` returns `lwwTruncated`, `conflictsTruncated` and `unitsTruncated` alongside its
-diagnostic lists (including in `Conflict.detail`); `workspace.commit` reports
+diagnostic lists (including in `Conflict.detail`). `units` lists caller-declared
+units changed on both sides and which side was kept whole; `unitsTruncated`
+reports that its byte window omitted entries from that list. `workspace.commit` reports
 `lwwTruncated` and its conflict detail reports both flags. Each conflict keeps
 its original `blocks` count and reports `hunksOmitted` if whole hunks were left
 out. These flags limit the reply only: every path still participates in the

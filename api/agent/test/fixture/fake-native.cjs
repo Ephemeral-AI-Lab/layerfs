@@ -68,6 +68,154 @@ const p8Read = (args) => {
   return { value: args.binary ? { ...value, bytes: content } : { ...value, text: content.toString("utf8") } };
 };
 
+const MAX_SAFE = Number.MAX_SAFE_INTEGER;
+const EVENT_BUDGET = 49_152;
+const subscriptions = new Map();
+let nextSubscription = 1;
+let admittedPolls = 0;
+const valueCost = (value) => {
+  if (value === null || typeof value === "boolean") return 1;
+  if (typeof value === "number") return 9;
+  if (typeof value === "string") return Buffer.byteLength(value) + 5;
+  if (Buffer.isBuffer(value)) return value.length + 5;
+  if (Array.isArray(value)) return 5 + value.reduce((sum, item) => sum + valueCost(item), 0);
+  return 5 + Object.entries(value).reduce((sum, [name, item]) => sum + Buffer.byteLength(name) + 2 + valueCost(item), 0);
+};
+const eventPage = (events, cursor, hasMore = false) => ({ value: { events, cursor, hasMore, stale: false, closed: false } });
+const closedPage = (state) => ({ value: { events: [], cursor: state.seq, hasMore: false, stale: false, closed: true } });
+const invalid = (message) => refusal("InvalidInput", message);
+function fakeSnapshot() {
+  const branches = (exports.branchList ?? ["main", "cart"]).map((name) => ({ name, head: name === "cart" ? "head1234567890ab" : null }));
+  const sandboxes = exports.sandboxList.map(({ sandbox }) => ({ sandbox }));
+  const workspaces = [];
+  for (const { sandbox } of exports.sandboxList) {
+    const records = exports.workspaceLists?.[sandbox] ?? exports.workspaceList;
+    for (const workspace of records) if (workspace.mounted && workspace.directory) workspaces.push({ sandbox, path: workspace.directory, branch: workspace.branch ?? null });
+  }
+  return { branches, workspaces, sandboxes };
+}
+function settlePoll(state) {
+  const waiter = state.waiter;
+  if (!waiter) return;
+  state.waiter = null;
+  clearTimeout(waiter.timer);
+  waiter.resolve(pollPage(state, waiter.cursor, waiter.limit));
+}
+function pollPage(state, cursor, limit) {
+  if (state.closed) return closedPage(state);
+  if (state.exhausted) return invalid("cursor exhausted; resubscribe");
+  if (cursor > state.seq) return invalid("unknown cursor");
+  if (state.stale || cursor < state.minimum) {
+    const current = state.seq;
+    state.events = [];
+    state.minimum = current;
+    state.stale = false;
+    return { value: { events: [], cursor: current, hasMore: false, stale: true, closed: false, snapshot: fakeSnapshot() } };
+  }
+  const deliverable = state.events.filter((event) => event.seq > cursor);
+  const events = [];
+  let spent = 0;
+  while (deliverable.length && events.length < limit) {
+    const event = deliverable[0];
+    if (events.length && spent + event.cost > EVENT_BUDGET) break;
+    events.push(deliverable.shift());
+    spent += event.cost;
+    if (spent >= EVENT_BUDGET) break;
+  }
+  if (events.length) {
+    const last = events.at(-1).seq;
+    state.events = state.events.filter((event) => event.seq > last);
+    state.minimum = last;
+    cursor = last;
+  }
+  return eventPage(events.map(({ cost, ...event }) => event), cursor, state.events.length > 0);
+}
+function eventSubscribe() {
+  const id = (nextSubscription++).toString(16).padStart(64, "0");
+  const state = { id, seq: 0, minimum: 0, events: [], stale: false, closed: false, exhausted: false, polling: false, waiter: null };
+  subscriptions.set(id, state);
+  return { value: { subscription: id, cursor: 0, snapshot: fakeSnapshot() } };
+}
+function eventPoll(args) {
+  const state = subscriptions.get(args.subscription);
+  if (!state) return invalid("unknown subscription");
+  const { cursor, timeoutMs = 0, limit = 50 } = args;
+  if (!Number.isSafeInteger(cursor) || cursor < 0) return invalid("cursor must be a nonnegative safe integer");
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 0 || timeoutMs > 30_000) return invalid("timeoutMs must be an integer in 0..30000");
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) return invalid("limit must be an integer in 1..500");
+  if (state.polling) return invalid("a poll is already outstanding");
+  if (exports.pollRefusals?.length) return refusal(exports.pollRefusals.shift(), "poll refused by the fake");
+  state.polling = true;
+  if (timeoutMs > 0) {
+    const workers = Number(process.env.UV_THREADPOOL_SIZE ?? 4);
+    const admission = Math.max(0, Math.min(16, workers - 1));
+    if (admittedPolls >= admission) {
+      state.polling = false;
+      return refusal("Busy", "long-poll admission is saturated; no wait was started", { kind: "long-poll admission" });
+    }
+    admittedPolls++;
+  }
+  const finish = (page) => {
+    state.polling = false;
+    if (timeoutMs > 0) admittedPolls--;
+    return page;
+  };
+  const page = pollPage(state, cursor, limit);
+  if (timeoutMs === 0 || page.refused || page.value.events.length || page.value.stale || page.value.closed) return finish(page);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      state.waiter = null;
+      resolve(finish(pollPage(state, cursor, limit)));
+    }, timeoutMs);
+    state.waiter = { cursor, limit, timer, resolve: (page) => resolve(finish(page)) };
+  });
+}
+function eventUnsubscribe(args) {
+  const state = subscriptions.get(args.subscription);
+  if (!state) return invalid("unknown subscription");
+  subscriptions.delete(args.subscription);
+  state.closed = true;
+  state.events = [];
+  settlePoll(state);
+  return { value: { kind: "Unsubscribed" } };
+}
+function emitEvent(id, type, source, payload) {
+  const state = subscriptions.get(id);
+  if (!state || state.closed || state.exhausted) return;
+  if (state.seq === MAX_SAFE) {
+    state.exhausted = true;
+    settlePoll(state);
+    return;
+  }
+  state.seq++;
+  const event = { seq: state.seq, type, source, payload };
+  const capacity = Number(process.env.LAYERFS_FAKE_EVENT_CAP ?? 1024);
+  if (state.events.length === capacity) {
+    const dropped = state.events.shift();
+    state.minimum = dropped.seq;
+    state.stale = true;
+  }
+  state.events.push({ ...event, cost: valueCost(event) });
+  settlePoll(state);
+}
+function mapEvent(op, args, value) {
+  const kind = value.kind;
+  if (op === "workspace.commit" && kind === "Committed") return ["commit.created", "store", { branch: args.branch ?? "main", workspace: { sandbox: args.sandbox, path: args.path }, commit: value.commit }];
+  if (/^fs\.(write|apply|edit|mkdir|rm|mv|cp)$/.test(op) && kind === "Committed") {
+    const moving = op === "fs.mv" || op === "fs.cp";
+    const plain = ["fs.write", "fs.edit", "fs.mkdir", "fs.rm"].includes(op);
+    return ["fs.committed", "store", { branch: value.branch ?? args.branch, method: op, path: plain ? args.path : null, from: moving ? args.from : null, to: moving ? args.to : null, commit: value.commit }];
+  }
+  if (op === "branch.fork" && kind === "Forked") return ["branch.forked", "store", { branch: value.branch, forkPoint: value.head === null ? { kind: "layer", id: value.base } : { kind: "commit", id: value.head } }];
+  if (op === "branch.merge" && kind === "Merged") return ["branch.merged", "store", { merge: value }];
+  if (op === "branch.publish" && kind === "Added") return ["branch.published", "store", { branch: value.source.branch, commit: value.source.commit, layer: value.publishedLayer.id, basedOn: value.basedOn }];
+  if (op === "workspace.mount" && kind === "Mounted") return ["workspace.mounted", "daemon", { workspace: { sandbox: value.sandbox, path: value.path }, branch: value.branch }];
+  if (op === "workspace.unmount" && ["Unmounted", "ForceUnmounted"].includes(kind)) return ["workspace.unmounted", "daemon", { workspace: { sandbox: args.sandbox, path: args.path } }];
+  if (op === "sandbox.create") return ["sandbox.created", "daemon", { sandbox: value.sandbox }];
+  if (op === "sandbox.close" && kind === "Closed") return ["sandbox.closed", "daemon", { sandbox: args.sandbox }];
+  return null;
+}
+
 function answer(op, args) {
   const refuse = (process.env.CLI_FAKE_REFUSE || "").split(",").filter(Boolean);
   if (refuse.includes(op)) return refusal(process.env.CLI_FAKE_CODE || "Conflict", `${op} refused by the fake`, { op });
@@ -101,7 +249,7 @@ function answer(op, args) {
       return { value: { items, hasMore, nextPagePos: hasMore ? pagePos + items.length : null } };
     }
     case "project.list_sandboxes": return { value: { kind: "ok", items: exports.sandboxList } };
-    case "branch.fork": return { value: { kind: "Forked", branch: args.name, base: "lay0", head: "not-a-publication" } };
+    case "branch.fork": return { value: { kind: "Forked", branch: args.name, base: "lay0", head: args.from === "layer" ? null : "not-a-publication" } };
     case "branch.graph": return { value: {
       branch: { name: args.branch, id: "branch1234567890ab", base: "base1234567890ab", head: "head1234567890ab", forkedFrom: "c0ffee" },
       forkPoint: { kind: "commit", id: "c0ffee" },
@@ -116,8 +264,8 @@ function answer(op, args) {
       hasMore: false,
       nextPagePos: null,
     } };
-    case "branch.merge": return { value: { kind: "Merged", branch: args.name, head: "m3rge", root: "r00t" } };
-    case "branch.publish": return { value: { kind: "Added", source: { branch: "feature", commit: "pub1" }, publishedLayer: { id: "lay1" } } };
+    case "branch.merge": return { value: exports.mergeResults?.[args.name] ?? { kind: "Merged", branch: args.name, head: "m3rge", root: "r00t" } };
+    case "branch.publish": return { value: exports.publishResults?.[args.branch] ?? { kind: "Added", source: { branch: "feature", commit: "pub1" }, publishedLayer: { id: "lay1" } } };
     case "fs.read":
       if (P8_REFS.has(args.branch)) return p8Read(args);
       return { value: args.startLine === 1 ? { text: "a\n", nextLine: 2 } : { text: "b\n", nextLine: null } };
@@ -130,7 +278,7 @@ function answer(op, args) {
         return { value: { ...p8Header(args.branch, args.path), type: "file", inode: 2, size, mode: 420 } };
       }
       return { value: { type: "file", size: 5, mode: 420 } };
-    case "fs.rm": return { value: { kind: "UpToDate", head: "h3ad" } };
+    case "fs.rm": return { value: exports.fsResults?.[op] ?? { kind: "UpToDate", head: "h3ad" } };
     case "workspace.mount": return { value: { kind: "Mounted", sandbox: args.sandbox, container: `layerfs-website-${args.sandbox}`, path: "/workspaces/w1", image: "fake-image", branch: args.branch, base: "b4se", baseLayer: "lay0", root: "r00t" } };
     case "workspace.exec": {
       const exit = /^exit (\d+)$/.exec(args.command);
@@ -138,7 +286,7 @@ function answer(op, args) {
       const code = Number(exit[1]);
       return { value: { kind: `exit:${code}`, exitCode: code, stdout: `out:${args.command}`, stderr: "err", truncated: false } };
     }
-    case "workspace.commit": return { value: { ...committed, commit: { ...commit, author: args.author ?? null, labels: args.labels ?? [] } } };
+    case "workspace.commit": return { value: exports.workspaceCommitResult ?? { ...committed, commit: { ...commit, ...(exports.eventPayloadText === undefined ? {} : { message: exports.eventPayloadText }), author: args.author ?? null, labels: args.labels ?? [] } } };
     case "workspace.unmount": return { value: args.force ? { kind: "ForceUnmounted", abort: "Written", detach: "Detached", cleanup: "Queued" } : { kind: "Unmounted" } };
     case "backend.daemon.process.start": return { value: { kind: "running", process: "proc_1_ab", command: args.command } };
     case "backend.store.project.get_history": return { value: exports.history ?? { kind: "ok", version: "h1", project: "website", branches: [], commits: [], more: {}, layers: [], workspaces: [] } };
@@ -148,7 +296,7 @@ function answer(op, args) {
     case "sandbox.close": return { value: { kind: "Closed", sandbox: args.sandbox } };
     case "runtime.sandbox.reclaim": return { value: { kind: "ok", reclaimed: exports.reclaimed ?? [] } };
     default:
-      if (/^fs\.(write|edit|apply|mkdir|cp|mv)$/.test(op)) return { value: committed };
+      if (/^fs\.(write|edit|apply|mkdir|cp|mv)$/.test(op)) return { value: exports.fsResults?.[op] ?? (exports.fullCommits ? { ...committed, branch: args.branch, commit: { ...commit, branch: args.branch } } : committed) };
       return { value: { items: [], hasMore: false, nextPagePos: null } };
   }
 }
@@ -165,15 +313,30 @@ exports.calls = [];
 exports.observed = [];
 exports.deploys = [];
 exports.args = [];
+exports.behaviorArgs = [];
+exports.eventStates = subscriptions;
 exports.workspaceList = [];
 exports.sandboxList = [{ sandbox: "1", name: "layerfs-website-1", image: "fake-image", workspaces: 0 }];
-const traced = (op, args) => {
+const traced = async (op, args) => {
   log(op, args);
   exports.calls.push(op);
   exports.observed.push(args.observe ?? null);
   if (args.deploy) exports.deploys.push(args.deploy);
   exports.args.push(args);
-  const result = answer(op, args);
+  const { subscription, ...behaviorArgs } = args;
+  exports.behaviorArgs.push(behaviorArgs);
+  let result;
+  if (op === "events.subscribe") {
+    const delay = Number(process.env.LAYERFS_FAKE_EVENT_SUBSCRIBE_DELAY ?? 0);
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+    result = eventSubscribe();
+  } else if (op === "events.poll") result = await eventPoll(args);
+  else if (op === "events.unsubscribe") result = eventUnsubscribe(args);
+  else result = answer(op, behaviorArgs);
+  if (result.value && subscription) {
+    const event = mapEvent(op, behaviorArgs, result.value);
+    if (event) emitEvent(subscription, ...event);
+  }
   return args.observe ? { ...result, telemetry: telemetry(op) } : result;
 };
 exports.stores = [];

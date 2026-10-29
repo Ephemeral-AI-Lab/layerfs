@@ -9,7 +9,7 @@ export const transportOf = (client) => client[STATE].transport;
 import { LayerFSError } from "./errors.js";
 import { traced } from "./trace.js";
 
-/** A client's private state: `{ closed, transport }`. */
+/** A client's private state: `{ closed, transport, subscription }`. */
 export const STATE = Symbol("layerfs.client");
 
 /** Names on the binding's backend table (#428), refused by the public one. */
@@ -91,7 +91,8 @@ export function live(client) {
  * home and the Store this process opened. */
 export function invokeClient(client, op, args) {
   live(client);
-  return invoke(op, { ...projectArgs(client), ...storeArgs(client), ...args }, client.options, transportOf(client));
+  const subscription = client[STATE].subscription?.id;
+  return invoke(op, { ...projectArgs(client), ...storeArgs(client), ...args, ...(subscription ? { subscription } : {}) }, client.options, transportOf(client));
 }
 
 /** One backend-table call of an open client, with the same fields. */

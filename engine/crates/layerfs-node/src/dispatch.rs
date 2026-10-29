@@ -17,6 +17,24 @@ pub(crate) fn call(op: String, args: JsUnknown) -> napi::Result<AsyncTask<Job>> 
 }
 
 fn dispatch(op: &str, args: SdkValue) -> Outcome {
+    match op {
+        "events.subscribe" => return crate::events::subscribe(args),
+        "events.poll" => return crate::events::poll(&args),
+        "events.unsubscribe" => return crate::events::unsubscribe(&args),
+        _ => {}
+    }
+    let (subscription, args) = crate::events::take(args);
+    let mounted_branch = (op == "workspace.commit")
+        .then(|| crate::events::workspace_branch(&args))
+        .flatten();
+    let outcome = operation(op, &args);
+    if let Ok(value) = &outcome {
+        crate::events::emit(subscription, op, &args, value, mounted_branch);
+    }
+    outcome
+}
+
+fn operation(op: &str, args: &SdkValue) -> Outcome {
     if let Some(value) = args.get("message") {
         if !matches!(value, SdkValue::Null) {
             let SdkValue::Text(message) = value else {
@@ -29,28 +47,33 @@ fn dispatch(op: &str, args: SdkValue) -> Outcome {
         }
     }
     match op {
-        "project.init" => project::init(&args),
-        "project.list_sandboxes" => workspace::sandboxes(&args),
-        "sandbox.list_workspaces" => listed(daemon_backend(op, args)?),
-        "sandbox.create" => crate::sandbox::create(&args),
-        "sandbox.close" => crate::sandbox::close(&args),
-        "workspace.mount" => workspace::mount(&args),
-        "workspace.commit" => workspace::commit(&args),
-        "workspace.unmount" => workspace::unmount(&args),
+        "project.init" => project::init(args),
+        "project.list_sandboxes" => workspace::sandboxes(args),
+        "sandbox.list_workspaces" => sandbox_workspaces(args),
+        "sandbox.create" => crate::sandbox::create(args),
+        "sandbox.close" => crate::sandbox::close(args),
+        "workspace.mount" => workspace::mount(args),
+        "workspace.commit" => workspace::commit(args),
+        "workspace.unmount" => workspace::unmount(args),
         "workspace.exec" if args.get_bool("background") => Err(refused(
             "InvalidInput",
             "background launch is backend.daemon.process.start",
         )),
-        "workspace.exec" => exec::exec(&args),
-        "workspace.exec_release" => output::release(&args),
+        "workspace.exec" => exec::exec(args),
+        "workspace.exec_release" => output::release(args),
         _ if op.starts_with("backend.") || op.starts_with("runtime.") => Err(refused(
             "UnknownMethod",
             "backend and runtime methods require backendCall",
         )),
         // Store calls run in this process; there is no other route.
-        _ if op.contains('.') => direct::call(op, args, false),
+        _ if op.contains('.') => direct::call(op, args.clone(), false),
         _ => Err(refused("UnknownMethod", format!("no operation {op}"))),
     }
+}
+
+/// Complete daemon Workspace records for both the SDK and event snapshots.
+pub(crate) fn sandbox_workspaces(args: &SdkValue) -> Outcome {
+    listed(daemon_backend("sandbox.list_workspaces", args.clone())?)
 }
 
 /// `sandbox.list_workspaces`: the daemon's read model without its history
