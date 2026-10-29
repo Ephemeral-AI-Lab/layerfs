@@ -10,7 +10,9 @@
 //! failed on the remote is answered with the failure's kind: `Changed`
 //! (the file was replaced since the view opened), `Unavailable`, `Denied`,
 //! `Unknown` (a request's outcome is unknown) or `Failed`. Nothing is
-//! retried. A view closes with `runtime.remote.close_view`, or once it has
+//! retried. A failed read quarantines the Store session that made it, as
+//! on any Store, so a view that met a remote failure answers that failure
+//! on every later call that fails, and is opened again to read on. A view closes with `runtime.remote.close_view`, or once it has
 //! been unused for a minute (checked at every view call).
 use crate::job::{failed, refused, Outcome};
 use crate::registry::{lock, random, text};
@@ -106,15 +108,15 @@ pub(crate) fn guard(op: &str, args: &SdkValue) -> Result<(), SdkRefusal> {
 }
 
 /// Runs `call` on the view at store path `path`; a failure a remote read
-/// caused is answered with that read's kind and message.
+/// caused, during this call or before it (its session is then
+/// quarantined), is answered with that read's kind and message.
 pub(crate) fn answered(path: &str, call: impl FnOnce() -> Outcome) -> Outcome {
     let view = named(path)?;
-    let before = view.file.failures();
     let outcome = call();
     let Err(refusal) = outcome else {
         return outcome;
     };
-    match view.file.failure_since(before) {
+    match view.file.failure_since(0) {
         Some(failure) => Err(refused(code(failure.kind), failure.message)),
         None => Err(refusal),
     }

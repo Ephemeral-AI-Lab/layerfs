@@ -10,7 +10,9 @@ export async function create(client, options = {}) {
   if (options === null || typeof options !== "object" || (options.image !== undefined && typeof options.image !== "string")) {
     throw new LayerFSError("InvalidInput", "options are { image? }, an image digest", null);
   }
-  const deploy = deployment({ ...client.options.deploy, ...(options.image ? { image: options.image } : {}) }, Boolean(client.options.postgresql));
+  // a view of a remote file (store path remote:…) starts no Sandbox: the binding refuses it ReadOnly
+  const view = client.options.storePath?.startsWith("remote:");
+  const deploy = view ? {} : deployment({ ...client.options.deploy, ...(options.image ? { image: options.image } : {}) }, Boolean(client.options.postgresql));
   const value = await invokeClient(client, "sandbox.create", { deploy });
   return { sandbox: value.sandbox, image: value.image };
 }
