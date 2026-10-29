@@ -4,6 +4,7 @@ use super::{body::exact, Sandbox};
 use super::{body::Body, socket::Socket};
 use crate::{RuntimeError, WireFailure};
 use std::{
+    collections::VecDeque,
     io::{self, BufReader, Read},
     net::Shutdown,
     time::{Duration, Instant},
@@ -161,7 +162,7 @@ impl Sandbox {
                 None,
             )));
         }
-        let mut kept = Vec::new();
+        let mut kept = VecDeque::new();
         let parsed = (|| {
             let mut payload = [0; 8192];
             loop {
@@ -182,13 +183,19 @@ impl Sandbox {
                         return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
                     }
                     left -= n as u32;
-                    kept.extend_from_slice(&payload[..n]);
-                    kept.drain(..kept.len().saturating_sub(cap));
+                    if n >= cap {
+                        kept.clear();
+                        kept.extend(payload[n - cap..n].iter().copied());
+                    } else {
+                        let discard = kept.len().saturating_sub(cap - n);
+                        kept.drain(..discard);
+                        kept.extend(payload[..n].iter().copied());
+                    }
                 }
             }
         })();
         parsed.map_err(|e| self.selected(r.fail(e, None)))?;
-        Ok(kept)
+        Ok(kept.into_iter().collect())
     }
 }
 
