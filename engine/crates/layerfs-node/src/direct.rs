@@ -46,19 +46,27 @@ fn path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
 
 /// Opens the Store at `store` for this process, or refuses.
 fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
-    let project = crate::discovery::project(args)?;
+    let identity = crate::stores::identity(args)?;
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
         std::process::id(),
         layerfs_bridge::sdk_values::hex(&crate::registry::random()?[..12])
     ));
     std::fs::create_dir(&directory).map_err(failed)?;
-    let opened = StoreService::open_direct(
-        store,
-        &project.manifest.binding,
-        project.manifest.cursor_key,
-        &directory.join("overlay.sqlite"),
-    );
+    let template = directory.join("overlay.sqlite");
+    let opened = match identity.kind {
+        crate::stores::Kind::Sqlite => {
+            StoreService::open_direct(store, &identity.binding, identity.cursor_key, &template)
+                .map_err(|refusal| match refusal {
+                    OpenRefusal::Unsupported(reason) => refused("Unsupported", reason.0),
+                    OpenRefusal::Missing(reason) => refused("NoStore", reason),
+                    OpenRefusal::Failed(reason) => refused("Failed", reason),
+                })
+        }
+        crate::stores::Kind::Postgresql { .. } => {
+            crate::stores::open_postgres(args, &identity, &template)
+        }
+    };
     match opened {
         Ok(service) => Ok(Opened {
             service: Arc::new(service),
@@ -67,11 +75,7 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
         }),
         Err(refusal) => {
             let _ = std::fs::remove_dir_all(&directory);
-            Err(match refusal {
-                OpenRefusal::Unsupported(reason) => refused("Unsupported", reason.0),
-                OpenRefusal::Missing(reason) => refused("NoStore", reason),
-                OpenRefusal::Failed(reason) => refused("Failed", reason),
-            })
+            Err(refusal)
         }
     }
 }
@@ -128,6 +132,26 @@ fn service(args: &SdkValue) -> Result<Arc<StoreService>, SdkRefusal> {
         .ok_or_else(|| refused("InvalidInput", "the client has not opened its Store"))
 }
 
+/// Runs `work` on the Store a call names, opened for it when this process
+/// holds it not yet and closed after when no other client holds it (#506
+/// Store-level calls: nothing stays open for a pull to find).
+pub(crate) fn with_service<T>(
+    args: &SdkValue,
+    work: impl FnOnce(&Arc<StoreService>) -> Result<T, SdkRefusal>,
+) -> Result<T, SdkRefusal> {
+    acquire(args)?;
+    let result = service(args).and_then(|service| work(&service));
+    let released = release(args);
+    let value = result?;
+    released?;
+    Ok(value)
+}
+
+/// Whether this process holds the Store at `path` open.
+pub(crate) fn holds(path: &Path) -> Result<bool, SdkRefusal> {
+    Ok(lock(&STORES)?.contains_key(path))
+}
+
 /// Runs one Store call (`backend` for the backend table) in this process.
 pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
     let service = service(&args)?;
@@ -136,7 +160,10 @@ pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
             fields
                 .into_iter()
                 .filter(|(name, _)| {
-                    !matches!(name.as_str(), "storePath" | "sandbox" | "deploy" | "home")
+                    !matches!(
+                        name.as_str(),
+                        "storePath" | "sandbox" | "deploy" | "home" | "store" | "postgresql"
+                    )
                 })
                 .collect(),
         ),

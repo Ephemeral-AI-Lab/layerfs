@@ -7,9 +7,12 @@ mod exec;
 mod job;
 mod output;
 mod pool;
+mod postgres;
 mod project;
 mod registry;
 mod sandbox;
+mod stores;
+mod sync;
 mod trace;
 mod workspace;
 

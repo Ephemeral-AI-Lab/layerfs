@@ -117,12 +117,30 @@ pub(crate) fn claim_next(args: &SdkValue) -> Result<(String, PathBuf)> {
     private(&path, true)?;
     Ok((n.to_string(), path))
 }
+/// A project's home entry (#506 Store-first): `<home>/<project>/` for a
+/// call that names no `store`, and for the one project of a Store made by
+/// an Init of its own (the Store has its project's name and no Store
+/// record); `<home>/.stores/<store>/projects/<project>/` for every other
+/// project of a Store.
 pub(crate) fn project_dir(args: &SdkValue) -> Result<PathBuf> {
-    let name = registry::text(args, "project")?;
-    layerfs_history::HistoryName::new(name).map_err(failed)?;
-    let path = home(args)?.join(name);
+    let path = project_entry(args)?;
     private(&path, true)?;
     Ok(path)
+}
+
+/// [`project_dir`]'s path, not checked to exist.
+pub(crate) fn project_entry(args: &SdkValue) -> Result<PathBuf> {
+    let name = registry::text(args, "project")?;
+    layerfs_history::HistoryName::new(name).map_err(failed)?;
+    let home = home(args)?;
+    match args.get_text("store") {
+        Some(store) if !(store == name && crate::stores::legacy(&home, store)?) => {
+            Ok(crate::stores::store_dir(&home, store)?
+                .join("projects")
+                .join(name))
+        }
+        _ => Ok(home.join(name)),
+    }
 }
 /// Calls take turns on one directory: in this process before its OS lock,
 /// and between processes on the lock itself. The wait is readiness, bounded,

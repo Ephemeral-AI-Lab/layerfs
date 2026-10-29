@@ -88,13 +88,15 @@ const PREFIX: &str = "layerfs-";
 
 /// The container labels of Sandbox `id` of `project`: what it is, whose,
 /// and which. Saved in its record, so a reopen expects the same.
-pub(crate) fn labels(project: &str, id: &str) -> Vec<(String, String)> {
+/// A project of a shared Store (#506) also carries `layerfs.store`.
+pub(crate) fn labels(project: &str, store: Option<&str>, id: &str) -> Vec<(String, String)> {
     [
         ("layerfs.role", "sandbox"),
         ("layerfs.project", project),
         ("layerfs.sandbox", id),
     ]
     .into_iter()
+    .chain(store.map(|store| ("layerfs.store", store)))
     .map(|(key, value)| (key.to_owned(), value.to_owned()))
     .collect()
 }
@@ -107,6 +109,10 @@ pub(crate) fn start(args: &SdkValue, directory: &Path) -> Result<Arc<SandboxStat
     let deploy = args
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
+    if args.get_text("store").is_some() {
+        let identity = crate::stores::identity(args)?;
+        crate::stores::sqlite_only(&identity, "a Sandbox (its daemon opens a Store file)")?;
+    }
     let project = crate::discovery::project(args)?;
     // Inputs are read first, so a refused request leaves no creation intent.
     let Some(installed) = project.installed.clone() else {
@@ -199,7 +205,12 @@ fn start_claimed(
         .and_then(|d| d.get_text("containerPrefix"))
         .filter(|prefix| !prefix.is_empty())
         .unwrap_or(PREFIX);
-    let container_name = format!("{prefix}{name}-{id}");
+    // a project of a shared Store (#506): `<prefix><store>.<project>-<n>`
+    let store = crate::stores::shared_store(args)?;
+    let container_name = match &store {
+        Some(store) => format!("{prefix}{store}.{name}-{id}"),
+        None => format!("{prefix}{name}-{id}"),
+    };
     let docker = Docker::new(docker, ENGINE)
         .map_err(failed)?
         .naming(&container_name)
@@ -215,7 +226,7 @@ fn start_claimed(
                 image,
                 store_volume,
                 port: PORT,
-                labels: labels(name, id),
+                labels: labels(name, store.as_deref(), id),
             },
             setup: daemon_setup,
             executable,

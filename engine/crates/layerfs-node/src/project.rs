@@ -28,7 +28,7 @@ use std::time::{Duration, Instant};
 
 /// Where the daemon opens the installed Store inside its Sandbox.
 pub(crate) const LOCATOR: &str = "/layerfs-store/global/store.sqlite";
-fn sixteen(bytes: [u8; 32]) -> [u8; 16] {
+pub(crate) fn sixteen(bytes: [u8; 32]) -> [u8; 16] {
     let mut out = [0; 16];
     out.copy_from_slice(&bytes[..16]);
     out
@@ -198,7 +198,9 @@ fn init_failure(failure: InitFailure, directory: &Path) -> SdkRefusal {
 /// The Store policy Init records: the default, or the caller's `policy`
 /// ({ smallFileThreshold, wholeFileDepth, chunkDepth, metadataDepth }, each
 /// defaulting to the default's), validated before anything is made.
-fn policy(args: &SdkValue) -> Result<StoragePolicy, layerfs_bridge::control::SdkRefusal> {
+pub(crate) fn policy(
+    args: &SdkValue,
+) -> Result<StoragePolicy, layerfs_bridge::control::SdkRefusal> {
     let base = StoragePolicy::frozen_default();
     let Some(given) = args.get("policy") else {
         return Ok(base);
@@ -228,7 +230,7 @@ fn policy(args: &SdkValue) -> Result<StoragePolicy, layerfs_bridge::control::Sdk
 
 /// Init's deadline, counted from now: the caller's required `timeoutMs`, a
 /// positive whole number of milliseconds. There is no default here.
-fn deadline(args: &SdkValue) -> Result<Instant, layerfs_bridge::control::SdkRefusal> {
+pub(crate) fn deadline(args: &SdkValue) -> Result<Instant, layerfs_bridge::control::SdkRefusal> {
     let Some(SdkValue::Int(ms @ 1..)) = args.get("timeoutMs") else {
         return Err(refused(
             "InvalidInput",
@@ -253,8 +255,8 @@ impl Drop for Running<'_> {
 /// `runtime.project.get_init`: how far the project's running Init has come
 /// (`step`, `entries`, `files`, `bytes`), or null when none runs.
 pub(crate) fn progress(args: &SdkValue) -> Outcome {
-    let name = text(args, "project")?;
-    let Some(counters) = lock(&INITS)?.get(name).cloned() else {
+    let name = crate::stores::init_key(args, text(args, "project")?);
+    let Some(counters) = lock(&INITS)?.get(&name).cloned() else {
         return Ok(SdkValue::Null);
     };
     let counts = counters.read();
