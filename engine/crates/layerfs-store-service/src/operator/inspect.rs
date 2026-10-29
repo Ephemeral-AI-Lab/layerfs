@@ -113,7 +113,7 @@ fn workspace_value(
 /// The snapshot answer, or `unchanged` when `since` names its version.
 pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) -> Answer {
     let stack = super::args::project(store, args)?;
-    let page = store
+    let mut page = store
         .history()
         .branches(
             stack.id,
@@ -126,18 +126,34 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
     let more_branches = page.continuation.is_some();
     let branches = page
         .records
-        .into_iter()
-        .filter(|branch| branch.name.as_str() != MAIN)
-        .collect::<Vec<_>>();
-    let names = branches
         .iter()
-        .map(|branch| {
+        .filter(|branch| branch.name.as_str() != MAIN)
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut names = BTreeMap::new();
+    loop {
+        names.extend(page.records.iter().map(|branch| {
             (
                 branch.id,
                 (branch.name.as_str().to_owned(), branch.head_commit),
             )
-        })
-        .collect::<BTreeMap<_, _>>();
+        }));
+        match page.continuation.take() {
+            Some(cursor) => {
+                page = store
+                    .history()
+                    .branches(
+                        stack.id,
+                        &layerfs_history::Page {
+                            cursor: Some(cursor),
+                            limit: MAXIMUM_PAGE_RECORDS,
+                        },
+                    )
+                    .map_err(args::history)?;
+            }
+            None => break,
+        }
+    }
     let mut spent = 0usize;
     let mut take = |value: SdkValue| {
         spent += cost(&value);

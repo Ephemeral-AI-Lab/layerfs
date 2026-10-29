@@ -11,10 +11,11 @@
 //   (comma-separated) is refused with code CLI_FAKE_CODE (default Conflict);
 //   `initRefusal`, when set, is what project.init refuses; a policy depth over
 //   255 is refused as the addon refuses it.
-// - Answers: `sandboxList` is the project's running Sandboxes,
-//   `workspaceList` a Sandbox's daemon records. An exec command "exit <n>"
-//   ends with exit code n, stdout "out:<command>" and stderr "err"; any other
-//   command ends with code 3 and 5000 bytes of stdout.
+// - Answers: `branchList` enables Branch paging, with `branchReplyBudget`
+//   optionally limiting each reply; `sandboxList` is the project's running
+//   Sandboxes, `workspaceList` a Sandbox's daemon records. An exec command
+//   "exit <n>" ends with exit code n, stdout "out:<command>" and stderr "err";
+//   any other command ends with code 3 and 5000 bytes of stdout.
 const { appendFileSync } = require("node:fs");
 
 const plain = (value) => {
@@ -41,10 +42,28 @@ function answer(op, args) {
       if (exports.initRefusal) return { refused: exports.initRefusal };
       if (args.policy?.chunkDepth > 255) return refusal("InvalidInput", "policy.chunkDepth is out of range");
       return { value: { kind: "Initialized", project: args.name, layer: "lay0", root: "r00t", store: args.storePath } };
-    case "project.list_branches": return { value: { items: [
-      { name: "main", base: "layer0000000000aa", head: null },
-      { name: "cart", base: "base1234567890ab", head: "head1234567890ab" },
-    ], hasMore: false, nextPagePos: null } };
+    case "project.list_branches": {
+      if (!exports.branchList) return { value: { items: [
+        { name: "main", base: "layer0000000000aa", head: null },
+        { name: "cart", base: "base1234567890ab", head: "head1234567890ab" },
+      ], hasMore: false, nextPagePos: null } };
+      const items = [];
+      const names = exports.branchList.slice(args.pagePos ?? 0);
+      const limit = args.pageSize ?? 50;
+      let spent = 0;
+      let hasMore = false;
+      for (const name of names) {
+        const cost = Buffer.byteLength(name) + 512;
+        if (items.length === limit || (exports.branchReplyBudget != null && spent + cost > exports.branchReplyBudget)) {
+          hasMore = true;
+          break;
+        }
+        spent += cost;
+        items.push({ name, base: "base1234567890ab", head: null });
+      }
+      const pagePos = args.pagePos ?? 0;
+      return { value: { items, hasMore, nextPagePos: hasMore ? pagePos + items.length : null } };
+    }
     case "project.list_sandboxes": return { value: { kind: "ok", items: exports.sandboxList } };
     case "branch.fork": return { value: { kind: "Forked", branch: args.name, base: "lay0", head: "not-a-publication" } };
     case "branch.merge": return { value: { kind: "Merged", branch: args.name, head: "m3rge", root: "r00t" } };
