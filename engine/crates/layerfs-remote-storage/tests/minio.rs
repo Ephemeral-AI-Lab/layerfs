@@ -494,7 +494,12 @@ fn listing_and_last_modified() {
     assert!(listed
         .iter()
         .all(|l| l.bytes == 3000 && l.metadata.is_none() && l.modified.is_some()));
-    let b: Vec<_> = remote.list("b/").unwrap().into_iter().map(|l| l.name).collect();
+    let b: Vec<_> = remote
+        .list("b/")
+        .unwrap()
+        .into_iter()
+        .map(|l| l.name)
+        .collect();
     assert_eq!(b, ["b/note", "b/store.sqlite"]);
     assert!(remote.list("c/").unwrap().is_empty());
 }
