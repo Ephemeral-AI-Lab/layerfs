@@ -44,6 +44,16 @@ pub struct StoreDiagnostics {
     pub readers: Vec<SqlWork>,
 }
 impl OpenedStore {
+    /// One consistent copy of the live Store to the new file `destination`,
+    /// on its own read-only connection (#506); push uploads it.
+    pub fn snapshot(
+        &self,
+        destination: &std::path::Path,
+    ) -> StorageResult<layerfs_persistence::SealedStore> {
+        self.writer
+            .snapshot(destination)
+            .map_err(StorageError::from)
+    }
     pub fn reader_indices(&self) -> Vec<usize> {
         let readers = self
             .readers

@@ -25,6 +25,7 @@ pub(crate) mod schema;
 pub(crate) mod seal;
 #[cfg(target_os = "macos")]
 mod seal_allocation;
+pub(crate) mod snapshot;
 pub(crate) mod statement_work;
 pub(crate) mod thread_work;
 pub(crate) mod transaction;
