@@ -32,6 +32,7 @@ import { commit } from "./workspace/commit.js";
 import { exec } from "./workspace/exec.js";
 import { mount } from "./workspace/mount.js";
 import { unmount } from "./workspace/unmount.js";
+import { closeOwned as closeEvents, subscribe as subscribeEvents } from "./events.js";
 
 export { LayerFSError, isRefusal, CODES } from "./errors.js";
 export { INIT_TIMEOUT_MS };
@@ -209,6 +210,7 @@ export class LayerFS {
     this.branch = bind(this, { list_commits, graph, changed_paths, diff_commits, diff_branches, fork, merge, publish });
     this.sandbox = bind(this, { create, list_workspaces, close: closeSandbox });
     this.workspace = bind(this, { mount, exec, commit, unmount });
+    this.events = { subscribe: () => subscribeEvents(this) };
   }
 
   /** One public call of this client; refused once the client is closed. */
@@ -218,13 +220,17 @@ export class LayerFS {
     return invokeClient(this, method, args);
   }
 
-  /** Releases this client's Store (the process's last client of it closes
-   * it). Workspaces stay mounted. Every later call is refused InvalidInput;
-   * a second close does nothing. */
+  /** Drops this client's event queue and releases its Store (the process's
+   * last client of it closes the Store). Workspaces stay mounted. Every later
+   * call is refused InvalidInput; a second close does nothing. Both releases
+   * are attempted once, even when event unsubscribe fails. */
   async close() {
     if (this[STATE].closed !== false) return;
     this[STATE].closed = true;
-    await storeClose(this);
+    let failure;
+    try { await closeEvents(this); } catch (error) { failure = error; }
+    try { await storeClose(this); } catch (error) { failure ??= error; }
+    if (failure) throw failure;
   }
 }
 
