@@ -197,6 +197,25 @@ fn part_sizes_and_config_refusals() {
         S3Client::new(config("ftp://example.com")),
         Err(RemoteError::Invalid(_))
     ));
+    // any reachable host: a container name, a host alias, IPv6, a trailing slash
+    for endpoint in [
+        "http://lfs_minio-1:9000",
+        "http://host.docker.internal:9000/",
+        "http://[::1]:9000",
+        "http://[fd00::2]",
+        "http://minio",
+    ] {
+        assert!(S3Client::new(config(endpoint)).is_ok(), "{endpoint}");
+    }
+    for endpoint in [
+        "http://",
+        "http://h:0",
+        "http://h:9000/path",
+        "http://[::1",
+        "http://a b",
+    ] {
+        assert!(S3Client::new(config(endpoint)).is_err(), "{endpoint}");
+    }
     let mut bad = config("http://127.0.0.1:9");
     bad.bucket = "No_Caps".to_owned();
     assert!(S3Client::new(bad).is_err());

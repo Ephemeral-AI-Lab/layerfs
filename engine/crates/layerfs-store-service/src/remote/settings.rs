@@ -1,6 +1,8 @@
-//! A project's named remotes, kept in one text file the caller places (for
-//! example in the project's own directory). Each remote names its provider
-//! and where the credentials are; the file never holds a secret.
+//! The named remotes of one LayerFS home, kept in one text file in the home
+//! (`remotes`). One remote holds many Stores, each under its own name: Store
+//! `NAME` is the file `NAME/store.sqlite` in the remote's namespace (plus its
+//! pieces when split). Each remote names its provider and where the
+//! credentials are; the file never holds a secret.
 //!
 //! Each remote is a `remote NAME` line followed by `key value` lines:
 //! `provider minio` with `endpoint http://host:port`, `bucket`, `prefix`,
@@ -14,8 +16,27 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-/// The remote file name of a project's Store, within the remote's namespace.
-pub const STORE_OBJECT: &str = "store.sqlite";
+/// The settings file's name in a LayerFS home.
+pub const HOME_FILE: &str = "remotes";
+/// The file name of every Store on a remote, under the Store's name.
+pub const STORE_FILE: &str = "store.sqlite";
+
+/// The remote file of the Store named `store` (one segment of
+/// `[A-Za-z0-9._-]`, not starting with a dot).
+pub fn store_object(store: &str) -> Result<String, String> {
+    let valid = !store.is_empty()
+        && store.len() <= 128
+        && !store.starts_with('.')
+        && store
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b));
+    if !valid {
+        return Err(format!(
+            "Store name {store:?}: use [A-Za-z0-9._-], at most 128, not starting with a dot"
+        ));
+    }
+    Ok(format!("{store}/{STORE_FILE}"))
+}
 const HEADER: &str = "# LayerFS remotes; credentials are references, never secrets.";
 
 /// Where one remote keeps the Store.
@@ -43,7 +64,7 @@ impl Provider {
     }
 }
 
-/// A project's remotes by name.
+/// A home's remotes by name.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Remotes {
     remotes: BTreeMap<String, Provider>,
@@ -189,6 +210,11 @@ impl Remotes {
             }
         }
         Ok(decoded)
+    }
+
+    /// The settings file of the LayerFS home `home`.
+    pub fn home_path(home: &Path) -> PathBuf {
+        home.join(HOME_FILE)
     }
 
     /// Reads the settings file; an absent file has no remotes.

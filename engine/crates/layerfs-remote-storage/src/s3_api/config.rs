@@ -8,7 +8,9 @@ use std::time::Duration;
 /// Connection and namespace inputs for one S3-compatible remote.
 #[derive(Clone, Debug)]
 pub struct S3Config {
-    /// `http://host[:port]`, without path or credentials.
+    /// `http://host[:port]` with any host name, IPv4 or bracketed IPv6
+    /// address (a container on a Docker network reaches MinIO by its
+    /// container name), an optional trailing `/`, no path or credentials.
     pub endpoint: String,
     /// Existing bucket; this client does not create buckets.
     pub bucket: String,
@@ -71,18 +73,41 @@ impl S3Config {
         }
         let invalid = || RemoteError::Invalid(format!("S3 endpoint {:?}", self.endpoint));
         let authority = self.endpoint.strip_prefix("http://").ok_or_else(invalid)?;
-        if authority.is_empty()
-            || !authority
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b".-:".contains(&b))
-        {
-            return Err(invalid());
-        }
-        let (host, port) = match authority.rsplit_once(':') {
-            Some((host, port)) => (host, port.parse::<u16>().map_err(|_| invalid())?),
-            None => (authority, 80),
+        let authority = authority.strip_suffix('/').unwrap_or(authority);
+        let (host, port) = match authority.strip_prefix('[') {
+            // [IPv6] or [IPv6]:port
+            Some(rest) => {
+                let (address, after) = rest.split_once(']').ok_or_else(invalid)?;
+                if address.is_empty()
+                    || !address
+                        .bytes()
+                        .all(|b| b.is_ascii_hexdigit() || b".:".contains(&b))
+                {
+                    return Err(invalid());
+                }
+                let port = match after.strip_prefix(':') {
+                    Some(port) => port.parse::<u16>().map_err(|_| invalid())?,
+                    None if after.is_empty() => 80,
+                    None => return Err(invalid()),
+                };
+                (address, port)
+            }
+            None => {
+                let (host, port) = match authority.rsplit_once(':') {
+                    Some((host, port)) => (host, port.parse::<u16>().map_err(|_| invalid())?),
+                    None => (authority, 80),
+                };
+                if host.is_empty()
+                    || !host
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+                {
+                    return Err(invalid());
+                }
+                (host, port)
+            }
         };
-        if host.is_empty() || host.contains(':') || port == 0 {
+        if port == 0 {
             return Err(invalid());
         }
         Ok((host.to_owned(), port, authority.to_owned()))

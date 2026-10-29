@@ -28,6 +28,11 @@ start)
         sleep 1
     done
     docker exec "$name" mc mb local/layerfs-test >/dev/null
+    # From this host: the published loopback port. From a container on
+    # NETWORK (such as the macOS worker), use the container name instead.
+    if [ -n "$network" ]; then
+        echo "# on network $network: export LAYERFS_REMOTE_ENDPOINT=http://$name:9000"
+    fi
     echo "export LAYERFS_REMOTE_ENDPOINT=http://127.0.0.1:$port"
     echo "export LAYERFS_REMOTE_BUCKET=layerfs-test"
     echo "export LAYERFS_REMOTE_ACCESS_KEY=$user"

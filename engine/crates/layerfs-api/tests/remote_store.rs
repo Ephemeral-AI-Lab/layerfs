@@ -1,5 +1,6 @@
-//! A project's Store pushed to a remote and pulled into a fresh location
-//! has identical history (#506 R): the same Branches, Commits and files.
+//! A Store pushed to a remote and pulled into a fresh location has
+//! identical history (#506 R): the same Branches, Commits and files. The
+//! remote keys it by the Store's name and holds many Stores.
 //! The push is a consistent snapshot (a Commit after it is not pulled); a
 //! pull refuses to replace a Store that is open and replaces it once closed.
 //!
@@ -18,13 +19,16 @@ mod support;
 use layerfs_bridge::control::SdkValue;
 use layerfs_history::BranchId;
 use layerfs_persistence::{PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile};
+use layerfs_store_service::remote::state::{self, Direction, Transfer};
 use layerfs_store_service::remote::storage::minio::MinioSettings;
 use layerfs_store_service::remote::storage::pieces;
-use layerfs_store_service::remote::{self, Provider, Remotes, STORE_OBJECT};
+use layerfs_store_service::remote::{self, store_object, Provider, Remotes};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 const MIB: usize = 1024 * 1024;
+/// The Store's name on the remote.
+const STORE: &str = "alpha";
 
 fn t(text: &str) -> SdkValue {
     SdkValue::text(text)
@@ -117,14 +121,33 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
     let before = history(&source);
 
     let driver = provider.driver().unwrap();
-    let pushed = remote::push(&source.service.opened, driver.as_ref(), &work).unwrap();
+    let store = source.host.config.path.clone();
+    let pushed = remote::push(&source.service.opened, &store, driver.as_ref(), STORE).unwrap();
     assert!(pushed.bytes as usize > big, "{pushed:?}");
     assert!(pushed.cleanup.is_none());
-    // the snapshot is removed; the remote holds the file and its sha256
-    assert_eq!(fs::read_dir(&work).unwrap().count(), 0);
-    let stat = driver.stat(STORE_OBJECT).unwrap().unwrap();
+    assert_eq!(pushed.object, "alpha/store.sqlite");
+    // the snapshot, staged beside the Store, is removed
+    let mut staged = store.clone().into_os_string();
+    staged.push(".pushing");
+    assert!(!Path::new(&staged).exists());
+    // the remote holds the file and its sha256 under the Store's name
+    let object = store_object(STORE).unwrap();
+    let stat = driver.stat(&object).unwrap().unwrap();
     assert_eq!(stat.bytes, pushed.bytes);
     assert_eq!(stat.metadata[pieces::SHA256], pieces::hex(&pushed.sha256));
+    // one remote holds many Stores
+    let beta = remote::push(&source.service.opened, &store, driver.as_ref(), "beta").unwrap();
+    assert_eq!(
+        driver.stat("beta/store.sqlite").unwrap().unwrap().bytes,
+        beta.bytes
+    );
+    pieces::delete(driver.as_ref(), "beta/store.sqlite").unwrap();
+    // the home records the last transfer of each Store, outside the Store
+    let home = work.join("home");
+    let recorded = Transfer::now("origin", Direction::Push, pushed.sha256, pushed.bytes);
+    let state_file = state::state_path(&home, STORE).unwrap();
+    state::save(&state_file, &recorded).unwrap();
+    assert_eq!(state::load(&state_file).unwrap(), Some(recorded));
     // a Commit after the push is not in the pushed Store
     write(&source, "work", "/notes.txt", "after the push\n");
     assert_ne!(history(&source), before);
@@ -134,6 +157,7 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
     let destination = work.join("volume/global/store.sqlite");
     let outcome = remote::pull(
         driver.as_ref(),
+        STORE,
         &destination,
         installed::BINDING,
         installed::CURSOR,
@@ -143,7 +167,7 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
         let failure = outcome.unwrap_err();
         assert!(failure.cause.contains("must run as user 0"), "{failure}");
         assert!(failure.left.is_none() && !destination.exists());
-        pieces::delete(driver.as_ref(), STORE_OBJECT).unwrap();
+        pieces::delete(driver.as_ref(), &object).unwrap();
         source.cleanup();
         fs::remove_dir_all(work).unwrap();
         return;
@@ -153,19 +177,23 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
     assert!(!pulled.replaced);
     let opened = open(&destination, &work.join("first"));
     assert_eq!(history(&opened), before);
+    let pulled = Transfer::now("origin", Direction::Pull, pulled.sha256, pulled.bytes);
+    state::save(&state_file, &pulled).unwrap();
+    assert_eq!(state::load(&state_file).unwrap(), Some(pulled));
+    assert_eq!(fs::read_dir(home.join("remote-state")).unwrap().count(), 1);
 
-    // an open local Store is not replaced; the verified download is kept
+    // an open local Store is refused before anything is downloaded
     let refused = remote::pull(
         driver.as_ref(),
+        STORE,
         &destination,
         installed::BINDING,
         installed::CURSOR,
     )
     .unwrap_err();
     assert!(refused.cause.contains("is open"), "{refused}");
-    let left = refused.left.expect("the temporary pulled file");
-    assert!(left.ends_with("store.sqlite.pulling"));
-    fs::remove_file(left).unwrap();
+    assert!(refused.left.is_none());
+    assert!(!work.join("volume/global/store.sqlite.pulling").exists());
     write(
         &opened,
         "feat",
@@ -177,6 +205,7 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
     // once closed, the pull replaces it
     let again = remote::pull(
         driver.as_ref(),
+        STORE,
         &destination,
         installed::BINDING,
         installed::CURSOR,
@@ -188,14 +217,20 @@ fn round_trip(label: &str, provider: Provider, big: usize) {
     reopened.close();
     drop(host);
 
-    // a Store of another project does not open with this binding
+    // a Store with another binding does not open in its place
     fs::create_dir_all(work.join("other")).unwrap();
     let other = work.join("other/global/store.sqlite");
-    let refused = remote::pull(driver.as_ref(), &other, b"another", [1; 32]).unwrap_err();
+    let refused = remote::pull(driver.as_ref(), STORE, &other, b"another", [1; 32]).unwrap_err();
     assert!(refused.cause.contains("does not open"), "{refused}");
     assert!(!other.exists());
+    let _ = fs::remove_file(work.join("other/global/store.sqlite.pulling"));
 
-    pieces::delete(driver.as_ref(), STORE_OBJECT).unwrap();
+    // an unknown Store name is Missing; a bad one is refused before any request
+    let missing = remote::pull(driver.as_ref(), "absent", &other, b"x", [1; 32]).unwrap_err();
+    assert!(missing.cause.contains("missing"), "{missing}");
+    assert!(remote::pull(driver.as_ref(), "../x", &other, b"x", [1; 32]).is_err());
+
+    pieces::delete(driver.as_ref(), &object).unwrap();
     source.cleanup();
     fs::remove_dir_all(work).unwrap();
 }

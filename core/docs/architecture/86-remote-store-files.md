@@ -9,11 +9,14 @@
 
 ## 1. What a remote is
 
-A remote holds a project's whole SQLite Store file under one name
-(`store.sqlite`) in its own namespace. **Push** uploads a consistent copy of
-the live Store; **pull** downloads it and replaces the local Store. LayerFS
-never opens SQLite over the network: every opener still opens a local file on
-a local Linux filesystem, as before.
+The unit is a **Store**, with every project (named layer stack) in it; a
+LayerFS home can have many Stores. Remotes are defined once per home, and one
+remote holds many Stores: Store `NAME` is the file `NAME/store.sqlite` in the
+remote's namespace (`<prefix>/NAME/store.sqlite` on MinIO), plus its pieces
+when split. **Push** uploads a consistent copy of a live Store; **pull**
+downloads it and replaces one local Store as a whole. LayerFS never opens
+SQLite over the network: every opener still opens a local file on a local
+Linux filesystem, as before.
 
 There is no compare-and-swap on the remote (owner, 2026-10-29). Two pushes
 race last-writer-wins. A pull racing a push fails its sha256 check instead of
@@ -35,8 +38,9 @@ named files and has no first-party dependency; its only dependency is `sha2`.
 | `s3_api/` | the S3 API client (feature `s3_api`): `config`, `sign` (SigV4), `http`, `multipart`, `client` |
 | `minio/` | the MinIO provider (feature `minio`) |
 
-`layerfs-store-service/src/remote/` uses it for Stores: `settings.rs` (named
-remotes), `push.rs` and `pull.rs`.
+`layerfs-store-service/src/remote/` uses it for Stores: `settings.rs` (a
+home's named remotes and `store_object`), `push.rs`, `pull.rs` and `state.rs`
+(the last transfer of each Store).
 
 ## 3. One attempt per request
 
@@ -77,44 +81,61 @@ too, the error is `PartsLeft` with the upload id; `S3Client::pending_uploads`
 lists such uploads and `abort_upload` removes one.
 
 MinIO limits: 50 TiB object, 5 TiB single PUT, 5 TiB pieces above 50 TiB.
-Endpoints are plain `http://`; an `https://` endpoint is `Unsupported`. TLS,
-which Cloudflare R2 and AWS S3 need, is a later phase.
+An endpoint is `http://` with any host name (a container on a Docker
+network, such as the macOS worker, reaches MinIO by container name), IPv4 or
+bracketed IPv6 address, and an optional trailing `/`; nothing assumes
+localhost. An `https://` endpoint is `Unsupported`. TLS, which Cloudflare R2
+and AWS S3 need, is a later phase.
 
-## 6. Named remotes
+## 6. Named remotes and transfer state
 
-A project's remotes live in one text file its caller places: `remote NAME`
+A home's remotes live in one text file, `HOME/remotes`: `remote NAME`
 lines, each followed by `key value` lines (`provider`, then the provider's
 keys). Credentials are a reference (`env:LAYERFS_REMOTE` reads
 `LAYERFS_REMOTE_ACCESS_KEY` and `LAYERFS_REMOTE_SECRET_KEY`); any other key,
 and so any secret, is refused. The file is written owner-only.
 `MinioSettings::from_env` reads `LAYERFS_REMOTE_*`.
 
+The last push or pull of each Store (remote name, direction, time, sha256,
+size) is kept in `HOME/remote-state/NAME`, outside the Store, because a pull
+replaces the Store file. `remote::state::save` and `load` write and read it;
+the caller records a transfer after it completes.
+
 ## 7. Push
 
-`remote::push(opened, driver, scratch)`:
+`remote::push(opened, store, driver, name)`:
 
-1. `OpenedStore::snapshot` copies the live Store to a new file in `scratch`
-   with SQLite's online backup API (Persistence owns it). Writers continue.
-2. The size is checked against the driver's limits; a Store above max file
+1. Check that the Store's filesystem has room for one Store-sized copy (main
+   file plus WAL) and the Store's own write headroom; refuse `Space`,
+   naming the directory, the bytes needed and the bytes free. On macOS the
+   Store, and so the staged copy, is inside the Docker volume.
+2. `OpenedStore::snapshot` copies the live Store to `store.sqlite.pushing`
+   beside it with SQLite's online backup API (Persistence owns it). Writers
+   continue.
+3. The size is checked against the driver's limits; a Store above max file
    goes up as pieces, and the manifest must fit what a pull reads (16 MiB).
-3. `pieces::upload` sends it with its sha256 and SQLite version as metadata.
-4. The temporary snapshot is removed.
+4. `pieces::upload` sends it as `NAME/store.sqlite` with its sha256 and
+   SQLite version as metadata.
+5. The staged snapshot is removed.
 
 ## 8. Pull
 
-`remote::pull(driver, destination, binding, cursor_key)`, on the same terms
-as the sealed-Store install (`install.rs`): the kernel guard passes for the
-volume and the process is the daemons' user.
+`remote::pull(driver, name, destination, binding, cursor_key)`, on the same
+terms as the sealed-Store install (`install.rs`): the kernel guard passes for
+the volume and the process is the daemons' user.
 
-1. Download to `store.sqlite.pulling` beside the destination (owner-only,
-   created once) and verify every sha256.
-2. Open it as this project's Store (binding and cursor key) and close it,
-   which removes the sidecars it created.
-3. If a local Store exists, refuse when its `-wal` or `-shm` exists: on
-   Linux both exist exactly while an opener holds the Store. The caller stops
-   the project's daemons and SDK processes first; nothing prevents a new
-   opener between this check and the rename.
-4. Rename the pulled file over the destination.
+1. Refuse when the local Store is open: its `-wal` or `-shm` exists. On
+   Linux both exist exactly while an opener holds the Store: a daemon (and
+   so every mounted Workspace) or an SDK process or worker. The macOS worker
+   keeps a Store open for a quiet minute after use; the error says so.
+2. Download `NAME/store.sqlite` to `store.sqlite.pulling` beside the
+   destination (same filesystem, owner-only, created once) and verify every
+   sha256.
+3. Open it with the Store's binding and cursor key and close it, which
+   removes the sidecars it created.
+4. Refuse again if the local Store was opened meanwhile; nothing prevents a
+   new opener between this check and the rename.
+5. Rename the pulled file over the destination: one rename.
 
 A failure keeps the temporary file and names it in the report; nothing is
 deleted or tried again.
@@ -128,13 +149,15 @@ deleted or tried again.
   part reply, a failed abort) through a fault proxy, against a pinned MinIO
   started by `tests/minio_service.sh`. The service tests are `#[ignore]`d.
 - `layerfs-store-service/tests/remote_settings.rs`: settings round trip and
-  refusals.
+  refusals, Store names and the transfer state file.
 - `layerfs-api/tests/remote_store.rs` (Linux): a Store with Branches and
   Commits pushed and pulled into a fresh volume has identical history, over
-  the folder remote and (ignored) MinIO.
+  the folder remote and (ignored) MinIO; two Stores on one remote; an open
+  Store refused before any download.
 
 ## 10. Not in this phase
 
+The free-space refusal has no automated test (it needs a full filesystem).
 TLS and the other providers (AWS S3, Cloudflare R2, Google Drive, Dropbox,
 OneDrive, Box); SDK methods and a `layerfs` command for remotes; incremental
 push (row bundles, #495); a PostgreSQL Store's remote (it pulls a SQLite

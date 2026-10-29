@@ -1,8 +1,9 @@
 //! A project's named remotes (#506 R): the settings file round-trips, keeps
 //! a credential reference and refuses any other key, so no secret is stored.
+use layerfs_store_service::remote::state::{self, Direction, Transfer};
 use layerfs_store_service::remote::storage::minio::{MinioSettings, DEFAULT_PART_SIZE};
 use layerfs_store_service::remote::storage::CredentialRef;
-use layerfs_store_service::remote::{Provider, Remotes};
+use layerfs_store_service::remote::{store_object, Provider, Remotes};
 use std::path::PathBuf;
 
 fn minio(prefix: &str) -> Provider {
@@ -79,4 +80,35 @@ fn settings_refuse_secrets_and_unknown_input() {
     assert!(remotes
         .set("origin", Provider::LocalFolder(PathBuf::from("/a\nb")))
         .is_err());
+}
+
+#[test]
+fn stores_are_keyed_by_name_and_their_state_kept_in_the_home() {
+    assert_eq!(store_object("alpha").unwrap(), "alpha/store.sqlite");
+    assert_eq!(store_object("a.b-c_1").unwrap(), "a.b-c_1/store.sqlite");
+    let long = "x".repeat(129);
+    for bad in ["", ".hidden", "a/b", "../x", "with space", long.as_str()] {
+        assert!(store_object(bad).is_err(), "{bad:?}");
+        assert!(state::state_path(std::path::Path::new("/home"), bad).is_err());
+    }
+    let home = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("remote-state-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    // the remotes are defined once per home
+    assert_eq!(Remotes::home_path(&home), home.join("remotes"));
+    let path = state::state_path(&home, "alpha").unwrap();
+    assert_eq!(path, home.join("remote-state/alpha"));
+    assert_eq!(state::load(&path).unwrap(), None);
+    let pushed = Transfer::now("origin", Direction::Push, [9; 32], 4096);
+    state::save(&path, &pushed).unwrap();
+    assert_eq!(state::load(&path).unwrap(), Some(pushed.clone()));
+    let pulled = Transfer {
+        direction: Direction::Pull,
+        ..pushed
+    };
+    state::save(&path, &pulled).unwrap();
+    assert_eq!(state::load(&path).unwrap(), Some(pulled));
+    std::fs::write(&path, "remote origin\ndirection sideways\n").unwrap();
+    assert!(state::load(&path).is_err());
+    std::fs::remove_dir_all(home).unwrap();
 }

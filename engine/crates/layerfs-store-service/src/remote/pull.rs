@@ -1,7 +1,8 @@
-//! Pull: download the remote Store to a temporary sibling of the local one,
-//! verify its sha256 (and each piece's), check it opens as this project's
-//! Store, then rename it over the local Store, which happens only when no
-//! opener holds it.
+//! Pull: download the Store named `NAME` to a temporary sibling of the local
+//! Store (on its filesystem, so the swap is one rename), verify its sha256
+//! (and each piece's), check it opens with the Store's binding, then rename
+//! it over the local Store, which happens only when no opener holds it. The
+//! whole Store is replaced, with every project in it.
 //!
 //! Like the sealed-Store install (`install.rs`), the destination must pass
 //! the kernel guard and the installer must be the daemons' user. One
@@ -9,7 +10,7 @@
 use crate::bootstrap::open_store_observed;
 use crate::install::{installer_user, paths};
 use crate::kernel_guard;
-use crate::remote::settings::STORE_OBJECT;
+use crate::remote::settings::store_object;
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_remote_storage::{pieces, Driver};
 use layerfs_storage::ReservationBlocks;
@@ -64,13 +65,31 @@ fn exists(path: &Path) -> io::Result<bool> {
     }
 }
 
-/// Pulls the Store from `driver` into `destination` (a project volume's
-/// `global/store.sqlite`), which opens with `binding` and `cursor_key`.
-/// An existing local Store is replaced only when no opener holds it: its
-/// `-wal` and `-shm` sidecars are absent. Stop the project's daemons and
-/// SDK processes first; nothing here prevents a new opener meanwhile.
+/// Refuses when the local Store `target` is open. Every opener (a daemon,
+/// so every mounted Workspace, and an SDK process or worker) holds SQLite's
+/// sidecars while it has the Store open.
+fn refuse_open(target: &Path) -> Result<(), String> {
+    for suffix in SIDECARS {
+        if exists(&sidecar(target, suffix)).map_err(|e| e.to_string())? {
+            return Err(format!(
+                "the local Store {} is open (its {suffix} exists): a daemon, a mounted \
+                 Workspace or an SDK or worker process holds it; stop them first (the macOS \
+                 worker closes a Store after a quiet minute) and pull again",
+                target.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Pulls the Store named `name` from `driver` into `destination` (a Store
+/// volume's `global/store.sqlite`), which opens with `binding` and
+/// `cursor_key`. An existing local Store is replaced only when no opener
+/// holds it, checked before the download and again before the rename;
+/// nothing here prevents a new opener in between.
 pub fn pull(
     driver: &dyn Driver,
+    name: &str,
     destination: &Path,
     binding: &[u8],
     cursor_key: [u8; 32],
@@ -78,6 +97,7 @@ pub fn pull(
     let mut left = None;
     let result = (|| {
         let text = |error: io::Error| error.to_string();
+        let object = store_object(name)?;
         let directory = destination
             .parent()
             .ok_or("the Store destination has no directory")?;
@@ -92,6 +112,7 @@ pub fn pull(
                 .map_err(text)?;
         }
         let (target, _) = paths(destination).map_err(text)?;
+        refuse_open(&target)?;
         let temporary = sidecar(&target, ".pulling");
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
@@ -101,10 +122,10 @@ pub fn pull(
         }
         let mut file = options.open(&temporary).map_err(text)?;
         left = Some(temporary.clone());
-        let moved = pieces::download(driver, STORE_OBJECT, &mut file).map_err(|e| e.to_string())?;
+        let moved = pieces::download(driver, &object, &mut file).map_err(|e| e.to_string())?;
         file.flush().map_err(text)?;
         drop(file);
-        // The verified bytes must open as this project's Store before they
+        // The verified bytes must open as this Store before they
         // replace anything; closing it removes the sidecars it created.
         let opened = open_store_observed(
             PersistenceConfig::sqlite(&temporary)
@@ -123,14 +144,7 @@ pub fn pull(
             }
         }
         let replaced = exists(&target).map_err(text)?;
-        for suffix in SIDECARS {
-            if replaced && exists(&sidecar(&target, suffix)).map_err(text)? {
-                return Err(format!(
-                    "the local Store {} is open (its {suffix} exists); stop its openers first",
-                    target.display()
-                ));
-            }
-        }
+        refuse_open(&target)?;
         fs::rename(&temporary, &target).map_err(text)?;
         left = None;
         Ok(Pulled {
