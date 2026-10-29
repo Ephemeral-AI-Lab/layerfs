@@ -1,7 +1,7 @@
 // @layerfs/agent's surface and client lifecycle (#428). Each case is one
 // command; every case but `dispatch` uses the stand-in binding and creates no
 // Store:
-//   node api/agent/test/packaging.mjs surface|lifecycle|copy|sandbox|worker-route|transport-order|dispatch
+//   node api/agent/test/packaging.mjs surface|lifecycle|options|copy|sandbox|worker-route|transport-order|dispatch
 // `dispatch` loads the real addon (LAYERFS_NATIVE or engine/crates/layerfs-node/layerfs.node).
 import assert from "node:assert/strict";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -31,10 +31,10 @@ if (selected === "surface") {
   assert.equal(shop.projectName, "website");
   assert.equal(shop.options.home, "/private/configured-home");
   assert.deepEqual(shop.options.deploy, { docker: "/configured/docker.sock", image: "configured-image", volume: "configured-volume", daemon: "/configured/daemon" });
-  // five groups: project 2, branch 6, fs 14, sandbox 3, workspace 4
+  // five groups: project 2, branch 8, fs 14, sandbox 3, workspace 4
   const methods = (group) => Object.keys(shop[group]).sort();
   assert.deepEqual(methods("project"), ["list_branches", "list_sandboxes"]);
-  assert.deepEqual(methods("branch"), ["diff_branches", "diff_commits", "fork", "list_commits", "merge", "publish"]);
+  assert.deepEqual(methods("branch"), ["changed_paths", "diff_branches", "diff_commits", "fork", "graph", "list_commits", "merge", "publish"]);
   assert.equal(methods("fs").length, 14);
   assert.deepEqual(methods("sandbox"), ["close", "create", "list_workspaces"]);
   assert.deepEqual(methods("workspace"), ["commit", "exec", "mount", "unmount"]);
@@ -79,12 +79,17 @@ if (selected === "surface") {
   await assert.rejects(LayerFS.open("website"), { code: "NoSuchProject" });
   process.env.LAYERFS_STORE_PATH = "/fake/store.sqlite";
   assert.deepEqual(native.stores.slice(before), [["open", "/missing"], ["close", "/missing"]]);
-  // the options argument is gone: an object where it went is refused, never ignored
+  // options are accepted (P2), but an object in the timeout position and any
+  // further positional argument are refused, never ignored
   const asked = native.calls.length;
-  for (const call of [() => LayerFS.open("website", {}), () => LayerFS.open("website", { storePath: "/missing" }), () => LayerFS.init("fresh", "/src/fresh", {}), () => LayerFS.init("fresh", "/src/fresh", { storePath: "/x" }, 5000), () => LayerFS.init("fresh", "/src/fresh", 5000, {})]) {
-    await assert.rejects(call(), { code: "InvalidInput", message: /takes no options: settings come from the environment/ });
+  for (const call of [() => LayerFS.init("fresh", "/src/fresh", {}), () => LayerFS.init("fresh", "/src/fresh", { storePath: "/x" }, 5000), () => LayerFS.open("website", {}, "extra"), () => LayerFS.init("fresh", "/src/fresh", 5000, {}, "extra")]) {
+    await assert.rejects(call(), { code: "InvalidInput" });
   }
-  assert.equal(native.calls.length, asked, "a refused options argument sends nothing");
+  assert.equal(native.calls.length, asked, "a refused call sends nothing");
+  // and an accepted options object opens fine, resolved over the environment
+  const accepted = await LayerFS.open("website", {});
+  assert.equal(accepted.options.storePath, "/fake/store.sqlite");
+  await accepted.close();
   // LayerFS.init runs project.init, then the same open
   const made = await LayerFS.init("fresh", "/src/fresh");
   assert.deepEqual(native.calls.slice(-2), ["project.init", "project.list_branches"]);
@@ -106,6 +111,59 @@ if (selected === "surface") {
     await scoped.project.list_branches();
   }
   assert.deepEqual(native.stores.at(-1), ["close", "/fake/store.sqlite"]);
+} else if (selected === "options") {
+  // explicit beats env; env is the fallback for unset fields
+  const explicit = await LayerFS.open("website", { storePath: "/fake/store.sqlite", deploy: { image: "explicit-image" } });
+  assert.deepEqual(explicit.options.deploy, { docker: "/configured/docker.sock", image: "explicit-image", volume: "configured-volume", daemon: "/configured/daemon" });
+  assert.equal(explicit.options.home, "/private/configured-home");
+  await explicit.close();
+  // snapshot: mutating the input and the env after open changes nothing
+  const input = { deploy: { image: "snap-image" } };
+  const snap = await LayerFS.open("website", input);
+  input.deploy.image = "mutated-image";
+  process.env.LAYERFS_IMAGE = "env-changed-image";
+  assert.equal(snap.options.deploy.image, "snap-image");
+  // a second client still reads the (changed) env at its own construction
+  const later = await LayerFS.open("website", {});
+  assert.equal(later.options.deploy.image, "env-changed-image");
+  process.env.LAYERFS_IMAGE = "configured-image";
+  await snap.close();
+  await later.close();
+  // schema refusals send nothing
+  const asked = native.calls.length;
+  for (const bad of [{ unknown: 1 }, { deploy: { unknown: "x" } }, { deploy: [] }, { deploy: "x" }, { storePath: null }, { storePath: "" }, { storePath: 7 }, { home: "" }, { trace: 5 }, { storePolicy: 7 }]) {
+    await assert.rejects(LayerFS.open("website", bad), { code: "InvalidInput" });
+  }
+  assert.equal(native.calls.length, asked, "a refused options argument sends nothing");
+  // storePolicy accepts an object (normalized to text) or text
+  const pol = await LayerFS.open("website", { storePolicy: { smallFileThreshold: 1, wholeFileDepth: 2, chunkDepth: 3, metadataDepth: 4 } });
+  assert.equal(typeof pol.options.storePolicy, "string");
+  await pol.close();
+  // init forms: options as fourth argument accepted; object in timeout position refused
+  const made = await LayerFS.init("fresh", "/src/fresh", undefined, { storePath: "/fake/store.sqlite" });
+  assert.equal(made.options.storePath, "/fake/store.sqlite");
+  await made.close();
+  const timed = await LayerFS.init("fresh", "/src/fresh", 5000, {});
+  assert.equal(timed.options.storePath, "/fake/store.sqlite");
+  await timed.close();
+  await assert.rejects(LayerFS.init("fresh", "/src/fresh", {}), { code: "InvalidInput" });
+  // TRACE_STEP and TRACE_START stay per-call: set after open, they label the next call
+  const dir = mkdtempSync(join(tmpdir(), "layerfs-options-trace-"));
+  try {
+    const traceFile = join(dir, "trace.jsonl");
+    const traced = await LayerFS.open("website", { trace: traceFile });
+    process.env.LAYERFS_TRACE_STEP = "after-open-step";
+    process.env.LAYERFS_TRACE_START = "1";
+    await traced.project.list_branches();
+    const lines = readFileSync(traceFile, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    assert.ok(lines.some((l) => l.phase === "start"), "TRACE_START read at the call");
+    assert.ok(lines.some((l) => l.step === "after-open-step"), "TRACE_STEP read at the call");
+    await traced.close();
+  } finally {
+    delete process.env.LAYERFS_TRACE_STEP;
+    delete process.env.LAYERFS_TRACE_START;
+    rmSync(dir, { recursive: true, force: true });
+  }
 } else if (selected === "copy") {
   // a second copy of the package in one process refuses to load
   const dir = mkdtempSync(join(tmpdir(), "layerfs-agent-copy-"));
@@ -233,6 +291,6 @@ if (selected === "surface") {
   assert.equal((await binding.backendCall("project.init", {})).refused.code, "UnknownMethod");
   assert.equal((await binding.backendCall("backend.missing", {})).refused.code, "UnknownMethod");
 } else {
-  throw new Error("select surface, lifecycle, copy, sandbox, worker-route, transport-order or dispatch");
+  throw new Error("select surface, lifecycle, options, copy, sandbox, worker-route, transport-order or dispatch");
 }
 console.log(`PASS packaging/${selected}`);

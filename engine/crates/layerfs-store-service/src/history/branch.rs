@@ -7,11 +7,12 @@
 //! A conflict creates nothing. Publishing is overwrite-only and reports
 //! the main Layers it skipped.
 use super::lookup::{
-    self as args, branch_node, commit_value, hex, history, invalid, layer_value, node_text, refuse,
-    root, short, Answer,
+    self as args, branch_node, hex, history, invalid, layer_value, node_text, refuse, root, short,
+    Answer,
 };
 use crate::store::{CommitError, Store};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::sdk_values::{commit_value_with_budget, value_cost};
 use layerfs_content::{
     filesystem::FilesystemRootId,
     merge::{merge_roots, MergeInput, MergeUnit, RulesFrom, Units},
@@ -136,7 +137,7 @@ pub fn list(
 }
 
 /// The listed form of the project's main line.
-fn main_item(stack: &layerfs_history::LayerStackRecord) -> SdkValue {
+pub(super) fn main_item(stack: &layerfs_history::LayerStackRecord) -> SdkValue {
     SdkValue::map([
         ("name", SdkValue::text(MAIN)),
         ("id", SdkValue::Null),
@@ -146,7 +147,7 @@ fn main_item(stack: &layerfs_history::LayerStackRecord) -> SdkValue {
 }
 
 /// The listed form of one Branch.
-fn item(branch: &layerfs_history::BranchRecord) -> SdkValue {
+pub(super) fn item(branch: &layerfs_history::BranchRecord) -> SdkValue {
     SdkValue::map([
         ("name", SdkValue::text(branch.name.as_str())),
         ("id", SdkValue::text(hex(branch.id.as_slice()))),
@@ -257,13 +258,20 @@ pub fn list_commits(
                 seen += 1;
                 continue;
             }
-            let cost = record.meta.message.as_ref().map_or(0, String::len) + 1024;
-            if items.len() == limit || spent + cost > crate::read::reads::REPLY_BUDGET {
+            let value = commit_value_with_budget(
+                &record,
+                Some(branch.name.as_str()),
+                crate::read::reads::REPLY_BUDGET,
+            );
+            let cost = value_cost(&value);
+            if !items.is_empty()
+                && (items.len() == limit || spent + cost > crate::read::reads::REPLY_BUDGET)
+            {
                 more = true;
                 break 'pages;
             }
             spent += cost;
-            items.push(commit_value(&record, Some(branch.name.as_str())));
+            items.push(value);
         }
         match page.continuation {
             Some(next) => cursor = Some(next),

@@ -127,6 +127,8 @@ fn commit_together(
                             token,
                             force: false,
                             message: None,
+                            author: None,
+                            labels: Vec::new(),
                         }))
                         .map(|done| done.reply)
                 })

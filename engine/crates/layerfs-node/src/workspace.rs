@@ -15,8 +15,48 @@ use crate::sandbox::{operation, WORKSPACES};
 use layerfs_api::internal::workspace;
 use layerfs_api::sandbox::{values, Unmounted};
 use layerfs_bridge::control::{CommitControl, SdkRefusal, SdkValue};
-use layerfs_history::WorkspaceId;
+use layerfs_history::{CommitMeta, CommitVia, WorkspaceId};
 use std::path::Path;
+
+fn attribution(args: &SdkValue) -> Result<(Option<String>, Vec<String>), SdkRefusal> {
+    let author = match args.get("author") {
+        None => None,
+        Some(SdkValue::Text(author)) => Some(author.clone()),
+        _ => {
+            return Err(crate::job::refused(
+                "InvalidInput",
+                "workspace.commit author must be a string",
+            ))
+        }
+    };
+    let labels = match args.get("labels") {
+        None => Vec::new(),
+        Some(SdkValue::List(labels)) => labels
+            .iter()
+            .map(|label| match label {
+                SdkValue::Text(label) => Ok(label.clone()),
+                _ => Err(crate::job::refused(
+                    "InvalidInput",
+                    "workspace.commit labels must be strings",
+                )),
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        _ => {
+            return Err(crate::job::refused(
+                "InvalidInput",
+                "workspace.commit labels must be an array of strings",
+            ))
+        }
+    };
+    CommitMeta {
+        author: author.clone(),
+        labels: labels.clone(),
+        ..CommitMeta::new(CommitVia::Workspace)
+    }
+    .check()
+    .map_err(|_| crate::job::refused("InvalidInput", "invalid workspace.commit attribution"))?;
+    Ok((author, labels))
+}
 
 /// The Workspaces Sandbox directory `directory` records.
 fn recorded(directory: &Path) -> Result<usize, SdkRefusal> {
@@ -235,8 +275,9 @@ pub(crate) fn status(args: &SdkValue) -> Outcome {
     Ok(value)
 }
 
-/// `workspace.commit(ws, { message?, force? })`.
+/// `workspace.commit(ws, { message?, force?, author?, labels? })`.
 pub(crate) fn commit(args: &SdkValue) -> Outcome {
+    let (author, labels) = attribution(args)?;
     let state = sandbox(args)?;
     let token = state.token(text(args, "path")?)?;
     let reply = workspace(&mut *crate::trace::control(&state.controls)?)
@@ -244,6 +285,8 @@ pub(crate) fn commit(args: &SdkValue) -> Outcome {
             token,
             force: args.get_bool("force"),
             message: args.get_text("message").map(str::to_owned),
+            author,
+            labels,
         })
         .map_err(operation)?;
     values::commit(&reply)

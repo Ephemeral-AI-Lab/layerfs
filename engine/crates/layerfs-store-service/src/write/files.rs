@@ -99,6 +99,8 @@ pub fn commit(
         &crate::store::CommitOptions {
             force: false,
             message: Some(message.unwrap_or("Apply filesystem changes").to_owned()),
+            author: None,
+            labels: Vec::new(),
         },
         CommitVia::Files,
     );
