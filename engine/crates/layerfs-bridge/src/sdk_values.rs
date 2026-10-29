@@ -41,6 +41,23 @@ pub fn short(node: NodeId) -> String {
     hex(&node.as_slice()[1..7])
 }
 
+/// Encoded byte cost of one SDK value, excluding outer reply framing.
+pub fn value_cost(value: &SdkValue) -> usize {
+    match value {
+        SdkValue::Null | SdkValue::Bool(_) => 1,
+        SdkValue::Int(_) => 9,
+        SdkValue::Text(text) => text.len() + 5,
+        SdkValue::Bytes(bytes) => bytes.len() + 5,
+        SdkValue::List(items) => 5 + items.iter().map(value_cost).sum::<usize>(),
+        SdkValue::Map(fields) => {
+            5 + fields
+                .iter()
+                .map(|(name, value)| name.len() + 2 + value_cost(value))
+                .sum::<usize>()
+        }
+    }
+}
+
 /// How a Commit was made, as the SDK names it.
 pub fn via(via: CommitVia) -> &'static str {
     match via {
@@ -109,6 +126,7 @@ pub fn commit_value(record: &CommitRecord, branch: Option<&str>) -> SdkValue {
             "lwwTruncated",
             SdkValue::Bool(meta.lww_truncated || meta.lww.len() > count),
         ),
+        ("unitsTruncated", SdkValue::Bool(false)),
     ]);
     // The merge units a Branch merge ran with (#352 F-057), only when given.
     if let (false, SdkValue::Map(fields)) = (meta.units.is_empty(), &mut value) {
@@ -122,6 +140,30 @@ pub fn commit_value(record: &CommitRecord, branch: Option<&str>) -> SdkValue {
             ])
         });
         fields.push(("units".to_owned(), SdkValue::List(units.collect())));
+    }
+    value
+}
+
+/// A Commit whose merge units are omitted, with disclosure, only when the
+/// complete value alone exceeds `budget`.
+pub fn commit_value_with_budget(
+    record: &CommitRecord,
+    branch: Option<&str>,
+    budget: usize,
+) -> SdkValue {
+    let mut value = commit_value(record, branch);
+    if value_cost(&value) > budget {
+        if let SdkValue::Map(fields) = &mut value {
+            if fields.iter().any(|(name, _)| name == "units") {
+                fields.retain(|(name, _)| name != "units");
+                if let Some((_, truncated)) = fields
+                    .iter_mut()
+                    .find(|(name, _)| name == "unitsTruncated")
+                {
+                    *truncated = SdkValue::Bool(true);
+                }
+            }
+        }
     }
     value
 }
