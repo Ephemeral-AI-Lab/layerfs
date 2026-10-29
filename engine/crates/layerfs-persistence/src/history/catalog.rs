@@ -91,6 +91,10 @@ impl HistoryCatalog for HistoryProvider {
         self.read(|tx| layerstack::layer(tx, id))
     }
 
+    fn is_published(&self, head: LayerId, commit: &CommitRecord) -> HistoryResult<bool> {
+        self.read(|tx| layerstack::is_published(tx, head, commit))
+    }
+
     fn commit_history(
         &self,
         request: &CommitHistoryRequest,

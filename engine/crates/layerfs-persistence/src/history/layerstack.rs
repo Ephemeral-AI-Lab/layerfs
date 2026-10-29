@@ -395,3 +395,21 @@ fn published_source(
         },
     )
 }
+
+/// Direct source publication in the chain ending at `head`, through the
+/// source and lineage indexes rather than a walk of the chain.
+pub(crate) fn is_published(
+    tx: &Transaction<'_>,
+    head: LayerId,
+    commit: &layerfs_history::CommitRecord,
+) -> HistoryResult<bool> {
+    let Some(branch) = commit.meta.branch else {
+        return Ok(false);
+    };
+    let Some(layer) = published_source(tx, branch, commit.id)? else {
+        return Ok(false);
+    };
+    let source = super::lineage::layer_line(tx, layer)?;
+    let head = super::lineage::layer_line(tx, head)?;
+    Ok(source.stack == commit.stack && head.stack == commit.stack && source.height <= head.height)
+}

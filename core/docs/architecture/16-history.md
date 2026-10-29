@@ -88,6 +88,16 @@
 > read as author null and labels `[]`. History values and the bounded reply
 > budgets include both fields.
 
+> **P1 graph paging, 2026-10-30:** `branch.graph` streams main's Layer pages
+> and fetches only source Commits that reach the requested output page or its
+> `hasMore` check. Non-main publication flags use
+> `HistoryCatalog::is_published(head, commit)`: the SQLite provider resolves the
+> direct source through `layers_source(source_branch_id, source_commit_id)` and
+> checks current-chain membership by comparing maintained Layer-lineage heights
+> at the source and supplied head. A Commit absorbed into another Layer's
+> ancestry is not itself marked published. Neither path builds a history-sized
+> resident publication set or Commit vector.
+
 > **Commit metadata, overwrite publish and Branch merge, 2026-10-15 (#327):**
 > every Commit records `CommitMeta`: the Branch it was made on, how it was made
 > (`Workspace`, `Files`, `Merge`), the caller's `agent` and `call` (at most 128
