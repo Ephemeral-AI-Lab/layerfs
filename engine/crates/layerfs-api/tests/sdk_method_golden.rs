@@ -71,7 +71,10 @@ fn render(value: &SdkValue, out: &mut String) {
                 out.push_str(name);
                 out.push_str(": ");
                 if matches!(item, SdkValue::Int(_))
-                    && matches!(name.as_str(), "time" | "newStored" | "newMetadata")
+                    && matches!(
+                        name.as_str(),
+                        "time" | "newStored" | "newMetadata" | "mtimeSeconds" | "mtimeNanoseconds"
+                    )
                 {
                     out.push_str("<varies>");
                 } else {
