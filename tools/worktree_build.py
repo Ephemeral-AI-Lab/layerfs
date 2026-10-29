@@ -222,6 +222,10 @@ def build(args):
             "-j",
             str(args.jobs),
         ]
+        # e.g. layerfs-node/postgresql for the worker's PostgreSQL Stores (#506)
+        features = getattr(args, "features", None)
+        if features:
+            command += ["--features", features]
         if args.profile == "release":
             command.append("--release")
         try:

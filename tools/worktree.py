@@ -36,6 +36,9 @@ def parser():
             command.add_argument("--source-resources", required=True)
         if name == "build":
             command.add_argument("--jobs", type=int, default=2)
+            command.add_argument(
+                "--features", help="Cargo features of the build, e.g. layerfs-node/postgresql (#506)"
+            )
         if name in {"cargo", "run"}:
             command.add_argument("--timeout", type=float, default=90)
             command.add_argument("arguments", nargs=argparse.REMAINDER)

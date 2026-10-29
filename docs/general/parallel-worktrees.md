@@ -89,7 +89,10 @@ python3 tools/worktree.py build --resources /absolute/path/resources.json --plat
 ```
 
 The command prints the sealed bundle path. Select `--platform macos` for host
-artifacts. macOS Store execution remains unsupported; Store E2E runs on Linux.
+artifacts. `--features` passes Cargo features to the build and is recorded in
+the bundle's manifest: `--features layerfs-node/postgresql` builds the
+binding (and the macOS/Windows worker that runs it) with the PostgreSQL Store
+engine (#506); MinIO remotes are built by default. macOS Store execution remains unsupported; Store E2E runs on Linux.
 The Linux target mount stays inside `/work`, which also satisfies the existing
 [native build script](../../api/scripts/build-native.mjs)'s path restriction.
 The standalone `build:native` script remains available; the isolated launcher
