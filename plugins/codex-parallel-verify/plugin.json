@@ -33,6 +33,16 @@
   "status": "preview",
   "versions": [
     {
+      "version": "0.1.1",
+      "commit": "259fed402f84db273929f3a83ad7a8ce32888217",
+      "date": "2026-10-28",
+      "layerfs": {
+        "version": "v1.1.0",
+        "commit": "4b5276216a2e9f780194a554ef9f0c33f9b6ba6d"
+      },
+      "notes": "Update SDK checkout paths and pin LayerFS with Docker API negotiation (#476); Linux API 1.52 two-candidate verification passed."
+    },
+    {
       "version": "0.1.0",
       "commit": "e440813d6ca2cc973ddae517319addeb52b694b6",
       "date": "2026-10-25",

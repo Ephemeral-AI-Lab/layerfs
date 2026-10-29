@@ -43,6 +43,7 @@ fn name(value: &str) -> PathName {
 struct Serials {
     root: u64,
     git: u64,
+    git_mode: u32,
     index: u64,
 }
 
@@ -71,13 +72,17 @@ fn refusal(tag: u8, operations: impl Fn(Serials) -> Vec<Operation>) -> Unmounted
     let root = view.root_serial();
     let git = view
         .lookup(operation.overlay(), root, &name(".git"))
-        .unwrap()
-        .serial;
+        .unwrap();
     let index = view
-        .lookup(operation.overlay(), git, &name("index"))
+        .lookup(operation.overlay(), git.serial, &name("index"))
         .unwrap()
         .serial;
-    for change in operations(Serials { root, git, index }) {
+    for change in operations(Serials {
+        root,
+        git: git.serial,
+        git_mode: git.metadata.mode,
+        index,
+    }) {
         let changed = operation
             .workspace()
             .mutate(operation.overlay(), operation.ports(), &view, change, NOW)
@@ -195,4 +200,123 @@ fn a_refusal_names_every_change_it_counts() {
     assert_eq!(named(kept), (vec!["/kept".to_owned()], false));
     let touched = refusal(54, |at| vec![mtime(at.index)]);
     assert_eq!(named(touched), (vec!["/.git/index".to_owned()], false));
+}
+
+/// A created inode no name binds any more: one no-op row per pair.
+fn no_op_rows(count: usize, root: u64) -> Vec<Operation> {
+    let mut operations = Vec::with_capacity(count * 2);
+    for _ in 0..count {
+        operations.push(Operation::Create {
+            parent: root,
+            name: name(".probe"),
+            mode: 0o644,
+        });
+        operations.push(Operation::Unlink {
+            parent: root,
+            name: name(".probe"),
+        });
+    }
+    operations
+}
+
+#[test]
+fn no_op_rows_past_the_old_cap_do_not_refuse_an_unmount() {
+    let refused = refusal(61, |at| no_op_rows(4100, at.root));
+    assert!(matches!(refused, Unmounted::Closed), "{refused:?}");
+}
+
+#[test]
+fn a_change_after_many_no_op_rows_is_named() {
+    let refused = refusal(62, |at| {
+        let mut operations = no_op_rows(4100, at.root);
+        operations.push(Operation::Create {
+            parent: at.root,
+            name: name("kept"),
+            mode: 0o644,
+        });
+        operations
+    });
+    assert_eq!(named(refused), (vec!["/kept".to_owned()], false));
+}
+
+#[test]
+fn exactly_the_old_cap_of_no_op_rows_is_not_truncated() {
+    let refused = refusal(63, |at| {
+        let mut operations = no_op_rows(4096, at.root);
+        operations.push(Operation::Create {
+            parent: at.root,
+            name: name("kept"),
+            mode: 0o644,
+        });
+        operations
+    });
+    assert_eq!(named(refused), (vec!["/kept".to_owned()], false));
+}
+
+#[test]
+fn a_directory_restored_to_its_base_mode_does_not_refuse() {
+    let clean = refusal(64, |at| {
+        vec![
+            Operation::SetAttributes {
+                serial: at.git,
+                mode: Some(0o711),
+                mtime: None,
+                size: None,
+            },
+            Operation::SetAttributes {
+                serial: at.git,
+                mode: Some(at.git_mode),
+                mtime: None,
+                size: None,
+            },
+        ]
+    });
+    assert!(matches!(clean, Unmounted::Closed), "{clean:?}");
+}
+
+#[test]
+fn more_changes_than_the_report_names_set_truncated() {
+    let refused = refusal(66, |at| {
+        (0..300)
+            .map(|n| Operation::Create {
+                parent: at.root,
+                name: name(&format!(".f{n:03}")),
+                mode: 0o644,
+            })
+            .collect()
+    });
+    let (paths, truncated) = named(refused);
+    assert_eq!(paths.len(), 256);
+    assert!(truncated, "300 changes do not fit one report");
+}
+
+#[test]
+fn removing_a_base_directory_refuses_and_names_it() {
+    let refused = refusal(65, |at| {
+        vec![
+            Operation::Unlink {
+                parent: at.git,
+                name: name("index"),
+            },
+            Operation::Unlink {
+                parent: at.git,
+                name: name("link"),
+            },
+            Operation::Rmdir {
+                parent: at.root,
+                name: name(".git"),
+            },
+        ]
+    });
+    assert_eq!(
+        named(refused),
+        (
+            vec![
+                "/.git".to_owned(),
+                "/.git/index".to_owned(),
+                "/.git/link".to_owned(),
+            ],
+            false,
+        )
+    );
 }

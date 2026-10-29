@@ -41,6 +41,8 @@ API_MOUNT_TARGETS = {"kernel_mount_routes", "kernel_application", "observed_appl
 # (package, test target): run seconds on the macOS host, 2026-10-23.
 SLOW = {
     ("layerfs-nfs", "helper_deadline"): 60.1,
+    # Six Linux FUSE teardown cases, including two bounded Join observations.
+    ("layerfs-daemon", "stalled_unmount"): 21.28,
     # Linux native binding proof, owner-excluded from CI; run explicitly.
     ("layerfs-node", "native_admission"): 60.52,
     # Linux SDK mount proof after the ownership move, 2026-10-27.
@@ -80,10 +82,13 @@ HEAVY = {
 }
 
 # SDK timings are recorded above without adding the owner-excluded API to CI.
+# stalled_unmount's timing is recorded above; it runs in the mount lane.
 NIGHTLY = {
     target
     for target in set(SLOW) | set(HEAVY)
-    if target[0] != "layerfs-node" and not (target[0] == "layerfs-api" and target[1] in API_MOUNT_TARGETS)
+    if target[0] != "layerfs-node"
+    and not (target[0] == "layerfs-api" and target[1] in API_MOUNT_TARGETS)
+    and target != (MOUNT_PACKAGE, "stalled_unmount")
 }
 
 
