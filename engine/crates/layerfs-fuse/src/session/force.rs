@@ -86,3 +86,25 @@ impl KernelSession {
         self.release(work)
     }
 }
+
+impl Undrained {
+    /// A normal unmount whose plain detach succeeded but whose drain stopped at
+    /// `Join`: another mount of the same superblock outlived the detach, so the
+    /// kernel never ended the connection and the receive loops stay blocked
+    /// (#426, #460). End it exactly the way a forced unmount does: one abort
+    /// write on the already-detached connection, then the same drain. Only a
+    /// `Join` stop is a candidate. A refused or short write keeps the owner
+    /// and records the attempted abort; its facts admit no second abort.
+    pub fn end_stalled(mut self) -> Result<Box<Drained>, Box<Undrained>> {
+        if self.stage != DrainStage::Join {
+            return Err(Box::new(self));
+        }
+        match self.session.abort_detached() {
+            Ok(AbortWrite::Written) => self.session.force_drain(),
+            Ok(_) | Err(_) => {
+                self.forced = self.session.forced();
+                Err(Box::new(self))
+            }
+        }
+    }
+}

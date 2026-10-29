@@ -78,7 +78,12 @@ impl Service {
         workspace: &BoundWorkspace,
         kernel: Receipt,
     ) -> Result<Success, Failure> {
-        let kernel = self.closed(token, workspace, kernel, None)?;
+        #[cfg(target_os = "linux")]
+        let forced =
+            super::detach::detached_abort_facts(kernel.as_ref().and_then(|done| done.forced));
+        #[cfg(not(target_os = "linux"))]
+        let forced = None;
+        let kernel = self.closed(token, workspace, kernel, forced)?;
         self.depart(
             token,
             Success {
