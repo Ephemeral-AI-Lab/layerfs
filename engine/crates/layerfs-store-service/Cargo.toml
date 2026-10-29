@@ -16,4 +16,6 @@ layerfs-history = { path = "../../../core/crates/layerfs-history" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 # Concrete Store opening (bootstrap) and the kernel guard's open.
 layerfs-persistence = { path = "../layerfs-persistence" }
+# Whole-file remote drivers for Store push and pull (#506).
+layerfs-remote-storage = { path = "../layerfs-remote-storage" }
 nix = { version = "=0.31.3", default-features = false, features = ["fs"] }

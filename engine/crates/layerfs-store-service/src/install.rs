@@ -203,7 +203,7 @@ pub fn install_local(
 }
 
 /// Refuses an installer that is not the daemons' user.
-fn installer_user() -> Result<(), String> {
+pub(crate) fn installer_user() -> Result<(), String> {
     use std::os::unix::fs::MetadataExt;
     // the owner of /proc/self is this process's effective user
     let uid = fs::metadata("/proc/self")
