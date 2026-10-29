@@ -38,6 +38,35 @@ for (const c of CASES) {
   }
 }
 
+try {
+  const ws = { sandbox: "1", path: "/workspaces/w1" };
+  const before = native.calls.length;
+  const totalOverflow = Array(64).fill("");
+  totalOverflow[0] = "x".repeat(3904);
+  const invalid = [
+    null, { unknown: true }, { author: null }, { author: 7 }, { labels: null }, { labels: "call-7" }, { labels: [7] }, { labels: [undefined] }, { labels: Array(1) },
+    { author: "a".repeat(4097) }, { labels: ["bad\u0007"] }, { labels: Array(65).fill("x") }, { labels: totalOverflow },
+  ];
+  for (const options of invalid) {
+    await assert.rejects(lf.workspace.commit(ws, "invalid", false, options), { code: "InvalidInput" });
+  }
+  assert.equal(native.calls.length, before, "invalid P7 options send nothing");
+} catch (failure) {
+  failures.push(`P7 option validation: ${failure.message}`);
+}
+
+try {
+  const ws = { sandbox: "1", path: "/workspaces/w1" };
+  const labels = Array(64).fill("");
+  labels[0] = "x".repeat(3903);
+  assert.equal(Buffer.byteLength(JSON.stringify(labels)), 4096);
+  const result = await lf.workspace.commit(ws, "boundary", false, { author: "a".repeat(4096), labels });
+  assert.equal(result.commit.author.length, 4096);
+  assert.deepEqual(result.commit.labels, labels);
+} catch (failure) {
+  failures.push(`P7 option boundaries: ${failure.message}`);
+}
+
 native.branchList = BUDGET_BRANCH_NAMES;
 native.branchReplyBudget = 48 * 1024;
 const before = native.calls.length;
@@ -71,7 +100,7 @@ try {
 
 await lf.close();
 if (failures.length) {
-  console.error(`FAIL area-p: ${failures.length} of ${CASES.length + 1}\n${failures.join("\n")}`);
+  console.error(`FAIL area-p: ${failures.length} of ${CASES.length + 3}\n${failures.join("\n")}`);
   process.exit(1);
 }
-console.log(`PASS area-p (${CASES.length} cases + 1 budget traversal)`);
+console.log(`PASS area-p (${CASES.length} cases + 2 P7 validation groups + 1 budget traversal)`);

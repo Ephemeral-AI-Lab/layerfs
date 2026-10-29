@@ -28,7 +28,7 @@ const log = (op, args) => {
   if (process.env.CLI_FAKE_LOG) appendFileSync(process.env.CLI_FAKE_LOG, `${JSON.stringify([op, plain(args)])}\n`);
 };
 
-const commit = { id: "c0ffee", logical: 120, newCanonical: 40, newStored: 30, newMetadata: 8 };
+const commit = { id: "c0ffee", author: null, labels: [], logical: 120, newCanonical: 40, newStored: 30, newMetadata: 8 };
 const committed = { kind: "Committed", head: commit.id, commit };
 const refusal = (code, message, detail = null) => ({ refused: { code, message, detail } });
 
@@ -92,7 +92,7 @@ function answer(op, args) {
       const code = Number(exit[1]);
       return { value: { kind: `exit:${code}`, exitCode: code, stdout: `out:${args.command}`, stderr: "err", truncated: false } };
     }
-    case "workspace.commit": return { value: committed };
+    case "workspace.commit": return { value: { ...committed, commit: { ...commit, author: args.author ?? null, labels: args.labels ?? [] } } };
     case "workspace.unmount": return { value: args.force ? { kind: "ForceUnmounted", abort: "Written", detach: "Detached", cleanup: "Queued" } : { kind: "Unmounted" } };
     case "backend.daemon.process.start": return { value: { kind: "running", process: "proc_1_ab", command: args.command } };
     case "backend.store.project.get_history": return { value: exports.history ?? { kind: "ok", version: "h1", project: "website", branches: [], commits: [], more: {}, layers: [], workspaces: [] } };

@@ -55,6 +55,8 @@ fn commands_are_bounded_exact_and_reject_every_truncated_prefix() {
             token,
             force: false,
             message: Some("agent".into()),
+            author: Some("author-p7".into()),
+            labels: vec!["call-7".into(), "call-7".into()],
         }),
         Request::Status(token),
         Request::Unmount(UnmountControl {

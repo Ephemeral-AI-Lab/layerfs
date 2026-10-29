@@ -81,6 +81,11 @@ adding a table or index is a schema-version change with an additive migration
 | Hints and rings | `binding_hint` (#352, additive), `content_signature` (bounded ring, ≤ 8,192 rows) | parent bindings for O(changed) diffs; similarity signatures for delta bases |
 | Init | `init_entry`, `init_host_file`, `init_operation` | Project Init's resumable records |
 
+The Commit table appends nullable `author` and `labels` columns through an
+additive writable-open migration. Labels are one JSON array; both columns have
+4096-byte checks. They are creation-time annotations outside Commit identity,
+and old NULL rows read as no author and no labels.
+
 ## 5. Objects inside the file
 
 - **Content-addressed.** An object's id is the hash of its canonical bytes;

@@ -93,6 +93,8 @@ fn conflicted_commit(label: &str, id: u8, count: usize) -> (Vec<String>, bool) {
             token,
             force: false,
             message: None,
+            author: None,
+            labels: Vec::new(),
         }))
         .unwrap()
         .reply;

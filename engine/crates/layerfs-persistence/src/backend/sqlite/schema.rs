@@ -7,6 +7,11 @@ pub(crate) const APPLICATION_ID: i64 = 1279677264;
 pub(crate) const OBJECTS: &str = include_str!("../../../sql/sqlite/objects.sql");
 pub(crate) const METADATA: &str = include_str!("../../../sql/sqlite/metadata.sql");
 pub(crate) const HISTORY: &str = include_str!("../../../sql/sqlite/history.sql");
+const ATTRIBUTION: &str = "    author TEXT CHECK (author IS NULL OR length(CAST(author AS BLOB)) <= 4096),\n    labels TEXT CHECK (labels IS NULL OR length(CAST(labels AS BLOB)) <= 4096),\n";
+const ATTRIBUTION_MIGRATION: &str = "ALTER TABLE \"commit\" ADD COLUMN author TEXT CHECK (author IS NULL OR length(CAST(author AS BLOB)) <= 4096);\nALTER TABLE \"commit\" ADD COLUMN labels TEXT CHECK (labels IS NULL OR length(CAST(labels AS BLOB)) <= 4096);\n";
+fn before_attribution(source: String) -> String {
+    source.replacen(ATTRIBUTION, "", 1)
+}
 /// Lineage tables (#353); a Store written before them gains them at open.
 pub(crate) const LINEAGE: &str = include_str!("../../../sql/sqlite/lineage.sql");
 /// Merge build records (#355); a Store written before them gains them at open.
@@ -167,7 +172,7 @@ impl super::connection::Session {
             };
             // The schema this migration records is the one before the
             // lineage and merge tables; later migrations add those.
-            let current = source((self.layout, self.acquisition))
+            let current = before_attribution(source((self.layout, self.acquisition)))
                 .replacen(DIGESTS, "", 1)
                 .replacen(SCRATCH, "", 1)
                 .replacen(LINEAGE, "", 1);
@@ -214,7 +219,7 @@ impl super::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = source((self.layout, self.acquisition))
+            let current = before_attribution(source((self.layout, self.acquisition)))
                 .replacen(DIGESTS, "", 1)
                 .replacen(SCRATCH, "", 1);
             if row.get::<String>(0)? != current.replacen(LINEAGE, "", 1)
@@ -251,7 +256,7 @@ impl super::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = source((self.layout, self.acquisition)).replacen(DIGESTS, "", 1);
+            let current = before_attribution(source((self.layout, self.acquisition))).replacen(DIGESTS, "", 1);
             if row.get::<String>(0)? != current.replacen(SCRATCH, "", 1)
                 || row.get::<String>(1)? != definition(tx.connection, tx.work)?
             {
@@ -286,13 +291,45 @@ impl super::connection::Session {
             let Some(row) = rows.first() else {
                 return Ok(());
             };
-            let current = source((self.layout, self.acquisition));
+            let current = before_attribution(source((self.layout, self.acquisition)));
             if row.get::<String>(0)? != current.replacen(DIGESTS, "", 1)
                 || row.get::<String>(1)? != definition(tx.connection, tx.work)?
             {
                 return Ok(());
             }
             tx.bootstrap(DIGESTS)?;
+            let definition = definition(tx.connection, tx.work)?;
+            tx.query(
+                "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",
+                vec![Param::Text(current), Param::Text(definition)],
+            )?;
+            Ok(())
+        })
+    }
+    /// Appends nullable Commit author and labels columns without backfilling old rows.
+    pub(crate) fn add_commit_attribution(&self) -> Result<(), BackendError> {
+        self.run::<_, BackendError>(true, |tx| {
+            let columns = tx.query("PRAGMA table_info(\"commit\")", vec![])?;
+            if columns.iter().any(|row| {
+                row.get::<String>(1)
+                    .is_ok_and(|name| name == "author")
+            }) {
+                return Ok(());
+            }
+            let rows = tx.query(
+                "SELECT schema_source,schema_definition FROM history_meta WHERE id=1",
+                vec![],
+            )?;
+            let Some(row) = rows.first() else {
+                return Ok(());
+            };
+            let current = source((self.layout, self.acquisition));
+            if row.get::<String>(0)? != before_attribution(current.clone())
+                || row.get::<String>(1)? != definition(tx.connection, tx.work)?
+            {
+                return Ok(());
+            }
+            tx.bootstrap(ATTRIBUTION_MIGRATION)?;
             let definition = definition(tx.connection, tx.work)?;
             tx.query(
                 "UPDATE history_meta SET schema_source=?1,schema_definition=?2 WHERE id=1",

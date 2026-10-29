@@ -121,7 +121,7 @@ for (const count of [0, 64, 65, 129]) {
 const graphResult = (branch, pagePos) => ({
   branch: { name: branch, id: "branch1234567890ab", base: "base1234567890ab", head: "head1234567890ab", forkedFrom: "c0ffee" },
   forkPoint: { kind: "commit", id: "c0ffee" },
-  commits: [{ id: "decaf", branch, parent: "parent1234567890", logical: 120, newCanonical: 40, newStored: 30, newMetadata: 8, published: true }],
+  commits: [{ id: "decaf", branch, parent: "parent1234567890", author: null, labels: [], logical: 120, newCanonical: 40, newStored: 30, newMetadata: 8, published: true }],
   hasMore: true,
   nextPagePos: pagePos + 1,
 });
@@ -153,4 +153,30 @@ export const P1_CASES = [
   },
 ];
 
-export const CASES = [...branches, ...workspaces, ...P1_CASES];
+const WS = { sandbox: "1", path: "/workspaces/w1" };
+const attributedResult = (author, labels) => ({
+  kind: "Committed",
+  head: "c0ffee",
+  commit: { id: "c0ffee", author, labels, logical: 120, newCanonical: 40, newStored: 30, newMetadata: 8 },
+});
+
+export const P7_CASES = [
+  {
+    name: "P7 workspace commit author and labels",
+    argv: ["workspace", "commit", "1:/workspaces/w1", "-m", "attributed", "--author", "agent-p7", "--labels", '["call-7","call-7","last"]'],
+    sdk: (lf) => lf.workspace.commit(WS, "attributed", false, { author: "agent-p7", labels: ["call-7", "call-7", "last"] }),
+    op: "workspace.commit",
+    sent: { ...WS, message: "attributed", force: false, author: "agent-p7", labels: ["call-7", "call-7", "last"] },
+    result: attributedResult("agent-p7", ["call-7", "call-7", "last"]),
+  },
+  {
+    name: "P7 workspace commit empty labels",
+    argv: ["workspace", "commit", "1:/workspaces/w1", "--author", "agent-empty", "--labels", "[]"],
+    sdk: (lf) => lf.workspace.commit(WS, undefined, false, { author: "agent-empty", labels: [] }),
+    op: "workspace.commit",
+    sent: { ...WS, force: false, author: "agent-empty", labels: [] },
+    result: attributedResult("agent-empty", []),
+  },
+];
+
+export const CASES = [...branches, ...workspaces, ...P1_CASES, ...P7_CASES];
