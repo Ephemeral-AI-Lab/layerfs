@@ -1,8 +1,9 @@
 // Binary write bodies (#413): fs.write and fs.apply take a Buffer, any typed
 // array, a DataView or an ArrayBuffer as the bytes they view, and refuse
-// shared, detached and non-binary bodies before the call. Reads stay text
-// only. Real native binding, Disposable Store, no Docker or daemon; Linux,
-// with LAYERFS_STORE_PATH on a local volume (the E2E launcher's):
+// shared, detached and non-binary bodies before the call. fs.read stays text
+// only; fs.read_bytes (#417) returns the same bytes back. Real native binding,
+// Disposable Store, no Docker or daemon; Linux, with LAYERFS_STORE_PATH on a
+// local volume (the E2E launcher's):
 //   node api/agent/test/binary_write.mjs
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -39,10 +40,22 @@ try {
     assert.equal(await text(path), "ABCD", path);
   }
 
-  // Bytes that are not text are stored whole and read back as Binary.
+  // Bytes that are not text are stored whole, read back as Binary by fs.read,
+  // and read back exactly by fs.read_bytes.
   await layerfs.fs.write("feat", "/blob", Buffer.from([0, 0xff, 0xfe, 1]));
   assert.equal(await size("/blob"), 4);
   await assert.rejects(layerfs.fs.read("feat", "/blob"), { code: "Binary" });
+  const whole = await layerfs.fs.read_bytes("feat", "/blob");
+  assert.ok(Buffer.isBuffer(whole.bytes));
+  assert.deepEqual([...whole.bytes], [0, 0xff, 0xfe, 1]);
+  assert.deepEqual([whole.size, whole.hasMore], [4, false]);
+  const middle = await layerfs.fs.read_bytes("feat", "/blob", 1, 2);
+  assert.deepEqual([...middle.bytes], [0xff, 0xfe]);
+  assert.deepEqual([middle.size, middle.hasMore], [4, true]);
+  const past = await layerfs.fs.read_bytes("feat", "/blob", 9);
+  assert.deepEqual([[...past.bytes], past.size, past.hasMore], [[], 4, false]);
+  await assert.rejects(layerfs.fs.read_bytes("feat", "/"), { code: "IsDirectory" });
+  await assert.rejects(layerfs.fs.read_bytes("feat", "/missing"), { code: "NoSuchPath" });
 
   // fs.apply: `bytes` in any binary form, and binary `content` sent as bytes.
   const applied = await layerfs.fs.apply("feat", [

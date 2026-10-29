@@ -49,6 +49,17 @@ pub fn line(args: &SdkValue, name: &str, default: u64) -> Result<u64, SdkRefusal
     }
 }
 
+/// A non-negative byte offset or count argument; `default` when absent or null.
+pub fn count(args: &SdkValue, name: &str, default: u64) -> Result<u64, SdkRefusal> {
+    match args.get(name) {
+        None | Some(SdkValue::Null) => Ok(default),
+        Some(SdkValue::Int(n)) if (0..=9_007_199_254_740_991).contains(n) => Ok(*n as u64),
+        _ => Err(invalid(format!(
+            "{name} must be a non-negative safe integer"
+        ))),
+    }
+}
+
 /// A tree difference's page: offset or `cursor` path, and whether `hunks`.
 pub fn diff_page(args: &SdkValue) -> Result<Request, SdkRefusal> {
     let (limit, pos) = paging(args)?;

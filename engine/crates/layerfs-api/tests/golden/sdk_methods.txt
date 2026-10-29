@@ -34,6 +34,12 @@ fs.read -> refused NoSuchPath "/nope does not exist at feat@<hex>" {path: "/nope
 fs.read -> refused NoSuchBranch "Branch ghost does not exist" null
 fs.read -> refused InvalidInput "missing text argument `path`" null
 fs.read -> refused Binary "text contains NUL or invalid UTF-8" null
+fs.read_bytes -> ok {kind: "ok", snapshot: "main@<hex>", root: "<hex>", path: "/blob.bin", bytes: bytes"[0, 159, 146, 150, 0, 1]", size: 6, hasMore: false}
+fs.read_bytes -> ok {kind: "ok", snapshot: "main@<hex>", root: "<hex>", path: "/blob.bin", bytes: bytes"[146, 150]", size: 6, hasMore: true}
+fs.read_bytes -> ok {kind: "ok", snapshot: "main@<hex>", root: "<hex>", path: "/blob.bin", bytes: bytes"[]", size: 6, hasMore: false}
+fs.read_bytes -> refused IsDirectory "expected a regular file" null
+fs.read_bytes -> refused InvalidInput "offset must be a non-negative safe integer" null
+fs.read_bytes -> refused NoSuchPath "/nope does not exist at main@<hex>" {path: "/nope"}
 fs.list -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/", items: [{name: "a.txt", path: "/a.txt", type: "file", inode: 2}, {name: "applied-dir", path: "/applied-dir", type: "dir", inode: 201}, {name: "applied.txt", path: "/applied.txt", type: "file", inode: 200}, {name: "blob.bin", path: "/blob.bin", type: "file", inode: 3}, {name: "dir", path: "/dir", type: "dir", inode: 4}, {name: "made", path: "/made", type: "dir", inode: 72}, {name: "moved.txt", path: "/moved.txt", type: "file", inode: 137}, {name: "new.txt", path: "/new.txt", type: "file", inode: 8}], hasMore: false, nextPagePos: null}
 fs.list -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/dir", items: [{name: "b.txt", path: "/dir/b.txt", type: "file", inode: 5}], hasMore: true, nextPagePos: 1}
 fs.list -> refused NotDirectory "expected a directory" null

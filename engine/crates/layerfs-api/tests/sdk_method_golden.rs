@@ -329,6 +329,43 @@ fn public_methods_answer_as_recorded() {
         "fs.read",
         vec![("branch", t("main")), ("path", t("/blob.bin"))],
     );
+    s.call(
+        "fs.read_bytes",
+        vec![("branch", t("main")), ("path", t("/blob.bin"))],
+    );
+    s.call(
+        "fs.read_bytes",
+        vec![
+            ("branch", t("main")),
+            ("path", t("/blob.bin")),
+            ("offset", SdkValue::Int(2)),
+            ("length", SdkValue::Int(2)),
+        ],
+    );
+    s.call(
+        "fs.read_bytes",
+        vec![
+            ("branch", t("main")),
+            ("path", t("/blob.bin")),
+            ("offset", SdkValue::Int(6)),
+        ],
+    );
+    s.call(
+        "fs.read_bytes",
+        vec![("branch", t("main")), ("path", t("/dir"))],
+    );
+    s.call(
+        "fs.read_bytes",
+        vec![
+            ("branch", t("main")),
+            ("path", t("/blob.bin")),
+            ("offset", SdkValue::Int(-1)),
+        ],
+    );
+    s.call(
+        "fs.read_bytes",
+        vec![("branch", t("main")), ("path", t("/nope"))],
+    );
     s.call("fs.list", vec![("branch", t("feat"))]);
     s.call(
         "fs.list",

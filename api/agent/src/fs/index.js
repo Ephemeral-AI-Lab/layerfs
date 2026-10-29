@@ -1,5 +1,6 @@
 // The `fs` group: reads at a saved snapshot and one-Commit Branch writes.
 export { read } from "./read.js";
+export { read_bytes } from "./read_bytes.js";
 export { list } from "./list.js";
 export { stat } from "./stat.js";
 export { grep } from "./grep.js";
