@@ -4,8 +4,12 @@
 //! in place, read-only, through ranged requests pinned to that version
 //! (`layerfs_store_service::remote::open_view`). The view is addressed by
 //! its id and by its store path, `remote:<connection>/<file>#<view>`, which
-//! a client passes as `storePath` like any Store's: every read call works
-//! on it, every other call is refused `ReadOnly` before it runs. A view is
+//! a client passes as `storePath` like any Store's. A view reads a Store's
+//! tree, sizes and history, never file contents: the folder listings,
+//! stats and globs, Branches and Commits, each file's revisions and the
+//! storage figures work on it; a call that reads file bytes (a file's
+//! text, grep, blame, and diffs, which compare bytes) is refused
+//! `Unsupported`, and every other call `ReadOnly`, before it runs. A view is
 //! never registered as a Store of the home and never linked. A read that
 //! failed on the remote is answered with the failure's kind: `Changed`
 //! (the file was replaced since the view opened), `Unavailable`, `Denied`,
@@ -30,19 +34,14 @@ use std::time::{Duration, Instant};
 const IDLE: Duration = Duration::from_secs(60);
 /// The store path prefix of a view.
 pub(crate) const PREFIX: &str = "remote:";
-/// The calls a view answers; every other call on it is refused `ReadOnly`.
+/// The calls a view answers: the tree, sizes and history, which read no
+/// file bytes.
 const READS: &[&str] = &[
     "project.list_branches",
     "branch.list_commits",
-    "branch.diff_commits",
-    "branch.diff_branches",
-    "fs.read",
     "fs.list",
     "fs.stat",
-    "fs.grep",
     "fs.glob",
-    "fs.diff_files",
-    "fs.blame",
     "backend.store.project.get_history",
     "backend.store.project.get_storage",
     "backend.store.project.list_overwritten",
@@ -96,9 +95,24 @@ pub(crate) fn service(path: &str) -> Result<Arc<StoreService>, SdkRefusal> {
     Ok(named(path)?.service.clone())
 }
 
-/// Refuses every call but a read on a view's store path, before it runs.
+/// The reads a view refuses because they read file bytes.
+const CONTENTS: &[&str] = &[
+    "fs.read",
+    "fs.grep",
+    "fs.blame",
+    "fs.diff_files",
+    "branch.diff_commits",
+    "branch.diff_branches",
+];
+
+/// Refuses every call but a tree, size or history read on a view's store
+/// path, before it runs.
 pub(crate) fn guard(op: &str, args: &SdkValue) -> Result<(), SdkRefusal> {
     match args.get_text("storePath") {
+        Some(path) if is_view(path) && CONTENTS.contains(&op) => Err(refused(
+            "Unsupported",
+            format!("{op}: a view of a remote file reads its tree, sizes and history, not file contents; load the file to read them"),
+        )),
         Some(path) if is_view(path) && !READS.contains(&op) => Err(refused(
             "ReadOnly",
             format!("{op}: a view of a remote file is read-only; load the file to change it"),

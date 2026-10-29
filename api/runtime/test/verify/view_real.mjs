@@ -1,11 +1,13 @@
 // A live view of a Store file in MinIO (#510 §7.3), with the real binding:
-// a Store with two projects (Branches, Commits, nested folders, a small, a
-// chunked and a large file) is published to MinIO; a view of the file must
-// answer every read exactly as the same Store opened locally (projects,
-// Branch heads, Commit lists, folder listings, stats and whole file text),
-// refuse writes, Workspaces and Sandboxes ReadOnly, and, once a push lands
-// over the file, fail a read it has not cached with Changed. Each step
-// prints the view's counters (requests, bytes, cache hits and misses).
+// a Store with two projects (Branches, Commits, nested folders, 2,000 small
+// files, a chunked and a large file) is published to MinIO; a view of the
+// file reads its tree, sizes and history, never file contents, and must
+// answer each of those reads exactly as the same Store opened locally
+// (projects, Branch heads, Commit lists, folder listings, stats, each
+// file's revisions and storage figures). It refuses content reads
+// Unsupported, writes, Workspaces and Sandboxes ReadOnly, and, once a push
+// lands over the file, fails a read it has not cached with Changed. Each
+// step prints the view's counters (requests, bytes, cache hits and misses).
 //
 //   node api/runtime/test/verify/view_real.mjs linux <bundle> <image digest>
 //       on a Mac or Linux Docker host: runs `inner` in the runtime image,
@@ -73,25 +75,23 @@ async function run({ bundle, image, home, prefix, work, s3 }) {
   const local = async (name) => (await runtime.project.list()).find((p) => p.name === name && p.store === "team");
   const viewed = (view, name) => runtime.views.project(view.view, name);
   const use = (record, work) => runtime.clients.use(record, work);
-  /** Every read the comparison makes of one project, as plain values. */
-  const reads = (record, files) => use(record, async (c) => {
+  /** Every read the comparison makes of one project (tree, sizes, history), as plain values. */
+  const reads = (record, files, dirs) => use(record, async (c) => {
+    const { LayerFSBackend } = await import("@layerfs/backend");
+    const backend = LayerFSBackend.of(c);
     const branches = (await c.project.list_branches()).items.map(({ name, base, head }) => ({ name, base, head }));
-    const commits = {}, listings = {}, stats = {}, texts = {};
+    const commits = {}, listings = {}, stats = {}, revisions = {}, storage = {};
     for (const b of branches) {
       if (b.name !== "main") commits[b.name] = (await c.branch.list_commits(b.name)).items;
-      for (const dir of ["/", "/src", "/src/deep"]) listings[`${b.name}:${dir}`] = (await c.fs.list(b.name, dir).catch((e) => ({ refused: e.code }))).items ?? "absent";
+      for (const dir of dirs) listings[`${b.name}:${dir}`] = (await c.fs.list(b.name, dir, 1000).catch((e) => ({ refused: e.code }))).items ?? "absent";
     }
     for (const [branch, path] of files) {
       stats[`${branch}:${path}`] = await c.fs.stat(branch, path);
-      let whole = "";
-      for (let line = 1; line !== null; ) {
-        const window = await c.fs.read(branch, path, line);
-        whole += window.text ?? "";
-        line = window.nextLine ?? null;
-      }
-      texts[`${branch}:${path}`] = whole;
+      revisions[`${branch}:${path}`] = (await backend.store.fs.list_revisions(branch, path)).items;
+      storage[`${branch}:${path}`] = await backend.store.fs.get_storage(branch, path);
     }
-    return { branches, commits, listings, stats, texts };
+    const globbed = (await c.fs.glob("main", "**/*.txt", "/", 1000)).items;
+    return { branches, commits, listings, stats, revisions, storage, globbed, totals: await backend.store.project.get_storage() };
   });
   const shown = async (view, what) => {
     const s = await runtime.remote.view_stats(view.view);
@@ -107,6 +107,8 @@ async function run({ bundle, image, home, prefix, work, s3 }) {
       "src/deep/chunked.txt": text(60_000, 1), // a few MB: several chunks
       "src/deep/large.txt": text(300_000, 2), // about 9 MB
     };
+    // a wide tree: its metadata reaches past what the open reads
+    for (let d = 0; d < 40; d++) for (let f = 0; f < 50; f++) shop[`wide/d${d}/f${f}.txt`] = `${d}/${f}\n`;
     await ended(await runtime.project.start_init("shop", folder(work, "shop", shop), { store: "team" }));
     await ended(await runtime.project.start_init("docs", folder(work, "docs", { "index.md": "# docs\n", "src/a.md": "a\n" }), { store: "team" }));
     await use(await local("shop"), async (c) => {
@@ -121,6 +123,7 @@ async function run({ bundle, image, home, prefix, work, s3 }) {
       shop: [["main", "/README.md"], ["feature", "/src/cart.js"], ["main", "/src/deep/chunked.txt"], ["feature", "/src/deep/new.txt"], ["other", "/README.md"], ["main", "/src/deep/large.txt"]],
       docs: [["main", "/index.md"], ["draft", "/index.md"], ["main", "/src/a.md"]],
     };
+    const dirs = { shop: ["/", "/src", "/src/deep", "/wide", "/wide/d0", "/wide/d39"], docs: ["/", "/src"] };
 
     step("publish the Store to MinIO (VACUUM INTO snapshot)");
     await runtime.remote.add({ name: "minio", provider: "minio", endpoint: s3.endpoint, bucket: "layerfs", prefix: "lfc-test-view" });
@@ -140,18 +143,30 @@ async function run({ bundle, image, home, prefix, work, s3 }) {
     assert.deepEqual((await runtime.project.list({ view: view.view })).map((p) => p.name).sort(), ["docs", "shop"]);
     await shown(view, "opened");
 
-    step("every read through the view equals the local Store's");
+    step("every tree, size and history read through the view equals the local Store's");
     for (const name of ["shop", "docs"]) {
-      const there = await reads(viewed(view, name), files[name]);
+      const there = await reads(viewed(view, name), files[name], dirs[name]);
       await shown(view, `${name} read`);
-      const here = await reads(await local(name), files[name]);
+      const here = await reads(await local(name), files[name], dirs[name]);
       assert.deepEqual(there, here, `${name}: the view answers as the local Store`);
-      console.log(`  ${name}: ${there.branches.length} Branches, ${Object.values(there.commits).flat().length} Commits, ${Object.keys(there.listings).length} listings, ${Object.keys(there.texts).length} files (${Object.values(there.texts).reduce((n, t) => n + t.length, 0)} bytes) identical`);
+      console.log(`  ${name}: ${there.branches.length} Branches, ${Object.values(there.commits).flat().length} Commits, ${Object.values(there.listings).flat().length} listed entries, ${Object.keys(there.stats).length} stats and revision lists, ${there.globbed.length} globbed: identical`);
     }
     const state = await runtime.project.get_state("shop", undefined, { view: view.view });
     const localState = await runtime.project.get_state("shop", undefined, { store: "team" });
     assert.deepEqual([state.branches, state.commits, state.layers], [localState.branches, localState.commits, localState.layers]);
     assert.deepEqual(state.sandboxes, []);
+
+    step("the view reads no file contents: text, grep, blame and diffs are refused Unsupported");
+    await use(viewed(view, "shop"), async (c) => {
+      const before = await runtime.remote.view_stats(view.view);
+      await assert.rejects(c.fs.read("main", "/README.md"), { code: "Unsupported" });
+      await assert.rejects(c.fs.grep("main", "cart"), { code: "Unsupported" });
+      await assert.rejects(c.fs.blame("feature", "/src/cart.js"), { code: "Unsupported" });
+      const commits = (await c.branch.list_commits("feature")).items;
+      await assert.rejects(c.branch.diff_commits(commits.at(-1).id, commits[0].id), { code: "Unsupported" });
+      await assert.rejects(c.branch.diff_branches("main", "feature"), { code: "Unsupported" });
+      assert.equal((await runtime.remote.view_stats(view.view)).requests, before.requests, "a refused read sends nothing");
+    });
 
     step("the view is read-only: writes, Workspaces and Sandboxes are refused");
     await use(viewed(view, "shop"), async (c) => {
@@ -167,17 +182,29 @@ async function run({ bundle, image, home, prefix, work, s3 }) {
     await use(await local("shop"), (c) => c.fs.write("feature", "/late.txt", "after the view opened\n", "late"));
     await ended(await runtime.store.start_push("team", { credentials }));
     await use(viewed(second, "shop"), async (c) => {
-      // nothing of the large file is cached in this view yet
-      await assert.rejects(c.fs.read("main", "/src/deep/large.txt", 250_000), { code: "Changed" });
+      // this view has read only what its open needed: tree reads soon reach an uncached block
+      let failed = null, served = 0;
+      for (let d = 0; d < 40 && !failed; d++) {
+        try {
+          await c.fs.list("main", `/wide/d${d}`);
+          await c.fs.stat("main", `/wide/d${d}/f49.txt`);
+          served++;
+        } catch (error) {
+          failed = error;
+        }
+      }
+      assert.ok(failed, `every tree read was cached (${served} folders served)`);
+      assert.equal(failed.code, "Changed", failed.message);
+      console.log(`  ${served} folders read from cache, then Changed`);
       // the failed read quarantined the view's session: later reads answer the same kind
-      await assert.rejects(c.fs.read("main", "/src/deep/large.txt", 150_000), { code: "Changed" });
-      await assert.rejects(c.fs.list("main", "/"), { code: "Changed" });
+      await assert.rejects(c.fs.list("main", "/wide/d39"), { code: "Changed" });
+      await assert.rejects(c.branch.list_commits("feature"), { code: "Changed" });
     });
     const after = await shown(second, "after Changed");
     const again = await runtime.remote.view_stats(second.view);
     assert.equal(again.requests, after.requests, "no request after Changed");
     const fresh = await runtime.remote.open_view("minio", { file: "team", credentials });
-    await use(viewed(fresh, "shop"), async (c) => assert.equal((await c.fs.read("feature", "/late.txt")).text, "after the view opened\n"));
+    await use(viewed(fresh, "shop"), async (c) => assert.equal((await c.fs.stat("feature", "/late.txt")).size, "after the view opened\n".length));
 
     step("close: the view and its clients go");
     for (const v of [view, second, fresh]) assert.deepEqual(await runtime.remote.close_view(v.view), { closed: true });
