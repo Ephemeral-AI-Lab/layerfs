@@ -237,6 +237,48 @@ pub(crate) fn new_commit(
     commit(tx, record.id)?.ok_or(HistoryError::Integrity("Commit identity"))
 }
 
+/// Issues an authenticated continuation after an already-delivered Commit.
+pub(crate) fn commit_resume(
+    tx: &Transaction<'_>,
+    catalog: CatalogId,
+    incarnation: u64,
+    key: &[u8; 32],
+    request: &CommitHistoryRequest,
+    after: CommitId,
+) -> HistoryResult<Vec<u8>> {
+    query::capacity(request.limit, 1)?;
+    if request.cursor.is_some() {
+        return Err(HistoryError::InvalidInput("Commit resume cursor"));
+    }
+    let branch =
+        super::branch::branch(tx, request.branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
+    let anchor = request
+        .start
+        .or(branch.head_commit)
+        .ok_or(HistoryError::InvalidInput("Commit resume anchor"))?;
+    let anchor_record = commit(tx, anchor)?.ok_or(HistoryError::Integrity("Commit anchor"))?;
+    let record = commit(tx, after)?.ok_or(HistoryError::Missing(Missing::Commit))?;
+    if anchor_record.stack != branch.stack || record.stack != branch.stack {
+        return Err(HistoryError::Integrity("Commit ownership"));
+    }
+    if !ancestry_contains(tx, Some(anchor), after)? {
+        return Err(HistoryError::NotInHistory("Commit"));
+    }
+    query::encode(
+        Context {
+            key,
+            catalog,
+            incarnation,
+            range: Range::CommitAncestry,
+            subject: request.branch.as_slice(),
+        },
+        &Cursor {
+            anchor: anchor.as_slice().to_vec(),
+            position: after.as_slice().to_vec(),
+        },
+    )
+}
+
 /// Walks one Branch's ancestry from an immutable start, newest first.
 pub(crate) fn commit_history(
     tx: &Transaction<'_>,
@@ -247,7 +289,7 @@ pub(crate) fn commit_history(
 ) -> HistoryResult<PageResult<CommitRecord>> {
     let branch =
         super::branch::branch(tx, request.branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
-    let capacity = query::capacity(request.limit, CommitRecord::MAXIMUM_ENCODED_BYTES)?;
+    let limit = query::capacity(request.limit, 1)?;
     let context = Context {
         key,
         catalog,
@@ -294,8 +336,9 @@ pub(crate) fn commit_history(
         });
     };
     let mut records = Vec::new();
+    let mut bytes = 0usize;
     while let Some(id) = current {
-        if records.len() > capacity {
+        if records.len() > limit || bytes > query::available() {
             break;
         }
         let record = commit(tx, id)?.ok_or(HistoryError::Integrity("Commit chain"))?;
@@ -303,10 +346,10 @@ pub(crate) fn commit_history(
             return Err(HistoryError::Integrity("Commit ownership"));
         }
         current = record.parent;
+        bytes = bytes.saturating_add(record.encoded_bytes());
         records.push(record);
     }
-    let more = records.len() > capacity;
-    query::page(records, capacity, more, |record| {
+    query::page_by(records, limit, CommitRecord::encoded_bytes, |record| {
         query::encode(
             context,
             &Cursor {

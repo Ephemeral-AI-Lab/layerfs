@@ -110,6 +110,23 @@ impl HistoryCatalog for HistoryProvider {
         })
     }
 
+    fn commit_resume(
+        &self,
+        request: &CommitHistoryRequest,
+        commit: CommitId,
+    ) -> HistoryResult<Vec<u8>> {
+        self.read(|tx| {
+            commit::commit_resume(
+                tx,
+                self.catalog_id,
+                self.incarnation,
+                &self.cursor_key,
+                request,
+                commit,
+            )
+        })
+    }
+
     fn overwritten(
         &self,
         layer: LayerId,

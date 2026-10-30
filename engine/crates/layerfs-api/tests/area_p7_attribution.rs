@@ -613,3 +613,212 @@ fn maximal_commit_record_matches_declared_encoded_width() {
     assert_eq!(encoded.len() - 17, CommitRecord::MAXIMUM_ENCODED_BYTES);
     assert_eq!(Answer::decode(&encoded).unwrap(), answer);
 }
+
+fn maximal_meta() -> CommitMeta {
+    CommitMeta {
+        message: Some("m".repeat(MAXIMUM_ATTRIBUTION_BYTES)),
+        author: Some("a".repeat(MAXIMUM_ATTRIBUTION_BYTES)),
+        labels: boundary_labels(),
+        ..CommitMeta::new(CommitVia::Workspace)
+    }
+}
+
+fn provider_pages(
+    fixture: &Fixture,
+    branch: BranchId,
+    records: usize,
+) -> Vec<PageResult<CommitRecord>> {
+    let connection = rusqlite::Connection::open(&fixture.host.config.path).unwrap();
+    let mut explain = connection
+        .prepare(
+            "EXPLAIN QUERY PLAN SELECT commit_id, layer_stack_id, root_id, parent_commit_id, base_layer_id, second_parent_id, branch_id, via, message, merged_from_id, created_ms, logical, new_canonical, new_stored, new_metadata, lww, displaced_id, author, labels FROM \"commit\" WHERE commit_id = $1",
+        )
+        .unwrap();
+    let id = CommitId::from_bytes([0x12; 33]).unwrap();
+    let plan = explain
+        .query_map([id.as_slice()], |row| row.get::<_, String>(3))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    println!("P7_PROVIDER_PLAN {}", plan.join(" | "));
+    drop(explain);
+    drop(connection);
+    let before = fixture.work();
+    let mut cursor = None;
+    let mut pages = Vec::new();
+    loop {
+        assert!(pages.len() <= records, "provider paging did not terminate");
+        let page = fixture
+            .service
+            .store
+            .history()
+            .commit_history(&CommitHistoryRequest {
+                branch,
+                start: None,
+                cursor,
+                limit: 128,
+            })
+            .unwrap();
+        let answer = Answer {
+            id: 1,
+            reply: Reply::History(page.clone()),
+        };
+        let encoded = answer.encode().unwrap();
+        assert!(
+            encoded.len() - 17 <= layerfs_history::records::MAXIMUM_RESULT_BYTES,
+            "encoded provider page bytes: {}",
+            encoded.len() - 17
+        );
+        assert_eq!(Answer::decode(&encoded).unwrap(), answer);
+        cursor = page.continuation.clone();
+        pages.push(page);
+        if cursor.is_none() {
+            break;
+        }
+    }
+    let work = fixture.since(before);
+    println!(
+        "P7_PROVIDER records={records} pages={} statements={} rows={} vm_steps={}",
+        pages.len(),
+        work.statements,
+        work.rows,
+        work.vm_steps
+    );
+    pages
+}
+
+#[test]
+fn tiny_commit_records_share_one_encoded_provider_page() {
+    let fixture = Fixture::new("area-p7-tiny-provider-pages", |_source| 0);
+    fixture.fork("tiny-provider");
+    let branch = BranchId::named(
+        LayerStackId::from_authority([23; 16]),
+        &HistoryName::new("tiny-provider").unwrap(),
+    );
+    let mut expected = Vec::new();
+    for n in 0..16 {
+        expected.push(
+            direct_commit(
+                &fixture,
+                branch,
+                ObjectId::for_bytes(format!("P7 tiny provider root {n}").as_bytes()),
+                CommitMeta {
+                    message: Some(format!("tiny {n}")),
+                    ..CommitMeta::new(CommitVia::Workspace)
+                },
+            )
+            .unwrap()
+            .id,
+        );
+    }
+    expected.reverse();
+    let pages = provider_pages(&fixture, branch, expected.len());
+    assert_eq!(pages.len(), 1, "tiny records must share a provider page");
+    assert_eq!(pages[0].continuation, None);
+    assert_eq!(
+        pages
+            .iter()
+            .flat_map(|page| page.records.iter().map(|record| record.id))
+            .collect::<Vec<_>>(),
+        expected
+    );
+    fixture.cleanup();
+}
+
+#[test]
+fn maximal_commit_records_still_take_one_provider_page_each() {
+    let fixture = Fixture::new("area-p7-maximal-provider-pages", |_source| 0);
+    fixture.fork("maximal-provider");
+    let branch = BranchId::named(
+        LayerStackId::from_authority([23; 16]),
+        &HistoryName::new("maximal-provider").unwrap(),
+    );
+    let mut expected = Vec::new();
+    for n in 0..3 {
+        expected.push(
+            direct_commit(
+                &fixture,
+                branch,
+                ObjectId::for_bytes(format!("P7 maximal provider root {n}").as_bytes()),
+                maximal_meta(),
+            )
+            .unwrap()
+            .id,
+        );
+    }
+    expected.reverse();
+    let pages = provider_pages(&fixture, branch, expected.len());
+    assert_eq!(pages.len(), 3);
+    assert!(pages.iter().all(|page| page.records.len() == 1));
+    assert_eq!(
+        pages
+            .iter()
+            .flat_map(|page| page.records.iter().map(|record| record.id))
+            .collect::<Vec<_>>(),
+        expected
+    );
+    fixture.cleanup();
+}
+
+#[test]
+fn mixed_commit_records_pack_by_actual_width_and_resume_exactly_once() {
+    let fixture = Fixture::new("area-p7-mixed-provider-pages", |_source| 0);
+    fixture.fork("mixed-provider");
+    let branch = BranchId::named(
+        LayerStackId::from_authority([23; 16]),
+        &HistoryName::new("mixed-provider").unwrap(),
+    );
+    let old_tiny = direct_commit(
+        &fixture,
+        branch,
+        ObjectId::for_bytes(b"P7 mixed old tiny"),
+        CommitMeta::new(CommitVia::Workspace),
+    )
+    .unwrap();
+    let maximal = direct_commit(
+        &fixture,
+        branch,
+        ObjectId::for_bytes(b"P7 mixed maximal"),
+        maximal_meta(),
+    )
+    .unwrap();
+    let big = direct_commit(
+        &fixture,
+        branch,
+        ObjectId::for_bytes(b"P7 mixed big"),
+        CommitMeta {
+            message: Some("m".repeat(4000)),
+            author: Some("a".repeat(4000)),
+            ..CommitMeta::new(CommitVia::Workspace)
+        },
+    )
+    .unwrap();
+    let new_tiny = direct_commit(
+        &fixture,
+        branch,
+        ObjectId::for_bytes(b"P7 mixed new tiny"),
+        CommitMeta::new(CommitVia::Workspace),
+    )
+    .unwrap();
+    let expected = vec![new_tiny.id, big.id, maximal.id, old_tiny.id];
+    let pages = provider_pages(&fixture, branch, expected.len());
+    assert_eq!(
+        pages
+            .iter()
+            .map(|page| page.records.len())
+            .collect::<Vec<_>>(),
+        [2, 2],
+        "actual widths must stop before the next record would overflow"
+    );
+    let found = pages
+        .iter()
+        .flat_map(|page| page.records.iter().map(|record| record.id))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        found, expected,
+        "provider pages repeated or skipped a Commit"
+    );
+    let unique = found.iter().collect::<std::collections::HashSet<_>>();
+    assert_eq!(unique.len(), found.len());
+    fixture.cleanup();
+}

@@ -261,7 +261,7 @@ fn snapshot_commit_ids(value: &SdkValue) -> Vec<String> {
 /// previously pushed both restart (Null) and the provider cursor for the
 /// same Branch, a duplicate map key the control decoder rejects. The fix
 /// pushes exactly one continuation: restart, which is exact here because
-/// provider pages hold one Commit each, so nothing was emitted for the
+/// the page's first record was rejected, so nothing was emitted for the
 /// Branch yet and restart yields the rejected Commit first.
 #[test]
 fn snapshot_rejected_commit_yields_one_restart_continuation() {
@@ -344,6 +344,131 @@ fn snapshot_rejected_commit_yields_one_restart_continuation() {
     let unique: std::collections::HashSet<_> = ids.iter().collect();
     assert_eq!(unique.len(), ids.len(), "restart repeated a commit");
     println!("P14_REJECTED target_more=Null restart_first_is_rejected=true small_branches={added}");
+    fixture.cleanup();
+}
+
+#[test]
+fn snapshot_carries_multiple_small_commits_from_one_branch() {
+    let fixture = Fixture::new("area-p14-multiple-commits", |_source| 0);
+    fixture.fork("many-commits");
+    let mut expected = Vec::new();
+    for n in 0..4 {
+        expected.push(hex(commit_to(
+            &fixture,
+            "many-commits",
+            small_meta(),
+            format!("snapshot-small-{n}").as_bytes(),
+        )
+        .as_slice()));
+    }
+    expected.reverse();
+    let value = snapshot(&fixture, &[]);
+    assert_eq!(snapshot_commit_ids(&value), expected);
+    match value.get("more") {
+        Some(SdkValue::Map(more)) => {
+            assert!(more.iter().all(|(name, _)| name != "many-commits"))
+        }
+        other => panic!("more: {other:?}"),
+    }
+    fixture.cleanup();
+}
+
+#[test]
+fn snapshot_mid_page_rejection_resumes_at_rejected_commit() {
+    let fixture = Fixture::new("area-p14-mid-page-rejection", |_source| 0);
+    fixture.fork("mmm-mid-target");
+    let old = commit_to(&fixture, "mmm-mid-target", small_meta(), b"mid-old");
+    let rejected = commit_to(&fixture, "mmm-mid-target", big_meta(), b"mid-rejected");
+    let newest = commit_to(&fixture, "mmm-mid-target", small_meta(), b"mid-newest");
+    let provider = fixture
+        .service
+        .store
+        .history()
+        .commit_history(&CommitHistoryRequest {
+            branch: branch_id("mmm-mid-target"),
+            start: None,
+            cursor: None,
+            limit: 128,
+        })
+        .unwrap();
+    assert_eq!(
+        provider
+            .records
+            .iter()
+            .map(|record| record.id)
+            .collect::<Vec<_>>(),
+        [newest, rejected, old],
+        "the rejection fixture must be mid-page, not a one-record page"
+    );
+
+    fixture.fork("zzz-control");
+    let control = commit_to(&fixture, "zzz-control", small_meta(), b"mid-control");
+    let mut added = 0;
+    let value = loop {
+        let value = snapshot(&fixture, &[]);
+        let ids = snapshot_commit_ids(&value);
+        let has_newest = ids.iter().any(|id| id == &hex(newest.as_slice()));
+        let has_rejected = ids.iter().any(|id| id == &hex(rejected.as_slice()));
+        let has_control = ids.iter().any(|id| id == &hex(control.as_slice()));
+        if has_newest && !has_rejected && has_control {
+            break value;
+        }
+        assert!(
+            has_rejected || has_control,
+            "overshot: target newest={has_newest} rejected={has_rejected} control={has_control}"
+        );
+        let name = format!("aaa-m{added:03}");
+        fixture.fork(&name);
+        let root = format!("mid-small-{added}");
+        commit_to(&fixture, &name, small_meta(), root.as_bytes());
+        added += 1;
+        assert!(added <= 60, "never reached the mid-page rejection regime");
+    };
+    let target_ids = snapshot_commit_ids(&value);
+    assert_eq!(
+        target_ids
+            .iter()
+            .filter(|id| ***id == hex(newest.as_slice()))
+            .count(),
+        1
+    );
+    assert!(!target_ids.contains(&hex(rejected.as_slice())));
+    assert!(!target_ids.contains(&hex(old.as_slice())));
+
+    let cursor = match value.get("more") {
+        Some(SdkValue::Map(entries)) => entries
+            .iter()
+            .find(|(name, _)| name == "mmm-mid-target")
+            .map(|(_, cursor)| match cursor {
+                SdkValue::Text(cursor) => layerfs_bridge::sdk_values::unhex(cursor).unwrap(),
+                other => panic!("mid-page rejection must resume, not restart: {other:?}"),
+            })
+            .unwrap(),
+        other => panic!("more: {other:?}"),
+    };
+    let mut resumed = Vec::new();
+    let mut cursor = Some(cursor);
+    for _ in 0..4 {
+        let page = fixture
+            .service
+            .store
+            .history()
+            .commit_history(&CommitHistoryRequest {
+                branch: branch_id("mmm-mid-target"),
+                start: None,
+                cursor,
+                limit: 128,
+            })
+            .unwrap();
+        resumed.extend(page.records.iter().map(|record| record.id));
+        match page.continuation {
+            Some(next) => cursor = Some(next),
+            None => break,
+        }
+    }
+    assert_eq!(resumed, [rejected, old]);
+    assert_eq!([vec![newest], resumed].concat(), [newest, rejected, old]);
+    println!("P14_MID_PAGE_REJECT target_more=resume newest_once=true rejected_then_old=true small_branches={added}");
     fixture.cleanup();
 }
 
