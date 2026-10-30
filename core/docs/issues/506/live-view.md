@@ -9,7 +9,9 @@
 > lookup misses in a different place and reads 1 MiB ahead). R2 stopped twice
 > on a cut reply body (`Unknown`); the cause was the client's
 > `Connection: close`, and the S3 client now keeps connections alive instead
-> (§4.2 Transport). See the #510 comments. Builds on
+> (§4.2 Transport, `7ab54bcf1a`); a cold R2 view after it completed with no
+> failure (History 4 GETs; root folder +20, one file's revisions +20; 11.39%
+> of the file). See the #510 comments. Builds on
 > [one link per Store](links.md) (#509). The Connect part is in Connect's own
 > repository, `docs/ui/storage-links.md` §8.
 
