@@ -9,6 +9,7 @@
 use crate::job::{failed, refused, Outcome};
 use crate::output::Spool;
 use crate::registry::{lock, naming, sandbox, sandbox_live, text, Process, SandboxState};
+use layerfs_api::internal::exec_directory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::time::Duration;
 
@@ -60,7 +61,17 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;
     let path = text(args, "path")?;
     let command = text(args, "command")?;
-    let directory = state.directory(path)?;
+    let cwd = match args.get("cwd") {
+        None => None,
+        Some(SdkValue::Text(cwd)) => Some(cwd.as_str()),
+        _ => {
+            return Err(refused(
+                "InvalidInput",
+                "workspace.exec cwd must be a canonical absolute path string",
+            ))
+        }
+    };
+    let directory = exec_directory(&state.directory(path)?, cwd)?;
     if !args.get_bool("background") {
         let (code, stdout, stderr) = run(
             &state,

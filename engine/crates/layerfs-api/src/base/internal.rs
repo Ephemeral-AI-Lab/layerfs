@@ -139,6 +139,8 @@ pub fn parts(
     (&sandbox.runtime, &mut sandbox.control)
 }
 
+pub use crate::sandbox::exec::exec_directory;
+
 /// The same ordinary launcher for external host commands and disjoint concurrent proof borrows.
 #[cfg(unix)]
 pub fn exec(

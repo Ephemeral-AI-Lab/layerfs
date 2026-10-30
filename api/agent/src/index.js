@@ -10,10 +10,11 @@
 // (fs, branch, project) run against the project's Store, opened in this
 // process on Linux (#352 F-020) or in the LayerFS home's worker on macOS and
 // Windows (transport/).
-import { BACKEND, STATE, invoke, invokeClient, live, projectArgs, sinkOf, storeArgs, storeClose, storeOpen, transportOf } from "./client.js";
+import { BACKEND, STATE, invoke, invokeClient, live, page, pageOf, projectArgs, sinkOf, storeArgs, storeClose, storeOpen, transportOf } from "./client.js";
 import { binding } from "./transport/index.js";
 import { LayerFSError } from "./errors.js";
 import { createResults } from "./results.js";
+import { checkScope, scopeArgs, scopeBranches } from "./scope.js";
 import * as fsMethods from "./fs/index.js";
 import { INIT_TIMEOUT_MS, init } from "./project/init.js";
 import { list_branches } from "./project/list_branches.js";
@@ -67,6 +68,19 @@ async function opened(client) {
   client[STATE].closed = false;
 }
 
+/** Lists the complete Branch namespace, then applies the caller's page to it. */
+async function scopedBranches(client, args) {
+  const requested = page(args?.pageSize ?? 50, args?.pagePos ?? 0);
+  const items = [];
+  for (let pagePos = 0; ;) {
+    const answer = await invokeClient(client, "project.list_branches", { ...args, pageSize: 1000, pagePos });
+    items.push(...scopeBranches(client[STATE].scope, answer.items));
+    if (!answer.hasMore) break;
+    pagePos = answer.nextPagePos;
+  }
+  return pageOf(items, requested);
+}
+
 /** True for a plain object (not null, not an array). */
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -90,7 +104,7 @@ function resolveOptions(given) {
     throw new LayerFSError("InvalidInput", "LayerFS options must be a plain object", null);
   }
   for (const key of Object.keys(given ?? {})) {
-    if (!["home", "trace", "deploy", "storePolicy", "storePath"].includes(key)) {
+    if (!["home", "trace", "deploy", "storePolicy", "storePath", "scope"].includes(key)) {
       throw new LayerFSError("InvalidInput", `unknown LayerFS option "${key}"`, null);
     }
   }
@@ -128,6 +142,7 @@ function resolveOptions(given) {
   } else {
     throw new LayerFSError("InvalidInput", `LayerFS option "storePolicy" must be JSON text or a plain object`, null);
   }
+  const scope = checkScope(given?.scope);
   return {
     home: optionField(given, "home", "HOME", env),
     trace: optionField(given, "trace", "TRACE", env),
@@ -141,6 +156,7 @@ function resolveOptions(given) {
     },
     storePolicy,
     storePath: optionField(given, "storePath", "STORE_PATH", env),
+    ...(scope ? { scope } : {}),
   };
 }
 
@@ -166,6 +182,9 @@ export class LayerFS {
     }
     if (rest.length > 1 || (rest.length === 1 && rest[0] !== undefined && !isPlainObject(rest[0]))) {
       throw new LayerFSError("InvalidInput", "LayerFS.init(name, folder, timeout?, options?) takes one options object at most", null);
+    }
+    if (Object.hasOwn(rest[0] ?? {}, "scope")) {
+      throw new LayerFSError("InvalidInput", "LayerFS.init does not accept scope; open the existing project with a scope instead", null);
     }
     const client = new LayerFS(projectName, FACTORY, rest[0]);
     const created = await init(client, folder, timeout);
@@ -205,7 +224,7 @@ export class LayerFS {
     this.projectName = projectName;
     this.options = resolveOptions(givenOptions);
     // not open until a factory has opened its Store; the binding is chosen now, once
-    this[STATE] = { closed: null, transport: binding(), results: createResults() };
+    this[STATE] = { closed: null, transport: binding(), results: createResults(), scope: this.options.scope ?? null };
     this.fs = bind(this, fsMethods);
     this.project = bind(this, { list_branches, list_sandboxes });
     this.branch = bind(this, { list_commits, graph, changed_paths, diff_commits, diff_branches, fork, merge, publish });
@@ -215,9 +234,11 @@ export class LayerFS {
   }
 
   /** One public call of this client; refused once the client is closed. */
-  async call(method, args) {
+  async call(method, given) {
     if (BACKEND.test(method)) throw new LayerFSError("UnknownMethod", "backend and runtime methods are @layerfs/backend's and @layerfs/runtime's", null);
     live(this);
+    const args = scopeArgs(this[STATE].scope, method, given);
+    if (this[STATE].scope && method === "project.list_branches") return scopedBranches(this, args);
     return invokeClient(this, method, args);
   }
 

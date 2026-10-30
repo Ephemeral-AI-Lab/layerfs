@@ -14,14 +14,16 @@
 // are not ended, and the result's field for each is null. The result then
 // also carries `stdoutBytes` and `stderrBytes`. Page reads are not traced:
 // the call's trace line covers the command's run.
-import { invoke, invokeClient, outcome, transportOf, workspaceArgs, checkedMessage } from "../client.js";
+import { invoke, invokeClient, outcome, transportOf, workspaceArgs, checkedMessage, STATE } from "../client.js";
 import { LayerFSError } from "../errors.js";
+import { scopeArgs } from "../scope.js";
 
 const PAGE = 1 << 20;
 
 export async function exec(client, ws, command, message, sinks) {
   const to = checkedSinks(sinks);
-  const value = await invokeClient(client, "workspace.exec", { ...workspaceArgs(ws), command, message: checkedMessage(message), ...(to ? { spool: true } : {}) });
+  const args = { ...workspaceArgs(ws), command, message: checkedMessage(message), ...(to ? { spool: true } : {}) };
+  const value = await invokeClient(client, "workspace.exec", scopeArgs(client[STATE].scope, "workspace.exec", args));
   if (!to && value.output === undefined) return value;
   const { output, ...result } = value;
   result.stdoutBytes ??= Buffer.byteLength(result.stdout ?? "");

@@ -8,12 +8,16 @@
 // The native call gets { sandbox, branch } with the client's project, home,
 // deploy and storePath. Returns the Workspace, `{ sandbox, path }`, and its
 // Sandbox's `image`.
-import { invokeClient } from "../client.js";
+import { invokeClient, STATE } from "../client.js";
 import { LayerFSError } from "../errors.js";
+import { outOfScope, scopeArgs } from "../scope.js";
 export async function mount(client, sandbox, branch, ...rest) {
-  if (typeof sandbox !== "string" || !/^[1-9][0-9]{0,9}$/.test(sandbox) || typeof branch !== "string" || rest.some((value) => value !== undefined)) {
+  const scope = client[STATE].scope;
+  if (scope && (branch !== undefined || rest.length > 0)) throw outOfScope("branch");
+  const selected = scope ? "main" : branch;
+  if (typeof sandbox !== "string" || !/^[1-9][0-9]{0,9}$/.test(sandbox) || typeof selected !== "string" || (!scope && rest.some((value) => value !== undefined))) {
     throw new LayerFSError("InvalidInput", "workspace.mount(sandbox, branch) takes a Sandbox number such as \"1\" (from sandbox.create() or project.list_sandboxes()) and a Branch name, and no options", null);
   }
-  const value = await invokeClient(client, "workspace.mount", { sandbox, branch });
+  const value = await invokeClient(client, "workspace.mount", scopeArgs(scope, "workspace.mount", { sandbox, branch: selected }));
   return { sandbox: value.sandbox, path: value.path, image: value.image };
 }
