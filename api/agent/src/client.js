@@ -107,7 +107,9 @@ export function projectArgs(client) {
   return { project: client.projectName, home: client.options.home, deploy: client.options.deploy };
 }
 
-export const storeArgs = (client) => (client.options.storePath ? { storePath: client.options.storePath } : {});
+export const storeArgs = (client) => (client.options.storePath
+  ? { storePath: client.options.storePath, ...(client.options.readOnly ? { readOnly: true } : {}) }
+  : {});
 
 /** Opens the client's Store in this process (one more client of it). */
 export async function storeOpen(client) {

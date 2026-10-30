@@ -1,12 +1,14 @@
 //! Store calls in this process (#352 F-020): the only route for fs, branch,
 //! project and backend Store calls.
 //!
-//! One `StoreService` per Store path per process, opened by the first client
-//! that names the path and closed when the last one releases it. It is a live
-//! opener of the installed Store, as a daemon is: never sealed here. The
-//! kernel guard runs before any file is opened; where it refuses (macOS, a
-//! filesystem that does not carry SQLite locks), every Store call fails
-//! `Unsupported` with its reason. There is no other route.
+//! One `StoreService` per Store path and open mode per process, opened by
+//! the first client that names the path (writable, or read-only) and closed
+//! when the last one of that mode releases it. A read-only open holds no
+//! writable catalog handle and creates no overlay. It is a live opener of
+//! the installed Store, as a daemon is: never sealed here. The kernel guard
+//! runs before any file is opened; where it refuses (macOS, a filesystem
+//! that does not carry SQLite locks), every Store call fails `Unsupported`
+//! with its reason. There is no other route.
 //!
 //! The private overlays file-changing calls construct through live in this
 //! process's temporary directory, under a random name so a directory left by
@@ -27,11 +29,11 @@ use std::sync::{Arc, LazyLock, Mutex};
 struct Opened {
     service: Arc<StoreService>,
     clients: usize,
-    /// This service's private overlay directory.
-    directory: PathBuf,
+    /// This service's private overlay directory; none when opened read-only.
+    directory: Option<PathBuf>,
 }
 
-static STORES: LazyLock<Mutex<BTreeMap<PathBuf, Opened>>> = LazyLock::new(Default::default);
+static STORES: LazyLock<Mutex<BTreeMap<(PathBuf, bool), Opened>>> = LazyLock::new(Default::default);
 
 /// The Store path a call names.
 fn path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
@@ -44,47 +46,67 @@ fn path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
     }
 }
 
+fn key(args: &SdkValue) -> Result<(PathBuf, bool), SdkRefusal> {
+    Ok((path(args)?, args.get_bool("readOnly")))
+}
+
+fn open_refusal(refusal: OpenRefusal) -> SdkRefusal {
+    match refusal {
+        OpenRefusal::Unsupported(reason) => refused("Unsupported", reason.0),
+        OpenRefusal::Missing(reason) => refused("NoStore", reason),
+        OpenRefusal::Failed(reason) => refused("Failed", reason),
+    }
+}
+
 /// Opens the Store at `store` for this process, or refuses.
 fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
     let project = crate::discovery::project(args)?;
+    if args.get_bool("readOnly") {
+        return StoreService::open_read_only(
+            store,
+            &project.manifest.binding,
+            project.manifest.cursor_key,
+        )
+        .map(|service| Opened {
+            service: Arc::new(service),
+            clients: 0,
+            directory: None,
+        })
+        .map_err(open_refusal);
+    }
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
         std::process::id(),
         layerfs_bridge::sdk_values::hex(&crate::registry::random()?[..12])
     ));
     std::fs::create_dir(&directory).map_err(failed)?;
-    let opened = StoreService::open_direct(
+    match StoreService::open_direct(
         store,
         &project.manifest.binding,
         project.manifest.cursor_key,
         &directory.join("overlay.sqlite"),
-    );
-    match opened {
+    ) {
         Ok(service) => Ok(Opened {
             service: Arc::new(service),
             clients: 0,
-            directory,
+            directory: Some(directory),
         }),
         Err(refusal) => {
             let _ = std::fs::remove_dir_all(&directory);
-            Err(match refusal {
-                OpenRefusal::Unsupported(reason) => refused("Unsupported", reason.0),
-                OpenRefusal::Missing(reason) => refused("NoStore", reason),
-                OpenRefusal::Failed(reason) => refused("Failed", reason),
-            })
+            Err(open_refusal(refusal))
         }
     }
 }
 
 /// `storeOpen`: one more client of the Store a call names, opening it first.
 pub(crate) fn acquire(args: &SdkValue) -> Outcome {
-    let store = path(args)?;
+    let key = key(args)?;
     let mut stores = lock(&STORES)?;
-    if !stores.contains_key(&store) {
-        let opened = open(&store, args)?;
-        stores.insert(store.clone(), opened);
+    if !stores.contains_key(&key) {
+        let opened = open(&key.0, args)?;
+        stores.insert(key.clone(), opened);
     }
-    let opened = stores.get_mut(&store).expect("opened above");
+    let opened = stores.get_mut(&key).expect("opened above");
     opened.clients += 1;
     Ok(SdkValue::map([(
         "clients",
@@ -94,11 +116,12 @@ pub(crate) fn acquire(args: &SdkValue) -> Outcome {
 
 /// `storeClose`: one client less; the last one closes the Store and removes
 /// its overlay directory. A call still running keeps the service alive until
-/// it returns, and the service closes when it is dropped then.
+/// it returns, and the service closes when it is dropped then. A read-only
+/// open has no overlay directory.
 pub(crate) fn release(args: &SdkValue) -> Outcome {
-    let store = path(args)?;
+    let key = key(args)?;
     let mut stores = lock(&STORES)?;
-    let Some(opened) = stores.get_mut(&store) else {
+    let Some(opened) = stores.get_mut(&key) else {
         return Err(refused("InvalidInput", "this process holds no such Store"));
     };
     opened.clients = opened.clients.saturating_sub(1);
@@ -108,22 +131,25 @@ pub(crate) fn release(args: &SdkValue) -> Outcome {
             SdkValue::Int(opened.clients as i64),
         )]));
     }
-    let opened = stores.remove(&store).expect("present above");
+    let opened = stores.remove(&key).expect("present above");
     drop(stores);
     let closed = match Arc::try_unwrap(opened.service) {
         Ok(service) => service.close().map_err(failed),
         Err(_) => Ok(()),
     };
-    let removed = std::fs::remove_dir_all(&opened.directory).map_err(failed);
+    let removed = match opened.directory {
+        Some(directory) => std::fs::remove_dir_all(&directory).map_err(failed),
+        None => Ok(()),
+    };
     closed.and(removed)?;
     Ok(SdkValue::map([("clients", SdkValue::Int(0))]))
 }
 
 /// The open service of the Store a call names.
 fn service(args: &SdkValue) -> Result<Arc<StoreService>, SdkRefusal> {
-    let store = path(args)?;
+    let key = key(args)?;
     lock(&STORES)?
-        .get(&store)
+        .get(&key)
         .map(|opened| opened.service.clone())
         .ok_or_else(|| refused("InvalidInput", "the client has not opened its Store"))
 }
@@ -136,7 +162,10 @@ pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
             fields
                 .into_iter()
                 .filter(|(name, _)| {
-                    !matches!(name.as_str(), "storePath" | "sandbox" | "deploy" | "home")
+                    !matches!(
+                        name.as_str(),
+                        "storePath" | "sandbox" | "deploy" | "home" | "readOnly"
+                    )
                 })
                 .collect(),
         ),

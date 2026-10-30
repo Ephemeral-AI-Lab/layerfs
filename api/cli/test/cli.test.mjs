@@ -167,6 +167,27 @@ test("a missing project exits 2 before anything opens", () => {
   assert.deepEqual(r.calls, []);
 });
 
+test("--read-only opens the Store for reads only", () => {
+  const r = cli(["--read-only", "fs", "stat", "main", "/a"]);
+  assert.equal(r.code, 0, r.err);
+  const open = r.calls.find(([op]) => op === "store.open");
+  assert.equal(open[1].readOnly, true);
+  assert.equal(r.made[0][1].readOnly, true);
+});
+
+test("--read-only refuses a file write", () => {
+  const r = cli(["--read-only", "fs", "write", "cart", "/a"], { input: "x\n" });
+  assert.equal(r.code, 125, r.err);
+  assert.equal(JSON.parse(r.err).code, "ReadOnly");
+});
+
+test("--read-only cannot be used with init", () => {
+  const r = cli(["--read-only", "init", "site", source]);
+  assert.equal(r.code, 2);
+  assert.match(r.err, /--read-only cannot be used with init/);
+  assert.deepEqual(r.calls, []);
+});
+
 test("--project wins over LAYERFS_PROJECT; an integration's prefixed name is not read", () => {
   assert.equal(cli(["fs", "stat", "main", "/a", "--project", "other"]).made[0][1].project, "other");
   assert.equal(cli(["--project=other", "fs", "stat", "main", "/a"]).made[0][1].project, "other");

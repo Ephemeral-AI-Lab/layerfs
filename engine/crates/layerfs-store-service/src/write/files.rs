@@ -65,6 +65,7 @@ pub fn commit(
     changes: &[Arg<Change<'_>>],
     message: Option<&str>,
 ) -> Answer {
+    service.require_write()?;
     let store = &service.store;
     let (branch_name, branch) = crate::telemetry::timed("files.resolve", |_| {
         let stack = args::project(store, project)?;

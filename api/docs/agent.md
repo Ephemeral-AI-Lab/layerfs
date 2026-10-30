@@ -39,18 +39,25 @@ await layerfs.close();
 
 ### Opening a project
 
-A client is made by `LayerFS.open(name)` (an existing project) or
-`LayerFS.init(name, folder, timeout?)` (Init, then the same open); both are
-async and return a ready client, and `new LayerFS()` is refused
-`InvalidInput`. **There is no options argument:** every setting comes from the
-environment, read once when the client is made, by its `LAYERFS_` name only:
-`LAYERFS_HOME`, `_STORE_PATH`, `_DOCKER`, `_IMAGE`,
+A client is made by `LayerFS.open(name)` (an existing project),
+`LayerFS.openReadOnly(name)` (the same, with the Store opened for reads
+only) or `LayerFS.init(name, folder, timeout?)` (Init, then the same open as
+`open`); all are async and return a ready client, and `new LayerFS()` is
+refused `InvalidInput`. **There is no options argument:** every setting comes
+from the environment, read once when the client is made, by its `LAYERFS_`
+name only: `LAYERFS_HOME`, `_STORE_PATH`, `_DOCKER`, `_IMAGE`,
 `_VOLUME`, `_DAEMON`, `_CONTAINER_PREFIX`, `_DAEMON_HOST`, `_TRACE`,
 `_STORE_POLICY` (and `_TRACE_STEP`, read at each call). An object passed where
-the options went (`LayerFS.open(name, {…})`, or an object as `LayerFS.init`'s
-third argument) is refused `InvalidInput`, never ignored. `open` opens the project's Store and makes one project lookup
-on it, so a missing project is `NoSuchProject` at once; if either fails,
-nothing stays open. `close()` releases the Store (the process's last client of
+the options went (`LayerFS.open(name, {…})`, `LayerFS.openReadOnly(name, {…})`,
+or an object as `LayerFS.init`'s third argument) is refused `InvalidInput`,
+never ignored. `open` and `openReadOnly` open the project's Store and make
+one project lookup on it, so a missing project is `NoSuchProject` at once; if
+either fails, nothing stays open. `openReadOnly` opens the catalog handle
+read-only and does not create an overlay: file-changing Store calls
+(`fs.write`, `fs.edit`, `fs.mkdir`, `fs.rm`, `fs.cp`, `fs.mv`, `fs.apply`) and
+history-mutating ones (`branch.fork`, `branch.merge`, `branch.publish`) are
+refused `ReadOnly` ("this Store is open read-only") before they bind or
+write. Workspace and Sandbox calls still go to the daemon. `close()` releases the Store (the process's last client of
 it closes it), leaves Workspaces mounted, and makes every later call refuse
 `InvalidInput`; a second `close()` does nothing. `await using layerfs = await
 LayerFS.open(...)` closes it at the end of the block. One copy of
@@ -267,7 +274,7 @@ trace line covers the command's run.
 
 | Group | Positional methods |
 | --- | --- |
-| `LayerFS` (2) | `LayerFS.open(name)`, `LayerFS.init(name, folder, timeout?)`: static, each returns a ready client |
+| `LayerFS` (3) | `LayerFS.open(name)`, `LayerFS.openReadOnly(name)`, `LayerFS.init(name, folder, timeout?)`: static, each returns a ready client |
 | project (2) | `list_branches(pageSize?, pagePos?)`, `list_sandboxes(pageSize?, pagePos?)` |
 | fs reads (7) | `read(ref, path, startLine?, endLine?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
 | fs writes (7) | `write(branch, path, content, message? \| { message?, mode? })`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message? \| { message?, mode? })`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
@@ -400,7 +407,8 @@ merge, and a failed/unknown operation must be inspected before a new operation.
 `layerfs` runs one `@layerfs/agent` call per command, so an agent whose only
 tool is Bash can use LayerFS without writing a Node script for each call.
 
-It is only a wrapper. Each command opens the project with `LayerFS.open`,
+It is only a wrapper. Each command opens the project with `LayerFS.open` (or
+`LayerFS.openReadOnly` when `--read-only` is given),
 makes exactly one SDK call through the SDK's public API, prints the result and
 closes the client. It adds no capability, check or retry of its own: the SDK
 checks the inputs and makes its one attempt, and the command reports what it
@@ -458,7 +466,9 @@ layerfs sandbox close 1
   same way. `fs edit` takes `--old <text>` or `--old-from <file>`, and `--new`
   or `--new-from`. Input is read before anything opens.
 - **Global options**, anywhere before `--`: `--project <name>`, `--text`
-  (readable output instead of JSON), `-h`/`--help`, `--version`.
+  (readable output instead of JSON), `--read-only` (opens the Store for reads
+  only; file-changing and history-mutating Store calls are refused `ReadOnly`;
+  cannot be used with `init`), `-h`/`--help`, `--version`.
 - **exec.** `workspace exec` prints the SDK's result as JSON, with the
   command's `exitCode` inside, and exits 0. With `--stream` it writes the
   command's stdout and stderr through as they arrive, prints nothing else and
@@ -538,7 +548,8 @@ table differs, and when a family's files stop matching the SDK's.
 ### Cost per command
 
 Each command is a new Node process. Before its one call it loads the SDK and
-the native addon and opens the project's Store (`LayerFS.open` also makes one
+the native addon and opens the project's Store (`LayerFS.open` and
+`LayerFS.openReadOnly` also make one
 `project.list_branches` call to check the project exists); a Workspace call
 also connects to the Sandbox's daemon. An SDK script pays this once for many
 calls. This cost has not been measured. For a loop of many calls, a script is

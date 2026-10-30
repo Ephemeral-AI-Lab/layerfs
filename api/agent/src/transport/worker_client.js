@@ -133,8 +133,9 @@ function initRun(init, request) {
 
 /** The binding that sends every call to the worker named by the endpoint file `file`. */
 export function workerClient(file) {
-  /** Stores this process has opened, by path, with their clients. */
+  /** Stores this process has opened, by path and open mode, with their clients. */
   const opened = new Map();
+  const storeKey = ({ storePath, readOnly }) => `${storePath}\0${readOnly ? "1" : "0"}`;
   async function send(fn, op, args) {
     let info;
     try { info = endpointOf(file); } catch (error) { return refused("Failed", `the LayerFS worker is not running for this home: ${error.message}`); }
@@ -144,7 +145,7 @@ export function workerClient(file) {
       ...(info.docker ? { docker: info.docker } : {}),
     };
     const sent = info.daemonHost || info.docker ? { ...args, deploy } : args;
-    const request = { fn, op, args: sent, open: opened.has(args.storePath) };
+    const request = { fn, op, args: sent, open: opened.has(storeKey(args)) };
     if (fn === "call" && op === "project.init" && info.init) return initRun(info.init, request);
     return connection(info).call(request);
   }
@@ -152,13 +153,15 @@ export function workerClient(file) {
     call: (op, args) => send("call", op, args),
     backendCall: (op, args) => send("backendCall", op, args),
     /** The Store opens in the worker; here only its clients are counted. */
-    async storeOpen({ storePath }) {
-      opened.set(storePath, (opened.get(storePath) ?? 0) + 1);
+    async storeOpen(args) {
+      const key = storeKey(args);
+      opened.set(key, (opened.get(key) ?? 0) + 1);
       return { value: null };
     },
-    async storeClose({ storePath }) {
-      const left = (opened.get(storePath) ?? 1) - 1;
-      if (left > 0) opened.set(storePath, left); else opened.delete(storePath);
+    async storeClose(args) {
+      const key = storeKey(args);
+      const left = (opened.get(key) ?? 1) - 1;
+      if (left > 0) opened.set(key, left); else opened.delete(key);
       return { value: null };
     },
     /** The worker returns a spooled exec's output whole, so there is no spool to read here. */

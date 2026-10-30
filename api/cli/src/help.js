@@ -26,6 +26,7 @@ usage:  layerfs <family> <call> [args] [options]
 GLOBAL OPTIONS
   --project <name>      the project (default $LAYERFS_PROJECT)
   --text                readable output instead of JSON
+  --read-only           open the Store for reads only; writes are refused ReadOnly
   -h, --help            help for the command
 
 SETTINGS come from the environment, as for the SDK: LAYERFS_HOME, LAYERFS_STORE_PATH,

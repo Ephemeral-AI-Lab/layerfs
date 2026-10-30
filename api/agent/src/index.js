@@ -1,7 +1,9 @@
 // @layerfs/agent (#428): what an agent's script calls. A client is opened by
-// `LayerFS.open(name)` (an existing project) or `LayerFS.init(name, folder,
-// timeout?)` (a new one) and released by `close()`; there is no public
-// constructor and no options argument: settings come from the environment.
+// `LayerFS.open(name)` (an existing project), `LayerFS.openReadOnly(name)`
+// (the same, with the Store opened for reads only) or `LayerFS.init(name,
+// folder, timeout?)` (a new one) and released by `close()`; there is no
+// public constructor and no options argument: settings come from the
+// environment.
 // Calls name their Branch. `sandbox.create()` starts a Sandbox (the only
 // call that does) and `sandbox.close` stops it; `workspace.mount(sandbox,
 // branch)` returns a Workspace, `{ sandbox, path }`, in the Sandbox it names
@@ -78,6 +80,18 @@ export class LayerFS {
     return client;
   }
 
+  /** A ready client of the existing project `projectName`, with its Store
+   * opened for reads only: file-changing and history-mutating Store calls
+   * are refused `ReadOnly`. Workspace and Sandbox calls still go to the
+   * daemon. The constructor lists its settings. */
+  static async openReadOnly(projectName, ...rest) {
+    noOptions("LayerFS.openReadOnly(name)", rest.some((value) => value !== undefined));
+    const client = new LayerFS(projectName, FACTORY);
+    client.options.readOnly = true;
+    await opened(client);
+    return client;
+  }
+
   /** Creates the project `projectName` from `folder` (one Init), then opens
    * it. `created` on the client is what Init returned. An uncertain Init
    * keeps everything it made. `timeout` (milliseconds, a positive whole
@@ -92,7 +106,8 @@ export class LayerFS {
     return client;
   }
 
-  /** Not public: `LayerFS.open` and `LayerFS.init` make clients. Every
+  /** Not public: `LayerFS.open`, `LayerFS.openReadOnly` and `LayerFS.init`
+   * make clients. Every
    * setting is read from the environment once, here, into `options`, by its
    * LAYERFS_ name. LAYERFS_TRACE names a
    * per-call trace file; LAYERFS_TRACE_STEP, read at each call, labels its
@@ -113,7 +128,7 @@ export class LayerFS {
    * `LayerFS.init` records instead of the default. */
   constructor(projectName, token = undefined) {
     if (token !== FACTORY) {
-      throw new LayerFSError("InvalidInput", "use `await LayerFS.open(name)` or `await LayerFS.init(name, folder)`; there is no public constructor", null);
+      throw new LayerFSError("InvalidInput", "use `await LayerFS.open(name)`, `await LayerFS.openReadOnly(name)` or `await LayerFS.init(name, folder)`; there is no public constructor", null);
     }
     if (typeof projectName !== "string" || !/^[a-z0-9](?:[a-z0-9_.-]{0,61}[a-z0-9])?$/.test(projectName)) {
       throw new LayerFSError("InvalidInput", "a project name is required", null);
