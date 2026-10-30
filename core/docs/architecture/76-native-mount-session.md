@@ -189,19 +189,27 @@ its existing Commit-custody admission and then, for an attached Workspace:
 3. **Drain.** [`drain`](../../crates/layerfs-fuse/src/session/drain.rs)
    establishes that every created loop is joined, the owner and watcher
    returned, no received, admitted or retained request remains, and releases the
-   lane. `drain_wait` is an observation deadline.
+   lane. `drain_wait` is an observation deadline. A stop at `Join` means the
+   connection outlived its mount (another mount namespace holds a copy of it,
+   #426 and #460): the unmount makes one abort write on the already-detached
+   connection and drains again, so the stalled connection still ends. A write
+   that is not accepted whole, or a second stop, keeps the entry `Retained`
+   exactly as any other stop does.
 4. **Revocation.** `NativeJob::Revoke` logically revokes the engine mount.
 5. **Close and registry removal** through the existing terminal Close.
 
 Any step that is not established leaves the entry `Retained` with its stage
-(`Detach`, `Join`, `Owner`, `Requests`, `Lane`, `Revoke`, `Close` or `Registry`),
+(`Detach`, `Join`, `Abort`, `Owner`, `Requests`, `Lane`, `Revoke`, `Close` or `Registry`),
 the observer and the original evidence. The reply is `Retained` with
 `TeardownCustody`; it is not reported as an uncertain mutation and nothing is
 replayed. Later Attach or Unmount on that entry returns the same custody, and
-so does ForceUnmount, except after a detached drain stopped at `Join`: that one
-[stalled normal unmount](80-forced-teardown.md#stalled-normal-unmount) is ended
-by one forced unmount. The normal path never uses the abort control and never
-sets the terminal fence.
+so does ForceUnmount, except for the one kind of stop that can still be ended:
+a detached drain stopped at `Join` whose abort control is bound and unused
+([stalled normal unmount](80-forced-teardown.md#stalled-normal-unmount)). The
+normal path uses the abort control only there. An accepted abort sets the
+terminal service fence before the second drain. A failed or short abort reports
+`Abort` with its original errno or byte count; later drain, Revoke and Close
+failures retain the recorded abort effects in `TeardownCustody.forced`.
 
 ## Forced unmount
 

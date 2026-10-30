@@ -129,7 +129,7 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
         .into_iter()
         .filter(|branch| branch.name.as_str() != MAIN)
         .collect::<Vec<_>>();
-    let names = branches
+    let mut names = branches
         .iter()
         .map(|branch| {
             (
@@ -138,6 +138,22 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
             )
         })
         .collect::<BTreeMap<_, _>>();
+    // The page is bounded, but a Workspace may be mounted on a Branch outside
+    // it. Resolve just those mounted identities, so the listing does not
+    // depend on how many Branches the project has. The page still reports
+    // `moreBranches`; the Workspace answer needs the name and current head.
+    for view in views {
+        if view.binding.branch.stack != stack.id {
+            continue;
+        }
+        let id = view.binding.branch.id;
+        if names.contains_key(&id) {
+            continue;
+        }
+        if let Some(branch) = store.history().branch(id).map_err(args::history)? {
+            names.insert(id, (branch.name.as_str().to_owned(), branch.head_commit));
+        }
+    }
     let mut spent = 0usize;
     let mut take = |value: SdkValue| {
         spent += cost(&value);
