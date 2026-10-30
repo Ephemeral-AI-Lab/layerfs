@@ -33,6 +33,7 @@ export class LayerFSBackend {
   /** The backend of an opened agent client. */
   static of(shop) {
     if (!shop || !shop[STATE]) throw new LayerFSError("InvalidInput", "LayerFSBackend.of takes a client from LayerFS.open or LayerFS.init", null);
+    if (shop[STATE].scope) throw new LayerFSError("InvalidInput", "out of scope: backend", null);
     return new LayerFSBackend(shop, FACTORY);
   }
 

@@ -4,7 +4,6 @@ mod close;
 mod commit;
 #[cfg(unix)]
 pub(crate) mod create;
-#[cfg(unix)]
 pub(crate) mod exec;
 mod mount;
 mod status;

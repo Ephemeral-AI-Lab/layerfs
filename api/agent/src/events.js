@@ -41,7 +41,7 @@ export async function subscribe(client) {
   live(client);
   const previous = client[STATE].subscription;
   if (previous) await previous.current.close();
-  const answer = await invokeClient(client, "events.subscribe", {});
+  const answer = await client.call("events.subscribe", {});
   const subscription = {
     cursor: answer.cursor,
     snapshot: answer.snapshot,

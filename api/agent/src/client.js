@@ -9,7 +9,7 @@ export const transportOf = (client) => client[STATE].transport;
 import { LayerFSError } from "./errors.js";
 import { traced } from "./trace.js";
 
-/** A client's private state: `{ closed, transport, subscription, results }`. */
+/** A client's private state: `{ closed, transport, subscription, results, scope }`. */
 export const STATE = Symbol("layerfs.client");
 
 /** Names on the binding's backend table (#428), refused by the public one. */
