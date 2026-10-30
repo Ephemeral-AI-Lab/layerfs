@@ -591,13 +591,12 @@ the LayerFS home's worker on macOS and Windows, and fail `Unsupported` anywhere 
 
 ### Install and run
 
-The command is the `api/cli/` folder of a LayerFS checkout; it isn't published to
-npm. It needs Node 20 or newer and the SDK's native addon (`npm run
+The command is the `api/cli/` folder of a LayerFS checkout. It needs Node 20
+or newer and the SDK's native addon (`npm run
 build:native` in `api`, or `LAYERFS_NATIVE`).
 
 ```bash
 npm --prefix "$LAYERFS_REPO/api" install
-npm --prefix "$LAYERFS_REPO/api/cli" install
 "$LAYERFS_REPO/api/cli/src/layerfs.js" help
 ```
 

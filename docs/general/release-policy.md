@@ -62,6 +62,45 @@ A release candidate is eligible only when:
 Pre-1.0 releases may evolve quickly. Any compatibility promise must still be
 stated explicitly in that release's manual; silence is not a promise.
 
+## JavaScript package versions
+
+The four `@layerfs/*` packages are versioned as one LayerFS release set. Choose
+the next set version from the current release policy and the compatibility
+impact of all package changes: use the next planned release version, and do not
+ship a package independently at a different version. Keep `@layerfs/agent`,
+`@layerfs/backend`, `@layerfs/runtime`, and `@layerfs/cli` on the same exact
+version because backend/runtime depend on the agent's internal surface and the
+CLI calls its public surface.
+
+For a `1.x` set, a change is breaking if it removes or changes an exported
+entrypoint, export path, method, argument/result shape, documented error or
+observable behavior; changes CLI command names, arguments, output or exit
+semantics; breaks backend/runtime compatibility with the matching agent; or
+changes Node/platform/addon/worker requirements in a way existing supported
+installations cannot satisfy. A compatible correction or additive export is a
+minor release when it adds public surface, and a patch release when it fixes
+behavior without changing the documented contract. Any incompatible change
+requires the next major version, except an explicit owner waiver recorded with
+the release. A new major may also revise the Store or daemon compatibility
+boundary, which must be stated in that release's manual.
+
+Package-specific compatibility boundaries are:
+
+- `@layerfs/agent`: `.` and `/internal` exports, SDK methods and their
+  arguments, results, errors, Store/daemon behavior, and native-addon/worker
+  requirements. The internal export is deliberately unstable for external
+  consumers, but changing it incompatibly still requires a coordinated set
+  release because backend and runtime depend on it.
+- `@layerfs/backend`: its root export, `LayerFSBackend.of`, and the `store` and
+  `daemon` call groups, including each call's inputs and results.
+- `@layerfs/runtime`: its root export, `LayerFSRuntime.open`, runtime settings,
+  lifecycle methods, worker startup and platform behavior.
+- `@layerfs/cli`: the `layerfs` binary, command names and arguments, JSON/text
+  output, stdin/file handling, and exit codes.
+
+The published `1.1.0` is the documented owner-waived exception above; it does
+not change this rule for the next version.
+
 ## Evidence policy
 
 Performance claims must come from the released source or an exact recorded
