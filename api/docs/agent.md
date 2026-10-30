@@ -213,6 +213,53 @@ the old ID fails `InvalidInput` "unknown subscription"; subscribe again for a
 fresh snapshot. There is no automatic reconnect or replay. The `layerfs`
 command has no event-stream command.
 
+### Per-call results
+
+`client.results(after?)` returns this client's per-call results as an API:
+each call's method, client-side duration, error code, and for writes the
+Commit, bytes added or refusal. It is synchronous and local — it never dials
+the binding, adds no binding call, and stays readable after `close()`. The
+`layerfs` command has no results command (one process per command, like the
+event stream).
+
+Every call a trace file would record appends exactly one record, whether or
+not `LAYERFS_TRACE` is set: every agent and backend operation through the
+client, its own `project.init` and open-time project lookup, and
+`events.unsubscribe`. Refusals raised before the call is sent (argument
+validation, a closed client) record nothing. Records appear in completion
+order, so parallel calls can have out-of-order `start` times.
+
+```js
+{
+  seq: 7,                        // per-client, starts 1, +1 per record, never reused
+  method: "fs.write",
+  start: "2026-10-30T04:05:06.789Z", // ISO, when the call was sent
+  ms: 12.345,                    // client-side duration to settle
+  ok: true,
+  code: "NoSuchPath", message: "...", // only when ok is false
+  kind: "Committed",             // the answer's outcome kind, when it names one
+  commit: "c0ffee",              // publishing writes: the new Commit (UpToDate: its head)
+  layer: "lay1",                 // branch.publish only
+  sizes: { logical, newCanonical, newStored, newMetadata }, // when the Commit record is carried
+}
+```
+
+`commit`, `layer` and `sizes` appear only on successful publishing writes
+(`fs.write`/`edit`/`apply`/`mkdir`/`rm`/`cp`/`mv`, `workspace.commit`,
+`branch.merge`, `branch.publish`); `sizes.newStored` is the bytes added to
+the Store. Arguments, result ids, queue attribution and daemon telemetry stay
+in the trace file, not in a record.
+
+The client keeps its most recent **1024** records; overflow drops oldest
+without reusing sequence numbers. `client.results(after = 0)` returns
+`{ items, next, evicted, stale? }`: the kept records with `seq > after`,
+oldest first; `next`, the cursor to pass next time (the last returned `seq`,
+or `after` itself when nothing was returned); `evicted`, the total records
+dropped so far; and `stale: true` when records after `after` were dropped
+(the kept records are still returned). `after` must be a nonnegative safe
+integer, else `InvalidInput`. With tracing on, each record and its trace line
+agree on method, start, ms, outcome and write outcome.
+
 ### Settings
 
 | Environment | Meaning |

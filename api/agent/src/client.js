@@ -9,25 +9,29 @@ export const transportOf = (client) => client[STATE].transport;
 import { LayerFSError } from "./errors.js";
 import { traced } from "./trace.js";
 
-/** A client's private state: `{ closed, transport, subscription }`. */
+/** A client's private state: `{ closed, transport, subscription, results }`. */
 export const STATE = Symbol("layerfs.client");
 
 /** Names on the binding's backend table (#428), refused by the public one. */
 export const BACKEND = /^(backend|runtime)\./;
 
+/** The sink appending each call's per-call result to the client's ring. */
+export const sinkOf = (client) => client[STATE].results.sink;
+
 /** Runs one operation once and returns its value or throws its refusal;
  * `options` are the client's settings, whose `trace` selects its trace file;
- * `transport` is the client's binding (default: the one a new client would use). */
-export async function invoke(op, args, options, transport = binding()) {
+ * `transport` is the client's binding (default: the one a new client would use);
+ * `sink`, when given, receives the call's per-call result record. */
+export async function invoke(op, args, options, transport = binding(), sink = null) {
   return outcome(await traced(options, op, args, (scope) => {
     if (BACKEND.test(op)) throw new LayerFSError("UnknownMethod", "backend and runtime methods are @layerfs/backend's and @layerfs/runtime's", null);
     return transport.call(op, observed(args, scope));
-  }));
+  }, sink));
 }
 
 /** One call on the binding's backend table (`backend.*`, `runtime.*`). */
-export async function invokeBackend(op, args, options, transport = binding()) {
-  return outcome(await traced(options, op, args, (scope) => transport.backendCall(op, observed(args, scope))));
+export async function invokeBackend(op, args, options, transport = binding(), sink = null) {
+  return outcome(await traced(options, op, args, (scope) => transport.backendCall(op, observed(args, scope)), sink));
 }
 
 /** A traced call carries its scope; the binding removes it before dispatch. */
@@ -92,13 +96,13 @@ export function live(client) {
 export function invokeClient(client, op, args) {
   live(client);
   const subscription = client[STATE].subscription?.id;
-  return invoke(op, { ...projectArgs(client), ...storeArgs(client), ...args, ...(subscription ? { subscription } : {}) }, client.options, transportOf(client));
+  return invoke(op, { ...projectArgs(client), ...storeArgs(client), ...args, ...(subscription ? { subscription } : {}) }, client.options, transportOf(client), sinkOf(client));
 }
 
 /** One backend-table call of an open client, with the same fields. */
 export function invokeClientBackend(client, op, args) {
   live(client);
-  return invokeBackend(op, { ...projectArgs(client), ...storeArgs(client), ...args }, client.options, transportOf(client));
+  return invokeBackend(op, { ...projectArgs(client), ...storeArgs(client), ...args }, client.options, transportOf(client), sinkOf(client));
 }
 
 /** A call's project fields: the project, discovery home and the client's

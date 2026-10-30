@@ -1,6 +1,6 @@
 // Same-client opened-project events. The native subscription ID and each
 // poll's in-flight state stay private to this module.
-import { invoke, invokeClient, live, projectArgs, STATE, storeArgs, transportOf } from "./client.js";
+import { invoke, invokeClient, live, projectArgs, sinkOf, STATE, storeArgs, transportOf } from "./client.js";
 import { LayerFSError } from "./errors.js";
 
 const PRIVATE = new WeakMap();
@@ -28,7 +28,7 @@ function close(client, subscription, owner = false) {
   if (state.closing) return state.closing;
   state.closing = (async () => {
     const result = owner
-      ? await invoke("events.unsubscribe", { ...projectArgs(client), ...storeArgs(client), subscription: state.id }, client.options, transportOf(client))
+      ? await invoke("events.unsubscribe", { ...projectArgs(client), ...storeArgs(client), subscription: state.id }, client.options, transportOf(client), sinkOf(client))
       : (live(client), await invokeClient(client, "events.unsubscribe", { subscription: state.id }));
     state.closed = true;
     if (client[STATE].subscription?.current === subscription) client[STATE].subscription = null;

@@ -10,9 +10,10 @@
 // (fs, branch, project) run against the project's Store, opened in this
 // process on Linux (#352 F-020) or in the LayerFS home's worker on macOS and
 // Windows (transport/).
-import { BACKEND, STATE, invoke, invokeClient, live, projectArgs, storeArgs, storeClose, storeOpen, transportOf } from "./client.js";
+import { BACKEND, STATE, invoke, invokeClient, live, projectArgs, sinkOf, storeArgs, storeClose, storeOpen, transportOf } from "./client.js";
 import { binding } from "./transport/index.js";
 import { LayerFSError } from "./errors.js";
+import { createResults } from "./results.js";
 import * as fsMethods from "./fs/index.js";
 import { INIT_TIMEOUT_MS, init } from "./project/init.js";
 import { list_branches } from "./project/list_branches.js";
@@ -58,7 +59,7 @@ async function opened(client) {
   if (!client.options.storePath) throw new LayerFSError("InvalidInput", "a LayerFS client needs storePath (LAYERFS_STORE_PATH), the project's installed Store", null);
   await storeOpen(client);
   try {
-    await invoke("project.list_branches", { ...projectArgs(client), ...storeArgs(client), pageSize: 1, pagePos: 0 }, client.options, transportOf(client));
+    await invoke("project.list_branches", { ...projectArgs(client), ...storeArgs(client), pageSize: 1, pagePos: 0 }, client.options, transportOf(client), sinkOf(client));
   } catch (error) {
     await storeClose(client).catch(() => {});
     throw error;
@@ -204,7 +205,7 @@ export class LayerFS {
     this.projectName = projectName;
     this.options = resolveOptions(givenOptions);
     // not open until a factory has opened its Store; the binding is chosen now, once
-    this[STATE] = { closed: null, transport: binding() };
+    this[STATE] = { closed: null, transport: binding(), results: createResults() };
     this.fs = bind(this, fsMethods);
     this.project = bind(this, { list_branches, list_sandboxes });
     this.branch = bind(this, { list_commits, graph, changed_paths, diff_commits, diff_branches, fork, merge, publish });
@@ -218,6 +219,13 @@ export class LayerFS {
     if (BACKEND.test(method)) throw new LayerFSError("UnknownMethod", "backend and runtime methods are @layerfs/backend's and @layerfs/runtime's", null);
     live(this);
     return invokeClient(this, method, args);
+  }
+
+  /** This client's per-call results: kept records with `seq > after`, oldest
+   * first, plus the next cursor and the dropped count (P10). Local and
+   * synchronous: no binding call, and readable after close(). */
+  results(after = 0) {
+    return this[STATE].results.read(after);
   }
 
   /** Drops this client's event queue and releases its Store (the process's
