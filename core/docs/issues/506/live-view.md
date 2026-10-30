@@ -1,10 +1,13 @@
 # #506 Live view of a Store in S3: implementation spec
 
 > **Status:** Owner-approved direction (2026-10-30); A–D implemented on PR #507
-> (`26eb1b975d`–`2f2b1deaf5`), E in Connect's working tree. Acceptance §7.6 is
-> partly met: reads identical and the state read in 4 GETs, but Connect's
-> History diffs every Commit (20.78% of the file on `r2-examples-clone`); see
-> the #510 verification comment. Builds on
+> (`26eb1b975d`–`59eb6ef8bf`), E in Connect's working tree. Narrowed by the
+> owner (2026-10-30, `63ced40427`): a view reads the tree, sizes and history,
+> never file contents; content reads (read, grep, blame, diffs) are refused
+> `Unsupported`. On `r2-examples-clone` via MinIO, History costs 4 GETs and the
+> run 7.26% of the file, but the root folder listing costs 20 GETs (each inode
+> lookup misses in a different place and reads 1 MiB ahead). R2 stopped twice
+> on a cut reply body (`Unknown`). See the #510 comments. Builds on
 > [one link per Store](links.md) (#509). The Connect part is in Connect's own
 > repository, `docs/ui/storage-links.md` §8.
 
