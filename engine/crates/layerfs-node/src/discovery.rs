@@ -651,7 +651,10 @@ fn namespaces_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Reco
         layerfs_sandbox::backend::namespaces::NamespaceProvider::new(root).map_err(|error| {
             refused(
                 "Unsupported",
-                format!("namespaces Sandbox at {}", directory.display()).clone(),
+                format!(
+                    "namespaces Sandbox at {} cannot run on this host: {error}",
+                    directory.display()
+                ),
             )
         })?;
     Ok(Recorded::Namespaces(
