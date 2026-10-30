@@ -67,6 +67,90 @@ fn boolean(value: &SdkValue, key: &str) -> bool {
     }
 }
 
+#[derive(Debug)]
+struct ContentIo {
+    bytes: u64,
+    reads: u64,
+}
+
+fn content_io(fixture: &Fixture) -> ContentIo {
+    let mut total = ContentIo { bytes: 0, reads: 0 };
+    for index in 0..256 {
+        if let Some(work) = fixture.service.store.reader_storage_diagnostics(index) {
+            total.bytes +=
+                work.pack_read_bytes + work.payload_read_bytes + work.range_acquired_bytes;
+            total.reads += work.read_packs + work.payload_reads;
+        }
+    }
+    total
+}
+
+fn huge_line(length: usize) -> Vec<u8> {
+    let mut state = 0x4d59_5df4_d0f3_3173u64;
+    (0..length)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            match (state >> 32) as u8 {
+                b'\n' => 0,
+                byte => byte,
+            }
+        })
+        .collect()
+}
+
+fn assert_huge_next_line_stops(terminated: bool) {
+    let fixture = Fixture::new(
+        if terminated {
+            "area-p8-huge-terminated"
+        } else {
+            "area-p8-huge-unterminated"
+        },
+        |source| {
+            let mut content = b"first\n".to_vec();
+            content.extend_from_slice(&huge_line(4_000_000));
+            if terminated {
+                content.extend_from_slice(b"\nthird\n");
+            }
+            fs::write(source.join("huge.bin"), content).unwrap();
+            1
+        },
+    );
+    let before = content_io(&fixture);
+    let reply = read(&fixture, "main", "/huge.bin", 1, 3, Some(true));
+    let after = content_io(&fixture);
+    let io = ContentIo {
+        bytes: after.bytes - before.bytes,
+        reads: after.reads - before.reads,
+    };
+    assert_eq!(bytes(&reply), b"first\n");
+    assert_eq!(int(&reply, "endLine"), Some(1));
+    assert_eq!(int(&reply, "nextLine"), Some(2));
+    assert!(!boolean(&reply, "lineTruncated"));
+    assert!(boolean(&reply, "truncated"));
+    assert!(
+        io.bytes < 2_000_000,
+        "huge next line was read past the reply budget: terminated={terminated} {io:?}"
+    );
+    assert!(
+        io.reads < 16,
+        "huge next line caused unbounded content reads: terminated={terminated} {io:?}"
+    );
+    println!("P8_EARLY_STOP terminated={terminated} {io:?}");
+    fixture.cleanup();
+}
+
+#[test]
+fn huge_terminated_next_line_stops_at_the_reply_budget() {
+    assert_huge_next_line_stops(true);
+}
+
+#[test]
+fn huge_unterminated_next_line_stops_at_the_reply_budget() {
+    assert_huge_next_line_stops(false);
+}
+
 fn list(fixture: &Fixture, reference: &str, path: &str) -> SdkValue {
     fixture.call(
         "fs.list",

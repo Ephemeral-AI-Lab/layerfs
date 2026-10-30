@@ -315,9 +315,23 @@ pub fn lines(
     prefix: usize,
     from: u64,
     binary: bool,
-    mut visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
+    visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
-    let (mut open, mut stopped) = (Open::new(), false);
+    lines_until(reader, entry, prefix, from, binary, |_, _| Ok(false), visit).map(|_| ())
+}
+
+/// `lines` with a stop check at each new line and each incomplete line part.
+/// A stopped line's number is returned without waiting for its terminator.
+pub(super) fn lines_until(
+    reader: &dyn AuthenticatedObjects,
+    entry: &EntryFacts,
+    prefix: usize,
+    from: u64,
+    binary: bool,
+    mut stop: impl FnMut(u64, usize) -> Result<bool, SdkRefusal>,
+    mut visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
+) -> Result<Option<u64>, SdkRefusal> {
+    let (mut open, mut stopped, mut early) = (Open::new(), false, None);
     scan(reader, entry, None, !binary, |bytes| {
         let mut at = 0;
         while at < bytes.len() {
@@ -334,7 +348,13 @@ pub fn lines(
                 }
                 continue;
             }
-            match bytes[at..].iter().position(|&byte| byte == b'\n') {
+            if open.length == 0 && stop(open.number, 0)? {
+                early = Some(open.number);
+                stopped = true;
+                return Ok(false);
+            }
+            let end = (at + WINDOW as usize).min(bytes.len());
+            match bytes[at..end].iter().position(|&byte| byte == b'\n') {
                 Some(i) => {
                     open.take(&bytes[at..at + i + 1], prefix);
                     if !visit(open.number, open.finish(true))? {
@@ -345,8 +365,13 @@ pub fn lines(
                     at += i + 1;
                 }
                 None => {
-                    open.take(&bytes[at..], prefix);
-                    at = bytes.len();
+                    open.take(&bytes[at..end], prefix);
+                    at = end;
+                    if stop(open.number, open.length)? {
+                        early = Some(open.number);
+                        stopped = true;
+                        return Ok(false);
+                    }
                 }
             }
         }
@@ -355,7 +380,7 @@ pub fn lines(
     if !stopped && open.length > 0 {
         visit(open.number, open.finish(true))?;
     }
-    Ok(())
+    Ok(early)
 }
 
 pub(super) fn binary() -> SdkRefusal {
