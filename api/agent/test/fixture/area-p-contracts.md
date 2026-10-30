@@ -9,9 +9,9 @@ shapes and refusals, not the implementation's own wording.
 
 **Surface**: `@layerfs/agent`. `client.results(after?)` on every client made
 by `LayerFS.open` / `LayerFS.init`. Synchronous and local: it never dials the
-binding, adds no binding call, and stays readable after `client.close()`.
-The `layerfs` command has no results command (one process per command, like
-the event stream). P4/P5 map the same shape onto Python and MCP.
+binding, adds no binding call, and stays readable after `client.close()`. The
+`layerfs` command has no results command (one process per command, like the
+event stream). P4/P5 map the same shape onto Python and MCP.
 
 **What is recorded**: exactly the calls a trace file would record — every
 agent and backend operation through the client (including `client.call`),
@@ -126,3 +126,63 @@ catalog, O(number of commits), grouped in SQL; this is not cheap and is never
 presented as cheap. The reply is bounded: `disk` plus at most three small
 kind maps, so no paging is needed.
 
+## P12 — cheap Store summary (`backend.store.project.get_summary`)
+
+**Surface**: `@layerfs/backend` adds the no-argument
+`backend.store.project.get_summary()` call for issue layerfs-connect#63. It is
+additive and does not alter P11's complete `get_storage()` contract. The call
+is computed fresh from the real open Store every time: no cached, sampled or
+estimated values.
+
+**Reply (exact JS shape)**:
+
+```js
+{
+  logical: 123,                 // logical bytes, integer
+  branches: 2,                  // exact Branch count for this Store
+  commits: 5,                   // exact Commit count for this Store
+  mainLayer: "lay1",            // main Branch's head Layer id; null if absent
+  lastCommit: {                  // main Branch's head Commit; null if absent
+    id: "c0ffee",
+    createdMs: 1761800000000,    // Unix epoch milliseconds, integer
+  },
+}
+```
+
+- `logical` is the maintained logical-byte total from `store_totals` (O(1));
+  it is not the SQLite file length, unique canonical bytes or compressed bytes.
+- `branches` is the exact number of Branch rows belonging to this Store's
+  LayerStack. `commits` is the exact number of Commit rows belonging to that
+  LayerStack. Both are nonnegative integer counts.
+- `mainLayer` is the main Branch's head Layer identity. `lastCommit` is the
+  main Branch's current head Commit identity and its creation timestamp. They
+  are both `null` when main has no head Commit; IDs are checked lowercase hex
+  strings and `createdMs` is an integer number of milliseconds since Unix epoch.
+  The `lastCommit` value is a Commit record, not the globally newest Commit on
+  another Branch.
+- The object has exactly these five keys. P12 omits P11's disk/WAL sizes,
+  canonical/stored/metadata totals, per-Commit-kind accounting and full history.
+
+**Cost — SummaryBound**: exactly five fixed SQL statements, each returning at
+most one row: maintained totals; Branch count; Commit count; main Branch
+lookup; main head Commit lookup. No object-catalog scan, no per-Commit column
+reads, and no cache. The Branch and Commit counts are index-only `COUNT(*)`
+aggregates using their LayerStack-leading unique indexes, with EXPLAIN plans
+showing no table scan. Statement and returned-row counts are fixed for every
+store size: the five queries run in one read snapshot, whose surrounding
+`BEGIN`/`COMMIT` are the only additional statements. The runtime fixture
+therefore observes 7 statements and 5 returned rows at every size, and the
+test asserts exactly those fixed numbers. The database still visits O(B) Branch index entries and O(C) Commit
+index entries for B Branches and C Commits; P12 does not claim O(1) page work.
+The remaining three reads are maintained/point lookups with bounded result
+rows. Runtime evidence compares two sizes using only `Fixture::work` statement
+and row counters, not VM-step counters, and SQL page-work growth is explained
+from the index-only EXPLAIN plans.
+
+A maintained Branch/Commit counter schema was considered and rejected for this
+slice: it changes Store format identity and migration chains, while this
+contract can state and test the honest index-work bound without a schema change.
+
+**Refusals**: non-object arguments, options, or unknown option keys refuse
+`InvalidInput`. Store-open and query failures preserve the existing exact
+Store/History refusal code and cause; no partial summary is returned.

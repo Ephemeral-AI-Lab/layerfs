@@ -30,6 +30,42 @@ fn kind_totals(kinds: &[CommitKindStatistics], via: CommitVia) -> SdkValue {
     ])
 }
 
+pub fn summary(store: &Arc<Store>, args: &SdkValue) -> Answer {
+    let project = match args {
+        SdkValue::Map(fields) => {
+            for (key, _) in fields {
+                match key.as_str() {
+                    "project" | "home" | "deploy" | "storePath" | "store_path" | "subscription" => {
+                    }
+                    _ => return Err(args::invalid(format!("unknown option `{key}`"))),
+                }
+            }
+            text(args, "project")?
+        }
+        _ => return Err(args::invalid("options must be a map")),
+    };
+    let project = args::name(project)?;
+    let value = store.history().summary(&project).map_err(args::history)?;
+    Ok(SdkValue::map([
+        ("logical", SdkValue::Int(value.logical as i64)),
+        ("branches", SdkValue::Int(value.branches as i64)),
+        ("commits", SdkValue::Int(value.commits as i64)),
+        (
+            "mainLayer",
+            SdkValue::opt_text(value.main_layer.map(|id| args::hex(id.as_slice()))),
+        ),
+        (
+            "lastCommit",
+            value.last_commit.map_or(SdkValue::Null, |commit| {
+                SdkValue::map([
+                    ("id", SdkValue::text(args::hex(commit.id.as_slice()))),
+                    ("createdMs", SdkValue::Int(commit.created_ms)),
+                ])
+            }),
+        ),
+    ]))
+}
+
 pub fn stats(store: &Arc<Store>, args: &SdkValue) -> Answer {
     let commits = match args {
         SdkValue::Map(fields) => {
