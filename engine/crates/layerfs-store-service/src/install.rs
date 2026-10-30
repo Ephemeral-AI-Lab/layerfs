@@ -166,11 +166,9 @@ pub fn install_local(
         let directory = destination
             .parent()
             .ok_or("the Store destination has no directory")?;
-        // check takes the Store file and strips the parent itself, like
-        // every caller.
-        crate::kernel_guard::check(destination).map_err(|reason| reason.0)?;
-        installer_user()?;
         let text = |error: io::Error| error.to_string();
+        // The directory is created first (owner-only): the guard examines
+        // it as the Store file's parent, and install owns its creation.
         if !directory.exists() {
             #[cfg(unix)]
             {
@@ -187,6 +185,10 @@ pub fn install_local(
                 crate::windows_acl::restrict_to_owner(directory).map_err(text)?;
             }
         }
+        // check takes the Store file and strips the parent itself, like
+        // every caller.
+        crate::kernel_guard::check(destination).map_err(|reason| reason.0)?;
+        installer_user()?;
         let (target, temporary) = paths(destination).map_err(text)?;
         let mut file = claim(&target, &temporary).map_err(text)?;
         left.temporary = Some(temporary.clone());

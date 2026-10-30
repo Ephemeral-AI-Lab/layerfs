@@ -49,9 +49,21 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
                 "project.init installs the Store at the client's storePath (LAYERFS_STORE_PATH)",
             )),
         };
-    // the Store's directory is made by the install; its volume must carry
-    // the Store's locks. check takes the Store file and strips the parent
-    // itself, like every caller.
+    // The Store's directory is created first (owner-only, like the install
+    // does): check takes the Store file and examines its parent's volume,
+    // and the SDK layout may not have made it yet.
+    let store_directory = store_path.parent().unwrap_or(&store_path).to_path_buf();
+    if !store_directory.as_os_str().is_empty() && !store_directory.exists() {
+        std::fs::create_dir(&store_directory).map_err(failed)?;
+        #[cfg(unix)]
+        std::fs::set_permissions(&store_directory, {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::Permissions::from_mode(0o700)
+        })
+        .map_err(failed)?;
+        #[cfg(windows)]
+        layerfs_store_service::windows_acl::restrict_to_owner(&store_directory).map_err(failed)?;
+    }
     layerfs_store_service::kernel_guard::check(&store_path)
         .map_err(|reason| refused("Unsupported", reason.0))?;
     let directory = home.join(name);
