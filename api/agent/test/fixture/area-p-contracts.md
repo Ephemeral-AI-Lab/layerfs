@@ -126,3 +126,55 @@ catalog, O(number of commits), grouped in SQL; this is not cheap and is never
 presented as cheap. The reply is bounded: `disk` plus at most three small
 kind maps, so no paging is needed.
 
+## P4 — Python SDK (D10)
+
+**Package and constructors**: `layerfs` is a Python package. `LayerFS.open(name, options=None)` opens an installed project; `LayerFS.init(name, folder, timeout=300, options=None)` initializes then opens it. Both return an async context manager/client with explicit `close()`. Options mirror Node (`home`, `trace`, `deploy`, `storePolicy`, `storePath`); explicit values override `LAYERFS_*` once at construction. Store calls use the calling process on Linux and the existing authenticated fixed-length JSON worker protocol on macOS/Windows. No Linux worker route or alternate Store exists.
+
+**Client groups**: `client.fs`, `client.project`, `client.branch`, `client.sandbox`, and `client.workspace` expose the Node agent methods with the same argument order, defaults, returned JSON-compatible shapes, and behavior. Python uses snake_case names. `client.backend` exposes the Node backend methods under `store` and `daemon`; methods and options retain the same shapes. `client.results(after=0)` synchronously returns the exact P10 page and remains readable after close. `client.call(method, args)` provides the same agent dispatch, rejecting backend/runtime names as `UnknownMethod`. Client `close()` releases the Store once; it leaves mounted Workspaces intact. `LayerFSError` has `.code`, `.message`, and `.detail`. As in Node, `.message` is exactly `${code}: ${message}` (including the prefix), while `.detail` is the unchanged structured detail; the unprefixed refusal text is not exposed as `.message`. Non-refusal failures remain ordinary exceptions with their original cause where available.
+
+**Operation mapping**: all Node agent and backend operations are present/equivalent, listed below. Runtime-management APIs are explicitly deferred: they own host installation, Docker/WSL worker lifecycle, project removal, volume/container cleanup, and init-job orchestration, rather than a project client; Python uses the already-defined worker endpoint for Store calls and does not create a second runtime manager. Node `workspace.exec` has equivalent async Python behavior returning exit code/stdout/stderr; long-running stream callbacks and Node-specific stream objects are deferred pending a language-neutral stream contract. `workspace.exec` does not make filesystem state depend on command registration.
+
+| Node namespace/method | Python parity | Notes |
+| --- | --- | --- |
+| `project.init` / `LayerFS.init` | equivalent | async init then open; same timeout and Store configuration |
+| `project.list_branches` | present | same paging/result |
+| `project.list_sandboxes` | present | same paging/result |
+| `fs.apply`, `blame`, `cp`, `diff_files`, `edit`, `glob`, `grep`, `list`, `mkdir`, `mv`, `read`, `rm`, `stat`, `write` | present | same arguments, normalization, result/refusals; binary read uses bytes in Python |
+| `branch.changed_paths`, `diff_branches`, `diff_commits`, `fork`, `graph`, `list_commits`, `merge`, `publish` | present | same arguments and paged shapes |
+| `sandbox.create`, `list_workspaces`, `close` | present | same lifecycle/result |
+| `workspace.mount`, `exec`, `commit`, `unmount` | equivalent | execution result normalized to Python values; callback streaming deferred as described above |
+| `events.subscribe`, `events.poll`, `events.unsubscribe`, async iteration | deferred | `layerfs-api` exposes no events surface; its only `event` occurrence is a Sandbox listener wait in `sandbox/create.rs`. Node's queues are binding-private, so Python cannot reuse them through the public Rust API. No Python `client.events` is provided. |
+| `client.results(after)` (P10) | present | local synchronous accessor; exact 1024-record cursor/eviction contract |
+| `backend.store.project.get_history`, `get_storage`, `get_comparable`, `list_overwritten` | present | `get_storage(options=None)` accepts only `{commits: bool}` per P11; default omits `commits` |
+| `backend.store.branch.list_commit_storage` | present | same paging/result |
+| `backend.store.fs.get_storage`, `list_revisions` | present | same args/result |
+| `backend.daemon.workspace.status`, `list_changes`, `get_storage` | present | same args/result |
+| `backend.daemon.process.start`, `list`, `cancel` | present | same args/result; process lifecycle stays caller-owned |
+| `backend.daemon.sandbox.get_log` | present | same args/result |
+| `LayerFSRuntime.open` | deferred | Host/runtime lifecycle API, outside project SDK. Python does not take ownership of deployment policy. |
+| `runtime.status` | deferred | Host status and sweep report are outside the project client. |
+| `runtime.worker.start` | deferred | Host owns worker startup. Python Store calls only consume the existing authenticated worker endpoint. |
+| `runtime.worker.restart` | deferred | Host owns worker restart and its explicit restart confirmation. |
+| `runtime.project.list` | deferred | Host project inventory is outside the project client. |
+| `runtime.project.start_init` | deferred | Host async init-job orchestration is outside the project client. |
+| `runtime.project.get_init` | deferred | Host init-job observation is outside the project client. |
+| `runtime.project.subscribe_init` | deferred | Host init-job subscription is outside the project client. |
+| `runtime.project.get_state` | deferred | Host project-state observation is outside the project client. |
+| `runtime.project.remove` | deferred | Host destructive project removal is outside the project client. |
+| `runtime.sandbox.reclaim` | deferred | Host container reclamation policy is outside the project client. |
+| `runtime.sandbox.list_leftovers` | deferred | Host leftover-container inventory is outside the project client. |
+| `runtime.sandbox.clean_leftovers` | deferred | Host leftover-container cleanup is outside the project client. |
+| `runtime.sandbox.list` | deferred | Host-wide Sandbox inventory is outside the project client. |
+| `runtime.sandbox.sweep` | deferred | Host Sandbox sweep policy is outside the project client. |
+| `runtime.volume.list` | deferred | Host volume inventory is outside the project client. |
+| `runtime.volume.remove` | deferred | Host destructive volume removal is outside the project client. |
+| `runtime.events.subscribe` | deferred | Runtime-wide event stream is outside the project client's deferred events surface. |
+| `LayerFSRuntime.close` | deferred | Host/runtime lifecycle cleanup is outside the project client. |
+| Push/pull | deferred, blocked | R7 #42 is unresolved; no method, stub, local simulation, or successful-looking transfer result is provided. |
+| P12 cheap project summary | pending reconciliation at merge | Implemented by parallel slice; reconcile Python contract against its landed public shape. |
+| P13 folder-scoped client | pending reconciliation at merge | Implemented by parallel slice; do not invent names/semantics before merging its contract. |
+
+**Refusal/error mapping**: every typed Node refusal becomes `LayerFSError` with the identical `.code`, prefixed `.message` (`${code}: ${message}`), and structured `.detail`: `Conflict`, `HeadMoved`, `Dirty`, `Busy`, `NoSuchPath`, `NoSuchBranch`, `NoSuchCommit`, `NoSuchProject`, `NoCommit`, `NoMergeBase`, `IsDirectory`, `NotDirectory`, `NotFile`, `Binary`, `NotText`, `NoMatch`, `AmbiguousMatch`, `Exists`, `NotEmpty`, `NameTaken`, `ReservedName`, `ReadOnly`, `MountsActive`, `TooLarge`, `InvalidInput`, `NotMounted`, `NoSuchSandbox`, `NoSuchProcess`, `Capacity`, `NotComparable`, plus existing codes not in `CODES` such as `UnknownMethod`, `Unsupported`, `Failed`, `NotFound`, and `Unknown`. Never infer a refusal from message text. Transport/protocol/authentication failures remain errors, not success-shaped values; an uncertain mutation is surfaced without retry or replay.
+
+**Shared tests**: Python drives the existing P6 cases (`cases.mjs`, `cases-area-p.mjs`, P1/P7/P8 cases and refusal payloads) through the Python client and compares operation name, sent arguments, result/refusal code/message/detail. It also mirrors P10 results and P11 `get_storage({commits: true})` options and invalid-option refusals. Linux real-Store tests use fresh Disposable fixtures only and cover init/open, filesystem read/write/list, Branch/Commit/history, and storage stats. Until those real-Store checks pass, real-Store behavior and cost claims are target behavior, not verified Python behavior; P11 cost claims remain owned by the operator implementation and its Rust tests, not by the stand-in parity suite.
+
