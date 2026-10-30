@@ -44,25 +44,42 @@ pub fn read(
     let end = end.min(start.saturating_add(window::LINES as u64 - 1));
     let (mut content, mut next, mut clipped) = (Vec::new(), None, false);
     let mut last = None;
-    window::lines(&cached, &entry, REPLY_BUDGET, start, binary, |n, line| {
-        if n > requested_end {
-            return Ok(false);
-        }
-        let line_truncated = line.truncated;
-        let shown = if binary {
-            line.prefix
-        } else {
-            line.text().into_bytes()
-        };
-        if n > end || (!content.is_empty() && content.len() + shown.len() > REPLY_BUDGET) {
-            next = Some(n);
-            return Ok(false);
-        }
-        clipped |= line_truncated;
-        last = Some(n);
-        content.extend_from_slice(&shown);
-        Ok(true)
-    })?;
+    let spent = std::cell::Cell::new(0);
+    let stopped = window::lines_until(
+        &cached,
+        &entry,
+        REPLY_BUDGET,
+        start,
+        binary,
+        |n, length| {
+            Ok(n > requested_end
+                || n > end
+                || (spent.get() > 0 && spent.get() + length > REPLY_BUDGET))
+        },
+        |n, line| {
+            if n > requested_end {
+                return Ok(false);
+            }
+            let line_truncated = line.truncated;
+            let shown = if binary {
+                line.prefix
+            } else {
+                line.text().into_bytes()
+            };
+            if n > end || (!content.is_empty() && content.len() + shown.len() > REPLY_BUDGET) {
+                next = Some(n);
+                return Ok(false);
+            }
+            clipped |= line_truncated;
+            last = Some(n);
+            content.extend_from_slice(&shown);
+            spent.set(content.len());
+            Ok(true)
+        },
+    )?;
+    if let Some(n) = stopped.filter(|&n| n <= requested_end) {
+        next = Some(n);
+    }
     // Return either aggregate text or bytes, avoiding duplicate payload on the wire.
     let (name, content) = if binary {
         ("bytes", SdkValue::Bytes(content))
