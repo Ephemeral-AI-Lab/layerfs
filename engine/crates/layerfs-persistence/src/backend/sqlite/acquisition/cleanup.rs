@@ -134,9 +134,9 @@ pub(crate) fn release_validated(
 fn maintain(tx: &Transaction<'_>, removed: bool, released: bool) -> Result<(), Failure> {
     if tx.reclamation_enabled() {
         if released {
-            super::super::reclamation::job(tx, crate::RECLAMATION_PAGE_LIMIT)?;
+            crate::backend::sqlite::lifecycle::reclamation::job(tx, crate::RECLAMATION_PAGE_LIMIT)?;
         } else if removed {
-            super::super::reclamation::job_when(
+            crate::backend::sqlite::lifecycle::reclamation::job_when(
                 tx,
                 crate::RECLAMATION_PAGE_LIMIT,
                 u64::from(crate::RECLAMATION_PAGE_LIMIT),

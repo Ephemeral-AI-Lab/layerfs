@@ -35,6 +35,25 @@ impl Handles {
     pub fn close(&self) {
         self.storage.session.admission.close();
     }
+    /// One consistent copy of this live Store to `destination`, a new file
+    /// (#506). It runs on its own read-only connection, so this session and
+    /// writers in every process continue meanwhile; see
+    /// [`StorageProvider::snapshot`].
+    pub fn snapshot(
+        &self,
+        destination: &std::path::Path,
+    ) -> Result<crate::SealedStore, PersistenceError> {
+        self.storage.snapshot(destination)
+    }
+    /// [`Self::snapshot`], reporting the bytes written while it runs;
+    /// see [`StorageProvider::snapshot_observed`].
+    pub fn snapshot_observed(
+        &self,
+        destination: &std::path::Path,
+        progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<crate::SealedStore, PersistenceError> {
+        self.storage.snapshot_observed(destination, progress)
+    }
     /// Read-back settings from the actual shared connection.
     pub fn profile(&self) -> &ConnectionProfile {
         &self.storage.session.profile

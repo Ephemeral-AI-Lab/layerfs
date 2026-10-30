@@ -18,7 +18,7 @@ const IMAGE: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 fn request() -> SandboxRequest {
     SandboxRequest {
         image: IMAGE.into(),
-        store_volume: "lfs-test-borrowed".into(),
+        store_volume: Some("lfs-test-borrowed".into()),
         port: 30421,
         labels: vec![],
     }

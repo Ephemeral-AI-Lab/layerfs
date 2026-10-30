@@ -27,7 +27,8 @@ fn window(limits: Limits, row_bytes: usize) -> i64 {
 }
 
 fn get<T: FromSql>(row: &Row<'_>, index: usize) -> Result<T, BackendError> {
-    row.get(index).map_err(super::super::rows::error)
+    row.get(index)
+        .map_err(crate::backend::sqlite::session::rows::error)
 }
 
 fn number(value: i64) -> Result<u64, BackendError> {
@@ -40,11 +41,15 @@ fn kind(row: &Row<'_>, index: usize) -> Result<InodeKind, BackendError> {
 }
 
 fn root(row: &Row<'_>, index: usize) -> Result<ObjectId, BackendError> {
-    ObjectId::from_bytes(super::super::rows::blob(row, index)?).map_err(|_| BackendError::Integrity)
+    ObjectId::from_bytes(crate::backend::sqlite::session::rows::blob(row, index)?)
+        .map_err(|_| BackendError::Integrity)
 }
 
 fn optional_root(row: &Row<'_>, index: usize) -> Result<Option<ObjectId>, BackendError> {
-    match row.get_ref(index).map_err(super::super::rows::error)? {
+    match row
+        .get_ref(index)
+        .map_err(crate::backend::sqlite::session::rows::error)?
+    {
         rusqlite::types::ValueRef::Null => Ok(None),
         _ => root(row, index).map(Some),
     }
@@ -95,7 +100,8 @@ fn owned<T>(
         Phase::from_code(phase).ok_or(BackendError::Integrity)?;
         live = true;
         if matches!(
-            row.get_ref(1).map_err(super::super::rows::error)?,
+            row.get_ref(1)
+                .map_err(crate::backend::sqlite::session::rows::error)?,
             rusqlite::types::ValueRef::Null
         ) {
             Ok(None)
@@ -150,15 +156,18 @@ pub(crate) fn unplaced_children(
     let parent = checked(session, owner, signed(parent))?;
     let limit = window(limits, UNPLACED_ROW_BYTES);
     let decode = |row: &Row<'_>| {
-        let identity = match row.get_ref(3).map_err(super::super::rows::error)? {
+        let identity = match row
+            .get_ref(3)
+            .map_err(crate::backend::sqlite::session::rows::error)?
+        {
             rusqlite::types::ValueRef::Null => None,
             _ => {
-                let packed: [u8; 60] = exact(super::super::rows::blob(row, 3)?)?;
+                let packed: [u8; 60] = exact(crate::backend::sqlite::session::rows::blob(row, 3)?)?;
                 Some(host(&packed[..8], &packed[8..16], &packed[16..])?)
             }
         };
         Ok(Unplaced {
-            name: super::super::rows::blob(row, 1)?.to_vec(),
+            name: crate::backend::sqlite::session::rows::blob(row, 1)?.to_vec(),
             kind: kind(row, 2)?,
             host: identity,
         })
@@ -202,7 +211,7 @@ pub(crate) fn directories(
         |row| {
             Ok(Directory {
                 position: number(get(row, 0)?)?,
-                host_path: super::super::rows::blob(row, 1)?.to_vec(),
+                host_path: crate::backend::sqlite::session::rows::blob(row, 1)?.to_vec(),
             })
         },
     )?)
@@ -221,7 +230,7 @@ pub(crate) fn directory_path(
         &[&operation, &epoch, &position],
         24,
         1,
-        |row| Ok(super::super::rows::blob(row, 1)?.to_vec()),
+        |row| Ok(crate::backend::sqlite::session::rows::blob(row, 1)?.to_vec()),
     )?;
     Ok(rows.into_iter().next())
 }
@@ -230,11 +239,11 @@ fn job_row(row: &Row<'_>, start: usize) -> Result<Job, BackendError> {
     Ok(Job {
         position: number(get(row, start)?)?,
         host: host(
-            super::super::rows::blob(row, start + 1)?,
-            super::super::rows::blob(row, start + 2)?,
-            super::super::rows::blob(row, start + 3)?,
+            crate::backend::sqlite::session::rows::blob(row, start + 1)?,
+            crate::backend::sqlite::session::rows::blob(row, start + 2)?,
+            crate::backend::sqlite::session::rows::blob(row, start + 3)?,
         )?,
-        host_path: super::super::rows::blob(row, start + 4)?.to_vec(),
+        host_path: crate::backend::sqlite::session::rows::blob(row, start + 4)?.to_vec(),
     })
 }
 
@@ -303,12 +312,15 @@ fn entry_row(row: &Row<'_>) -> Result<Entry, BackendError> {
     Ok(Entry {
         key: EntryKey {
             parent: (parent >= 0).then(|| number(parent)).transpose()?,
-            name: super::super::rows::blob(row, 2)?.to_vec(),
+            name: crate::backend::sqlite::session::rows::blob(row, 2)?.to_vec(),
         },
         position: number(position)?,
         kind: kind(row, 4)?,
         canonical: get::<Option<i64>>(row, 5)?.map(number).transpose()?,
-        metadata: super::metadata_parse(super::super::rows::blob(row, 6)?, kind(row, 4)?)?,
+        metadata: super::metadata_parse(
+            crate::backend::sqlite::session::rows::blob(row, 6)?,
+            kind(row, 4)?,
+        )?,
         content_root: optional_root(row, 7)?,
     })
 }
@@ -358,7 +370,7 @@ pub(crate) fn bindings(
         Ok(Binding {
             key: EntryKey {
                 parent: (parent >= 0).then(|| number(parent)).transpose()?,
-                name: super::super::rows::blob(row, 2)?.to_vec(),
+                name: crate::backend::sqlite::session::rows::blob(row, 2)?.to_vec(),
             },
             position: number(position)?,
             canonical: get::<Option<i64>>(row, 4)?.map(number).transpose()?,

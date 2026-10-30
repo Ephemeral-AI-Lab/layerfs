@@ -32,9 +32,12 @@ impl SandboxRequest {
         quoted(w, &format!("{}/tcp", self.port))?;
         w.write_all(b":{}},\"HostConfig\":{\"Init\":true,\"RestartPolicy\":{\"Name\":\"no\"},\"LogConfig\":{\"Type\":\"json-file\",\"Config\":{\"max-size\":\"10m\",\"max-file\":\"2\"}},\"Privileged\":false,\"CapAdd\":[\"CAP_SYS_ADMIN\"],\"Devices\":[{\"PathOnHost\":\"/dev/fuse\",\"PathInContainer\":\"/dev/fuse\",\"CgroupPermissions\":\"rwm\"}],\"SecurityOpt\":[\"no-new-privileges=true\",\"apparmor=unconfined\",")?;
         quoted(w, SECCOMP)?;
-        w.write_all(b"],\"Mounts\":[{\"Type\":\"volume\",\"Source\":")?;
-        quoted(w, &self.store_volume)?;
-        w.write_all(b",\"Target\":\"/layerfs-store\",\"ReadOnly\":false,\"VolumeOptions\":{\"NoCopy\":true}}")?;
+        w.write_all(b"],\"Mounts\":[")?;
+        if let Some(volume) = &self.store_volume {
+            w.write_all(b"{\"Type\":\"volume\",\"Source\":")?;
+            quoted(w, volume)?;
+            w.write_all(b",\"Target\":\"/layerfs-store\",\"ReadOnly\":false,\"VolumeOptions\":{\"NoCopy\":true}}")?;
+        }
         w.write_all(b"],\"PortBindings\":{")?;
         quoted(w, &format!("{}/tcp", self.port))?;
         w.write_all(b":[{\"HostIp\":\"127.0.0.1\",\"HostPort\":\"\"}]}}}")
@@ -98,7 +101,9 @@ impl Docker {
                 .check()
                 .map_err(|e| super::http::failure(false, 0, None, e, None))?;
             phase = CreatePhase::Volume;
-            self.plain_volume(&request.store_volume)?;
+            if let Some(volume) = &request.store_volume {
+                self.plain_volume(volume)?;
+            }
             phase = CreatePhase::Create;
             // `naming` admitted only characters that need no URL escape.
             let path = match &self.container_name {

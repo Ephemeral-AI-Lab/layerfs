@@ -4,12 +4,29 @@
 // the project's settings are set for that synchronous step only. A client is
 // closed after a quiet minute; Workspaces are unaffected.
 import { LayerFS } from "@layerfs/agent";
+import { keyOf } from "./project/list.js";
 import { callHome } from "./settings.js";
 
 const IDLE_MS = 60_000;
 
-/** The environment one project's client (and its agents' bash calls) use. */
+/** The environment one project's client (and its agents' bash calls) use.
+ * A project of a PostgreSQL Store (#506) has no volume; its Store path is
+ * `postgresql:<store>`, and its connection's URL is added only when the
+ * call gave one (`project.url`). */
 export function deploymentEnv(settings, platform, project) {
+  if (project.kind === "postgresql") {
+    return {
+      HOME: callHome(settings),
+      DOCKER: settings.docker,
+      IMAGE: project.image ?? settings.image ?? "",
+      DAEMON: settings.daemon ?? "",
+      VOLUME: "",
+      STORE_PATH: `postgresql:${project.store}`,
+      STORE: project.store,
+      ...(project.url ? { STORE_POSTGRESQL: JSON.stringify({ url: project.url }) } : {}),
+      CONTAINER_PREFIX: settings.containerPrefix,
+    };
+  }
   return {
     HOME: callHome(settings),
     DOCKER: settings.docker,
@@ -17,6 +34,8 @@ export function deploymentEnv(settings, platform, project) {
     DAEMON: settings.daemon ?? "",
     VOLUME: project.volume,
     STORE_PATH: platform.storePath(settings, project.volume),
+    // a project of a shared Store (#506) is addressed by Store and name; "" leaves it unset
+    STORE: project.shared ? project.store : "",
     CONTAINER_PREFIX: settings.containerPrefix,
   };
 }
@@ -42,29 +61,46 @@ export class Clients {
     this.held = new Map();
   }
 
-  /** Runs `work(client)` with the project's open client. */
+  /** Runs `work(client)` with the project's open client. A project of a
+   * PostgreSQL Store gets a client for this call alone, closed after it,
+   * so its URL is never held between calls. */
   async use(project, work) {
-    let held = this.held.get(project.name);
+    if (project.kind === "postgresql") {
+      const { settings, platform } = this.runtime;
+      const client = await withEnv(deploymentEnv(settings, platform, project), () => LayerFS.open(project.name));
+      try {
+        return await work(client);
+      } finally {
+        await client.close();
+      }
+    }
+    const key = keyOf(project);
+    let held = this.held.get(key);
     if (!held) {
       const { settings, platform } = this.runtime;
       // LayerFS.open reads the environment before its first await
       const opening = withEnv(deploymentEnv(settings, platform, project), () => LayerFS.open(project.name));
-      this.held.set(project.name, (held = { opening, users: 0, timer: null }));
-      opening.catch(() => { if (this.held.get(project.name) === held) this.held.delete(project.name); });
+      this.held.set(key, (held = { opening, users: 0, timer: null }));
+      opening.catch(() => { if (this.held.get(key) === held) this.held.delete(key); });
     }
     held.users++;
     clearTimeout(held.timer);
     try {
       return await work(await held.opening);
     } finally {
-      if (--held.users === 0 && this.held.get(project.name) === held) {
-        held.timer = setTimeout(() => this.forget(project.name), IDLE_MS);
+      if (--held.users === 0 && this.held.get(key) === held) {
+        held.timer = setTimeout(() => this.forget(key), IDLE_MS);
         held.timer.unref?.();
       }
     }
   }
 
-  /** Closes the project's client, if any. */
+  /** Closes the clients of every project of the Store `store` (a project with a Store of its own is keyed by its name). */
+  async forgetStore(store) {
+    await Promise.all([...this.held.keys()].filter((key) => key === store || key.startsWith(`${store}/`)).map((key) => this.forget(key)));
+  }
+
+  /** Closes the client of the project keyed `name` (keyOf), if any. */
   async forget(name) {
     const held = this.held.get(name);
     if (!held) return;

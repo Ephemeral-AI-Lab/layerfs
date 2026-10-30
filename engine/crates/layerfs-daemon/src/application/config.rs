@@ -51,6 +51,10 @@ pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
         overlay.parent().ok_or_else(|| invalid("Overlay parent"))?,
         true,
     )?;
+    // a PostgreSQL Store (#506) has no file or volume here
+    if config.postgresql.is_some() {
+        return Ok(config);
+    }
     private_directory(
         store.parent().ok_or_else(|| invalid("Store parent"))?,
         config.existing_store.is_none(),

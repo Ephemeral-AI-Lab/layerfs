@@ -159,13 +159,13 @@ class WorktreeTests(unittest.TestCase):
         with self.assertRaises(Refused):
             resources.inputs(self.record)
 
-    def build_bundle(self, mutate=False):
+    def build_bundle(self, mutate=False, features=None):
         target = self.repo / "target/debug"
         target.mkdir(parents=True)
         (target / "layerfs-daemon").write_bytes(b"daemon")
         (target / "layerfs-daemon").chmod(0o755)
         (target / "liblayerfs_node.dylib").write_bytes(b"addon")
-        args = SimpleNamespace(resources=str(self.path), platform="macos", profile="debug", jobs=2)
+        args = SimpleNamespace(resources=str(self.path), platform="macos", profile="debug", jobs=2, features=features)
 
         def execute(*a, **kw):
             if mutate:
@@ -214,6 +214,11 @@ class WorktreeTests(unittest.TestCase):
         file.write_bytes(b"corrupt")
         with self.assertRaises(Refused):
             builds.verify_bundle(bundle)
+
+    def test_build_features_reach_cargo_and_the_manifest(self):
+        bundle = self.build_bundle(features="layerfs-node/postgresql")
+        command = builds.verify_bundle(bundle)["command"]
+        self.assertEqual(command[command.index("--features") + 1], "layerfs-node/postgresql")
 
     def test_changed_build_source_cannot_publish_sealed_bundle(self):
         with self.assertRaises(Refused):

@@ -76,6 +76,16 @@ pub enum InitError {
     Project(ProjectError),
     /// First Branch publication.
     History(HistoryError),
+    /// Adding a project (#506): the Store already has a project of that
+    /// name; nothing was written.
+    Exists,
+    /// Adding a project (#506): the Store was made without the acquisition
+    /// tables (schema versions 16 to 18), refused before anything was
+    /// scanned or written. LayerFS adds no tables to an existing Store.
+    NoAcquisition,
+    /// Adding a project (#506): another add is still working in this Store
+    /// (its acquisition rows remain); nothing was begun.
+    Busy,
 }
 impl fmt::Display for InitFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -227,5 +237,24 @@ impl ProjectApi {
         counters: Arc<InitCounters>,
     ) -> Result<SealedProject, Box<InitFailure>> {
         initialize(request, timer, counters)
+    }
+    /// Creates and seals one Store holding no project yet, with the
+    /// acquisition tables projects are added through (#506).
+    pub fn create_store(
+        &self,
+        request: super::live::CreateRequest,
+    ) -> Result<SealedStore, InitError> {
+        super::live::create(request)
+    }
+    /// Imports a folder as a new project of the live Store (#506), through
+    /// its admission and writer lane; the Store is neither sealed nor
+    /// replaced. `counters` follow it as for [`ProjectApi::init_observed`].
+    pub fn add_project(
+        &self,
+        request: super::live::AddRequest,
+        timer: &TimingScope<'_, Active>,
+        counters: Arc<InitCounters>,
+    ) -> Result<super::live::AddedProject, Box<super::live::AddFailure>> {
+        super::live::add(request, timer, counters)
     }
 }

@@ -5,7 +5,9 @@ use crate::{ContainerId, RuntimeError, WireFailure};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SandboxRequest {
     pub image: String,
-    pub store_volume: String,
+    /// The Store volume mounted at `/layerfs-store`; None mounts nothing (a
+    /// PostgreSQL Store, #506).
+    pub store_volume: Option<String>,
     pub port: u16,
     /// Container labels (`layerfs.project`, for instance): each key once.
     /// A reopened container must carry every one; the image may add more.
@@ -42,7 +44,11 @@ impl SandboxRequest {
         {
             return Err(RuntimeError::Protocol("image digest/daemon port"));
         }
-        if !volume_name(&self.store_volume) {
+        if self
+            .store_volume
+            .as_deref()
+            .is_some_and(|v| !volume_name(v))
+        {
             return Err(RuntimeError::Protocol("existing named VM volume"));
         }
         for (i, (key, value)) in self.labels.iter().enumerate() {

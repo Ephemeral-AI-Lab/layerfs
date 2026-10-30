@@ -2,7 +2,8 @@
 // on this engine, with who owns each, and the removal of this home's
 // orphans. A project's Store volume is labelled at Init (layerfs.role=store,
 // layerfs.home, layerfs.project); an older one is known by the runtime's
-// project record. Docker's own "reclaimable" counts every volume no
+// project record; a shared Store's (#506) carries layerfs.store and is the
+// home's while stores.json lists it. Docker's own "reclaimable" counts every volume no
 // container uses, which includes every idle project's Store, so it is not
 // used here.
 //   owner "this"    labelled with this home, or recorded by one of its projects
@@ -14,6 +15,7 @@
 // One `docker system df -v`, plus one `docker volume inspect` of the
 // labelled volumes; listing changes nothing.
 import { LayerFSError } from "@layerfs/agent";
+import { entries } from "./store/registry.js";
 
 const UNITS = { B: 1, kB: 1e3, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12 };
 /** "84.05MB" -> 84050000; anything else -> null. */
@@ -31,6 +33,9 @@ export async function list(runtime) {
   const labels = new Map(labelled.length ? JSON.parse(await platform.docker(settings, ["volume", "inspect", ...labelled], { timeout: 30_000 })).map((v) => [v.Name, v.Labels ?? {}]) : []);
   const projects = await runtime.project.list();
   const recorded = new Map(projects.filter((p) => p.volume).map((p) => [p.volume, p.name]));
+  // a Store's volume (#506) is this home's while the Store is registered, with or without projects
+  const stores = new Map(entries(settings).filter((s) => s.volume).map((s) => [s.volume, s.name]));
+  for (const volume of stores.keys()) if (!recorded.has(volume)) recorded.set(volume, null);
   const named = new Map(projects.map((p) => [p.name, p]));
   return volumes.map((v) => {
     const l = labels.get(v.Name) ?? {};
@@ -41,7 +46,8 @@ export async function list(runtime) {
     else if (store && l["layerfs.home"]) [owner, project] = ["other", l["layerfs.project"] ?? null];
     const live = owner === "this" && (recorded.has(v.Name) || (named.has(project) && !named.get(project).volume));
     const containers = Number(v.Links) || 0;
-    return { name: v.Name, size: bytesOf(v.Size), containers, owner, project, live, removable: owner === "this" && !live && containers === 0 };
+    const held = stores.get(v.Name) ?? (l["layerfs.home"] === settings.home ? l["layerfs.store"] ?? null : null);
+    return { name: v.Name, size: bytesOf(v.Size), containers, owner, project, ...(held ? { store: held } : {}), live, removable: owner === "this" && !live && containers === 0 };
   }).sort((a, b) => a.name.localeCompare(b.name));
 }
 

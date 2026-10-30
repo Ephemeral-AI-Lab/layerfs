@@ -4,6 +4,9 @@
 // deployment settings an agent's environment doesn't have.
 //   const runtime = await LayerFSRuntime.open({ home, image, docker, bundle, … });
 //   try { await runtime.status(); } finally { await runtime.close(); }
+// A home holds many Stores and a Store many projects (#506): runtime.store,
+// runtime.remote, runtime.sync and runtime.postgresql are the Store-level calls of
+// core/docs/issues/506/README.md section 6.
 // Destructive calls name what they destroy (`confirm`); every call is one
 // attempt; an uncertain outcome keeps what exists and reports Unknown.
 //
@@ -21,11 +24,14 @@ import { status } from "./status.js";
 import linux from "./platform/linux/index.js";
 import macos from "./platform/macos/index.js";
 import windows from "./platform/windows/index.js";
-import { list } from "./project/list.js";
+import { find, list } from "./project/list.js";
+import * as stores from "./store/calls.js";
+import * as sync from "./store/sync.js";
+import { SyncJobs, progressOf } from "./store/sync.js";
 import { InitJobs } from "./project/jobs.js";
 import { prepare, runInit } from "./project/init.js";
 import { get_state } from "./project/state.js";
-import { remove } from "./project/remove.js";
+import { deleteProject } from "./project/delete.js";
 import { reclaim } from "./sandbox/reclaim.js";
 import { clean_leftovers, leftovers } from "./sandbox/leftovers.js";
 import { list as listSandboxes } from "./sandbox/list.js";
@@ -60,13 +66,18 @@ export class LayerFSRuntime {
       if (this.closed) throw new LayerFSError("InvalidInput", "this LayerFS runtime is closed; open another with LayerFSRuntime.open", null);
       return method(...args);
     };
-    /** A project this runtime knows: its record, else its home entry. */
-    const known = async (name) => {
-      const found = (await list(this)).find((p) => p.name === name);
-      if (!found) throw new LayerFSError("NoSuchProject", `no LayerFS project named ${name} in ${settings.home}`, null);
+    /** A project this runtime knows (of `store` when its name is in several Stores) with a Store volume,
+     * or of a PostgreSQL Store with the call's `url`, which the runtime holds for that call only. */
+    const known = async (name, store = undefined, url = undefined) => {
+      const found = await find(this, name, store);
+      if (found.kind === "postgresql") {
+        if (typeof url !== "string" || !url) throw new LayerFSError("InvalidInput", `${name} is in the PostgreSQL Store ${found.store}: pass its connection's { url } with the call (never stored)`, null);
+        return { ...found, url };
+      }
       if (!found.volume) throw new LayerFSError("InvalidInput", `the runtime has no record of ${name}'s volume (made outside this runtime)`, null);
       return found;
     };
+    const syncs = new SyncJobs();
     this.status = live(async () => ({ ...(await status(this)), sweep: this.swept }));
     this.worker = {
       start: live(() => this.platform.start(settings)),
@@ -79,11 +90,36 @@ export class LayerFSRuntime {
       list: live(() => list(this)),
       start_init: live(async (name, folder, options) => jobs.begin(await prepare(this, name, folder, options, jobs.pending()))),
       get_init: live(async (job) => jobs.get(job?.id ?? job)),
-      get_state: live(async (name, since) => this.clients.use(await known(name), (client) => get_state(client, since))),
-      remove: live((name, options) => remove(this, name, options)),
+      get_state: live(async (name, since, options) => this.clients.use(await known(name, options?.store, options?.url), (client) => get_state(client, since))),
+      delete: live((name, options) => deleteProject(this, name, options)),
     };
+    // #506 Store-first (doc section 6): a home holds many Stores, a Store many projects
+    this.store = {
+      list: live(() => stores.list(this)),
+      create: live((name) => stores.create(this, name)),
+      remove: live((name, options) => stores.remove(this, name, options)),
+      attach_postgresql: live((options) => stores.attach_postgresql(this, options)),
+      // #509: one link per SQLite Store
+      start_publish: live((name, options) => sync.start_publish(this, syncs, name, options)),
+      start_push: live((name, options) => sync.start_push(this, syncs, name, options)),
+      start_pull: live((name, options) => sync.start_pull(this, syncs, name, options)),
+      start_send: live((name, options) => sync.start_send(this, syncs, name, options)),
+      start_load: live((remote, options) => sync.start_load(this, syncs, remote, options)),
+      unlink: live((name, options) => stores.unlink(this, name, options)),
+      start_import_postgresql: live((name, options) => sync.start_import_postgresql(this, syncs, name, options)),
+      check: live((name, options) => stores.check(this, name, options)),
+    };
+    this.remote = {
+      list: live(() => stores.remotes(this)),
+      add: live((remote) => stores.addRemote(this, remote)),
+      remove: live((name, options) => stores.removeRemote(this, name, options)),
+      list_stores: live((remote, options) => stores.listStores(this, remote, options)),
+      providers: live(() => stores.providers(this)),
+    };
+    this.postgresql = { status: live((options) => stores.postgresqlStatus(this, options)) };
+    this.sync = { get: live((job) => syncs.get(job, progressOf(this))) };
     this.sandbox = {
-      reclaim: live(async (name) => reclaim(this, await known(name))),
+      reclaim: live(async (name, options) => reclaim(this, await known(name, options?.store, options?.url))),
       list_leftovers: live(() => leftovers(this)),
       clean_leftovers: live((names) => clean_leftovers(this, names)),
       list: live(() => listSandboxes(this)),

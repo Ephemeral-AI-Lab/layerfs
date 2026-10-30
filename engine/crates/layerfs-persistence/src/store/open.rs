@@ -91,7 +91,7 @@ impl Handles {
         }
         let handles = Self::validated(session, directory, binding, cursor_key)?;
         if writable {
-            crate::storage::merge_records::sweep(&handles.storage.session)?;
+            crate::backend::sqlite::storage::merge_records::sweep(&handles.storage.session)?;
         }
         Ok(handles)
     }
@@ -113,7 +113,7 @@ impl Handles {
             storage,
             acquisition: AcquisitionProvider::new(session.clone(), directory),
             history: HistoryProvider {
-                session,
+                engine: crate::backend::Engine::Sqlite(session),
                 catalog_id,
                 incarnation,
                 cursor_key,

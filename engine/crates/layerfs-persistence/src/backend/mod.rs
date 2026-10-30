@@ -1,12 +1,14 @@
-//! Small typed backend seam; PostgreSQL is unavailable in config.
+//! The Store engine seam (#506): SQLite always, PostgreSQL behind the
+//! `postgresql` feature. Shared Metadata, Objects and history semantics reach
+//! an engine only through [`Mechanics`] and [`HistoryStatements`].
+pub(crate) mod admission;
+#[cfg(feature = "postgresql")]
+pub(crate) mod postgresql;
 pub(crate) mod records;
+mod seam;
 pub(crate) mod sqlite;
-pub(crate) use sqlite::connection::Session;
-pub(crate) use sqlite::metadata_allocation;
-pub(crate) use sqlite::metadata_locations;
-pub(crate) use sqlite::metadata_policy;
-pub(crate) use sqlite::metadata_signatures;
-pub(crate) use sqlite::metadata_values;
-pub(crate) use sqlite::objects_read;
-pub(crate) use sqlite::publish;
-pub(crate) use sqlite::transaction::Transaction;
+pub(crate) use seam::{Column, Engine, HistoryStatements, Mechanics};
+pub(crate) use sqlite::metadata::locations as metadata_locations;
+pub(crate) use sqlite::objects::publish;
+pub(crate) use sqlite::session::connection::Session;
+pub(crate) use sqlite::session::transaction::Transaction;

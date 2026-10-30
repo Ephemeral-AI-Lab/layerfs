@@ -1,35 +1,13 @@
-//! SQLite-only connection, transaction, query, schema and physical mechanics.
+//! SQLite-only connection, transaction, query, schema and physical mechanics,
+//! grouped by role (#506 A1).
 pub(crate) mod acquisition;
-mod admission;
-pub(crate) mod connection;
-#[cfg(target_os = "macos")]
-#[allow(unsafe_code)]
-mod file_control;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-pub(crate) mod headroom;
+pub(crate) mod heads;
 pub(crate) mod lane;
-pub(crate) mod metadata_allocation;
-pub(crate) mod metadata_locations;
-pub(crate) mod metadata_policy;
-pub(crate) mod metadata_signatures;
-pub(crate) mod metadata_values;
-pub(crate) mod objects_read;
-pub(crate) mod objects_selection;
-pub(crate) mod prepared;
-mod profile;
-pub(crate) mod publish;
-pub(crate) mod query;
-pub(crate) mod reclamation;
-pub(crate) mod rows;
+pub(crate) mod lifecycle;
+mod mechanics;
+pub(crate) mod metadata;
+pub(crate) mod objects;
 pub(crate) mod schema;
-pub(crate) mod seal;
-#[cfg(target_os = "macos")]
-mod seal_allocation;
-pub(crate) mod statement_work;
-pub(crate) mod thread_work;
-pub(crate) mod transaction;
-pub(crate) mod unit_io;
-pub(crate) mod unit_layout;
-mod units_publish;
-mod units_read;
-mod writer_admission;
+pub(crate) mod session;
+pub(crate) mod snapshot;
+pub(crate) mod storage;

@@ -100,6 +100,36 @@ impl StoreService {
             ReservationBlocks::default(),
         )
         .map_err(|error| OpenRefusal::Failed(format!("Store open: {error}")))?;
+        Self::owning(opened, template)
+    }
+
+    /// Opens a PostgreSQL Store (#506) for this process's Store calls, with
+    /// the overlay template at `template`. No kernel guard runs: the Store
+    /// is no file shared through one kernel but a server every opener
+    /// reaches over its own connection.
+    #[cfg(feature = "postgresql")]
+    pub fn open_postgres(
+        selection: &layerfs_persistence::PostgresSelection,
+        binding: &[u8],
+        cursor_key: [u8; 32],
+        template: &Path,
+    ) -> Result<Self, OpenRefusal> {
+        let mut config = PersistenceConfig::sqlite(template);
+        config.backend = layerfs_persistence::BackendSelection::Postgres(selection.clone());
+        let opened = open_store_observed(
+            config,
+            binding,
+            cursor_key,
+            CALLS,
+            CACHE_BYTES,
+            ReservationBlocks::default(),
+        )
+        .map_err(|error| OpenRefusal::Failed(format!("Store open: {error}")))?;
+        Self::owning(opened, template)
+    }
+
+    /// Serves `opened`, starting the overlay owner over `template`.
+    fn owning(opened: OpenedStore, template: &Path) -> Result<Self, OpenRefusal> {
         let owner = Owner::start(
             template,
             ProfileConfig {

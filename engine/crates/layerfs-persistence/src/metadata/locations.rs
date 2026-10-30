@@ -1,17 +1,17 @@
 //! Common locator cardinality/identity bounds, checked around the backend read.
-use crate::backend::{metadata_locations, Transaction};
+use crate::backend::Mechanics;
 use layerfs_content::ObjectId;
 use layerfs_storage::{location::LocatedObject, policy, port::PersistenceError};
 use std::collections::BTreeSet;
-pub(crate) fn read(
-    tx: &Transaction<'_>,
+pub(crate) fn read<T: Mechanics + ?Sized>(
+    tx: &T,
     ids: &[ObjectId],
     out: &mut Vec<LocatedObject>,
 ) -> Result<(), PersistenceError> {
     if ids.len() > policy::READ_OBJECT_LIMIT {
         return Err(PersistenceError::Malformed);
     }
-    metadata_locations::read(tx, ids, out)?;
+    tx.locate(ids, out)?;
     let unique: BTreeSet<_> = ids.iter().copied().collect();
     let mut seen = BTreeSet::new();
     for row in out {

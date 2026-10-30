@@ -23,6 +23,8 @@
 // each frame { id, fn, op, args, open } is answered by { id, answer }. `ping`
 // answers { ready, active, stores, build } at once. `fn` is call,
 // backendCall or releaseStore, and `args.home` must be the worker's home.
+// A Store pull (#506) first closes the Store this worker holds open, or is
+// refused Busy while a call uses it.
 // Each call is made once; one that throws answers { thrown }.
 import { execFile } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
@@ -145,9 +147,17 @@ async function withStore(args, work) {
   }
 }
 
+/** Calls whose `path` is the Init source folder, given in the caller's own terms. */
+const IMPORTS = new Set(["call:project.init", "backendCall:runtime.store.add_project"]);
+
 async function answer({ fn, op, args, open }) {
   if (fn === "releaseStore") return closeStore(args.storePath);
-  const sent = stdin && fn === "call" && op === "project.init" && typeof args.path === "string" ? { ...args, path: await linuxPath(args.path) } : args;
+  // a pull replaces the Store file: this worker's quiet-minute hold closes first (#506)
+  if (fn === "backendCall" && op === "runtime.store.pull") {
+    const closed = await closeStore(args.storePath);
+    if (closed.refused) return closed;
+  }
+  const sent = stdin && IMPORTS.has(`${fn}:${op}`) && typeof args.path === "string" ? { ...args, path: await linuxPath(args.path) } : args;
   const call = () => made(binding, fn, op, sent);
   return open ? withStore(sent, call) : call();
 }

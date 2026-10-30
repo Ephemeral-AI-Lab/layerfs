@@ -7,8 +7,21 @@ pub fn engine(home: &Path, status: u16, body: &str) -> JoinHandle<String> {
 
 /// The Engine at `home/docker.sock`, answering each request, one connection
 /// each, with the next `(status, body)`; it returns their request heads.
+/// Each Docker client first reads the Engine's API version (#457): those
+/// `GET /version` requests are answered with [`API_VERSION`] and are neither
+/// scripted nor returned.
 pub fn engines(home: &Path, responses: Vec<(u16, String)>) -> JoinHandle<Vec<String>> {
     engines_before(home, responses, || {})
+}
+
+/// The Engine API version the mock reports: the newest the client speaks.
+pub const API_VERSION: &str = r#"{"ApiVersion":"1.54"}"#;
+
+fn response(status: u16, body: &str) -> String {
+    format!(
+        "HTTP/1.1 {status} test\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    )
 }
 
 pub fn engines_before(
@@ -23,40 +36,47 @@ pub fn engines_before(
         let deadline = Instant::now() + Duration::from_secs(3);
         let mut requests = Vec::new();
         for (status, body) in responses {
-            let response = format!(
-                "HTTP/1.1 {status} test\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
-                body.len()
-            );
-            let stream = loop {
-                match listener.accept() {
-                    Ok((stream, _)) => break stream,
-                    Err(e)
-                        if e.kind() == std::io::ErrorKind::WouldBlock
-                            && Instant::now() < deadline =>
-                    {
-                        thread::sleep(Duration::from_millis(2))
-                    }
-                    Err(e) => panic!("bounded engine admission: {e}"),
-                }
-            };
-            stream.set_nonblocking(false).unwrap();
-            stream
-                .set_read_timeout(Some(Duration::from_secs(2)))
-                .unwrap();
-            let mut reader = BufReader::new(stream.try_clone().unwrap());
-            let mut request = String::new();
             loop {
-                let mut line = String::new();
-                if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
-                    break;
+                let stream = loop {
+                    match listener.accept() {
+                        Ok((stream, _)) => break stream,
+                        Err(e)
+                            if e.kind() == std::io::ErrorKind::WouldBlock
+                                && Instant::now() < deadline =>
+                        {
+                            thread::sleep(Duration::from_millis(2))
+                        }
+                        Err(e) => panic!("bounded engine admission: {e}"),
+                    }
+                };
+                stream.set_nonblocking(false).unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut request = String::new();
+                loop {
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                        break;
+                    }
+                    request.push_str(&line);
                 }
-                request.push_str(&line);
+                if request.starts_with("GET /version ") {
+                    (&stream)
+                        .write_all(response(200, API_VERSION).as_bytes())
+                        .unwrap();
+                    continue;
+                }
+                if let Some(before) = before.take() {
+                    before();
+                }
+                (&stream)
+                    .write_all(response(status, &body).as_bytes())
+                    .unwrap();
+                requests.push(request);
+                break;
             }
-            if let Some(before) = before.take() {
-                before();
-            }
-            (&stream).write_all(response.as_bytes()).unwrap();
-            requests.push(request);
         }
         requests
     })

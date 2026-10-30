@@ -1,15 +1,21 @@
 //! Node entry points for the public SDK and its backend table (#428).
 mod convert;
+mod copies;
 mod direct;
 mod discovery;
 mod dispatch;
 mod exec;
 mod job;
+mod local;
 mod output;
 mod pool;
+mod postgres;
+mod progress;
 mod project;
 mod registry;
 mod sandbox;
+mod stores;
+mod sync;
 mod trace;
 mod workspace;
 

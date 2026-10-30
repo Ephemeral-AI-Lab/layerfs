@@ -88,7 +88,7 @@ try {
   assert.equal(agent.code, 0, agent.text);
   console.log(agent.text.trim());
 } finally {
-  await runtime.project.remove("shop", { confirm: "shop", stopSandboxes: true }).catch((error) => console.error(`remove: ${error.message}`));
+  await runtime.project.delete("shop", { confirm: "shop", stopSandboxes: true }).catch((error) => console.error(`remove: ${error.message}`));
   await runtime.close();
   for (const name of docker("ps", "-a", "--filter", `name=^${prefix}`, "--format", "{{.Names}}").split("\n").filter(Boolean)) docker("rm", "-f", name);
   for (const name of docker("volume", "ls", "--filter", `name=^${prefix}`, "--format", "{{.Name}}").split("\n").filter(Boolean)) docker("volume", "rm", name);

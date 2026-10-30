@@ -5,7 +5,7 @@ use crate::{
     wire::{Reader, Writer},
 };
 use std::fmt;
-const MAGIC: &[u8] = b"LFSD\x05";
+const MAGIC: &[u8] = b"LFSD\x06";
 /// Explicit daemon startup resources; these are windows/admission, not file caps.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DaemonLimits {
@@ -51,6 +51,47 @@ pub struct DaemonSetup {
     /// None selects the original one-time installer. Some selects explicit existing
     /// Store open using retained authority; never selected after an install error.
     pub existing_store: Option<StoreManifest>,
+    /// Some opens a PostgreSQL Store (#506) instead of the Store file; the
+    /// daemon then starts ready, with no install and no Store volume.
+    pub postgresql: Option<DaemonPostgres>,
+}
+/// A PostgreSQL Store a daemon opens. The URL may hold a password: it lives
+/// only in this private config, never in env, argv, records or `Debug`.
+#[derive(Clone, Eq, PartialEq)]
+pub struct DaemonPostgres {
+    /// libpq-style connection string or URL, as the daemon dials it.
+    pub url: String,
+    /// Schema holding the Store: `[a-z_][a-z0-9_]*`, at most 63 bytes.
+    pub schema: String,
+    /// `off`, `local`, `remote_write`, `on` or `remote_apply`.
+    pub synchronous_commit: String,
+    /// The Store's binding key, from the home's Store record.
+    pub binding: Vec<u8>,
+    /// The Store's cursor key, from the home's Store record.
+    pub cursor_key: [u8; 32],
+}
+impl DaemonPostgres {
+    fn check(&self) -> Result<(), ControlError> {
+        let schema = self.schema.as_bytes();
+        let valid = !self.url.is_empty()
+            && self.url.len() <= 4096
+            && !schema.is_empty()
+            && schema.len() <= 63
+            && !schema[0].is_ascii_digit()
+            && schema
+                .iter()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'_')
+            && matches!(
+                self.synchronous_commit.as_str(),
+                "off" | "local" | "remote_write" | "on" | "remote_apply"
+            )
+            && !self.binding.is_empty()
+            && self.binding.len() <= 128
+            && self.cursor_key != [0; 32];
+        valid
+            .then_some(())
+            .ok_or(ControlError("daemon PostgreSQL Store"))
+    }
 }
 impl DaemonSetup {
     /// Encodes one bounded private config. No operation/flow byte limit is implied.
@@ -76,6 +117,14 @@ impl DaemonSetup {
         out.byte(u8::from(self.existing_store.is_some()))?;
         if let Some(value) = &self.existing_store {
             out.blob(&value.encode()?)?;
+        }
+        out.byte(u8::from(self.postgresql.is_some()))?;
+        if let Some(p) = &self.postgresql {
+            for v in [&p.url, &p.schema, &p.synchronous_commit] {
+                out.blob(v.as_bytes())?;
+            }
+            out.blob(&p.binding)?;
+            out.put(&p.cursor_key)?;
         }
         Ok(out.0)
     }
@@ -104,6 +153,17 @@ impl DaemonSetup {
             1 => Some(StoreManifest::decode(input.blob(crate::wire::LIMIT)?)?),
             _ => return Err(ControlError("daemon config boolean")),
         };
+        let postgresql = match input.byte()? {
+            0 => None,
+            1 => Some(DaemonPostgres {
+                url: input.text(4096)?,
+                schema: input.text(63)?,
+                synchronous_commit: input.text(16)?,
+                binding: input.blob(128)?.to_vec(),
+                cursor_key: input.array()?,
+            }),
+            _ => return Err(ControlError("daemon config boolean")),
+        };
         input.finish()?;
         let value = Self {
             listen,
@@ -116,6 +176,7 @@ impl DaemonSetup {
             command_gid,
             limits,
             existing_store,
+            postgresql,
         };
         value.check()?;
         Ok(value)
@@ -154,7 +215,18 @@ impl DaemonSetup {
                 return Err(ControlError("explicit existing Disposable Store"));
             }
         }
+        if let Some(p) = &self.postgresql {
+            p.check()?;
+            if self.existing_store.is_some() {
+                return Err(ControlError("one Store: a file or PostgreSQL"));
+            }
+        }
         Ok(())
+    }
+    /// Whether the daemon opens an existing Store at startup (a file or
+    /// PostgreSQL), so it starts ready with no install.
+    pub fn opens_existing(&self) -> bool {
+        self.existing_store.is_some() || self.postgresql.is_some()
     }
 }
 impl fmt::Debug for DaemonSetup {
@@ -170,6 +242,17 @@ impl fmt::Debug for DaemonSetup {
             .field("command_gid", &self.command_gid)
             .field("limits", &self.limits)
             .field("existing_store", &self.existing_store)
+            .field("postgresql", &self.postgresql)
+            .finish()
+    }
+}
+impl fmt::Debug for DaemonPostgres {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DaemonPostgres")
+            .field("url", &"[redacted]")
+            .field("schema", &self.schema)
+            .field("synchronous_commit", &self.synchronous_commit)
+            .field("cursor_key", &"[redacted]")
             .finish()
     }
 }

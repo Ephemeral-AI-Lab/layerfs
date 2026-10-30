@@ -1,12 +1,82 @@
 //! Explicit backend and local database selection.
 use std::path::PathBuf;
 /// Explicit persistence engine; no error-driven fallback.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BackendSelection {
     /// Embedded local SQLite.
     Sqlite,
-    /// Unavailable placeholder.
-    Postgres,
+    /// A PostgreSQL Store (#506), opened through `PostgresHandles` when the
+    /// `postgresql` feature is built. Init stays SQLite only: `Handles`
+    /// refuses this selection with `BackendUnavailable`.
+    Postgres(PostgresSelection),
+}
+/// PostgreSQL `synchronous_commit` for every write transaction, applied with
+/// `SET LOCAL`. `Off` is the default (owner, 2026-10-29).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SynchronousCommit {
+    /// Acknowledge before the WAL record is flushed.
+    #[default]
+    Off,
+    /// Wait for the local WAL flush only.
+    Local,
+    /// Wait for standbys to receive the WAL.
+    RemoteWrite,
+    /// Wait for the local and synchronous-standby flush.
+    On,
+    /// Wait for synchronous standbys to apply the WAL.
+    RemoteApply,
+}
+impl SynchronousCommit {
+    #[cfg_attr(not(feature = "postgresql"), allow(dead_code))]
+    pub(crate) const fn setting(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Local => "local",
+            Self::RemoteWrite => "remote_write",
+            Self::On => "on",
+            Self::RemoteApply => "remote_apply",
+        }
+    }
+}
+/// One PostgreSQL Store: server, schema and write settings.
+#[derive(Clone, Eq, PartialEq)]
+pub struct PostgresSelection {
+    /// libpq-style connection string or URL. It may hold a password, so it
+    /// is never printed by `Debug`.
+    pub url: String,
+    /// Schema holding the Store's tables: `[a-z_][a-z0-9_]*`, at most 63 bytes.
+    pub schema: String,
+    /// `synchronous_commit` of every write transaction.
+    pub synchronous_commit: SynchronousCommit,
+    /// `lock_timeout` while a write waits for the publication lane, in
+    /// milliseconds; a wait that reaches it fails `Busy`, never retried.
+    pub lock_timeout_ms: u32,
+}
+impl PostgresSelection {
+    /// A selection with `synchronous_commit=off` and a 30 s lane wait.
+    pub fn new(url: impl Into<String>, schema: impl Into<String>) -> Self {
+        Self {
+            url: url.into(),
+            schema: schema.into(),
+            synchronous_commit: SynchronousCommit::Off,
+            lock_timeout_ms: 30_000,
+        }
+    }
+    /// Selects `synchronous_commit` for every write transaction.
+    pub fn with_synchronous_commit(mut self, setting: SynchronousCommit) -> Self {
+        self.synchronous_commit = setting;
+        self
+    }
+}
+impl std::fmt::Debug for PostgresSelection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PostgresSelection")
+            .field("url", &"<redacted>")
+            .field("schema", &self.schema)
+            .field("synchronous_commit", &self.synchronous_commit)
+            .field("lock_timeout_ms", &self.lock_timeout_ms)
+            .finish()
+    }
 }
 /// Explicit SQLite completion and durability contract, selected before opening.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

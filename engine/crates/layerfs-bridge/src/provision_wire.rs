@@ -12,6 +12,7 @@ impl StoreManifest {
         let mut out = Writer::new(MAGIC);
         out.byte(match self.provider {
             ProviderKind::Sqlite => 1,
+            ProviderKind::Postgres => 2,
         })?;
         out.byte(match self.profile {
             StoreProfile::Durable => 1,
@@ -33,6 +34,7 @@ impl StoreManifest {
         let mut input = Reader::new(bytes, MAGIC)?;
         let provider = match input.byte()? {
             1 => ProviderKind::Sqlite,
+            2 => ProviderKind::Postgres,
             _ => return Err(ControlError("provider kind")),
         };
         let profile = match input.byte()? {

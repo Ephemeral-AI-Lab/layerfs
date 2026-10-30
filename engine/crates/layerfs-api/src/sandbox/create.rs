@@ -187,6 +187,26 @@ impl SandboxApi {
     ) -> Result<ManagedSandbox, Box<SandboxFailure>> {
         self.create_file(request, &project.store, &project.manifest)
     }
+    /// Creates a new daemon on the PostgreSQL Store its setup selects
+    /// (#506): no Store file, volume or install; it starts ready.
+    pub fn create_postgres(
+        &self,
+        request: SandboxCreate,
+    ) -> Result<ManagedSandbox, Box<SandboxFailure>> {
+        if request.setup.postgresql.is_none() || request.deployment.store_volume.is_some() {
+            return Err(Box::new(SandboxFailure {
+                request,
+                phase: SandboxPhase::Validate,
+                sandbox: None,
+                control: None,
+                handshake: ChannelWork::default(),
+                observed: None,
+                installed: None,
+                cause: SandboxCause::Setup(ControlError("PostgreSQL Store with no volume")),
+            }));
+        }
+        create(&self.docker, request)
+    }
     /// Creates a new daemon using exact persisted sealed-file and manifest facts.
     pub fn create_file(
         &self,
@@ -376,11 +396,11 @@ pub(crate) fn create(
             control.as_mut().expect("authenticated"),
             HelloRequest {
                 expected_instance: None,
-                wait_for_store: request.setup.existing_store.is_some(),
+                wait_for_store: request.setup.opens_existing(),
             },
         )
         .map_err(SandboxCause::Control)?;
-        let expected = if request.setup.existing_store.is_some() {
+        let expected = if request.setup.opens_existing() {
             DaemonPhase::ControlReady
         } else {
             DaemonPhase::InstallPending

@@ -284,21 +284,14 @@ pub(crate) fn changes(service: &Service, args: &SdkValue) -> Answer {
     })
 }
 
+/// The overlay's own row counts, read from its database alone (#508). Path
+/// change counts are `null`: naming them walks the base tree, which costs
+/// minutes on a large tree, and state reads call this for every Workspace.
+/// `list_changes` pages the changed paths on request.
 pub(crate) fn overlay(service: &Service, args: &SdkValue) -> Answer {
     let workspace = selected(service, args)?;
     let op = workspace.operation().map_err(args::failed)?;
     let resources = op.overlay().resources().map_err(args::failed)?;
-    let mut counts = [0i64; 3];
-    with_source(&workspace, |op, view| {
-        scan(service, &workspace, op, view, |_, kind, _| {
-            counts[match kind {
-                "Added" => 0,
-                "Modified" => 1,
-                _ => 2,
-            }] += 1;
-            Ok(true)
-        })
-    })?;
     let c = resources.counts;
     Ok(SdkValue::map([
         ("inodes", SdkValue::Int(c.inode_rows as i64)),
@@ -309,13 +302,6 @@ pub(crate) fn overlay(service: &Service, args: &SdkValue) -> Answer {
             "metadataRows",
             SdkValue::Int((c.inode_rows + c.directory_entry_rows + c.operation_record_rows) as i64),
         ),
-        (
-            "changes",
-            SdkValue::map([
-                ("added", SdkValue::Int(counts[0])),
-                ("modified", SdkValue::Int(counts[1])),
-                ("removed", SdkValue::Int(counts[2])),
-            ]),
-        ),
+        ("changes", SdkValue::Null),
     ]))
 }

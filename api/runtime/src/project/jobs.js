@@ -21,12 +21,12 @@ export class InitJobs {
 
   /** Names of Inits still running; a new Init does not take them. */
   pending() {
-    return new Set([...this.jobs.values()].filter((job) => !job.ended).map((job) => job.name));
+    return new Set([...this.jobs.values()].filter((job) => !job.ended).map((job) => (job.store ? `${job.store}/${job.name}` : job.name)));
   }
 
   /** Starts a prepared Init; answers its job. */
   begin(prepared) {
-    const job = { id: randomUUID(), name: prepared.name, source: prepared.source, started: Date.now(), step: "scan", scanned: null, totals: null, imported: null, project: null, error: null, ended: null };
+    const job = { id: randomUUID(), name: prepared.name, store: prepared.store ?? null, source: prepared.source, started: Date.now(), step: "scan", scanned: null, totals: null, imported: null, project: null, error: null, ended: null };
     this.jobs.set(job.id, job);
     const end = (fields) => {
       Object.assign(job, fields, { ended: Date.now() });

@@ -1,8 +1,8 @@
 //! Bounds of one stored-value read, shared by every backend.
-use crate::backend::{metadata_values, Transaction};
+use crate::backend::Mechanics;
 use layerfs_storage::{location::InodeValueRow, policy, port::*};
-pub(crate) fn read(
-    tx: &Transaction<'_>,
+pub(crate) fn read<T: Mechanics + ?Sized>(
+    tx: &T,
     ordinals: &[u32],
     out: &mut Vec<InodeValueRow>,
 ) -> Result<(), PersistenceError> {
@@ -12,7 +12,7 @@ pub(crate) fn read(
     {
         return Err(PersistenceError::Malformed);
     }
-    metadata_values::read(tx, ordinals, out)?;
+    tx.inode_values(ordinals, out)?;
     // The reply names only asked ordinals, each once, ascending.
     let mut asked = ordinals.iter();
     for row in out.iter() {

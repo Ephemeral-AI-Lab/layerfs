@@ -12,6 +12,7 @@ mod lineage;
 mod lineage_backfill;
 mod merge;
 mod provider;
+mod removal;
 mod rows;
 mod transaction;
 pub(crate) use lineage_backfill::backfill_lineage;

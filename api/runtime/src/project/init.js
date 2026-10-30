@@ -1,5 +1,6 @@
-// runtime.project.start_init(name, folder, { image, timeout }): imports a folder as a
-// new project on its own Docker volume, as a background job of this process
+// runtime.project.start_init(name, folder, { image, timeout, store }): imports a folder as a
+// new project on its own Docker volume (a new Store of the project's name),
+// or with `store` into that existing SQLite Store (#506, runInto), as a background job of this process
 // (jobs.js). Copied from the dsh Host's init.js (#428; its demo-scenario and
 // simulator branches are dropped). The steps: count the source, make the
 // volume, then one Init (LayerFS.init) where the Store lives: in this
@@ -15,11 +16,12 @@ import { appendFileSync, existsSync, statSync } from "node:fs";
 import { lstat, opendir } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
-import { LayerFS, LayerFSError } from "@layerfs/agent";
+import { INIT_TIMEOUT_MS, LayerFS, LayerFSError } from "@layerfs/agent";
 import { invokeBackend } from "@layerfs/agent/internal";
 import { deploymentEnv, withEnv } from "../clients.js";
 import { callHome, missing } from "../settings.js";
 import { NAME, record, saveRecord } from "./list.js";
+import { entries, named, put, storeFields, update } from "../store/registry.js";
 
 const WATCH_MS = 250;
 const IMAGE = /^sha256:[0-9a-f]{64}$/;
@@ -50,17 +52,31 @@ export async function prepare(runtime, name, folder, options = {}, pending = new
   if (options.image !== undefined && !IMAGE.test(options.image)) throw refuse("InvalidInput", "image is a runtime image digest sha256:<64 hex>");
   if (options.timeout !== undefined && !(Number.isSafeInteger(options.timeout) && options.timeout > 0)) throw refuse("InvalidInput", "timeout must be a positive whole number of milliseconds");
   if (typeof folder !== "string" || !isAbsolute(folder) || !existsSync(folder) || !statSync(folder).isDirectory()) throw refuse("InvalidInput", `${folder} is not an absolute directory`);
+  if (options.store !== undefined) return prepareInto(runtime, name, folder, options, pending);
   if (pending.has(name) || record(settings, name) || (await platform.homeNames(settings)).includes(name)) throw refuse("Exists", `a LayerFS project named ${name} exists`);
+  // a new Store of the project's name: no other Store may have that name
+  if (entries(settings).some((s) => s.name === name)) throw refuse("Exists", `a LayerFS Store named ${name} exists; name the Store to add ${name} to as { store }`);
   const created = Date.now();
   return { name, source: folder, volume: `${settings.containerPrefix}${name}-store-${created.toString(36)}`, created, ...(options.image ? { image: options.image } : {}), ...(options.timeout !== undefined ? { timeout: options.timeout } : {}) };
 }
 
+/** An Init into the existing SQLite Store `options.store` (#506): the
+ * project gets no volume of its own; a Store policy is the Store's. */
+async function prepareInto(runtime, name, folder, options, pending) {
+  if (options.image !== undefined) throw refuse("InvalidInput", "a project added to a Store has no image of its own; its Sandboxes take the runtime's");
+  const store = await named(runtime, options.store);
+  if (store.kind !== "sqlite") throw refuse("Unsupported", `a project is added only to a SQLite Store; ${store.name} is a PostgreSQL schema (import a SQLite Store into it instead)`);
+  if (pending.has(`${store.name}/${name}`) || store.projects.some((p) => p.name === name)) throw refuse("Exists", `Store ${store.name} has a project named ${name}`);
+  storeFields(runtime, store);
+  return { name, store: store.name, source: folder, created: Date.now(), ...(options.timeout !== undefined ? { timeout: options.timeout } : {}) };
+}
+
 /** Runs `making` (LayerFS.init), reading Init's counts every WATCH_MS in this process until it ends. */
-async function watching(runtime, name, making, report) {
+async function watching(runtime, name, making, report, store = undefined) {
   let running = true;
   const watch = (async () => {
     while (running) {
-      const counts = await invokeBackend("runtime.project.get_init", { project: name, home: callHome(runtime.settings) }, {}).catch(() => (running = false, null));
+      const counts = await invokeBackend("runtime.project.get_init", { project: name, home: callHome(runtime.settings), ...(store ? { store } : {}) }, {}).catch(() => (running = false, null));
       if (counts && running) report({ imported: counts });
       if (running) await pause(WATCH_MS);
     }
@@ -75,6 +91,7 @@ async function watching(runtime, name, making, report) {
 
 /** One prepared Init; `report` sees each step. Answers the project's record. */
 export async function runInit(runtime, prepared, report = () => {}) {
+  if (prepared.store) return runInto(runtime, prepared, report);
   const { settings, platform } = runtime;
   const { timeout, ...project } = prepared; // the record keeps no timeout
   report({ step: "scan" });
@@ -102,4 +119,32 @@ export async function runInit(runtime, prepared, report = () => {}) {
   await client.close();
   saveRecord(settings, project);
   return project;
+}
+
+/** One prepared Init into an existing Store (#506): no volume is made; the
+ * binding adds the project's stack through the Store's writer lane and its
+ * entry. A refused add removed its own entry; an uncertain one keeps it
+ * and is recorded in init-failures.jsonl. Answers the project. */
+async function runInto(runtime, prepared, report) {
+  const { settings, platform } = runtime;
+  const { timeout, ...project } = prepared;
+  report({ step: "scan" });
+  const totals = await scanSource(project.source, (counts) => report({ scanned: counts }));
+  report({ step: "volume", totals });
+  await platform.init(settings);
+  const store = await named(runtime, project.store);
+  report({ step: "import" });
+  const args = { ...storeFields(runtime, store), name: project.name, path: platform.path(settings, project.source), timeoutMs: timeout ?? INIT_TIMEOUT_MS };
+  const making = invokeBackend("runtime.store.add_project", args, {});
+  try {
+    await (platform.name === "macos" ? making : watching(runtime, project.name, making, report, store.name));
+  } catch (error) {
+    if (error?.code === "Unknown" || platform.name === "windows") {
+      appendFileSync(join(settings.stateDir, "init-failures.jsonl"), JSON.stringify({ project, platform: platform.name, home: callHome(settings), code: error?.code ?? null, message: error?.message ?? String(error), at: new Date().toISOString() }) + "\n");
+    }
+    throw error;
+  }
+  const kept = store.legacy ? put(settings, { ...store, projects: store.projects.filter((p) => p.name !== store.name) }) : store;
+  update(settings, kept.name, (s) => ({ ...s, projects: [...s.projects, { name: project.name, source: project.source, created: project.created }] }));
+  return { ...project, volume: store.volume, shared: true };
 }

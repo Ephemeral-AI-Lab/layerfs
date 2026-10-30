@@ -12,7 +12,10 @@ use layerfs_bridge::{
     duplex as transport,
 };
 use layerfs_overlay::ProfileConfig;
-use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{
+    BackendSelection, PersistenceConfig, PostgresSelection, SqlitePersistenceProfile,
+    SynchronousCommit,
+};
 use layerfs_storage::ReservationBlocks;
 use std::{
     sync::{Arc, Condvar, Mutex},
@@ -91,17 +94,44 @@ impl Application {
                 })
             }
         };
-        let existing = match &setup.existing_store {
-            Some(m) => match open_store_observed(
+        let selected = match (&setup.existing_store, &setup.postgresql) {
+            (Some(m), _) => Some((
                 PersistenceConfig::sqlite(&setup.store)
                     .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
-                &m.binding,
+                m.binding.as_slice(),
                 m.cursor_key,
+            )),
+            (None, Some(p)) => Some((
+                postgres(&setup.store, p),
+                p.binding.as_slice(),
+                p.cursor_key,
+            )),
+            (None, None) => None,
+        };
+        let existing = match selected {
+            Some((config, binding, cursor_key)) => match open_store_observed(
+                config,
+                binding,
+                cursor_key,
                 l.namespaces as usize,
                 cache_bytes,
                 ReservationBlocks::default(),
             ) {
-                Ok(opened) => Some(opened),
+                Ok(mut opened) => {
+                    if setup.postgresql.is_some() {
+                        // the status carries one printable word: `postgresql/17.6`
+                        opened.sqlite_version = opened
+                            .sqlite_version
+                            .split_whitespace()
+                            .take(2)
+                            .collect::<Vec<_>>()
+                            .join("/")
+                            .chars()
+                            .take(64)
+                            .collect();
+                    }
+                    Some(opened)
+                }
                 Err(cause) => {
                     return Err(ApplicationError::AfterOverlay {
                         owner: Box::new(owner),
@@ -240,4 +270,21 @@ impl Application {
         self.changed.notify_all();
         Ok(Some(failure))
     }
+}
+
+/// The PostgreSQL Store `p` selects (#506). `store` is only the config's
+/// unused file path: Store reads and writes go to the server.
+fn postgres(store: &str, p: &layerfs_bridge::daemon_setup::DaemonPostgres) -> PersistenceConfig {
+    let setting = match p.synchronous_commit.as_str() {
+        "local" => SynchronousCommit::Local,
+        "remote_write" => SynchronousCommit::RemoteWrite,
+        "on" => SynchronousCommit::On,
+        "remote_apply" => SynchronousCommit::RemoteApply,
+        _ => SynchronousCommit::Off,
+    };
+    let mut config = PersistenceConfig::sqlite(store);
+    config.backend = BackendSelection::Postgres(
+        PostgresSelection::new(p.url.clone(), p.schema.clone()).with_synchronous_commit(setting),
+    );
+    config
 }

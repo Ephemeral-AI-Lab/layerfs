@@ -1,6 +1,6 @@
 [package]
 name = "layerfs-persistence"
-description = "Shared physical persistence and history over durable embedded SQLite."
+description = "Shared physical persistence and history over embedded SQLite or PostgreSQL."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,6 +12,16 @@ layerfs-history = { path = "../../../core/crates/layerfs-history", default-featu
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
+
+# PostgreSQL Store engine (#506), off by default. Owner-authorized new
+# dependencies for this issue: the sync `postgres` client (pinned as in the
+# #420 experiments) and one TLS connector.
+postgres = { version = "=0.19.14", optional = true }
+postgres-native-tls = { version = "=0.5.3", optional = true }
+native-tls = { version = "=0.2.18", optional = true }
+
+[features]
+postgresql = ["dep:postgres", "dep:postgres-native-tls", "dep:native-tls"]
 
 [dev-dependencies]
 blake3 = { version = "=1.8.5", default-features = false }

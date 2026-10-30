@@ -3,7 +3,7 @@ use super::{
     accounting::{charge, ROOT_BYTES},
     statements::{signed, Failure},
 };
-use crate::backend::{sqlite::rows, Transaction};
+use crate::backend::{sqlite::session::rows, Transaction};
 use layerfs_content::ObjectId;
 use layerfs_storage::port::acquisition::Owner;
 use std::collections::BTreeSet;

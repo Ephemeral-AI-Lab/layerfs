@@ -200,6 +200,18 @@ pub trait HistoryCatalog: Send + Sync {
     /// Creates one Branch sharing the selected ancestry.
     fn fork(&self, request: &ForkRequest) -> HistoryResult<BranchSnapshot>;
 
+    /// Removes one LayerStack (a project) in one write transaction: its
+    /// Layers, Branches, Commits and their lineage, and their logical bytes
+    /// from the Store totals. Store-wide packs, objects and file digests stay,
+    /// and so does the stack's allocator scope; reclaiming packs no stack
+    /// reaches is separate (#411). An unknown stack is `Missing(LayerStack)`.
+    /// A provider that cannot remove stacks refuses as `Unsupported`.
+    fn remove_layerstack(&self, _stack: LayerStackId) -> HistoryResult<()> {
+        Err(crate::error::HistoryError::Unsupported(
+            "LayerStack removal",
+        ))
+    }
+
     /// Holds the Store's publication lane for the calling thread until the
     /// returned value is dropped: no other publication, in this process or
     /// another, can interleave with the caller's read of a head and its

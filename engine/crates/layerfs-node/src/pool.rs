@@ -8,7 +8,8 @@
 //! once. A connection whose exchange failed is quarantined by its `Control`
 //! and is closed rather than reused; the failed call is never sent again.
 //! When the daemon admits no more connections, the Sandbox keeps the ones it
-//! has and callers take turns on them. Opening a connection is not an attempt
+//! has and callers take turns on them, each waiting at most [`LEND_WAIT`]
+//! before it is refused `Busy`. Opening a connection is not an attempt
 //! of any operation: nothing is sent before the connection is ready.
 use crate::job::{failed, refused};
 use layerfs_api::internal::Control;
@@ -51,6 +52,13 @@ pub(crate) struct Dial {
 /// while other processes hold every admitted one (the same bound as the
 /// project's discovery lock).
 pub(crate) const ADMISSION_WAIT: Duration = Duration::from_secs(60);
+
+/// How long a call waits for one of this process's connections to come free
+/// once every one is lent (#508). Control replies have no deadline, so behind
+/// calls that never end an unbounded wait would last forever while holding
+/// the caller's discovery turn. The wait is readiness: nothing is attempted
+/// before it ends, and its `Busy` refusal is not retried.
+pub(crate) const LEND_WAIT: Duration = ADMISSION_WAIT;
 
 /// Whether a failed open is the daemon closing a connection it did not admit:
 /// the stream ended before the Hello reply. Through a port proxy the client
@@ -198,7 +206,22 @@ impl Controls {
                     }
                 }
             }
-            pool = self.freed.wait(pool).map_err(|_| poisoned())?;
+            let remaining = LEND_WAIT.saturating_sub(started.elapsed());
+            if remaining.is_zero() {
+                return Err(refused(
+                    "Busy",
+                    format!(
+                        "all {} of this process's connections to the Sandbox stayed in use for {}s; nothing was attempted",
+                        pool.open,
+                        LEND_WAIT.as_secs()
+                    ),
+                ));
+            }
+            pool = self
+                .freed
+                .wait_timeout(pool, remaining)
+                .map_err(|_| poisoned())?
+                .0;
         }
     }
 

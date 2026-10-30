@@ -90,7 +90,7 @@ What a mounted Workspace holds uncommitted.
 | `payload` | Uncommitted file bytes stored, including validity masks |
 | `metadataRows` | Inode, entry and operation-record rows together |
 | `metadata` | `null` (no exclusive byte attribution) |
-| `changes` | `{ added, modified, removed }` path counts |
+| `changes` | `null`: counting changed paths walks the whole base tree; page them with `list_changes` |
 
 ## `backend.daemon.workspace.list_changes(ws, pageSize?, pagePos?)`
 

@@ -77,8 +77,8 @@ class ProductBoundaryTests(unittest.TestCase):
     def test_persistence_seal_ffi_is_limited_to_the_authorized_module(self):
         base = Path("engine/crates/layerfs-persistence/src")
         ffi = "fn seal() { unsafe { file_control(); } }"
-        self.assertFalse(unsafe_violations(base / "backend/sqlite/file_control.rs", ffi))
-        for sibling in ["backend/sqlite/seal.rs", "store/seal.rs", "backend/sqlite/connection.rs"]:
+        self.assertFalse(unsafe_violations(base / "backend/sqlite/lifecycle/file_control.rs", ffi))
+        for sibling in ["backend/sqlite/lifecycle/seal.rs", "store/seal.rs", "backend/sqlite/session/connection.rs"]:
             self.assertTrue(unsafe_violations(base / sibling, ffi))
         self.assertFalse(unsafe_violations(base / "lib.rs", "#![deny(unsafe_code)]"))
         self.assertTrue(unsafe_violations(base / "lib.rs", "pub mod store;"))

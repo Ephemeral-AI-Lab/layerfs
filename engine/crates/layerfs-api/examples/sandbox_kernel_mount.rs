@@ -98,6 +98,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
             idle_exit_s: 0,
         },
         existing_store: None,
+        postgresql: None,
     }
 }
 type Running = (
@@ -197,7 +198,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             SandboxCreate {
                 deployment: SandboxRequest {
                     image: args[2].clone(),
-                    store_volume: args[3].clone(),
+                    store_volume: Some(args[3].clone()),
                     port: 30421,
                     labels: vec![],
                 },
