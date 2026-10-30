@@ -1,6 +1,6 @@
 // Removing a Store's volume: what uses it first. A running container (a
 // Sandbox) refuses Busy unless `stopSandboxes`; stopped containers left by
-// failed starts and idle Sandboxes go with it. Moved from project/remove.js
+// failed starts and idle Sandboxes go with it. Moved from project/delete.js
 // (#506), where it was a project's own volume. One attempt per step; a
 // failed step leaves the rest in place.
 import { LayerFSError } from "@layerfs/agent";

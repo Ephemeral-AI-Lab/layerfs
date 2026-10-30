@@ -2,7 +2,7 @@
 // entry (`<home>/<name>/project.record`); the runtime's own record,
 // `<stateDir>/projects/<name>.json` { name, volume, image?, source, created },
 // written by start_init, adds its volume. A project made elsewhere has no
-// record, so its volume is unknown here (project.remove then needs it named).
+// record, so its volume is unknown here (project.delete then needs it named).
 // Since #506 a Store may hold many projects: those of shared Stores are
 // listed from the home's stores.json (store/registry.js), with their Store.
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";

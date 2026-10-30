@@ -88,8 +88,8 @@ try {
   rmSync(big, { recursive: true });
 
   // remove names what it destroys
-  await assert.rejects(runtime.project.remove(name), { code: "InvalidInput" });
-  assert.deepEqual(await runtime.project.remove(name, { confirm: name }), { kind: "Removed", project: name, volume: listed.volume });
+  await assert.rejects(runtime.project.delete(name), { code: "InvalidInput" });
+  assert.deepEqual(await runtime.project.delete(name, { confirm: name }), { kind: "Deleted", project: name, volume: listed.volume });
   assert.equal((await runtime.project.list()).some((p) => p.name === name), false);
   assert.equal(existsSync(join(volumes, listed.volume)), false);
   console.log(`docker CLI calls (stubbed): ${docker.join(", ")}`);

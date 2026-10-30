@@ -1,4 +1,4 @@
-// runtime.project.remove(name, { store, confirm, stopSandboxes, volume, url }).
+// runtime.project.delete(name, { store, confirm, stopSandboxes, volume, url }).
 // Copied from the dsh Host's remove.js (#428); Store-first since #506.
 // `confirm` must equal the name; `store` names the project's Store when the
 // name is in several.
@@ -29,7 +29,7 @@ export async function forgetOwn(runtime, name) {
   dropRecord(runtime.settings, name);
 }
 
-export async function remove(runtime, name, options = {}) {
+export async function deleteProject(runtime, name, options = {}) {
   const { settings, platform } = runtime;
   if (typeof name !== "string" || !NAME.test(name)) throw refuse("InvalidInput", "a project name is required");
   if (options?.confirm !== name) throw refuse("InvalidInput", `confirm with the project's name, ${name}`);
@@ -45,7 +45,7 @@ export async function remove(runtime, name, options = {}) {
   await removeVolume(runtime, volume, options);
   await forgetOwn(runtime, name);
   if (entries(settings).some((s) => s.name === name)) drop(settings, name);
-  return { kind: "Removed", project: name, volume };
+  return { kind: "Deleted", project: name, volume };
 }
 
 /** Container states that run nothing. */
@@ -75,5 +75,5 @@ async function dropStack(runtime, project, options) {
   } else if (entries(settings).some((s) => s.name === store.name)) {
     update(settings, store.name, (s) => ({ ...s, projects: s.projects.filter((p) => p.name !== project.name) }));
   }
-  return { kind: "Removed", project: project.name, store: store.name, ...answer };
+  return { kind: "Deleted", project: project.name, store: store.name, ...answer };
 }

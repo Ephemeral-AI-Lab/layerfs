@@ -28,7 +28,7 @@ try {
   await runtime.volume.list();             // [{ name, size, containers, owner, project, live, removable }]
   await runtime.volume.remove(["layerfs-shop-store-k2"]); // { results: [{ name, ok, message? }] }
   for await (const event of runtime.events.subscribe({ project: "shop" })) { /* a trace line + actor */ }
-  await runtime.project.remove("shop", { confirm: "shop", stopSandboxes: false });
+  await runtime.project.delete("shop", { confirm: "shop", stopSandboxes: false });
 } finally {
   await runtime.close();
 }

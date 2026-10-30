@@ -11,7 +11,7 @@
 // attempt; destructive calls name what they destroy (`confirm`).
 import { invokeBackend } from "@layerfs/agent/internal";
 import { NAME } from "../project/list.js";
-import { forgetOwn } from "../project/remove.js";
+import { forgetOwn } from "../project/delete.js";
 import { callHome } from "../settings.js";
 import { all, drop, entries, named, put, refuse, storeFields, update } from "./registry.js";
 import { removeVolume } from "./volume.js";

@@ -305,16 +305,16 @@ async function run({ platform, bundle, image, home, prefix, work, svc }) {
     await runtime.store.remove("team-pg", { confirm: "team-pg" });
     const again = await runtime.store.attach_postgresql({ name: "team-pg2", connection: "pg-local", url: svc.url, schema: "lfc_team" });
     assert.deepEqual(again.projects.sort(), ["docs", "shop"]);
-    await runtime.project.remove("docs", { store: "team-pg2", confirm: "docs", url: svc.url });
+    await runtime.project.delete("docs", { store: "team-pg2", confirm: "docs", url: svc.url });
     assert.deepEqual((await runtime.store.list()).find((s) => s.name === "team-pg2").projects, ["shop"]);
 
     step("remove one project of a shared Store, and the project a Store was made by");
-    const removed = await runtime.project.remove("docs", { store: "team", confirm: "docs" });
+    const removed = await runtime.project.delete("docs", { store: "team", confirm: "docs" });
     assert.deepEqual([removed.kind, removed.store, removed.packsKept], ["Removed", "team", true]);
     assert.deepEqual((await runtime.store.list()).find((s) => s.name === "team").projects, ["shop"]);
     assert.deepEqual(await history("shop", "team"), team.shop, "the other project stays whole");
     await ended(await runtime.project.start_init("extra", folder(work, "extra", { "e.txt": "e\n" }), { store: "solo" }));
-    await runtime.project.remove("solo", { store: "solo", confirm: "solo" });
+    await runtime.project.delete("solo", { store: "solo", confirm: "solo" });
     const solo = (await runtime.store.list()).find((s) => s.name === "solo");
     assert.deepEqual([solo.legacy, solo.projects], [false, ["extra"]]);
     await use("extra", "solo", async (c) => assert.equal((await c.fs.read("main", "/e.txt")).text, "e\n"));

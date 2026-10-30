@@ -35,7 +35,7 @@ try {
     await assert.rejects(LayerFSRuntime.open({ home: "relative" }), { code: "InvalidInput" });
     const { runtime } = await opened((args) => (args[0] === "version" ? "27.0.1" : ""));
     const methods = (group) => Object.keys(group).sort();
-    assert.deepEqual(methods(runtime.project), ["get_init", "get_state", "list", "remove", "start_init"]);
+    assert.deepEqual(methods(runtime.project), ["delete", "get_init", "get_state", "list", "start_init"]);
     assert.deepEqual(methods(runtime.sandbox), ["clean_leftovers", "list", "list_leftovers", "reclaim", "sweep"]);
     assert.deepEqual(methods(runtime.volume), ["list", "remove"]);
     assert.deepEqual(methods(runtime.worker), ["restart", "start"]);
@@ -82,15 +82,15 @@ try {
     writeFileSync(join(home, ".runtime", "projects", "beta.json"), JSON.stringify({ name: "beta", volume: "layerfs-beta-store-1", source: "/src/beta", created: 1 }));
     assert.deepEqual((await runtime.project.list()).map(({ name, volume, initialized }) => [name, volume, initialized]), [["alpha", null, true], ["beta", "layerfs-beta-store-1", true]]);
     // remove names what it destroys
-    await assert.rejects(runtime.project.remove("beta"), { code: "InvalidInput", message: /confirm/ });
-    await assert.rejects(runtime.project.remove("alpha", { confirm: "alpha" }), { code: "InvalidInput", message: /volume/ });
-    await assert.rejects(runtime.project.remove("gamma", { confirm: "gamma", volume: "v" }), { code: "NoSuchProject" });
+    await assert.rejects(runtime.project.delete("beta"), { code: "InvalidInput", message: /confirm/ });
+    await assert.rejects(runtime.project.delete("alpha", { confirm: "alpha" }), { code: "InvalidInput", message: /volume/ });
+    await assert.rejects(runtime.project.delete("gamma", { confirm: "gamma", volume: "v" }), { code: "NoSuchProject" });
     // a running Sandbox on the volume refuses, unless asked to stop it
     running = "c1 running\nc2 exited";
-    await assert.rejects(runtime.project.remove("beta", { confirm: "beta" }), { code: "Busy" });
+    await assert.rejects(runtime.project.delete("beta", { confirm: "beta" }), { code: "Busy" });
     assert.ok(existsSync(join(home, "beta")), "a refused remove changes nothing");
     calls.length = 0;
-    assert.deepEqual(await runtime.project.remove("beta", { confirm: "beta", stopSandboxes: true }), { kind: "Removed", project: "beta", volume: "layerfs-beta-store-1" });
+    assert.deepEqual(await runtime.project.delete("beta", { confirm: "beta", stopSandboxes: true }), { kind: "Deleted", project: "beta", volume: "layerfs-beta-store-1" });
     assert.deepEqual(calls.slice(1), [["rm", "-f", "c1", "c2"], ["volume", "rm", "layerfs-beta-store-1"]]);
     assert.ok(!existsSync(join(home, "beta")));
     assert.deepEqual((await runtime.project.list()).map((p) => p.name), ["alpha"]);
@@ -669,16 +669,16 @@ try {
     assert.equal(nativeArgs("project.list_sandboxes").storePath, "postgresql:main");
     // removing one project of a shared Store drops its stack; the Store and its other projects stay
     sandboxRows = "layerfs-work.api-1\trunning\tUp 1 minute\tapi\t1\timg\twork\nlayerfs-work.shop-1\trunning\tUp\tshop\t1\timg\twork\n";
-    await assert.rejects(runtime.project.remove("api", { store: "work", confirm: "api" }), { code: "Busy", message: /1 running Sandbox/ });
+    await assert.rejects(runtime.project.delete("api", { store: "work", confirm: "api" }), { code: "Busy", message: /1 running Sandbox/ });
     sandboxRows = "layerfs-work.api-1\texited\tExited (0)\tapi\t1\timg\twork\n";
-    assert.deepEqual(await runtime.project.remove("api", { store: "work", confirm: "api" }), { kind: "Removed", project: "api", store: "work", stack: "5e", packsKept: true });
+    assert.deepEqual(await runtime.project.delete("api", { store: "work", confirm: "api" }), { kind: "Deleted", project: "api", store: "work", stack: "5e", packsKept: true });
     assert.equal(nativeArgs("runtime.store.remove_project").project, "api");
     assert.ok(calls.some((a) => a.join(" ") === "rm layerfs-work.api-1"), "its stopped Sandbox goes with it");
     sandboxRows = "";
     assert.deepEqual((await runtime.store.list()).find((s) => s.name === "work").projects, ["shop", "cart"]);
     // a PostgreSQL Store's project: the URL is passed for the call
-    await assert.rejects(runtime.project.remove("api", { store: "main", confirm: "api" }), { code: "InvalidInput", message: /url/ });
-    await runtime.project.remove("api", { store: "main", confirm: "api", url });
+    await assert.rejects(runtime.project.delete("api", { store: "main", confirm: "api" }), { code: "InvalidInput", message: /url/ });
+    await runtime.project.delete("api", { store: "main", confirm: "api", url });
     assert.equal(nativeArgs("runtime.store.remove_project").postgresql.url, url);
     // removing a Store names it, and takes its volume
     await assert.rejects(runtime.store.remove("copy"), { code: "InvalidInput", message: /confirm/ });

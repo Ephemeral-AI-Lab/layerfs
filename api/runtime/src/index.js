@@ -32,7 +32,7 @@ import { SyncJobs, progressOf } from "./store/sync.js";
 import { InitJobs } from "./project/jobs.js";
 import { prepare, runInit } from "./project/init.js";
 import { get_state } from "./project/state.js";
-import { remove } from "./project/remove.js";
+import { deleteProject } from "./project/delete.js";
 import { reclaim } from "./sandbox/reclaim.js";
 import { clean_leftovers, leftovers } from "./sandbox/leftovers.js";
 import { list as listSandboxes } from "./sandbox/list.js";
@@ -98,7 +98,7 @@ export class LayerFSRuntime {
         if (options?.view) return views.use(options.view, () => this.clients.use(views.project(options.view, name), (client) => get_state(client, since, { sandboxes: false })));
         return this.clients.use(await known(name, options?.store, options?.url), (client) => get_state(client, since));
       }),
-      remove: live((name, options) => remove(this, name, options)),
+      delete: live((name, options) => deleteProject(this, name, options)),
     };
     // #506 Store-first (doc section 6): a home holds many Stores, a Store many projects
     this.store = {
