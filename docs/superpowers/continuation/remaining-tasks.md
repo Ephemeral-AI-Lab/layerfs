@@ -1,16 +1,31 @@
-# Remaining tasks after finding 5 (2026-10-30, p1-p15 tip 20b44a0b)
+# Remaining tasks after finding 8 (2026-10-30, p1-p15 tip 9a4fb5b5f)
 
-## Retro follow-ups (report: `retro-p-perf-design.md`)
+## Retro follow-ups (report: `retro-p-perf-design.md`) — ALL DONE
 
-- [ ] Finding 6 — fs.read early-stop predicate (P8, medium).
-  Local scanner change, no contract change.
+- [x] Finding 6 — fs.read early-stop predicate (P8, medium).
+  Local scanner change, no contract change. Private PR #13
+  (7ff95b4e2, 3 files +151/-25, LOC 104700 -> 104739),
+  merged 2026-10-30 ~10:22 CST (merge 6c9111ec1).
   Brief: `brief-finding-6.md`.
-- [ ] Finding 7 — late line windows rescan from byte zero
+- [x] Finding 7 — late line windows rescan from byte zero
   (P8, medium). Additive `nextOffset` byte-cursor contract
-  change. DESIGN FIRST, then implement.
+  change. Design approved by commander, then implemented.
+  Private PR #14 (73f5398e1, 16 files +987/-56,
+  LOC 104739 -> 104896), merged 2026-10-30 (merge 7d18a1551).
+  NOTE: the independent fresh review session died on kimi
+  quota exhaustion (429, no verdict); the commander
+  self-reviewed the full diff against the approved design
+  and disclosed the substitution in the PR body. The reads
+  ratio in the scaling proof is vacuous (0 <= 0, traversal
+  bytes flow via range acquisition); bytes ratio + late-page
+  bound carry the proof.
   Brief: `brief-finding-7-design.md`.
-- [ ] Finding 8 — blame triple conversion (P8, low). Small
-  cleanup, no contract change. Brief: `brief-finding-8.md`.
+- [x] Finding 8 — blame triple conversion (P8, low). Small
+  cleanup, no contract change. Implemented directly by the
+  commander (kimi quota exhausted). Private PR #15
+  (c9950a6c, 1 file +13/-10, LOC 104896 -> 104899),
+  merged 2026-10-30 (merge 9a4fb5b5f).
+  Brief: `brief-finding-8.md`.
 
 ## P slices (parent: layerfs-connect#14, "each of Node, Python,
 ## CLI and MCP can mount, run a command, commit, read history,
@@ -62,7 +77,10 @@ Order after Ephemeral-AI-Lab/layerfs #505 merges:
 4. Finding 4 upstream PR (actual-size packing + mid-page
    resume).
 5. Finding 5 upstream PR (changed_paths keyset cursor).
-6. Later slices (6/7/8, P10–P15) as their own complete
+6. Finding 6 upstream PR (early-stop predicate).
+7. Finding 7 upstream PR (nextOffset byte cursor).
+8. Finding 8 upstream PR (single-conversion cleanup).
+9. Later slices (P10–P15) as their own complete
    batches, in landing order.
 
 Upstream commits carry NO Co-Authored-By trailer and a
