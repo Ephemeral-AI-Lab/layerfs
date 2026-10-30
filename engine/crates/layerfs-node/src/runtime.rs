@@ -15,6 +15,37 @@ pub(crate) const LOCAL: &str = "local";
 /// A native Sandbox record's `runtime` (LAYERFS_SANDBOX=native): a local
 /// daemon serving FUSE on Linux or loopback NFS on macOS.
 pub(crate) const NATIVE: &str = "native";
+/// A namespace Sandbox record's `runtime` (LAYERFS_SANDBOX_BACKEND=namespaces,
+/// Linux): a local daemon in its own mount, PID and IPC namespaces and cgroup.
+pub(crate) const NAMESPACES: &str = "namespaces";
+
+/// Which local backend a native deployment runs inside its Sandbox directory:
+/// the plain native one, or the Linux namespace one.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Backend {
+    Native,
+    Namespaces,
+}
+
+/// The local backend the deployment selects: `deploy.sandboxBackend`
+/// (LAYERFS_SANDBOX_BACKEND), `native` when unset. The namespace backend is
+/// Linux only; anywhere else selecting it is refused before any effect.
+pub(crate) fn backend(deploy: &SdkValue) -> Result<Backend, SdkRefusal> {
+    match deploy.get_text("sandboxBackend") {
+        None | Some(NATIVE) => Ok(Backend::Native),
+        Some(NAMESPACES) if cfg!(target_os = "linux") => Ok(Backend::Namespaces),
+        Some(NAMESPACES) => Err(refused(
+            "Unsupported",
+            "deploy.sandboxBackend (LAYERFS_SANDBOX_BACKEND) namespaces is Linux only; use native",
+        )),
+        Some(other) => Err(refused(
+            "InvalidInput",
+            format!(
+                "deploy.sandboxBackend (LAYERFS_SANDBOX_BACKEND) is native or namespaces, not {other}"
+            ),
+        )),
+    }
+}
 
 /// Whether the deployment selects a local daemon: `deploy.sandbox` unset or
 /// `docker` is Docker, `native` is a local daemon; anything else (the

@@ -26,7 +26,7 @@ mod groups;
 pub(crate) mod process;
 mod provider;
 mod sandbox;
-mod search;
+pub(crate) mod search;
 #[cfg(target_os = "linux")]
 pub(crate) use super::linux as platform;
 #[cfg(target_os = "macos")]

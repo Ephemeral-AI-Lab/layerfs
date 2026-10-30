@@ -7,4 +7,13 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-nix = { version = "=0.31.3", features = ["poll", "socket", "fs", "signal", "mount", "user"] }
+nix = { version = "=0.31.3", features = [
+    "poll",
+    "socket",
+    "fs",
+    "signal",
+    "mount",
+    "user",
+    "sched",
+    "process",
+] }

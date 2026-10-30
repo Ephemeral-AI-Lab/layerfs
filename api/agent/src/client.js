@@ -91,7 +91,9 @@ export function deployment(options = {}) {
 }
 
 /** A native Sandbox's settings: the daemon, the directory its Sandboxes
- * live in, and the optional name prefix. */
+ * live in, the optional name prefix, and the backend inside that directory
+ * (`sandboxBackend`, LAYERFS_SANDBOX_BACKEND: `native` when unset, or
+ * `namespaces` on Linux). */
 function nativeDeployment(options, env, sandbox) {
   const deploy = {
     sandbox,
@@ -99,6 +101,8 @@ function nativeDeployment(options, env, sandbox) {
     localDir: options.localDir ?? env("LOCAL_DIR"),
     containerPrefix: options.containerPrefix ?? env("CONTAINER_PREFIX"),
   };
+  const backend = options.sandboxBackend ?? env("SANDBOX_BACKEND");
+  if (backend !== undefined) deploy.sandboxBackend = backend;
   for (const [name, setting] of [["daemon", "DAEMON"], ["localDir", "LOCAL_DIR"]]) {
     if (!deploy[name]) throw new LayerFSError("InvalidInput", `deploy.${name} is not configured (LAYERFS_${setting})`, null);
   }

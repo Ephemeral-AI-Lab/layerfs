@@ -147,6 +147,7 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_DAEMON_HOST` | Optional. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |
 | `LAYERFS_SANDBOX` | Optional. Unset or `docker`: a Sandbox is a Docker container, exactly as described here. `native` (macOS only): a Sandbox is a daemon process of this user, with no container, no root and no Docker setting read; Workspaces are served over loopback NFS and mounted by this machine's own NFS client, and commands run as this user (see [Native Sandboxes](#native-sandboxes-macos)). Elsewhere `sandbox.create` refuses `native` as `Unsupported`. Any other value is refused as `InvalidInput` before anything is made. |
 | `LAYERFS_LOCAL_DIR` | With `LAYERFS_SANDBOX=native`, required: an existing absolute directory, owned by the running user, not group/other writable and traversable by others (0755). Each native Sandbox gets its own directory under it. |
+| `LAYERFS_SANDBOX_BACKEND` | With `LAYERFS_SANDBOX=native` on Linux, optional: `native` (unset) or `namespaces`. `namespaces` puts each Sandbox's daemon in its own mount, PID and IPC namespaces and its own cgroup v2 directory, and runs commands as the sandbox's uid:gid with no capabilities and no-new-privs; see [Namespace Sandboxes (Linux)](#namespace-sandboxes-linux). It needs root, cgroup v2, `/dev/fuse` and `user.max_user_namespaces=0`, and is refused `Unsupported` elsewhere or without them. Any other value is refused `InvalidInput` before anything is made. |
 | `LAYERFS_TRACE` | Optional per-call trace file (see [the call trace](backend.md#the-call-trace)); unset means no trace. |
 | `LAYERFS_TRACE_STEP` | Optional step label put on each trace line as `step`; read at every call. |
 | `LAYERFS_TRACE_START` | `1` adds a start line before each traced call; read at every call. |
@@ -307,6 +308,63 @@ itself.
 Limits: background processes still read `/proc` and are not available on
 macOS; many small writes cost about six times APFS's time; checked on Apple
 silicon with macOS 27.2.
+
+### Namespace Sandboxes (Linux)
+
+`LAYERFS_SANDBOX_BACKEND=namespaces` keeps the native deployment (no Docker, no
+image) and adds isolation inside the project's VM: each Sandbox's daemon runs
+in its own mount, PID and IPC namespaces and its own cgroup v2 directory
+(`/sys/fs/cgroup/layerfs/<Sandbox id>`), so two Sandboxes on one Store cannot
+see each other's mounts, processes or files, and closing one ends everything
+it started.
+
+It needs root (mount and PID namespaces, `/dev/fuse`), the unified cgroup v2
+hierarchy with `cgroup.kill`, and `user.max_user_namespaces=0`: without the
+last, a command could unshare a user namespace and keep its own copy of the
+Workspace mount, outside the daemon's unmount. The runtime never sets that
+limit; the VM's owner does (`sysctl -w user.max_user_namespaces=0`). A host
+that fails any of these is refused `Unsupported` before anything is made, and
+the message names the missing condition.
+
+Sandbox `n` lives where a native Sandbox does — `LAYERFS_LOCAL_DIR/<prefix><project>-<n>/`
+with `config/daemon.setup`, `overlay/`, `workspaces/<k>`, `tmp/` and
+`daemon.log` — plus `bin/layerfs-daemon` (the daemon executable, copied in
+0755) and its sibling `<prefix><project>-<n>.root/`, the private root its init
+stage mounts a tmpfs on and pivots to. The private root holds: the VM's own
+userland (`/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/etc`) bound read-only,
+so there is no image and no package restoration; a private `/proc` (only the
+Sandbox's processes), `/dev` (the basic devices, `/dev/fuse`, a private
+`devpts` and `shm`), `/tmp`; the Sandbox's own directory bound at its own path,
+so `config/`, `overlay/` and `workspaces/<k>` keep the same names on both
+sides; and the Store's directory bound read-write, so the daemon's SQLite WAL
+and the writers' directory lock see the same inode as every other opener on
+the kernel. The daemon listens on the VM's `127.0.0.1`, as a native one does,
+and `127.0.0.1:0` in its setup means the same thing.
+
+Commands run through `layerfs-sandbox-helper`, which is looked up at
+`LAYERFS_SANDBOX_HELPER` when set and otherwise beside the daemon executable.
+Each command enters the Sandbox's namespaces and runs as its uid:gid with no
+effective or permitted capabilities and no-new-privs; it cannot mount, cannot
+unmount the Workspace and cannot create a user namespace. A background process
+it leaves behind (even after `setsid`) is ended by the Sandbox's close, which
+is one `cgroup.kill` write followed by waiting for the group to be empty;
+Delete then removes the cgroup and the directory, so a closed Sandbox leaves no
+process, mount or cgroup behind. No graceful filesystem drain exists.
+
+A record's `runtime` is `namespaces`, with the same fields as a native record;
+it is used only by a client whose `LAYERFS_SANDBOX_BACKEND` is `namespaces`
+with the same `LAYERFS_LOCAL_DIR` and prefix. Another backend's record — and a
+`namespaces` record seen by a native deployment — is refused `InvalidInput`
+and nothing is deleted. Reopen checks the recorded init process (id, start
+time, boot) and its cgroup membership, so a reused id, or a process outside
+the Sandbox's cgroup, is never taken for it. Everything else above holds:
+numbered Sandboxes, up to 16 Workspaces each, one daemon per Sandbox, idle
+close after 2 minutes, reclaim, and `image` reported as `local`.
+
+Limits: the network namespace is shared with the VM, so a command can reach
+another Sandbox's daemon port on `127.0.0.1`; `/sys` is not mounted; the
+userland is the VM's, not a pinned image; and the private root's bind mounts
+are read-only at their top only, as this kernel's remount is not recursive.
 
 ### Exec output
 

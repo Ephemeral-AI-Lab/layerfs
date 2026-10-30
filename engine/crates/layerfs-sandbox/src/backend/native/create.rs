@@ -5,25 +5,20 @@ use super::{
     sandbox::{Sandbox, LOG},
     search::search_path,
 };
-use crate::{ContainerId, RuntimeError};
+use crate::backend::{identity, listener};
+use crate::RuntimeError;
 use nix::fcntl::OFlag;
 use std::{
     fs::{self, File, OpenOptions, Permissions},
-    io::{self, Read, Seek, SeekFrom, Write},
-    net::SocketAddr,
+    io::{self, Write},
     os::unix::{
         fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt},
         process::CommandExt,
     },
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
-    time::{Duration, Instant},
+    time::Duration,
 };
-
-/// The daemon's startup line; the address follows it.
-const MARKER: &[u8] = b"LAYERFS_DAEMON_LISTEN ";
-/// Pause between two reads of a starting daemon's output.
-const PAUSE: Duration = Duration::from_millis(10);
 
 /// A local runtime root: one directory per Sandbox under it.
 #[derive(Clone, Debug)]
@@ -206,7 +201,7 @@ impl Local {
             }
         })();
         checked.map_err(|cause| fail(LocalPhase::Validate, None, cause))?;
-        let id = identity().map_err(|cause| fail(LocalPhase::Validate, None, cause))?;
+        let id = identity::random().map_err(|cause| fail(LocalPhase::Validate, None, cause))?;
         // one create of the directory: a name another start holds fails here
         fs::DirBuilder::new()
             .mode(0o755)
@@ -249,7 +244,10 @@ impl Local {
             .child
             .get_mut()
             .unwrap_or_else(|error| error.into_inner()) = Some(child);
-        match listener(&sandbox, &paths.log, wait) {
+        match listener::await_listener(&paths.log, wait, &|| {
+            sandbox.reap();
+            sandbox.process.is_some_and(LocalProcess::alive)
+        }) {
             Ok(port) => {
                 sandbox.port = port;
                 Ok(sandbox)
@@ -257,19 +255,6 @@ impl Local {
             Err(cause) => Err(fail(LocalPhase::Listener, Some(sandbox), cause)),
         }
     }
-}
-
-/// A fresh random identity in the Engine's form (64 lowercase hex, not all
-/// zero), so records and names treat a local Sandbox like a container.
-fn identity() -> Result<ContainerId, RuntimeError> {
-    let mut bytes = [0u8; 32];
-    File::open("/dev/urandom")?.read_exact(&mut bytes)?;
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let text: String = (bytes.iter())
-        .flat_map(|b| [HEX[usize::from(b >> 4)], HEX[usize::from(b & 15)]])
-        .map(char::from)
-        .collect();
-    ContainerId::parse(&text)
 }
 
 /// The setup and overlay directories (0700), the scratch directory (1777),
@@ -296,52 +281,4 @@ fn prepare(paths: &LocalPaths, config: &[u8]) -> io::Result<File> {
     };
     private(&paths.config)?.write_all(config)?;
     private(&paths.log)
-}
-
-/// Waits until the daemon's output names its loopback address, the daemon
-/// exits, or `wait` ends. Each look reads only what was appended since.
-fn listener(sandbox: &Sandbox, log: &Path, wait: Duration) -> Result<u16, RuntimeError> {
-    let deadline = Instant::now() + wait;
-    let mut file = File::open(log)?;
-    let mut offset = 0u64;
-    let mut line = Vec::new();
-    let mut chunk = [0u8; 4096];
-    loop {
-        file.seek(SeekFrom::Start(offset))?;
-        loop {
-            let n = file.read(&mut chunk)?;
-            if n == 0 {
-                break;
-            }
-            offset += n as u64;
-            for &byte in &chunk[..n] {
-                if byte != b'\n' {
-                    // a startup line is short; a longer one is not the marker
-                    if line.len() < 256 {
-                        line.push(byte);
-                    }
-                    continue;
-                }
-                if let Some(address) = line.strip_prefix(MARKER) {
-                    let address = std::str::from_utf8(address)
-                        .ok()
-                        .and_then(|text| text.parse::<SocketAddr>().ok())
-                        .filter(|a| a.ip().is_loopback() && a.port() != 0)
-                        .ok_or(RuntimeError::Protocol("local daemon loopback listener"))?;
-                    return Ok(address.port());
-                }
-                line.clear();
-            }
-        }
-        sandbox.reap();
-        if !sandbox.process.is_some_and(LocalProcess::alive) {
-            return Err(RuntimeError::Protocol(
-                "local daemon exited before its listener line",
-            ));
-        }
-        if Instant::now() >= deadline {
-            return Err(io::Error::from(io::ErrorKind::TimedOut).into());
-        }
-        std::thread::sleep(PAUSE);
-    }
 }

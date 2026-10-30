@@ -47,7 +47,8 @@ pub(crate) fn start(
             "deploy.localDir is not configured (LAYERFS_LOCAL_DIR); a native Sandbox needs it",
         )
     })?;
-    let runtime = native_runtime(root)
+    let backend = crate::runtime::backend(deploy)?;
+    let runtime = native_runtime(root, backend)
         .map_err(|error| refused("InvalidInput", format!("LAYERFS_LOCAL_DIR {root}: {error}")))?;
     let executable = PathBuf::from(text(deploy, "daemon")?);
     let store = match args.get_text("storePath") {
@@ -70,7 +71,7 @@ pub(crate) fn start(
         &saved_directory,
         &id,
         project,
-        (runtime, executable, store),
+        (runtime, backend, executable, store),
     );
     if made.is_err() {
         let _ = std::fs::remove_dir(&saved_directory);
@@ -86,7 +87,7 @@ fn start_claimed(
     saved_directory: &Path,
     id: &str,
     (project, installed): (&crate::registry::Project, StoreManifest),
-    (runtime, executable, store): (Runtime, PathBuf, String),
+    (runtime, backend, executable, store): (Runtime, crate::runtime::Backend, PathBuf, String),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
     let sandbox_name = sandbox_name(args, id)?;
@@ -125,6 +126,7 @@ fn start_claimed(
     )?;
     let labels = crate::sandbox::labels(name, id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
+    let options = launch_options(backend, identity, &setup.store);
     let mut manifest = project.manifest.clone();
     manifest.locator = setup.store.clone();
     let created = api
@@ -136,10 +138,7 @@ fn start_claimed(
                     daemon_config: Vec::new(),
                     labels,
                     startup_timeout: crate::sandbox::STARTUP,
-                    options: ProviderLaunchOptions::Local {
-                        command_identity: identity,
-                        environment: native_environment(),
-                    },
+                    options,
                 },
                 setup,
                 controller_private: controller.private,
@@ -231,20 +230,71 @@ fn start_claimed(
 /// this user, or Linux FUSE with a root daemon. The other platform's
 /// provider, and another OS, is refused before root access.
 #[cfg(target_os = "macos")]
-fn native_runtime(root: &str) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
+fn native_runtime(
+    root: &str,
+    _: crate::runtime::Backend,
+) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
     layerfs_sandbox::backend::native::NativeMacosProvider::new(root).map(Runtime::MacosNative)
 }
 
 #[cfg(target_os = "linux")]
-fn native_runtime(root: &str) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
-    layerfs_sandbox::backend::native::NativeLinuxProvider::new(root).map(Runtime::LinuxNative)
+fn native_runtime(
+    root: &str,
+    backend: crate::runtime::Backend,
+) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
+    match backend {
+        crate::runtime::Backend::Native => {
+            layerfs_sandbox::backend::native::NativeLinuxProvider::new(root)
+                .map(Runtime::LinuxNative)
+        }
+        crate::runtime::Backend::Namespaces => {
+            layerfs_sandbox::backend::namespaces::NamespaceProvider::new(root)
+                .map(Runtime::Namespaces)
+        }
+    }
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-fn native_runtime(_: &str) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
+fn native_runtime(
+    _: &str,
+    _: crate::runtime::Backend,
+) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
     Err(layerfs_sandbox::RuntimeError::Unsupported(
         "native Sandbox runtime platform",
     ))
+}
+
+/// How the daemon of `backend` is launched: the same local options, and for
+/// the namespace backend the Store file its private root binds.
+#[cfg(target_os = "linux")]
+fn launch_options(
+    backend: crate::runtime::Backend,
+    identity: CommandIdentity,
+    store: &str,
+) -> ProviderLaunchOptions {
+    match backend {
+        crate::runtime::Backend::Native => ProviderLaunchOptions::Local {
+            command_identity: identity,
+            environment: native_environment(),
+        },
+        crate::runtime::Backend::Namespaces => ProviderLaunchOptions::Namespaces {
+            command_identity: identity,
+            environment: native_environment(),
+            store: PathBuf::from(store),
+        },
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn launch_options(
+    _: crate::runtime::Backend,
+    identity: CommandIdentity,
+    _: &str,
+) -> ProviderLaunchOptions {
+    ProviderLaunchOptions::Local {
+        command_identity: identity,
+        environment: native_environment(),
+    }
 }
 
 /// What a native Sandbox's daemon starts with besides `PATH`: the NFS

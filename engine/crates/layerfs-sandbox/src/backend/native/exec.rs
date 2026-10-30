@@ -5,10 +5,11 @@
 //! the Sandbox until it is empty, so what it leaves running ends with the
 //! Sandbox.
 use super::{groups, process, process::LocalProcess, sandbox::Sandbox, search::search_path};
+use crate::backend::streams;
 use crate::{ExecRequest, RuntimeError, WireFailure};
 use nix::sys::signal::{killpg, Signal};
 use std::{
-    io::{self, Read, Write},
+    io::{self, Write},
     os::unix::process::{CommandExt, ExitStatusExt},
     path::Path,
     process::{Command, Stdio},
@@ -83,8 +84,8 @@ impl Sandbox {
         let out = child.stdout.take();
         let err = child.stderr.take();
         let copied = std::thread::scope(|scope| {
-            let errors = scope.spawn(move || copy(err, stderr));
-            let outs = copy(out, stdout);
+            let errors = scope.spawn(move || streams::copy(err, stderr));
+            let outs = streams::copy(out, stdout);
             let errs = errors
                 .join()
                 .unwrap_or_else(|_| Err(io::Error::other("stderr copy panicked")));
@@ -129,23 +130,4 @@ fn check(request: &ExecRequest) -> Result<(), RuntimeError> {
         return Err(RuntimeError::Unsupported("local command standard input"));
     }
     Ok(())
-}
-
-/// Copies one stream to its sink until end of stream; the bytes delivered.
-fn copy(source: Option<impl Read>, sink: &mut (dyn Write + Send)) -> io::Result<u64> {
-    let Some(mut source) = source else {
-        return Ok(0);
-    };
-    let mut total = 0u64;
-    let mut window = [0u8; 8192];
-    loop {
-        let n = match source.read(&mut window) {
-            Ok(0) => return Ok(total),
-            Ok(n) => n,
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-            Err(error) => return Err(error),
-        };
-        sink.write_all(&window[..n])?;
-        total = total.saturating_add(n as u64);
-    }
 }

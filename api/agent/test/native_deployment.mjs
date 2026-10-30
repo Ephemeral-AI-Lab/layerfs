@@ -50,6 +50,13 @@ process.env.LAYERFS_LOCAL_DIR = "/Users/me/lfs";
 assert.deepEqual(deployment(), { sandbox: "native", daemon: "/opt/layerfs-daemon", localDir: "/Users/me/lfs" });
 // an image (sandbox.create's option) does not change a native deployment
 assert.deepEqual(deployment({ image: docker.image }), { sandbox: "native", daemon: "/opt/layerfs-daemon", localDir: "/Users/me/lfs" });
+// the backend inside the directory is native unless named; namespaces is
+// passed through (the binding refuses it off Linux, and an unknown value)
+assert.equal(deployment().sandboxBackend, undefined);
+process.env.LAYERFS_SANDBOX_BACKEND = "namespaces";
+assert.equal(deployment().sandboxBackend, "namespaces");
+assert.equal(deployment({ sandboxBackend: "native" }).sandboxBackend, "native");
+delete process.env.LAYERFS_SANDBOX_BACKEND;
 // the container prefix names native Sandbox directories too
 process.env.LAYERFS_CONTAINER_PREFIX = "ci-";
 assert.equal(deployment().containerPrefix, "ci-");

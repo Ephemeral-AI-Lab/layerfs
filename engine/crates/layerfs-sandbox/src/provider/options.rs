@@ -27,6 +27,15 @@ pub enum ProviderLaunchOptions {
         command_identity: CommandIdentity,
         environment: Vec<(String, String)>,
     },
+    /// The Linux namespace backend: a namespaced daemon plus the Store file it
+    /// opens. `store` is the exact file; its directory is what the Sandbox's
+    /// private root binds, so SQLite's WAL and the writers' directory lock see
+    /// the same inode as every other opener on this kernel.
+    Namespaces {
+        command_identity: CommandIdentity,
+        environment: Vec<(String, String)>,
+        store: PathBuf,
+    },
     Docker {
         image: String,
         store_volume: String,
@@ -56,12 +65,23 @@ pub struct DockerRecord {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SandboxRecord {
     Local(LocalRecord),
+    /// A namespaced Linux Sandbox; the physical facts kept are the same as a
+    /// local one (its directory name, init process identity and listener port).
+    /// The variant itself names the backend, so a record is never reopened by
+    /// another one.
+    Namespaces(LocalRecord),
     Docker(DockerRecord),
 }
 impl SandboxRecord {
     pub fn local(&self) -> Option<&LocalRecord> {
         match self {
             Self::Local(record) => Some(record),
+            _ => None,
+        }
+    }
+    pub fn namespaces(&self) -> Option<&LocalRecord> {
+        match self {
+            Self::Namespaces(record) => Some(record),
             _ => None,
         }
     }

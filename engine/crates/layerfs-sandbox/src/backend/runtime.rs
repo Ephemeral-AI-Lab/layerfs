@@ -2,6 +2,8 @@
 //! choice, and [`Sandbox`] is the launched owner over it. There is no provider
 //! trait; each backend is a concrete type and dispatch is a `match` here.
 use super::docker::{self, DockerProvider};
+#[cfg(target_os = "linux")]
+use super::namespaces::{self, NamespaceProvider};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use super::native::{self, NativeLinuxProvider, NativeMacosProvider};
 use crate::provider::{
@@ -29,6 +31,10 @@ pub enum Runtime {
     /// identity (Linux).
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     LinuxNative(NativeLinuxProvider),
+    /// A root daemon in its own mount, PID and IPC namespaces and cgroup,
+    /// commands entering them as a nonroot identity (Linux).
+    #[cfg(target_os = "linux")]
+    Namespaces(NamespaceProvider),
     /// Placeholder: selecting Windows refuses before any effect.
     Windows,
 }
@@ -41,6 +47,8 @@ impl Runtime {
             Self::MacosNative(provider) => Ok(provider.capabilities()),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::LinuxNative(provider) => Ok(provider.capabilities()),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(provider) => Ok(provider.capabilities()),
             Self::Windows => Err(RuntimeError::Unsupported(WINDOWS)),
         }
     }
@@ -54,6 +62,8 @@ impl Runtime {
             Self::MacosNative(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::LinuxNative(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
             Self::Windows => Err(RuntimeError::Unsupported(WINDOWS)),
         }
     }
@@ -64,6 +74,8 @@ impl Runtime {
         match self {
             Self::MacosNative(provider) => provider.paths(name),
             Self::LinuxNative(provider) => provider.paths(name),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(provider) => provider.paths(name),
             Self::Docker(_) | Self::Windows => Err(RuntimeError::Unsupported(
                 "native Sandbox paths need a native runtime",
             )),
@@ -78,6 +90,10 @@ impl Runtime {
             Self::MacosNative(provider) => provider.launch(request).map(Sandbox::Native),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::LinuxNative(provider) => provider.launch(request).map(Sandbox::Native),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(provider) => provider
+                .launch(request)
+                .map(|sandbox| Sandbox::Namespaces(Box::new(sandbox))),
             Self::Windows => Err(Box::new(LaunchFailure {
                 phase: crate::provider::LaunchPhase::Validate,
                 instance: None,
@@ -98,6 +114,10 @@ impl Runtime {
             Self::MacosNative(provider) => provider.reopen(id, record).map(Sandbox::Native),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::LinuxNative(provider) => provider.reopen(id, record).map(Sandbox::Native),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(provider) => provider
+                .reopen(id, record)
+                .map(|sandbox| Sandbox::Namespaces(Box::new(sandbox))),
             Self::Windows => Err(WireFailure::local(RuntimeError::Unsupported(WINDOWS))),
         }
     }
@@ -114,6 +134,10 @@ impl Runtime {
             Self::MacosNative(provider) => provider.reopen_stopped(id, record).map(Sandbox::Native),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::LinuxNative(provider) => provider.reopen_stopped(id, record).map(Sandbox::Native),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(provider) => provider
+                .reopen_stopped(id, record)
+                .map(|sandbox| Sandbox::Namespaces(Box::new(sandbox))),
             Self::Windows => Err(WireFailure::local(RuntimeError::Unsupported(WINDOWS))),
         }
     }
@@ -125,6 +149,8 @@ pub enum Sandbox {
     Docker(docker::Sandbox),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     Native(native::Sandbox),
+    #[cfg(target_os = "linux")]
+    Namespaces(Box<namespaces::Sandbox>),
 }
 
 impl Sandbox {
@@ -133,6 +159,8 @@ impl Sandbox {
             Self::Docker(sandbox) => sandbox.identity(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Native(sandbox) => sandbox.identity(),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(sandbox) => sandbox.identity(),
         }
     }
 
@@ -141,6 +169,8 @@ impl Sandbox {
             Self::Docker(sandbox) => sandbox.endpoint(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Native(sandbox) => sandbox.endpoint(),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(sandbox) => sandbox.endpoint(),
         }
     }
 
@@ -163,6 +193,8 @@ impl Sandbox {
                     stderr_bytes: exit.stderr,
                 })
             }
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(sandbox) => sandbox.run(request, stdout, stderr),
         }
     }
 
@@ -174,6 +206,10 @@ impl Sandbox {
             Self::Docker(_) => Ok(()),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Native(sandbox) => sandbox.track(pid, start_time),
+            // its cgroup owns every process the Sandbox started, whatever
+            // session it left, so nothing needs naming
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(sandbox) => sandbox.track(pid, start_time),
         }
     }
 
@@ -182,6 +218,8 @@ impl Sandbox {
             Self::Docker(sandbox) => sandbox.log_tail(lines, cap),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Native(sandbox) => sandbox.log_tail(lines, cap),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(sandbox) => sandbox.log_tail(lines, cap),
         }
     }
 
@@ -199,6 +237,17 @@ impl Sandbox {
                     scratch_bytes: None,
                 })
             }
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(sandbox) => {
+                sandbox.reap();
+                Ok(SandboxInspection {
+                    identity: sandbox.identity(),
+                    running: sandbox.process().is_some_and(|p| p.alive()),
+                    exit_code: None,
+                    process_id: sandbox.process().map(|p| p.pid),
+                    scratch_bytes: None,
+                })
+            }
         }
     }
 
@@ -207,6 +256,8 @@ impl Sandbox {
             Self::Docker(sandbox) => sandbox.stop(timeout_seconds),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Native(sandbox) => sandbox.stop(timeout_seconds),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(sandbox) => sandbox.stop(timeout_seconds),
         }
     }
 
@@ -215,6 +266,8 @@ impl Sandbox {
             Self::Docker(sandbox) => sandbox.delete(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Native(sandbox) => sandbox.delete(),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(sandbox) => sandbox.delete(),
         }
     }
 
@@ -225,6 +278,8 @@ impl Sandbox {
             Self::Docker(_) => "/tmp".into(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Native(sandbox) => sandbox.tmp().display().to_string(),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(sandbox) => sandbox.tmp().display().to_string(),
         }
     }
 
@@ -234,6 +289,8 @@ impl Sandbox {
             Self::Docker(_) => None,
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Native(sandbox) => sandbox.local_record(),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(_) => None,
         }
     }
 
@@ -243,6 +300,8 @@ impl Sandbox {
             Self::Docker(sandbox) => Some(SandboxRecord::Docker(sandbox.request().clone().into())),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Native(_) => self.local_record().map(SandboxRecord::Local),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(sandbox) => sandbox.record(),
         }
     }
 }

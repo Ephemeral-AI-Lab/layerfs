@@ -140,10 +140,16 @@ impl SandboxApi {
             }
             let mut launch = request.launch.clone();
             launch.daemon_config = request.setup.encode().map_err(SandboxCause::Setup)?;
-            if let ProviderLaunchOptions::Local {
-                command_identity, ..
-            } = &launch.options
-            {
+            let local_identity = match &launch.options {
+                ProviderLaunchOptions::Local {
+                    command_identity, ..
+                }
+                | ProviderLaunchOptions::Namespaces {
+                    command_identity, ..
+                } => Some(command_identity),
+                ProviderLaunchOptions::Docker { .. } => None,
+            };
+            if let Some(command_identity) = local_identity {
                 if (command_identity.uid, command_identity.gid)
                     != (request.setup.command_uid, request.setup.command_gid)
                 {
@@ -250,10 +256,16 @@ impl SandboxApi {
             }
             let mut launch = request.launch.clone();
             launch.daemon_config = request.setup.encode().map_err(SandboxCause::Setup)?;
-            if let ProviderLaunchOptions::Local {
-                command_identity, ..
-            } = &launch.options
-            {
+            let local_identity = match &launch.options {
+                ProviderLaunchOptions::Local {
+                    command_identity, ..
+                }
+                | ProviderLaunchOptions::Namespaces {
+                    command_identity, ..
+                } => Some(command_identity),
+                ProviderLaunchOptions::Docker { .. } => None,
+            };
+            if let Some(command_identity) = local_identity {
                 if (command_identity.uid, command_identity.gid)
                     != (request.setup.command_uid, request.setup.command_gid)
                 {
