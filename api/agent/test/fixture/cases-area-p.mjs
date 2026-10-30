@@ -131,6 +131,7 @@ const changedResult = (commit) => ({
   items: [{ path: "/changed.txt", kind: "Modified", type: "file", before: { type: "file", inode: 7 }, after: { type: "file", inode: 7 }, content: true, identity: false, metadata: false, hunks: null, hunksOmitted: false }],
   hasMore: false,
   nextPagePos: null,
+  nextCursor: null,
 });
 
 export const P1_CASES = [
@@ -148,6 +149,14 @@ export const P1_CASES = [
     sdk: (lf) => lf.branch.changed_paths("c0ffee", 5),
     op: "branch.changed_paths",
     sent: { commit: "c0ffee", pageSize: 5, pagePos: 0 },
+    result: changedResult("c0ffee"),
+  },
+  {
+    name: "P1 branch changed_paths cursor",
+    argv: ["branch", "changed_paths", "c0ffee", "--page-size", "5", "--cursor", "/changed.txt"],
+    sdk: (lf) => lf.branch.changed_paths("c0ffee", 5, 0, { cursor: "/changed.txt" }),
+    op: "branch.changed_paths",
+    sent: { commit: "c0ffee", pageSize: 5, pagePos: 0, cursor: "/changed.txt" },
     result: changedResult("c0ffee"),
   },
 ];
