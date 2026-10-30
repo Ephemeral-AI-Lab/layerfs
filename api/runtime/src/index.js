@@ -6,8 +6,7 @@
 //   try { await runtime.status(); } finally { await runtime.close(); }
 // A home holds many Stores and a Store many projects (#506): runtime.store,
 // runtime.remote, runtime.sync and runtime.postgresql are the Store-level calls of
-// core/docs/issues/506/README.md section 6; runtime.remote.open_view opens a
-// read-only view of a Store file on a remote, read in place (#510).
+// core/docs/issues/506/README.md section 6.
 // Destructive calls name what they destroy (`confirm`); every call is one
 // attempt; an uncertain outcome keeps what exists and reports Unknown.
 //
@@ -39,7 +38,6 @@ import { list as listSandboxes } from "./sandbox/list.js";
 import { sweep } from "./sandbox/sweep.js";
 import { list as listVolumes, remove as removeVolumes } from "./volume.js";
 import { subscribe } from "./events/subscribe.js";
-import { Views } from "./remote/views.js";
 
 const PLATFORMS = { linux, macos, windows };
 /** Held only by `open`: the constructor refuses without it. */
@@ -63,7 +61,6 @@ export class LayerFSRuntime {
     const endpoint = this.platform.endpoint(settings);
     if (endpoint) useWorker(endpoint);
     this.clients = new Clients(this);
-    const views = (this.views = new Views(this));
     const jobs = new InitJobs((prepared, report) => runInit(this, prepared, report));
     const live = (method) => async (...args) => {
       if (this.closed) throw new LayerFSError("InvalidInput", "this LayerFS runtime is closed; open another with LayerFSRuntime.open", null);
@@ -90,14 +87,10 @@ export class LayerFSRuntime {
       }),
     };
     this.project = {
-      // #510: { view } lists a remote view's projects instead of the home's
-      list: live((options) => (options?.view ? views.projects(options.view) : list(this))),
+      list: live(() => list(this)),
       start_init: live(async (name, folder, options) => jobs.begin(await prepare(this, name, folder, options, jobs.pending()))),
       get_init: live(async (job) => jobs.get(job?.id ?? job)),
-      get_state: live(async (name, since, options) => {
-        if (options?.view) return views.use(options.view, () => this.clients.use(views.project(options.view, name), (client) => get_state(client, since, { sandboxes: false })));
-        return this.clients.use(await known(name, options?.store, options?.url), (client) => get_state(client, since));
-      }),
+      get_state: live(async (name, since, options) => this.clients.use(await known(name, options?.store, options?.url), (client) => get_state(client, since))),
       delete: live((name, options) => deleteProject(this, name, options)),
     };
     // #506 Store-first (doc section 6): a home holds many Stores, a Store many projects
@@ -122,10 +115,6 @@ export class LayerFSRuntime {
       remove: live((name, options) => stores.removeRemote(this, name, options)),
       list_stores: live((remote, options) => stores.listStores(this, remote, options)),
       providers: live(() => stores.providers(this)),
-      // #510: live read-only views of a remote Store file
-      open_view: live((remote, options) => views.open(remote, options)),
-      close_view: live((view) => views.close(view)),
-      view_stats: live((view) => views.stats(view)),
     };
     this.postgresql = { status: live((options) => stores.postgresqlStatus(this, options)) };
     this.sync = { get: live((job) => syncs.get(job, progressOf(this))) };
@@ -163,7 +152,6 @@ export class LayerFSRuntime {
     if (this.closed) return;
     await this.sweeping;
     this.closed = true;
-    await this.views.closeAll();
     await this.clients.closeAll();
     await this.platform.close?.(this.settings);
   }

@@ -3,7 +3,6 @@
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 mod backend;
-pub mod remote;
 mod storage;
 mod store;
 pub(crate) use store::config;

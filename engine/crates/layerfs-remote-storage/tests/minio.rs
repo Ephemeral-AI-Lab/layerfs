@@ -11,7 +11,7 @@ use layerfs_remote_storage::minio::{self, MinioSettings};
 use layerfs_remote_storage::pieces;
 use layerfs_remote_storage::s3_api::{part_size, S3Client, S3Config, MAX_PARTS, MIN_PART};
 use layerfs_remote_storage::{
-    CredentialRef, Driver, Limits, Metadata, PinnedFile, RemoteError, Span,
+    CredentialRef, Driver, Limits, Metadata, RemoteError, Span,
 };
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
@@ -511,48 +511,4 @@ fn listing_and_last_modified() {
         .collect();
     assert_eq!(b, ["b/note", "b/store.sqlite"]);
     assert!(remote.list("c/").unwrap().is_empty());
-}
-
-/// Sequential 1 MiB ranged reads through a [`PinnedFile`], as a live view
-/// makes them, on the client's kept connections (#510).
-/// `LAYERFS_TEST_RANGED_READS` reads (default 16) of a 32 MiB file; prints
-/// requests, bytes, failures and wall time, then deletes the file. A failed
-/// read is counted, never sent again; the next read is a different range.
-#[test]
-#[ignore = "needs MinIO: tests/minio_service.sh"]
-fn ranged_reads_through_a_pinned_file() {
-    let settings = settings("ranged");
-    let remote = client(&settings);
-    let root = scratch("ranged");
-    let data = bytes(32 * MIB, 3);
-    fs::write(root.join("file"), &data).unwrap();
-    remote
-        .upload_file("store.sqlite", &root.join("file"), None, &Metadata::new())
-        .unwrap();
-    let reads: u64 = std::env::var("LAYERFS_TEST_RANGED_READS")
-        .map_or(16, |n| n.parse().expect("LAYERFS_TEST_RANGED_READS"));
-    let start = std::time::Instant::now();
-    let pinned = PinnedFile::open(Box::new(client(&settings)), "store.sqlite").unwrap();
-    let mut failures = Vec::new();
-    let mut out = vec![0; MIB as usize];
-    for read in 0..reads {
-        let offset = (read * 7919 * 4096) % (31 * MIB);
-        match pinned.read(offset, &mut out) {
-            Ok(()) => assert!(out[..] == data[offset as usize..(offset + MIB) as usize]),
-            Err(error) => failures.push(format!("read {read} at {offset}: {error}")),
-        }
-    }
-    let wall = start.elapsed();
-    println!(
-        "ranged reads {reads}: requests {} (the open's included), bytes {}, failures {}, wall {} ms",
-        pinned.requests(),
-        pinned.fetched(),
-        failures.len(),
-        wall.as_millis()
-    );
-    for failure in &failures {
-        println!("{failure}");
-    }
-    remote.delete("store.sqlite").unwrap();
-    assert!(failures.is_empty());
 }

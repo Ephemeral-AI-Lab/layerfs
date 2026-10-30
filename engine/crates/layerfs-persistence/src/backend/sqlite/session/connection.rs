@@ -155,7 +155,6 @@ impl Session {
         selected: SqlitePersistenceProfile,
         creation_layout: crate::SqlitePackLayout,
         creation_acquisition: crate::SqliteAcquisitionSchema,
-        remote: Option<&crate::remote::RemoteFile>,
     ) -> Result<Self, BackendError> {
         if !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(BackendError::Integrity);
@@ -165,20 +164,7 @@ impl Session {
         } else {
             OpenFlags::SQLITE_OPEN_READ_ONLY
         } | OpenFlags::SQLITE_OPEN_NO_MUTEX;
-        let connection = match remote {
-            None => Connection::open_with_flags(path, flags),
-            // #510: read-only and immutable through the remote reader's VFS
-            Some(file) if !writable && !create => {
-                crate::remote::ensure_vfs().map_err(|_| BackendError::Unknown)?;
-                Connection::open_with_flags_and_vfs(
-                    format!("file:{}?immutable=1", file.name()),
-                    flags | OpenFlags::SQLITE_OPEN_URI,
-                    crate::remote::VFS_NAME,
-                )
-            }
-            Some(_) => return Err(BackendError::ReadOnly),
-        }
-        .map_err(rows::error)?;
+        let connection = Connection::open_with_flags(path, flags).map_err(rows::error)?;
         connection.set_prepared_statement_cache_capacity(64);
         connection
             .busy_timeout(std::time::Duration::ZERO)
@@ -187,14 +173,7 @@ impl Session {
         connection
             .set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
             .map_err(rows::error)?;
-        profile::apply(
-            &connection,
-            create,
-            selected,
-            creation_acquisition,
-            remote.is_some(),
-            &work,
-        )?;
+        profile::apply(&connection, create, selected, creation_acquisition, &work)?;
         let (layout, acquisition) = if create {
             (creation_layout, creation_acquisition)
         } else {
@@ -238,11 +217,7 @@ impl Session {
             identity: selected.identity(),
             sqlite_version: rusqlite::version().to_owned(),
             platform: std::env::consts::OS,
-            vfs_selection: if remote.is_some() {
-                profile::REMOTE_VFS
-            } else {
-                "SQLite default; name not directly observed"
-            },
+            vfs_selection: "SQLite default; name not directly observed",
             compile_options,
             journal_mode,
             synchronous: integer("synchronous")?,

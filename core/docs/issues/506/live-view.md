@@ -1,19 +1,14 @@
 # #506 Live view of a Store in S3: implementation spec
 
-> **Status:** Owner-approved direction (2026-10-30); A–D implemented on PR #507
-> (`26eb1b975d`–`59eb6ef8bf`), E in Connect's working tree. Narrowed by the
-> owner (2026-10-30, `63ced40427`): a view reads the tree, sizes and history,
-> never file contents; content reads (read, grep, blame, diffs) are refused
-> `Unsupported`. On `r2-examples-clone` via MinIO, History costs 4 GETs and the
-> run 7.26% of the file, but the root folder listing costs 20 GETs (each inode
-> lookup misses in a different place and reads 1 MiB ahead). R2 stopped twice
-> on a cut reply body (`Unknown`); the cause was the client's
-> `Connection: close`, and the S3 client now keeps connections alive instead
-> (§4.2 Transport, `7ab54bcf1a`); a cold R2 view after it completed with no
-> failure (History 4 GETs; root folder +20, one file's revisions +20; 11.39%
-> of the file). See the #510 comments. Builds on
-> [one link per Store](links.md) (#509). The Connect part is in Connect's own
-> repository, `docs/ui/storage-links.md` §8.
+> **Status:** Retired by the owner (2026-10-30): the live view is removed.
+> Parts B (in-place reads), C and D (`remote:` Store paths and view calls)
+> and E (Connect Browse) were implemented on PR #507 (`cb968f9cda`–
+> `ea2b495aae`), measured, and then removed because folder and revision
+> reads stayed too slow on R2 (about 7 s each on a 250 MB file; see the #510
+> comments). Two parts stay: A, the push snapshot through `VACUUM INTO`
+> (`26eb1b975d`), and the S3 client's kept-alive connections (`7ab54bcf1a`,
+> §4.2), which serve push and pull. The rest of this page is the historical
+> spec; it does not describe current behaviour.
 
 ## 1. Owner direction (2026-10-30)
 

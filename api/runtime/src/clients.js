@@ -14,13 +14,6 @@ const IDLE_MS = 60_000;
  * `postgresql:<store>`, and its connection's URL is added only when the
  * call gave one (`project.url`). */
 export function deploymentEnv(settings, platform, project) {
-  // #510: a view's project reads through the view's store path; it has no volume and starts no Sandbox
-  if (project.kind === "view") {
-    return {
-      HOME: callHome(settings), DOCKER: settings.docker, IMAGE: "", DAEMON: "", VOLUME: "",
-      STORE_PATH: project.storePath, STORE: "", CONTAINER_PREFIX: settings.containerPrefix,
-    };
-  }
   if (project.kind === "postgresql") {
     return {
       HOME: callHome(settings),

@@ -5,7 +5,7 @@
 //! short, are `Uncertain` and the request is never sent again.
 use layerfs_remote_storage::minio;
 use layerfs_remote_storage::s3_api::{S3Client, S3Config, MIN_PART};
-use layerfs_remote_storage::{Condition, Credentials, Driver, RemoteError, Span};
+use layerfs_remote_storage::{Credentials, Driver, RemoteError, Span};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -197,13 +197,8 @@ fn client(endpoint: &str) -> S3Client {
 fn read(client: &S3Client, offset: u64, length: u64) -> Result<(), RemoteError> {
     let mut out = Vec::new();
     let span = Span { offset, length };
-    let ranged = client.download_range(
-        "obj",
-        span,
-        &Condition::Match("\"v1\"".to_owned()),
-        &mut out,
-    )?;
-    assert_eq!(ranged.bytes, length);
+    let bytes = client.download_file("obj", Some(span), &mut out)?;
+    assert_eq!(bytes, length);
     assert_eq!(out, (offset..offset + length).map(byte).collect::<Vec<_>>());
     Ok(())
 }

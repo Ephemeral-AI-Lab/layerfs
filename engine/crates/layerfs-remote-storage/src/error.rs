@@ -30,9 +30,6 @@ pub enum RemoteError {
     },
     /// Not built in this phase (for example TLS endpoints).
     Unsupported(String),
-    /// A conditional read found another version of the file than the one
-    /// it was pinned to (HTTP 412): the file changed since (#510).
-    Changed,
 }
 
 impl fmt::Display for RemoteError {
@@ -57,7 +54,6 @@ impl fmt::Display for RemoteError {
                 "{cause}; abort of multipart upload {upload} failed ({abort}), its parts may remain"
             ),
             Self::Unsupported(why) => write!(f, "unsupported: {why}"),
-            Self::Changed => f.write_str("the remote file changed since it was opened"),
         }
     }
 }

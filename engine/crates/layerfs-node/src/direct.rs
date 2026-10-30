@@ -1,6 +1,5 @@
 //! Store calls in this process (#352 F-020): the only route for fs, branch,
-//! project and backend Store calls. A view's store path (#510) opens the
-//! view's own read-only service (`views`).
+//! project and backend Store calls.
 //!
 //! One `StoreService` per Store path per process, opened by the first client
 //! that names the path and closed when the last one releases it. It is a live
@@ -28,8 +27,8 @@ use std::sync::{Arc, LazyLock, Mutex};
 struct Opened {
     service: Arc<StoreService>,
     clients: usize,
-    /// This service's private overlay directory; none for a view (#510).
-    directory: Option<PathBuf>,
+    /// This service's private overlay directory.
+    directory: PathBuf,
 }
 
 static STORES: LazyLock<Mutex<BTreeMap<PathBuf, Opened>>> = LazyLock::new(Default::default);
@@ -47,14 +46,6 @@ fn path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
 
 /// Opens the Store at `store` for this process, or refuses.
 fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
-    // #510: a view's store path names an open view; it constructs nothing
-    if let Some(view) = store.to_str().filter(|path| crate::views::is_view(path)) {
-        return Ok(Opened {
-            service: crate::views::service(view)?,
-            clients: 0,
-            directory: None,
-        });
-    }
     let identity = crate::stores::identity(args)?;
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
@@ -80,7 +71,7 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
         Ok(service) => Ok(Opened {
             service: Arc::new(service),
             clients: 0,
-            directory: Some(directory),
+            directory,
         }),
         Err(refusal) => {
             let _ = std::fs::remove_dir_all(&directory);
@@ -127,10 +118,7 @@ pub(crate) fn release(args: &SdkValue) -> Outcome {
         Ok(service) => service.close().map_err(failed),
         Err(_) => Ok(()),
     };
-    let removed = match &opened.directory {
-        Some(directory) => std::fs::remove_dir_all(directory).map_err(failed),
-        None => Ok(()),
-    };
+    let removed = std::fs::remove_dir_all(&opened.directory).map_err(failed);
     closed.and(removed)?;
     Ok(SdkValue::map([("clients", SdkValue::Int(0))]))
 }
@@ -164,19 +152,8 @@ pub(crate) fn holds(path: &Path) -> Result<bool, SdkRefusal> {
     Ok(lock(&STORES)?.contains_key(path))
 }
 
-/// Runs one Store call (`backend` for the backend table) in this process;
-/// on a view, a failed remote read answers with its own kind (#510).
+/// Runs one Store call (`backend` for the backend table) in this process.
 pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
-    match args.get_text("storePath") {
-        Some(path) if crate::views::is_view(path) => {
-            let path = path.to_owned();
-            crate::views::answered(&path, || served(method, args, backend))
-        }
-        _ => served(method, args, backend),
-    }
-}
-
-fn served(method: &str, args: SdkValue, backend: bool) -> Outcome {
     let service = service(&args)?;
     let args = match args {
         SdkValue::Map(fields) => SdkValue::Map(

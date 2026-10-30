@@ -51,8 +51,7 @@ pub struct StoreService {
     pub opened: OpenedStore,
     pub store: Arc<Store>,
     owned: Option<Owner>,
-    /// None for a read-only remote view (#510), which constructs nothing.
-    owner: Option<OwnerClient>,
+    owner: OwnerClient,
     capacity: usize,
     bound: AtomicUsize,
     retained: Mutex<Vec<Retained>>,
@@ -65,7 +64,7 @@ impl StoreService {
             store: opened.store.clone(),
             opened,
             owned: None,
-            owner: Some(owner.client()),
+            owner: owner.client(),
             capacity: owner.configuration().namespaces,
             bound: AtomicUsize::new(0),
             retained: Mutex::new(Vec::new()),
@@ -129,26 +128,6 @@ impl StoreService {
         Self::owning(opened, template)
     }
 
-    /// Serves the read-only view `opened` of a Store file on a remote
-    /// (#510): reads only. It has no overlay owner, so every file-changing
-    /// call is refused `ReadOnly` before anything is bound.
-    pub fn read_only(opened: OpenedStore) -> Self {
-        Self {
-            store: opened.store.clone(),
-            opened,
-            owned: None,
-            owner: None,
-            capacity: 0,
-            bound: AtomicUsize::new(0),
-            retained: Mutex::new(Vec::new()),
-        }
-    }
-
-    /// Whether this service is a read-only view (#510).
-    pub fn is_read_only(&self) -> bool {
-        self.owner.is_none()
-    }
-
     /// Serves `opened`, starting the overlay owner over `template`.
     fn owning(opened: OpenedStore, template: &Path) -> Result<Self, OpenRefusal> {
         let owner = Owner::start(
@@ -181,10 +160,11 @@ impl StoreService {
         branch: BranchId,
         timing: &TimingScope<'_, Active>,
     ) -> Result<Arc<BoundWorkspace>, String> {
-        let Some(owner) = &self.owner else {
-            return Err("ReadOnly: a remote view changes no file".to_owned());
-        };
-        if let Some(stopped) = owner.maintenance_failure().map_err(|e| e.to_string())? {
+        if let Some(stopped) = self
+            .owner
+            .maintenance_failure()
+            .map_err(|e| e.to_string())?
+        {
             return Err(format!("overlay maintenance stopped: {stopped}"));
         }
         let admitted = self
@@ -197,7 +177,7 @@ impl StoreService {
         }
         let bound = crate::telemetry::phase(timing, "store.bind", || {
             self.store
-                .bind_private(owner.clone(), BindRequest { workspace, branch })
+                .bind_private(self.owner.clone(), BindRequest { workspace, branch })
         });
         match bound {
             Ok(success) => Ok(Arc::new(success.workspace)),
@@ -212,12 +192,9 @@ impl StoreService {
     pub fn release(&self, workspace: &BoundWorkspace) -> Result<(), String> {
         workspace.close().map_err(|e| format!("{e:?}"))?;
         self.bound.fetch_sub(1, Ordering::AcqRel);
-        match &self.owner {
-            Some(owner) => owner
-                .retire_namespace(workspace.route().namespace())
-                .map_err(|e| e.to_string()),
-            None => Ok(()),
-        }
+        self.owner
+            .retire_namespace(workspace.route().namespace())
+            .map_err(|e| e.to_string())
     }
 
     /// Keeps a private Workspace whose Commit outcome is uncertain, with its
