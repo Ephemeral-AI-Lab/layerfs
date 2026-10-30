@@ -622,6 +622,30 @@ impl CommitStatistics {
     };
 }
 
+/// The main Branch's current head Commit facts in a Store summary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StoreSummaryCommit {
+    /// Head Commit identity.
+    pub id: CommitId,
+    /// Creation time in milliseconds since the Unix epoch.
+    pub created_ms: i64,
+}
+
+/// Five bounded facts read fresh from one Store.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct StoreSummary {
+    /// Maintained logical-byte total.
+    pub logical: u64,
+    /// Exact Branch count for the Store's LayerStack.
+    pub branches: u64,
+    /// Exact Commit count for the Store's LayerStack.
+    pub commits: u64,
+    /// Base Layer of the main Branch's head Commit, absent without a head.
+    pub main_layer: Option<LayerId>,
+    /// Main Branch's current head Commit, absent without a head.
+    pub last_commit: Option<StoreSummaryCommit>,
+}
+
 /// Store-wide byte facts read from publication-maintained totals.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct StoreStatistics {

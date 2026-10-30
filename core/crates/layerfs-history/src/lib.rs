@@ -36,6 +36,7 @@ pub use records::{
     CommitRecord, CommitRequest, CommitStatistics, CommitVia, FileDigest, ForkRequest, ForkSource,
     InitStatistics, LayerHistoryRequest, LayerRecord, LayerStackRecord, MergeCommit, MergeHead,
     MergeSide, Page, PageResult, RecordKind, Reservation, ReserveRequest, StackInitialization,
-    StoreDiskStatistics, StoreStatistics, FILE_DIGEST_WINDOW, MAXIMUM_ATTRIBUTION_BYTES,
-    MAXIMUM_LABELS, MAXIMUM_LABELS_JSON_BYTES, MAXIMUM_MESSAGE_BYTES, MAXIMUM_PAGE_RECORDS,
+    StoreDiskStatistics, StoreStatistics, StoreSummary, StoreSummaryCommit, FILE_DIGEST_WINDOW,
+    MAXIMUM_ATTRIBUTION_BYTES, MAXIMUM_LABELS, MAXIMUM_LABELS_JSON_BYTES, MAXIMUM_MESSAGE_BYTES,
+    MAXIMUM_PAGE_RECORDS,
 };

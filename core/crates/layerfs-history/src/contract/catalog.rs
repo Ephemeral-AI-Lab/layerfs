@@ -169,6 +169,13 @@ pub trait HistoryCatalog: Send + Sync {
         ))
     }
 
+    /// Reads the five-statement bounded Store summary for one named stack.
+    /// Branch and Commit counts use their LayerStack-leading covering indexes.
+    fn summary(&self, project: &HistoryName) -> HistoryResult<crate::records::StoreSummary> {
+        let _ = project;
+        Err(crate::HistoryError::Unsupported("Store summary"))
+    }
+
     /// Reads maintained Store totals; no full object/history scan.
     fn statistics(&self) -> HistoryResult<crate::records::StoreStatistics> {
         Err(crate::HistoryError::Unsupported("Store statistics"))

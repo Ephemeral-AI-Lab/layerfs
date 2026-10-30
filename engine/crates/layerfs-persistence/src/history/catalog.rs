@@ -4,6 +4,9 @@ use super::{
 };
 use layerfs_history::*;
 impl HistoryCatalog for HistoryProvider {
+    fn summary(&self, project: &HistoryName) -> HistoryResult<StoreSummary> {
+        HistoryProvider::summary(self, project)
+    }
     fn statistics(&self) -> HistoryResult<StoreStatistics> {
         HistoryProvider::statistics(self)
     }

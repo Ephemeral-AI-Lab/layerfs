@@ -19,6 +19,7 @@ const backend = LayerFSBackend.of(layerfs); // opens nothing; refused once layer
 // backend.store: the project's Store, no Sandbox needed
 await backend.store.project.get_history(since);           // Branches, newest Commits, Layers, version
 await backend.store.project.get_storage();
+await backend.store.project.get_summary();                 // { logical, branches, commits, mainLayer, lastCommit }
 await backend.store.project.get_comparable(id);           // { commit, root, exact } or NotComparable
 await backend.store.project.list_overwritten(layer, 50, 0);
 await backend.store.branch.list_commit_storage("feature", 20, 0);
@@ -81,6 +82,26 @@ and `newMetadata` summed across each `CommitVia` kind over the commit catalog.
 The default call stays cheap (maintained totals plus two file stats, O(1));
 `commits: true` requires one full scan of the commit catalog (O(number of commits)).
 Figures are never cached, sampled, or estimated; an unmeasurable file fails `Failed`.
+
+## The cheap Store summary
+
+`backend.store.project.get_summary()` takes no arguments and answers exactly
+`{ logical, branches, commits, mainLayer, lastCommit }`, computed fresh from the
+open Store. `logical` is the maintained logical-byte total (the same figure as
+`get_storage`'s `logical`, O(1)); `branches` and `commits` are exact counts for
+this Store's LayerStack; `mainLayer` is the main Branch's head Layer id and
+`lastCommit` is its head Commit as `{ id, createdMs }`, both `null` when main has
+no head Commit. IDs are lowercase hex.
+
+The call is five fixed SQL statements — maintained totals, Branch count, Commit
+count, main Branch and main head Commit — each returning at most one row, inside
+one read snapshot (with its `BEGIN`/`COMMIT`). The counts are index-only
+`COUNT(*)` aggregates over LayerStack-leading covering indexes, so statement and
+row counts are fixed at every Store size; the database still visits O(B) Branch
+and O(C) Commit index entries. No object-catalog scan, no per-Commit column reads
+and no cache. A non-object arguments value or unknown option refuses
+`InvalidInput`; Store failures keep their exact refusal code and cause, with no
+partial summary.
 
 ## The call trace
 
