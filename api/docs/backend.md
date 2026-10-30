@@ -72,6 +72,16 @@ revision diagnostics explicitly disclose their 1000-revision count bound.
 Overlay payload counts stored cell bytes including validity masks; metadata row
 counts are reported without inventing exclusive byte attribution.
 
+`backend.store.project.get_storage()` additionally returns `disk: { main, wal, total }`,
+measuring physical file lengths from the filesystem: `main` is the SQLite database file,
+`wal` the `-wal` file (0 when absent), and `total` their sum (the transient `-shm` index
+is excluded). Calling `backend.store.project.get_storage({ commits: true })` adds
+`commits: { Workspace, Files, Merge }`, with `count`, `newCanonical`, `newStored`,
+and `newMetadata` summed across each `CommitVia` kind over the commit catalog.
+The default call stays cheap (maintained totals plus two file stats, O(1));
+`commits: true` requires one full scan of the commit catalog (O(number of commits)).
+Figures are never cached, sampled, or estimated; an unmeasurable file fails `Failed`.
+
 ## The call trace
 
 `LAYERFS_TRACE=<file>`, as set when the client is

@@ -73,3 +73,56 @@ the completion order.
 **Agreement with the trace**: with `LAYERFS_TRACE` on, each record and its
 trace line agree on method, start, ms, ok, code, message, kind, commit, layer
 and sizes. Recording changes no call's value or refusal.
+
+## P11 — Store statistics (`backend.store.project.get_storage` extended)
+
+**Surface**: `@layerfs/backend` `backend.store.project.get_storage(options?)`,
+on the existing call. The CLI has no backend commands; P4/P5 map the same
+shape onto Python and MCP. Builds on today's totals; no new call, no second
+Store implementation, no Store schema change.
+
+**Call**: `get_storage()` or `get_storage({ commits: true })`. Any other
+option key, a non-object options argument, or a non-boolean `commits` refuses
+`InvalidInput` (validated in the JS wrapper and again at the operator
+boundary).
+
+**Reply**: the existing fields (`logical`, `canonical`, `stored`, `metadata`,
+`file`, `free`, `dedupe`, `compression`, `init`) unchanged, plus:
+
+```js
+{
+  // always present:
+  disk: { main, wal, total },
+  // only when commits: true:
+  commits: {
+    Workspace: { count, newCanonical, newStored, newMetadata },
+    Files:     { count, newCanonical, newStored, newMetadata },
+    Merge:     { count, newCanonical, newStored, newMetadata },
+  },
+}
+```
+
+- `disk.main`: byte length of the Store's main SQLite file. `disk.wal`: byte
+  length of its `<store>-wal` file, `0` when no WAL file exists. `disk.total`:
+  `main + wal`. Physical file lengths, unlike `file` (logical DB pages). The
+  `-shm` file is a transient shared-memory index, not data, and is excluded.
+- `commits.<kind>`: over the whole commit catalog, grouped by `CommitVia`:
+  `count` commits of that kind and the sums of each commit's own
+  `newCanonical`, `newStored`, `newMetadata` — the same counters
+  `backend.store.branch.list_commit_storage` reports per commit. All three
+  kinds are always present, zero-filled when a kind has no commits. Per-commit
+  snapshot `logical` is deliberately NOT summed: a snapshot size is not an
+  additive storage statistic. `raw`/`unique`/`compressed` bytes are the
+  existing `logical`/`canonical`/`stored` fields.
+- Every figure is computed fresh from the real Store on each call: no
+  estimation, no sampling, no caching across calls. If the Store's files
+  cannot be measured the call fails (`Failed` with the cause) instead of
+  returning partial or estimated statistics.
+
+**Cost**: the default call reads maintained totals, page pragmas and two file
+stats — no scan of the object catalog or the commit catalog (unchanged from
+today, plus two stats). `commits: true` adds ONE full scan of the commit
+catalog, O(number of commits), grouped in SQL; this is not cheap and is never
+presented as cheap. The reply is bounded: `disk` plus at most three small
+kind maps, so no paging is needed.
+

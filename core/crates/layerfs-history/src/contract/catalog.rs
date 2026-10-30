@@ -174,6 +174,18 @@ pub trait HistoryCatalog: Send + Sync {
         Err(crate::HistoryError::Unsupported("Store statistics"))
     }
 
+    /// Measures the Store's main and WAL file lengths from the files
+    /// themselves; two file stats, no scan of any catalog.
+    fn disk_statistics(&self) -> HistoryResult<crate::records::StoreDiskStatistics> {
+        Err(crate::HistoryError::Unsupported("Store disk statistics"))
+    }
+
+    /// Per-Commit-kind byte totals over the whole commit catalog, computed by
+    /// one full scan of that catalog; not a maintained cheap total.
+    fn commit_kind_statistics(&self) -> HistoryResult<Vec<crate::records::CommitKindStatistics>> {
+        Err(crate::HistoryError::Unsupported("Commit kind statistics"))
+    }
+
     /// Records Init's totals once; a second record is `Integrity`.
     fn record_init(&self, _totals: &crate::records::InitStatistics) -> HistoryResult<()> {
         Err(crate::HistoryError::Unsupported("Init statistics"))

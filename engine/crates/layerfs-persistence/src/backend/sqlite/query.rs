@@ -8,6 +8,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "statistics_totals" => Ok(include_str!(
             "../../../sql/sqlite/queries/history/statistics_totals.sql"
         )),
+        "statistics_commit_kinds" => Ok(include_str!(
+            "../../../sql/sqlite/queries/history/statistics_commit_kinds.sql"
+        )),
         "statistics_record_init" => Ok(include_str!(
             "../../../sql/sqlite/queries/history/statistics_record_init.sql"
         )),

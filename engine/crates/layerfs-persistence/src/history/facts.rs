@@ -2,7 +2,10 @@
 use super::{provider::HistoryProvider, rows::cell};
 use crate::backend::records::Param;
 use layerfs_content::merge::{LwwDecision, MergeUnit};
-use layerfs_history::{HistoryError, HistoryResult, InitStatistics, StoreStatistics};
+use layerfs_history::{
+    CommitKindStatistics, CommitVia, HistoryError, HistoryResult, InitStatistics,
+    StoreDiskStatistics, StoreStatistics,
+};
 
 /// Marks the merge units after the LWW decisions: no path is that long, so
 /// a blob written before units reads as having none (#352 F-057).
@@ -153,6 +156,48 @@ impl HistoryProvider {
                     }),
                 },
             })
+        })
+    }
+    /// Measures the Store's main and WAL file lengths from the files; two
+    /// stats, no scan. An unmeasurable Store file fails the call: no partial
+    /// or estimated figures.
+    pub(crate) fn disk_statistics(&self) -> HistoryResult<StoreDiskStatistics> {
+        let main = std::fs::metadata(&self.session.path)
+            .map_err(|_| HistoryError::Integrity("Store file statistics"))?
+            .len();
+        let mut wal = self.session.path.clone().into_os_string();
+        wal.push("-wal");
+        let wal = match std::fs::metadata(&wal) {
+            Ok(metadata) => metadata.len(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
+            Err(_) => return Err(HistoryError::Integrity("Store file statistics")),
+        };
+        Ok(StoreDiskStatistics { main, wal })
+    }
+
+    /// Per-kind Commit byte totals over the whole commit catalog, computed by
+    /// one full scan of that catalog; not a maintained cheap total.
+    pub(crate) fn commit_kind_statistics(&self) -> HistoryResult<Vec<CommitKindStatistics>> {
+        self.read(|tx| {
+            let rows = tx.query("statistics_commit_kinds", Vec::new())?;
+            rows.iter()
+                .map(|row| {
+                    let get = |index| -> HistoryResult<u64> {
+                        u64::try_from(cell::<i64>(row, index)?)
+                            .map_err(|_| HistoryError::Integrity("negative Commit kind total"))
+                    };
+                    let via = u8::try_from(cell::<i64>(row, 0)?)
+                        .map_err(|_| HistoryError::Integrity("Commit via"))
+                        .and_then(CommitVia::from_code)?;
+                    Ok(CommitKindStatistics {
+                        via,
+                        count: get(1)?,
+                        new_canonical: get(2)?,
+                        new_stored: get(3)?,
+                        new_metadata: get(4)?,
+                    })
+                })
+                .collect()
         })
     }
     pub(crate) fn record_init(&self, totals: &InitStatistics) -> HistoryResult<()> {

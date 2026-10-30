@@ -8,11 +8,49 @@ use crate::{
     store::Store,
 };
 use layerfs_bridge::control::SdkValue;
-use layerfs_history::NodeId;
+use layerfs_history::{CommitKindStatistics, CommitVia, NodeId};
 use std::sync::Arc;
 
-pub fn stats(store: &Arc<Store>) -> Answer {
+/// One Commit kind's totals as SDK values; absent kinds answer zero-filled.
+fn kind_totals(kinds: &[CommitKindStatistics], via: CommitVia) -> SdkValue {
+    let found = kinds.iter().find(|kind| kind.via == via);
+    let (count, canonical, stored, metadata) = found.map_or((0, 0, 0, 0), |kind| {
+        (
+            kind.count,
+            kind.new_canonical,
+            kind.new_stored,
+            kind.new_metadata,
+        )
+    });
+    SdkValue::map([
+        ("count", SdkValue::Int(count as i64)),
+        ("newCanonical", SdkValue::Int(canonical as i64)),
+        ("newStored", SdkValue::Int(stored as i64)),
+        ("newMetadata", SdkValue::Int(metadata as i64)),
+    ])
+}
+
+pub fn stats(store: &Arc<Store>, args: &SdkValue) -> Answer {
+    let commits = match args {
+        SdkValue::Map(fields) => {
+            let mut commits = false;
+            for (key, val) in fields {
+                match key.as_str() {
+                    "commits" => match val {
+                        SdkValue::Bool(b) => commits = *b,
+                        _ => return Err(args::invalid("commits must be a boolean")),
+                    },
+                    "project" | "home" | "deploy" | "storePath" | "store_path" | "subscription" => {
+                    }
+                    _ => return Err(args::invalid(format!("unknown option `{key}`"))),
+                }
+            }
+            commits
+        }
+        _ => return Err(args::invalid("options must be a map")),
+    };
     let value = store.history().statistics().map_err(args::history)?;
+    let disk = store.history().disk_statistics().map_err(args::history)?;
     let ratio = |n: u64, d: u64| {
         if d == 0 {
             SdkValue::Null
@@ -20,7 +58,7 @@ pub fn stats(store: &Arc<Store>) -> Answer {
             SdkValue::text(format!("{:.6}", n as f64 / d as f64))
         }
     };
-    Ok(SdkValue::map([
+    let mut out = vec![
         ("logical", SdkValue::Int(value.logical as i64)),
         ("canonical", SdkValue::Int(value.canonical as i64)),
         ("stored", SdkValue::Int(value.stored as i64)),
@@ -43,7 +81,35 @@ pub fn stats(store: &Arc<Store>) -> Answer {
                 ])
             }),
         ),
-    ]))
+        (
+            "disk",
+            SdkValue::map([
+                ("main", SdkValue::Int(disk.main as i64)),
+                ("wal", SdkValue::Int(disk.wal as i64)),
+                ("total", SdkValue::Int((disk.main + disk.wal) as i64)),
+            ]),
+        ),
+    ];
+    if commits {
+        // One full scan of the commit catalog, opt-in; never a cheap total.
+        let kinds = store
+            .history()
+            .commit_kind_statistics()
+            .map_err(args::history)?;
+        out.push((
+            "commits",
+            SdkValue::map([
+                ("Workspace", kind_totals(&kinds, CommitVia::Workspace)),
+                ("Files", kind_totals(&kinds, CommitVia::Files)),
+                ("Merge", kind_totals(&kinds, CommitVia::Merge)),
+            ]),
+        ));
+    }
+    Ok(SdkValue::Map(
+        out.into_iter()
+            .map(|(name, value)| (name.to_owned(), value))
+            .collect(),
+    ))
 }
 
 pub fn commits(store: &Arc<Store>, args: &SdkValue) -> Answer {

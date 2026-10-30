@@ -279,7 +279,10 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
     let body = vec![
         (
             "store".to_owned(),
-            SdkValue::map([("stats", super::store::stats(store)?)]),
+            SdkValue::map([(
+                "stats",
+                super::store::stats(store, &SdkValue::Map(Vec::new()))?,
+            )]),
         ),
         ("project".to_owned(), SdkValue::text(stack.name.as_str())),
         ("branches".to_owned(), SdkValue::List(branch_items)),
