@@ -148,6 +148,9 @@ async function run({ bundle, image, home, prefix, work, s3 }) {
       const there = await reads(viewed(view, name), files[name], dirs[name]);
       await shown(view, `${name} read`);
       const here = await reads(await local(name), files[name], dirs[name]);
+      // the pushed file is the compacted VACUUM INTO copy: its file and metadata figures are its own
+      assert.equal(there.totals.file, published.result.transfer.bytes);
+      for (const side of [there, here]) for (const figure of ["file", "metadata", "free"]) delete side.totals[figure];
       assert.deepEqual(there, here, `${name}: the view answers as the local Store`);
       console.log(`  ${name}: ${there.branches.length} Branches, ${Object.values(there.commits).flat().length} Commits, ${Object.values(there.listings).flat().length} listed entries, ${Object.keys(there.stats).length} stats and revision lists, ${there.globbed.length} globbed: identical`);
     }
