@@ -55,7 +55,7 @@ The Rust behind them lives in the engine: the SDK method surface
 `engine/crates/layerfs-api` and the Node addon crate
 `engine/crates/layerfs-node`, which builds `engine/crates/layerfs-node/layerfs.node`.
 
-`npm install` in `api` links `agent`, `backend` and `runtime` to each
+`npm install` in `api` links `agent`, `backend`, `runtime` and `cli` to each
 other; it downloads nothing.
 
 `@layerfs/agent/internal` is not a public API. It exists only for
@@ -125,7 +125,7 @@ Run each part under the E2E launcher (`tools/worktree.py run`, see
 ### The `layerfs` command's tests
 
 ```bash
-npm --prefix api/cli install
+npm --prefix api install
 node --test api/cli/test/cli.test.mjs
 ```
 

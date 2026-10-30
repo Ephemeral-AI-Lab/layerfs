@@ -7,6 +7,7 @@
   "workspaces": [
     "agent",
     "backend",
+    "cli",
     "mcp",
     "runtime"
   ],
@@ -16,6 +17,7 @@
   "scripts": {
     "build:native": "node scripts/build-native.mjs",
     "build:isolated": "python3 ../tools/worktree.py build",
-    "test:isolated": "python3 ../tools/worktree.py run"
+    "test:isolated": "python3 ../tools/worktree.py run",
+    "prepare:publish": "node scripts/prepare-publish.mjs"
   }
 }
