@@ -38,11 +38,13 @@ never be simulated.
 
 ## Standing rules for every brief (do not re-derive)
 
-- Pipeline: kimi implements → fresh-session diff review →
-  commander verifies in the clone → one private PR per slice →
-  merge. Upstream PRs carry COMPLETE code only, and wait for
-  #505 to merge first (finding 2, P9, finding 3, finding 4,
-  finding 5 each go as their own complete slice/batch).
+- Pipeline (UPDATED 2026-10-30: user ordered kimi STOPPED):
+  commander implements directly → commander verifies in the
+  clone → one private PR per slice → merge. NO kimi sessions
+  until the user re-enables kimi. Upstream PRs carry COMPLETE
+  code only, and wait for #505 to merge first (finding 2, P9,
+  finding 3, finding 4, finding 5 each go as their own
+  complete slice/batch).
 - Contract first: for any slice with a public surface, write
   the precise public contract beside the P6 cases before
   coding; keep test-first and the per-suite verification
