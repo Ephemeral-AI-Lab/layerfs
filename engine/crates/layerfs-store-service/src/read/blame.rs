@@ -49,13 +49,14 @@ fn text(reader: &StorePorts, file: EntryFacts) -> Result<Text> {
     let (mut lines, mut prefix, mut bytes, mut complete) = (0, Vec::new(), 0, true);
     window::lines(reader, &file, window::BYTES, 1, false, |_, line| {
         lines += 1;
-        if complete
-            && !line.truncated
-            && prefix.len() < window::LINES
-            && bytes + line.text().len() <= window::BYTES
-        {
-            bytes += line.text().len();
-            prefix.push(line.text());
+        if complete && !line.truncated && prefix.len() < window::LINES {
+            let shown = line.text();
+            if bytes + shown.len() <= window::BYTES {
+                bytes += shown.len();
+                prefix.push(shown);
+            } else {
+                complete = false;
+            }
         } else {
             complete = false;
         }
@@ -146,13 +147,15 @@ pub fn blame(
             return Ok(true);
         }
         // Include maximum message/identity overhead for each origin on the wire.
-        if tracks.len() == window::LINES
-            || (!tracks.is_empty() && spent + line.text().len() + 256 > window::BYTES - 8192)
-        {
+        if tracks.len() == window::LINES {
             next_line = Some(n);
             return Ok(false);
         }
         let mut shown = line.text();
+        if !tracks.is_empty() && spent + shown.len() + 256 > window::BYTES - 8192 {
+            next_line = Some(n);
+            return Ok(false);
+        }
         let mut end = shown.len().min(window::BYTES - 8192 - 256 - spent);
         while !shown.is_char_boundary(end) {
             end -= 1;
