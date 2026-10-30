@@ -366,7 +366,7 @@ trace line covers the command's run.
 | project (2) | `list_branches(pageSize?, pagePos?)`, `list_sandboxes(pageSize?, pagePos?)` |
 | fs reads (7) | `read(ref, path, startLine?, endLine?, { binary? }?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
 | fs writes (7) | `write(branch, path, content, message? \| { message?, mode? })`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message? \| { message?, mode? })`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
-| branch (8) | `fork(name, fromRef?)`, `graph(branch, pageSize?, pagePos?)`, `changed_paths(commit, pageSize?, pagePos?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
+| branch (8) | `fork(name, fromRef?)`, `graph(branch, pageSize?, pagePos?)`, `changed_paths(commit, pageSize?, pagePos?, { cursor? }?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
 | sandbox (3) | `create({ image }?)` → `{ sandbox, image }`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
 | workspace (4) | `mount(sandbox, branch)` → `{ sandbox, path, image }`, `exec(ws, command, message?, { stdout?, stderr? }?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?, force?)` |
 | events (1) | `subscribe()` → an opened-project subscription with `poll`, `close`, and async iteration |
@@ -448,17 +448,18 @@ flag is `--binary`. `fs.read` reports the full file size in either mode.
 ### Pages and reads
 
 Pages have `items` and `hasMore`; advance by `pagePos + items.length`.
-`diff_commits` and `diff_branches` also answer `nextCursor`, the last path the
-page listed: passing it back as `cursor` resumes the walk after that path, so a
-page costs its own changes instead of re-walking earlier pages. `hunks: false`
-lists the changes without line hunks (`hunks` is `null`), so a page fills by
-paths rather than by file contents. Defaults
-are 50/0, max pageSize 1000, with safe integers only. Byte bounds can shorten a
-page; they never mean EOF when `hasMore` is true. Deep offsets skip through bounded
-windows linearly. Names use byte order; recursive paths use deterministic
-component-by-component byte order, then line number for grep. Commit history is
-newest first along first parents. Every call resolves each live ref once; separate
-calls against live heads can shift numeric positions.
+`changed_paths`, `diff_commits` and `diff_branches` also answer `nextCursor`, the
+last path the page listed: passing it back as `cursor` resumes the walk after that
+path, so a page costs its own changes instead of re-walking earlier pages. When
+both are given, `cursor` takes precedence over `pagePos`; numeric-only calls keep
+their existing behavior. `hunks: false` lists the changes without line hunks
+(`hunks` is `null`), so a page fills by paths rather than by file contents.
+Defaults are 50/0, max pageSize 1000, with safe integers only. Byte bounds can
+shorten a page; they never mean EOF when `hasMore` is true. Deep offsets skip
+through bounded windows linearly. Names use byte order; recursive paths use
+deterministic component-by-component byte order, then line number for grep. Commit
+history is newest first along first parents. Every call resolves each live ref
+once; separate calls against live heads can shift numeric positions.
 
 `branch.graph` returns the Branch record, its resolved `forkPoint`, and `commits`
 in the `list_commits` shape plus `published`. The walk stops before a Commit fork
@@ -471,7 +472,8 @@ every call, not stored on a Commit. `pagePos` counts the bounded walk.
 It compares against the first parent when present, against the base Layer for a
 parentless merge, and against an empty tree for a true root Commit. It accepts only
 a Commit identity: malformed text and Layer identities are `InvalidInput`, and an
-absent Commit is `NoSuchCommit`.
+absent Commit is `NoSuchCommit`. Cursor validation and refusal are shared with
+`diff_commits`.
 
 Read/blame use 1-based inclusive line positions, with no byte-offset windows.
 Responses fit the authenticated control frame: at most 2000 lines and 48 KiB of
@@ -613,7 +615,7 @@ table differs, and when a family's files stop matching the SDK's.
 | `project.list_sandboxes` | `layerfs project list_sandboxes [--page-size <n>] [--page-pos <n>]` |
 | `branch.fork` | `layerfs branch fork <name> [<from-ref>]` |
 | `branch.graph` | `layerfs branch graph <branch> [--page-size <n>] [--page-pos <n>]` |
-| `branch.changed_paths` | `layerfs branch changed_paths <commit> [--page-size <n>] [--page-pos <n>]` |
+| `branch.changed_paths` | `layerfs branch changed_paths <commit> [--page-size <n>] [--page-pos <n>] [--cursor <text>]` |
 | `branch.list_commits` | `layerfs branch list_commits <branch> [--page-size <n>] [--page-pos <n>]` |
 | `branch.diff_commits` | `layerfs branch diff_commits <from-commit> <to-commit> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--no-hunks]` |
 | `branch.diff_branches` | `layerfs branch diff_branches <from-branch> <to-branch> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--no-hunks]` |

@@ -512,6 +512,7 @@ pub fn changed_paths(
             SdkValue::Bool(!matches!(next.pos, SdkValue::Null)),
         ),
         ("nextPagePos", next.pos),
+        ("nextCursor", next.cursor),
     ])
 }
 

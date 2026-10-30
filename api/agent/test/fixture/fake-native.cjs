@@ -263,6 +263,7 @@ function answer(op, args) {
       items: [{ path: "/changed.txt", kind: "Modified", type: "file", before: { type: "file", inode: 7 }, after: { type: "file", inode: 7 }, content: true, identity: false, metadata: false, hunks: null, hunksOmitted: false }],
       hasMore: false,
       nextPagePos: null,
+      nextCursor: null,
     } };
     case "branch.merge": return { value: exports.mergeResults?.[args.name] ?? { kind: "Merged", branch: args.name, head: "m3rge", root: "r00t" } };
     case "branch.publish": return { value: exports.publishResults?.[args.branch] ?? { kind: "Added", source: { branch: "feature", commit: "pub1" }, publishedLayer: { id: "lay1" } } };

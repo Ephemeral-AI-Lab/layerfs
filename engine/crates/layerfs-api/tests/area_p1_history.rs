@@ -343,3 +343,272 @@ fn changed_paths_budget_short_pages_return_every_root_path() {
     );
     fixture.cleanup();
 }
+
+fn changed_cursor(
+    fixture: &Fixture,
+    commit: &str,
+    limit: i64,
+    pos: i64,
+    cursor: &SdkValue,
+) -> SdkValue {
+    fixture.call(
+        "branch.changed_paths",
+        vec![
+            ("commit", text(commit)),
+            ("pageSize", SdkValue::Int(limit)),
+            ("pagePos", SdkValue::Int(pos)),
+            ("cursor", cursor.clone()),
+        ],
+    )
+}
+
+fn root_commit(fixture: &Fixture, branch: &str, files: usize) -> (String, Vec<String>) {
+    let expected = (0..files)
+        .map(|n| format!("/f{n:03}.txt"))
+        .collect::<Vec<_>>();
+    fixture.apply(
+        branch,
+        expected.iter().map(|path| write(path, "x\n")).collect(),
+    );
+    let history = fixture.call("branch.list_commits", vec![("branch", text(branch))]);
+    let commit = support::items(&history)[0]
+        .get_text("id")
+        .unwrap()
+        .to_owned();
+    (commit, expected)
+}
+
+fn nested_root_commit(fixture: &Fixture, branch: &str, changes: usize) -> (String, Vec<String>) {
+    let directories = (0..changes / 2)
+        .map(|n| {
+            let mut components = Vec::new();
+            let mut current = Some(n);
+            while let Some(i) = current {
+                components.push(format!("d{i:03}"));
+                current = i.checked_sub(1).map(|parent| parent / 2);
+            }
+            components.reverse();
+            format!("/{}", components.join("/"))
+        })
+        .collect::<Vec<_>>();
+    let mut expected = directories
+        .iter()
+        .flat_map(|directory| [directory.clone(), format!("{directory}/f.txt")])
+        .collect::<Vec<_>>();
+    expected.sort_by(|a, b| a.split('/').cmp(b.split('/')));
+    fixture.apply(
+        branch,
+        directories
+            .iter()
+            .map(|path| support::operation("mkdir", path))
+            .chain(
+                directories
+                    .iter()
+                    .map(|path| write(&format!("{path}/f.txt"), "x\n")),
+            )
+            .collect(),
+    );
+    let history = fixture.call("branch.list_commits", vec![("branch", text(branch))]);
+    let commit = support::items(&history)[0]
+        .get_text("id")
+        .unwrap()
+        .to_owned();
+    (commit, expected)
+}
+
+fn enumerate_changed_work(files: usize, by_cursor: bool, nested: bool) -> support::Work {
+    let mode = if by_cursor { "cursor" } else { "page-pos" };
+    let shape = if nested { "nested" } else { "flat" };
+    let fixture = Fixture::new(
+        &format!("area-p1-changed-{mode}-{shape}-work-{files}"),
+        |_source| 0,
+    );
+    fixture.fork("root");
+    let (commit, expected) = if nested {
+        nested_root_commit(&fixture, "root", files)
+    } else {
+        root_commit(&fixture, "root", files)
+    };
+    let before = fixture.work();
+    let mut cursor = SdkValue::Null;
+    let mut pos = 0;
+    let mut listed = Vec::new();
+    let mut pages = 0;
+    loop {
+        let page = if by_cursor {
+            changed_cursor(&fixture, &commit, 17, 0, &cursor)
+        } else {
+            changed(&fixture, &commit, 17, pos)
+        };
+        pages += 1;
+        listed.extend(support::paths(&page).into_iter().map(str::to_owned));
+        if !page.get_bool("hasMore") {
+            assert_eq!(page.get("nextCursor"), Some(&SdkValue::Null));
+            assert_eq!(page.get("nextPagePos"), Some(&SdkValue::Null));
+            break;
+        }
+        if by_cursor {
+            cursor = page.get("nextCursor").cloned().expect("nextCursor");
+            assert!(matches!(cursor, SdkValue::Text(_)), "{cursor:?}");
+        } else {
+            pos = page.get_int("nextPagePos").expect("nextPagePos");
+        }
+        assert!(pages <= files, "{mode} paging did not make progress");
+    }
+    let work = fixture.since(before);
+    assert_eq!(listed, expected, "every change once, in order");
+    assert!(pages >= 3, "several pages at {files} changes: {pages}");
+    println!(
+        "P1_CHANGED_WORK mode={mode} shape={shape} changes={files} pages={pages} object_batches={} object_ids={} statements={} rows={}",
+        work.object_batches, work.object_ids, work.statements, work.rows
+    );
+    fixture.cleanup();
+    work
+}
+
+#[test]
+fn changed_paths_cursor_pages_have_linear_visited_work() {
+    let small = enumerate_changed_work(40, true, false);
+    let large = enumerate_changed_work(80, true, false);
+    assert!(
+        large.statements <= 2 * small.statements + 8,
+        "statements grew faster than the change set: 40={} 80={}",
+        small.statements,
+        large.statements
+    );
+    assert!(
+        large.rows <= 2 * small.rows + 16,
+        "rows grew faster than the change set: 40={} 80={}",
+        small.rows,
+        large.rows
+    );
+    assert!(
+        large.object_batches <= 2 * small.object_batches,
+        "cursor object batches grew faster than the change set: 40={} 80={}",
+        small.object_batches,
+        large.object_batches
+    );
+    assert!(
+        large.object_ids <= 2 * small.object_ids,
+        "cursor object reads grew faster than the change set: 40={} 80={}",
+        small.object_ids,
+        large.object_ids
+    );
+
+    let small_nested = enumerate_changed_work(40, true, true);
+    let large_nested = enumerate_changed_work(80, true, true);
+    assert!(
+        large_nested.object_batches <= 2 * small_nested.object_batches,
+        "nested cursor object batches grew faster than the change set: 40={} 80={}",
+        small_nested.object_batches,
+        large_nested.object_batches
+    );
+    assert!(
+        large_nested.object_ids <= 2 * small_nested.object_ids,
+        "nested cursor object reads grew faster than the change set: 40={} 80={}",
+        small_nested.object_ids,
+        large_nested.object_ids
+    );
+
+    let small_rewalk = enumerate_changed_work(40, false, true);
+    let large_rewalk = enumerate_changed_work(80, false, true);
+    assert!(
+        large_rewalk.object_ids > 2 * small_rewalk.object_ids,
+        "pagePos must discriminate rewalking: 40={} 80={}",
+        small_rewalk.object_ids,
+        large_rewalk.object_ids
+    );
+}
+
+#[test]
+fn changed_paths_cursor_takes_precedence_over_page_pos() {
+    let fixture = Fixture::new("area-p1-changed-cursor-precedence", |_source| 0);
+    fixture.fork("root");
+    let (commit, _) = root_commit(&fixture, "root", 40);
+    let first = changed_cursor(&fixture, &commit, 7, 0, &SdkValue::Null);
+    let cursor = first.get("nextCursor").cloned().expect("nextCursor");
+    let resumed = changed_cursor(&fixture, &commit, 7, 14, &cursor);
+    let cursor_page = changed(&fixture, &commit, 7, 7);
+    let conflicting_page = changed(&fixture, &commit, 7, 14);
+    assert_eq!(resumed.get("items"), cursor_page.get("items"));
+    assert_ne!(resumed.get("items"), conflicting_page.get("items"));
+    fixture.cleanup();
+}
+
+#[test]
+fn changed_paths_page_pos_pages_keep_their_legacy_results() {
+    let fixture = Fixture::new("area-p1-changed-page-pos-compatibility", |_source| 0);
+    fixture.fork("root");
+    let (commit, _) = root_commit(&fixture, "root", 40);
+    let whole = changed(&fixture, &commit, 1000, 0);
+    let mut pos = 0;
+    let mut listed = Vec::new();
+    loop {
+        let page = changed(&fixture, &commit, 7, pos);
+        let items = support::items(&page);
+        listed.extend(items.iter().cloned());
+        assert_eq!(page.get_bool("hasMore"), pos as usize + items.len() < 40);
+        if !page.get_bool("hasMore") {
+            assert_eq!(page.get("nextPagePos"), Some(&SdkValue::Null));
+            break;
+        }
+        assert_eq!(page.get_int("nextPagePos"), Some(pos + items.len() as i64));
+        pos = page.get_int("nextPagePos").unwrap();
+    }
+    assert_eq!(listed, support::items(&whole));
+    fixture.cleanup();
+}
+
+#[test]
+fn changed_paths_cursor_validation_matches_diff_commits() {
+    let fixture = Fixture::new("area-p1-changed-cursor-validation", |_source| 0);
+    fixture.fork("root");
+    fixture.apply("root", vec![write("/base.txt", "base\n")]);
+    let parent = fixture
+        .apply("root", vec![write("/child.txt", "child\n")])
+        .get_text("head")
+        .unwrap()
+        .to_owned();
+    let commit = fixture
+        .apply("root", vec![write("/last.txt", "last\n")])
+        .get_text("head")
+        .unwrap()
+        .to_owned();
+    for cursor in [text("relative/path"), SdkValue::Int(9)] {
+        let changed = fixture.try_call(
+            "branch.changed_paths",
+            vec![("commit", text(&commit)), ("cursor", cursor.clone())],
+        );
+        let diff = fixture.try_call(
+            "branch.diff_commits",
+            vec![
+                ("from", text(&parent)),
+                ("to", text(&commit)),
+                ("cursor", cursor),
+            ],
+        );
+        let changed = changed.unwrap_err();
+        let diff = diff.unwrap_err();
+        assert_eq!(changed.code, diff.code);
+        assert_eq!(changed.message, diff.message);
+        assert_eq!(changed.detail, diff.detail);
+    }
+    let changed = fixture.try_call(
+        "branch.changed_paths",
+        vec![("commit", text(&commit)), ("cursor", text("/not-present"))],
+    );
+    let diff = fixture.try_call(
+        "branch.diff_commits",
+        vec![
+            ("from", text(&parent)),
+            ("to", text(&commit)),
+            ("cursor", text("/not-present")),
+        ],
+    );
+    let changed = changed.unwrap();
+    let diff = diff.unwrap();
+    assert_eq!(changed.get("items"), diff.get("items"));
+    assert_eq!(changed.get("hasMore"), diff.get("hasMore"));
+    assert_eq!(changed.get("nextCursor"), diff.get("nextCursor"));
+    fixture.cleanup();
+}
