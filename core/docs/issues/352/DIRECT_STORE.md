@@ -100,9 +100,11 @@ no daemon are involved. Implemented on branch `windows-native-store`:
 - The cross-process writer lane is a named kernel mutex
   (`Local\layerfs-writer-lane-<hash>`); an abandoned mutex is taken by the
   next waiter, so a dead writer does not hold the lane.
-- The kernel guard allows local NTFS volumes only, read with
-  `GetVolumeInformationW`; other filesystems and non-disk prefixes fail
-  `Unsupported` before the Store opens.
+- The kernel guard allows local NTFS volumes only: it opens the Store
+  directory's own handle, reads its final path (a spelling that lands on
+  `\\?\UNC\` — a share behind a junction or mapped drive — is refused) and
+  the filesystem name with `GetVolumeInformationByHandleW`; anything else
+  fails `Unsupported` before the Store opens.
 - SQLite is bundled (rusqlite) on Windows targets; Disposable/WAL/OFF is the
   only profile, unchanged.
 - Acquisition identity is the real volume serial and file index
