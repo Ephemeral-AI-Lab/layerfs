@@ -22,6 +22,7 @@ const BLOCK: u64 = 16 * WINDOW;
 pub struct Line {
     pub prefix: Vec<u8>,
     pub bytes: u64,
+    pub offset: u64,
     pub truncated: bool,
     pub matched: bool,
 }
@@ -36,16 +37,21 @@ impl Line {
     }
 }
 
-/// The line being scanned: its number, shown prefix and length so far.
+/// The line being scanned: its number, absolute start, shown prefix and length.
 pub(super) struct Open {
     pub number: u64,
+    pub offset: u64,
     head: Vec<u8>,
     pub length: usize,
 }
 impl Open {
     pub fn new() -> Self {
+        Self::at(1, 0)
+    }
+    fn at(number: u64, offset: u64) -> Self {
         Self {
-            number: 1,
+            number,
+            offset,
             head: Vec::new(),
             length: 0,
         }
@@ -63,7 +69,8 @@ impl Open {
     }
     /// The finished line; the next one starts empty.
     pub fn finish(&mut self, matched: bool) -> Line {
-        let line = line(&mut self.head, self.length, matched);
+        let line = line(&mut self.head, self.offset, self.length, matched);
+        self.offset += self.length as u64;
         self.length = 0;
         line
     }
@@ -118,18 +125,19 @@ pub(super) fn texts(
     view: Option<FileView>,
     mut visit: impl FnMut(&str) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
-    scan(reader, entry, view, true, |bytes| {
+    scan(reader, entry, view, true, 0, |bytes| {
         visit(std::str::from_utf8(bytes).expect("checked text part"))
     })
 }
 
-/// Reads a file once, delivering checked text parts in text mode or raw parts
-/// in binary mode. Both modes use the same block and line-window machinery.
+/// Reads a file suffix once, delivering checked text parts in text mode or raw
+/// parts in binary mode. Both modes use the same block and line-window machinery.
 fn scan(
     reader: &dyn AuthenticatedObjects,
     entry: &EntryFacts,
     view: Option<FileView>,
     text: bool,
+    from: u64,
     mut visit: impl FnMut(&[u8]) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
     if entry.value.kind != InodeKind::RegularFile {
@@ -158,11 +166,12 @@ fn scan(
     let size = view.logical_len();
     // A whole-file payload is already in memory: one part, nothing copied.
     if let Some(payload) = view.whole_file_bytes().map_err(args::content)? {
+        let payload = &payload[from as usize..];
         if !text {
             visit(payload)?;
             return Ok(());
         }
-        let (text, bad) = checked(payload, 0, size, true);
+        let (text, bad) = checked(payload, from, size, true);
         return if !visit(text.as_bytes())? || !bad {
             Ok(())
         } else {
@@ -171,7 +180,7 @@ fn scan(
     }
     let mut feed = Feed {
         pending: Vec::new(),
-        from: 0,
+        from,
         size,
         text,
         visit: &mut visit,
@@ -181,7 +190,7 @@ fn scan(
     let read = crate::telemetry::timed("sdk.lines", |timing| {
         timing
             .child("content.read")
-            .run(|scope| view.read_range(reader, 0..size, &mut feed, scope))
+            .run(|scope| view.read_range(reader, from..size, &mut feed, scope))
     });
     if let Some(end) = feed.end.take() {
         return end;
@@ -306,6 +315,11 @@ fn checked(bytes: &[u8], from: u64, size: u64, last: bool) -> (&str, bool) {
     (text, bad.is_some())
 }
 
+pub(super) struct LineStart {
+    pub line: u64,
+    pub offset: Option<u64>,
+}
+
 /// Scans with bounded buffers, including huge lines: every line from line
 /// `from` on, in order, until `visit` stops. Earlier lines are only counted.
 /// Each line retains its raw prefix; only text mode validates and converts UTF-8.
@@ -317,39 +331,57 @@ pub fn lines(
     binary: bool,
     visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
-    lines_until(reader, entry, prefix, from, binary, |_, _| Ok(false), visit).map(|_| ())
+    lines_until(
+        reader,
+        entry,
+        prefix,
+        LineStart {
+            line: from,
+            offset: None,
+        },
+        binary,
+        |_, _| Ok(false),
+        visit,
+    )
+    .map(|_| ())
 }
 
 /// `lines` with a stop check at each new line and each incomplete line part.
-/// A stopped line's number is returned without waiting for its terminator.
+/// A stopped line's number and absolute start are returned without waiting for
+/// its terminator. A supplied byte offset starts directly at `from`; numeric
+/// calls otherwise count and discard earlier lines from byte zero.
 pub(super) fn lines_until(
     reader: &dyn AuthenticatedObjects,
     entry: &EntryFacts,
     prefix: usize,
-    from: u64,
+    start: LineStart,
     binary: bool,
     mut stop: impl FnMut(u64, usize) -> Result<bool, SdkRefusal>,
     mut visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
-) -> Result<Option<u64>, SdkRefusal> {
-    let (mut open, mut stopped, mut early) = (Open::new(), false, None);
-    scan(reader, entry, None, !binary, |bytes| {
+) -> Result<Option<(u64, u64)>, SdkRefusal> {
+    let (from, offset) = (start.line, start.offset);
+    let mut open = offset.map_or_else(Open::new, |offset| Open::at(from, offset));
+    let (mut stopped, mut early) = (false, None);
+    scan(reader, entry, None, !binary, offset.unwrap_or(0), |bytes| {
         let mut at = 0;
         while at < bytes.len() {
             if open.number < from {
                 match skip(&bytes[at..], from - open.number) {
                     Ok(next) => {
                         open.number = from;
+                        open.offset += next as u64;
                         at += next;
                     }
                     Err(seen) => {
                         open.number += seen;
+                        open.offset += (bytes.len() - at) as u64;
                         at = bytes.len();
                     }
                 }
                 continue;
             }
             if open.length == 0 && stop(open.number, 0)? {
-                early = Some(open.number);
+                early = Some((open.number, open.offset));
                 stopped = true;
                 return Ok(false);
             }
@@ -368,7 +400,7 @@ pub(super) fn lines_until(
                     open.take(&bytes[at..end], prefix);
                     at = end;
                     if stop(open.number, open.length)? {
-                        early = Some(open.number);
+                        early = Some((open.number, open.offset));
                         stopped = true;
                         return Ok(false);
                     }
@@ -391,12 +423,13 @@ pub(super) fn binary() -> SdkRefusal {
     )
 }
 
-fn line(bytes: &mut Vec<u8>, length: usize, matched: bool) -> Line {
+fn line(bytes: &mut Vec<u8>, offset: u64, length: usize, matched: bool) -> Line {
     let shown = std::mem::take(bytes);
     let truncated = shown.len() < length;
     Line {
         bytes: length as u64,
         prefix: shown,
+        offset,
         truncated,
         matched,
     }

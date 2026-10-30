@@ -64,7 +64,8 @@ const p8Read = (args) => {
   const binary = args.path === "/binary.bin";
   if (binary && !args.binary) return refusal("Binary", "text contains NUL or invalid UTF-8");
   const content = binary ? Buffer.from([0, 255, 1, 10]) : Buffer.from(args.path === "/same.txt" ? "same\n" : p8Text(args.branch));
-  const value = { ...p8Header(args.branch, args.path), startLine: args.startLine ?? 1, endLine: 1, lineTruncated: false, truncated: false, nextLine: null, size: content.length };
+  const continued = typeof args.offset === "string";
+  const value = { ...p8Header(args.branch, args.path), startLine: continued ? 2 : args.startLine ?? 1, endLine: continued ? 2 : 1, lineTruncated: false, truncated: continued, nextLine: continued ? 3 : null, nextOffset: continued ? `lfr1.t.3.6.${"ab".repeat(32)}.2f66696c652e747874` : null, size: content.length };
   return { value: args.binary ? { ...value, bytes: content } : { ...value, text: content.toString("utf8") } };
 };
 
@@ -269,7 +270,7 @@ function answer(op, args) {
     case "branch.publish": return { value: exports.publishResults?.[args.branch] ?? { kind: "Added", source: { branch: "feature", commit: "pub1" }, publishedLayer: { id: "lay1" } } };
     case "fs.read":
       if (P8_REFS.has(args.branch)) return p8Read(args);
-      return { value: args.startLine === 1 ? { text: "a\n", nextLine: 2 } : { text: "b\n", nextLine: null } };
+      return { value: args.startLine === 1 ? { text: "a\n", nextLine: 2, nextOffset: `lfr1.t.2.2.${"ab".repeat(32)}.2f61` } : { text: "b\n", nextLine: null, nextOffset: null } };
     case "fs.list":
       if (args.branch === P8_COMMIT || args.branch === P8_LAYER) return p8List(args);
       return { value: { items: [], hasMore: false, nextPagePos: null } };

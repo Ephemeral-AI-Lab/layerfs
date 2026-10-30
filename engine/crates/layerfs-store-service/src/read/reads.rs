@@ -31,12 +31,28 @@ pub fn read(
     start: Arg<u64>,
     end: Arg<u64>,
     binary: bool,
+    offset: Arg<Option<String>>,
 ) -> Answer {
     // The lookup's pages are memoized over the call's caches; the file's
     // own objects are read through the caches only.
     let cached = Cached::new(reader)?;
     let entry = existing(&Memo::new(&cached), snap, path)?;
-    let (start, end) = (start?, end?);
+    let (numeric_start, end, offset) = (start?, end?, offset?);
+    let file_size = offset.as_ref().map(|_| size(reader, &entry)).transpose()?;
+    let (start, byte_start) = match offset {
+        Some(offset) => {
+            let cursor = parse_cursor(&offset)?;
+            let bound = cursor.path == path
+                && cursor.content_root == entry.value.content_root.to_string()
+                && cursor.binary == binary
+                && cursor.offset <= file_size.expect("cursor size");
+            if !bound {
+                return Err(invalid("offset does not match this file read"));
+            }
+            (cursor.line, Some(cursor.offset))
+        }
+        None => (numeric_start, None),
+    };
     if end < start {
         return Err(invalid("endLine must be at least startLine"));
     }
@@ -49,7 +65,10 @@ pub fn read(
         &cached,
         &entry,
         REPLY_BUDGET,
-        start,
+        window::LineStart {
+            line: start,
+            offset: byte_start,
+        },
         binary,
         |n, length| {
             Ok(n > requested_end
@@ -61,13 +80,14 @@ pub fn read(
                 return Ok(false);
             }
             let line_truncated = line.truncated;
+            let line_offset = line.offset;
             let shown = if binary {
                 line.prefix
             } else {
                 line.text().into_bytes()
             };
             if n > end || (!content.is_empty() && content.len() + shown.len() > REPLY_BUDGET) {
-                next = Some(n);
+                next = Some((n, line_offset));
                 return Ok(false);
             }
             clipped |= line_truncated;
@@ -77,8 +97,8 @@ pub fn read(
             Ok(true)
         },
     )?;
-    if let Some(n) = stopped.filter(|&n| n <= requested_end) {
-        next = Some(n);
+    if let Some(stopped_next) = stopped.filter(|(n, _)| *n <= requested_end) {
+        next = Some(stopped_next);
     }
     // Return either aggregate text or bytes, avoiding duplicate payload on the wire.
     let (name, content) = if binary {
@@ -88,6 +108,10 @@ pub fn read(
             "text",
             SdkValue::Text(String::from_utf8(content).expect("validated text window")),
         )
+    };
+    let size = match file_size {
+        Some(size) => size,
+        None => size(reader, &entry)?,
     };
     let mut fields = header(snap, path);
     fields.extend([
@@ -101,11 +125,105 @@ pub fn read(
         ("truncated", SdkValue::Bool(clipped || next.is_some())),
         (
             "nextLine",
-            next.map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
+            next.map_or(SdkValue::Null, |(n, _)| SdkValue::Int(n as i64)),
         ),
-        ("size", SdkValue::Int(size(reader, &entry)? as i64)),
+        (
+            "nextOffset",
+            next.map_or(SdkValue::Null, |(line, offset)| {
+                SdkValue::text(read_cursor(path, &entry, binary, line, offset))
+            }),
+        ),
+        ("size", SdkValue::Int(size as i64)),
     ]);
     answer(fields)
+}
+
+struct Cursor {
+    line: u64,
+    offset: u64,
+    content_root: String,
+    path: String,
+    binary: bool,
+}
+
+fn parse_cursor(value: &str) -> Result<Cursor, SdkRefusal> {
+    let malformed = || invalid("offset is not a valid read cursor");
+    let fields: Vec<_> = value.split('.').collect();
+    if fields.len() != 6
+        || fields.iter().any(|field| field.is_empty())
+        || fields[0] != "lfr1"
+        || fields[4].len() != 64
+        || !lower_hex(fields[4])
+    {
+        return Err(malformed());
+    }
+    let binary = match fields[1] {
+        "t" => false,
+        "b" => true,
+        _ => return Err(malformed()),
+    };
+    let line = decimal(fields[2], true).ok_or_else(malformed)?;
+    let offset = decimal(fields[3], false).ok_or_else(malformed)?;
+    let path = decode_hex(fields[5])
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+        .and_then(|path| crate::write::files::path(&path).ok())
+        .ok_or_else(malformed)?;
+    Ok(Cursor {
+        line,
+        offset,
+        content_root: fields[4].to_owned(),
+        path,
+        binary,
+    })
+}
+
+fn decimal(value: &str, positive: bool) -> Option<u64> {
+    if value.is_empty()
+        || (value.len() > 1 && value.starts_with('0'))
+        || !value.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let number = value.parse::<u64>().ok()?;
+    (number <= 9_007_199_254_740_991 && (!positive || number > 0)).then_some(number)
+}
+
+fn lower_hex(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() % 2 == 0
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn decode_hex(value: &str) -> Option<Vec<u8>> {
+    if !lower_hex(value) {
+        return None;
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| Some((hex_digit(pair[0])? << 4) | hex_digit(pair[1])?))
+        .collect()
+}
+
+fn hex_digit(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        _ => None,
+    }
+}
+
+fn read_cursor(path: &str, entry: &EntryFacts, binary: bool, line: u64, offset: u64) -> String {
+    format!(
+        "lfr1.{}.{}.{}.{}.{}",
+        if binary { "b" } else { "t" },
+        line,
+        offset,
+        entry.value.content_root,
+        args::hex(path.as_bytes())
+    )
 }
 
 /// The type, inode, size and permission mode of the entry at `path`. An

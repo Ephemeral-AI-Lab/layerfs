@@ -364,7 +364,7 @@ trace line covers the command's run.
 | --- | --- |
 | `LayerFS` (2) | `LayerFS.open(name)`, `LayerFS.init(name, folder, timeout?)`: static, each returns a ready client |
 | project (2) | `list_branches(pageSize?, pagePos?)`, `list_sandboxes(pageSize?, pagePos?)` |
-| fs reads (7) | `read(ref, path, startLine?, endLine?, { binary? }?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
+| fs reads (7) | `read(ref, path, startLine?, endLine?, { binary?, offset? }?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
 | fs writes (7) | `write(branch, path, content, message? \| { message?, mode? })`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message? \| { message?, mode? })`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
 | branch (8) | `fork(name, fromRef?)`, `graph(branch, pageSize?, pagePos?)`, `changed_paths(commit, pageSize?, pagePos?, { cursor? }?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
 | sandbox (3) | `create({ image }?)` → `{ sandbox, image }`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
@@ -475,15 +475,31 @@ a Commit identity: malformed text and Layer identities are `InvalidInput`, and a
 absent Commit is `NoSuchCommit`. Cursor validation and refusal are shared with
 `diff_commits`.
 
-Read/blame use 1-based inclusive line positions, with no byte-offset windows.
-Responses fit the authenticated control frame: at most 2000 lines and 48 KiB of
-text/byte payload, below the selected 256 KiB ceiling. LF separates lines; CRLF
-text is preserved, and a final LF creates no phantom line. Read reports `startLine`,
-`endLine`, `truncated`, `lineTruncated` and `nextLine`. Huge lines return a UTF-8
-prefix in text mode or a raw byte prefix in binary mode, with no within-line
-continuation; the remainder is explicitly omitted and the next window starts at
-the following line. NUL/invalid UTF-8 in scanned text is Binary only in text mode.
-Grep scans chunks and matches across chunk boundaries.
+Read/blame use 1-based inclusive line positions. Responses fit the authenticated
+control frame: at most 2000 lines and 48 KiB of text/byte payload, below the selected
+256 KiB ceiling. LF separates lines; CRLF text is preserved, and a final LF creates no
+phantom line. Read reports `startLine`, `endLine`, `truncated`, `lineTruncated`,
+`nextLine` and `nextOffset`. Huge lines return a UTF-8 prefix in text mode or a raw
+byte prefix in binary mode, with no within-line continuation; the remainder is
+explicitly omitted and the next window starts at the following line. NUL/invalid UTF-8
+in scanned text is Binary only in text mode. Grep scans chunks and matches across
+chunk boundaries.
+
+`nextOffset` is non-null exactly when `nextLine` is non-null and is an opaque cursor
+to the first byte of that unreturned line. Pass it as `{ offset }` to continue without
+rescanning earlier pages; the CLI flag is `--offset <cursor>`. `undefined`/`null` or
+omission selects numeric behavior, and numeric `startLine` paging remains supported.
+A valid cursor takes precedence over `startLine`, but numeric arguments are still
+validated, and `endLine` remains absolute. The reply's `startLine` is the effective
+cursor line. The cursor binds the normalized path, immutable content root and
+text/binary mode, not a snapshot: the same path and content may continue across a
+Commit or Layer, while another path, changed content, a mode swap or an offset beyond
+the file size is refused. Missing-path `NoSuchPath` lookup precedes cursor validation.
+Malformed input is `InvalidInput: offset is not a valid read cursor`; a binding
+mismatch is `InvalidInput: offset does not match this file read`; both have null detail.
+A cursor error never falls back to a numeric start or retries automatically. In the
+SDK, a non-string/non-null offset is refused before binding with `InvalidInput:
+offset must be a string or null`.
 Blame uses bounded LCS and exact common edges. In coarse comparisons, a line
 is inherited from the common suffix only when it starts at a corresponding
 line boundary in both versions, and from the common prefix only when it ends at
@@ -621,7 +637,7 @@ table differs, and when a family's files stop matching the SDK's.
 | `branch.diff_branches` | `layerfs branch diff_branches <from-branch> <to-branch> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--no-hunks]` |
 | `branch.merge` | `layerfs branch merge <a> <b> <name> [-m <text>] [--units <json>]` |
 | `branch.publish` | `layerfs branch publish <branch> [<commit>]` |
-| `fs.read` | `layerfs fs read <ref> <path> [--start-line <n>] [--end-line <n>] [--binary]` |
+| `fs.read` | `layerfs fs read <ref> <path> [--start-line <n>] [--end-line <n>] [--binary] [--offset <text>]` |
 | `fs.list` | `layerfs fs list <ref> [<path>] [--page-size <n>] [--page-pos <n>]` |
 | `fs.stat` | `layerfs fs stat <ref> <path>` |
 | `fs.grep` | `layerfs fs grep <ref> <pattern> [<path>] [--page-size <n>] [--page-pos <n>]` |
