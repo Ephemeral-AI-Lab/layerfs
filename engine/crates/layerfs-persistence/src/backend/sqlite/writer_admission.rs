@@ -18,7 +18,22 @@ pub(crate) struct Writer {
 }
 
 impl Writer {
+    /// Takes the cross-process writer lane. The blocking wait — another
+    /// process or session holding the lane — is a Store-writer wait like
+    /// the admission queue: the phase that waited reports it as
+    /// `wait.writer`, so an open or a publication that met a held lane is
+    /// visible in timing coverage instead of vanishing into the lock.
     pub(crate) fn acquire(path: &Path) -> Result<Self, BackendError> {
+        let started = std::time::Instant::now();
+        let writer = Self::acquire_lane(path)?;
+        layerfs_telemetry::timer::waits::add(
+            layerfs_telemetry::timer::waits::Wait::Writer,
+            started.elapsed(),
+        );
+        Ok(writer)
+    }
+
+    fn acquire_lane(path: &Path) -> Result<Self, BackendError> {
         #[cfg(target_os = "linux")]
         {
             // Never open another FD to SQLite's main/WAL/SHM files here:
