@@ -88,7 +88,11 @@ impl Mounter {
     /// floor, and a soft call then gave up within seconds. `mutejukebox`
     /// keeps an `NFS3ERR_JUKEBOX` answer from raising the "server not
     /// responding" dialog. A dead export still fails calls (connection
-    /// refused), within seconds.
+    /// refused), within seconds. `noatime` stops the client from updating the
+    /// access time: this export keeps one timestamp and shows it as atime,
+    /// mtime and ctime alike, and `layerfs-nfs` decodes and drops a SETATTR's
+    /// access time, so the update would cost one SETATTR per file a read or a
+    /// scan touches and change nothing.
     pub fn host() -> Self {
         let helper = |words: &[&str]| Helper(words.iter().map(|w| (*w).to_owned()).collect());
         if cfg!(target_os = "macos") {
@@ -96,7 +100,7 @@ impl Mounter {
                 mount: helper(&[
                     "/sbin/mount_nfs",
                     "-o",
-                    "vers=3,tcp,port={port},mountport={port},locallocks,nfc,actimeo=60,rsize=131072,wsize=131072,soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse",
+                    "vers=3,tcp,port={port},mountport={port},locallocks,nfc,noatime,actimeo=60,rsize=131072,wsize=131072,soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse",
                     "127.0.0.1:/",
                     "{dir}",
                 ]),
