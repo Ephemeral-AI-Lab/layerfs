@@ -1,0 +1,25 @@
+[package]
+name = "layerfs-python"
+description = "Python binding for the LayerFS Python SDK (local preparation; not published)"
+publish = false
+workspace = "../../.."
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+pyo3 = { version = "0.30.1", features = ["abi3-py310", "extension-module"] }
+layerfs-api = { path = "../layerfs-api" }
+layerfs-bridge = { path = "../layerfs-bridge" }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-persistence = { path = "../layerfs-persistence" }
+layerfs-project = { path = "../layerfs-project" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-store-service = { path = "../layerfs-store-service" }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }

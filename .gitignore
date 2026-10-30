@@ -1,6 +1,7 @@
 target/
 # The Node addon that api/scripts/build-native.mjs builds beside its crate.
 /engine/crates/layerfs-node/layerfs.node
+/engine/crates/layerfs-python/python/layerfs/_native.so
 /target-linux/
 /eval/runs/
 /eval/datasets/

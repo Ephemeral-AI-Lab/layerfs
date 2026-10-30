@@ -365,6 +365,7 @@ ENGINE_CRATES = {
     "layerfs-workspace",
     "layerfs-api",
     "layerfs-node",
+    "layerfs-python",
 }
 # Crate folders directly under api/ before the regrouping, by folder name.
 OLD_API_CRATES = {"layerfs-api": "layerfs-api", "binding": "layerfs-node"}

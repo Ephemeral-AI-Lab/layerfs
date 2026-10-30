@@ -36,6 +36,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-api",
     "layerfs-bridge",
     "layerfs-sandbox",
+    "layerfs-python",
 )
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
@@ -51,6 +52,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-api": "#![forbid(unsafe_code)]",
     "layerfs-bridge": "#![forbid(unsafe_code)]",
     "layerfs-sandbox": "#![forbid(unsafe_code)]",
+    "layerfs-python": "#![forbid(unsafe_code)]",
 }
 
 
@@ -64,6 +66,16 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-history",
         "layerfs-persistence",
         "layerfs-sandbox",
+        "layerfs-storage",
+        "layerfs-store-service",
+        "layerfs-telemetry",
+    },
+    "layerfs-python": {
+        "layerfs-project",
+        "layerfs-api",
+        "layerfs-bridge",
+        "layerfs-history",
+        "layerfs-persistence",
         "layerfs-storage",
         "layerfs-store-service",
         "layerfs-telemetry",
@@ -145,6 +157,7 @@ LAYER = {
     # only the published JavaScript packages, so no crate is in the api layer.
     "layerfs-api": ENGINE,
     "layerfs-node": ENGINE,
+    "layerfs-python": ENGINE,
 }
 
 
