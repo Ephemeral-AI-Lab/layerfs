@@ -166,9 +166,12 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   and daemon calls still refuse `Unsupported` on Windows, and the dsh macOS
   and WSL2 exceptions are unchanged. Recorded limitations: Windows Init has
   no hard-link membership and synthesizes the mode from the read-only
-  attribute; names travel as lossless WTF-8 (the backing-inside-source check
+  attribute; names travel as lossless WTF-8 — **owner-ratified 2026-10-31
+  ("可以合并") as the long-term content grammar** (an unpaired surrogate's
+  three-byte form is accepted, a pair spelled apart is refused; the earlier
+  lossy-names limitation is superseded) — the backing-inside-source check
   walks the audited volume-serial + file-index identity, and overlay
-  allocation is the real on-disk footprint); homes, discovery records and
+  allocation is the real on-disk footprint; homes, discovery records and
   Stores carry owner-only DACLs. See
   [the Windows-native route](core/docs/issues/352/DIRECT_STORE.md).
 - **Plugin-neutral LayerFS (owner, 2026-10-24).** LayerFS is agnostic to dsh

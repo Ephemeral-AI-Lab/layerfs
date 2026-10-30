@@ -88,6 +88,7 @@ fn dispatch(op: &str, args: SdkValue) -> Outcome {
 
 /// `sandbox.list_workspaces`: the daemon's read model without its history
 /// half, `{ kind, version, workspaces }`; the SDK pages and shapes them.
+#[cfg(unix)]
 fn listed(answer: SdkValue) -> Outcome {
     let SdkValue::Map(fields) = answer else {
         return Err(refused(
@@ -137,12 +138,12 @@ pub(crate) fn exec_output(
     #[cfg(windows)]
     {
         let _ = (&args, &page);
-        return Ok(AsyncTask::new(Job::new(move || {
+        Ok(AsyncTask::new(Job::new(move || {
             Err(refused(
                 "Unsupported",
                 "exec output needs a daemon Workspace; the Windows-native Store route serves project, fs and branch calls in-process",
             ))
-        })));
+        })))
     }
     #[cfg(unix)]
     {

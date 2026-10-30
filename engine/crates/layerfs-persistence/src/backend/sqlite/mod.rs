@@ -8,7 +8,6 @@ mod file_control;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub(crate) mod headroom;
 #[cfg(target_os = "windows")]
-#[allow(unsafe_code)]
 mod windows_lane;
 #[cfg(target_os = "windows")]
 pub use windows_lane::windows_volume_filesystem;

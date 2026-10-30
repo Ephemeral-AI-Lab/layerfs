@@ -41,7 +41,6 @@ pub fn encode(value: &OsStr) -> Vec<u8> {
                 out.push(0x80 | ((unit >> 6) & 0x3F) as u8);
                 out.push(0x80 | (unit & 0x3F) as u8);
             }
-            _ => unreachable!("a UTF-16 code unit is at most 16 bits"),
         }
         index += 1;
     }

@@ -207,7 +207,7 @@ fn a_junction_spelling_of_the_source_is_refused_as_inside_it() {
         matches!(error, ProjectError::BackingInsideSource),
         "{error:?}"
     );
-    std::fs::remove_dir(&fixture.path.join("alias")).unwrap();
+    std::fs::remove_dir(fixture.path.join("alias")).unwrap();
 }
 
 /// A dangling link initializes with the rest of the tree: the scan stamps a
@@ -217,7 +217,7 @@ fn a_junction_spelling_of_the_source_is_refused_as_inside_it() {
 #[test]
 fn a_dangling_junction_initializes_with_the_rest_of_the_tree() {
     use layerfs_history::{HistoryName, LayerStackId};
-    use layerfs_project::{init, InitRequest};
+    use layerfs_project::InitRequest;
     use support::memory_acquisition::MemoryAcquisition;
     let fixture = Fixture::new(5);
     let target = fixture.path.join("gone");

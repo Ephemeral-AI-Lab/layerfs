@@ -168,31 +168,29 @@ fn os_lock(directory: &Path, deadline: Instant) -> Result<usize> {
     if handle.is_null() {
         return Err(refused("Failed", "the discovery mutex cannot open"));
     }
-    loop {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
+    // One bounded attempt, not a retry loop: every exit below is final.
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if remaining.is_zero() {
+        unsafe { CloseHandle(handle) };
+        return Err(refused(
+            "Busy",
+            "another process owns this discovery mutation",
+        ));
+    }
+    let waited =
+        unsafe { WaitForSingleObject(handle, remaining.as_millis().min(u32::MAX as u128) as u32) };
+    match waited {
+        WAIT_OBJECT_0 | WAIT_ABANDONED => Ok(handle as usize),
+        WAIT_TIMEOUT => {
             unsafe { CloseHandle(handle) };
-            return Err(refused(
+            Err(refused(
                 "Busy",
                 "another process owns this discovery mutation",
-            ));
+            ))
         }
-        let waited = unsafe {
-            WaitForSingleObject(handle, remaining.as_millis().min(u32::MAX as u128) as u32)
-        };
-        match waited {
-            WAIT_OBJECT_0 | WAIT_ABANDONED => return Ok(handle as usize),
-            WAIT_TIMEOUT => {
-                unsafe { CloseHandle(handle) };
-                return Err(refused(
-                    "Busy",
-                    "another process owns this discovery mutation",
-                ));
-            }
-            _ => {
-                unsafe { CloseHandle(handle) };
-                return Err(refused("Failed", "the discovery mutex cannot be held"));
-            }
+        _ => {
+            unsafe { CloseHandle(handle) };
+            Err(refused("Failed", "the discovery mutex cannot be held"))
         }
     }
 }

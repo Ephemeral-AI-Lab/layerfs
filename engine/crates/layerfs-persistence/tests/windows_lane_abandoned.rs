@@ -5,7 +5,7 @@ mod support;
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::{port::*, StoragePolicy};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 fn config(path: &Path) -> PersistenceConfig {
     PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)

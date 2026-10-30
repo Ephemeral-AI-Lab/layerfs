@@ -74,7 +74,7 @@ pub fn claim(destination: &Path, temporary: &Path) -> io::Result<File> {
     {
         let claimed = options.open(temporary)?;
         crate::windows_acl::restrict_to_owner(temporary)?;
-        return Ok(claimed);
+        Ok(claimed)
     }
     #[cfg(not(windows))]
     options.open(temporary)

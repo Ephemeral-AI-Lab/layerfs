@@ -129,7 +129,12 @@ Linux's blocking flock is. Windows Init carries names as
 lossless WTF-8 end to end (an unpaired surrogate included, byte-exact
 round trip through the codec and the audited identity probes) and
 synthesizes the mode from the read-only attribute, and has no hard-link
-membership. The backing-inside-source check walks the audited
+membership. **The WTF-8 name grammar is owner-ratified 2026-10-31
+("可以合并") as the long-term content grammar**; until the byte-carrying
+merge/compare path lands as follow-up, a merge or compare that must build
+a String path over a name outside UTF-8 is refused (`InvalidRecord`)
+rather than decided on a collapsed path, and SDK listings render such
+names empty. The backing-inside-source check walks the audited
 volume-serial + file-index identity of every ancestor (a subst drive or
 junction into the source is recognised and refused, as on Linux), and
 overlay allocation is the entry's real on-disk footprint. Last-owner

@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 use crate::compare::tree::TreeTable;
 use crate::compare::BindingHints;
-use crate::error::ContentResult;
+use crate::error::{ContentError, ContentResult};
 use crate::filesystem::path::PathName;
 use crate::object::{AuthenticatedObjects, ObjectId};
 use layerfs_telemetry::timer::TimingScope;
@@ -186,11 +186,20 @@ fn name_all(
         let path = if first.is_empty() {
             "/".to_owned()
         } else {
-            first.iter().fold(String::new(), |mut path, name| {
+            // A name outside UTF-8 (the WTF-8 grammar) cannot ride a String
+            // path: rendering it empty would collapse distinct entries and
+            // every decision built on the path would be wrong. Refuse until
+            // the byte-carrying merge/compare path lands (the grammar is
+            // owner-ratified; the carriage is follow-up work).
+            let mut path = String::new();
+            for name in first {
+                let text = std::str::from_utf8(name.as_bytes()).map_err(|_| {
+                    ContentError::InvalidRecord("a name outside UTF-8 has no String path")
+                })?;
                 path.push('/');
-                path.push_str(name.as_str());
-                path
-            })
+                path.push_str(text);
+            }
+            path
         };
         named.insert(*serial, path);
     }

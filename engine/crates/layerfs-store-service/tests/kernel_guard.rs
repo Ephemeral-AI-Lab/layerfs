@@ -5,8 +5,9 @@
 //! refusal comes before any file is opened: the Store file's bytes are
 //! unchanged and no overlay template is created.
 use layerfs_store_service::{OpenRefusal, StoreService};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn refused(directory: &Path) -> (String, Vec<u8>, Vec<u8>) {
     let store = directory.join("store.sqlite");
     std::fs::write(&store, b"not opened").unwrap();
@@ -25,6 +26,7 @@ fn refused(directory: &Path) -> (String, Vec<u8>, Vec<u8>) {
     (reason, before, std::fs::read(&store).unwrap())
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn scratch(parent: &Path, label: &str) -> PathBuf {
     let directory = parent.join(format!("layerfs-guard-{label}-{}", std::process::id()));
     std::fs::create_dir_all(&directory).unwrap();
