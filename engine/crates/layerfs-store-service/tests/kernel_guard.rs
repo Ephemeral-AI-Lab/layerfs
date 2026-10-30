@@ -6,6 +6,8 @@
 //! unchanged and no overlay template is created.
 use layerfs_store_service::{OpenRefusal, StoreService};
 use std::path::Path;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+use std::path::PathBuf;
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 fn refused(directory: &Path) -> (String, Vec<u8>, Vec<u8>) {
