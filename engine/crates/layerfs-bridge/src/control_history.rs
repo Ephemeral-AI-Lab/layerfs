@@ -143,13 +143,16 @@ pub(crate) fn binding(input: &mut Reader<'_>) -> Result<BranchSnapshot, ControlE
     })
 }
 pub(crate) fn put_commit(out: &mut Writer, value: &CommitRecord) -> Result<(), ControlError> {
+    let start = out.0.len();
     out.put(&value.id.to_bytes())?;
     out.put(&value.stack.to_bytes())?;
     out.put(&value.root.to_bytes())?;
     put_head(out, value.parent)?;
     out.put(&value.base_layer.to_bytes())?;
     put_node(out, value.second_parent)?;
-    put_meta(out, &value.meta)
+    put_meta(out, &value.meta)?;
+    debug_assert_eq!(out.0.len() - start, value.encoded_bytes());
+    Ok(())
 }
 pub(crate) fn put_attribution(
     out: &mut Writer,

@@ -220,27 +220,22 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
             more.push((branch.name.as_str().to_owned(), SdkValue::Null));
             continue;
         }
+        let request = CommitHistoryRequest {
+            branch: branch.id,
+            start: None,
+            cursor: None,
+            limit: room.min(usize::from(MAXIMUM_PAGE_RECORDS)) as u16,
+        };
         let page = store
             .history()
-            .commit_history(&CommitHistoryRequest {
-                branch: branch.id,
-                start: None,
-                cursor: None,
-                limit: room.min(usize::from(MAXIMUM_PAGE_RECORDS)) as u16,
-            })
+            .commit_history(&request)
             .map_err(args::history)?;
-        // A rejected Commit yields exactly one continuation. Provider pages
-        // hold one Commit each (capacity is the 16 KiB result budget over the
-        // 12,608-byte maximal Commit width), so a rejection means nothing was
-        // emitted for this Branch: restart (Null) replays nothing for it and
-        // yields the rejected Commit first. The provider cursor resumes after
-        // the page's record, so it would skip the rejected Commit and must
-        // not also be pushed; pushing both produced a duplicate map key,
-        // which the control decoder rejects as "SDK field repeated".
-        // NOTE: when finding 4 packs provider pages by actual encoded size,
-        // a page can hold several Commits and a mid-page rejection needs a
-        // resume-at-rejected-Commit cursor instead of restart; revisit then.
+        // Restart is exact only when this Branch emitted nothing. After a
+        // mid-page rejection, resume at the rejected Commit so earlier values
+        // are not repeated and the rejected value is not skipped.
         let mut rejected = false;
+        let mut emitted = false;
+        let mut previous = None;
         for record in &page.records {
             if seen.insert(record.id) {
                 let name = match record.meta.branch {
@@ -248,16 +243,35 @@ pub fn snapshot(store: &Arc<Store>, args: &SdkValue, views: &[WorkspaceView]) ->
                     None => None,
                 };
                 let value = commit_value_with_budget(record, name.as_deref(), BUDGET);
-                if spent + value_cost(&value) > BUDGET {
+                let cost = value_cost(&value);
+                if spent + cost > BUDGET {
                     rejected = true;
                     break;
                 }
-                spent += value_cost(&value);
+                spent += cost;
                 commits.push(value);
+                emitted = true;
             }
+            previous = Some(record.id);
         }
         if rejected {
-            more.push((branch.name.as_str().to_owned(), SdkValue::Null));
+            let cursor = match previous.filter(|_| emitted) {
+                Some(previous) => {
+                    let resume = CommitHistoryRequest {
+                        branch: request.branch,
+                        start: page.records.first().map(|record| record.id),
+                        cursor: None,
+                        limit: request.limit,
+                    };
+                    let cursor = store
+                        .history()
+                        .commit_resume(&resume, previous)
+                        .map_err(args::history)?;
+                    SdkValue::text(hex(&cursor))
+                }
+                None => SdkValue::Null,
+            };
+            more.push((branch.name.as_str().to_owned(), cursor));
         } else if let Some(cursor) = page.continuation.as_deref() {
             more.push((branch.name.as_str().to_owned(), SdkValue::text(hex(cursor))));
         }

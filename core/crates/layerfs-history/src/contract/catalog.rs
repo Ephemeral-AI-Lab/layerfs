@@ -124,6 +124,16 @@ pub trait HistoryCatalog: Send + Sync {
         request: &CommitHistoryRequest,
     ) -> HistoryResult<PageResult<CommitRecord>>;
 
+    /// An authenticated cursor that resumes after an already-delivered Commit.
+    fn commit_resume(
+        &self,
+        request: &CommitHistoryRequest,
+        after: CommitId,
+    ) -> HistoryResult<Vec<u8>> {
+        let _ = (request, after);
+        Err(crate::HistoryError::Unsupported("Commit resume cursor"))
+    }
+
     /// Publication chain of one stack, newest first, one bounded page at a time.
     fn layer_history(
         &self,

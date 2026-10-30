@@ -85,6 +85,33 @@ pub struct CommitRecord {
     pub meta: CommitMeta,
 }
 
+impl CommitRecord {
+    /// Exact bytes of this decoded record in the typed history codec.
+    pub fn encoded_bytes(&self) -> usize {
+        let optional = |width: Option<usize>| 1 + width.unwrap_or(0);
+        let blob = |value: Option<&String>| optional(value.map(|text| text.len() + 2));
+        let node = |value: Option<NodeId>| optional(value.map(|id| id.as_slice().len()));
+        let labels = (!self.meta.labels.is_empty())
+            .then(|| crate::labels::encode(&self.meta.labels).len() + 2);
+        self.id.as_slice().len()
+            + self.stack.as_slice().len()
+            + self.root.as_bytes().len()
+            + optional(self.parent.map(|id| id.as_slice().len()))
+            + self.base_layer.as_slice().len()
+            + node(self.second_parent)
+            + optional(self.meta.branch.map(|id| id.as_slice().len()))
+            + 1
+            + blob(self.meta.message.as_ref())
+            + node(self.meta.merged_from)
+            + 8
+            + 4 * 8
+            + optional(self.meta.displaced.map(|id| id.as_slice().len()))
+            + 1
+            + blob(self.meta.author.as_ref())
+            + optional(labels)
+    }
+}
+
 /// How a Commit was made.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CommitVia {
