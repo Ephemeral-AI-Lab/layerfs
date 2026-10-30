@@ -99,7 +99,7 @@ pub fn init_observed(
     let scope = scope_for_seed(request.scope_seed);
     let mut stack = [0; 16];
     stack.copy_from_slice(&request.stack.to_bytes()[1..]);
-    let host = super::host::HostStat::of(&request.source, &source)?;
+    let host = super::host::HostStat::of(request.source, &source)?;
     let begun = request.acquisition.begin(&Begin {
         source_device: host.dev,
         source_inode: host.ino,

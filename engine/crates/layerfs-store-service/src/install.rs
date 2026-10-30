@@ -77,7 +77,7 @@ pub fn claim(destination: &Path, temporary: &Path) -> io::Result<File> {
         return Ok(claimed);
     }
     #[cfg(not(windows))]
-    Ok(options.open(temporary)?)
+    options.open(temporary)
 }
 
 /// Why an installed Store's initial Branch is not the sealed one.

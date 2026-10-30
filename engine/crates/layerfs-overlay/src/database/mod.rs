@@ -5,8 +5,9 @@ pub(crate) mod startup;
 pub(crate) mod statements;
 
 pub(crate) mod physical;
+// The audited module's own `#![allow(unsafe_code)]` admits it; a second
+// outer attribute is a clippy duplication.
 #[cfg(target_os = "windows")]
-#[allow(unsafe_code)]
 pub(crate) mod windows_identity;
 
 pub(crate) mod accounting;
