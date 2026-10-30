@@ -10,7 +10,9 @@
 use layerfs_remote_storage::minio::{self, MinioSettings};
 use layerfs_remote_storage::pieces;
 use layerfs_remote_storage::s3_api::{part_size, S3Client, S3Config, MAX_PARTS, MIN_PART};
-use layerfs_remote_storage::{CredentialRef, Driver, Limits, Metadata, RemoteError, Span};
+use layerfs_remote_storage::{
+    CredentialRef, Driver, Limits, Metadata, PinnedFile, RemoteError, Span,
+};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -46,11 +48,15 @@ fn bytes(n: u64, seed: u8) -> Vec<u8> {
         .collect()
 }
 
-/// The service under test, in its own namespace.
+/// The service under test, in its own namespace: `tests/<unique>`, under
+/// `LAYERFS_REMOTE_PREFIX` when that is set.
 fn settings(tag: &str) -> MinioSettings {
     let mut settings = MinioSettings::from_env()
         .expect("LAYERFS_REMOTE_* of a running MinIO (tests/minio_service.sh)");
-    settings.prefix = format!("tests/{}", unique(tag));
+    settings.prefix = match settings.prefix.as_str() {
+        "" => format!("tests/{}", unique(tag)),
+        base => format!("{base}/tests/{}", unique(tag)),
+    };
     settings.part_size = MIN_PART;
     settings
 }
@@ -70,7 +76,8 @@ enum Fault {
 }
 
 /// A one-request-per-connection proxy in front of MinIO that records each
-/// request line and injects `fault`. It reads plain HTTP, so an `https://`
+/// request line and injects `fault`. It asks MinIO to close after each
+/// reply (`connection: close`), which the client then honours. It reads plain HTTP, so an `https://`
 /// MinIO has none: the caller says so and skips (these tests run against an
 /// `http://` MinIO; `multipart_direct_round_trip` covers multipart over TLS).
 fn proxy(upstream: &str, fault: Option<Fault>) -> Option<(String, Arc<Mutex<Vec<String>>>)> {
@@ -138,6 +145,8 @@ fn relay(client: TcpStream, upstream: &str, fault: Option<Fault>, log: &Mutex<Ve
         return;
     }
     let mut server = TcpStream::connect(upstream).unwrap();
+    head.truncate(head.len() - 2);
+    head.extend_from_slice(b"connection: close\r\n\r\n");
     server.write_all(&head).unwrap();
     server.write_all(&body).unwrap();
     let mut reply = Vec::new();
@@ -502,4 +511,48 @@ fn listing_and_last_modified() {
         .collect();
     assert_eq!(b, ["b/note", "b/store.sqlite"]);
     assert!(remote.list("c/").unwrap().is_empty());
+}
+
+/// Sequential 1 MiB ranged reads through a [`PinnedFile`], as a live view
+/// makes them, on the client's kept connections (#510).
+/// `LAYERFS_TEST_RANGED_READS` reads (default 16) of a 32 MiB file; prints
+/// requests, bytes, failures and wall time, then deletes the file. A failed
+/// read is counted, never sent again; the next read is a different range.
+#[test]
+#[ignore = "needs MinIO: tests/minio_service.sh"]
+fn ranged_reads_through_a_pinned_file() {
+    let settings = settings("ranged");
+    let remote = client(&settings);
+    let root = scratch("ranged");
+    let data = bytes(32 * MIB, 3);
+    fs::write(root.join("file"), &data).unwrap();
+    remote
+        .upload_file("store.sqlite", &root.join("file"), None, &Metadata::new())
+        .unwrap();
+    let reads: u64 = std::env::var("LAYERFS_TEST_RANGED_READS")
+        .map_or(16, |n| n.parse().expect("LAYERFS_TEST_RANGED_READS"));
+    let start = std::time::Instant::now();
+    let pinned = PinnedFile::open(Box::new(client(&settings)), "store.sqlite").unwrap();
+    let mut failures = Vec::new();
+    let mut out = vec![0; MIB as usize];
+    for read in 0..reads {
+        let offset = (read * 7919 * 4096) % (31 * MIB);
+        match pinned.read(offset, &mut out) {
+            Ok(()) => assert!(out[..] == data[offset as usize..(offset + MIB) as usize]),
+            Err(error) => failures.push(format!("read {read} at {offset}: {error}")),
+        }
+    }
+    let wall = start.elapsed();
+    println!(
+        "ranged reads {reads}: requests {} (the open's included), bytes {}, failures {}, wall {} ms",
+        pinned.requests(),
+        pinned.fetched(),
+        failures.len(),
+        wall.as_millis()
+    );
+    for failure in &failures {
+        println!("{failure}");
+    }
+    remote.delete("store.sqlite").unwrap();
+    assert!(failures.is_empty());
 }

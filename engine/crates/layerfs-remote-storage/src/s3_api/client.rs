@@ -1,6 +1,7 @@
 //! The S3 API driver: single PUT up to the part size, multipart above it,
 //! ranged GET (conditional on the file's version, #510), HEAD, DELETE and
-//! ListObjectsV2 paging. One connection and one attempt per request.
+//! ListObjectsV2 paging. One attempt per request, on a connection the
+//! client kept alive from an earlier reply or a new one.
 use crate::driver::{
     check_metadata, open_span, Condition, Driver, Listed, Metadata, Ranged, Span, Stat,
     MAX_LIST_PAGES,
@@ -8,6 +9,7 @@ use crate::driver::{
 use crate::error::{local, RemoteError};
 use crate::limits::Limits;
 use crate::s3_api::config::S3Config;
+use crate::s3_api::connection::Kept;
 use crate::s3_api::http::{exchange, parse_length, Body, Reply, Sink};
 use crate::s3_api::{multipart, sign};
 use sha2::{Digest, Sha256};
@@ -22,13 +24,18 @@ const META: &str = "x-amz-meta-";
 #[derive(Debug)]
 pub struct S3Client {
     config: S3Config,
+    /// Idle connections for the next requests.
+    kept: Kept,
 }
 
 impl S3Client {
     /// Checks `config`; sends nothing.
     pub fn new(config: S3Config) -> Result<Self, RemoteError> {
         config.validate()?;
-        Ok(Self { config })
+        Ok(Self {
+            config,
+            kept: Kept::default(),
+        })
     }
 
     pub fn config(&self) -> &S3Config {
@@ -54,7 +61,15 @@ impl S3Client {
         } else {
             format!("{path}?{query}")
         };
-        exchange(&self.config, method, &target, &headers, body, sink)
+        exchange(
+            &self.config,
+            &self.kept,
+            method,
+            &target,
+            &headers,
+            body,
+            sink,
+        )
     }
 
     /// Upload ids of unfinished multipart uploads of `name`. An operator

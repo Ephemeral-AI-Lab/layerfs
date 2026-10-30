@@ -1,16 +1,19 @@
-//! One HTTP/1.1 request per TCP connection (`Connection: close`), with a
-//! streamed file body and a streamed reply body. Revived from the retired
-//! `layerfs-s3` framing; bodies no longer have to fit in memory. An
-//! `https://` endpoint runs the same exchange over TLS (`tls` feature).
+//! One HTTP/1.1 request and its reply, with a streamed file body and a
+//! streamed reply body, on a kept-alive connection of the client or a new
+//! one ([`super::connection`], #510). Revived from the retired `layerfs-s3`
+//! framing; bodies no longer have to fit in memory. An `https://` endpoint
+//! runs the same exchange over TLS (`tls` feature).
 //!
-//! Failures before the first byte is written, the TLS handshake included,
-//! are `Unavailable`; after it,
-//! any failure to complete the exchange is `Uncertain`, and the request is
-//! never sent again. A file body's bytes are reported to the thread's
-//! transfer progress as they are written.
+//! Failures before the first byte is written, the connect and TLS handshake
+//! included, are `Unavailable`; after it, any failure to complete the
+//! exchange is `Uncertain`, and the request is never sent again, on this
+//! connection or another. A reply read to its exact end leaves its
+//! connection to the client's next request. A file body's bytes are
+//! reported to the thread's transfer progress as they are written.
 use crate::driver::Span;
 use crate::error::{local, RemoteError};
 use crate::s3_api::config::S3Config;
+use crate::s3_api::connection::{Connection, Kept};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
@@ -20,61 +23,6 @@ const HEADER_LIMIT: usize = 16 * 1024;
 /// Largest reply body read into memory (error and XML replies).
 pub(crate) const SMALL_BODY: u64 = 4 * 1024 * 1024;
 const BUFFER: usize = 256 * 1024;
-
-/// The one connection of a request: TCP, or TLS over it.
-enum Connection {
-    Plain(TcpStream),
-    #[cfg(feature = "tls")]
-    Tls(Box<native_tls::TlsStream<TcpStream>>),
-}
-
-impl Connection {
-    /// Wraps `socket` in TLS for `host` when `tls`; the handshake checks the
-    /// certificate against the system's roots and `host`.
-    fn open(socket: TcpStream, host: &str, tls: bool) -> Result<Self, String> {
-        if !tls {
-            return Ok(Self::Plain(socket));
-        }
-        #[cfg(feature = "tls")]
-        {
-            let connector = native_tls::TlsConnector::new().map_err(|e| format!("TLS: {e}"))?;
-            let stream = connector
-                .connect(host, socket)
-                .map_err(|e| format!("TLS handshake with {host}: {e}"))?;
-            Ok(Self::Tls(Box::new(stream)))
-        }
-        #[cfg(not(feature = "tls"))]
-        Err(format!("TLS to {host}: this build has no tls feature"))
-    }
-}
-
-impl Read for Connection {
-    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
-        match self {
-            Self::Plain(socket) => socket.read(buffer),
-            #[cfg(feature = "tls")]
-            Self::Tls(stream) => stream.read(buffer),
-        }
-    }
-}
-
-impl Write for Connection {
-    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
-        match self {
-            Self::Plain(socket) => socket.write(buffer),
-            #[cfg(feature = "tls")]
-            Self::Tls(stream) => stream.write(buffer),
-        }
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        match self {
-            Self::Plain(socket) => socket.flush(),
-            #[cfg(feature = "tls")]
-            Self::Tls(stream) => stream.flush(),
-        }
-    }
-}
 
 /// A request body.
 pub(crate) enum Body<'a> {
@@ -116,26 +64,14 @@ enum Framing {
     None,
 }
 
-/// Sends one request and reads its reply.
-pub(crate) fn exchange(
-    config: &S3Config,
-    method: &str,
-    target: &str,
-    headers: &BTreeMap<String, String>,
-    mut body: Body<'_>,
-    sink: Option<Sink<'_>>,
-) -> Result<Reply, RemoteError> {
-    let (host, port, _, tls) = config.address()?;
+/// Opens a new connection to the endpoint; nothing is sent yet.
+fn connect(config: &S3Config, host: &str, port: u16, tls: bool) -> Result<Connection, RemoteError> {
     let unavailable = |e: io::Error| RemoteError::Unavailable(format!("{host}:{port}: {e}"));
-    let address = (host.as_str(), port)
+    let address = (host, port)
         .to_socket_addrs()
         .map_err(unavailable)?
         .next()
         .ok_or_else(|| RemoteError::Unavailable(format!("{host} has no address")))?;
-    if let Body::File { file, span } = &mut body {
-        file.seek(SeekFrom::Start(span.offset))
-            .map_err(|e| local("seek", e))?;
-    }
     let socket =
         TcpStream::connect_timeout(&address, config.connect_timeout).map_err(unavailable)?;
     let configure = |socket: &TcpStream| {
@@ -144,17 +80,45 @@ pub(crate) fn exchange(
         socket.set_write_timeout(Some(config.io_timeout))
     };
     configure(&socket).map_err(unavailable)?;
-    let mut connection = Connection::open(socket, &host, tls).map_err(RemoteError::Unavailable)?;
-    let what = format!("{method} {}", target.split('?').next().unwrap_or(target));
+    Connection::open(socket, host, tls).map_err(RemoteError::Unavailable)
+}
+
+/// Sends one request, on a connection `kept` holds or a new one, and reads
+/// its reply; a connection the reply leaves reusable goes back to `kept`.
+pub(crate) fn exchange(
+    config: &S3Config,
+    kept: &Kept,
+    method: &str,
+    target: &str,
+    headers: &BTreeMap<String, String>,
+    mut body: Body<'_>,
+    sink: Option<Sink<'_>>,
+) -> Result<Reply, RemoteError> {
+    let (host, port, _, tls) = config.address()?;
+    if let Body::File { file, span } = &mut body {
+        file.seek(SeekFrom::Start(span.offset))
+            .map_err(|e| local("seek", e))?;
+    }
+    let path = target.split('?').next().unwrap_or(target);
+    let (mut connection, what) = match kept.take() {
+        Some((connection, idle)) => (
+            connection,
+            format!(
+                "{method} {path} (on a connection kept {} ms)",
+                idle.as_millis()
+            ),
+        ),
+        None => (
+            connect(config, &host, port, tls)?,
+            format!("{method} {path}"),
+        ),
+    };
     let uncertain = |why: String| RemoteError::Uncertain(format!("{what}: {why}"));
     let mut head = format!("{method} {target} HTTP/1.1\r\n");
     for (name, value) in headers {
         head.push_str(&format!("{name}: {value}\r\n"));
     }
-    head.push_str(&format!(
-        "content-length: {}\r\nconnection: close\r\n\r\n",
-        body.length()
-    ));
+    head.push_str(&format!("content-length: {}\r\n\r\n", body.length()));
     let writer = &mut connection;
     writer
         .write_all(head.as_bytes())
@@ -187,7 +151,7 @@ pub(crate) fn exchange(
         .flush()
         .map_err(|e| uncertain(format!("send: {e}")))?;
     let mut reader = BufReader::with_capacity(BUFFER, &mut connection);
-    let (status, headers) = read_head(&mut reader).map_err(uncertain)?;
+    let (version, status, headers) = read_head(&mut reader).map_err(uncertain)?;
     let framing = if method == "HEAD" || status == 204 || status == 304 {
         Framing::None
     } else {
@@ -201,6 +165,7 @@ pub(crate) fn exchange(
             _ => return Err(uncertain("ambiguous reply framing".to_owned())),
         }
     };
+    let until_close = matches!(framing, Framing::Close);
     let mut memory = Vec::new();
     let streamed = match sink {
         Some(sink) if sink.status == status => {
@@ -211,6 +176,20 @@ pub(crate) fn exchange(
             0
         }
     };
+    // Kept only when the reply ended exactly where its framing said, nothing
+    // more was read, and neither side asked to close.
+    let reusable = version == "HTTP/1.1"
+        && !until_close
+        && reader.buffer().is_empty()
+        && !headers.get("connection").is_some_and(|value| {
+            value
+                .split(',')
+                .any(|token| token.trim().eq_ignore_ascii_case("close"))
+        });
+    drop(reader);
+    if reusable {
+        kept.put(connection);
+    }
     Ok(Reply {
         status,
         headers,
@@ -252,7 +231,9 @@ fn read_body(
             if chunk.is_empty() {
                 return match left {
                     None => Ok(()),
-                    Some(_) => Err(BodyError::Network("reply body ended early".to_owned())),
+                    Some(left) => Err(BodyError::Network(format!(
+                        "reply body ended early: the server closed the connection {left} bytes short"
+                    ))),
                 };
             }
             let n = left.map_or(chunk.len(), |left| chunk.len().min(left as usize));
@@ -297,13 +278,18 @@ fn read_body(
     Ok(total)
 }
 
-fn read_head(reader: &mut impl BufRead) -> Result<(u16, BTreeMap<String, String>), String> {
+/// A reply's HTTP version, status and headers (names in lower case).
+type Head = (&'static str, u16, BTreeMap<String, String>);
+
+fn read_head(reader: &mut impl BufRead) -> Result<Head, String> {
     let mut remaining = HEADER_LIMIT;
     let line = read_line(reader, &mut remaining)?;
     let mut words = line.splitn(3, ' ');
-    if !matches!(words.next(), Some("HTTP/1.1" | "HTTP/1.0")) {
-        return Err(format!("reply status line {line:?}"));
-    }
+    let version = match words.next() {
+        Some("HTTP/1.1") => "HTTP/1.1",
+        Some("HTTP/1.0") => "HTTP/1.0",
+        _ => return Err(format!("reply status line {line:?}")),
+    };
     let status = words
         .next()
         .filter(|s| s.len() == 3)
@@ -314,7 +300,7 @@ fn read_head(reader: &mut impl BufRead) -> Result<(u16, BTreeMap<String, String>
     loop {
         let line = read_line(reader, &mut remaining)?;
         if line.is_empty() {
-            return Ok((status, headers));
+            return Ok((version, status, headers));
         }
         let (name, value) = line.split_once(':').ok_or("reply header")?;
         if name.is_empty() || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {

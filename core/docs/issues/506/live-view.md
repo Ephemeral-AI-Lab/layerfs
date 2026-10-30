@@ -7,7 +7,9 @@
 > `Unsupported`. On `r2-examples-clone` via MinIO, History costs 4 GETs and the
 > run 7.26% of the file, but the root folder listing costs 20 GETs (each inode
 > lookup misses in a different place and reads 1 MiB ahead). R2 stopped twice
-> on a cut reply body (`Unknown`). See the #510 comments. Builds on
+> on a cut reply body (`Unknown`); the cause was the client's
+> `Connection: close`, and the S3 client now keeps connections alive instead
+> (§4.2 Transport). See the #510 comments. Builds on
 > [one link per Store](links.md) (#509). The Connect part is in Connect's own
 > repository, `docs/ui/storage-links.md` §8.
 
@@ -123,6 +125,23 @@ Already in place:
 - **No retry:** each GET is one attempt. Failure maps to `Unavailable`,
   `Denied` (401/403), `Changed` (412) or `Unknown` (connection lost), and
   fails that SQLite read (`SQLITE_IOERR_READ`), so the call reports it.
+- **Transport (#510 fix):** the S3 client sends HTTP/1.1 requests without
+  `Connection: close` and keeps a connection whose reply ended exactly at
+  its framing for its next request (at most 4 idle, each for at most 10 s;
+  `s3_api/connection.rs`). Cause, diagnostic (one sample per arm, Linux
+  container on macOS Docker, 1 MiB ranged GETs of an `lfc-test-` object,
+  4 at a time): with `Connection: close`, R2's edge ended 6 of 583 bodies
+  2–18 KiB early with a clean TLS close (`close_notify`); without it, 0 of
+  597 on fresh connections and 0 of 1,035 on reused ones. The transport
+  could not tell that close from a complete body: OpenSSL 3 through
+  rust-openssl's stream reports both a `close_notify` and a TCP close
+  without one as end of file, so `read_body` said "reply body ended
+  early". Not a read timeout (that surfaces as `WouldBlock`, never as end
+  of file). Taking a kept connection sends nothing: one idle too long, or
+  with anything to read (a close, an alert, stray bytes) is closed first
+  and the request connects afresh. Once a request's first byte is written,
+  a failure is that request's outcome (`Unknown` when sent), never resent
+  on this or another connection.
 - **Counters:** per view, requests, bytes fetched, cache hits and misses,
   for the trace and for §7.
 - **Concurrency:** one view may serve concurrent read calls; the cache is
