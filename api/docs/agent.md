@@ -313,7 +313,15 @@ one: a new file gets `mode`, else 0o644; an existing file keeps its mode unless
 `mode` is given; a new folder gets `mode`, else 0o755, while parents it creates
 get 0o755 and an existing folder keeps its mode, as `mkdir -p -m` does.
 `{ op: "chmod", path, mode }` sets the mode of an existing file or folder.
-`fs.stat` reports `mode`. A mode that is not an integer from 0 to 0o7777 is
+`fs.stat` reports `mode`, `mtimeSeconds`, `mtimeNanoseconds` and `nlink`.
+`mtimeSeconds` and `mtimeNanoseconds` are the portable modification time
+(Unix epoch seconds and the fractional second); they are two integers so a
+JavaScript Number keeps them exactly. `nlink` is the committed namespace
+link count: 0 for the root, 1 for any other directory or symlink, and the
+number of names for a regular file (hard-linked names share `inode`).
+`fs.list` entries report the same `mode`, `mtimeSeconds`, `mtimeNanoseconds`
+and `nlink` beside `name`, `path`, `type` and `inode`, so a directory listing
+does not need one `fs.stat` per name. A mode that is not an integer from 0 to 0o7777 is
 `InvalidInput`; one LayerFS cannot store (set-user-ID or set-group-ID on any
 entry, the sticky bit on a file) is `InvalidInput` with `detail`
 `{ reason: "Mode", path, mode }` (octal text), as in `project.init`. A symbolic
