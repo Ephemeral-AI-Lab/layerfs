@@ -31,25 +31,28 @@
 ## CLI and MCP can mount, run a command, commit, read history,
 ## and push or pull")
 
-- [ ] P10 (connect#61) — single-call result API.
-  Brief: `brief-p10.md`.
-- [ ] P11 (connect#62) — storage statistics (extend
-  get_storage). Brief: `brief-p11.md`.
-- [ ] P12 (connect#63) — storage summary (cheap).
-  Brief: `brief-p12.md`.
-- [ ] P13 (connect#64) — folder-scoped client (options /
-  wrapper). Brief: `brief-p13.md`.
-- [ ] P3 (connect#54) — history DONE via P1. Push/pull
+- [x] P10 (connect#61) — single-call result API.
+  Merged in PR #16 (commit bc3036162). Brief: `brief-p10.md`.
+- [x] P11 (connect#62) — storage statistics (extend
+  get_storage). Merged in PR #17 (commit abd6d57c8).
+  Brief: `brief-p11.md`.
+- [x] P12 (connect#63) — storage summary (cheap).
+  Merged in PR #18 (commit 2117909b5). Brief: `brief-p12.md`.
+- [x] P13 (connect#64) — folder-scoped client (options /
+  wrapper). Merged in PR #19 (commit 4d2838648).
+  Brief: `brief-p13.md`.
+- [x] P3 (connect#54) — history DONE via P1. Push/pull
   BLOCKED by R7 #42: never simulate, never fake.
   Note: `brief-p3-status.md`.
-- [ ] P4 (connect#55) — Python SDK, per D10: native PyO3
+- [x] P4 (connect#55) — Python SDK, per D10: native PyO3
   binding over the public Rust API on Linux, framed worker on
-  macOS/Windows. Brief: `brief-p4.md`.
-- [ ] P5 (connect#56) — MCP, per D11: Node SDK + stdio first,
-  no HTTP initially. Brief: `brief-p5.md`.
-- [ ] P15 (connect#66) — prepare @layerfs/* for npm ONLY.
-  Publication needs a separate user approval.
-  Brief: `brief-p15.md`.
+  macOS/Windows. Merged in PR #20 (commit 1de6e99dc).
+  Brief: `brief-p4.md`.
+- [x] P5 (connect#56) — MCP, per D11: Node SDK + stdio first,
+  no HTTP initially. Merged in PR #21 (commit bd586c414).
+  Brief: `brief-p5.md`.
+- [x] P15 (connect#66) — prepare @layerfs/* for npm ONLY.
+  Merged in PR #22 (commit ebd40cee0). Brief: `brief-p15.md`.
 
 ## Integration and gates
 
