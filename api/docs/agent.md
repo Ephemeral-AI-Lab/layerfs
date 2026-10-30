@@ -306,7 +306,9 @@ itself.
 
 Limits: background processes still read `/proc` and are not available on
 macOS; many small writes cost about six times APFS's time; checked on Apple
-silicon with macOS 27.2.
+silicon with macOS 27.2. Imported application SQLite databases in WAL mode
+can fail on this NFS route with the system SQLite VFS; see
+[SQLite database preparation and cache placement](../../docs/general/sqlite-on-network-filesystems.md).
 
 ### Exec output
 
