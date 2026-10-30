@@ -14,6 +14,7 @@ use layerfs_bridge::{
 };
 use layerfs_sandbox::backend::docker::DockerProvider;
 use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions};
+use layerfs_sandbox::Runtime;
 use std::{
     fs,
     net::TcpListener,
@@ -129,7 +130,7 @@ impl Fixture {
         ];
         responses.extend(tail);
         let (docker, peer) = Peer::new(responses, 4096);
-        let api = SandboxApi::with_provider(Arc::new(DockerProvider::new(docker)));
+        let api = SandboxApi::with_runtime(Arc::new(Runtime::Docker(DockerProvider::new(docker))));
         let binary = std::env::temp_dir().join(format!(
             "sdk-operations-{}-{}",
             std::process::id(),
@@ -442,7 +443,7 @@ fn create_matching_existing_project_keeps_one_original_hello_and_does_not_reinst
 fn create_mismatched_existing_project_refuses_before_any_deployment_or_control_effect() {
     let project = ProjectFixture::new();
     let (docker, peer) = Peer::new(vec![], 4096);
-    let api = SandboxApi::with_provider(Arc::new(DockerProvider::new(docker)));
+    let api = SandboxApi::with_runtime(Arc::new(Runtime::Docker(DockerProvider::new(docker))));
     let mut deployment_setup = setup([32; 32], duplex::public_key(&[31; 32]).unwrap());
     let mut manifest = project.project.manifest.clone();
     manifest.root[0] ^= 1;

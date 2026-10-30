@@ -18,13 +18,13 @@ UNSAFE = re.compile(r"\bunsafe\b")
 # Crates whose `unsafe` surface is bounded. layerfs-storage keeps one audited
 # FFI module (encoding/codec.rs); Persistence has the owner-authorized macOS
 # seal file-control module; Sandbox reads macOS process facts through
-# proc_pidinfo in backend/local/darwin.rs. Their siblings stay unsafe-free. The
+# proc_pidinfo in backend/macos/darwin.rs. Their siblings stay unsafe-free. The
 # comment in a lint name (`unsafe_code`) is not the bare word, so attr lines
 # never trip the scan once comments are stripped.
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
     "layerfs-persistence": "src/backend/sqlite/file_control.rs",
-    "layerfs-sandbox": "src/backend/local/darwin.rs",
+    "layerfs-sandbox": "src/backend/macos/darwin.rs",
 }
 UNSAFE_FREE_CRATES = (
     "layerfs-content",

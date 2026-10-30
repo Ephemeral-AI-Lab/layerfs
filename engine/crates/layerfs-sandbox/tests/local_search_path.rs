@@ -8,7 +8,7 @@
 use layerfs_sandbox::{
     backend::{
         docker::ExecRequest,
-        local::{Local, Sandbox},
+        native::{Local, Sandbox},
     },
     CommandIdentity,
 };

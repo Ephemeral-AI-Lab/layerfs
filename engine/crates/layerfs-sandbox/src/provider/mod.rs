@@ -1,9 +1,9 @@
-//! Runtime providers own processes and command streams, never daemon control protocols.
+//! Runtime inputs and observations; concrete backends own their own lifecycle.
 mod capabilities;
-mod lifecycle;
+mod launch;
 mod options;
 pub use capabilities::{IsolationModel, MountDriver, ProviderCapabilities, SearchPathPolicy};
-pub use lifecycle::{LaunchFailure, LaunchPhase, SandboxInstance, SandboxProvider};
+pub use launch::{LaunchFailure, LaunchPhase};
 pub use options::{
     DockerRecord, ExecExit, LaunchRequest, LocalRecord, ProviderLaunchOptions, SandboxInspection,
     SandboxRecord,

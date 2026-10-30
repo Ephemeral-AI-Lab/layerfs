@@ -1,4 +1,4 @@
-//! The local process runtime (`backend::local`): one daemon process per
+//! The native process runtime (`backend::native`): one daemon process per
 //! Sandbox directory, observed by process id and start time, its commands run
 //! as their own identity, and its stop and delete each attempted once. A
 //! small shell script stands in for the daemon; nothing here needs root.
@@ -7,7 +7,7 @@
 use layerfs_sandbox::{
     backend::{
         docker::ExecRequest,
-        local::{Local, LocalPhase, LocalProcess, Sandbox},
+        native::{Local, LocalPhase, LocalProcess, Sandbox},
     },
     CommandIdentity, RuntimeError,
 };

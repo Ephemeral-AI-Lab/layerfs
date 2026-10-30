@@ -1,10 +1,10 @@
-//! macOS facts the local runtime reads from `/proc` on Linux: a process's
+//! macOS facts the native runtime reads from `/proc` on Linux: a process's
 //! state, group and start time (`proc_pidinfo`, a system call: `ps` is setuid
 //! root, which a Seatbelt-sandboxed caller may not execute), this boot's
 //! identity (`sysctl`), the mount table (`mount`) and a forced unmount
 //! (`umount -f`). Each tool is one run with a fixed path and the C locale,
 //! read once; nothing is retried.
-use super::process::Stat;
+use crate::backend::native::process::Stat;
 use nix::{
     fcntl::{fcntl, FcntlArg, OFlag},
     libc,
@@ -48,7 +48,7 @@ fn invalid(what: &'static str) -> io::Error {
 /// exists. Not `ps`: it is setuid root, and a sandboxed caller (dsh's
 /// Seatbelt profile for agents' bash) may not execute it.
 #[allow(unsafe_code)]
-pub(super) fn stat(pid: u32) -> io::Result<Stat> {
+pub(crate) fn stat(pid: u32) -> io::Result<Stat> {
     let id = i32::try_from(pid).map_err(|_| invalid("process id width"))?;
     let mut info = std::mem::MaybeUninit::<libc::proc_bsdinfo>::zeroed();
     let size = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
@@ -101,7 +101,7 @@ fn from_info(info: &libc::proc_bsdinfo) -> Stat {
 /// Every process now, with its stat (`proc_listallpids`); a process that
 /// ends or is not readable between the listing and its read is left out.
 #[allow(unsafe_code)]
-pub(super) fn processes() -> io::Result<Vec<(u32, Stat)>> {
+pub(crate) fn processes() -> io::Result<Vec<(u32, Stat)>> {
     // SAFETY: a null buffer asks only for the count.
     let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
     if count < 0 {
@@ -127,7 +127,7 @@ pub(super) fn processes() -> io::Result<Vec<(u32, Stat)>> {
 
 /// This boot's identity as a number, read once per process:
 /// `kern.bootsessionuuid`, else `kern.boottime` (seconds and microseconds).
-pub(super) fn boot() -> io::Result<u128> {
+pub(crate) fn boot() -> io::Result<u128> {
     static BOOT: OnceLock<u128> = OnceLock::new();
     if let Some(boot) = BOOT.get() {
         return Ok(*boot);
@@ -167,7 +167,7 @@ fn boottime(text: &str) -> Option<u128> {
 }
 
 /// Every mount point now, from `mount`'s `<what> on <point> (<options>)`.
-pub(super) fn mount_points() -> io::Result<Vec<PathBuf>> {
+pub(crate) fn mount_points() -> io::Result<Vec<PathBuf>> {
     let (ran, text) = output(MOUNT, &[])?;
     if !ran {
         return Err(io::Error::other("mount listing failed"));
@@ -182,7 +182,7 @@ fn mount_point(line: &str) -> Option<PathBuf> {
 }
 
 /// Forces the mount at `point` off once; a point no longer mounted is done.
-pub(super) fn force_unmount(point: &Path) -> io::Result<()> {
+pub(crate) fn force_unmount(point: &Path) -> io::Result<()> {
     static RETAINED: Mutex<Vec<Child>> = Mutex::new(Vec::new());
     {
         let mut held = RETAINED.lock().unwrap_or_else(|error| error.into_inner());

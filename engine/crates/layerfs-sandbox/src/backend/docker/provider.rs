@@ -1,12 +1,11 @@
-//! Docker's existing one-attempt runtime behind the shared provider ports.
+//! Docker's existing one-attempt runtime as a concrete backend.
 use super::{Docker, Sandbox, SandboxRequest};
 use crate::provider::{
-    ExecExit, IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, MountDriver,
-    ProviderCapabilities, ProviderLaunchOptions, SandboxInspection, SandboxInstance,
-    SandboxProvider, SandboxRecord, SearchPathPolicy,
+    IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, MountDriver, ProviderCapabilities,
+    ProviderLaunchOptions, SandboxRecord, SearchPathPolicy,
 };
-use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
-use std::{fs::File, io::Write, net::SocketAddr};
+use crate::{ContainerId, RuntimeError, WireFailure};
+use std::fs::File;
 
 /// Negotiation and all transfers use the supplied client's original policy and version cache.
 #[derive(Clone, Debug)]
@@ -20,9 +19,7 @@ impl DockerProvider {
     pub fn new(docker: Docker) -> Self {
         Self { docker }
     }
-}
-impl SandboxProvider for DockerProvider {
-    fn capabilities(&self) -> ProviderCapabilities {
+    pub fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             name: "docker",
             isolation: IsolationModel::Container,
@@ -33,13 +30,7 @@ impl SandboxProvider for DockerProvider {
             direct_store_access: true,
         }
     }
-    fn local_directory(&self, _: &str) -> Result<Option<std::path::PathBuf>, RuntimeError> {
-        Ok(None)
-    }
-    fn launch(
-        &self,
-        request: LaunchRequest,
-    ) -> Result<Box<dyn SandboxInstance>, Box<LaunchFailure>> {
+    pub fn launch(&self, request: LaunchRequest) -> Result<Sandbox, Box<LaunchFailure>> {
         let mut phase = LaunchPhase::Validate;
         let mut instance = None;
         let result = (|| {
@@ -95,32 +86,32 @@ impl SandboxProvider for DockerProvider {
             Ok(())
         })();
         match result {
-            Ok(()) => Ok(Box::new(instance.expect("launched"))),
+            Ok(()) => Ok(instance.expect("launched")),
             Err(cause) => Err(Box::new(LaunchFailure {
                 phase,
-                instance: instance.map(|s| Box::new(s) as Box<dyn SandboxInstance>),
+                instance: instance
+                    .map(|sandbox| Box::new(crate::backend::Sandbox::Docker(sandbox))),
                 cause,
             })),
         }
     }
-    fn reopen(
+    pub fn reopen(
         &self,
         id: ContainerId,
         record: &SandboxRecord,
-    ) -> Result<Box<dyn SandboxInstance>, Box<WireFailure>> {
+    ) -> Result<Sandbox, Box<WireFailure>> {
         let Some(record) = record.docker() else {
             return Err(WireFailure::local(RuntimeError::Unsupported(
                 "Docker requires a Docker deployment record",
             )));
         };
         Sandbox::reopen(self.docker.clone(), id, record.clone().into())
-            .map(|s| Box::new(s) as Box<dyn SandboxInstance>)
     }
-    fn reopen_stopped(
+    pub fn reopen_stopped(
         &self,
         id: ContainerId,
         record: &SandboxRecord,
-    ) -> Result<Box<dyn SandboxInstance>, Box<WireFailure>> {
+    ) -> Result<Sandbox, Box<WireFailure>> {
         let Some(record) = record.docker() else {
             return Err(WireFailure::local(RuntimeError::Unsupported(
                 "Docker requires a Docker deployment record",
@@ -128,47 +119,6 @@ impl SandboxProvider for DockerProvider {
         };
         let request: SandboxRequest = record.clone().into();
         request.check().map_err(WireFailure::local)?;
-        Ok(Box::new(Sandbox::stopped(self.docker.clone(), id, request)))
-    }
-}
-impl SandboxInstance for Sandbox {
-    fn identity(&self) -> ContainerId {
-        self.identity()
-    }
-    fn endpoint(&self) -> Result<SocketAddr, Box<WireFailure>> {
-        self.endpoint()
-    }
-    fn run(
-        &self,
-        request: &ExecRequest,
-        stdout: &mut (dyn Write + Send),
-        stderr: &mut (dyn Write + Send),
-    ) -> Result<ExecExit, Box<WireFailure>> {
-        super::provider_exec::run(self, request, stdout, stderr)
-    }
-    fn track(&self, _: u32, _: u64) -> Result<(), Box<WireFailure>> {
-        // Container teardown owns all descendants; no host process is adopted.
-        Ok(())
-    }
-    fn log_tail(&self, lines: u16, cap: usize) -> Result<Vec<u8>, Box<WireFailure>> {
-        self.log_tail(lines, cap)
-    }
-    fn inspect(&self) -> Result<SandboxInspection, Box<WireFailure>> {
-        self.inspect()
-    }
-    fn stop(&mut self, seconds: u16) -> Result<(), Box<WireFailure>> {
-        self.stop(seconds)
-    }
-    fn delete(&mut self) -> Result<(), Box<WireFailure>> {
-        self.delete()
-    }
-    fn scratch_directory(&self) -> String {
-        "/tmp".into()
-    }
-    fn local_record(&self) -> Option<LocalRecord> {
-        None
-    }
-    fn record(&self) -> Option<SandboxRecord> {
-        Some(SandboxRecord::Docker(self.request.clone().into()))
+        Ok(Sandbox::stopped(self.docker.clone(), id, request))
     }
 }

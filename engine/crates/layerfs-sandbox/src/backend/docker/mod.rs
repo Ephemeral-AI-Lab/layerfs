@@ -26,6 +26,7 @@ pub use container_types::{
 pub use http::Docker;
 pub use listener::{ListenerFailure, ListenerObservation};
 pub use provider::{DockerInstance, DockerProvider};
+pub(crate) use provider_exec::run as run_command;
 pub use provider_failure::ProviderFailure;
 pub use request::{ExecCreateFailure, ExecCreated, ExecRequest};
 pub use streams::{

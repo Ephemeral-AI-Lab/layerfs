@@ -14,16 +14,11 @@
 //! daemon stopped and its directory deleted, each once.
 use crate::job::{failed, refused};
 use crate::registry::{lock, text, SandboxState, SANDBOXES};
-use crate::runtime::Runtime;
 use layerfs_api::{sandbox::ProviderCreate, SandboxApi};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::StoreManifest;
-#[cfg(target_os = "linux")]
-use layerfs_sandbox::backend::local::NativeLinuxProvider as NativeProvider;
-#[cfg(target_os = "macos")]
-use layerfs_sandbox::backend::local::NativeMacosProvider as NativeProvider;
-use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions, SandboxInstance};
-use layerfs_sandbox::CommandIdentity;
+use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions};
+use layerfs_sandbox::{CommandIdentity, Runtime, Sandbox};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
@@ -52,7 +47,7 @@ pub(crate) fn start(
             "deploy.localDir is not configured (LAYERFS_LOCAL_DIR); a native Sandbox needs it",
         )
     })?;
-    let local = NativeProvider::new(root)
+    let runtime = native_runtime(root)
         .map_err(|error| refused("InvalidInput", format!("LAYERFS_LOCAL_DIR {root}: {error}")))?;
     let executable = PathBuf::from(text(deploy, "daemon")?);
     let store = match args.get_text("storePath") {
@@ -75,7 +70,7 @@ pub(crate) fn start(
         &saved_directory,
         &id,
         project,
-        (local, executable, store),
+        (runtime, executable, store),
     );
     if made.is_err() {
         let _ = std::fs::remove_dir(&saved_directory);
@@ -91,11 +86,11 @@ fn start_claimed(
     saved_directory: &Path,
     id: &str,
     (project, installed): (&crate::registry::Project, StoreManifest),
-    (local, executable, store): (NativeProvider, PathBuf, String),
+    (runtime, executable, store): (Runtime, PathBuf, String),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
     let sandbox_name = sandbox_name(args, id)?;
-    let paths = local.paths(&sandbox_name).map_err(failed)?;
+    let paths = runtime.native_paths(&sandbox_name).map_err(failed)?;
     let path_text = |path: &Path| {
         path.to_str()
             .map(str::to_owned)
@@ -129,7 +124,7 @@ fn start_claimed(
         SdkValue::text(format!("creation of Sandbox {id} began and never finished")),
     )?;
     let labels = crate::sandbox::labels(name, id);
-    let api = SandboxApi::with_provider(Arc::new(local));
+    let api = SandboxApi::with_runtime(Arc::new(runtime));
     let mut manifest = project.manifest.clone();
     manifest.locator = setup.store.clone();
     let created = api
@@ -191,7 +186,7 @@ fn start_claimed(
         project: name.to_owned(),
         name: sandbox_name,
         directory: saved_directory.to_owned(),
-        runtime: Runtime::Local(sandbox),
+        runtime: sandbox,
         identity,
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),
@@ -217,9 +212,6 @@ fn start_claimed(
         // directory deleted like any failed start's, and the records written
         // so far are removed, so its number is free again.
         let SandboxState { runtime, .. } = state;
-        let Runtime::Local(sandbox) = runtime else {
-            unreachable!("a local start owns a local Sandbox")
-        };
         for record in ["sandbox.record", "container"] {
             let _ = std::fs::remove_file(saved_directory.join(record));
         }
@@ -227,12 +219,32 @@ fn start_claimed(
             directory,
             id,
             format!("local sandbox records: {}", refusal.message),
-            Some(sandbox),
+            Some(runtime),
         ));
     }
     let state = Arc::new(state);
     lock(&SANDBOXES)?.insert(state.directory.clone(), state.clone());
     Ok(state)
+}
+
+/// The native runtime this host offers, over `root`: macOS loopback NFS as
+/// this user, or Linux FUSE with a root daemon. The other platform's
+/// provider, and another OS, is refused before root access.
+#[cfg(target_os = "macos")]
+fn native_runtime(root: &str) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
+    layerfs_sandbox::backend::native::NativeMacosProvider::new(root).map(Runtime::MacosNative)
+}
+
+#[cfg(target_os = "linux")]
+fn native_runtime(root: &str) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
+    layerfs_sandbox::backend::native::NativeLinuxProvider::new(root).map(Runtime::LinuxNative)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn native_runtime(_: &str) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
+    Err(layerfs_sandbox::RuntimeError::Unsupported(
+        "native Sandbox runtime platform",
+    ))
 }
 
 /// What a native Sandbox's daemon starts with besides `PATH`: the NFS
@@ -315,7 +327,7 @@ fn abandon(
     directory: &Path,
     id: &str,
     mut cause: String,
-    sandbox: Option<Box<dyn SandboxInstance>>,
+    sandbox: Option<Box<Sandbox>>,
 ) -> SdkRefusal {
     let container = sandbox.as_ref().map(|s| s.identity().to_string());
     let mut log = None;

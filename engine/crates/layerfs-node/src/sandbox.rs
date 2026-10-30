@@ -22,6 +22,7 @@ use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonSetup};
 use layerfs_bridge::provision::StoreManifest;
 use layerfs_sandbox::backend::docker::{CreatePhase, Docker, DockerProvider};
 use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions};
+use layerfs_sandbox::Runtime;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -222,13 +223,13 @@ fn start_claimed(
         .map_err(failed)?
         .naming(&container_name)
         .map_err(|_| refused("InvalidInput", format!("container name {container_name}")))?;
-    let provider = Arc::new(DockerProvider::new(docker));
+    let provider = Arc::new(Runtime::Docker(DockerProvider::new(docker)));
     // Read only if this process ends before the intent is resolved.
     crate::discovery::save(
         &directory.join("create.intent"),
         SdkValue::text(format!("creation of Sandbox {id} began and never finished")),
     )?;
-    let created = SandboxApi::with_provider(provider).create_provider_file(
+    let created = SandboxApi::with_runtime(provider).create_provider_file(
         ProviderCreate {
             launch: LaunchRequest {
                 name: container_name.clone(),
@@ -266,7 +267,7 @@ fn start_claimed(
         project: name.to_owned(),
         name: container_name,
         directory: saved_directory.to_owned(),
-        runtime: crate::runtime::Runtime::Docker(runtime),
+        runtime,
         identity,
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),
@@ -391,7 +392,10 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
     Ok(SdkValue::map([
         ("sandbox", SdkValue::text(&state.id)),
         ("name", SdkValue::text(&state.name)),
-        ("image", SdkValue::text(state.runtime.image())),
+        (
+            "image",
+            SdkValue::text(crate::runtime::image(&state.runtime)),
+        ),
     ]))
 }
 

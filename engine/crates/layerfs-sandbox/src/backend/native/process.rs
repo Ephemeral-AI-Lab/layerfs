@@ -1,13 +1,11 @@
 //! A local process named by its id, kernel start time and boot, so a reused
 //! id, or the same id and start time after a reboot or snapshot restore, is
-//! never taken for the process that was started. On macOS the same three
-//! facts come from `proc_pidinfo` and `sysctl` (see `darwin.rs`).
-#[cfg(target_os = "macos")]
-pub(super) use super::darwin::{boot, stat};
+//! never taken for the process that was started. The three facts come from
+//! `/proc` on Linux and from `proc_pidinfo`/`sysctl` on macOS (see
+//! [`super::macos`]).
+pub(crate) use super::platform::{boot, stat};
 use nix::{sys::signal::Signal, unistd::Pid};
 use std::io;
-#[cfg(target_os = "linux")]
-use std::sync::OnceLock;
 
 /// One started process: its id, its start time in clock ticks since boot
 /// (`/proc/<pid>/stat` field 22) and the boot it started in
@@ -24,8 +22,8 @@ pub struct LocalProcess {
 }
 
 impl LocalProcess {
-    /// The process running now under `pid`, read once from `/proc`, in this
-    /// boot.
+    /// The process running now under `pid`, read once from this kernel, in
+    /// this boot.
     pub fn observe(pid: u32) -> io::Result<Self> {
         let stat = stat(pid)?;
         Ok(Self {
@@ -64,53 +62,19 @@ impl LocalProcess {
     }
 }
 
-/// This boot's id (`/proc/sys/kernel/random/boot_id`, a UUID) as a number,
-/// read once per process.
-#[cfg(target_os = "linux")]
-pub(super) fn boot() -> io::Result<u128> {
-    static BOOT: OnceLock<u128> = OnceLock::new();
-    if let Some(boot) = BOOT.get() {
-        return Ok(*boot);
-    }
-    let text = std::fs::read_to_string("/proc/sys/kernel/random/boot_id")?;
-    let hex: String = text.trim().chars().filter(|c| *c != '-').collect();
-    let boot = (hex.len() == 32)
-        .then(|| u128::from_str_radix(&hex, 16).ok())
-        .flatten()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "boot id"))?;
-    Ok(*BOOT.get_or_init(|| boot))
-}
-
-/// What `/proc/<pid>/stat` says of one process.
+/// What this kernel says of one process.
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Stat {
-    pub(super) state: u8,
-    pub(super) group: u32,
-    pub(super) start: u64,
+pub(crate) struct Stat {
+    pub(crate) state: u8,
+    pub(crate) group: u32,
+    pub(crate) start: u64,
 }
 
 impl Stat {
     /// A zombie or a dead entry: it runs nothing any more.
-    pub(super) fn ended(self) -> bool {
+    pub(crate) fn ended(self) -> bool {
         matches!(self.state, b'Z' | b'X' | b'x')
     }
-}
-
-/// State, process group and start time of `pid`. The command name may hold
-/// spaces and parentheses, so fields are counted after its last `)`.
-#[cfg(target_os = "linux")]
-pub(super) fn stat(pid: u32) -> io::Result<Stat> {
-    let text = std::fs::read_to_string(format!("/proc/{pid}/stat"))?;
-    let invalid = || io::Error::new(io::ErrorKind::InvalidData, "process stat fields");
-    let rest = text.rsplit_once(')').ok_or_else(invalid)?.1;
-    // field 3 (the state) is the first after the name, so field n is at n - 3
-    let fields: Vec<&str> = rest.split_ascii_whitespace().collect();
-    let field = |n: usize| fields.get(n - 3).copied().ok_or_else(invalid);
-    Ok(Stat {
-        state: field(3)?.bytes().next().ok_or_else(invalid)?,
-        group: field(5)?.parse().map_err(|_| invalid())?,
-        start: field(22)?.parse().map_err(|_| invalid())?,
-    })
 }
 
 /// A process id as the kernel's signed type.

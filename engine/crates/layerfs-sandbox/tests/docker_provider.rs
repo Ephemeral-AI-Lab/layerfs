@@ -6,10 +6,9 @@ mod peer;
 use layerfs_sandbox::{
     backend::docker::{DockerProvider, ProviderFailure, Sandbox, SandboxRequest},
     provider::{
-        DockerRecord, LaunchPhase, LaunchRequest, LocalRecord, ProviderLaunchOptions,
-        SandboxInstance, SandboxProvider, SandboxRecord,
+        DockerRecord, LaunchPhase, LaunchRequest, LocalRecord, ProviderLaunchOptions, SandboxRecord,
     },
-    CommandIdentity, ContainerId, ExecRequest, RuntimeError,
+    CommandIdentity, ContainerId, ExecRequest, Runtime, RuntimeError,
 };
 use peer::{fixed, frame, upgrade, Peer};
 use std::{
@@ -111,9 +110,8 @@ fn launch_stream_log_stop_delete_and_negotiated_versions_use_the_original_runtim
             fixed(204, b""),
         ]);
         let (docker, peer) = Peer::scripted(responses, 8192);
-        let provider = DockerProvider::new(docker);
-        assert_eq!(provider.capabilities().name, "docker");
-        assert!(provider.local_directory("anything").unwrap().is_none());
+        let provider = Runtime::Docker(DockerProvider::new(docker));
+        assert_eq!(provider.capabilities().unwrap().name, "docker");
         let mut instance = provider.launch(binary.launch()).unwrap();
         assert_eq!(instance.identity().to_string(), CID);
         assert_eq!(instance.scratch_directory(), "/tmp");
@@ -162,7 +160,7 @@ fn uncertain_create_retains_partial_id_and_never_adopts_or_cleans_it() {
     responses.truncate(2);
     responses[1] = fixed(201, format!(r#"{{"Id":"{CID}","Id":"{CID}"}}"#).as_bytes());
     let (docker, peer) = Peer::new(responses, 1);
-    let failure = DockerProvider::new(docker)
+    let failure = Runtime::Docker(DockerProvider::new(docker))
         .launch(binary.launch())
         .err()
         .unwrap();
@@ -190,7 +188,7 @@ fn upload_start_and_listener_failures_keep_acknowledged_instance_and_original_re
         responses.truncate(stage + 1);
         responses[stage] = fixed(409, b"refused");
         let (docker, peer) = Peer::new(responses, 8192);
-        let mut failure = DockerProvider::new(docker)
+        let mut failure = Runtime::Docker(DockerProvider::new(docker))
             .launch(binary.launch())
             .err()
             .unwrap();
@@ -215,7 +213,7 @@ fn upload_start_and_listener_failures_keep_acknowledged_instance_and_original_re
 fn validation_and_stdin_refuse_without_an_engine_attempt() {
     let binary = Binary::new();
     let (docker, peer) = Peer::new(vec![], 1);
-    let provider = DockerProvider::new(docker.clone());
+    let provider = Runtime::Docker(DockerProvider::new(docker.clone()));
     let mut request = binary.launch();
     request.name = "../escape".into();
     assert_eq!(
@@ -263,7 +261,8 @@ fn validation_and_stdin_refuse_without_an_engine_attempt() {
     let mut request = exec_request();
     request.stdin = true;
     assert!(
-        !SandboxInstance::run(&stopped, &request, &mut Vec::new(), &mut Vec::new())
+        !layerfs_sandbox::Sandbox::Docker(stopped)
+            .run(&request, &mut Vec::new(), &mut Vec::new())
             .unwrap_err()
             .attempted
     );
@@ -279,7 +278,9 @@ fn eof_with_unknown_exit_preserves_the_handle_without_polling_or_replay() {
         exec_inspection(true, "null"),
     ]);
     let (docker, peer) = Peer::new(responses, 8192);
-    let instance = DockerProvider::new(docker).launch(binary.launch()).unwrap();
+    let instance = Runtime::Docker(DockerProvider::new(docker))
+        .launch(binary.launch())
+        .unwrap();
     let failure = instance
         .run(&exec_request(), &mut Vec::new(), &mut Vec::new())
         .unwrap_err();
@@ -316,7 +317,9 @@ fn exec_stage_failures_keep_deciding_wire_facts_and_delivered_progress() {
         exec[stage] = fixed(409, b"original refusal");
         responses.extend(exec);
         let (docker, peer) = Peer::new(responses, 8192);
-        let owner = DockerProvider::new(docker).launch(binary.launch()).unwrap();
+        let owner = Runtime::Docker(DockerProvider::new(docker))
+            .launch(binary.launch())
+            .unwrap();
         let failure = owner
             .run(&exec_request(), &mut Vec::new(), &mut Vec::new())
             .unwrap_err();
@@ -370,7 +373,9 @@ fn failed_sink_retains_pending_output_and_exec_identity_without_inspection_or_cl
         upgrade(&frame(1, b"undelivered")),
     ]);
     let (docker, peer) = Peer::new(responses, 8192);
-    let instance = DockerProvider::new(docker).launch(binary.launch()).unwrap();
+    let instance = Runtime::Docker(DockerProvider::new(docker))
+        .launch(binary.launch())
+        .unwrap();
     let failure = instance
         .run(&exec_request(), &mut BrokenSink, &mut Vec::new())
         .unwrap_err();

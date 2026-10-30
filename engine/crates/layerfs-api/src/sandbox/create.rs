@@ -2,7 +2,7 @@
 use crate::{internal::Control, OperationFailure};
 use layerfs_bridge::control::{ControlError, DaemonStatus, HelloRequest, Reply, Request};
 use layerfs_bridge::duplex::ChannelError;
-use layerfs_sandbox::provider::SandboxProvider;
+use layerfs_sandbox::Runtime;
 use std::{io, sync::Arc};
 
 /// The address to dial for a daemon `endpoint` observed on the Docker host's
@@ -80,7 +80,7 @@ pub enum SandboxCause {
 /// Actual local Engine and authenticated daemon lifecycle organization.
 #[derive(Clone)]
 pub struct SandboxApi {
-    pub(crate) provider: Arc<dyn SandboxProvider>,
+    pub(crate) runtime: Arc<Runtime>,
 }
 
 pub(super) fn hello(

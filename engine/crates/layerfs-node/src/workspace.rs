@@ -94,7 +94,10 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("sandbox".to_owned(), SdkValue::text(state.id.as_str())));
         fields.push(("container".to_owned(), SdkValue::text(state.name.as_str())));
-        fields.push(("image".to_owned(), SdkValue::text(state.runtime.image())));
+        fields.push((
+            "image".to_owned(),
+            SdkValue::text(crate::runtime::image(&state.runtime)),
+        ));
     }
     crate::discovery::save_workspace(&state, &mounted, branch)?;
     lock(&state.mounts)?.insert(

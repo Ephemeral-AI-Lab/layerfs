@@ -1,4 +1,4 @@
-//! Provider startup uses the same authenticated connection and Store installation as Docker.
+//! Runtime startup uses the same authenticated connection and Store installation as Docker.
 use super::{connection::Startup, SandboxApi, SandboxCause, SandboxPhase};
 use crate::internal::Control;
 use layerfs_bridge::{
@@ -8,12 +8,12 @@ use layerfs_bridge::{
     provision::StoreManifest,
 };
 use layerfs_sandbox::{
-    provider::{LaunchRequest, ProviderLaunchOptions, SandboxInstance, SandboxProvider},
-    CommandIdentity,
+    provider::{LaunchRequest, ProviderLaunchOptions},
+    CommandIdentity, Runtime, Sandbox,
 };
 use std::{fmt, sync::Arc};
 
-/// Provider launch and private daemon authentication inputs.
+/// Runtime launch and private daemon authentication inputs.
 #[derive(Clone)]
 pub struct ProviderCreate {
     /// Runtime launch; configuration is encoded from setup after validation.
@@ -41,7 +41,7 @@ pub struct ProviderFailure {
     /// Last attempted stage.
     pub phase: SandboxPhase,
     /// Acknowledged runtime, including a partially launched instance.
-    pub runtime: Option<Box<dyn SandboxInstance>>,
+    pub runtime: Option<Box<Sandbox>>,
     /// Authenticated channel when established.
     pub control: Option<Control>,
     /// Actual handshake work.
@@ -68,12 +68,12 @@ impl fmt::Display for ProviderFailure {
     }
 }
 impl std::error::Error for ProviderFailure {}
-/// Provider runtime and its original authenticated daemon channel.
+/// Runtime owner and its original authenticated daemon channel.
 pub struct ProviderSandbox {
     /// Original private launch and daemon configuration inputs.
     pub request: ProviderCreate,
     /// Explicit runtime lifecycle owner.
-    pub runtime: Box<dyn SandboxInstance>,
+    pub runtime: Box<Sandbox>,
     /// Original correlated startup observation.
     pub startup: DaemonStatus,
     /// Actual handshake work.
@@ -100,9 +100,9 @@ impl ProviderSandbox {
     }
 }
 impl SandboxApi {
-    /// Uses a dynamically selected runtime provider.
-    pub fn with_provider(provider: Arc<dyn SandboxProvider>) -> Self {
-        Self { provider }
+    /// Uses the deployment's selected runtime.
+    pub fn with_runtime(runtime: Arc<Runtime>) -> Self {
+        Self { runtime }
     }
     /// Creates, privately configures, starts and authenticates once, preserving partial ownership on failure.
     pub fn create(
@@ -118,11 +118,10 @@ impl SandboxApi {
         request: ProviderCreate,
     ) -> Result<ProviderSandbox, Box<ProviderFailure>> {
         let mut progress = Startup::new();
-        let mut runtime = None;
+        let mut launched = None;
         let result = (|| {
-            let provider = &self.provider;
             if let Some(directory) =
-                provider
+                self.runtime
                     .local_directory(&request.launch.name)
                     .map_err(|cause| {
                         SandboxCause::Runtime(layerfs_sandbox::WireFailure::local(cause))
@@ -163,8 +162,8 @@ impl SandboxApi {
                     "provider topology/identity",
                 )));
             }
-            runtime = Some(match provider.launch(launch) {
-                Ok(owner) => owner,
+            launched = Some(match self.runtime.launch(launch) {
+                Ok(owner) => Box::new(owner),
                 Err(mut failure) => {
                     progress.phase = match failure.phase {
                         layerfs_sandbox::provider::LaunchPhase::Validate => SandboxPhase::Validate,
@@ -172,12 +171,12 @@ impl SandboxApi {
                         layerfs_sandbox::provider::LaunchPhase::Start => SandboxPhase::Start,
                         layerfs_sandbox::provider::LaunchPhase::Listener => SandboxPhase::Listener,
                     };
-                    runtime = failure.instance.take();
+                    launched = failure.instance.take();
                     return Err(SandboxCause::Provider(failure));
                 }
             });
             progress.phase = SandboxPhase::Endpoint;
-            let endpoint = runtime
+            let endpoint = launched
                 .as_ref()
                 .expect("launched")
                 .endpoint()
@@ -198,7 +197,7 @@ impl SandboxApi {
         match result {
             Ok(startup) => Ok(ProviderSandbox {
                 request: request.clone(),
-                runtime: runtime.expect("launched"),
+                runtime: launched.expect("launched"),
                 startup,
                 installed: None,
                 handshake: progress.handshake,
@@ -211,7 +210,7 @@ impl SandboxApi {
             Err(cause) => Err(Box::new(ProviderFailure {
                 request,
                 phase: progress.phase,
-                runtime,
+                runtime: launched,
                 control: progress.control,
                 handshake: progress.handshake,
                 observed: progress.observed,
@@ -228,12 +227,11 @@ impl SandboxApi {
         manifest: &StoreManifest,
     ) -> Result<ProviderSandbox, Box<ProviderFailure>> {
         let mut progress = Startup::new();
-        let mut runtime = None;
+        let mut launched = None;
         let mut installed = None;
         let result = (|| {
-            let provider = &self.provider;
             if let Some(directory) =
-                provider
+                self.runtime
                     .local_directory(&request.launch.name)
                     .map_err(|cause| {
                         SandboxCause::Runtime(layerfs_sandbox::WireFailure::local(cause))
@@ -288,8 +286,8 @@ impl SandboxApi {
                     )));
                 }
             }
-            runtime = Some(match provider.launch(launch) {
-                Ok(owner) => owner,
+            launched = Some(match self.runtime.launch(launch) {
+                Ok(owner) => Box::new(owner),
                 Err(mut failure) => {
                     progress.phase = match failure.phase {
                         layerfs_sandbox::provider::LaunchPhase::Validate => SandboxPhase::Validate,
@@ -297,12 +295,12 @@ impl SandboxApi {
                         layerfs_sandbox::provider::LaunchPhase::Start => SandboxPhase::Start,
                         layerfs_sandbox::provider::LaunchPhase::Listener => SandboxPhase::Listener,
                     };
-                    runtime = failure.instance.take();
+                    launched = failure.instance.take();
                     return Err(SandboxCause::Provider(failure));
                 }
             });
             progress.phase = SandboxPhase::Endpoint;
-            let endpoint = runtime
+            let endpoint = launched
                 .as_ref()
                 .expect("launched")
                 .endpoint()
@@ -338,7 +336,7 @@ impl SandboxApi {
         match result {
             Ok(startup) => Ok(ProviderSandbox {
                 request: request.clone(),
-                runtime: runtime.expect("launched"),
+                runtime: launched.expect("launched"),
                 startup,
                 installed,
                 handshake: progress.handshake,
@@ -351,7 +349,7 @@ impl SandboxApi {
             Err(cause) => Err(Box::new(ProviderFailure {
                 request,
                 phase: progress.phase,
-                runtime,
+                runtime: launched,
                 control: progress.control,
                 handshake: progress.handshake,
                 observed: progress.observed,

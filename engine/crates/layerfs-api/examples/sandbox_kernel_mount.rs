@@ -107,7 +107,7 @@ enum Directory<'a> {
     Kernel(&'a str),
 }
 fn run_dir(
-    runtime: &dyn layerfs_sandbox::provider::SandboxInstance,
+    runtime: &layerfs_sandbox::Sandbox,
     identity: layerfs_sandbox::CommandIdentity,
     script: &str,
     directory: &str,
@@ -181,8 +181,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let keys = transport::generate_keypair()?;
     let daemon = transport::generate_keypair()?;
     let docker = Docker::new(&args[1], Duration::from_secs(3))?;
-    let provider = Arc::new(DockerProvider::new(docker));
-    let api = SandboxApi::with_provider(provider);
+    let provider = Arc::new(layerfs_sandbox::Runtime::Docker(DockerProvider::new(
+        docker,
+    )));
+    let api = SandboxApi::with_runtime(provider);
     let mut owner = api
         .create(
             ProviderCreate {

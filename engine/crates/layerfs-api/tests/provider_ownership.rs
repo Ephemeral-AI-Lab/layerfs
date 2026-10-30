@@ -64,9 +64,9 @@ fn native_resource_paths_are_validated_before_launch() {
         duplex,
     };
     use layerfs_sandbox::{
-        backend::local::NativeMacosProvider,
+        backend::native::NativeMacosProvider,
         provider::{LaunchRequest, ProviderLaunchOptions},
-        CommandIdentity,
+        CommandIdentity, Runtime,
     };
     use std::{
         os::unix::fs::{MetadataExt, PermissionsExt},
@@ -119,7 +119,7 @@ fn native_resource_paths_are_validated_before_launch() {
             },
         },
     };
-    let api = SandboxApi::with_provider(Arc::new(provider));
+    let api = SandboxApi::with_runtime(Arc::new(Runtime::MacosNative(provider)));
     for field in ["overlay", "mounts", "store", "listen"] {
         let mut invalid = request.clone();
         match field {

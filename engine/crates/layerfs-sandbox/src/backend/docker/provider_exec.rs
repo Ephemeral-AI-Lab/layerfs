@@ -36,7 +36,7 @@ fn failure(container: crate::ContainerId, cause: ProviderFailure) -> Box<WireFai
     outer.cause = RuntimeError::Docker(Box::new(cause));
     outer
 }
-pub(super) fn run(
+pub(crate) fn run(
     sandbox: &Sandbox,
     request: &ExecRequest,
     mut stdout: &mut (dyn Write + Send),

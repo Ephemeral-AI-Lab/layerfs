@@ -1,12 +1,12 @@
 //! A Sandbox's runtime: Docker (default), or `LAYERFS_SANDBOX=native` on
 //! Linux (root FUSE daemon, nonroot commands) and macOS (loopback NFS,
-//! caller identity). Both use the same authenticated daemon control pipeline.
+//! caller identity). Both use the same authenticated daemon control pipeline
+//! and the same concrete `layerfs_sandbox::Sandbox` handle.
 use crate::job::{failed, refused};
 use crate::output::Spool;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_sandbox::provider::SandboxInstance;
-use layerfs_sandbox::{CommandIdentity, ContainerId, WireFailure};
-use std::net::SocketAddr;
+use layerfs_sandbox::provider::SandboxRecord;
+use layerfs_sandbox::{CommandIdentity, Sandbox};
 
 /// The image a native Sandbox records and reports, and the `runtime` of a
 /// record from the former `local` runtime, which is never used (a Docker
@@ -15,13 +15,6 @@ pub(crate) const LOCAL: &str = "local";
 /// A native Sandbox record's `runtime` (LAYERFS_SANDBOX=native): a local
 /// daemon serving FUSE on Linux or loopback NFS on macOS.
 pub(crate) const NATIVE: &str = "native";
-
-/// One Sandbox's runtime owner.
-pub(crate) enum Runtime {
-    Docker(Box<dyn SandboxInstance>),
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    Local(Box<dyn SandboxInstance>),
-}
 
 /// Whether the deployment selects a local daemon: `deploy.sandbox` unset or
 /// `docker` is Docker, `native` is a local daemon; anything else (the
@@ -43,119 +36,52 @@ pub(crate) fn native(deploy: &SdkValue) -> bool {
     deploy.get_text("sandbox") == Some(NATIVE)
 }
 
-impl Runtime {
-    fn instance(&self) -> &dyn SandboxInstance {
-        match self {
-            Self::Docker(sandbox) => sandbox.as_ref(),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Local(sandbox) => sandbox.as_ref(),
-        }
+/// The image a Sandbox reports: its container's, or `local` for a native one.
+pub(crate) fn image(runtime: &Sandbox) -> String {
+    match runtime.record() {
+        Some(SandboxRecord::Docker(docker)) => docker.image,
+        _ => LOCAL.to_owned(),
     }
+}
 
-    fn instance_mut(&mut self) -> &mut dyn SandboxInstance {
-        match self {
-            Self::Docker(sandbox) => sandbox.as_mut(),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Local(sandbox) => sandbox.as_mut(),
-        }
-    }
+/// Where its commands keep scratch files: `/tmp` in a container, the
+/// Sandbox's own `tmp` directory for a native one (deleted with it), so a
+/// native Sandbox leaves nothing in this machine's `/tmp`.
+pub(crate) fn scratch(runtime: &Sandbox) -> String {
+    runtime.scratch_directory()
+}
 
-    /// The recorded identity: the container's, or a local Sandbox's own.
-    pub(crate) fn identity(&self) -> ContainerId {
-        self.instance().identity()
+/// Names a background process a command started in a session of its own
+/// (`pid`, started at `start`), so it ends with a native Sandbox as it ends
+/// with a container. A container's teardown already owns its descendants.
+pub(crate) fn track(runtime: &Sandbox, pid: u32, start: &str) -> Result<(), SdkRefusal> {
+    if matches!(runtime, Sandbox::Docker(_)) {
+        return Ok(());
     }
+    let start = start.parse::<u64>().map_err(failed)?;
+    runtime.track(pid, start).map_err(failed)
+}
 
-    /// The image it runs; `local` for a local Sandbox.
-    pub(crate) fn image(&self) -> String {
-        match self {
-            Self::Docker(sandbox) => sandbox
-                .record()
-                .and_then(|r| match r {
-                    layerfs_sandbox::provider::SandboxRecord::Docker(d) => Some(d.image),
-                    _ => None,
-                })
-                .unwrap_or_default(),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Local(_) => LOCAL.to_owned(),
-        }
-    }
-
-    /// Its daemon's endpoint while it runs, observed once; a container or
-    /// daemon found gone or stopped is [`WireFailure::container_gone`] or
-    /// [`WireFailure::container_stopped`].
-    pub(crate) fn endpoint(&self) -> Result<SocketAddr, Box<WireFailure>> {
-        self.instance().endpoint()
-    }
-
-    /// Where its commands keep scratch files: `/tmp` in a container, the
-    /// Sandbox's own `tmp` directory for a local one (deleted with it), so
-    /// a local Sandbox leaves nothing in this machine's `/tmp`.
-    pub(crate) fn scratch(&self) -> String {
-        match self {
-            Self::Docker(_) => "/tmp".to_owned(),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Local(sandbox) => sandbox.scratch_directory(),
-        }
-    }
-
-    /// Stops it, giving its daemon `seconds` to exit before it is killed
-    /// (`sandbox.close`).
-    pub(crate) fn stop(&mut self, seconds: u16) -> Result<(), Box<WireFailure>> {
-        self.instance_mut().stop(seconds)
-    }
-
-    /// The last `lines` lines of its daemon's log, at most `cap` bytes
-    /// (`backend.daemon.sandbox.get_log`): the container's log, or a local
-    /// Sandbox's log file.
-    pub(crate) fn log_tail(&self, lines: u16, cap: usize) -> Result<Vec<u8>, Box<WireFailure>> {
-        self.instance().log_tail(lines, cap)
-    }
-
-    /// Deletes a Sandbox found stopped, once.
-    pub(crate) fn delete(&mut self) -> Result<(), Box<WireFailure>> {
-        self.instance_mut().delete()
-    }
-
-    /// Names a background process a command started in a session of its own
-    /// (`pid`, started at `start`), so it ends with a local Sandbox as it
-    /// ends with a container.
-    #[cfg_attr(
-        not(any(target_os = "linux", target_os = "macos")),
-        allow(unused_variables)
-    )]
-    pub(crate) fn track(&self, pid: u32, start: &str) -> Result<(), SdkRefusal> {
-        match self {
-            Self::Docker(_) => Ok(()),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Local(sandbox) => {
-                let start = start.parse::<u64>().map_err(failed)?;
-                sandbox.track(pid, start).map_err(failed)
-            }
-        }
-    }
-
-    /// One command to its end: exit code, stdout, stderr. `spool` sends
-    /// every non-empty stream to its file instead of keeping it inline.
-    pub(crate) fn run(
-        &self,
-        identity: CommandIdentity,
-        arguments: Vec<String>,
-        environment: Vec<String>,
-        directory: &str,
-        spool: bool,
-    ) -> Result<(i32, Spool, Spool), SdkRefusal> {
-        let (mut stdout, mut stderr) = (Spool::new(spool), Spool::new(spool));
-        let request = layerfs_sandbox::ExecRequest {
-            identity,
-            arguments,
-            environment,
-            directory: directory.to_owned(),
-            stdin: false,
-        };
-        let exit = self
-            .instance()
-            .run(&request, &mut stdout, &mut stderr)
-            .map_err(failed)?;
-        Ok((exit.code, stdout, stderr))
-    }
+/// One command to its end: exit code, stdout, stderr. `spool` sends every
+/// non-empty stream to its file instead of keeping it inline.
+pub(crate) fn run(
+    runtime: &Sandbox,
+    identity: CommandIdentity,
+    arguments: Vec<String>,
+    environment: Vec<String>,
+    directory: &str,
+    spool: bool,
+) -> Result<(i32, Spool, Spool), SdkRefusal> {
+    let (mut stdout, mut stderr) = (Spool::new(spool), Spool::new(spool));
+    let request = layerfs_sandbox::ExecRequest {
+        identity,
+        arguments,
+        environment,
+        directory: directory.to_owned(),
+        stdin: false,
+    };
+    let exit = runtime
+        .run(&request, &mut stdout, &mut stderr)
+        .map_err(failed)?;
+    Ok((exit.code, stdout, stderr))
 }

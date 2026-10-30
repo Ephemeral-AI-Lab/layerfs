@@ -420,7 +420,7 @@ fn only_the_exact_intact_container_not_running_is_a_stopped_container() {
 #[test]
 fn provider_inspects_and_reopens_exact_running_and_stopped_deployments() {
     use layerfs_sandbox::backend::docker::DockerProvider;
-    use layerfs_sandbox::provider::{SandboxProvider, SandboxRecord};
+    use layerfs_sandbox::provider::SandboxRecord;
     let id = layerfs_sandbox::ContainerId::parse(CID).unwrap();
     let running = inspect().replace(
         r#""Running":true"#,

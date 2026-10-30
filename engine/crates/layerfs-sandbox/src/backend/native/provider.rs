@@ -1,12 +1,11 @@
-//! The existing local runtime behind the provider port; no alternate process engine.
+//! The existing native runtime as a concrete backend; no alternate process engine.
 use super::{Local, LocalPhase, LocalProcess, Sandbox};
 use crate::provider::{
-    ExecExit, IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, MountDriver,
-    ProviderCapabilities, ProviderLaunchOptions, SandboxInspection, SandboxInstance,
-    SandboxProvider, SandboxRecord, SearchPathPolicy,
+    IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, MountDriver,
+    ProviderCapabilities, ProviderLaunchOptions, SandboxRecord, SearchPathPolicy,
 };
-use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
-use std::{io::Write, net::SocketAddr, path::Path};
+use crate::{ContainerId, RuntimeError, WireFailure};
+use std::path::Path;
 
 #[derive(Clone, Debug)]
 pub struct NativeProvider<const LINUX: bool> {
@@ -42,9 +41,7 @@ impl<const LINUX: bool> NativeProvider<LINUX> {
     pub fn paths(&self, name: &str) -> Result<super::LocalPaths, RuntimeError> {
         self.local.clone().naming(name)?.paths()
     }
-}
-impl<const LINUX: bool> SandboxProvider for NativeProvider<LINUX> {
-    fn capabilities(&self) -> ProviderCapabilities {
+    pub fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             name: if LINUX {
                 "native-linux"
@@ -67,13 +64,7 @@ impl<const LINUX: bool> SandboxProvider for NativeProvider<LINUX> {
             direct_store_access: true,
         }
     }
-    fn local_directory(&self, name: &str) -> Result<Option<std::path::PathBuf>, RuntimeError> {
-        self.paths(name).map(|paths| Some(paths.directory))
-    }
-    fn launch(
-        &self,
-        request: LaunchRequest,
-    ) -> Result<Box<dyn SandboxInstance>, Box<LaunchFailure>> {
+    pub fn launch(&self, request: LaunchRequest) -> Result<Sandbox, Box<LaunchFailure>> {
         let fail = |cause| {
             Box::new(LaunchFailure {
                 phase: LaunchPhase::Validate,
@@ -124,7 +115,6 @@ impl<const LINUX: bool> SandboxProvider for NativeProvider<LINUX> {
                 request.startup_timeout,
                 request.labels,
             )
-            .map(|sandbox| Box::new(sandbox) as Box<dyn SandboxInstance>)
             .map_err(|failure| {
                 Box::new(LaunchFailure {
                     phase: match failure.phase {
@@ -135,16 +125,16 @@ impl<const LINUX: bool> SandboxProvider for NativeProvider<LINUX> {
                     },
                     instance: failure
                         .sandbox
-                        .map(|s| Box::new(s) as Box<dyn SandboxInstance>),
+                        .map(|sandbox| Box::new(crate::backend::Sandbox::Native(sandbox))),
                     cause: failure.cause,
                 })
             })
     }
-    fn reopen(
+    pub fn reopen(
         &self,
         id: ContainerId,
         record: &SandboxRecord,
-    ) -> Result<Box<dyn SandboxInstance>, Box<WireFailure>> {
+    ) -> Result<Sandbox, Box<WireFailure>> {
         let Some(record) = record.local() else {
             return Err(WireFailure::local(RuntimeError::Unsupported(
                 "native provider requires a local record",
@@ -158,26 +148,25 @@ impl<const LINUX: bool> SandboxProvider for NativeProvider<LINUX> {
             record.port,
             record.labels.clone(),
         )
-        .map(|s| Box::new(s) as Box<dyn SandboxInstance>)
     }
-    fn reopen_stopped(
+    pub fn reopen_stopped(
         &self,
         id: ContainerId,
         record: &SandboxRecord,
-    ) -> Result<Box<dyn SandboxInstance>, Box<WireFailure>> {
+    ) -> Result<Sandbox, Box<WireFailure>> {
         let Some(record) = record.local() else {
             return Err(WireFailure::local(RuntimeError::Unsupported(
                 "native provider requires a local record",
             )));
         };
         let paths = self.paths(&record.name).map_err(WireFailure::local)?;
-        Ok(Box::new(Sandbox::stopped(
+        Ok(Sandbox::stopped(
             paths.directory,
             id,
             process(record),
             record.port,
             record.labels.clone(),
-        )))
+        ))
     }
 }
 fn process(record: &LocalRecord) -> LocalProcess {
@@ -185,66 +174,5 @@ fn process(record: &LocalRecord) -> LocalProcess {
         pid: record.pid,
         start: record.start_time,
         boot: record.boot,
-    }
-}
-impl SandboxInstance for Sandbox {
-    fn identity(&self) -> ContainerId {
-        self.identity()
-    }
-    fn endpoint(&self) -> Result<SocketAddr, Box<WireFailure>> {
-        self.endpoint()
-    }
-    fn run(
-        &self,
-        request: &ExecRequest,
-        stdout: &mut (dyn Write + Send),
-        stderr: &mut (dyn Write + Send),
-    ) -> Result<ExecExit, Box<WireFailure>> {
-        let exit = self.run(request, stdout, stderr)?;
-        Ok(ExecExit {
-            code: exit.code,
-            pid: Some(exit.pid),
-            stdout_bytes: exit.stdout,
-            stderr_bytes: exit.stderr,
-        })
-    }
-    fn track(&self, pid: u32, start: u64) -> Result<(), Box<WireFailure>> {
-        self.track(pid, start)
-    }
-    fn log_tail(&self, lines: u16, cap: usize) -> Result<Vec<u8>, Box<WireFailure>> {
-        self.log_tail(lines, cap)
-    }
-    fn inspect(&self) -> Result<SandboxInspection, Box<WireFailure>> {
-        self.reap();
-        Ok(SandboxInspection {
-            identity: self.identity(),
-            running: self.process().is_some_and(LocalProcess::alive),
-            exit_code: None,
-            process_id: self.process().map(|p| p.pid),
-            scratch_bytes: None,
-        })
-    }
-    fn stop(&mut self, seconds: u16) -> Result<(), Box<WireFailure>> {
-        self.stop(seconds)
-    }
-    fn delete(&mut self) -> Result<(), Box<WireFailure>> {
-        self.delete()
-    }
-    fn scratch_directory(&self) -> String {
-        self.tmp().display().to_string()
-    }
-    fn local_record(&self) -> Option<LocalRecord> {
-        let p = self.process()?;
-        Some(LocalRecord {
-            name: self.directory().file_name()?.to_str()?.to_owned(),
-            pid: p.pid,
-            start_time: p.start,
-            boot: p.boot,
-            port: self.port(),
-            labels: self.labels().to_vec(),
-        })
-    }
-    fn record(&self) -> Option<SandboxRecord> {
-        self.local_record().map(SandboxRecord::Local)
     }
 }

@@ -3,7 +3,8 @@
 //! reaps a daemon this process started that has already exited. A stop
 //! returns only once a daemon this process started is reaped, so it never
 //! stays a zombie of this process.
-use super::{groups, mounts, process::LocalProcess};
+use super::{groups, platform, process::LocalProcess};
+use crate::provider::LocalRecord;
 use crate::{ContainerId, RuntimeError, WireFailure};
 use nix::sys::signal::Signal;
 use std::{
@@ -122,6 +123,18 @@ impl Sandbox {
     pub fn labels(&self) -> &[(String, String)] {
         &self.labels
     }
+    /// The facts its record keeps, for reopening this exact Sandbox later.
+    pub fn local_record(&self) -> Option<LocalRecord> {
+        let process = self.process()?;
+        Some(LocalRecord {
+            name: self.directory().file_name()?.to_str()?.to_owned(),
+            pid: process.pid,
+            start_time: process.start,
+            boot: process.boot,
+            port: self.port(),
+            labels: self.labels().to_vec(),
+        })
+    }
     /// The daemon's endpoint while that exact process runs. A daemon that
     /// exited (idle close, crash, kill) is the stopped observation
     /// ([`WireFailure::container_stopped`]): its Workspaces went with it.
@@ -154,7 +167,7 @@ impl Sandbox {
         // A live NFS server can finish client writeback during detach. A
         // failed detach does not prevent crash teardown; Delete retains its
         // existing checked detach before removing anything through a mount.
-        if let Err(error) = mounts::detach(&self.directory) {
+        if let Err(error) = platform::mounts::detach(&self.directory) {
             eprintln!("local Stop detach {}: {error}", self.directory.display());
         }
         if let Some(process) = self.process {
@@ -194,7 +207,7 @@ impl Sandbox {
                 .map_err(|error| self.io(error))?;
             self.ended = true;
         }
-        mounts::detach(&self.directory).map_err(|error| self.io(error))?;
+        platform::mounts::detach(&self.directory).map_err(|error| self.io(error))?;
         match fs::remove_dir_all(&self.directory) {
             Ok(()) => {}
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
@@ -245,7 +258,7 @@ impl Sandbox {
     }
     /// Reaps the daemon this process started, if it exited. True when no
     /// daemon this process started is left unreaped.
-    pub(super) fn reap(&self) -> bool {
+    pub(crate) fn reap(&self) -> bool {
         let mut child = self.child.lock().unwrap_or_else(|error| error.into_inner());
         let Some(started) = child.as_mut() else {
             return true;

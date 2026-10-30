@@ -1,54 +1,95 @@
-# Sandbox Docker provider
+# Sandbox runtimes
 
 Status: Current general guide.
 
-`backend::docker::DockerProvider::new(docker)` adapts the existing
-Engine client and `SandboxRequest`. `DockerInstance` aliases the original
-`docker::Sandbox`: the provider shares its lifecycle admission, API 1.48–1.54
+`backend::runtime` holds the concrete runtime choice and the launched owner.
+There are no provider or instance traits: each backend is an ordinary concrete
+type and the only dispatch is one `match` per method.
+
+- `Runtime` is one deployment's selection and is kept for every Sandbox it
+  starts: `Docker(DockerProvider)` (the default), `MacosNative(NativeMacosProvider)`,
+  `LinuxNative(NativeLinuxProvider)`, and `Windows`, a placeholder with no backend.
+  `Runtime::{capabilities, local_directory, native_paths, launch, reopen,
+  reopen_stopped}` dispatch to them.
+- `Sandbox` is what `Runtime::launch`/`reopen` return: `Docker(docker::Sandbox)`
+  or `Native(native::Sandbox)`, with `identity`, `endpoint`, `run`, `track`,
+  `log_tail`, `inspect`, `stop`, `delete`, `scratch_directory`, `local_record`
+  and `record`.
+
+`layerfs_sandbox::{Runtime, Sandbox}` re-export both. `provider` keeps the
+inputs and observations they share: `LaunchRequest`, `ProviderLaunchOptions`,
+`LocalRecord`, `DockerRecord`, `SandboxRecord`, `ExecExit`,
+`SandboxInspection`, `ProviderCapabilities` and the `LaunchPhase`/`LaunchFailure`
+pair. The runtime layer has no daemon control dependency.
+
+## Docker
+
+`Runtime::Docker(DockerProvider::new(docker))` adapts the existing Engine client
+and `SandboxRequest`. It shares its lifecycle admission, API 1.48–1.54
 negotiation cache, streamed private archive, logs, exact deployment inspection,
-and explicit stop/delete. It introduces no automatic cleanup or retries.
+and explicit stop/delete. Call `runtime.launch(LaunchRequest { .. })` with the
+executable, private configuration, name, explicit startup wait, and
+`ProviderLaunchOptions::Docker { image, store_volume, port, connect_host }`;
+Docker validates the immutable image digest, existing volume name, port,
+connect_host format and labels before any Engine effect. The runtime does not
+decode daemon configuration or perform authentication.
 
-Import `provider::{SandboxProvider, SandboxInstance}` to use the ports. Call
-`provider.launch(LaunchRequest { .. })` with the executable, private configuration,
-name, explicit startup wait, and `ProviderLaunchOptions::Docker { image, store_volume, port, connect_host }`.
-Docker validates the immutable image digest, existing volume name, port, optional
-connect_host format, and labels from `LaunchRequest.labels`.
-The runtime does not decode daemon configuration or perform authentication.
-
-The instance supports `endpoint`, `inspect`, `run`, `log_tail`, `stop` and
-`delete`. `run` streams stdout/stderr to caller sinks with bounded windows and
+`Sandbox::run` streams stdout/stderr to caller sinks with bounded windows and
 returns `ExecExit` only after one inspection knows the root process exit. It
-rejects `stdin=true` before effects: interactive users keep the existing concrete
-`create_exec/start/into_parts` stream API. EOF alone is not an exit. No automatic
-poll follows an unknown exit. `track` needs no host registration because container
-teardown owns descendants; scratch is `/tmp` and `local_record()` is absent.
-`inspect` checks the recorded deployment but neither adopts it nor changes
-lifecycle admission; unknown PID/exit/storage fields remain absent.
+rejects `stdin=true` before effects: interactive users keep the existing
+concrete `create_exec/start/into_parts` stream API. EOF alone is not an exit and
+no automatic poll follows an unknown exit. `track` needs no host registration
+because container teardown owns descendants; scratch is `/tmp` and
+`local_record()` is absent. `inspect` checks the recorded deployment but neither
+adopts it nor changes lifecycle admission; unknown PID/exit/storage fields stay
+absent.
 
-A `LaunchFailure` retains the acknowledged instance, when any. Its cause may be
+## Native
+
+`Runtime::MacosNative(NativeMacosProvider::new(root))` runs the daemon as this
+user and serves loopback NFS; `Runtime::LinuxNative(NativeLinuxProvider::new(root))`
+runs a root daemon serving FUSE with ordinary commands as a nonroot identity.
+Each refuses the wrong platform before root access, and Linux refuses a non-root
+caller the same way. `backend::native` owns the one lifecycle both use; only the
+platform facts differ:
+
+- `backend::macos`: `darwin.rs` (`proc_pidinfo`, `sysctl`, the `mount` table and
+  `umount -f`) and `mounts.rs` (force detach, deepest first).
+- `backend::linux`: `process.rs` (`/proc/<pid>/stat`, the boot id and the
+  process table) and `mounts.rs` (`/proc/self/mountinfo`, lazy `MNT_DETACH`).
+
+The provider validates the command identity, the environment it is given and
+the daemon executable, then starts one daemon in a private directory with the
+platform's kernel marker (`LAYERFS_KERNEL=fuse` on Linux, `nfs` on macOS); it
+rejects conflicting overrides. Launch preserves the original single-attempt
+process lifecycle and partial owner on failure. `inspect` reports exact process
+liveness; unknown exit/storage facts stay absent. Records remain the Node
+binding's responsibility; runtimes neither scan directories nor infer project
+ownership.
+
+## Windows
+
+`Runtime::Windows` is a placeholder: `capabilities`, `local_directory`,
+`native_paths`, `launch`, `reopen` and `reopen_stopped` all refuse with the
+existing `RuntimeError::Unsupported` before any effect, and no `Sandbox` variant
+exists for it. No Windows host runtime is implemented; see
+[`src/backend/windows/README.md`](src/backend/windows/README.md) for the planned
+routes.
+
+## Failure and records
+
+A `LaunchFailure` retains the acknowledged `Sandbox`, when any. Its cause may be
 `RuntimeError::Docker(Box<docker::ProviderFailure>)`: match the typed variant for
 the original Create/Upload/Start/Listener receipt, partial IDs, upload work and
 pending source bytes. Upload is within existing `LaunchPhase::Create`; inspect
-the typed cause to distinguish it. A partially decoded Create ID is never adopted.
+the typed cause to distinguish it. A partially decoded Create ID is never
+adopted, and retaining a handle permits an explicit later observation, never a
+replay of creation or Start.
 
-For `run` failures, the outer `WireFailure` summarizes the deciding exchange's
-scalar transfer facts when one exists. Output/split/unknown-exit errors mark an
-attempt but do not invent a new HTTP exchange. Original pending buffers,
-diagnostics, fence errors and Exec owners remain in the nested `ProviderFailure`.
-`ExecInspect` and `ExecExitUnknown` also retain delivered `OutputProgress`.
-Retaining a handle permits an explicit later observation; it never permits replay
-of creation or Start. Ordinary commands have no automatic runtime timeout.
-
-Records remain a caller responsibility. `SandboxProvider::reopen(id, &SandboxRecord)`
-validates the exact existing deployment and endpoint without starting it.
-`SandboxProvider::reopen_stopped` requires the caller's prior exact stopped observation and
-admits only non-forcing Delete. Both methods accept `SandboxRecord`, which represents either
-`LocalRecord` or `DockerRecord`. Docker refuses local records before effects; native providers
-refuse Docker records before effects. `SandboxInstance::record()` exposes the instance's
-persisted deployment facts. No disk format changes occur.
-
-This slice does not route `SandboxApi` or the Node binding through the provider.
-Their existing Docker paths remain for the follow-up, which must validate daemon
-topology and preserve unknown Create/install custody before cleanup. B8/B9/B10
-are outside this slice. Protocol peers prove requests and ownership contracts;
-real Engine/FUSE/SDK qualification requires a Linux host separately.
+`Runtime::reopen(id, &SandboxRecord)` validates the exact existing deployment or
+process and endpoint without starting it; `reopen_stopped` requires the caller's
+prior exact stopped observation and admits only non-forcing Delete. Both accept
+`SandboxRecord`, which represents either `LocalRecord` or `DockerRecord`; Docker
+refuses a local record before effects and native runtimes refuse a Docker
+record. `Sandbox::record()` exposes the persisted deployment facts. No disk
+format changes occur: a record without a `runtime` field is Docker's.

@@ -1,8 +1,7 @@
-//! Kernel mounts left under a local Sandbox's directory once its daemon is
-//! gone. A container's mounts end with its namespace; a local daemon's stay
-//! in this one ("transport endpoint is not connected") until detached. On
-//! macOS the table is `mount`'s output and a mount is forced off with
-//! `umount -f`.
+//! Kernel mounts left under a native Sandbox's directory once its daemon is
+//! gone. A container's mounts end with its namespace; this daemon's stay in
+//! the one kernel until detached. The table is `/proc/self/mountinfo` and a
+//! mount is detached lazily with `umount2(MNT_DETACH)`.
 use std::{
     io,
     path::{Path, PathBuf},
@@ -10,17 +9,7 @@ use std::{
 
 /// Mount points at or under `directory`, deepest first, from this
 /// process's mount table.
-#[cfg(target_os = "macos")]
-pub(super) fn under(directory: &Path) -> io::Result<Vec<PathBuf>> {
-    let mut found: Vec<PathBuf> = (super::darwin::mount_points()?.into_iter())
-        .filter(|point| point.starts_with(directory))
-        .collect();
-    found.sort_by_key(|point| std::cmp::Reverse(point.components().count()));
-    found.dedup();
-    Ok(found)
-}
-#[cfg(target_os = "linux")]
-pub(super) fn under(directory: &Path) -> io::Result<Vec<PathBuf>> {
+pub(crate) fn under(directory: &Path) -> io::Result<Vec<PathBuf>> {
     let table = std::fs::read_to_string("/proc/self/mountinfo")?;
     let mut found = Vec::new();
     for line in table.lines() {
@@ -38,7 +27,6 @@ pub(super) fn under(directory: &Path) -> io::Result<Vec<PathBuf>> {
     Ok(found)
 }
 
-#[cfg(target_os = "linux")]
 fn unescape(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -66,25 +54,10 @@ fn unescape(text: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Unmounts every mount under `directory` once with `umount -f` (a dead
-/// NFS export's mount is forced off; macOS has no lazy detach), then checks
-/// that none is left.
-#[cfg(target_os = "macos")]
-pub(super) fn detach(directory: &Path) -> io::Result<()> {
-    for point in under(directory)? {
-        super::darwin::force_unmount(&point)?;
-    }
-    if under(directory)?.is_empty() {
-        Ok(())
-    } else {
-        Err(io::Error::other("a mount under the local Sandbox remains"))
-    }
-}
 /// Detaches every mount under `directory` once (lazy unmount: a process
 /// still inside keeps its view; new lookups no longer reach it), then checks
 /// that none is left.
-#[cfg(target_os = "linux")]
-pub(super) fn detach(directory: &Path) -> io::Result<()> {
+pub(crate) fn detach(directory: &Path) -> io::Result<()> {
     use nix::mount::{umount2, MntFlags};
     for point in under(directory)? {
         match umount2(&point, MntFlags::MNT_DETACH) {

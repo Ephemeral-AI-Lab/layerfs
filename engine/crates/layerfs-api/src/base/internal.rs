@@ -106,7 +106,7 @@ pub fn control(sandbox: &mut crate::sandbox::ProviderSandbox) -> &mut Control {
 pub fn split_provider(
     sandbox: crate::sandbox::ProviderSandbox,
 ) -> (
-    Box<dyn layerfs_sandbox::provider::SandboxInstance>,
+    Box<layerfs_sandbox::Sandbox>,
     Control,
     layerfs_sandbox::CommandIdentity,
 ) {
@@ -116,10 +116,7 @@ pub fn split_provider(
 #[cfg(unix)]
 pub fn provider_parts(
     sandbox: &mut crate::sandbox::ProviderSandbox,
-) -> (
-    &dyn layerfs_sandbox::provider::SandboxInstance,
-    &mut Control,
-) {
+) -> (&layerfs_sandbox::Sandbox, &mut Control) {
     (sandbox.runtime.as_ref(), &mut sandbox.control)
 }
 /// Original one-attempt startup used by existing-Store deployments and lifecycle proofs.

@@ -47,7 +47,7 @@ pub(crate) struct SandboxState {
     /// directory name).
     pub(crate) name: String,
     pub(crate) directory: std::path::PathBuf,
-    pub(crate) runtime: crate::runtime::Runtime,
+    pub(crate) runtime: Box<layerfs_sandbox::Sandbox>,
     pub(crate) identity: CommandIdentity,
     pub(crate) controls: crate::pool::Controls,
     pub(crate) mounts: Mutex<BTreeMap<String, Mount>>,

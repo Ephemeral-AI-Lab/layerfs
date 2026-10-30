@@ -1,20 +1,28 @@
-//! Real provider lifecycle and partial launch custody through the public port.
+//! Real native runtime lifecycle and partial launch custody through the Runtime enum.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 #[cfg(target_os = "linux")]
-use layerfs_sandbox::backend::local::NativeLinuxProvider as NativeProvider;
+use layerfs_sandbox::backend::native::NativeLinuxProvider as NativeProvider;
 #[cfg(target_os = "macos")]
-use layerfs_sandbox::backend::local::NativeMacosProvider as NativeProvider;
+use layerfs_sandbox::backend::native::NativeMacosProvider as NativeProvider;
 use layerfs_sandbox::{
-    provider::{
-        DockerRecord, LaunchPhase, LaunchRequest, ProviderLaunchOptions, SandboxProvider,
-        SandboxRecord,
-    },
-    CommandIdentity,
+    provider::{DockerRecord, LaunchPhase, LaunchRequest, ProviderLaunchOptions, SandboxRecord},
+    CommandIdentity, Runtime,
 };
 use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
 
+/// The native runtime this host offers, over `root`.
+#[cfg(target_os = "linux")]
+fn native(root: &std::path::Path) -> Runtime {
+    Runtime::LinuxNative(NativeProvider::new(root).unwrap())
+}
+
+#[cfg(target_os = "macos")]
+fn native(root: &std::path::Path) -> Runtime {
+    Runtime::MacosNative(NativeProvider::new(root).unwrap())
+}
+
 #[test]
-fn provider_preserves_partial_launch_owner_and_reopens_the_exact_process() {
+fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
     if cfg!(target_os = "linux") && !nix::unistd::Uid::effective().is_root() {
         assert!(NativeProvider::new("/no-access-required").is_err());
         return;
@@ -32,9 +40,9 @@ fn provider_preserves_partial_launch_owner_and_reopens_the_exact_process() {
     )
     .unwrap();
     fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
-    let provider = NativeProvider::new(&base).unwrap();
+    let provider = native(&base);
     assert_eq!(
-        provider.capabilities().name,
+        provider.capabilities().unwrap().name,
         if cfg!(target_os = "linux") {
             "native-linux"
         } else {
