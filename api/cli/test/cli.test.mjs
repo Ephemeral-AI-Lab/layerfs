@@ -216,7 +216,7 @@ test("exec --stream passes the command's output and exit code through", () => {
 test("--text prints readable results", () => {
   const r = cli(["--text", "workspace", "commit", WS]);
   assert.equal(r.out, "kind: Committed\nhead: c0ffee\ncommit:\n  id: c0ffee\n  author: -\n  labels: (none)\n  logical: 120\n  newCanonical: 40\n  newStored: 30\n  newMetadata: 8\n");
-  assert.equal(cli(["--text", "fs", "read", "main", "/a"]).out, "text: |\n  a\nnextLine: 2\n");
+  assert.equal(cli(["--text", "fs", "read", "main", "/a"]).out, `text: |\n  a\nnextLine: 2\nnextOffset: lfr1.t.2.2.${"ab".repeat(32)}.2f61\n`);
 });
 
 test("help, --help and --version", () => {

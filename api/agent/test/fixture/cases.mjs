@@ -68,7 +68,7 @@ export const CASES = [
   { name: "branch publish head", argv: ["branch", "publish", "cart"], sdk: (lf) => lf.branch.publish("cart"),
     op: "branch.publish", sent: { branch: "cart" }, result: { kind: "Added", source: { branch: "feature", commit: "pub1" }, publishedLayer: { id: "lay1" } } },
   { name: "fs read", argv: ["fs", "read", "main", "/a.txt", "--start-line=3", "--end-line", "9"], sdk: (lf) => lf.fs.read("main", "/a.txt", 3, 9),
-    op: "fs.read", sent: { branch: "main", path: "/a.txt", startLine: 3, endLine: 9 }, result: { text: "b\n", nextLine: null } },
+    op: "fs.read", sent: { branch: "main", path: "/a.txt", startLine: 3, endLine: 9 }, result: { text: "b\n", nextLine: null, nextOffset: null } },
   { name: "fs list", argv: ["fs", "list", "main"], sdk: (lf) => lf.fs.list("main"),
     op: "fs.list", sent: { branch: "main", path: "/", pageSize: 50, pagePos: 0 }, result: page },
   { name: "fs stat", argv: ["fs", "stat", "main", "/a"], sdk: (lf) => lf.fs.stat("main", "/a"),
@@ -117,7 +117,7 @@ export const CASES = [
     op: "sandbox.close", sent: { sandbox: "2" }, result: { kind: "Closed", sandbox: "2" } },
   // the first window, and refusals: the binding's, then one the SDK makes itself
   { name: "fs read (first window)", argv: ["fs", "read", "main", "/a"], sdk: (lf) => lf.fs.read("main", "/a"),
-    op: "fs.read", sent: { branch: "main", path: "/a", startLine: 1 }, result: { text: "a\n", nextLine: 2 } },
+    op: "fs.read", sent: { branch: "main", path: "/a", startLine: 1 }, result: { text: "a\n", nextLine: 2, nextOffset: `lfr1.t.2.2.${"ab".repeat(32)}.2f61` } },
   { name: "fs read (missing)", argv: ["fs", "read", "main", "/missing"], sdk: (lf) => lf.fs.read("main", "/missing"),
     op: "fs.read", sent: { path: "/missing" }, refused: { code: "NoSuchPath", message: "NoSuchPath: /missing does not exist", detail: null } },
   { name: "branch merge (refused)", argv: ["branch", "merge", "a", "b", "ab"], sdk: (lf) => lf.branch.merge("a", "b", "ab"), refuse: ["branch.merge"],

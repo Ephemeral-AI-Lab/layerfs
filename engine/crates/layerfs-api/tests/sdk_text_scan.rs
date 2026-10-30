@@ -412,3 +412,142 @@ fn grep_and_read_give_the_window_scan_results() {
         }
     }
 }
+
+fn read_offset(
+    fixture: &Fixture,
+    path: &str,
+    start: Option<u64>,
+    binary: bool,
+    offset: Option<&str>,
+) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+    let mut fields = vec![
+        ("branch", SdkValue::text("main")),
+        ("path", SdkValue::text(path)),
+        ("binary", SdkValue::Bool(binary)),
+    ];
+    if let Some(start) = start {
+        fields.push(("startLine", SdkValue::Int(start as i64)));
+    }
+    if let Some(offset) = offset {
+        fields.push(("offset", SdkValue::text(offset)));
+    }
+    fixture.try_call("fs.read", fields)
+}
+
+fn cursor(value: &SdkValue) -> Option<&str> {
+    match value.get("nextOffset") {
+        Some(SdkValue::Text(cursor)) => Some(cursor),
+        Some(SdkValue::Null) => None,
+        other => panic!("nextOffset must be present and text or null: {other:?}"),
+    }
+}
+
+fn plain_lines(size: usize, width: usize) -> Vec<u8> {
+    let mut out = Vec::with_capacity(size);
+    for n in 0.. {
+        if out.len() >= size {
+            break;
+        }
+        let mut line = format!("{n:07} ");
+        while line.len() + 1 < width {
+            line.push('x');
+        }
+        line.push('\n');
+        out.extend_from_slice(line.as_bytes());
+    }
+    out.truncate(size);
+    out
+}
+
+#[test]
+fn read_cursors_match_reference_and_preserve_delayed_binary_classification() {
+    let valid = [
+        (
+            "valid-window",
+            put(plain_lines(400_000, 61), WINDOW - 2, "😀".as_bytes()),
+        ),
+        (
+            "valid-block",
+            put(plain_lines(400_000, 61), BLOCK - 2, "😀".as_bytes()),
+        ),
+        (
+            "valid-budget",
+            put(plain_lines(400_000, 61), BUDGET - 2, "😀".as_bytes()),
+        ),
+    ];
+    let bad = [
+        ("nul-late", put(plain_lines(400_000, 61), 150_000, b"\0")),
+        (
+            "invalid-late",
+            put(plain_lines(400_000, 61), 170_000, b"\xE2\x82A"),
+        ),
+    ];
+    let fixture = Fixture::new("sdk-text-scan-cursors", |source| {
+        for (name, bytes) in valid.iter().chain(&bad) {
+            std::fs::write(source.join(name), bytes).unwrap();
+        }
+        valid.len() + bad.len()
+    });
+    for (name, _) in &valid {
+        let path = format!("/{name}");
+        let (mut offset, mut start, mut pages) = (None, 1, 0);
+        loop {
+            pages += 1;
+            assert!(pages < 100, "cursor traversal did not terminate for {path}");
+            let reply = read_offset(&fixture, &path, None, false, offset.as_deref()).unwrap();
+            let numeric = read_offset(&fixture, &path, Some(start), false, None).unwrap();
+            let got = (
+                text(&reply, "text"),
+                int(&reply, "endLine"),
+                boolean(&reply, "truncated"),
+                int(&reply, "nextLine"),
+            );
+            let want = (
+                text(&numeric, "text"),
+                int(&numeric, "endLine"),
+                boolean(&numeric, "truncated"),
+                int(&numeric, "nextLine"),
+            );
+            assert_eq!(got, want, "cursor/reference mismatch for {path} at {start}");
+            let next = int(&reply, "nextLine");
+            assert_eq!(cursor(&reply).is_some(), next.is_some());
+            if next.is_none() {
+                break;
+            }
+            start = next.unwrap();
+            offset = cursor(&reply).map(str::to_owned);
+        }
+        assert!(pages > 1);
+    }
+    for (name, _) in &bad {
+        let path = format!("/{name}");
+        let (mut offset, mut pages) = (None, 0);
+        let refused = loop {
+            assert!(pages < 100, "cursor traversal did not terminate for {path}");
+            match read_offset(&fixture, &path, None, false, offset.as_deref()) {
+                Ok(reply) => {
+                    pages += 1;
+                    let next = int(&reply, "nextLine");
+                    assert_eq!(cursor(&reply).is_some(), next.is_some());
+                    assert!(
+                        next.is_some(),
+                        "complete traversal unexpectedly succeeded for {path}"
+                    );
+                    offset = cursor(&reply).map(str::to_owned);
+                }
+                Err(refusal) => break refusal,
+            }
+        };
+        assert!(pages >= 2, "valid early pages must succeed for {path}");
+        assert_eq!(refused.code, "Binary");
+        assert_eq!(refused.message, "text contains NUL or invalid UTF-8");
+        assert_eq!(refused.detail, SdkValue::Null);
+    }
+    let binary = read_offset(&fixture, "/nul-late", None, true, None).unwrap();
+    let offset = cursor(&binary).unwrap().to_owned();
+    let refusal = read_offset(&fixture, "/nul-late", None, false, Some(&offset)).unwrap_err();
+    assert_eq!(refusal.code, "InvalidInput");
+    assert_eq!(refusal.message, "offset does not match this file read");
+    assert_eq!(refusal.detail, SdkValue::Null);
+    fixture.cleanup();
+}

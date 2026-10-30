@@ -319,6 +319,22 @@ fn public_methods_answer_as_recorded() {
             ("startLine", SdkValue::Int(0)),
         ],
     );
+    s.call(
+        "fs.read",
+        vec![
+            ("branch", t("feat")),
+            ("path", t("/a.txt")),
+            ("offset", SdkValue::Int(7)),
+        ],
+    );
+    s.call(
+        "fs.read",
+        vec![
+            ("branch", t("feat")),
+            ("path", t("/a.txt")),
+            ("offset", t("not-a-cursor")),
+        ],
+    );
     s.call("fs.read", vec![("branch", t("feat")), ("path", t("/nope"))]);
     s.call(
         "fs.read",

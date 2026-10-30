@@ -25,11 +25,13 @@ fs.apply -> refused NoSuchPath "Content(PathNotFound)" {index: 0}
 fs.apply -> refused InvalidInput "unknown change op bogus" {index: 1}
 fs.apply -> refused InvalidInput "apply requires a changes array" null
 fs.write -> ok {kind: "Committed", branch: "other", head: "<hex>", commit: {id: "<hex>", branch: "other", parent: null, secondParent: null, base: "<hex>", root: "<hex>", via: "fs", message: "Apply filesystem changes", author: null, labels: [], mergedFrom: null, time: <varies>, logical: 34, newCanonical: 774, newStored: <varies>, newMetadata: <varies>, displaced: null, lww: [], lwwTruncated: false, unitsTruncated: false}}
-fs.read -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/a.txt", text: "one\nTWO\nthree\n", startLine: 1, endLine: 3, lineTruncated: false, truncated: false, nextLine: null, size: 14}
-fs.read -> ok {kind: "ok", snapshot: "main@<hex>", root: "<hex>", path: "/a.txt", text: "one\ntwo\nthree\n", startLine: 1, endLine: 3, lineTruncated: false, truncated: false, nextLine: null, size: 14}
-fs.read -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/a.txt", text: "TWO\n", startLine: 2, endLine: 2, lineTruncated: false, truncated: false, nextLine: null, size: 14}
+fs.read -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/a.txt", text: "one\nTWO\nthree\n", startLine: 1, endLine: 3, lineTruncated: false, truncated: false, nextLine: null, nextOffset: null, size: 14}
+fs.read -> ok {kind: "ok", snapshot: "main@<hex>", root: "<hex>", path: "/a.txt", text: "one\ntwo\nthree\n", startLine: 1, endLine: 3, lineTruncated: false, truncated: false, nextLine: null, nextOffset: null, size: 14}
+fs.read -> ok {kind: "ok", snapshot: "feat@<hex>", root: "<hex>", path: "/a.txt", text: "TWO\n", startLine: 2, endLine: 2, lineTruncated: false, truncated: false, nextLine: null, nextOffset: null, size: 14}
 fs.read -> refused InvalidInput "endLine must be at least startLine" null
 fs.read -> refused InvalidInput "startLine must be a positive safe integer" null
+fs.read -> refused InvalidInput "offset is not a valid read cursor" null
+fs.read -> refused InvalidInput "offset is not a valid read cursor" null
 fs.read -> refused NoSuchPath "/nope does not exist at feat@<hex>" {path: "/nope"}
 fs.read -> refused NoSuchBranch "Branch ghost does not exist" null
 fs.read -> refused InvalidInput "missing text argument `path`" null
@@ -58,7 +60,7 @@ branch.diff_commits -> refused InvalidInput "diff_commits takes two saved Commit
 branch.diff_commits -> refused NoSuchBranch "Branch ghost does not exist" null
 branch.merge -> refused Conflict "feat + other conflict in 1 file(s); nothing was created" {sources: [{ref: "feat", node: "<hex>"}, {ref: "other", node: "<hex>"}], mergeBase: "<hex>", conflicts: [{path: "/a.txt", kind: "content", blocks: 1, hunksOmitted: false, hunks: [{line: 1, ours: ["one", "TWO", "three"], theirs: ["other side"]}]}], lww: [], conflictsTruncated: false, lwwTruncated: false, units: [], unitsTruncated: false}
 branch.diff_commits -> ok {kind: "ok", from: {commit: "<hex>", root: "<hex>"}, to: {commit: "<hex>", root: "<hex>"}, items: [{path: "/applied-dir", kind: "Added", type: "dir", before: null, after: {type: "dir", inode: 201}, content: false, identity: false, metadata: false, hunks: null, hunksOmitted: false}, {path: "/applied.txt", kind: "Added", type: "file", before: null, after: {type: "file", inode: 200}, content: false, identity: false, metadata: false, hunks: null, hunksOmitted: false}], hasMore: false, nextPagePos: null, nextCursor: null}
-fs.read -> ok {kind: "ok", snapshot: "<hex>", root: "<hex>", path: "/new.txt", text: "hello\n", startLine: 1, endLine: 1, lineTruncated: false, truncated: false, nextLine: null, size: 6}
+fs.read -> ok {kind: "ok", snapshot: "<hex>", root: "<hex>", path: "/new.txt", text: "hello\n", startLine: 1, endLine: 1, lineTruncated: false, truncated: false, nextLine: null, nextOffset: null, size: 6}
 branch.fork -> ok {kind: "Forked", branch: "at-commit", base: "<hex>", head: "<hex>"}
 branch.fork -> ok {kind: "Forked", branch: "left", base: "<hex>", head: null}
 fs.write -> ok {kind: "Committed", branch: "left", head: "<hex>", commit: {id: "<hex>", branch: "left", parent: null, secondParent: null, base: "<hex>", root: "<hex>", via: "fs", message: "Apply filesystem changes", author: null, labels: [], mergedFrom: null, time: <varies>, logical: 41, newCanonical: 956, newStored: <varies>, newMetadata: <varies>, displaced: null, lww: [], lwwTruncated: false, unitsTruncated: false}}
@@ -74,7 +76,7 @@ branch.publish -> ok {kind: "UpToDate", layer: "<hex>"}
 branch.fork -> ok {kind: "Forked", branch: "empty", base: "<hex>", head: null}
 branch.publish -> refused NoCommit "empty has no saved Commit to publish" null
 project.list_branches -> ok {items: [{name: "at-commit", id: "<hex>", base: "<hex>", head: "<hex>", forkedFrom: "<hex>"}, {name: "both", id: "<hex>", base: "<hex>", head: "<hex>", forkedFrom: "<hex>"}, {name: "empty", id: "<hex>", base: "<hex>", head: null, forkedFrom: "<hex>"}, {name: "feat", id: "<hex>", base: "<hex>", head: "<hex>", forkedFrom: "<hex>"}, {name: "left", id: "<hex>", base: "<hex>", head: "<hex>", forkedFrom: "<hex>"}, {name: "main", id: null, base: "<hex>", head: null}, {name: "other", id: "<hex>", base: "<hex>", head: "<hex>", forkedFrom: "<hex>"}, {name: "right", id: "<hex>", base: "<hex>", head: "<hex>", forkedFrom: "<hex>"}], hasMore: false, nextPagePos: null}
-fs.read -> ok {kind: "ok", snapshot: "main@<hex>", root: "<hex>", path: "/a.txt", text: "one\nTWO\nthree\n", startLine: 1, endLine: 3, lineTruncated: false, truncated: false, nextLine: null, size: 14}
+fs.read -> ok {kind: "ok", snapshot: "main@<hex>", root: "<hex>", path: "/a.txt", text: "one\nTWO\nthree\n", startLine: 1, endLine: 3, lineTruncated: false, truncated: false, nextLine: null, nextOffset: null, size: 14}
 fs.nope -> refused UnknownMethod "no Store method fs.nope" null
 backend.store.project.get_storage -> refused UnknownMethod "no Store method backend.store.project.get_storage" null
 project.list_overwritten -> refused UnknownMethod "no Store method project.list_overwritten" null

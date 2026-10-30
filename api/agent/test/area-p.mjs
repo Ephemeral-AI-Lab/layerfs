@@ -81,7 +81,18 @@ try {
   for (const options of [{ unknown: true }, { binary: "yes" }, null, [], "yes"]) {
     await assert.rejects(lf.fs.read(P8_REFS.commit, "/file.txt", 1, 1, options), { code: "InvalidInput" });
   }
+  for (const offset of [7, true, {}]) {
+    await assert.rejects(lf.fs.read(P8_REFS.commit, "/file.txt", 1, 1, { offset }), {
+      name: "LayerFSError",
+      code: "InvalidInput",
+      message: "InvalidInput: offset must be a string or null",
+      detail: null,
+    });
+  }
   assert.equal(native.calls.length, before, "invalid P8 options send nothing");
+  const result = await lf.fs.read(P8_REFS.commit, "/file.txt", 1, 1, { offset: null });
+  assert.equal(result.nextOffset, null);
+  assert.ok(!("offset" in native.args.at(-1)), "null offset omits the wire field");
 } catch (failure) {
   failures.push(`P8 option validation: ${failure.message}`);
 }

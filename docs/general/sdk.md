@@ -91,8 +91,24 @@ fork point and publication state derived from main's current Layer stack. Main's
 graph instead walks Layer-source Commits and skips genesis.
 [Changed paths](../../engine/crates/layerfs-api/src/branch/changed_paths.rs) uses the
 existing comparison encoder against a Commit's first parent, its base Layer for a
-parentless merge, or an empty tree for a root Commit. Neither operation changes the
-Store schema.
+parentless merge, or an empty tree for a root Commit. Its optional path cursor and
+`nextCursor` reuse the difference walk's keyset resumption, with cursor precedence
+over `pagePos`; numeric-only paging remains supported. Neither operation changes
+the Store schema.
+
+## Filesystem reads
+
+`fs.read` accepts an optional `offset` string and always answers `nextOffset`, which
+is non-null exactly when `nextLine` is non-null. Passing the opaque cursor back resumes
+at the first byte of the first unreturned line; a valid cursor takes precedence over
+`startLine`, while `endLine` remains absolute and numeric paging remains supported.
+The cursor binds the normalized path, immutable content root, and text/binary mode,
+not a Commit or Layer identity, so unchanged content can be continued across snapshots.
+
+Cursor calls read the file suffix rather than rescanning the returned prefix. Sequential
+cursor traversal therefore performs linear content work plus bounded overlap when part
+of an unreturned line was inspected. Numeric-only reads retain their existing behavior
+and cold prefix-scanning cost. This is an implementation bound, not a timing claim.
 
 ## Sandbox
 

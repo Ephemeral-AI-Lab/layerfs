@@ -207,9 +207,12 @@ const p8List = (ref, path, pageSize, pagePos) => {
   const hasMore = pagePos + items.length < p8Items(path).length;
   return { ...p8Header(ref, path), items, hasMore, nextPagePos: hasMore ? pagePos + items.length : null };
 };
+export const P8_OFFSET = `lfr1.t.2.3.${"ab".repeat(32)}.2f66696c652e747874`;
+export const P8_NEXT_OFFSET = `lfr1.t.3.6.${"ab".repeat(32)}.2f66696c652e747874`;
+
 const p8Read = (ref, path, binary) => {
   const content = path === "/binary.bin" ? Buffer.from([0, 255, 1, 10]) : Buffer.from(path === "/same.txt" ? "same\n" : p8Text(ref));
-  return { ...p8Header(ref, path), ...(binary ? { bytes: { base64: content.toString("base64") } } : { text: content.toString("utf8") }), startLine: 1, endLine: 1, lineTruncated: false, truncated: false, nextLine: null, size: content.length };
+  return { ...p8Header(ref, path), ...(binary ? { bytes: { base64: content.toString("base64") } } : { text: content.toString("utf8") }), startLine: 1, endLine: 1, lineTruncated: false, truncated: false, nextLine: null, nextOffset: null, size: content.length };
 };
 const p8ListCase = (ref, path, pageSize = 1, pagePos = 0) => ({
   name: `P8 list ${ref.slice(2, 14)} ${path}`,
@@ -255,6 +258,14 @@ export const P8_CASES = [
   p8ReadCase("read Layer text", P8_REFS.layer, "/file.txt"),
   p8ReadCase("read Commit binary", P8_REFS.commit, "/binary.bin", { binary: true }),
   p8ReadCase("read text as binary", P8_REFS.commit, "/file.txt", { binary: true }),
+  {
+    name: "P8 read offset with start-line forwarding",
+    argv: ["fs", "read", P8_REFS.commit, "/file.txt", "--offset", P8_OFFSET, "--start-line", "7", "--end-line", "9"],
+    sdk: (lf) => lf.fs.read(P8_REFS.commit, "/file.txt", 7, 9, { offset: P8_OFFSET }),
+    op: "fs.read",
+    sent: { branch: P8_REFS.commit, path: "/file.txt", startLine: 7, endLine: 9, binary: false, offset: P8_OFFSET },
+    result: { ...p8Read(P8_REFS.commit, "/file.txt", false), startLine: 2, endLine: 2, truncated: true, nextLine: 3, nextOffset: P8_NEXT_OFFSET },
+  },
   p8Refusal("binary=false refuses binary", P8_REFS.commit, "/binary.bin", "Binary", "text contains NUL or invalid UTF-8", null, { binary: false }),
   p8Refusal("omitted binary refuses binary", P8_REFS.commit, "/binary.bin", "Binary", "text contains NUL or invalid UTF-8"),
   p8Refusal("unknown Branch", "p8-unknown-branch", "/file.txt", "NoSuchBranch", "Branch p8-unknown-branch does not exist"),
