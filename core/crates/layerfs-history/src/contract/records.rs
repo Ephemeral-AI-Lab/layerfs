@@ -642,6 +642,32 @@ pub struct StoreStatistics {
     pub init: Option<InitStatistics>,
 }
 
+/// The Store's physical on-disk file lengths, measured fresh from the files.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct StoreDiskStatistics {
+    /// Byte length of the Store's main SQLite file.
+    pub main: u64,
+    /// Byte length of its `-wal` file; zero when no WAL file exists. The
+    /// transient `-shm` index is not data and is never counted.
+    pub wal: u64,
+}
+
+/// One Commit kind's totals over the whole commit catalog, computed by a
+/// full scan of that catalog (not a maintained, cheap total).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CommitKindStatistics {
+    /// How these Commits were made.
+    pub via: CommitVia,
+    /// Commits of this kind.
+    pub count: u64,
+    /// Sum of each Commit's own newly inserted canonical object bytes.
+    pub new_canonical: u64,
+    /// Sum of each Commit's own new pack bytes.
+    pub new_stored: u64,
+    /// Sum of each Commit's own new metadata-domain pack bytes.
+    pub new_metadata: u64,
+}
+
 /// Contents one `file_roots` demand asks about.
 pub const FILE_DIGEST_WINDOW: usize = 64;
 

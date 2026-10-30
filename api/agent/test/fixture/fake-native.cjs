@@ -292,7 +292,7 @@ function answer(op, args) {
     case "workspace.unmount": return { value: args.force ? { kind: "ForceUnmounted", abort: "Written", detach: "Detached", cleanup: "Queued" } : { kind: "Unmounted" } };
     case "backend.daemon.process.start": return { value: { kind: "running", process: "proc_1_ab", command: args.command } };
     case "backend.store.project.get_history": return { value: exports.history ?? { kind: "ok", version: "h1", project: "website", branches: [], commits: [], more: {}, layers: [], workspaces: [] } };
-    case "backend.store.project.get_storage": return { value: { dedupe: "2", compression: null } };
+    case "backend.store.project.get_storage": return { value: exports.storageResult ?? { dedupe: "2", compression: null } };
     case "sandbox.create": return { value: { sandbox: "2", name: "layerfs-website-2", image: args.deploy?.image } };
     case "sandbox.list_workspaces": return { value: { kind: "ok", version: "1", workspaces: exports.workspaceList } };
     case "sandbox.close": return { value: { kind: "Closed", sandbox: args.sandbox } };

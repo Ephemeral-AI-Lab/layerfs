@@ -7,6 +7,12 @@ impl HistoryCatalog for HistoryProvider {
     fn statistics(&self) -> HistoryResult<StoreStatistics> {
         HistoryProvider::statistics(self)
     }
+    fn disk_statistics(&self) -> HistoryResult<StoreDiskStatistics> {
+        HistoryProvider::disk_statistics(self)
+    }
+    fn commit_kind_statistics(&self) -> HistoryResult<Vec<CommitKindStatistics>> {
+        HistoryProvider::commit_kind_statistics(self)
+    }
     fn record_init(&self, totals: &InitStatistics) -> HistoryResult<()> {
         HistoryProvider::record_init(self, totals)
     }
