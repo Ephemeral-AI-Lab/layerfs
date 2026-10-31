@@ -146,22 +146,26 @@ fn one_unpack_per_digest_however_many_sandboxes_ask_for_it() {
 fn a_second_sandbox_waits_for_the_unpack_that_is_running() {
     let scratch = Scratch::new("lock");
     let path = archive(&scratch.base, "image", DIGEST, two_layers());
-    // the first unpack publishes the cache and its lock
-    let published = unpacked(&scratch, &path, DIGEST);
-    let directory = published.directory().to_owned();
-    drop(published);
-    fs::remove_dir_all(&directory).unwrap();
     // holding the digest's lock is what an unpack in progress looks like: a
-    // second one neither starts nor publishes anything until it is released
+    // second one neither starts nor publishes anything until it is released.
+    // The test takes the lock itself rather than publishing an unpack and
+    // deleting it: a published image is 0555, and unlinking inside a read-only
+    // directory is root's privilege, while these tests must also run as the
+    // nonroot CI user. Publishing and deleting are not what this proves.
+    let cache = scratch.cache.clone();
+    fs::create_dir_all(&cache).unwrap();
     let held = nix::fcntl::Flock::lock(
         fs::OpenOptions::new()
             .read(true)
             .write(true)
-            .open(scratch.cache.join(format!("{}.lock", hex(DIGEST))))
+            .create(true)
+            .truncate(false)
+            .open(cache.join(format!("{}.lock", hex(DIGEST))))
             .unwrap(),
         nix::fcntl::FlockArg::LockExclusive,
     )
     .unwrap();
+    let directory = cache.join(hex(DIGEST));
     let waiting = {
         let (archive, cache) = (path.clone(), scratch.cache.clone());
         std::thread::spawn(move || {
