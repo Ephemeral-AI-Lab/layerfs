@@ -92,6 +92,34 @@ impl StoreService {
         template: &Path,
     ) -> Result<Self, OpenRefusal> {
         kernel_guard::check(store).map_err(OpenRefusal::Unsupported)?;
+        // The installed Store file answers to its own entry: a substituted
+        // link planted at its spelling is refused, never followed, and on
+        // Windows its DACL must still grant nothing beyond the owner — the
+        // discovery tree's privacy check does not cover the installed file.
+        #[cfg(windows)]
+        {
+            use std::fs::symlink_metadata;
+            let entry = symlink_metadata(store)
+                .map_err(|error| OpenRefusal::Failed(format!("Store entry: {error}")))?;
+            if entry.file_type().is_symlink() {
+                return Err(OpenRefusal::Unsupported(crate::kernel_guard::Unsupported(
+                    format!(
+                        "the installed Store at {} is a link, not the Store file",
+                        store.display()
+                    ),
+                )));
+            }
+            // The Store file itself is the privacy boundary (its owner-only
+            // DACL protects the content); the directory is restricted when
+            // the route creates it, and a caller-pre-created directory is
+            // accepted as the caller shaped it.
+            crate::windows_acl::require_owner_only(store).map_err(|error| {
+                OpenRefusal::Unsupported(crate::kernel_guard::Unsupported(format!(
+                    "the Store at {}: {error}",
+                    store.display()
+                )))
+            })?;
+        }
         if !store.is_file() {
             return Err(OpenRefusal::Missing(format!(
                 "no installed Store at {}",

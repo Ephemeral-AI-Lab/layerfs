@@ -145,7 +145,35 @@ substituted reparse point. Homes, discovery records, the install volume
 directory and Store files carry owner-only protected DACLs (the audited
 ACL module): what this route creates is restricted to its owner, and an
 existing entry whose DACL grants Everyone, Users or Authenticated Users
-is refused — the parity of unix's 0700/0600 discipline.
+is refused — the parity of unix's 0700/0600 discipline; the installed
+Store file and its directory answer the same check at every open, and a
+link planted at either spelling is refused, never followed. A home that
+lost its owner (restored from backup, moved between machines) answers
+`Unauthorized`; an administrator recovers it with `takeown` (making the
+taker the owner, whom the OWNER RIGHTS ace then serves) and, if needed,
+`icacls <home> /inheritance:r /grant:r '<user>:(OI)(CI)F'` before the
+route accepts it again.
+
+Operational notes from the 2026-10-31 production-readiness round: the
+audited Win32 calls spell paths verbatim (`\\?\`), so trees deeper than
+MAX_PATH initialize — but the host process must also carry a
+`longPathAware` manifest for its own operations, which today's node.exe
+does not; keep sources and homes within ~260 characters until it does.
+Windows lacks the 64 MiB disk-headroom pre-admission macOS and Linux run
+(a filling disk surfaces mid-transaction as the typed `Capacity`
+refusal instead); an in-session writer-lane squatter parks every Store
+call for as long as it holds the mutex (the readiness wait has no
+bound, exactly as Linux's blocking flock); a killed process leaves one
+overlay directory under `%TEMP%\layerfs-store-*` until the OS cleans
+it; and a `fs.rm`/`fs.cp` over a subtree holding a name outside UTF-8
+refuses with a message naming that entry (the SDK cannot spell such a
+name until the byte-carrying path lands — the same follow-up as the
+merge/compare fence above, which surfaces at the SDK as code `Failed`
+with the cause in the message, not as the content-layer error name).
+
+**Obtaining the addon**: `npm run build:native` in `api/` builds on
+Linux, macOS and Windows (cargo `+1.85.1 --release --locked -p
+layerfs-node`, artifact staged to `engine/crates/layerfs-node/layerfs.node`); `LAYERFS_NATIVE` names another copy.
 
 When the owner merges this branch, the observation period runs by a
 fixed checklist (each step reads a mechanism that already exists, none

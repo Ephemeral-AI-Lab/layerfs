@@ -30,14 +30,10 @@ pub(crate) fn windows_file_identity(path: &Path) -> io::Result<WindowsFileIdenti
         FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE,
         FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
     };
-    // Raw units, not a lossy string: an unpaired surrogate is a legal NTFS
-    // name and must reach CreateFileW unchanged (K3-R3 F2).
-    use std::os::windows::ffi::OsStrExt;
-    let wide: Vec<u16> = path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
+    // A verbatim spelling: raw units (an unpaired surrogate is a legal NTFS
+    // name and must reach CreateFileW unchanged, K3-R3 F2) under a \\?\
+    // prefix, so deep trees beyond MAX_PATH stamp too.
+    let wide = layerfs_persistence::verbatim_wide(path);
     let handle = unsafe {
         CreateFileW(
             wide.as_ptr(),

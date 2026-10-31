@@ -22,6 +22,11 @@ export const CODES = Object.freeze([
   "NotText", "NoMatch", "AmbiguousMatch",
   "Exists", "NotEmpty", "NameTaken", "ReservedName", "ReadOnly", "MountsActive", "TooLarge",
   "InvalidInput", "NotMounted", "NoSuchSandbox", "NoSuchProcess", "Capacity", "NotComparable",
+  // The Windows-native Store route (and the shared refusals under it) also
+  // emits: a privacy-boundary or platform refusal, a failed operation with
+  // custody detail, a missing Store path, an unknown method, and the store
+  // file refusing to open as itself (link substitution or widened DACL).
+  "Unauthorized", "Unsupported", "Failed", "NoStore", "UnknownMethod",
 ]);
 
 /** True when `error` is a LayerFS refusal with `code`. */

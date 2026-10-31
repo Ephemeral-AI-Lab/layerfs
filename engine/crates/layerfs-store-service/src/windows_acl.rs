@@ -37,7 +37,6 @@ fn well_known(kind: windows_sys::Win32::Security::WELL_KNOWN_SID_TYPE) -> io::Re
 /// Restricts `path` — file or directory — to its owner: one allow-ACE for
 /// OWNER RIGHTS under a protected DACL; nothing is inherited.
 pub fn restrict_to_owner(path: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{LocalFree, HLOCAL};
     use windows_sys::Win32::Security::Authorization::{
         SetEntriesInAclW, SetNamedSecurityInfoW, EXPLICIT_ACCESS_W, GRANT_ACCESS, SE_FILE_OBJECT,
@@ -72,11 +71,9 @@ pub fn restrict_to_owner(path: &Path) -> io::Result<()> {
             "the owner-only ACL cannot be built (win32 error {built:#x})"
         )));
     }
-    let mut wide: Vec<u16> = path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
+    // A verbatim spelling: the named-security calls accept \\?\ paths, and a
+    // home beyond MAX_PATH must still be restrictable.
+    let mut wide = layerfs_persistence::verbatim_wide(path);
     let set = unsafe {
         SetNamedSecurityInfoW(
             wide.as_mut_ptr(),
@@ -101,7 +98,6 @@ pub fn restrict_to_owner(path: &Path) -> io::Result<()> {
 /// Refuses `path` when another local user can read it: its DACL allows
 /// Everyone, Builtin\Users or Authenticated Users, or it has no DACL.
 pub fn require_owner_only(path: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{LocalFree, HLOCAL};
     use windows_sys::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};
     use windows_sys::Win32::Security::{
@@ -119,11 +115,7 @@ pub fn require_owner_only(path: &Path) -> io::Result<()> {
             ),
         )
     };
-    let mut wide: Vec<u16> = path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
+    let mut wide = layerfs_persistence::verbatim_wide(path);
     let mut dacl: *mut ACL = std::ptr::null_mut();
     let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
     let read = unsafe {

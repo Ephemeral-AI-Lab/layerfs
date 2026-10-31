@@ -100,6 +100,50 @@ impl Drop for LaneMutex {
     }
 }
 
+/// A verbatim (`\\?\`-prefixed) wide spelling of an absolute path, NUL
+/// terminated, so the Win32 calls in the audited modules accept trees
+/// deeper than MAX_PATH — a plain spelling fails at 260 characters even
+/// with the host's long-paths registry switch, because the hosting node
+/// process carries no `longPathAware` manifest. Already-verbatim paths
+/// pass through; UNC shares become `\\?\UNC\...`; relative paths pass
+/// through unchanged (every call site is absolute). Forward slashes
+/// become backslashes under the prefix: a verbatim path is not
+/// normalized, and a caller (node) may hand either spelling.
+pub fn verbatim_wide(path: &Path) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    let mut units: Vec<u16> = path.as_os_str().encode_wide().collect();
+    const PREFIX: [u16; 4] = [92, 92, 63, 92]; // \ ? \
+    if units.len() >= 4 && units[..4] == PREFIX {
+        // Already verbatim.
+    } else if units.first() == Some(&92) && units.get(1) == Some(&92) {
+        // \\server\share → \\?\UNC\server\share
+        let mut prefixed = Vec::with_capacity(units.len() + 6);
+        prefixed.extend_from_slice(&PREFIX);
+        prefixed.extend([85, 78, 67]); // U N C
+        prefixed.extend(units[2..].iter().map(|&unit| {
+            if unit == 47 {
+                92
+            } else {
+                unit
+            }
+        }));
+        units = prefixed;
+    } else if path.is_absolute() {
+        let mut prefixed = Vec::with_capacity(units.len() + 4);
+        prefixed.extend_from_slice(&PREFIX);
+        prefixed.extend(units.iter().map(|&unit| {
+            if unit == 47 {
+                92
+            } else {
+                unit
+            }
+        }));
+        units = prefixed;
+    }
+    units.push(0);
+    units
+}
+
 /// The filesystem name of the volume actually holding `directory`, for the
 /// kernel guard's allowlist. The directory's own handle answers, and its
 /// final path decides locality: the spelling is irrelevant (a verbatim
@@ -107,18 +151,13 @@ impl Drop for LaneMutex {
 /// that lands on a share (`\\?\UNC\...`) is refused — its locks travel the
 /// SMB redirector, not this kernel's lock manager (K3-R3 F4).
 pub fn windows_volume_filesystem(directory: &Path) -> io::Result<String> {
-    use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::Storage::FileSystem::{
         CreateFileW, GetFinalPathNameByHandleW, GetVolumeInformationByHandleW,
         FILE_FLAG_BACKUP_SEMANTICS, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
         OPEN_EXISTING, VOLUME_NAME_DOS,
     };
-    let wide: Vec<u16> = directory
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
+    let wide = verbatim_wide(directory);
     let handle = unsafe {
         CreateFileW(
             wide.as_ptr(),

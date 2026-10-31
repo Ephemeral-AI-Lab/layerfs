@@ -126,7 +126,12 @@ Each platform folder implements one interface (`endpoint`, `status`,
 - **Windows** runs the worker as a Node process in a WSL2 distribution
   (`server.js --stdin`); Init runs in the worker, which maps the folder with
   `wslpath`. This process owns the worker through its stdin: `close()` drains
-  and ends it.
+  and ends it. This is the worker route; it coexists with the **Windows-native
+  Store route** (owner, 2026-10-25), where the in-process addon opens a local
+  NTFS Store directly and no worker is involved. The native route is the
+  default when no worker endpoint is set (`LAYERFS_WORKER_ENDPOINT` or
+  `useWorker`): setting a worker sends the calls to the worker instead, and
+  the worker's paths are then inside its WSL2 Linux.
 
 The runtime starts a worker only on macOS and Windows. The worker route is
 open to any integration (owner, 2026-10-24): on those platforms the runtime

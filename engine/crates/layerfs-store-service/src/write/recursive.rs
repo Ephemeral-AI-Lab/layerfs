@@ -29,11 +29,15 @@ impl Frame {
     }
 }
 fn join(path: &str, name: &[u8]) -> Result<String> {
-    Ok(format!(
-        "{}/{}",
-        path.trim_end_matches('/'),
-        std::str::from_utf8(name).map_err(args::failed)?
-    ))
+    let name = std::str::from_utf8(name).map_err(|_| {
+        args::failed(format!(
+            "the entry {}/{} has a name outside UTF-8; the SDK cannot spell \
+             or remove it until the byte-carrying path lands",
+            path.trim_end_matches('/'),
+            String::from_utf8_lossy(name)
+        ))
+    })?;
+    Ok(format!("{}/{}", path.trim_end_matches('/'), name))
 }
 impl Mutation<'_> {
     pub fn remove(&mut self, path: &str) -> Result<()> {
