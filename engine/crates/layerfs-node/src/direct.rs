@@ -33,10 +33,21 @@ struct Opened {
 
 static STORES: LazyLock<Mutex<BTreeMap<PathBuf, Opened>>> = LazyLock::new(Default::default);
 
-/// The Store path a call names.
+/// The Store path a call names — absolute, like the home it is set beside:
+/// a relative spelling would resolve against the process's working
+/// directory and silently name another file.
 fn path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
     match args.get_text("storePath") {
-        Some(path) if !path.is_empty() => Ok(PathBuf::from(path)),
+        Some(text) if !text.is_empty() => {
+            let path = PathBuf::from(text);
+            if !path.is_absolute() {
+                return Err(refused(
+                    "InvalidInput",
+                    "the client's storePath must be absolute (the installed Store file)",
+                ));
+            }
+            Ok(path)
+        }
         _ => Err(refused(
             "InvalidInput",
             "Store calls need the client's storePath (the installed Store file)",

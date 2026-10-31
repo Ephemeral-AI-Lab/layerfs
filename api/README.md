@@ -81,11 +81,12 @@ addon. It uses Cargo +1.85.1, `--offline --locked --release`, and the repository
 ARM64 inputs. `-- --debug` selects dev. The artifact is atomically renamed into
 place, avoiding stale macOS executable-page signature state. `CARGO_TARGET_DIR`
 must stay inside this worktree; `LAYERFS_NATIVE_OUTPUT` can select a separate
-platform artifact. Keep Linux addons separate from the host addon. On
-Windows the script refuses to run; build the addon directly with
-`cargo build --manifest-path engine/Cargo.toml -p layerfs-node` (locked,
-`CARGO_TARGET_DIR` inside this worktree) and rename
-`target/<profile>/layerfs_node.dll` to the addon path.
+platform artifact. Keep Linux addons separate from the host addon. The same
+command builds on Windows: the script runs Cargo `+1.85.1 --release --locked`
+against the repository-root manifest and stages
+`target/<profile>/layerfs_node.dll` to the addon path. A first build needs
+the cargo registry warmed (`--offline` cannot fetch); a clean machine
+installs rustup, the 1.85.1 toolchain and VS Build Tools (link.exe) first.
 
 At runtime, the Docker Engine server selected by `LAYERFS_DOCKER` must speak
 Engine API v1.48 (Docker 28.0) or newer. Before its first request the SDK reads

@@ -115,11 +115,16 @@ pub fn verbatim_wide(path: &Path) -> Vec<u16> {
     const PREFIX: [u16; 4] = [92, 92, 63, 92]; // \ ? \
     if units.len() >= 4 && units[..4] == PREFIX {
         // Already verbatim.
-    } else if units.first() == Some(&92) && units.get(1) == Some(&92) {
-        // \\server\share → \\?\UNC\server\share
-        let mut prefixed = Vec::with_capacity(units.len() + 6);
+    } else if matches!(
+        (units.first(), units.get(1)),
+        (Some(&92), Some(&92)) | (Some(&47), Some(&47))
+    ) {
+        // \\server\share (or //server/share) → \\?\UNC\server\share — the
+        // separator after UNC is part of the spelling; without it the
+        // server name mis-joins.
+        let mut prefixed = Vec::with_capacity(units.len() + 7);
         prefixed.extend_from_slice(&PREFIX);
-        prefixed.extend([85, 78, 67]); // U N C
+        prefixed.extend([85, 78, 67, 92]); // U N C \
         prefixed.extend(
             units[2..]
                 .iter()

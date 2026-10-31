@@ -149,10 +149,12 @@ is refused — the parity of unix's 0700/0600 discipline; the installed
 Store file and its directory answer the same check at every open, and a
 link planted at either spelling is refused, never followed. A home that
 lost its owner (restored from backup, moved between machines) answers
-`Unauthorized`; an administrator recovers it with `takeown` (making the
-taker the owner, whom the OWNER RIGHTS ace then serves) and, if needed,
-`icacls <home> /inheritance:r /grant:r '<user>:(OI)(CI)F'` before the
-route accepts it again.
+`Unauthorized`; an administrator recovers it from an **elevated** console
+with `takeown` (making the taker the owner, whom the OWNER RIGHTS ace
+then serves) and, if needed,
+`icacls <home> /inheritance:r /grant:r '<user>:(OI)(CI)F'` — repeating
+the `icacls` grant on the installed Store file (and its tree, when the
+volume sits outside the home) — before the route accepts it again.
 
 Operational notes from the 2026-10-31 production-readiness round: the
 audited Win32 calls spell paths verbatim (`\\?\`), so trees deeper than

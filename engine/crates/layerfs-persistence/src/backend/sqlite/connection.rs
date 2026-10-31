@@ -166,7 +166,19 @@ impl Session {
         } else {
             OpenFlags::SQLITE_OPEN_READ_ONLY
         } | OpenFlags::SQLITE_OPEN_NO_MUTEX;
-        let connection = Connection::open_with_flags(path, flags).map_err(rows::error)?;
+        // SQLite itself must also see the verbatim spelling: the plain one
+        // fails beyond MAX_PATH under a host without longPathAware, which
+        // would make a deep Store installable but unopenable.
+        #[cfg(target_os = "windows")]
+        let sqlite_path: std::path::PathBuf = {
+            use std::os::windows::ffi::OsStringExt;
+            let mut wide = super::windows_lane::verbatim_wide(path);
+            wide.pop(); // drop the NUL for the OsString form
+            std::path::PathBuf::from(std::ffi::OsString::from_wide(&wide))
+        };
+        #[cfg(not(target_os = "windows"))]
+        let sqlite_path: std::path::PathBuf = path.to_path_buf();
+        let connection = Connection::open_with_flags(sqlite_path, flags).map_err(rows::error)?;
         connection.set_prepared_statement_cache_capacity(64);
         connection
             .busy_timeout(std::time::Duration::ZERO)
