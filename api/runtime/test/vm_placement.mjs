@@ -151,6 +151,9 @@ try {
       assert.equal(env.STORE_PATH, `${GUEST.store}/global/store.sqlite`, "the Store disk is the Store's directory");
       assert.equal(env.SANDBOX_BACKEND, "namespaces");
       assert.equal(env.IMAGE, `sha256:${image}`, "a bundle with an image gives the deployment its digest");
+      assert.equal(env.IMAGE_ARCHIVE, `${GUEST.bundle}/images/${image}.tar`, "and the archive in this VM's own copy of the bundle");
+      assert.equal(env.LOCAL_DIR, `${GUEST.store}/local`, "Sandbox directories are on the Store disk, never the VM's own root");
+      assert.match(readFileSync(join(state, "calls.jsonl"), "utf8"), /\/layerfs\/store\/local/, "the guest's Sandbox directory was made on the Store disk");
 
       // the same project again: the VM and its bundle are reused, and only the VM is read
       const counted = () => calls(state).filter((argv) => argv[0] === "create" || argv[0] === "copy" || argv[0] === "exec").length;

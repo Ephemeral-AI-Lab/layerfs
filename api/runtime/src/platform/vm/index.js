@@ -124,8 +124,9 @@ function bundleIdentity(bundle) {
  * backend's convention): `<bundle>/images/<64 hex>.tar`, an uncompressed
  * `docker save` archive named by the image's config digest. It is copied in
  * with the rest of the bundle — each VM has its own copy, because each VM is
- * one Store — and the worker is told about it as a guest path. A bundle of
- * none (today's `requires_image: false` backend) sets neither.
+ * one Store — and the worker is told about it as a guest path. The namespaces
+ * backend requires an image, so a bundle of none leaves its Sandboxes to refuse
+ * the start (`deploy.image`/`deploy.imageArchive` are not configured).
  */
 function bundleImage(bundle) {
   const folder = join(bundle, "images");
@@ -148,10 +149,10 @@ async function install(settings, provider, vm) {
 }
 
 /**
- * Step ③, the guest's precondition for the namespace backend: its Sandbox
- * directory (`/layerfs/local`) and the VM-wide user-namespace block (V4). The
- * block is read back — the namespaces backend refuses a host without it — so a
- * VM that cannot block them is reported here, by fact.
+ * Step ③, the guest's precondition for the namespace backend: the Sandbox
+ * directory (`GUEST.local`, on the Store disk) and the VM-wide user-namespace
+ * block (V4). The block is read back — the namespaces backend refuses a host
+ * without it — so a VM that cannot block them is reported here, by fact.
  */
 async function prepareGuest(provider, vm) {
   // the namespaces backend wants a root owned by this user (root), not
@@ -371,8 +372,10 @@ export function deploymentEnv(settings, project) {
     SANDBOX_BACKEND: process.env.LAYERFS_SANDBOX_BACKEND || "namespaces",
     DAEMON: GUEST.daemon,
     LOCAL_DIR: GUEST.local,
-    // the Sandbox image this VM's bundle carries, when it carries one (V7)
-    ...(image ? { IMAGE: image.digest } : {}),
+    // the Sandbox image this VM's bundle carries, when it carries one (V7):
+    // the digest and, for the namespaces backend, the archive in this VM's
+    // own copy of the bundle that holds it (both guest paths)
+    ...(image ? { IMAGE: image.digest, IMAGE_ARCHIVE: image.archive } : {}),
     STORE_PATH: storeFile(),
     CONTAINER_PREFIX: settings.containerPrefix,
     // a process an integration launches for this project reaches this VM's worker

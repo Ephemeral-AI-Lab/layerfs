@@ -20,7 +20,14 @@ export const GUEST = Object.freeze({
   bundle: "/layerfs/bundle",
   import: "/layerfs/import",
   state: "/layerfs/state",
-  local: "/layerfs/local",
+  // The Sandbox directory is on the Store disk, beside the Store's own
+  // `global/` folder, not on the VM's root: a namespace Sandbox's root is an
+  // overlay whose writable layer must be on a local filesystem, and a
+  // provider's own root may be an overlay itself (Microsandbox's is), while
+  // the Store disk is an ext4 disk on both providers (H38's
+  // `require_overlay_upper`). Its `parent` is what the backend reads, so the
+  // Store's own directory `/layerfs/store/global` stays outside it.
+  local: "/layerfs/store/local",
   daemon: "/layerfs/bundle/layerfs-daemon",
 });
 

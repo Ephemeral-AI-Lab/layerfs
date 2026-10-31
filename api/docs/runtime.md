@@ -211,16 +211,22 @@ are the same files on both sides; **the Store disk is mounted at the Store
 directory**, so the Store is `/layerfs/store/global/store.sqlite`; the sealed
 bundle is copied in at `/layerfs/bundle`; an Init source folder is copied to
 `/layerfs/import/<hash>`; the worker's settings, pid and log live in
-`/layerfs/state`; Sandbox directories are `/layerfs/local`. The home mount is
-the one thing two VMs share, and it holds records, not Stores: what a VM cannot
-see is another project's Store, which is on another disk in another VM.
+`/layerfs/state`; **Sandbox directories are on the Store disk, at
+`/layerfs/store/local`**, not on the VM's root: a namespace Sandbox's root is
+an `overlay` whose writable layer must sit on a local filesystem, and a
+provider's own root can be an overlay itself (Microsandbox's is), while the
+Store disk is an ext4 disk on both providers. The home mount is the one thing
+two VMs share, and it holds records, not Stores: what a VM cannot see is
+another project's Store, which is on another disk in another VM.
 
 A bundle may also carry the Sandbox image as `<bundle>/images/<64 hex>.tar`
 (#515 §4.7 V7, the namespaces backend's convention): it comes in with the rest
 of the bundle — its own copy in each VM — and the worker is started with
 `LAYERFS_IMAGE=sha256:<64 hex>` and `LAYERFS_IMAGE_ARCHIVE=/layerfs/bundle/images/<64 hex>.tar`,
-while `deploymentEnv` gives clients that digest as `LAYERFS_IMAGE`. A bundle
-without one sets none of them (the backend then needs no image).
+while `deploymentEnv` gives clients that digest and that archive path as
+`LAYERFS_IMAGE` and `LAYERFS_IMAGE_ARCHIVE`. The namespaces backend requires an
+image (`capabilities.requires_image`), so a bundle without one starts no
+Sandbox: the request is refused, naming the missing setting.
 
 The adapter's five steps, each attempted once, all for one named project:
 
