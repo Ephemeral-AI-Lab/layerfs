@@ -12,9 +12,13 @@
 // (correctness). api/cli/test/cli.test.mjs runs each case through both and
 // checks that the CLI sends and prints exactly what the SDK sends and
 // returns (consistency).
+import { resolve } from "node:path";
+
 const WS = { sandbox: "1", path: "/workspaces/w1" };
 const HANDLE = "1:/workspaces/w1";
-const commit = { id: "c0ffee", logical: 120, newCanonical: 40, newStored: 30, newMetadata: 8 };
+/** Init's source folder: the command resolves it against the host, so the SDK case uses the same path. */
+const SOURCE = resolve("/fake/src");
+const commit = { id: "c0ffee", author: null, labels: [], logical: 120, newCanonical: 40, newStored: 30, newMetadata: 8 };
 const committed = { kind: "Committed", head: "c0ffee", commit };
 const page = { items: [], hasMore: false, nextPagePos: null };
 
@@ -44,8 +48,8 @@ export const ENV = {
 };
 
 export const CASES = [
-  { name: "init", argv: ["init", "site", "/fake/src", "--timeout", "5000"], sdk: async (lf, LayerFS) => (await LayerFS.init("site", "/fake/src", 5000)).created,
-    op: "project.init", sent: { name: "site", path: "/fake/src", timeoutMs: 5000 },
+  { name: "init", argv: ["init", "site", SOURCE, "--timeout", "5000"], sdk: async (lf, LayerFS) => (await LayerFS.init("site", SOURCE, 5000)).created,
+    op: "project.init", sent: { name: "site", path: SOURCE, timeoutMs: 5000 },
     result: { kind: "Initialized", project: "site", layer: "lay0", root: "r00t", store: "/fake/store.sqlite" } },
   { name: "project list_branches", argv: ["project", "list_branches", "--page-size", "5", "--page-pos", "10"], sdk: (lf) => lf.project.list_branches(5, 10),
     op: "project.list_branches", sent: { pageSize: 5, pagePos: 10 }, result: { items: [{ name: "main", base: "layer0000000000aa", head: null }, { name: "cart", base: "base1234567890ab", head: "head1234567890ab" }], hasMore: false, nextPagePos: null } },
@@ -68,7 +72,7 @@ export const CASES = [
   { name: "branch publish head", argv: ["branch", "publish", "cart"], sdk: (lf) => lf.branch.publish("cart"),
     op: "branch.publish", sent: { branch: "cart" }, result: { kind: "Added", source: { branch: "feature", commit: "pub1" }, publishedLayer: { id: "lay1" } } },
   { name: "fs read", argv: ["fs", "read", "main", "/a.txt", "--start-line=3", "--end-line", "9"], sdk: (lf) => lf.fs.read("main", "/a.txt", 3, 9),
-    op: "fs.read", sent: { branch: "main", path: "/a.txt", startLine: 3, endLine: 9 }, result: { text: "b\n", nextLine: null } },
+    op: "fs.read", sent: { branch: "main", path: "/a.txt", startLine: 3, endLine: 9 }, result: { text: "b\n", nextLine: null, nextOffset: null } },
   { name: "fs list", argv: ["fs", "list", "main"], sdk: (lf) => lf.fs.list("main"),
     op: "fs.list", sent: { branch: "main", path: "/", pageSize: 50, pagePos: 0 }, result: page },
   { name: "fs stat", argv: ["fs", "stat", "main", "/a"], sdk: (lf) => lf.fs.stat("main", "/a"),
@@ -117,7 +121,7 @@ export const CASES = [
     op: "sandbox.close", sent: { sandbox: "2" }, result: { kind: "Closed", sandbox: "2" } },
   // the first window, and refusals: the binding's, then one the SDK makes itself
   { name: "fs read (first window)", argv: ["fs", "read", "main", "/a"], sdk: (lf) => lf.fs.read("main", "/a"),
-    op: "fs.read", sent: { branch: "main", path: "/a", startLine: 1 }, result: { text: "a\n", nextLine: 2 } },
+    op: "fs.read", sent: { branch: "main", path: "/a", startLine: 1 }, result: { text: "a\n", nextLine: 2, nextOffset: `lfr1.t.2.2.${"ab".repeat(32)}.2f61` } },
   { name: "fs read (missing)", argv: ["fs", "read", "main", "/missing"], sdk: (lf) => lf.fs.read("main", "/missing"),
     op: "fs.read", sent: { path: "/missing" }, refused: { code: "NoSuchPath", message: "NoSuchPath: /missing does not exist", detail: null } },
   { name: "branch merge (refused)", argv: ["branch", "merge", "a", "b", "ab"], sdk: (lf) => lf.branch.merge("a", "b", "ab"), refuse: ["branch.merge"],

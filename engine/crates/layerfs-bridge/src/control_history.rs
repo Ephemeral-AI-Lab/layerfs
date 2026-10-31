@@ -143,15 +143,58 @@ pub(crate) fn binding(input: &mut Reader<'_>) -> Result<BranchSnapshot, ControlE
     })
 }
 pub(crate) fn put_commit(out: &mut Writer, value: &CommitRecord) -> Result<(), ControlError> {
+    let start = out.0.len();
     out.put(&value.id.to_bytes())?;
     out.put(&value.stack.to_bytes())?;
     out.put(&value.root.to_bytes())?;
     put_head(out, value.parent)?;
     out.put(&value.base_layer.to_bytes())?;
     put_node(out, value.second_parent)?;
-    put_meta(out, &value.meta)
+    put_meta(out, &value.meta)?;
+    debug_assert_eq!(out.0.len() - start, value.encoded_bytes());
+    Ok(())
 }
-/// Commit metadata: Branch, via, agent, call, merge origin and time.
+pub(crate) fn put_attribution(
+    out: &mut Writer,
+    author: &Option<String>,
+    labels: &[String],
+) -> Result<(), ControlError> {
+    out.byte(u8::from(author.is_some()))?;
+    if let Some(author) = author {
+        if author.len() > layerfs_history::MAXIMUM_ATTRIBUTION_BYTES {
+            return Err(ControlError("Commit author"));
+        }
+        out.blob(author.as_bytes())?;
+    }
+    out.byte(u8::from(!labels.is_empty()))?;
+    if !labels.is_empty() {
+        let encoded = layerfs_history::labels::encode(labels);
+        if encoded.len() > layerfs_history::MAXIMUM_LABELS_JSON_BYTES {
+            return Err(ControlError("Commit labels JSON"));
+        }
+        out.blob(encoded.as_bytes())?;
+    }
+    Ok(())
+}
+
+pub(crate) fn attribution(
+    input: &mut Reader<'_>,
+) -> Result<(Option<String>, Vec<String>), ControlError> {
+    let author = if boolean(input)? {
+        Some(input.text(layerfs_history::MAXIMUM_ATTRIBUTION_BYTES)?)
+    } else {
+        None
+    };
+    let labels = if boolean(input)? {
+        let encoded = input.text(layerfs_history::MAXIMUM_LABELS_JSON_BYTES)?;
+        history(layerfs_history::labels::decode(&encoded))?
+    } else {
+        Vec::new()
+    };
+    Ok((author, labels))
+}
+
+/// Commit metadata, including creation-time author and labels after the LWW flag.
 pub(crate) fn put_meta(out: &mut Writer, value: &CommitMeta) -> Result<(), ControlError> {
     out.byte(u8::from(value.branch.is_some()))?;
     if let Some(branch) = value.branch {
@@ -178,7 +221,8 @@ pub(crate) fn put_meta(out: &mut Writer, value: &CommitMeta) -> Result<(), Contr
     put_head(out, value.displaced)?;
     // Full decisions remain in the Store and the separate merge report. A
     // bounded typed history record discloses their omission explicitly.
-    out.byte(u8::from(value.lww_truncated || !value.lww.is_empty()))
+    out.byte(u8::from(value.lww_truncated || !value.lww.is_empty()))?;
+    put_attribution(out, &value.author, &value.labels)
 }
 pub(crate) fn meta(input: &mut Reader<'_>) -> Result<CommitMeta, ControlError> {
     let branch = if boolean(input)? {
@@ -195,21 +239,29 @@ pub(crate) fn meta(input: &mut Reader<'_>) -> Result<CommitMeta, ControlError> {
         }
     };
     let message = text()?;
+    let merged_from = node(input)?;
+    let time_ms = i64::from_be_bytes(input.array()?);
+    let statistics = layerfs_history::CommitStatistics {
+        logical: u64::from_be_bytes(input.array()?),
+        new_canonical: u64::from_be_bytes(input.array()?),
+        new_stored: u64::from_be_bytes(input.array()?),
+        new_metadata: u64::from_be_bytes(input.array()?),
+    };
+    let displaced = head(input)?;
+    let lww_truncated = boolean(input)?;
+    let (author, labels) = attribution(input)?;
     Ok(CommitMeta {
         branch,
         via,
         message,
-        merged_from: node(input)?,
-        time_ms: i64::from_be_bytes(input.array()?),
-        statistics: layerfs_history::CommitStatistics {
-            logical: u64::from_be_bytes(input.array()?),
-            new_canonical: u64::from_be_bytes(input.array()?),
-            new_stored: u64::from_be_bytes(input.array()?),
-            new_metadata: u64::from_be_bytes(input.array()?),
-        },
-        displaced: head(input)?,
+        author,
+        labels,
+        merged_from,
+        time_ms,
+        statistics,
+        displaced,
         lww: Vec::new(),
-        lww_truncated: boolean(input)?,
+        lww_truncated,
         // Like the decisions, the unit list stays in the Store.
         units: Vec::new(),
     })

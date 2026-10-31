@@ -8,6 +8,24 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "statistics_totals" => Ok(include_str!(
             "../../../sql/sqlite/queries/history/statistics_totals.sql"
         )),
+        "statistics_commit_kinds" => Ok(include_str!(
+            "../../../sql/sqlite/queries/history/statistics_commit_kinds.sql"
+        )),
+        "summary_main_branch" => Ok(include_str!(
+            "../../../sql/sqlite/queries/history/summary_main_branch.sql"
+        )),
+        "summary_branch_count" => Ok(include_str!(
+            "../../../sql/sqlite/queries/history/summary_branch_count.sql"
+        )),
+        "summary_commit_count" => Ok(include_str!(
+            "../../../sql/sqlite/queries/history/summary_commit_count.sql"
+        )),
+        "summary_main_commit" => Ok(include_str!(
+            "../../../sql/sqlite/queries/history/summary_main_commit.sql"
+        )),
+        "summary_logical_total" => Ok(include_str!(
+            "../../../sql/sqlite/queries/history/summary_logical_total.sql"
+        )),
         "statistics_record_init" => Ok(include_str!(
             "../../../sql/sqlite/queries/history/statistics_record_init.sql"
         )),

@@ -1,8 +1,14 @@
 //! Persistent history facts and constant-size Store accounting reads.
-use super::{provider::HistoryProvider, rows::cell};
+use super::{
+    provider::HistoryProvider,
+    rows::{cell, commit_column, layer_column, required},
+};
 use crate::backend::records::Param;
 use layerfs_content::merge::{LwwDecision, MergeUnit};
-use layerfs_history::{HistoryError, HistoryResult, InitStatistics, StoreStatistics};
+use layerfs_history::{
+    CommitKindStatistics, CommitVia, HistoryError, HistoryName, HistoryResult, InitStatistics,
+    StoreDiskStatistics, StoreStatistics, StoreSummary, StoreSummaryCommit,
+};
 
 /// Marks the merge units after the LWW decisions: no path is that long, so
 /// a blob written before units reads as having none (#352 F-057).
@@ -108,6 +114,60 @@ pub(crate) fn decode(mut bytes: &[u8]) -> HistoryResult<Facts> {
     Ok((out, units))
 }
 impl HistoryProvider {
+    /// Five one-row reads: main Branch, two covering-index counts, main head
+    /// Commit and maintained totals. The counts visit O(B)/O(C) index entries.
+    pub(crate) fn summary(&self, project: &HistoryName) -> HistoryResult<StoreSummary> {
+        self.read(|tx| {
+            let main = tx.query(
+                "summary_main_branch",
+                vec![Param::Text(project.as_str().to_owned())],
+            )?;
+            let (stack, head) = match main.first().filter(|_| main.len() == 1) {
+                Some(row) => (cell::<Vec<u8>>(row, 0)?, cell::<Option<Vec<u8>>>(row, 1)?),
+                None if main.is_empty() => (Vec::new(), None),
+                None => return Err(HistoryError::Integrity("summary main Branch")),
+            };
+            let count = |key: &str| -> HistoryResult<u64> {
+                let rows = tx.query(key, vec![Param::Bytes(stack.clone())])?;
+                let row = rows
+                    .first()
+                    .filter(|_| rows.len() == 1)
+                    .ok_or(HistoryError::Integrity("summary count"))?;
+                u64::try_from(cell::<i64>(row, 0)?)
+                    .map_err(|_| HistoryError::Integrity("negative summary count"))
+            };
+            let branches = count("summary_branch_count")?;
+            let commits = count("summary_commit_count")?;
+            let head = tx.query(
+                "summary_main_commit",
+                vec![Param::Bytes(stack), Param::OptionalBytes(head)],
+            )?;
+            let last = match head.first().filter(|_| head.len() == 1) {
+                Some(row) => Some((
+                    required(commit_column(row, 0)?, "summary Commit identity")?,
+                    required(layer_column(row, 1)?, "summary Layer identity")?,
+                    cell::<i64>(row, 2)?,
+                )),
+                None if head.is_empty() => None,
+                None => return Err(HistoryError::Integrity("summary main Commit")),
+            };
+            let totals = tx.query("summary_logical_total", Vec::new())?;
+            let totals = totals
+                .first()
+                .filter(|_| totals.len() == 1)
+                .ok_or(HistoryError::Integrity("Store totals"))?;
+            let logical = u64::try_from(cell::<i64>(totals, 0)?)
+                .map_err(|_| HistoryError::Integrity("negative Store size"))?;
+            Ok(StoreSummary {
+                logical,
+                branches,
+                commits,
+                main_layer: last.as_ref().map(|(_, layer, _)| *layer),
+                last_commit: last.map(|(id, _, created_ms)| StoreSummaryCommit { id, created_ms }),
+            })
+        })
+    }
+
     pub(crate) fn statistics(&self) -> HistoryResult<StoreStatistics> {
         self.read(|tx| {
             let rows = tx.query("statistics_totals", Vec::new())?;
@@ -153,6 +213,48 @@ impl HistoryProvider {
                     }),
                 },
             })
+        })
+    }
+    /// Measures the Store's main and WAL file lengths from the files; two
+    /// stats, no scan. An unmeasurable Store file fails the call: no partial
+    /// or estimated figures.
+    pub(crate) fn disk_statistics(&self) -> HistoryResult<StoreDiskStatistics> {
+        let main = std::fs::metadata(&self.session.path)
+            .map_err(|_| HistoryError::Integrity("Store file statistics"))?
+            .len();
+        let mut wal = self.session.path.clone().into_os_string();
+        wal.push("-wal");
+        let wal = match std::fs::metadata(&wal) {
+            Ok(metadata) => metadata.len(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
+            Err(_) => return Err(HistoryError::Integrity("Store file statistics")),
+        };
+        Ok(StoreDiskStatistics { main, wal })
+    }
+
+    /// Per-kind Commit byte totals over the whole commit catalog, computed by
+    /// one full scan of that catalog; not a maintained cheap total.
+    pub(crate) fn commit_kind_statistics(&self) -> HistoryResult<Vec<CommitKindStatistics>> {
+        self.read(|tx| {
+            let rows = tx.query("statistics_commit_kinds", Vec::new())?;
+            rows.iter()
+                .map(|row| {
+                    let get = |index| -> HistoryResult<u64> {
+                        u64::try_from(cell::<i64>(row, index)?)
+                            .map_err(|_| HistoryError::Integrity("negative Commit kind total"))
+                    };
+                    let via = u8::try_from(cell::<i64>(row, 0)?)
+                        .map_err(|_| HistoryError::Integrity("Commit via"))
+                        .and_then(CommitVia::from_code)?;
+                    Ok(CommitKindStatistics {
+                        via,
+                        count: get(1)?,
+                        new_canonical: get(2)?,
+                        new_stored: get(3)?,
+                        new_metadata: get(4)?,
+                    })
+                })
+                .collect()
         })
     }
     pub(crate) fn record_init(&self, totals: &InitStatistics) -> HistoryResult<()> {

@@ -56,6 +56,7 @@ export class LayerFSRuntime {
     if (endpoint) useWorker(endpoint);
     this.clients = new Clients(this);
     const jobs = new InitJobs((prepared, report) => runInit(this, prepared, report));
+    this.initJobs = jobs;
     const live = (method) => async (...args) => {
       if (this.closed) throw new LayerFSError("InvalidInput", "this LayerFS runtime is closed; open another with LayerFSRuntime.open", null);
       return method(...args);
@@ -79,6 +80,7 @@ export class LayerFSRuntime {
       list: live(() => list(this)),
       start_init: live(async (name, folder, options) => jobs.begin(await prepare(this, name, folder, options, jobs.pending()))),
       get_init: live(async (job) => jobs.get(job?.id ?? job)),
+      subscribe_init: live(async (job) => jobs.subscribe(job?.id ?? job)),
       get_state: live(async (name, since) => this.clients.use(await known(name), (client) => get_state(client, since))),
       remove: live((name, options) => remove(this, name, options)),
     };
@@ -116,6 +118,7 @@ export class LayerFSRuntime {
     if (this.closed) return;
     await this.sweeping;
     this.closed = true;
+    this.initJobs.close();
     await this.clients.closeAll();
     await this.platform.close?.(this.settings);
   }

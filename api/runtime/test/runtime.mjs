@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const FAKE = fileURLToPath(new URL("../../agent/test/fixture/fake-native.cjs", import.meta.url));
 process.env.LAYERFS_NATIVE = FAKE;
@@ -14,7 +14,7 @@ for (const name of ["TRACE", "TRACE_STEP", "TRACE_START", "WORKER_ENDPOINT", "HO
   delete process.env[`DSH_LAYERFS_${name}`];
 }
 const { LayerFSRuntime } = await import("@layerfs/runtime");
-const native = (await import(FAKE)).default;
+const native = (await import(pathToFileURL(FAKE).href)).default;
 const selected = process.argv[2];
 const work = mkdtempSync(join(tmpdir(), "layerfs-runtime-"));
 const home = join(work, "home");
@@ -35,7 +35,7 @@ try {
     await assert.rejects(LayerFSRuntime.open({ home: "relative" }), { code: "InvalidInput" });
     const { runtime } = await opened((args) => (args[0] === "version" ? "27.0.1" : ""));
     const methods = (group) => Object.keys(group).sort();
-    assert.deepEqual(methods(runtime.project), ["get_init", "get_state", "list", "remove", "start_init"]);
+    assert.deepEqual(methods(runtime.project), ["get_init", "get_state", "list", "remove", "start_init", "subscribe_init"]);
     assert.deepEqual(methods(runtime.sandbox), ["clean_leftovers", "list", "list_leftovers", "reclaim", "sweep"]);
     assert.deepEqual(methods(runtime.volume), ["list", "remove"]);
     assert.deepEqual(methods(runtime.worker), ["restart", "start"]);
@@ -382,7 +382,7 @@ try {
     writeFileSync(join(bundle, "manifest.json"), JSON.stringify({ status: "sealed", platform: "linux", build_id: "build-f", files: {} }));
     const secret = randomBytes(32).toString("hex");
     const server = spawn(process.execPath, [fileURLToPath(new URL("../src/worker/server.js", import.meta.url))], {
-      env: { ...process.env, LAYERFS_WORKER_SECRET: secret, LAYERFS_HOME: home, LAYERFS_BUNDLE: bundle, LAYERFS_NATIVE: FAKE, LAYERFS_WORKER_LISTEN: "127.0.0.1:0" },
+      env: { ...process.env, CLI_FAKE_LOG: join(work, "worker-calls.jsonl"), LAYERFS_FAKE_EVENT_SUBSCRIBE_DELAY: "100", LAYERFS_WORKER_SECRET: secret, LAYERFS_HOME: home, LAYERFS_BUNDLE: bundle, LAYERFS_NATIVE: FAKE, LAYERFS_WORKER_LISTEN: "127.0.0.1:0" },
       stdio: ["ignore", "ignore", "pipe"],
     });
     try {
@@ -416,6 +416,63 @@ try {
       assert.deepEqual(trusted.got.map((v) => v.id), [0, 1, 2]);
       assert.deepEqual([trusted.got[1].answer.value.ready, trusted.got[1].answer.value.build], [true, "build-f"]);
       assert.ok(trusted.got[2].answer.value, "the large trusted call was made");
+
+      const logEntries = () => existsSync(join(work, "worker-calls.jsonl")) ? readFileSync(join(work, "worker-calls.jsonl"), "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+      const waitFor = async (found) => {
+        const deadline = Date.now() + 3000;
+        while (Date.now() < deadline) {
+          if (found()) return;
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        throw new Error("the worker did not finish its disconnect cleanup");
+      };
+      const openWorker = async () => {
+        const socket = connect({ host: "127.0.0.1", port }), pending = new Map();
+        const closed = new Promise((resolve) => socket.on("close", resolve));
+        socket.on("error", () => {});
+        readFrames(socket, (value) => { pending.get(value.id)?.(value); pending.delete(value.id); }, () => {});
+        await new Promise((resolve) => socket.on("connect", resolve));
+        const request = (id, fn, op, args = { home }) => new Promise((resolve) => {
+          pending.set(id, resolve);
+          socket.write(frame({ id, fn, op, args }));
+        });
+        const hello = new Promise((resolve) => pending.set(0, resolve));
+        socket.write(frame({ secret }));
+        await hello;
+        return {
+          request,
+          async close() { socket.end(); await closed; },
+          async destroy() { socket.destroy(); await closed; },
+        };
+      };
+      const eventArgs = { home, project: "site", storePath: "/fake/store.sqlite" };
+      const first = await openWorker();
+      const made = await first.request(1, "call", "events.subscribe", eventArgs);
+      const oldId = made.answer.value.subscription;
+      assert.match(oldId, /^[0-9a-f]{64}$/);
+      await first.request(2, "call", "fs.write", { ...eventArgs, branch: "main", path: "/backlog", content: "x", subscription: oldId });
+      await first.close();
+      await waitFor(() => logEntries().some(([op, args]) => op === "events.unsubscribe" && args.subscription === oldId));
+
+      const second = await openWorker();
+      const oldPoll = await second.request(1, "call", "events.poll", { ...eventArgs, subscription: oldId, cursor: 0, timeoutMs: 0 });
+      assert.equal(oldPoll.answer.refused.code, "InvalidInput");
+      assert.equal(oldPoll.answer.refused.message, "unknown subscription");
+      const fresh = await second.request(2, "call", "events.subscribe", eventArgs);
+      assert.equal(fresh.answer.value.cursor, 0);
+      const empty = await second.request(3, "call", "events.poll", { ...eventArgs, subscription: fresh.answer.value.subscription, cursor: 0, timeoutMs: 0 });
+      assert.deepEqual(empty.answer.value.events, [], "no backlog crosses a new worker connection");
+      await second.close();
+      await waitFor(() => logEntries().some(([op, args]) => op === "events.unsubscribe" && args.subscription === fresh.answer.value.subscription));
+
+      const beforeLate = logEntries().length;
+      const late = await openWorker();
+      late.request(1, "call", "events.subscribe", eventArgs);
+      await late.destroy();
+      await waitFor(() => logEntries().slice(beforeLate).filter(([op]) => op.startsWith("events.")).length === 2);
+      const lateCalls = logEntries().slice(beforeLate);
+      assert.deepEqual(lateCalls.map(([op]) => op), ["events.subscribe", "events.unsubscribe"], "a subscribe completing after close self-cleans");
+      assert.match(lateCalls[1][1].subscription, /^[0-9a-f]{64}$/);
     } finally {
       server.kill("SIGTERM");
     }

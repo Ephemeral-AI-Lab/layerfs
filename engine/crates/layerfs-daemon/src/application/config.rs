@@ -1,13 +1,28 @@
 //! Actual protected configuration descriptors and process/placement checks.
 use layerfs_bridge::daemon_setup::DaemonSetup;
+#[cfg(target_os = "linux")]
 use nix::{fcntl::OFlag, unistd::Uid};
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
+#[cfg(target_os = "linux")]
 use std::{
     fs::{self, OpenOptions},
-    io::{self, Read},
-    os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
-    path::Path,
+    io::Read,
 };
+use std::{io, path::Path};
 
+/// Refuses the daemon off Linux: the whole application (protected config,
+/// process protection, kernel serving) is a Linux production surface, so the
+/// binary exits with its reason instead of a weaker non-Linux variant.
+#[cfg(not(target_os = "linux"))]
+pub(super) fn read(_path: &Path) -> io::Result<DaemonSetup> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "production daemon requires Linux",
+    ))
+}
+
+#[cfg(target_os = "linux")]
 pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
     secure_process()?;
     let mut file = OpenOptions::new()
@@ -63,6 +78,7 @@ pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
     }
     Ok(config)
 }
+#[cfg(target_os = "linux")]
 pub(super) fn protected_file(path: &Path) -> io::Result<()> {
     let file = OpenOptions::new()
         .read(true)
@@ -77,6 +93,7 @@ pub(super) fn protected_file(path: &Path) -> io::Result<()> {
     }
     Ok(())
 }
+#[cfg(target_os = "linux")]
 fn private_directory(path: &Path, create: bool) -> io::Result<()> {
     match fs::symlink_metadata(path) {
         Ok(_) => (),
@@ -108,13 +125,7 @@ fn secure_process() -> io::Result<()> {
     }
     Ok(())
 }
-#[cfg(not(target_os = "linux"))]
-fn secure_process() -> io::Result<()> {
-    Err(io::Error::new(
-        io::ErrorKind::Unsupported,
-        "production daemon requires Linux process protection",
-    ))
-}
+#[cfg(target_os = "linux")]
 fn invalid(message: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, message)
 }

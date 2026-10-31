@@ -1,5 +1,7 @@
 //! Process observation is independent of pipe EOF and filesystem drain.
-use super::{ContainerId, ExecId, RuntimeError};
+#[cfg(unix)]
+use super::RuntimeError;
+use super::{ContainerId, ExecId};
 /// Explicit nonroot identity for ordinary commands.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CommandIdentity {
@@ -7,6 +9,7 @@ pub struct CommandIdentity {
     pub gid: u32,
 }
 impl CommandIdentity {
+    #[cfg(unix)] // called only by the (Unix) backend's request validation
     pub(crate) fn check(self) -> Result<(), RuntimeError> {
         if self.uid == 0 || self.gid == 0 {
             Err(RuntimeError::Protocol("nonroot command uid/gid"))

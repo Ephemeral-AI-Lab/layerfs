@@ -85,6 +85,31 @@ history method. It sends the unchanged History request and returns one anchored,
 bounded ancestry page, newest first. Cursor authentication, captured-head scope,
 publication semantics and original control bytes are unchanged.
 
+[Graph](../../engine/crates/layerfs-api/src/branch/graph.rs) returns a Branch's own
+first-parent Commits up to, but excluding, a Commit fork point, together with the
+fork point and publication state derived from main's current Layer stack. Main's
+graph instead walks Layer-source Commits and skips genesis.
+[Changed paths](../../engine/crates/layerfs-api/src/branch/changed_paths.rs) uses the
+existing comparison encoder against a Commit's first parent, its base Layer for a
+parentless merge, or an empty tree for a root Commit. Its optional path cursor and
+`nextCursor` reuse the difference walk's keyset resumption, with cursor precedence
+over `pagePos`; numeric-only paging remains supported. Neither operation changes
+the Store schema.
+
+## Filesystem reads
+
+`fs.read` accepts an optional `offset` string and always answers `nextOffset`, which
+is non-null exactly when `nextLine` is non-null. Passing the opaque cursor back resumes
+at the first byte of the first unreturned line; a valid cursor takes precedence over
+`startLine`, while `endLine` remains absolute and numeric paging remains supported.
+The cursor binds the normalized path, immutable content root, and text/binary mode,
+not a Commit or Layer identity, so unchanged content can be continued across snapshots.
+
+Cursor calls read the file suffix rather than rescanning the returned prefix. Sequential
+cursor traversal therefore performs linear content work plus bounded overlap when part
+of an unreturned line was inspected. Numeric-only reads retain their existing behavior
+and cold prefix-scanning cost. This is an implementation bound, not a timing claim.
+
 ## Sandbox
 
 [Create](../../engine/crates/layerfs-api/src/sandbox/create.rs) uses the original
@@ -126,7 +151,10 @@ Any other permitted process can use the same mount through ordinary filesystem
 calls; the filesystem daemon supervises no commands.
 
 [Commit](../../engine/crates/layerfs-api/src/sandbox/commit.rs) captures the shared
-published frontier and returns Committed or UpToDate. It does not filter mutations
+published frontier and returns Committed or UpToDate. `CommitControl` also carries
+optional author text and an ordered label list; both are bounded creation-time
+annotations outside Commit identity and are returned in every Commit value.
+It does not filter mutations
 by launch route or command completion. [Status](../../engine/crates/layerfs-api/src/sandbox/status.rs)
 retains the existing maintained-state scope and never resolves an unknown operation.
 

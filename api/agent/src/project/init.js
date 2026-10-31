@@ -6,7 +6,7 @@
 // { smallFileThreshold, wholeFileDepth, chunkDepth, metadataDepth }, is sent
 // as `policy`: JSON that is not such an object is refused here, and the
 // native code's refusal of a field is named after the variable too.
-import { invoke, projectArgs, storeArgs, transportOf } from "../client.js";
+import { invoke, projectArgs, sinkOf, storeArgs, transportOf } from "../client.js";
 import { LayerFSError } from "../errors.js";
 
 /** Init's default timeout, in milliseconds: 300 s. */
@@ -18,7 +18,7 @@ export async function init(client, sourcePath, timeout = INIT_TIMEOUT_MS) {
   }
   const policy = storePolicy(client.options.storePolicy);
   try {
-    return await invoke("project.init", { ...projectArgs(client), ...storeArgs(client), path: sourcePath, name: client.projectName, ...(policy ? { policy } : {}), timeoutMs: timeout }, client.options, transportOf(client));
+    return await invoke("project.init", { ...projectArgs(client), ...storeArgs(client), path: sourcePath, name: client.projectName, ...(policy ? { policy } : {}), timeoutMs: timeout }, client.options, transportOf(client), sinkOf(client));
   } catch (error) {
     // the native check runs before Init makes anything: `policy.<field> …` or `policy: …`
     const field = policy && error?.code === "InvalidInput" && /^InvalidInput: (policy[.:].*)$/s.exec(error.message);

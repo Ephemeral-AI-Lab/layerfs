@@ -92,6 +92,11 @@ pub(crate) fn commit_row(row: &Row) -> HistoryResult<CommitRecord> {
                     .map_err(|_| HistoryError::Integrity("Commit via"))?,
             )?,
             message: cell(row, 8)?,
+            author: cell(row, 17)?,
+            labels: cell::<Option<String>>(row, 18)?
+                .map(|encoded| layerfs_history::labels::decode(&encoded))
+                .transpose()?
+                .unwrap_or_default(),
             merged_from: cell::<Option<Vec<u8>>>(row, 9)?
                 .map(|bytes| NodeId::from_slice(&bytes))
                 .transpose()?,

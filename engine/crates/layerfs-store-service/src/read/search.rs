@@ -146,7 +146,7 @@ impl Reuse {
         }
         let (mut lines, mut cost, mut complete) = (Vec::new(), ENTRY, true);
         let result = matches(reader, entry, view, prefix, pattern, |n, line| {
-            cost += line.text.len() + ENTRY;
+            cost += line.prefix.len() + ENTRY;
             if self.spent + cost <= KEPT {
                 lines.push((n, line.clone()));
             }

@@ -121,6 +121,7 @@ impl HistoryCatalog for Gated {
         branches(stack: LayerStackId, page: &Page) -> HistoryResult<PageResult<BranchRecord>>;
         commit(id: CommitId) -> HistoryResult<Option<CommitRecord>>;
         layer(id: LayerId) -> HistoryResult<Option<LayerRecord>>;
+        is_published(head: LayerId, commit: &CommitRecord) -> HistoryResult<bool>;
         commit_history(request: &CommitHistoryRequest) -> HistoryResult<PageResult<CommitRecord>>;
         layer_history(request: &LayerHistoryRequest) -> HistoryResult<PageResult<LayerRecord>>;
         merge_base(left: NodeId, right: NodeId) -> HistoryResult<Option<NodeId>>;
@@ -355,6 +356,8 @@ fn commit_held(
                     token,
                     force: false,
                     message: None,
+                    author: None,
+                    labels: Vec::new(),
                 }))
                 .map(|done| done.reply)
                 .map_err(|failure| format!("{failure:?}"))
@@ -391,6 +394,8 @@ fn commit_plain(fixture: &Fixture, token: layerfs_bridge::control::WorkspaceToke
             token,
             force: false,
             message: None,
+            author: None,
+            labels: Vec::new(),
         }))
         .map(|done| done.reply)
         .map_err(|failure| format!("{failure:?}"));

@@ -1,5 +1,5 @@
-//! Bounded text scanning at immutable roots: a file's text arrives in whole
-//! blocks, checked as before, and a buffer-wide line scanner splits it.
+//! Bounded text and raw-byte scanning at immutable roots: a file arrives in
+//! whole blocks and a buffer-wide line scanner retains raw line prefixes.
 use crate::history::lookup as args;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_content::{
@@ -20,22 +20,38 @@ const BLOCK: u64 = 16 * WINDOW;
 /// One logical LF-delimited line. A final LF belongs to this line, not a new one.
 #[derive(Clone)]
 pub struct Line {
-    pub text: String,
+    pub prefix: Vec<u8>,
     pub bytes: u64,
+    pub offset: u64,
     pub truncated: bool,
     pub matched: bool,
 }
 
-/// The line being scanned: its number, shown prefix and length so far.
+impl Line {
+    /// The validated text of a line scanned in text mode, excluding an
+    /// incomplete character at the prefix's byte cut.
+    pub fn text(&self) -> String {
+        let end = std::str::from_utf8(&self.prefix)
+            .map_or_else(|error| error.valid_up_to(), |_| self.prefix.len());
+        String::from_utf8(self.prefix[..end].to_vec()).expect("validated line prefix")
+    }
+}
+
+/// The line being scanned: its number, absolute start, shown prefix and length.
 pub(super) struct Open {
     pub number: u64,
+    pub offset: u64,
     head: Vec<u8>,
     pub length: usize,
 }
 impl Open {
     pub fn new() -> Self {
+        Self::at(1, 0)
+    }
+    fn at(number: u64, offset: u64) -> Self {
         Self {
-            number: 1,
+            number,
+            offset,
             head: Vec::new(),
             length: 0,
         }
@@ -53,7 +69,8 @@ impl Open {
     }
     /// The finished line; the next one starts empty.
     pub fn finish(&mut self, matched: bool) -> Line {
-        let line = line(&mut self.head, self.length, matched);
+        let line = line(&mut self.head, self.offset, self.length, matched);
+        self.offset += self.length as u64;
         self.length = 0;
         line
     }
@@ -108,6 +125,21 @@ pub(super) fn texts(
     view: Option<FileView>,
     mut visit: impl FnMut(&str) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
+    scan(reader, entry, view, true, 0, |bytes| {
+        visit(std::str::from_utf8(bytes).expect("checked text part"))
+    })
+}
+
+/// Reads a file suffix once, delivering checked text parts in text mode or raw
+/// parts in binary mode. Both modes use the same block and line-window machinery.
+fn scan(
+    reader: &dyn AuthenticatedObjects,
+    entry: &EntryFacts,
+    view: Option<FileView>,
+    text: bool,
+    from: u64,
+    mut visit: impl FnMut(&[u8]) -> Result<bool, SdkRefusal>,
+) -> Result<(), SdkRefusal> {
     if entry.value.kind != InodeKind::RegularFile {
         return Err(args::refuse(
             if entry.value.kind == InodeKind::Directory {
@@ -134,8 +166,13 @@ pub(super) fn texts(
     let size = view.logical_len();
     // A whole-file payload is already in memory: one part, nothing copied.
     if let Some(payload) = view.whole_file_bytes().map_err(args::content)? {
-        let (text, bad) = checked(payload, 0, size, true);
-        return if !visit(text)? || !bad {
+        let payload = &payload[from as usize..];
+        if !text {
+            visit(payload)?;
+            return Ok(());
+        }
+        let (text, bad) = checked(payload, from, size, true);
+        return if !visit(text.as_bytes())? || !bad {
             Ok(())
         } else {
             Err(binary())
@@ -143,8 +180,9 @@ pub(super) fn texts(
     }
     let mut feed = Feed {
         pending: Vec::new(),
-        from: 0,
+        from,
         size,
+        text,
         visit: &mut visit,
         end: None,
     };
@@ -152,7 +190,7 @@ pub(super) fn texts(
     let read = crate::telemetry::timed("sdk.lines", |timing| {
         timing
             .child("content.read")
-            .run(|scope| view.read_range(reader, 0..size, &mut feed, scope))
+            .run(|scope| view.read_range(reader, from..size, &mut feed, scope))
     });
     if let Some(end) = feed.end.take() {
         return end;
@@ -168,16 +206,22 @@ struct Feed<'v> {
     pending: Vec<u8>,
     from: u64,
     size: u64,
-    visit: &'v mut dyn FnMut(&str) -> Result<bool, SdkRefusal>,
+    text: bool,
+    visit: &'v mut dyn FnMut(&[u8]) -> Result<bool, SdkRefusal>,
     end: Option<Result<(), SdkRefusal>>,
 }
 
 impl Feed<'_> {
-    /// Hands on the checked text; false, with `end` set, when the scan ends.
+    /// Hands on the checked text or raw bytes; false when the scan ends.
     fn deliver(&mut self, last: bool) -> bool {
-        let (text, bad) = checked(&self.pending, self.from, self.size, last);
-        let length = text.len();
-        match (self.visit)(text) {
+        let (length, bad, outcome) = if self.text {
+            let (text, bad) = checked(&self.pending, self.from, self.size, last);
+            (text.len(), bad, (self.visit)(text.as_bytes()))
+        } else {
+            let length = self.pending.len();
+            (length, false, (self.visit)(&self.pending))
+        };
+        match outcome {
             Err(refusal) => self.end = Some(Err(refusal)),
             Ok(false) => self.end = Some(Ok(())),
             Ok(true) if bad => self.end = Some(Err(binary())),
@@ -271,34 +315,78 @@ fn checked(bytes: &[u8], from: u64, size: u64, last: bool) -> (&str, bool) {
     (text, bad.is_some())
 }
 
+pub(super) struct LineStart {
+    pub line: u64,
+    pub offset: Option<u64>,
+}
+
 /// Scans with bounded buffers, including huge lines: every line from line
 /// `from` on, in order, until `visit` stops. Earlier lines are only counted.
+/// Each line retains its raw prefix; only text mode validates and converts UTF-8.
 pub fn lines(
     reader: &dyn AuthenticatedObjects,
     entry: &EntryFacts,
     prefix: usize,
     from: u64,
-    mut visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
+    binary: bool,
+    visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
 ) -> Result<(), SdkRefusal> {
-    let (mut open, mut stopped) = (Open::new(), false);
-    texts(reader, entry, None, |text| {
-        let bytes = text.as_bytes();
+    lines_until(
+        reader,
+        entry,
+        prefix,
+        LineStart {
+            line: from,
+            offset: None,
+        },
+        binary,
+        |_, _| Ok(false),
+        visit,
+    )
+    .map(|_| ())
+}
+
+/// `lines` with a stop check at each new line and each incomplete line part.
+/// A stopped line's number and absolute start are returned without waiting for
+/// its terminator. A supplied byte offset starts directly at `from`; numeric
+/// calls otherwise count and discard earlier lines from byte zero.
+pub(super) fn lines_until(
+    reader: &dyn AuthenticatedObjects,
+    entry: &EntryFacts,
+    prefix: usize,
+    start: LineStart,
+    binary: bool,
+    mut stop: impl FnMut(u64, usize) -> Result<bool, SdkRefusal>,
+    mut visit: impl FnMut(u64, Line) -> Result<bool, SdkRefusal>,
+) -> Result<Option<(u64, u64)>, SdkRefusal> {
+    let (from, offset) = (start.line, start.offset);
+    let mut open = offset.map_or_else(Open::new, |offset| Open::at(from, offset));
+    let (mut stopped, mut early) = (false, None);
+    scan(reader, entry, None, !binary, offset.unwrap_or(0), |bytes| {
         let mut at = 0;
         while at < bytes.len() {
             if open.number < from {
                 match skip(&bytes[at..], from - open.number) {
                     Ok(next) => {
                         open.number = from;
+                        open.offset += next as u64;
                         at += next;
                     }
                     Err(seen) => {
                         open.number += seen;
+                        open.offset += (bytes.len() - at) as u64;
                         at = bytes.len();
                     }
                 }
                 continue;
             }
-            match text[at..].find('\n') {
+            if open.length == 0 && stop(open.number, 0)? {
+                early = Some((open.number, open.offset));
+                stopped = true;
+                return Ok(false);
+            }
+            let end = (at + WINDOW as usize).min(bytes.len());
+            match bytes[at..end].iter().position(|&byte| byte == b'\n') {
                 Some(i) => {
                     open.take(&bytes[at..at + i + 1], prefix);
                     if !visit(open.number, open.finish(true))? {
@@ -309,8 +397,13 @@ pub fn lines(
                     at += i + 1;
                 }
                 None => {
-                    open.take(&bytes[at..], prefix);
-                    at = bytes.len();
+                    open.take(&bytes[at..end], prefix);
+                    at = end;
+                    if stop(open.number, open.length)? {
+                        early = Some((open.number, open.offset));
+                        stopped = true;
+                        return Ok(false);
+                    }
                 }
             }
         }
@@ -319,7 +412,7 @@ pub fn lines(
     if !stopped && open.length > 0 {
         visit(open.number, open.finish(true))?;
     }
-    Ok(())
+    Ok(early)
 }
 
 pub(super) fn binary() -> SdkRefusal {
@@ -330,17 +423,14 @@ pub(super) fn binary() -> SdkRefusal {
     )
 }
 
-fn line(bytes: &mut Vec<u8>, length: usize, matched: bool) -> Line {
-    let mut shown = std::mem::take(bytes);
-    let end = match std::str::from_utf8(&shown) {
-        Ok(_) => shown.len(),
-        Err(e) => e.valid_up_to(),
-    };
-    shown.truncate(end);
+fn line(bytes: &mut Vec<u8>, offset: u64, length: usize, matched: bool) -> Line {
+    let shown = std::mem::take(bytes);
+    let truncated = shown.len() < length;
     Line {
         bytes: length as u64,
-        text: String::from_utf8(shown).expect("validated prefix"),
-        truncated: end < length,
+        prefix: shown,
+        offset,
+        truncated,
         matched,
     }
 }

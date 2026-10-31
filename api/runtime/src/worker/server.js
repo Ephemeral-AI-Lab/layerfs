@@ -165,8 +165,16 @@ async function shutdown() {
 const server = createServer((socket) => {
   sockets.add(socket);
   socket.setNoDelay(true);
+  const subscriptions = new Map();
+  let socketClosed = false;
+  const release = (id, args) => binding.call("events.unsubscribe", { ...args, subscription: id }).catch((error) => console.error(`layerfs worker: unsubscribing ${id}: ${error}`));
   socket.on("error", () => {}); // a caller that went away; its calls still finish here
-  socket.on("close", () => sockets.delete(socket));
+  socket.on("close", () => {
+    socketClosed = true;
+    sockets.delete(socket);
+    for (const [id, args] of subscriptions) release(id, args);
+    subscriptions.clear();
+  });
   let trusted = false;
   const silent = setTimeout(() => socket.destroy(), SECRET_MS);
   socket.on("close", () => clearTimeout(silent));
@@ -178,13 +186,19 @@ const server = createServer((socket) => {
       clearTimeout(silent);
       return socket.write(frame({ id: 0, answer: { value: "hello" } }));
     }
-    const { id, fn, args } = request;
+    const { id, fn, op, args } = request;
     if (fn === "ping") return socket.write(frame({ id, answer: { value: { ready: true, active, stores: stores.size, build: manifest.build_id } } }));
     if (closing) return socket.write(frame({ id, answer: { refused: { code: "Failed", message: "the LayerFS worker is closing; the call was not attempted", detail: null } } }));
     if (!FUNCTIONS.has(fn) || args?.home !== config.home) return socket.destroy();
     active++;
     let result;
     try { result = await answer(request); } catch (error) { result = { thrown: String(error?.stack ?? error) }; } finally { active--; }
+    if (fn === "call" && op === "events.subscribe" && result?.value?.subscription) {
+      const subscription = result.value.subscription;
+      if (socketClosed) release(subscription, args);
+      else subscriptions.set(subscription, args);
+    }
+    if (fn === "call" && op === "events.unsubscribe" && result?.value?.kind === "Unsubscribed") subscriptions.delete(args.subscription);
     if (!socket.destroyed) socket.write(frame({ id, answer: result }));
     if (closing && active === 0) shutdown().catch((error) => console.error(error));
   }, (error) => { console.error(error.message); socket.destroy(); }, { firstLimit: FIRST_LIMIT });

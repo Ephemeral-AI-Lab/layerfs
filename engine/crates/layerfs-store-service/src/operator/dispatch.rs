@@ -10,7 +10,8 @@ use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
 pub fn dispatch(service: &StoreService, call: &SdkCall) -> Result<SdkValue, SdkRefusal> {
     match call.method.as_str() {
         "backend.store.project.get_history" => snapshot(&service.store, &call.args, &[]),
-        "backend.store.project.get_storage" => store::stats(&service.store),
+        "backend.store.project.get_storage" => store::stats(&service.store, &call.args),
+        "backend.store.project.get_summary" => store::summary(&service.store, &call.args),
         "backend.store.branch.list_commit_storage" => store::commits(&service.store, &call.args),
         "backend.store.project.list_overwritten" => store::overwritten(&service.store, &call.args),
         "backend.store.fs.get_storage" => files::stats(&service.store, &call.args),

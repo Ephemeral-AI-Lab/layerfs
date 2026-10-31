@@ -1,12 +1,10 @@
 //! Read-only physical observations of one disposable SQLite file.
 use crate::{OverlayError, OverlayResult};
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux"))] // read by the Unix observations
 use std::os::unix::fs::MetadataExt;
-use std::{
-    cell::Cell,
-    fs::File,
-    path::{Path, PathBuf},
-};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+use std::path::PathBuf;
+use std::{cell::Cell, fs::File, path::Path};
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct AllocationWork {
     pub attempts: u64,
@@ -31,11 +29,16 @@ pub struct AllocationState {
     pub work: AllocationWork,
 }
 pub(crate) struct Allocation {
+    #[cfg(any(target_os = "macos", target_os = "linux"))] // read by the Unix observations
     file: File,
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     device: u64,
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     inode: u64,
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     path: PathBuf,
     work: Cell<AllocationWork>,
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     high_water: Cell<u64>,
 }
 /// A checked-closed SQLite file's retained physical identity handle. It has no

@@ -4,8 +4,17 @@ use super::{
 };
 use layerfs_history::*;
 impl HistoryCatalog for HistoryProvider {
+    fn summary(&self, project: &HistoryName) -> HistoryResult<StoreSummary> {
+        HistoryProvider::summary(self, project)
+    }
     fn statistics(&self) -> HistoryResult<StoreStatistics> {
         HistoryProvider::statistics(self)
+    }
+    fn disk_statistics(&self) -> HistoryResult<StoreDiskStatistics> {
+        HistoryProvider::disk_statistics(self)
+    }
+    fn commit_kind_statistics(&self) -> HistoryResult<Vec<CommitKindStatistics>> {
+        HistoryProvider::commit_kind_statistics(self)
     }
     fn record_init(&self, totals: &InitStatistics) -> HistoryResult<()> {
         HistoryProvider::record_init(self, totals)
@@ -91,6 +100,10 @@ impl HistoryCatalog for HistoryProvider {
         self.read(|tx| layerstack::layer(tx, id))
     }
 
+    fn is_published(&self, head: LayerId, commit: &CommitRecord) -> HistoryResult<bool> {
+        self.read(|tx| layerstack::is_published(tx, head, commit))
+    }
+
     fn commit_history(
         &self,
         request: &CommitHistoryRequest,
@@ -102,6 +115,23 @@ impl HistoryCatalog for HistoryProvider {
                 self.incarnation,
                 &self.cursor_key,
                 request,
+            )
+        })
+    }
+
+    fn commit_resume(
+        &self,
+        request: &CommitHistoryRequest,
+        commit: CommitId,
+    ) -> HistoryResult<Vec<u8>> {
+        self.read(|tx| {
+            commit::commit_resume(
+                tx,
+                self.catalog_id,
+                self.incarnation,
+                &self.cursor_key,
+                request,
+                commit,
             )
         })
     }

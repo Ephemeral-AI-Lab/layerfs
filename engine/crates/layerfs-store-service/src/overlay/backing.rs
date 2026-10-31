@@ -14,7 +14,9 @@ pub struct Backing {
     file: Option<std::fs::File>,
     namespace: i64,
     incarnation: [u8; 32],
+    #[cfg(unix)] // checked in the (Unix) delete identity fence
     device: u64,
+    #[cfg(unix)]
     inode: u64,
     pool: Weak<Workspaces>,
     terminal: AtomicBool,
@@ -42,8 +44,9 @@ impl Backing {
             }
             (metadata.dev(), metadata.ino(), metadata.nlink())
         };
+        // `device`/`inode` exist only on Unix, whose delete path checks them.
         #[cfg(not(unix))]
-        let (device, inode, links) = (0, 0, 0);
+        let links = 0;
         if !metadata.is_file() || links != 1 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -55,7 +58,9 @@ impl Backing {
             file: Some(file),
             namespace,
             incarnation,
+            #[cfg(unix)]
             device,
+            #[cfg(unix)]
             inode,
             pool,
             terminal: AtomicBool::new(false),
@@ -69,14 +74,14 @@ impl Backing {
         self.closed.store(true, Ordering::Release);
     }
     fn delete(&self) -> io::Result<()> {
-        let metadata = std::fs::symlink_metadata(&self.path)?;
-        let original = self
-            .file
-            .as_ref()
-            .expect("retained identity file")
-            .metadata()?;
         #[cfg(unix)]
         {
+            let metadata = std::fs::symlink_metadata(&self.path)?;
+            let original = self
+                .file
+                .as_ref()
+                .expect("retained identity file")
+                .metadata()?;
             use std::os::unix::fs::MetadataExt;
             if !metadata.is_file()
                 || metadata.nlink() != 1
@@ -89,14 +94,13 @@ impl Backing {
                     "overlay deletion identity",
                 ));
             }
+            std::fs::remove_file(&self.path)
         }
         #[cfg(not(unix))]
-        return Err(io::Error::new(
+        Err(io::Error::new(
             io::ErrorKind::Unsupported,
             "overlay deletion platform",
-        ));
-        #[cfg(unix)]
-        std::fs::remove_file(&self.path)
+        ))
     }
 }
 impl Drop for Backing {

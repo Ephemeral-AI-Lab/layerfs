@@ -113,11 +113,26 @@ pub trait HistoryCatalog: Send + Sync {
     /// One Layer by identity.
     fn layer(&self, id: LayerId) -> HistoryResult<Option<LayerRecord>>;
 
+    /// True when `commit` is the direct source of a Layer in the current chain
+    /// ending at `head`. Commits merely absorbed into a Layer's ancestry are
+    /// not direct sources.
+    fn is_published(&self, head: LayerId, commit: &CommitRecord) -> HistoryResult<bool>;
+
     /// Ancestry walk of one Branch, newest first, one bounded page at a time.
     fn commit_history(
         &self,
         request: &CommitHistoryRequest,
     ) -> HistoryResult<PageResult<CommitRecord>>;
+
+    /// An authenticated cursor that resumes after an already-delivered Commit.
+    fn commit_resume(
+        &self,
+        request: &CommitHistoryRequest,
+        after: CommitId,
+    ) -> HistoryResult<Vec<u8>> {
+        let _ = (request, after);
+        Err(crate::HistoryError::Unsupported("Commit resume cursor"))
+    }
 
     /// Publication chain of one stack, newest first, one bounded page at a time.
     fn layer_history(
@@ -154,9 +169,28 @@ pub trait HistoryCatalog: Send + Sync {
         ))
     }
 
+    /// Reads the five-statement bounded Store summary for one named stack.
+    /// Branch and Commit counts use their LayerStack-leading covering indexes.
+    fn summary(&self, project: &HistoryName) -> HistoryResult<crate::records::StoreSummary> {
+        let _ = project;
+        Err(crate::HistoryError::Unsupported("Store summary"))
+    }
+
     /// Reads maintained Store totals; no full object/history scan.
     fn statistics(&self) -> HistoryResult<crate::records::StoreStatistics> {
         Err(crate::HistoryError::Unsupported("Store statistics"))
+    }
+
+    /// Measures the Store's main and WAL file lengths from the files
+    /// themselves; two file stats, no scan of any catalog.
+    fn disk_statistics(&self) -> HistoryResult<crate::records::StoreDiskStatistics> {
+        Err(crate::HistoryError::Unsupported("Store disk statistics"))
+    }
+
+    /// Per-Commit-kind byte totals over the whole commit catalog, computed by
+    /// one full scan of that catalog; not a maintained cheap total.
+    fn commit_kind_statistics(&self) -> HistoryResult<Vec<crate::records::CommitKindStatistics>> {
+        Err(crate::HistoryError::Unsupported("Commit kind statistics"))
     }
 
     /// Records Init's totals once; a second record is `Integrity`.

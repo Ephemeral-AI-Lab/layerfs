@@ -85,6 +85,33 @@ pub struct CommitRecord {
     pub meta: CommitMeta,
 }
 
+impl CommitRecord {
+    /// Exact bytes of this decoded record in the typed history codec.
+    pub fn encoded_bytes(&self) -> usize {
+        let optional = |width: Option<usize>| 1 + width.unwrap_or(0);
+        let blob = |value: Option<&String>| optional(value.map(|text| text.len() + 2));
+        let node = |value: Option<NodeId>| optional(value.map(|id| id.as_slice().len()));
+        let labels = (!self.meta.labels.is_empty())
+            .then(|| crate::labels::encode(&self.meta.labels).len() + 2);
+        self.id.as_slice().len()
+            + self.stack.as_slice().len()
+            + self.root.as_bytes().len()
+            + optional(self.parent.map(|id| id.as_slice().len()))
+            + self.base_layer.as_slice().len()
+            + node(self.second_parent)
+            + optional(self.meta.branch.map(|id| id.as_slice().len()))
+            + 1
+            + blob(self.meta.message.as_ref())
+            + node(self.meta.merged_from)
+            + 8
+            + 4 * 8
+            + optional(self.meta.displaced.map(|id| id.as_slice().len()))
+            + 1
+            + blob(self.meta.author.as_ref())
+            + optional(labels)
+    }
+}
+
 /// How a Commit was made.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CommitVia {
@@ -120,9 +147,17 @@ impl CommitVia {
 /// Maximum encoded UTF-8 bytes in a Commit or execution message.
 pub const MAXIMUM_MESSAGE_BYTES: usize = 4096;
 
+/// Largest encoded UTF-8 bytes in a Commit author or one label.
+pub const MAXIMUM_ATTRIBUTION_BYTES: usize = 4096;
+/// Largest number of labels on one Commit.
+pub const MAXIMUM_LABELS: usize = 64;
+/// Largest encoded UTF-8 bytes of the complete labels JSON array.
+pub const MAXIMUM_LABELS_JSON_BYTES: usize = 4096;
+
 /// Commit provenance and publication facts. Branch, via, message, merge origin
-/// and displaced head participate in identity; time, byte statistics, LWW
-/// details and merge units are persisted facts outside that identity.
+/// and displaced head participate in identity; author, labels, time, byte
+/// statistics, LWW details and merge units are creation-time annotations or
+/// persisted facts outside that identity.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommitMeta {
     /// Branch the Commit was made on; the catalog sets it from the request.
@@ -131,6 +166,10 @@ pub struct CommitMeta {
     pub via: CommitVia,
     /// Description of the filesystem change; participates in Commit identity.
     pub message: Option<String>,
+    /// Person or agent that made the Commit; outside Commit identity.
+    pub author: Option<String>,
+    /// Free-form creation-time labels, preserving order and duplicates.
+    pub labels: Vec<String>,
     /// Head a merge-on-commit started from, when one ran.
     pub merged_from: Option<NodeId>,
     /// Persisted newer-write-wins decisions.
@@ -155,6 +194,8 @@ impl CommitMeta {
             branch: None,
             via,
             message: None,
+            author: None,
+            labels: Vec::new(),
             merged_from: None,
             lww: Vec::new(),
             lww_truncated: false,
@@ -165,17 +206,34 @@ impl CommitMeta {
         }
     }
 
-    /// Checks the attribution bounds: at most
-    /// [`MAXIMUM_MESSAGE_BYTES`] bytes and no control character.
+    /// Checks message, author and label bounds before storage or transport.
     pub fn check(&self) -> crate::error::HistoryResult<()> {
-        for field in [&self.message].into_iter().flatten() {
-            if field.len() > MAXIMUM_MESSAGE_BYTES
+        fn text(field: &str, what: &'static str) -> crate::error::HistoryResult<()> {
+            if field.len() > MAXIMUM_ATTRIBUTION_BYTES
                 || field
                     .chars()
                     .any(|c| c.is_control() && c != '\n' && c != '\t')
             {
-                return Err(crate::error::HistoryError::InvalidInput("Commit message"));
+                return Err(crate::error::HistoryError::InvalidInput(what));
             }
+            Ok(())
+        }
+        if let Some(message) = &self.message {
+            text(message, "Commit message")?;
+        }
+        if let Some(author) = &self.author {
+            text(author, "Commit author")?;
+        }
+        if self.labels.len() > MAXIMUM_LABELS {
+            return Err(crate::error::HistoryError::InvalidInput("Commit labels"));
+        }
+        for label in &self.labels {
+            text(label, "Commit label")?;
+        }
+        if crate::labels::encode(&self.labels).len() > MAXIMUM_LABELS_JSON_BYTES {
+            return Err(crate::error::HistoryError::InvalidInput(
+                "Commit labels JSON",
+            ));
         }
         Ok(())
     }
@@ -539,7 +597,7 @@ macro_rules! encoded_width {
 
 encoded_width!(LayerStackRecord, 179);
 encoded_width!(BranchRecord, 200);
-encoded_width!(CommitRecord, 4510);
+encoded_width!(CommitRecord, 12608);
 encoded_width!(LayerRecord, 176);
 
 /// Byte facts acknowledged by a construction producer and stored at publication.
@@ -564,6 +622,30 @@ impl CommitStatistics {
     };
 }
 
+/// The main Branch's current head Commit facts in a Store summary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StoreSummaryCommit {
+    /// Head Commit identity.
+    pub id: CommitId,
+    /// Creation time in milliseconds since the Unix epoch.
+    pub created_ms: i64,
+}
+
+/// Five bounded facts read fresh from one Store.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct StoreSummary {
+    /// Maintained logical-byte total.
+    pub logical: u64,
+    /// Exact Branch count for the Store's LayerStack.
+    pub branches: u64,
+    /// Exact Commit count for the Store's LayerStack.
+    pub commits: u64,
+    /// Base Layer of the main Branch's head Commit, absent without a head.
+    pub main_layer: Option<LayerId>,
+    /// Main Branch's current head Commit, absent without a head.
+    pub last_commit: Option<StoreSummaryCommit>,
+}
+
 /// Store-wide byte facts read from publication-maintained totals.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct StoreStatistics {
@@ -582,6 +664,32 @@ pub struct StoreStatistics {
     pub free: u64,
     /// What Init imported and what it cost; absent until Init records it.
     pub init: Option<InitStatistics>,
+}
+
+/// The Store's physical on-disk file lengths, measured fresh from the files.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct StoreDiskStatistics {
+    /// Byte length of the Store's main SQLite file.
+    pub main: u64,
+    /// Byte length of its `-wal` file; zero when no WAL file exists. The
+    /// transient `-shm` index is not data and is never counted.
+    pub wal: u64,
+}
+
+/// One Commit kind's totals over the whole commit catalog, computed by a
+/// full scan of that catalog (not a maintained, cheap total).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CommitKindStatistics {
+    /// How these Commits were made.
+    pub via: CommitVia,
+    /// Commits of this kind.
+    pub count: u64,
+    /// Sum of each Commit's own newly inserted canonical object bytes.
+    pub new_canonical: u64,
+    /// Sum of each Commit's own new pack bytes.
+    pub new_stored: u64,
+    /// Sum of each Commit's own new metadata-domain pack bytes.
+    pub new_metadata: u64,
 }
 
 /// Contents one `file_roots` demand asks about.

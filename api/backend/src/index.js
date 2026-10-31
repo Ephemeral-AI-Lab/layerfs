@@ -11,6 +11,7 @@ import { STATE } from "@layerfs/agent/internal";
 import { get_comparable } from "./store/project/get_comparable.js";
 import { get_history } from "./store/project/get_history.js";
 import { get_storage as get_project_storage } from "./store/project/get_storage.js";
+import { get_summary } from "./store/project/get_summary.js";
 import { list_overwritten } from "./store/project/list_overwritten.js";
 import { list_commit_storage } from "./store/branch/list_commit_storage.js";
 import { get_storage as get_file_storage } from "./store/fs/get_storage.js";
@@ -33,6 +34,7 @@ export class LayerFSBackend {
   /** The backend of an opened agent client. */
   static of(shop) {
     if (!shop || !shop[STATE]) throw new LayerFSError("InvalidInput", "LayerFSBackend.of takes a client from LayerFS.open or LayerFS.init", null);
+    if (shop[STATE].scope) throw new LayerFSError("InvalidInput", "out of scope: backend", null);
     return new LayerFSBackend(shop, FACTORY);
   }
 
@@ -40,7 +42,7 @@ export class LayerFSBackend {
   constructor(shop, token = undefined) {
     if (token !== FACTORY) throw new LayerFSError("InvalidInput", "use LayerFSBackend.of(shop); there is no public constructor", null);
     this.store = {
-      project: bind(shop, { get_history, get_storage: get_project_storage, get_comparable, list_overwritten }),
+      project: bind(shop, { get_history, get_storage: get_project_storage, get_summary, get_comparable, list_overwritten }),
       branch: bind(shop, { list_commit_storage }),
       fs: bind(shop, { get_storage: get_file_storage, list_revisions }),
     };

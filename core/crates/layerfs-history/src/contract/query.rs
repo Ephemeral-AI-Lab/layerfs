@@ -117,6 +117,11 @@ pub fn decode(context: Context<'_>, bytes: &[u8]) -> HistoryResult<Cursor> {
     })
 }
 
+/// Bytes available for records in one bounded result.
+pub const fn available() -> usize {
+    MAXIMUM_RESULT_BYTES.saturating_sub(MAXIMUM_CURSOR_BYTES + 16)
+}
+
 /// How many records of one kind fit a byte-bounded page.
 ///
 /// The caller's `limit` is an upper bound; the encoded-result budget is the
@@ -126,8 +131,7 @@ pub fn capacity(limit: u16, per_record: usize) -> HistoryResult<usize> {
     if limit == 0 || limit > MAXIMUM_PAGE_RECORDS {
         return Err(HistoryError::InvalidInput("page limit"));
     }
-    let available = MAXIMUM_RESULT_BYTES.saturating_sub(MAXIMUM_CURSOR_BYTES + 16);
-    Ok(usize::from(limit).min((available / per_record.max(1)).max(1)))
+    Ok(usize::from(limit).min((available() / per_record.max(1)).max(1)))
 }
 
 /// Assembles one page from rows already in query order.
@@ -145,6 +149,38 @@ pub fn page<T>(
 ) -> HistoryResult<PageResult<T>> {
     let continuation = if more && records.len() > capacity {
         records.truncate(capacity);
+        match records.last() {
+            Some(last) => position(last)?,
+            None => None,
+        }
+    } else {
+        None
+    };
+    Ok(PageResult {
+        records,
+        continuation,
+    })
+}
+
+/// Assembles a page using each record's exact encoded width.
+pub fn page_by<T>(
+    mut records: Vec<T>,
+    limit: usize,
+    width: impl Fn(&T) -> usize,
+    position: impl FnOnce(&T) -> HistoryResult<Option<Vec<u8>>>,
+) -> HistoryResult<PageResult<T>> {
+    let mut bytes = 0usize;
+    let mut take = 0usize;
+    for record in records.iter().take(limit) {
+        let width = width(record);
+        if take != 0 && bytes.saturating_add(width) > available() {
+            break;
+        }
+        bytes += width;
+        take += 1;
+    }
+    let continuation = if records.len() > take {
+        records.truncate(take);
         match records.last() {
             Some(last) => position(last)?,
             None => None,

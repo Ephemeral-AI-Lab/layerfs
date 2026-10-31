@@ -9,25 +9,29 @@ export const transportOf = (client) => client[STATE].transport;
 import { LayerFSError } from "./errors.js";
 import { traced } from "./trace.js";
 
-/** A client's private state: `{ closed, transport }`. */
+/** A client's private state: `{ closed, transport, subscription, results, scope }`. */
 export const STATE = Symbol("layerfs.client");
 
 /** Names on the binding's backend table (#428), refused by the public one. */
 export const BACKEND = /^(backend|runtime)\./;
 
+/** The sink appending each call's per-call result to the client's ring. */
+export const sinkOf = (client) => client[STATE].results.sink;
+
 /** Runs one operation once and returns its value or throws its refusal;
  * `options` are the client's settings, whose `trace` selects its trace file;
- * `transport` is the client's binding (default: the one a new client would use). */
-export async function invoke(op, args, options, transport = binding()) {
+ * `transport` is the client's binding (default: the one a new client would use);
+ * `sink`, when given, receives the call's per-call result record. */
+export async function invoke(op, args, options, transport = binding(), sink = null) {
   return outcome(await traced(options, op, args, (scope) => {
     if (BACKEND.test(op)) throw new LayerFSError("UnknownMethod", "backend and runtime methods are @layerfs/backend's and @layerfs/runtime's", null);
     return transport.call(op, observed(args, scope));
-  }));
+  }, sink));
 }
 
 /** One call on the binding's backend table (`backend.*`, `runtime.*`). */
-export async function invokeBackend(op, args, options, transport = binding()) {
-  return outcome(await traced(options, op, args, (scope) => transport.backendCall(op, observed(args, scope))));
+export async function invokeBackend(op, args, options, transport = binding(), sink = null) {
+  return outcome(await traced(options, op, args, (scope) => transport.backendCall(op, observed(args, scope)), sink));
 }
 
 /** A traced call carries its scope; the binding removes it before dispatch. */
@@ -58,18 +62,18 @@ export function sandboxArg(sandbox) {
   return sandbox;
 }
 
-/** Deployment settings from the client options, else the environment
- * (LAYERFS_<NAME>). A Workspace's Sandbox needs
+/** Deployment settings from the client's resolved options (the constructor
+ * already applied the environment fallback and defaults, so nothing here
+ * re-reads the environment). A Workspace's Sandbox needs
  * every one but the container prefix and daemon host. */
 export function deployment(options = {}) {
-  const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
   const deploy = {
-    docker: options.docker ?? env("DOCKER") ?? "/var/run/docker.sock",
-    image: options.image ?? env("IMAGE"),
-    volume: options.volume ?? env("VOLUME"),
-    daemon: options.daemon ?? env("DAEMON"),
-    containerPrefix: options.containerPrefix ?? env("CONTAINER_PREFIX"),
-    daemonHost: options.daemonHost ?? env("DAEMON_HOST"),
+    docker: options.docker ?? "/var/run/docker.sock",
+    image: options.image,
+    volume: options.volume,
+    daemon: options.daemon,
+    containerPrefix: options.containerPrefix,
+    daemonHost: options.daemonHost,
   };
   for (const [name, value] of Object.entries(deploy)) {
     if (name === "containerPrefix" || name === "daemonHost") continue;
@@ -91,13 +95,14 @@ export function live(client) {
  * home and the Store this process opened. */
 export function invokeClient(client, op, args) {
   live(client);
-  return invoke(op, { ...projectArgs(client), ...storeArgs(client), ...args }, client.options, transportOf(client));
+  const subscription = client[STATE].subscription?.id;
+  return invoke(op, { ...projectArgs(client), ...storeArgs(client), ...args, ...(subscription ? { subscription } : {}) }, client.options, transportOf(client), sinkOf(client));
 }
 
 /** One backend-table call of an open client, with the same fields. */
 export function invokeClientBackend(client, op, args) {
   live(client);
-  return invokeBackend(op, { ...projectArgs(client), ...storeArgs(client), ...args }, client.options, transportOf(client));
+  return invokeBackend(op, { ...projectArgs(client), ...storeArgs(client), ...args }, client.options, transportOf(client), sinkOf(client));
 }
 
 /** A call's project fields: the project, discovery home and the client's
@@ -139,12 +144,35 @@ export function diffOptions({ cursor, hunks } = {}) {
   return { ...(cursor == null ? {} : { cursor }), ...(hunks === undefined ? {} : { hunks }) };
 }
 
-export function checkedMessage(message) {
-  if (message === undefined) return undefined;
-  if (typeof message !== "string" || Buffer.byteLength(message) > 4096 || [...message].some((c) => (c.codePointAt(0) < 32 && c !== "\n" && c !== "\t") || (c.codePointAt(0) >= 127 && c.codePointAt(0) <= 159) || (c.codePointAt(0) >= 0xd800 && c.codePointAt(0) <= 0xdfff))) {
-    throw new LayerFSError("InvalidInput", "message must be UTF-8, at most 4096 bytes, with no controls except newline/tab", null);
+function checkedText(value, name) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || Buffer.byteLength(value) > 4096 || [...value].some((c) => (c.codePointAt(0) < 32 && c !== "\n" && c !== "\t") || (c.codePointAt(0) >= 127 && c.codePointAt(0) <= 159) || (c.codePointAt(0) >= 0xd800 && c.codePointAt(0) <= 0xdfff))) {
+    throw new LayerFSError("InvalidInput", `${name} must be UTF-8, at most 4096 bytes, with no controls except newline/tab`, null);
   }
-  return message;
+  return value;
+}
+
+export function checkedMessage(message) {
+  return checkedText(message, "message");
+}
+
+export function commitOptions(options = {}) {
+  if (options === null || typeof options !== "object" || Array.isArray(options)) {
+    throw new LayerFSError("InvalidInput", "options must be { author?, labels? }", null);
+  }
+  for (const key of Object.keys(options)) {
+    if (!["author", "labels"].includes(key)) throw new LayerFSError("InvalidInput", `unknown workspace.commit option "${key}"`, null);
+  }
+  const author = checkedText(options.author, "author");
+  const labels = options.labels;
+  if (labels !== undefined && (!Array.isArray(labels) || labels.length > 64 || [...labels].some((label) => typeof label !== "string"))) {
+    throw new LayerFSError("InvalidInput", "labels must be an array of at most 64 strings", null);
+  }
+  const checked = labels?.map((label) => checkedText(label, "each label"));
+  if (checked !== undefined && Buffer.byteLength(JSON.stringify(checked)) > 4096) {
+    throw new LayerFSError("InvalidInput", "labels JSON must be at most 4096 bytes", null);
+  }
+  return { ...(author === undefined ? {} : { author }), ...(checked === undefined ? {} : { labels: checked }) };
 }
 
 /** A write's last argument as call fields: a Commit message string, or

@@ -86,6 +86,9 @@ impl HistoryCatalog for MemoryHistory {
     fn commit(&self, _id: CommitId) -> HistoryResult<Option<CommitRecord>> {
         Err(HistoryError::Unsupported("memory Init fixture operation"))
     }
+    fn is_published(&self, _head: LayerId, _commit: &CommitRecord) -> HistoryResult<bool> {
+        Err(HistoryError::Unsupported("memory Init fixture operation"))
+    }
     fn commit_history(
         &self,
         _request: &CommitHistoryRequest,

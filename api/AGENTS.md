@@ -3,11 +3,11 @@
 > **Status:** Current general guide.
 
 Read [repository instructions](../AGENTS.md) first. This layer holds the
-published JavaScript packages only, one folder each: `agent` (@layerfs/agent),
-`cli` (@layerfs/cli), `backend` (@layerfs/backend) and `runtime`
-(@layerfs/runtime), with their guides in `docs/` and the build scripts in
-`scripts/`. It holds no Rust: the SDK method surface `layerfs-api` and the Node
-binding `layerfs-node` are engine crates (see the
+published JavaScript packages only, five folders, one package each: `agent`
+(@layerfs/agent), `cli` (@layerfs/cli), `backend` (@layerfs/backend), `mcp`
+(@layerfs/mcp) and `runtime` (@layerfs/runtime), with their guides in `docs/`
+and the build scripts in `scripts/`. It holds no Rust: the SDK method surface
+`layerfs-api` and the Node binding `layerfs-node` are engine crates (see the
 [engine guide](../engine/AGENTS.md#scope-and-ownership)); `scripts/build-native.mjs`
 builds the addon beside its crate at `engine/crates/layerfs-node/layerfs.node`.
 The packages load the engine through that addon or the worker; nothing in core

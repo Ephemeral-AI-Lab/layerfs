@@ -70,10 +70,12 @@ impl InitCounters {
         self.step.store(index as u8, Relaxed);
     }
     /// One more source entry observed.
+    #[cfg(unix)] // counted only by the (Unix) scan
     pub(crate) fn entry(&self) {
         self.entries.fetch_add(1, Relaxed);
     }
     /// One more regular-file identity constructed, of `len` bytes.
+    #[cfg(unix)] // counted only by the (Unix) file construction
     pub(crate) fn built(&self, len: u64) {
         self.files.fetch_add(1, Relaxed);
         self.bytes.fetch_add(len, Relaxed);

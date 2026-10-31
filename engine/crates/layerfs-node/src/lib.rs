@@ -3,6 +3,7 @@ mod convert;
 mod direct;
 mod discovery;
 mod dispatch;
+mod events;
 mod exec;
 mod job;
 mod output;

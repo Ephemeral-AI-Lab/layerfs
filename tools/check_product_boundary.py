@@ -36,6 +36,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-api",
     "layerfs-bridge",
     "layerfs-sandbox",
+    "layerfs-python",
 )
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
@@ -51,6 +52,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-api": "#![forbid(unsafe_code)]",
     "layerfs-bridge": "#![forbid(unsafe_code)]",
     "layerfs-sandbox": "#![forbid(unsafe_code)]",
+    "layerfs-python": "#![forbid(unsafe_code)]",
 }
 
 
@@ -64,6 +66,16 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-history",
         "layerfs-persistence",
         "layerfs-sandbox",
+        "layerfs-storage",
+        "layerfs-store-service",
+        "layerfs-telemetry",
+    },
+    "layerfs-python": {
+        "layerfs-project",
+        "layerfs-api",
+        "layerfs-bridge",
+        "layerfs-history",
+        "layerfs-persistence",
         "layerfs-storage",
         "layerfs-store-service",
         "layerfs-telemetry",
@@ -145,6 +157,7 @@ LAYER = {
     # only the published JavaScript packages, so no crate is in the api layer.
     "layerfs-api": ENGINE,
     "layerfs-node": ENGINE,
+    "layerfs-python": ENGINE,
 }
 
 
@@ -323,11 +336,11 @@ def unsafe_violations(path, source):
     crate = crate_name(path)
     if crate is None or crate not in UNSAFE_ROOT_ATTR or path.suffix != ".rs":
         return found
-    relative = Path(*path.parts[path.parts.index("src") :])
+    relative = Path(*path.parts[path.parts.index("src") :]).as_posix()
     code = "\n".join(line.split("//", 1)[0] for line in source.splitlines())
-    if UNSAFE.search(code) and (crate in UNSAFE_FREE_CRATES or str(relative) != UNSAFE_AUDITED_MODULE[crate]):
+    if UNSAFE.search(code) and (crate in UNSAFE_FREE_CRATES or relative != UNSAFE_AUDITED_MODULE[crate]):
         found.append((1, "unsafe outside the audited module boundary; see core/AGENTS.md"))
-    if relative == Path("src/lib.rs") and UNSAFE_ROOT_ATTR[crate] not in source:
+    if relative == "src/lib.rs" and UNSAFE_ROOT_ATTR[crate] not in source:
         found.append((1, f"crate root must declare {UNSAFE_ROOT_ATTR[crate]}"))
     return found
 
@@ -422,7 +435,7 @@ def main():
     files = production_files(root, include_sdk="--skip-sdk" not in sys.argv[1:])
     failures = 0
     for path in files:
-        for line, reason in violations(path, path.read_text()):
+        for line, reason in violations(path, path.read_text(encoding="utf-8", errors="replace")):
             print(f"{path.relative_to(root)}:{line}: {reason}")
             failures += 1
     for name in RETIRED_PACKAGES:
@@ -430,14 +443,19 @@ def main():
             print(f"crates/{name}: {RETIRED_PACKAGE}")
             failures += 1
     manifests = {root / "Cargo.toml" for root in crate_directories(root) if (root / "Cargo.toml").is_file()}
-    packages = {manifest.parent: tomllib.loads(manifest.read_text())["package"]["name"] for manifest in manifests}
+    packages = {
+        manifest.parent: tomllib.loads(manifest.read_text(encoding="utf-8", errors="replace"))["package"]["name"]
+        for manifest in manifests
+    }
     for manifest in sorted(manifests):
-        for line, reason in dependency_violations(manifest.read_text()):
+        for line, reason in dependency_violations(manifest.read_text(encoding="utf-8", errors="replace")):
             print(f"{manifest.relative_to(root)}:{line}: {reason}")
             failures += 1
     for package in packages:
         for path in sorted((package / "tests").rglob("*.rs")):
-            for line, reason in test_path_violations(path, path.read_text(), packages):
+            for line, reason in test_path_violations(
+                path, path.read_text(encoding="utf-8", errors="replace"), packages
+            ):
                 print(f"{path.relative_to(root)}:{line}: {reason}")
                 failures += 1
     if failures:

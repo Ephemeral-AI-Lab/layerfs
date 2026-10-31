@@ -131,6 +131,135 @@ once. The binding sets `UV_THREADPOOL_SIZE` to 64 when the process has not set
 it, because every call, a long `exec` included, holds a Node worker thread.
 Keep each agent's operations on a Workspace sequential.
 
+### Opened-project events
+
+`await layerfs.events.subscribe()` opens one live, in-memory event queue for
+that client. It returns `{ cursor: 0, snapshot, poll, close }` and is also an
+async iterator. The native subscription ID is private: after subscribing, the
+client attaches it to each later operation automatically. Only successful
+operations made through that same client emit events. Operations by another
+client or process and spontaneous daemon changes do not; this is not a global
+watch, persisted log, or replay across reconnect. Init finished before the
+client exists, so it produces no opened-project events; use
+`runtime.project.subscribe_init` for Init progress.
+
+The initial snapshot is current state, not event history or a complete
+`ProjectState` replacement:
+
+```js
+{
+  branches: [{ name, head }],
+  workspaces: [{ sandbox, path, branch }],
+  sandboxes: [{ sandbox }]
+}
+```
+
+It includes every Branch page and every running Sandbox and mounted Workspace.
+Snapshot assembly is not atomic across those systems; an operation during
+assembly can appear both in the snapshot and in the queue. Snapshots are
+complete and are not subject to the event-page byte budget.
+
+Every event is `{ seq, type, source, payload }`, with a per-subscription safe
+integer sequence starting at 1. The nine types are:
+
+| Type | Source | Payload and successful outcome |
+| --- | --- | --- |
+| `commit.created` | `store` | Workspace Commit `{ branch, workspace: { sandbox, path }, commit }`, with the complete Commit; `Committed` only |
+| `fs.committed` | `store` | `{ branch, method, path, from, to, commit }` for a Committed `fs.write`, `apply`, `edit`, `mkdir`, `rm`, `mv`, or `cp`; move/copy uses `from`/`to`, `fs.apply` has all three paths null |
+| `branch.forked` | `store` | `{ branch, forkPoint: { kind: "commit" \| "layer", id } }` |
+| `branch.merged` | `store` | `{ merge }`, the complete result of either fast-forward or Commit-producing merge; never a duplicate `commit.created` |
+| `branch.published` | `store` | `{ branch, commit, layer, basedOn }`; publish `Added` only |
+| `workspace.mounted` | `daemon` | `{ workspace: { sandbox, path }, branch }` |
+| `workspace.unmounted` | `daemon` | `{ workspace: { sandbox, path } }` after normal or forced unmount |
+| `sandbox.created` | `daemon` | `{ sandbox }` |
+| `sandbox.closed` | `daemon` | `{ sandbox }` |
+
+Workspace/file `UpToDate`, publish `UpToDate`/`NoChanges`, refusals, and
+`workspace.exec` alone emit nothing. Workspace Commit has source `store` even
+though its SDK operation is daemon-mediated.
+
+`subscription.poll(timeoutMs = 0)` accepts an integer from 0 through 30000 ms
+and returns `{ events, cursor, hasMore, stale, closed }`. One outstanding poll
+is allowed per subscription. Returned sequences are strictly increasing safe
+integers; the subscription advances its public `cursor` from each answer. A
+normal page contains at most 50 events and budgets their encoded envelopes to
+49,152 bytes, stopping with `hasMore: true` when necessary. One oversized event
+is returned alone so the cursor still advances. The snapshot in a subscribe or
+stale answer is exempt from this budget.
+
+Positive-timeout polls wait for an event, staleness, close, or their fixed
+deadline. Native admission allows at most `min(16, UV_THREADPOOL_SIZE - 1)`
+simultaneous waiting polls (SDK/worker default 64 threads, direct Node default
+4); immediate polls need no slot. If no slot is available, the call fails
+`Busy` at once rather than waiting for admission. Neither polling nor async
+iteration retries this or any other refusal.
+
+The queue holds 1024 events. Overflow drops oldest events without reusing
+sequence numbers. The next poll from an undeliverable cursor returns
+`stale: true`, no events, a fresh complete snapshot, and the sequence captured
+before snapshot assembly; the subscription replaces its snapshot and advances
+to that cursor. Polling from the new cursor resumes normally. Manual polling
+returns this stale answer so resynchronization cannot be missed. Async
+iteration applies it and then throws `InvalidInput` "stream went stale;
+resubscribe". It otherwise polls for 1000 ms while idle, pages immediately
+through `hasMore`, yields in sequence order, and returns normally on close.
+
+`subscription.close()` unsubscribes once and later calls are local no-ops.
+Closing the client also closes its subscription; closing the subscription does
+not close the client. A second `subscribe()` on one client closes the previous
+queue and starts at cursor 0 with a fresh snapshot, never the old backlog. On
+the worker route, socket close drops that socket's queues. A later poll with
+the old ID fails `InvalidInput` "unknown subscription"; subscribe again for a
+fresh snapshot. There is no automatic reconnect or replay. The `layerfs`
+command has no event-stream command.
+
+### Per-call results
+
+`client.results(after?)` returns this client's per-call results as an API:
+each call's method, client-side duration, error code, and for writes the
+Commit, bytes added or refusal. It is synchronous and local — it never dials
+the binding, adds no binding call, and stays readable after `close()`. The
+`layerfs` command has no results command (one process per command, like the
+event stream).
+
+Every call a trace file would record appends exactly one record, whether or
+not `LAYERFS_TRACE` is set: every agent and backend operation through the
+client, its own `project.init` and open-time project lookup, and
+`events.unsubscribe`. Refusals raised before the call is sent (argument
+validation, a closed client) record nothing. Records appear in completion
+order, so parallel calls can have out-of-order `start` times.
+
+```js
+{
+  seq: 7,                        // per-client, starts 1, +1 per record, never reused
+  method: "fs.write",
+  start: "2026-10-30T04:05:06.789Z", // ISO, when the call was sent
+  ms: 12.345,                    // client-side duration to settle
+  ok: true,
+  code: "NoSuchPath", message: "...", // only when ok is false
+  kind: "Committed",             // the answer's outcome kind, when it names one
+  commit: "c0ffee",              // publishing writes: the new Commit (UpToDate: its head)
+  layer: "lay1",                 // branch.publish only
+  sizes: { logical, newCanonical, newStored, newMetadata }, // when the Commit record is carried
+}
+```
+
+`commit`, `layer` and `sizes` appear only on successful publishing writes
+(`fs.write`/`edit`/`apply`/`mkdir`/`rm`/`cp`/`mv`, `workspace.commit`,
+`branch.merge`, `branch.publish`); `sizes.newStored` is the bytes added to
+the Store. Arguments, result ids, queue attribution and daemon telemetry stay
+in the trace file, not in a record.
+
+The client keeps its most recent **1024** records; overflow drops oldest
+without reusing sequence numbers. `client.results(after = 0)` returns
+`{ items, next, evicted, stale? }`: the kept records with `seq > after`,
+oldest first; `next`, the cursor to pass next time (the last returned `seq`,
+or `after` itself when nothing was returned); `evicted`, the total records
+dropped so far; and `stale: true` when records after `after` were dropped
+(the kept records are still returned). `after` must be a nonnegative safe
+integer, else `InvalidInput`. With tracing on, each record and its trace line
+agree on method, start, ms, outcome and write outcome.
+
 ### Settings
 
 | Environment | Meaning |
@@ -195,7 +324,20 @@ base, activity, changed }` (`activity` Idle or Busy) plus the daemon's record. A
 `{ sandbox, path }`, its Sandbox's number and its path in that Sandbox
 (`/workspaces/1`, `/workspaces/2`, … numbered per Sandbox); `exec`, `status`,
 `commit` and `unmount` take it. Every Workspace of a project sees the same
-Store, so which Sandbox holds it changes nothing a command sees. A Sandbox's
+Store, so which Sandbox holds it changes nothing a command sees.
+
+`workspace.commit(ws, message?, force?, options?)` accepts trailing
+`{ author?, labels? }`: one author string and an array of label strings,
+preserving label order and duplicates. Author and each label are at most 4096
+UTF-8 bytes with no controls except newline/tab; there are at most 64 labels
+and their complete JSON array is at most 4096 bytes. Null options/fields,
+unknown keys and wrong shapes are refused `InvalidInput` before the binding.
+The CLI equivalents are `--author <text>` and `--labels <json-array>`.
+Commit results and every history read carry `author` (string or null) and
+`labels` (always an array). These creation-time annotations do not participate
+in Commit identity; a repeated derived Commit keeps its original attribution.
+
+A Sandbox's
 container is `<prefix><project>-<n>`, labelled `layerfs.role=sandbox`,
 `layerfs.project` and `layerfs.sandbox=<n>`; its only mount is the project's
 Store volume. Its records are `LAYERFS_HOME/<project>/sandboxes/<n>/`, with
@@ -269,20 +411,23 @@ trace line covers the command's run.
 | --- | --- |
 | `LayerFS` (2) | `LayerFS.open(name)`, `LayerFS.init(name, folder, timeout?)`: static, each returns a ready client |
 | project (2) | `list_branches(pageSize?, pagePos?)`, `list_sandboxes(pageSize?, pagePos?)` |
-| fs reads (7) | `read(ref, path, startLine?, endLine?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
+| fs reads (7) | `read(ref, path, startLine?, endLine?, { binary?, offset? }?)`, `list(ref, path?, pageSize?, pagePos?)`, `stat(ref, path)`, `grep(ref, pattern, path?, pageSize?, pagePos?)`, `glob(ref, pattern, path?, pageSize?, pagePos?)`, `diff_files(leftRef, leftPath, rightRef, rightPath)`, `blame(ref, path, fromLine?)` |
 | fs writes (7) | `write(branch, path, content, message? \| { message?, mode? })`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message? \| { message?, mode? })`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
-| branch (6) | `fork(name, fromRef?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
+| branch (8) | `fork(name, fromRef?)`, `graph(branch, pageSize?, pagePos?)`, `changed_paths(commit, pageSize?, pagePos?, { cursor? }?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `diff_branches(from, to, pageSize?, pagePos?, { cursor?, hunks? }?)`, `merge(a, b, name, message?, units?)`, `publish(branch, commit?)` |
 | sandbox (3) | `create({ image }?)` → `{ sandbox, image }`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
 | workspace (4) | `mount(sandbox, branch)` → `{ sandbox, path, image }`, `exec(ws, command, message?, { stdout?, stderr? }?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?, force?)` |
+| events (1) | `subscribe()` → an opened-project subscription with `poll`, `close`, and async iteration |
 
 A Workspace's status is not an agent call: it is `backend.daemon.workspace.status(ws)`
 in [`@layerfs/backend`](backend.md).
 
 Every grouped method returns a Promise and takes positional arguments; only
-the trailing `{ ... }?` arguments shown above are options objects. A ref is `main`, a Branch name, a Commit
-id or a Layer id. Filesystem paths are absolute in that view. Main changes only
-through publish. There is no `remove` alias, harness export, agent/call attribution,
-public inspect or public process-control method.
+the trailing `{ ... }?` arguments shown above are options objects. A ref is `main`,
+a Branch name, or a 66-character hex Commit or Layer identity. Reads at any of
+these refs need no mounted Workspace and do not move Branch heads. Filesystem
+paths are absolute in that view. Main changes only through publish. There is no
+`remove` alias, harness export, agent/call attribution, public inspect or public
+process-control method.
 
 ### Messages
 
@@ -341,33 +486,67 @@ binary `content` is sent as `bytes`. Bytes in a `SharedArrayBuffer` or a
 detached `ArrayBuffer` are refused as InvalidInput, and so is anything else,
 such as an array of numbers. The bytes are copied once the call starts, after
 the client's Store is open, so do not change them until the call settles.
-Reads are text only: `fs.read` refuses a file that is not UTF-8 text as
-`Binary`, and `fs.stat` reports its size. `node api/agent/test/binary_write.mjs`
-checks these forms and refusals on Linux.
+By default `fs.read` returns `text` and refuses NUL or invalid UTF-8 as `Binary`.
+With `{ binary: true }` it returns `bytes` as a `Buffer` instead of `text`, using
+the same line window and 48 KiB raw-byte budget without UTF-8 validation. The CLI
+flag is `--binary`. `fs.read` reports the full file size in either mode.
+`node api/agent/test/binary_write.mjs` checks the write forms and refusals on Linux.
 
 ### Pages and reads
 
 Pages have `items` and `hasMore`; advance by `pagePos + items.length`.
-`diff_commits` and `diff_branches` also answer `nextCursor`, the last path the
-page listed: passing it back as `cursor` resumes the walk after that path, so a
-page costs its own changes instead of re-walking earlier pages. `hunks: false`
-lists the changes without line hunks (`hunks` is `null`), so a page fills by
-paths rather than by file contents. Defaults
-are 50/0, max pageSize 1000, with safe integers only. Byte bounds can shorten a
-page; they never mean EOF when `hasMore` is true. Deep offsets skip through bounded
-windows linearly. Names use byte order; recursive paths use deterministic
-component-by-component byte order, then line number for grep. Commit history is
-newest first along first parents. Every call resolves each live ref once; separate
-calls against live heads can shift numeric positions.
+`changed_paths`, `diff_commits` and `diff_branches` also answer `nextCursor`, the
+last path the page listed: passing it back as `cursor` resumes the walk after that
+path, so a page costs its own changes instead of re-walking earlier pages. When
+both are given, `cursor` takes precedence over `pagePos`; numeric-only calls keep
+their existing behavior. `hunks: false` lists the changes without line hunks
+(`hunks` is `null`), so a page fills by paths rather than by file contents.
+Defaults are 50/0, max pageSize 1000, with safe integers only. Byte bounds can
+shorten a page; they never mean EOF when `hasMore` is true. Deep offsets skip
+through bounded windows linearly. Names use byte order; recursive paths use
+deterministic component-by-component byte order, then line number for grep. Commit
+history is newest first along first parents. Every call resolves each live ref
+once; separate calls against live heads can shift numeric positions.
 
-Read/blame use 1-based inclusive line positions, no byte offsets or byte-read
-method. Responses fit the authenticated control frame: at most 2000 lines and
-48 KiB of text/value payload, below the selected 256 KiB ceiling. LF separates
-lines; CRLF text is preserved, and a final LF creates no phantom line. Read reports
-`startLine`, `endLine`, `truncated`, `lineTruncated` and `nextLine`. Huge lines return
-a UTF-8 prefix, with no within-line continuation; the remainder is explicitly
-omitted and the next window starts at the following line. NUL/invalid UTF-8 in the
-scanned text is Binary. Grep scans chunks and matches across chunk boundaries.
+`branch.graph` returns the Branch record, its resolved `forkPoint`, and `commits`
+in the `list_commits` shape plus `published`. The walk stops before a Commit fork
+point; a Layer or absent fork point runs to the root. A fresh Commit fork therefore
+has no own Commits. For `main`, it returns the source Commits of the current Layer
+stack, skipping genesis, all published. Publication is derived from that stack on
+every call, not stored on a Commit. `pagePos` counts the bounded walk.
+
+`branch.changed_paths` returns one Commit's path-level changes without line hunks.
+It compares against the first parent when present, against the base Layer for a
+parentless merge, and against an empty tree for a true root Commit. It accepts only
+a Commit identity: malformed text and Layer identities are `InvalidInput`, and an
+absent Commit is `NoSuchCommit`. Cursor validation and refusal are shared with
+`diff_commits`.
+
+Read/blame use 1-based inclusive line positions. Responses fit the authenticated
+control frame: at most 2000 lines and 48 KiB of text/byte payload, below the selected
+256 KiB ceiling. LF separates lines; CRLF text is preserved, and a final LF creates no
+phantom line. Read reports `startLine`, `endLine`, `truncated`, `lineTruncated`,
+`nextLine` and `nextOffset`. Huge lines return a UTF-8 prefix in text mode or a raw
+byte prefix in binary mode, with no within-line continuation; the remainder is
+explicitly omitted and the next window starts at the following line. NUL/invalid UTF-8
+in scanned text is Binary only in text mode. Grep scans chunks and matches across
+chunk boundaries.
+
+`nextOffset` is non-null exactly when `nextLine` is non-null and is an opaque cursor
+to the first byte of that unreturned line. Pass it as `{ offset }` to continue without
+rescanning earlier pages; the CLI flag is `--offset <cursor>`. `undefined`/`null` or
+omission selects numeric behavior, and numeric `startLine` paging remains supported.
+A valid cursor takes precedence over `startLine`, but numeric arguments are still
+validated, and `endLine` remains absolute. The reply's `startLine` is the effective
+cursor line. The cursor binds the normalized path, immutable content root and
+text/binary mode, not a snapshot: the same path and content may continue across a
+Commit or Layer, while another path, changed content, a mode swap or an offset beyond
+the file size is refused. Missing-path `NoSuchPath` lookup precedes cursor validation.
+Malformed input is `InvalidInput: offset is not a valid read cursor`; a binding
+mismatch is `InvalidInput: offset does not match this file read`; both have null detail.
+A cursor error never falls back to a numeric start or retries automatically. In the
+SDK, a non-string/non-null offset is refused before binding with `InvalidInput:
+offset must be a string or null`.
 Blame uses bounded LCS and exact common edges. In coarse comparisons, a line
 is inherited from the common suffix only when it starts at a corresponding
 line boundary in both versions, and from the common prefix only when it ends at
@@ -380,7 +559,9 @@ represent them; equal content is decided by immutable content identity.
 
 Merge diagnostics also use byte windows within the unchanged control frame.
 `branch.merge` returns `lwwTruncated`, `conflictsTruncated` and `unitsTruncated` alongside its
-diagnostic lists (including in `Conflict.detail`); `workspace.commit` reports
+diagnostic lists (including in `Conflict.detail`). `units` lists caller-declared
+units changed on both sides and which side was kept whole; `unitsTruncated`
+reports that its byte window omitted entries from that list. `workspace.commit` reports
 `lwwTruncated` and its conflict detail reports both flags. Each conflict keeps
 its original `blocks` count and reports `hunksOmitted` if whole hunks were left
 out. These flags limit the reply only: every path still participates in the
@@ -410,13 +591,12 @@ the LayerFS home's worker on macOS and Windows, and fail `Unsupported` anywhere 
 
 ### Install and run
 
-The command is the `api/cli/` folder of a LayerFS checkout; it isn't published to
-npm. It needs Node 20 or newer and the SDK's native addon (`npm run
+The command is the `api/cli/` folder of a LayerFS checkout. It needs Node 20
+or newer and the SDK's native addon (`npm run
 build:native` in `api`, or `LAYERFS_NATIVE`).
 
 ```bash
 npm --prefix "$LAYERFS_REPO/api" install
-npm --prefix "$LAYERFS_REPO/api/cli" install
 "$LAYERFS_REPO/api/cli/src/layerfs.js" help
 ```
 
@@ -496,12 +676,14 @@ table differs, and when a family's files stop matching the SDK's.
 | `project.list_branches` | `layerfs project list_branches [--page-size <n>] [--page-pos <n>]` |
 | `project.list_sandboxes` | `layerfs project list_sandboxes [--page-size <n>] [--page-pos <n>]` |
 | `branch.fork` | `layerfs branch fork <name> [<from-ref>]` |
+| `branch.graph` | `layerfs branch graph <branch> [--page-size <n>] [--page-pos <n>]` |
+| `branch.changed_paths` | `layerfs branch changed_paths <commit> [--page-size <n>] [--page-pos <n>] [--cursor <text>]` |
 | `branch.list_commits` | `layerfs branch list_commits <branch> [--page-size <n>] [--page-pos <n>]` |
 | `branch.diff_commits` | `layerfs branch diff_commits <from-commit> <to-commit> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--no-hunks]` |
 | `branch.diff_branches` | `layerfs branch diff_branches <from-branch> <to-branch> [--page-size <n>] [--page-pos <n>] [--cursor <text>] [--no-hunks]` |
 | `branch.merge` | `layerfs branch merge <a> <b> <name> [-m <text>] [--units <json>]` |
 | `branch.publish` | `layerfs branch publish <branch> [<commit>]` |
-| `fs.read` | `layerfs fs read <ref> <path> [--start-line <n>] [--end-line <n>]` |
+| `fs.read` | `layerfs fs read <ref> <path> [--start-line <n>] [--end-line <n>] [--binary] [--offset <text>]` |
 | `fs.list` | `layerfs fs list <ref> [<path>] [--page-size <n>] [--page-pos <n>]` |
 | `fs.stat` | `layerfs fs stat <ref> <path>` |
 | `fs.grep` | `layerfs fs grep <ref> <pattern> [<path>] [--page-size <n>] [--page-pos <n>]` |
@@ -517,7 +699,7 @@ table differs, and when a family's files stop matching the SDK's.
 | `fs.mv` | `layerfs fs mv <branch> <from-path> <to-path> [-m <text>]` |
 | `workspace.mount` | `layerfs workspace mount <sandbox> <branch>` |
 | `workspace.exec` | `layerfs workspace exec <ws> <command> [-m <text>] [--stream]` |
-| `workspace.commit` | `layerfs workspace commit <ws> [-m <text>] [--force]` |
+| `workspace.commit` | `layerfs workspace commit <ws> [-m <text>] [--force] [--author <text>] [--labels <json>]` |
 | `workspace.unmount` | `layerfs workspace unmount <ws> [--discard] [--force]` |
 | `sandbox.create` | `layerfs sandbox create [--image <text>]` |
 | `sandbox.list_workspaces` | `layerfs sandbox list_workspaces <sandbox> [--page-size <n>] [--page-pos <n>]` |

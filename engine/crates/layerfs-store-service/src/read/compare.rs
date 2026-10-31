@@ -244,12 +244,12 @@ fn order(a: &str, b: &str) -> std::cmp::Ordering {
 fn changes(
     store: &Arc<Store>,
     reader: &StorePorts,
-    left: &Snap,
+    left: Option<&Snap>,
     right: &Snap,
     request: Arg<Request>,
 ) -> Result<(Vec<SdkValue>, Next), SdkRefusal> {
     let request = request?;
-    if left.root == right.root {
+    if left.is_some_and(|left| left.root == right.root) {
         let done = Next {
             pos: SdkValue::Null,
             cursor: SdkValue::Null,
@@ -259,26 +259,33 @@ fn changes(
     let hints = CatalogHints::new(store.history());
     // One memo for the page: lookups share the B-trees' upper pages.
     let memo = Memo::new(reader);
-    let key = (left.root, right.root);
-    let plan = match super::plans::find(key) {
-        Some(kept) => kept,
-        None => {
-            let made = Plan::make(&memo, &hints, &left.tree, &right.tree);
-            if let Some(error) = hints.failure.take() {
-                return Err(args::history(error));
+    let plan = left
+        .map(|left| {
+            let key = (left.root, right.root);
+            match super::plans::find(key) {
+                Some(kept) => Ok(kept),
+                None => {
+                    let made = Plan::make(&memo, &hints, &left.tree, &right.tree);
+                    if let Some(error) = hints.failure.take() {
+                        return Err(args::history(error));
+                    }
+                    let plan = made.map_err(args::content)?.map(Arc::new);
+                    super::plans::keep(key, plan.clone());
+                    Ok(plan)
+                }
             }
-            let plan = made.map_err(args::content)?.map(Arc::new);
-            super::plans::keep(key, plan.clone());
-            plan
-        }
-    };
+        })
+        .transpose()?;
     let first = match &request.cursor {
         Some(cursor) => component(cursor, "/")?,
         None => None,
     };
-    let mut walk = match &plan {
-        Some(plan) => ChangeWalk::planned(&memo, &left.tree, &right.tree, plan, first.as_ref()),
-        None => ChangeWalk::full(&memo, &left.tree, &right.tree, first.as_ref()),
+    let mut walk = match (left, plan.as_ref()) {
+        (Some(left), Some(Some(plan))) => {
+            ChangeWalk::planned(&memo, &left.tree, &right.tree, plan, first.as_ref())
+        }
+        (Some(left), _) => ChangeWalk::full(&memo, &left.tree, &right.tree, first.as_ref()),
+        (None, _) => ChangeWalk::full_from_empty(&memo, &right.tree, first.as_ref()),
     }
     .map_err(args::content)?;
     emit(reader, &mut walk, &request)
@@ -418,7 +425,7 @@ fn listed(
     request: Arg<Request>,
     sides: [SdkValue; 2],
 ) -> Answer {
-    let (items, next) = changes(store, reader, from, to, request)?;
+    let (items, next) = changes(store, reader, Some(from), to, request)?;
     let [from, to] = sides;
     answer(vec![
         ("kind", SdkValue::text("ok")),
@@ -452,6 +459,61 @@ pub fn diff_commits(
         ])
     };
     listed(store, reader, from, to, request, [side(from), side(to)])
+}
+
+/// The changes a Commit made against its first parent, its base Layer for a
+/// parentless merge, or an empty tree for a true root Commit.
+pub fn changed_paths(
+    store: &Arc<Store>,
+    stack: &LayerStackRecord,
+    reader: &StorePorts,
+    commit: &str,
+    request: Arg<Request>,
+) -> Answer {
+    let id = match args::node(commit)? {
+        layerfs_history::NodeId::Commit(id) => id,
+        layerfs_history::NodeId::Layer(_) => {
+            return Err(invalid("changed_paths takes a saved Commit"));
+        }
+    };
+    let record = args::commit(store, id)?;
+    let to = snapshot::resolve(store, stack, reader, commit)?;
+    let from = if let Some(parent) = record.parent {
+        Some(snapshot::resolve(
+            store,
+            stack,
+            reader,
+            &args::hex(parent.as_slice()),
+        )?)
+    } else if record.second_parent.is_some() {
+        Some(snapshot::resolve(
+            store,
+            stack,
+            reader,
+            &args::hex(record.base_layer.as_slice()),
+        )?)
+    } else {
+        None
+    };
+    let request = request.map(|mut request| {
+        request.hunks = false;
+        request
+    });
+    let (items, next) = changes(store, reader, from.as_ref(), &to, request)?;
+    answer(vec![
+        ("commit", SdkValue::text(args::hex(record.id.as_slice()))),
+        (
+            "parent",
+            SdkValue::opt_text(record.parent.map(|id| args::hex(id.as_slice()))),
+        ),
+        ("items", SdkValue::List(items)),
+        (
+            "hasMore",
+            SdkValue::Bool(!matches!(next.pos, SdkValue::Null)),
+        ),
+        ("nextPagePos", next.pos),
+        ("nextCursor", next.cursor),
+    ])
 }
 
 /// The changes from Branch (or main) `from` to `to`, one page; the names

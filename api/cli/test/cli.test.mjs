@@ -16,6 +16,9 @@ import { CALLS, INIT } from "../src/calls.js";
 import { usage } from "../src/help.js";
 import { tables, written } from "./doc-tables.mjs";
 import { CASES, ENV, contains, made, plain } from "../../agent/test/fixture/cases.mjs";
+import { P1_CASES, P7_CASES, P8_CASES } from "../../agent/test/fixture/cases-area-p.mjs";
+
+const AGREEMENT_CASES = [...CASES, ...P1_CASES, ...P7_CASES, ...P8_CASES];
 
 const CLI = fileURLToPath(new URL("../src/layerfs.js", import.meta.url));
 const FAKE = fileURLToPath(new URL("../../agent/test/fixture/fake-native.cjs", import.meta.url));
@@ -62,6 +65,7 @@ after(() => sdk?.lf.close());
 
 /** One case through the SDK in this process: the binding calls it made, and its result or refusal. */
 async function throughSdk(c) {
+  c.prepare?.(native);
   const first = native.args.length;
   process.env.CLI_FAKE_REFUSE = (c.refuse ?? []).join(",");
   try {
@@ -76,11 +80,11 @@ async function throughSdk(c) {
 }
 
 test("every table entry has a case", () => {
-  const covered = new Set(CASES.map((c) => c.argv.slice(0, c.argv[0] === "init" ? 1 : 2).join(" ")));
+  const covered = new Set(AGREEMENT_CASES.map((c) => c.argv.slice(0, c.argv[0] === "init" ? 1 : 2).join(" ")));
   for (const entry of [INIT, ...CALLS]) assert.ok(covered.has(command(entry).join(" ")), key(entry));
 });
 
-for (const c of CASES) {
+for (const c of AGREEMENT_CASES) {
   test(`${c.name}: the command matches the SDK`, async () => {
     const want = await throughSdk(c);
     const r = cli(c.argv, { input: c.input, env: { CLI_FAKE_REFUSE: (c.refuse ?? []).join(",") } });
@@ -127,8 +131,12 @@ for (const [why, argv, message] of [
   ["unknown short option", ["fs", "stat", "main", "/a", "-x"], "unknown option -x"],
   ["duplicate option", ["fs", "mkdir", "cart", "/d", "-m", "a", "--message", "b"], "--message is given twice"],
   ["bool with a value", ["branch", "diff_branches", "a", "b", "--no-hunks=yes"], "--no-hunks takes no value"],
+  ["binary with a value", ["fs", "read", "main", "/a", "--binary=yes"], "--binary takes no value"],
   ["int that is not a whole number", ["project", "list_branches", "--page-size", "x"], "--page-size takes a whole number"],
   ["bad JSON option", ["branch", "merge", "a", "b", "ab", "--units", "{"], "--units is not JSON"],
+  ["malformed labels JSON", ["workspace", "commit", WS, "--labels", "{"], "--labels is not JSON"],
+  ["labels that are not an array", ["workspace", "commit", WS, "--labels", "null"], "--labels must be a JSON array of strings"],
+  ["a non-string label", ["workspace", "commit", WS, "--labels", '["call",7]'], "--labels must be a JSON array of strings"],
   ["option with no value", ["fs", "mkdir", "cart", "/d", "-m"], "-m needs a value"],
   ["bad Workspace handle", ["workspace", "commit", "1/workspaces/w1"], "a Workspace is <sandbox>:<path>"],
   ["Workspace handle with no path", ["workspace", "commit", "1:"], "a Workspace is <sandbox>:<path>"],
@@ -207,8 +215,8 @@ test("exec --stream passes the command's output and exit code through", () => {
 
 test("--text prints readable results", () => {
   const r = cli(["--text", "workspace", "commit", WS]);
-  assert.equal(r.out, "kind: Committed\nhead: c0ffee\ncommit:\n  id: c0ffee\n  logical: 120\n  newCanonical: 40\n  newStored: 30\n  newMetadata: 8\n");
-  assert.equal(cli(["--text", "fs", "read", "main", "/a"]).out, "text: |\n  a\nnextLine: 2\n");
+  assert.equal(r.out, "kind: Committed\nhead: c0ffee\ncommit:\n  id: c0ffee\n  author: -\n  labels: (none)\n  logical: 120\n  newCanonical: 40\n  newStored: 30\n  newMetadata: 8\n");
+  assert.equal(cli(["--text", "fs", "read", "main", "/a"]).out, `text: |\n  a\nnextLine: 2\nnextOffset: lfr1.t.2.2.${"ab".repeat(32)}.2f61\n`);
 });
 
 test("help, --help and --version", () => {

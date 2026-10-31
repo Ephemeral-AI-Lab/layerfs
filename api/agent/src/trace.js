@@ -97,42 +97,64 @@ function step() {
 /** Sends one call once through `send(scope)` and returns the binding's
  * answer. When `options.trace` names a file the call is traced: `send` gets
  * a fresh scope, the answer's telemetry goes to the trace line and is
- * removed from it. */
-export async function traced(options, method, args, send) {
+ * removed from it. `sink`, when given, receives the call's per-call result
+ * record (P10: method, start, ms, outcome, write outcome) whether or not a
+ * trace file is set; an untraced call keeps `send(null)`, with no scope. */
+export async function traced(options, method, args, send, sink = null) {
   const file = options?.trace;
-  if (!file) return send(null);
-  const id = `${RUN}-${++next}`;
-  const scope = randomBytes(32).toString("hex");
+  if (!file && !sink) return send(null);
+  const scope = file ? randomBytes(32).toString("hex") : null;
   const start = new Date();
   const began = performance.now();
+  const started = start.toISOString();
   let line;
-  try {
-    line = { layerfs_trace: 1, id, ...step(), method, ...(typeof args?.project === "string" ? { project: args.project } : {}), args: summary(args), start: start.toISOString(), scope };
-  } catch {
-    line = { layerfs_trace: 1, id, method, args: null, start: start.toISOString(), scope };
+  if (file) {
+    const id = `${RUN}-${++next}`;
+    try {
+      line = { layerfs_trace: 1, id, ...step(), method, ...(typeof args?.project === "string" ? { project: args.project } : {}), args: summary(args), start: started, scope };
+    } catch {
+      line = { layerfs_trace: 1, id, method, args: null, start: started, scope };
+    }
+    if (process.env.LAYERFS_TRACE_START === "1") write(file, { ...line, phase: "start" });
+    line.phase = "end";
   }
-  if (process.env.LAYERFS_TRACE_START === "1") write(file, { ...line, phase: "start" });
-  line.phase = "end";
   let answer;
   try {
     answer = await send(scope);
   } catch (error) {
-    write(file, { ...line, ms: elapsed(began), ok: false, code: error?.code ?? null, message: error?.message ?? String(error) });
+    const ms = elapsed(began);
+    const failure = { ok: false, code: error?.code ?? null, message: error?.message ?? String(error) };
+    if (file) write(file, { ...line, ms, ...failure });
+    if (sink) sink({ method, start: started, ms, ...failure });
     throw error;
   }
   const { telemetry, client, ...plain } = answer;
   const ms = elapsed(began);
-  // Queue time, never hidden in the call's work (#352 F-017): the wait for a
-  // worker thread (the call's time outside its run in the binding) and the
-  // wait for a free control connection of its Sandbox.
-  const queue = client ? queued(ms, client) : null;
-  try {
-    const result = plain.refused
-      ? { ok: false, code: plain.refused.code, message: plain.refused.message }
-      : { ok: true, ...committed(method, plain.value), ...results(method, args, plain.value) };
-    write(file, { ...line, ms, ...(queue ? { queue } : {}), ...result, ...(telemetry ? { daemon: telemetry.map(daemon) } : {}) });
-  } catch {
-    write(file, { ...line, ms, ok: !plain.refused });
+  if (file) {
+    // Queue time, never hidden in the call's work (#352 F-017): the wait for a
+    // worker thread (the call's time outside its run in the binding) and the
+    // wait for a free control connection of its Sandbox.
+    const queue = client ? queued(ms, client) : null;
+    try {
+      const result = plain.refused
+        ? { ok: false, code: plain.refused.code, message: plain.refused.message }
+        : { ok: true, ...committed(method, plain.value), ...results(method, args, plain.value) };
+      write(file, { ...line, ms, ...(queue ? { queue } : {}), ...result, ...(telemetry ? { daemon: telemetry.map(daemon) } : {}) });
+    } catch {
+      write(file, { ...line, ms, ok: !plain.refused });
+    }
+  }
+  if (sink) {
+    try {
+      sink({
+        method, start: started, ms,
+        ...(plain.refused
+          ? { ok: false, code: plain.refused.code, message: plain.refused.message }
+          : { ok: true, ...committed(method, plain.value) }),
+      });
+    } catch {
+      sink({ method, start: started, ms, ok: !plain.refused });
+    }
   }
   return plain;
 }

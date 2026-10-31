@@ -170,6 +170,28 @@ impl Fixture {
         id: u8,
         before: impl FnOnce(),
     ) -> CommitSuccess {
+        self.workspace_commit_with(
+            branch,
+            changes,
+            id,
+            before,
+            CommitOptions {
+                force: false,
+                message: Some("Workspace changes".into()),
+                author: None,
+                labels: Vec::new(),
+            },
+        )
+    }
+
+    pub fn workspace_commit_with(
+        &self,
+        branch: &str,
+        changes: &[Change<'_>],
+        id: u8,
+        before: impl FnOnce(),
+        options: CommitOptions,
+    ) -> CommitSuccess {
         let bound = self
             .service
             .store
@@ -318,10 +340,7 @@ impl Fixture {
         drop(operation);
         before();
         let committed = workspace
-            .commit_captured(&CommitOptions {
-                force: false,
-                message: Some("Workspace changes".into()),
-            })
+            .commit_captured(&options)
             .unwrap_or_else(|failure| panic!("Workspace Commit: {failure:?}"));
         workspace.close().unwrap();
         committed
