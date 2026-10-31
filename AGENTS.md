@@ -154,6 +154,15 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   native handles and project discovery. This is independent of the macOS
   adapter and changes neither the product SDK nor the daemon. A lost reply
   is never replayed, and an uncertain Init retains its Linux home and volume.
+- **Additional exception (owner, 2026-11-01, #527 D5): native macOS.** With
+  `LAYERFS_SANDBOX=native` on macOS, the SDK loads the macOS addon in its own
+  process and opens the project's Store directly on a local apfs or hfs
+  directory (`kernel_guard` admits those two there, #427). Its Sandboxes are
+  daemon processes serving loopback NFS to this Mac's own client, one user,
+  no container (see the agent guide's native Sandboxes). Every opener is a
+  process on this one Mac, so the one-kernel, local-filesystem rule holds;
+  network and other filesystems are still refused. The Docker, worker and
+  `vm:` routes on macOS are unchanged.
 - **Plugin-neutral LayerFS (owner, 2026-10-24).** LayerFS is agnostic to dsh
   and every other plugin. The macOS and Windows worker routes above are open
   to any integration: `@layerfs/runtime` starts the worker on those platforms
