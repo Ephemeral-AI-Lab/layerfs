@@ -2,7 +2,7 @@
 //! recorded facts a reopen reads, and the refusals that keep one runtime's
 //! records from another. Nothing here starts a process.
 use layerfs_sandbox::{
-    backend::HelperSpec, DockerRecord, Image, LocalRecord, NamespaceRecord, SandboxRecord,
+    DockerRecord, HelperSpec, Image, LocalRecord, NamespaceRecord, SandboxRecord,
 };
 use std::path::PathBuf;
 

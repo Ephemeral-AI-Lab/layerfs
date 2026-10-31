@@ -1,14 +1,12 @@
-//! The native process runtime (`backend::native`): one daemon process per
+//! The native process runtime (`layerfs_sandbox::native`): one daemon process per
 //! Sandbox directory, observed by process id and start time, its commands run
 //! as their own identity, and its stop and delete each attempted once. A
 //! small shell script stands in for the daemon; nothing here needs root.
 //! The runtime is Linux only, and so are these tests.
 #![cfg(target_os = "linux")]
 use layerfs_sandbox::{
-    backend::{
-        docker::ExecRequest,
-        native::{Local, LocalPhase, LocalProcess, Sandbox},
-    },
+    docker::ExecRequest,
+    native::{Local, LocalPhase, LocalProcess, Sandbox},
     CommandIdentity, RuntimeError,
 };
 use std::{

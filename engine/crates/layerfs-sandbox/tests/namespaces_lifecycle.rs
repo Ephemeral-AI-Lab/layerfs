@@ -17,7 +17,7 @@ mod support {
     pub mod image;
 }
 use layerfs_sandbox::{
-    backend::namespaces::{NamespaceProvider, Sandbox},
+    namespaces::{NamespaceProvider, Sandbox},
     CommandIdentity, ExecRequest, Image, LaunchRequest, ProviderLaunchOptions, RuntimeError,
     SandboxRecord,
 };

@@ -6,10 +6,8 @@
 //! process's PATH, which no other test in this binary reads.
 #![cfg(target_os = "macos")]
 use layerfs_sandbox::{
-    backend::{
-        docker::ExecRequest,
-        native::{Local, Sandbox},
-    },
+    docker::ExecRequest,
+    native::{Local, Sandbox},
     CommandIdentity,
 };
 use std::{

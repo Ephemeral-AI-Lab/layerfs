@@ -12,9 +12,9 @@ use layerfs_bridge::{
     provision::StoreManifest,
 };
 use layerfs_persistence::{SealedStore, SqlitePersistenceProfile};
-use layerfs_sandbox::backend::docker::{Docker, DockerProvider, SandboxRequest};
+use layerfs_sandbox::docker::{Docker, DockerProvider, SandboxRequest};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_sandbox::backend::native::{self, LocalProcess};
+use layerfs_sandbox::native::{self, LocalProcess};
 use layerfs_sandbox::{CommandIdentity, ContainerId, Sandbox, WireFailure};
 use layerfs_sandbox::{LocalRecord, SandboxRecord};
 use std::{
@@ -698,16 +698,15 @@ fn namespaces_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Reco
     }
     let root = (directory.parent())
         .ok_or_else(|| refused("InvalidInput", "namespaces Sandbox directory"))?;
-    let provider =
-        layerfs_sandbox::backend::namespaces::NamespaceProvider::new(root).map_err(|error| {
-            refused(
-                "Unsupported",
-                format!(
-                    "namespaces Sandbox at {} cannot run on this host: {error}",
-                    directory.display()
-                ),
-            )
-        })?;
+    let provider = layerfs_sandbox::namespaces::NamespaceProvider::new(root).map_err(|error| {
+        refused(
+            "Unsupported",
+            format!(
+                "namespaces Sandbox at {} cannot run on this host: {error}",
+                directory.display()
+            ),
+        )
+    })?;
     Ok(Recorded::Namespaces(
         layerfs_sandbox::Runtime::Namespaces(provider),
         ContainerId::parse(registry::text(value, "container")?).map_err(failed)?,

@@ -7,7 +7,7 @@ mod support {
     pub mod engine;
 }
 use layerfs_sandbox::{
-    backend::docker::{CreatePhase, SandboxRequest},
+    docker::{CreatePhase, SandboxRequest},
     RuntimeError,
 };
 use std::{

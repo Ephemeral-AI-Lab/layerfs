@@ -103,7 +103,7 @@ success; durable recovery of that lost result is not claimed.
 
 ## Stop before daemon termination
 
-[`backend/native/sandbox.rs`](../../../engine/crates/layerfs-sandbox/src/backend/native/sandbox.rs)
+[`platform/native/sandbox.rs`](../../../engine/crates/layerfs-sandbox/src/platform/native/sandbox.rs)
 attempts detach below that Sandbox's own directory before TERM/KILL, while its
 NFS server can still answer client writeback. A detach failure is logged and
 does not prevent the existing daemon and process-group stop. Stop remains crash

@@ -124,15 +124,16 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\nmod init;"))
 
     def test_sandbox_active_edges_and_unsafe_boundary(self):
-        path = Path("engine/crates/layerfs-sandbox/src/backend/docker/http.rs")
+        path = Path("engine/crates/layerfs-sandbox/src/platform/docker/http.rs")
         self.assertTrue(unsafe_violations(path, "unsafe fn signal_pid() {}"))
         self.assertFalse(unsafe_violations(Path("engine/crates/layerfs-sandbox/src/lib.rs"), "#![deny(unsafe_code)]"))
         self.assertTrue(unsafe_violations(Path("engine/crates/layerfs-sandbox/src/lib.rs"), "#![forbid(unsafe_code)]"))
-        darwin = Path("engine/crates/layerfs-sandbox/src/backend/macos/darwin.rs")
+        darwin = Path("engine/crates/layerfs-sandbox/src/platform/native/macos/darwin.rs")
         self.assertFalse(unsafe_violations(darwin, "fn f() { unsafe { libc::proc_listallpids(); } }"))
         self.assertTrue(
             unsafe_violations(
-                Path("engine/crates/layerfs-sandbox/src/backend/macos/mounts.rs"), "fn f() { unsafe { call(); } }"
+                Path("engine/crates/layerfs-sandbox/src/platform/native/macos/mounts.rs"),
+                "fn f() { unsafe { call(); } }",
             )
         )
         prefix = '[package]\nname="layerfs-sandbox"\n[dependencies]\n'

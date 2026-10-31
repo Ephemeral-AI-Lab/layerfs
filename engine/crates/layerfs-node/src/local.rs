@@ -235,7 +235,7 @@ fn native_runtime(
     root: &str,
     _: crate::runtime::Backend,
 ) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
-    layerfs_sandbox::backend::native::NativeMacosProvider::new(root).map(Runtime::MacosNative)
+    layerfs_sandbox::native::NativeMacosProvider::new(root).map(Runtime::MacosNative)
 }
 
 #[cfg(target_os = "linux")]
@@ -245,12 +245,10 @@ fn native_runtime(
 ) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
     match backend {
         crate::runtime::Backend::Native => {
-            layerfs_sandbox::backend::native::NativeLinuxProvider::new(root)
-                .map(Runtime::LinuxNative)
+            layerfs_sandbox::native::NativeLinuxProvider::new(root).map(Runtime::LinuxNative)
         }
         crate::runtime::Backend::Namespaces => {
-            layerfs_sandbox::backend::namespaces::NamespaceProvider::new(root)
-                .map(Runtime::Namespaces)
+            layerfs_sandbox::namespaces::NamespaceProvider::new(root).map(Runtime::Namespaces)
         }
     }
 }

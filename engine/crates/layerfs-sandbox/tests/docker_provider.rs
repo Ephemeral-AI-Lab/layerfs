@@ -4,7 +4,7 @@
 #[path = "support/engine.rs"]
 mod peer;
 use layerfs_sandbox::{
-    backend::docker::{DockerProvider, ProviderFailure, Sandbox, SandboxRequest},
+    docker::{DockerProvider, ProviderFailure, Sandbox, SandboxRequest},
     CommandIdentity, ContainerId, DockerRecord, ExecRequest, LaunchPhase, LaunchRequest,
     LocalRecord, ProviderLaunchOptions, Runtime, RuntimeError, SandboxRecord,
 };

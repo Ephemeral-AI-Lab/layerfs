@@ -1,6 +1,6 @@
 //! Actual ordinary Engine exec/stdio/status on an explicitly caller-selected container.
 use layerfs_sandbox::{
-    backend::docker::{Docker, ExecRequest},
+    docker::{Docker, ExecRequest},
     CommandIdentity, ContainerId,
 };
 use std::{

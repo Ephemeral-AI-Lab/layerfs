@@ -3,7 +3,7 @@
 #[path = "support/engine.rs"]
 mod peer;
 use layerfs_sandbox::{
-    backend::docker::{CreatePhase, Docker, ExecRequest, SandboxRequest},
+    docker::{CreatePhase, Docker, ExecRequest, SandboxRequest},
     CommandIdentity, ContainerId, ExecId, RuntimeError,
 };
 use std::io::{self, Write};

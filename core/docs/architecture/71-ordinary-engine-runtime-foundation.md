@@ -24,7 +24,7 @@ fields; nested Arguments/lookalikes cannot change them. Known root exit requires
 Running=false and a present code; null is never zero. PID is diagnostic only.
 A later observation does not resolve an earlier original lost-operation receipt.
 
-`backend/docker/` owns standard HTTP/JSON/multiplex framing. Requests count escaped
+`platform/docker/` owns standard HTTP/JSON/multiplex framing. Requests count escaped
 metadata locally then stream through an8KiB buffer; this is not a second runtime
 operation. Responses retain the same buffered reader through101 and validate the
 multiplexed media type. Content-Length/chunk sizes/frame lengths are scalar

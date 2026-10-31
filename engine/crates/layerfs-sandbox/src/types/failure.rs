@@ -5,7 +5,7 @@ use std::{fmt, io};
 pub enum RuntimeError {
     /// Original Docker provider stage failure, including retained transfer/stream owners.
     #[cfg(unix)]
-    Docker(Box<crate::backend::docker::ProviderFailure>),
+    Docker(Box<crate::platform::docker::ProviderFailure>),
     Io(io::Error),
     Protocol(&'static str),
     /// Original HTTP status, with a separately retained bounded error-body diagnostic.

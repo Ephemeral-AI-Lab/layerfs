@@ -12,7 +12,7 @@ use layerfs_bridge::{
     daemon_setup::{DaemonLimits, DaemonSetup},
     duplex,
 };
-use layerfs_sandbox::backend::docker::DockerProvider;
+use layerfs_sandbox::docker::DockerProvider;
 use layerfs_sandbox::Runtime;
 use layerfs_sandbox::{LaunchRequest, ProviderLaunchOptions};
 use std::{

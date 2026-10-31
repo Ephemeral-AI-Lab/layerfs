@@ -4,7 +4,7 @@ mod support {
     pub mod engine;
 }
 use layerfs_sandbox::{
-    backend::docker::{CreatePhase, SandboxRequest},
+    docker::{CreatePhase, SandboxRequest},
     RuntimeError,
 };
 use std::{
@@ -347,8 +347,7 @@ fn marker_inside_truncated_frame_keeps_evidence_and_fails_readiness() {
 fn reopened(status: u16, body: &[u8]) -> bool {
     let (docker, peer) = Peer::new(vec![fixed(status, body)], 64);
     let id = layerfs_sandbox::ContainerId::parse(CID).unwrap();
-    let Err(failure) = layerfs_sandbox::backend::docker::Sandbox::reopen(docker, id, request())
-    else {
+    let Err(failure) = layerfs_sandbox::docker::Sandbox::reopen(docker, id, request()) else {
         panic!("reopen of an unanswered container fails");
     };
     let calls = peer.finish();
@@ -369,8 +368,7 @@ fn a_stop_the_engine_answers_with_no_such_container_is_a_gone_container() {
     let gone = format!(r#"{{"message":"No such container: {CID}"}}"#);
     let (docker, peer) = Peer::new(vec![endpoint(), fixed(404, gone.as_bytes())], 64);
     let id = layerfs_sandbox::ContainerId::parse(CID).unwrap();
-    let mut sandbox =
-        layerfs_sandbox::backend::docker::Sandbox::reopen(docker, id, request()).unwrap();
+    let mut sandbox = layerfs_sandbox::docker::Sandbox::reopen(docker, id, request()).unwrap();
     let failure = sandbox.stop(1).unwrap_err();
     assert!(failure.container_gone());
     assert!(!sandbox.disposition().stopped);
@@ -393,8 +391,7 @@ fn exited() -> String {
 fn reopened_from(body: &str) -> Box<layerfs_sandbox::WireFailure> {
     let (docker, peer) = Peer::new(vec![fixed(200, body.as_bytes())], 64);
     let id = layerfs_sandbox::ContainerId::parse(CID).unwrap();
-    let Err(failure) = layerfs_sandbox::backend::docker::Sandbox::reopen(docker, id, request())
-    else {
+    let Err(failure) = layerfs_sandbox::docker::Sandbox::reopen(docker, id, request()) else {
         panic!("reopen of a container that does not run fails");
     };
     peer.finish();
@@ -419,7 +416,7 @@ fn only_the_exact_intact_container_not_running_is_a_stopped_container() {
 
 #[test]
 fn provider_inspects_and_reopens_exact_running_and_stopped_deployments() {
-    use layerfs_sandbox::backend::docker::DockerProvider;
+    use layerfs_sandbox::docker::DockerProvider;
     use layerfs_sandbox::SandboxRecord;
     let id = layerfs_sandbox::ContainerId::parse(CID).unwrap();
     let running = inspect().replace(
@@ -462,7 +459,7 @@ fn provider_inspects_and_reopens_exact_running_and_stopped_deployments() {
 fn a_stopped_container_is_deleted_once_and_never_forced() {
     let id = layerfs_sandbox::ContainerId::parse(CID).unwrap();
     let (docker, peer) = Peer::new(vec![fixed(204, b"")], 64);
-    let mut sandbox = layerfs_sandbox::backend::docker::Sandbox::stopped(docker, id, request());
+    let mut sandbox = layerfs_sandbox::docker::Sandbox::stopped(docker, id, request());
     assert!(
         sandbox.endpoint().is_err(),
         "a stopped Sandbox has no endpoint"
@@ -477,7 +474,7 @@ fn a_stopped_container_is_deleted_once_and_never_forced() {
     // running again meanwhile: the Engine refuses the unforced Delete
     let running = br#"{"message":"cannot remove container: container is running"}"#;
     let (docker, peer) = Peer::new(vec![fixed(409, running)], 64);
-    let mut sandbox = layerfs_sandbox::backend::docker::Sandbox::stopped(docker, id, request());
+    let mut sandbox = layerfs_sandbox::docker::Sandbox::stopped(docker, id, request());
     assert!(sandbox.delete().is_err());
     assert!(!sandbox.disposition().deleted);
     peer.finish();

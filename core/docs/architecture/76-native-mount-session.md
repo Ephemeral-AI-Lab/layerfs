@@ -259,7 +259,7 @@ daemon does not wait or retry on its behalf.
 
 ## Sandbox access
 
-The Docker [container configuration](../../../engine/crates/layerfs-sandbox/src/backend/docker/container.rs)
+The Docker [container configuration](../../../engine/crates/layerfs-sandbox/src/platform/docker/container.rs)
 adds exactly `CapAdd: ["CAP_SYS_ADMIN"]`, one `/dev/fuse` device mapping and
 `apparmor=unconfined`, keeping `Privileged: false` and `no-new-privileges=true`.
 Since 2026-10-10 (owner decision C-1) it also sends one inline system-call
@@ -270,7 +270,7 @@ no copy of a Workspace mount can exist outside the daemon's namespace and a
 normal Unmount stays truthful against any holder. A tool that needs an
 unprivileged user namespace fails in a Workspace command with `EPERM`. The
 filter replaces the Engine's default one for this container.
-[Topology inspection](../../../engine/crates/layerfs-sandbox/src/backend/docker/topology.rs)
+[Topology inspection](../../../engine/crates/layerfs-sandbox/src/platform/docker/topology.rs)
 requires exactly that set: a missing, widened or additional capability, device
 or security option is not reported as the daemon endpoint. Commands still run
 as the nonroot command identity with an empty effective capability set.

@@ -10,7 +10,7 @@ mod support {
     pub mod image;
 }
 use layerfs_sandbox::{
-    backend::namespaces::rootfs::{self, ImageRoot},
+    namespaces::rootfs::{self, ImageRoot},
     Image,
 };
 use std::{

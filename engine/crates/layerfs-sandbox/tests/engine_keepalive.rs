@@ -3,7 +3,7 @@
 //! refused to keep is never used, and nothing is resent.
 #![cfg(unix)]
 use layerfs_sandbox::{
-    backend::docker::{Docker, ExecRequest},
+    docker::{Docker, ExecRequest},
     CommandIdentity, ContainerId, ExecId,
 };
 use std::{

@@ -5,13 +5,11 @@ use layerfs_sandbox::RuntimeError;
 #[test]
 fn wrong_platform_is_refused_before_root_access() {
     #[cfg(target_os = "macos")]
-    let result = layerfs_sandbox::backend::native::NativeLinuxProvider::new(
-        "/does-not-exist/native-provider",
-    );
+    let result =
+        layerfs_sandbox::native::NativeLinuxProvider::new("/does-not-exist/native-provider");
     #[cfg(target_os = "linux")]
-    let result = layerfs_sandbox::backend::native::NativeMacosProvider::new(
-        "/does-not-exist/native-provider",
-    );
+    let result =
+        layerfs_sandbox::native::NativeMacosProvider::new("/does-not-exist/native-provider");
     assert!(matches!(result, Err(RuntimeError::Unsupported(_))));
 }
 
@@ -19,9 +17,7 @@ fn wrong_platform_is_refused_before_root_access() {
 fn native_linux_requires_root_before_root_access() {
     if cfg!(target_os = "linux") && !nix::unistd::Uid::effective().is_root() {
         assert!(matches!(
-            layerfs_sandbox::backend::native::NativeLinuxProvider::new(
-                "/does-not-exist/native-provider"
-            ),
+            layerfs_sandbox::native::NativeLinuxProvider::new("/does-not-exist/native-provider"),
             Err(RuntimeError::Unsupported(_))
         ));
     }

@@ -6,7 +6,7 @@
 //! runs in its own binary (no Sandbox runs beside it) and only as root in the
 //! VM or CI host that owns this kernel.
 #![cfg(target_os = "linux")]
-use layerfs_sandbox::{backend::namespaces::NamespaceProvider, RuntimeError};
+use layerfs_sandbox::{namespaces::NamespaceProvider, RuntimeError};
 use std::{fs, os::unix::fs::PermissionsExt, path::Path, path::PathBuf};
 
 /// The kernel's limit on user namespaces.

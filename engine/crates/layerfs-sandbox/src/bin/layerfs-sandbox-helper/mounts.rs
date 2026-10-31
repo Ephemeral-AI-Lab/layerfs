@@ -6,7 +6,7 @@
 //! private `/proc`, `/dev` and `/tmp` are mounted over the image's own.
 //! Nothing the Sandbox mounts reaches the VM's mount tree: the init stage made
 //! this mount namespace private first.
-use layerfs_sandbox::backend::HelperSpec;
+use layerfs_sandbox::HelperSpec;
 use nix::{
     mount::{mount, umount2, MntFlags, MsFlags},
     unistd::chdir,

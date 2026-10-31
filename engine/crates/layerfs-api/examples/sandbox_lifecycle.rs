@@ -8,7 +8,7 @@ use layerfs_bridge::{
 };
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
-use layerfs_sandbox::backend::docker::{Docker, DockerProvider};
+use layerfs_sandbox::docker::{Docker, DockerProvider};
 use layerfs_sandbox::{LaunchRequest, ProviderLaunchOptions};
 use layerfs_storage::StoragePolicy;
 use layerfs_telemetry::timer::Timing;

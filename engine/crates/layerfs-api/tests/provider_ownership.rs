@@ -64,8 +64,7 @@ fn native_resource_paths_are_validated_before_launch() {
         duplex,
     };
     use layerfs_sandbox::{
-        backend::native::NativeMacosProvider, CommandIdentity, LaunchRequest,
-        ProviderLaunchOptions, Runtime,
+        native::NativeMacosProvider, CommandIdentity, LaunchRequest, ProviderLaunchOptions, Runtime,
     };
     use std::{
         os::unix::fs::{MetadataExt, PermissionsExt},

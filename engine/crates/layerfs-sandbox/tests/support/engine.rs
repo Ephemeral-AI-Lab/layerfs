@@ -1,5 +1,5 @@
 //! External bounded local Engine peer, through ordinary public Unix endpoint configuration.
-use layerfs_sandbox::backend::docker::Docker;
+use layerfs_sandbox::docker::Docker;
 use std::{
     fs,
     io::{BufRead, BufReader, Read, Write},

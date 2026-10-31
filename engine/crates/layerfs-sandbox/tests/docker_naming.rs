@@ -1,6 +1,6 @@
 //! A client that names its containers takes only names the Engine accepts
 //! without escaping, and refuses every other before any request.
-use layerfs_sandbox::backend::docker::Docker;
+use layerfs_sandbox::docker::Docker;
 use std::time::Duration;
 
 fn client() -> Docker {

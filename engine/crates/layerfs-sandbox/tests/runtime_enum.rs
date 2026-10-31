@@ -1,5 +1,5 @@
 //! The Runtime enum's Docker selection: no local directory, container capabilities.
-use layerfs_sandbox::backend::docker::{Docker, DockerProvider};
+use layerfs_sandbox::docker::{Docker, DockerProvider};
 use layerfs_sandbox::Runtime;
 use std::time::Duration;
 

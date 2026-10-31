@@ -33,6 +33,21 @@ impl ContainerId {
     pub fn as_str(&self) -> &str {
         self.0.text()
     }
+    /// A fresh random identity in the Engine's form (64 lowercase hex, not
+    /// all zero), so records, names and the cgroup directory treat a local
+    /// Sandbox like a container.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    pub(crate) fn random() -> Result<Self, RuntimeError> {
+        use std::{fs::File, io::Read};
+        let mut bytes = [0u8; 32];
+        File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        let text: String = (bytes.iter())
+            .flat_map(|b| [HEX[usize::from(b >> 4)], HEX[usize::from(b & 15)]])
+            .map(char::from)
+            .collect();
+        Self::parse(&text)
+    }
 }
 impl fmt::Debug for ContainerId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -2,9 +2,20 @@
 
 Status: Current general guide.
 
-`backend::runtime` holds the concrete runtime choice and the launched owner.
+`src/runtime.rs` holds the concrete runtime choice and the launched owner.
 There are no provider or instance traits: each backend is an ordinary concrete
 type and the only dispatch is one `match` per method.
+
+Each backend has one folder under `src/platform/`, named as `LAYERFS_SANDBOX`
+names it: `docker/`, `native/` (with its OS facts in `native/linux/` and
+`native/macos/`) and `namespaces/` (Linux). Here `platform/` means the
+backend; in `@layerfs/runtime` it means placement (#527 D7). The modules are
+private: callers use the crate root and one public module per backend,
+`layerfs_sandbox::docker`, `::native` and `::namespaces` (#527 step 9b; they
+were under `layerfs_sandbox::backend`). The root re-exports `Runtime`,
+`Sandbox`, `LaunchFailure`, the shared types, `Docker`, the four providers
+(`DockerProvider`, `NativeMacosProvider`, `NativeLinuxProvider`,
+`NamespaceProvider`) and `HelperSpec`.
 
 - `Runtime` is one deployment's selection and is kept for every Sandbox it
   starts: `Docker(DockerProvider)` (the default), `MacosNative(NativeMacosProvider)`,
@@ -19,7 +30,7 @@ type and the only dispatch is one `match` per method.
 
 `layerfs_sandbox::{Runtime, Sandbox, LaunchFailure}` re-export them;
 `LaunchFailure` (which holds a `Sandbox`) lives beside them in
-`backend/runtime.rs`. The inputs and observations every backend shares are in
+`src/runtime.rs`. The inputs and observations every backend shares are in
 the crate's private `types/` and re-exported at the root:
 `LaunchRequest`, `LaunchPhase`, `ProviderLaunchOptions`, `LocalRecord`,
 `NamespaceRecord`, `DockerRecord`, `SandboxRecord`, `ExecExit`,
@@ -27,9 +38,10 @@ the crate's private `types/` and re-exported at the root:
 `layerfs_sandbox::provider`). `types/` depends on no backend except through
 `RuntimeError::Docker`; the conversions between `DockerRecord` and Docker's
 `SandboxRequest` are Docker's own. The runtime layer has no daemon control
-dependency. `backend::HelperSpec`
+dependency. `HelperSpec` (`src/helper_spec.rs`)
 is the namespace helper's line format; it is compiled and tested on every
-platform, while only the helper that reads it is Linux only.
+Unix platform, while only the helper that reads it is Linux only. `src/json/`
+streams the Engine's replies and the namespace backend's image manifests.
 
 ## Docker
 
@@ -60,12 +72,12 @@ absent.
 user and serves loopback NFS; `Runtime::LinuxNative(NativeLinuxProvider::new(root))`
 runs a root daemon serving FUSE with ordinary commands as a nonroot identity.
 Each refuses the wrong platform before root access, and Linux refuses a non-root
-caller the same way. `backend::native` owns the one lifecycle both use; only the
+caller the same way. `native` owns the one lifecycle both use; only the
 platform facts differ:
 
-- `backend::macos`: `darwin.rs` (`proc_pidinfo`, `sysctl`, the `mount` table and
+- `native/macos/`: `darwin.rs` (`proc_pidinfo`, `sysctl`, the `mount` table and
   `umount -f`) and `mounts.rs` (force detach, deepest first).
-- `backend::linux`: `process.rs` (`/proc/<pid>/stat`, the boot id and the
+- `native/linux/`: `process.rs` (`/proc/<pid>/stat`, the boot id and the
   process table) and `mounts.rs` (`/proc/self/mountinfo`, lazy `MNT_DETACH`).
 
 The provider validates the command identity, the environment it is given and
@@ -87,15 +99,15 @@ PID and IPC namespaces and its own cgroup v2 directory. The VM that holds this
 kernel is the boundary (one per Store); the namespaces keep Sandboxes on one
 Store out of each other.
 
-- `backend::namespaces::create` makes the Sandbox's private directory, copies
+- `namespaces/create.rs` makes the Sandbox's private directory, copies
   the daemon to `<directory>/bin/layerfs-daemon` (0755), writes the setup (0600)
   and a `HelperSpec`, makes `/sys/fs/cgroup/layerfs/<id>`, then spawns the
   helper's init stage.
-- `backend::namespaces::sandbox` owns the launched handle: the init process's
+- `namespaces/sandbox.rs` owns the launched handle: the init process's
   identity, `cgroup.kill` for stop (a `SIGKILL` to everything the Sandbox
   started, `populated 0` awaited), cgroup and directory removal on delete, and
   reopen by the recorded process plus its cgroup membership.
-- `backend::namespaces::exec` runs one command through the helper's exec stage.
+- `namespaces/exec.rs` runs one command through the helper's exec stage.
 - `src/bin/layerfs-sandbox-helper` performs the calls that act on the calling
   process, so the product crate stays `unsafe`-free: the init stage creates the
   namespaces, joins the cgroup and starts the inner stage (PID 1), which mounts

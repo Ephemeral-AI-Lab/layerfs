@@ -20,7 +20,7 @@ use layerfs_api::{OperationFailure, SandboxApi, SandboxCause, SandboxPhase};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonPostgres, DaemonSetup};
 use layerfs_bridge::provision::StoreManifest;
-use layerfs_sandbox::backend::docker::{CreatePhase, Docker, DockerProvider};
+use layerfs_sandbox::docker::{CreatePhase, Docker, DockerProvider};
 use layerfs_sandbox::Runtime;
 use layerfs_sandbox::{LaunchRequest, ProviderLaunchOptions};
 use std::path::{Path, PathBuf};
@@ -358,7 +358,7 @@ fn settled(failure: &ProviderFailure) -> bool {
         SandboxCause::Provider(launch) => match &launch.cause {
             layerfs_sandbox::RuntimeError::Docker(docker_failure) => {
                 match docker_failure.as_ref() {
-                    layerfs_sandbox::backend::docker::ProviderFailure::Create(create) => {
+                    layerfs_sandbox::docker::ProviderFailure::Create(create) => {
                         create.phase == CreatePhase::Create
                             && !matches!(
                                 create.transfer.cause,

@@ -4,7 +4,7 @@
 //! retries anything: a failure ends the stage and is written to the Sandbox's
 //! daemon log, which the start's error keeps.
 use super::mounts;
-use layerfs_sandbox::backend::HelperSpec;
+use layerfs_sandbox::HelperSpec;
 use nix::{
     sched::{unshare, CloneFlags},
     sys::wait::{waitpid, WaitStatus},
