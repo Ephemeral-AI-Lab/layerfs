@@ -217,6 +217,12 @@ impl Service {
         run: impl FnOnce(&BoundWorkspace) -> Result<CommitSuccess, Box<CommitFailure>>,
     ) -> Result<Success, Failure> {
         let workspace = self.admit(token, Activity::Committing)?;
+        // NFS route: what the client buffered is written back first, as a
+        // FUSE write has already reached the Workspace when it returned.
+        if let Err(failure) = self.flush_export(token) {
+            self.settle_activity(token, Activity::Idle);
+            return Err(failure);
+        }
         let result = run(&workspace);
         // An install that replaced what the Workspace showed is invalidated
         // in the kernel before the answer.
@@ -311,6 +317,31 @@ impl Service {
                 }
                 _ => Err(Failure::Commit(failed)),
             },
+        }
+    }
+    /// Poison recovery stores this exact owner only; a poisoned registry never
+    /// authorizes another product operation.
+    pub(super) fn settle(
+        &self,
+        token: WorkspaceToken,
+        kernel: super::kernel::Kernel,
+        activity: Activity,
+    ) {
+        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        if let Ok(binding) = bound_mut(&mut entries, token) {
+            binding.kernel = kernel;
+            binding.activity = activity;
+            binding.epoch = binding.epoch.saturating_add(1);
+        }
+    }
+    /// Returns an admitted entry to `activity` when its operation stopped
+    /// before any effect.
+    fn settle_activity(&self, token: WorkspaceToken, activity: Activity) {
+        if let Ok(mut entries) = self.entries.lock() {
+            if let Ok(binding) = bound_mut(&mut entries, token) {
+                binding.activity = activity;
+                binding.epoch = binding.epoch.saturating_add(1);
+            }
         }
     }
     pub(super) fn job<T>(

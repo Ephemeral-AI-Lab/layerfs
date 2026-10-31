@@ -1,0 +1,22 @@
+[package]
+name = "layerfs-nfs"
+description = "Loopback NFSv3 service of one mounted Workspace over the kernel request ports"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+layerfs-overlay = { path = "../layerfs-overlay" }
+layerfs-workspace = { path = "../layerfs-workspace" }
+layerfs-fuse = { path = "../layerfs-fuse" }
+
+[dev-dependencies]
+layerfs-bridge = { path = "../layerfs-bridge" }
+layerfs-daemon = { path = "../layerfs-daemon" }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-persistence = { path = "../layerfs-persistence" }
+layerfs-project = { path = "../layerfs-project" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
