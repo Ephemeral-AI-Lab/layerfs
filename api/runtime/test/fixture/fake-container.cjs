@@ -12,8 +12,10 @@
 //   container run --detach --name N … IMAGE sleep infinity
 //   container start|stop NAME, container delete --force NAME
 //   container volume inspect NAME | create -s SIZE NAME | delete NAME
-//   container copy HOST NAME:DEST
+//   container copy HOST NAME:DEST (the adapter no longer uses it: see `cp -Rp`)
 //   container exec [-i] NAME sh -c SCRIPT sh ARGS…
+// A guest path under /layerfs/home is the VM's home bind mount, so it is the
+// host folder `run` was given; every other guest path is under the VM's folder.
 // Records live in FAKE_CONTAINER_STATE/vms/<name>.json, volumes in
 // FAKE_CONTAINER_STATE/volumes/<name>.json, guest paths under
 // FAKE_CONTAINER_STATE/guest/<name>.
@@ -162,6 +164,14 @@ if (command === "inspect") {
     } else if (/cat > "\$1"/.test(script)) {
       if (!interactive) fail("stdin was not kept open: the adapter must pass -i");
       put(args[1], readFileSync(0));
+    } else if (/cp -Rp "\$1\/\." "\$2"/.test(script)) {
+      // the adapter's copy: a staging folder in the home bind mount, onto the guest's disk
+      const home = "/layerfs/home/";
+      if (!args[1].startsWith(home)) fail(`cp: the source ${args[1]} is not in the home bind mount`);
+      const from = join(vm.home, args[1].slice(home.length));
+      if (!existsSync(from)) fail(`cp: cannot stat '${args[1]}': No such file or directory`);
+      mkdirSync(guest(args[2]), { recursive: true });
+      cpSync(from, guest(args[2]), { recursive: true, verbatimSymlinks: true });
     } else if (/umask 022/.test(script)) {
       mkdirSync(guest(args[1]), { recursive: true, mode: 0o755 });
     } else if (/max_user_namespaces/.test(script)) {

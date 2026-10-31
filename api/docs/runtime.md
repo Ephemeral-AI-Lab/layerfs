@@ -275,7 +275,14 @@ The adapter's five steps, each attempted once, all for one named project:
    another home, or one whose mounts or port differ, is refused rather than
    reused or repaired;
 2. the sealed bundle is copied into that VM once per bundle hash (the hash of
-   its `manifest.json`), with a marker at `/layerfs/bundle/.sealed`;
+   its `manifest.json`), with a marker at `/layerfs/bundle/.sealed`. Apple
+   Container's `container copy` moves about 35 MB/s (a 2.7 GB bundle with its
+   Sandbox image took 77–90 s, #527), so that adapter stages the folder in a
+   private `<home>/.vm-copy-*` folder (an APFS clone where the volume allows),
+   the guest copies it from its home bind mount onto its own disk with
+   `cp -Rp`, and the staging folder is removed whatever the outcome (4.8 s for
+   the same bundle). Init sources take the same route; a folder already inside
+   the home is read in place;
 3. `user.max_user_namespaces=0` is written and read back (V4; Apple Container's
    guest mounts `/proc/sys` read-only, so its adapter remounts it first), then
    the worker starts as root with its secret in a 0600 guest file — never in a

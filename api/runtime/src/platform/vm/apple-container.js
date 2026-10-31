@@ -16,7 +16,9 @@
 //   - a volume keeps its size: `volume create -s <size>` (the CLI's default is
 //     a sparse 504 GiB image), so `ensureStore` sizes it from `storeSize`;
 //   - `exec` needs `-i` for a caller's stdin (`cat > file` gets EOF at once
-//     without it), which `write` and `copy` rely on;
+//     without it), which `write` relies on;
+//   - `copy` moves about 35 MB/s, so a folder goes in through the home bind
+//     mount instead (see `copy` below);
 //   - the guest's `/proc/sys` is mounted **read-only** and user namespaces are
 //     open by default: V4's block needs `mount -o remount,rw /proc/sys` first
 //     (CAP_SYS_ADMIN, which this adapter adds anyway), then the write;
@@ -25,6 +27,9 @@
 // It reads its facts strictly: an `inspect` answer that is not this shape is
 // refused by name rather than guessed at, so a changed CLI shows up as an error
 // and never as a VM this adapter believes is running.
+import { constants, cpSync, mkdtempSync, rmSync } from "node:fs";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { GUEST } from "../../settings.js";
 import { answer, capture, readFile, writeFile } from "./cli.js";
 
 const CLI = "container";
@@ -138,8 +143,35 @@ export async function storeFree(name) {
   return Number.isFinite(kb) ? kb * 1024 : null;
 }
 
-/** Copies a host folder into a guest folder. */
-export const copy = (name, source, destination) => call(["copy", source, `${name}:${destination}`], { timeout: CREATE_MS });
+/**
+ * Copies a host folder into a guest folder, as a copy the VM owns. Measured on
+ * 1.6.1 (#527, a 2.7 GB bundle): `container copy` moved about 35 MB/s (77 s),
+ * a `tar` stream through `exec -i` about 117 MB/s (23.5 s), while the guest
+ * reads the VM's home bind mount (virtiofs) at about 650 MB/s (4 s). So the
+ * folder is cloned into a private staging folder in the home the VM already
+ * mounts (an APFS clone where the volume allows, else a plain copy), the guest
+ * copies it from there onto its own disk with `cp -Rp` (modes, owners and
+ * times kept, symlinks as symlinks), and the staging folder is removed
+ * whatever the outcome. One attempt; no step is retried.
+ */
+export async function copy(name, source, destination) {
+  const found = await inspect(name);
+  if (!found?.home) throw new Error(`the VM ${name} mounts no LayerFS home at ${GUEST.home}, so a folder cannot be staged for it`);
+  const guestCopy = async (from) => {
+    const done = await exec(name, ["sh", "-c", "mkdir -p \"$2\" && cp -Rp \"$1/.\" \"$2\"", "sh", from, destination], { timeout: CREATE_MS });
+    if (done.code !== 0) throw new Error(`could not copy ${source} into ${name}:${destination}: ${(done.stderr || done.stdout).trim()}`);
+  };
+  // a folder inside the home is already in the guest's view: nothing to stage
+  const inside = relative(found.home, resolve(source));
+  if (inside && !inside.startsWith("..") && !isAbsolute(inside)) return guestCopy(`${GUEST.home}/${inside.split(sep).join("/")}`);
+  const stage = mkdtempSync(join(found.home, ".vm-copy-"));
+  try {
+    cpSync(source, join(stage, "c"), { recursive: true, mode: constants.COPYFILE_FICLONE, verbatimSymlinks: true, preserveTimestamps: true });
+    await guestCopy(`${GUEST.home}/${basename(stage)}/c`);
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
+}
 
 export const read = (name, path) => readFile(CLI, name, path, exec);
 export const write = (name, path, text) => writeFile(CLI, name, path, text, exec);

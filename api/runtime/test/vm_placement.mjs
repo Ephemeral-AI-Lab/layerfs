@@ -440,8 +440,31 @@ try {
       // the verified 1.6.1 inspect shape: the adapter reads this VM's state, store and home
       const entry = await runtime.vm.status("shop");
       assert.deepEqual([entry.state, entry.store, entry.home, entry.worker.state], ["running", storeName("shop"), home, "running"]);
-      // copying the bundle into an Apple Container VM is `container copy HOST NAME:DEST`
-      assert.ok(first.some((argv) => argv[0] === "copy" && argv[2] === `${vmName("shop")}:/layerfs/bundle`));
+      // the bundle reaches the VM through a staging folder in the home it already
+      // mounts, and the guest copies it onto its own disk: no `container copy`
+      // (35 MB/s on 1.6.1, #527), and the staging folder is gone afterwards
+      assert.ok(!first.some((argv) => argv[0] === "copy"), "no `container copy`");
+      const staged = first.find((argv) => argv[0] === "exec" && /cp -Rp/.test(argv.join(" ")) && argv.at(-1) === "/layerfs/bundle");
+      assert.ok(staged, "the guest copied the bundle from the home bind mount");
+      assert.match(staged.at(-2), /^\/layerfs\/home\/\.vm-copy-[^/]+\/c$/);
+      assert.ok(existsSync(join(state, "guest", vmName("shop"), "layerfs/bundle/manifest.json")), "the VM owns its copy");
+      assert.deepEqual(readdirSync(home).filter((name) => name.startsWith(".vm-copy-")), [], "no staging folder is left in the home");
+      // the same route serves an Init source; a folder inside the home is read in place, never staged into itself
+      const source = join(work, "src");
+      mkdirSync(join(source, "d"), { recursive: true });
+      writeFileSync(join(source, "d", "a.txt"), "a\n");
+      const container = (await import("../src/platform/vm/apple-container.js")).default;
+      await deadline(30_000, "copy", container.copy(vmName("shop"), source, "/layerfs/import/x"));
+      assert.equal(readFileSync(join(state, "guest", vmName("shop"), "layerfs/import/x/d/a.txt"), "utf8"), "a\n");
+      assert.deepEqual(readdirSync(home).filter((name) => name.startsWith(".vm-copy-")), []);
+      mkdirSync(join(home, "inside"), { recursive: true });
+      writeFileSync(join(home, "inside", "b.txt"), "b\n");
+      await deadline(30_000, "copy", container.copy(vmName("shop"), join(home, "inside"), "/layerfs/import/z"));
+      assert.equal(readFileSync(join(state, "guest", vmName("shop"), "layerfs/import/z/b.txt"), "utf8"), "b\n");
+      assert.equal(calls(state).filter((argv) => argv[0] === "exec").at(-1).at(-2), "/layerfs/home/inside", "read in place through the bind mount");
+      // a failed guest copy still removes the staging folder, and is reported
+      await assert.rejects(container.copy(vmName("shop"), join(work, "no-such-folder"), "/layerfs/import/y"), /ENOENT|no such file/i);
+      assert.deepEqual(readdirSync(home).filter((name) => name.startsWith(".vm-copy-")), []);
     } finally {
       restore();
       await runtime.close();
