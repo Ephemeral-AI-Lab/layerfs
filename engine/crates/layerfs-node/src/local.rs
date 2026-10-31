@@ -228,8 +228,8 @@ fn start_claimed(
 }
 
 /// The native runtime this host offers, over `root`: macOS loopback NFS as
-/// this user, or Linux FUSE with a root daemon. The other platform's
-/// provider, and another OS, is refused before root access.
+/// this user, or Linux FUSE with a root daemon (this module is built on those
+/// two only). The other platform's provider is refused before root access.
 #[cfg(target_os = "macos")]
 fn native_runtime(
     root: &str,
@@ -253,16 +253,6 @@ fn native_runtime(
                 .map(Runtime::Namespaces)
         }
     }
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-fn native_runtime(
-    _: &str,
-    _: crate::runtime::Backend,
-) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
-    Err(layerfs_sandbox::RuntimeError::Unsupported(
-        "native Sandbox runtime platform",
-    ))
 }
 
 /// How the daemon of `backend` is launched: the same local options, and for

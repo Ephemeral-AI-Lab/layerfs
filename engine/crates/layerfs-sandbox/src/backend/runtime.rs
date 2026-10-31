@@ -13,9 +13,6 @@ use crate::{
 };
 use std::{fmt, io::Write, net::SocketAddr, path::PathBuf};
 
-/// What Windows would need and does not have yet: no host runtime exists.
-const WINDOWS: &str = "windows native Sandbox runtime";
-
 /// One deployment's runtime choice, kept for every Sandbox it starts.
 ///
 /// A Sandbox's record names the variant that made it; a platform without a
@@ -35,8 +32,6 @@ pub enum Runtime {
     /// commands entering them as a nonroot identity (Linux).
     #[cfg(target_os = "linux")]
     Namespaces(NamespaceProvider),
-    /// Placeholder: selecting Windows refuses before any effect.
-    Windows,
 }
 
 impl Runtime {
@@ -49,7 +44,6 @@ impl Runtime {
             Self::LinuxNative(provider) => Ok(provider.capabilities()),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => Ok(provider.capabilities()),
-            Self::Windows => Err(RuntimeError::Unsupported(WINDOWS)),
         }
     }
 
@@ -64,7 +58,6 @@ impl Runtime {
             Self::LinuxNative(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
-            Self::Windows => Err(RuntimeError::Unsupported(WINDOWS)),
         }
     }
 
@@ -76,7 +69,7 @@ impl Runtime {
             Self::LinuxNative(provider) => provider.paths(name),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider.paths(name),
-            Self::Docker(_) | Self::Windows => Err(RuntimeError::Unsupported(
+            Self::Docker(_) => Err(RuntimeError::Unsupported(
                 "native Sandbox paths need a native runtime",
             )),
         }
@@ -94,11 +87,6 @@ impl Runtime {
             Self::Namespaces(provider) => provider
                 .launch(request)
                 .map(|sandbox| Sandbox::Namespaces(Box::new(sandbox))),
-            Self::Windows => Err(Box::new(LaunchFailure {
-                phase: LaunchPhase::Validate,
-                instance: None,
-                cause: RuntimeError::Unsupported(WINDOWS),
-            })),
         }
     }
 
@@ -118,7 +106,6 @@ impl Runtime {
             Self::Namespaces(provider) => provider
                 .reopen(id, record)
                 .map(|sandbox| Sandbox::Namespaces(Box::new(sandbox))),
-            Self::Windows => Err(WireFailure::local(RuntimeError::Unsupported(WINDOWS))),
         }
     }
 
@@ -138,7 +125,6 @@ impl Runtime {
             Self::Namespaces(provider) => provider
                 .reopen_stopped(id, record)
                 .map(|sandbox| Sandbox::Namespaces(Box::new(sandbox))),
-            Self::Windows => Err(WireFailure::local(RuntimeError::Unsupported(WINDOWS))),
         }
     }
 }

@@ -8,8 +8,8 @@ type and the only dispatch is one `match` per method.
 
 - `Runtime` is one deployment's selection and is kept for every Sandbox it
   starts: `Docker(DockerProvider)` (the default), `MacosNative(NativeMacosProvider)`,
-  `LinuxNative(NativeLinuxProvider)`, `Namespaces(NamespaceProvider)` (Linux
-  only) and `Windows`, a placeholder with no backend.
+  `LinuxNative(NativeLinuxProvider)` and `Namespaces(NamespaceProvider)` (Linux
+  only).
   `Runtime::{capabilities, local_directory, native_paths, launch, reopen,
   reopen_stopped}` dispatch to them.
 - `Sandbox` is what `Runtime::launch`/`reopen` return: `Docker(docker::Sandbox)`,
@@ -118,12 +118,11 @@ keeps the same physical facts as `LocalRecord`.
 
 ## Windows
 
-`Runtime::Windows` is a placeholder: `capabilities`, `local_directory`,
-`native_paths`, `launch`, `reopen` and `reopen_stopped` all refuse with the
-existing `RuntimeError::Unsupported` before any effect, and no `Sandbox` variant
-exists for it. No Windows host runtime is implemented; see
-[`src/backend/windows/README.md`](src/backend/windows/README.md) for the planned
-routes.
+There is no Windows backend and no Windows variant (#527 D2). Windows runs the
+Linux build: through the WSL2 worker on a local placement, or in a Linux VM
+(`vm:<provider>`). The backends and `Runtime` are Unix only; the crate's shared
+types still compile for Windows, and a build-only CI lane reports whether they
+do (#527 D6).
 
 ## Failure and records
 

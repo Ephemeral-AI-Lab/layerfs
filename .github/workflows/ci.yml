@@ -1,6 +1,8 @@
 # Fast lane: runs after a push and reports. It is never a required check and
 # never blocks a push or merge; agents do not wait for it (AGENTS.md §4).
 # Slow and FUSE mount tests run in nightly.yml. Selection: tools/ci_tests.py.
+# windows-build only compiles the crates gated for Windows (#527 D6) and
+# reports; it runs no test and its failure fails nothing (continue-on-error).
 # The Node binding (engine/crates/layerfs-node) and the JavaScript packages in
 # api/ stay outside CI (owner, 2026-10-23): no path trigger, excluded from
 # Clippy/tests and skipped by the guard. The Rust layerfs-api crate is included.
@@ -75,6 +77,21 @@ jobs:
           workspaces: . -> target
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo +1.85.1 clippy --manifest-path Cargo.toml --locked --workspace --exclude layerfs-node --all-targets -- -D warnings
+
+  # Windows runs the Linux build through WSL2 or a VM (#527 D2); this lane only
+  # reports whether the crates gated for Windows still compile there. Today
+  # that is layerfs-sandbox (its shared types; the backends are Unix only).
+  # layerfs-node stays outside CI, and layerfs-api cannot build for Windows
+  # yet (layerfs-store-service is Unix only).
+  windows-build:
+    name: windows build (reports only)
+    runs-on: windows-2025
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: rustup toolchain install 1.85.1 --profile minimal --component clippy
+      - run: cargo +1.85.1 clippy --manifest-path Cargo.toml --locked -p layerfs-sandbox -- -D warnings
 
   test:
     runs-on: ubuntu-24.04

@@ -10,6 +10,7 @@ mod request;
 mod transfer;
 pub use capabilities::{IsolationModel, MountDriver, ProviderCapabilities, SearchPathPolicy};
 pub use execution::{CommandIdentity, ExecInspection};
+#[cfg(unix)]
 pub(crate) use failure::STOPPED;
 pub use failure::{ErrorDiagnostic, RuntimeError, WireFailure};
 pub use identity::{ContainerId, ExecId};
