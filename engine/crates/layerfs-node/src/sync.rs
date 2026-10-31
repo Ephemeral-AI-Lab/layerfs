@@ -495,7 +495,7 @@ fn failure_text(failure: &remote::PushFailure, kind: Upload) -> String {
 /// lacks is listed in `missing` and kept.
 pub(crate) fn pull(args: &SdkValue) -> Outcome {
     let path = stores::store_path(args)?;
-    crate::local::exclusive(&path, || {
+    crate::local_stores::exclusive(&path, || {
         crate::progress::observed(args, || pull_once(args))
     })
 }
@@ -540,7 +540,7 @@ fn pull_once(args: &SdkValue) -> Outcome {
 /// remote file `file`, with an entry for each project, linked to the file.
 pub(crate) fn load_store(args: &SdkValue) -> Outcome {
     let path = stores::store_path(args)?;
-    crate::local::exclusive(&path, || {
+    crate::local_stores::exclusive(&path, || {
         crate::progress::observed(args, || load_once(args))
     })
 }

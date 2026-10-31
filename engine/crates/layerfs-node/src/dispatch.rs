@@ -141,7 +141,7 @@ pub(crate) fn backend_call(op: String, args: JsUnknown) -> napi::Result<AsyncTas
             "runtime.store.attach_postgresql" => crate::postgres::attach(&args),
             // #506 E1-E9: local sizes and heads, copy checks, listing,
             // providers, PostgreSQL status and live job progress
-            "runtime.store.stat" => crate::local::stat_stores(&args),
+            "runtime.store.stat" => crate::local_stores::stat_stores(&args),
             "runtime.store.check" => crate::copies::check(&args),
             "runtime.remote.list_stores" => crate::copies::list_stores(&args),
             "runtime.remote.providers" => crate::copies::providers(&args),

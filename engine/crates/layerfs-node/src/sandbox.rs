@@ -14,15 +14,15 @@
 //! the caller's behalf.
 use crate::job::{failed, refused, Outcome};
 use crate::registry::{lock, text, SandboxState, SANDBOXES};
-use layerfs_api::internal::split;
-use layerfs_api::sandbox::values;
-use layerfs_api::{
-    OperationFailure, SandboxApi, SandboxCause, SandboxCreate, SandboxFailure, SandboxPhase,
-};
+use layerfs_api::internal::split_provider;
+use layerfs_api::sandbox::{values, ProviderCreate, ProviderFailure};
+use layerfs_api::{OperationFailure, SandboxApi, SandboxCause, SandboxPhase};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonPostgres, DaemonSetup};
 use layerfs_bridge::provision::StoreManifest;
-use layerfs_sandbox::backend::docker::{CreatePhase, Docker, SandboxRequest};
+use layerfs_sandbox::backend::docker::{CreatePhase, Docker, DockerProvider};
+use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions};
+use layerfs_sandbox::Runtime;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,12 +30,12 @@ use std::time::Duration;
 /// Port the daemon listens on inside its container.
 const PORT: u16 = 30421;
 /// Wait for the daemon's listener after Start.
-const STARTUP: Duration = Duration::from_secs(30);
+pub(crate) const STARTUP: Duration = Duration::from_secs(30);
 /// Wait for one Engine control response.
 const ENGINE: Duration = Duration::from_secs(30);
 /// A failed create's report keeps its daemon's last log lines, up to this many bytes.
-const LOG_LINES: u16 = 20;
-const LOG_BYTES: usize = 2048;
+pub(crate) const LOG_LINES: u16 = 20;
+pub(crate) const LOG_BYTES: usize = 2048;
 
 pub(crate) fn operation(failure: Box<OperationFailure>) -> SdkRefusal {
     values::refusal(&failure).unwrap_or_else(|| failed(failure))
@@ -54,7 +54,7 @@ pub(crate) const WORKSPACES: u32 = 16;
 /// for this process and the rest for others (#352 F-017).
 pub(crate) const DAEMON_CONNECTIONS: u16 = 8;
 
-fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
+pub(crate) fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
     DaemonSetup {
         listen: format!("0.0.0.0:{PORT}"),
         private_key: private,
@@ -85,7 +85,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
 }
 
 /// A container name prefix when the deployment sets none.
-const PREFIX: &str = "layerfs-";
+pub(crate) const PREFIX: &str = "layerfs-";
 
 /// The container labels of Sandbox `id` of `project`: what it is, whose,
 /// and which. Saved in its record, so a reopen expects the same.
@@ -139,6 +139,27 @@ pub(crate) fn start(
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
+    if crate::runtime::local(deploy)? {
+        let DaemonStore::File(file) = store else {
+            return Err(refused(
+                "Unsupported",
+                "a native Sandbox's daemon opens a Store file; a Sandbox of a PostgreSQL Store runs in Docker",
+            ));
+        };
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        {
+            let (project, installed) = *file;
+            return crate::local::start(args, directory, (&project, installed));
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        {
+            drop(file);
+            return Err(refused(
+                "Unsupported",
+                "LAYERFS_SANDBOX=native requires Linux (FUSE) or macOS (loopback NFS); use Docker",
+            ));
+        }
+    }
     let docker = text(deploy, "docker")?;
     let image = deploy
         .get_text("image")
@@ -167,27 +188,11 @@ pub(crate) fn start(
         DaemonStore::Postgres(_) => None,
     };
     let executable = PathBuf::from(text(deploy, "daemon")?);
-    // A creation whose outcome is unknown is never silently attempted again.
-    let intent = directory.join("create.intent");
-    if intent.exists() {
-        let state = match crate::discovery::load(&intent) {
-            Ok(SdkValue::Text(state)) => state,
-            _ => "its record is unreadable".to_owned(),
-        };
-        return Err(refused(
-            "Unknown",
-            format!(
-                "a prior Sandbox creation has an unresolved discovery intent: {state}. Its outcome \
-                 is unknown, so it is neither retried nor taken as done. Remove any container it \
-                 left (docker ps -a --filter {}), then delete {}",
-                match &store_volume {
-                    Some(volume) => format!("volume={volume}"),
-                    None => format!("label=layerfs.project={}", text(args, "project")?),
-                },
-                intent.display()
-            ),
-        ));
-    }
+    let left = match &store_volume {
+        Some(volume) => format!("volume={volume}"),
+        None => format!("label=layerfs.project={}", text(args, "project")?),
+    };
+    unresolved(directory, &format!("docker ps -a --filter {left}"))?;
     // The number is claimed before anything is made; a failed start gives it
     // back (its directory holds no record yet), so the number is used again.
     let (id, saved_directory) = crate::discovery::claim_next(args)?;
@@ -203,6 +208,29 @@ pub(crate) fn start(
         let _ = std::fs::remove_dir(&saved_directory);
     }
     made
+}
+
+/// A creation whose outcome is unknown is never silently attempted again:
+/// while the project's creation intent stays, starts are refused. `left`
+/// says where to look for what that creation may have left.
+pub(crate) fn unresolved(directory: &Path, left: &str) -> Result<(), SdkRefusal> {
+    let intent = directory.join("create.intent");
+    if intent.exists() {
+        let state = match crate::discovery::load(&intent) {
+            Ok(SdkValue::Text(state)) => state,
+            _ => "its record is unreadable".to_owned(),
+        };
+        return Err(refused(
+            "Unknown",
+            format!(
+                "a prior Sandbox creation has an unresolved discovery intent: {state}. Its outcome \
+                 is unknown, so it is neither retried nor taken as done. Remove any container it \
+                 left ({left}), then delete {}",
+                intent.display()
+            ),
+        ));
+    }
+    Ok(())
 }
 
 /// Starts the claimed Sandbox `id`: container, daemon on the installed
@@ -246,34 +274,41 @@ fn start_claimed(
         .map_err(failed)?
         .naming(&container_name)
         .map_err(|_| refused("InvalidInput", format!("container name {container_name}")))?;
+    let provider = Arc::new(Runtime::Docker(DockerProvider::new(docker)));
     // Read only if this process ends before the intent is resolved.
     crate::discovery::save(
         &directory.join("create.intent"),
         SdkValue::text(format!("creation of Sandbox {id} began and never finished")),
     )?;
-    let request = SandboxCreate {
-        deployment: SandboxRequest {
-            image,
-            store_volume,
-            port: PORT,
+    let request = ProviderCreate {
+        launch: LaunchRequest {
+            name: container_name.clone(),
+            daemon_executable: executable,
+            daemon_config: Vec::new(),
             labels: labels(name, store.as_deref(), id),
+            startup_timeout: STARTUP,
+            options: ProviderLaunchOptions::Docker {
+                image,
+                store_volume,
+                port: PORT,
+                connect_host: crate::pool::daemon_host(args),
+            },
         },
         setup: daemon_setup,
-        executable,
         controller_private: controller.private,
         daemon_peer: daemon.public,
-        startup_wait: STARTUP,
-        connect_host: crate::pool::daemon_host(args),
     };
-    let api = SandboxApi::new(docker);
+    let api = SandboxApi::with_runtime(provider);
     let created = match &opened {
-        DaemonStore::File(file) => api.create_file(request, &file.0.store, &file.0.manifest),
-        DaemonStore::Postgres(_) => api.create_postgres(request),
+        DaemonStore::File(file) => {
+            api.create_provider_file(request, &file.0.store, &file.0.manifest)
+        }
+        DaemonStore::Postgres(_) => api.create_provider_postgres(request),
     };
     let owner = created.map_err(|failure| abandon(directory, id, failure))?;
     let container = owner.runtime.identity().to_string();
     let instance = owner.startup.instance;
-    let (runtime, control, identity) = split(owner);
+    let (runtime, control, identity) = split_provider(owner);
     let dial = crate::pool::Dial {
         endpoint: runtime.endpoint().map_err(failed)?,
         host: crate::pool::daemon_host(args),
@@ -310,33 +345,46 @@ fn start_claimed(
 
 /// Whether a failed create's every effect is known: nothing reached the
 /// Store volume, and any container it made is acknowledged by identity.
-fn settled(failure: &SandboxFailure) -> bool {
+fn settled(failure: &ProviderFailure) -> bool {
     // A Create the Engine refused (409: the container name is taken) made no container.
-    let unknown_container = matches!(
-        &failure.cause,
-        SandboxCause::Create(create) if create.phase == CreatePhase::Create
-            && !matches!(create.transfer.cause, layerfs_sandbox::RuntimeError::Http(409))
-    );
+    let unknown_container = match &failure.cause {
+        SandboxCause::Provider(launch) => match &launch.cause {
+            layerfs_sandbox::RuntimeError::Docker(docker_failure) => {
+                match docker_failure.as_ref() {
+                    layerfs_sandbox::backend::docker::ProviderFailure::Create(create) => {
+                        create.phase == CreatePhase::Create
+                            && !matches!(
+                                create.transfer.cause,
+                                layerfs_sandbox::RuntimeError::Http(409)
+                            )
+                    }
+                    _ => false,
+                }
+            }
+            _ => false,
+        },
+        _ => false,
+    };
     failure.phase != SandboxPhase::Install && failure.installed.is_none() && !unknown_container
 }
 
 /// The refusal for a failed create. A settled one reads its container's log
 /// tail once, removes the container (stop, then delete, each once) and its
 /// intent; otherwise the intent stays, rewritten to say what is left.
-fn abandon(directory: &Path, id: &str, mut failure: Box<SandboxFailure>) -> SdkRefusal {
+fn abandon(directory: &Path, id: &str, mut failure: Box<ProviderFailure>) -> SdkRefusal {
     let mut cause = format!(
         "sandbox create stopped at {:?}: {:?}",
         failure.phase, failure.cause
     );
     let container = failure
-        .sandbox
+        .runtime
         .as_ref()
         .map(|sandbox| sandbox.identity().to_string());
     drop(failure.control.take());
     let mut log = None;
     let left = if !settled(&failure) {
         Some("its effect on the Store volume or the Engine is unknown".to_owned())
-    } else if let Some(sandbox) = failure.sandbox.as_mut() {
+    } else if let Some(sandbox) = failure.runtime.as_mut() {
         match sandbox.log_tail(LOG_LINES, LOG_BYTES) {
             Ok(bytes) => {
                 let text = String::from_utf8_lossy(&bytes).trim_end().to_owned();
@@ -387,7 +435,8 @@ fn abandon(directory: &Path, id: &str, mut failure: Box<SandboxFailure>) -> SdkR
 /// `sandbox.create({ image })`: under the project's guard, reclaims the
 /// project's idle-closed Sandboxes, then starts the lowest free number on
 /// the call's image (`deploy.image`) and waits for its daemon:
-/// `{ sandbox, name, image }`. The only call that starts a Sandbox. Failures
+/// `{ sandbox, name, image }`. With `deploy.sandbox` `native` (macOS) it
+/// starts a daemon process instead of a container; its `image` is `local`. The only call that starts a Sandbox. Failures
 /// are `Failed` or `Unknown`, never retried.
 pub(crate) fn create(args: &SdkValue) -> Outcome {
     // a PostgreSQL Store's URL is the call's; its project's entry is made here
@@ -404,7 +453,7 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
         ("name", SdkValue::text(&state.name)),
         (
             "image",
-            SdkValue::text(state.runtime.request().image.as_str()),
+            SdkValue::text(crate::runtime::image(&state.runtime)),
         ),
     ]))
 }
@@ -429,8 +478,16 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
     }
     let state = crate::registry::sandbox_live(args)?;
     let _guard = crate::discovery::guard(&state.directory)?;
-    crate::discovery::refresh(&state)?;
-    let mounted = lock(&state.mounts)?.keys().cloned().collect::<Vec<_>>();
+    let recoverable = crate::unmount::check_all(&state)?;
+    crate::discovery::refresh_except(&state, &recoverable)?;
+    // Explicit close can take over an orphaned/retained unmount, but must
+    // still refuse every unrelated live Workspace. Stop detaches before
+    // killing the daemon; Delete independently checks physical detach.
+    let mounted = lock(&state.mounts)?
+        .keys()
+        .filter(|path| !recoverable.contains(path))
+        .cloned()
+        .collect::<Vec<_>>();
     if !mounted.is_empty() {
         return Err(SdkRefusal {
             code: "MountsActive".to_owned(),
@@ -445,8 +502,8 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
         });
     }
     let value = crate::discovery::load(&record)?;
-    let (docker, selector, request) = crate::discovery::runtime(&value)?;
-    let mut owner = layerfs_sandbox::backend::docker::Sandbox::reopen(docker, selector, request)
+    let mut owner = crate::discovery::recorded(args, &id, &value)?
+        .reopen()
         .map_err(failed)?;
     owner.stop(STOP_S).map_err(failed)?;
     owner.delete().map_err(failed)?;
@@ -461,7 +518,8 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
 
 /// `backend.daemon.sandbox.get_log({ sandbox, lines })`: the last `lines`
 /// lines (1..=2000) of Sandbox `sandbox`'s daemon log, at most
-/// [`GET_LOG_BYTES`], read once through the Engine: `{ sandbox, container,
+/// [`GET_LOG_BYTES`], read once through the Engine (a local Sandbox's from
+/// its log file): `{ sandbox, container,
 /// text, bytes }`. A stopped container's log is readable until its records
 /// are reclaimed. Refused `NoSuchSandbox` with no record or no container.
 /// Read-only: it starts, stops and reclaims nothing.
@@ -485,8 +543,7 @@ pub(crate) fn get_log(args: &SdkValue) -> Outcome {
         crate::discovery::load(&record)?
     };
     let container = text(&value, "container")?.to_owned();
-    let (docker, selector, request) = crate::discovery::runtime(&value)?;
-    let sandbox = layerfs_sandbox::backend::docker::Sandbox::stopped(docker, selector, request);
+    let sandbox = crate::discovery::recorded(args, &id, &value)?.stopped();
     let bytes = match sandbox.log_tail(lines, GET_LOG_BYTES) {
         Ok(bytes) => bytes,
         Err(failure) if failure.container_gone() => {
@@ -508,7 +565,7 @@ const GET_LOG_BYTES: usize = 64 * 1024;
 /// Seconds a closing Sandbox's daemon has to exit before the Engine kills it.
 const STOP_S: u16 = 5;
 
-/// Reclaims Sandbox `id`, whose container a reopen found gone or stopped
+/// Reclaims Sandbox `id`, whose container (or local daemon) a reopen found gone or stopped
 /// (`container`, `stopped`): one unforced Delete of a stopped container, then
 /// its records, so its number is free again. Called under the project's
 /// guard; the Sandbox's own guard is taken too. The record is read again
@@ -533,8 +590,9 @@ pub(crate) fn reclaim(args: &SdkValue, id: &str, container: &str, stopped: bool)
         ));
     }
     if stopped {
-        let (docker, selector, request) = crate::discovery::runtime(&value)?;
-        match layerfs_sandbox::backend::docker::Sandbox::stopped(docker, selector, request).delete()
+        match crate::discovery::recorded(args, id, &value)?
+            .stopped()
+            .delete()
         {
             Err(failure) if !failure.container_gone() => return Err(failed(failure)),
             _ => {}

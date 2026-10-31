@@ -8,9 +8,7 @@
 //! by a mount and reclaimed by the next `sandbox.create` or
 //! `runtime.sandbox.reclaim`.
 use crate::job::{failed, Outcome};
-use crate::registry::{
-    lock, naming, random, sandbox, sandbox_live, sandbox_refreshed, text, Mount,
-};
+use crate::registry::{lock, naming, random, sandbox, sandbox_live, text, Mount};
 use crate::sandbox::{operation, WORKSPACES};
 use layerfs_api::internal::workspace;
 use layerfs_api::sandbox::{values, Unmounted};
@@ -96,8 +94,10 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("sandbox".to_owned(), SdkValue::text(state.id.as_str())));
         fields.push(("container".to_owned(), SdkValue::text(state.name.as_str())));
-        let image = state.runtime.request().image.as_str();
-        fields.push(("image".to_owned(), SdkValue::text(image)));
+        fields.push((
+            "image".to_owned(),
+            SdkValue::text(crate::runtime::image(&state.runtime)),
+        ));
     }
     crate::discovery::save_workspace(&state, &mounted, branch)?;
     lock(&state.mounts)?.insert(
@@ -112,15 +112,21 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
 
 /// One recorded Sandbox of the project: running (`Ok(true)`), or found
 /// gone or stopped (`Ok(false)`, with its container and whether it stopped).
-/// Its container is inspected once; no daemon is dialed.
-fn observed(record: &SdkValue, directory: &Path) -> Result<Option<(String, bool)>, SdkRefusal> {
+/// Its container (or local daemon process) is inspected once; no daemon
+/// is dialed.
+fn observed(
+    args: &SdkValue,
+    id: &str,
+    record: &SdkValue,
+    directory: &Path,
+) -> Result<Option<(String, bool)>, SdkRefusal> {
     let cached = lock(&crate::registry::SANDBOXES)?.get(directory).cloned();
     let observed = match cached {
         Some(state) => state.runtime.endpoint().map(drop),
-        None => {
-            let (docker, selector, request) = crate::discovery::runtime(record)?;
-            layerfs_sandbox::backend::docker::Sandbox::reopen(docker, selector, request).map(drop)
-        }
+        // a container, or with the local runtime a daemon process
+        None => crate::discovery::recorded(args, id, record)?
+            .reopen()
+            .map(drop),
     };
     match observed {
         Ok(()) => Ok(None),
@@ -152,7 +158,7 @@ fn records(args: &SdkValue) -> Result<Vec<(String, std::path::PathBuf, SdkValue)
 /// under the project's guard before it starts one.
 pub(crate) fn reclaim_gone(args: &SdkValue) -> Result<(), SdkRefusal> {
     for (id, directory, value) in records(args)? {
-        if let Some((container, stopped)) = observed(&value, &directory)? {
+        if let Some((container, stopped)) = observed(args, &id, &value, &directory)? {
             crate::sandbox::reclaim(args, &id, &container, stopped)?;
         }
     }
@@ -168,7 +174,7 @@ pub(crate) fn reclaim_gone(args: &SdkValue) -> Result<(), SdkRefusal> {
 pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
     let mut items = Vec::new();
     for (id, directory, value) in records(args)? {
-        if observed(&value, &directory)?.is_some() {
+        if observed(args, &id, &value, &directory)?.is_some() {
             continue;
         }
         items.push(SdkValue::map([
@@ -198,7 +204,7 @@ pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
 pub(crate) fn reclaim(args: &SdkValue) -> Outcome {
     let mut reclaimed = Vec::new();
     for (id, directory, value) in records(args)? {
-        let Some((container, stopped)) = observed(&value, &directory)? else {
+        let Some((container, stopped)) = observed(args, &id, &value, &directory)? else {
             continue;
         };
         let _placing = crate::discovery::guard(&crate::discovery::project_dir(args)?)?;
@@ -252,10 +258,19 @@ pub(crate) fn commit(args: &SdkValue) -> Outcome {
 /// `workspace.unmount(ws, { discard?, force? })`: `Busy` while a background
 /// process this binding started still runs there, then the daemon's answer.
 pub(crate) fn unmount(args: &SdkValue) -> Outcome {
-    let state = sandbox_refreshed(args)?;
-    let _guard = crate::discovery::guard(&state.directory)?;
+    let state = sandbox(args)?;
     let path = text(args, "path")?;
+    if let Some(value) = crate::unmount::find(&state, path)? {
+        return crate::unmount::repeat(&value);
+    }
+    let guard = crate::discovery::guard(&state.directory)?;
+    // Another process may have registered while this call waited for the
+    // short admission section. Check again before sending anything.
+    if let Some(value) = crate::unmount::find(&state, path)? {
+        return crate::unmount::repeat(&value);
+    }
     let token = state.token(path)?;
+    crate::discovery::refresh(&state)?;
     // The runtime owner knows its own processes; the daemon's kernel probe
     // still answers Busy for any other holder.
     let running = crate::exec::running_in(&state, path)?;
@@ -273,22 +288,59 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
             )]),
         });
     }
-    let value = {
+    let attempt = crate::unmount::begin(&state, token, path)?;
+    drop(guard);
+    // Only this Workspace's lease remains held. Other Workspaces and
+    // processes can take Sandbox ownership while the daemon helper waits.
+    let mut sent = false;
+    let outcome = (|| {
         let mut control = crate::trace::control(&state.controls)?;
+        sent = true;
         let mut api = workspace(&mut control);
         // Forced: one abort write ends the connection, also after a normal
         // unmount stalled at Join; uncommitted changes are dropped.
         if args.get_bool("force") {
             match api.unmount(token, true).map_err(operation)? {
-                Some(outcome) => values::force_unmounted(&outcome),
-                None => values::unmounted(&Unmounted::Closed)?,
+                Some(outcome) => Ok(values::force_unmounted(&outcome)),
+                None => values::unmounted(&Unmounted::Closed),
             }
         } else {
-            let discard = args.get_bool("discard");
-            values::unmounted(&api.unmount_checked(token, discard).map_err(operation)?)?
+            match api.unmount_checked(token, args.get_bool("discard")) {
+                Ok(answer) => values::unmounted(&answer),
+                Err(error) => Err(operation(error)),
+            }
         }
+    })();
+    let outcome = match outcome {
+        Err(error) if error.code == "Missing" => {
+            Ok(SdkValue::map([("kind", SdkValue::text("Unmounted"))]))
+        }
+        other => other,
     };
-    std::fs::remove_file(crate::discovery::workspace_file(&state, token)).map_err(failed)?;
-    lock(&state.mounts)?.remove(path);
-    Ok(value)
+    // Preserve the daemon's known outcome before any discovery-lock wait.
+    // A file/cleanup failure is separate from an already successful detach.
+    let publication = if !sent {
+        crate::unmount::cancel(&attempt)
+    } else {
+        crate::unmount::finish(&attempt, path, &outcome)
+    };
+    if let Err(error) = publication {
+        return crate::unmount::cleanup_failure(outcome, error);
+    }
+    if outcome.is_ok() {
+        let cleanup = (|| {
+            let _guard = crate::discovery::guard(&state.directory)?;
+            match std::fs::remove_file(crate::discovery::workspace_file(&state, token)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(failed(error)),
+            }
+            lock(&state.mounts)?.remove(path);
+            Ok(())
+        })();
+        if let Err(error) = cleanup {
+            return crate::unmount::cleanup_failure(outcome, error);
+        }
+    }
+    outcome
 }

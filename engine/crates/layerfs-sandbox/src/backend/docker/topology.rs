@@ -1,8 +1,6 @@
 //! Exact observed daemon identity, security and kernel-access settings, and volume placement.
-use super::{
-    json::{once, Json},
-    SandboxRequest,
-};
+use super::SandboxRequest;
+use crate::backend::json::{once, Json};
 use crate::RuntimeError;
 use std::io::Read;
 /// The container's whole system-call filter. It denies creation of a user

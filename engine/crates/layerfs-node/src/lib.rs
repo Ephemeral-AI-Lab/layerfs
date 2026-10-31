@@ -6,17 +6,21 @@ mod discovery;
 mod dispatch;
 mod exec;
 mod job;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod local;
+mod local_stores;
 mod output;
 mod pool;
 mod postgres;
 mod progress;
 mod project;
 mod registry;
+mod runtime;
 mod sandbox;
 mod stores;
 mod sync;
 mod trace;
+mod unmount;
 mod workspace;
 
 use job::Job;

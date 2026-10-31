@@ -41,6 +41,27 @@ impl<R: Read> Json<R> {
         self.string_each(|c| text.push(c, capture))?;
         Ok(text)
     }
+    /// Reads a string value into `out` as UTF-8, refusing one longer than
+    /// `max`: the Engine's selected fields are short, and the longest string
+    /// this crate reads is an image archive's path. Its only caller unpacks
+    /// images, which this crate does on Linux only.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub fn text_into(&mut self, out: &mut Vec<u8>, max: usize) -> Result<(), RuntimeError> {
+        let mut too_long = false;
+        self.string_each(|c| {
+            let mut encoded = [0; 4];
+            let bytes = c.encode_utf8(&mut encoded).as_bytes();
+            if out.len() + bytes.len() > max {
+                too_long = true;
+            } else {
+                out.extend_from_slice(bytes);
+            }
+        })?;
+        if too_long {
+            return Err(RuntimeError::Protocol("JSON string length"));
+        }
+        Ok(())
+    }
     pub fn string_equals(&mut self, expected: &str) -> Result<bool, RuntimeError> {
         let mut expected = expected.chars();
         let mut equal = true;

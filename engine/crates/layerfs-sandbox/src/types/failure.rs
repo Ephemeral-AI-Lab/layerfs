@@ -3,6 +3,9 @@ use std::{fmt, io};
 /// Original ordinary-runtime refusal or I/O cause.
 #[derive(Debug)]
 pub enum RuntimeError {
+    /// Original Docker provider stage failure, including retained transfer/stream owners.
+    #[cfg(unix)]
+    Docker(Box<crate::backend::docker::ProviderFailure>),
     Io(io::Error),
     Protocol(&'static str),
     /// Original HTTP status, with a separately retained bounded error-body diagnostic.
@@ -18,6 +21,8 @@ impl From<io::Error> for RuntimeError {
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            #[cfg(unix)]
+            Self::Docker(failure) => write!(f, "Docker provider: {failure:?}"),
             Self::Io(e) => write!(f, "runtime I/O: {e}"),
             Self::Protocol(e) => write!(f, "runtime protocol: {e}"),
             Self::Http(s) => write!(f, "runtime HTTP status {s}"),
@@ -53,6 +58,24 @@ pub struct WireFailure {
 /// The cause [`WireFailure::container_stopped`] reports.
 pub(crate) const STOPPED: &str = "exact stopped container observation";
 impl WireFailure {
+    /// A non-HTTP cause before an attempt, with no invented transport facts.
+    pub fn local(cause: RuntimeError) -> Box<Self> {
+        Box::new(Self {
+            attempted: false,
+            sent_bytes: 0,
+            request_header_bytes: 0,
+            sent_body_bytes: 0,
+            pending_request: Default::default(),
+            status: None,
+            cause,
+            fence_error: None,
+            observed_exec: None,
+            observed_container: None,
+            requested_container: None,
+            requested_exec: None,
+            error_body: None,
+        })
+    }
     /// The Engine still has the exact requested container, intact, but it is
     /// not running: its daemon exited, so nothing it held survives.
     pub fn container_stopped(&self) -> bool {

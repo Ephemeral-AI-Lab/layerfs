@@ -17,8 +17,9 @@ export const BACKEND = /^(backend|runtime)\./;
 
 /** Runs one operation once and returns its value or throws its refusal;
  * `options` are the client's settings, whose `trace` selects its trace file;
- * `transport` is the client's binding (default: the one a new client would use). */
-export async function invoke(op, args, options, transport = binding()) {
+ * `transport` is the client's binding (default: the one a new client of
+ * `args.project` would use). */
+export async function invoke(op, args, options, transport = binding(args.project)) {
   return outcome(await traced(options, op, args, (scope) => {
     if (BACKEND.test(op)) throw new LayerFSError("UnknownMethod", "backend and runtime methods are @layerfs/backend's and @layerfs/runtime's", null);
     return transport.call(op, observed(args, scope));
@@ -26,7 +27,7 @@ export async function invoke(op, args, options, transport = binding()) {
 }
 
 /** One call on the binding's backend table (`backend.*`, `runtime.*`). */
-export async function invokeBackend(op, args, options, transport = binding()) {
+export async function invokeBackend(op, args, options, transport = binding(args?.project)) {
   return outcome(await traced(options, op, args, (scope) => transport.backendCall(op, observed(args, scope))));
 }
 
@@ -61,9 +62,19 @@ export function sandboxArg(sandbox) {
 /** Deployment settings from the client options, else the environment
  * (LAYERFS_<NAME>). A Workspace's Sandbox needs
  * every one but the container prefix and daemon host, and, on a PostgreSQL
- * Store (`postgresql`), the volume: its daemon opens the server. */
+ * Store (`postgresql`), the volume: its daemon opens the server. With
+ * `sandbox` (LAYERFS_SANDBOX) `native` (Linux or macOS), a Sandbox is a host
+ * daemon: Linux uses FUSE with a root daemon and nonroot commands (501:20);
+ * macOS uses loopback NFS and this user. It needs the daemon and
+ * `localDir` (LAYERFS_LOCAL_DIR) and no Docker setting. Unset or `docker` is
+ * Docker; any other value is refused. */
 export function deployment(options = {}, postgresql = false) {
   const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
+  const sandbox = options.sandbox ?? env("SANDBOX");
+  if (sandbox === "native") return nativeDeployment(options, env, sandbox);
+  if (sandbox !== undefined && sandbox !== "docker") {
+    throw new LayerFSError("InvalidInput", `deploy.sandbox (LAYERFS_SANDBOX) is docker or native (Linux or macOS), not ${sandbox}`, null);
+  }
   const deploy = {
     docker: options.docker ?? env("DOCKER") ?? "/var/run/docker.sock",
     image: options.image ?? env("IMAGE"),
@@ -79,6 +90,35 @@ export function deployment(options = {}, postgresql = false) {
   if (!deploy.volume) delete deploy.volume;
   if (!deploy.containerPrefix) delete deploy.containerPrefix;
   if (!deploy.daemonHost) delete deploy.daemonHost;
+  return deploy;
+}
+
+/** A native Sandbox's settings: the daemon, the directory its Sandboxes
+ * live in, the optional name prefix, and the backend inside that directory
+ * (`sandboxBackend`, LAYERFS_SANDBOX_BACKEND: `native` when unset, or
+ * `namespaces` on Linux). The namespaces backend gives each Sandbox a root
+ * filesystem from an image, so it also needs `image` (LAYERFS_IMAGE, the
+ * same digest Docker deploys) and `imageArchive` (LAYERFS_IMAGE_ARCHIVE, the
+ * docker-archive the bundle carries). */
+function nativeDeployment(options, env, sandbox) {
+  const deploy = {
+    sandbox,
+    daemon: options.daemon ?? env("DAEMON"),
+    localDir: options.localDir ?? env("LOCAL_DIR"),
+    containerPrefix: options.containerPrefix ?? env("CONTAINER_PREFIX"),
+  };
+  const backend = options.sandboxBackend ?? env("SANDBOX_BACKEND");
+  if (backend !== undefined) deploy.sandboxBackend = backend;
+  const required = [["daemon", "DAEMON"], ["localDir", "LOCAL_DIR"]];
+  if (backend === "namespaces") {
+    deploy.image = options.image ?? env("IMAGE");
+    deploy.imageArchive = options.imageArchive ?? env("IMAGE_ARCHIVE");
+    required.push(["image", "IMAGE"], ["imageArchive", "IMAGE_ARCHIVE"]);
+  }
+  for (const [name, setting] of required) {
+    if (!deploy[name]) throw new LayerFSError("InvalidInput", `deploy.${name} is not configured (LAYERFS_${setting})`, null);
+  }
+  if (!deploy.containerPrefix) delete deploy.containerPrefix;
   return deploy;
 }
 

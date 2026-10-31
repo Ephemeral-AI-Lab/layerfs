@@ -2,9 +2,13 @@
 mod execution;
 mod failure;
 mod identity;
+mod image;
+mod request;
 mod transfer;
 pub use execution::{CommandIdentity, ExecInspection};
 pub(crate) use failure::STOPPED;
 pub use failure::{ErrorDiagnostic, RuntimeError, WireFailure};
 pub use identity::{ContainerId, ExecId};
+pub use image::Image;
+pub use request::ExecRequest;
 pub use transfer::PendingRequest;

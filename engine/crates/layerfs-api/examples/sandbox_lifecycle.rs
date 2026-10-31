@@ -1,6 +1,6 @@
 //! Positive-path host Init -> protected owned Sandbox -> direct shared Store control proof.
 //! Typed failure custody is covered separately by public adapter tests; this example reports failures in stderr.
-use layerfs_api::{InitRequest, ManagedSandbox, ProjectApi, SandboxApi, SandboxCreate};
+use layerfs_api::{InitRequest, ProjectApi, ProviderCreate, ProviderSandbox, SandboxApi};
 use layerfs_bridge::{
     control::{DaemonPhase, Reply, Request},
     daemon_setup::{DaemonLimits, DaemonSetup},
@@ -8,13 +8,15 @@ use layerfs_bridge::{
 };
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
-use layerfs_sandbox::backend::docker::{Docker, SandboxRequest};
+use layerfs_sandbox::backend::docker::{Docker, DockerProvider};
+use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions};
 use layerfs_storage::StoragePolicy;
 use layerfs_telemetry::timer::Timing;
 use std::{
     fs,
     io::Write,
     path::PathBuf,
+    sync::Arc,
     time::{Duration, Instant},
 };
 fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
@@ -40,25 +42,26 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
         postgresql: None,
     }
 }
-fn ordinary(owner: &ManagedSandbox) -> Result<(), Box<dyn std::error::Error>> {
-    let command="set -e; test \"$(id -u)\" = 501; test \"$(id -g)\" = 20; test \"$(id -G)\" = 20; grep -q '^CapEff:[[:space:]]*0000000000000000$' /proc/self/status; grep -q '^CapAmb:[[:space:]]*0000000000000000$' /proc/self/status; grep -q '^NoNewPrivs:[[:space:]]*1$' /proc/self/status; for p in /layerfs-local/config/daemon.setup /layerfs-local/overlay/overlay.sqlite /layerfs-store/global/store.sqlite /proc/1/root/layerfs-local/config/daemon.setup /proc/1/root/layerfs-store/global/store.sqlite /proc/1/environ /proc/1/fd; do test ! -r \"$p\"; done; test ! -w /dev/fuse; test ! -w /sys/fs/fuse/connections; printf 'ORDINARY_ACCESS uid=501 gid=20 groups=20 CapEff=0 CapAmb=0 NoNewPrivs=1 private_backing_denied proc_aliases_denied fuse_control_denied\\n'";
-    let created = layerfs_api::internal::exec(
-        &owner.runtime,
-        layerfs_sandbox::CommandIdentity { uid: 501, gid: 20 },
-        vec!["bash".into(), "-c".into(), command.into()],
-        vec![],
-        "/".into(),
-        false,
-    )
-    .map_err(|f| format!("create {f:?}"))?;
-    let attached = created.start().map_err(|f| format!("start {f:?}"))?;
-    let (_input, output, handle) = attached.into_parts().map_err(|f| format!("split {f:?}"))?;
-    let progress = output
-        .copy_to(&mut std::io::stdout(), &mut std::io::stderr())
-        .map_err(|f| format!("output {f:?}"))?;
-    let inspected = handle.inspect().map_err(|f| format!("inspect {f:?}"))?;
-    println!("ORDINARY_RESULT {:?} {:?}", progress, inspected);
-    assert_eq!(inspected.known_root_exit(), Some(0));
+fn ordinary(owner: &ProviderSandbox) -> Result<(), Box<dyn std::error::Error>> {
+    let command = "set -e; test \"$(id -u)\" = 501; test \"$(id -g)\" = 20; test \"$(id -G)\" = 20; grep -q '^CapEff:[[:space:]]*0000000000000000$' /proc/self/status; grep -q '^CapAmb:[[:space:]]*0000000000000000$' /proc/self/status; grep -q '^NoNewPrivs:[[:space:]]*1$' /proc/self/status; for p in /layerfs-local/config/daemon.setup /layerfs-local/overlay/overlay.sqlite /layerfs-store/global/store.sqlite /proc/1/root/layerfs-local/config/daemon.setup /proc/1/root/layerfs-store/global/store.sqlite /proc/1/environ /proc/1/fd; do test ! -r \"$p\"; done; test ! -w /dev/fuse; test ! -w /sys/fs/fuse/connections; printf 'ORDINARY_ACCESS uid=501 gid=20 groups=20 CapEff=0 CapAmb=0 NoNewPrivs=1 private_backing_denied proc_aliases_denied fuse_control_denied\\n'";
+    let mut stdout = std::io::stdout();
+    let mut stderr = std::io::stderr();
+    let exit = owner
+        .runtime
+        .run(
+            &layerfs_sandbox::ExecRequest {
+                identity: layerfs_sandbox::CommandIdentity { uid: 501, gid: 20 },
+                arguments: vec!["bash".into(), "-c".into(), command.into()],
+                environment: vec![],
+                directory: "/".into(),
+                stdin: false,
+            },
+            &mut stdout,
+            &mut stderr,
+        )
+        .map_err(|f| format!("run {f:?}"))?;
+    println!("ORDINARY_RESULT {:?}", exit);
+    assert_eq!(exit.code, 0);
     Ok(())
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -97,23 +100,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let keys = transport::generate_keypair()?;
     let daemon = transport::generate_keypair()?;
     let docker = Docker::new(&args[1], Duration::from_secs(3))?;
-    let api = SandboxApi::new(docker);
-    let make = |setup: DaemonSetup| SandboxCreate {
-        deployment: SandboxRequest {
-            image: args[2].clone(),
-            store_volume: Some(args[3].clone()),
-            port: 30421,
+    let provider = Arc::new(layerfs_sandbox::Runtime::Docker(DockerProvider::new(
+        docker,
+    )));
+    let api = SandboxApi::with_runtime(provider);
+    let make = |name: &str, setup: DaemonSetup| ProviderCreate {
+        launch: LaunchRequest {
+            name: name.into(),
+            daemon_executable: PathBuf::from(&args[4]),
+            daemon_config: vec![],
             labels: vec![],
+            startup_timeout: Duration::from_secs(3),
+            options: ProviderLaunchOptions::Docker {
+                image: args[2].clone(),
+                store_volume: Some(args[3].clone()),
+                port: 30421,
+                connect_host: None,
+            },
         },
         setup,
-        executable: PathBuf::from(&args[4]),
         controller_private: keys.private,
         daemon_peer: daemon.public,
-        startup_wait: Duration::from_secs(3),
-        connect_host: None,
     };
     let mut first = api
-        .create(make(setup(daemon.private, keys.public)), &project)
+        .create(make("first", setup(daemon.private, keys.public)), &project)
         .map_err(|f| format!("first {f:?}"))?;
     println!(
         "OWNED_FIRST_CONTAINER {} phase={:?}",
@@ -132,7 +142,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut second_setup = setup(daemon.private, keys.public);
     second_setup.existing_store = Some(installed.manifest.clone());
     let second = api
-        .create(make(second_setup), &project)
+        .create(make("second", second_setup), &project)
         .map_err(|f| format!("second {f:?}"))?;
     println!(
         "OWNED_SECOND_CONTAINER {} phase={:?}",
@@ -162,7 +172,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut reopened_setup = setup(daemon.private, keys.public);
     reopened_setup.existing_store = Some(installed.manifest.clone());
     let mut reopened = api
-        .create(make(reopened_setup), &project)
+        .create(make("reopened", reopened_setup), &project)
         .map_err(|f| format!("reopen {f:?}"))?;
     println!(
         "OWNED_REOPEN_CONTAINER {} phase={:?}",
