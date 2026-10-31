@@ -1,0 +1,386 @@
+{
+  "receipt": "lfs527-cell/1",
+  "row": "vm-firecracker",
+  "cell": "C11",
+  "verdict": "PASS",
+  "cause": null,
+  "project": "c11",
+  "prefix": "lfs527-wxmqtb1p2n-",
+  "startedAt": "2026-10-31T21:47:48.671Z",
+  "host": {
+    "hostname": "Yifans-MacBook-Pro-10.local",
+    "platform": "darwin",
+    "release": "25.4.0",
+    "cpus": 14,
+    "memBytes": 38654705664,
+    "node": "v24.21.0",
+    "uid": 501
+  },
+  "runner": {
+    "run.mjs": "e8aa4f90a4d44db8894f2c7185dcba54a332f059922e08a4a79c17e7dc0905fa",
+    "cell.mjs": "4d8c3431e3c5de3b7a261d7aff7f0b1ba816b4cbfe021d8e12d5ae3dea5cdb78",
+    "workloads.mjs": "e22d812db8858758dc8cae491168b881bb81489663e43b8ebac115f9eec99f62"
+  },
+  "load1": {
+    "start": 8.55029296875,
+    "end": 7.82373046875
+  },
+  "constructionWorkers": "1",
+  "driver": {
+    "firecracker": {
+      "lima": "lfs527-vzkvm",
+      "dir": "/var/lib/lfs527-firecracker",
+      "stateDir": "/Users/yifanxu/.cache/layerfs-test/lfs527-firecracker-state-wxmqtb1p2n"
+    },
+    "work": "/Users/yifanxu/.cache/layerfs-test/lfs527-hZrfq6",
+    "initMs": 36775,
+    "volume": "lfs527-wxmqtb1p2n-c11-store-mvwxmqu9",
+    "vm": {
+      "project": "c11",
+      "name": "lfs527-wxmqtb1p2n-c11-vm",
+      "state": "running",
+      "image": "/var/lib/lfs527-firecracker/rootfs.ext4",
+      "home": "/Users/yifanxu/.cache/layerfs-test/lfs527-hZrfq6/home",
+      "store": "lfs527-wxmqtb1p2n-c11-vm-store",
+      "created": "2026-10-31T21:47:48.891Z",
+      "worker": {
+        "state": "running",
+        "answering": true,
+        "build": "build-linux-bd7ac86d01304d4e89a2e98057d26d66",
+        "port": 57347
+      },
+      "disk": {
+        "free": 19866648576
+      }
+    },
+    "setupMs": 37058,
+    "cellBudgetMs": 47913,
+    "teardownMs": 10248
+  },
+  "teardown": [
+    {
+      "name": "project.delete",
+      "ok": true,
+      "value": {
+        "kind": "Deleted",
+        "project": "c11",
+        "volume": "lfs527-wxmqtb1p2n-c11-store-mvwxmqu9"
+      }
+    },
+    {
+      "name": "vm.delete",
+      "ok": true,
+      "value": {
+        "project": "c11",
+        "name": "lfs527-wxmqtb1p2n-c11-vm",
+        "state": "missing",
+        "store": "kept"
+      }
+    },
+    {
+      "name": "firecracker state",
+      "ok": true
+    },
+    {
+      "name": "runtime.close",
+      "ok": true
+    },
+    {
+      "name": "work",
+      "ok": true
+    }
+  ],
+  "body": {
+    "sha256": "b057769c09c98bda3d759364d4857cd2e1eaf64855296d2bf7a7d225a37d2b40",
+    "commandSha256": "53077030326a1386f2cf2523f5a850b35feaba2d8fcb1b36e9f40a742be40a0d",
+    "setupSha256": "68c36eedeb7daf07516db93ca0ac0263bf3859d42549f7d490b1f074475ffc9d"
+  },
+  "imageDigest": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+  "bundle": {
+    "path": "/Users/yifanxu/.cache/layerfs-test/lfs527-bundles/cells-bd7ac86d",
+    "id": "build-linux-bd7ac86d01304d4e89a2e98057d26d66",
+    "platform": "linux",
+    "profile": "release",
+    "sourceCommit": "5431c7e4a9ef01b9f0651682dda1d558f9837df2",
+    "sourceSha256": "dea9123661697246ff5f09d4033d5ff0cc64a604ca7218fd3108355f367dfb00",
+    "manifestSha256": "a4cc65f236bc32e9f2cc007fe7d779a01a615b4a632c07001e0f60c662f34b18",
+    "images": {
+      "build": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "runtime": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+      "sandbox": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"
+    },
+    "filesChecked": 215,
+    "mismatched": [],
+    "imageArchives": [
+      "1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9.tar"
+    ]
+  },
+  "sourceCommit": "5431c7e4a9ef01b9f0651682dda1d558f9837df2",
+  "env": {
+    "LAYERFS_HOME": "/layerfs/home",
+    "LAYERFS_SANDBOX": "namespaces",
+    "LAYERFS_DAEMON": "/layerfs/bundle/layerfs-daemon",
+    "LAYERFS_LOCAL_DIR": "/layerfs/store/local",
+    "LAYERFS_IMAGE": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+    "LAYERFS_IMAGE_ARCHIVE": "/layerfs/bundle/images/1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9.tar",
+    "LAYERFS_STORE_PATH": "/layerfs/store/global/store.sqlite",
+    "LAYERFS_CONTAINER_PREFIX": "lfs527-wxmqtb1p2n-",
+    "LAYERFS_WORKER_ENDPOINT": "/Users/yifanxu/.cache/layerfs-test/lfs527-hZrfq6/home/worker/c11.json"
+  },
+  "lock": {
+    "lock": "/Users/yifanxu/.cache/layerfs-test/lfs527-sample.lock",
+    "waitMs": 1,
+    "load1": 8.56494140625,
+    "grantedAt": "2026-10-31T21:48:37.971Z",
+    "staleRemoved": null
+  },
+  "cellResult": {
+    "cell": "C11",
+    "project": "c11",
+    "branch": "lane",
+    "ok": true,
+    "cause": null,
+    "phases": {
+      "setup": {
+        "exec": {
+          "wallMs": 325.536,
+          "exitCode": 0,
+          "stdout": "",
+          "stderr": "",
+          "rc": null,
+          "ms": null
+        },
+        "commitKind": "Committed",
+        "commit": {
+          "kind": "Committed",
+          "head": "128a869596ee18d42482b46a12129a9fc11798b2dc3ed057c184dc684888fc4922",
+          "commit": {
+            "id": "128a869596ee18d42482b46a12129a9fc11798b2dc3ed057c184dc684888fc4922",
+            "branch": null,
+            "parent": null,
+            "secondParent": null,
+            "base": "32bf28a88ca1dae819bb485310ee7a6276dcae63bbfa8af3fc5bb950d31489a269",
+            "root": "e9ea0205976ff040257ff98d64792b4ea2d4113fe9cc979c95b87382664c76f4",
+            "via": "exec",
+            "message": "lfs527 C11 setup",
+            "mergedFrom": null,
+            "time": 1793483317862,
+            "logical": 67108864,
+            "newCanonical": 39263,
+            "newStored": 748,
+            "newMetadata": 672,
+            "displaced": null,
+            "lww": [],
+            "lwwTruncated": false
+          },
+          "displacedHead": null,
+          "merged": null,
+          "lww": [],
+          "lwwTruncated": false
+        },
+        "unmount": {
+          "kind": "Unmounted"
+        }
+      },
+      "warmup": {
+        "mountMs": 11.598,
+        "exec": {
+          "wallMs": 415.926,
+          "exitCode": 0,
+          "stdout": "LFS527 0 1793483318063325063 1793483318360736313\n",
+          "stderr": "",
+          "rc": 0,
+          "ms": 297.41125
+        },
+        "unmountMs": 31.001,
+        "unmount": {
+          "kind": "Unmounted"
+        }
+      },
+      "timed": {
+        "mountMs": 20.762,
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "workspace": {
+          "sandbox": "1",
+          "path": "/layerfs/store/local/lfs527-wxmqtb1p2n-c11-1/workspaces/3"
+        },
+        "exec": {
+          "wallMs": 272.029,
+          "exitCode": 0,
+          "stdout": "LFS527 0 1793483318459949730 1793483318696450272\n",
+          "stderr": "",
+          "rc": 0,
+          "ms": 236.500542
+        },
+        "commitMs": 150.782,
+        "commitKind": "UpToDate",
+        "commit": {
+          "kind": "UpToDate",
+          "head": "128a869596ee18d42482b46a12129a9fc11798b2dc3ed057c184dc684888fc4922",
+          "root": "e9ea0205976ff040257ff98d64792b4ea2d4113fe9cc979c95b87382664c76f4",
+          "merged": null,
+          "lww": [],
+          "lwwTruncated": false
+        },
+        "unmountMs": 10.667,
+        "unmount": {
+          "kind": "Unmounted"
+        }
+      },
+      "verify": {
+        "exitCode": 0,
+        "stdout": "VERIFY OK\n",
+        "stderr": ""
+      }
+    },
+    "steps": [
+      {
+        "name": "open",
+        "ms": 11.342,
+        "ok": true
+      },
+      {
+        "name": "branch.fork",
+        "ms": 3.503,
+        "ok": true
+      },
+      {
+        "name": "sandbox.create",
+        "ms": 10954.968,
+        "ok": true
+      },
+      {
+        "name": "setup.mount",
+        "ms": 27.902,
+        "ok": true
+      },
+      {
+        "name": "setup.exec",
+        "ms": 325.531,
+        "ok": true
+      },
+      {
+        "name": "setup.commit",
+        "ms": 343.387,
+        "ok": true
+      },
+      {
+        "name": "setup.unmount",
+        "ms": 29.908,
+        "ok": true
+      },
+      {
+        "name": "warmup.mount",
+        "ms": 11.595,
+        "ok": true
+      },
+      {
+        "name": "warmup.exec",
+        "ms": 415.922,
+        "ok": true
+      },
+      {
+        "name": "warmup.unmount",
+        "ms": 30.999,
+        "ok": true
+      },
+      {
+        "name": "timed.mount",
+        "ms": 20.759,
+        "ok": true
+      },
+      {
+        "name": "timed.exec",
+        "ms": 272.025,
+        "ok": true
+      },
+      {
+        "name": "timed.commit",
+        "ms": 150.779,
+        "ok": true
+      },
+      {
+        "name": "timed.unmount",
+        "ms": 10.664,
+        "ok": true
+      },
+      {
+        "name": "verify.mount",
+        "ms": 6.249,
+        "ok": true
+      },
+      {
+        "name": "verify.identity",
+        "ms": 116.281,
+        "ok": true
+      },
+      {
+        "name": "verify.exec",
+        "ms": 504.613,
+        "ok": true
+      },
+      {
+        "name": "verify.unmount",
+        "ms": 9.478,
+        "ok": true
+      },
+      {
+        "name": "sandbox.close",
+        "ms": 26.76,
+        "ok": true
+      }
+    ],
+    "fork": {
+      "kind": "Forked",
+      "branch": "lane",
+      "base": "32bf28a88ca1dae819bb485310ee7a6276dcae63bbfa8af3fc5bb950d31489a269",
+      "head": null
+    },
+    "sandbox": {
+      "sandbox": "1",
+      "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9"
+    },
+    "lock": {
+      "askedMs": 1.479,
+      "lock": "/Users/yifanxu/.cache/layerfs-test/lfs527-sample.lock",
+      "waitMs": 1,
+      "load1": 8.56494140625,
+      "grantedAt": "2026-10-31T21:48:37.971Z",
+      "staleRemoved": null
+    },
+    "where": {
+      "kernel": "Linux 6.18.56+",
+      "machine": "aarch64",
+      "cpus": "4",
+      "memKiB": "2034572",
+      "memBytes": null,
+      "cpuMax": null,
+      "id": "501:20"
+    }
+  },
+  "cellExit": {
+    "code": 0,
+    "signal": null,
+    "killed": false,
+    "stderr": ""
+  },
+  "timings": {
+    "mountMs": 20.762,
+    "execWallMs": 272.029,
+    "commandMs": 236.500542,
+    "commitMs": 150.782,
+    "commitKind": "UpToDate",
+    "unmountMs": 10.667
+  },
+  "where": {
+    "kernel": "Linux 6.18.56+",
+    "machine": "aarch64",
+    "cpus": "4",
+    "memKiB": "2034572",
+    "memBytes": null,
+    "cpuMax": null,
+    "id": "501:20"
+  },
+  "teardownOk": true,
+  "endedAt": "2026-10-31T21:48:49.341Z"
+}

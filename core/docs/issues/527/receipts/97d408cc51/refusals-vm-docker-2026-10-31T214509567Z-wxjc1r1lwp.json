@@ -1,0 +1,133 @@
+{
+  "receipt": "lfs527-cell/1",
+  "row": "refusals",
+  "cell": "vm-docker",
+  "verdict": "PASS",
+  "cause": "expected {\"placement vm:docker\":\"Unsupported\",\"LAYERFS_SANDBOX=docker on vm:apple-container\":\"Unsupported\",\"LAYERFS_SANDBOX_BACKEND=docker on vm:apple-container\":\"InvalidInput\"}; answered {\"placement vm:docker\":\"Unsupported\",\"LAYERFS_SANDBOX=docker on vm:apple-container\":\"Unsupported\",\"LAYERFS_SANDBOX_BACKEND=docker on vm:apple-container\":\"InvalidInput\"}",
+  "project": "refusal",
+  "prefix": "lfs527-wxjc1r1lwp-",
+  "startedAt": "2026-10-31T21:45:09.567Z",
+  "host": {
+    "hostname": "Yifans-MacBook-Pro-10.local",
+    "platform": "darwin",
+    "release": "25.4.0",
+    "cpus": 14,
+    "memBytes": 38654705664,
+    "node": "v24.21.0",
+    "uid": 501
+  },
+  "runner": {
+    "run.mjs": "e8aa4f90a4d44db8894f2c7185dcba54a332f059922e08a4a79c17e7dc0905fa",
+    "cell.mjs": "4d8c3431e3c5de3b7a261d7aff7f0b1ba816b4cbfe021d8e12d5ae3dea5cdb78",
+    "workloads.mjs": "e22d812db8858758dc8cae491168b881bb81489663e43b8ebac115f9eec99f62"
+  },
+  "load1": {
+    "start": 10.7353515625,
+    "end": 10.16064453125
+  },
+  "constructionWorkers": "1",
+  "driver": {
+    "work": "/Users/yifanxu/.cache/layerfs-test/lfs527-U9JE8w",
+    "initMs": 9009,
+    "volume": "lfs527-wxjc1r1lwp-refusal-store-mvwxjc39",
+    "vm": {
+      "project": "refusal",
+      "name": "lfs527-wxjc1r1lwp-refusal-vm",
+      "state": "running",
+      "image": "docker.io/library/node:22-trixie-slim",
+      "home": "/Users/yifanxu/.cache/layerfs-test/lfs527-U9JE8w/home",
+      "store": "lfs527-wxjc1r1lwp-refusal-vm-store",
+      "created": "2026-10-31T21:45:09Z",
+      "worker": {
+        "state": "running",
+        "answering": true,
+        "build": "build-linux-4ee01388b1e54170bbd20243afe1ca37",
+        "port": 56850
+      },
+      "disk": {
+        "free": 21120929792
+      }
+    },
+    "teardownMs": 1068
+  },
+  "teardown": [
+    {
+      "name": "project.delete",
+      "ok": true,
+      "value": {
+        "kind": "Deleted",
+        "project": "refusal",
+        "volume": "lfs527-wxjc1r1lwp-refusal-store-mvwxjc39"
+      }
+    },
+    {
+      "name": "vm.delete",
+      "ok": true,
+      "value": {
+        "project": "refusal",
+        "name": "lfs527-wxjc1r1lwp-refusal-vm",
+        "state": "missing",
+        "store": "kept"
+      }
+    },
+    {
+      "name": "runtime.close",
+      "ok": true
+    },
+    {
+      "name": "work",
+      "ok": true
+    }
+  ],
+  "bundle": {
+    "path": "/Users/yifanxu/.cache/layerfs-test/lfs527-bundles/cells-4ee01388",
+    "id": "build-linux-4ee01388b1e54170bbd20243afe1ca37",
+    "platform": "linux",
+    "profile": "release",
+    "sourceCommit": "97d408cc5160347bd66b69b4eede91c173703d42",
+    "sourceSha256": "c47fba689c2da30e5066d44893330790165bb3834402b5de9033d2174d82635d",
+    "manifestSha256": "8fd20df6ecc404b6352526c8d8db884ca6d2d88dd791e888a733cfbec696471d",
+    "images": {
+      "build": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "runtime": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+      "sandbox": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"
+    },
+    "filesChecked": 215,
+    "mismatched": [],
+    "imageArchives": [
+      "1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9.tar"
+    ]
+  },
+  "observed": {
+    "placement vm:docker": {
+      "refused": true,
+      "code": "Unsupported",
+      "message": "Unsupported: no VM provider is implemented for vm:docker; it is vm:microsandbox or vm:apple-container or vm:ssh or vm:lima or vm:firecracker",
+      "detail": null
+    },
+    "LAYERFS_SANDBOX=docker on vm:apple-container": {
+      "opened": {
+        "refused": true,
+        "code": "Unsupported",
+        "message": "Unsupported: deploy.sandbox (LAYERFS_SANDBOX) docker is not available on a vm:apple-container home: its Sandboxes are namespaces inside the project's VM lfs527-wxjc1r1lwp-refusal-vm; leave LAYERFS_SANDBOX to the runtime",
+        "detail": null
+      },
+      "created": null
+    },
+    "LAYERFS_SANDBOX_BACKEND=docker on vm:apple-container": {
+      "opened": {
+        "refused": false,
+        "value": "opened"
+      },
+      "created": {
+        "refused": true,
+        "code": "InvalidInput",
+        "message": "InvalidInput: deploy.sandboxBackend (LAYERFS_SANDBOX_BACKEND) is native or namespaces, not docker; it is replaced by LAYERFS_SANDBOX=native or namespaces",
+        "detail": null
+      }
+    }
+  },
+  "imageDigest": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+  "teardownOk": true,
+  "endedAt": "2026-10-31T21:45:19.816Z"
+}

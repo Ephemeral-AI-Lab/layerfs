@@ -1,0 +1,25 @@
+HEAD 97d408cc5160347bd66b69b4eede91c173703d42 2026-10-31T21:46:56Z
+ api/agent/src/transport/worker_client.js |  5 +++++
+ api/agent/test/native_deployment.mjs     | 27 +++++++++++++++++++++++++++
+ api/docs/agent.md                        |  2 +-
+ api/runtime/test/verify/cells/run.mjs    | 10 ++++++++--
+ 4 files changed, 41 insertions(+), 3 deletions(-)
+agent native_deployment: native_deployment: ok
+agent calls: PASS calls (39 cases)
+agent exec_output: exec output: ok
+vm_placement settings: PASS vm_placement/settings
+vm_placement flow: PASS vm_placement/flow
+vm_placement two: PASS vm_placement/two
+vm_placement bundle: PASS vm_placement/bundle
+vm_placement delete: PASS vm_placement/delete
+vm_placement hosts: PASS vm_placement/hosts
+vm_placement stores: PASS vm_placement/stores
+vm_placement apple-container: PASS vm_placement/apple-container
+vm_placement ssh: PASS vm_placement/ssh
+vm_placement lima: PASS vm_placement/lima
+vm_placement firecracker: PASS vm_placement/firecracker
+vm_placement cleanup: PASS vm_placement/cleanup
+runtime macos-worker: PASS runtime/macos-worker
+runtime windows-worker: PASS runtime/windows-worker
+runtime worker-frames: PASS runtime/worker-frames
+runtime worker-docker: PASS runtime/worker-docker

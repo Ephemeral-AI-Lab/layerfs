@@ -1,0 +1,395 @@
+{
+  "receipt": "lfs527-cell/1",
+  "row": "linux-namespaces",
+  "cell": "C09",
+  "verdict": "PASS",
+  "cause": null,
+  "project": "c09",
+  "prefix": "lfs527-vwuvbudqop-",
+  "startedAt": "2026-10-31T20:30:30.021Z",
+  "host": {
+    "hostname": "Yifans-MacBook-Pro-10.local",
+    "platform": "darwin",
+    "release": "25.4.0",
+    "cpus": 14,
+    "memBytes": 38654705664,
+    "node": "v24.21.0",
+    "uid": 501
+  },
+  "runner": {
+    "run.mjs": "164f91862f99c53e3e28f76f873013e8e13d4eb3d3cc9626d1180720794e9dcd",
+    "cell.mjs": "4d8c3431e3c5de3b7a261d7aff7f0b1ba816b4cbfe021d8e12d5ae3dea5cdb78",
+    "workloads.mjs": "e22d812db8858758dc8cae491168b881bb81489663e43b8ebac115f9eec99f62"
+  },
+  "load1": {
+    "start": 1.74,
+    "end": 7.63330078125
+  },
+  "constructionWorkers": "1",
+  "driver": {
+    "work": "/var/lib/lfs527/lfs527-EaqYhL",
+    "fs": "ext4",
+    "maxUserNamespaces": "0",
+    "initMs": 18,
+    "init": {
+      "kind": "Initialized",
+      "project": "c09",
+      "layer": "32d7f9a400eb1c105fca0ec258c2cd62da55ec181c36aa010a21df7486bb68b2aa",
+      "root": "13ff21384285a65c272d5b04eed76460e93e50bda25fa084240e24b825f6e434",
+      "store": "/var/lib/lfs527/lfs527-EaqYhL/store/store.sqlite"
+    },
+    "setupMs": 113,
+    "cellBudgetMs": 89627,
+    "teardownMs": 849
+  },
+  "teardown": [
+    {
+      "name": "sandboxes",
+      "ok": false,
+      "error": {
+        "code": "Failed",
+        "message": "Failed: WireFailure { attempted: false, sent_bytes: 0, request_header_bytes: 0, sent_body_bytes: 0, pending_request: PendingRequest { bytes: 0 }, status: None, cause: Unsupported(\"the namespaces Sandbox runtime needs the layerfs-sandbox-helper executable beside the          daemon (or LAYERFS_SANDBOX_HELPER set)\"), fence_error: None, observed_exec: None, observed_container: None, requested_container: None, requested_exec: None, error_body: None }",
+        "detail": null
+      }
+    },
+    {
+      "name": "leftover mounts and processes",
+      "ok": true,
+      "value": {
+        "mounts": [],
+        "pids": [
+          "34734",
+          "34735",
+          "34736"
+        ]
+      }
+    },
+    {
+      "name": "work",
+      "ok": true
+    }
+  ],
+  "body": {
+    "sha256": "37eb10ecfa439aa69bc9e430d39ce029099fa2bb52a44a67ffef8a31ecdac9e5",
+    "commandSha256": "1017cbd4cd0a42bc4cd14f23c24adf54e47518ad58d7564b0eecf8badb1c6dae",
+    "setupSha256": "68c36eedeb7daf07516db93ca0ac0263bf3859d42549f7d490b1f074475ffc9d"
+  },
+  "imageDigest": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+  "imageArchive": "/Users/yifanxu/.cache/layerfs-test/lfs527-images/1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9.tar",
+  "bundle": {
+    "path": "/Users/yifanxu/.cache/layerfs-worktrees/issue527-platform-pass-e-f55ee57a9aa7/artifacts/build-linux-4bedac61bd884930b3b8e16af1af2a00",
+    "id": "build-linux-4bedac61bd884930b3b8e16af1af2a00",
+    "platform": "linux",
+    "profile": "release",
+    "sourceCommit": "50e2c2bc87c8ffbde05bca046f4b1d407ee10e7b",
+    "sourceSha256": "b35ec6b35a60f226287494bc283892bf3dbe290b6c47194ba90d0bb87c5c8060",
+    "manifestSha256": "7587a03bb144443d7a55f0fe0af793f0f4349985eedb93342347ef0de7de6d42",
+    "images": {
+      "build": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "runtime": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+      "sandbox": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"
+    },
+    "filesChecked": 207,
+    "mismatched": [],
+    "imageArchives": []
+  },
+  "sourceCommit": "50e2c2bc87c8ffbde05bca046f4b1d407ee10e7b",
+  "env": {
+    "LAYERFS_SANDBOX": "native",
+    "LAYERFS_NATIVE": "/Users/yifanxu/.cache/layerfs-worktrees/issue527-platform-pass-e-f55ee57a9aa7/artifacts/build-linux-4bedac61bd884930b3b8e16af1af2a00/layerfs.node",
+    "LAYERFS_DAEMON": "/Users/yifanxu/.cache/layerfs-worktrees/issue527-platform-pass-e-f55ee57a9aa7/artifacts/build-linux-4bedac61bd884930b3b8e16af1af2a00/layerfs-daemon",
+    "LAYERFS_LOCAL_DIR": "/var/lib/lfs527/lfs527-EaqYhL/local",
+    "LAYERFS_STORE_PATH": "/var/lib/lfs527/lfs527-EaqYhL/store/store.sqlite",
+    "LAYERFS_HOME": "/var/lib/lfs527/lfs527-EaqYhL/home",
+    "LAYERFS_CONTAINER_PREFIX": "lfs527-vwuvbudqop-",
+    "LAYERFS_SANDBOX_BACKEND": "namespaces",
+    "LAYERFS_IMAGE": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+    "LAYERFS_IMAGE_ARCHIVE": "/Users/yifanxu/.cache/layerfs-test/lfs527-images/1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9.tar"
+  },
+  "lock": {
+    "lock": "/Users/yifanxu/.cache/layerfs-test/lfs527-sample.lock",
+    "waitMs": 0,
+    "load1": 7.63330078125,
+    "grantedAt": "2026-10-31T20:30:39.854Z",
+    "staleRemoved": null,
+    "relayed": true,
+    "load1Local": 1.7
+  },
+  "cellResult": {
+    "cell": "C09",
+    "project": "c09",
+    "branch": "lane",
+    "ok": true,
+    "cause": null,
+    "phases": {
+      "setup": {
+        "exec": {
+          "wallMs": 329.426,
+          "exitCode": 0,
+          "stdout": "",
+          "stderr": "",
+          "rc": null,
+          "ms": null
+        },
+        "commitKind": "Committed",
+        "commit": {
+          "kind": "Committed",
+          "head": "12bdd882a3f3f46cee2915acf61b3f1a4abad11815ddce9493e1ce490f7300b001",
+          "commit": {
+            "id": "12bdd882a3f3f46cee2915acf61b3f1a4abad11815ddce9493e1ce490f7300b001",
+            "branch": null,
+            "parent": null,
+            "secondParent": null,
+            "base": "32d7f9a400eb1c105fca0ec258c2cd62da55ec181c36aa010a21df7486bb68b2aa",
+            "root": "966d7596ee1f967ed0f7265bea5ba10fe70880d432525ee2bcc9a62b7a8fc059",
+            "via": "exec",
+            "message": "lfs527 C09 setup",
+            "mergedFrom": null,
+            "time": 1793478639858,
+            "logical": 67108864,
+            "newCanonical": 39263,
+            "newStored": 748,
+            "newMetadata": 672,
+            "displaced": null,
+            "lww": [],
+            "lwwTruncated": false
+          },
+          "displacedHead": null,
+          "merged": null,
+          "lww": [],
+          "lwwTruncated": false
+        },
+        "unmount": {
+          "kind": "Unmounted"
+        }
+      },
+      "warmup": {
+        "mountMs": 3.914,
+        "exec": {
+          "wallMs": 118.33,
+          "exitCode": 0,
+          "stdout": "LFS527 0 1793478639941515174 1793478640040598637\n",
+          "stderr": "",
+          "rc": 0,
+          "ms": 99.083463
+        },
+        "unmountMs": 4.602,
+        "unmount": {
+          "kind": "Unmounted"
+        }
+      },
+      "timed": {
+        "mountMs": 7.817,
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "workspace": {
+          "sandbox": "1",
+          "path": "/var/lib/lfs527/lfs527-EaqYhL/local/lfs527-vwuvbudqop-c09-1/workspaces/3"
+        },
+        "exec": {
+          "wallMs": 156.587,
+          "exitCode": 0,
+          "stdout": "LFS527 0 1793478640092999280 1793478640223669138\n",
+          "stderr": "",
+          "rc": 0,
+          "ms": 130.669858
+        },
+        "commitMs": 0.895,
+        "commitKind": "UpToDate",
+        "commit": {
+          "kind": "UpToDate",
+          "head": "12bdd882a3f3f46cee2915acf61b3f1a4abad11815ddce9493e1ce490f7300b001",
+          "root": "966d7596ee1f967ed0f7265bea5ba10fe70880d432525ee2bcc9a62b7a8fc059",
+          "merged": null,
+          "lww": [],
+          "lwwTruncated": false
+        },
+        "unmountMs": 5.728,
+        "unmount": {
+          "kind": "Unmounted"
+        }
+      },
+      "verify": {
+        "exitCode": 0,
+        "stdout": "VERIFY OK\n",
+        "stderr": ""
+      }
+    },
+    "steps": [
+      {
+        "name": "open",
+        "ms": 8.388,
+        "ok": true
+      },
+      {
+        "name": "branch.fork",
+        "ms": 0.505,
+        "ok": true
+      },
+      {
+        "name": "sandbox.create",
+        "ms": 8412.031,
+        "ok": true
+      },
+      {
+        "name": "setup.mount",
+        "ms": 8.623,
+        "ok": true
+      },
+      {
+        "name": "setup.exec",
+        "ms": 329.407,
+        "ok": true
+      },
+      {
+        "name": "setup.commit",
+        "ms": 330.501,
+        "ok": true
+      },
+      {
+        "name": "setup.unmount",
+        "ms": 9.839,
+        "ok": true
+      },
+      {
+        "name": "warmup.mount",
+        "ms": 3.91,
+        "ok": true
+      },
+      {
+        "name": "warmup.exec",
+        "ms": 118.324,
+        "ok": true
+      },
+      {
+        "name": "warmup.unmount",
+        "ms": 4.589,
+        "ok": true
+      },
+      {
+        "name": "timed.mount",
+        "ms": 7.811,
+        "ok": true
+      },
+      {
+        "name": "timed.exec",
+        "ms": 156.574,
+        "ok": true
+      },
+      {
+        "name": "timed.commit",
+        "ms": 0.89,
+        "ok": true
+      },
+      {
+        "name": "timed.unmount",
+        "ms": 5.715,
+        "ok": true
+      },
+      {
+        "name": "verify.mount",
+        "ms": 6.298,
+        "ok": true
+      },
+      {
+        "name": "verify.identity",
+        "ms": 94.706,
+        "ok": true
+      },
+      {
+        "name": "verify.exec",
+        "ms": 533.176,
+        "ok": true
+      },
+      {
+        "name": "verify.unmount",
+        "ms": 4.58,
+        "ok": true
+      },
+      {
+        "name": "sandbox.close",
+        "ms": 1.242,
+        "ok": false,
+        "error": {
+          "code": "Failed",
+          "message": "Failed: WireFailure { attempted: false, sent_bytes: 0, request_header_bytes: 0, sent_body_bytes: 0, pending_request: PendingRequest { bytes: 0 }, status: None, cause: Unsupported(\"the namespaces Sandbox runtime needs the layerfs-sandbox-helper executable beside the          daemon (or LAYERFS_SANDBOX_HELPER set)\"), fence_error: None, observed_exec: None, observed_container: None, requested_container: None, requested_exec: None, error_body: None }",
+          "detail": null
+        }
+      }
+    ],
+    "fork": {
+      "kind": "Forked",
+      "branch": "lane",
+      "base": "32d7f9a400eb1c105fca0ec258c2cd62da55ec181c36aa010a21df7486bb68b2aa",
+      "head": null
+    },
+    "sandbox": {
+      "sandbox": "1",
+      "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9"
+    },
+    "lock": {
+      "askedMs": 13.839,
+      "lock": "/Users/yifanxu/.cache/layerfs-test/lfs527-sample.lock",
+      "waitMs": 0,
+      "load1": 7.63330078125,
+      "grantedAt": "2026-10-31T20:30:39.854Z",
+      "staleRemoved": null,
+      "relayed": true,
+      "load1Local": 1.7
+    },
+    "where": {
+      "kernel": "Linux 6.8.0-147-generic",
+      "machine": "aarch64",
+      "cpus": "4",
+      "memKiB": "3994696",
+      "memBytes": null,
+      "cpuMax": null,
+      "id": "501:20"
+    },
+    "closeError": "sandbox.close: Failed Failed: WireFailure { attempted: false, sent_bytes: 0, request_header_bytes: 0, sent_body_bytes: 0, pending_request: PendingRequest { bytes: 0 }, status: None, cause: Unsupported(\"the namespaces Sandbox runtime needs the layerfs-sandbox-helper executable beside the          daemon (or LAYERFS_SANDBOX_HELPER set)\"), fence_error: None, observed_exec: None, observed_container: None, requested_container: None, requested_exec: None, error_body: None }"
+  },
+  "cellExit": {
+    "code": 0,
+    "signal": null,
+    "killed": false,
+    "stderr": ""
+  },
+  "timings": {
+    "mountMs": 7.817,
+    "execWallMs": 156.587,
+    "commandMs": 130.669858,
+    "commitMs": 0.895,
+    "commitKind": "UpToDate",
+    "unmountMs": 5.728
+  },
+  "where": {
+    "kernel": "Linux 6.8.0-147-generic",
+    "machine": "aarch64",
+    "cpus": "4",
+    "memKiB": "3994696",
+    "memBytes": null,
+    "cpuMax": null,
+    "id": "501:20"
+  },
+  "teardownOk": false,
+  "endedAt": "2026-10-31T20:30:41.555Z",
+  "via": {
+    "lima": "lfs527-linux",
+    "lock": {
+      "grants": [
+        {
+          "lock": "/Users/yifanxu/.cache/layerfs-test/lfs527-sample.lock",
+          "waitMs": 0,
+          "load1": 7.63330078125,
+          "grantedAt": "2026-10-31T20:30:39.854Z",
+          "staleRemoved": null
+        }
+      ]
+    },
+    "exit": 0,
+    "stderr": ""
+  },
+  "load1Outer": {
+    "start": 6.673828125
+  },
+  "runnerCopy": "/Users/yifanxu/.cache/layerfs-test/lfs527-runner-a266423340453927"
+}
