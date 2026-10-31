@@ -62,9 +62,10 @@ in one Linux VM, below) and on Windows `wsl: { distribution, user, node, home }`
 missing setting does not refuse `open`: `status().missing` lists it.
 
 The runtime names each project's Sandbox backend itself (#527 F4): a `local`
-home's clients get `LAYERFS_SANDBOX=docker` with `LAYERFS_SANDBOX_BACKEND`,
-`LAYERFS_LOCAL_DIR` and `LAYERFS_IMAGE_ARCHIVE` unset, and a `vm:` home's get
-native Sandboxes on the namespaces backend. Values of those settings in the
+home's clients get `LAYERFS_SANDBOX=docker` with the former
+`LAYERFS_SANDBOX_BACKEND`, `LAYERFS_LOCAL_DIR` and `LAYERFS_IMAGE_ARCHIVE`
+unset, and a `vm:` home's get `LAYERFS_SANDBOX=namespaces` (#527 step 11),
+with `LAYERFS_SANDBOX_BACKEND` unset. Values of those settings in the
 runtime's own environment do not reach its clients.
 
 ## Init
@@ -212,7 +213,7 @@ bundle's `manifest.json` before it listens.
 worker, unchanged) or `vm:<provider>`: **each of this home's projects — its
 Stores — lives in one Linux VM of its own** on this machine (#515 §6, V9, V1).
 A project's VM holds that project's Store on its own ext4 disk, its Sandboxes
-are Linux namespaces (`LAYERFS_SANDBOX_BACKEND=namespaces`, H36's backend) and
+are Linux namespaces (`LAYERFS_SANDBOX=namespaces`, H36's backend) and
 its worker runs the real SDK as root; the host reaches only each VM's worker,
 with one attempt per call and no replay. Providers, verified with stand-in
 provider CLIs (`test/vm_placement.mjs`; real runs of `test/verify/vm_real.mjs`:
@@ -303,7 +304,7 @@ The adapter's five steps, each attempted once, all for one named project:
 Init runs as one more call to that project's worker: `platform.init` starts its
 VM and copies the source folder into `/layerfs/import`, and `LayerFS.init`
 reads it there. `deploymentEnv` gives clients and agents the VM's settings:
-`LAYERFS_SANDBOX=native`, `LAYERFS_SANDBOX_BACKEND=namespaces` (always: a
+`LAYERFS_SANDBOX=namespaces` (always: a `LAYERFS_SANDBOX` or the former
 `LAYERFS_SANDBOX_BACKEND` in the caller's environment does not replace it), `LAYERFS_DAEMON`,
 `LAYERFS_LOCAL_DIR`, `LAYERFS_HOME=/layerfs/home`, the Store's
 `LAYERFS_STORE_PATH`, this project's `LAYERFS_WORKER_ENDPOINT`, and the bundle

@@ -147,9 +147,9 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open: `global/store.sqlite` in the project's volume. On Linux this process opens it, so it must be on a local filesystem the daemons share, such as `/layerfs-store/global/store.sqlite` where the volume is mounted at `/layerfs-store`; otherwise Store calls fail `Unsupported`. On macOS and Windows the worker opens it, so it is the path inside the worker's Linux, `/var/lib/docker/volumes/<volume>/_data/global/store.sqlite`. On any other platform Store calls fail `Unsupported`. Unset, they fail `InvalidInput` everywhere. |
 | `LAYERFS_CONTAINER_PREFIX` | Optional. Names every container this client creates `<prefix><project>-<Sandbox>` (default prefix `layerfs-`); another LayerFS home on the same Docker engine sets its own, so names never collide. Docker's name rule applies (an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128). A name another container holds refuses the create before any effect. |
 | `LAYERFS_DAEMON_HOST` | Optional. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |
-| `LAYERFS_SANDBOX` | Optional. Unset or `docker`: a Sandbox is a Docker container, exactly as described here. `native` (Linux or macOS): a Sandbox is a daemon process with no container and no Docker setting read. On macOS it runs as this user, without root; Workspaces are served over loopback NFS and mounted by this machine's own NFS client, and commands run as this user. On Linux it needs root: the daemon serves FUSE as root and commands run as 501:20 (see [Native Sandboxes](#native-sandboxes-linux-and-macos)). Elsewhere `sandbox.create` refuses `native` as `Unsupported`; on Windows the agent itself refuses it, and `LAYERFS_SANDBOX_BACKEND=namespaces`, before anything is made (a Windows Sandbox is Docker, through the WSL2 worker). Any other value is refused as `InvalidInput` before anything is made. |
-| `LAYERFS_LOCAL_DIR` | With `LAYERFS_SANDBOX=native`, required: an existing absolute directory, owned by the running user, not group/other writable and traversable by others (0755). Each native Sandbox gets its own directory under it. |
-| `LAYERFS_SANDBOX_BACKEND` | With `LAYERFS_SANDBOX=native` on Linux, optional: `native` (unset) or `namespaces`. `namespaces` puts each Sandbox's daemon in its own mount, PID and IPC namespaces and its own cgroup v2 directory, and runs commands as the sandbox's uid:gid with no capabilities and no-new-privs; see [Namespace Sandboxes (Linux)](#namespace-sandboxes-linux). It needs root, cgroup v2, `/dev/fuse` and `user.max_user_namespaces=0`, and is refused `Unsupported` elsewhere or without them. Any other value is refused `InvalidInput` before anything is made. It is read when the client is made and sent with every call, so a Sandbox made with one backend is never reopened as the other. |
+| `LAYERFS_SANDBOX` | Optional: the Sandbox backend, `docker`, `native` or `namespaces`. Unset or `docker`: a Sandbox is a Docker container, exactly as described here. `native` (Linux or macOS): a Sandbox is a daemon process with no container and no Docker setting read. On macOS it runs as this user, without root; Workspaces are served over loopback NFS and mounted by this machine's own NFS client, and commands run as this user. On Linux it needs root: the daemon serves FUSE as root and commands run as 501:20 (see [Native Sandboxes](#native-sandboxes-linux-and-macos)). `namespaces` (Linux) is native with each Sandbox's daemon in its own mount, PID and IPC namespaces and its own cgroup v2 directory, on a root from the Sandbox image (`LAYERFS_IMAGE`, `LAYERFS_IMAGE_ARCHIVE`); commands run as the sandbox's uid:gid with no capabilities and no-new-privs; see [Namespace Sandboxes (Linux)](#namespace-sandboxes-linux). It needs root, cgroup v2, `/dev/fuse` and `user.max_user_namespaces=0`, and is refused `Unsupported` elsewhere or without them. Elsewhere `sandbox.create` refuses `native` as `Unsupported`; on Windows the agent itself refuses `native` and `namespaces` before anything is made (a Windows Sandbox is Docker, through the WSL2 worker). Any other value is refused as `InvalidInput` before anything is made. It is read when the client is made and sent with every call, so a Sandbox made with one backend is never reopened as another. |
+| `LAYERFS_LOCAL_DIR` | With `LAYERFS_SANDBOX=native` or `namespaces`, required: an existing absolute directory, owned by the running user, not group/other writable and traversable by others (0755). Each native or namespaces Sandbox gets its own directory under it. |
+| `LAYERFS_SANDBOX_BACKEND` | Former, kept for one release: replaced by `LAYERFS_SANDBOX`. `LAYERFS_SANDBOX=native` with `LAYERFS_SANDBOX_BACKEND=namespaces` still means `namespaces`, and with it unset or `native` means `native`. Set beside any other `LAYERFS_SANDBOX` (`namespaces` with `native`, or `docker` with either), or set to another value, it is refused `InvalidInput` before anything is made, naming both settings. |
 | `LAYERFS_TRACE` | Optional per-call trace file (see [the call trace](backend.md#the-call-trace)); unset means no trace. |
 | `LAYERFS_TRACE_STEP` | Optional step label put on each trace line as `step`; read at every call. |
 | `LAYERFS_TRACE_START` | `1` adds a start line before each traced call; read at every call. |
@@ -255,7 +255,7 @@ process identity; the filesystem daemon launches and supervises no commands.
 machine, with no container and no Docker. On Linux it needs root: the daemon
 serves its Workspaces over FUSE as root (`LAYERFS_KERNEL=fuse`), commands run
 as 501:20, and the Store (`LAYERFS_STORE_PATH`) is on a local Linux filesystem
-the daemons share; `LAYERFS_SANDBOX_BACKEND=namespaces` adds isolation (see
+the daemons share; `LAYERFS_SANDBOX=namespaces` adds isolation (see
 [Namespace Sandboxes (Linux)](#namespace-sandboxes-linux)). Without root it is
 refused `Unsupported` before anything is made. The rest of this section
 describes macOS, where it needs no root, no kernel extension and no macFUSE or
@@ -291,8 +291,9 @@ on 127.0.0.1 only. Its records name the daemon by process id and start time,
 so a reused id is never taken for it. `sandbox.create`, the mount result and
 `project.list_sandboxes()` give a native Sandbox's `image` as `local`. A
 record's `runtime` is `native`; it is used only by a client whose deployment
-is `native` with the native backend (`LAYERFS_SANDBOX_BACKEND` unset or
-`native`; a `namespaces` deployment does not reopen it either, #527) and the
+is `native` (`LAYERFS_SANDBOX=native`, or the former pair with
+`LAYERFS_SANDBOX_BACKEND` unset or `native`; a `namespaces` deployment does
+not reopen it either, #527) and the
 same `LAYERFS_LOCAL_DIR` and prefix, so it puts that
 Sandbox exactly where the record says; any other is refused `InvalidInput`
 and nothing is deleted. A record of the former `local` runtime (an earlier,
@@ -326,8 +327,10 @@ can fail on this NFS route with the system SQLite VFS; see
 
 ### Namespace Sandboxes (Linux)
 
-`LAYERFS_SANDBOX_BACKEND=namespaces` keeps the native deployment (no Docker)
-and adds isolation inside the project's VM: each Sandbox's daemon runs
+`LAYERFS_SANDBOX=namespaces` (formerly `LAYERFS_SANDBOX=native` with
+`LAYERFS_SANDBOX_BACKEND=namespaces`, still accepted for one release) is the
+native deployment (no Docker) with isolation added, as inside a `vm:` home's
+project VM: each Sandbox's daemon runs
 in its own mount, PID and IPC namespaces and its own cgroup v2 directory
 (`/sys/fs/cgroup/layerfs/<Sandbox id>`), so two Sandboxes on one Store cannot
 see each other's mounts, processes or files, and closing one ends everything
@@ -370,7 +373,7 @@ Delete then removes the cgroup and the directory, so a closed Sandbox leaves no
 process, mount or cgroup behind. No graceful filesystem drain exists.
 
 A record's `runtime` is `namespaces`, with the same fields as a native record;
-it is used only by a client whose `LAYERFS_SANDBOX_BACKEND` is `namespaces`
+it is used only by a client whose `LAYERFS_SANDBOX` is `namespaces`
 with the same `LAYERFS_LOCAL_DIR` and prefix. Another backend's record is
 refused `InvalidInput` and nothing is deleted, both ways: a `namespaces`
 record seen by a native deployment, and a `native` record seen by a

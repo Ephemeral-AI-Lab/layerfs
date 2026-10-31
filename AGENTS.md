@@ -170,7 +170,7 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   setting), with `local` the default and unchanged. **One Linux VM per Store**
   (V1): a project's VM holds that project's Store on its own ext4 disk, its
   Sandboxes are Linux namespaces inside it
-  (`LAYERFS_SANDBOX_BACKEND=namespaces`, documented in
+  (`LAYERFS_SANDBOX=namespaces`, documented in
   [the agent guide](api/docs/agent.md#namespace-sandboxes-linux)), and its
   worker runs the real SDK as root with its own secret and its own
   loopback-published port; the host reaches only each VM's worker, with one

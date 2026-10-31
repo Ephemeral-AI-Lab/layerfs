@@ -111,15 +111,17 @@ export class LayerFS {
    * settings read LAYERFS_HOME, _DOCKER, _IMAGE, _VOLUME and _DAEMON; a
    * Sandbox this client starts runs _IMAGE
    * on _VOLUME. LAYERFS_CONTAINER_PREFIX (default `layerfs-`) names every
-   * container it starts `<prefix><project>-<n>`. On Linux or macOS,
-   * LAYERFS_SANDBOX=native starts each Sandbox as a host daemon in a directory
+   * container it starts `<prefix><project>-<n>`. LAYERFS_SANDBOX picks the
+   * backend: `docker` (unset), `native` (Linux or macOS) or `namespaces`
+   * (Linux). Native starts each Sandbox as a host daemon in a directory
    * under LAYERFS_LOCAL_DIR. Linux requires root for FUSE and runs commands
    * as 501:20; macOS uses loopback NFS and the caller's identity. No Docker
-   * setting is read; native provides no isolation from the host.
-   * LAYERFS_SANDBOX_BACKEND picks the backend inside that directory: `native`
-   * (unset) or, on Linux, `namespaces` (namespaces, cgroups, nonroot commands).
-   * It is read for every call, so a Sandbox made with one backend is never
-   * reopened as another.
+   * setting is read; native provides no isolation from the host. Namespaces
+   * adds Linux namespaces, a cgroup and an image root (LAYERFS_IMAGE,
+   * LAYERFS_IMAGE_ARCHIVE). The former LAYERFS_SANDBOX_BACKEND=namespaces
+   * beside LAYERFS_SANDBOX=native still means namespaces, for one release.
+   * The backend is read for every call, so a Sandbox made with one backend
+   * is never reopened as another.
    * LAYERFS_DAEMON_HOST is the host this process
    * dials for a daemon's port, published on the Docker host's 127.0.0.1 only;
    * set it when the client runs in a container (`host.docker.internal` on

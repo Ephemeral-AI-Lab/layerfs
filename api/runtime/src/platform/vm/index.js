@@ -1,7 +1,7 @@
 // `vm:<provider>` placement (#515 §6, V9): **each of this home's projects —
 // strictly, each Store — lives in one Linux VM of its own** (V1). That VM holds
 // that project's Store on its own ext4 disk, shares that disk with the project's
-// Sandboxes' daemons (Linux namespaces inside it, `LAYERFS_SANDBOX_BACKEND=
+// Sandboxes' daemons (Linux namespaces inside it, `LAYERFS_SANDBOX=
 // namespaces`, H36), and runs its own worker with its own secret and its own
 // private loopback channel (`worker/server.js`, one attempt per call, no replay).
 // The host reaches only each VM's worker.
@@ -378,16 +378,17 @@ const stores = {
   },
 };
 
-/** The guest home, and the deployment inside the project's VM: native Sandboxes, the namespace
- * backend, named here rather than read from this process's environment (#527 F4). */
+/** The guest home, and the deployment inside the project's VM: namespaces Sandboxes
+ * (LAYERFS_SANDBOX=namespaces), named here rather than read from this process's environment (#527 F4). */
 export function deploymentEnv(settings, project) {
   // a VM's projects open the SQLite Store on that VM's disk only (#527 F3)
   if (project.kind === "postgresql") throw refuse("Unsupported", `${project.name} is in the PostgreSQL Store ${project.store}, and this home is placed in ${settings.placement.name}: its projects open only the SQLite Store on their own VM's disk`, null);
   const image = settings.bundle ? bundleImage(settings.bundle) : null;
   return {
     HOME: callHome(settings),
-    SANDBOX: "native",
-    SANDBOX_BACKEND: "namespaces",
+    SANDBOX: "namespaces",
+    // "" unsets an ambient former LAYERFS_SANDBOX_BACKEND, which would conflict
+    SANDBOX_BACKEND: "",
     DAEMON: GUEST.daemon,
     LOCAL_DIR: GUEST.local,
     // the Sandbox image this VM's bundle carries, when it carries one (V7):

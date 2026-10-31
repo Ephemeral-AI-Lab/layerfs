@@ -28,10 +28,17 @@ GLOBAL OPTIONS
   --text                readable output instead of JSON
   -h, --help            help for the command
 
-SETTINGS come from the environment, as for the SDK: LAYERFS_HOME, LAYERFS_STORE_PATH,
-  LAYERFS_DOCKER, LAYERFS_IMAGE, LAYERFS_VOLUME, LAYERFS_DAEMON, LAYERFS_CONTAINER_PREFIX,
-  LAYERFS_DAEMON_HOST, LAYERFS_STORE_POLICY, LAYERFS_TRACE, LAYERFS_TRACE_STEP,
-  LAYERFS_TRACE_START.
+SETTINGS come from the environment, as for the SDK (api/docs/agent.md):
+  Store       LAYERFS_HOME, LAYERFS_STORE_PATH, LAYERFS_STORE, LAYERFS_STORE_POSTGRESQL,
+              LAYERFS_STORE_POLICY
+  Sandbox     LAYERFS_SANDBOX (docker, native or namespaces; default docker),
+              LAYERFS_DAEMON, LAYERFS_CONTAINER_PREFIX
+    docker      LAYERFS_DOCKER, LAYERFS_IMAGE, LAYERFS_VOLUME, LAYERFS_DAEMON_HOST
+    native      LAYERFS_LOCAL_DIR
+    namespaces  LAYERFS_LOCAL_DIR, LAYERFS_IMAGE, LAYERFS_IMAGE_ARCHIVE
+    former      LAYERFS_SANDBOX_BACKEND=namespaces with LAYERFS_SANDBOX=native (one release)
+  Binding     LAYERFS_NATIVE, LAYERFS_WORKER_ENDPOINT
+  Trace       LAYERFS_TRACE, LAYERFS_TRACE_STEP, LAYERFS_TRACE_START
 
 ARGUMENTS
   <ref>                 main, a Branch, a Commit id or a Layer id

@@ -60,22 +60,25 @@ export function sandboxArg(sandbox) {
 }
 
 /** Deployment settings from the client options, else the environment
- * (LAYERFS_<NAME>). A Workspace's Sandbox needs
- * every one but the container prefix and daemon host, and, on a PostgreSQL
- * Store (`postgresql`), the volume: its daemon opens the server. With
- * `sandbox` (LAYERFS_SANDBOX) `native` (Linux or macOS), a Sandbox is a host
- * daemon: Linux uses FUSE with a root daemon and nonroot commands (501:20);
- * macOS uses loopback NFS and this user. It needs the daemon and
- * `localDir` (LAYERFS_LOCAL_DIR) and no Docker setting; on Windows it is
- * refused Unsupported. Unset or `docker` is Docker; any other value is
- * refused. */
+ * (LAYERFS_<NAME>). `sandbox` (LAYERFS_SANDBOX) picks the backend (#527 D3):
+ * unset or `docker`, a Docker container, which needs every Docker setting but
+ * the container prefix and daemon host, and, on a PostgreSQL Store
+ * (`postgresql`), the volume: its daemon opens the server. `native` (Linux or
+ * macOS) and `namespaces` (Linux) are host daemons (see `localDeployment`).
+ * The binding is the one validator: it maps the former
+ * `sandboxBackend` (LAYERFS_SANDBOX_BACKEND), kept for one release, and
+ * refuses an unknown value or a conflicting pair, so this only checks that
+ * each value's fields are present and passes both settings on. `host` is
+ * the platform the Sandbox runs on (`sandboxHost`): native and namespaces are
+ * refused where they cannot run before anything is read. */
 export function deployment(options = {}, postgresql = false, host = process.platform) {
   const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
   const sandbox = options.sandbox ?? env("SANDBOX");
-  if (sandbox === "native") return nativeDeployment(options, env, sandbox, host);
-  if (sandbox !== undefined && sandbox !== "docker") {
-    throw new LayerFSError("InvalidInput", `deploy.sandbox (LAYERFS_SANDBOX) is docker or native (Linux or macOS), not ${sandbox}`, null);
-  }
+  const backend = options.sandboxBackend ?? env("SANDBOX_BACKEND");
+  const named = { ...(sandbox !== undefined ? { sandbox } : {}), ...(backend !== undefined ? { sandboxBackend: backend } : {}) };
+  if (sandbox === "native" || sandbox === "namespaces") return localDeployment(options, env, named, host);
+  // another value is the binding's to refuse, naming the values it takes
+  if (sandbox !== undefined && sandbox !== "docker") return named;
   const deploy = {
     docker: options.docker ?? env("DOCKER") ?? "/var/run/docker.sock",
     image: options.image ?? env("IMAGE"),
@@ -91,39 +94,41 @@ export function deployment(options = {}, postgresql = false, host = process.plat
   if (!deploy.volume) delete deploy.volume;
   if (!deploy.containerPrefix) delete deploy.containerPrefix;
   if (!deploy.daemonHost) delete deploy.daemonHost;
-  return deploy;
+  // a former LAYERFS_SANDBOX_BACKEND beside Docker is the binding's to refuse
+  return backend === undefined ? deploy : { ...deploy, sandboxBackend: backend };
 }
 
-/** A native Sandbox's settings: the daemon, the directory its Sandboxes
- * live in, the optional name prefix, and the backend inside that directory
- * (`sandboxBackend`, LAYERFS_SANDBOX_BACKEND: `native` when unset, or
- * `namespaces` on Linux). The namespaces backend gives each Sandbox a root
- * filesystem from an image, so it also needs `image` (LAYERFS_IMAGE, the
- * same digest Docker deploys) and `imageArchive` (LAYERFS_IMAGE_ARCHIVE, the
- * docker-archive the bundle carries). `host` is the platform the Sandbox
- * runs on: this process's, or Linux when a worker makes it (see
+/** A host-daemon Sandbox's settings (`sandbox` native or namespaces): the
+ * daemon, the directory its Sandboxes live in and the optional name prefix.
+ * Native on Linux uses FUSE with a root daemon and nonroot commands (501:20);
+ * on macOS loopback NFS and this user. Namespaces (Linux) gives each Sandbox
+ * a root filesystem from an image, so it also needs `image` (LAYERFS_IMAGE,
+ * the same digest Docker deploys) and `imageArchive` (LAYERFS_IMAGE_ARCHIVE,
+ * the docker-archive the bundle carries). The former `native` with
+ * `sandboxBackend` `namespaces` needs the same. `host` is the platform the
+ * Sandbox runs on: this process's, or Linux when a worker makes it (see
  * `sandboxHost`). */
-function nativeDeployment(options, env, sandbox, host) {
-  const backend = options.sandboxBackend ?? env("SANDBOX_BACKEND");
+function localDeployment(options, env, named, host) {
+  const namespaces = named.sandbox === "namespaces" || named.sandboxBackend === "namespaces";
+  const setting = named.sandbox === "namespaces" ? "deploy.sandbox (LAYERFS_SANDBOX) namespaces"
+    : namespaces ? "deploy.sandboxBackend (LAYERFS_SANDBOX_BACKEND) namespaces" : "deploy.sandbox (LAYERFS_SANDBOX) native";
   // #527 step 8: Windows runs Docker Sandboxes through its WSL2 worker; it has no native or namespaces backend
   if (host === "win32") {
-    const named = backend === "namespaces" ? "deploy.sandboxBackend (LAYERFS_SANDBOX_BACKEND) namespaces" : "deploy.sandbox (LAYERFS_SANDBOX) native";
-    throw new LayerFSError("Unsupported", `${named} is not supported on Windows: a Windows Sandbox is Docker, through the WSL2 worker; native runs on Linux or macOS, namespaces on Linux`, null);
+    throw new LayerFSError("Unsupported", `${setting} is not supported on Windows: a Windows Sandbox is Docker, through the WSL2 worker; native runs on Linux or macOS, namespaces on Linux`, null);
   }
   // namespaces is Linux only: refused before its image settings are read, so
   // a macOS deployment hears Unsupported, not a missing LAYERFS_IMAGE
-  if (backend === "namespaces" && host !== "linux") {
-    throw new LayerFSError("Unsupported", "deploy.sandboxBackend (LAYERFS_SANDBOX_BACKEND) namespaces is Linux only; use native", null);
+  if (namespaces && host !== "linux") {
+    throw new LayerFSError("Unsupported", `${setting} is Linux only; use native`, null);
   }
   const deploy = {
-    sandbox,
+    ...named,
     daemon: options.daemon ?? env("DAEMON"),
     localDir: options.localDir ?? env("LOCAL_DIR"),
     containerPrefix: options.containerPrefix ?? env("CONTAINER_PREFIX"),
   };
-  if (backend !== undefined) deploy.sandboxBackend = backend;
   const required = [["daemon", "DAEMON"], ["localDir", "LOCAL_DIR"]];
-  if (backend === "namespaces") {
+  if (namespaces) {
     deploy.image = options.image ?? env("IMAGE");
     deploy.imageArchive = options.imageArchive ?? env("IMAGE_ARCHIVE");
     required.push(["image", "IMAGE"], ["imageArchive", "IMAGE_ARCHIVE"]);

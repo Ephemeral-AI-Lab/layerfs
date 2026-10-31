@@ -195,13 +195,16 @@ try {
       assert.equal(existsSync(guestPath(state, vmName("shop"), `/layerfs/bundle/images/${image}.tar`)), true, "the image archive came in with the bundle");
 
       // the client side: this project's deployment, and this project's endpoint
-      // #527 F4: the VM deployment names its backend; a host LAYERFS_SANDBOX_BACKEND does not replace it
+      // #527 F4: the VM deployment names its backend; a host LAYERFS_SANDBOX or the former
+      // LAYERFS_SANDBOX_BACKEND does not replace it (step 11: it is LAYERFS_SANDBOX=namespaces)
+      process.env.LAYERFS_SANDBOX = "docker";
       process.env.LAYERFS_SANDBOX_BACKEND = "native";
       const env = deploymentEnv(runtime.settings, runtime.platform, { name: "shop" });
+      delete process.env.LAYERFS_SANDBOX;
       delete process.env.LAYERFS_SANDBOX_BACKEND;
       assert.equal(env.WORKER_ENDPOINT, endpointFile(home, "shop"), "agents an integration launches reach this project's VM");
       assert.equal(env.STORE_PATH, `${GUEST.store}/global/store.sqlite`, "the Store disk is the Store's directory");
-      assert.deepEqual([env.SANDBOX, env.SANDBOX_BACKEND], ["native", "namespaces"]);
+      assert.deepEqual([env.SANDBOX, env.SANDBOX_BACKEND], ["namespaces", ""]);
       assert.equal(env.IMAGE, `sha256:${image}`, "a bundle with an image gives the deployment its digest");
       assert.equal(env.IMAGE_ARCHIVE, `${GUEST.bundle}/images/${image}.tar`, "and the archive in this VM's own copy of the bundle");
       assert.equal(env.LOCAL_DIR, `${GUEST.store}/local`, "Sandbox directories are on the Store disk, never the VM's own root");

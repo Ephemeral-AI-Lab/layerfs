@@ -584,19 +584,18 @@ fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
     // record of the `local` runtime (an earlier, unmerged build) is never
     // used, so nothing it names is deleted
     let native = args.get("deploy").is_some_and(|deploy| {
-        crate::runtime::native(deploy)
-            && matches!(
-                crate::runtime::backend(deploy),
-                Ok(crate::runtime::Backend::Native)
-            )
+        matches!(
+            crate::runtime::backend(deploy),
+            Ok(Some(crate::runtime::Backend::Native))
+        )
     });
     if !native || value.get_text("runtime") != Some(NATIVE) {
         return Err(refused(
             "InvalidInput",
             format!(
-                "Sandbox {id} is a {} Sandbox, but only a native deployment with the native \
-                 backend (LAYERFS_SANDBOX=native, LAYERFS_SANDBOX_BACKEND unset or native) uses \
-                 a native record and none uses another; Sandboxes of other runtimes are never \
+                "Sandbox {id} is a {} Sandbox, but only a native deployment \
+                 (LAYERFS_SANDBOX=native) uses a native record and none uses another; \
+                 Sandboxes of other runtimes are never \
                  mixed, so the record is neither used nor deleted. Remove what it left by hand, \
                  then delete LAYERFS_HOME/{}/sandboxes/{id}/sandbox.record",
                 value.get_text("runtime").unwrap_or_default(),
@@ -684,12 +683,12 @@ fn namespaces_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Reco
     let deploy = args
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
-    if crate::runtime::backend(deploy)? != crate::runtime::Backend::Namespaces {
+    if crate::runtime::backend(deploy)? != Some(crate::runtime::Backend::Namespaces) {
         return Err(refused(
             "InvalidInput",
             format!(
-                "Sandbox {id} is a namespaces Sandbox, but this deployment runs the other local \
-                 backend; Sandboxes of other runtimes are never mixed, so the record is neither \
+                "Sandbox {id} is a namespaces Sandbox, but only a namespaces deployment \
+                 (LAYERFS_SANDBOX=namespaces) uses it; Sandboxes of other runtimes are never mixed, so the record is neither \
                  used nor deleted. Remove what it left by hand, then delete \
                  LAYERFS_HOME/{}/sandboxes/{id}/sandbox.record",
                 registry::text(args, "project")?

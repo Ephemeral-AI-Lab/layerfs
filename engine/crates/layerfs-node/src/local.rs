@@ -1,6 +1,7 @@
-//! Native Sandboxes (`deploy.sandbox` `native`, LAYERFS_SANDBOX=native):
-//! the project's daemon runs as a process of this user instead of in a
-//! container. It isolates nothing beyond the caller's own sandbox.
+//! Native and namespaces Sandboxes (`deploy.sandbox` `native` or
+//! `namespaces`, LAYERFS_SANDBOX): the project's daemon runs as a process of
+//! this user instead of in a container. Native isolates nothing beyond the
+//! caller's own sandbox; namespaces adds Linux namespaces and a cgroup.
 //!
 //! Each Sandbox gets a directory `<LAYERFS_LOCAL_DIR>/<prefix><project>-<n>`
 //! with what a container held at fixed paths: its setup
@@ -30,6 +31,7 @@ pub(crate) fn start(
     args: &SdkValue,
     directory: &Path,
     project: (&crate::registry::Project, StoreManifest),
+    backend: crate::runtime::Backend,
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let deploy = args
         .get("deploy")
@@ -38,7 +40,7 @@ pub(crate) fn start(
     if cfg!(target_os = "linux") && crate::discovery::user().0 != 0 {
         return Err(refused(
             "Unsupported",
-            "LAYERFS_SANDBOX=native on Linux needs root for FUSE and commands as uid 501, gid 20; run inside the VM or CI box that isolates it",
+            "LAYERFS_SANDBOX=native or namespaces on Linux needs root for FUSE and commands as uid 501, gid 20; run inside the VM or CI box that isolates it",
         ));
     }
     let root = deploy.get_text("localDir").ok_or_else(|| {
@@ -47,7 +49,6 @@ pub(crate) fn start(
             "deploy.localDir is not configured (LAYERFS_LOCAL_DIR); a native Sandbox needs it",
         )
     })?;
-    let backend = crate::runtime::backend(deploy)?;
     let runtime = native_runtime(root, backend)
         .map_err(|error| refused("InvalidInput", format!("LAYERFS_LOCAL_DIR {root}: {error}")))?;
     let executable = PathBuf::from(text(deploy, "daemon")?);

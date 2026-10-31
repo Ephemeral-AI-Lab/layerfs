@@ -297,3 +297,69 @@ fn a_native_record_is_not_reopened_by_a_namespaces_deployment() {
     reclaim(&home, "native", Some(text(&root)), RECLAIMED);
     assert!(!own.exists());
 }
+
+#[test]
+fn one_sandbox_setting_maps_the_former_pair_and_refuses_conflicts() {
+    // #527 step 11 (D3): LAYERFS_SANDBOX=docker|native|namespaces is the one
+    // setting; the binding validates it and maps the former pair. A
+    // namespaces record makes the call read its deployment's backend.
+    let home = Home::new();
+    let root = root(&home);
+    let own = own(&root);
+    let digest = format!("sha256:{}", "a".repeat(64));
+    record(
+        &home,
+        "namespaces",
+        text(&own),
+        "layerfs-proj-1",
+        set("image", Some(SdkValue::text(&digest))),
+    );
+    for (deploy, message) in [
+        (
+            "sandbox:'namespaces', sandboxBackend:'native'",
+            r"deploy\.sandbox \(LAYERFS_SANDBOX\) namespaces conflicts with deploy\.sandboxBackend \(LAYERFS_SANDBOX_BACKEND\) native",
+        ),
+        (
+            "sandbox:'docker', sandboxBackend:'namespaces'",
+            r"\(LAYERFS_SANDBOX\) docker conflicts with .*\(LAYERFS_SANDBOX_BACKEND\) namespaces",
+        ),
+        (
+            "sandboxBackend:'namespaces'",
+            r"\(LAYERFS_SANDBOX\) unset \(docker\) conflicts",
+        ),
+        (
+            "sandbox:'native', sandboxBackend:'podman'",
+            r"\(LAYERFS_SANDBOX_BACKEND\) is native or namespaces, not podman",
+        ),
+        (
+            "sandbox:'podman'",
+            r"\(LAYERFS_SANDBOX\) is docker, native \(Linux or macOS\) or namespaces \(Linux\), not podman",
+        ),
+    ] {
+        home.node(
+            &format!(
+                "const r = await native.backendCall('runtime.sandbox.reclaim', {{...args, deploy:{{{deploy}, localDir:{:?}}}}});
+                assert.equal(r.refused?.code, 'InvalidInput', JSON.stringify(r));
+                assert.match(r.refused.message, /{message}/);",
+                text(&root)
+            ),
+            None,
+            Duration::from_secs(10),
+        );
+    }
+    assert!(own.join("daemon.log").exists());
+    assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
+    // the former pair with the native backend named is native: a stopped
+    // native record is its own and is reclaimed
+    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
+    home.node(
+        &format!(
+            "const r = await native.backendCall('runtime.sandbox.reclaim', {{...args, deploy:{{sandbox:'native', sandboxBackend:'native', localDir:{:?}}}}});
+            {RECLAIMED}",
+            text(&root)
+        ),
+        None,
+        Duration::from_secs(10),
+    );
+    assert!(!own.exists());
+}

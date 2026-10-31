@@ -110,12 +110,56 @@ process.env.DSH_LAYERFS_SANDBOX = "native";
 process.env.DSH_LAYERFS_LOCAL_DIR = "/l";
 assert.deepEqual(deployment(), docker);
 
-// anything else, the former `local` included, is refused, never silently Docker
+// anything else, the former `local` included, is never silently Docker: it
+// is passed on alone, for the binding (the one validator, #527 step 11) to
+// refuse naming the values it takes
 for (const typo of ["local", "Native", "nativ", "NATIVE", "podman"]) {
   clear();
   setDocker();
   process.env.LAYERFS_SANDBOX = typo;
-  assert.throws(() => deployment(), (e) => e.code === "InvalidInput" && e.message.includes(`not ${typo}`));
+  assert.deepEqual(deployment(), { sandbox: typo });
+}
+
+// #527 step 11 (D3): one setting, LAYERFS_SANDBOX=docker|native|namespaces
+Object.defineProperty(process, "platform", { ...linuxHost, value: "linux" });
+try {
+  clear();
+  process.env.LAYERFS_SANDBOX = "namespaces";
+  process.env.LAYERFS_DAEMON = "/opt/layerfs-daemon";
+  process.env.LAYERFS_LOCAL_DIR = "/lfs";
+  process.env.LAYERFS_IMAGE = docker.image;
+  process.env.LAYERFS_IMAGE_ARCHIVE = archive;
+  const namespaces = { sandbox: "namespaces", daemon: "/opt/layerfs-daemon", localDir: "/lfs", image: docker.image, imageArchive: archive };
+  assert.deepEqual(deployment(), namespaces);
+  // it needs the image fields the former pair needed
+  delete process.env.LAYERFS_IMAGE_ARCHIVE;
+  assert.throws(() => deployment(), (e) => e.code === "InvalidInput" && /\(LAYERFS_IMAGE_ARCHIVE\)/.test(e.message));
+  process.env.LAYERFS_IMAGE_ARCHIVE = archive;
+  // a conflicting former setting is passed on for the binding to refuse
+  process.env.LAYERFS_SANDBOX_BACKEND = "native";
+  assert.deepEqual(deployment(), { ...namespaces, sandboxBackend: "native" });
+  // so is one beside Docker, which named no backend before
+  clear();
+  setDocker();
+  process.env.LAYERFS_SANDBOX_BACKEND = "namespaces";
+  assert.deepEqual(deployment(), { ...docker, sandboxBackend: "namespaces" });
+  // a client sends the new value as it is
+  clear();
+  store();
+  Object.assign(process.env, { LAYERFS_SANDBOX: "namespaces", LAYERFS_DAEMON: "/opt/layerfs-daemon", LAYERFS_LOCAL_DIR: "/lfs", LAYERFS_IMAGE: docker.image, LAYERFS_IMAGE_ARCHIVE: archive });
+  const { LayerFS } = await import("../src/index.js");
+  const made = await LayerFS.open("website");
+  await made.sandbox.create();
+  assert.deepEqual(native.deploys.at(-1), namespaces);
+  await made.close();
+} finally {
+  Object.defineProperty(process, "platform", linuxHost);
+}
+// where namespaces cannot run it is refused by that name before its image settings are read
+for (const [platform, pattern] of [["darwin", /LAYERFS_SANDBOX\) namespaces is Linux only/], ["win32", /LAYERFS_SANDBOX\) namespaces is not supported on Windows/]]) {
+  clear();
+  Object.assign(process.env, { LAYERFS_SANDBOX: "namespaces", LAYERFS_DAEMON: "/opt/layerfs-daemon", LAYERFS_LOCAL_DIR: "/lfs" });
+  assert.throws(() => deployment({}, false, platform), (e) => e.code === "Unsupported" && pattern.test(e.message));
 }
 
 // a client reads LAYERFS_SANDBOX and LAYERFS_LOCAL_DIR once, and
