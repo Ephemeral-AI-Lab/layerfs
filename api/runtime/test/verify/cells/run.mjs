@@ -10,6 +10,12 @@
 //
 // Rows: macos-docker, macos-native, linux-docker, linux-native,
 // linux-namespaces, vm-apple-container, vm-microsandbox, vm-ssh, refusals.
+// #529: each row's cell makes its Sandbox with sandbox.create({ platform })
+// (PLATFORM below), and C01 also runs the home's default and refusal checks
+// (cell.mjs). Two Linux rows take the cell `check`: linux-mixed (mixed.mjs:
+// a docker and a linux Sandbox of one project, --ns-image the namespaces
+// image) and linux-oldrecords (make.mjs with the pre-#529 bundle
+// --old-bundle, then oldrec.mjs).
 // A linux-* row given on macOS re-runs this file as root inside the Lima VM
 // (LFS527_LIMA_VM, default lfs527-linux) and relays the lock over stdio.
 //
@@ -18,7 +24,9 @@
 //   --macos-bundle  LFS527_MACOS_BUNDLE  sealed macOS bundle (macos-native, refusals)
 //   --vm-bundle     LFS527_VM_BUNDLE     Linux bundle copy carrying images/<hex>.tar (vm-*)
 //   --image         LFS527_IMAGE         Sandbox image digest (default: the bundle's images.sandbox)
-//   --image-archive LFS527_IMAGE_ARCHIVE docker-archive of the image (linux-namespaces)
+//   --image-archive LFS527_IMAGE_ARCHIVE docker-archive of the image (linux-namespaces, linux-mixed, linux-oldrecords)
+//   --ns-image      LFS529_NS_IMAGE      the namespaces image digest (config digest) of linux-mixed and linux-oldrecords
+//   --old-bundle    LFS529_OLD_BUNDLE    sealed Linux bundle from before #529 (linux-oldrecords)
 //   --provider      LFS527_PROVIDER      refusals vm-docker: the VM provider (default apple-container)
 //   --budget-ms     LFS527_BUDGET_MS     the invocation's deadline (default 115000)
 //   --lock-relay    ask the parent for the lock over stdio (set by the Lima relay)
@@ -41,7 +49,16 @@ import { CF, command, sha256 } from "./workloads.mjs";
 const SELF = fileURLToPath(import.meta.url);
 const HERE = dirname(SELF);
 const CELL = join(HERE, "cell.mjs");
-const ROWS = ["macos-docker", "macos-native", "linux-docker", "linux-native", "linux-namespaces", "vm-apple-container", "vm-microsandbox", "vm-lima", "vm-firecracker", "vm-ssh", "refusals"];
+const ROWS = ["macos-docker", "macos-native", "linux-docker", "linux-native", "linux-namespaces", "vm-apple-container", "vm-microsandbox", "vm-lima", "vm-firecracker", "vm-ssh", "refusals", "linux-mixed", "linux-oldrecords"];
+/** #529: the rows that take the cell `check` instead of C01..C12. */
+const CHECKS = ["linux-mixed", "linux-oldrecords"];
+/** #529: each row's platform, the platforms its home allows and its default (spec §4). */
+const LINUX = ["docker", "linux"];
+const PLATFORM = {
+  "macos-docker": ["docker", ["docker"], "docker"], "macos-native": ["mac", ["mac"], "mac"],
+  "linux-docker": ["docker", LINUX, "docker"], "linux-native": ["linux", LINUX, "linux"], "linux-namespaces": ["linux", LINUX, "linux"],
+  ...Object.fromEntries(["apple-container", "microsandbox", "lima", "firecracker", "ssh"].map((p) => [`vm-${p}`, [p, [p], p]])),
+};
 const REFUSALS = ["macos-namespaces", "vm-docker"];
 
 // ---- arguments ------------------------------------------------------------
@@ -62,8 +79,10 @@ const opts = {
   image: flag("image", "LFS527_IMAGE"),
   imageArchive: flag("image-archive", "LFS527_IMAGE_ARCHIVE"),
   provider: flag("provider", "LFS527_PROVIDER", "apple-container"),
+  nsImage: flag("ns-image", "LFS529_NS_IMAGE"),
+  oldBundle: flag("old-bundle", "LFS529_OLD_BUNDLE"),
 };
-if (!ROWS.includes(row) || (row === "refusals" ? !REFUSALS.includes(cell) : !CF[cell]) || (!outDir && !relay)) {
+if (!ROWS.includes(row) || (row === "refusals" ? !REFUSALS.includes(cell) : CHECKS.includes(row) ? cell !== "check" : !CF[cell]) || (!outDir && !relay)) {
   console.error(`usage: node run.mjs <${ROWS.join("|")}> <C01..C12 | ${REFUSALS.join("|")}> --out <dir> [--linux-bundle P] [--macos-bundle P] [--vm-bundle P] [--image D] [--image-archive P]`);
   process.exit(2);
 }
@@ -74,7 +93,7 @@ const fileSha = (path) => createHash("sha256").update(readFileSync(path)).digest
 const errorOf = (error) => ({ code: error?.code ?? null, message: String(error?.message ?? error).slice(0, 2000), detail: error?.detail ?? null });
 const id = `${Date.now().toString(36)}${process.pid.toString(36)}`.slice(-10);
 const prefix = `lfs527-${id}-`;
-const project = (row === "refusals" ? "refusal" : cell.toLowerCase());
+const project = (row === "refusals" ? "refusal" : CHECKS.includes(row) ? row.slice("linux-".length) : cell.toLowerCase());
 
 const receipt = {
   receipt: "lfs527-cell/1",
@@ -82,13 +101,14 @@ const receipt = {
   project, prefix,
   startedAt: new Date().toISOString(),
   host: { hostname: hostname(), platform: process.platform, release: release(), cpus: cpus().length, memBytes: totalmem(), node: process.version, uid: process.getuid?.() },
-  runner: { "run.mjs": fileSha(SELF), "cell.mjs": fileSha(CELL), "workloads.mjs": fileSha(join(HERE, "workloads.mjs")) },
+  runner: Object.fromEntries(["run.mjs", "cell.mjs", "workloads.mjs", "mixed.mjs", "make.mjs", "oldrec.mjs"].map((name) => [name, fileSha(join(HERE, name))])),
+  platform: PLATFORM[row]?.[0] ?? null,
   load1: { start: loadavg()[0] },
   constructionWorkers: "1",
   driver: {},
   teardown: [],
 };
-if (row !== "refusals") {
+if (row !== "refusals" && !CHECKS.includes(row)) {
   receipt.body = { sha256: sha256(CF[cell][0]), commandSha256: sha256(command(cell)), setupSha256: CF[cell][1] ? sha256(CF[cell][1]) : null };
 }
 
@@ -513,6 +533,68 @@ async function refusals() {
   receipt.cause = `expected ${JSON.stringify(expected)}; answered ${JSON.stringify(answered)}`;
 }
 
+// ---- #529 Linux checks --------------------------------------------------------
+/** A Linux home on @layerfs/runtime that also allows `linux` (localDir, imageArchive), with `bundle`'s SDK. */
+async function linuxHome(bundle) {
+  const image = opts.image || bundleIdentity(bundle).images?.sandbox;
+  receipt.imageDigest = image;
+  receipt.nsImage = need(opts.nsImage, "--ns-image");
+  receipt.imageArchive = need(opts.imageArchive, "--image-archive");
+  process.env.LAYERFS_NATIVE = join(bundle, "layerfs.node");
+  const localDir = mkdtempSync(join(workRoot(), "lfs527-local-"));
+  chmodSync(localDir, 0o755);
+  teardowns.push(async () => teardownStep("local dir", () => rmSync(localDir, { recursive: true, force: true })));
+  const made = await runtimeRow({
+    bundle, socket: null,
+    settings: { image, platform: "linux", localDir, imageArchive: opts.imageArchive },
+    extraEnv: () => ({ LAYERFS_NATIVE: join(bundle, "layerfs.node") }),
+  });
+  teardowns.push(made.teardown);
+  receipt.bundle = bundleIdentity(bundle);
+  receipt.sourceCommit = receipt.bundle.sourceCommit;
+  receipt.env = made.env;
+  receipt.platforms = (await made.runtime.status()).platforms;
+  return made;
+}
+
+/** One agent script of this folder as its own process: its `LFS529-RESULT`, bounded by the deadline. */
+async function agentRun(script, env, bundle) {
+  const ran = await runChild(process.execPath, [join(HERE, script), project], agentEnv(env, bundle), deadline - Date.now() - 20_000, "LFS529-RESULT");
+  return { result: ran.result, exit: { code: ran.code, signal: ran.signal, killed: ran.killed, stderr: ran.stderr.slice(-2000) } };
+}
+
+async function linuxCheck() {
+  const bundle = need(opts.linuxBundle, "--linux-bundle");
+  receipt.driver.fs = execFileSync("findmnt", ["-n", "-o", "FSTYPE", "-T", workRoot()], { encoding: "utf8" }).trim();
+  const made = await linuxHome(bundle);
+  if (row === "linux-mixed") {
+    const ran = await agentRun("mixed.mjs", { ...made.env, LFS529_NS_IMAGE: opts.nsImage }, bundle);
+    receipt.cellResult = ran.result;
+    receipt.cellExit = ran.exit;
+    receipt.verdict = ran.result?.ok ? "PASS" : "FAIL";
+    receipt.cause = ran.result ? ran.result.cause : `mixed.mjs ended without a result: ${ran.exit.stderr.slice(-500)}`;
+    return;
+  }
+  // old records: the pre-#529 SDK and daemon make a docker and a namespaces Sandbox
+  const old = need(opts.oldBundle, "--old-bundle");
+  receipt.oldBundle = bundleIdentity(old);
+  const oldEnv = { ...made.env, LAYERFS_NATIVE: join(old, "layerfs.node"), LAYERFS_DAEMON: join(old, "layerfs-daemon") };
+  const docker = await agentRun("make.mjs", oldEnv, old);
+  const namespaces = await agentRun("make.mjs", { ...oldEnv, LAYERFS_SANDBOX: "namespaces", LAYERFS_IMAGE: opts.nsImage }, old);
+  receipt.made = { docker, namespaces };
+  if (!docker.result?.ok || !namespaces.result?.ok) {
+    receipt.verdict = "FAIL";
+    receipt.cause = `the old bundle did not make both Sandboxes: ${docker.result?.cause ?? docker.exit.stderr.slice(-300)} / ${namespaces.result?.cause ?? namespaces.exit.stderr.slice(-300)}`;
+    return;
+  }
+  const expect = { [docker.result.created.sandbox]: "docker", [namespaces.result.created.sandbox]: "linux" };
+  const ran = await agentRun("oldrec.mjs", { ...made.env, LFS529_EXPECT: JSON.stringify(expect) }, bundle);
+  receipt.cellResult = ran.result;
+  receipt.cellExit = ran.exit;
+  receipt.verdict = ran.result?.ok ? "PASS" : "FAIL";
+  receipt.cause = ran.result ? ran.result.cause : `oldrec.mjs ended without a result: ${ran.exit.stderr.slice(-500)}`;
+}
+
 // ---- the run ------------------------------------------------------------------
 const teardowns = [];
 function writeReceipt() {
@@ -539,13 +621,14 @@ async function viaLima() {
   const runner = join(homedir(), ".cache", "layerfs-test", `lfs527-runner-${version}`);
   if (!existsSync(join(runner, "run.mjs"))) {
     mkdirSync(`${runner}.tmp-${id}`, { recursive: true });
-    for (const name of ["run.mjs", "cell.mjs", "workloads.mjs"]) copyFileSync(join(HERE, name), join(`${runner}.tmp-${id}`, name));
+    for (const name of Object.keys(receipt.runner)) copyFileSync(join(HERE, name), join(`${runner}.tmp-${id}`, name));
     renameSync(`${runner}.tmp-${id}`, runner);
   }
   const pass = Object.entries(process.env).filter(([name]) => name.startsWith("LFS527_") && name !== "LFS527_OUT").map(([name, value]) => `${name}=${value}`);
   const args = ["shell", "--workdir", "/", vm, "sudo", "env", ...pass,
     ...(opts.linuxBundle ? [`LFS527_LINUX_BUNDLE=${opts.linuxBundle}`] : []), ...(opts.image ? [`LFS527_IMAGE=${opts.image}`] : []),
     ...(opts.imageArchive ? [`LFS527_IMAGE_ARCHIVE=${opts.imageArchive}`] : []),
+    ...(opts.nsImage ? [`LFS529_NS_IMAGE=${opts.nsImage}`] : []), ...(opts.oldBundle ? [`LFS529_OLD_BUNDLE=${opts.oldBundle}`] : []),
     process.env.LFS527_LIMA_NODE || "node", join(runner, "run.mjs"), row, cell, "--lock-relay", "--budget-ms", String(deadline - Date.now() - 5_000)];
   const ran = await runChild("limactl", args, process.env, deadline - Date.now(), "LFS527-RECEIPT");
   if (ran.result) {
@@ -567,6 +650,8 @@ try {
     await viaLima();
   } else if (row === "refusals") {
     await refusals();
+  } else if (CHECKS.includes(row)) {
+    await linuxCheck();
   } else {
     const at = Date.now();
     // Setup is bounded by the invocation's deadline too: a setup still running
@@ -586,7 +671,9 @@ try {
     const childMs = deadline - Date.now() - (row.startsWith("vm-") ? 30_000 : 20_000);
     if (childMs < 15_000) throw Object.assign(new Error(`only ${childMs} ms left for the cell after setup`), { phase: "setup" });
     receipt.driver.cellBudgetMs = childMs;
-    const ran = await runChild(process.execPath, [CELL, cell, project], agentEnv(made.env, made.bundle), childMs, "LFS527-RESULT");
+    const [platform, allowed, fallback] = PLATFORM[row];
+    const cellEnv = { ...agentEnv(made.env, made.bundle), LFS529_PLATFORM: platform, LFS529_ALLOWED: allowed.join(","), LFS529_DEFAULT: fallback, ...(cell === "C01" ? { LFS529_EXTRAS: "1" } : {}) };
+    const ran = await runChild(process.execPath, [CELL, cell, project], cellEnv, childMs, "LFS527-RESULT");
     receipt.lock = ran.lock.grants[0] ?? (ran.lock.error ? { error: ran.lock.error } : null);
     receipt.cellResult = ran.result;
     receipt.cellExit = { code: ran.code, signal: ran.signal, killed: ran.killed, stderr: ran.stderr };
@@ -596,6 +683,10 @@ try {
     } : null;
     receipt.where = ran.result?.where ?? null;
     receipt.imageDigest = timed?.image && timed.image !== "local" ? timed.image : receipt.imageDigest;
+    if (ran.result?.extras) {
+      receipt.extras = ran.result.extras;
+      receipt.extrasVerdict = ran.result.extras.ok ? "PASS" : "FAIL";
+    }
     receipt.verdict = ran.result?.ok ? "PASS" : "FAIL";
     receipt.cause = ran.result ? ran.result.cause : `the cell ended without a result (exit ${ran.code}${ran.killed ? ", killed at its deadline" : ""}): ${ran.stderr.slice(-500)}`;
   }

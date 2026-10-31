@@ -10,6 +10,13 @@
 //   timed   [host lock] mount, exec, Commit, unmount (no discard) [unlock];
 //   verify  fresh mount, exec the Sandbox identity and the verifier, unmount with discard;
 //   close   the Sandbox.
+// #529: the Sandbox is made by sandbox.create({ platform: LFS529_PLATFORM }),
+// and its create and mount answers must name that platform. With
+// LFS529_EXTRAS (C01 only), after the cell: `default`, a Sandbox made with no
+// platform must be the home's default (LFS529_DEFAULT), then closed; and
+// `refusals`, every platform outside LFS529_ALLOWED is Unsupported and
+// windows, native, namespaces and an unknown name InvalidInput, with the
+// project's Sandboxes the same before and after. Neither changes the cell's verdict.
 // The lock is asked of the parent: this process prints `LFS527-LOCK acquire`
 // and waits for one stdin line `LFS527-LOCK granted <json>`, then prints
 // `LFS527-LOCK release`. The last stdout line is `LFS527-RESULT <json>`.
@@ -47,8 +54,9 @@ async function step(name, call) {
 const exec = (layerfs, ws, text, label) => step(label, () => layerfs.workspace.exec(ws, text, `lfs527 ${cell} ${label}`));
 const execSummary = ({ value, ms }) => ({ wallMs: ms, exitCode: value.exitCode, stdout: value.stdout?.slice(0, 2000), stderr: value.stderr?.slice(0, 2000), ...parseTimed(value.stdout) });
 
-if (!CF[cell] || !project || !process.env.LFS527_AGENT) {
-  console.error("usage: LFS527_AGENT=<bundle>/api/agent/src/index.js node cell.mjs <C01..C12> <project>");
+const PLATFORM = process.env.LFS529_PLATFORM;
+if (!CF[cell] || !project || !process.env.LFS527_AGENT || !PLATFORM) {
+  console.error("usage: LFS527_AGENT=<bundle>/api/agent/src/index.js LFS529_PLATFORM=<platform> node cell.mjs <C01..C12> <project>");
   process.exit(2);
 }
 const { LayerFS } = await import(pathToFileURL(process.env.LFS527_AGENT).href);
@@ -57,7 +65,7 @@ const mounted = new Set();
 try {
   layerfs = (await step("open", () => LayerFS.open(project))).value;
   out.fork = (await step("branch.fork", () => layerfs.branch.fork(BRANCH, "main"))).value;
-  const created = (await step("sandbox.create", () => layerfs.sandbox.create())).value;
+  const created = (await step("sandbox.create", () => layerfs.sandbox.create({ platform: PLATFORM }))).value;
   sandbox = created.sandbox;
   out.sandbox = created;
 
@@ -103,7 +111,7 @@ try {
     const committed = await step("timed.commit", () => layerfs.workspace.commit(ws, `lfs527 ${cell}`));
     const left = await unmount("timed", ws, false);
     out.phases.timed = {
-      mountMs: mountAt.ms, image: ws.image ?? null, workspace: { sandbox: ws.sandbox, path: ws.path },
+      mountMs: mountAt.ms, image: ws.image ?? null, platform: ws.platform ?? null, workspace: { sandbox: ws.sandbox, path: ws.path },
       exec: ran, commitMs: committed.ms, commitKind: committed.value?.kind ?? null, commit: committed.value,
       unmountMs: left.ms, unmount: left.value,
     };
@@ -125,6 +133,8 @@ try {
   if (timed.exec.exitCode !== 0) problems.push(`exec exit ${timed.exec.exitCode}`);
   if (timed.exec.rc !== 0) problems.push(`body exit ${timed.exec.rc}`);
   if (!["Committed", "UpToDate"].includes(timed.commitKind)) problems.push(`Commit kind ${timed.commitKind}`);
+  if (created.platform !== PLATFORM) problems.push(`sandbox.create answered platform ${created.platform}, not ${PLATFORM}`);
+  if (timed.platform !== PLATFORM) problems.push(`workspace.mount answered platform ${timed.platform}, not ${PLATFORM}`);
   if (out.phases.verify.exitCode !== 0 || !/^VERIFY OK$/m.test(out.phases.verify.stdout)) problems.push(`verifier: ${out.phases.verify.stdout.trim()} ${out.phases.verify.stderr.trim()}`.trim());
   out.ok = problems.length === 0;
   out.cause = problems.join("; ") || null;
@@ -144,8 +154,37 @@ try {
     // not part of the verdict (PASS = verifier, Commit, clean unmount); the driver's teardown reports leftovers
     await step("sandbox.close", () => layerfs.sandbox.close(sandbox)).catch((error) => { out.closeError = error.message; });
   }
+  if (process.env.LFS529_EXTRAS && layerfs) out.extras = await extras(layerfs).catch((error) => ({ ok: false, error: errorOf(error) }));
   await layerfs?.close().catch(() => {});
   lines.close();
+}
+
+/** #529's default and refusal checks on this home (see the head comment). */
+async function extras(layerfs) {
+  const names = ["docker", "mac", "linux", "apple-container", "microsandbox", "lima", "firecracker", "ssh"];
+  const allowed = process.env.LFS529_ALLOWED.split(",");
+  const listed = async () => (await layerfs.project.list_sandboxes(1000, 0)).items.map((s) => `${s.sandbox}:${s.platform}`).sort();
+  const result = { ok: false, default: {}, refusals: [] };
+  const made = (await step("extras.default.create", () => layerfs.sandbox.create())).value;
+  result.default = { expected: process.env.LFS529_DEFAULT, made };
+  await step("extras.default.close", () => layerfs.sandbox.close(made.sandbox));
+  const before = await listed();
+  const tries = [...names.filter((name) => !allowed.includes(name)).map((name) => [name, "Unsupported"]),
+    ...["windows", "native", "namespaces", "podman"].map((name) => [name, "InvalidInput"])];
+  for (const [platform, expected] of tries) {
+    const at = now();
+    try {
+      const value = await layerfs.sandbox.create({ platform });
+      result.refusals.push({ platform, expected, code: null, made: value });
+      await layerfs.sandbox.close(value.sandbox).catch(() => {});
+    } catch (error) {
+      result.refusals.push({ platform, expected, code: error.code ?? null, message: String(error.message).slice(0, 300), ms: round(now() - at) });
+    }
+  }
+  result.before = before;
+  result.after = await listed();
+  result.ok = made.platform === result.default.expected && result.refusals.every((r) => r.code === r.expected) && JSON.stringify(before) === JSON.stringify(result.after);
+  return result;
 }
 console.log(`LFS527-RESULT ${JSON.stringify(out)}`);
 process.exit(0);
