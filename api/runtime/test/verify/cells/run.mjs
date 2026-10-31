@@ -381,7 +381,7 @@ const SETUP = {
     const image = opts.image || bundleIdentity(bundle).images?.sandbox;
     receipt.imageDigest = image;
     receipt.imageArchive = need(opts.imageArchive, "--image-archive");
-    return { ...(await sdkRow({ bundle, rowEnv: { LAYERFS_SANDBOX_BACKEND: "namespaces", LAYERFS_IMAGE: image, LAYERFS_IMAGE_ARCHIVE: opts.imageArchive } })), bundle };
+    return { ...(await sdkRow({ bundle, rowEnv: { LAYERFS_SANDBOX: "namespaces", LAYERFS_IMAGE: image, LAYERFS_IMAGE_ARCHIVE: opts.imageArchive } })), bundle };
   },
   "vm-apple-container": () => vmRow("apple-container"),
   "vm-microsandbox": () => vmRow("microsandbox"),
@@ -451,24 +451,32 @@ async function refusals() {
     const made = await sdkRow({ bundle, rowEnv: {} });
     teardowns.push(made.teardown);
     const image = opts.image || receipt.bundle.images?.sandbox;
-    const attempt = async (extra) => {
-      Object.assign(process.env, { LAYERFS_SANDBOX_BACKEND: "namespaces" }, extra);
+    // step 11: LAYERFS_SANDBOX=namespaces; the former pair (native +
+    // LAYERFS_SANDBOX_BACKEND=namespaces, kept one release) is observed too
+    const attempt = async (extra, named = { LAYERFS_SANDBOX: "namespaces" }) => {
+      Object.assign(process.env, named, extra);
       let client = null;
       const opened = await observe(async () => { client = await made.LayerFS.open(project); return "opened"; });
       const created = client ? await observe(() => client.sandbox.create()) : null;
       if (created && !created.refused) await client.sandbox.close(created.value.sandbox).catch(() => {});
       await client?.close();
       delete process.env.LAYERFS_SANDBOX_BACKEND;
+      process.env.LAYERFS_SANDBOX = made.env.LAYERFS_SANDBOX;
       delete process.env.LAYERFS_IMAGE;
       delete process.env.LAYERFS_IMAGE_ARCHIVE;
       return { opened, created };
     };
     const without = await attempt({});
     const withImage = await attempt({ LAYERFS_IMAGE: image, LAYERFS_IMAGE_ARCHIVE: join(made.env.LAYERFS_LOCAL_DIR, "none.tar") });
-    receipt.observed = { "namespaces, no image settings": without, "namespaces, with LAYERFS_IMAGE and LAYERFS_IMAGE_ARCHIVE": withImage };
-    const code = withImage.created?.code ?? withImage.opened?.code;
-    receipt.verdict = code === "Unsupported" ? "PASS" : "FAIL";
-    receipt.cause = `expected Unsupported; sandbox.create answered ${code ?? "no refusal"}`;
+    const former = await attempt({ LAYERFS_IMAGE: image, LAYERFS_IMAGE_ARCHIVE: join(made.env.LAYERFS_LOCAL_DIR, "none.tar") }, { LAYERFS_SANDBOX: "native", LAYERFS_SANDBOX_BACKEND: "namespaces" });
+    receipt.observed = {
+      "LAYERFS_SANDBOX=namespaces, no image settings": without,
+      "LAYERFS_SANDBOX=namespaces, with LAYERFS_IMAGE and LAYERFS_IMAGE_ARCHIVE": withImage,
+      "former pair native + LAYERFS_SANDBOX_BACKEND=namespaces, with image settings": former,
+    };
+    const codes = [without, withImage, former].map((seen) => seen.created?.code ?? seen.opened?.code);
+    receipt.verdict = codes.every((code) => code === "Unsupported") ? "PASS" : "FAIL";
+    receipt.cause = `expected Unsupported three times; answered ${codes.map((code) => code ?? "no refusal").join(", ")}`;
     return;
   }
   // vm-docker: what a caller who asks for Docker Sandboxes on a vm: home gets
