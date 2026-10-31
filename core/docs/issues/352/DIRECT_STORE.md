@@ -162,9 +162,12 @@ volume sits outside the home) — before the route accepts it again.
 
 Operational notes from the 2026-10-31 production-readiness round: the
 audited Win32 calls spell paths verbatim (`\\?\`), so trees deeper than
-MAX_PATH initialize — but the host process must also carry a
-`longPathAware` manifest for its own operations, which today's node.exe
-does not; keep sources and homes within ~260 characters until it does.
+MAX_PATH initialize — but the host process's own plain-spelled
+operations still need the host's long-path relaxation (a
+`longPathAware` manifest, or an OS build that no longer requires it —
+round-3 A1 measured plain 308-character paths working on one such
+host); keep sources and homes within ~260 characters on hosts whose
+policy is not confirmed.
 Windows lacks the 64 MiB disk-headroom pre-admission macOS and Linux run
 (a filling disk surfaces mid-transaction as the typed `Capacity`
 refusal instead); SQLite's `-wal`/`-shm` sidecars inherit the
