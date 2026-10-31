@@ -100,7 +100,12 @@ try {
     mkdirSync(join(source, "src"), { recursive: true });
     writeFileSync(join(source, "README.md"), "hello\n");
     writeFileSync(join(source, "src", "a.js"), "1\n");
-    const { runtime, calls } = await opened();
+    // no volume exists, unless `taken` says so
+    let taken = false;
+    const { runtime, calls } = await opened((args) => {
+      if (args[0] === "volume" && args[1] === "inspect" && !taken) throw Object.assign(new Error("no such volume"), { stderr: "Error: No such volume" });
+      return "";
+    });
     // checked before anything changes
     for (const [name, folder, options, code] of [["Bad", source, {}, "InvalidInput"], ["shop", "relative", {}, "InvalidInput"], ["shop", join(work, "none"), {}, "InvalidInput"], ["shop", source, { image: "latest" }, "InvalidInput"], ...[0, -5, 2.5, "60000", null].map((timeout) => ["shop", source, { timeout }, "InvalidInput"])]) {
       await assert.rejects(runtime.project.start_init(name, folder, options), { code });
@@ -120,11 +125,14 @@ try {
     const done = await until(await runtime.project.start_init("shop", source));
     assert.equal(done.step, "done", JSON.stringify(done.error));
     assert.deepEqual(done.totals, { entries: 4, files: 2, bytes: 8 });
-    assert.equal(calls[0].join(" "), `volume create --label layerfs.role=store --label layerfs.home=${home} --label layerfs.project=shop ${calls[0].at(-1)}`);
-    assert.match(calls[0].at(-1), /^layerfs-shop-store-[0-9a-z]+$/);
+    // the project's own Store: its volume is looked for (and must not exist), then made with its labels
+    assert.deepEqual(calls[0].slice(0, 2), ["volume", "inspect"]);
+    assert.equal(calls[1].join(" "), `volume create --label layerfs.role=store --label layerfs.home=${home} --label layerfs.project=shop ${calls[1].at(-1)}`);
+    assert.match(calls[1].at(-1), /^layerfs-shop-store-[0-9a-z]+$/);
+    assert.equal(calls[0].at(-1), calls[1].at(-1));
     const init = native.args[native.calls.lastIndexOf("project.init")];
-    assert.deepEqual([init.path, init.name, init.storePath, init.deploy.volume], [source, "shop", join(work, "volumes", calls[0].at(-1), "_data/global/store.sqlite"), calls[0].at(-1)]);
-    assert.equal((await runtime.project.list()).find((p) => p.name === "shop").volume, calls[0].at(-1));
+    assert.deepEqual([init.path, init.name, init.storePath, init.deploy.volume], [source, "shop", join(work, "volumes", calls[1].at(-1), "_data/global/store.sqlite"), calls[1].at(-1)]);
+    assert.equal((await runtime.project.list()).find((p) => p.name === "shop").volume, calls[1].at(-1));
     assert.equal(init.timeoutMs, 300_000, "no timeout: LayerFS.init's 300 s default, none of the runtime's own");
     // a timeout passes through to LayerFS.init as timeoutMs; the record keeps none
     calls.length = 0;
@@ -137,21 +145,28 @@ try {
     calls.length = 0;
     const late = await until(await runtime.project.start_init("late", source, { timeout: 1 }));
     assert.deepEqual([late.step, late.error.code], ["failed", "Failed"]);
-    assert.deepEqual(calls.map((c) => c.slice(0, 2)), [["volume", "create"], ["volume", "rm"]]);
+    assert.deepEqual(calls.map((c) => c.slice(0, 2)), [["volume", "inspect"], ["volume", "create"], ["volume", "rm"]]);
     delete native.initRefusal;
     // a failed Init removes what it made; an uncertain one keeps it and is recorded
     native.initRefusal = { code: "InvalidInput", message: "Mode", detail: null };
     calls.length = 0;
     const failed = await until(await runtime.project.start_init("bad", source));
     assert.deepEqual([failed.step, failed.error.code], ["failed", "InvalidInput"]);
-    assert.deepEqual(calls.map((c) => c.slice(0, 2)), [["volume", "create"], ["volume", "rm"]]);
+    assert.deepEqual(calls.map((c) => c.slice(0, 2)), [["volume", "inspect"], ["volume", "create"], ["volume", "rm"]]);
     native.initRefusal = { code: "Unknown", message: "lost", detail: null };
     calls.length = 0;
     const unsure = await until(await runtime.project.start_init("unsure", source));
     assert.equal(unsure.error.code, "Unknown");
-    assert.deepEqual(calls.map((c) => c.slice(0, 2)), [["volume", "create"]], "nothing is removed on a guess");
+    assert.deepEqual(calls.map((c) => c.slice(0, 2)), [["volume", "inspect"], ["volume", "create"]], "nothing is removed on a guess");
     assert.equal(JSON.parse(readFileSync(join(home, ".runtime", "init-failures.jsonl"), "utf8").trim()).project.name, "unsure");
     delete native.initRefusal;
+    // an existing volume is refused, not reused, and left as it was (#527 step 10b)
+    taken = true;
+    calls.length = 0;
+    const clash = await until(await runtime.project.start_init("clash", source));
+    assert.deepEqual([clash.step, clash.error.code], ["failed", "Exists"]);
+    assert.deepEqual(calls.map((c) => c.slice(0, 2)), [["volume", "inspect"]], "no volume is made or removed");
+    assert.equal((await runtime.project.list()).some((p) => p.name === "clash"), false);
     await runtime.close();
   } else if (selected === "state") {
     const { runtime } = await opened();

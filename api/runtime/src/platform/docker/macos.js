@@ -138,8 +138,8 @@ const platform = {
   /** Before a volume is deleted, the worker closes its cached Store of it,
    * as on Windows and `vm:` (#527 §10: it kept the deleted Store open until
    * its quiet minute ended). With no worker endpoint nothing holds it. */
-  async releaseStore(settings, project) {
-    const { volume } = project;
+  async releaseStore(settings, store) {
+    const { volume } = store;
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(volume)) throw refuse("InvalidInput", "invalid Store volume name");
     let info;
     try { info = JSON.parse(readFileSync(endpointFile(settings.home), "utf8")); } catch { return; }

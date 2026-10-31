@@ -201,7 +201,7 @@ export async function start_load(runtime, jobs, remoteName, options = {}) {
     return jobs.begin({ kind: "load", store: name, ...from }, async (job) => {
       try {
         await runtime.platform.init(runtime.settings);
-        const volume = await runtime.platform.docker.stores.makeVolume(runtime, name);
+        const volume = await runtime.platform.createStore(runtime, { name });
         const store = { name, kind: "sqlite", volume, link: null, created: Date.now(), projects: [] };
         let answer;
         try {

@@ -101,9 +101,10 @@ export async function runInit(runtime, prepared, report = () => {}) {
   const totals = await scanSource(project.source, (counts) => report({ scanned: counts }));
   report({ step: "volume", totals });
   await platform.init(settings, project);
-  // its owner, for runtime.volume.list on a local placement (Docker sets a
-  // volume's labels only when it creates it); a VM's Store is a directory
-  await platform.makeStore(runtime, project);
+  // the project's own Store (a labelled volume on a local placement, a
+  // directory on the project's VM's disk); an existing volume is refused
+  const own = { name: project.name, volume: project.volume, legacy: true };
+  await platform.createStore(runtime, own);
   report({ step: "import" });
   let client;
   try {
@@ -117,7 +118,7 @@ export async function runInit(runtime, prepared, report = () => {}) {
       throw error;
     }
     if (error?.code !== "Exists") await platform.removeHome(settings, project.name).catch(() => {});
-    await platform.removeStore(runtime, project).catch(() => {});
+    await platform.removeStore(runtime, own).catch(() => {});
     throw error;
   }
   await client.close();

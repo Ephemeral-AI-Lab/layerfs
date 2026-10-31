@@ -263,7 +263,7 @@ try {
       assert.deepEqual(listed.vms.map((vm) => [vm.project, vm.state, vm.worker.port]).sort(), [["blog", "running", blog.port], ["shop", "running", shop.port]]);
       // the hook project.delete uses takes that project's VM and disk, and nothing else
       // (the whole call, a Sandbox closing included, is vm_real.mjs's, with a real VM)
-      await runtime.platform.removeStore(runtime, { name: "blog", volume: "lfs-blog-store-1" });
+      await runtime.platform.removeStore(runtime, { name: "blog", volume: "lfs-blog-store-1", legacy: true });
       assert.equal(existsSync(join(state, "vms", `${vmName("blog")}.json`)), false, "the project's VM is gone");
       assert.ok(calls(state).some((argv) => argv[0] === "volume" && argv[1] === "remove" && argv[2] === storeName("blog")));
       assert.equal(existsSync(join(state, "vms", `${vmName("shop")}.json`)), true, "the other project's VM is untouched");
@@ -395,6 +395,11 @@ try {
       // map every Store of the home to the one guest path each VM holds its own Store at
       await assert.rejects(runtime.platform.init(runtime.settings), refused);
       assert.throws(() => runtime.platform.storePath(runtime.settings, "lfs-shop-store-1"), refused);
+      // the Store hooks are keyed by Store, and a VM holds only its project's own (#527 step 10b)
+      for (const hook of ["createStore", "storeHolders", "removeStore"]) {
+        await assert.rejects(runtime.platform[hook](runtime, { name: "fresh", volume: "lfs-store-fresh" }), refused, hook);
+      }
+      await assert.rejects(runtime.platform.releaseStore(runtime.settings, { name: "fresh", volume: "lfs-store-fresh" }), refused);
       // a PostgreSQL project is refused before its client is made
       await assert.rejects(runtime.project.get_state("pga", undefined, { store: "pgs", url }), { code: "Unsupported", message: /PostgreSQL Store pgs.*vm:microsandbox/ });
       // nothing reached the provider: no VM, no disk, no copy

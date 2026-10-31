@@ -326,42 +326,55 @@ function exists(settings, project) {
   } catch { return false; }
 }
 
-/** The four hooks Init and project removal use instead of host Docker (§4.2 B2, B9). */
+/**
+ * The project whose VM holds `store`: a VM holds only the Store its own
+ * project's Init made (`legacy`, named after the project). Any other Store of
+ * the home is refused before any effect (#527 F3), until a VM home can hold
+ * Stores of its own.
+ */
+function holderOf(settings, store, what) {
+  if (!store?.legacy) throw noHomeStores(settings.placement.name, what);
+  return checked(store.name);
+}
+
+/** The four Store hooks Init and Store removal use instead of host Docker (§4.2 B2, B9), keyed by Store. */
 const stores = {
   /**
    * Init examines the Store's directory before it installs into it (the kernel
    * guard checks its filesystem), so the project's Store disk is mounted and
    * its directory made here, as a Docker volume is on a local placement.
    */
-  async makeStore(runtime, project) {
-    const provider = providerOf(runtime.settings), name = vmNameOf(runtime.settings, project.name);
+  async createStore(runtime, store) {
+    const project = holderOf(runtime.settings, store, "a Store that is not one project's own");
+    const provider = providerOf(runtime.settings), name = vmNameOf(runtime.settings, project);
     const { code, stderr } = await provider.exec(name, ["sh", "-c", "umask 022 && mkdir -p \"$1\" && chmod 755 \"$1\"", "sh", GUEST.store]);
     if (code !== 0) throw refuse("Failed", `could not make ${GUEST.store} in ${name}: ${stderr.trim()}`, null);
+    return store.volume;
   },
   /** The Sandboxes holding the project's Store now: its running Sandboxes, by number. A stopped VM runs none. */
-  async storeHolders(runtime, project) {
-    const { settings } = runtime, provider = providerOf(settings);
-    const found = await provider.inspect(vmNameOf(settings, project.name));
+  async storeHolders(runtime, store) {
+    const { settings } = runtime, project = holderOf(settings, store, "a Store's holders"), provider = providerOf(settings);
+    const found = await provider.inspect(vmNameOf(settings, project));
     if (!found || found.state !== "running") return [];
-    const held = await runtime.clients.use(project, (client) => client.project.list_sandboxes(1000, 0));
+    const held = await runtime.clients.use({ name: project, volume: store.volume }, (client) => client.project.list_sandboxes(1000, 0));
     return held.items.map(({ sandbox }) => ({ id: sandbox, state: "running" }));
   },
   /** Stops them the way the SDK does: `sandbox.close`, one per Sandbox. */
-  async releaseStoreHolders(runtime, project, holders) {
-    const { settings } = runtime, provider = providerOf(settings);
-    const found = await provider.inspect(vmNameOf(settings, project.name));
+  async releaseStoreHolders(runtime, store, holders) {
+    const { settings } = runtime, project = holderOf(settings, store, "a Store's holders"), provider = providerOf(settings);
+    const found = await provider.inspect(vmNameOf(settings, project));
     if (!found || found.state !== "running") return;
-    await runtime.clients.use(project, async (client) => {
+    await runtime.clients.use({ name: project, volume: store.volume }, async (client) => {
       for (const holder of holders) await client.sandbox.close(holder.id);
     });
   },
   /** Removes the project's VM and its Store disk: no Store copy is left anywhere. */
-  async removeStore(runtime, project) {
-    const { settings } = runtime, provider = providerOf(settings), name = vmNameOf(settings, project.name);
+  async removeStore(runtime, store) {
+    const { settings } = runtime, project = holderOf(settings, store, "a Store removal that is not one project's own"), provider = providerOf(settings), name = vmNameOf(settings, project);
     const found = await provider.inspect(name);
     if (found) await provider.remove(name);
-    await provider.removeStore(storeNameOf(settings, project.name));
-    rmSync(endpointFile(settings.home, project.name), { force: true });
+    await provider.removeStore(storeNameOf(settings, project));
+    rmSync(endpointFile(settings.home, project), { force: true });
   },
 };
 
@@ -434,8 +447,8 @@ export function vmPlatform(settingName) {
       rmSync(join(settings.home, name), { recursive: true, force: true });
     },
     /** Before a Store is deleted, the project's worker closes the Store it holds open. */
-    async releaseStore(settings, project) {
-      const info = endpoint(settings, project.name);
+    async releaseStore(settings, store) {
+      const info = endpoint(settings, holderOf(settings, store, "a Store release that is not one project's own"));
       if (!info) return;
       const answer = await connection(info).call({ fn: "releaseStore", args: { home: GUEST.home, storePath: storeFile() } });
       if (answer.refused) throw refuse(answer.refused.code, answer.refused.message, answer.refused.detail);

@@ -112,7 +112,7 @@ export async function create(runtime, name) {
   const { settings, platform } = runtime;
   await unused(runtime, name);
   await platform.init(settings);
-  const volume = await platform.docker.stores.makeVolume(runtime, name);
+  const volume = await platform.createStore(runtime, { name });
   const store = { name, kind: "sqlite", volume, link: null, created: Date.now(), projects: [] };
   try {
     await call("runtime.store.create", storeFields(runtime, store));
@@ -132,7 +132,7 @@ export async function remove(runtime, name, options = {}) {
   await runtime.clients.forgetStore(name);
   if (store.kind === "sqlite") {
     if (!store.volume) throw refuse("InvalidInput", `the runtime has no record of Store ${name}'s volume`);
-    await removeVolume(runtime, { name, volume: store.volume }, options);
+    await removeVolume(runtime, { name, volume: store.volume, legacy: !!store.legacy }, options);
   }
   await call("runtime.store.forget", { home: callHome(settings), store: name });
   if (store.legacy) await forgetOwn(runtime, name);

@@ -132,9 +132,9 @@ lines from now on, or from `since`, each with `actor`, its trace file's name.
 `platform/docker/` for `local` (`linux.js`, `macos.js` and `windows/`: Docker
 on this host, in Docker Desktop's VM or in WSL2) and `platform/vm/` for
 `vm:<provider>`. Each platform object implements one interface (`endpoint`,
-`status`, `start`, `restart`, `init`, `path`, the Store hooks `makeStore`,
-`storeHolders`, `releaseStoreHolders` and `removeStore`, and the home and
-disk helpers) and may declare capabilities instead of being named:
+`status`, `start`, `restart`, `init`, `path`, the Store hooks `createStore`,
+`storeHolders`, `releaseStoreHolders`, `releaseStore` and `removeStore`, and
+the home and disk helpers) and may declare capabilities instead of being named:
 `initCounts: false` (macOS: this process cannot read Init's counts) and
 `uncertainInit: true` (Windows: any failed Init is kept and recorded, never
 cleaned up); `platform/vm/` implements the same interface over a VM
@@ -148,6 +148,15 @@ volumes and their hooks, `stores.js`) and `disk` (the engine's volumes,
 `disk.js`). A `vm:` platform has no group, and the helpers that read host
 Docker refuse there. Every helper reaches Docker through
 `runtime.platform.docker.run`, so a test replaces that one call.
+
+The Store hooks are keyed by Store, `{ name, volume, legacy }` (#527 step
+10b): `legacy` marks the Store a project's own Init makes, named after the
+project; any other is a Store of the home. On a Docker placement
+`createStore` makes the Store's labelled volume (the project's own volume,
+labelled `layerfs.project`, or `<prefix>store-<name>`, labelled
+`layerfs.store`) and refuses `Exists` for a volume that exists instead of
+reusing it; Init, `store.create` and `store.start_load` all make their
+volume through it.
 
 - **Linux** runs Store calls in this process. There is no worker:
   `worker.start` and `worker.restart` are refused `InvalidInput`. Init
@@ -307,7 +316,8 @@ VM, so a call on the home's Stores or remotes has no VM to run in (#527 F3).
 `store.start_*` job, `store.unlink`, `store.check`, every `remote.*` call,
 `postgresql.status` and `project.start_init` with `{ store }` refuse
 `Unsupported` before any effect, and so does a client of a project in a
-PostgreSQL Store. `store.list` still lists the home's records, with `bytes`,
+PostgreSQL Store. The VM's Store hooks hold only a project's own Store and
+refuse any other the same way. `store.list` still lists the home's records, with `bytes`,
 `open` and `heads` null. A project is made with `project.start_init(name,
 folder)` and removed with `project.delete`.
 
