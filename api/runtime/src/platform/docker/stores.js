@@ -6,6 +6,8 @@
 // `legacy` marks the Store a project's own Init makes, named after it (#506);
 // any other is a Store of the home. Each uses that platform's own Docker CLI
 // call (Windows goes through WSL).
+import { keyOf } from "../../project/list.js";
+import { holding, recorded, recordingProjects } from "../../sandbox/records.js";
 import { refuse } from "../shared.js";
 
 const docker = (runtime, args, options = {}) => runtime.platform.docker.run(runtime.settings, args, options);
@@ -28,14 +30,31 @@ export async function createStore(runtime, store) {
   return volume;
 }
 
-/** The containers holding the Store's volume now: [{ id, state }], running or not. */
+/** The containers holding the Store's volume now: [{ id, state }], running or not. Where native
+ * and namespaces Sandboxes can open this placement's Stores too (`localSandboxes`, Linux), the
+ * running ones of the Store's projects join them, from their records (#527 step 12, F6):
+ * `{ id: "<project>/<n>", state, runtime, project, sandbox }`. */
 export async function storeHolders(runtime, store) {
   const rows = await docker(runtime, ["ps", "-a", "--filter", `volume=${store.volume}`, "--format", "{{.ID}} {{.State}}"]);
-  return rows.split("\n").filter(Boolean).map((line) => { const [id, state] = line.split(" "); return { id, state }; });
+  const holders = rows.split("\n").filter(Boolean).map((line) => { const [id, state] = line.split(" "); return { id, state }; });
+  if (!runtime.platform.localSandboxes) return holders;
+  for (const project of (await recordingProjects(runtime)).filter((p) => p.store === store.name)) {
+    for (const item of (await recorded(runtime, project)).filter((r) => r.runtime !== "docker" && holding(r))) {
+      holders.push({ id: `${keyOf(project)}/${item.sandbox}`, state: item.state, runtime: item.runtime, project: keyOf(project), sandbox: item.sandbox });
+    }
+  }
+  return holders;
 }
 
-/** Removes the volume's holders: the running ones only when `force`. */
+/** Removes the volume's holders: the running ones only when `force`. A native or namespaces
+ * Sandbox is not Docker's to remove: one among them refuses Busy before any effect, naming it,
+ * so its own deployment closes it (`sandbox.close`). */
 export async function releaseStoreHolders(runtime, store, holders, { force = false } = {}) {
+  const daemons = holders.filter((holder) => holder.runtime);
+  if (daemons.length) {
+    const named = daemons.map((d) => `Sandbox ${d.sandbox} of ${d.project} (${d.runtime})`).join(", ");
+    throw refuse("Busy", `${named} use${daemons.length === 1 ? "s" : ""} Store ${store.name} outside Docker; close ${daemons.length === 1 ? "it" : "them"} with a client whose LAYERFS_SANDBOX names that backend (sandbox.close), then remove the Store`);
+  }
   if (!holders.length) return;
   await docker(runtime, ["rm", ...(force ? ["-f"] : []), ...holders.map((holder) => holder.id)], { timeout: 30_000 });
 }

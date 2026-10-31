@@ -11,7 +11,8 @@
 //   (comma-separated) is refused with code CLI_FAKE_CODE (default Conflict);
 //   `initRefusal`, when set, is what project.init refuses; a policy depth over
 //   255 is refused as the addon refuses it.
-// - Answers: `sandboxList` is the project's running Sandboxes,
+// - Answers: `sandboxList` is the project's running Sandboxes, `recordList`
+//   (by project) every backend's records (runtime.sandbox.records),
 //   `workspaceList` a Sandbox's daemon records. An exec command "exit <n>"
 //   ends with exit code n, stdout "out:<command>" and stderr "err"; any other
 //   command ends with code 3 and 5000 bytes of stdout.
@@ -68,6 +69,7 @@ function answer(op, args) {
     case "sandbox.list_workspaces": return { value: { kind: "ok", version: "1", workspaces: exports.workspaceList } };
     case "sandbox.close": return { value: { kind: "Closed", sandbox: args.sandbox } };
     case "runtime.sandbox.reclaim": return { value: { kind: "ok", reclaimed: exports.reclaimed ?? [] } };
+    case "runtime.sandbox.records": return { value: { kind: "ok", items: exports.recordList?.[args.project] ?? [] } };
     // #506 Store-first: Stores, their projects, remotes and transfers
     case "runtime.store.create": return { value: { kind: "Created", store: args.store, storePath: args.storePath, bytes: 4096, sqlite: "3.50.0" } };
     case "runtime.store.add_project": return { value: { kind: "Initialized", project: args.name, store: args.store, layer: "lay0", root: "r00t", storePath: args.storePath } };

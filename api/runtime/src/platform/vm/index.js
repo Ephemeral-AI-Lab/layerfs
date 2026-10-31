@@ -32,6 +32,7 @@ import { endpointFile, homeNames, localHome, noHomeStores, ping, ready, refuse, 
 import { readEndpoint, releaseStore } from "../../worker/call.js";
 import { callHome, GUEST } from "../../settings.js";
 import { NAME, record as projectRecord } from "../../project/list.js";
+import { holding, recorded } from "../../sandbox/records.js";
 import microsandbox from "./microsandbox.js";
 import appleContainer from "./apple-container.js";
 import ssh from "./ssh.js";
@@ -351,13 +352,14 @@ const stores = {
     if (code !== 0) throw refuse("Failed", `could not make ${GUEST.store} in ${name}: ${stderr.trim()}`, null);
     return store.volume;
   },
-  /** The Sandboxes holding the project's Store now: its running Sandboxes, by number. A stopped VM runs none. */
+  /** The Sandboxes holding the project's Store now, by number: its records' running ones (and any
+   * whose state is unknown), of every backend, through the binding's runtime.sandbox.records, the
+   * same read a Linux `local` home uses (#527 step 12). A stopped VM runs none. */
   async storeHolders(runtime, store) {
     const { settings } = runtime, project = holderOf(settings, store, "a Store's holders"), provider = providerOf(settings);
     const found = await provider.inspect(vmNameOf(settings, project));
     if (!found || found.state !== "running") return [];
-    const held = await runtime.clients.use({ name: project, volume: store.volume }, (client) => client.project.list_sandboxes(1000, 0));
-    return held.items.map(({ sandbox }) => ({ id: sandbox, state: "running" }));
+    return (await recorded(runtime, { name: project })).filter(holding).map(({ sandbox, state }) => ({ id: sandbox, state }));
   },
   /** Stops them the way the SDK does: `sandbox.close`, one per Sandbox. */
   async releaseStoreHolders(runtime, store, holders) {

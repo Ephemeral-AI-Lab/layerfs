@@ -241,6 +241,33 @@ try {
     assert.deepEqual(listed.map((c) => [c.name, c.state, c.scratch, c.owned]), [["layerfs-gone-1", "exited", 1_000_000, false], ["layerfs-shop-1", "running", 4096, true]]);
     assert.deepEqual([listed[1].ports, listed[1].finishedAt, listed[0].finishedAt], [[{ container: "30421/tcp", host: "127.0.0.1", port: 54321 }], null, "2026-10-24T02:00:00Z"]);
     assert.deepEqual(calls.find((c) => c[0] === "inspect"), ["inspect", "--size", "id1", "id2", "id3"]);
+    // #527 step 12: on Linux a project's native and namespaces Sandboxes are read from its records
+    // (runtime.sandbox.records, every backend, no deployment matched) and listed beside the containers
+    native.recordList = { shop: [
+      { sandbox: "1", name: "layerfs-shop-1", runtime: "docker", image: IMAGE, state: "running", workspaces: 0 },
+      { sandbox: "4", name: "layerfs-shop-4", runtime: "native", image: "local", state: "running", workspaces: 1 },
+      { sandbox: "5", name: "layerfs-shop-5", runtime: "namespaces", image: IMAGE, state: "stopped", workspaces: 0 },
+    ] };
+    const asked = native.calls.length;
+    const both = await runtime.sandbox.list();
+    assert.deepEqual(native.args.slice(asked).filter((a, i) => native.calls[asked + i] === "runtime.sandbox.records").map((a) => [a.project, a.home, "deploy" in a]), [["shop", home, false]], "one records call per project, with no deployment");
+    assert.deepEqual(both.map((c) => [c.name, c.runtime, c.state, c.running, c.owned]), [
+      ["layerfs-gone-1", "docker", "exited", false, false], ["layerfs-shop-1", "docker", "running", true, true],
+      ["layerfs-shop-4", "native", "running", true, true], ["layerfs-shop-5", "namespaces", "stopped", false, true],
+    ]);
+    assert.deepEqual([both[2].scratch, both[2].ports, both[2].sandbox], [null, [], "4"]);
+    // removing the Store sees the running native Sandbox as a holder: Busy, and with stopSandboxes
+    // still Busy (it is not Docker's to remove), naming it, before any docker rm
+    const removing = calls.length;
+    await assert.rejects(runtime.project.delete("shop", { confirm: "shop" }), { code: "Busy" });
+    await assert.rejects(runtime.project.delete("shop", { confirm: "shop", stopSandboxes: true }), { code: "Busy", message: /Sandbox 4 of shop \(native\).*LAYERFS_SANDBOX/ });
+    assert.deepEqual(calls.slice(removing).filter((c) => c[0] === "rm" || c[0] === "volume"), [], "nothing was removed");
+    assert.ok(existsSync(join(home, "shop")));
+    // a stopped one holds nothing: only the containers are removed then (none run on the volume here)
+    native.recordList = { shop: [{ sandbox: "4", name: "layerfs-shop-4", runtime: "native", image: "local", state: "stopped", workspaces: 0 }] };
+    const { storeHolders } = await import("../src/platform/docker/stores.js");
+    assert.deepEqual((await storeHolders(runtime, { name: "shop", volume: "vol-shop", legacy: true })).filter((h) => h.runtime), []);
+    delete native.recordList;
     // sweep: only shop has an ended container of a project of this home; created ones and other projects are left alone
     native.reclaimed = ["2"];
     const before = native.calls.length;

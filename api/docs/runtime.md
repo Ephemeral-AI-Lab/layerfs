@@ -23,7 +23,7 @@ try {
   await runtime.sandbox.reclaim("shop");   // { reclaimed: [ids] }
   await runtime.sandbox.list_leftovers();
   await runtime.sandbox.clean_leftovers(["layerfs-old-1"]);
-  await runtime.sandbox.list();            // [{ name, project, sandbox, state, running, startedAt, finishedAt, image, ports, scratch, owned }]
+  await runtime.sandbox.list();            // [{ name, project, sandbox, runtime, state, running, startedAt, finishedAt, image, ports, scratch, owned }]
   await runtime.sandbox.sweep();           // { reclaimed: { project: [ids] }, failed: [{ project, code, message }] }
   await runtime.volume.list();             // [{ name, size, containers, owner, project, live, removable }]
   await runtime.volume.remove(["layerfs-shop-store-k2"]); // { results: [{ name, ok, message? }] }
@@ -107,12 +107,29 @@ lines from now on, or from `since`, each with `actor`, its trace file's name.
   `scratch`, the bytes of the container's writable layer (what commands wrote
   outside every Workspace), its ports and whether a project of this home owns
   it. One `docker ps` and one `docker inspect --size`; it changes nothing.
+  Each row's `runtime` is `docker`. On Linux, where an SDK run as root can
+  start native and namespaces Sandboxes on this home's Stores (the platform's
+  `localSandboxes` capability), each SQLite project's records are read too,
+  through the binding's `runtime.sandbox.records` (#527 step 12, F6): every
+  record with its `runtime` and `state` (`running`, `stopped`, `gone` or
+  `unknown`), whatever backend this runtime's clients use, reopening none.
+  Their native and namespaces Sandboxes are listed beside the containers,
+  named by their directory, with no container facts (`scratch`,
+  `startedAt` and `finishedAt` null, no ports).
+- Removing a Store (`project.delete`, `store.remove`) counts those running
+  native and namespaces Sandboxes (and any whose state is unknown) among its
+  holders on Linux: they refuse `Busy` like a running container, and with
+  `stopSandboxes` still `Busy`, naming each, before any container or volume
+  is removed: only a client of their own backend closes them. A `vm:` home's
+  holders are read the same way inside the project's VM.
 - `sandbox.sweep` runs `sandbox.reclaim` for every project of the home that
   has an exited or dead Sandbox container, found by the container's
   `layerfs.project` and `layerfs.store` labels rather than its name (the
   binding owns the name format). The project's records and lock
   decide what goes, so a container of another home, or one starting now, is
   never touched; containers no project records stay for `list_leftovers`.
+  A project's native or namespaces record does not fail its reclaim: a
+  Docker deployment leaves it out (#527 step 12).
   `open` runs it once in the background unless `sweep: false`;
   `status().sweep` is `null`, `{ state: "running" }` or
   `{ state: "done" | "failed", at, … }`, and `close` waits for it.
@@ -138,9 +155,10 @@ on this host, in Docker Desktop's VM or in WSL2) and `platform/vm/` for
 `status`, `start`, `restart`, `init`, `path`, the Store hooks `createStore`,
 `storeHolders`, `releaseStoreHolders`, `releaseStore` and `removeStore`, and
 the home and disk helpers) and may declare capabilities instead of being named:
-`initCounts: false` (macOS: this process cannot read Init's counts) and
+`initCounts: false` (macOS: this process cannot read Init's counts),
 `uncertainInit: true` (Windows: any failed Init is kept and recorded, never
-cleaned up); `platform/vm/` implements the same interface over a VM
+cleaned up) and `localSandboxes: true` (Linux: native and namespaces
+Sandboxes can open this placement's Stores, so discovery reads records too); `platform/vm/` implements the same interface over a VM
 (see [Placement](#placement-one-linux-vm-per-store)).
 
 The three Docker platforms also carry `platform.docker`, one Docker group

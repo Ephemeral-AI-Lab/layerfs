@@ -11,6 +11,9 @@ const NO_WORKER = "Linux runs Store calls in-process; there is no worker";
 
 export default {
   name: "linux",
+  /** Native and namespaces Sandboxes (an SDK's LAYERFS_SANDBOX, run as root here) can open this
+   * placement's Stores beside its Docker ones, so discovery reads their records too (#527 F6). */
+  localSandboxes: true,
   endpoint: () => null,
   async status() { return { worker: null }; },
   async start() { throw refuse("InvalidInput", NO_WORKER); },

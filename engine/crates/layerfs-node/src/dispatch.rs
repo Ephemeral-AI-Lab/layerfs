@@ -154,6 +154,7 @@ pub(crate) fn backend_call(op: String, args: JsUnknown) -> napi::Result<AsyncTas
             "runtime.remote.add" => crate::sync::add(&args),
             "runtime.remote.remove" => crate::sync::remove(&args),
             "runtime.sandbox.reclaim" => workspace::reclaim(&args),
+            "runtime.sandbox.records" => workspace::all_records(&args),
             "backend.daemon.sandbox.get_log" => crate::sandbox::get_log(&args),
             "backend.store.project.get_history"
             | "backend.store.project.get_storage"

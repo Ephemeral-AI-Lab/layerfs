@@ -31,8 +31,10 @@ Node process; the fixture's fork is bounded and released on test unwinding.
 deployment puts that Sandbox is refused and nothing is deleted, the configured
 `localDir` must be absolute and plain, a stopped native Sandbox is deleted and its
 number freed, a damaged boot or port is refused, a native record is used only by
-a native deployment, and a record of the former `local` runtime is never used or
-deleted. Record handling is the same code on Linux and macOS, so it runs here;
+a native deployment (another deployment's reclaim leaves it out, its close
+refuses it), a record of the former `local` runtime is never used or
+deleted, `LAYERFS_SANDBOX` maps the former pair and refuses conflicts, and
+`runtime.sandbox.records` lists every backend's record with its state. Record handling is the same code on Linux and macOS, so it runs here;
 starting a native Sandbox is supported on macOS (caller identity, loopback NFS) and Linux (root daemon, nonroot 501:20 commands, FUSE). Linux lifecycle qualification also runs `layerfs-sandbox --test native_provider` as root and the SDK smoke with `LAYERFS_SANDBOX=native`.
 
 `native_admission` covers initial connection admission and its `Busy` deadline.

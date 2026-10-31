@@ -250,21 +250,43 @@ fn a_docker_record_stays_docker_under_a_native_deployment() {
     assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
 }
 
+/// `sandbox.close` of Sandbox 1 under a `deploy` (JavaScript object text):
+/// it reopens the record, so another backend's is refused (#527 step 4).
+fn close_refused_as_mixed(home: &Home, deploy: &str) {
+    home.node(
+        &format!(
+            "const r = await native.call('sandbox.close', {{...args, deploy:{deploy}}});
+            {NEITHER}
+            assert.match(r.refused.message, /never mixed/);"
+        ),
+        None,
+        Duration::from_secs(10),
+    );
+}
+
+/// Reclaim under `deploy` leaves another backend's record out: nothing is
+/// reclaimed, nothing is refused (#527 step 12).
+const LEFT_OUT: &str = "assert.deepEqual(r, {value:{kind:'ok',reclaimed:[]}});";
+
 #[test]
 fn a_record_of_the_former_local_runtime_is_never_used_nor_deleted() {
     let home = Home::new();
     let root = root(&home);
     let own = own(&root);
-    let mixed = "assert.equal(r.refused?.code, 'InvalidInput', JSON.stringify(r));
-    assert.match(r.refused.message, /never mixed/);
-    assert.match(r.refused.message, /neither used nor deleted/);";
-    // a record of the former `local` runtime is used by no deployment
+    let native = format!("{{sandbox:'native', localDir:{:?}}}", text(&root));
+    // a record of the former `local` runtime is used by no deployment: a
+    // reclaim leaves it out, a reopen refuses it
     record(&home, "local", text(&own), "layerfs-proj-1", |_| {});
-    reclaim(&home, "native", Some(text(&root)), mixed);
-    reclaim(&home, "docker", Some(text(&root)), mixed);
+    reclaim(&home, "native", Some(text(&root)), LEFT_OUT);
+    reclaim(&home, "docker", Some(text(&root)), LEFT_OUT);
+    close_refused_as_mixed(&home, &native);
     // nor is a native record by any deployment but a native one
     record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
-    reclaim(&home, "docker", Some(text(&root)), mixed);
+    reclaim(&home, "docker", Some(text(&root)), LEFT_OUT);
+    close_refused_as_mixed(
+        &home,
+        &format!("{{sandbox:'docker', localDir:{:?}}}", text(&root)),
+    );
     assert!(own.join("daemon.log").exists());
     assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
     // a native deployment uses its own record: stopped, it is reclaimed
@@ -276,26 +298,88 @@ fn a_record_of_the_former_local_runtime_is_never_used_nor_deleted() {
 #[test]
 fn a_native_record_is_not_reopened_by_a_namespaces_deployment() {
     // #527 step 4: reopen requires the deployment's own backend both ways; a
-    // namespaces deployment does not take a native record as its own
+    // namespaces deployment does not take a native record as its own, and
+    // since step 12 its reclaim leaves the record out instead of failing
     let home = Home::new();
     let root = root(&home);
     let own = own(&root);
     record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
-    home.node(
-        &format!(
-            "const r = await native.backendCall('runtime.sandbox.reclaim', {{...args, deploy:{{sandbox:'native', sandboxBackend:'namespaces', localDir:{:?}}}}});
-            {NEITHER}
-            assert.match(r.refused.message, /never mixed/);",
-            text(&root)
-        ),
-        None,
-        Duration::from_secs(10),
+    reclaim(&home, "namespaces", Some(text(&root)), LEFT_OUT);
+    close_refused_as_mixed(
+        &home,
+        &format!("{{sandbox:'namespaces', localDir:{:?}}}", text(&root)),
     );
     assert!(own.join("daemon.log").exists());
     assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
     // the same record under a native deployment is its own: reclaimed
     reclaim(&home, "native", Some(text(&root)), RECLAIMED);
     assert!(!own.exists());
+}
+
+#[test]
+fn every_backend_s_record_is_listed_with_its_runtime_and_state() {
+    // #527 step 12: runtime.sandbox.records lists a record of any backend
+    // without matching the deployment's; list_sandboxes and reclaim of a
+    // Docker deployment leave a native record out instead of failing
+    let home = Home::new();
+    let root = root(&home);
+    let own = own(&root);
+    let records =
+        "await native.backendCall('runtime.sandbox.records', {...args, deploy:{sandbox:'docker'}})";
+    let listed =
+        "await native.call('project.list_sandboxes', {...args, deploy:{sandbox:'docker'}})";
+    // a native daemon long gone: stopped
+    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
+    home.node(
+        &format!(
+            "assert.deepEqual({records}, {{value:{{kind:'ok', items:[{{sandbox:'1', name:'layerfs-proj-1', runtime:'native', image:'local', workspaces:0, state:'stopped'}}]}}}});
+            assert.deepEqual({listed}, {{value:{{kind:'ok', items:[]}}}});"
+        ),
+        None,
+        Duration::from_secs(10),
+    );
+    reclaim(&home, "docker", None, LEFT_OUT);
+    // a namespaces record whose process runs (this test's own): running
+    let stat = std::fs::read_to_string("/proc/self/stat").unwrap();
+    let start = stat[stat.rfind(')').unwrap() + 2..]
+        .split(' ')
+        .nth(19)
+        .unwrap()
+        .to_owned();
+    let digest = format!("sha256:{}", "a".repeat(64));
+    record(
+        &home,
+        "namespaces",
+        text(&own),
+        "layerfs-proj-1",
+        |fields| {
+            set("pid", Some(SdkValue::Int(i64::from(std::process::id()))))(fields);
+            set("start", Some(SdkValue::text(&start)))(fields);
+            set("image", Some(SdkValue::text(&digest)))(fields);
+        },
+    );
+    home.node(
+        &format!(
+            "const r = {records};
+            assert.deepEqual(r.value.items.map((s) => [s.runtime, s.state, s.image]), [['namespaces', 'running', {digest:?}]]);
+            assert.deepEqual({listed}, {{value:{{kind:'ok', items:[]}}}});"
+        ),
+        None,
+        Duration::from_secs(10),
+    );
+    // a record of the former local runtime is listed and never read
+    record(&home, "local", text(&own), "layerfs-proj-1", |_| {});
+    home.node(
+        &format!(
+            "const [item] = ({records}).value.items;
+            assert.deepEqual([item.runtime, item.state], ['local', 'unknown']);
+            assert.match(item.message, /never used/);"
+        ),
+        None,
+        Duration::from_secs(10),
+    );
+    assert!(own.join("daemon.log").exists(), "listing deletes nothing");
+    assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
 }
 
 #[test]

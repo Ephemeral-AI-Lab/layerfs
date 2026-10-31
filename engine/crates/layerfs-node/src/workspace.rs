@@ -138,8 +138,32 @@ fn observed(
     }
 }
 
-/// The project's recorded Sandboxes, lowest number first, with each record.
+/// The project's recorded Sandboxes that this deployment's backend may
+/// reopen, lowest number first, with each record. A Docker record is every
+/// deployment's, as before; a native or namespaces record is only its own
+/// backend's, and a record of the former `local` runtime nobody's. The
+/// others are left out, never refused, so one of them does not fail the
+/// listing, reclaim or `sandbox.create` of the rest (#527 step 12); they are
+/// neither reopened nor deleted here, and `runtime.sandbox.records` lists
+/// them. Reopening one by its number is still refused (step 4).
 fn records(args: &SdkValue) -> Result<Vec<(String, std::path::PathBuf, SdkValue)>, SdkRefusal> {
+    let deployed = match args.get("deploy") {
+        Some(deploy) => crate::runtime::backend(deploy)?,
+        None => None,
+    };
+    let mut own = recorded_all(args)?;
+    own.retain(|(_, _, value)| match crate::runtime::recorded(value) {
+        Ok(None) => true,
+        Ok(backend) => backend == deployed,
+        Err(_) => false,
+    });
+    Ok(own)
+}
+
+/// Every recorded Sandbox of the project, lowest number first, with each record.
+fn recorded_all(
+    args: &SdkValue,
+) -> Result<Vec<(String, std::path::PathBuf, SdkValue)>, SdkRefusal> {
     let mut found = Vec::new();
     for id in crate::discovery::sandbox_ids(args)? {
         let directory = crate::discovery::sandbox_dir(args, &id)?;
@@ -170,7 +194,8 @@ pub(crate) fn reclaim_gone(args: &SdkValue) -> Result<(), SdkRefusal> {
 /// counts its Workspace records. It reads records and inspects each
 /// container once; it starts nothing and changes nothing. A Sandbox found
 /// gone or stopped (an idle-closed one) is left out and its records kept:
-/// `sandbox.create` and `runtime.sandbox.reclaim` remove them.
+/// `sandbox.create` and `runtime.sandbox.reclaim` remove them. A Sandbox
+/// of another backend than the deployment's is left out too ([`records`]).
 pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
     let mut items = Vec::new();
     for (id, directory, value) in records(args)? {
@@ -189,6 +214,78 @@ pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
             ),
             ("workspaces", SdkValue::Int(recorded(&directory)? as i64)),
         ]));
+    }
+    Ok(SdkValue::map([
+        ("kind", SdkValue::text("ok")),
+        ("items", SdkValue::List(items)),
+    ]))
+}
+
+/// `runtime.sandbox.records()`: every recorded Sandbox of the project, of
+/// every backend, lowest number first: `{ sandbox, name, runtime, image,
+/// state, workspaces }`, with `message` when `state` is `unknown`. `runtime`
+/// is `docker`, `native`, `namespaces` (or `local`, the former runtime's);
+/// `state` is `running`, `stopped`, `gone` (a Docker container no longer
+/// there) or `unknown`. The deployment's backend is not consulted (#527
+/// step 12): a Docker record's container is inspected once at its own
+/// Engine, a native or namespaces record's process is read from this kernel
+/// by id, start time and boot, and a `local` record is never read. Nothing
+/// is reopened, dialed, started or changed.
+pub(crate) fn all_records(args: &SdkValue) -> Outcome {
+    let mut items = Vec::new();
+    for (id, directory, value) in recorded_all(args)? {
+        let (runtime, state) = match crate::runtime::recorded(&value) {
+            Ok(None) => (
+                "docker",
+                observed(args, &id, &value, &directory).map(|found| match found {
+                    None => "running",
+                    Some((_, true)) => "stopped",
+                    Some((_, false)) => "gone",
+                }),
+            ),
+            Ok(Some(_)) => (
+                value.get_text("runtime").unwrap_or_default(),
+                crate::discovery::local_running(&value).map(|alive| {
+                    if alive {
+                        "running"
+                    } else {
+                        "stopped"
+                    }
+                }),
+            ),
+            Err(other) => (
+                other,
+                Err(crate::job::refused(
+                    "InvalidInput",
+                    "a record of the former local runtime is never used",
+                )),
+            ),
+        };
+        let mut fields = vec![
+            ("sandbox", SdkValue::text(&id)),
+            (
+                "name",
+                SdkValue::text(value.get_text("name").unwrap_or_default()),
+            ),
+            ("runtime", SdkValue::text(runtime)),
+            (
+                "image",
+                SdkValue::text(value.get_text("image").unwrap_or_default()),
+            ),
+            ("workspaces", SdkValue::Int(recorded(&directory)? as i64)),
+        ];
+        match state {
+            Ok(state) => fields.push(("state", SdkValue::text(state))),
+            Err(refusal) => fields.extend([
+                ("state", SdkValue::text("unknown")),
+                ("message", SdkValue::text(refusal.message)),
+            ]),
+        }
+        items.push(SdkValue::Map(
+            (fields.into_iter())
+                .map(|(name, value)| (name.to_owned(), value))
+                .collect(),
+        ));
     }
     Ok(SdkValue::map([
         ("kind", SdkValue::text("ok")),

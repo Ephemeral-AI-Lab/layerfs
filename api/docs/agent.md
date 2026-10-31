@@ -211,7 +211,11 @@ keeps it for its life.
 A Sandbox closes when idle: its daemon ends itself after 2 minutes with no
 Workspace and no call, and its container stops. Open connections do not keep
 it. `project.list_sandboxes()` skips a stopped Sandbox and keeps its
-records; the next mount or `runtime.sandbox.reclaim` that meets a stopped or
+records, and leaves out a Sandbox of another backend than the client's
+`LAYERFS_SANDBOX` (a Docker client's list, reclaim and `sandbox.create`
+neither fail on nor touch a native or namespaces record, and the reverse;
+`runtime.sandbox.records` lists every record with its `runtime` and
+`state`, #527 step 12); the next mount or `runtime.sandbox.reclaim` that meets a stopped or
 removed container reclaims the Sandbox: it deletes a stopped container
 (unforced, once) and removes the Sandbox's records, so the number is used
 again. `runtime.sandbox.sweep`, which the runtime runs once when it opens,
@@ -296,9 +300,10 @@ is `native` (`LAYERFS_SANDBOX=native`, or the former pair with
 not reopen it either, #527) and the
 same `LAYERFS_LOCAL_DIR` and prefix, so it puts that
 Sandbox exactly where the record says; any other is refused `InvalidInput`
-and nothing is deleted. A record of the former `local` runtime (an earlier,
-unmerged build) is never used: it is refused the same way and nothing it
-names is deleted. A daemon that ends (idle close, crash, kill) is the stopped
+when it would reopen the record (a mount or close of that Sandbox), and left
+out of listing and reclaim; nothing is deleted. A record of the former
+`local` runtime (an earlier, unmerged build) is never used: it is refused
+and left out the same way and nothing it names is deleted. A daemon that ends (idle close, crash, kill) is the stopped
 observation: Workspace calls to it are refused, and the next `sandbox.create`
 or `runtime.sandbox.reclaim` reclaims it, forcing off any mount the dead
 daemon left before deleting its directory. Nothing outside that directory is

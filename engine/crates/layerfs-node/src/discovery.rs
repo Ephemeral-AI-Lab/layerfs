@@ -637,11 +637,27 @@ fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathB
             ),
         ));
     }
-    let number = |key: &str| {
-        value
-            .get_int(key)
-            .ok_or_else(|| refused("InvalidInput", format!("local Sandbox record {key}")))
+    let process = recorded_process(value)?;
+    let port = value
+        .get_int("port")
+        .ok_or_else(|| refused("InvalidInput", "local Sandbox record port"))?;
+    let record = LocalRecord {
+        name: name.to_owned(),
+        pid: process.pid,
+        start_time: process.start,
+        boot: process.boot,
+        port: u16::try_from(port).map_err(failed)?,
+        labels: labels(value)?,
     };
+    Ok((directory, record))
+}
+/// The daemon (native) or init (namespaces) process a local record names:
+/// its id, start time and boot. A record from before boot ids has none.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn recorded_process(value: &SdkValue) -> Result<LocalProcess> {
+    let pid = value
+        .get_int("pid")
+        .ok_or_else(|| refused("InvalidInput", "local Sandbox record pid"))?;
     let boot = match value.get_text("boot") {
         None => None,
         Some(hex) => Some(
@@ -651,17 +667,26 @@ fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathB
                 .ok_or_else(|| refused("InvalidInput", "local Sandbox record boot"))?,
         ),
     };
-    let record = LocalRecord {
-        name: name.to_owned(),
-        pid: u32::try_from(number("pid")?).map_err(failed)?,
-        start_time: registry::text(value, "start")?
+    Ok(LocalProcess {
+        pid: u32::try_from(pid).map_err(failed)?,
+        start: registry::text(value, "start")?
             .parse::<u64>()
             .map_err(failed)?,
         boot,
-        port: u16::try_from(number("port")?).map_err(failed)?,
-        labels: labels(value)?,
-    };
-    Ok((directory, record))
+    })
+}
+/// Whether the process a native or namespaces record names still runs (id,
+/// start time, boot), from this kernel alone: no deployment is consulted.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub(crate) fn local_running(value: &SdkValue) -> Result<bool> {
+    Ok(recorded_process(value)?.alive())
+}
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub(crate) fn local_running(_: &SdkValue) -> Result<bool> {
+    Err(refused(
+        "Unsupported",
+        "a local process is read on Linux or macOS",
+    ))
 }
 /// A namespaces record is used only where this backend puts that Sandbox and
 /// only by a deployment that selects it: another backend never reopens or
