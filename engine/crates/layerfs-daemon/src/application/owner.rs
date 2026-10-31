@@ -47,6 +47,8 @@ pub struct Application {
     pub(super) owner: Owner,
     /// Fixed shared kernel workers, entered before control readiness.
     pub(super) kernel: Option<Arc<crate::control::KernelServing>>,
+    /// NFS serving of the native route, when selected.
+    pub(super) export: Option<Arc<crate::control::ExportServing>>,
     pub(super) state: Mutex<State>,
     pub(super) changed: Condvar,
     pub(super) workers: Mutex<Vec<Option<JoinHandle<()>>>>,
@@ -150,11 +152,21 @@ impl Application {
                 })
             }
         };
+        let export = match super::filesystem::assemble_export(&setup) {
+            Ok(export) => export,
+            Err(cause) => {
+                return Err(ApplicationError::AfterOverlay {
+                    owner: Box::new(owner),
+                    cause: Box::new(ApplicationError::Io(cause)),
+                })
+            }
+        };
         let service = existing.as_ref().map(|opened| {
             super::filesystem::service(
                 opened.store.clone(),
                 &owner,
                 kernel.as_ref(),
+                export.as_ref(),
                 l.serial_low_water,
             )
         });
@@ -169,6 +181,7 @@ impl Application {
             instance,
             owner,
             kernel,
+            export,
             state: Mutex::new(State {
                 startup: Startup {
                     phase,

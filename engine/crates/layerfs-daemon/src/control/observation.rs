@@ -57,7 +57,11 @@ impl Service {
             Kernel::Ready(attached) => Some(attached.session.observer()),
             Kernel::Leaving(leaving) => Some(leaving.observer.clone()),
             Kernel::Retained(kept) => kept.observer.clone(),
-            Kernel::Unattached | Kernel::Attaching => None,
+            Kernel::Unattached
+            | Kernel::Attaching
+            | Kernel::Exported(_)
+            | Kernel::ExportLeaving(_)
+            | Kernel::ExportKept(_) => None,
         })
     }
 }

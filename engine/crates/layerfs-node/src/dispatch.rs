@@ -75,6 +75,9 @@ fn listed(answer: SdkValue) -> Outcome {
 /// the daemon, so it is not sent on.
 fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
     let state = registry::sandbox_live(&args)?;
+    if let Some(path) = args.get_text("path") {
+        crate::unmount::check(&state, path)?;
+    }
     let args = match args {
         SdkValue::Map(fields) => SdkValue::Map(
             fields

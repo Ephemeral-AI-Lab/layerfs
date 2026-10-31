@@ -65,7 +65,6 @@ impl Success {
     }
 }
 impl Failure {
-    #[cfg(target_os = "linux")]
     pub(super) fn kernel(
         code: ControlCode,
         phase: &'static str,

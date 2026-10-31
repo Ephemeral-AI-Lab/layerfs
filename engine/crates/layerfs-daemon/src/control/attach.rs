@@ -35,6 +35,11 @@ impl Service {
         token: WorkspaceToken,
         timing: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>,
     ) -> Result<Success, Failure> {
+        if let Some(export) = self.export.clone() {
+            return crate::telemetry::phase(timing, "kernel.attach", || {
+                self.attach_export(&export, token)
+            });
+        }
         let Some(serving) = self.kernel.clone() else {
             return Err(Failure::Rejected(
                 ControlCode::Invalid,

@@ -301,7 +301,10 @@ at once.
 
 `LAYERFS_NFS_MOUNT`, `_UNMOUNT`, `_FORCE` and `_FLUSH` replace the daemon's
 helper commands (`{port}` and `{dir}` are filled in). The default mount is
-`/sbin/mount_nfs -o vers=3,tcp,port={port},mountport={port},locallocks,nfc,actimeo=60,rsize=131072,wsize=131072,soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse 127.0.0.1:/ {dir}`.
+`/sbin/mount_nfs -o vers=3,tcp,port={port},mountport={port},locallocks,nfc,noatime,actimeo=60,rsize=131072,wsize=131072,soft,intr,dumbtimer,timeo=300,retrans=6,mutejukebox,nobrowse 127.0.0.1:/ {dir}`.
+`noatime` suppresses client access-time updates, which can otherwise add a
+SETATTR for each file read. The export keeps one timestamp, shows it as atime,
+mtime and ctime, and drops the access time decoded from SETATTR.
 `LAYERFS_NFS_REFRESH=0` turns the refresh after an install off (the client
 then revalidates within `actimeo`, 60 s). Only these `LAYERFS_` names are
 read; an integration that can set only its own prefixed names maps them
@@ -309,7 +312,9 @@ itself.
 
 Limits: background processes still read `/proc` and are not available on
 macOS; many small writes cost about six times APFS's time; checked on Apple
-silicon with macOS 27.2.
+silicon with macOS 27.2. Imported application SQLite databases in WAL mode
+can fail on this NFS route with the system SQLite VFS; see
+[SQLite database preparation and cache placement](../../docs/general/sqlite-on-network-filesystems.md).
 
 ### Namespace Sandboxes (Linux)
 
