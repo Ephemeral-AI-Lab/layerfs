@@ -181,16 +181,22 @@ class Workspace:
     def __init__(self, client):
         self.client = client
 
-    async def mount(self, sandbox, branch):
+    async def mount(self, sandbox, branch=OMIT):
         import re
 
-        if not isinstance(sandbox, str) or not re.fullmatch(r"[1-9][0-9]{0,9}", sandbox) or not isinstance(branch, str):
+        scope = self.client.options.get("scope")
+        if scope and branch is not OMIT:
+            from ._scope import out_of_scope
+
+            raise out_of_scope("branch")
+        selected = "main" if scope else branch
+        if not isinstance(sandbox, str) or not re.fullmatch(r"[1-9][0-9]{0,9}", sandbox) or not isinstance(selected, str):
             raise LayerFSError("InvalidInput", 'workspace.mount(sandbox, branch) takes a Sandbox number such as "1" (from sandbox.create() or project.list_sandboxes()) and a Branch name, and no options')
-        value = await self.client._invoke("workspace.mount", {"sandbox": sandbox, "branch": branch})
+        value = await self.client.call("workspace.mount", {"sandbox": sandbox, "branch": selected})
         return {"sandbox": value["sandbox"], "path": value["path"], "image": value["image"]}
 
     async def exec(self, workspace, command, message=OMIT):
-        value = await self.client._invoke("workspace.exec", {
+        value = await self.client.call("workspace.exec", {
             **workspace_args(workspace), "command": command, "message": checked_message(message),
         })
         if "output" not in value:

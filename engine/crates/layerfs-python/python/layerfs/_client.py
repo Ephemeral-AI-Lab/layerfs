@@ -7,7 +7,8 @@ import time
 from ._errors import LayerFSError
 from ._methods import Backend, Branch, FS, Project, Sandbox, Workspace
 from ._results import Results, outcome_fields, started
-from ._util import OMIT, clean, safe_integer
+from ._scope import check_scope, scope_args, scope_branches
+from ._util import OMIT, clean, page, page_of, safe_integer
 
 
 INIT_TIMEOUT_MS = 300_000
@@ -38,7 +39,7 @@ def resolve_options(given):
     if not _plain_options(given):
         raise LayerFSError("InvalidInput", "LayerFS options must be a plain object")
     for key in given:
-        if key not in ("home", "trace", "deploy", "storePolicy", "storePath"):
+        if key not in ("home", "trace", "deploy", "storePolicy", "storePath", "scope"):
             raise LayerFSError("InvalidInput", f'unknown LayerFS option "{key}"')
 
     def env(name):
@@ -90,13 +91,17 @@ def resolve_options(given):
         value = deploy_field(name, env_name)
         if value:
             deploy[name] = value
-    return {
+    scope = check_scope(given.get("scope", OMIT))
+    res = {
         "home": field("home", "HOME"),
         "trace": field("trace", "TRACE"),
         "deploy": deploy,
         "storePolicy": policy,
         "storePath": field("storePath", "STORE_PATH"),
     }
+    if scope:
+        res["scope"] = scope
+    return res
 
 
 def _summary(args):
@@ -148,7 +153,7 @@ class LayerFS:
         self.branch = Branch(self)
         self.sandbox = Sandbox(self)
         self.workspace = Workspace(self)
-        self.backend = Backend(self)
+        self.backend = None if self.options.get("scope") else Backend(self)
 
     _FACTORY = object()
 
@@ -163,6 +168,8 @@ class LayerFS:
         if timeout is OMIT:
             timeout = INIT_TIMEOUT_MS
         client = cls(project_name, cls._FACTORY, options)
+        if client.options.get("scope"):
+            raise LayerFSError("InvalidInput", "LayerFS.init does not accept scope; open the existing project with a scope instead")
         client.created = await client._init(folder, timeout)
         await client._opened()
         return client
@@ -222,7 +229,25 @@ class LayerFS:
     async def call(self, method, args):
         if isinstance(method, str) and re.match(r"^(backend|runtime)\.", method):
             raise LayerFSError("UnknownMethod", "backend and runtime methods are @layerfs/backend's and @layerfs/runtime's")
-        return await self._invoke(method, args)
+        scope = self.options.get("scope")
+        scoped_args = scope_args(scope, method, args)
+        if scope and method == "project.list_branches":
+            return await self._scoped_branches(scope, scoped_args)
+        return await self._invoke(method, scoped_args)
+
+    async def _scoped_branches(self, scope, args):
+        """Lists the complete Branch namespace, then applies the caller's page to it."""
+        args = args or {}
+        requested = page(args.get("pageSize", OMIT), args.get("pagePos", OMIT))
+        items = []
+        page_pos = 0
+        while True:
+            answer = await self._invoke("project.list_branches", {**args, "pageSize": 1000, "pagePos": page_pos})
+            items.extend(scope_branches(scope, answer.get("items", [])))
+            if not answer.get("hasMore"):
+                break
+            page_pos = answer["nextPagePos"]
+        return page_of(items, requested["pageSize"], requested["pagePos"])
 
     async def _invoke(self, method, args):
         self._live()
