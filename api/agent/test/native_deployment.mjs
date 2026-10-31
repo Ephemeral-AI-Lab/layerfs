@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { deployment, sandboxHost, STATE } from "../src/client.js";
+import { deployment } from "../src/client.js";
 import { workerClient } from "../src/transport/worker_client.js";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -236,8 +236,6 @@ try {
   // its Linux host, so a macOS client sending to one is not refused
   process.env.LAYERFS_IMAGE = docker.image;
   process.env.LAYERFS_IMAGE_ARCHIVE = "/bundle/images/a.tar";
-  assert.equal(sandboxHost({ [STATE]: { transport: { worker: true } } }), "linux");
-  assert.equal(sandboxHost({ [STATE]: { transport: {} } }), "darwin");
   assert.equal(deployment({}, false, "linux").sandboxBackend, "namespaces");
   assert.throws(() => deployment({}, false, "darwin"), (e) => e.code === "Unsupported");
 } finally {

@@ -6,13 +6,13 @@
 
 Examples use `layerfs` as connected in [SKILL.md](../../SKILL.md#connect-to-a-project).
 
-**A mount names its Sandbox.** There is no placement: `sandbox.create()` is the only call
-that starts a Sandbox, and `workspace.mount(sandbox, branch)` mounts in the one it
-names. A Sandbox holds up to 16 Workspaces of any Branches; reuse one with room (see
+**A mount names its Sandbox.** `sandbox.create()` is the only call that starts a
+Sandbox, and `workspace.mount(sandbox, branch)` mounts in the one it names. A Sandbox
+names its platform (#529); every later call on it follows that, not your settings. A Sandbox holds up to 16 Workspaces of any Branches; reuse one with room (see
 `project.list_sandboxes()`), or create one, and close it when you're done.
 
 ```js
-const own = await layerfs.sandbox.create();                    // { sandbox: "2", image }
+const own = await layerfs.sandbox.create();                    // { sandbox: "2", image, platform }
 try {
   const ws = await layerfs.workspace.mount(own.sandbox, "work");
   try {
@@ -38,9 +38,11 @@ numbers are used again.
 | Arg | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `options.image` | string | no | Exact local image digest `sha256:<64 hex>`; default `LAYERFS_IMAGE`. Every Workspace mounted there runs on it |
+| `options.platform` | string | no | `docker`, `mac`, `linux`, `apple-container`, `microsandbox`, `lima`, `firecracker` or `ssh`; default your home's. Your home allows only some (a Linux home `docker` and `linux`; a `vm:` home its provider; macOS and Windows `docker`, or `mac` with `LAYERFS_SANDBOX=native`) |
 
-**Returns:** `{ sandbox, image }`: its number (pass it to `workspace.mount`) and its
-image. Its container is named `<prefix><project>-<n>`.
+**Returns:** `{ sandbox, image, platform }`: its number (pass it to `workspace.mount`),
+its image (`null` for a `mac` or native `linux` one) and its platform. Its container,
+or daemon folder, is named `<prefix><project>-<n>`.
 
 **Refusals**
 
@@ -49,7 +51,8 @@ image. Its container is named `<prefix><project>-<n>`.
 | `Failed` | Starting it failed. With `detail.removed: true` its container is already removed and nothing of it is left, and `detail.log` holds its daemon's last log lines (also in the message); otherwise it names what stays | Stop and report the message |
 | `Unknown` | An earlier Sandbox start of this project has an unknown outcome; every start is refused until it is resolved | Stop and report the message, which says what a person must remove; don't remove or retry anything yourself |
 | `Busy` | Another call held the project's lock for 60 seconds | Stop and report |
-| `InvalidInput` | A missing `LAYERFS_*` deployment variable or an image that isn't a digest | Check the environment ([SKILL.md](../../SKILL.md#connect-to-a-project)) |
+| `InvalidInput` | A missing `LAYERFS_*` deployment variable, an image that isn't a digest, or a platform that is not one of the eight names (`windows`, `native` and `namespaces` are not platforms) | Check the environment ([SKILL.md](../../SKILL.md#connect-to-a-project)) |
+| `Unsupported` | Your home does not allow that platform; the message names what it allows | Leave `platform` out, or pick one it names |
 
 **Notes:** like any Sandbox, it closes itself two minutes after its last Workspace is
 unmounted, with no call in flight.

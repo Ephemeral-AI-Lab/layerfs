@@ -439,13 +439,20 @@ fn abandon(directory: &Path, id: &str, mut failure: Box<ProviderFailure>) -> Sdk
     }
 }
 
-/// `sandbox.create({ image })`: under the project's guard, reclaims the
+/// `sandbox.create({ image, platform })`: under the project's guard, reclaims the
 /// project's idle-closed Sandboxes, then starts the lowest free number on
 /// the call's image (`deploy.image`) and waits for its daemon:
-/// `{ sandbox, name, image }`. With `deploy.sandbox` `native` (macOS) it
-/// starts a daemon process instead of a container; its `image` is `local`. The only call that starts a Sandbox. Failures
-/// are `Failed` or `Unknown`, never retried.
+/// `{ sandbox, name, image, platform, runtime }`. With `deploy.sandbox`
+/// `native` or `namespaces` it starts a daemon process instead of a
+/// container; a native one's `image` is `local`. `platform` (#529) is
+/// checked against that backend and recorded. The only call that starts a
+/// Sandbox. Failures are `Failed` or `Unknown`, never retried.
 pub(crate) fn create(args: &SdkValue) -> Outcome {
+    // the platform is checked against the deployment before any effect (#529)
+    let deploy = args
+        .get("deploy")
+        .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
+    let platform = crate::runtime::platform(args, crate::runtime::backend(deploy)?)?;
     // a PostgreSQL Store's URL is the call's; its project's entry is made here
     let store = match crate::postgres::sandbox_store(args)? {
         Some(selected) => DaemonStore::Postgres(selected),
@@ -461,6 +468,11 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
         (
             "image",
             SdkValue::text(crate::runtime::image(&state.runtime)),
+        ),
+        ("platform", SdkValue::text(platform)),
+        (
+            "runtime",
+            SdkValue::text(crate::runtime::kind(&state.runtime)),
         ),
     ]))
 }

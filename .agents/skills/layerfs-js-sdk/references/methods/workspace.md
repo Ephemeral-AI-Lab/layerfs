@@ -17,10 +17,11 @@ a mounted Workspace of the Branch `"work"`, as `mount` returned it.
 
 - A Workspace is `{ sandbox, path }`: the number of the Sandbox that holds it and its
   path there. It persists: any later process with the same `LAYERFS_HOME` can use it.
-- **A mount names its Sandbox; there is no placement.** A project's Sandboxes are
-  numbered `1`, `2`, …; each is a container with one LayerFS daemon and holds up to 16
-  Workspaces, of any Branches of the project. Each runs one image, set when
-  `sandbox.create()` starts it; one project's Sandboxes may run different images.
+- **A mount names its Sandbox.** A project's Sandboxes are numbered `1`, `2`, …; each
+  is a container (or daemon process) with one LayerFS daemon and holds up to 16
+  Workspaces, of any Branches of the project. Each runs one image and one platform,
+  set when `sandbox.create()` starts it; one project's Sandboxes may differ in both, and
+  `mount` returns `{ sandbox, path, image, platform }`.
   `sandbox.create()` is the only call that starts a Sandbox; `mount(sandbox, branch)`
   never does ([sandbox](sandbox.md)).
 - **A Sandbox closes itself when idle:** its daemon ends two minutes after its last

@@ -387,8 +387,11 @@ pub(crate) fn save_sandbox(
     let deploy = args
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "deploy"))?;
+    // the platform the call named, checked by `create` before any effect (#529)
+    let platform = crate::runtime::platform(args, crate::runtime::backend(deploy)?)?;
     let mut fields = vec![
         ("id", SdkValue::text(&state.id)),
+        ("platform", SdkValue::text(platform)),
         ("project", SdkValue::text(&state.project)),
         ("name", SdkValue::text(&state.name)),
         (
@@ -464,7 +467,7 @@ fn local_fields(
         (
             "directory",
             SdkValue::text(
-                crate::local::directory(args, &state.id)?
+                crate::local::directory(args, &state.id, None)?
                     .display()
                     .to_string(),
             ),
@@ -557,13 +560,28 @@ pub(crate) enum Recorded {
     Namespaces(layerfs_sandbox::Runtime, ContainerId, SandboxRecord),
 }
 /// Reads Sandbox `id`'s record's runtime.
+/// The record alone decides (#529): a caller's deployment backend is not
+/// consulted, so every call on a Sandbox reopens it by its own runtime.
 pub(crate) fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
     #[cfg(target_os = "linux")]
     if value.get_text("runtime") == Some(NAMESPACES) {
         return namespaces_record(args, id, value);
     }
-    if matches!(value.get_text("runtime"), Some(LOCAL | NATIVE)) {
+    if value.get_text("runtime") == Some(NATIVE) {
         return local_record(args, id, value);
+    }
+    if let Some(other) = value.get_text("runtime") {
+        // the former `local` runtime (an earlier, unmerged build), or one
+        // this host does not run: nothing it names is used or deleted
+        return Err(refused(
+            "InvalidInput",
+            format!(
+                "Sandbox {id} is a {other} Sandbox, which this host never reopens, so the record \
+                 is neither used nor deleted. Remove what it left by hand, then delete \
+                 LAYERFS_HOME/{}/sandboxes/{id}/sandbox.record",
+                registry::text(args, "project")?
+            ),
+        ));
     }
     let (docker, container, request) = runtime(value)?;
     Ok(Recorded::Docker(docker, container, request))
@@ -577,32 +595,6 @@ pub(crate) fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Re
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
     let (directory, record) = local_record_of(args, id, value)?;
-    // with no placement (#428), a mount names its Sandbox: a record is used
-    // only by a deployment of its own backend, and only a native record is
-    // here. A native record is not reopened by a namespaces deployment
-    // either (#527 step 4), as a namespaces record is not by a native one. A
-    // record of the `local` runtime (an earlier, unmerged build) is never
-    // used, so nothing it names is deleted
-    let native = args.get("deploy").is_some_and(|deploy| {
-        matches!(
-            crate::runtime::backend(deploy),
-            Ok(Some(crate::runtime::Backend::Native))
-        )
-    });
-    if !native || value.get_text("runtime") != Some(NATIVE) {
-        return Err(refused(
-            "InvalidInput",
-            format!(
-                "Sandbox {id} is a {} Sandbox, but only a native deployment \
-                 (LAYERFS_SANDBOX=native) uses a native record and none uses another; \
-                 Sandboxes of other runtimes are never \
-                 mixed, so the record is neither used nor deleted. Remove what it left by hand, \
-                 then delete LAYERFS_HOME/{}/sandboxes/{id}/sandbox.record",
-                value.get_text("runtime").unwrap_or_default(),
-                registry::text(args, "project")?
-            ),
-        ));
-    }
     Ok(Recorded::Local {
         directory,
         id: ContainerId::parse(registry::text(value, "container")?).map_err(failed)?,
@@ -616,11 +608,14 @@ fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
     })
 }
 /// A record's directory and physical facts, checked against where this
-/// deployment puts that Sandbox.
+/// deployment puts that Sandbox: under its LAYERFS_LOCAL_DIR when it sets
+/// one, else (#529: the record decides, so a caller of another backend has
+/// none) beside the record's own directory, which must still carry the
+/// name this deployment gives Sandbox `id`.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathBuf, LocalRecord)> {
     let directory = PathBuf::from(registry::text(value, "directory")?);
-    let expected = crate::local::directory(args, id)?;
+    let expected = crate::local::directory(args, id, directory.parent())?;
     // the Sandbox's own directory name, exactly as this deployment names it
     let name = registry::text(value, "name")?;
     if directory != expected || expected.file_name().and_then(|n| n.to_str()) != Some(name) {
@@ -705,21 +700,6 @@ fn namespaces_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Reco
             )
         })?;
     let record = layerfs_sandbox::NamespaceRecord { local, image };
-    let deploy = args
-        .get("deploy")
-        .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
-    if crate::runtime::backend(deploy)? != Some(crate::runtime::Backend::Namespaces) {
-        return Err(refused(
-            "InvalidInput",
-            format!(
-                "Sandbox {id} is a namespaces Sandbox, but only a namespaces deployment \
-                 (LAYERFS_SANDBOX=namespaces) uses it; Sandboxes of other runtimes are never mixed, so the record is neither \
-                 used nor deleted. Remove what it left by hand, then delete \
-                 LAYERFS_HOME/{}/sandboxes/{id}/sandbox.record",
-                registry::text(args, "project")?
-            ),
-        ));
-    }
     let root = (directory.parent())
         .ok_or_else(|| refused("InvalidInput", "namespaces Sandbox directory"))?;
     let provider = layerfs_sandbox::namespaces::NamespaceProvider::new(root).map_err(|error| {

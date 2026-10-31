@@ -38,7 +38,7 @@ fn no_sandbox(mut refusal: SdkRefusal) -> SdkRefusal {
 
 /// `workspace.mount(sandbox, branch)`: a new Workspace of `branch` in
 /// Sandbox `sandbox`, which must be running and hold fewer than
-/// [`WORKSPACES`]; its `sandbox`, `path` and `image`. Refused
+/// [`WORKSPACES`]; its `sandbox`, `path`, `image`, `platform` and `runtime`. Refused
 /// `NoSuchSandbox` (no such Sandbox, or it closed itself) and `Capacity`
 /// (full), each naming the calls to make instead. Only the Sandbox's own
 /// guard is taken; its record and count are checked under it.
@@ -98,6 +98,13 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
             "image".to_owned(),
             SdkValue::text(crate::runtime::image(&state.runtime)),
         ));
+        // what its record names (#529); a record from before has no platform
+        let saved = crate::discovery::load(&record)?;
+        fields.push(("platform".to_owned(), platform_of(&saved)));
+        fields.push((
+            "runtime".to_owned(),
+            SdkValue::text(crate::runtime::runtime_name(&saved)),
+        ));
     }
     crate::discovery::save_workspace(&state, &mounted, branch)?;
     lock(&state.mounts)?.insert(
@@ -138,25 +145,20 @@ fn observed(
     }
 }
 
-/// The project's recorded Sandboxes that this deployment's backend may
-/// reopen, lowest number first, with each record. A Docker record is every
-/// deployment's, as before; a native or namespaces record is only its own
-/// backend's, and a record of the former `local` runtime nobody's. The
-/// others are left out, never refused, so one of them does not fail the
-/// listing, reclaim or `sandbox.create` of the rest (#527 step 12); they are
-/// neither reopened nor deleted here, and `runtime.sandbox.records` lists
-/// them. Reopening one by its number is still refused (step 4).
+/// The project's recorded Sandboxes that a call may reopen, lowest number
+/// first, with each record: every Docker, native and namespaces record,
+/// whatever backend the caller's deployment selects (#529: the record
+/// decides). A record of the former `local` runtime is nobody's and is left
+/// out, never refused, so it does not fail the listing, reclaim or
+/// `sandbox.create` of the rest; `runtime.sandbox.records` lists it. The
+/// deployment's Sandbox setting is still checked, so a malformed one is
+/// refused here as everywhere.
 fn records(args: &SdkValue) -> Result<Vec<(String, std::path::PathBuf, SdkValue)>, SdkRefusal> {
-    let deployed = match args.get("deploy") {
-        Some(deploy) => crate::runtime::backend(deploy)?,
-        None => None,
-    };
+    if let Some(deploy) = args.get("deploy") {
+        crate::runtime::backend(deploy)?;
+    }
     let mut own = recorded_all(args)?;
-    own.retain(|(_, _, value)| match crate::runtime::recorded(value) {
-        Ok(None) => true,
-        Ok(backend) => backend == deployed,
-        Err(_) => false,
-    });
+    own.retain(|(_, _, value)| crate::runtime::recorded(value).is_ok());
     Ok(own)
 }
 
@@ -189,13 +191,19 @@ pub(crate) fn reclaim_gone(args: &SdkValue) -> Result<(), SdkRefusal> {
     Ok(())
 }
 
-/// `project.list_sandboxes()`: the project's running Sandboxes, lowest
-/// number first: `{ sandbox, name, image, workspaces }`, where `workspaces`
-/// counts its Workspace records. It reads records and inspects each
-/// container once; it starts nothing and changes nothing. A Sandbox found
-/// gone or stopped (an idle-closed one) is left out and its records kept:
-/// `sandbox.create` and `runtime.sandbox.reclaim` remove them. A Sandbox
-/// of another backend than the deployment's is left out too ([`records`]).
+/// A record's `platform` (#529), or null for a record from before it, which
+/// the agent reads as the platform its runtime and home imply.
+fn platform_of(record: &SdkValue) -> SdkValue {
+    SdkValue::opt_text(record.get_text("platform").map(str::to_owned))
+}
+
+/// `project.list_sandboxes()`: the project's running Sandboxes of every
+/// platform, lowest number first: `{ sandbox, name, image, platform,
+/// runtime, workspaces }`, where `workspaces` counts its Workspace records.
+/// It reads records and inspects each container or daemon once; it starts
+/// nothing and changes nothing. A Sandbox found gone or stopped (an
+/// idle-closed one) is left out and its records kept: `sandbox.create` and
+/// `runtime.sandbox.reclaim` remove them.
 pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
     let mut items = Vec::new();
     for (id, directory, value) in records(args)? {
@@ -212,6 +220,11 @@ pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
                 "image",
                 SdkValue::text(value.get_text("image").unwrap_or_default()),
             ),
+            ("platform", platform_of(&value)),
+            (
+                "runtime",
+                SdkValue::text(crate::runtime::runtime_name(&value)),
+            ),
             ("workspaces", SdkValue::Int(recorded(&directory)? as i64)),
         ]));
     }
@@ -222,8 +235,8 @@ pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
 }
 
 /// `runtime.sandbox.records()`: every recorded Sandbox of the project, of
-/// every backend, lowest number first: `{ sandbox, name, runtime, image,
-/// state, workspaces }`, with `message` when `state` is `unknown`. `runtime`
+/// every backend, lowest number first: `{ sandbox, name, runtime, platform,
+/// image, state, workspaces }` (`platform` null in a record from before #529), with `message` when `state` is `unknown`. `runtime`
 /// is `docker`, `native`, `namespaces` (or `local`, the former runtime's);
 /// `state` is `running`, `stopped`, `gone` (a Docker container no longer
 /// there) or `unknown`. The deployment's backend is not consulted (#527
@@ -268,6 +281,7 @@ pub(crate) fn all_records(args: &SdkValue) -> Outcome {
                 SdkValue::text(value.get_text("name").unwrap_or_default()),
             ),
             ("runtime", SdkValue::text(runtime)),
+            ("platform", platform_of(&value)),
             (
                 "image",
                 SdkValue::text(value.get_text("image").unwrap_or_default()),

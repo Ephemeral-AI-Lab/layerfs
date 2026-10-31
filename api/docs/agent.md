@@ -123,7 +123,7 @@ the real binding: Init, `Exists`, delete the entry, Init again in one process.
 ### Calls in parallel
 
 Parallel agents each mount their own Workspaces, each in a Sandbox the
-mount names (see below); there is no placement. A mount takes only its
+mount names (see below). A mount takes only its
 Sandbox's own lock; `sandbox.create` and `sandbox.close` also take the
 project's. Exec, status, Commit and unmount take neither.
 Concurrent calls to one Sandbox from one process use separate control
@@ -147,7 +147,7 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open: `global/store.sqlite` in the project's volume. On Linux this process opens it, so it must be on a local filesystem the daemons share, such as `/layerfs-store/global/store.sqlite` where the volume is mounted at `/layerfs-store`; otherwise Store calls fail `Unsupported`. On macOS and Windows the worker opens it, so it is the path inside the worker's Linux, `/var/lib/docker/volumes/<volume>/_data/global/store.sqlite`. On any other platform Store calls fail `Unsupported`. Unset, they fail `InvalidInput` everywhere. |
 | `LAYERFS_CONTAINER_PREFIX` | Optional. Names every container this client creates `<prefix><project>-<Sandbox>` (default prefix `layerfs-`); another LayerFS home on the same Docker engine sets its own, so names never collide. Docker's name rule applies (an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128). A name another container holds refuses the create before any effect. |
 | `LAYERFS_DAEMON_HOST` | Optional. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |
-| `LAYERFS_SANDBOX` | Optional: the Sandbox backend, `docker`, `native` or `namespaces`. Unset or `docker`: a Sandbox is a Docker container, exactly as described here. `native` (Linux or macOS): a Sandbox is a daemon process with no container and no Docker setting read. On macOS it runs as this user, without root; Workspaces are served over loopback NFS and mounted by this machine's own NFS client, and commands run as this user. On Linux it needs root: the daemon serves FUSE as root and commands run as 501:20 (see [Native Sandboxes](#native-sandboxes-linux-and-macos)). `namespaces` (Linux) is native with each Sandbox's daemon in its own mount, PID and IPC namespaces and its own cgroup v2 directory, on a root from the Sandbox image (`LAYERFS_IMAGE`, `LAYERFS_IMAGE_ARCHIVE`); commands run as the sandbox's uid:gid with no capabilities and no-new-privs; see [Namespace Sandboxes (Linux)](#namespace-sandboxes-linux). It needs root, cgroup v2, `/dev/fuse` and `user.max_user_namespaces=0`, and is refused `Unsupported` elsewhere or without them. Elsewhere `sandbox.create` refuses `native` as `Unsupported`; on Windows the agent itself refuses `native` and `namespaces` before anything is made (a Windows Sandbox is Docker, through the WSL2 worker). A `vm:` home's worker has no Docker Engine: the runtime sets `namespaces` for it, and `docker` (or unset) sent to it is refused `Unsupported` before the call leaves this process. Any other value is refused as `InvalidInput` before anything is made. It is read when the client is made and sent with every call, so a Sandbox made with one backend is never reopened as another. |
+| `LAYERFS_SANDBOX` | Optional: the Sandbox backend, `docker`, `native` or `namespaces`. Unset or `docker`: a Sandbox is a Docker container, exactly as described here. `native` (Linux or macOS): a Sandbox is a daemon process with no container and no Docker setting read. On macOS it runs as this user, without root; Workspaces are served over loopback NFS and mounted by this machine's own NFS client, and commands run as this user. On Linux it needs root: the daemon serves FUSE as root and commands run as 501:20 (see [Native Sandboxes](#native-sandboxes-linux-and-macos)). `namespaces` (Linux) is native with each Sandbox's daemon in its own mount, PID and IPC namespaces and its own cgroup v2 directory, on a root from the Sandbox image (`LAYERFS_IMAGE`, `LAYERFS_IMAGE_ARCHIVE`); commands run as the sandbox's uid:gid with no capabilities and no-new-privs; see [Namespace Sandboxes (Linux)](#namespace-sandboxes-linux). It needs root, cgroup v2, `/dev/fuse` and `user.max_user_namespaces=0`, and is refused `Unsupported` elsewhere or without them. Elsewhere `sandbox.create` refuses `native` as `Unsupported`; on Windows the agent itself refuses `native` and `namespaces` before anything is made (a Windows Sandbox is Docker, through the WSL2 worker). A `vm:` home's worker has no Docker Engine: the runtime sets `namespaces` for it, and `docker` (or unset) sent to it is refused `Unsupported` before the call leaves this process. Any other value is refused as `InvalidInput` before anything is made. It is read when the client is made and sets the home's **default platform** only (#529): `docker` is `docker`, `native` is `mac` on macOS and `linux` on Linux, `namespaces` is `linux`. `sandbox.create({ platform })` may name another platform the home allows (see [Platforms](#platforms)); every later call on a Sandbox follows its record, whatever the caller's `LAYERFS_SANDBOX`. |
 | `LAYERFS_LOCAL_DIR` | With `LAYERFS_SANDBOX=native` or `namespaces`, required: an existing absolute directory, owned by the running user, not group/other writable and traversable by others (0755). Each native or namespaces Sandbox gets its own directory under it. |
 | `LAYERFS_SANDBOX_BACKEND` | Former, kept for one release: replaced by `LAYERFS_SANDBOX`. `LAYERFS_SANDBOX=native` with `LAYERFS_SANDBOX_BACKEND=namespaces` still means `namespaces`, and with it unset or `native` means `native`. Set beside any other `LAYERFS_SANDBOX` (`namespaces` with `native`, or `docker` with either), or set to another value, it is refused `InvalidInput` before anything is made, naming both settings. |
 | `LAYERFS_TRACE` | Optional per-call trace file (see [the call trace](backend.md#the-call-trace)); unset means no trace. |
@@ -171,15 +171,19 @@ its own wrapper.
 
 ### Sandboxes and Workspaces
 
-A Sandbox is a container running one daemon on the project's Store. The
-project has numbered Sandboxes, `1`, `2`, …, each on one image and holding up
-to 16 Workspaces. **There is no placement** (owner 2026-10-23):
-`sandbox.create({ image }?)` is the only call that starts one. Under the
-project's lock it first reclaims Sandboxes that closed themselves, then
-starts the lowest free number on `image` (default `LAYERFS_IMAGE`) and
-returns `{ sandbox, image }`. One project's Sandboxes may run different
-images; the mount result and `project.list_sandboxes()` give each one's
-`image`. `workspace.mount(sandbox, branch)` (both required, no options)
+A Sandbox is a container (or, on the other platforms below, a daemon
+process) running one daemon on the project's Store. The project has numbered
+Sandboxes, `1`, `2`, …, each on one image and one platform, holding up to 16
+Workspaces. **A Sandbox names its platform; the home still decides where
+Stores live** (#529, replacing "there is no placement", owner 2026-10-23):
+`sandbox.create({ image?, platform? }?)` is the only call that starts one, on
+the platform it names or the home's default. Under the project's lock it
+first reclaims Sandboxes that closed themselves, then starts the lowest free
+number on `image` (default `LAYERFS_IMAGE`) and returns `{ sandbox, image,
+platform }`. One project's Sandboxes may run different images and, on a
+Linux home, different platforms; the mount result and
+`project.list_sandboxes()` give each one's `image` and `platform`.
+`workspace.mount(sandbox, branch)` (both required, no options)
 mounts in that Sandbox only, on its image; the native call gets
 `{ sandbox, branch }` with the client's project, home, deploy and Store
 path. It is refused `NoSuchSandbox` when the Sandbox is not running (or
@@ -192,9 +196,9 @@ Workspaces, with a message that says to create a new Sandbox with
 delete, each once), refused `MountsActive` while a Workspace is mounted in it
 and `NoSuchSandbox` when it is not running. A Sandbox still closes itself two
 minutes after its last Workspace is unmounted, with no call in flight.
-`project.list_sandboxes(pageSize, pagePos)` lists the running ones, each
-`{ sandbox, name, image, workspaces }`, reading records and starting and
-changing nothing; `sandbox.list_workspaces(sandbox, pageSize, pagePos)` asks
+`project.list_sandboxes(pageSize, pagePos)` lists the running ones of every
+platform, each `{ sandbox, name, image, platform, workspaces }`, reading
+records and starting and changing nothing; `sandbox.list_workspaces(sandbox, pageSize, pagePos)` asks
 that Sandbox's daemon for its Workspaces, each `{ sandbox, path, branch,
 base, activity, changed }` (`activity` Idle or Busy) plus the daemon's record. A Workspace is
 `{ sandbox, path }`, its Sandbox's number and its path in that Sandbox
@@ -211,11 +215,10 @@ keeps it for its life.
 A Sandbox closes when idle: its daemon ends itself after 2 minutes with no
 Workspace and no call, and its container stops. Open connections do not keep
 it. `project.list_sandboxes()` skips a stopped Sandbox and keeps its
-records, and leaves out a Sandbox of another backend than the client's
-`LAYERFS_SANDBOX` (a Docker client's list, reclaim and `sandbox.create`
-neither fail on nor touch a native or namespaces record, and the reverse;
-`runtime.sandbox.records` lists every record with its `runtime` and
-`state`, #527 step 12); the next mount or `runtime.sandbox.reclaim` that meets a stopped or
+records. Listing, reclaim and every call on a Sandbox follow its record,
+whatever the caller's `LAYERFS_SANDBOX` (#529; before it a client left out
+another backend's records); `runtime.sandbox.records` lists every record with
+its `runtime`, `platform` and `state` (#527 step 12); the next mount or `runtime.sandbox.reclaim` that meets a stopped or
 removed container reclaims the Sandbox: it deletes a stopped container
 (unforced, once) and removes the Sandbox's records, so the number is used
 again. `runtime.sandbox.sweep`, which the runtime runs once when it opens,
@@ -252,6 +255,62 @@ before deleting `<home>/<project>/create.intent`.
 Daemon/container restart recovery and replay of uncertain operations are excluded.
 Background process ownership is in the native executor, including persisted
 process identity; the filesystem daemon launches and supervises no commands.
+
+### Platforms
+
+A Sandbox names the platform it runs on (#529). `sandbox.create({ platform })`
+takes one of eight names, records it with the Sandbox beside its `runtime`,
+and every later call on that Sandbox (`mount`, `exec`, `commit`, `unmount`,
+`close`, `list_workspaces`) follows the record. Every platform keeps the
+contract above: numbered Sandboxes, up to 16 Workspaces, idle close after 2
+minutes, the same refusals.
+
+| `platform` | A Sandbox is | Its `runtime` |
+| --- | --- | --- |
+| `docker` | a Docker container (macOS, Windows through WSL2, Linux) | `docker` |
+| `mac` | a native macOS process served over loopback NFS | `native` |
+| `linux` | a native Linux process in its own namespaces and cgroup | `namespaces` (`native` on a home whose `LAYERFS_SANDBOX` is `native`) |
+| `apple-container`, `microsandbox`, `lima`, `firecracker`, `ssh` | namespaces inside the project's VM (a `vm:<provider>` home) | `namespaces` |
+
+There is no `windows` platform: a Windows Sandbox is `docker` through the WSL2
+worker. A Sandbox can open its project's Store only from the machine or VM
+that holds it, so the home decides which platforms it allows;
+`LayerFS.init` and `LAYERFS_PLACEMENT` are unchanged.
+
+| Home | Allowed | Default when `platform` is left out |
+| --- | --- | --- |
+| macOS `local` (Docker Desktop) | `docker` | `docker` |
+| macOS with `LAYERFS_SANDBOX=native` (Store on apfs/hfs) | `mac` | `mac` |
+| Windows `local` (WSL2 worker) | `docker` | `docker` |
+| Linux `local` | `docker`, `linux` | `docker`, or `linux` when `LAYERFS_SANDBOX` is `namespaces` or `native` |
+| `vm:<provider>` | `<provider>` | `<provider>` |
+
+- **Refusals, before anything is made.** A known platform the home does not
+  allow is `Unsupported`, naming the home and what it allows; any other value
+  (`windows`, `native`, `namespaces`, a typo, a non-string) is `InvalidInput`
+  listing the eight names.
+- **Settings.** A platform needs its own settings in the client's
+  environment: `docker` its Docker settings (`LAYERFS_DOCKER`, `_IMAGE`,
+  `_VOLUME`, `_DAEMON`), `linux` the namespaces ones (`LAYERFS_DAEMON`,
+  `_LOCAL_DIR`, `_IMAGE`, `_IMAGE_ARCHIVE`); a missing one is refused
+  `InvalidInput` naming it. The image a namespaces root is unpacked from is
+  named by its config digest, while a Docker engine with the containerd image
+  store names the same image by its index digest, so on such a host pass
+  `image` with the `linux` call.
+- **Linux mixes platforms in one project.** The SDK opens the Store at
+  `LAYERFS_STORE_PATH`; a `docker` Sandbox mounts the project's volume, whose
+  file that is, and a `linux` Sandbox's daemon opens the same file. Both see
+  the same Branches and Commits.
+- **Results.** `sandbox.create` returns `{ sandbox, image, platform }`; the
+  mount result and `project.list_sandboxes()` items carry `platform` too.
+  `image` is `null` for a `mac` or native `linux` Sandbox, and an `image`
+  given for one is ignored. A record from before #529 has no `platform` and
+  reads as the one its runtime and the home imply: `docker` for a container,
+  `mac` (macOS) or `linux` for a native one, the provider (`vm:` home) or
+  `linux` for a namespaces one. Nothing rewrites it.
+- **What the home offers.** `@layerfs/runtime`'s `runtime.status().platforms`
+  lists all eight with `allowed`, `ready` and `missing`
+  ([runtime.md](runtime.md#status)).
 
 ### Native Sandboxes (Linux and macOS)
 
@@ -293,11 +352,11 @@ Sandbox `n` lives in `LAYERFS_LOCAL_DIR/<prefix><project>-<n>/`:
 reads; a failed start's report carries its last 20 lines). The daemon listens
 on 127.0.0.1 only. Its records name the daemon by process id and start time,
 so a reused id is never taken for it. `sandbox.create`, the mount result and
-`project.list_sandboxes()` give a native Sandbox's `image` as `local`. A
-record's `runtime` is `native`; it is used only by a client whose deployment
-is `native` (`LAYERFS_SANDBOX=native`, or the former pair with
-`LAYERFS_SANDBOX_BACKEND` unset or `native`; a `namespaces` deployment does
-not reopen it either, #527) and the
+`project.list_sandboxes()` give a native Sandbox's `image` as `null` (the
+binding's records say `local`). A record's `runtime` is `native` and its
+`platform` `mac` or `linux`; any client of the home reopens it by its record
+(#529, which replaces #527 step 4: a native record was then used only by a
+native deployment) and the
 same `LAYERFS_LOCAL_DIR` and prefix, so it puts that
 Sandbox exactly where the record says; any other is refused `InvalidInput`
 when it would reopen the record (a mount or close of that Sandbox), and left
@@ -389,7 +448,7 @@ the Sandbox's cgroup, is never taken for it. Everything else above holds:
 numbered Sandboxes, up to 16 Workspaces each, one daemon per Sandbox, idle
 close after 2 minutes and reclaim. `sandbox.create`, the mount result and
 `project.list_sandboxes()` report a namespaces Sandbox's `image` as its image
-digest, not `local`.
+digest.
 
 Limits: the network namespace is shared with the VM, so a command can reach
 another Sandbox's daemon port on `127.0.0.1`; `/sys` is not mounted; and an
@@ -579,7 +638,7 @@ The package's bin is `layerfs`; link it onto `PATH` (for example `npm link` in
 export LAYERFS_PROJECT=shop                        # or --project shop on each command
 layerfs branch fork cart
 printf '# Shop\n' | layerfs fs write cart /README.md -m readme
-layerfs sandbox create                             # {"sandbox":"1","image":"sha256:…"}
+layerfs sandbox create                             # {"sandbox":"1","image":"sha256:…","platform":"docker"}
 layerfs workspace mount 1 cart                     # {…,"ws":"1:/workspaces/3"}
 layerfs workspace exec 1:/workspaces/3 "npm test" --stream
 layerfs workspace commit 1:/workspaces/3 -m "step 1: npm test"
@@ -598,13 +657,14 @@ layerfs sandbox close 1
   that is left out is not sent, so the SDK applies its own default (`fs list
   main` lists `/`, `branch fork cart` forks from main).
 - **Options** are the SDK's remaining arguments as flags: `--page-size <n>`,
-  `--start-line <n>`, `--no-hunks` (sends `hunks: false`), `--image <digest>`. A value is `--name value`
+  `--start-line <n>`, `--no-hunks` (sends `hunks: false`), `--image <digest>`,
+  `--platform <name>`. A value is `--name value`
   or `--name=value`; `-m <text>` is the Commit message, the only short option.
   A whole number must be digits only, `--units` is JSON, a flag takes no value,
   and an option given twice or not known is refused. `--` ends the options, so
   `layerfs workspace exec 1:/workspaces/3 -- --version` runs `--version`.
 - **A Workspace** is written `<sandbox>:<path>`, such as `1:/workspaces/3`.
-  `workspace mount` prints it as `ws` beside the SDK's `{ sandbox, path, image }`.
+  `workspace mount` prints it as `ws` beside the SDK's `{ sandbox, path, image, platform }`.
 - **Bodies.** `fs write` reads the file's bytes from stdin, or from `--from
   <file>`, and sends them exactly. `fs apply` reads a JSON array of changes the
   same way. `fs edit` takes `--old <text>` or `--old-from <file>`, and `--new`
@@ -671,7 +731,7 @@ table differs, and when a family's files stop matching the SDK's.
 | `workspace.exec` | `layerfs workspace exec <ws> <command> [-m <text>] [--stream]` |
 | `workspace.commit` | `layerfs workspace commit <ws> [-m <text>] [--force]` |
 | `workspace.unmount` | `layerfs workspace unmount <ws> [--discard] [--force]` |
-| `sandbox.create` | `layerfs sandbox create [--image <text>]` |
+| `sandbox.create` | `layerfs sandbox create [--image <text>] [--platform <text>]` |
 | `sandbox.list_workspaces` | `layerfs sandbox list_workspaces <sandbox> [--page-size <n>] [--page-pos <n>]` |
 | `sandbox.close` | `layerfs sandbox close <sandbox>` |
 <!-- calls:end -->

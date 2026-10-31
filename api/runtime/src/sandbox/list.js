@@ -10,19 +10,20 @@ import { keyOf } from "../project/list.js";
 import { dockerOf, VM_SANDBOXES } from "../place/shared.js";
 import { recorded, recordingProjects } from "./records.js";
 
-/** `[{ name, project, sandbox, runtime, state, running, startedAt, finishedAt, image, ports, scratch, owned }]`,
+/** `[{ name, project, sandbox, runtime, platform, state, running, startedAt, finishedAt, image, ports, scratch, owned }]`,
  * by name. Where native and namespaces Sandboxes can run beside Docker's (`localSandboxes`, Linux),
  * each project's records add those (#527 step 12, F6): named by their directory, with no container
  * facts (`startedAt`, `finishedAt`, `scratch` null, no ports), `state` from the binding's
- * runtime.sandbox.records (running, stopped or unknown). */
+ * runtime.sandbox.records (running, stopped or unknown). `platform` (#529) is `docker` for a
+ * container and the record's own for the others (`linux` in a record from before it). */
 export async function list(runtime) {
   const docker = dockerOf(runtime, "runtime.sandbox.list", VM_SANDBOXES);
-  const found = (await docker.sandboxes.details(runtime)).map((c) => ({ ...c, runtime: "docker" }));
+  const found = (await docker.sandboxes.details(runtime)).map((c) => ({ ...c, runtime: "docker", platform: "docker" }));
   if (runtime.platform.localSandboxes) {
     for (const project of await recordingProjects(runtime)) {
       for (const item of (await recorded(runtime, project)).filter((r) => r.runtime !== "docker")) {
         found.push({
-          name: item.name, project: project.name, store: project.shared ? project.store : null, sandbox: item.sandbox, runtime: item.runtime,
+          name: item.name, project: project.name, store: project.shared ? project.store : null, sandbox: item.sandbox, runtime: item.runtime, platform: item.platform ?? "linux",
           state: item.state, running: item.state === "running", startedAt: null, finishedAt: null, image: item.image || null, ports: [], scratch: null,
         });
       }

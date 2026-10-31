@@ -15,7 +15,7 @@ Agents don't import it; a host that runs projects for its users does.
 import { LayerFSRuntime } from "@layerfs/runtime";
 const runtime = await LayerFSRuntime.open({ home, image, daemon, bundle, docker, containerPrefix });
 try {
-  await runtime.status();                  // { platform, placement, missing, docker, worker, vm, disk, sweep }
+  await runtime.status();                  // { platform, placement, missing, platforms, docker, worker, vm, disk, sweep }
   const job = await runtime.project.start_init("shop", "/src/shop", { timeout }); // timeout optional: LayerFS.init's 300 s default
   await runtime.project.get_init(job.id);  // { step, scanned, totals, imported, project, error, ended }
   await runtime.project.list();            // [{ name, volume, image, source, created, initialized }]
@@ -23,7 +23,7 @@ try {
   await runtime.sandbox.reclaim("shop");   // { reclaimed: [ids] }
   await runtime.sandbox.list_leftovers();
   await runtime.sandbox.clean_leftovers(["layerfs-old-1"]);
-  await runtime.sandbox.list();            // [{ name, project, sandbox, runtime, state, running, startedAt, finishedAt, image, ports, scratch, owned }]
+  await runtime.sandbox.list();            // [{ name, project, sandbox, runtime, platform, state, running, startedAt, finishedAt, image, ports, scratch, owned }]
   await runtime.sandbox.sweep();           // { reclaimed: { project: [ids] }, failed: [{ project, code, message }] }
   await runtime.volume.list();             // [{ name, size, containers, owner, project, live, removable }]
   await runtime.volume.remove(["layerfs-shop-store-k2"]); // { results: [{ name, ok, message? }] }
@@ -58,13 +58,32 @@ checked once at `open`), `volumes` (Linux),
 `traceDir` (default `<home>/traces`), `containerPrefix`, `stateDir` (default
 `<home>/.runtime`, the runtime's project records), `sweep`
 (default true), `placement` (default `local`; `vm:<provider>` places the home
-in one Linux VM, below) and on Windows `wsl: { distribution, user, node, home }`. A
-missing setting does not refuse `open`: `status().missing` lists it.
+in one Linux VM, below), on Linux `localDir` and `imageArchive` (the `linux`
+platform's Sandbox folder and image archive, #529) and on Windows `wsl: {
+distribution, user, node, home }`. A missing setting does not refuse `open`:
+`status().missing` lists it.
 
-The runtime names each project's Sandbox backend itself (#527 F4): a `local`
-home's clients get `LAYERFS_SANDBOX=docker` with the former
-`LAYERFS_SANDBOX_BACKEND`, `LAYERFS_LOCAL_DIR` and `LAYERFS_IMAGE_ARCHIVE`
-unset, and a `vm:` home's get `LAYERFS_SANDBOX=namespaces` (#527 step 11),
+### Status
+
+`status().platforms` (#529) lists the eight Sandbox platforms of
+[agent.md](agent.md#platforms), in that order, each `{ id, allowed, ready,
+missing }`. `allowed` follows the home: its provider on a `vm:` home, `docker`
+and `linux` on Linux, `docker` on macOS and Windows (the runtime never runs a
+`mac` home: that is the SDK's `LAYERFS_SANDBOX=native`). `ready` is true when
+nothing is `missing`: setting names as `status().missing` gives them, plus
+`tool:<cli>` for a command not on `PATH` (`docker` when the engine does not
+answer; `container`, `msb`, `limactl`, `ssh` for the VM providers) and
+`host:<fact>` for what this host lacks (`host:root`, `host:/dev/fuse`,
+`host:cgroup2` for `linux`, which also needs `image`, `daemon`, `localDir` and
+`imageArchive`). A platform the home does not allow is not checked:
+`{ allowed: false, ready: false, missing: [] }`. Connect builds its New
+Sandbox menu from it.
+
+The runtime names each project's default Sandbox backend itself (#527 F4): a
+`local` home's clients get `LAYERFS_SANDBOX=docker` with the former
+`LAYERFS_SANDBOX_BACKEND` unset, and `LAYERFS_LOCAL_DIR` and
+`LAYERFS_IMAGE_ARCHIVE` from the Linux settings `localDir` and `imageArchive`
+(unset otherwise), so a client may also make `linux` Sandboxes (#529), and a `vm:` home's get `LAYERFS_SANDBOX=namespaces` (#527 step 11),
 with `LAYERFS_SANDBOX_BACKEND` unset. Values of those settings in the
 runtime's own environment do not reach its clients.
 
@@ -128,8 +147,9 @@ lines from now on, or from `since`, each with `actor`, its trace file's name.
   binding owns the name format). The project's records and lock
   decide what goes, so a container of another home, or one starting now, is
   never touched; containers no project records stay for `list_leftovers`.
-  A project's native or namespaces record does not fail its reclaim: a
-  Docker deployment leaves it out (#527 step 12).
+  On Linux it also reclaims a project whose records name a stopped native
+  or namespaces (`linux`) Sandbox; reclaim follows each record, whatever the
+  client's backend (#529).
   `open` runs it once in the background unless `sweep: false`;
   `status().sweep` is `null`, `{ state: "running" }` or
   `{ state: "done" | "failed", at, … }`, and `close` waits for it.

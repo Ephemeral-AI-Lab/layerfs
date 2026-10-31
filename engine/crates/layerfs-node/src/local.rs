@@ -327,11 +327,18 @@ fn native_environment() -> Vec<(String, String)> {
 
 /// Where this deployment puts Sandbox `id`:
 /// `<LAYERFS_LOCAL_DIR>/<prefix><project>-<id>`, computed from the
-/// configuration alone, as a record's directory must be.
-pub(crate) fn directory(args: &SdkValue, id: &str) -> Result<PathBuf, SdkRefusal> {
+/// configuration, as a record's directory must be. With no LAYERFS_LOCAL_DIR
+/// configured, `recorded` (a record's own parent directory) stands in for
+/// it: a call on a Sandbox follows its record (#529).
+pub(crate) fn directory(
+    args: &SdkValue,
+    id: &str,
+    recorded: Option<&Path>,
+) -> Result<PathBuf, SdkRefusal> {
     let root = (args.get("deploy"))
         .and_then(|deploy| deploy.get_text("localDir"))
         .map(Path::new)
+        .or(recorded)
         .ok_or_else(|| {
             refused(
                 "InvalidInput",

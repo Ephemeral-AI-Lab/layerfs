@@ -11,8 +11,10 @@
 //   from transport/worker_client.js: connection, endpointOf
 //   from transport/inprocess.js: addonPath
 //   from transport/index.js: useWorker
+//   from platform.js: PLATFORMS
 export { STATE, invokeBackend, invokeClient, invokeClientBackend, live, outcome, page, pageOf, projectArgs, sandboxArg, storeArgs, workspaceArgs, deployment } from "./client.js";
 export { decode, encode, frame, readFrames } from "./transport/frames.js";
 export { connection, endpointOf } from "./transport/worker_client.js";
 export { addonPath } from "./transport/inprocess.js";
 export { useWorker } from "./transport/index.js";
+export { PLATFORMS } from "./platform.js";

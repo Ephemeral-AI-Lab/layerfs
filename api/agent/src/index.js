@@ -4,8 +4,9 @@
 // constructor and no options argument: settings come from the environment.
 // Calls name their Branch. `sandbox.create()` starts a Sandbox (the only
 // call that does) and `sandbox.close` stops it; `workspace.mount(sandbox,
-// branch)` returns a Workspace, `{ sandbox, path }`, in the Sandbox it names
-// (there is no placement); the other Workspace calls take it. Store calls
+// branch)` returns a Workspace, `{ sandbox, path }`, in the Sandbox it names;
+// the other Workspace calls take it. A Sandbox names its platform (#529);
+// the home still decides where Stores live. Store calls
 // (fs, branch, project) run against the project's Store, opened in this
 // process on Linux (#352 F-020) or in the LayerFS home's worker on macOS and
 // Windows (transport/).
@@ -112,16 +113,18 @@ export class LayerFS {
    * Sandbox this client starts runs _IMAGE
    * on _VOLUME. LAYERFS_CONTAINER_PREFIX (default `layerfs-`) names every
    * container it starts `<prefix><project>-<n>`. LAYERFS_SANDBOX picks the
-   * backend: `docker` (unset), `native` (Linux or macOS) or `namespaces`
-   * (Linux). Native starts each Sandbox as a host daemon in a directory
+   * home's default Sandbox backend: `docker` (unset), `native` (Linux or
+   * macOS) or `namespaces` (Linux); `sandbox.create({ platform })` may name
+   * another platform the home allows (#529, platform.js). Native starts each Sandbox as a host daemon in a directory
    * under LAYERFS_LOCAL_DIR. Linux requires root for FUSE and runs commands
    * as 501:20; macOS uses loopback NFS and the caller's identity. No Docker
    * setting is read; native provides no isolation from the host. Namespaces
    * adds Linux namespaces, a cgroup and an image root (LAYERFS_IMAGE,
    * LAYERFS_IMAGE_ARCHIVE). The former LAYERFS_SANDBOX_BACKEND=namespaces
    * beside LAYERFS_SANDBOX=native still means namespaces, for one release.
-   * The backend is read for every call, so a Sandbox made with one backend
-   * is never reopened as another.
+   * These settings are read once, when the client is made, and decide only
+   * what a new Sandbox starts with: every later call on a Sandbox follows
+   * its record (its platform and runtime), whatever the caller's settings.
    * LAYERFS_DAEMON_HOST is the host this process
    * dials for a daemon's port, published on the Docker host's 127.0.0.1 only;
    * set it when the client runs in a container (`host.docker.internal` on

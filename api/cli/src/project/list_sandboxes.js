@@ -4,6 +4,6 @@ import { PAGE } from "../common.js";
 export default {
   args: [],
   options: PAGE,
-  summary: "the project's running Sandboxes and how many Workspaces each holds",
+  summary: "the project's running Sandboxes of every platform, each with its platform and how many Workspaces it holds",
   run: (lf, a, o) => lf.project.list_sandboxes(o.pageSize, o.pagePos),
 };

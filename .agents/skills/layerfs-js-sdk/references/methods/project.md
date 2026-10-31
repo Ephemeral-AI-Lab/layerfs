@@ -147,8 +147,10 @@ that closed itself or whose container is gone is left out (the runtime reclaims 
 | `pagePos` | number | no | Offset, default 0 |
 
 **Returns:** a page `{ items, hasMore, nextPagePos }`. Each item is
-`{ sandbox, name, image, workspaces }`: its number, its container name, the image digest
-it runs (one project's Sandboxes may differ) and how many Workspaces it holds.
+`{ sandbox, name, image, platform, workspaces }`: its number, its container name, the
+image digest it runs (`null` for a `mac` or native `linux` one; one project's Sandboxes
+may differ), its platform and how many Workspaces it holds. Every platform's running
+Sandboxes are listed.
 
 ```js
 const { items } = await layerfs.project.list_sandboxes();

@@ -49,7 +49,7 @@ if (selected === "surface") {
   assert.equal(agent.INIT_TIMEOUT_MS, 300_000, "Init's default timeout: 300 s");
   // the internal entry exports exactly what its header and the README list
   assert.deepEqual(Object.keys(await import("@layerfs/agent/internal")).sort(), [
-    "STATE", "addonPath", "connection", "decode", "deployment", "encode", "endpointOf", "frame", "invokeBackend", "invokeClient",
+    "PLATFORMS", "STATE", "addonPath", "connection", "decode", "deployment", "encode", "endpointOf", "frame", "invokeBackend", "invokeClient",
     "invokeClientBackend", "live", "outcome", "page", "pageOf", "projectArgs", "readFrames", "sandboxArg", "storeArgs", "useWorker", "workspaceArgs",
   ]);
   await shop.close();
@@ -125,7 +125,7 @@ if (selected === "surface") {
   assert.equal(sent("sandbox.create").deploy.image, "sha256:other");
   await assert.rejects(shop.sandbox.create({ image: 7 }), { code: "InvalidInput" });
   // mount names its Sandbox (no placement): the native call gets { sandbox, branch }, no image
-  assert.deepEqual(await shop.workspace.mount("2", "feature"), { sandbox: "2", path: "/workspaces/w1", image: "fake-image" });
+  assert.deepEqual(await shop.workspace.mount("2", "feature"), { sandbox: "2", path: "/workspaces/w1", image: "fake-image", platform: "docker" });
   const mounted = sent("workspace.mount");
   assert.deepEqual([mounted.sandbox, mounted.branch, "image" in mounted], ["2", "feature", false]);
   const asked = native.calls.length;
@@ -142,7 +142,7 @@ if (selected === "surface") {
   const first = await shop.project.list_sandboxes(2, 0);
   assert.deepEqual([first.items.map((s) => s.sandbox), first.hasMore, first.nextPagePos], [["1", "2"], true, 2]);
   const last = await shop.project.list_sandboxes(2, 2);
-  assert.deepEqual([last.items, last.hasMore, last.nextPagePos], [[{ sandbox: "3", name: "layerfs-website-3", image: "configured-image", workspaces: 3 }], false, null]);
+  assert.deepEqual([last.items, last.hasMore, last.nextPagePos], [[{ sandbox: "3", name: "layerfs-website-3", image: "configured-image", platform: "docker", workspaces: 3 }], false, null]);
   // list_workspaces shapes the daemon's records
   native.workspaceList = [
     { workspace: "w1", branch: "feature", base: "c1", activity: "idle", mounted: true, directory: "/workspaces/w1", dirty: { inodes: 0, entries: 0 }, headMovedSinceMount: false, pendingMerge: false },

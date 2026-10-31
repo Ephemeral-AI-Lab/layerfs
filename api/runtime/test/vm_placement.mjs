@@ -131,6 +131,11 @@ try {
     assert.deepEqual([vm.vm.cpus, vm.vm.memory, vm.vm.storeSize], [2, "2G", "20G"]);
     assert.equal(callHome(vm), GUEST.home, "LayerFS calls see the VM's home");
     assert.deepEqual(missing(vm), [], "a VM home needs no runtime image and no daemon setting");
+    // #529: a vm: home allows its provider alone; its readiness names the provider's CLI when absent
+    const { platforms } = await import("../src/sandbox/platforms.js");
+    const listed = platforms(vm, [], { level: "not-used" });
+    assert.deepEqual(listed.filter((p) => p.allowed).map((p) => p.id), ["microsandbox"]);
+    assert.ok(["[]", '["tool:msb"]'].includes(JSON.stringify(listed[4].missing)), JSON.stringify(listed[4]));
     // sizes and cpus come from settings.vm, else LAYERFS_VM_*
     process.env.LAYERFS_VM_CPUS = "3";
     process.env.LAYERFS_VM_STORE_SIZE = "64G";

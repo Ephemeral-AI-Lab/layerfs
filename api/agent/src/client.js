@@ -69,12 +69,14 @@ export function sandboxArg(sandbox) {
  * `sandboxBackend` (LAYERFS_SANDBOX_BACKEND), kept for one release, and
  * refuses an unknown value or a conflicting pair, so this only checks that
  * each value's fields are present and passes both settings on. `host` is
- * the platform the Sandbox runs on (`sandboxHost`): native and namespaces are
+ * the OS the Sandbox runs on (Linux for a worker, see platform.js): native and namespaces are
  * refused where they cannot run before anything is read. */
 export function deployment(options = {}, postgresql = false, host = process.platform) {
   const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
-  const sandbox = options.sandbox ?? env("SANDBOX");
-  const backend = options.sandboxBackend ?? env("SANDBOX_BACKEND");
+  // a field the options name (even as undefined, for a platform's own
+  // runtime, #529) is not read from the environment
+  const sandbox = "sandbox" in options ? options.sandbox : env("SANDBOX");
+  const backend = "sandboxBackend" in options ? options.sandboxBackend : env("SANDBOX_BACKEND");
   const named = { ...(sandbox !== undefined ? { sandbox } : {}), ...(backend !== undefined ? { sandboxBackend: backend } : {}) };
   if (sandbox === "native" || sandbox === "namespaces") return localDeployment(options, env, named, host);
   // another value is the binding's to refuse, naming the values it takes
@@ -107,7 +109,7 @@ export function deployment(options = {}, postgresql = false, host = process.plat
  * the docker-archive the bundle carries). The former `native` with
  * `sandboxBackend` `namespaces` needs the same. `host` is the platform the
  * Sandbox runs on: this process's, or Linux when a worker makes it (see
- * `sandboxHost`). */
+ * platform.js). */
 function localDeployment(options, env, named, host) {
   const namespaces = named.sandbox === "namespaces" || named.sandboxBackend === "namespaces";
   const setting = named.sandbox === "namespaces" ? "deploy.sandbox (LAYERFS_SANDBOX) namespaces"
@@ -139,11 +141,6 @@ function localDeployment(options, env, named, host) {
   if (!deploy.containerPrefix) delete deploy.containerPrefix;
   return deploy;
 }
-
-/** The platform a client's Sandboxes run on: a worker (the macOS and
- * Windows routes, or a `vm:` placement's VM) runs them on its Linux host;
- * the addon in this process runs them here. */
-export const sandboxHost = (client) => (transportOf(client).worker ? "linux" : process.platform);
 
 /** Refuses every call on a closed client (or one no factory opened). */
 export function live(client) {

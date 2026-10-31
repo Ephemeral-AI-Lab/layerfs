@@ -42,6 +42,12 @@ try {
     assert.deepEqual(methods(runtime.events), ["subscribe"]);
     const state = await runtime.status();
     assert.deepEqual([state.platform, state.missing, state.docker, state.worker], ["linux", [], { level: "ok", version: "27.0.1" }, null]);
+    // #529: all eight platforms; a Linux home allows docker and linux, linux ready only with its settings and host
+    assert.deepEqual(state.platforms.map((p) => [p.id, p.allowed]), [["docker", true], ["mac", false], ["linux", true], ["apple-container", false], ["microsandbox", false], ["lima", false], ["firecracker", false], ["ssh", false]]);
+    assert.deepEqual(state.platforms[0], { id: "docker", allowed: true, ready: true, missing: [] });
+    assert.deepEqual(state.platforms[1], { id: "mac", allowed: false, ready: false, missing: [] });
+    assert.equal(state.platforms[2].ready, false);
+    assert.ok(state.platforms[2].missing.includes("localDir") && state.platforms[2].missing.includes("imageArchive"), JSON.stringify(state.platforms[2]));
     // Linux has no worker; a restart needs confirm before anything else
     await assert.rejects(runtime.worker.start(), { code: "InvalidInput", message: /in-process/ });
     await assert.rejects(runtime.worker.restart(), { code: "InvalidInput", message: /confirm/ });
@@ -53,6 +59,9 @@ try {
     const mac = await LayerFSRuntime.open({ home, platform: "macos", image: IMAGE, bundle: "/b", sweep: false });
     assert.equal(process.env.LAYERFS_WORKER_ENDPOINT, undefined, "the endpoint is handed over in-process, not through the environment");
     assert.deepEqual(missing(mac.settings), []);
+    const { platforms } = await import("../src/sandbox/platforms.js");
+    assert.deepEqual(platforms(mac.settings, [], { level: "down" }).filter((p) => p.allowed), [{ id: "docker", allowed: true, ready: false, missing: ["tool:docker"] }]);
+    assert.equal(mac.settings.localDir, null, "localDir is a Linux home's setting");
     assert.equal("adapter" in mac.settings, false);
     await mac.close();
     // closed: every call refused; a second close does nothing
@@ -251,9 +260,9 @@ try {
     const asked = native.calls.length;
     const both = await runtime.sandbox.list();
     assert.deepEqual(native.args.slice(asked).filter((a, i) => native.calls[asked + i] === "runtime.sandbox.records").map((a) => [a.project, a.home, "deploy" in a]), [["shop", home, false]], "one records call per project, with no deployment");
-    assert.deepEqual(both.map((c) => [c.name, c.runtime, c.state, c.running, c.owned]), [
-      ["layerfs-gone-1", "docker", "exited", false, false], ["layerfs-shop-1", "docker", "running", true, true],
-      ["layerfs-shop-4", "native", "running", true, true], ["layerfs-shop-5", "namespaces", "stopped", false, true],
+    assert.deepEqual(both.map((c) => [c.name, c.runtime, c.platform, c.state, c.running, c.owned]), [
+      ["layerfs-gone-1", "docker", "docker", "exited", false, false], ["layerfs-shop-1", "docker", "docker", "running", true, true],
+      ["layerfs-shop-4", "native", "linux", "running", true, true], ["layerfs-shop-5", "namespaces", "linux", "stopped", false, true],
     ]);
     assert.deepEqual([both[2].scratch, both[2].ports, both[2].sandbox], [null, [], "4"]);
     // removing the Store sees the running native Sandbox as a holder: Busy, and with stopSandboxes
@@ -272,7 +281,7 @@ try {
     native.reclaimed = ["2"];
     const before = native.calls.length;
     assert.deepEqual(await runtime.sandbox.sweep(), { reclaimed: { shop: ["2"] }, failed: [] });
-    assert.deepEqual(native.calls.slice(before).filter((c) => c.startsWith("runtime.")), ["runtime.sandbox.reclaim"]);
+    assert.deepEqual(native.calls.slice(before).filter((c) => c.startsWith("runtime.") && c !== "runtime.sandbox.records"), ["runtime.sandbox.reclaim"]);
     assert.equal(calls.filter((c) => c[0] === "rm").length, 0, "the sweep deletes through the project's records, never by name");
     // the project is found by the container's labels, not by its name: an ended container labelled
     // shop whose name is not `<prefix>shop-<n>` still has shop's own records decide (#527 step 12)
@@ -283,6 +292,11 @@ try {
     const quiet = native.calls.length;
     assert.deepEqual(await runtime.sandbox.sweep(), { reclaimed: {}, failed: [] }, "a running container or one of no project of this home starts no reclaim");
     assert.equal(native.calls.slice(quiet).filter((c) => c === "runtime.sandbox.reclaim").length, 0);
+    // #529: on Linux a project whose records name a stopped native or namespaces Sandbox is reclaimed too
+    native.recordList = { shop: [{ sandbox: "4", name: "layerfs-shop-4", runtime: "namespaces", platform: "linux", image: IMAGE, state: "stopped", workspaces: 0 }] };
+    native.reclaimed = ["4"];
+    assert.deepEqual(await runtime.sandbox.sweep(), { reclaimed: { shop: ["4"] }, failed: [] });
+    delete native.recordList;
     delete native.reclaimed;
     await runtime.close();
     // open sweeps once in the background; status reports it and close waits for it

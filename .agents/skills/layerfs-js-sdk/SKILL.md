@@ -10,8 +10,8 @@ description: Use when building, editing, testing or inspecting a project through
 > Workspace API and idle close are #373's (section 8 of
 > [its design](../../../core/docs/issues/373/README.md)). The `@layerfs/agent`
 > package, its client factories and the `sandbox` methods are #428's
-> ([its design](../../../core/docs/issues/428/layerfs-agent.md)). There is no
-> placement since 2026-10-23 (owner): a mount names its Sandbox.
+> ([its design](../../../core/docs/issues/428/layerfs-agent.md)). A mount names its
+> Sandbox, and a Sandbox names its platform (#529); the home decides where Stores live.
 
 Your project lives in LayerFS, not on your local disk. You read and change it through
 the SDK, from small Node scripts you run with `node`.
@@ -101,8 +101,9 @@ Commit, so for one small read or edit prefer `fs.*`.
   pass it to `exec`, `commit` and `unmount`. Two mounts of one Branch are two
   separate Workspaces, and a Workspace is never valid after its unmount.
 - **You name the Sandbox.** A project's Sandboxes are numbered `1`, `2`, …, each a
-  container holding up to 16 Workspaces on one image (`LAYERFS_IMAGE`, or
-  `sandbox.create({ image })`). `sandbox.create()` starts one and returns its number;
+  container (or daemon process) holding up to 16 Workspaces on one image
+  (`LAYERFS_IMAGE`, or `sandbox.create({ image })`) and one platform (the home's
+  default, or `sandbox.create({ platform })`). `sandbox.create()` starts one and returns its number;
   `workspace.mount(sandbox, branch)` mounts there and never starts one. When a mount
   is refused `NoSuchSandbox` (it closed itself) or `Capacity` (16 Workspaces), do what
   its message says: `sandbox.create()` a new one, or `sandbox.list_workspaces(sandbox)`
@@ -153,7 +154,7 @@ overwrite it.
 | Branch | A named line of Commits. `main` changes only through `branch.publish`; work on your own Branch | `branch` |
 | Files | Read and change files on a Branch directly. Every write is one immutable Commit; `fs.apply` makes many changes as one | `fs` |
 | Workspace | A complete, writable view of a Branch where ordinary commands run, `{ sandbox, path }`. `workspace.commit` saves **everything** in it: `node_modules`, `.git`, build output, caches | `workspace` |
-| Sandbox | A numbered container running one LayerFS daemon, holding up to 16 Workspaces. LayerFS starts one when a mount needs it, or you `create` one; it closes itself when idle | `sandbox`, `project.list_sandboxes` |
+| Sandbox | A numbered container (or daemon process, by its platform) running one LayerFS daemon, holding up to 16 Workspaces. You `create` one; a mount never starts one; it closes itself when idle | `sandbox`, `project.list_sandboxes` |
 
 ## Import the SDK
 
@@ -373,7 +374,7 @@ method, its arguments, result fields, refusals with what to do, limits and examp
 | [fs writes](references/methods/fs-write.md) | `write(branch, path, content, message?)`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message?)`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
 | [branch](references/methods/branch.md) | `fork(name, fromRef?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?)`, `diff_branches(from, to, pageSize?, pagePos?)`, `merge(a, b, name, message?)`, `publish(branch, commit?)` |
 | [sandbox](references/methods/sandbox.md) | `create(options?)`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
-| [workspace](references/methods/workspace.md) | `mount(sandbox, branch)` → `{ sandbox, path, image }`, `exec(ws, command, message?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?, force?)` |
+| [workspace](references/methods/workspace.md) | `mount(sandbox, branch)` → `{ sandbox, path, image, platform }`, `exec(ws, command, message?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?, force?)` |
 
 A `ref` is `main`, a Branch name, a Commit id or a Layer id. Paths are absolute in the
 view (`/src/index.js`). Pages are `{ items, hasMore }`; advance with

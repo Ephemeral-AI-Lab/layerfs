@@ -109,6 +109,10 @@ function defaultDocker(platform) {
  * @param {object} [given.vm] VM placement: { image, cpus, memory, storeSize } (also
  *   LAYERFS_VM_IMAGE, LAYERFS_VM_CPUS, LAYERFS_VM_MEMORY, LAYERFS_VM_STORE_SIZE)
  * @param {string} [given.platform] linux | macos | windows (default this process's)
+ * @param {string} [given.localDir] Linux: where `linux` Sandboxes (namespaces daemons) live
+ *   (LAYERFS_LOCAL_DIR of the home's clients); with `imageArchive` it makes `linux` ready (#529)
+ * @param {string} [given.imageArchive] Linux: the docker-archive of `image` a `linux`
+ *   Sandbox's root is unpacked from (LAYERFS_IMAGE_ARCHIVE)
  * @param {boolean} [given.sweep] sweep this home's stopped Sandboxes once at open (default true)
  */
 export function resolveSettings(given = {}) {
@@ -130,6 +134,9 @@ export function resolveSettings(given = {}) {
     volumes: given.volumes || VOLUMES,
     traceDir: given.traceDir || join(given.home, "traces"),
     containerPrefix: given.containerPrefix || "layerfs-",
+    // a Linux home's `linux` platform (#529): unset, it is allowed but not ready
+    localDir: (platform === "linux" && where.kind === "local" && given.localDir) || null,
+    imageArchive: (platform === "linux" && where.kind === "local" && given.imageArchive) || null,
     stateDir: given.stateDir || join(given.home, ".runtime"),
     pollMs: given.pollMs ?? 400,
     sweep: given.sweep !== false,

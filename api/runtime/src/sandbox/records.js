@@ -9,7 +9,8 @@
 import { invokeBackend } from "@layerfs/agent/internal";
 import { callHome } from "../settings.js";
 
-/** `[{ sandbox, name, runtime, image, state, workspaces, message? }]` of `project` ({ name, store?, shared? }). */
+/** `[{ sandbox, name, runtime, platform, image, state, workspaces, message? }]` of `project`
+ * ({ name, store?, shared? }); `platform` is null in a record from before #529. */
 export async function recorded(runtime, project) {
   const args = { project: project.name, home: callHome(runtime.settings), ...(project.shared ? { store: project.store } : {}) };
   return (await invokeBackend("runtime.sandbox.records", args, {})).items;

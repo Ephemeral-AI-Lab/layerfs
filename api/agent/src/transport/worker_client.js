@@ -157,6 +157,11 @@ export function workerClient(file) {
   return {
     /** Calls run in a Linux worker, so its Sandboxes run on Linux. */
     worker: true,
+    /** The VM a `vm:` home's endpoint names ({ provider, name, project }), null for any
+     * other worker, or undefined when no worker is running for this home (#529). */
+    place() {
+      try { return endpointOf(file).vm ?? null; } catch { return undefined; }
+    },
     call: (op, args) => send("call", op, args),
     backendCall: (op, args) => send("backendCall", op, args),
     /** The Store opens in the worker; here only its clients are counted. */

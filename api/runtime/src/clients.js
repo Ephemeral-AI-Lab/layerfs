@@ -9,10 +9,11 @@ import { callHome } from "./settings.js";
 
 const IDLE_MS = 60_000;
 
-/** The local placement's Sandbox backend: LAYERFS_SANDBOX=docker, named rather
- * than read from this process's environment (#527 F4). "" unsets what an
- * ambient former LAYERFS_SANDBOX_BACKEND (which would conflict with docker),
- * _LOCAL_DIR or _IMAGE_ARCHIVE would set. */
+/** The local placement's default Sandbox backend: LAYERFS_SANDBOX=docker, named
+ * rather than read from this process's environment (#527 F4). "" unsets what
+ * an ambient former LAYERFS_SANDBOX_BACKEND (which would conflict with docker),
+ * _LOCAL_DIR or _IMAGE_ARCHIVE would set; a Linux home's own `localDir` and
+ * `imageArchive` settings set the last two for its `linux` platform (#529). */
 const DOCKER_BACKEND = { SANDBOX: "docker", SANDBOX_BACKEND: "", LOCAL_DIR: "", IMAGE_ARCHIVE: "" };
 
 /** The environment one project's client (and its agents' bash calls) use. A
@@ -40,6 +41,9 @@ export function deploymentEnv(settings, platform, project) {
   return {
     HOME: callHome(settings),
     ...DOCKER_BACKEND,
+    // a Linux home also allows `linux` Sandboxes (#529): its clients get their settings
+    LOCAL_DIR: settings.localDir ?? "",
+    IMAGE_ARCHIVE: settings.imageArchive ?? "",
     DOCKER: settings.docker,
     IMAGE: project.image ?? settings.image ?? "",
     DAEMON: settings.daemon ?? "",

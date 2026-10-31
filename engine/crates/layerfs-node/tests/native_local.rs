@@ -156,13 +156,15 @@ fn a_native_record_naming_another_directory_is_neither_used_nor_deleted() {
 }
 
 #[test]
-fn a_native_record_is_used_only_with_its_deployment_s_absolute_local_dir() {
+fn a_native_record_s_directory_is_checked_with_or_without_a_local_dir() {
+    // #529: a call follows the record, so a caller with no LAYERFS_LOCAL_DIR
+    // (a Docker deployment) uses the record's own directory, still named as
+    // this deployment names the Sandbox; a relative or dotted one is refused
     let home = Home::new();
     let root = root(&home);
     let own = own(&root);
     record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
     let refused = "assert.equal(r.refused?.code, 'InvalidInput', JSON.stringify(r));";
-    reclaim(&home, "native", None, refused);
     reclaim(&home, "native", Some("relative"), refused);
     reclaim(
         &home,
@@ -172,6 +174,8 @@ fn a_native_record_is_used_only_with_its_deployment_s_absolute_local_dir() {
     );
     assert!(own.join("daemon.log").exists());
     assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
+    reclaim(&home, "native", None, RECLAIMED);
+    assert!(!own.exists(), "the stopped Sandbox's directory is deleted");
 }
 
 #[test]
@@ -251,21 +255,20 @@ fn a_docker_record_stays_docker_under_a_native_deployment() {
 }
 
 /// `sandbox.close` of Sandbox 1 under a `deploy` (JavaScript object text):
-/// it reopens the record, so another backend's is refused (#527 step 4).
-fn close_refused_as_mixed(home: &Home, deploy: &str) {
+/// it reopens the record, and a record no host reopens is refused.
+fn close_refused_as_unused(home: &Home, deploy: &str) {
     home.node(
         &format!(
             "const r = await native.call('sandbox.close', {{...args, deploy:{deploy}}});
-            {NEITHER}
-            assert.match(r.refused.message, /never mixed/);"
+            {NEITHER}"
         ),
         None,
         Duration::from_secs(10),
     );
 }
 
-/// Reclaim under `deploy` leaves another backend's record out: nothing is
-/// reclaimed, nothing is refused (#527 step 12).
+/// Reclaim leaves a record no host reopens out: nothing is reclaimed,
+/// nothing is refused (#527 step 12).
 const LEFT_OUT: &str = "assert.deepEqual(r, {value:{kind:'ok',reclaimed:[]}});";
 
 #[test]
@@ -279,48 +282,35 @@ fn a_record_of_the_former_local_runtime_is_never_used_nor_deleted() {
     record(&home, "local", text(&own), "layerfs-proj-1", |_| {});
     reclaim(&home, "native", Some(text(&root)), LEFT_OUT);
     reclaim(&home, "docker", Some(text(&root)), LEFT_OUT);
-    close_refused_as_mixed(&home, &native);
-    // nor is a native record by any deployment but a native one
-    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
-    reclaim(&home, "docker", Some(text(&root)), LEFT_OUT);
-    close_refused_as_mixed(
-        &home,
-        &format!("{{sandbox:'docker', localDir:{:?}}}", text(&root)),
-    );
+    close_refused_as_unused(&home, &native);
     assert!(own.join("daemon.log").exists());
     assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
-    // a native deployment uses its own record: stopped, it is reclaimed
-    reclaim(&home, "native", Some(text(&root)), RECLAIMED);
+    // a native record is used by every deployment (#529, the record
+    // decides): stopped, a Docker deployment's reclaim removes it
+    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
+    reclaim(&home, "docker", Some(text(&root)), RECLAIMED);
     assert!(!own.exists());
     assert!(!home.0.join("proj/sandboxes/1").exists());
 }
 
 #[test]
-fn a_native_record_is_not_reopened_by_a_namespaces_deployment() {
-    // #527 step 4: reopen requires the deployment's own backend both ways; a
-    // namespaces deployment does not take a native record as its own, and
-    // since step 12 its reclaim leaves the record out instead of failing
+fn a_native_record_is_reopened_by_its_runtime_under_any_deployment() {
+    // #529 replaces #527 step 4: reopen follows the record's runtime, so a
+    // namespaces deployment reclaims a stopped native Sandbox as its own
     let home = Home::new();
     let root = root(&home);
     let own = own(&root);
     record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
-    reclaim(&home, "namespaces", Some(text(&root)), LEFT_OUT);
-    close_refused_as_mixed(
-        &home,
-        &format!("{{sandbox:'namespaces', localDir:{:?}}}", text(&root)),
-    );
-    assert!(own.join("daemon.log").exists());
-    assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
-    // the same record under a native deployment is its own: reclaimed
-    reclaim(&home, "native", Some(text(&root)), RECLAIMED);
+    reclaim(&home, "namespaces", Some(text(&root)), RECLAIMED);
     assert!(!own.exists());
+    assert!(!home.0.join("proj/sandboxes/1").exists());
 }
 
 #[test]
 fn every_backend_s_record_is_listed_with_its_runtime_and_state() {
     // #527 step 12: runtime.sandbox.records lists a record of any backend
-    // without matching the deployment's; list_sandboxes and reclaim of a
-    // Docker deployment leave a native record out instead of failing
+    // without matching the deployment's, with its platform (#529; null in a
+    // record from before it); list_sandboxes leaves a stopped one out
     let home = Home::new();
     let root = root(&home);
     let own = own(&root);
@@ -332,13 +322,25 @@ fn every_backend_s_record_is_listed_with_its_runtime_and_state() {
     record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
     home.node(
         &format!(
-            "assert.deepEqual({records}, {{value:{{kind:'ok', items:[{{sandbox:'1', name:'layerfs-proj-1', runtime:'native', image:'local', workspaces:0, state:'stopped'}}]}}}});
+            "assert.deepEqual({records}, {{value:{{kind:'ok', items:[{{sandbox:'1', name:'layerfs-proj-1', runtime:'native', platform:null, image:'local', workspaces:0, state:'stopped'}}]}}}});
             assert.deepEqual({listed}, {{value:{{kind:'ok', items:[]}}}});"
         ),
         None,
         Duration::from_secs(10),
     );
-    reclaim(&home, "docker", None, LEFT_OUT);
+    // a record of #529 names its platform
+    record(
+        &home,
+        "native",
+        text(&own),
+        "layerfs-proj-1",
+        set("platform", Some(SdkValue::text("linux"))),
+    );
+    home.node(
+        &format!("assert.deepEqual(({records}).value.items.map((s) => s.platform), ['linux']);"),
+        None,
+        Duration::from_secs(10),
+    );
     // a namespaces record whose process runs (this test's own): running
     let stat = std::fs::read_to_string("/proc/self/stat").unwrap();
     let start = stat[stat.rfind(')').unwrap() + 2..]
@@ -361,8 +363,7 @@ fn every_backend_s_record_is_listed_with_its_runtime_and_state() {
     home.node(
         &format!(
             "const r = {records};
-            assert.deepEqual(r.value.items.map((s) => [s.runtime, s.state, s.image]), [['namespaces', 'running', {digest:?}]]);
-            assert.deepEqual({listed}, {{value:{{kind:'ok', items:[]}}}});"
+            assert.deepEqual(r.value.items.map((s) => [s.runtime, s.state, s.image]), [['namespaces', 'running', {digest:?}]]);"
         ),
         None,
         Duration::from_secs(10),

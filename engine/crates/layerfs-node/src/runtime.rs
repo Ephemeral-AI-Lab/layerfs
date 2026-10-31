@@ -2,7 +2,9 @@
 //! Linux (root FUSE daemon, nonroot commands) and macOS (loopback NFS,
 //! caller identity), or `LAYERFS_SANDBOX=namespaces` on Linux. All use the
 //! same authenticated daemon control pipeline and the same concrete
-//! `layerfs_sandbox::Sandbox` handle.
+//! `layerfs_sandbox::Sandbox` handle. A Sandbox also names its platform
+//! (#529), recorded beside the runtime; every later call follows the
+//! record, not the caller's deployment.
 use crate::job::{failed, refused};
 use crate::output::Spool;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -107,6 +109,79 @@ pub(crate) fn recorded(record: &SdkValue) -> Result<Option<Backend>, &str> {
         Some(NAMESPACES) => Ok(Some(Backend::Namespaces)),
         Some(other) => Err(other),
     }
+}
+
+/// The platforms a Sandbox names (#529 P4): what a caller chooses and
+/// reads. The record keeps the lower-level `runtime` beside it.
+pub(crate) const PLATFORMS: [&str; 8] = [
+    "docker",
+    "mac",
+    "linux",
+    "apple-container",
+    "microsandbox",
+    "lima",
+    "firecracker",
+    "ssh",
+];
+
+/// The platform a `sandbox.create` call names (`platform`), checked against
+/// the backend its deployment selects before any effect: `docker` is a
+/// Docker container; `mac` a native daemon on macOS; `linux` a native or
+/// namespaces daemon on Linux; a VM provider a namespaces daemon in the
+/// project's VM, which is Linux. The agent chooses which platforms a home
+/// allows and maps each to its deployment; this refuses a call whose two
+/// facts disagree. A call that names none (an older caller) records the
+/// one its backend implies.
+pub(crate) fn platform(args: &SdkValue, backend: Option<Backend>) -> Result<String, SdkRefusal> {
+    let implied = match backend {
+        None => "docker",
+        Some(_) if cfg!(target_os = "macos") => "mac",
+        Some(_) => "linux",
+    };
+    let Some(named) = args.get_text("platform") else {
+        return Ok(implied.to_owned());
+    };
+    if !PLATFORMS.contains(&named) {
+        return Err(refused(
+            "InvalidInput",
+            format!("platform is one of {}, not {named}", PLATFORMS.join(", ")),
+        ));
+    }
+    let fits = match named {
+        "docker" | "mac" | "linux" => named == implied,
+        // a VM provider's Sandbox is namespaces inside its Linux VM
+        _ => backend == Some(Backend::Namespaces) && implied == "linux",
+    };
+    if !fits {
+        return Err(refused(
+            "InvalidInput",
+            format!(
+                "platform {named} does not run the deployment's Sandbox backend ({}) on this host",
+                backend.map_or("docker", |b| match b {
+                    Backend::Native => NATIVE,
+                    Backend::Namespaces => NAMESPACES,
+                })
+            ),
+        ));
+    }
+    Ok(named.to_owned())
+}
+
+/// A running Sandbox's `runtime`, as its record names it.
+pub(crate) fn kind(runtime: &Sandbox) -> &'static str {
+    match runtime {
+        Sandbox::Docker(_) => "docker",
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        Sandbox::Native(_) => NATIVE,
+        #[cfg(target_os = "linux")]
+        Sandbox::Namespaces(_) => NAMESPACES,
+    }
+}
+
+/// A record's `runtime` as a caller reads it: `docker` (a Docker record has
+/// none), `native`, `namespaces`, or another recorded name as it is.
+pub(crate) fn runtime_name(record: &SdkValue) -> &str {
+    record.get_text("runtime").unwrap_or("docker")
 }
 
 /// The image a Sandbox reports: its container's, the digest a namespaces

@@ -31,8 +31,8 @@ GLOBAL OPTIONS
 SETTINGS come from the environment, as for the SDK (api/docs/agent.md):
   Store       LAYERFS_HOME, LAYERFS_STORE_PATH, LAYERFS_STORE, LAYERFS_STORE_POSTGRESQL,
               LAYERFS_STORE_POLICY
-  Sandbox     LAYERFS_SANDBOX (docker, native or namespaces; default docker),
-              LAYERFS_DAEMON, LAYERFS_CONTAINER_PREFIX
+  Sandbox     LAYERFS_SANDBOX (docker, native or namespaces; default docker), the
+              home's default platform, LAYERFS_DAEMON, LAYERFS_CONTAINER_PREFIX
     docker      LAYERFS_DOCKER, LAYERFS_IMAGE, LAYERFS_VOLUME, LAYERFS_DAEMON_HOST
     native      LAYERFS_LOCAL_DIR
     namespaces  LAYERFS_LOCAL_DIR, LAYERFS_IMAGE, LAYERFS_IMAGE_ARCHIVE
@@ -45,6 +45,8 @@ ARGUMENTS
   <path>                absolute, starting with /
   <ws>                  a Workspace, <sandbox>:<path> (mount prints it as ws)
   <sandbox>             a Sandbox number, such as 2
+  --platform <text>     docker, mac, linux, apple-container, microsandbox, lima,
+                        firecracker or ssh: one the home allows (default its own)
   -m <text>             the Commit message, UTF-8, at most 4096 bytes
   --page-size <n>       default 50; --page-pos <n> default 0`;
 

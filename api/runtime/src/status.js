@@ -1,11 +1,13 @@
 // runtime.status(): Docker reachability, the worker's state (null on Linux),
-// free disk and missing settings. From part of the dsh Host's runtime.js
+// free disk, missing settings and the Sandbox platforms this home allows
+// (#529, sandbox/platforms.js). From part of the dsh Host's runtime.js
 // (#428). It starts nothing. A `vm:<provider>` home has no host Docker in its
 // data path (#515 §3): its Stores and Sandboxes are inside the VM, so `docker`
 // says so instead of reporting the host engine down, and `vm` carries the VM's
 // own state.
 import { statfsSync } from "node:fs";
 import { missing } from "./settings.js";
+import { platforms } from "./sandbox/platforms.js";
 
 export async function status(runtime) {
   const { settings, platform } = runtime;
@@ -26,6 +28,7 @@ export async function status(runtime) {
     platform: settings.platform,
     placement: settings.placement.name,
     missing: missing(settings),
+    platforms: platforms(settings, missing(settings), docker),
     docker,
     worker: reported.worker ?? null,
     vm: reported.vm ?? null,
