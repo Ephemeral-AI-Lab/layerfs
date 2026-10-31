@@ -108,6 +108,11 @@ function nativeDeployment(options, env, sandbox) {
     const named = backend === "namespaces" ? "deploy.sandboxBackend (LAYERFS_SANDBOX_BACKEND) namespaces" : "deploy.sandbox (LAYERFS_SANDBOX) native";
     throw new LayerFSError("Unsupported", `${named} is not supported on Windows: a Windows Sandbox is Docker, through the WSL2 worker; native runs on Linux or macOS, namespaces on Linux`, null);
   }
+  // namespaces is Linux only: refused before its image settings are read, so
+  // a macOS deployment hears Unsupported, not a missing LAYERFS_IMAGE
+  if (backend === "namespaces" && process.platform !== "linux") {
+    throw new LayerFSError("Unsupported", "deploy.sandboxBackend (LAYERFS_SANDBOX_BACKEND) namespaces is Linux only; use native", null);
+  }
   const deploy = {
     sandbox,
     daemon: options.daemon ?? env("DAEMON"),

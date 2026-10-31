@@ -51,8 +51,11 @@ assert.deepEqual(deployment(), { sandbox: "native", daemon: "/opt/layerfs-daemon
 // an image (sandbox.create's option) does not change a native deployment
 assert.deepEqual(deployment({ image: docker.image }), { sandbox: "native", daemon: "/opt/layerfs-daemon", localDir: "/Users/me/lfs" });
 // the backend inside the directory is native unless named; namespaces is
-// passed through (the binding refuses it off Linux, and an unknown value)
+// passed through on Linux (the binding refuses an unknown value; off Linux
+// it is refused here, below)
 assert.equal(deployment().sandboxBackend, undefined);
+const linuxHost = Object.getOwnPropertyDescriptor(process, "platform");
+Object.defineProperty(process, "platform", { ...linuxHost, value: "linux" });
 const archive = `/bundle/images/${"a".repeat(64)}.tar`;
 process.env.LAYERFS_SANDBOX_BACKEND = "namespaces";
 process.env.LAYERFS_IMAGE = docker.image;
@@ -82,6 +85,7 @@ assert.deepEqual(deployment({ sandboxBackend: "native" }), {
   sandboxBackend: "native",
 });
 delete process.env.LAYERFS_SANDBOX_BACKEND;
+Object.defineProperty(process, "platform", linuxHost);
 delete process.env.LAYERFS_IMAGE;
 delete process.env.LAYERFS_IMAGE_ARCHIVE;
 // the container prefix names native Sandbox directories too
@@ -167,6 +171,19 @@ try {
   await assert.rejects(windows.sandbox.create(), { code: "Unsupported" });
   assert.equal(native.deploys.length, made, "no Sandbox was asked for");
   await windows.close();
+} finally {
+  Object.defineProperty(process, "platform", host);
+}
+// on macOS namespaces is refused Unsupported (#527 §3.1) before its image
+// settings are read, so a missing LAYERFS_IMAGE does not hide the reason
+Object.defineProperty(process, "platform", { ...host, value: "darwin" });
+try {
+  clear();
+  process.env.LAYERFS_SANDBOX = "native";
+  process.env.LAYERFS_SANDBOX_BACKEND = "namespaces";
+  process.env.LAYERFS_DAEMON = "/opt/layerfs-daemon";
+  process.env.LAYERFS_LOCAL_DIR = "/tmp/lfs";
+  assert.throws(() => deployment(), (e) => e.code === "Unsupported" && /namespaces is Linux only/.test(e.message));
 } finally {
   Object.defineProperty(process, "platform", host);
 }
