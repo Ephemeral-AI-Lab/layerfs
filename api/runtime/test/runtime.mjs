@@ -227,7 +227,7 @@ try {
     mkdirSync(join(home, ".runtime", "projects"), { recursive: true });
     writeFileSync(join(home, ".runtime", "projects", "shop.json"), JSON.stringify({ name: "shop", volume: "vol-shop" }));
     const inspected = (name, project, status, size, ports = {}) => ({ Name: `/${name}`, State: { Status: status, Running: status === "running", StartedAt: "2026-10-24T01:00:00Z", FinishedAt: status === "running" ? "0001-01-01T00:00:00Z" : "2026-10-24T02:00:00Z" }, Config: { Image: IMAGE, Labels: { "layerfs.role": "sandbox", "layerfs.project": project, "layerfs.sandbox": name.at(-1) } }, NetworkSettings: { Ports: ports }, SizeRw: size });
-    const ps = ["layerfs-shop-1\trunning\tUp\tshop\t1\timg", "layerfs-shop-2\texited\tExited (0)\tshop\t2\timg", "layerfs-shop-3\tcreated\tCreated\tshop\t3\timg", "layerfs-gone-1\texited\tExited\tgone\t1\timg", "layerfs-issue9-shop-1\texited\tExited\tshop\t1\timg"].join("\n");
+    let ps = ["layerfs-shop-1\trunning\tUp\tshop\t1\timg", "layerfs-shop-2\texited\tExited (0)\tshop\t2\timg", "layerfs-shop-3\tcreated\tCreated\tshop\t3\timg", "layerfs-gone-1\texited\tExited\tgone\t1\timg", "layerfs-issue9-shop-1\texited\tExited\tshop\t1\timg"].join("\n");
     const { runtime, calls } = await opened((args) => {
       if (args[0] === "ps") return args.includes("-q") ? "id1\nid2\nid3" : ps;
       if (args[0] === "inspect") {
@@ -241,12 +241,21 @@ try {
     assert.deepEqual(listed.map((c) => [c.name, c.state, c.scratch, c.owned]), [["layerfs-gone-1", "exited", 1_000_000, false], ["layerfs-shop-1", "running", 4096, true]]);
     assert.deepEqual([listed[1].ports, listed[1].finishedAt, listed[0].finishedAt], [[{ container: "30421/tcp", host: "127.0.0.1", port: 54321 }], null, "2026-10-24T02:00:00Z"]);
     assert.deepEqual(calls.find((c) => c[0] === "inspect"), ["inspect", "--size", "id1", "id2", "id3"]);
-    // sweep: only shop has an ended container of this home's own naming; created ones and other projects are left alone
+    // sweep: only shop has an ended container of a project of this home; created ones and other projects are left alone
     native.reclaimed = ["2"];
     const before = native.calls.length;
     assert.deepEqual(await runtime.sandbox.sweep(), { reclaimed: { shop: ["2"] }, failed: [] });
     assert.deepEqual(native.calls.slice(before).filter((c) => c.startsWith("runtime.")), ["runtime.sandbox.reclaim"]);
     assert.equal(calls.filter((c) => c[0] === "rm").length, 0, "the sweep deletes through the project's records, never by name");
+    // the project is found by the container's labels, not by its name: an ended container labelled
+    // shop whose name is not `<prefix>shop-<n>` still has shop's own records decide (#527 step 12)
+    ps = "layerfs-renamed-7\texited\tExited (0)\tshop\t7\timg";
+    native.reclaimed = ["7"];
+    assert.deepEqual(await runtime.sandbox.sweep(), { reclaimed: { shop: ["7"] }, failed: [] });
+    ps = ["layerfs-shop-1\trunning\tUp\tshop\t1\timg", "layerfs-gone-1\texited\tExited\tgone\t1\timg"].join("\n");
+    const quiet = native.calls.length;
+    assert.deepEqual(await runtime.sandbox.sweep(), { reclaimed: {}, failed: [] }, "a running container or one of no project of this home starts no reclaim");
+    assert.equal(native.calls.slice(quiet).filter((c) => c === "runtime.sandbox.reclaim").length, 0);
     delete native.reclaimed;
     await runtime.close();
     // open sweeps once in the background; status reports it and close waits for it

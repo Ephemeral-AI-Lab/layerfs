@@ -107,7 +107,9 @@ lines from now on, or from `since`, each with `actor`, its trace file's name.
   outside every Workspace), its ports and whether a project of this home owns
   it. One `docker ps` and one `docker inspect --size`; it changes nothing.
 - `sandbox.sweep` runs `sandbox.reclaim` for every project of the home that
-  has an exited or dead Sandbox container. The project's records and lock
+  has an exited or dead Sandbox container, found by the container's
+  `layerfs.project` and `layerfs.store` labels rather than its name (the
+  binding owns the name format). The project's records and lock
   decide what goes, so a container of another home, or one starting now, is
   never touched; containers no project records stay for `list_leftovers`.
   `open` runs it once in the background unless `sweep: false`;
