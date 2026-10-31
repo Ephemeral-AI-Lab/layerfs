@@ -34,6 +34,7 @@
 // Commands go through ssh rather than `limactl shell` so the argv quoting is
 // this file's (ssh.js's `shellEscape`), not the CLI's. One call per step, one
 // attempt, no retry.
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { constants, cpSync, mkdtempSync, rmSync } from "node:fs";
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
@@ -204,6 +205,38 @@ export async function storeFree(name) {
   const kb = Number(stdout.trim().split("\n").pop().trim().split(/\s+/)[3]);
   return Number.isFinite(kb) ? kb * 1024 : null;
 }
+
+/**
+ * Step ②: a host folder's contents as one `tar` stream into a guest folder,
+ * through `argv` (the command that reads the stream on the far side). Both ends
+ * are killed when the copy passes its budget; `COPYFILE_DISABLE` keeps the Mac's
+ * tar from adding AppleDouble `._` entries.
+ */
+export function stream(command, args, source, what) {
+  return new Promise((resolve, reject) => {
+    const pack = spawn("tar", ["-C", source, "-cf", "-", "."], { env: { ...process.env, COPYFILE_DISABLE: "1" }, stdio: ["ignore", "pipe", "pipe"] });
+    const unpack = spawn(command, args, { stdio: ["pipe", "ignore", "pipe"] });
+    let err = "", tarErr = "";
+    const timer = setTimeout(() => {
+      pack.kill("SIGKILL");
+      unpack.kill("SIGKILL");
+      reject(new Error(`copy into ${what} did not end within ${COPY_MS / 1000} s`));
+    }, COPY_MS);
+    unpack.stderr.on("data", (chunk) => { err += chunk.toString(); });
+    pack.stderr.on("data", (chunk) => { tarErr += chunk.toString(); });
+    pack.on("error", (error) => { clearTimeout(timer); reject(error); });
+    unpack.on("error", (error) => { clearTimeout(timer); reject(error); });
+    unpack.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(`copy into ${what} failed (exit ${code}): ${(err || tarErr).trim()}`));
+    });
+    pack.stdout.pipe(unpack.stdin);
+  });
+}
+
+/** The tar stream's far side: make the folder and unpack into it, as root (vm:firecracker's copy). */
+export const UNPACK = ["sh", "-c", "mkdir -p \"$1\" && tar -C \"$1\" -xf -", "sh"];
 
 /**
  * Step ②, and an Init source: a host folder into a guest folder, as a copy the

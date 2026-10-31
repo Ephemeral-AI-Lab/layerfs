@@ -240,10 +240,13 @@ see the #527 platform pass): `microsandbox`
 the user provides, reached with the system `ssh` client; see
 [the SSH provider](#the-ssh-provider-any-linux-host) below), `lima` (one Lima
 `vmType: vz` instance per project, `limactl` 2.2.1; see
-[the Lima provider](#the-lima-provider-vz)).
+[the Lima provider](#the-lima-provider-vz)) and `firecracker` (one Firecracker
+microVM per project, nested in a Lima vz instance; see
+[the Firecracker provider](#the-firecracker-provider-nested-in-lima)).
 Each provider runs on its own host systems, checked when the settings resolve
-and refused `Unsupported` elsewhere: `apple-container` and `lima` on macOS
-only (vz is Apple's Virtualization.framework), `microsandbox` on Linux (KVM) and
+and refused `Unsupported` elsewhere: `apple-container`, `lima` and
+`firecracker` on macOS only (vz is Apple's Virtualization.framework, and
+Firecracker runs inside such an instance), `microsandbox` on Linux (KVM) and
 macOS (Apple silicon), `ssh` on Linux and macOS. No provider runs on a Windows host, since the placement maps this
 host's folders into the guest as POSIX paths (#527 step 8).
 
@@ -352,13 +355,13 @@ refuse any other the same way. `store.list` still lists the home's records, with
 folder)` and removed with `project.delete`.
 
 The real proof is `node api/runtime/test/verify/vm_real.mjs <sealed Linux
-bundle> [microsandbox|apple-container|lima]` (`VM_REAL_PREFIX`, default
+bundle> [microsandbox|apple-container|lima|firecracker]` (`VM_REAL_PREFIX`, default
 `lfs-`, starts every name it makes): two projects, each in its own VM — Init
 through each VM's worker, a fork, a write, a Sandbox, an exec as the nonroot
 identity with user namespaces blocked, a Commit, a stop/start of one VM and a
 worker restart, then a check that neither Store holds the other's Branch, and
 that removing one project leaves the other's VM running. The unit tests
-(`node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|stores|apple-container|ssh|lima|cleanup`)
+(`node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|stores|apple-container|ssh|lima|firecracker|cleanup`)
 use a stand-in provider CLI.
 
 ### The SSH provider (any Linux host)
@@ -476,6 +479,64 @@ The adapter's steps on this provider:
 
 One sample (#527, load 3.6): `vm_real.mjs <h39 bundle> lima` passed in 65.2 s
 for two projects, both VMs made, restarted and removed.
+
+### The Firecracker provider (nested in Lima)
+
+`vm:firecracker` runs one Firecracker microVM per project inside a Lima vz
+instance with nested virtualization (macOS has no KVM; nested KVM needs an
+Apple M3 or newer and macOS 15+). Per #516 it is pass/fail only: its timings
+describe the nesting. The Lima instance is the user's, like an SSH host: the
+adapter makes none, names it `LAYERFS_FIRECRACKER_LIMA` (default
+`layerfs-firecracker`) and proves what it needs before the first VM. In it,
+`LAYERFS_FIRECRACKER_DIR` (default `/var/lib/layerfs-firecracker`) holds:
+
+| File | What |
+| --- | --- |
+| `bin/firecracker` | the Firecracker VMM (v1.17.0 verified) |
+| `vmlinux` | the guest kernel, with FUSE, overlayfs, ext4 and virtio-net (the Firecracker CI 6.18 kernel has them) |
+| `rootfs.ext4` | the base root filesystem: `node` 22 or newer on root's PATH, an sshd that accepts the key, `sh`, `tar`, `cp`, `mount`, `findmnt`, `df`; its eth0 address comes from the kernel's `ip=` argument (or from the MAC, as the CI rootfs does) |
+| `id_ed25519` | the key the microVM's root accepts |
+
+The host must also have `/dev/kvm`, `mkfs.ext4`, `ip` and `flock`; a missing
+item is refused by name before any disk or VM is made.
+
+The adapter's steps on this provider:
+
+1. the Store disk is `<dir>/disks/<store>.ext4`, a sparse file of `storeSize`
+   made ext4 by `mkfs.ext4`, attached as the microVM's second drive and
+   mounted at `/layerfs/store` after boot;
+2. the VM is `<dir>/vms/<vm>`: its own copy of `rootfs.ext4`, a config file
+   for `firecracker --no-api --config-file` (`cpus`, `memory` in MiB, no PMU),
+   and a tap device `lfsfc<n>` with the /30 network `172.30.<n>.0` (host `.1`,
+   guest `.2`), `n` the lowest free number up to 250, taken under a lock. Guest
+   memory is on 2 MiB huge pages when the host has enough free
+   (`vm.nr_hugepages`): nested, every first touch of a 4 KiB page is a fault
+   through both hypervisors (#516: a 28–55 s boot became 1.9 s). The boot waits
+   up to 60 s for the guest's sshd (a readiness wait);
+3. guest commands run as root through two SSH hops: Lima's into the host,
+   then the host's into the microVM (point-to-point inside the host, so its
+   host key is not checked); the bundle goes in as one `tar` stream (there is
+   no shared folder);
+4. the private stream is `ssh -N -L 127.0.0.1:<host>:172.30.<n>.2:7070` to the
+   Lima instance with `ExitOnForwardFailure`, a process of this machine whose
+   record is in `LAYERFS_FIRECRACKER_STATE_DIR` (default
+   `~/.layerfs/firecracker`). A VM is running when both its Firecracker
+   process and that forward run; a VM whose forward ended reads as stopped,
+   and `start` reopens the forward without rebooting it;
+5. stop ends the forward, syncs and resets the guest (Firecracker exits on a
+   guest reset; SIGKILL after 5 s) and removes its tap; delete removes the VM's
+   folder and keeps the Store disk file unless `discardStore`.
+
+As on an SSH host, no folder is shared with this machine: Init sources are
+copied in, and the guest's `/layerfs/home` (Sandbox records, traces) is its
+own, not this machine's home.
+
+Verified (#527, one sample each, load 3.5): Firecracker v1.17.0, the CI
+kernel `vmlinux-6.18.56` and the CI `ubuntu-24.04.squashfs` with Node.js
+v22.23.4 added (both from `s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20261028-84df49062576-0/aarch64/`),
+in a Lima 2.2.1 vz instance with `nestedVirtualization: true` (4 CPUs, 4 GiB,
+1100 huge pages): one microVM booted to SSH in 6.6 s, and
+`LAYERFS_VM_MEMORY=1G vm_real.mjs <h39 bundle> firecracker` passed in 87.3 s.
 
 ## Docker
 

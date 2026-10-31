@@ -5,7 +5,7 @@
 // fixture keeps one VM record per project, maps each guest's absolute paths
 // under a temp folder, and starts the adapter's bundle worker so step ④'s
 // readiness is real.
-//   node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|stores|apple-container|ssh|lima|cleanup
+//   node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|stores|apple-container|ssh|lima|firecracker|cleanup
 import assert from "node:assert/strict";
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -51,7 +51,7 @@ function standIn(name, fixture, state) {
   };
 }
 
-/** The `limactl` and `ssh` stand-ins of vm:lima: one fixture, two names on PATH. */
+/** The `limactl` and `ssh` stand-ins of vm:lima and vm:firecracker: one fixture, two names on PATH. */
 function limaStandIn(state) {
   const bin = join(work, "lima-bin");
   mkdirSync(bin, { recursive: true });
@@ -64,7 +64,7 @@ function limaStandIn(state) {
   Object.assign(process.env, { FAKE_LIMA_STATE: state, FAKE_LIMA_NATIVE: FAKE, LIMA_HOME: join(state, "lima-home") });
   return () => {
     process.env.PATH = saved.PATH;
-    for (const name of ["FAKE_LIMA_STATE", "FAKE_LIMA_NATIVE", "LIMA_HOME"]) delete process.env[name];
+    for (const name of ["FAKE_LIMA_STATE", "FAKE_LIMA_NATIVE", "LIMA_HOME", "LAYERFS_FIRECRACKER_LIMA", "LAYERFS_FIRECRACKER_STATE_DIR", "FAKE_FC_NO_KVM"]) delete process.env[name];
   };
 }
 
@@ -146,8 +146,8 @@ try {
       for (const host of ["linux", "macos"]) assert.equal(resolveSettings({ home, platform: host, placement: `vm:${provider}` }).placement.provider, provider);
     }
     assert.equal(resolveSettings({ home, platform: "macos", placement: "vm:apple-container" }).placement.provider, "apple-container");
-    // Lima makes vz instances (Virtualization.framework)
-    for (const provider of ["lima"]) {
+    // Lima makes vz instances (Virtualization.framework), and Firecracker runs nested in one
+    for (const provider of ["lima", "firecracker"]) {
       for (const host of ["linux", "windows"]) {
         assert.throws(() => resolveSettings({ home, platform: host, placement: `vm:${provider}` }), { code: "Unsupported", message: new RegExp(`vm:${provider} runs on macOS hosts, not ${host === "linux" ? "Linux" : "Windows"}`) });
       }
@@ -629,6 +629,79 @@ try {
       await runtime.close();
       restoreWorker(work);
     }
+  } else if (selected === "firecracker") {
+    makeBundle();
+    const state = join(work, "lima");
+    mkdirSync(join(state, "vms"), { recursive: true });
+    const restore = limaStandIn(state);
+    // the Firecracker host is a Lima vz instance the user made and named
+    process.env.LAYERFS_FIRECRACKER_LIMA = "lfs-vm-test-fc-host";
+    process.env.LAYERFS_FIRECRACKER_STATE_DIR = join(state, "sessions");
+    const runtime = await LayerFSRuntime.open({ home, bundle, placement: "vm:firecracker", containerPrefix: prefix, platform: "macos", sweep: false });
+    try {
+      await assert.rejects(runtime.worker.start("shop"), /no Lima instance lfs-vm-test-fc-host to run Firecracker in/);
+      writeFileSync(join(state, "vms", "lfs-vm-test-fc-host.json"), JSON.stringify({ status: "Running", config: { vmType: "vz", nestedVirtualization: true } }));
+      // a host without /dev/kvm is refused by fact, before any disk or VM
+      process.env.FAKE_FC_NO_KVM = "1";
+      await assert.rejects(runtime.worker.start("shop"), /there is no \/dev\/kvm/);
+      delete process.env.FAKE_FC_NO_KVM;
+      assert.equal(existsSync(join(state, "fc")), false, "nothing was made on a host that cannot run it");
+
+      const started = await deadline(60_000, "worker.start", runtime.worker.start("shop"));
+      assert.deepEqual([started.vm.state, started.worker.state, started.vm.store, started.vm.home], ["running", "running", storeName("shop"), home]);
+      const blog = await deadline(60_000, "worker.start blog", runtime.worker.start("blog"));
+      assert.equal(blog.worker.state, "running");
+      const marked = (op) => calls(state).filter((argv) => remoteOf(argv)?.[5]?.startsWith(`# layerfs-firecracker:${op}`));
+      // every host step is root in the named Lima host, in its folder
+      assert.ok(marked("create").every((argv) => argv[2] === "lima-lfs-vm-test-fc-host" && remoteOf(argv)[7] === "/var/lib/layerfs-firecracker"));
+      assert.deepEqual(marked("create").map((argv) => remoteOf(argv).slice(8)), [
+        [vmName("shop"), `/var/lib/layerfs-firecracker/disks/${storeName("shop")}.ext4`, "2", "2048"],
+        [vmName("blog"), `/var/lib/layerfs-firecracker/disks/${storeName("blog")}.ext4`, "2", "2048"],
+      ], "one microVM per project, each on its own Store disk file, sized from settings.vm");
+      assert.equal(marked("disk").length, 2);
+      assert.equal(marked("boot").length, 2);
+      // ④ a forward from this host's loopback to each microVM's own address
+      const shopEndpoint = endpointAt("shop"), blogEndpoint = endpointAt("blog");
+      const forwards = calls(state).filter((argv) => argv.includes("-N")).map((argv) => argv[argv.indexOf("-L") + 1]);
+      assert.deepEqual(forwards, [`127.0.0.1:${shopEndpoint.port}:172.30.1.2:7070`, `127.0.0.1:${blogEndpoint.port}:172.30.2.2:7070`]);
+      assert.ok(calls(state).filter((argv) => argv.includes("-N")).every((argv) => argv.includes("ExitOnForwardFailure=yes") && argv.includes("ControlPath=none")), "its own connection: a forward handed to Lima's control master would outlive its record");
+      assert.notEqual(shopEndpoint.secret, blogEndpoint.secret);
+      assert.ok(!JSON.stringify(calls(state)).includes(shopEndpoint.secret), "no call carried a secret in its arguments");
+      // ② ③ in the microVM, through the host's guest script
+      const guestCalls = marked("guest").map((argv) => remoteOf(argv).slice(9).join(" "));
+      assert.ok(guestCalls.some((line) => /max_user_namespaces/.test(line)));
+      assert.ok(guestCalls.some((line) => /nohup node/.test(line)));
+      assert.ok(guestCalls.some((line) => line.includes("tar -C") && line.endsWith("/layerfs/bundle")));
+      assert.equal(existsSync(guestPath(state, vmName("shop"), "/layerfs/bundle/.sealed")), true, "the bundle reached the microVM");
+      assert.equal(readFileSync(guestPath(state, vmName("shop"), "/proc/sys/user/max_user_namespaces"), "utf8").trim(), "0");
+      // a forward that ended reads as a stopped VM; start opens it again without a boot
+      process.kill(JSON.parse(readFileSync(join(state, "sessions", `${vmName("shop")}.json`), "utf8")).pid);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      assert.equal((await runtime.vm.status("shop")).state, "stopped");
+      const reopened = await deadline(60_000, "worker.start after the forward ended", runtime.worker.start("shop"));
+      assert.deepEqual([reopened.vm.state, reopened.worker.state], ["running", "running"]);
+      assert.equal(marked("boot").length, 2, "the microVM still ran: no second boot");
+      assert.equal(endpointAt("shop").port, shopEndpoint.port, "the same port");
+      // ⑤ stop resets the microVM and ends the forward; start boots it again
+      assert.equal((await runtime.vm.stop("shop")).state, "stopped");
+      assert.equal(marked("stop").length, 1);
+      assert.equal(existsSync(join(state, "sessions", `${vmName("shop")}.json`)), false, "its forward record is gone");
+      assert.equal((await deadline(60_000, "worker.start after stop", runtime.worker.start("shop"))).worker.state, "running");
+      assert.equal(marked("boot").length, 3);
+      // V8 and the delete that discards the Store disk file
+      project("shop");
+      await assert.rejects(runtime.vm.delete("shop", { confirm: "delete" }), { code: "Unsupported", message: /never destroys a Store that was not pushed/ });
+      forget("shop");
+      assert.equal((await runtime.vm.delete("shop", { confirm: "delete", discardStore: true })).store, "discarded");
+      assert.equal(existsSync(join(state, "fc", "vms", vmName("shop"))), false, "the VM's folder is gone");
+      assert.equal(existsSync(join(state, "fc", "disks", `${storeName("shop")}.json`)), false, "and its Store disk");
+      assert.equal(existsSync(join(state, "fc", "disks", `${storeName("blog")}.json`)), true, "the other project's disk stays");
+      assert.equal((await runtime.vm.status("blog")).worker.state, "running");
+    } finally {
+      restore();
+      await runtime.close();
+      restoreWorker(work);
+    }
   } else if (selected === "cleanup") {
     // H39v's two findings: a provider create that fails must leave nothing
     // behind — no Store volume for Apple Container (the CLI makes one before it
@@ -670,7 +743,7 @@ try {
       rmSync(hidden, { recursive: true, force: true });
     }
   } else {
-    throw new Error("select settings, flow, two, bundle, delete, hosts, stores, apple-container, ssh, lima or cleanup");
+    throw new Error("select settings, flow, two, bundle, delete, hosts, stores, apple-container, ssh, lima, firecracker or cleanup");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });
@@ -697,7 +770,7 @@ function restoreWorker(folder) {
       for (const file of readdirSync(sessions)) {
         try {
           const session = JSON.parse(readFileSync(join(sessions, file), "utf8"));
-          if (session.forwardPid) process.kill(session.forwardPid);
+          if (session.forwardPid ?? session.pid) process.kill(session.forwardPid ?? session.pid);
         } catch {}
       }
     }

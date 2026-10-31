@@ -16,11 +16,12 @@ const DEFAULT_DOCKER = "/var/run/docker.sock";
  * (#527 step 8). Apple Container is macOS only; Microsandbox runs libkrun
  * microVMs on Linux (KVM) and macOS (Apple silicon); `ssh` needs only the
  * system ssh client and tar; `lima` makes `vmType: vz` instances, which is
- * Apple's Virtualization.framework, so it is macOS only. None runs on Windows: the VM placement
+ * Apple's Virtualization.framework; `firecracker` runs nested in such a Lima
+ * instance, so it is macOS only too. None runs on Windows: the VM placement
  * maps this host's folders into the guest as POSIX paths.
  */
 const PROVIDERS = {
-  microsandbox: ["linux", "macos"], "apple-container": ["macos"], ssh: ["linux", "macos"], lima: ["macos"],
+  microsandbox: ["linux", "macos"], "apple-container": ["macos"], ssh: ["linux", "macos"], lima: ["macos"], firecracker: ["macos"],
 };
 const NAMES = { linux: "Linux", macos: "macOS", windows: "Windows" };
 /** The VM's own settings: the image that holds node and the guest base, and its size. */

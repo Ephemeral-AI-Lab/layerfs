@@ -14,7 +14,8 @@
 // onto a root that boot did not start, the next `sandbox.create` reclaims it and
 // reuses its number, and that Sandbox runs from the same unpacked image. Everything it made (both VMs, their Store disks, the home and
 // the sources) is removed afterwards.
-//   node api/runtime/test/verify/vm_real.mjs <sealed Linux bundle> [microsandbox|apple-container|lima]
+//   node api/runtime/test/verify/vm_real.mjs <sealed Linux bundle> [microsandbox|apple-container|lima|firecracker]
+// vm:firecracker needs its Lima host (LAYERFS_FIRECRACKER_LIMA, see api/docs/runtime.md).
 // VM_REAL_PREFIX (default `lfs-`) starts every VM, disk and container name.
 // Needs that provider's CLI and the bundle built for the host's Linux VM
 // (aarch64 on an M-series Mac), with a Sandbox image at `images/<64 hex>.tar`.
@@ -29,7 +30,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SELF = fileURLToPath(import.meta.url);
-const CLI = { microsandbox: "msb", "apple-container": "container", lima: "limactl" };
+const CLI = { microsandbox: "msb", "apple-container": "container", lima: "limactl", firecracker: "limactl" };
 
 /** An agent process: it names its project, and the endpoint of that project's VM comes from the deployment. */
 async function agent(project, deployment, phase = undefined, extra = {}) {
@@ -203,7 +204,7 @@ if (process.argv[2] === "agent") {
 
 const [bundle, provider = "microsandbox"] = process.argv.slice(2);
 if (!CLI[provider] || !bundle || process.platform !== "darwin") {
-  console.error("usage: vm_real.mjs <sealed Linux bundle> [microsandbox|apple-container|lima] (macOS host)");
+  console.error("usage: vm_real.mjs <sealed Linux bundle> [microsandbox|apple-container|lima|firecracker] (macOS host)");
   process.exit(2);
 }
 if (!existsSync(bundle)) {
@@ -217,7 +218,7 @@ const { endpointFile } = await import("../../src/platform/shared.js");
 // own disk (filesystem, image cache), which no public call answers
 const DRIVER = {
   microsandbox: "../../src/platform/vm/microsandbox.js", "apple-container": "../../src/platform/vm/apple-container.js",
-  lima: "../../src/platform/vm/lima.js",
+  lima: "../../src/platform/vm/lima.js", firecracker: "../../src/platform/vm/firecracker.js",
 };
 const driver = (await import(DRIVER[provider])).default;
 
@@ -332,9 +333,12 @@ try {
   // VM kept is the same directory, and the record it left is reclaimed by the
   // resume phase, which then starts a Sandbox on that same unpack
   assert.deepEqual((await disk("shop")).stat, unpacked.stat, "the image cache survived the VM restart unchanged");
-  // the Sandbox the reboot ended is still a record in the home, not a running Sandbox
-  const record = join(home, "shop", "sandboxes", left, "sandbox.record");
-  assert.ok(existsSync(record), `the Sandbox record survived the VM restart: ${record}`);
+  // the Sandbox the reboot ended is still a record in the home, not a running Sandbox.
+  // A microVM provider mounts this home in the guest; Firecracker shares no folder,
+  // so its guest home is its own and the record is read there
+  const record = join("shop", "sandboxes", left, "sandbox.record");
+  const recorded = async () => (provider === "firecracker" ? (await guest("shop", `test -f /layerfs/home/${record} && echo yes`)) === "yes" : existsSync(join(home, record)));
+  assert.ok(await recorded(), `the Sandbox record survived the VM restart: ${record}`);
   console.log("stopped and restarted the project's VM: ok");
 
   // the restarted worker takes a new secret, and the project's Commit is still readable
@@ -343,7 +347,7 @@ try {
   const resumed = await agent("shop", shopEnv, "resume", { AGENT_LEFTOVER: left });
   assert.equal(resumed.code, 0, resumed.text);
   console.log(resumed.text.trim());
-  assert.ok(!existsSync(record), "the record the previous boot left was reclaimed by the resumed agent");
+  assert.ok(!(await recorded()), "the record the previous boot left was reclaimed by the resumed agent");
 
   // removing one project takes its own VM and Store disk, and leaves the other alone
   const removed = await runtime.project.delete("blog", { confirm: "blog", stopSandboxes: true });

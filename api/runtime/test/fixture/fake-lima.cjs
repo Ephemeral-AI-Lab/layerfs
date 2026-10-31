@@ -1,21 +1,28 @@
-// The `limactl` and `ssh` stand-in for @layerfs/runtime's vm:lima tests
-// (#527 platform pass): no VM. Called as
+// The `limactl` and `ssh` stand-in for @layerfs/runtime's vm:lima and
+// vm:firecracker tests (#527 platform pass): no VM. Called as
 // `fake-lima.cjs limactl …` or `fake-lima.cjs ssh …` (the test puts one shim of
-// each name on PATH). It answers exactly the calls `platform/vm/lima.js` makes,
-// and maps each guest's absolute paths
+// each name on PATH). It answers exactly the calls `platform/vm/lima.js` and
+// `platform/vm/firecracker.js` make, and maps each guest's absolute paths
 // under FAKE_LIMA_STATE/guest/<vm>, so guest reads and writes are real files:
 //
 //   limactl list --json NAME | create --name N --tty=false - | start --tty=false N
 //   limactl stop N | delete --force N | disk list --json | disk create D … | disk delete D
 //   ssh -F <dir>/ssh.config lima-N -- sudo -n -- ARGV…      a root command in instance N
 //       (a Lima VM's /layerfs/home is the host folder its template mounts there)
+//   ssh -F … -N -o ExitOnForwardFailure=yes -L 127.0.0.1:H:IP:7070 lima-N   a forward
 //
 // ARGV arrives shell-quoted, as the remote shell would see it, and is unquoted
-// here. A started worker is the bundle's own worker/server.js with the stand-in
-// binding, listening on the VM's forwarded host port. Every call is appended to
-// calls.jsonl as { at, tool, argv } with ARGV unquoted.
+// here. In a Lima VM it is the adapter's guest command; in the Firecracker host
+// it is one of firecracker.js's marked scripts (`# layerfs-firecracker:<op>`),
+// and the `guest` script's own arguments are unquoted once more for the
+// microVM. A started worker is the bundle's own worker/server.js with the
+// stand-in binding: a Lima VM's listens on its forwarded host port, a microVM's
+// on a free port behind the stand-in forward. `FAKE_FC_NO_KVM=1` makes the
+// Firecracker host check fail. Every call is appended to calls.jsonl as
+// { at, tool, argv } with ARGV unquoted.
 const { appendFileSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } = require("node:fs");
 const { spawn } = require("node:child_process");
+const { createServer, connect } = require("node:net");
 const { dirname, join } = require("node:path");
 
 const state = process.env.FAKE_LIMA_STATE;
@@ -50,6 +57,12 @@ function endWorker(vm) {
   rmSync(pid, { force: true });
 }
 
+/** A port nothing listens on now. */
+const freePort = () => new Promise((resolve) => {
+  const server = createServer();
+  server.listen(0, "127.0.0.1", () => { const { port } = server.address(); server.close(() => resolve(port)); });
+});
+
 /** The bundle's worker in guest `vm`, listening on `port`. */
 function launchWorker(vm, port) {
   endWorker(vm);
@@ -66,7 +79,7 @@ function launchWorker(vm, port) {
   writeFileSync(guest("/layerfs/state/worker.pid"), `${child.pid}\n`);
 }
 
-/** A guest command as the adapter sends it; answers its exit code. */
+/** A guest command (Lima VM or microVM) as the adapters send it; answers its exit code. */
 async function guestCommand(vm, args, workerPort) {
   const guest = guestIn(vm);
   const [cmd, flag, script, , ...rest] = args;
@@ -139,7 +152,89 @@ function limactl() {
   } else fail(`fake limactl does not know ${command}`);
 }
 
+// --- the Firecracker host's marked scripts ---
+
+const fcDir = (name) => file("fc", "vms", name);
+const fcIp = (name) => `172.30.${readJson(join(fcDir(name), "vm.json")).index}.2`;
+
+async function firecrackerScript(op, args) {
+  const [, name] = args;
+  if (op === "check") {
+    if (process.env.FAKE_FC_NO_KVM) { console.error("there is no /dev/kvm (the Lima instance needs nestedVirtualization: true, an M3 or newer and macOS 15+)"); return 1; }
+    return 0;
+  }
+  if (op === "disk") {
+    const disk = file("fc", "disks", `${args[1]}.json`);
+    if (existsSync(disk)) return 0;
+    saveJson(disk, { name: args[1], size: args[2] });
+    process.stdout.write("made\n");
+    return 0;
+  }
+  if (op === "create") {
+    if (existsSync(fcDir(name))) { console.error(`${fcDir(name)} already exists`); return 17; }
+    const used = existsSync(file("fc", "vms")) ? readdirSync(file("fc", "vms")).map((vm) => readJson(join(fcDir(vm), "vm.json")).index) : [];
+    let index = 1;
+    while (used.includes(index)) index++;
+    saveJson(join(fcDir(name), "vm.json"), { index, store: args[2], cpus: Number(args[3]), mem: Number(args[4]), vmm: "stopped" });
+    writeFileSync(join(fcDir(name), "meta.json"), stdin());
+    return 0;
+  }
+  if (op === "boot" || op === "stop") {
+    const vm = readJson(join(fcDir(name), "vm.json"));
+    if (!vm) return 0;
+    if (op === "stop") endWorker(name);
+    vm.vmm = op === "boot" ? "running" : "stopped";
+    saveJson(join(fcDir(name), "vm.json"), vm);
+    if (op === "stop" && args[2] === "delete") rmSync(fcDir(name), { recursive: true, force: true });
+    return 0;
+  }
+  if (op === "inspect") {
+    const vm = readJson(join(fcDir(name), "vm.json"));
+    if (!vm) return 3;
+    process.stdout.write(`${vm.vmm}\n${fcIp(name)}\n${readFileSync(join(fcDir(name), "meta.json"), "utf8")}`);
+    return 0;
+  }
+  if (op === "guest") {
+    const guestArgv = args.slice(2).map(unquote);
+    const workerPort = async () => {
+      const port = await freePort();
+      writeFileSync(join(fcDir(name), "worker.port"), `${port}\n`);
+      return port;
+    };
+    return guestCommand(name, guestArgv, workerPort);
+  }
+  console.error(`fake firecracker host does not know ${op}`);
+  return 1;
+}
+
+/** The forward to a microVM: lazy, it reads the worker's port when a client connects. */
+function forward(hostPort, ip) {
+  const server = createServer((client) => {
+    client.on("error", () => {});
+    const vm = (existsSync(file("fc", "vms")) ? readdirSync(file("fc", "vms")) : []).find((name) => fcIp(name) === ip);
+    const portFile = vm ? join(fcDir(vm), "worker.port") : null;
+    let tries = 0;
+    const dial = () => {
+      const port = portFile && existsSync(portFile) ? Number(readFileSync(portFile, "utf8").trim()) : NaN;
+      if (!Number.isFinite(port)) return tries++ < 20 ? setTimeout(dial, 50) : client.destroy();
+      const upstream = connect(port, "127.0.0.1");
+      upstream.on("error", () => client.destroy());
+      client.pipe(upstream);
+      upstream.pipe(client);
+    };
+    dial();
+  });
+  server.on("error", (error) => { console.error(`bind [127.0.0.1]:${hostPort}: ${error.code === "EADDRINUSE" ? "Address already in use" : error.message}`); process.exit(255); });
+  server.listen(hostPort, "127.0.0.1");
+}
+
 async function ssh() {
+  if (argv.includes("-N")) {
+    log(argv);
+    const spec = /^127\.0\.0\.1:(\d+):([\d.]+):(\d+)$/.exec(argv[argv.indexOf("-L") + 1] ?? "");
+    if (!spec) fail("ssh: no forward to open", 255);
+    return forward(Number(spec[1]), spec[2]);
+  }
   const dash = argv.indexOf("--");
   const host = argv[dash - 1].replace(/^lima-/, "");
   const remote = argv.slice(dash + 1).map(unquote);
@@ -148,6 +243,9 @@ async function ssh() {
   const args = remote.slice(3);
   const vm = readJson(vmFile(host));
   if (!vm || vm.status !== "Running") fail(`ssh: connect to lima-${host}: Connection refused`, 255);
+  const marker = args[0] === "sh" && /^# layerfs-firecracker:(\w+)/.exec(args[2] ?? "")?.[1];
+  if (marker) process.exit(await firecrackerScript(marker, args.slice(4)));
+  if (args[0] === "sh" && args[2] === "rm -f \"$1\"") { rmSync(file("fc", "disks", `${args[4].split("/").pop().replace(/\.ext4$/, "")}.json`), { force: true }); return; }
   const port = vm.config.portForwards?.find((rule) => rule.guestPort)?.hostPort;
   process.exit(await guestCommand(host, args, async () => port));
 }
