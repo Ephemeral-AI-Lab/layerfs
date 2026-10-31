@@ -365,7 +365,8 @@ const stores = {
   },
 };
 
-/** The guest home, and the deployment inside the project's VM: native Sandboxes, the namespace backend. */
+/** The guest home, and the deployment inside the project's VM: native Sandboxes, the namespace
+ * backend, named here rather than read from this process's environment (#527 F4). */
 export function deploymentEnv(settings, project) {
   // a VM's projects open the SQLite Store on that VM's disk only (#527 F3)
   if (project.kind === "postgresql") throw refuse("Unsupported", `${project.name} is in the PostgreSQL Store ${project.store}, and this home is placed in ${settings.placement.name}: its projects open only the SQLite Store on their own VM's disk`, null);
@@ -373,7 +374,7 @@ export function deploymentEnv(settings, project) {
   return {
     HOME: callHome(settings),
     SANDBOX: "native",
-    SANDBOX_BACKEND: process.env.LAYERFS_SANDBOX_BACKEND || "namespaces",
+    SANDBOX_BACKEND: "namespaces",
     DAEMON: GUEST.daemon,
     LOCAL_DIR: GUEST.local,
     // the Sandbox image this VM's bundle carries, when it carries one (V7):

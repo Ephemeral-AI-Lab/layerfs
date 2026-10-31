@@ -61,6 +61,12 @@ checked once at `open`), `volumes` (Linux),
 in one Linux VM, below) and on Windows `wsl: { distribution, user, node, home }`. A
 missing setting does not refuse `open`: `status().missing` lists it.
 
+The runtime names each project's Sandbox backend itself (#527 F4): a `local`
+home's clients get `LAYERFS_SANDBOX=docker` with `LAYERFS_SANDBOX_BACKEND`,
+`LAYERFS_LOCAL_DIR` and `LAYERFS_IMAGE_ARCHIVE` unset, and a `vm:` home's get
+native Sandboxes on the namespaces backend. Values of those settings in the
+runtime's own environment do not reach its clients.
+
 ## Init
 
 `start_init(name, folder, { image, timeout })` refuses a bad name, folder,
@@ -258,8 +264,8 @@ The adapter's five steps, each attempted once, all for one named project:
 Init runs as one more call to that project's worker: `platform.init` starts its
 VM and copies the source folder into `/layerfs/import`, and `LayerFS.init`
 reads it there. `deploymentEnv` gives clients and agents the VM's settings:
-`LAYERFS_SANDBOX=native`, `LAYERFS_SANDBOX_BACKEND=namespaces` (an explicit
-`LAYERFS_SANDBOX_BACKEND` in the caller's environment wins), `LAYERFS_DAEMON`,
+`LAYERFS_SANDBOX=native`, `LAYERFS_SANDBOX_BACKEND=namespaces` (always: a
+`LAYERFS_SANDBOX_BACKEND` in the caller's environment does not replace it), `LAYERFS_DAEMON`,
 `LAYERFS_LOCAL_DIR`, `LAYERFS_HOME=/layerfs/home`, the Store's
 `LAYERFS_STORE_PATH`, this project's `LAYERFS_WORKER_ENDPOINT`, and the bundle
 image's `LAYERFS_IMAGE` when it has one — no `LAYERFS_DOCKER` or `_VOLUME`.

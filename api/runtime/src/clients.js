@@ -9,17 +9,23 @@ import { callHome } from "./settings.js";
 
 const IDLE_MS = 60_000;
 
+/** The local placement's Sandbox backend: Docker, named rather than read
+ * from this process's environment (#527 F4). "" unsets a native-only setting
+ * an ambient LAYERFS_SANDBOX_BACKEND, _LOCAL_DIR or _IMAGE_ARCHIVE would set. */
+const DOCKER_BACKEND = { SANDBOX: "docker", SANDBOX_BACKEND: "", LOCAL_DIR: "", IMAGE_ARCHIVE: "" };
+
 /** The environment one project's client (and its agents' bash calls) use. A
  * platform may replace it whole (`deploymentEnv`), as a `vm:<provider>` home
  * does: its deployment is native Sandboxes in the VM's namespace backend, not
- * host Docker. A project of a PostgreSQL Store (#506) has no volume; its
- * Store path is `postgresql:<store>`, and its connection's URL is added only
- * when the call gave one (`project.url`). */
+ * host Docker. Otherwise the backend is Docker. A project of a PostgreSQL
+ * Store (#506) has no volume; its Store path is `postgresql:<store>`, and its
+ * connection's URL is added only when the call gave one (`project.url`). */
 export function deploymentEnv(settings, platform, project) {
   if (platform.deploymentEnv) return platform.deploymentEnv(settings, project);
   if (project.kind === "postgresql") {
     return {
       HOME: callHome(settings),
+      ...DOCKER_BACKEND,
       DOCKER: settings.docker,
       IMAGE: project.image ?? settings.image ?? "",
       DAEMON: settings.daemon ?? "",
@@ -32,6 +38,7 @@ export function deploymentEnv(settings, platform, project) {
   }
   return {
     HOME: callHome(settings),
+    ...DOCKER_BACKEND,
     DOCKER: settings.docker,
     IMAGE: project.image ?? settings.image ?? "",
     DAEMON: settings.daemon ?? "",

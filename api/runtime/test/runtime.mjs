@@ -1,6 +1,6 @@
 // @layerfs/runtime with the agent's stand-in binding and a stub Docker (#428):
 // no Store, Docker or daemon. One case per command:
-//   node api/runtime/test/runtime.mjs surface|home-mode|projects|init|state|events|leftovers|sandboxes|volumes|transport-order|macos-worker|worker-frames|docker-default|worker-docker|stores
+//   node api/runtime/test/runtime.mjs surface|home-mode|projects|init|state|events|leftovers|sandboxes|volumes|transport-order|macos-worker|worker-frames|docker-default|worker-docker|stores|backend
 import assert from "node:assert/strict";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -697,8 +697,35 @@ try {
     assert.equal(JSON.parse(readFileSync(join(home, "stores.json"), "utf8")).version, 2);
     rmSync(folder, { recursive: true, force: true });
     await runtime.close();
+  } else if (selected === "backend") {
+    // #527 F4: the local deployment names Docker; ambient native settings in this process do not leak into it
+    const ambient = { SANDBOX: "native", SANDBOX_BACKEND: "namespaces", LOCAL_DIR: "/ambient/local", IMAGE_ARCHIVE: "/ambient/image.tar" };
+    for (const [name, value] of Object.entries(ambient)) process.env[`LAYERFS_${name}`] = value;
+    try {
+      const { runtime } = await opened();
+      project("shop");
+      mkdirSync(join(home, ".runtime", "projects"), { recursive: true });
+      writeFileSync(join(home, ".runtime", "projects", "shop.json"), JSON.stringify({ name: "shop", volume: "vol-shop" }));
+      native.sandboxList = [];
+      native.workspaceList = [];
+      const before = native.calls.length;
+      await runtime.project.get_state("shop");
+      const deploy = native.args[before].deploy;
+      assert.equal(native.calls[before], "project.list_branches");
+      assert.equal(deploy.sandbox, "docker", "the local placement names its backend");
+      assert.deepEqual(["sandboxBackend", "localDir", "imageArchive"].filter((name) => name in deploy), [], "no native-only setting leaks in");
+      assert.equal(deploy.volume, "vol-shop");
+      const { deploymentEnv } = await import("../src/clients.js");
+      const pg = deploymentEnv(runtime.settings, runtime.platform, { name: "api", kind: "postgresql", store: "main" });
+      assert.deepEqual([pg.SANDBOX, pg.SANDBOX_BACKEND, pg.LOCAL_DIR, pg.IMAGE_ARCHIVE], ["docker", "", "", ""], "a PostgreSQL project's deployment names it too");
+      await runtime.close();
+      // the ambient values are this process's again once the client is made
+      assert.deepEqual(Object.keys(ambient).map((name) => process.env[`LAYERFS_${name}`]), Object.values(ambient));
+    } finally {
+      for (const name of Object.keys(ambient)) delete process.env[`LAYERFS_${name}`];
+    }
   } else {
-    throw new Error("select surface, home-mode, projects, init, state, events, leftovers, sandboxes, volumes, transport-order, macos-worker, worker-frames, docker-default, worker-docker or stores");
+    throw new Error("select surface, home-mode, projects, init, state, events, leftovers, sandboxes, volumes, transport-order, macos-worker, worker-frames, docker-default, worker-docker, stores or backend");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });
