@@ -1,8 +1,6 @@
 //! One exact runtime observation, structurally decoded without retaining Arguments.
-use super::{
-    json::{once, Json},
-    Docker,
-};
+use super::Docker;
+use crate::backend::json::{once, Json};
 use crate::{ContainerId, ExecId, ExecInspection, RuntimeError, WireFailure};
 impl Docker {
     /// Reads one coherent runtime snapshot. PID is diagnostic, never a signal target.

@@ -20,9 +20,15 @@ pub(crate) struct Paths {
     pub(crate) bin: PathBuf,
     /// The init stage's inputs, `<directory>/config/helper.spec`, 0600.
     pub(crate) spec: PathBuf,
-    /// The private root, `<directory>.root`; the init stage mounts a tmpfs on
-    /// it and pivots to it, so it is empty again once the namespaces end.
+    /// The private root, `<directory>.root`; the init stage mounts the
+    /// Sandbox's overlay on it and pivots to it, so it is empty again once the
+    /// namespaces end.
     pub(crate) root: PathBuf,
+    /// The Sandbox's own writable layer of that overlay,
+    /// `<directory>/overlay/upper`, and the overlay's work directory beside
+    /// it: root-owned 0700, and deleted with the directory.
+    pub(crate) upper: PathBuf,
+    pub(crate) work: PathBuf,
 }
 
 impl Paths {
@@ -42,6 +48,8 @@ impl Paths {
             bin: local.directory.join("bin").join(DAEMON),
             spec: local.directory.join("config").join("helper.spec"),
             root: PathBuf::from(root),
+            upper: local.directory.join("overlay").join("upper"),
+            work: local.directory.join("overlay").join("work"),
             local,
         })
     }

@@ -135,6 +135,7 @@ export class LayerFS {
         ...(env("CONTAINER_PREFIX") ? { containerPrefix: env("CONTAINER_PREFIX") } : {}),
         ...(env("SANDBOX") ? { sandbox: env("SANDBOX") } : {}),
         ...(env("LOCAL_DIR") ? { localDir: env("LOCAL_DIR") } : {}),
+        ...(env("IMAGE_ARCHIVE") ? { imageArchive: env("IMAGE_ARCHIVE") } : {}),
         ...(env("DAEMON_HOST") ? { daemonHost: env("DAEMON_HOST") } : {}),
       },
       storePolicy: env("STORE_POLICY"),

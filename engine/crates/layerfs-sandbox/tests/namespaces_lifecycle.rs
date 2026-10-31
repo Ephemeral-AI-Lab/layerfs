@@ -1,37 +1,64 @@
 //! The namespace backend's Linux lifecycle and the #512 parity checks: a
 //! Sandbox's daemon runs in its own mount, PID and IPC namespaces and its own
-//! cgroup, commands enter them as a nonroot identity with no capabilities and
-//! no-new-privs, another Sandbox's processes and paths are invisible, and a
-//! close leaves no process, mount or cgroup behind.
+//! cgroup, on a root that is the Sandbox image with its own writable layer,
+//! commands enter them as a nonroot identity with no capabilities and
+//! no-new-privs, another Sandbox's processes, paths and writes are invisible,
+//! and a close leaves no process, mount, writable layer or cgroup behind.
 //!
 //! It needs root, `/dev/fuse`, cgroup v2 and `user.max_user_namespaces=0`; it
 //! starts a stub daemon (a shell script that prints the listener line), so no
-//! Store or real daemon is involved. Without those conditions it reports why
-//! and returns, and the run is not proof.
+//! Store or real daemon is involved. The image is this host's own userland in
+//! a docker-archive, so the stub and the tools the checks run exist in it and
+//! nowhere else in the Sandbox. Without those conditions it reports why and
+//! returns, and the run is not proof.
 #![cfg(target_os = "linux")]
+#[allow(dead_code)]
+mod support {
+    pub mod image;
+}
 use layerfs_sandbox::{
     backend::namespaces::{NamespaceProvider, Sandbox},
     provider::{LaunchRequest, ProviderLaunchOptions, SandboxRecord},
-    CommandIdentity, ExecRequest, RuntimeError,
+    CommandIdentity, ExecRequest, Image, RuntimeError,
 };
 use std::{
+    collections::BTreeSet,
     fs,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
+use support::image::{archive, hex, Tar, DIGEST};
 
 /// The port the stub daemon claims; nothing listens on it.
 const PORT: u16 = 40404;
 
+/// The programs the checks below run: each is copied into the image from this
+/// host, with the libraries `ldd` names for it.
+const PROGRAMS: [&str; 12] = [
+    "/bin/sh",
+    "/bin/ls",
+    "/bin/cat",
+    "/bin/grep",
+    "/bin/test",
+    "/bin/echo",
+    "/bin/sleep",
+    "/bin/setsid",
+    "/bin/mkdir",
+    "/bin/mount",
+    "/bin/unshare",
+    "/bin/id",
+];
+
 /// One test's private directories: the runtime root, the Store's directory,
-/// the stub daemon and a copy of the helper beside it.
+/// the stub daemon, a copy of the helper beside it, and the image archive.
 struct Fixture {
     base: PathBuf,
     root: PathBuf,
     store: PathBuf,
     daemon: PathBuf,
+    archive: PathBuf,
 }
 
 impl Fixture {
@@ -59,16 +86,22 @@ impl Fixture {
         fs::set_permissions(&daemon, fs::Permissions::from_mode(0o755)).unwrap();
         let helper = helper();
         fs::copy(&helper, base.join("layerfs-sandbox-helper")).unwrap();
+        let archive = image(&base);
         Self {
             base,
             root,
             store,
             daemon,
+            archive,
         }
     }
 
     fn provider(&self) -> Result<NamespaceProvider, RuntimeError> {
         NamespaceProvider::new(&self.root)
+    }
+
+    fn image(&self) -> Image {
+        Image::parse(DIGEST).unwrap()
     }
 
     fn request(&self, name: &str) -> LaunchRequest {
@@ -82,6 +115,8 @@ impl Fixture {
                 command_identity: CommandIdentity { uid: 501, gid: 20 },
                 environment: vec![("LAYERFS_KERNEL".to_owned(), "fuse".to_owned())],
                 store: self.store.join("sealed.sqlite"),
+                image: self.image(),
+                archive: self.archive.clone(),
             },
         }
     }
@@ -94,6 +129,10 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        if std::env::var_os("LAYERFS_H38_KEEP").is_some() {
+            eprintln!("kept {}", self.base.display());
+            return;
+        }
         let _ = fs::remove_dir_all(&self.base);
     }
 }
@@ -108,6 +147,63 @@ fn helper() -> PathBuf {
         "build the helper first: cargo build -p layerfs-sandbox --bin layerfs-sandbox-helper"
     );
     helper
+}
+
+/// One docker-archive holding this host's own userland for the programs above,
+/// plus a marker file a command can read and `/var/tmp`, the one directory a
+/// command may write to.
+fn image(base: &Path) -> PathBuf {
+    let mut tar = Tar::new()
+        .directory("etc/", 0o755)
+        .file("etc/layerfs-image", 0o644, b"layerfs image\n")
+        .directory("var/", 0o755)
+        .directory("var/tmp/", 0o1777);
+    let mut copied = BTreeSet::new();
+    for program in PROGRAMS {
+        let Ok(source) = std::fs::canonicalize(program) else {
+            continue;
+        };
+        tar = copy(tar, &mut copied, &source, Path::new(program));
+        for library in libraries(&source) {
+            tar = copy(tar, &mut copied, &library, &library);
+        }
+    }
+    assert!(
+        copied.contains(Path::new("/bin/sh")) && copied.contains(Path::new("/bin/ls")),
+        "the host has no userland to build an image from"
+    );
+    archive(base, "image", DIGEST, vec![tar.finish()])
+}
+
+/// The same bytes at `path` in the image, with the source's mode.
+fn copy(mut tar: Tar, copied: &mut BTreeSet<PathBuf>, source: &Path, path: &Path) -> Tar {
+    if !copied.insert(path.to_path_buf()) {
+        return tar;
+    }
+    let Ok(body) = fs::read(source) else {
+        return tar;
+    };
+    let mode = fs::metadata(source).map_or(0o755, |metadata| metadata.permissions().mode() & 0o777);
+    // inside the image the path is relative: the tar carries `/bin/sh` as
+    // `bin/sh`, and the root's own `/` is the image itself
+    let text = path.to_str().expect("a UTF-8 host path");
+    tar = tar.file(text.trim_start_matches('/'), mode, &body);
+    tar
+}
+
+/// The libraries `ldd` names for `program`: every absolute path it prints.
+fn libraries(program: &Path) -> Vec<PathBuf> {
+    let Ok(output) = std::process::Command::new("ldd").arg(program).output() else {
+        return Vec::new();
+    };
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut libraries = Vec::new();
+    for line in text.lines() {
+        if let Some(path) = (line.split_whitespace()).find(|token| token.starts_with('/')) {
+            libraries.push(PathBuf::from(path));
+        }
+    }
+    libraries
 }
 
 /// One command in `sandbox`, its streams captured.
@@ -167,6 +263,19 @@ fn a_sandbox_is_its_own_namespaces_and_nothing_of_it_is_left_behind() {
     ));
     let directory = fixture.directory("sandbox-1");
     assert!(directory.is_dir());
+    // its root is the image, with this Sandbox's own empty writable layer
+    assert!(directory.join("overlay/upper").is_dir());
+    assert_eq!(
+        fs::read_to_string(
+            fixture
+                .root
+                .join("images")
+                .join(hex(DIGEST))
+                .join("etc/layerfs-image")
+        )
+        .unwrap(),
+        "layerfs image\n"
+    );
 
     // identity, capabilities and no-new-privs: a command is uid 501, gid 20,
     // with no effective capability and no way to gain one
@@ -198,7 +307,7 @@ fn a_sandbox_is_its_own_namespaces_and_nothing_of_it_is_left_behind() {
     );
     assert_ne!(code, 0, "a command mounted a filesystem");
 
-    // the private root: its own /proc, /dev/fuse and the VM's userland
+    // the root is the image: its own /proc, /dev/fuse, userland and marker
     let (code, out, _) = run(&sandbox, &["/bin/sh", "-c", "pwd"], &[]);
     assert_eq!(
         (code, out.trim_end().to_owned()),
@@ -210,6 +319,30 @@ fn a_sandbox_is_its_own_namespaces_and_nothing_of_it_is_left_behind() {
     let (code, out, _) = run(&sandbox, &["/bin/cat", "/proc/1/comm"], &[]);
     assert_eq!(code, 0);
     assert!(!out.trim().is_empty());
+    let (code, out, _) = run(&sandbox, &["/bin/cat", "/etc/layerfs-image"], &[]);
+    assert_eq!((code, out.as_str()), (0, "layerfs image\n"));
+    // and it is read-only: a command cannot write the image, only its own
+    // writable layer above it
+    let (code, _, _) = run(
+        &sandbox,
+        &["/bin/sh", "-c", "echo changed > /etc/layerfs-image"],
+        &[],
+    );
+    assert_ne!(code, 0, "a command wrote the image");
+    let (code, _, _) = run(&sandbox, &["/bin/test", "-w", "/etc"], &[]);
+    assert_ne!(code, 0, "a command may write the image's directory");
+    let (code, _, _) = run(&sandbox, &["/bin/test", "-w", "/var/tmp"], &[]);
+    assert_eq!(code, 0, "a command may not write its own writable layer");
+    let (code, _, _) = run(
+        &sandbox,
+        &[
+            "/bin/sh",
+            "-c",
+            "/bin/mkdir /var/tmp/written && echo x > /var/tmp/written/x",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "a command could not write its own layer");
 
     // streams, environment and exit status
     let (code, out, err) = run(
@@ -246,6 +379,13 @@ fn a_sandbox_is_its_own_namespaces_and_nothing_of_it_is_left_behind() {
         !mounts.contains("sandbox-1"),
         "a mount of the Sandbox remains"
     );
+    // the image stays: it is the cache every other Sandbox of it reuses
+    assert!(fixture
+        .root
+        .join("images")
+        .join(hex(DIGEST))
+        .join("etc/layerfs-image")
+        .is_file());
 }
 
 #[test]
@@ -294,6 +434,55 @@ fn two_sandboxes_on_one_store_cannot_see_each_other() {
     assert_eq!(code, 0);
     assert!(out.contains(first.identity().as_str()), "{out}");
 
+    // one image, two writable layers: what one Sandbox writes the other never
+    // sees, and each keeps its own
+    let (code, _, _) = run(
+        &first,
+        &["/bin/sh", "-c", "echo first > /var/tmp/mine"],
+        &[],
+    );
+    assert_eq!(code, 0);
+    let (code, _, _) = run(
+        &second,
+        &["/bin/sh", "-c", "echo second > /var/tmp/mine"],
+        &[],
+    );
+    assert_eq!(code, 0);
+    let (code, out, _) = run(&first, &["/bin/cat", "/var/tmp/mine"], &[]);
+    assert_eq!((code, out.as_str()), (0, "first\n"));
+    let (code, out, _) = run(&second, &["/bin/cat", "/var/tmp/mine"], &[]);
+    assert_eq!((code, out.as_str()), (0, "second\n"));
+    let (code, _, _) = run(&first, &["/bin/test", "-e", "/var/tmp/only-second"], &[]);
+    assert_ne!(code, 0);
+    // both still see the image itself, unchanged
+    let (code, out, _) = run(&first, &["/bin/cat", "/etc/layerfs-image"], &[]);
+    assert_eq!((code, out.as_str()), (0, "layerfs image\n"));
+    // and the writes live in each Sandbox's own upper layer, never in the
+    // shared image
+    let image_root = fixture.root.join("images").join(hex(DIGEST));
+    assert!(
+        fs::read_to_string(image_root.join("var/tmp/mine")).is_err(),
+        "a Sandbox's write reached the shared image"
+    );
+    assert_eq!(
+        fs::read_to_string(
+            fixture
+                .directory("sandbox-1")
+                .join("overlay/upper/var/tmp/mine")
+        )
+        .unwrap(),
+        "first\n"
+    );
+    assert_eq!(
+        fs::read_to_string(
+            fixture
+                .directory("sandbox-2")
+                .join("overlay/upper/var/tmp/mine")
+        )
+        .unwrap(),
+        "second\n"
+    );
+
     // both run at the same time, neither disturbed by the other
     let handles = [first.clone(), second.clone()];
     let codes = std::thread::scope(|scope| {
@@ -340,14 +529,42 @@ fn a_record_reopens_the_exact_sandbox_and_nothing_else() {
     let sandbox = provider.launch(fixture.request("sandbox-1")).unwrap();
     let id = sandbox.identity();
     let record = sandbox.record().unwrap();
-    // what a new process reads: the record alone, with the provider's root
+    // the record names the image its root is an overlay of
+    assert_eq!(
+        record.namespaces().map(|record| record.image().as_str()),
+        Some(DIGEST)
+    );
+    assert_eq!(
+        record
+            .namespaces()
+            .map(|record| record.local().name.as_str()),
+        Some("sandbox-1")
+    );
+    // what a new process reads: the record alone, with the provider's root,
+    // and it finds the same image under the digest the record keeps
     let reopened_provider = fixture.provider().unwrap();
     let mut reopened = reopened_provider.reopen(id, &record).unwrap();
     assert_eq!(reopened.identity(), id);
     assert_eq!(reopened.port(), PORT);
+    assert_eq!(reopened.record().unwrap(), record);
+    assert_eq!(reopened.image().image().as_str(), DIGEST);
     let (code, out, _) = run(&reopened, &["/bin/echo", "again"], &[]);
     assert_eq!((code, out.as_str()), (0, "again\n"));
     assert!(!reopened.log_tail(10, 4096).unwrap().is_empty());
+
+    // a record whose image is gone is refused, not given another root
+    let mut without_image = record.clone();
+    if let SandboxRecord::Namespaces(record) = &mut without_image {
+        record.image = Image::parse(&format!("sha256:{}", "e".repeat(64))).unwrap();
+    }
+    let refused = reopened_provider
+        .reopen(id, &without_image)
+        .expect_err("a record without its image was reopened");
+    assert!(
+        format!("{:?}", refused.cause).contains("cannot be found"),
+        "{:?}",
+        refused.cause
+    );
 
     // a Docker record is refused rather than reinterpreting it
     let foreign = SandboxRecord::Docker(layerfs_sandbox::provider::DockerRecord {
@@ -382,6 +599,8 @@ fn a_request_is_refused_before_any_effect() {
         command_identity: CommandIdentity { uid: 0, gid: 0 },
         environment: Vec::new(),
         store: fixture.store.join("sealed.sqlite"),
+        image: fixture.image(),
+        archive: fixture.archive.clone(),
     };
     let failure = provider.launch(request).unwrap_err();
     assert!(matches!(
@@ -404,10 +623,41 @@ fn a_request_is_refused_before_any_effect() {
         command_identity: CommandIdentity { uid: 501, gid: 20 },
         environment: Vec::new(),
         store: fixture.root.join("sealed.sqlite"),
+        image: fixture.image(),
+        archive: fixture.archive.clone(),
     };
     let failure = provider.launch(request).unwrap_err();
     assert!(matches!(failure.cause, RuntimeError::Protocol(_)));
     assert!(!fixture.directory("sandbox-3").exists());
+    // a bundle without the image archive
+    let mut request = fixture.request("sandbox-4");
+    request.options = ProviderLaunchOptions::Namespaces {
+        command_identity: CommandIdentity { uid: 501, gid: 20 },
+        environment: Vec::new(),
+        store: fixture.store.join("sealed.sqlite"),
+        image: fixture.image(),
+        archive: fixture.base.join("no-such-image.tar"),
+    };
+    let failure = provider.launch(request).unwrap_err();
+    assert!(failure.instance.is_none(), "{:?}", failure.cause);
+    assert!(format!("{:?}", failure.cause).contains("no-such-image.tar"));
+    assert!(!fixture.directory("sandbox-4").exists());
+    // an image archive that holds another image than the deployment named
+    let mut request = fixture.request("sandbox-5");
+    let other = Image::parse(&format!("sha256:{}", "d".repeat(64))).unwrap();
+    request.options = ProviderLaunchOptions::Namespaces {
+        command_identity: CommandIdentity { uid: 501, gid: 20 },
+        environment: Vec::new(),
+        store: fixture.store.join("sealed.sqlite"),
+        image: other.clone(),
+        archive: fixture.archive.clone(),
+    };
+    let failure = provider.launch(request).unwrap_err();
+    assert!(failure.instance.is_none(), "{:?}", failure.cause);
+    let message = format!("{:?}", failure.cause);
+    assert!(message.contains(other.hex()), "{message}");
+    assert!(message.contains(hex(DIGEST)), "{message}");
+    assert!(!fixture.directory("sandbox-5").exists());
 }
 
 #[test]
@@ -439,5 +689,18 @@ fn a_running_command_ends_with_its_sandbox() {
     )
     .unwrap();
     assert!(events.contains("populated 0"), "{events}");
+    // closing it removes the writable layer and the directory, and the shared
+    // image stays for the next Sandbox of it
+    assert!(fixture
+        .directory("sandbox-1")
+        .join("overlay/upper")
+        .is_dir());
     sandbox.delete().unwrap();
+    assert!(!fixture.directory("sandbox-1").exists());
+    assert!(fixture
+        .root
+        .join("images")
+        .join(hex(DIGEST))
+        .join("etc/layerfs-image")
+        .is_file());
 }

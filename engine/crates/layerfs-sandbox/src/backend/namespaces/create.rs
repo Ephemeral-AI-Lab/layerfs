@@ -2,11 +2,16 @@
 //! overlay, mounts), its cgroup and one spawn of the init stage, then the
 //! wait for its daemon's listener. Nothing is retried, and a failure returns
 //! what it made so the caller can end and delete it once.
-use super::{cgroup, host, paths::Paths, sandbox::Sandbox};
+use super::{
+    cgroup, host,
+    paths::Paths,
+    rootfs::{self, ImageRoot},
+    sandbox::Sandbox,
+};
 use crate::backend::listener;
 use crate::backend::native::{search::search_path, Local, LocalPhase, LocalProcess};
 use crate::backend::{identity, HelperSpec};
-use crate::{CommandIdentity, RuntimeError};
+use crate::{CommandIdentity, Image, RuntimeError};
 use nix::fcntl::OFlag;
 use std::{
     fs::{self, File, OpenOptions, Permissions},
@@ -26,6 +31,10 @@ pub(crate) struct Options {
     pub(crate) environment: Vec<(String, String)>,
     /// The exact Store file the daemon opens; its directory is bound in.
     pub(crate) store: PathBuf,
+    /// The image digest the Sandbox's root is an overlay of, and the
+    /// docker-archive in the bundle that holds it.
+    pub(crate) image: Image,
+    pub(crate) archive: PathBuf,
 }
 
 /// A failed start. `sandbox` holds what it made (its directory, cgroup and,
@@ -51,7 +60,7 @@ pub(crate) fn create(
             cause,
         })
     };
-    let paths = start_request(local, helper, request, options)
+    let (paths, image) = start_request(local, helper, request, options)
         .map_err(|cause| fail(LocalPhase::Validate, None, cause))?;
     let id = identity::random().map_err(|cause| fail(LocalPhase::Validate, None, cause))?;
     let cgroup = cgroup::path(&id);
@@ -66,8 +75,9 @@ pub(crate) fn create(
         cgroup.clone(),
         request.labels.clone(),
         helper.to_owned(),
+        image.clone(),
     );
-    let log = match prepare(&paths, request, options, &id) {
+    let log = match prepare(&paths, request, options, &id, &image) {
         Ok(log) => log,
         Err(cause) => return Err(fail(LocalPhase::Create, Some(sandbox), cause)),
     };
@@ -121,13 +131,14 @@ pub(crate) fn create(
 
 /// Everything a start refuses before it makes anything: the request's own
 /// fields, this host's runtime prerequisites, the Store's directory against
-/// the private root's, and the helper.
+/// the private root's, the helper, and the image the bundle carries. Getting
+/// the image's root may unpack it, once per digest for the whole runtime root.
 fn start_request(
     local: &Local,
     helper: &Path,
     request: &crate::provider::LaunchRequest,
     options: &Options,
-) -> Result<Paths, RuntimeError> {
+) -> Result<(Paths, ImageRoot), RuntimeError> {
     let paths = {
         let named = local.clone().naming(&request.name)?;
         Paths::of(named.paths()?)?
@@ -136,6 +147,9 @@ fn start_request(
     host::require_user_namespaces_blocked()?;
     host::require_cgroup_v2()?;
     host::require_fuse()?;
+    let root = (paths.local.directory.parent())
+        .ok_or(RuntimeError::Protocol("namespaces Sandbox root"))?;
+    host::require_overlay_upper(root)?;
     options.command_identity.check()?;
     let executable = &request.daemon_executable;
     let metadata = fs::metadata(executable)?;
@@ -163,7 +177,10 @@ fn start_request(
             Ok(_) => return Err(RuntimeError::Protocol("namespaces Sandbox path exists")),
         }
     }
-    Ok(paths)
+    let root = (paths.local.directory.parent())
+        .ok_or(RuntimeError::Protocol("namespaces Sandbox root"))?;
+    let image = rootfs::ensure(&options.archive, &options.image, &rootfs::cache(root))?;
+    Ok((paths, image))
 }
 
 /// The daemon starts with the search path and nothing else but these: no
@@ -211,12 +228,15 @@ fn check_store(paths: &Paths, store: &Path) -> Result<(), RuntimeError> {
 }
 
 /// The Sandbox's own directories and files, its copied executable, its init
-/// spec and the empty log; returns the log file.
+/// spec and the empty log; returns the log file. Its overlay's writable layer
+/// and work directory are made here, empty: the init stage mounts them with
+/// the image underneath.
 fn prepare(
     paths: &Paths,
     request: &crate::provider::LaunchRequest,
     options: &Options,
     id: &crate::ContainerId,
+    image: &ImageRoot,
 ) -> Result<File, RuntimeError> {
     fs::set_permissions(&paths.local.directory, Permissions::from_mode(0o755))?;
     let private = |path: &Path| {
@@ -239,6 +259,9 @@ fn prepare(
     fs::DirBuilder::new().mode(0o700).create(&paths.local.tmp)?;
     fs::set_permissions(&paths.local.tmp, Permissions::from_mode(0o1777))?;
     fs::DirBuilder::new().mode(0o755).create(&paths.root)?;
+    for directory in [&paths.upper, &paths.work] {
+        fs::DirBuilder::new().mode(0o700).create(directory)?;
+    }
     private(&paths.local.config)?.write_all(&request.daemon_config)?;
     fs::copy(&request.daemon_executable, &paths.bin)?;
     fs::set_permissions(&paths.bin, Permissions::from_mode(0o755))?;
@@ -251,6 +274,9 @@ fn prepare(
         daemon: paths.bin.clone(),
         config: paths.local.config.clone(),
         cgroup: cgroup::path(id),
+        lower: image.directory().to_owned(),
+        upper: paths.upper.clone(),
+        work: paths.work.clone(),
     };
     private(&paths.spec)?.write_all(&spec.encode()?)?;
     Ok(private(&paths.local.log)?)

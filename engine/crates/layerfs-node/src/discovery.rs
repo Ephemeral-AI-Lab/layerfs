@@ -389,14 +389,21 @@ pub(crate) fn save_sandbox(
             let record = runtime
                 .local_record()
                 .ok_or_else(|| refused("Failed", "local Sandbox has no daemon process"))?;
-            fields.extend(local_fields(args, state, &record, NATIVE)?);
+            fields.extend(local_fields(args, state, &record, NATIVE, LOCAL)?);
         }
         #[cfg(target_os = "linux")]
         Sandbox::Namespaces(runtime) => {
             let Some(SandboxRecord::Namespaces(record)) = runtime.record() else {
                 return Err(refused("Failed", "namespace Sandbox has no init process"));
             };
-            fields.extend(local_fields(args, state, &record, NAMESPACES)?);
+            let image = record.image().as_str().to_owned();
+            fields.extend(local_fields(
+                args,
+                state,
+                record.local(),
+                NAMESPACES,
+                &image,
+            )?);
         }
     }
     fields.extend([
@@ -414,14 +421,16 @@ pub(crate) fn save_sandbox(
     )
 }
 /// The fields a local Sandbox record keeps: its directory, its daemon or init
-/// process identity and its listener port, under `runtime` `native` or
-/// `namespaces`.
+/// process identity, its listener port and the image it runs, under `runtime`
+/// `native` (whose image is `local`) or `namespaces` (whose image is the
+/// digest its root is an overlay of).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_fields(
     args: &SdkValue,
     state: &SandboxState,
     record: &LocalRecord,
     runtime: &'static str,
+    image: &str,
 ) -> Result<Vec<(&'static str, SdkValue)>> {
     let boot = record
         .boot
@@ -442,7 +451,7 @@ fn local_fields(
         ("start", SdkValue::text(record.start_time.to_string())),
         ("boot", SdkValue::text(format!("{boot:032x}"))),
         ("port", SdkValue::Int(i64::from(record.port))),
-        ("image", SdkValue::text(LOCAL)),
+        ("image", SdkValue::text(image)),
         ("labels", label_values(&record.labels)),
     ])
 }
@@ -629,7 +638,18 @@ fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathB
 /// deletes what this one made.
 #[cfg(target_os = "linux")]
 fn namespaces_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
-    let (directory, record) = local_record_of(args, id, value)?;
+    let (directory, local) = local_record_of(args, id, value)?;
+    let image =
+        layerfs_sandbox::Image::parse(registry::text(value, "image")?).map_err(|error| {
+            refused(
+                "InvalidInput",
+                format!(
+                    "Sandbox {id} is a namespaces Sandbox whose record names no image digest \
+                 ({error}); it cannot be given a root, so it is neither reopened nor deleted"
+                ),
+            )
+        })?;
+    let record = layerfs_sandbox::provider::NamespaceRecord { local, image };
     let deploy = args
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;

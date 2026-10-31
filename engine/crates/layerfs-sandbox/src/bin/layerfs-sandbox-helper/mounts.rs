@@ -1,12 +1,11 @@
-//! The Sandbox's private root: a tmpfs tree holding only what its daemon and
-//! its commands need, with the Sandbox's own directory and the Store's
-//! directory bound at their own paths so every path keeps one meaning on both
-//! sides of the pivot. Nothing the Sandbox mounts reaches the VM's own mount
-//! tree: the init stage made this mount namespace private first.
-//!
-//! The userland (`/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/etc`) is the
-//! VM's own, bound read-only. There is no image: deploying a namespaces
-//! Sandbox means the VM that already holds the daemon and its libraries.
+//! The Sandbox's root: the unpacked image (a read-only lower layer) with the
+//! Sandbox's own empty writable layer on top, so every command sees the image
+//! as `/` and everything it writes belongs to that Sandbox alone. The
+//! Sandbox's own directory and the Store's directory are bound at their own
+//! paths so every path keeps one meaning on both sides of the pivot, and a
+//! private `/proc`, `/dev` and `/tmp` are mounted over the image's own.
+//! Nothing the Sandbox mounts reaches the VM's mount tree: the init stage made
+//! this mount namespace private first.
 use layerfs_sandbox::backend::HelperSpec;
 use nix::{
     mount::{mount, umount2, MntFlags, MsFlags},
@@ -18,27 +17,22 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// The VM userland bound read-only inside the Sandbox; each is skipped when
-/// this host has no such path.
-const USERLAND: [&str; 6] = ["/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc"];
-
 /// The devices a daemon and ordinary commands need, bound from this host's
 /// `/dev`; nothing else of `/dev` is visible.
 const DEVICES: [&str; 7] = ["fuse", "null", "zero", "full", "random", "urandom", "tty"];
 
-/// Builds the private root `spec.root` (a tmpfs) and everything inside it.
+/// Builds the Sandbox's root at `spec.root`: the image as the overlay's lower
+/// layer, the Sandbox's own `upper` and `work` above it, and the private mounts
+/// that must not come from the image.
 pub(super) fn build(spec: &HelperSpec) -> Result<(), String> {
     fs::set_permissions(&spec.root, fs::Permissions::from_mode(0o755))
         .map_err(|error| format!("{}: {error}", spec.root.display()))?;
-    tmpfs(&spec.root, MsFlags::empty(), "mode=0755")?;
-    for source in USERLAND {
-        let source = Path::new(source);
-        if fs::symlink_metadata(source).is_err() {
-            continue;
-        }
-        let target = inside(&spec.root, source)?;
-        bind(source, &target, true)?;
-    }
+    overlay(spec)?;
+    // an overlay's own root takes its attributes from the empty upper
+    // directory, which is root's 0700 on this host: the root a command sees
+    // must instead be one it can traverse, as a container's `/` is
+    fs::set_permissions(&spec.root, fs::Permissions::from_mode(0o755))
+        .map_err(|error| format!("{}: {error}", spec.root.display()))?;
     let proc_directory = inside(&spec.root, Path::new("/proc"))?;
     mount(
         None::<&Path>,
@@ -63,10 +57,37 @@ pub(super) fn build(spec: &HelperSpec) -> Result<(), String> {
     Ok(())
 }
 
+/// The image as the root's lower layer and the Sandbox's own upper and work
+/// directories above it. The result is one mount, so a command's writes stay
+/// in the upper directory and the image is never modified.
+fn overlay(spec: &HelperSpec) -> Result<(), String> {
+    let data = format!(
+        "lowerdir={},upperdir={},workdir={}",
+        spec.lower.display(),
+        spec.upper.display(),
+        spec.work.display()
+    );
+    mount(
+        Some("overlay"),
+        &spec.root,
+        Some("overlay"),
+        MsFlags::MS_NOSUID,
+        Some(data.as_str()),
+    )
+    .map_err(|error| {
+        format!(
+            "mounting the image {} over {} with {}: {error}",
+            spec.lower.display(),
+            spec.root.display(),
+            data
+        )
+    })
+}
+
 /// Pivots to `root`, so the VM's own tree is no longer reachable from the
 /// Sandbox, and drops the old root.
 pub(super) fn pivot(root: &Path) -> Result<(), String> {
-    // the private root must be a mount point of its own, which the tmpfs is
+    // the private root must be a mount point of its own, which the overlay is
     chdir(root).map_err(|error| format!("{}: {error}", root.display()))?;
     nix::unistd::pivot_root(Path::new("."), Path::new("."))
         .map_err(|error| format!("pivoting to the Sandbox's root: {error}"))?;
@@ -141,9 +162,7 @@ fn tmpfs(target: &Path, flags: MsFlags, data: &str) -> Result<(), String> {
     .map_err(|error| format!("mounting a tmpfs at {}: {error}", target.display()))
 }
 
-/// `source` at `target`, read-only when `read_only`. A read-only bind makes
-/// the top of that mount read-only; a nested mount inside it (this VM has
-/// none under the userland) is not remounted by this step.
+/// `source` at `target`, read-only when `read_only`.
 fn bind(source: &Path, target: &Path, read_only: bool) -> Result<(), String> {
     mount(
         Some(source),

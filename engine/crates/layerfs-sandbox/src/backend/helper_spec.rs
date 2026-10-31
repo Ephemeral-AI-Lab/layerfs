@@ -1,4 +1,7 @@
-//! The init stage's inputs: absolute paths only, one per line, in a 0600 file.
+//! The init stage's inputs: absolute paths only, one per line, in a 0600 file:
+//! what it mounts, the three directories of the Sandbox root's overlay (the
+//! unpacked image as its read-only lower layer, and the Sandbox's own upper
+//! and work directories), the daemon it starts, and the cgroup it joins.
 //!
 //! A format, not a platform behaviour: it is compiled wherever the crate is and
 //! tested without root; only the helper that reads it is Linux only.
@@ -9,10 +12,15 @@
 //! first one); a path may not contain a control character, because the format
 //! is line based.
 use crate::RuntimeError;
-use std::path::{Component, Path, PathBuf};
+use std::{
+    os::unix::ffi::OsStrExt,
+    path::{Component, Path, PathBuf},
+};
 
 /// The fields, in the order they are written.
-const FIELDS: [&str; 6] = ["root", "sandbox", "store", "daemon", "config", "cgroup"];
+const FIELDS: [&str; 9] = [
+    "root", "sandbox", "store", "daemon", "config", "cgroup", "lower", "upper", "work",
+];
 
 /// One init stage's decoded inputs.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -32,6 +40,12 @@ pub struct HelperSpec {
     pub config: PathBuf,
     /// The Sandbox's cgroup v2 directory.
     pub cgroup: PathBuf,
+    /// The unpacked image: the read-only lower layer of the Sandbox's root.
+    pub lower: PathBuf,
+    /// The Sandbox's own writable layer, and the overlay's work directory;
+    /// both inside its private directory, deleted with it.
+    pub upper: PathBuf,
+    pub work: PathBuf,
 }
 
 impl HelperSpec {
@@ -39,8 +53,11 @@ impl HelperSpec {
     /// or `..` components, or holds a control character.
     pub fn encode(&self) -> Result<Vec<u8>, RuntimeError> {
         let mut out = Vec::new();
-        for (field, path) in self.fields() {
+        for (index, (field, path)) in self.fields().into_iter().enumerate() {
             check(path)?;
+            if index >= LAYERS {
+                check_overlay(path)?;
+            }
             out.extend_from_slice(field.as_bytes());
             out.push(b'=');
             let text = path.to_str().ok_or(RuntimeError::Protocol(PATH))?;
@@ -57,7 +74,7 @@ impl HelperSpec {
             return Err(RuntimeError::Protocol(PATH));
         }
         let text = std::str::from_utf8(bytes).map_err(|_| RuntimeError::Protocol(PATH))?;
-        let mut values: [Option<PathBuf>; 6] = [None, None, None, None, None, None];
+        let mut values: [Option<PathBuf>; 9] = Default::default();
         for line in text.lines() {
             let (key, value) = line.split_once('=').ok_or(RuntimeError::Protocol(FIELD))?;
             let index = FIELDS
@@ -72,17 +89,24 @@ impl HelperSpec {
             values[index] = Some(path);
         }
         let mut take = |index: usize| values[index].take().ok_or(RuntimeError::Protocol(FIELD));
-        Ok(Self {
+        let spec = Self {
             root: take(0)?,
             sandbox: take(1)?,
             store: take(2)?,
             daemon: take(3)?,
             config: take(4)?,
             cgroup: take(5)?,
-        })
+            lower: take(6)?,
+            upper: take(7)?,
+            work: take(8)?,
+        };
+        for path in [&spec.lower, &spec.upper, &spec.work] {
+            check_overlay(path)?;
+        }
+        Ok(spec)
     }
 
-    fn fields(&self) -> [(&'static str, &Path); 6] {
+    fn fields(&self) -> [(&'static str, &Path); 9] {
         [
             (FIELDS[0], &self.root),
             (FIELDS[1], &self.sandbox),
@@ -90,6 +114,9 @@ impl HelperSpec {
             (FIELDS[3], &self.daemon),
             (FIELDS[4], &self.config),
             (FIELDS[5], &self.cgroup),
+            (FIELDS[6], &self.lower),
+            (FIELDS[7], &self.upper),
+            (FIELDS[8], &self.work),
         ]
     }
 }
@@ -109,6 +136,19 @@ fn check(path: &Path) -> Result<(), RuntimeError> {
         || (path.components()).any(|c| matches!(c, Component::CurDir | Component::ParentDir))
     {
         return Err(RuntimeError::Protocol(PATH));
+    }
+    Ok(())
+}
+
+/// The three fields from here on are the Sandbox root's overlay.
+const LAYERS: usize = 6;
+
+/// The three overlay paths travel in one mount option string, where `,`
+/// separates options and `:` would separate layers, so neither may appear.
+fn check_overlay(path: &Path) -> Result<(), RuntimeError> {
+    let bytes = path.as_os_str().as_bytes();
+    if bytes.iter().any(|byte| matches!(byte, b',' | b':')) {
+        return Err(RuntimeError::Protocol("an overlay path holds a `,` or `:`"));
     }
     Ok(())
 }

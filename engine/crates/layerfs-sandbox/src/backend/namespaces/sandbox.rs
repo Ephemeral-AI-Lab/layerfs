@@ -2,9 +2,9 @@
 //! namespaces, its cgroup and its exact attempts. Nothing is retried and no
 //! Drop cleans up; a Drop only reaps an init process this process started
 //! that has already exited, so it never stays a zombie of this process.
-use super::{cgroup, host, paths::Paths};
+use super::{cgroup, host, paths::Paths, rootfs::ImageRoot};
 use crate::backend::native::LocalProcess;
-use crate::provider::{LocalRecord, SandboxRecord};
+use crate::provider::{LocalRecord, NamespaceRecord, SandboxRecord};
 use crate::{ContainerId, RuntimeError, WireFailure};
 use std::{
     fs::{self, OpenOptions},
@@ -26,6 +26,15 @@ pub(super) fn process(record: &LocalRecord) -> LocalProcess {
     }
 }
 
+/// The facts a record carries into a reopen: the init stage it saw, the port
+/// it listened on, its labels and the image its root is an overlay of.
+pub(crate) struct Recorded {
+    pub(crate) init: LocalProcess,
+    pub(crate) port: u16,
+    pub(crate) labels: Vec<(String, String)>,
+    pub(crate) image: ImageRoot,
+}
+
 /// Pause between two looks at a killed init process.
 const PAUSE: Duration = Duration::from_millis(20);
 /// Wait for the group's processes to be gone after `cgroup.kill`.
@@ -41,6 +50,8 @@ pub struct Sandbox {
     pub(super) labels: Vec<(String, String)>,
     /// The helper executable this backend's init and exec stages run.
     pub(super) helper: std::path::PathBuf,
+    /// The unpacked image its root is an overlay of, and its digest.
+    pub(super) image: ImageRoot,
     /// The init stage this process started, kept so its exit is reaped here.
     /// `None` after a reopen.
     pub(super) child: Mutex<Option<Child>>,
@@ -61,6 +72,7 @@ impl Sandbox {
         cgroup: std::path::PathBuf,
         labels: Vec<(String, String)>,
         helper: std::path::PathBuf,
+        image: ImageRoot,
     ) -> Self {
         Self {
             id,
@@ -68,6 +80,7 @@ impl Sandbox {
             cgroup,
             labels,
             helper,
+            image,
             child: Mutex::new(None),
             init: None,
             port: 0,
@@ -85,12 +98,16 @@ impl Sandbox {
         paths: Paths,
         cgroup: std::path::PathBuf,
         id: ContainerId,
-        init: LocalProcess,
-        port: u16,
-        labels: Vec<(String, String)>,
         helper: std::path::PathBuf,
+        recorded: Recorded,
     ) -> Result<Self, Box<WireFailure>> {
-        let mut owner = Self::unstarted(id, paths, cgroup, labels, helper);
+        let Recorded {
+            init,
+            port,
+            labels,
+            image,
+        } = recorded;
+        let mut owner = Self::unstarted(id, paths, cgroup, labels, helper, image);
         owner.init = Some(init);
         owner.port = port;
         if !owner.paths.local.directory.is_absolute() || port == 0 {
@@ -111,14 +128,12 @@ impl Sandbox {
         paths: Paths,
         cgroup: std::path::PathBuf,
         id: ContainerId,
-        init: LocalProcess,
-        port: u16,
-        labels: Vec<(String, String)>,
         helper: std::path::PathBuf,
+        recorded: Recorded,
     ) -> Self {
-        let mut owner = Self::unstarted(id, paths, cgroup, labels, helper);
-        owner.init = Some(init);
-        owner.port = port;
+        let mut owner = Self::unstarted(id, paths, cgroup, recorded.labels, helper, recorded.image);
+        owner.init = Some(recorded.init);
+        owner.port = recorded.port;
         owner.stop_attempted = true;
         owner.stopped = true;
         owner
@@ -154,6 +169,11 @@ impl Sandbox {
         &self.labels
     }
 
+    /// The image its root is an overlay of.
+    pub fn image(&self) -> &ImageRoot {
+        &self.image
+    }
+
     /// The facts its record keeps, for reopening this exact Sandbox later.
     pub fn local_record(&self) -> Option<LocalRecord> {
         let init = self.process()?;
@@ -167,9 +187,14 @@ impl Sandbox {
         })
     }
 
-    /// Its record, naming this backend so another one never reopens it.
+    /// Its record, naming this backend so another one never reopens it, and
+    /// the image digest so a reopen finds the same root again.
     pub fn record(&self) -> Option<SandboxRecord> {
-        self.local_record().map(SandboxRecord::Namespaces)
+        let local = self.local_record()?;
+        Some(SandboxRecord::Namespaces(NamespaceRecord {
+            local,
+            image: self.image.image().clone(),
+        }))
     }
 
     /// The daemon's endpoint while its init stage runs. A Sandbox whose init

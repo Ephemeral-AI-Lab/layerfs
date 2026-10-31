@@ -70,6 +70,27 @@ pub(crate) fn require_fuse() -> Result<(), RuntimeError> {
     }
 }
 
+/// The Sandbox's root is an overlay whose writable layer is the Sandbox's own
+/// directory under this runtime root, so the root must be on a filesystem that
+/// can be an overlay upper. overlayfs refuses another overlay or a network
+/// filesystem there, and a host that cannot hold it is refused before any
+/// Sandbox is made rather than failing inside the Sandbox's mount.
+pub(crate) fn require_overlay_upper(root: &Path) -> Result<(), RuntimeError> {
+    let resolved = fs::canonicalize(root)?;
+    match super::super::linux::mounts::filesystem(&resolved) {
+        Ok(kind) if !UNSUITABLE.contains(&kind.as_str()) && !kind.starts_with("fuse") => Ok(()),
+        // an unreadable mount table is no proof either way: the mount itself
+        // then reports what is wrong, and nothing is invented here
+        Err(_) => Ok(()),
+        Ok(_) => Err(RuntimeError::Unsupported(
+            "the namespaces runtime root is on a filesystem that cannot hold a Sandbox root's              writable layer (overlayfs or a network filesystem); put LAYERFS_LOCAL_DIR on a local              filesystem such as the project VM's ext4, xfs or btrfs disk",
+        )),
+    }
+}
+
+/// Filesystems an overlay upper layer cannot live on.
+const UNSUITABLE: [&str; 7] = ["overlay", "nfs", "nfs4", "cifs", "smb3", "9p", "virtiofs"];
+
 /// The cgroup of `pid`, as the kernel reports it, e.g. `0::/layerfs/<id>`.
 pub(crate) fn cgroup_of(pid: u32) -> std::io::Result<String> {
     fs::read_to_string(format!("/proc/{pid}/cgroup"))

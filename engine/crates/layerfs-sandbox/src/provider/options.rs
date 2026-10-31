@@ -30,11 +30,15 @@ pub enum ProviderLaunchOptions {
     /// The Linux namespace backend: a namespaced daemon plus the Store file it
     /// opens. `store` is the exact file; its directory is what the Sandbox's
     /// private root binds, so SQLite's WAL and the writers' directory lock see
-    /// the same inode as every other opener on this kernel.
+    /// the same inode as every other opener on this kernel. `image` is the
+    /// digest its root is an overlay of, and `archive` the docker-archive in
+    /// the bundle that digest names, which is unpacked once per digest.
     Namespaces {
         command_identity: CommandIdentity,
         environment: Vec<(String, String)>,
         store: PathBuf,
+        image: crate::Image,
+        archive: PathBuf,
     },
     Docker {
         image: String,
@@ -53,6 +57,24 @@ pub struct LocalRecord {
     pub port: u16,
     pub labels: Vec<(String, String)>,
 }
+/// A namespaced Linux Sandbox's record: the local facts (its directory name,
+/// init process identity and listener port) and the image digest its root is
+/// an overlay of, so a reopen finds the same unpacked image.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NamespaceRecord {
+    pub local: LocalRecord,
+    pub image: crate::Image,
+}
+impl NamespaceRecord {
+    /// The physical local facts every record of this backend keeps.
+    pub fn local(&self) -> &LocalRecord {
+        &self.local
+    }
+    /// The image digest the Sandbox's root is an overlay of.
+    pub fn image(&self) -> &crate::Image {
+        &self.image
+    }
+}
 /// Persisted deployment facts for a Docker container; no filesystem discovery here.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DockerRecord {
@@ -66,10 +88,10 @@ pub struct DockerRecord {
 pub enum SandboxRecord {
     Local(LocalRecord),
     /// A namespaced Linux Sandbox; the physical facts kept are the same as a
-    /// local one (its directory name, init process identity and listener port).
-    /// The variant itself names the backend, so a record is never reopened by
-    /// another one.
-    Namespaces(LocalRecord),
+    /// local one (its directory name, init process identity and listener port),
+    /// plus the image digest its root is an overlay of. The variant itself
+    /// names the backend, so a record is never reopened by another one.
+    Namespaces(NamespaceRecord),
     Docker(DockerRecord),
 }
 impl SandboxRecord {
@@ -79,7 +101,7 @@ impl SandboxRecord {
             _ => None,
         }
     }
-    pub fn namespaces(&self) -> Option<&LocalRecord> {
+    pub fn namespaces(&self) -> Option<&NamespaceRecord> {
         match self {
             Self::Namespaces(record) => Some(record),
             _ => None,

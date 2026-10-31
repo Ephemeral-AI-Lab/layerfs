@@ -1,9 +1,9 @@
 //! The Engine API version a client speaks: the daemon's, up to the newest this client targets.
 use super::{
     http::{failure, Mode},
-    json::{once, Json},
     Docker,
 };
+use crate::backend::json::{once, Json};
 use crate::{ErrorDiagnostic, RuntimeError, WireFailure};
 /// The oldest Engine API minor version (1.N) this client speaks: Engine 28.0.
 /// Before it, uploading the daemon fails (`getent unable to find entry "0:0"`:
