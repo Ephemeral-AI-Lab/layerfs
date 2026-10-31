@@ -11,13 +11,16 @@ import { createWriteStream, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connection, frame, readFrames } from "@layerfs/agent/internal";
-import { endpointFile, ping, ready, refuse, run, writeEndpoint, makeStore, releaseStoreHolders, removeStore, storeHolders } from "../shared.js";
+import { endpointFile, ping, ready, refuse, run, writeEndpoint } from "../../shared.js";
+import { dockerGroup } from "../index.js";
+import { hooks } from "../stores.js";
 import { absoluteLinux, projectHome, wsl, wslArgs } from "./paths.js";
 
 const SERVER = "api/runtime/src/worker/server.js";
 const workers = new Map();
 
-const docker = (settings, args, options = {}) => wsl(settings, ["docker", "-H", `unix://${settings.docker}`, ...args], { timeout: 5000, ...options }).then((r) => r.stdout.trim());
+/** One Docker CLI call on the distribution's engine, through `wsl.exe`. */
+const wslRun = (settings, args, options = {}) => wsl(settings, ["docker", "-H", `unix://${settings.docker}`, ...args], { timeout: 5000, ...options }).then((r) => r.stdout.trim());
 
 /** Only this Windows user and SYSTEM may read the endpoint's folder. */
 async function protect(directory) {
@@ -132,11 +135,8 @@ export default {
   /** Init runs in the worker, which reads the folder through WSL. */
   async init(settings) { await start(settings); },
   path: (settings, hostPath) => hostPath,
-  docker,
-  makeStore,
-  storeHolders,
-  releaseStoreHolders,
-  removeStore,
+  docker: dockerGroup(wslRun),
+  ...hooks,
   storePath: (settings, volume) => `/var/lib/docker/volumes/${volume}/_data/global/store.sqlite`,
   async homeNames(settings) {
     const { stdout } = await wsl(settings, ["find", settings.wsl.home, "-mindepth", "2", "-maxdepth", "2", "-name", "project.record"], { timeout: 5000 }).catch(() => ({ stdout: "" }));

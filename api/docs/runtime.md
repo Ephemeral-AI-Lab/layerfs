@@ -128,14 +128,26 @@ lines from now on, or from `since`, each with `actor`, its trace file's name.
 
 ## Platforms and the worker
 
-Each platform folder implements one interface (`endpoint`, `status`,
-`start`, `restart`, `init`, `path`, the Store hooks `makeStore`,
-`storeHolders`, `releaseStoreHolders` and `removeStore`, and the Docker, home
-and disk helpers) and may declare capabilities instead of being named:
+`src/platform/` holds one folder per placement kind (#527 §6, D4):
+`platform/docker/` for `local` (`linux.js`, `macos.js` and `windows/`: Docker
+on this host, in Docker Desktop's VM or in WSL2) and `platform/vm/` for
+`vm:<provider>`. Each platform object implements one interface (`endpoint`,
+`status`, `start`, `restart`, `init`, `path`, the Store hooks `makeStore`,
+`storeHolders`, `releaseStoreHolders` and `removeStore`, and the home and
+disk helpers) and may declare capabilities instead of being named:
 `initCounts: false` (macOS: this process cannot read Init's counts) and
 `uncertainInit: true` (Windows: any failed Init is kept and recorded, never
 cleaned up); `platform/vm/` implements the same interface over a VM
 (see [Placement](#placement-one-linux-vm-per-store)).
+
+The three Docker platforms also carry `platform.docker`, one Docker group
+built in `platform/docker/index.js` from that platform's own CLI call: `run`
+(the host socket on Linux and macOS, `wsl.exe` on Windows), `version`,
+`sandboxes` (this home's Sandbox containers, `sandboxes.js`), `stores` (Store
+volumes and their hooks, `stores.js`) and `disk` (the engine's volumes,
+`disk.js`). A `vm:` platform has no group, and the helpers that read host
+Docker refuse there. Every helper reaches Docker through
+`runtime.platform.docker.run`, so a test replaces that one call.
 
 - **Linux** runs Store calls in this process. There is no worker:
   `worker.start` and `worker.restart` are refused `InvalidInput`. Init

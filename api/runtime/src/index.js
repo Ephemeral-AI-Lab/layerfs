@@ -22,10 +22,10 @@ import { Clients } from "./clients.js";
 import { homeStores } from "./platform/shared.js";
 import { resolveSettings } from "./settings.js";
 import { status } from "./status.js";
-import linux from "./platform/linux/index.js";
-import macos from "./platform/macos/index.js";
+import linux from "./platform/docker/linux.js";
+import macos from "./platform/docker/macos.js";
+import windows from "./platform/docker/windows/index.js";
 import { vmPlatform } from "./platform/vm/index.js";
-import windows from "./platform/windows/index.js";
 import { find, list } from "./project/list.js";
 import * as stores from "./store/calls.js";
 import * as sync from "./store/sync.js";
@@ -42,7 +42,7 @@ import { list as listVolumes, remove as removeVolumes } from "./volume.js";
 import { subscribe } from "./events/subscribe.js";
 
 const PLATFORMS = { linux, macos, windows };
-/** The platform object `settings` selects: this host's, or one VM's (§6). */
+/** The platform object `settings` selects: a `local` home's Docker placement (platform/docker/), or one VM's (platform/vm/, #527 §6). */
 const platformFor = (settings) => (settings.placement.kind === "vm" ? vmPlatform(settings.placement.provider) : PLATFORMS[settings.platform]);
 /** Held only by `open`: the constructor refuses without it. */
 const FACTORY = Symbol("LayerFSRuntime.open");

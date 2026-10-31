@@ -15,7 +15,9 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { connection } from "@layerfs/agent/internal";
-import { docker as cli, endpointFile, homeNames, makeStore, ping, ready, refuse, releaseStoreHolders, removeStore, storeHolders, writeEndpoint } from "../shared.js";
+import { endpointFile, homeNames, ping, ready, refuse, writeEndpoint } from "../shared.js";
+import { dockerGroup, socketRun } from "./index.js";
+import { hooks } from "./stores.js";
 
 const VOLUMES = "/var/lib/docker/volumes";
 const WORKER_PORT = 7070;
@@ -26,7 +28,7 @@ const SERVER = "api/runtime/src/worker/server.js";
 const INIT = "api/runtime/src/worker/init.js";
 
 // every Docker call goes through the platform object, so a test can stub it
-const docker = (...args) => platform.docker(...args);
+const docker = (...args) => platform.docker.run(...args);
 const name = (settings) => `${settings.containerPrefix}worker`;
 
 const build = (settings) => JSON.parse(readFileSync(join(settings.bundle, "manifest.json"), "utf8")).build_id;
@@ -128,11 +130,8 @@ const platform = {
     if (worker.state !== "running" || !worker.answering) await start(settings);
   },
   path: (settings, hostPath) => hostPath,
-  docker: cli,
-  makeStore,
-  storeHolders,
-  releaseStoreHolders,
-  removeStore,
+  docker: dockerGroup(socketRun),
+  ...hooks,
   storePath: (settings, volume) => `${VOLUMES}/${volume}/_data/global/store.sqlite`,
   homeNames: (settings) => homeNames(settings.home),
   async removeHome(settings, project) { rmSync(join(settings.home, project), { recursive: true, force: true }); },

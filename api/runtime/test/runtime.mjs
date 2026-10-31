@@ -19,11 +19,11 @@ const selected = process.argv[2];
 const work = mkdtempSync(join(tmpdir(), "layerfs-runtime-"));
 const home = join(work, "home");
 const IMAGE = `sha256:${"a".repeat(64)}`;
-/** A runtime on Linux whose Docker CLI calls go to `docker(args)`; `calls` lists them. */
+/** A runtime on Linux whose Docker CLI calls (its Docker group's `run`) go to `docker(args)`; `calls` lists them. */
 async function opened(docker = () => "", settings = {}) {
   const runtime = await LayerFSRuntime.open({ home, image: IMAGE, daemon: "/bin/daemon", volumes: join(work, "volumes"), platform: "linux", sweep: false, ...settings });
   const calls = [];
-  runtime.platform = { ...runtime.platform, docker: async (_settings, args) => { calls.push(args); return docker(args); } };
+  runtime.platform = { ...runtime.platform, docker: { ...runtime.platform.docker, run: async (_settings, args) => { calls.push(args); return docker(args); } } };
   return { runtime, calls };
 }
 const project = (name) => { mkdirSync(join(home, name), { recursive: true }); writeFileSync(join(home, name, "project.record"), "x"); };
@@ -236,7 +236,7 @@ try {
     await runtime.close();
     // open sweeps once in the background; status reports it and close waits for it
     const swept = await LayerFSRuntime.open({ home, image: IMAGE, daemon: "/bin/daemon", volumes: join(work, "volumes"), platform: "linux" });
-    swept.platform = { ...swept.platform, docker: async (_s, args) => (args[0] === "version" ? "27.0.1" : args[0] === "ps" ? ps : "") };
+    swept.platform = { ...swept.platform, docker: { ...swept.platform.docker, run: async (_s, args) => (args[0] === "version" ? "27.0.1" : args[0] === "ps" ? ps : "") } };
     assert.equal((await swept.status()).sweep.state, "running");
     await swept.close();
     assert.equal(swept.swept.state, "done");
@@ -319,15 +319,15 @@ try {
   } else if (selected === "macos-worker") {
     // the macOS worker's start with a stubbed docker CLI and a stand-in worker
     const { fakeWorker } = await import("../../agent/test/fixture/fake-worker.mjs");
-    const macos = (await import("../src/platform/macos/index.js")).default;
+    const macos = (await import("../src/platform/docker/macos.js")).default;
     const worker = await fakeWorker(undefined, { anySecret: true });
     const bundle = join(work, "bundle");
     mkdirSync(bundle);
     writeFileSync(join(bundle, "manifest.json"), JSON.stringify({ build_id: "build-1" }));
     const calls = [];
     let started = false;
-    const real = macos.docker;
-    macos.docker = async (_settings, args, options = {}) => {
+    const real = macos.docker.run;
+    macos.docker.run = async (_settings, args, options = {}) => {
       calls.push({ args, env: options.env });
       const [verb] = args;
       if (verb === "inspect" && !started) throw Object.assign(new Error("inspect"), { stderr: "Error: No such object: layerfs-worker" });
@@ -372,7 +372,7 @@ try {
       await assert.rejects(macos.releaseStore(runtime.settings, { volume: "../x" }), { code: "InvalidInput" });
       await runtime.close();
     } finally {
-      macos.docker = real;
+      macos.docker.run = real;
       worker.close();
     }
   } else if (selected === "worker-frames") {

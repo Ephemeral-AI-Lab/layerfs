@@ -12,11 +12,11 @@
 // `live` is true while this home has the project that owns the volume (an
 // uncertain Init, which keeps a home entry and no record, counts as live).
 // `size` is Docker's figure, rounded to about four significant digits.
-// One `docker system df -v`, plus one `docker volume inspect` of the
-// labelled volumes; listing changes nothing.
+// The Docker group's `disk` reads the engine (platform/docker/disk.js);
+// listing changes nothing.
 import { LayerFSError } from "@layerfs/agent";
 import { entries } from "./store/registry.js";
-import { noHostDocker } from "./platform/shared.js";
+import { dockerOf } from "./platform/shared.js";
 
 const UNITS = { B: 1, kB: 1e3, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12 };
 /** "84.05MB" -> 84050000; anything else -> null. */
@@ -27,12 +27,8 @@ export const bytesOf = (text) => {
 
 /** `[{ name, size, containers, owner, project, live, removable }]`, by name. */
 export async function list(runtime) {
-  const { settings, platform } = runtime;
-  if (platform.hostDocker === false) throw noHostDocker(runtime, "runtime.volume.list", "its Stores are directories on the VM's disk, not host Docker volumes");
-  const df = JSON.parse(await platform.docker(settings, ["system", "df", "-v", "--format", "{{json .}}"], { timeout: 60_000 }));
-  const volumes = df.Volumes ?? [];
-  const labelled = volumes.filter((v) => v.Labels).map((v) => v.Name);
-  const labels = new Map(labelled.length ? JSON.parse(await platform.docker(settings, ["volume", "inspect", ...labelled], { timeout: 30_000 })).map((v) => [v.Name, v.Labels ?? {}]) : []);
+  const { settings } = runtime;
+  const volumes = await dockerOf(runtime, "runtime.volume.list", "its Stores are directories on the VM's disk, not host Docker volumes").disk.volumes(runtime);
   const projects = await runtime.project.list();
   const recorded = new Map(projects.filter((p) => p.volume).map((p) => [p.volume, p.name]));
   // a Store's volume (#506) is this home's while the Store is registered, with or without projects
@@ -40,16 +36,16 @@ export async function list(runtime) {
   for (const volume of stores.keys()) if (!recorded.has(volume)) recorded.set(volume, null);
   const named = new Map(projects.map((p) => [p.name, p]));
   return volumes.map((v) => {
-    const l = labels.get(v.Name) ?? {};
+    const l = v.labels;
     const store = l["layerfs.role"] === "store";
     let owner = "unknown", project = null;
-    if (recorded.has(v.Name)) [owner, project] = ["this", recorded.get(v.Name)];
+    if (recorded.has(v.name)) [owner, project] = ["this", recorded.get(v.name)];
     else if (store && l["layerfs.home"] === settings.home) [owner, project] = ["this", l["layerfs.project"] ?? null];
     else if (store && l["layerfs.home"]) [owner, project] = ["other", l["layerfs.project"] ?? null];
-    const live = owner === "this" && (recorded.has(v.Name) || (named.has(project) && !named.get(project).volume));
-    const containers = Number(v.Links) || 0;
-    const held = stores.get(v.Name) ?? (l["layerfs.home"] === settings.home ? l["layerfs.store"] ?? null : null);
-    return { name: v.Name, size: bytesOf(v.Size), containers, owner, project, ...(held ? { store: held } : {}), live, removable: owner === "this" && !live && containers === 0 };
+    const live = owner === "this" && (recorded.has(v.name) || (named.has(project) && !named.get(project).volume));
+    const containers = Number(v.links) || 0;
+    const held = stores.get(v.name) ?? (l["layerfs.home"] === settings.home ? l["layerfs.store"] ?? null : null);
+    return { name: v.name, size: bytesOf(v.size), containers, owner, project, ...(held ? { store: held } : {}), live, removable: owner === "this" && !live && containers === 0 };
   }).sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -68,7 +64,7 @@ export async function remove(runtime, names) {
       : null;
     if (why) { results.push({ name, ok: false, message: why }); continue; }
     try {
-      await runtime.platform.docker(runtime.settings, ["volume", "rm", name], { timeout: 30_000 });
+      await runtime.platform.docker.disk.remove(runtime, name);
       results.push({ name, ok: true });
     } catch (error) {
       results.push({ name, ok: false, message: error.stderr?.trim() || error.message });

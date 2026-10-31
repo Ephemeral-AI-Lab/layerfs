@@ -26,7 +26,7 @@ const runtime = await LayerFSRuntime.open({
 const docker = [];
 runtime.platform = {
   ...runtime.platform,
-  async docker(settings, args) {
+  docker: { ...runtime.platform.docker, async run(settings, args) {
     docker.push(args.slice(0, 2).join(" "));
     // Init labels the volume (--label ...), so its name is the last argument
     if (args[0] === "volume" && args[1] === "create") { mkdirSync(join(volumes, args.at(-1), "_data"), { recursive: true }); return args.at(-1); }
@@ -34,7 +34,7 @@ runtime.platform = {
     if (args[0] === "version") return "stub";
     if (args[0] === "ps") return "";
     throw new Error(`unexpected docker ${args.join(" ")}`);
-  },
+  } },
 };
 const name = `rt-${Date.now().toString(36)}`;
 const source = mkdtempSync(join(tmpdir(), "layerfs-rt-"));

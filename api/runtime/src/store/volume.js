@@ -6,7 +6,7 @@
 // project's VM, its disk and its namespace Sandboxes under `vm:` (#515).
 // One attempt per step; a failed step leaves the rest in place.
 import { LayerFSError } from "@layerfs/agent";
-import { STOPPED } from "../platform/shared.js";
+import { STOPPED } from "../platform/docker/sandboxes.js";
 
 /** `owner` is `{ name, volume }`: the project or Store the volume holds. A
  * `vm:` placement's Store is the project's own VM and disk, so the hooks

@@ -389,10 +389,10 @@ export function deploymentEnv(settings, project) {
 }
 
 /**
- * The platform object of a `vm:<provider>` home. `hostDocker`/`hostSandboxes`
- * tell the runtime that host Docker is not this home's: its Stores are
- * directories on each VM's own disk and its Sandboxes are Linux namespaces
- * there, so `volume.list`, `volume.remove`, `sandbox.list`,
+ * The platform object of a `vm:<provider>` home. It has no Docker group
+ * (`docker`, platform/docker/index.js): host Docker is not this home's, since
+ * its Stores are directories on each VM's own disk and its Sandboxes are
+ * Linux namespaces there, so `volume.list`, `volume.remove`, `sandbox.list`,
  * `sandbox.list_leftovers` and `sandbox.clean_leftovers` refuse with that
  * reason instead of answering from the host, and `sandbox.sweep` answers
  * `{ host: false }`. `homeStores: false` says the home keeps no Store of its
@@ -406,8 +406,6 @@ export function vmPlatform(settingName) {
   const placement = `vm:${settingName}`;
   return {
     name: placement,
-    hostDocker: false,
-    hostSandboxes: false,
     homeStores: false,
     endpoints: (settings) => (project) => endpointFile(settings.home, project),
     status,
@@ -426,9 +424,6 @@ export function vmPlatform(settingName) {
     /** Where the SDK inside the VM reads a host folder: its copy under `/layerfs/import`. */
     path: (settings, hostPath) => (hostPath === settings.home || hostPath.startsWith(`${settings.home}/`) ? hostPath.replace(settings.home, GUEST.home) : importPath(hostPath)),
     deploymentEnv,
-    docker: () => {
-      throw refuse("Unsupported", `this home is placed in vm:${settingName}: its Stores and Sandboxes are inside each project's VM, so host Docker does not describe it`, null);
-    },
     // every project's Store is at the same guest path in its own VM: a path by
     // volume alone would map every Store of the home to that one file
     storePath: () => {

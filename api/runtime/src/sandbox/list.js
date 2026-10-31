@@ -4,48 +4,15 @@
 // Workspace (/tmp, which is also HOME, and the npm, node and cargo caches
 // there). It goes only when the container is deleted (sandbox.close, an idle
 // close followed by a reclaim, or runtime.sandbox.sweep). One `docker ps`
-// and one `docker inspect --size`; it changes nothing.
+// and one `docker inspect --size` (platform/docker/sandboxes.js); it changes nothing.
 import { keyOf } from "../project/list.js";
-import { noHostDocker } from "../platform/shared.js";
-
-/** A container gone between the listing and the inspection is left out: inspect still prints the others. */
-async function inspect(runtime, ids) {
-  const { settings, platform } = runtime;
-  try {
-    return JSON.parse(await platform.docker(settings, ["inspect", "--size", ...ids], { timeout: 30_000 }));
-  } catch (error) {
-    const out = String(error?.stdout ?? "").trim();
-    if (out.startsWith("[")) return JSON.parse(out);
-    throw error;
-  }
-}
+import { dockerOf, VM_SANDBOXES } from "../platform/shared.js";
 
 /** `[{ name, project, sandbox, state, running, startedAt, finishedAt, image, ports, scratch, owned }]`, by name. */
 export async function list(runtime) {
-  const { settings, platform } = runtime;
-  if (platform.hostSandboxes === false) throw noHostDocker(runtime, "runtime.sandbox.list", "its Sandboxes are Linux namespaces inside the VM; the SDK's project.list_sandboxes reads them");
-  const ids = (await platform.docker(settings, ["ps", "-a", "-q", "--no-trunc", "--filter", "label=layerfs.role=sandbox"])).split("\n").filter(Boolean);
-  if (!ids.length) return [];
+  const docker = dockerOf(runtime, "runtime.sandbox.list", VM_SANDBOXES);
+  const found = await docker.sandboxes.details(runtime);
+  if (!found.length) return [];
   const known = new Set((await runtime.project.list()).map(keyOf));
-  return (await inspect(runtime, ids)).map((c) => {
-    const labels = c.Config?.Labels ?? {};
-    const project = labels["layerfs.project"] ?? null;
-    const store = labels["layerfs.store"] ?? null;
-    const running = c.State?.Running === true;
-    const finished = c.State?.FinishedAt;
-    return {
-      name: String(c.Name ?? "").replace(/^\//, ""),
-      project,
-      store,
-      sandbox: labels["layerfs.sandbox"] ?? null,
-      state: c.State?.Status ?? "unknown",
-      running,
-      startedAt: c.State?.StartedAt ?? null,
-      finishedAt: running || !finished || finished.startsWith("0001-") ? null : finished,
-      image: c.Config?.Image ?? null,
-      ports: Object.entries(c.NetworkSettings?.Ports ?? {}).flatMap(([port, bound]) => (bound ?? []).map((b) => ({ container: port, host: b.HostIp, port: Number(b.HostPort) }))),
-      scratch: typeof c.SizeRw === "number" ? c.SizeRw : null,
-      owned: project !== null && known.has(store ? `${store}/${project}` : project),
-    };
-  }).filter((c) => c.name.startsWith(settings.containerPrefix)).sort((a, b) => a.name.localeCompare(b.name));
+  return found.map((c) => ({ ...c, owned: c.project !== null && known.has(c.store ? `${c.store}/${c.project}` : c.project) }));
 }

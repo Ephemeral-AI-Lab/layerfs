@@ -10,10 +10,10 @@ import { missing } from "./settings.js";
 export async function status(runtime) {
   const { settings, platform } = runtime;
   let docker;
-  if (platform.hostDocker === false) {
+  if (!platform.docker) {
     docker = { level: "not-used", detail: `this home is placed in ${platform.name}; its Stores and Sandboxes are inside each project's VM` };
   } else {
-    try { docker = { level: "ok", version: await platform.docker(settings, ["version", "--format", "{{.Server.Version}}"]) }; } catch (error) {
+    try { docker = { level: "ok", version: await platform.docker.version(runtime) }; } catch (error) {
       docker = { level: "down", error: error.stderr?.trim() || error.message };
     }
   }

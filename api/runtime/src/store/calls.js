@@ -107,22 +107,12 @@ export async function unused(runtime, name) {
   if ((await all(runtime)).some((s) => s.name === name)) throw refuse("Exists", `a LayerFS Store named ${name} exists`);
 }
 
-/** Makes a Store's labelled volume, refusing one that exists (docker volume create would reuse it). */
-export async function makeVolume(runtime, name) {
-  const { settings, platform } = runtime;
-  const volume = `${settings.containerPrefix}store-${name}`;
-  const exists = await platform.docker(settings, ["volume", "inspect", "--format", "{{.Name}}", volume]).then(() => true, () => false);
-  if (exists) throw refuse("Exists", `the volume ${volume} exists; remove it, or name the Store differently`);
-  await platform.docker(settings, ["volume", "create", "--label", "layerfs.role=store", "--label", `layerfs.home=${settings.home}`, "--label", `layerfs.store=${name}`, volume], { timeout: 30_000 });
-  return volume;
-}
-
 /** runtime.store.create(name): a new empty local SQLite Store in its own volume. */
 export async function create(runtime, name) {
   const { settings, platform } = runtime;
   await unused(runtime, name);
   await platform.init(settings);
-  const volume = await makeVolume(runtime, name);
+  const volume = await platform.docker.stores.makeVolume(runtime, name);
   const store = { name, kind: "sqlite", volume, link: null, created: Date.now(), projects: [] };
   try {
     await call("runtime.store.create", storeFields(runtime, store));

@@ -22,7 +22,7 @@ import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { invokeBackend } from "@layerfs/agent/internal";
 import { callHome } from "../settings.js";
-import { credentialsOf, makeVolume, postgresqlTarget, shown, unused } from "./calls.js";
+import { credentialsOf, postgresqlTarget, shown, unused } from "./calls.js";
 import { FILE, claim, link, named, put, refuse, storeFields } from "./registry.js";
 import { removeVolume } from "./volume.js";
 
@@ -201,7 +201,7 @@ export async function start_load(runtime, jobs, remoteName, options = {}) {
     return jobs.begin({ kind: "load", store: name, ...from }, async (job) => {
       try {
         await runtime.platform.init(runtime.settings);
-        const volume = await makeVolume(runtime, name);
+        const volume = await runtime.platform.docker.stores.makeVolume(runtime, name);
         const store = { name, kind: "sqlite", volume, link: null, created: Date.now(), projects: [] };
         let answer;
         try {

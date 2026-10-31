@@ -4,7 +4,9 @@
 // keeps root-only: `init` checks this process can write there first.
 import { accessSync, constants, existsSync, rmSync, statSync, statfsSync } from "node:fs";
 import { join } from "node:path";
-import { docker, homeNames, makeStore, refuse, releaseStoreHolders, removeStore, storeHolders } from "../shared.js";
+import { homeNames, refuse } from "../shared.js";
+import { dockerGroup, socketRun } from "./index.js";
+import { hooks } from "./stores.js";
 
 const NO_WORKER = "Linux runs Store calls in-process; there is no worker";
 
@@ -26,11 +28,8 @@ export default {
     if (uid !== undefined && owner !== uid) throw refuse("Unsupported", `the LayerFS home ${settings.home} belongs to uid ${owner}, not this process's uid ${uid}`);
   },
   path: (settings, hostPath) => hostPath,
-  docker,
-  makeStore,
-  storeHolders,
-  releaseStoreHolders,
-  removeStore,
+  docker: dockerGroup(socketRun),
+  ...hooks,
   storePath: (settings, volume) => `${settings.volumes}/${volume}/_data/global/store.sqlite`,
   homeNames: (settings) => homeNames(settings.home),
   async removeHome(settings, name) { rmSync(join(settings.home, name), { recursive: true, force: true }); },

@@ -1,19 +1,13 @@
 // Sandbox containers of this home that no project owns, or that were left
 // stopped, and their removal. From part of the dsh Host's runtime.js (#428).
+// The containers are the Docker group's (platform/docker/sandboxes.js).
 import { LayerFSError } from "@layerfs/agent";
 import { keyOf } from "../project/list.js";
-import { noHostDocker } from "../platform/shared.js";
+import { dockerOf, VM_SANDBOXES } from "../platform/shared.js";
 
-/** This home's Sandbox containers (`<prefix><project>-<n>`, label layerfs.role=sandbox), running or not. */
+/** This home's Sandbox containers, running or not; refused where the placement has no Docker group. */
 export async function containers(runtime) {
-  const { settings, platform } = runtime;
-  if (platform.hostSandboxes === false) throw noHostDocker(runtime, "runtime.sandbox", "its Sandboxes are Linux namespaces inside the VM; the SDK's project.list_sandboxes reads them");
-  const out = await platform.docker(settings, ["ps", "-a", "--no-trunc", "--filter", "label=layerfs.role=sandbox", "--format", "{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Label \"layerfs.project\"}}\t{{.Label \"layerfs.sandbox\"}}\t{{.Image}}\t{{.Label \"layerfs.store\"}}"]);
-  return out.split("\n").filter(Boolean).map((row) => {
-    const [name, state, status, project, sandbox, image, store] = row.split("\t");
-    // a Sandbox of a shared Store's project (#506) is `<prefix><store>.<project>-<n>`
-    return { name, state, running: state === "running", status, project, sandbox, image, store: store || null, key: store ? `${store}/${project}` : project };
-  }).filter((c) => c.name.startsWith(settings.containerPrefix));
+  return dockerOf(runtime, "runtime.sandbox", VM_SANDBOXES).sandboxes.containers(runtime);
 }
 
 /** Containers of no project of this home, or stopped: `[{ name, project, running, status }]`. */
@@ -32,7 +26,7 @@ export async function clean_leftovers(runtime, names) {
     if (!c) { results.push({ name, ok: false, message: "not a leftover of this home" }); continue; }
     if (c.running) { results.push({ name, ok: false, message: "still running; stop it first" }); continue; }
     try {
-      await runtime.platform.docker(runtime.settings, ["rm", name]);
+      await runtime.platform.docker.sandboxes.remove(runtime, [name]);
       results.push({ name, ok: true });
     } catch (error) {
       results.push({ name, ok: false, message: error.stderr?.trim() || error.message });

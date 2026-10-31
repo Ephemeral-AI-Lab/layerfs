@@ -62,7 +62,7 @@ async function dropStack(runtime, project, options) {
   const sandboxes = (await containers(runtime)).filter((c) => c.key === keyOf(project));
   const running = sandboxes.filter((c) => !STOPPED.has(c.state)).length;
   if (running && !options.stopSandboxes) throw refuse("Busy", `${running} running Sandbox(es) of ${project.name} use Store ${store.name}; a Sandbox closes 2 minutes after its last Workspace is unmounted, or pass stopSandboxes`);
-  if (sandboxes.length) await platform.docker(settings, ["rm", ...(running ? ["-f"] : []), ...sandboxes.map((c) => c.name)], { timeout: 30_000 });
+  if (sandboxes.length) await platform.docker.sandboxes.remove(runtime, sandboxes.map((c) => c.name), { force: running > 0, timeout: 30_000 });
   await runtime.clients.forget(keyOf(project));
   // a PostgreSQL Store's URL is passed per call
   if (store.kind === "postgresql" && (typeof options.url !== "string" || !options.url)) throw refuse("InvalidInput", `Store ${store.name} is a PostgreSQL schema: pass its { url } for this call`);
