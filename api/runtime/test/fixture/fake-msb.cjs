@@ -18,6 +18,7 @@
 // Every call is appended to FAKE_MSB_STATE/calls.jsonl as { at, argv }.
 const { appendFileSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } = require("node:fs");
 const { spawn } = require("node:child_process");
+const { homedir } = require("node:os");
 const { dirname, join } = require("node:path");
 
 const state = process.env.FAKE_MSB_STATE;
@@ -82,6 +83,12 @@ if (command === "inspect") {
 } else if (command === "create") {
   const name = at("--name");
   if (read(name)) fail(`sandbox already exists: sandbox '${name}' already exists; remove it, start the stopped sandbox, or recreate with .replace()`);
+  // H39v's finding: a create that fails on its mounts leaves the sandbox's own
+  // directory behind, invisible to `msb list` and uncleaned by `msb remove`
+  if (process.env.FAKE_MSB_FAIL_CREATE === "mount") {
+    mkdirSync(join(homedir(), ".microsandbox", "sandboxes", name), { recursive: true });
+    fail("the host path for one of the mounts does not exist");
+  }
   const labels = Object.fromEntries(argv.flatMap((value, index) => (value === "--label" ? [argv[index + 1].split("=")] : [])));
   const published = String(at("-p") ?? "").split(":");
   save(name, {

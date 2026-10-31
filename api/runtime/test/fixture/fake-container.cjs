@@ -89,6 +89,15 @@ if (command === "inspect") {
   const mounts = all("--mount").map((value) => Object.fromEntries(value.split(",").map((pair) => pair.split("="))));
   const store = mounts.find((entry) => entry.target === "/layerfs/store")?.source ?? "";
   const home = mounts.find((entry) => entry.target === "/layerfs/home")?.source ?? "";
+  // H39v's finding: `container run` makes a named volume it was given before it
+  // fails on a busy port, and the container record never appears
+  if (process.env.FAKE_CONTAINER_FAIL_RUN === "port") {
+    if (!existsSync(volumeFile(store))) {
+      mkdirSync(join(state, "volumes"), { recursive: true });
+      writeFileSync(volumeFile(store), JSON.stringify({ name: store, size: "20G", format: "ext4", creationDate: new Date().toISOString(), labels: {} }));
+    }
+    fail(`failed to publish 127.0.0.1:${String(at("--publish") ?? "").split(":")[1]}:7070: port is already allocated`);
+  }
   if (!existsSync(volumeFile(store))) fail(`volume not found: ${store}`);
   const labels = Object.fromEntries(all("--label").map((pair) => pair.split("=")));
   save({

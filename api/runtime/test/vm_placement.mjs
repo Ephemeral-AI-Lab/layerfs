@@ -16,6 +16,7 @@ const FAKE = fileURLToPath(new URL("../../agent/test/fixture/fake-native.cjs", i
 const SOURCE = fileURLToPath(new URL("../src", import.meta.url));
 const MSB = fileURLToPath(new URL("fixture/fake-msb.cjs", import.meta.url));
 const CONTAINER = fileURLToPath(new URL("fixture/fake-container.cjs", import.meta.url));
+const SSH = fileURLToPath(new URL("fixture/fake-ssh.cjs", import.meta.url));
 process.env.LAYERFS_NATIVE = FAKE;
 const { LayerFSRuntime } = await import("@layerfs/runtime");
 const { resolveSettings, missing, callHome, GUEST } = await import("../src/settings.js");
@@ -38,9 +39,14 @@ function standIn(name, fixture, state) {
   chmodSync(file, 0o755);
   const saved = process.env.PATH;
   process.env.PATH = `${bin}:${saved}`;
-  process.env[`FAKE_${name === "msb" ? "MSB" : "CONTAINER"}_STATE`] = state;
-  process.env[`FAKE_${name === "msb" ? "MSB" : "CONTAINER"}_NATIVE`] = FAKE;
-  return () => { process.env.PATH = saved; };
+  const envKey = name === "msb" ? "FAKE_MSB" : name === "container" ? "FAKE_CONTAINER" : "FAKE_SSH";
+  process.env[`${envKey}_STATE`] = state;
+  process.env[`${envKey}_NATIVE`] = FAKE;
+  if (name === "ssh") process.env.LAYERFS_SSH_STATE_DIR = join(state, "sessions");
+  return () => {
+    process.env.PATH = saved;
+    if (name === "ssh") delete process.env.LAYERFS_SSH_STATE_DIR;
+  };
 }
 
 /** A sealed Linux bundle with the adapter's worker and the real SDK packages it imports.
@@ -59,6 +65,21 @@ function makeBundle(tag = "build-one", image = null) {
 }
 
 const calls = (state) => (existsSync(join(state, "calls.jsonl")) ? readFileSync(join(state, "calls.jsonl"), "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line).argv) : []);
+
+/** Every await that could wait on a provider has a ceiling here, so a stuck
+ * call fails this case with a name instead of hanging the harness. */
+const deadline = (ms, what, promise) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${what} did not finish within ${ms / 1000} s`)), ms).unref()),
+  ]);
+
+// The whole case has a ceiling too: an unref'd watchdog that exits non-zero
+// rather than letting CI or a shell wait forever.
+setTimeout(() => {
+  process.stderr.write(`vm_placement/${selected}: FAIL, the case did not finish in 300 s\n`);
+  process.exit(1);
+}, 300_000).unref();
 /** A guest path inside one project's VM. */
 const guestPath = (state, vm, path) => join(state, "guest", vm, path.replace(/^\//, ""));
 /** The project is gone from this home: its entry and the runtime's record of it. */
@@ -95,8 +116,27 @@ try {
     const sized = resolveSettings({ home, platform: "linux", bundle: "/b" });
     assert.deepEqual([sized.vm.cpus, sized.vm.storeSize], [3, "64G"]);
     assert.throws(() => resolveSettings({ home, platform: "linux", placement: "vm:nope" }), { code: "Unsupported", message: /vm:microsandbox or vm:apple-container/ });
-    assert.throws(() => resolveSettings({ home, platform: "linux", placement: "cloud" }), { code: "InvalidInput", message: /local.*vm:<provider>/ });
+    assert.throws(() => resolveSettings({ home, platform: "linux", placement: "nope" }), { code: "InvalidInput", message: /local.*vm:<provider>/ });
     assert.throws(() => resolveSettings({ home, platform: "linux", placement: "vm:microsandbox", vm: { memory: "8" } }), { code: "InvalidInput", message: /memory/ });
+    // vm:ssh settings
+    const sshSettings = resolveSettings({
+      home, platform: "linux", bundle: "/b", placement: "vm:ssh",
+      vm: { host: "10.0.0.1", port: 2222, identityFile: "/path/to/key.pem", storePath: "/mnt/store" }
+    });
+    assert.deepEqual([sshSettings.placement.kind, sshSettings.placement.provider, sshSettings.vm.provider], ["vm", "ssh", "ssh"]);
+    assert.deepEqual(
+      [sshSettings.vm.ssh.host, sshSettings.vm.ssh.port, sshSettings.vm.ssh.identityFile, sshSettings.vm.ssh.storePath, sshSettings.vm.ssh.strictHostKeyChecking],
+      ["10.0.0.1", 2222, "/path/to/key.pem", "/mnt/store", true]
+    );
+    assert.deepEqual(missing(sshSettings), []);
+    // missing host in vm:ssh
+    const sshNoHost = resolveSettings({ home, platform: "linux", bundle: "/b", placement: "vm:ssh" });
+    assert.deepEqual(missing(sshNoHost), ["host"]);
+    // password rejected
+    assert.throws(
+      () => resolveSettings({ home, platform: "linux", bundle: "/b", placement: "vm:ssh", vm: { host: "10.0.0.1", password: "secret" } }),
+      { code: "InvalidInput", message: /password/ }
+    );
     delete process.env.LAYERFS_PLACEMENT;
     delete process.env.LAYERFS_VM_CPUS;
     delete process.env.LAYERFS_VM_STORE_SIZE;
@@ -346,23 +386,116 @@ try {
       await runtime.close();
       restoreWorker(work);
     }
+  } else if (selected === "ssh") {
+    makeBundle();
+    const state = join(work, "ssh");
+    mkdirSync(state);
+    const restore = standIn("ssh", SSH, state);
+    const runtime = await LayerFSRuntime.open({
+      home, bundle, placement: "vm:ssh", containerPrefix: prefix, platform: "linux", sweep: false,
+      vm: { host: "127.0.0.1", port: 22, storePath: "/layerfs/store" },
+    });
+    try {
+      const started = await deadline(60_000, "worker.start", runtime.worker.start("shop"));
+      assert.equal(started.vm.state, "running");
+      assert.equal(started.worker.state, "running");
+      const first = calls(state);
+      assert.ok(first.some((argv) => argv.includes("uname")), "the host's kernel is read before anything else");
+      assert.ok(first.some((argv) => argv.includes("findmnt")), "the Store path's filesystem is checked");
+      assert.ok(first.some((argv) => argv.includes("-N") && argv.includes("-L")), "the private stream is an ssh -L forward");
+      assert.ok(first.some((argv) => argv.includes("StrictHostKeyChecking=yes")), "host key checking stays on");
+      assert.ok(!first.some((argv) => argv.includes("StrictHostKeyChecking=no")), "never turned off behind the user's back");
+      assert.ok(first.some((argv) => argv.some((value) => typeof value === "string" && value.includes("tar -C"))), "the bundle arrives as one tar stream");
+      const entry = await deadline(30_000, "vm.status", runtime.vm.status("shop"));
+      assert.deepEqual([entry.state, entry.worker.state], ["running", "running"]);
+      // the endpoint the worker was written at is this host's forwarded port
+      const endpoint = endpointAt("shop");
+      assert.equal(endpoint.vm.provider, "ssh");
+      assert.ok(endpoint.port > 1024);
+      // a second start is served by the same forward: no second copy, no second forward
+      await deadline(30_000, "worker.start again", runtime.worker.start("shop"));
+      assert.equal(calls(state).filter((argv) => argv.includes("-N")).length, 1, "one forward per VM");
+      // stop ends the forward; the record stays and start re-opens it
+      assert.equal((await deadline(30_000, "vm.stop", runtime.vm.stop("shop"))).state, "stopped");
+      assert.equal((await deadline(30_000, "status after stop", runtime.vm.status("shop"))).state, "stopped");
+      const again = await deadline(60_000, "worker.start after stop", runtime.worker.start("shop"));
+      assert.deepEqual([again.vm.state, again.worker.state], ["running", "running"]);
+    } finally {
+      await runtime.close();
+      restore();
+      restoreWorker(work);
+    }
+  } else if (selected === "cleanup") {
+    // H39v's two findings: a provider create that fails must leave nothing
+    // behind — no Store volume for Apple Container (the CLI makes one before it
+    // fails on a busy port), and no hidden sandbox directory for Microsandbox.
+    const containerState = join(work, "container");
+    mkdirSync(containerState);
+    const restoreContainer = standIn("container", CONTAINER, containerState);
+    try {
+      const container = (await import("../src/platform/vm/apple-container.js")).default;
+      await container.ensureStore("lfs-vm-test-clean-store", "20G");
+      process.env.FAKE_CONTAINER_FAIL_RUN = "port";
+      await assert.rejects(container.create({
+        name: "lfs-vm-test-clean", image: "node:22-trixie-slim", cpus: 2, memory: "2G",
+        storeName: "lfs-vm-test-clean-store", storeSize: "20G", home, hostPort: 18080, workerPort: 7070,
+      }), /port is already allocated/);
+      assert.equal(existsSync(join(containerState, "volumes", "lfs-vm-test-clean-store.json")), false, "the Store volume this create made is gone");
+      assert.equal(existsSync(join(containerState, "vms", "lfs-vm-test-clean.json")), false, "and no VM record");
+    } finally {
+      delete process.env.FAKE_CONTAINER_FAIL_RUN;
+      restoreContainer();
+    }
+    const msbState = join(work, "msb");
+    mkdirSync(msbState);
+    const restoreMsb = standIn("msb", MSB, msbState);
+    const hidden = join(tmpdir(), ".microsandbox-clean-check");
+    try {
+      const msb = (await import("../src/platform/vm/microsandbox.js")).default;
+      const name = `lfs-vm-test-hidden-${process.pid}`;
+      const dir = join(process.env.HOME ?? join(tmpdir(), "home"), ".microsandbox", "sandboxes", name);
+      process.env.FAKE_MSB_FAIL_CREATE = "mount";
+      await assert.rejects(msb.create({
+        name, image: "node:22-trixie-slim", cpus: 2, memory: "2G", storeName: "lfs-vm-test-hidden-store",
+        storeSize: "20G", home, hostPort: 18081, workerPort: 7070,
+      }), /host path for one of the mounts/);
+      assert.equal(existsSync(dir), false, `the hidden sandbox directory ${dir} the failed create made is gone`);
+    } finally {
+      delete process.env.FAKE_MSB_FAIL_CREATE;
+      restoreMsb();
+      rmSync(hidden, { recursive: true, force: true });
+    }
   } else {
-    throw new Error("select settings, flow, two, bundle, delete, hosts or apple-container");
+    throw new Error("select settings, flow, two, bundle, delete, hosts, apple-container, ssh or cleanup");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });
 }
 console.log(`PASS vm_placement/${selected}`);
+// The run is over: exit explicitly so a stand-in child that outlived its case
+// cannot hold this process open. `restoreWorker` already ended them.
+process.exit(0);
 
 /** The stand-in's worker outlives its CLI: end it from the pid the fixture wrote. */
 function restoreWorker(folder) {
-  for (const provider of ["msb", "container"]) {
+  for (const provider of ["msb", "container", "ssh"]) {
     const guests = join(folder, provider, "guest");
-    if (!existsSync(guests)) continue;
-    for (const vm of readdirSync(guests)) {
-      const file = join(guests, vm, "layerfs/state/worker.pid");
-      if (!existsSync(file)) continue;
-      try { process.kill(Number(readFileSync(file, "utf8").trim())); } catch { /* already gone */ }
+    if (existsSync(guests)) {
+      for (const vm of readdirSync(guests)) {
+        for (const file of [join(guests, vm, "layerfs/state/worker.pid"), join(guests, "layerfs/state/worker.pid")]) {
+          if (!existsSync(file)) continue;
+          try { process.kill(Number(readFileSync(file, "utf8").trim())); } catch { /* already gone */ }
+        }
+      }
+    }
+    const sessions = join(folder, provider, "sessions");
+    if (existsSync(sessions)) {
+      for (const file of readdirSync(sessions)) {
+        try {
+          const session = JSON.parse(readFileSync(join(sessions, file), "utf8"));
+          if (session.forwardPid) process.kill(session.forwardPid);
+        } catch {}
+      }
     }
   }
 }

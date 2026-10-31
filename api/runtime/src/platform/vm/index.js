@@ -34,8 +34,9 @@ import { callHome, GUEST } from "../../settings.js";
 import { NAME, record as projectRecord } from "../../project/list.js";
 import microsandbox from "./microsandbox.js";
 import appleContainer from "./apple-container.js";
+import ssh from "./ssh.js";
 
-const PROVIDERS = { microsandbox, "apple-container": appleContainer };
+const PROVIDERS = { microsandbox, "apple-container": appleContainer, ssh };
 const WORKER_PORT = 7070;
 const SERVER = "api/runtime/src/worker/server.js";
 /** Bundle hashing in the worker comes first, so readiness takes a while. */
@@ -101,6 +102,7 @@ async function ensure(settings, project) {
   if (provider.ensureStore) await provider.ensureStore(storeName, settings.vm.storeSize);
   const hostPort = await freePort();
   const created = await provider.create({
+    ...settings.vm,
     name, image: settings.vm.image, cpus: settings.vm.cpus, memory: settings.vm.memory,
     storeName, storeSize: settings.vm.storeSize, home: settings.home, hostPort, workerPort: WORKER_PORT,
   });

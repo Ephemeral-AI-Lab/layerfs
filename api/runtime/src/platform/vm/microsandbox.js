@@ -11,6 +11,9 @@
 //     and the daemon run as root (the guest's only identity) and the
 //     namespaces backend drops each command itself (#515 §4.3).
 // One CLI call per call, one attempt, no retry.
+import { existsSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { answer, capture, readFile, writeFile } from "./cli.js";
 
 const CLI = "msb";
@@ -57,15 +60,24 @@ export async function inspect(name) {
  * reported by the caller from fact, not from the command's exit code.
  */
 export async function create(config) {
-  await call([
-    "create", "--name", config.name, "--cpus", String(config.cpus), "--memory", config.memory,
-    "--mount-named", `${config.storeName}:/layerfs/store:kind=disk,size=${config.storeSize}`,
-    "-v", `${config.home}:/layerfs/home`,
-    "-p", `127.0.0.1:${config.hostPort}:${config.workerPort}`,
-    "--label", "layerfs.role=vm", "--label", `layerfs.home=${config.home}`,
-    config.image,
-  ], { timeout: CREATE_MS });
-  return inspect(config.name);
+  const dir = join(homedir(), ".microsandbox", "sandboxes", config.name);
+  const existedBefore = existsSync(dir);
+  try {
+    await call([
+      "create", "--name", config.name, "--cpus", String(config.cpus), "--memory", config.memory,
+      "--mount-named", `${config.storeName}:/layerfs/store:kind=disk,size=${config.storeSize}`,
+      "-v", `${config.home}:/layerfs/home`,
+      "-p", `127.0.0.1:${config.hostPort}:${config.workerPort}`,
+      "--label", "layerfs.role=vm", "--label", `layerfs.home=${config.home}`,
+      config.image,
+    ], { timeout: CREATE_MS });
+    return inspect(config.name);
+  } catch (error) {
+    if (!existedBefore && existsSync(dir)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    throw error;
+  }
 }
 
 export const start = (name) => call(["start", name], { timeout: CREATE_MS });

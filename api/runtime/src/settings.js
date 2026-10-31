@@ -10,7 +10,7 @@ import { LayerFSError } from "@layerfs/agent";
 const PLATFORMS = { linux: "linux", darwin: "macos", win32: "windows" };
 const DEFAULT_DOCKER = "/var/run/docker.sock";
 /** Where a home's Store and Sandboxes live: this machine (`local`, today) or one Linux VM per home (V9). */
-const PROVIDERS = ["microsandbox", "apple-container"];
+const PROVIDERS = ["microsandbox", "apple-container", "ssh"];
 /** The VM's own settings: the image that holds node and the guest base, and its size. */
 const VM = { image: "node:22-trixie-slim", cpus: 2, memory: "2G", storeSize: "20G" };
 /** Where the VM sees the home, the Store disk, the bundle and its working state (§5, §6). */
@@ -118,7 +118,34 @@ export function resolveSettings(given = {}) {
     pollMs: given.pollMs ?? 400,
     sweep: given.sweep !== false,
   };
-  if (where.kind === "vm") settings.vm = { ...vmSettings(given.vm), ...where, home: GUEST.home, store: GUEST.store };
+  if (where.kind === "vm") {
+    settings.vm = { ...vmSettings(given.vm), ...where, home: GUEST.home, store: GUEST.store };
+    if (where.provider === "ssh") {
+      const sshGiven = given.ssh ?? given.vm ?? {};
+      if (sshGiven.password) throw new LayerFSError("InvalidInput", "vm:ssh does not support password authentication; use an identityFile instead", null);
+      const host = sshGiven.host ?? process.env.LAYERFS_SSH_HOST ?? null;
+      const port = Number(sshGiven.port ?? process.env.LAYERFS_SSH_PORT ?? 22);
+      if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new LayerFSError("InvalidInput", "the SSH port must be a number between 1 and 65535", null);
+      const identityFile = sshGiven.identityFile ?? sshGiven.identity ?? process.env.LAYERFS_SSH_IDENTITY ?? process.env.LAYERFS_SSH_KEY ?? null;
+      if (identityFile && typeof identityFile !== "string") throw new LayerFSError("InvalidInput", "the SSH identityFile must be a file path", null);
+      const storePath = sshGiven.storePath ?? sshGiven.store ?? process.env.LAYERFS_SSH_STORE ?? GUEST.store;
+      settings.vm.ssh = {
+        host: host ? String(host).trim() : null,
+        user: String(sshGiven.user ?? process.env.LAYERFS_SSH_USER ?? "root").trim(),
+        port,
+        identityFile: identityFile ? String(identityFile).trim() : null,
+        storePath: String(storePath).trim(),
+        strictHostKeyChecking: sshGiven.strictHostKeyChecking ?? true,
+        knownHostsFile: sshGiven.knownHostsFile ?? process.env.LAYERFS_SSH_KNOWN_HOSTS ?? null,
+        controlMaster: sshGiven.controlMaster ?? false,
+      };
+      settings.vm.host = settings.vm.ssh.host;
+      settings.vm.user = settings.vm.ssh.user;
+      settings.vm.port = settings.vm.ssh.port;
+      settings.vm.identityFile = settings.vm.ssh.identityFile;
+      settings.vm.storePath = settings.vm.ssh.storePath;
+    }
+  }
   if (platform === "windows") {
     const hash = createHash("sha256").update(given.home).digest("hex").slice(0, 16);
     settings.wsl = {
@@ -137,7 +164,13 @@ export function resolveSettings(given = {}) {
 
 /** Settings Init and Workspaces need that are not given. macOS, Windows and a VM need a bundle too. */
 export const missing = (settings) =>
-  [...(settings.placement.kind === "vm" ? [] : ["image"]), "daemon", ...(settings.platform === "linux" && settings.placement.kind !== "vm" ? [] : ["bundle"])].filter((name) => !settings[name]);
+  [
+    ...(settings.placement.kind === "vm" ? [] : ["image"]),
+    "daemon",
+    ...(settings.platform === "linux" && settings.placement.kind !== "vm" ? [] : ["bundle"]),
+    // a host this home cannot reach is a missing setting, listed before a start
+    ...(settings.placement.provider === "ssh" ? ["host"] : []),
+  ].filter((name) => (name === "host" ? !settings.vm?.host : !settings[name]));
 
 /** The LayerFS home as LayerFS calls see it (Windows: the WSL one; a VM: the guest's). */
 export const callHome = (settings) => settings.vm?.home ?? settings.wsl?.home ?? settings.home;

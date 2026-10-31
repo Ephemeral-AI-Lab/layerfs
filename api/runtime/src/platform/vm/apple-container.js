@@ -75,6 +75,9 @@ export async function inspect(name) {
   };
 }
 
+/** Newly created named Store volumes in this session; cleaned up if create fails. */
+const newlyCreatedStores = new Set();
+
 /**
  * The Store disk: a named volume of `size`, made once. An existing volume keeps
  * the size it was made with (the CLI has no resize), so only its presence is
@@ -85,19 +88,31 @@ export async function ensureStore(name, size) {
   if (found.code === 0) return;
   const made = await capture(CLI, ["volume", "create", "-s", size, name], { timeout: CREATE_MS });
   if (made.code !== 0) throw new Error(`could not create the Store volume ${name}: ${(made.stderr || made.stdout).trim()}`);
+  newlyCreatedStores.add(name);
 }
 
 export async function create(config) {
-  await call([
-    "run", "--detach", "--name", config.name, "--cpus", String(config.cpus), "--memory", config.memory,
-    ...CAPABILITIES,
-    "--mount", `type=volume,source=${config.storeName},target=/layerfs/store`,
-    "--mount", `type=bind,source=${config.home},target=/layerfs/home`,
-    "--publish", `127.0.0.1:${config.hostPort}:${config.workerPort}`,
-    "--label", "layerfs.role=vm", "--label", `layerfs.home=${config.home}`,
-    config.image, "sleep", "infinity",
-  ], { timeout: CREATE_MS });
-  return inspect(config.name);
+  const wasNew = newlyCreatedStores.has(config.storeName);
+  const existedBefore = wasNew ? false : (await capture(CLI, ["volume", "inspect", config.storeName])).code === 0;
+  try {
+    await call([
+      "run", "--detach", "--name", config.name, "--cpus", String(config.cpus), "--memory", config.memory,
+      ...CAPABILITIES,
+      "--mount", `type=volume,source=${config.storeName},target=/layerfs/store`,
+      "--mount", `type=bind,source=${config.home},target=/layerfs/home`,
+      "--publish", `127.0.0.1:${config.hostPort}:${config.workerPort}`,
+      "--label", "layerfs.role=vm", "--label", `layerfs.home=${config.home}`,
+      config.image, "sleep", "infinity",
+    ], { timeout: CREATE_MS });
+    newlyCreatedStores.delete(config.storeName);
+    return inspect(config.name);
+  } catch (error) {
+    if (wasNew || !existedBefore) {
+      newlyCreatedStores.delete(config.storeName);
+      await removeStore(config.storeName).catch(() => {});
+    }
+    throw error;
+  }
 }
 
 export const start = (name) => call(["start", name], { timeout: CREATE_MS });

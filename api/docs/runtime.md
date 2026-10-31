@@ -183,8 +183,10 @@ A project's VM holds that project's Store on its own ext4 disk, its Sandboxes
 are Linux namespaces (`LAYERFS_SANDBOX_BACKEND=namespaces`, H36's backend) and
 its worker runs the real SDK as root; the host reaches only each VM's worker,
 with one attempt per call and no replay. Providers, both verified against the
-real CLI by `test/verify/vm_real.mjs`: `microsandbox` (`msb` 0.7.8) and
-`apple-container` (`container` 1.6.1).
+real CLI by `test/verify/vm_real.mjs` and by H40's own run: `microsandbox`
+(`msb` 0.7.8), `apple-container` (`container` 1.6.1) and `ssh` (any Linux host
+the user provides, reached with the system `ssh` client; see
+[the SSH provider](#the-ssh-provider-any-linux-host) below).
 
 ```sh
 LAYERFS_PLACEMENT=vm:microsandbox layerfs-home # any integration that sets it
@@ -278,8 +280,71 @@ through each VM's worker, a fork, a write, a Sandbox, an exec as the nonroot
 identity with user namespaces blocked, a Commit, a stop/start of one VM and a
 worker restart, then a check that neither Store holds the other's Branch, and
 that removing one project leaves the other's VM running. The unit tests
-(`node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|apple-container`)
+(`node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|apple-container|ssh`)
 use a stand-in provider CLI.
+
+### The SSH provider (any Linux host)
+
+`vm:ssh` places the home on a Linux host the user already has — an EC2
+instance, a machine on the network, or a VM they made — instead of one this
+runtime starts (#515 §6). The host and its disk are the user's: the adapter
+makes no disk and formats nothing, it proves that the path given is an ext4
+filesystem on that host's own kernel (`uname -s` is `Linux`, `findmnt` or
+`blkid` says `ext4`) and attaches it at `/layerfs/store` (a bind mount for a
+directory, `mount -t ext4` for a block device) when it is somewhere else.
+
+```sh
+LAYERFS_PLACEMENT=vm:ssh LAYERFS_SSH_HOST=ec2-…amazonaws.com \
+LAYERFS_SSH_IDENTITY=~/.ssh/deploy LAYERFS_SSH_STORE=/mnt/layerfs \
+  layerfs-home
+```
+
+Settings (each also read from the environment named):
+
+| Setting | Environment | Default |
+| --- | --- | --- |
+| `vm.host` | `LAYERFS_SSH_HOST` | required |
+| `vm.user` | `LAYERFS_SSH_USER` | `root` |
+| `vm.port` | `LAYERFS_SSH_PORT` | `22` |
+| `vm.identityFile` | `LAYERFS_SSH_IDENTITY` | none: the agent's keys |
+| `vm.storePath` | `LAYERFS_SSH_STORE` | `/layerfs/store` |
+| `vm.strictHostKeyChecking` | — | `yes` |
+| `vm.knownHostsFile` | `LAYERFS_SSH_KNOWN_HOSTS` | the agent's |
+
+Key login only: a password is refused by name, the key is a path that goes to
+`ssh -i` (its bytes never enter an argument list or a log), and
+`StrictHostKeyChecking` is `yes` unless the setting says otherwise — the
+loosest it accepts is `accept-new`.
+
+What differs from a microVM provider, and why:
+
+- **One host serves one Store.** The Store path is one directory on the user's
+disk, so a second project naming the same host and path is refused `Busy`,
+naming the VM that holds it, instead of writing one Store file twice.
+- **The private stream is `ssh -L 127.0.0.1:<host>:127.0.0.1:7070`**, started
+with `-o ExitOnForwardFailure=yes`: a busy local port fails at once, before
+anything is uploaded or started. Its stderr goes to
+`<state>/<vm>-forward.log`, not a pipe, so the host process (CLI, test, an
+integration) exits while the user's VM keeps running. `stop` ends the forward
+and the remote worker (SIGTERM, then SIGKILL, bounded).
+- **Init sources are copied, not shared.** A microVM bind-mounts the host home;
+an SSH host shares no path with this machine, so `platform.init` copies the
+source to `/layerfs/import/<hash>`. The host's `/layerfs/home` is therefore its
+own directory, not this machine's home.
+- **A delete never touches the disk.** `runtime.vm.delete` removes the session
+record, the forward, `/layerfs/bundle` and `/layerfs/state`, and keeps the
+Store; the refusal while the project exists is the same V8 rule as above. The
+host's `/layerfs/home` and `/layerfs/import` also stay (they are LayerFS's own
+copies, but removing the home entry would let a second Init duplicate a project
+that the live Store already holds).
+
+Its session records live in `LAYERFS_SSH_STATE_DIR` (default
+`~/.layerfs/ssh`), one JSON file per VM, and a forward that no longer runs reads
+as a stopped VM, so the next `worker.start` re-opens it. The failure matrix is
+`node api/runtime/test/verify/ssh_faults.mjs [port|store|ext4|host|drop|disconnect|remote|delete|shared]`:
+a busy local port, a missing or non-ext4 Store path, a non-Linux host, an
+unreachable network and a reconnected one, a dropped forward, a rebooted host,
+a refused and a permitted delete, and a second project on the same host.
 
 ## Docker
 
