@@ -20,7 +20,7 @@ import { setTimeout as pause } from "node:timers/promises";
 import { INIT_TIMEOUT_MS, LayerFS, LayerFSError } from "@layerfs/agent";
 import { invokeBackend } from "@layerfs/agent/internal";
 import { deploymentEnv, withEnv } from "../clients.js";
-import { homeStores } from "../platform/shared.js";
+import { homeStores } from "../place/shared.js";
 import { callHome, missing } from "../settings.js";
 import { NAME, record, saveRecord } from "./list.js";
 import { entries, named, put, storeFields, update } from "../store/registry.js";

@@ -1,5 +1,5 @@
 // The `ssh` stand-in for @layerfs/runtime's vm:ssh tests (#515 §6): no host.
-// It answers exactly the calls `platform/vm/ssh.js` makes, keeps one guest root
+// It answers exactly the calls `place/vm/ssh.js` makes, keeps one guest root
 // under FAKE_SSH_STATE/guest, and serves the private stream itself:
 //
 //   ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:H:127.0.0.1:G …   the forward

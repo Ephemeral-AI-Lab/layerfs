@@ -19,13 +19,13 @@
 import { LayerFSError } from "@layerfs/agent";
 import { useWorker } from "@layerfs/agent/internal";
 import { Clients } from "./clients.js";
-import { homeStores } from "./platform/shared.js";
+import { homeStores } from "./place/shared.js";
 import { resolveSettings } from "./settings.js";
 import { status } from "./status.js";
-import linux from "./platform/docker/linux.js";
-import macos from "./platform/docker/macos.js";
-import windows from "./platform/docker/windows/index.js";
-import { vmPlatform } from "./platform/vm/index.js";
+import linux from "./place/docker/linux.js";
+import macos from "./place/docker/macos.js";
+import windows from "./place/docker/windows/index.js";
+import { vmPlatform } from "./place/vm/index.js";
 import { find, list } from "./project/list.js";
 import * as stores from "./store/calls.js";
 import * as sync from "./store/sync.js";
@@ -42,7 +42,7 @@ import { list as listVolumes, remove as removeVolumes } from "./volume.js";
 import { subscribe } from "./events/subscribe.js";
 
 const PLATFORMS = { linux, macos, windows };
-/** The platform object `settings` selects: a `local` home's Docker placement (platform/docker/), or one VM's (platform/vm/, #527 §6). */
+/** The platform object `settings` selects: a `local` home's Docker placement (place/docker/), or one VM's (place/vm/, #527 §6). */
 const platformFor = (settings) => (settings.placement.kind === "vm" ? vmPlatform(settings.placement.provider) : PLATFORMS[settings.platform]);
 /** Held only by `open`: the constructor refuses without it. */
 const FACTORY = Symbol("LayerFSRuntime.open");

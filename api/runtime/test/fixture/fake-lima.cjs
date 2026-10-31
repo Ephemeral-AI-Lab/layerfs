@@ -1,8 +1,8 @@
 // The `limactl` and `ssh` stand-in for @layerfs/runtime's vm:lima and
 // vm:firecracker tests (#527 platform pass): no VM. Called as
 // `fake-lima.cjs limactl …` or `fake-lima.cjs ssh …` (the test puts one shim of
-// each name on PATH). It answers exactly the calls `platform/vm/lima.js` and
-// `platform/vm/firecracker.js` make, and maps each guest's absolute paths
+// each name on PATH). It answers exactly the calls `place/vm/lima.js` and
+// `place/vm/firecracker.js` make, and maps each guest's absolute paths
 // under FAKE_LIMA_STATE/guest/<vm>, so guest reads and writes are real files:
 //
 //   limactl list --json NAME | create --name N --tty=false - | start --tty=false N

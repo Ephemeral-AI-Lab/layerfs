@@ -6,7 +6,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, posix } from "node:path";
 import { LayerFSError } from "@layerfs/agent";
-import { VOLUMES } from "./platform/docker/index.js";
+import { VOLUMES } from "./place/docker/index.js";
 
 const PLATFORMS = { linux: "linux", darwin: "macos", win32: "windows" };
 const DEFAULT_DOCKER = "/var/run/docker.sock";

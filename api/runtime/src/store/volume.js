@@ -3,12 +3,12 @@
 // failed starts and idle Sandboxes go with it. Moved from project/delete.js
 // (#506), where it was a project's own volume. The four Store hooks are the
 // platform's, keyed by Store: Docker volumes and containers on a local
-// placement (platform/docker/stores.js; on Linux also the running native and
+// placement (place/docker/stores.js; on Linux also the running native and
 // namespaces Sandboxes the records name, which only their own backend
 // closes, #527 step 12), the project's VM, its disk and its Sandboxes under
 // `vm:` (#515), which holds only a project's own Store. One attempt per step; a failed step leaves the rest in place.
 import { LayerFSError } from "@layerfs/agent";
-import { STOPPED } from "../platform/docker/sandboxes.js";
+import { STOPPED } from "../place/docker/sandboxes.js";
 
 /** `store` is `{ name, volume, legacy }`: `legacy` for the Store a project's own Init made, named after
  * that project (a `vm:` placement's Store is that project's VM and disk), else a Store of the home. */

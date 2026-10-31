@@ -23,7 +23,7 @@ process.env.LAYERFS_NATIVE = FAKE;
 const { LayerFSRuntime } = await import("@layerfs/runtime");
 const { resolveSettings, missing, callHome, GUEST } = await import("../src/settings.js");
 const { deploymentEnv } = await import("../src/clients.js");
-const { endpointFile } = await import("../src/platform/shared.js");
+const { endpointFile } = await import("../src/place/shared.js");
 
 const selected = process.argv[2];
 const work = mkdtempSync(join(tmpdir(), "layerfs-vm-"));
@@ -483,7 +483,7 @@ try {
       const source = join(work, "src");
       mkdirSync(join(source, "d"), { recursive: true });
       writeFileSync(join(source, "d", "a.txt"), "a\n");
-      const container = (await import("../src/platform/vm/apple-container.js")).default;
+      const container = (await import("../src/place/vm/apple-container.js")).default;
       await deadline(30_000, "copy", container.copy(vmName("shop"), source, "/layerfs/import/x"));
       assert.equal(readFileSync(join(state, "guest", vmName("shop"), "layerfs/import/x/d/a.txt"), "utf8"), "a\n");
       assert.deepEqual(readdirSync(home).filter((name) => name.startsWith(".vm-copy-")), []);
@@ -529,7 +529,7 @@ try {
         mkdirSync(source);
         writeFileSync(join(source, "a.txt"), "a\n");
         for (const path of [source, join(source, "a.txt")]) execFileSync("xattr", ["-w", "com.apple.provenance", "", path]);
-        const ssh = (await import("../src/platform/vm/ssh.js"));
+        const ssh = (await import("../src/place/vm/ssh.js"));
         await deadline(30_000, "copy", ssh.copy(vmName("shop"), source, "/layerfs/import/xattr"));
         const copied = readFileSync(join(state, "copies.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line)).find((copy) => copy.destination === "/layerfs/import/xattr");
         assert.deepEqual(copied.names.sort(), ["./", "./a.txt"], JSON.stringify(copied.names));
@@ -566,7 +566,7 @@ try {
       assert.equal(endpoint.vm.provider, "lima");
       // Lima finds a formatted disk by its ext4 label `lima-<disk>` (16 bytes at most): a longer
       // name would be formatted again at every boot, so the disk has a short name of its own
-      const { diskName, template: limaTemplate } = await import("../src/platform/vm/lima.js");
+      const { diskName, template: limaTemplate } = await import("../src/place/vm/lima.js");
       const disk = diskName(storeName("shop"));
       assert.match(disk, /^lfs[0-9a-f]{8}$/);
       assert.ok(`lima-${disk}`.length <= 16);
@@ -710,7 +710,7 @@ try {
     mkdirSync(containerState);
     const restoreContainer = standIn("container", CONTAINER, containerState);
     try {
-      const container = (await import("../src/platform/vm/apple-container.js")).default;
+      const container = (await import("../src/place/vm/apple-container.js")).default;
       await container.ensureStore("lfs-vm-test-clean-store", "20G");
       process.env.FAKE_CONTAINER_FAIL_RUN = "port";
       await assert.rejects(container.create({
@@ -728,7 +728,7 @@ try {
     const restoreMsb = standIn("msb", MSB, msbState);
     const hidden = join(tmpdir(), ".microsandbox-clean-check");
     try {
-      const msb = (await import("../src/platform/vm/microsandbox.js")).default;
+      const msb = (await import("../src/place/vm/microsandbox.js")).default;
       const name = `lfs-vm-test-hidden-${process.pid}`;
       const dir = join(process.env.HOME ?? join(tmpdir(), "home"), ".microsandbox", "sandboxes", name);
       process.env.FAKE_MSB_FAIL_CREATE = "mount";

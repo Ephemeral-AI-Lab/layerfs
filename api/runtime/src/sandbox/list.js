@@ -4,10 +4,10 @@
 // Workspace (/tmp, which is also HOME, and the npm, node and cargo caches
 // there). It goes only when the container is deleted (sandbox.close, an idle
 // close followed by a reclaim, or runtime.sandbox.sweep). One `docker ps`
-// and one `docker inspect --size` (platform/docker/sandboxes.js), plus on Linux one
+// and one `docker inspect --size` (place/docker/sandboxes.js), plus on Linux one
 // runtime.sandbox.records per project (sandbox/records.js); it changes nothing.
 import { keyOf } from "../project/list.js";
-import { dockerOf, VM_SANDBOXES } from "../platform/shared.js";
+import { dockerOf, VM_SANDBOXES } from "../place/shared.js";
 import { recorded, recordingProjects } from "./records.js";
 
 /** `[{ name, project, sandbox, runtime, state, running, startedAt, finishedAt, image, ports, scratch, owned }]`,

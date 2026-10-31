@@ -20,7 +20,7 @@ import { NAME, dropRecord, keyOf, list, record } from "./list.js";
 import { drop, entries, named, put, storeFields, update } from "../store/registry.js";
 import { removeVolume } from "../store/volume.js";
 import { containers } from "../sandbox/leftovers.js";
-import { STOPPED } from "../platform/docker/sandboxes.js";
+import { STOPPED } from "../place/docker/sandboxes.js";
 
 const refuse = (code, message) => new LayerFSError(code, message, null);
 
