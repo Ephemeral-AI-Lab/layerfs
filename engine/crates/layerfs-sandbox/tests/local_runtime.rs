@@ -89,8 +89,8 @@ fn run(sandbox: &Sandbox, arguments: &[&str], environment: &[&str]) -> (i32, Str
     };
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let exit = sandbox.run(&request, &mut out, &mut err).unwrap();
-    assert_eq!(exit.stdout, out.len() as u64);
-    assert_eq!(exit.stderr, err.len() as u64);
+    assert_eq!(exit.stdout_bytes, out.len() as u64);
+    assert_eq!(exit.stderr_bytes, err.len() as u64);
     (
         exit.code,
         String::from_utf8(out).unwrap(),

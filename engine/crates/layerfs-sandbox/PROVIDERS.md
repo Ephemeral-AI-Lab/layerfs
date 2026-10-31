@@ -17,6 +17,16 @@ were under `layerfs_sandbox::backend`). The root re-exports `Runtime`,
 (`DockerProvider`, `NativeMacosProvider`, `NativeLinuxProvider`,
 `NamespaceProvider`) and `HelperSpec`.
 
+The same file names hold the same roles in every backend: `provider.rs` (what
+`Runtime` holds), `create.rs` (start one Sandbox), `sandbox.rs` (a running
+Sandbox: stop, delete, inspect) and `exec.rs` (one command); `listener.rs` and
+`streams.rs` match between Docker and native. Docker's Engine HTTP client is
+`docker/client/` (`http`, `socket`, `body`, `mux`, `version`). Native reads its
+OS facts through the alias `os` (`native/linux/` or `native/macos/`). Every
+backend's `run` returns the shared `ExecExit` (native's `LocalExit` is gone),
+and the `DockerInstance`, `NativeLinuxInstance` and `NativeMacosInstance`
+aliases are removed (#527 step 9c).
+
 - `Runtime` is one deployment's selection and is kept for every Sandbox it
   starts: `Docker(DockerProvider)` (the default), `MacosNative(NativeMacosProvider)`,
   `LinuxNative(NativeLinuxProvider)` and `Namespaces(NamespaceProvider)` (Linux

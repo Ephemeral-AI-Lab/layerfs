@@ -1,33 +1,27 @@
 //! Local Docker Engine API1.48 to 1.54, negotiated once, with exact IDs and no command replay.
-mod archive;
-mod body;
-mod container;
-mod container_types;
+//! One container per Sandbox: `create` starts it, `sandbox` owns it (stop,
+//! delete), `exec` runs one command in it, and `client/` is the Engine HTTP
+//! client the rest reads.
+mod client;
+mod create;
 mod endpoint;
-mod headers;
-mod http;
-mod inspect;
+mod exec;
+mod failure;
 mod listener;
-mod mux;
 mod provider;
-mod provider_exec;
-mod provider_failure;
-mod request;
-mod socket;
+mod sandbox;
 mod streams;
 mod topology;
-mod version;
-pub use archive::{UploadFailure, UploadWork};
-pub use container_types::{
-    CreatePhase, Sandbox, SandboxCreateFailure, SandboxDisposition, SandboxRequest,
-};
-pub use http::Docker;
+mod upload;
+pub use client::Docker;
+pub(crate) use exec::run as run_command;
+pub use exec::{ExecCreateFailure, ExecCreated, ExecRequest};
+pub use failure::ProviderFailure;
 pub use listener::{ListenerFailure, ListenerObservation};
-pub use provider::{DockerInstance, DockerProvider};
-pub(crate) use provider_exec::run as run_command;
-pub use provider_failure::ProviderFailure;
-pub use request::{ExecCreateFailure, ExecCreated, ExecRequest};
+pub use provider::DockerProvider;
+pub use sandbox::{CreatePhase, Sandbox, SandboxCreateFailure, SandboxDisposition, SandboxRequest};
 pub use streams::{
     Attached, ExecHandle, InputCloseFailure, InputEnd, OutputFailure, OutputProgress, RuntimeInput,
     RuntimeOutput, SplitFailure, StartFailure,
 };
+pub use upload::{UploadFailure, UploadWork};

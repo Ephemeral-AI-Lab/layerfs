@@ -6,7 +6,7 @@
 //! Sandbox.
 use super::{groups, process, process::LocalProcess, sandbox::Sandbox, search::search_path};
 use crate::platform::native::streams;
-use crate::{ExecRequest, RuntimeError, WireFailure};
+use crate::{ExecExit, ExecRequest, RuntimeError, WireFailure};
 use nix::sys::signal::{killpg, Signal};
 use std::{
     io::{self, Write},
@@ -15,29 +15,20 @@ use std::{
     process::{Command, Stdio},
 };
 
-/// One command's end: its exit code (128 + the signal for one a signal
-/// ended, as the Engine reports it), its process id (diagnostic only) and the
-/// bytes each stream delivered.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct LocalExit {
-    pub code: i32,
-    pub pid: u32,
-    pub stdout: u64,
-    pub stderr: u64,
-}
-
 impl Sandbox {
     /// Runs `request` once while this Sandbox's daemon runs: as its uid/gid
     /// with no supplementary groups, in its directory, its stdout and stderr
     /// streamed to the sinks as they arrive, then waits for its exit. A sink
     /// failure closes the command's pipes, still waits for its exit, and
-    /// returns the sink's error. Standard input is not offered.
+    /// returns the sink's error. Standard input is not offered. The exit
+    /// code is 128 + the signal for a command a signal ended, as the Engine
+    /// reports it; the process id is diagnostic only.
     pub fn run(
         &self,
         request: &ExecRequest,
         stdout: &mut (dyn Write + Send),
         stderr: &mut (dyn Write + Send),
-    ) -> Result<LocalExit, Box<WireFailure>> {
+    ) -> Result<ExecExit, Box<WireFailure>> {
         check(request).map_err(|cause| self.failure(cause))?;
         self.endpoint()?;
         let mut command = Command::new(&request.arguments[0]);
@@ -101,11 +92,11 @@ impl Sandbox {
             .code()
             .or_else(|| status.signal().map(|signal| 128 + signal))
             .ok_or_else(|| self.invalid("local command exit status"))?;
-        Ok(LocalExit {
+        Ok(ExecExit {
             code,
-            pid,
-            stdout: out_bytes,
-            stderr: err_bytes,
+            pid: Some(pid),
+            stdout_bytes: out_bytes,
+            stderr_bytes: err_bytes,
         })
     }
 }

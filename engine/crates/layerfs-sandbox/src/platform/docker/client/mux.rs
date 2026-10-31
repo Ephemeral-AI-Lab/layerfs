@@ -1,6 +1,6 @@
 //! Shared standard Engine multiplexed header; lengths remain counters.
 use crate::RuntimeError;
-pub(super) fn header(bytes: [u8; 8]) -> Result<(u8, u32), RuntimeError> {
+pub(in crate::platform::docker) fn header(bytes: [u8; 8]) -> Result<(u8, u32), RuntimeError> {
     if bytes[1..4] != [0; 3] || bytes[0] > 3 {
         return Err(RuntimeError::Protocol("standard runtime frame header"));
     }

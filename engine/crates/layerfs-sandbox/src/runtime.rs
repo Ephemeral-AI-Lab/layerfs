@@ -170,15 +170,7 @@ impl Sandbox {
         match self {
             Self::Docker(sandbox) => docker::run_command(sandbox, request, stdout, stderr),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Native(sandbox) => {
-                let exit = sandbox.run(request, stdout, stderr)?;
-                Ok(ExecExit {
-                    code: exit.code,
-                    pid: Some(exit.pid),
-                    stdout_bytes: exit.stdout,
-                    stderr_bytes: exit.stderr,
-                })
-            }
+            Self::Native(sandbox) => sandbox.run(request, stdout, stderr),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.run(request, stdout, stderr),
         }

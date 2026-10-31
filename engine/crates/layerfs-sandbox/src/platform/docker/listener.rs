@@ -1,7 +1,7 @@
 //! Actual daemon stdout startup event; bounded line and multiplexed payload windows.
 //! A bounded read of the container's log tail, for a failed start's report.
-use super::{body::exact, Sandbox};
-use super::{body::Body, socket::Socket};
+use super::client::{body::exact, body::Body, socket::Socket};
+use super::Sandbox;
 use crate::{RuntimeError, WireFailure};
 use std::{
     io::{self, BufReader, Read},
@@ -77,7 +77,7 @@ impl Sandbox {
                 loop {
                     let mut header = [0; 8];
                     exact(&mut input, &mut header)?;
-                    let (tag, mut left) = super::mux::header(header)?;
+                    let (tag, mut left) = super::client::mux::header(header)?;
                     if !matches!(tag, 1 | 2) {
                         return Err(RuntimeError::Protocol("daemon log frame"));
                     }
@@ -171,7 +171,7 @@ impl Sandbox {
                     return Ok(());
                 }
                 exact(&mut r.body, &mut header[1..])?;
-                let (tag, mut left) = super::mux::header(header)?;
+                let (tag, mut left) = super::client::mux::header(header)?;
                 if !matches!(tag, 1 | 2) {
                     return Err(RuntimeError::Protocol("daemon log frame"));
                 }

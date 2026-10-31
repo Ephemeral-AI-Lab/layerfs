@@ -34,15 +34,12 @@ mod sandbox;
 pub(crate) mod search;
 pub(crate) mod streams;
 pub use create::{Local, LocalCreateFailure, LocalPaths, LocalPhase};
-pub use exec::LocalExit;
 #[cfg(target_os = "linux")]
-pub(crate) use linux as platform;
+pub(crate) use linux as os;
 #[cfg(target_os = "macos")]
-pub(crate) use macos as platform;
+pub(crate) use macos as os;
 pub use process::LocalProcess;
 #[cfg(target_os = "linux")]
 pub(crate) use provider::KERNEL_ROUTE;
-pub use provider::{
-    NativeLinuxInstance, NativeLinuxProvider, NativeMacosInstance, NativeMacosProvider,
-};
+pub use provider::{NativeLinuxProvider, NativeMacosProvider};
 pub use sandbox::Sandbox;

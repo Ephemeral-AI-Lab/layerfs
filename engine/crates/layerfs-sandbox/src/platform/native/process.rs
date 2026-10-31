@@ -3,7 +3,7 @@
 //! never taken for the process that was started. The three facts come from
 //! `/proc` on Linux and from `proc_pidinfo`/`sysctl` on macOS (see
 //! [`super::macos`]).
-pub(crate) use super::platform::{boot, stat};
+pub(crate) use super::os::{boot, stat};
 use nix::{sys::signal::Signal, unistd::Pid};
 use std::io;
 

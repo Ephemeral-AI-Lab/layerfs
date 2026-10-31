@@ -3,7 +3,7 @@
 //! reaps a daemon this process started that has already exited. A stop
 //! returns only once a daemon this process started is reaped, so it never
 //! stays a zombie of this process.
-use super::{groups, platform, process::LocalProcess};
+use super::{groups, os, process::LocalProcess};
 use crate::LocalRecord;
 use crate::{ContainerId, RuntimeError, WireFailure};
 use nix::sys::signal::Signal;
@@ -167,7 +167,7 @@ impl Sandbox {
         // A live NFS server can finish client writeback during detach. A
         // failed detach does not prevent crash teardown; Delete retains its
         // existing checked detach before removing anything through a mount.
-        if let Err(error) = platform::mounts::detach(&self.directory) {
+        if let Err(error) = os::mounts::detach(&self.directory) {
             eprintln!("local Stop detach {}: {error}", self.directory.display());
         }
         if let Some(process) = self.process {
@@ -207,7 +207,7 @@ impl Sandbox {
                 .map_err(|error| self.io(error))?;
             self.ended = true;
         }
-        platform::mounts::detach(&self.directory).map_err(|error| self.io(error))?;
+        os::mounts::detach(&self.directory).map_err(|error| self.io(error))?;
         match fs::remove_dir_all(&self.directory) {
             Ok(()) => {}
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}

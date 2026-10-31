@@ -1,6 +1,8 @@
-//! Owned container lifecycle; borrowed shared Store volume is never cleanup-owned.
+//! One owned container and its lifecycle: stop and delete, each attempted
+//! once; the borrowed shared Store volume is never cleanup-owned.
 use super::Docker;
 use crate::{ContainerId, DockerRecord, RuntimeError, SandboxRecord, WireFailure};
+use std::io::Read;
 /// Explicit immutable image, existing VM volume, daemon TCP port and labels.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SandboxRequest {
@@ -111,13 +113,68 @@ impl Sandbox {
         }
     }
     pub(super) fn invalid(&self, message: &'static str) -> Box<WireFailure> {
-        let mut f = super::http::failure(false, 0, None, RuntimeError::Protocol(message), None);
+        let mut f =
+            super::client::http::failure(false, 0, None, RuntimeError::Protocol(message), None);
         f.requested_container = Some(self.id);
         f
     }
     pub(super) fn selected(&self, mut f: Box<WireFailure>) -> Box<WireFailure> {
         f.requested_container = Some(self.id);
         f
+    }
+    /// Explicit whole-Sandbox process stop, once. This is crash teardown, not graceful FS drain.
+    /// The Engine's 304 (not running: its process already exited, or it never started)
+    /// is the same acknowledged stopped state.
+    pub fn stop(&mut self, seconds: u16) -> Result<(), Box<WireFailure>> {
+        if self.stop_attempted || self.delete_attempted {
+            return Err(self.invalid("original container Stop admission"));
+        }
+        self.stop_attempted = true;
+        let path = format!("/containers/{}/stop?t={seconds}", self.id);
+        self.empty("POST", &path, 204)
+            .or_else(|failure| match failure.cause {
+                RuntimeError::Http(304) => Ok(()),
+                _ => Err(failure),
+            })?;
+        self.stopped = true;
+        Ok(())
+    }
+    /// Deletes the exact acknowledged container/local writable layer once. Shared Store volume is borrowed.
+    pub fn delete(&mut self) -> Result<(), Box<WireFailure>> {
+        if self.delete_attempted || (self.start_attempted && !self.stopped) {
+            return Err(self.invalid("original container Delete admission; known stop required"));
+        }
+        self.delete_attempted = true;
+        self.empty(
+            "DELETE",
+            &format!("/containers/{}?force=false&v=false", self.id),
+            204,
+        )?;
+        self.deleted = true;
+        Ok(())
+    }
+    pub(super) fn empty(
+        &self,
+        method: &str,
+        path: &str,
+        status: u16,
+    ) -> Result<(), Box<WireFailure>> {
+        let mut response = self
+            .docker
+            .exchange(method, path, false, |_| Ok(()))
+            .map_err(|f| self.selected(f))?;
+        if response.status != status {
+            return Err(self.selected(response.fail(RuntimeError::Http(response.status), None)));
+        }
+        let mut byte = [0];
+        match response.body.read(&mut byte) {
+            Ok(0) => Ok(()),
+            Ok(_) => Err(self.selected(response.fail(
+                RuntimeError::Protocol("unexpected lifecycle response body"),
+                None,
+            ))),
+            Err(e) => Err(self.selected(response.fail(e.into(), None))),
+        }
     }
 }
 /// Known acknowledgments only, not process or filesystem drain.

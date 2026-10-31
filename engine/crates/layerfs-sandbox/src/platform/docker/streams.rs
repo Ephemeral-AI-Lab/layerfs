@@ -1,5 +1,6 @@
 //! Standard Docker duplex streams; transport completion never implies process exit.
-use super::{body::Body, http::Response, socket::Socket, ExecCreated};
+use super::client::{body::Body, http::Response, socket::Socket};
+use super::ExecCreated;
 use crate::{ExecInspection, RuntimeError, WireFailure};
 use std::{
     fmt,
@@ -347,7 +348,7 @@ impl RuntimeOutput {
                 }
                 self.header_used += n;
             }
-            (self.tag, self.remaining) = super::mux::header(self.header)?;
+            (self.tag, self.remaining) = super::client::mux::header(self.header)?;
             if self.tag == 3 {
                 return Err(RuntimeError::Protocol(
                     "runtime system-error stream; original unread payload retained",

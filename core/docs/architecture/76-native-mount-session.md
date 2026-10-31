@@ -259,7 +259,7 @@ daemon does not wait or retry on its behalf.
 
 ## Sandbox access
 
-The Docker [container configuration](../../../engine/crates/layerfs-sandbox/src/platform/docker/container.rs)
+The Docker [container configuration](../../../engine/crates/layerfs-sandbox/src/platform/docker/create.rs)
 adds exactly `CapAdd: ["CAP_SYS_ADMIN"]`, one `/dev/fuse` device mapping and
 `apparmor=unconfined`, keeping `Privileged: false` and `no-new-privileges=true`.
 Since 2026-10-10 (owner decision C-1) it also sends one inline system-call

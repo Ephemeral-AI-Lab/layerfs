@@ -44,13 +44,13 @@ impl Sandbox {
             {
                 return Err(self.invalid("original upload admission"));
             }
-            let metadata = executable
-                .metadata()
-                .map_err(|e| self.selected(super::http::failure(false, 0, None, e.into(), None)))?;
+            let metadata = executable.metadata().map_err(|e| {
+                self.selected(super::client::http::failure(false, 0, None, e.into(), None))
+            })?;
             if !metadata.is_file()
                 || metadata.len() == 0
                 || executable.stream_position().map_err(|e| {
-                    self.selected(super::http::failure(false, 0, None, e.into(), None))
+                    self.selected(super::client::http::failure(false, 0, None, e.into(), None))
                 })? != 0
                 || config.is_empty()
                 || config.len() > 8192

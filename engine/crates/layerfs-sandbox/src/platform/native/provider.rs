@@ -20,10 +20,6 @@ pub struct NativeProvider<const LINUX: bool> {
 pub type NativeMacosProvider = NativeProvider<false>;
 /// Native Linux processes with FUSE and a separate nonroot command identity.
 pub type NativeLinuxProvider = NativeProvider<true>;
-/// The existing local owner, using Darwin process facts.
-pub type NativeMacosInstance = Sandbox;
-/// The existing local owner, using Linux `/proc` process facts.
-pub type NativeLinuxInstance = Sandbox;
 impl<const LINUX: bool> NativeProvider<LINUX> {
     /// Refuses other platforms before accessing the root or launching anything.
     pub fn new(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {

@@ -1,13 +1,13 @@
-//! One-attempt create/start/stop/delete, with no implicit adoption or volume deletion.
+//! One-attempt create and start, with no implicit adoption or volume deletion.
 use super::{
-    container_types::{CreatePhase, Sandbox, SandboxCreateFailure, SandboxRequest},
+    sandbox::{CreatePhase, Sandbox, SandboxCreateFailure, SandboxRequest},
     topology::SECCOMP,
     Docker,
 };
 use crate::json::quoted;
 use crate::json::{once, Json};
 use crate::{ContainerId, RuntimeError, WireFailure};
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 impl SandboxRequest {
     /// Kernel mounting needs exactly one capability and one device. The
     /// container stays unprivileged with no-new-privileges; commands run as
@@ -99,7 +99,7 @@ impl Docker {
         let result = (|| {
             request
                 .check()
-                .map_err(|e| super::http::failure(false, 0, None, e, None))?;
+                .map_err(|e| super::client::http::failure(false, 0, None, e, None))?;
             phase = CreatePhase::Volume;
             if let Some(volume) = &request.store_volume {
                 self.plain_volume(volume)?;
@@ -188,54 +188,5 @@ impl Sandbox {
         self.empty("POST", &format!("/containers/{}/start", self.id), 204)?;
         self.started = true;
         Ok(())
-    }
-    /// Explicit whole-Sandbox process stop, once. This is crash teardown, not graceful FS drain.
-    /// The Engine's 304 (not running: its process already exited, or it never started)
-    /// is the same acknowledged stopped state.
-    pub fn stop(&mut self, seconds: u16) -> Result<(), Box<WireFailure>> {
-        if self.stop_attempted || self.delete_attempted {
-            return Err(self.invalid("original container Stop admission"));
-        }
-        self.stop_attempted = true;
-        let path = format!("/containers/{}/stop?t={seconds}", self.id);
-        self.empty("POST", &path, 204)
-            .or_else(|failure| match failure.cause {
-                RuntimeError::Http(304) => Ok(()),
-                _ => Err(failure),
-            })?;
-        self.stopped = true;
-        Ok(())
-    }
-    /// Deletes the exact acknowledged container/local writable layer once. Shared Store volume is borrowed.
-    pub fn delete(&mut self) -> Result<(), Box<WireFailure>> {
-        if self.delete_attempted || (self.start_attempted && !self.stopped) {
-            return Err(self.invalid("original container Delete admission; known stop required"));
-        }
-        self.delete_attempted = true;
-        self.empty(
-            "DELETE",
-            &format!("/containers/{}?force=false&v=false", self.id),
-            204,
-        )?;
-        self.deleted = true;
-        Ok(())
-    }
-    fn empty(&self, method: &str, path: &str, status: u16) -> Result<(), Box<WireFailure>> {
-        let mut response = self
-            .docker
-            .exchange(method, path, false, |_| Ok(()))
-            .map_err(|f| self.selected(f))?;
-        if response.status != status {
-            return Err(self.selected(response.fail(RuntimeError::Http(response.status), None)));
-        }
-        let mut byte = [0];
-        match response.body.read(&mut byte) {
-            Ok(0) => Ok(()),
-            Ok(_) => Err(self.selected(response.fail(
-                RuntimeError::Protocol("unexpected lifecycle response body"),
-                None,
-            ))),
-            Err(e) => Err(self.selected(response.fail(e.into(), None))),
-        }
     }
 }

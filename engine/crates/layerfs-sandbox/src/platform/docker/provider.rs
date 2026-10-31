@@ -12,8 +12,6 @@ use std::fs::File;
 pub struct DockerProvider {
     docker: Docker,
 }
-/// The original container owner, including its exact attempted/acknowledged lifecycle state.
-pub type DockerInstance = Sandbox;
 impl DockerProvider {
     /// Negotiation and all transfers use the supplied client's original policy and version cache.
     pub fn new(docker: Docker) -> Self {

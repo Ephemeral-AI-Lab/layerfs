@@ -218,7 +218,7 @@ Instead, within the current route:
 - `sandbox.exec` keeps one Docker exec per call (create, start, inspect).
 - #352 F-029: exec stops running the full `discovery::refresh()` on every
   call (one daemon `workspace.status` per mounted Workspace).
-- Docker Engine connection reuse in `layerfs-sandbox/src/platform/docker/http.rs`
+- Docker Engine connection reuse in `layerfs-sandbox/src/platform/docker/client/http.rs`
   instead of a new Unix-socket connection per request, one attempt per request.
 Both go to the #352 fixer as small fixes. The gates judge LayerFS work
 separately from process start (the split one-shot probe).

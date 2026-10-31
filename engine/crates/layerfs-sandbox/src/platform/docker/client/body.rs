@@ -1,13 +1,14 @@
-//! Exact HTTP framing; chunk sizes are counters, never allocations.
-use super::headers::field;
+//! Exact HTTP framing; chunk sizes are counters, never allocations. One
+//! strict header grammar ([`field`]) is shared by initial metadata and chunk
+//! trailers.
 use std::io::{self, Read};
-pub(super) enum Framing {
+pub(in crate::platform::docker) enum Framing {
     Fixed(u64),
     Chunked,
     Close,
     Hijacked,
 }
-pub(super) struct Body<R> {
+pub(in crate::platform::docker) struct Body<R> {
     inner: R,
     mode: Framing,
     remaining: u64,
@@ -150,7 +151,7 @@ impl<R: Read> Read for Body<R> {
         }
     }
 }
-pub(super) fn exact(reader: &mut impl Read, out: &mut [u8]) -> io::Result<()> {
+pub(in crate::platform::docker) fn exact(reader: &mut impl Read, out: &mut [u8]) -> io::Result<()> {
     let mut done = 0;
     while done < out.len() {
         let n = reader.read(&mut out[done..])?;
@@ -161,7 +162,10 @@ pub(super) fn exact(reader: &mut impl Read, out: &mut [u8]) -> io::Result<()> {
     }
     Ok(())
 }
-pub(super) fn line(reader: &mut impl Read, limit: usize) -> io::Result<Vec<u8>> {
+pub(in crate::platform::docker) fn line(
+    reader: &mut impl Read,
+    limit: usize,
+) -> io::Result<Vec<u8>> {
     let mut out = Vec::with_capacity(limit.min(256));
     loop {
         let mut one = [0];
@@ -178,6 +182,32 @@ pub(super) fn line(reader: &mut impl Read, limit: usize) -> io::Result<Vec<u8>> 
         }
         out.push(one[0]);
     }
+}
+/// One `name: value` header row, by the one grammar both header kinds use.
+pub(super) fn field(row: &[u8]) -> io::Result<(&[u8], &[u8])> {
+    let colon = row
+        .iter()
+        .position(|b| *b == b':')
+        .ok_or_else(|| invalid("HTTP header colon"))?;
+    let name = &row[..colon];
+    if name.is_empty()
+        || !name
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(b))
+    {
+        return Err(invalid("HTTP header name"));
+    }
+    let mut value = &row[colon + 1..];
+    while matches!(value.first(), Some(b' ' | b'\t')) {
+        value = &value[1..]
+    }
+    while matches!(value.last(), Some(b' ' | b'\t')) {
+        value = &value[..value.len() - 1]
+    }
+    if value.iter().any(|b| (*b < 32 && *b != b'\t') || *b == 127) {
+        return Err(invalid("HTTP header control"));
+    }
+    Ok((name, value))
 }
 fn invalid(message: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message)
