@@ -64,13 +64,15 @@ class LinuxRealStoreTests(unittest.IsolatedAsyncioTestCase):
     async def LayerFS_init(self):
         return await LayerFS.init("real", str(self.source), 300000, self.options)
 
-    @unittest.skip("P12 project.get_summary has not landed at this base")
     async def test_project_summary(self):
         client = await self.LayerFS_init()
         async with client:
-            summary = await client.project.get_summary()
+            summary = await client.backend.store.project.get_summary()
             self.assertEqual(summary["branches"], 1)
-            self.assertIn("storage", summary)
+            self.assertEqual(summary["commits"], 0)
+            self.assertIsNone(summary["mainLayer"])
+            self.assertIsNone(summary["lastCommit"])
+            self.assertGreater(summary["logical"], 0)
 
 
 if __name__ == "__main__":

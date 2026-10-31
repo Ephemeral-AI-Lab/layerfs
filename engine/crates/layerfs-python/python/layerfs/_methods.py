@@ -233,6 +233,9 @@ class StoreProject:
     def __init__(self, client):
         self.client = client
 
+    async def get_summary(self):
+        return await self.client._invoke_backend("backend.store.project.get_summary", {})
+
     async def get_history(self, since=OMIT):
         return await self.client._invoke_backend("backend.store.project.get_history", {"since": since})
 
