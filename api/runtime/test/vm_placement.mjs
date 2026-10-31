@@ -8,6 +8,7 @@
 //   node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|stores|apple-container|ssh|cleanup
 import assert from "node:assert/strict";
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -461,6 +462,20 @@ try {
       assert.ok(first.some((argv) => argv.includes("StrictHostKeyChecking=yes")), "host key checking stays on");
       assert.ok(!first.some((argv) => argv.includes("StrictHostKeyChecking=no")), "never turned off behind the user's back");
       assert.ok(first.some((argv) => argv.some((value) => typeof value === "string" && value.includes("tar -C"))), "the bundle arrives as one tar stream");
+      if (process.platform === "darwin") {
+        // a folder whose entries carry macOS metadata (com.apple.provenance,
+        // which this process's files get) arrives without the Mac tar's
+        // AppleDouble `._` entries (#527 platform pass: an Init source copied
+        // this way stored `._.` in the project)
+        const source = join(work, "xattr-source");
+        mkdirSync(source);
+        writeFileSync(join(source, "a.txt"), "a\n");
+        for (const path of [source, join(source, "a.txt")]) execFileSync("xattr", ["-w", "com.apple.provenance", "", path]);
+        const ssh = (await import("../src/platform/vm/ssh.js"));
+        await deadline(30_000, "copy", ssh.copy(vmName("shop"), source, "/layerfs/import/xattr"));
+        const copied = readFileSync(join(state, "copies.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line)).find((copy) => copy.destination === "/layerfs/import/xattr");
+        assert.deepEqual(copied.names.sort(), ["./", "./a.txt"], JSON.stringify(copied.names));
+      }
       const entry = await deadline(30_000, "vm.status", runtime.vm.status("shop"));
       assert.deepEqual([entry.state, entry.worker.state], ["running", "running"]);
       // the endpoint the worker was written at is this host's forwarded port

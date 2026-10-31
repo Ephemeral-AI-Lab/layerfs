@@ -356,14 +356,16 @@ export function exec(name, argv, options = {}) {
 /**
  * Step ②: the bundle (or any folder) as one `tar` stream, unpacked on the host.
  * Both ends are killed if the transfer passes its budget, so no copy outlives
- * its call.
+ * its call. On macOS `COPYFILE_DISABLE` keeps the Mac's `tar` from adding an
+ * AppleDouble `._<name>` file for each entry with extended attributes, which
+ * would otherwise land in the copy (and in an Init source, in the project).
  */
 export function copy(name, source, destination) {
   const session = loadSession(name);
   if (!session) throw refuse("Failed", `there is no vm:ssh session called ${name}`);
   const script = `mkdir -p ${shellEscape(destination)} && tar -C ${shellEscape(destination)} -xf -`;
   return new Promise((resolve, reject) => {
-    const pack = spawn("tar", ["-C", source, "-cf", "-", "."], { stdio: ["ignore", "pipe", "pipe"] });
+    const pack = spawn("tar", ["-C", source, "-cf", "-", "."], { env: { ...process.env, COPYFILE_DISABLE: "1" }, stdio: ["ignore", "pipe", "pipe"] });
     const unpack = spawn("ssh", [...sshArgs(session), destinationOf(session), "--", script], { stdio: ["pipe", "pipe", "pipe"] });
     let err = "", tarErr = "";
     const timer = setTimeout(() => {

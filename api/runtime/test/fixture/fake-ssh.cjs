@@ -139,14 +139,38 @@ function shellScript(script, args) {
   return 0;
 }
 
-/** The unpack end of a bundle copy: `mkdir -p DEST && tar -C DEST -xf -`. */
+/** The unpack end of a bundle copy: `mkdir -p DEST && tar -C DEST -xf -`.
+ * Each entry's name in the stream, as a Linux host's tar would create it, is
+ * appended to `copies.jsonl`: the Mac's own tar folds AppleDouble `._` entries
+ * back into attributes when it unpacks, so the guest tree cannot show them. */
 function unpack(script) {
   const match = /tar -C ('([^']+)'|\S+) -xf -/.exec(script);
   const destination = guestIn(match ? match[2] ?? match[1] : "/layerfs/bundle");
   mkdirSync(destination, { recursive: true });
   const tar = spawn("tar", ["-C", destination, "-xf", "-"], { stdio: ["pipe", "ignore", "inherit"] });
+  const chunks = [];
+  process.stdin.on("data", (chunk) => chunks.push(chunk));
   process.stdin.pipe(tar.stdin);
-  tar.on("close", (code) => process.exit(code ?? 0));
+  tar.on("close", (code) => {
+    appendFileSync(join(state, "copies.jsonl"), `${JSON.stringify({ destination: match ? match[2] ?? match[1] : null, names: entryNames(Buffer.concat(chunks)) })}\n`);
+    process.exit(code ?? 0);
+  });
+}
+
+/** The names of a ustar stream's entries (pax and GNU headers skipped). */
+function entryNames(bytes) {
+  const names = [];
+  for (let at = 0; at + 512 <= bytes.length; ) {
+    const header = bytes.subarray(at, at + 512);
+    if (header.every((byte) => byte === 0)) break;
+    const text = (from, to) => header.subarray(from, to).toString("latin1").replace(/\0.*$/s, "");
+    const size = parseInt(text(124, 136).trim() || "0", 8);
+    const kind = String.fromCharCode(header[156]);
+    const prefix = text(257, 262) === "ustar" ? text(345, 500) : "";
+    if (!"xgLK".includes(kind)) names.push(prefix ? `${prefix}/${text(0, 100)}` : text(0, 100));
+    at += 512 + Math.ceil(size / 512) * 512;
+  }
+  return names;
 }
 
 async function main() {
