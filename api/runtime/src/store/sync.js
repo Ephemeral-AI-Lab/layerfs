@@ -207,7 +207,7 @@ export async function start_load(runtime, jobs, remoteName, options = {}) {
         try {
           answer = await call("runtime.store.load", { ...storeFields(runtime, store), ...from, ...credentialsOf(options), job });
         } catch (error) {
-          if (error?.code !== "Unknown") await removeVolume(runtime, volume).catch(() => {});
+          if (error?.code !== "Unknown") await removeVolume(runtime, { name, volume }).catch(() => {});
           throw error;
         }
         put(runtime.settings, { ...store, projects: answer.projects.map((p) => ({ name: p })) });

@@ -219,6 +219,9 @@ def build(args):
             "layerfs-daemon",
             "-p",
             "layerfs-node",
+            # the namespaces Sandbox backend runs this beside the daemon (#515 §4.5)
+            "-p",
+            "layerfs-sandbox",
             "-j",
             str(args.jobs),
         ]
@@ -234,8 +237,9 @@ def build(args):
                 execute(docker_build(record, command), record["worktree"], log=receipt / "output.log")
                 script = (
                     'set -eu; cp "/work/target/$1/layerfs-daemon" /export/layerfs-daemon; '
+                    'cp "/work/target/$1/layerfs-sandbox-helper" /export/layerfs-sandbox-helper; '
                     'cp "/work/target/$1/liblayerfs_node.so" /export/layerfs.node; '
-                    'chown "$2:$3" /export/layerfs-daemon /export/layerfs.node'
+                    'chown "$2:$3" /export/layerfs-daemon /export/layerfs-sandbox-helper /export/layerfs.node'
                 )
                 export = docker_build(
                     record,

@@ -9,11 +9,14 @@ import { callHome } from "./settings.js";
 
 const IDLE_MS = 60_000;
 
-/** The environment one project's client (and its agents' bash calls) use.
- * A project of a PostgreSQL Store (#506) has no volume; its Store path is
- * `postgresql:<store>`, and its connection's URL is added only when the
- * call gave one (`project.url`). */
+/** The environment one project's client (and its agents' bash calls) use. A
+ * platform may replace it whole (`deploymentEnv`), as a `vm:<provider>` home
+ * does: its deployment is native Sandboxes in the VM's namespace backend, not
+ * host Docker. A project of a PostgreSQL Store (#506) has no volume; its
+ * Store path is `postgresql:<store>`, and its connection's URL is added only
+ * when the call gave one (`project.url`). */
 export function deploymentEnv(settings, platform, project) {
+  if (platform.deploymentEnv) return platform.deploymentEnv(settings, project);
   if (project.kind === "postgresql") {
     return {
       HOME: callHome(settings),

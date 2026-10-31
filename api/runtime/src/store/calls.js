@@ -127,7 +127,7 @@ export async function create(runtime, name) {
     await call("runtime.store.create", storeFields(runtime, store));
   } catch (error) {
     // a refused or failed create removed its own files; an uncertain one keeps the volume
-    if (error?.code !== "Unknown") await removeVolume(runtime, volume).catch(() => {});
+    if (error?.code !== "Unknown") await removeVolume(runtime, { name, volume }).catch(() => {});
     throw error;
   }
   return shown(put(settings, store));
@@ -141,7 +141,7 @@ export async function remove(runtime, name, options = {}) {
   await runtime.clients.forgetStore(name);
   if (store.kind === "sqlite") {
     if (!store.volume) throw refuse("InvalidInput", `the runtime has no record of Store ${name}'s volume`);
-    await removeVolume(runtime, store.volume, options);
+    await removeVolume(runtime, { name, volume: store.volume }, options);
   }
   await call("runtime.store.forget", { home: callHome(settings), store: name });
   if (store.legacy) await forgetOwn(runtime, name);

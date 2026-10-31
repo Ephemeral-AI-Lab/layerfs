@@ -42,7 +42,7 @@ export async function deleteProject(runtime, name, options = {}) {
   if (typeof volume !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(volume)) throw refuse("InvalidInput", `the runtime has no record of ${name}'s volume; name it as { volume }`);
   if (!project) throw refuse("NoSuchProject", `no LayerFS project named ${name}`);
   await runtime.clients.forget(name);
-  await removeVolume(runtime, volume, options);
+  await removeVolume(runtime, { name, volume }, options);
   await forgetOwn(runtime, name);
   if (entries(settings).some((s) => s.name === name)) drop(settings, name);
   return { kind: "Deleted", project: name, volume };

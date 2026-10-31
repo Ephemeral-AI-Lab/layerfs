@@ -8,6 +8,8 @@
 // The runtime runs it once when it opens (settings.sweep, default true);
 // status().sweep reports that run. One attempt per project, no retry.
 import { keyOf } from "../project/list.js";
+// A `vm:<provider>` home keeps no host containers, so its sweep reads none
+// and says so: `{ reclaimed: {}, failed: [], host: false }`.
 import { containers } from "./leftovers.js";
 
 /** States of a container whose daemon has ended and that nothing restarts. */
@@ -16,6 +18,7 @@ const ENDED = new Set(["exited", "dead"]);
 /** `{ reclaimed: { project: [ids] }, failed: [{ project, code, message }] }` */
 export async function sweep(runtime) {
   const { settings } = runtime;
+  if (runtime.platform.hostSandboxes === false) return { reclaimed: {}, failed: [], host: false };
   const known = new Map((await runtime.project.list()).filter((p) => p.volume && p.kind !== "postgresql").map((p) => [keyOf(p), p]));
   const named = (c) => `${settings.containerPrefix}${c.store ? `${c.store}.` : ""}${c.project}-`;
   const ended = (await containers(runtime)).filter((c) => ENDED.has(c.state) && known.has(c.key) && c.name.startsWith(named(c)));

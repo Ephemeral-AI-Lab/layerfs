@@ -11,7 +11,7 @@ import { createWriteStream, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connection, frame, readFrames } from "@layerfs/agent/internal";
-import { endpointFile, ping, ready, refuse, run, writeEndpoint } from "../shared.js";
+import { endpointFile, ping, ready, refuse, run, writeEndpoint, makeStore, releaseStoreHolders, removeStore, storeHolders } from "../shared.js";
 import { absoluteLinux, projectHome, wsl, wslArgs } from "./paths.js";
 
 const SERVER = "api/runtime/src/worker/server.js";
@@ -131,6 +131,10 @@ export default {
   async init(settings) { await start(settings); },
   path: (settings, hostPath) => hostPath,
   docker,
+  makeStore,
+  storeHolders,
+  releaseStoreHolders,
+  removeStore,
   storePath: (settings, volume) => `/var/lib/docker/volumes/${volume}/_data/global/store.sqlite`,
   async homeNames(settings) {
     const { stdout } = await wsl(settings, ["find", settings.wsl.home, "-mindepth", "2", "-maxdepth", "2", "-name", "project.record"], { timeout: 5000 }).catch(() => ({ stdout: "" }));
@@ -139,7 +143,8 @@ export default {
   // rm gets one checked child directory as an argv item, never shell text
   async removeHome(settings, name) { await wsl(settings, ["rm", "-rf", "--", projectHome(settings.wsl, name)], { timeout: 10_000 }); },
   /** Before a volume is deleted, the worker closes its cached Store of it. */
-  async releaseStore(settings, volume) {
+  async releaseStore(settings, project) {
+    const { volume } = project;
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(volume)) throw refuse("InvalidInput", "invalid Store volume name");
     const info = JSON.parse(readFileSync(endpointFile(settings.home), "utf8"));
     const answer = await connection(info).call({ fn: "releaseStore", args: { home: settings.wsl.home, storePath: `/var/lib/docker/volumes/${volume}/_data/global/store.sqlite` } });

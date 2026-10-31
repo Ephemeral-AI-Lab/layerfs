@@ -2,10 +2,12 @@
 // stopped, and their removal. From part of the dsh Host's runtime.js (#428).
 import { LayerFSError } from "@layerfs/agent";
 import { keyOf } from "../project/list.js";
+import { noHostDocker } from "../platform/shared.js";
 
 /** This home's Sandbox containers (`<prefix><project>-<n>`, label layerfs.role=sandbox), running or not. */
 export async function containers(runtime) {
   const { settings, platform } = runtime;
+  if (platform.hostSandboxes === false) throw noHostDocker(runtime, "runtime.sandbox", "its Sandboxes are Linux namespaces inside the VM; the SDK's project.list_sandboxes reads them");
   const out = await platform.docker(settings, ["ps", "-a", "--no-trunc", "--filter", "label=layerfs.role=sandbox", "--format", "{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Label \"layerfs.project\"}}\t{{.Label \"layerfs.sandbox\"}}\t{{.Image}}\t{{.Label \"layerfs.store\"}}"]);
   return out.split("\n").filter(Boolean).map((row) => {
     const [name, state, status, project, sandbox, image, store] = row.split("\t");
