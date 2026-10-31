@@ -158,7 +158,9 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
 - **Windows-native Store route (owner direction 2026-10-25).** The Store
   engine (SQLite, the cross-process writer lane, the kernel guard) and the
   SDK's in-process Store face (fs, branch, project, operator) also run
-  natively on Windows: local NTFS volumes only, a named kernel mutex as the
+  natively on Windows — the sandbox family, including
+  `project.list_sandboxes`, still refuses `Unsupported` there: local NTFS
+  volumes only, a named kernel mutex as the
   cross-process writer lane, real volume-serial + file-index identity for
   acquisition rows, and bundled SQLite, each in audited FFI modules
   (engine/AGENTS.md). No WSL2 and no daemon are involved. This supersedes the
@@ -168,7 +170,9 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   no hard-link membership and synthesizes the mode from the read-only
   attribute; names travel as lossless WTF-8 — **owner-ratified 2026-10-31
   ("可以合并") as the long-term content grammar** (an unpaired surrogate's
-  three-byte form is accepted, a pair spelled apart is refused; the earlier
+  three-byte form is accepted, a pair spelled apart is refused; JS callers
+  cannot spell such names — listings render them empty and a JS write names
+  an U+FFFD sibling; the earlier
   lossy-names limitation is superseded) — the backing-inside-source check
   walks the audited volume-serial + file-index identity, and overlay
   allocation is the real on-disk footprint; homes, discovery records and
@@ -311,7 +315,8 @@ remain binding; moving them out of this file does not weaken them.
   failure/uncertainty and custody; no guessed resend, deletion or success.
 - **CI reports; it never gates (owner, 2026-10-23).** GitHub Actions runs a
   fast lane after each push or pull request (`.github/workflows/ci.yml`: fmt,
-  guards, Clippy and the fast tests) and a nightly lane (`nightly.yml`: slow and
+  guards, Clippy, the fast tests and — from the Windows-native route — a
+  report-only windows store-suites job) and a nightly lane (`nightly.yml`: slow and
   FUSE mount tests); `format.yml` checks the Ruff formatting below.
   [tools/ci_tests.py](tools/ci_tests.py) decides which tests go in
   which lane. None is a required check, and nothing runs before a push. Do

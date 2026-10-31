@@ -32,14 +32,17 @@ the others as it grows:
   them, and on macOS and Windows starts the worker: add
   [`@layerfs/runtime`](docs/runtime.md).
 
-Store calls run in the calling process on Linux only. On macOS and Windows they
-go through the LayerFS home's worker, which `@layerfs/runtime` starts; see
+Store calls run in the calling process on Linux, and on Windows by default
+(the Windows-native route below) when no worker endpoint is set. On macOS —
+and on Windows when a worker endpoint is set — they go through the LayerFS
+home's worker, which `@layerfs/runtime` starts; see
 [where calls run](docs/agent.md#where-calls-run) and
 [platforms and the worker](docs/runtime.md#platforms-and-the-worker).
-On Windows there is also the native direct route (owner direction
-2026-10-25): the binding built from this tree opens a local NTFS Store
-itself — fs, branch, project and operator calls in this process, no
-worker and no daemon; workspace, exec and daemon calls refuse
+On Windows the native direct route (owner direction 2026-10-25) is the
+default: the binding built from this tree opens a local NTFS Store itself —
+fs, branch, project and operator calls in this process (on Windows,
+`project.list_sandboxes` and the sandbox family still refuse `Unsupported`),
+no worker and no daemon; workspace, exec and daemon calls refuse
 `Unsupported`. See
 [the Windows-native route](../core/docs/issues/352/DIRECT_STORE.md).
 

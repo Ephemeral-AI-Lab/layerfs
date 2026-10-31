@@ -112,7 +112,9 @@ no daemon are involved. Implemented on branch `windows-native-store`:
   (`GetFileInformationByHandle`), in audited FFI modules listed in
   engine/AGENTS.md.
 - The SDK addon serves fs, branch, project and operator calls in-process
-  exactly as on Linux. Workspace, exec and daemon calls refuse `Unsupported`
+  exactly as on Linux (on Windows, `project.list_sandboxes` and the sandbox
+  family also refuse `Unsupported` — the daemon owns them). Workspace, exec
+  and daemon calls refuse `Unsupported`
   on Windows: FUSE, the daemon and Workspaces remain Linux-only, and the dsh
   macOS and WSL2 exceptions are unchanged.
 
@@ -153,8 +155,10 @@ directory and Store files carry owner-only protected DACLs (the audited
 ACL module): what this route creates is restricted to its owner, and an
 existing entry whose DACL grants Everyone, Users or Authenticated Users
 is refused — the parity of unix's 0700/0600 discipline; the installed
-Store file and its directory answer the same check at every open, and a
-link planted at either spelling is refused, never followed. A home that
+Store file answers its own entry check at every open, its directory is
+restricted when the route creates it (a caller-pre-created directory is
+accepted as the caller shaped it — hence the sidecar note below), and a
+link planted at the file's spelling is refused, never followed. A home that
 lost its owner (restored from backup, moved between machines) answers
 `Unauthorized`; an administrator recovers it from an **elevated** console
 (runbook verified end to end, round 6): first
@@ -185,8 +189,8 @@ squatter parks every Store call for as long as it holds the mutex (the
 readiness wait has no bound, exactly as Linux's blocking flock) — round
 5 added two neighbours of that local-adversary availability class: a
 pre-planted lane object carrying a foreign DACL makes the next open
-fail (currently typed `Malformed`; an error-typing improvement is on
-the should-list), and any local user can enumerate lane names in
+fail (currently typed `Malformed`, recorded for a later typing pass),
+and any local user can enumerate lane names in
 `\BaseNamedObjects` (a digest of the directory that reveals write
 activity, not the path); a caller-pre-created wide directory also lets
 another user pre-place `-wal`/`-shm` the per-open tightening cannot
@@ -208,10 +212,19 @@ refuses with a message naming that entry (the SDK cannot spell such a
 name until the byte-carrying path lands — the same follow-up as the
 merge/compare fence above, which surfaces at the SDK as code `Failed`
 with the cause in the message, not as the content-layer error name).
+Upstream-family records pending an owner decision (round 7): the Linux
+FUSE invalidation keys `Stale::Entry` on the display spelling, so a
+non-UTF-8 name rebound by a merge misses its kernel dentry invalidation
+(untouched by this branch); the 256-component path limit is enforced on
+the workspace/rename route but not the SDK fs/init routes (live-accepted
+at 257-301 components); and deep single-chain operations grow
+near-quadratically (a d=250 `mkdir` measures ~1.8 s) — the engine guide's
+reject-quadratic rule makes that a decision, not a footnote.
 
 **Obtaining the addon**: `npm run build:native` in `api/` builds on
-Linux, macOS and Windows (cargo `+1.85.1 --release --locked -p
-layerfs-node`, artifact staged to `engine/crates/layerfs-node/layerfs.node`); `LAYERFS_NATIVE` names another copy.
+Linux, macOS and Windows (cargo `+1.85.1 --release --offline --locked -p
+layerfs-node`, artifact staged to `engine/crates/layerfs-node/layerfs.node`;
+Node ≥ 20 is the runtime floor); `LAYERFS_NATIVE` names another copy.
 
 When the owner merges this branch, the observation period runs by a
 fixed checklist (each step reads a mechanism that already exists, none

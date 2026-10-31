@@ -7,9 +7,10 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 
-// Every binding call runs on Node's worker pool, four threads unless the
-// process sets UV_THREADPOOL_SIZE. A Sandbox exec holds its thread for the
-// command's whole run, so with four agents' commands running every other call
+// Every binding call runs on Node's worker pool, sized 64 by default here
+// (WORKERS below) unless the process sets UV_THREADPOOL_SIZE itself. A
+// Sandbox exec holds its thread for the
+// command's whole run, so with many agents' commands running every other call
 // queued behind them (#352 F-017). Node reads the size when the pool first
 // starts; a process that set it keeps its own value.
 export const WORKERS = 64;

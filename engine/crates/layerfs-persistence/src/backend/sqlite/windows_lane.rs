@@ -183,6 +183,7 @@ pub fn windows_volume_filesystem(directory: &Path) -> io::Result<String> {
         ));
     }
     let mut final_path: Vec<u16> = vec![0u16; 1024];
+    let mut outgrew = false;
     let mut written = unsafe {
         GetFinalPathNameByHandleW(
             handle,
@@ -206,9 +207,23 @@ pub fn windows_volume_filesystem(directory: &Path) -> io::Result<String> {
                 VOLUME_NAME_DOS,
             )
         };
+        // The requirement grew between the two calls (a concurrent rename
+        // lengthening the path): a second short read leaves the buffer
+        // unfilled and the UNC check would read garbage — refuse instead
+        // (round-8 F1 F2).
+        if written != 0 && written as usize >= final_path.len() {
+            outgrew = true;
+        }
     }
     // Capture the failure before another syscall can overwrite it (D1 F6).
-    let final_failure = (written == 0).then(io::Error::last_os_error);
+    let final_failure = (written == 0).then(io::Error::last_os_error).or_else(|| {
+        outgrew.then(|| {
+            io::Error::new(
+                io::ErrorKind::Unsupported,
+                "the final path outgrew its regrown buffer (a concurrent rename?)",
+            )
+        })
+    });
     let share = written != 0
         && final_path
             .iter()

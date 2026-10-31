@@ -100,14 +100,16 @@ Store calls (`fs`, `branch`, `project.list_branches`) run in this process
 against the installed Store file at `storePath` (else `LAYERFS_STORE_PATH`),
 which the factory opened; no Sandbox is involved. The project family's
 Sandbox-related calls (`project.list_sandboxes`, `sandbox.*`) still need the
-daemon and refuse `Unsupported` on this route. That
+daemon and refuse `Unsupported` on the Windows-native route (on Linux they
+are served in this process). That
 file is `global/store.sqlite` in the project's volume, so the process runs where
 that volume is mounted (`/layerfs-store` in a Sandbox). On Linux the Store sits
 on a local filesystem the daemons share (ext4, xfs, btrfs); on **Windows the
 Store sits on a local NTFS volume this process opens directly** (the
 Windows-native route, owner 2026-10-25); anywhere else opening fails
-`Unsupported`, and without a `storePath` it fails
-`InvalidInput`. On macOS, and on Windows when a worker is preferred, any process that names its LayerFS
+`Unsupported`, without a `storePath` it fails
+`InvalidInput`, and a `storePath` naming no installed file fails
+`NoStore`. On macOS, and on Windows when a worker is preferred, any process that names its LayerFS
 home's worker (`LAYERFS_WORKER_ENDPOINT`, or the endpoint `@layerfs/runtime`
 hands over with `useWorker`) sends the calls there instead; on Windows the
 in-process native route is the default when no worker endpoint is set. The route is open to any integration (owner,
@@ -315,7 +317,10 @@ is a no-op. Edit requires exactly one match and streams large files.
 Names must be spellable by JavaScript: a path with an unpaired surrogate
 (which the content grammar keeps byte-exact on Windows) cannot cross the JS
 string boundary — a write by such a name lands as an U+FFFD sibling file
-rather than being refused, and listings render the original empty. The
+rather than being refused, and listings render the original empty. A merge
+or diff whose walk must build a path over such a name fails `Failed` with
+the cause in the message, and `fs.rm`/`fs.cp` over a subtree holding one
+refuses the same way. The
 byte-carrying path is recorded follow-up work.
 
 A file's or folder's permission bits are an integer `mode` such as `0o755`. A
