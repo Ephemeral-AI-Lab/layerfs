@@ -131,7 +131,10 @@ lines from now on, or from `since`, each with `actor`, its trace file's name.
 Each platform folder implements one interface (`endpoint`, `status`,
 `start`, `restart`, `init`, `path`, the Store hooks `makeStore`,
 `storeHolders`, `releaseStoreHolders` and `removeStore`, and the Docker, home
-and disk helpers); `platform/vm/` implements the same interface over a VM
+and disk helpers) and may declare capabilities instead of being named:
+`initCounts: false` (macOS: this process cannot read Init's counts) and
+`uncertainInit: true` (Windows: any failed Init is kept and recorded, never
+cleaned up); `platform/vm/` implements the same interface over a VM
 (see [Placement](#placement-one-linux-vm-per-home)).
 
 - **Linux** runs Store calls in this process. There is no worker:

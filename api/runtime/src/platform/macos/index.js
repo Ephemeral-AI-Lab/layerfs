@@ -115,6 +115,8 @@ async function restart(settings) {
 
 const platform = {
   name: "macos",
+  /** Init runs in a container of its own, whose counts this process cannot read. */
+  initCounts: false,
   endpoint: (settings) => endpointFile(settings.home),
   status,
   start,

@@ -10,7 +10,8 @@
 // unchanged: it bounds the Init itself, and when omitted LayerFS.init's
 // default (INIT_TIMEOUT_MS, 300 s) applies. One attempt. A failed Init removes what it made (the volume, and
 // the home entry unless another project holds the name); an uncertain one
-// (`Unknown`, or any failure on Windows) keeps everything and is recorded in
+// (`Unknown`, or any failure where the platform declares `uncertainInit`:
+// Windows) keeps everything and is recorded in
 // `<stateDir>/init-failures.jsonl`, never cleaned up on a guess.
 import { appendFileSync, existsSync, statSync } from "node:fs";
 import { lstat, opendir } from "node:fs/promises";
@@ -108,10 +109,10 @@ export async function runInit(runtime, prepared, report = () => {}) {
   try {
     // LayerFS.init reads the environment before its first await
     const making = withEnv(deploymentEnv(settings, platform, project), () => LayerFS.init(project.name, platform.path(settings, project.source), timeout));
-    // macOS: Init runs in its own container, whose counts this process cannot read
-    client = await (platform.name === "macos" ? making : watching(runtime, project.name, making, report));
+    // a platform whose Init counts this process cannot read (macOS: Init runs in its own container) says so
+    client = await (platform.initCounts === false ? making : watching(runtime, project.name, making, report));
   } catch (error) {
-    if (error?.code === "Unknown" || platform.name === "windows") {
+    if (error?.code === "Unknown" || platform.uncertainInit) {
       appendFileSync(join(settings.stateDir, "init-failures.jsonl"), JSON.stringify({ project, platform: platform.name, home: callHome(settings), code: error?.code ?? null, message: error?.message ?? String(error), at: new Date().toISOString() }) + "\n");
       throw error;
     }
@@ -140,9 +141,9 @@ async function runInto(runtime, prepared, report) {
   const args = { ...storeFields(runtime, store), name: project.name, path: platform.path(settings, project.source), timeoutMs: timeout ?? INIT_TIMEOUT_MS };
   const making = invokeBackend("runtime.store.add_project", args, {});
   try {
-    await (platform.name === "macos" ? making : watching(runtime, project.name, making, report, store.name));
+    await (platform.initCounts === false ? making : watching(runtime, project.name, making, report, store.name));
   } catch (error) {
-    if (error?.code === "Unknown" || platform.name === "windows") {
+    if (error?.code === "Unknown" || platform.uncertainInit) {
       appendFileSync(join(settings.stateDir, "init-failures.jsonl"), JSON.stringify({ project, platform: platform.name, home: callHome(settings), code: error?.code ?? null, message: error?.message ?? String(error), at: new Date().toISOString() }) + "\n");
     }
     throw error;

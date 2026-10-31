@@ -117,6 +117,8 @@ async function restart(settings) {
 
 export default {
   name: "windows",
+  /** Any failed Init is uncertain: the worker may have installed the Store meanwhile, so nothing is removed on a guess. */
+  uncertainInit: true,
   endpoint: (settings) => endpointFile(settings.home),
   status,
   async start(settings) {
