@@ -105,6 +105,10 @@ export class LayerFS {
    * under LAYERFS_LOCAL_DIR. Linux requires root for FUSE and runs commands
    * as 501:20; macOS uses loopback NFS and the caller's identity. No Docker
    * setting is read; native provides no isolation from the host.
+   * LAYERFS_SANDBOX_BACKEND picks the backend inside that directory: `native`
+   * (unset) or, on Linux, `namespaces` (namespaces, cgroups, nonroot commands).
+   * It is read for every call, so a Sandbox made with one backend is never
+   * reopened as another.
    * LAYERFS_DAEMON_HOST is the host this process
    * dials for a daemon's port, published on the Docker host's 127.0.0.1 only;
    * set it when the client runs in a container (`host.docker.internal` on
@@ -134,6 +138,7 @@ export class LayerFS {
         daemon: env("DAEMON"),
         ...(env("CONTAINER_PREFIX") ? { containerPrefix: env("CONTAINER_PREFIX") } : {}),
         ...(env("SANDBOX") ? { sandbox: env("SANDBOX") } : {}),
+        ...(env("SANDBOX_BACKEND") ? { sandboxBackend: env("SANDBOX_BACKEND") } : {}),
         ...(env("LOCAL_DIR") ? { localDir: env("LOCAL_DIR") } : {}),
         ...(env("DAEMON_HOST") ? { daemonHost: env("DAEMON_HOST") } : {}),
       },

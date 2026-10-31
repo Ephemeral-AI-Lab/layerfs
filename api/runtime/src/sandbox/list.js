@@ -5,6 +5,7 @@
 // there). It goes only when the container is deleted (sandbox.close, an idle
 // close followed by a reclaim, or runtime.sandbox.sweep). One `docker ps`
 // and one `docker inspect --size`; it changes nothing.
+import { noHostDocker } from "../platform/shared.js";
 
 /** A container gone between the listing and the inspection is left out: inspect still prints the others. */
 async function inspect(runtime, ids) {
@@ -21,6 +22,7 @@ async function inspect(runtime, ids) {
 /** `[{ name, project, sandbox, state, running, startedAt, finishedAt, image, ports, scratch, owned }]`, by name. */
 export async function list(runtime) {
   const { settings, platform } = runtime;
+  if (platform.hostSandboxes === false) throw noHostDocker(runtime, "runtime.sandbox.list", "its Sandboxes are Linux namespaces inside the VM; the SDK's project.list_sandboxes reads them");
   const ids = (await platform.docker(settings, ["ps", "-a", "-q", "--no-trunc", "--filter", "label=layerfs.role=sandbox"])).split("\n").filter(Boolean);
   if (!ids.length) return [];
   const known = new Set((await runtime.project.list()).map((p) => p.name));

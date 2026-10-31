@@ -15,7 +15,7 @@ Agents don't import it; a host that runs projects for its users does.
 import { LayerFSRuntime } from "@layerfs/runtime";
 const runtime = await LayerFSRuntime.open({ home, image, daemon, bundle, docker, containerPrefix });
 try {
-  await runtime.status();                  // { platform, missing, docker, worker, disk, sweep }
+  await runtime.status();                  // { platform, placement, missing, docker, worker, vm, disk, sweep }
   const job = await runtime.project.start_init("shop", "/src/shop", { timeout }); // timeout optional: LayerFS.init's 300 s default
   await runtime.project.get_init(job.id);  // { step, scanned, totals, imported, project, error, ended }
   await runtime.project.list();            // [{ name, volume, image, source, created, initialized }]
@@ -34,6 +34,14 @@ try {
 }
 ```
 
+A `vm:<provider>` home has one call group more (`vm`, see [Placement](#placement-one-linux-vm-per-home)):
+
+```js
+  await runtime.vm.status();               // { name, state, image, home, store, created } or { state: "missing" }
+  await runtime.vm.stop();                 // stops the VM; its Store disk and the projects' Stores stay
+  await runtime.vm.delete({ confirm: "delete", discardStore: false }); // the VM record only, unless discardStore
+```
+
 ## Opening and settings
 
 The runtime opens on a LayerFS home, not a project, so it works before the
@@ -44,7 +52,8 @@ on macOS Docker Desktop's `~/.docker/run/docker.sock` when only that one exists,
 checked once at `open`), `volumes` (Linux),
 `traceDir` (default `<home>/traces`), `containerPrefix`, `stateDir` (default
 `<home>/.runtime`, the runtime's project records), `sweep`
-(default true) and on Windows `wsl: { distribution, user, node, home }`. A
+(default true), `placement` (default `local`; `vm:<provider>` places the home
+in one Linux VM, below) and on Windows `wsl: { distribution, user, node, home }`. A
 missing setting does not refuse `open`: `status().missing` lists it.
 
 ## Init
@@ -109,7 +118,10 @@ lines from now on, or from `since`, each with `actor`, its trace file's name.
 ## Platforms and the worker
 
 Each platform folder implements one interface (`endpoint`, `status`,
-`start`, `restart`, `init`, `path` and the Docker, home and disk helpers):
+`start`, `restart`, `init`, `path`, the Store hooks `makeStore`,
+`storeHolders`, `releaseStoreHolders` and `removeStore`, and the Docker, home
+and disk helpers); `platform/vm/` implements the same interface over a VM
+(see [Placement](#placement-one-linux-vm-per-home)).
 
 - **Linux** runs Store calls in this process. There is no worker:
   `worker.start` and `worker.restart` are refused `InvalidInput`. Init
@@ -149,6 +161,83 @@ secret, build, daemonHost?, docker?, init? }`, readable by its user only. On mac
 worker and Init's container mount; it replaces every call's `deploy.docker`, so the
 Mac's own socket (`LAYERFS_DOCKER`) never reaches Linux. The worker
 checks every file of the bundle's `manifest.json` before it listens.
+
+## Placement: one Linux VM per home
+
+`placement` (also read from `LAYERFS_PLACEMENT` when the setting is absent) is
+`local` (the default: this machine's Docker, macOS worker container or WSL2
+worker, unchanged) or `vm:<provider>`: this LayerFS home's Stores and Sandboxes
+live in **one Linux VM per home** on this machine (#515 §6, V9). Inside it the
+store is on the VM's own ext4 disk, the Sandboxes are Linux namespaces
+(`LAYERFS_SANDBOX_BACKEND=namespaces`, H36's backend) and the worker runs the
+real SDK as root; the host reaches only the worker, with one attempt per call
+and no replay. Providers: `microsandbox` (`msb`, verified by
+`test/verify/vm_real.mjs`) and `apple-container` (`container`, implemented but
+UNVERIFIED — no `container` CLI on the machine this was written on).
+
+```sh
+LAYERFS_PLACEMENT=vm:microsandbox layerfs-home # any integration that sets it
+```
+
+Settings: `vm: { image, cpus, memory, storeSize }` (`LAYERFS_VM_IMAGE`,
+`LAYERFS_VM_CPUS`, `LAYERFS_VM_MEMORY`, `LAYERFS_VM_STORE_SIZE`; defaults
+`node:22-trixie-slim`, 2, `2G`, `20G`). The image is the VM's own: it must hold
+`node`, and it is not the Sandbox image (`LAYERFS_SANDBOX_BACKEND=namespaces`
+needs none). A VM home needs `bundle` and no `image`; its `daemon` setting is
+the guest's, `<bundle>/layerfs-daemon`, with `layerfs-sandbox-helper` beside it.
+
+Guest layout (`settings.js`'s `GUEST`): the home is a bind mount of the host's
+`<home>`, so project entries and traces are the same files on both sides; the
+Store disk is a named volume mounted at `/layerfs/store`, each project's Store
+at `/layerfs/store/<volume>/global/store.sqlite`; the sealed bundle is copied
+in at `/layerfs/bundle`; an Init source folder is copied to
+`/layerfs/import/<hash>`; the worker's settings, pid and log live in
+`/layerfs/state`; Sandbox directories are `/layerfs/local`.
+
+The adapter's five steps, each attempted once:
+
+1. the VM exists and runs, from `settings.vm`, with the named disk volume and
+   the home bind mount — `create` once, else `start`; a record of another home,
+   or one whose mounts or port differ, is refused rather than reused or
+   repaired;
+2. the sealed bundle is copied in once per bundle hash (the hash of its
+   `manifest.json`), with a marker at `/layerfs/bundle/.sealed`;
+3. `user.max_user_namespaces=0` is written and read back (V4), then the worker
+   starts as root with its secret in a 0600 guest file — never in a command
+   line — and the pid it wrote;
+4. the endpoint is written to `<home>/worker/endpoint.json` once the worker
+   answers on `127.0.0.1:<host>`, the VM's `-p 127.0.0.1:<host>:7070`
+   (V5: the Sandboxes share the VM's network, so a daemon's loopback port
+   stays inside it);
+5. `runtime.vm.stop()` stops the VM and keeps its disk; `runtime.vm.delete({
+   confirm: "delete" })` removes the VM record and keeps the Store disk unless
+   `discardStore`. **A delete is refused while any project of the home exists**:
+   each Store lies on that disk and nowhere else, and this build has no remote
+   Store push (#506), so V8's "never delete a Store that was not pushed" makes
+   the refusal the only safe answer.
+
+Init runs as one more call to the VM's worker: `platform.init` starts the VM
+and copies the source folder into `/layerfs/import`, and `LayerFS.init` reads
+it there. `deploymentEnv` gives clients and agents the VM's settings:
+`LAYERFS_SANDBOX=native`, `LAYERFS_SANDBOX_BACKEND=namespaces` (an explicit
+`LAYERFS_SANDBOX_BACKEND` in the caller's environment wins), `LAYERFS_DAEMON`,
+`LAYERFS_LOCAL_DIR`, `LAYERFS_HOME=/layerfs/home` and the project's
+`LAYERFS_STORE_PATH` — no `LAYERFS_DOCKER`, `_IMAGE` or `_VOLUME`.
+
+A VM home's `status()` reports `placement`, `docker: { level: "not-used" }`
+(host Docker is not in its data path) and `vm` (the VM's own state). The
+Docker-shaped helpers read host Docker and refuse `Unsupported` with the reason:
+`volume.list`, `volume.remove`, `sandbox.list`, `sandbox.list_leftovers` and
+`sandbox.clean_leftovers`; `sandbox.sweep` answers
+`{ reclaimed: {}, failed: [], host: false }`. The SDK's
+`project.list_sandboxes` reads the VM's Sandboxes.
+
+The real proof is `node api/runtime/test/verify/vm_real.mjs <sealed Linux
+bundle> microsandbox`: it initializes a project through the VM's worker, forks
+a Branch, writes, starts a Sandbox, execs as the nonroot identity, Commits,
+unmounts and closes, then removes the project and the VM. The unit tests
+(`node api/runtime/test/vm_placement.mjs settings|flow|bundle|delete|hosts|apple-container`)
+use a stand-in provider CLI.
 
 ## Docker
 

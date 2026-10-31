@@ -8,8 +8,12 @@ import { callHome } from "./settings.js";
 
 const IDLE_MS = 60_000;
 
-/** The environment one project's client (and its agents' bash calls) use. */
+/** The environment one project's client (and its agents' bash calls) use. A
+ * platform may replace it whole (`deploymentEnv`), as a `vm:<provider>` home
+ * does: its deployment is native Sandboxes in the VM's namespace backend, not
+ * host Docker. */
 export function deploymentEnv(settings, platform, project) {
+  if (platform.deploymentEnv) return platform.deploymentEnv(settings, project);
   return {
     HOME: callHome(settings),
     DOCKER: settings.docker,

@@ -14,7 +14,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { docker as cli, endpointFile, homeNames, ping, ready, refuse, writeEndpoint } from "../shared.js";
+import { docker as cli, endpointFile, homeNames, makeStore, ping, ready, refuse, releaseStoreHolders, removeStore, storeHolders, writeEndpoint } from "../shared.js";
 
 const VOLUMES = "/var/lib/docker/volumes";
 const WORKER_PORT = 7070;
@@ -126,6 +126,10 @@ const platform = {
   },
   path: (settings, hostPath) => hostPath,
   docker: cli,
+  makeStore,
+  storeHolders,
+  releaseStoreHolders,
+  removeStore,
   storePath: (settings, volume) => `${VOLUMES}/${volume}/_data/global/store.sqlite`,
   homeNames: (settings) => homeNames(settings.home),
   async removeHome(settings, project) { rmSync(join(settings.home, project), { recursive: true, force: true }); },

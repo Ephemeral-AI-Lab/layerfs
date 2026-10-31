@@ -20,6 +20,7 @@ import { resolveSettings } from "./settings.js";
 import { status } from "./status.js";
 import linux from "./platform/linux/index.js";
 import macos from "./platform/macos/index.js";
+import { vmPlatform } from "./platform/vm/index.js";
 import windows from "./platform/windows/index.js";
 import { list } from "./project/list.js";
 import { InitJobs } from "./project/jobs.js";
@@ -34,6 +35,8 @@ import { list as listVolumes, remove as removeVolumes } from "./volume.js";
 import { subscribe } from "./events/subscribe.js";
 
 const PLATFORMS = { linux, macos, windows };
+/** The platform object `settings` selects: this host's, or one VM's (§6). */
+const platformFor = (settings) => (settings.placement.kind === "vm" ? vmPlatform(settings.placement.provider) : PLATFORMS[settings.platform]);
 /** Held only by `open`: the constructor refuses without it. */
 const FACTORY = Symbol("LayerFSRuntime.open");
 
@@ -50,7 +53,7 @@ export class LayerFSRuntime {
   constructor(settings, token = undefined) {
     if (token !== FACTORY) throw new LayerFSError("InvalidInput", "use `await LayerFSRuntime.open(settings)`; there is no public constructor", null);
     this.settings = settings;
-    this.platform = PLATFORMS[settings.platform];
+    this.platform = platformFor(settings);
     this.closed = false;
     const endpoint = this.platform.endpoint(settings);
     if (endpoint) useWorker(endpoint);
@@ -93,6 +96,14 @@ export class LayerFSRuntime {
       list: live(() => listVolumes(this)),
       remove: live((names) => removeVolumes(this, names)),
     };
+    /** `vm:<provider>` only: the VM behind this home (stop, delete); absent on a local placement. */
+    if (this.platform.vm) {
+      this.vm = {
+        status: live(async () => (await this.platform.status(settings)).vm ?? null),
+        stop: live(() => this.platform.vm.stop(settings)),
+        delete: live((options) => this.platform.vm.delete(settings, options)),
+      };
+    }
     /** The open-time sweep: null when off, else { state: running | done | failed, … }. */
     this.swept = null;
     this.sweeping = null;

@@ -14,6 +14,7 @@
 // One `docker system df -v`, plus one `docker volume inspect` of the
 // labelled volumes; listing changes nothing.
 import { LayerFSError } from "@layerfs/agent";
+import { noHostDocker } from "./platform/shared.js";
 
 const UNITS = { B: 1, kB: 1e3, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12 };
 /** "84.05MB" -> 84050000; anything else -> null. */
@@ -25,6 +26,7 @@ export const bytesOf = (text) => {
 /** `[{ name, size, containers, owner, project, live, removable }]`, by name. */
 export async function list(runtime) {
   const { settings, platform } = runtime;
+  if (platform.hostDocker === false) throw noHostDocker(runtime, "runtime.volume.list", "its Stores are directories on the VM's disk, not host Docker volumes");
   const df = JSON.parse(await platform.docker(settings, ["system", "df", "-v", "--format", "{{json .}}"], { timeout: 60_000 }));
   const volumes = df.Volumes ?? [];
   const labelled = volumes.filter((v) => v.Labels).map((v) => v.Name);
