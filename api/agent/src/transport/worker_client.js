@@ -150,6 +150,8 @@ export function workerClient(file) {
     return connection(info).call(request);
   }
   return {
+    /** Calls run in a Linux worker, so its Sandboxes run on Linux. */
+    worker: true,
     call: (op, args) => send("call", op, args),
     backendCall: (op, args) => send("backendCall", op, args),
     /** The Store opens in the worker; here only its clients are counted. */

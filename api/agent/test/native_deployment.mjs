@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { deployment } from "../src/client.js";
+import { deployment, sandboxHost, STATE } from "../src/client.js";
 
 const FAKE = fileURLToPath(new URL("./fixture/fake-native.cjs", import.meta.url));
 const native = createRequire(import.meta.url)(FAKE);
@@ -184,6 +184,14 @@ try {
   process.env.LAYERFS_DAEMON = "/opt/layerfs-daemon";
   process.env.LAYERFS_LOCAL_DIR = "/tmp/lfs";
   assert.throws(() => deployment(), (e) => e.code === "Unsupported" && /namespaces is Linux only/.test(e.message));
+  // a worker (a vm: placement's VM, or the macOS route) makes the Sandbox on
+  // its Linux host, so a macOS client sending to one is not refused
+  process.env.LAYERFS_IMAGE = docker.image;
+  process.env.LAYERFS_IMAGE_ARCHIVE = "/bundle/images/a.tar";
+  assert.equal(sandboxHost({ [STATE]: { transport: { worker: true } } }), "linux");
+  assert.equal(sandboxHost({ [STATE]: { transport: {} } }), "darwin");
+  assert.equal(deployment({}, false, "linux").sandboxBackend, "namespaces");
+  assert.throws(() => deployment({}, false, "darwin"), (e) => e.code === "Unsupported");
 } finally {
   Object.defineProperty(process, "platform", host);
 }

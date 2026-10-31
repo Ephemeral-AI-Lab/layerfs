@@ -69,10 +69,10 @@ export function sandboxArg(sandbox) {
  * `localDir` (LAYERFS_LOCAL_DIR) and no Docker setting; on Windows it is
  * refused Unsupported. Unset or `docker` is Docker; any other value is
  * refused. */
-export function deployment(options = {}, postgresql = false) {
+export function deployment(options = {}, postgresql = false, host = process.platform) {
   const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
   const sandbox = options.sandbox ?? env("SANDBOX");
-  if (sandbox === "native") return nativeDeployment(options, env, sandbox);
+  if (sandbox === "native") return nativeDeployment(options, env, sandbox, host);
   if (sandbox !== undefined && sandbox !== "docker") {
     throw new LayerFSError("InvalidInput", `deploy.sandbox (LAYERFS_SANDBOX) is docker or native (Linux or macOS), not ${sandbox}`, null);
   }
@@ -100,17 +100,19 @@ export function deployment(options = {}, postgresql = false) {
  * `namespaces` on Linux). The namespaces backend gives each Sandbox a root
  * filesystem from an image, so it also needs `image` (LAYERFS_IMAGE, the
  * same digest Docker deploys) and `imageArchive` (LAYERFS_IMAGE_ARCHIVE, the
- * docker-archive the bundle carries). */
-function nativeDeployment(options, env, sandbox) {
+ * docker-archive the bundle carries). `host` is the platform the Sandbox
+ * runs on: this process's, or Linux when a worker makes it (see
+ * `sandboxHost`). */
+function nativeDeployment(options, env, sandbox, host) {
   const backend = options.sandboxBackend ?? env("SANDBOX_BACKEND");
   // #527 step 8: Windows runs Docker Sandboxes through its WSL2 worker; it has no native or namespaces backend
-  if (process.platform === "win32") {
+  if (host === "win32") {
     const named = backend === "namespaces" ? "deploy.sandboxBackend (LAYERFS_SANDBOX_BACKEND) namespaces" : "deploy.sandbox (LAYERFS_SANDBOX) native";
     throw new LayerFSError("Unsupported", `${named} is not supported on Windows: a Windows Sandbox is Docker, through the WSL2 worker; native runs on Linux or macOS, namespaces on Linux`, null);
   }
   // namespaces is Linux only: refused before its image settings are read, so
   // a macOS deployment hears Unsupported, not a missing LAYERFS_IMAGE
-  if (backend === "namespaces" && process.platform !== "linux") {
+  if (backend === "namespaces" && host !== "linux") {
     throw new LayerFSError("Unsupported", "deploy.sandboxBackend (LAYERFS_SANDBOX_BACKEND) namespaces is Linux only; use native", null);
   }
   const deploy = {
@@ -132,6 +134,11 @@ function nativeDeployment(options, env, sandbox) {
   if (!deploy.containerPrefix) delete deploy.containerPrefix;
   return deploy;
 }
+
+/** The platform a client's Sandboxes run on: a worker (the macOS and
+ * Windows routes, or a `vm:` placement's VM) runs them on its Linux host;
+ * the addon in this process runs them here. */
+export const sandboxHost = (client) => (transportOf(client).worker ? "linux" : process.platform);
 
 /** Refuses every call on a closed client (or one no factory opened). */
 export function live(client) {
