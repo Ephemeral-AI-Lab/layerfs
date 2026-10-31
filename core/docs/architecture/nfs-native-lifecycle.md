@@ -13,7 +13,7 @@ exceed it, and interrupting a helper cannot prove its kernel effect was undone.
 Removing Sandbox ownership from the wait resolves the serialization problem
 without trading it for earlier unknown outcomes.
 
-[`control/export_helper.rs`](../../crates/layerfs-daemon/src/control/export_helper.rs)
+[`control/export_helper.rs`](../../../engine/crates/layerfs-daemon/src/control/export_helper.rs)
 owns each NFS mount, unmount, force and optional flush helper attempt. The
 public `Helper` and `HELPER_WAIT` exports remain available from `control`.
 One attempt gets 60 seconds of exit observation. At expiry or an observation
@@ -103,7 +103,7 @@ success; durable recovery of that lost result is not claimed.
 
 ## Stop before daemon termination
 
-[`backend/native/sandbox.rs`](../../crates/layerfs-sandbox/src/backend/native/sandbox.rs)
+[`backend/native/sandbox.rs`](../../../engine/crates/layerfs-sandbox/src/backend/native/sandbox.rs)
 attempts detach below that Sandbox's own directory before TERM/KILL, while its
 NFS server can still answer client writeback. A detach failure is logged and
 does not prevent the existing daemon and process-group stop. Stop remains crash

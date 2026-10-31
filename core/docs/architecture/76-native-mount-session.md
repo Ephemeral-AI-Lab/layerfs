@@ -14,14 +14,14 @@ Scope and receipts are in the [R2](../issues/307/R2-COMPLETION-20261008.md) and
 
 ## Ownership
 
-Dependency is daemon → fuse → workspace. [Fuse](../../crates/layerfs-fuse/src/session/mod.rs)
+Dependency is daemon → fuse → workspace. [Fuse](../../../engine/crates/layerfs-fuse/src/session/mod.rs)
 owns the connection: direct mount syscalls, the patched fuser session, receive
 loops, request accounting and connection drain. The daemon owns the registry,
 overall Ready, unmount composition and the engine/Store owners. Fuse contains no
 daemon command, registry or application setting, and neither side registers,
 supervises, signals or times out a command.
 
-[Assembly](../../crates/layerfs-daemon/src/application/filesystem.rs) runs once
+[Assembly](../../../engine/crates/layerfs-daemon/src/application/filesystem.rs) runs once
 before control readiness. It starts the one shared
 [Dispatch](75-native-request-service.md) for the daemon's existing Overlay Owner
 and direct Store; no device is opened and nothing is mounted until an explicit
@@ -52,7 +52,7 @@ owner's subsequent2026-10-12 Store admission rule can wait before one SQL attemp
 for cooperating writers, as scoped by the integration contract; no failed
 Commit Begin is replayed.
 
-[`NativeSession::attach`](../../crates/layerfs-fuse/src/session/startup.rs) is one
+[`NativeSession::attach`](../../../engine/crates/layerfs-fuse/src/session/startup.rs) is one
 attempt with no retry. In order it builds the callback adapter, creates the mount
 directory (an existing path is refused), opens the device, calls `mount(2)`,
 completes the handshake through `Session::from_fd`, spawns the session owner and
@@ -63,7 +63,7 @@ The mount is type `fuse`, source `layerfs`, flags `nosuid,nodev,noatime`, with
 `rootmode=40000`, `default_permissions`, `allow_other` and `max_read=131072`.
 The mount owner is the daemon identity; projected inode ownership is the command
 identity. Kernel permission checks, not a library uid filter, decide access.
-[Negotiation](../../crates/layerfs-fuse/src/mount/profile.rs) requests 128 KiB
+[Negotiation](../../../engine/crates/layerfs-fuse/src/mount/profile.rs) requests 128 KiB
 write and readahead windows, background and congestion limits of 1, and adds no
 optional capability; writeback caching stays absent.
 
@@ -91,9 +91,9 @@ and no request capacity.
 ## Callback dispositions and accounting
 
 Every kernel operation the pinned adapter can receive has one declared
-[disposition](../../crates/layerfs-fuse/src/request/callbacks.rs), and every
+[disposition](../../../engine/crates/layerfs-fuse/src/request/callbacks.rs), and every
 received unit is counted once by
-[opcode and disposal](../../crates/layerfs-fuse/src/request/accounting.rs):
+[opcode and disposal](../../../engine/crates/layerfs-fuse/src/request/accounting.rs):
 
 | Disposition | Operations |
 | --- | --- |
@@ -119,12 +119,12 @@ admitted, charged and disposed independently.
 
 ## Control records
 
-[Bridge](../../crates/layerfs-bridge/src/control_native.rs) adds records without
+[Bridge](../../../engine/crates/layerfs-bridge/src/control_mount.rs) adds records without
 changing any existing byte encoding:
 
 - Requests `Attach(WorkspaceToken)` and `Locate(WorkspaceId)`.
 - Replies `Ready`, `Located` and `Retained`, and `Activity::Attaching`.
-- R6, in [`control_forced.rs`](../../crates/layerfs-bridge/src/control_forced.rs):
+- R6, in [`control_forced.rs`](../../../engine/crates/layerfs-bridge/src/control_forced.rs):
   request `ForceUnmount`, reply `ForceUnmounted`, `NativePhase::Stopping`,
   `TeardownStage::Abort` and `TeardownCustody.forced`; listed in
   [native control](68-native-workspace-control.md#forced-unmount-records).
@@ -140,7 +140,7 @@ phase, the Ready record, whether detach is known and `NativeWork` counters copie
 from maintained state. Status performs no syscall and one existing engine
 observation; it never settles an unknown.
 
-The [SDK mount](../../crates/layerfs-api/src/sandbox/mount.rs) exposes the
+The [SDK mount](../../../engine/crates/layerfs-api/src/sandbox/mount.rs) exposes the
 two-acknowledgement mount without a Project argument. Bind/attach and lost-reply
 locate are available only in the hidden component-proof/recovery module. If the
 second acknowledgement fails, MountFailure retains the already bound Workspace;
@@ -172,7 +172,7 @@ within a daemon, so neither is a directory or an engine mount incarnation.
 
 ## Normal unmount
 
-[Unmount](../../crates/layerfs-daemon/src/control/detach.rs) first refuses
+[Unmount](../../../engine/crates/layerfs-daemon/src/control/detach.rs) first refuses
 uncommitted changes with `Dirty` unless the request discards them
 ([architecture 82](82-sdk-call-channel.md#workspace-control-changes)). It keeps
 its existing Commit-custody admission and then, for an attached Workspace:
@@ -186,7 +186,7 @@ its existing Commit-custody admission and then, for an attached Workspace:
    answer is the fence.
 2. **Detach known.** Admission stops and waiters wake. Already admitted work
    keeps its original disposition.
-3. **Drain.** [`drain`](../../crates/layerfs-fuse/src/session/drain.rs)
+3. **Drain.** [`drain`](../../../engine/crates/layerfs-fuse/src/session/drain.rs)
    establishes that every created loop is joined, the owner and watcher
    returned, no received, admitted or retained request remains, and releases the
    lane. `drain_wait` is an observation deadline. A stop at `Join` means the
@@ -216,7 +216,7 @@ failures retain the recorded abort effects in `TeardownCustody.forced`.
 [`ForceUnmount`](80-forced-teardown.md) takes the session out of the entry the
 same way, into phase `Stopping`, after its own before-effect guard. It then
 uses the abort control bound at Attach for exactly one write, lets
-[`force_drain`](../../crates/layerfs-fuse/src/session/force.rs) establish the
+[`force_drain`](../../../engine/crates/layerfs-fuse/src/session/force.rs) establish the
 same drain predicate as step 3 and make the connection's one plain detach
 afterwards, and finishes with the same revocation and Close as steps 4 and 5.
 Its stops use the same stages plus `Abort`, and carry the forced facts. Once
@@ -228,11 +228,12 @@ before any syscall: the forced path owns its single detach.
 A successful plain detach aborts the connection, so the kernel may never deliver
 the asynchronous RELEASE and FORGET units for references it held. Revocation is
 therefore qualified by connection drain rather than by an empty handle set.
-[`revoke_native_mount`](../../crates/layerfs-overlay/src/lifetime/native.rs) is
+[`revoke_kernel_mount`](../../../engine/crates/layerfs-overlay/src/lifetime/kernel.rs) (formerly `revoke_native_mount`) is
 refused only while a native request source or read association remains; file
 handles, directory handles and lookup counts are retired by
-[automatic maintenance](../../crates/layerfs-overlay/src/maintenance/native.rs)
-in indexed windows of at most 64 rows per turn: file handles, open directory
+automatic maintenance (its module `maintenance/native.rs` was removed by
+`1ad1e90f48`, which moved Workspace open state into daemon memory; this
+paragraph predates that change) in indexed windows of at most 64 rows per turn: file handles, open directory
 headers, lookup groups by serial cursor, then the mount row. This supersedes the
 earlier rule that an outstanding handle refused revocation. The mount row fences
 whole-namespace cleanup until retirement ends, so a terminal unmount reply does
@@ -244,7 +245,7 @@ refusal cannot see one. Such a request is accounted by the connection drain
 that precedes revocation on both paths: it stays admitted in its lane until
 its future ends, and `Revoke` is submitted only after the drain observed
 nothing received and nothing admitted.
-[`forced_unmount.rs`](../../crates/layerfs-daemon/tests/forced_unmount.rs)
+[`forced_unmount.rs`](../../../engine/crates/layerfs-daemon/tests/forced_unmount.rs)
 stages a READ parked for a Store reader on a real mount: the engine's row
 counts equal those of the idle descriptor, normal Unmount is `Busy` at
 `unmount:kernel` with no effect, and Force ends the request through the
@@ -258,7 +259,7 @@ daemon does not wait or retry on its behalf.
 
 ## Sandbox access
 
-The Docker [container configuration](../../crates/layerfs-sandbox/src/backend/docker/container.rs)
+The Docker [container configuration](../../../engine/crates/layerfs-sandbox/src/backend/docker/container.rs)
 adds exactly `CapAdd: ["CAP_SYS_ADMIN"]`, one `/dev/fuse` device mapping and
 `apparmor=unconfined`, keeping `Privileged: false` and `no-new-privileges=true`.
 Since 2026-10-10 (owner decision C-1) it also sends one inline system-call
@@ -269,7 +270,7 @@ no copy of a Workspace mount can exist outside the daemon's namespace and a
 normal Unmount stays truthful against any holder. A tool that needs an
 unprivileged user namespace fails in a Workspace command with `EPERM`. The
 filter replaces the Engine's default one for this container.
-[Topology inspection](../../crates/layerfs-sandbox/src/backend/docker/topology.rs)
+[Topology inspection](../../../engine/crates/layerfs-sandbox/src/backend/docker/topology.rs)
 requires exactly that set: a missing, widened or additional capability, device
 or security option is not reported as the daemon endpoint. Commands still run
 as the nonroot command identity with an empty effective capability set.

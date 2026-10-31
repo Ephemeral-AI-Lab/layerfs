@@ -5,8 +5,9 @@
 
 ## 现在有什么
 
-- `layerfs_sandbox::Runtime` 的四个取值：`Docker`、`MacosNative`、
-  `LinuxNative`、`Windows`。前三个已有后端，Windows 只有这个变体。
+- `layerfs_sandbox::Runtime` 的五个取值：`Docker`、`MacosNative`、
+  `LinuxNative`、`Namespaces`（仅 Linux）、`Windows`。前四个已有后端，
+  Windows 只有这个变体。
 - `Runtime::{capabilities, local_directory, launch, reopen, reopen_stopped}`
   在 Windows 上全部返回 `Unsupported`；`Sandbox` 句柄没有 Windows 分支，
   因为 Windows 上不可能启动出实例。

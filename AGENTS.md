@@ -178,11 +178,12 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   routes. Store calls therefore leave the caller's process on Linux too, under
   `vm:` placement only, and a process routes them per project
   (`useWorker((project) => endpoint)`, or that project's
-  `LAYERFS_WORKER_ENDPOINT`). `project.init` makes the project's VM and
-  `project.remove` deletes it with its Store disk; a bare VM delete is refused
+  `LAYERFS_WORKER_ENDPOINT`). `project.start_init` makes the project's VM and
+  `project.delete` deletes it with its Store disk; a bare VM delete is refused
   while the project exists, because that Store is on that disk only and no
-  remote Store push exists (#506). Implemented and verified providers:
-  `microsandbox` (`msb`) and `apple-container` (`container` 1.6.1).
+  remote Store push exists (#506). Implemented providers: `microsandbox`
+  (`msb`), `apple-container` (`container` 1.6.1) and `ssh`; verified with
+  stand-in providers; real runs: see the #527 platform pass.
   `@layerfs/runtime`'s guide and `api/runtime/src/platform/vm/` hold the details.
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second

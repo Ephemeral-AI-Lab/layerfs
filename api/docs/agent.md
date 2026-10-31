@@ -147,7 +147,7 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open: `global/store.sqlite` in the project's volume. On Linux this process opens it, so it must be on a local filesystem the daemons share, such as `/layerfs-store/global/store.sqlite` where the volume is mounted at `/layerfs-store`; otherwise Store calls fail `Unsupported`. On macOS and Windows the worker opens it, so it is the path inside the worker's Linux, `/var/lib/docker/volumes/<volume>/_data/global/store.sqlite`. On any other platform Store calls fail `Unsupported`. Unset, they fail `InvalidInput` everywhere. |
 | `LAYERFS_CONTAINER_PREFIX` | Optional. Names every container this client creates `<prefix><project>-<Sandbox>` (default prefix `layerfs-`); another LayerFS home on the same Docker engine sets its own, so names never collide. Docker's name rule applies (an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128). A name another container holds refuses the create before any effect. |
 | `LAYERFS_DAEMON_HOST` | Optional. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |
-| `LAYERFS_SANDBOX` | Optional. Unset or `docker`: a Sandbox is a Docker container, exactly as described here. `native` (macOS only): a Sandbox is a daemon process of this user, with no container, no root and no Docker setting read; Workspaces are served over loopback NFS and mounted by this machine's own NFS client, and commands run as this user (see [Native Sandboxes](#native-sandboxes-macos)). Elsewhere `sandbox.create` refuses `native` as `Unsupported`; on Windows the agent itself refuses it, and `LAYERFS_SANDBOX_BACKEND=namespaces`, before anything is made (a Windows Sandbox is Docker, through the WSL2 worker). Any other value is refused as `InvalidInput` before anything is made. |
+| `LAYERFS_SANDBOX` | Optional. Unset or `docker`: a Sandbox is a Docker container, exactly as described here. `native` (Linux or macOS): a Sandbox is a daemon process with no container and no Docker setting read. On macOS it runs as this user, without root; Workspaces are served over loopback NFS and mounted by this machine's own NFS client, and commands run as this user. On Linux it needs root: the daemon serves FUSE as root and commands run as 501:20 (see [Native Sandboxes](#native-sandboxes-linux-and-macos)). Elsewhere `sandbox.create` refuses `native` as `Unsupported`; on Windows the agent itself refuses it, and `LAYERFS_SANDBOX_BACKEND=namespaces`, before anything is made (a Windows Sandbox is Docker, through the WSL2 worker). Any other value is refused as `InvalidInput` before anything is made. |
 | `LAYERFS_LOCAL_DIR` | With `LAYERFS_SANDBOX=native`, required: an existing absolute directory, owned by the running user, not group/other writable and traversable by others (0755). Each native Sandbox gets its own directory under it. |
 | `LAYERFS_SANDBOX_BACKEND` | With `LAYERFS_SANDBOX=native` on Linux, optional: `native` (unset) or `namespaces`. `namespaces` puts each Sandbox's daemon in its own mount, PID and IPC namespaces and its own cgroup v2 directory, and runs commands as the sandbox's uid:gid with no capabilities and no-new-privs; see [Namespace Sandboxes (Linux)](#namespace-sandboxes-linux). It needs root, cgroup v2, `/dev/fuse` and `user.max_user_namespaces=0`, and is refused `Unsupported` elsewhere or without them. Any other value is refused `InvalidInput` before anything is made. It is read when the client is made and sent with every call, so a Sandbox made with one backend is never reopened as the other. |
 | `LAYERFS_TRACE` | Optional per-call trace file (see [the call trace](backend.md#the-call-trace)); unset means no trace. |
@@ -249,10 +249,17 @@ Daemon/container restart recovery and replay of uncertain operations are exclude
 Background process ownership is in the native executor, including persisted
 process identity; the filesystem daemon launches and supervises no commands.
 
-### Native Sandboxes (macOS)
+### Native Sandboxes (Linux and macOS)
 
-`LAYERFS_SANDBOX=native` is the native runtime for macOS, with no root, no
-Docker, no kernel extension and no macFUSE or FUSE-T. Each Sandbox's daemon
+`LAYERFS_SANDBOX=native` runs each Sandbox's daemon as a process on this
+machine, with no container and no Docker. On Linux it needs root: the daemon
+serves its Workspaces over FUSE as root (`LAYERFS_KERNEL=fuse`), commands run
+as 501:20, and the Store (`LAYERFS_STORE_PATH`) is on a local Linux filesystem
+the daemons share; `LAYERFS_SANDBOX_BACKEND=namespaces` adds isolation (see
+[Namespace Sandboxes (Linux)](#namespace-sandboxes-linux)). Without root it is
+refused `Unsupported` before anything is made. The rest of this section
+describes macOS, where it needs no root, no kernel extension and no macFUSE or
+FUSE-T. Each Sandbox's daemon
 runs as a process of this user and serves its Workspaces over NFSv3 on
 127.0.0.1 (`LAYERFS_KERNEL=nfs`); macOS's own client mounts them
 (`/sbin/mount_nfs`, as this user) under the Sandbox's `workspaces/`. Commands
@@ -260,8 +267,7 @@ run as this user, in this machine's namespaces: **it isolates nothing**
 beyond what the caller's own sandbox (for instance Seatbelt) imposes. A
 command starts with this process's `PATH` (so `node`, Homebrew's tools and
 the like are found as in the caller's own shell) and its own environment,
-nothing else of this process's. Docker stays the default, and Linux keeps
-the Docker route only.
+nothing else of this process's. Docker stays the default on both.
 
 It is the in-process route: the client loads the macOS addon and opens the
 Store itself, so no worker endpoint (`LAYERFS_WORKER_ENDPOINT`) is set. It
@@ -318,8 +324,8 @@ can fail on this NFS route with the system SQLite VFS; see
 
 ### Namespace Sandboxes (Linux)
 
-`LAYERFS_SANDBOX_BACKEND=namespaces` keeps the native deployment (no Docker, no
-image) and adds isolation inside the project's VM: each Sandbox's daemon runs
+`LAYERFS_SANDBOX_BACKEND=namespaces` keeps the native deployment (no Docker)
+and adds isolation inside the project's VM: each Sandbox's daemon runs
 in its own mount, PID and IPC namespaces and its own cgroup v2 directory
 (`/sys/fs/cgroup/layerfs/<Sandbox id>`), so two Sandboxes on one Store cannot
 see each other's mounts, processes or files, and closing one ends everything
@@ -337,9 +343,12 @@ Sandbox `n` lives where a native Sandbox does — `LAYERFS_LOCAL_DIR/<prefix><pr
 with `config/daemon.setup`, `overlay/`, `workspaces/<k>`, `tmp/` and
 `daemon.log` — plus `bin/layerfs-daemon` (the daemon executable, copied in
 0755) and its sibling `<prefix><project>-<n>.root/`, the private root its init
-stage mounts a tmpfs on and pivots to. The private root holds: the VM's own
-userland (`/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/etc`) bound read-only,
-so there is no image and no package restoration; a private `/proc` (only the
+stage builds and pivots to. That root is an overlay: the Sandbox image
+(`LAYERFS_IMAGE`, the same `sha256:` digest Docker deploys, unpacked once per
+digest from the docker-archive `LAYERFS_IMAGE_ARCHIVE` into
+`LAYERFS_LOCAL_DIR/images/`) is its read-only lower layer, and the Sandbox's
+own `overlay/upper` and `overlay/work` are its writable layer, deleted with
+it; the VM's own userland is not part of it. Over it come a private `/proc` (only the
 Sandbox's processes), `/dev` (the basic devices, `/dev/fuse`, a private
 `devpts` and `shm`), `/tmp`; the Sandbox's own directory bound at its own path,
 so `config/`, `overlay/` and `workspaces/<k>` keep the same names on both
@@ -366,12 +375,14 @@ and nothing is deleted. Reopen checks the recorded init process (id, start
 time, boot) and its cgroup membership, so a reused id, or a process outside
 the Sandbox's cgroup, is never taken for it. Everything else above holds:
 numbered Sandboxes, up to 16 Workspaces each, one daemon per Sandbox, idle
-close after 2 minutes, reclaim, and `image` reported as `local`.
+close after 2 minutes and reclaim. `sandbox.create`, the mount result and
+`project.list_sandboxes()` report a namespaces Sandbox's `image` as its image
+digest, not `local`.
 
 Limits: the network namespace is shared with the VM, so a command can reach
-another Sandbox's daemon port on `127.0.0.1`; `/sys` is not mounted; the
-userland is the VM's, not a pinned image; and the private root's bind mounts
-are read-only at their top only, as this kernel's remount is not recursive.
+another Sandbox's daemon port on `127.0.0.1`; `/sys` is not mounted; and an
+image archive with compressed layers (as `podman save` writes) is refused:
+the archive must be `docker save`'s.
 
 ### Exec output
 

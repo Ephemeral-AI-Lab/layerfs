@@ -135,7 +135,7 @@ and disk helpers) and may declare capabilities instead of being named:
 `initCounts: false` (macOS: this process cannot read Init's counts) and
 `uncertainInit: true` (Windows: any failed Init is kept and recorded, never
 cleaned up); `platform/vm/` implements the same interface over a VM
-(see [Placement](#placement-one-linux-vm-per-home)).
+(see [Placement](#placement-one-linux-vm-per-store)).
 
 - **Linux** runs Store calls in this process. There is no worker:
   `worker.start` and `worker.restart` are refused `InvalidInput`. Init
@@ -191,8 +191,9 @@ Stores — lives in one Linux VM of its own** on this machine (#515 §6, V9, V1)
 A project's VM holds that project's Store on its own ext4 disk, its Sandboxes
 are Linux namespaces (`LAYERFS_SANDBOX_BACKEND=namespaces`, H36's backend) and
 its worker runs the real SDK as root; the host reaches only each VM's worker,
-with one attempt per call and no replay. Providers, both verified against the
-real CLI by `test/verify/vm_real.mjs` and by H40's own run: `microsandbox`
+with one attempt per call and no replay. Providers, verified with stand-in
+provider CLIs (`test/vm_placement.mjs`; real runs of `test/verify/vm_real.mjs`:
+see the #527 platform pass): `microsandbox`
 (`msb` 0.7.8), `apple-container` (`container` 1.6.1) and `ssh` (any Linux host
 the user provides, reached with the system `ssh` client; see
 [the SSH provider](#the-ssh-provider-any-linux-host) below).
@@ -265,7 +266,7 @@ The adapter's five steps, each attempted once, all for one named project:
    disk unless `discardStore`. **A delete is refused while that project
    exists**: its Store lies on that disk and nowhere else, and this build has
    no remote Store push (#506), so V8's "never delete a Store that was not
-   pushed" makes the refusal the only safe answer. `project.remove` is the
+   pushed" makes the refusal the only safe answer. `project.delete` is the
    explicit removal: it stops the project's Sandboxes, closes its Store, then
    deletes the VM and its disk together.
 
