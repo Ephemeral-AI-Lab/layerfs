@@ -1,7 +1,7 @@
 // @layerfs/agent's surface and client lifecycle (#428). Each case is one
 // command; every case but `dispatch` uses the stand-in binding and creates no
 // Store:
-//   node api/agent/test/packaging.mjs surface|lifecycle|copy|sandbox|worker-route|transport-order|dispatch
+//   node api/agent/test/packaging.mjs surface|lifecycle|copy|sandbox|worker-route|worker-per-project|transport-order|dispatch
 // `dispatch` loads the real addon (LAYERFS_NATIVE or engine/crates/layerfs-node/layerfs.node).
 import assert from "node:assert/strict";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -173,6 +173,32 @@ if (selected === "surface") {
   const calls = native.calls.length;
   await assert.rejects(LayerFS.open("website"), { message: /nonexistent/ });
   assert.equal(native.calls.length, calls, "the worker route never reaches the addon");
+} else if (selected === "worker-per-project") {
+  // one process, one worker per project (`vm:<provider>`: one VM per Store)
+  const { fakeWorker } = await import("./fixture/fake-worker.mjs");
+  const { useWorker } = await import("@layerfs/agent/internal");
+  const shopWorker = await fakeWorker(), blogWorker = await fakeWorker();
+  const dir = mkdtempSync(join(tmpdir(), "layerfs-per-project-"));
+  try {
+    const files = { shop: join(dir, "shop.json"), blog: join(dir, "blog.json") };
+    shopWorker.endpoint(files.shop, "/private/shop");
+    blogWorker.endpoint(files.blog, "/private/blog");
+    // a resolver instead of one endpoint: this process's route is one VM per project
+    useWorker((project) => files[project]);
+    assert.throws(() => useWorker((project) => `${project}.json`), { code: "InvalidInput", message: /already uses/ });
+    assert.throws(() => useWorker(files.shop), { code: "InvalidInput", message: /already uses/ });
+    const shop = await LayerFS.open("shop"), blog = await LayerFS.open("blog");
+    await shop.fs.read("main", "/README.md");
+    await blog.fs.read("main", "/README.md");
+    await shop.close();
+    await blog.close();
+    assert.deepEqual(shopWorker.calls.map((c) => c.op), ["project.list_branches", "fs.read"], "shop's calls reach shop's VM");
+    assert.deepEqual(blogWorker.calls.map((c) => c.op), ["project.list_branches", "fs.read"], "blog's calls reach blog's VM");
+  } finally {
+    shopWorker.close();
+    blogWorker.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 } else if (selected === "transport-order") {
   // each client keeps the binding it was made with, whatever the call order
   const { fakeWorker } = await import("./fixture/fake-worker.mjs");

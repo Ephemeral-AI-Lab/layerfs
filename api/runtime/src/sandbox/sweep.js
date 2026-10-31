@@ -7,6 +7,8 @@
 // project of this home records stay for list_leftovers / clean_leftovers.
 // The runtime runs it once when it opens (settings.sweep, default true);
 // status().sweep reports that run. One attempt per project, no retry.
+// A `vm:<provider>` home keeps no host containers, so its sweep reads none
+// and says so: `{ reclaimed: {}, failed: [], host: false }`.
 import { containers } from "./leftovers.js";
 
 /** States of a container whose daemon has ended and that nothing restarts. */
@@ -15,6 +17,7 @@ const ENDED = new Set(["exited", "dead"]);
 /** `{ reclaimed: { project: [ids] }, failed: [{ project, code, message }] }` */
 export async function sweep(runtime) {
   const { settings } = runtime;
+  if (runtime.platform.hostSandboxes === false) return { reclaimed: {}, failed: [], host: false };
   const known = new Set((await runtime.project.list()).filter((p) => p.volume).map((p) => p.name));
   const ended = (await containers(runtime)).filter((c) => ENDED.has(c.state) && known.has(c.project) && c.name.startsWith(`${settings.containerPrefix}${c.project}-`));
   const reclaimed = {}, failed = [];

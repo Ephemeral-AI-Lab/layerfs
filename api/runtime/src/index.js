@@ -20,6 +20,7 @@ import { resolveSettings } from "./settings.js";
 import { status } from "./status.js";
 import linux from "./platform/linux/index.js";
 import macos from "./platform/macos/index.js";
+import { vmPlatform } from "./platform/vm/index.js";
 import windows from "./platform/windows/index.js";
 import { list } from "./project/list.js";
 import { InitJobs } from "./project/jobs.js";
@@ -34,6 +35,8 @@ import { list as listVolumes, remove as removeVolumes } from "./volume.js";
 import { subscribe } from "./events/subscribe.js";
 
 const PLATFORMS = { linux, macos, windows };
+/** The platform object `settings` selects: this host's, or one VM's (§6). */
+const platformFor = (settings) => (settings.placement.kind === "vm" ? vmPlatform(settings.placement.provider) : PLATFORMS[settings.platform]);
 /** Held only by `open`: the constructor refuses without it. */
 const FACTORY = Symbol("LayerFSRuntime.open");
 
@@ -50,10 +53,15 @@ export class LayerFSRuntime {
   constructor(settings, token = undefined) {
     if (token !== FACTORY) throw new LayerFSError("InvalidInput", "use `await LayerFSRuntime.open(settings)`; there is no public constructor", null);
     this.settings = settings;
-    this.platform = PLATFORMS[settings.platform];
+    this.platform = platformFor(settings);
     this.closed = false;
-    const endpoint = this.platform.endpoint(settings);
-    if (endpoint) useWorker(endpoint);
+    // one worker for the home, or (a `vm:` placement) one endpoint per project
+    const endpoints = this.platform.endpoints?.(settings);
+    if (endpoints) useWorker(endpoints);
+    else {
+      const endpoint = this.platform.endpoint?.(settings);
+      if (endpoint) useWorker(endpoint);
+    }
     this.clients = new Clients(this);
     const jobs = new InitJobs((prepared, report) => runInit(this, prepared, report));
     const live = (method) => async (...args) => {
@@ -69,10 +77,13 @@ export class LayerFSRuntime {
     };
     this.status = live(async () => ({ ...(await status(this)), sweep: this.swept }));
     this.worker = {
-      start: live(() => this.platform.start(settings)),
-      restart: live((options) => {
+      start: live((project) => this.platform.start(settings, project)),
+      restart: live((first, second) => {
+        // `restart(project, { confirm })` on a `vm:` placement, `restart({ confirm })` elsewhere
+        const project = typeof first === "string" ? first : undefined;
+        const options = project ? second : first;
         if (options?.confirm !== "restart") throw new LayerFSError("InvalidInput", "a restart cuts off every project's Store calls; confirm it with { confirm: \"restart\" }", null);
-        return this.platform.restart(settings, options);
+        return this.platform.restart(settings, project, options);
       }),
     };
     this.project = {
@@ -93,6 +104,18 @@ export class LayerFSRuntime {
       list: live(() => listVolumes(this)),
       remove: live((names) => removeVolumes(this, names)),
     };
+    /** `vm:<provider>` only: one project's VM (`status(project)`), else every project's; absent on a local placement. */
+    if (this.platform.vm) {
+      this.vm = {
+        status: live(async (project) => {
+          const names = project ? [project] : (await this.project.list()).map((one) => one.name);
+          const reported = await this.platform.vm.status(settings, names);
+          return project ? reported.vm.vms[0] : reported.vm;
+        }),
+        stop: live((project) => this.platform.vm.stop(settings, project)),
+        delete: live((project, options) => this.platform.vm.delete(settings, project, options)),
+      };
+    }
     /** The open-time sweep: null when off, else { state: running | done | failed, … }. */
     this.swept = null;
     this.sweeping = null;

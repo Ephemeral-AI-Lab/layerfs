@@ -4,7 +4,7 @@
 // keeps root-only: `init` checks this process can write there first.
 import { accessSync, constants, existsSync, rmSync, statSync, statfsSync } from "node:fs";
 import { join } from "node:path";
-import { docker, homeNames, refuse } from "../shared.js";
+import { docker, homeNames, makeStore, refuse, releaseStoreHolders, removeStore, storeHolders } from "../shared.js";
 
 const NO_WORKER = "Linux runs Store calls in-process; there is no worker";
 
@@ -27,6 +27,10 @@ export default {
   },
   path: (settings, hostPath) => hostPath,
   docker,
+  makeStore,
+  storeHolders,
+  releaseStoreHolders,
+  removeStore,
   storePath: (settings, volume) => `${settings.volumes}/${volume}/_data/global/store.sqlite`,
   homeNames: (settings) => homeNames(settings.home),
   async removeHome(settings, name) { rmSync(join(settings.home, name), { recursive: true, force: true }); },

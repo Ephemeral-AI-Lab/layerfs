@@ -80,9 +80,10 @@ export async function runInit(runtime, prepared, report = () => {}) {
   report({ step: "scan" });
   const totals = await scanSource(project.source, (counts) => report({ scanned: counts }));
   report({ step: "volume", totals });
-  await platform.init(settings);
-  // its owner, for runtime.volume.list: Docker sets a volume's labels only when it creates it
-  await platform.docker(settings, ["volume", "create", "--label", "layerfs.role=store", "--label", `layerfs.home=${settings.home}`, "--label", `layerfs.project=${project.name}`, project.volume], { timeout: 30_000 });
+  await platform.init(settings, project);
+  // its owner, for runtime.volume.list on a local placement (Docker sets a
+  // volume's labels only when it creates it); a VM's Store is a directory
+  await platform.makeStore(runtime, project);
   report({ step: "import" });
   let client;
   try {
@@ -96,7 +97,7 @@ export async function runInit(runtime, prepared, report = () => {}) {
       throw error;
     }
     if (error?.code !== "Exists") await platform.removeHome(settings, project.name).catch(() => {});
-    await platform.docker(settings, ["volume", "rm", project.volume]).catch(() => {});
+    await platform.removeStore(runtime, project).catch(() => {});
     throw error;
   }
   await client.close();
