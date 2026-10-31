@@ -108,6 +108,15 @@ Signed Production Delta:      0 (clean modular integration; zero dead code or sc
 Target branch: `upstream/main` (`Ephemeral-AI-Lab/layerfs`).
 Integration branch: `area-p/complete-p1-p15` (based on `area-p/final-review`).
 
-*Note*: As directed by the upstream maintainers, upstream PR submission remains gated on PR #505 merging into upstream `main`. All code, documentation, and verification artifacts are complete, isolated, and ready for immediate push and PR creation upon PR #505 merge.
+Submission status:
+
+- The branch is pushed to `Ephemeral-AI-Lab/layerfs` and tracked as draft PR
+  [#521](https://github.com/Ephemeral-AI-Lab/layerfs/pull/521).
+- Batch 1 is still open as PR [#505](https://github.com/Ephemeral-AI-Lab/layerfs/pull/505)
+  (`area-p/batch-1`: P2, P14, P1, P7, P8 and the commit cost-accounting fix).
+  This integration branch carries those increments in their original slice
+  commits, so the PR stays a draft until #505 merges; it will then be rebased
+  to show only P4, P5, P9–P13, P15 and the integration work, and marked ready
+  for review.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
