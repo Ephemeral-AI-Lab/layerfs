@@ -12,9 +12,14 @@ pub struct WorkspaceApi<'a> {
 impl<'a> WorkspaceApi<'a> {
     /// Borrows this Sandbox's original authenticated filesystem control owner.
     #[cfg(unix)]
-    pub fn new(sandbox: &'a mut crate::ManagedSandbox) -> Self {
+    pub fn new(sandbox: &'a mut super::ProviderSandbox) -> Self {
+        Self::from_control(&mut sandbox.control)
+    }
+    /// Borrows an authenticated control channel directly.
+    #[cfg(unix)]
+    pub fn from_control(control: &'a mut Control) -> Self {
         Self {
-            control: &mut sandbox.control,
+            control,
             observation_scope: None,
         }
     }

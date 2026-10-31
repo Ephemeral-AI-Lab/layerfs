@@ -2,7 +2,8 @@
 //! project itself is only its home entry (`<home>/<name>/`), so a project
 //! removed there can be initialized again without a restart.
 //!
-//! A Sandbox is one container and its daemon. Its runtime runs commands
+//! A Sandbox is one container and its daemon (or, with the local runtime,
+//! one daemon process: `runtime`). Its runtime runs commands
 //! directly; its control connections (`pool`) each carry one exchange at a
 //! time, and concurrent calls take separate connections. The Sandbox runtime owner (this
 //! binding) also keeps the background processes it started; the daemon holds
@@ -11,7 +12,7 @@ use crate::job::refused;
 use layerfs_api::MountedWorkspace;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
 use layerfs_bridge::provision::StoreManifest;
-use layerfs_sandbox::{backend::docker::Sandbox, CommandIdentity};
+use layerfs_sandbox::CommandIdentity;
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 
@@ -42,10 +43,11 @@ pub(crate) struct Process {
 pub(crate) struct SandboxState {
     pub(crate) id: String,
     pub(crate) project: String,
-    /// Its container's name, `<prefix><project>-<id>`.
+    /// Its container's name, `<prefix><project>-<id>` (a local Sandbox's
+    /// directory name).
     pub(crate) name: String,
     pub(crate) directory: std::path::PathBuf,
-    pub(crate) runtime: Sandbox,
+    pub(crate) runtime: Box<layerfs_sandbox::Sandbox>,
     pub(crate) identity: CommandIdentity,
     pub(crate) controls: crate::pool::Controls,
     pub(crate) mounts: Mutex<BTreeMap<String, Mount>>,
@@ -76,7 +78,7 @@ pub(crate) fn text<'a>(args: &'a SdkValue, name: &str) -> Result<&'a str, SdkRef
 /// tables as they stand: no daemon call (#352 F-029). A call that names a
 /// mount checks just that mount (`SandboxState::token`, `directory`); one
 /// that needs every mount or process another process may have changed takes
-/// [`sandbox_refreshed`].
+/// `discovery::refresh`.
 pub(crate) fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
     let directory = crate::discovery::sandbox_dir(args, text(args, "sandbox")?)?;
     let existing = lock(&SANDBOXES)?.get(&directory).cloned();
@@ -129,14 +131,6 @@ pub(crate) fn naming(args: &SdkValue, id: &str) -> SdkValue {
     SdkValue::Map(fields)
 }
 
-/// The Sandbox an operation names, its tables read again from the shared
-/// records and the daemon (one status call per mount).
-pub(crate) fn sandbox_refreshed(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let state = sandbox(args)?;
-    crate::discovery::refresh(&state)?;
-    Ok(state)
-}
-
 impl SandboxState {
     /// The token of the Workspace mounted at `path`.
     pub(crate) fn token(&self, path: &str) -> Result<WorkspaceToken, SdkRefusal> {
@@ -154,6 +148,7 @@ impl SandboxState {
     /// once, for whatever is mounted there now; the full refresh replaces
     /// the table, so a stale entry goes with it.
     fn mounted<T>(&self, path: &str, pick: impl Fn(&Mount) -> T) -> Result<T, SdkRefusal> {
+        crate::unmount::check(self, path)?;
         let known = lock(&self.mounts)?
             .get(path)
             .map(|mount| (mount.workspace.bound.token, pick(mount)));

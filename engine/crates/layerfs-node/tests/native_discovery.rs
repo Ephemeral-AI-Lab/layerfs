@@ -32,11 +32,19 @@ fn another_404_is_a_failure_that_removes_nothing() {
     let home = Home::new();
     let engine = engine(&home.0, 404, r#"{"message":"page not found"}"#);
     home.node(
-        "assert.equal((await reclaim()).refused.code, 'Failed');",
+        r#"
+        const answer = await reclaim();
+        assert.equal(answer.refused.code, 'Failed');
+        assert.match(answer.refused.message, /status: Some\(404\)/);
+        assert.match(answer.refused.message, /page not found/);
+        "#,
         None,
         Duration::from_secs(5),
     );
-    engine.join().unwrap();
+    assert!(engine
+        .join()
+        .unwrap()
+        .starts_with(&format!("GET /v1.54/containers/{CID}/json HTTP/1.1\r\n")));
     assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
 }
 
@@ -113,11 +121,21 @@ fn a_stopped_container_the_engine_will_not_delete_keeps_its_records() {
         ],
     );
     home.node(
-        "assert.equal((await reclaim()).refused.code, 'Failed');",
+        r#"
+        const answer = await reclaim();
+        assert.equal(answer.refused.code, 'Failed');
+        assert.match(answer.refused.message, /status: Some\(409\)/);
+        assert.match(answer.refused.message, /cannot remove container: container is running/);
+        "#,
         None,
         Duration::from_secs(5),
     );
-    assert_eq!(engine.join().unwrap().len(), 2);
+    let requests = engine.join().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert!(requests[0].starts_with(&format!("GET /v1.54/containers/{CID}/json HTTP/1.1\r\n")));
+    assert!(requests[1].starts_with(&format!(
+        "DELETE /v1.54/containers/{CID}?force=false&v=false HTTP/1.1\r\n"
+    )));
     assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
 }
 

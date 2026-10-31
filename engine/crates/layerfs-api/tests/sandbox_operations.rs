@@ -3,20 +3,26 @@
 #[allow(dead_code)]
 #[path = "../../layerfs-sandbox/tests/support/engine.rs"]
 mod engine;
-use engine::{fixed, frame, Peer};
+use engine::{fixed, frame, upgrade, Peer};
 use layerfs_api::{
-    ManagedSandbox, SandboxApi, SandboxCause, SandboxCreate, SandboxPhase, WorkspaceApi,
+    ProviderCreate, ProviderSandbox, SandboxApi, SandboxCause, SandboxPhase, WorkspaceApi,
 };
 use layerfs_bridge::{
     control::{Answer, Call, DaemonPhase, DaemonStatus, Reply, Request},
     daemon_setup::{DaemonLimits, DaemonSetup},
     duplex,
 };
+use layerfs_sandbox::backend::docker::DockerProvider;
+use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions};
+use layerfs_sandbox::Runtime;
 use std::{
     fs,
     net::TcpListener,
     path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
@@ -52,7 +58,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
 
 struct Fixture {
     api: SandboxApi,
-    owner: Option<ManagedSandbox>,
+    owner: Option<ProviderSandbox>,
     peer: Option<Peer>,
     daemon: Option<JoinHandle<()>>,
     binary: PathBuf,
@@ -124,7 +130,7 @@ impl Fixture {
         ];
         responses.extend(tail);
         let (docker, peer) = Peer::new(responses, 4096);
-        let api = SandboxApi::new(docker);
+        let api = SandboxApi::with_runtime(Arc::new(Runtime::Docker(DockerProvider::new(docker))));
         let binary = std::env::temp_dir().join(format!(
             "sdk-operations-{}-{}",
             std::process::id(),
@@ -137,19 +143,23 @@ impl Fixture {
             manifest.daemon_sqlite = Some("3.51.0".into());
             deployment_setup.existing_store = Some(manifest);
         }
-        let request = SandboxCreate {
-            deployment: layerfs_sandbox::backend::docker::SandboxRequest {
-                image: IMAGE.into(),
-                store_volume: "lfs-test-borrowed".into(),
-                port: 30421,
+        let request = ProviderCreate {
+            launch: LaunchRequest {
+                name: "sdk-operations".into(),
+                daemon_executable: binary.clone(),
+                daemon_config: vec![],
                 labels: vec![],
+                startup_timeout: Duration::from_secs(2),
+                options: ProviderLaunchOptions::Docker {
+                    image: IMAGE.into(),
+                    store_volume: "lfs-test-borrowed".into(),
+                    port: 30421,
+                    connect_host: None,
+                },
             },
             setup: deployment_setup,
-            executable: binary.clone(),
             controller_private: [31; 32],
             daemon_peer: duplex::public_key(&[32; 32]).unwrap(),
-            startup_wait: Duration::from_secs(2),
-            connect_host: None,
         };
         // No Store is constructed or opened. This is the original InstallPending
         // startup used by component proofs, not a fabricated SDK owner.
@@ -201,10 +211,8 @@ fn failed_stop_preserves_original_owner_channel_inputs_and_attempt_without_delet
     let handshake = owner.handshake;
     let failure = fixture.api.close(owner).unwrap_err();
     assert_eq!(failure.phase, SandboxPhase::Stop);
-    let runtime = failure.sandbox.as_ref().unwrap();
+    let runtime = failure.runtime.as_ref().unwrap();
     assert_eq!(runtime.identity().to_string(), CID);
-    assert!(!runtime.disposition().stopped);
-    assert!(!runtime.disposition().deleted);
     let SandboxCause::Runtime(cause) = &failure.cause else {
         panic!("original runtime failure")
     };
@@ -227,10 +235,8 @@ fn failed_delete_retains_acknowledged_stop_and_exact_delete_failure() {
         .close(fixture.owner.take().unwrap())
         .unwrap_err();
     assert_eq!(failure.phase, SandboxPhase::Delete);
-    let runtime = failure.sandbox.as_ref().unwrap();
+    let runtime = failure.runtime.as_ref().unwrap();
     assert_eq!(runtime.identity().to_string(), CID);
-    assert!(runtime.disposition().stopped);
-    assert!(!runtime.disposition().deleted);
     let SandboxCause::Runtime(cause) = &failure.cause else {
         panic!("original runtime failure")
     };
@@ -299,39 +305,44 @@ fn workspace_exec_returns_original_runtime_owner_at_the_mount_with_no_daemon_reg
     const EID: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
     let mut fixture = Fixture::new(vec![
         fixed(201, format!("{{\"Id\":\"{EID}\"}}").as_bytes()),
+        upgrade(&frame(1, b"")),
+        fixed(
+            200,
+            format!(
+                "{{\"ID\":\"{EID}\",\"ContainerID\":\"{CID}\",\"Running\":false,\"ExitCode\":0,\"Pid\":42}}"
+            )
+            .as_bytes(),
+        ),
         fixed(204, b""),
         fixed(204, b""),
     ]);
     let before = layerfs_api::internal::control(fixture.owner.as_mut().unwrap()).channel_work();
-    let created = WorkspaceApi::exec(
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let exit = WorkspaceApi::exec(
         fixture.owner.as_ref().unwrap(),
         &mounted(),
         vec!["/bin/pwd".into()],
         vec!["SDK_TEST=1".into()],
-        false,
+        &mut stdout,
+        &mut stderr,
     )
     .unwrap();
-    assert_eq!(created.identity().0.to_string(), CID);
-    assert_eq!(created.identity().1.to_string(), EID);
-    assert_eq!(created.request().directory, "/workspaces/selected-mount");
-    assert_eq!(
-        created.request().identity,
-        layerfs_sandbox::CommandIdentity { uid: 501, gid: 20 }
-    );
+    assert_eq!(exit.code, 0);
+    assert_eq!(exit.pid, Some(42));
     assert_eq!(
         layerfs_api::internal::control(fixture.owner.as_mut().unwrap()).channel_work(),
         before
     );
     fixture.api.close(fixture.owner.take().unwrap()).unwrap();
     let calls = fixture.calls();
-    assert_eq!(calls.len(), 9);
+    assert_eq!(calls.len(), 11);
     let request = std::str::from_utf8(&calls[6]).unwrap();
     assert!(request.starts_with(&format!("POST /v1.54/containers/{CID}/exec ")));
     assert!(request.contains(r#""WorkingDir":"/workspaces/selected-mount""#));
     assert!(request.contains(r#""User":"501:20""#));
-    assert!(!calls
-        .iter()
-        .any(|call| call.windows(12).any(|bytes| bytes == b"/exec/start ")));
+    assert!(calls[7].starts_with(format!("POST /v1.54/exec/{EID}/start ").as_bytes()));
+    assert!(calls[8].starts_with(format!("GET /v1.54/exec/{EID}/json ").as_bytes()));
 }
 #[test]
 fn workspace_exec_failure_keeps_exact_original_request_and_container() {
@@ -340,19 +351,22 @@ fn workspace_exec_failure_keeps_exact_original_request_and_container() {
         fixed(204, b""),
         fixed(204, b""),
     ]);
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
     let failure = WorkspaceApi::exec(
         fixture.owner.as_ref().unwrap(),
         &mounted(),
         vec!["/bin/pwd".into()],
         vec![],
-        true,
+        &mut stdout,
+        &mut stderr,
     )
     .unwrap_err();
-    assert_eq!(failure.container.to_string(), CID);
-    assert_eq!(failure.request.directory, "/workspaces/selected-mount");
-    assert_eq!(failure.request.arguments, ["/bin/pwd"]);
-    assert!(failure.request.stdin);
-    assert!(failure.transfer.attempted);
+    assert_eq!(
+        failure.requested_container,
+        Some(layerfs_sandbox::ContainerId::parse(CID).unwrap())
+    );
+    assert!(failure.attempted);
     fixture.api.close(fixture.owner.take().unwrap()).unwrap();
     assert_eq!(fixture.calls().len(), 9);
 }
@@ -429,25 +443,29 @@ fn create_matching_existing_project_keeps_one_original_hello_and_does_not_reinst
 fn create_mismatched_existing_project_refuses_before_any_deployment_or_control_effect() {
     let project = ProjectFixture::new();
     let (docker, peer) = Peer::new(vec![], 4096);
-    let api = SandboxApi::new(docker);
+    let api = SandboxApi::with_runtime(Arc::new(Runtime::Docker(DockerProvider::new(docker))));
     let mut deployment_setup = setup([32; 32], duplex::public_key(&[31; 32]).unwrap());
     let mut manifest = project.project.manifest.clone();
     manifest.root[0] ^= 1;
     deployment_setup.existing_store = Some(manifest);
     let result = api.create(
-        SandboxCreate {
-            deployment: layerfs_sandbox::backend::docker::SandboxRequest {
-                image: IMAGE.into(),
-                store_volume: "lfs-test-borrowed".into(),
-                port: 30421,
+        ProviderCreate {
+            launch: LaunchRequest {
+                name: "mismatched-sandbox".into(),
+                daemon_executable: project.project.store.path.clone(),
+                daemon_config: vec![],
                 labels: vec![],
+                startup_timeout: Duration::from_secs(2),
+                options: ProviderLaunchOptions::Docker {
+                    image: IMAGE.into(),
+                    store_volume: "lfs-test-borrowed".into(),
+                    port: 30421,
+                    connect_host: None,
+                },
             },
             setup: deployment_setup,
-            executable: project.project.store.path.clone(),
             controller_private: [31; 32],
             daemon_peer: duplex::public_key(&[32; 32]).unwrap(),
-            startup_wait: Duration::from_secs(2),
-            connect_host: None,
         },
         &project.project,
     );
@@ -455,6 +473,6 @@ fn create_mismatched_existing_project_refuses_before_any_deployment_or_control_e
         panic!("mismatched Project must refuse before effects")
     };
     assert_eq!(failure.phase, SandboxPhase::Validate);
-    assert!(failure.sandbox.is_none() && failure.control.is_none() && failure.installed.is_none());
+    assert!(failure.runtime.is_none() && failure.control.is_none() && failure.installed.is_none());
     assert!(peer.finish().is_empty());
 }

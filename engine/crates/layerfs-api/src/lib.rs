@@ -27,7 +27,7 @@ pub use layerfs_project::store::{
 pub use layerfs_project::{InitCounters, InitCounts, InitStep, ProjectError, SourceRefusal};
 #[cfg(unix)]
 pub use sandbox::{
-    connect_address, ManagedSandbox, SandboxApi, SandboxCause, SandboxCreate, SandboxFailure,
+    connect_address, ProviderCreate, ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause,
     SandboxPhase,
 };
 pub use sandbox::{BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi};

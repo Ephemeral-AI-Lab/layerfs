@@ -405,6 +405,9 @@ fn reopened_from(body: &str) -> Box<layerfs_sandbox::WireFailure> {
 fn only_the_exact_intact_container_not_running_is_a_stopped_container() {
     let stopped = reopened_from(&exited());
     assert!(stopped.container_stopped());
+    assert!(stopped.attempted);
+    assert_eq!(stopped.status, Some(200));
+    assert!(stopped.sent_bytes >= stopped.request_header_bytes && stopped.request_header_bytes > 0);
     assert!(!stopped.container_gone());
     let other = "c".repeat(64);
     assert!(!reopened_from(&exited().replace(CID, &other)).container_stopped());
@@ -412,6 +415,47 @@ fn only_the_exact_intact_container_not_running_is_a_stopped_container() {
     assert!(!reopened_from(&dead).container_stopped());
     let image = exited().replace(IMAGE, &format!("sha256:{}", "d".repeat(64)));
     assert!(!reopened_from(&image).container_stopped());
+}
+
+#[test]
+fn provider_inspects_and_reopens_exact_running_and_stopped_deployments() {
+    use layerfs_sandbox::backend::docker::DockerProvider;
+    use layerfs_sandbox::provider::SandboxRecord;
+    let id = layerfs_sandbox::ContainerId::parse(CID).unwrap();
+    let running = inspect().replace(
+        r#""Running":true"#,
+        r#""Running":true,"Pid":42,"ExitCode":0"#,
+    );
+    let stopped = exited().replace(
+        r#""Running":false"#,
+        r#""Running":false,"Pid":0,"ExitCode":7"#,
+    );
+    let (docker, peer) = Peer::new(
+        vec![
+            fixed(200, running.as_bytes()),
+            fixed(200, running.as_bytes()),
+            fixed(200, stopped.as_bytes()),
+            fixed(204, b""),
+        ],
+        64,
+    );
+    let provider = DockerProvider::new(docker);
+    let record = SandboxRecord::from(request());
+    let mut owner = provider.reopen(id, &record).unwrap();
+    let facts = owner.inspect().unwrap();
+    assert!(facts.running);
+    assert_eq!(facts.process_id, Some(42));
+    assert_eq!(facts.exit_code, None);
+    assert_eq!(facts.scratch_bytes, None);
+    let facts = owner.inspect().unwrap();
+    assert!(!facts.running);
+    assert_eq!(facts.process_id, None);
+    assert_eq!(facts.exit_code, Some(7));
+    // A read-only observation does not authorize Delete on the running owner.
+    assert!(!owner.delete().unwrap_err().attempted);
+    let mut stopped = provider.reopen_stopped(id, &record).unwrap();
+    stopped.delete().unwrap();
+    assert_eq!(peer.finish().len(), 4);
 }
 
 #[test]
