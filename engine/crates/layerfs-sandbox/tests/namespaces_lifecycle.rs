@@ -540,6 +540,18 @@ fn a_record_reopens_the_exact_sandbox_and_nothing_else() {
             .map(|record| record.local().name.as_str()),
         Some("sandbox-1")
     );
+    // the Sandbox keeps its own copy of the helper beside its daemon, which a
+    // reopening process runs when it has no LAYERFS_SANDBOX_HELPER and its
+    // executable has no helper beside it (an in-process SDK's `node`)
+    assert_eq!(
+        fs::read(
+            fixture
+                .directory("sandbox-1")
+                .join("bin/layerfs-sandbox-helper")
+        )
+        .unwrap(),
+        fs::read(helper()).unwrap()
+    );
     // what a new process reads: the record alone, with the provider's root,
     // and it finds the same image under the digest the record keeps
     let reopened_provider = fixture.provider().unwrap();

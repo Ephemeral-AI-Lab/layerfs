@@ -8,6 +8,9 @@ use std::path::PathBuf;
 /// The daemon executable inside the Sandbox's own `bin` directory, copied
 /// there once per Sandbox so nothing about it is read from the host later.
 pub(crate) const DAEMON: &str = "layerfs-daemon";
+/// The helper executable, copied beside it for the same reason: a later
+/// process that reopens the Sandbox runs the helper it was started with.
+pub(crate) const HELPER: &str = "layerfs-sandbox-helper";
 
 /// One Sandbox's paths, all fixed from its directory name.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -18,6 +21,8 @@ pub(crate) struct Paths {
     pub(crate) bin_directory: PathBuf,
     /// `<directory>/bin/<DAEMON>`, 0755 and root-owned.
     pub(crate) bin: PathBuf,
+    /// `<directory>/bin/<HELPER>`, 0755 and root-owned.
+    pub(crate) helper: PathBuf,
     /// The init stage's inputs, `<directory>/config/helper.spec`, 0600.
     pub(crate) spec: PathBuf,
     /// The private root, `<directory>.root`; the init stage mounts the
@@ -46,6 +51,7 @@ impl Paths {
         Ok(Self {
             bin_directory: local.directory.join("bin"),
             bin: local.directory.join("bin").join(DAEMON),
+            helper: local.directory.join("bin").join(HELPER),
             spec: local.directory.join("config").join("helper.spec"),
             root: PathBuf::from(root),
             upper: local.directory.join("overlay").join("upper"),

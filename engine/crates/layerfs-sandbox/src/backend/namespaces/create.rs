@@ -77,7 +77,7 @@ pub(crate) fn create(
         helper.to_owned(),
         image.clone(),
     );
-    let log = match prepare(&paths, request, options, &id, &image) {
+    let log = match prepare(&paths, (request, helper), options, &id, &image) {
         Ok(log) => log,
         Err(cause) => return Err(fail(LocalPhase::Create, Some(sandbox), cause)),
     };
@@ -229,13 +229,13 @@ fn check_store(paths: &Paths, store: &Path) -> Result<(), RuntimeError> {
     Ok(())
 }
 
-/// The Sandbox's own directories and files, its copied executable, its init
-/// spec and the empty log; returns the log file. Its overlay's writable layer
+/// The Sandbox's own directories and files, its copied daemon and helper, its
+/// init spec and the empty log; returns the log file. Its overlay's writable layer
 /// and work directory are made here, empty: the init stage mounts them with
 /// the image underneath.
 fn prepare(
     paths: &Paths,
-    request: &crate::LaunchRequest,
+    (request, helper): (&crate::LaunchRequest, &Path),
     options: &Options,
     id: &crate::ContainerId,
     image: &ImageRoot,
@@ -267,6 +267,8 @@ fn prepare(
     private(&paths.local.config)?.write_all(&request.daemon_config)?;
     fs::copy(&request.daemon_executable, &paths.bin)?;
     fs::set_permissions(&paths.bin, Permissions::from_mode(0o755))?;
+    fs::copy(helper, &paths.helper)?;
+    fs::set_permissions(&paths.helper, Permissions::from_mode(0o755))?;
     let spec = HelperSpec {
         root: paths.root.clone(),
         sandbox: paths.local.directory.clone(),
