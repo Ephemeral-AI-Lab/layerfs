@@ -203,6 +203,7 @@ function makeWork() {
   mkdirSync(workRoot(), { recursive: true, mode: 0o755 });
   const work = mkdtempSync(join(workRoot(), "lfs527-"));
   chmodSync(work, 0o755); // a native Linux Sandbox's commands (501:20) traverse it
+  receipt.driver.work = work; // named at once, so a setup cut at the deadline still names it
   const home = join(work, "home"), source = join(work, "src");
   mkdirSync(home, { mode: 0o700 });
   mkdirSync(source);
@@ -540,7 +541,15 @@ try {
     await refusals();
   } else {
     const at = Date.now();
-    const made = await SETUP[row]().catch((error) => { throw Object.assign(error, { phase: "setup" }); });
+    // Setup is bounded by the invocation's deadline too: a setup still running
+    // 15 s before it is recorded as a failure, so the receipt is written before
+    // the outer bound kills this process (C01/C02 of the 50e2c2bc87 pass had none).
+    // What it made then is named by this run's prefix for the sweep to remove.
+    let late;
+    const made = await Promise.race([
+      SETUP[row]().catch((error) => { throw Object.assign(error, { phase: "setup" }); }),
+      new Promise((_, reject) => { late = setTimeout(() => reject(Object.assign(new Error(`setup did not finish within ${Math.round((deadline - 15_000 - at) / 1000)} s; left for cleanup: ${receipt.driver.work ?? "no work folder yet"} and anything named ${prefix}*`), { phase: "setup" })), Math.max(0, deadline - 15_000 - Date.now())); }),
+    ]).finally(() => clearTimeout(late));
     teardowns.push(made.teardown);
     receipt.driver.setupMs = Date.now() - at;
     receipt.bundle = bundleIdentity(made.bundle);
