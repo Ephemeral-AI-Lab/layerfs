@@ -120,24 +120,16 @@ pub fn verbatim_wide(path: &Path) -> Vec<u16> {
         let mut prefixed = Vec::with_capacity(units.len() + 6);
         prefixed.extend_from_slice(&PREFIX);
         prefixed.extend([85, 78, 67]); // U N C
-        prefixed.extend(units[2..].iter().map(|&unit| {
-            if unit == 47 {
-                92
-            } else {
-                unit
-            }
-        }));
+        prefixed.extend(
+            units[2..]
+                .iter()
+                .map(|&unit| if unit == 47 { 92 } else { unit }),
+        );
         units = prefixed;
     } else if path.is_absolute() {
         let mut prefixed = Vec::with_capacity(units.len() + 4);
         prefixed.extend_from_slice(&PREFIX);
-        prefixed.extend(units.iter().map(|&unit| {
-            if unit == 47 {
-                92
-            } else {
-                unit
-            }
-        }));
+        prefixed.extend(units.iter().map(|&unit| if unit == 47 { 92 } else { unit }));
         units = prefixed;
     }
     units.push(0);
