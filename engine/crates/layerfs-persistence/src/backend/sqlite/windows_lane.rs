@@ -182,7 +182,7 @@ pub fn windows_volume_filesystem(directory: &Path) -> io::Result<String> {
             ),
         ));
     }
-    let mut final_path = [0u16; 1024];
+    let mut final_path: Vec<u16> = vec![0u16; 1024];
     let mut written = unsafe {
         GetFinalPathNameByHandleW(
             handle,
@@ -191,8 +191,13 @@ pub fn windows_volume_filesystem(directory: &Path) -> io::Result<String> {
             VOLUME_NAME_DOS,
         )
     };
-    if written as usize > final_path.len() {
-        final_path = vec![0u16; written as usize].try_into().unwrap_or([0; 1024]);
+    // An insufficient buffer returns the required length: grow for real and
+    // retry once. The old fixed-array fallback could never fit a longer
+    // requirement and fell back to a zeroed buffer, on which the `\\?\UNC\`
+    // refusal silently passed and a deep share was admitted as NTFS
+    // (round-6 D1 F1).
+    if written != 0 && written as usize >= final_path.len() {
+        final_path = vec![0u16; written as usize + 1];
         written = unsafe {
             GetFinalPathNameByHandleW(
                 handle,
@@ -202,6 +207,8 @@ pub fn windows_volume_filesystem(directory: &Path) -> io::Result<String> {
             )
         };
     }
+    // Capture the failure before another syscall can overwrite it (D1 F6).
+    let final_failure = (written == 0).then(io::Error::last_os_error);
     let share = written != 0
         && final_path
             .iter()
@@ -224,13 +231,12 @@ pub fn windows_volume_filesystem(directory: &Path) -> io::Result<String> {
     // Capture the failure before another syscall can overwrite it.
     let failure = (examined == 0).then(io::Error::last_os_error);
     unsafe { CloseHandle(handle) };
-    if written == 0 {
+    if let Some(error) = final_failure {
         return Err(io::Error::new(
             io::ErrorKind::Unsupported,
             format!(
-                "the final path of {} cannot be read: {}",
-                directory.display(),
-                io::Error::last_os_error()
+                "the final path of {} cannot be read: {error}",
+                directory.display()
             ),
         ));
     }

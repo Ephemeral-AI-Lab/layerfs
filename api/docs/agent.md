@@ -98,7 +98,9 @@ or reinstalling over live state.
 
 Store calls (`fs`, `branch`, `project.list_branches`) run in this process
 against the installed Store file at `storePath` (else `LAYERFS_STORE_PATH`),
-which the factory opened; no Sandbox is involved. That
+which the factory opened; no Sandbox is involved. The project family's
+Sandbox-related calls (`project.list_sandboxes`, `sandbox.*`) still need the
+daemon and refuse `Unsupported` on this route. That
 file is `global/store.sqlite` in the project's volume, so the process runs where
 that volume is mounted (`/layerfs-store` in a Sandbox). On Linux the Store sits
 on a local filesystem the daemons share (ext4, xfs, btrfs); on **Windows the

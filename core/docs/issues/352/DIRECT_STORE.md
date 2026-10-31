@@ -133,7 +133,10 @@ synthesizes the mode from the read-only attribute, and has no hard-link
 membership. **The WTF-8 name grammar is owner-ratified 2026-10-31
 ("可以合并") as the long-term content grammar**; until the byte-carrying
 merge/compare path lands as follow-up, a merge or compare that must build
-a String path over a name outside UTF-8 is refused (`InvalidRecord`)
+a String path over a name outside UTF-8 is refused (`InvalidRecord`) at
+every entrance — the recorded-name path and the walked path alike
+(round-6 D1 F2 fenced `join`, whose collapsed key silently dropped the
+second changed entry of one directory)
 rather than decided on a collapsed path, and SDK listings render such
 names empty; a JS write naming one lands as an U+FFFD sibling file
 rather than being refused (the JS string boundary cannot carry an
@@ -154,11 +157,16 @@ Store file and its directory answer the same check at every open, and a
 link planted at either spelling is refused, never followed. A home that
 lost its owner (restored from backup, moved between machines) answers
 `Unauthorized`; an administrator recovers it from an **elevated** console
-with `takeown` (making the taker the owner, whom the OWNER RIGHTS ace
-then serves) and, if needed,
-`icacls <home> /inheritance:r /grant:r '<user>:(OI)(CI)F'` — repeating
-the `icacls` grant on the installed Store file (and its tree, when the
-volume sits outside the home) — before the route accepts it again.
+(runbook verified end to end, round 6): first
+`takeown /f <home> /r /d y` — and the same recursively on the volume
+tree, when the volume sits outside the home; taking ownership rewrites
+the files' OWNER RIGHTS ace into an inherit-only form, so every file
+must be re-granted explicitly — then
+`icacls <home> /inheritance:r /grant:r '<user>:(OI)(CI)F'` and the same
+grant on the volume tree, and finally a plain
+`icacls <file> /grant:r '<user>:F'` on the installed Store file and on
+`<home>/<project>/project.record` (an `(OI)(CI)` grant gives a *file*
+nothing) — before the route accepts it again.
 
 Operational notes from the 2026-10-31 production-readiness round: the
 audited Win32 calls spell paths verbatim (`\\?\`), so trees deeper than
@@ -183,6 +191,10 @@ the should-list), and any local user can enumerate lane names in
 activity, not the path); a caller-pre-created wide directory also lets
 another user pre-place `-wal`/`-shm` the per-open tightening cannot
 re-own (create the volume owner-only, as the route's own layout does);
+the lane's name is the canonicalized spelling, so a subst-drive spelling
+that does not canonicalize to the real path can hold a second lane for
+one directory — bounded by SQLite's own WAL write lock, which refuses
+the overlapping writer rather than corrupting (round-6 D1 F3);
 a killed process leaves one
 overlay directory under `%TEMP%\layerfs-store-*` until the OS cleans
 it (schema-only and never blocking the next open — accumulation is the

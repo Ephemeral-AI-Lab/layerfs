@@ -92,6 +92,15 @@ impl StoreService {
         template: &Path,
     ) -> Result<Self, OpenRefusal> {
         kernel_guard::check(store).map_err(OpenRefusal::Unsupported)?;
+        // A missing Store answers `Missing` on every platform before any
+        // entry examination: the Windows symlink/ACL block used to run
+        // first and surfaced a missing file as `Failed` (round-6 D1 F4).
+        if !store.is_file() {
+            return Err(OpenRefusal::Missing(format!(
+                "no installed Store at {}",
+                store.display()
+            )));
+        }
         // The installed Store file answers to its own entry: a substituted
         // link planted at its spelling is refused, never followed, and on
         // Windows its DACL must still grant nothing beyond the owner — the
@@ -119,12 +128,6 @@ impl StoreService {
                     store.display()
                 )))
             })?;
-        }
-        if !store.is_file() {
-            return Err(OpenRefusal::Missing(format!(
-                "no installed Store at {}",
-                store.display()
-            )));
         }
         let opened = open_store_observed(
             PersistenceConfig::sqlite(store)
