@@ -272,3 +272,28 @@ fn a_record_of_the_former_local_runtime_is_never_used_nor_deleted() {
     assert!(!own.exists());
     assert!(!home.0.join("proj/sandboxes/1").exists());
 }
+
+#[test]
+fn a_native_record_is_not_reopened_by_a_namespaces_deployment() {
+    // #527 step 4: reopen requires the deployment's own backend both ways; a
+    // namespaces deployment does not take a native record as its own
+    let home = Home::new();
+    let root = root(&home);
+    let own = own(&root);
+    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
+    home.node(
+        &format!(
+            "const r = await native.backendCall('runtime.sandbox.reclaim', {{...args, deploy:{{sandbox:'native', sandboxBackend:'namespaces', localDir:{:?}}}}});
+            {NEITHER}
+            assert.match(r.refused.message, /never mixed/);",
+            text(&root)
+        ),
+        None,
+        Duration::from_secs(10),
+    );
+    assert!(own.join("daemon.log").exists());
+    assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
+    // the same record under a native deployment is its own: reclaimed
+    reclaim(&home, "native", Some(text(&root)), RECLAIMED);
+    assert!(!own.exists());
+}

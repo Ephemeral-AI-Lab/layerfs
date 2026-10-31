@@ -578,19 +578,27 @@ pub(crate) fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Re
 fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
     let (directory, record) = local_record_of(args, id, value)?;
     // with no placement (#428), a mount names its Sandbox: a record is used
-    // only by a native deployment, and only a native record is. A record of
-    // the `local` runtime (an earlier, unmerged build) is never used, so
-    // nothing it names is deleted
-    let native = args.get("deploy").is_some_and(crate::runtime::native);
+    // only by a deployment of its own backend, and only a native record is
+    // here. A native record is not reopened by a namespaces deployment
+    // either (#527 step 4), as a namespaces record is not by a native one. A
+    // record of the `local` runtime (an earlier, unmerged build) is never
+    // used, so nothing it names is deleted
+    let native = args.get("deploy").is_some_and(|deploy| {
+        crate::runtime::native(deploy)
+            && matches!(
+                crate::runtime::backend(deploy),
+                Ok(crate::runtime::Backend::Native)
+            )
+    });
     if !native || value.get_text("runtime") != Some(NATIVE) {
         return Err(refused(
             "InvalidInput",
             format!(
-                "Sandbox {id} is a {} Sandbox, but only a native deployment \
-                 (LAYERFS_SANDBOX=native) uses a native record and none uses another; \
-                 Sandboxes of other runtimes are never mixed, so the record is neither used \
-                 nor deleted. Remove what it left by hand, then delete \
-                 LAYERFS_HOME/{}/sandboxes/{id}/sandbox.record",
+                "Sandbox {id} is a {} Sandbox, but only a native deployment with the native \
+                 backend (LAYERFS_SANDBOX=native, LAYERFS_SANDBOX_BACKEND unset or native) uses \
+                 a native record and none uses another; Sandboxes of other runtimes are never \
+                 mixed, so the record is neither used nor deleted. Remove what it left by hand, \
+                 then delete LAYERFS_HOME/{}/sandboxes/{id}/sandbox.record",
                 value.get_text("runtime").unwrap_or_default(),
                 registry::text(args, "project")?
             ),
