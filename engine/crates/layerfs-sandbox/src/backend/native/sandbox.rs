@@ -4,7 +4,7 @@
 //! returns only once a daemon this process started is reaped, so it never
 //! stays a zombie of this process.
 use super::{groups, platform, process::LocalProcess};
-use crate::provider::LocalRecord;
+use crate::LocalRecord;
 use crate::{ContainerId, RuntimeError, WireFailure};
 use nix::sys::signal::Signal;
 use std::{

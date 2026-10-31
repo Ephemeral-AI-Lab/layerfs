@@ -13,8 +13,8 @@ use layerfs_bridge::{
     duplex,
 };
 use layerfs_sandbox::backend::docker::DockerProvider;
-use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions};
 use layerfs_sandbox::Runtime;
+use layerfs_sandbox::{LaunchRequest, ProviderLaunchOptions};
 use std::{
     fs,
     net::TcpListener,

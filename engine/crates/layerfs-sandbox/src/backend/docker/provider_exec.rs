@@ -1,6 +1,6 @@
 //! Ordinary noninteractive provider execution, with streamed output and exact failure custody.
 use super::{ProviderFailure, Sandbox};
-use crate::{provider::ExecExit, ExecRequest, RuntimeError, WireFailure};
+use crate::{ExecExit, ExecRequest, RuntimeError, WireFailure};
 use std::io::Write;
 fn failure(container: crate::ContainerId, cause: ProviderFailure) -> Box<WireFailure> {
     // Scalar facts describe only the deciding exchange. Owned pending bytes,

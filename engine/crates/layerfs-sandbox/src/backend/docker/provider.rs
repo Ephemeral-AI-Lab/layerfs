@@ -1,10 +1,10 @@
 //! Docker's existing one-attempt runtime as a concrete backend.
 use super::{Docker, Sandbox, SandboxRequest};
-use crate::provider::{
+use crate::{ContainerId, RuntimeError, WireFailure};
+use crate::{
     IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, MountDriver, ProviderCapabilities,
     ProviderLaunchOptions, SandboxRecord, SearchPathPolicy,
 };
-use crate::{ContainerId, RuntimeError, WireFailure};
 use std::fs::File;
 
 /// Negotiation and all transfers use the supplied client's original policy and version cache.

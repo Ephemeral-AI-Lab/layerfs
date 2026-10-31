@@ -34,12 +34,9 @@ pub(crate) use super::macos as platform;
 pub use create::{Local, LocalCreateFailure, LocalPaths, LocalPhase};
 pub use exec::LocalExit;
 pub use process::LocalProcess;
+#[cfg(target_os = "linux")]
+pub(crate) use provider::KERNEL_ROUTE;
 pub use provider::{
     NativeLinuxInstance, NativeLinuxProvider, NativeMacosInstance, NativeMacosProvider,
 };
 pub use sandbox::Sandbox;
-
-/// The daemon's kernel route setting (`fuse` or `nfs`). Only the provider
-/// names it, from the platform it serves; a caller that names it is refused
-/// (#527 step 6), and the daemon checks the value it receives.
-pub(crate) const KERNEL_ROUTE: &str = "LAYERFS_KERNEL";

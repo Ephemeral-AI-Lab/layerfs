@@ -15,8 +15,8 @@ use layerfs_persistence::{SealedStore, SqlitePersistenceProfile};
 use layerfs_sandbox::backend::docker::{Docker, DockerProvider, SandboxRequest};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_sandbox::backend::native::{self, LocalProcess};
-use layerfs_sandbox::provider::{LocalRecord, SandboxRecord};
 use layerfs_sandbox::{CommandIdentity, ContainerId, Sandbox, WireFailure};
+use layerfs_sandbox::{LocalRecord, SandboxRecord};
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -672,7 +672,7 @@ fn namespaces_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Reco
                 ),
             )
         })?;
-    let record = layerfs_sandbox::provider::NamespaceRecord { local, image };
+    let record = layerfs_sandbox::NamespaceRecord { local, image };
     let deploy = args
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;

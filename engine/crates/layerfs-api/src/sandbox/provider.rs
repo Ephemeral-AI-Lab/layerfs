@@ -7,10 +7,7 @@ use layerfs_bridge::{
     duplex::{public_key, ChannelWork},
     provision::StoreManifest,
 };
-use layerfs_sandbox::{
-    provider::{LaunchRequest, ProviderLaunchOptions},
-    CommandIdentity, Runtime, Sandbox,
-};
+use layerfs_sandbox::{CommandIdentity, LaunchRequest, ProviderLaunchOptions, Runtime, Sandbox};
 use std::{fmt, sync::Arc};
 
 /// Runtime launch and private daemon authentication inputs.
@@ -200,10 +197,10 @@ impl SandboxApi {
                 Ok(owner) => Box::new(owner),
                 Err(mut failure) => {
                     progress.phase = match failure.phase {
-                        layerfs_sandbox::provider::LaunchPhase::Validate => SandboxPhase::Validate,
-                        layerfs_sandbox::provider::LaunchPhase::Create => SandboxPhase::Create,
-                        layerfs_sandbox::provider::LaunchPhase::Start => SandboxPhase::Start,
-                        layerfs_sandbox::provider::LaunchPhase::Listener => SandboxPhase::Listener,
+                        layerfs_sandbox::LaunchPhase::Validate => SandboxPhase::Validate,
+                        layerfs_sandbox::LaunchPhase::Create => SandboxPhase::Create,
+                        layerfs_sandbox::LaunchPhase::Start => SandboxPhase::Start,
+                        layerfs_sandbox::LaunchPhase::Listener => SandboxPhase::Listener,
                     };
                     launched = failure.instance.take();
                     return Err(SandboxCause::Provider(failure));
@@ -330,10 +327,10 @@ impl SandboxApi {
                 Ok(owner) => Box::new(owner),
                 Err(mut failure) => {
                     progress.phase = match failure.phase {
-                        layerfs_sandbox::provider::LaunchPhase::Validate => SandboxPhase::Validate,
-                        layerfs_sandbox::provider::LaunchPhase::Create => SandboxPhase::Create,
-                        layerfs_sandbox::provider::LaunchPhase::Start => SandboxPhase::Start,
-                        layerfs_sandbox::provider::LaunchPhase::Listener => SandboxPhase::Listener,
+                        layerfs_sandbox::LaunchPhase::Validate => SandboxPhase::Validate,
+                        layerfs_sandbox::LaunchPhase::Create => SandboxPhase::Create,
+                        layerfs_sandbox::LaunchPhase::Start => SandboxPhase::Start,
+                        layerfs_sandbox::LaunchPhase::Listener => SandboxPhase::Listener,
                     };
                     launched = failure.instance.take();
                     return Err(SandboxCause::Provider(failure));

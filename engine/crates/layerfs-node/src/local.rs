@@ -17,8 +17,8 @@ use crate::registry::{lock, text, SandboxState, SANDBOXES};
 use layerfs_api::{sandbox::ProviderCreate, SandboxApi};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::StoreManifest;
-use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions};
 use layerfs_sandbox::{CommandIdentity, Runtime, Sandbox};
+use layerfs_sandbox::{LaunchRequest, ProviderLaunchOptions};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 

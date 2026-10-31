@@ -18,8 +18,8 @@ mod support {
 }
 use layerfs_sandbox::{
     backend::namespaces::{NamespaceProvider, Sandbox},
-    provider::{LaunchRequest, ProviderLaunchOptions, SandboxRecord},
-    CommandIdentity, ExecRequest, Image, RuntimeError,
+    CommandIdentity, ExecRequest, Image, LaunchRequest, ProviderLaunchOptions, RuntimeError,
+    SandboxRecord,
 };
 use std::{
     collections::BTreeSet,
@@ -567,7 +567,7 @@ fn a_record_reopens_the_exact_sandbox_and_nothing_else() {
     );
 
     // a Docker record is refused rather than reinterpreting it
-    let foreign = SandboxRecord::Docker(layerfs_sandbox::provider::DockerRecord {
+    let foreign = SandboxRecord::Docker(layerfs_sandbox::DockerRecord {
         image: "sha256:0".to_owned(),
         store_volume: Some("volume".to_owned()),
         port: 30421,

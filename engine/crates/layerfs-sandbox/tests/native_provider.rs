@@ -5,8 +5,8 @@ use layerfs_sandbox::backend::native::NativeLinuxProvider as NativeProvider;
 #[cfg(target_os = "macos")]
 use layerfs_sandbox::backend::native::NativeMacosProvider as NativeProvider;
 use layerfs_sandbox::{
-    provider::{DockerRecord, LaunchPhase, LaunchRequest, ProviderLaunchOptions, SandboxRecord},
-    CommandIdentity, Runtime,
+    CommandIdentity, DockerRecord, LaunchPhase, LaunchRequest, ProviderLaunchOptions, Runtime,
+    SandboxRecord,
 };
 use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
 

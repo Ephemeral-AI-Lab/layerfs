@@ -63,13 +63,13 @@ impl Sandbox {
         endpoint.ok_or_else(|| self.invalid("missing daemon endpoint"))
     }
     /// One exact deployment/state observation; absent optional facts remain absent.
-    pub fn inspect(&self) -> Result<crate::provider::SandboxInspection, Box<WireFailure>> {
+    pub fn inspect(&self) -> Result<crate::SandboxInspection, Box<WireFailure>> {
         self.observe(false).map(|(inspection, _)| inspection)
     }
     fn observe(
         &self,
         require_running: bool,
-    ) -> Result<(crate::provider::SandboxInspection, Option<SocketAddr>), Box<WireFailure>> {
+    ) -> Result<(crate::SandboxInspection, Option<SocketAddr>), Box<WireFailure>> {
         if self.deleted {
             return Err(self.invalid("deleted container observation"));
         }
@@ -261,7 +261,7 @@ impl Sandbox {
                 return Err(RuntimeError::Protocol("missing daemon endpoint"));
             }
             Ok((
-                crate::provider::SandboxInspection {
+                crate::SandboxInspection {
                     identity: self.id,
                     running: running.expect("required"),
                     exit_code: if running == Some(false) {

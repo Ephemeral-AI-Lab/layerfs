@@ -19,4 +19,4 @@ pub mod runtime;
 mod streams;
 mod strings;
 pub use helper_spec::HelperSpec;
-pub use runtime::{Runtime, Sandbox};
+pub use runtime::{LaunchFailure, Runtime, Sandbox};

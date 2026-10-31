@@ -5,9 +5,9 @@
 use crate::job::{failed, refused};
 use crate::output::Spool;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_sandbox::provider::SandboxRecord;
 #[cfg(target_os = "linux")]
 use layerfs_sandbox::Image;
+use layerfs_sandbox::SandboxRecord;
 use layerfs_sandbox::{CommandIdentity, Sandbox};
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;

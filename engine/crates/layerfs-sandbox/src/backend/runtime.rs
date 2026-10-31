@@ -6,12 +6,12 @@ use super::docker::{self, DockerProvider};
 use super::namespaces::{self, NamespaceProvider};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use super::native::{self, NativeLinuxProvider, NativeMacosProvider};
-use crate::provider::{
-    ExecExit, LaunchFailure, LaunchRequest, LocalRecord, ProviderCapabilities, SandboxInspection,
+use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
+use crate::{
+    ExecExit, LaunchPhase, LaunchRequest, LocalRecord, ProviderCapabilities, SandboxInspection,
     SandboxRecord,
 };
-use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
-use std::{io::Write, net::SocketAddr, path::PathBuf};
+use std::{fmt, io::Write, net::SocketAddr, path::PathBuf};
 
 /// What Windows would need and does not have yet: no host runtime exists.
 const WINDOWS: &str = "windows native Sandbox runtime";
@@ -95,7 +95,7 @@ impl Runtime {
                 .launch(request)
                 .map(|sandbox| Sandbox::Namespaces(Box::new(sandbox))),
             Self::Windows => Err(Box::new(LaunchFailure {
-                phase: crate::provider::LaunchPhase::Validate,
+                phase: LaunchPhase::Validate,
                 instance: None,
                 cause: RuntimeError::Unsupported(WINDOWS),
             })),
@@ -303,5 +303,21 @@ impl Sandbox {
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.record(),
         }
+    }
+}
+
+/// The caller retains the exact resource even when launch fails after creating it.
+pub struct LaunchFailure {
+    pub phase: LaunchPhase,
+    pub instance: Option<Box<Sandbox>>,
+    pub cause: RuntimeError,
+}
+impl fmt::Debug for LaunchFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LaunchFailure")
+            .field("phase", &self.phase)
+            .field("identity", &self.instance.as_ref().map(|i| i.identity()))
+            .field("cause", &self.cause)
+            .finish()
     }
 }

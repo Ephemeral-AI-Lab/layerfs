@@ -1,8 +1,8 @@
 //! Platform refusal precedes filesystem access; a runtime never selects another backend.
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_sandbox::{
-    provider::{DockerRecord, LaunchPhase, LaunchRequest, ProviderLaunchOptions, SandboxRecord},
-    CommandIdentity, ContainerId, Runtime, RuntimeError,
+    CommandIdentity, ContainerId, DockerRecord, LaunchPhase, LaunchRequest, ProviderLaunchOptions,
+    Runtime, RuntimeError, SandboxRecord,
 };
 use std::time::Duration;
 

@@ -4,8 +4,8 @@
 //! that has already exited, so it never stays a zombie of this process.
 use super::{cgroup, host, paths::Paths, rootfs::ImageRoot};
 use crate::backend::native::LocalProcess;
-use crate::provider::{LocalRecord, NamespaceRecord, SandboxRecord};
 use crate::{ContainerId, RuntimeError, WireFailure};
+use crate::{LocalRecord, NamespaceRecord, SandboxRecord};
 use std::{
     fs::{self, OpenOptions},
     io::{self, Read, Seek, SeekFrom},

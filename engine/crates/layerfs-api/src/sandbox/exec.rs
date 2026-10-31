@@ -1,6 +1,6 @@
 //! Optional ordinary Sandbox launch at the acknowledged mounted directory.
 use super::{MountedWorkspace, ProviderSandbox, WorkspaceApi};
-use layerfs_sandbox::{provider::ExecExit, ExecRequest, WireFailure};
+use layerfs_sandbox::{ExecExit, ExecRequest, WireFailure};
 use std::io::Write;
 
 impl WorkspaceApi<'_> {

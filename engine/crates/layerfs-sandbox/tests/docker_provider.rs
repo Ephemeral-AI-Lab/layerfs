@@ -5,10 +5,8 @@
 mod peer;
 use layerfs_sandbox::{
     backend::docker::{DockerProvider, ProviderFailure, Sandbox, SandboxRequest},
-    provider::{
-        DockerRecord, LaunchPhase, LaunchRequest, LocalRecord, ProviderLaunchOptions, SandboxRecord,
-    },
-    CommandIdentity, ContainerId, ExecRequest, Runtime, RuntimeError,
+    CommandIdentity, ContainerId, DockerRecord, ExecRequest, LaunchPhase, LaunchRequest,
+    LocalRecord, ProviderLaunchOptions, Runtime, RuntimeError, SandboxRecord,
 };
 use peer::{fixed, frame, upgrade, Peer};
 use std::{

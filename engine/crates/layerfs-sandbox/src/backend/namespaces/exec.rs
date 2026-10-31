@@ -6,7 +6,7 @@
 use super::sandbox::Sandbox;
 use crate::backend::native::search::search_path;
 use crate::backend::streams;
-use crate::provider::ExecExit;
+use crate::ExecExit;
 use crate::{ExecRequest, RuntimeError, WireFailure};
 use std::{
     io::{self, Write},

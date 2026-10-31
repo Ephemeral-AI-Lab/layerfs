@@ -4,11 +4,12 @@
 #![deny(unsafe_code)]
 #[cfg(unix)]
 pub mod backend;
-pub mod provider;
 mod types;
 #[cfg(unix)]
-pub use backend::{Runtime, Sandbox};
+pub use backend::{LaunchFailure, Runtime, Sandbox};
 pub use types::{
-    CommandIdentity, ContainerId, ErrorDiagnostic, ExecId, ExecInspection, ExecRequest, Image,
-    PendingRequest, RuntimeError, WireFailure,
+    CommandIdentity, ContainerId, DockerRecord, ErrorDiagnostic, ExecExit, ExecId, ExecInspection,
+    ExecRequest, Image, IsolationModel, LaunchPhase, LaunchRequest, LocalRecord, MountDriver,
+    NamespaceRecord, PendingRequest, ProviderCapabilities, ProviderLaunchOptions, RuntimeError,
+    SandboxId, SandboxInspection, SandboxRecord, SearchPathPolicy, WireFailure,
 };

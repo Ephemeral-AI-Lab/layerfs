@@ -68,7 +68,7 @@ pub enum SandboxCause {
     /// Original Engine transfer, no replay.
     Runtime(Box<layerfs_sandbox::WireFailure>),
     /// Original provider launch cause; partial runtime ownership is retained separately.
-    Provider(Box<layerfs_sandbox::provider::LaunchFailure>),
+    Provider(Box<layerfs_sandbox::LaunchFailure>),
     /// Original authentication failure; handshake work remains in the receipt.
     Channel(ChannelError),
     /// Original correlated daemon control exchange/refusal.

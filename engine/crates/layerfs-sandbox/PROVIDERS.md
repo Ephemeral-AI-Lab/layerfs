@@ -17,11 +17,17 @@ type and the only dispatch is one `match` per method.
   `identity`, `endpoint`, `run`, `track`, `log_tail`, `inspect`, `stop`,
   `delete`, `scratch_directory`, `local_record` and `record`.
 
-`layerfs_sandbox::{Runtime, Sandbox}` re-export both. `provider` keeps the
-inputs and observations they share: `LaunchRequest`, `ProviderLaunchOptions`,
-`LocalRecord`, `DockerRecord`, `SandboxRecord`, `ExecExit`,
-`SandboxInspection`, `ProviderCapabilities` and the `LaunchPhase`/`LaunchFailure`
-pair. The runtime layer has no daemon control dependency. `backend::HelperSpec`
+`layerfs_sandbox::{Runtime, Sandbox, LaunchFailure}` re-export them;
+`LaunchFailure` (which holds a `Sandbox`) lives beside them in
+`backend/runtime.rs`. The inputs and observations every backend shares are in
+the crate's private `types/` and re-exported at the root:
+`LaunchRequest`, `LaunchPhase`, `ProviderLaunchOptions`, `LocalRecord`,
+`NamespaceRecord`, `DockerRecord`, `SandboxRecord`, `ExecExit`,
+`SandboxInspection` and `ProviderCapabilities` (#527 step 9a; they were under
+`layerfs_sandbox::provider`). `types/` depends on no backend except through
+`RuntimeError::Docker`; the conversions between `DockerRecord` and Docker's
+`SandboxRequest` are Docker's own. The runtime layer has no daemon control
+dependency. `backend::HelperSpec`
 is the namespace helper's line format; it is compiled and tested on every
 platform, while only the helper that reads it is Linux only.
 
@@ -64,8 +70,10 @@ platform facts differ:
 
 The provider validates the command identity, the environment it is given and
 the daemon executable, then starts one daemon in a private directory with the
-platform's kernel marker (`LAYERFS_KERNEL=fuse` on Linux, `nfs` on macOS); it
-rejects conflicting overrides. Launch preserves the original single-attempt
+platform's kernel route (`LAYERFS_KERNEL=fuse` on Linux, `nfs` on macOS). Only
+the provider names the route: a caller environment that names
+`LAYERFS_KERNEL` at all is refused at `Validate` (#527 step 6), and the daemon
+refuses at startup any route other than `fuse` or `nfs` (only `nfs` on macOS). Launch preserves the original single-attempt
 process lifecycle and partial owner on failure. `inspect` reports exact process
 liveness; unknown exit/storage facts stay absent. Records remain the Node
 binding's responsibility; runtimes neither scan directories nor infer project

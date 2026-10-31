@@ -1,6 +1,14 @@
 //! Launch inputs and observations independent of the daemon control protocol.
 use crate::{CommandIdentity, ContainerId};
 use std::{fmt, path::PathBuf, time::Duration};
+/// The last launch phase a provider reached.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LaunchPhase {
+    Validate,
+    Create,
+    Start,
+    Listener,
+}
 /// Configuration bytes may contain secrets; Debug only reports their length.
 #[derive(Clone)]
 pub struct LaunchRequest {
@@ -134,46 +142,6 @@ impl From<DockerRecord> for SandboxRecord {
 impl From<&DockerRecord> for SandboxRecord {
     fn from(record: &DockerRecord) -> Self {
         Self::Docker(record.clone())
-    }
-}
-impl From<crate::backend::docker::SandboxRequest> for DockerRecord {
-    fn from(request: crate::backend::docker::SandboxRequest) -> Self {
-        Self {
-            image: request.image,
-            store_volume: request.store_volume,
-            port: request.port,
-            labels: request.labels,
-        }
-    }
-}
-impl From<&crate::backend::docker::SandboxRequest> for DockerRecord {
-    fn from(request: &crate::backend::docker::SandboxRequest) -> Self {
-        Self {
-            image: request.image.clone(),
-            store_volume: request.store_volume.clone(),
-            port: request.port,
-            labels: request.labels.clone(),
-        }
-    }
-}
-impl From<DockerRecord> for crate::backend::docker::SandboxRequest {
-    fn from(record: DockerRecord) -> Self {
-        Self {
-            image: record.image,
-            store_volume: record.store_volume,
-            port: record.port,
-            labels: record.labels,
-        }
-    }
-}
-impl From<crate::backend::docker::SandboxRequest> for SandboxRecord {
-    fn from(request: crate::backend::docker::SandboxRequest) -> Self {
-        Self::Docker(request.into())
-    }
-}
-impl From<&crate::backend::docker::SandboxRequest> for SandboxRecord {
-    fn from(request: &crate::backend::docker::SandboxRequest) -> Self {
-        Self::Docker(request.into())
     }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

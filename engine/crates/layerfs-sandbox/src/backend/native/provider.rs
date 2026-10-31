@@ -1,11 +1,16 @@
 //! The existing native runtime as a concrete backend; no alternate process engine.
-use super::{Local, LocalPhase, LocalProcess, Sandbox, KERNEL_ROUTE};
-use crate::provider::{
+use super::{Local, LocalPhase, LocalProcess, Sandbox};
+use crate::{ContainerId, RuntimeError, WireFailure};
+use crate::{
     IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, MountDriver,
     ProviderCapabilities, ProviderLaunchOptions, SandboxRecord, SearchPathPolicy,
 };
-use crate::{ContainerId, RuntimeError, WireFailure};
 use std::path::Path;
+
+/// The daemon's kernel route setting (`fuse` or `nfs`). Only the provider
+/// names it, from the platform it serves; a caller that names it is refused
+/// (#527 step 6), and the daemon checks the value it receives.
+pub(crate) const KERNEL_ROUTE: &str = "LAYERFS_KERNEL";
 
 #[derive(Clone, Debug)]
 pub struct NativeProvider<const LINUX: bool> {

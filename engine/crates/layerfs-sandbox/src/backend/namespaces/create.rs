@@ -50,7 +50,7 @@ pub(crate) struct CreateFailure {
 pub(crate) fn create(
     local: &Local,
     helper: &Path,
-    request: &crate::provider::LaunchRequest,
+    request: &crate::LaunchRequest,
     options: &Options,
 ) -> Result<Sandbox, Box<CreateFailure>> {
     let fail = |phase, sandbox, cause| {
@@ -137,7 +137,7 @@ pub(crate) fn create(
 fn start_request(
     local: &Local,
     helper: &Path,
-    request: &crate::provider::LaunchRequest,
+    request: &crate::LaunchRequest,
     options: &Options,
 ) -> Result<(Paths, ImageRoot), RuntimeError> {
     let paths = {
@@ -235,7 +235,7 @@ fn check_store(paths: &Paths, store: &Path) -> Result<(), RuntimeError> {
 /// the image underneath.
 fn prepare(
     paths: &Paths,
-    request: &crate::provider::LaunchRequest,
+    request: &crate::LaunchRequest,
     options: &Options,
     id: &crate::ContainerId,
     image: &ImageRoot,

@@ -1,6 +1,6 @@
 //! Owned container lifecycle; borrowed shared Store volume is never cleanup-owned.
 use super::Docker;
-use crate::{ContainerId, RuntimeError, WireFailure};
+use crate::{ContainerId, DockerRecord, RuntimeError, SandboxRecord, WireFailure};
 /// Explicit immutable image, existing VM volume, daemon TCP port and labels.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SandboxRequest {
@@ -127,4 +127,44 @@ pub struct SandboxDisposition {
     pub started: bool,
     pub stopped: bool,
     pub deleted: bool,
+}
+impl From<SandboxRequest> for DockerRecord {
+    fn from(request: SandboxRequest) -> Self {
+        Self {
+            image: request.image,
+            store_volume: request.store_volume,
+            port: request.port,
+            labels: request.labels,
+        }
+    }
+}
+impl From<&SandboxRequest> for DockerRecord {
+    fn from(request: &SandboxRequest) -> Self {
+        Self {
+            image: request.image.clone(),
+            store_volume: request.store_volume.clone(),
+            port: request.port,
+            labels: request.labels.clone(),
+        }
+    }
+}
+impl From<DockerRecord> for SandboxRequest {
+    fn from(record: DockerRecord) -> Self {
+        Self {
+            image: record.image,
+            store_volume: record.store_volume,
+            port: record.port,
+            labels: record.labels,
+        }
+    }
+}
+impl From<SandboxRequest> for SandboxRecord {
+    fn from(request: SandboxRequest) -> Self {
+        Self::Docker(request.into())
+    }
+}
+impl From<&SandboxRequest> for SandboxRecord {
+    fn from(request: &SandboxRequest) -> Self {
+        Self::Docker(request.into())
+    }
 }

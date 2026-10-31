@@ -12,11 +12,11 @@ use super::{
     sandbox::Sandbox,
 };
 use crate::backend::native::{Local, LocalPaths};
-use crate::provider::{
+use crate::{ContainerId, RuntimeError, WireFailure};
+use crate::{
     IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, MountDriver, ProviderCapabilities,
     ProviderLaunchOptions, SandboxRecord, SearchPathPolicy,
 };
-use crate::{ContainerId, RuntimeError, WireFailure};
 use std::{
     env,
     path::{Path, PathBuf},
@@ -182,10 +182,7 @@ impl NamespaceProvider {
     /// The record's image, as the root this runtime already holds: a reopen
     /// starts and unpacks nothing, so a record whose image is gone is refused
     /// rather than given a different root.
-    fn image(
-        &self,
-        record: &crate::provider::NamespaceRecord,
-    ) -> Result<rootfs::ImageRoot, RuntimeError> {
+    fn image(&self, record: &crate::NamespaceRecord) -> Result<rootfs::ImageRoot, RuntimeError> {
         let paths = self.record_paths(&record.local().name)?;
         let root = (paths.local.directory.parent())
             .ok_or(RuntimeError::Protocol("namespaces Sandbox root"))?;
