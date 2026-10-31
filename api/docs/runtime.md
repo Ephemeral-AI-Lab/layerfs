@@ -236,13 +236,15 @@ its worker runs the real SDK as root; the host reaches only each VM's worker,
 with one attempt per call and no replay. Providers, verified with stand-in
 provider CLIs (`test/vm_placement.mjs`; real runs of `test/verify/vm_real.mjs`:
 see the #527 platform pass): `microsandbox`
-(`msb` 0.7.8), `apple-container` (`container` 1.6.1) and `ssh` (any Linux host
+(`msb` 0.7.8), `apple-container` (`container` 1.6.1), `ssh` (any Linux host
 the user provides, reached with the system `ssh` client; see
-[the SSH provider](#the-ssh-provider-any-linux-host) below).
+[the SSH provider](#the-ssh-provider-any-linux-host) below), `lima` (one Lima
+`vmType: vz` instance per project, `limactl` 2.2.1; see
+[the Lima provider](#the-lima-provider-vz)).
 Each provider runs on its own host systems, checked when the settings resolve
-and refused `Unsupported` elsewhere: `apple-container` on macOS only,
-`microsandbox` on Linux (KVM) and macOS (Apple silicon), `ssh` on Linux and
-macOS. No provider runs on a Windows host, since the placement maps this
+and refused `Unsupported` elsewhere: `apple-container` and `lima` on macOS
+only (vz is Apple's Virtualization.framework), `microsandbox` on Linux (KVM) and
+macOS (Apple silicon), `ssh` on Linux and macOS. No provider runs on a Windows host, since the placement maps this
 host's folders into the guest as POSIX paths (#527 step 8).
 
 ```sh
@@ -350,12 +352,13 @@ refuse any other the same way. `store.list` still lists the home's records, with
 folder)` and removed with `project.delete`.
 
 The real proof is `node api/runtime/test/verify/vm_real.mjs <sealed Linux
-bundle> [microsandbox|apple-container]`: two projects, each in its own VM — Init
+bundle> [microsandbox|apple-container|lima]` (`VM_REAL_PREFIX`, default
+`lfs-`, starts every name it makes): two projects, each in its own VM — Init
 through each VM's worker, a fork, a write, a Sandbox, an exec as the nonroot
 identity with user namespaces blocked, a Commit, a stop/start of one VM and a
 worker restart, then a check that neither Store holds the other's Branch, and
 that removing one project leaves the other's VM running. The unit tests
-(`node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|stores|apple-container|ssh|cleanup`)
+(`node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|stores|apple-container|ssh|lima|cleanup`)
 use a stand-in provider CLI.
 
 ### The SSH provider (any Linux host)
@@ -420,6 +423,59 @@ as a stopped VM, so the next `worker.start` re-opens it. The failure matrix is
 a busy local port, a missing or non-ext4 Store path, a non-Linux host, an
 unreachable network and a reconnected one, a dropped forward, a rebooted host,
 a refused and a permitted delete, and a second project on the same host.
+
+### The Lima provider (vz)
+
+`vm:lima` makes one Lima instance per project with `limactl` (verified with
+Lima 2.2.1 on macOS 26.4, Apple M3 Max, #527): `vmType: vz`, Ubuntu 24.04's
+cloud image, `cpus` and `memory` from `settings.vm`. Lima 1.0.x cannot start
+a vz instance on a Mac whose `/var/run` holds Docker Desktop's `docker.sock`
+symlink: its user network's resolv.conf watcher opens that socket and stops
+(`adding watcher failed: "/private/var/run/docker.sock": operation not
+supported on socket`); Lima 2.2.1 has no such watcher.
+
+```sh
+LAYERFS_PLACEMENT=vm:lima layerfs-home   # any integration that sets it
+```
+
+The adapter's steps on this provider:
+
+1. the Store disk is a Lima disk, `limactl disk create --format raw` (vz needs
+   raw) of `storeSize`, made before the instance; Lima formats it ext4 on first
+   attach and mounts it at `/mnt/lima-<disk>`, and the adapter bind-mounts that
+   at `/layerfs/store` after every boot, checking it is ext4. Lima recognises a
+   formatted disk by its ext4 label `lima-<disk>`, which holds 16 bytes: a
+   longer disk name is cut, never found, and the disk is **formatted again at
+   every boot** (found in this pass: a VM restart emptied the Store). So the
+   Lima disk is named `lfs` + 8 hex digits of the Store volume's name, and the
+   volume's own name and the home are kept in the instance as its
+   `LAYERFS_STORE` and `LAYERFS_HOME` params (`/etc/layerfs-vm` in the guest);
+2. the instance comes from a template the adapter writes to
+   `limactl create --name <vm> -` on stdin: the home mounted writable at
+   `/layerfs/home` (virtiofs), the Store disk, and `node` installed by a system
+   provision script on first boot (Node.js v22.23.4 from nodejs.org, checked
+   against that release's `SHASUMS256.txt`). `vm.image` names the Lima image
+   when it is an `https://` URL or an absolute path; the shared default (an OCI
+   reference) does not describe a Lima disk, so Ubuntu's image is used;
+3. the bundle and Init sources reach the guest's own disk through the home
+   mount, as on Apple Container: a private `<home>/.vm-copy-*` staging folder
+   (an APFS clone where the volume allows), `cp -Rp` in the guest, the staging
+   folder removed whatever the outcome; a folder already in the home is read in
+   place;
+4. every guest command runs as root (`sudo -n`, the Lima user's passwordless
+   sudo) through the instance's own SSH, `ssh -F <instance>/ssh.config
+   lima-<vm>`, with each argument quoted by the adapter (`limactl shell` is not
+   used); the worker's secret goes in a 0600 file from stdin;
+5. the private stream is the instance's own `portForwards` rule,
+   `127.0.0.1:<host>` to guest port 7070, and a last rule ignores every other
+   guest port, so Lima forwards nothing else;
+6. `limactl stop` keeps the instance and its disk; `limactl delete --force`
+   removes the instance and Lima keeps the disk, which only `discardStore`
+   (`limactl disk delete`) removes. A kept disk is attached again, not remade,
+   when the project's instance is made again.
+
+One sample (#527, load 3.6): `vm_real.mjs <h39 bundle> lima` passed in 65.2 s
+for two projects, both VMs made, restarted and removed.
 
 ## Docker
 

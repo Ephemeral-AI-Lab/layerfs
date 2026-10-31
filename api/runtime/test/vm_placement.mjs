@@ -5,7 +5,7 @@
 // fixture keeps one VM record per project, maps each guest's absolute paths
 // under a temp folder, and starts the adapter's bundle worker so step ④'s
 // readiness is real.
-//   node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|stores|apple-container|ssh|cleanup
+//   node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|stores|apple-container|ssh|lima|cleanup
 import assert from "node:assert/strict";
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -18,6 +18,7 @@ const SOURCE = fileURLToPath(new URL("../src", import.meta.url));
 const MSB = fileURLToPath(new URL("fixture/fake-msb.cjs", import.meta.url));
 const CONTAINER = fileURLToPath(new URL("fixture/fake-container.cjs", import.meta.url));
 const SSH = fileURLToPath(new URL("fixture/fake-ssh.cjs", import.meta.url));
+const LIMA = fileURLToPath(new URL("fixture/fake-lima.cjs", import.meta.url));
 process.env.LAYERFS_NATIVE = FAKE;
 const { LayerFSRuntime } = await import("@layerfs/runtime");
 const { resolveSettings, missing, callHome, GUEST } = await import("../src/settings.js");
@@ -50,6 +51,23 @@ function standIn(name, fixture, state) {
   };
 }
 
+/** The `limactl` and `ssh` stand-ins of vm:lima: one fixture, two names on PATH. */
+function limaStandIn(state) {
+  const bin = join(work, "lima-bin");
+  mkdirSync(bin, { recursive: true });
+  for (const tool of ["limactl", "ssh"]) {
+    writeFileSync(join(bin, tool), `#!/bin/sh\nexec "${process.execPath}" "${LIMA}" ${tool} "$@"\n`);
+    chmodSync(join(bin, tool), 0o755);
+  }
+  const saved = { PATH: process.env.PATH };
+  process.env.PATH = `${bin}:${saved.PATH}`;
+  Object.assign(process.env, { FAKE_LIMA_STATE: state, FAKE_LIMA_NATIVE: FAKE, LIMA_HOME: join(state, "lima-home") });
+  return () => {
+    process.env.PATH = saved.PATH;
+    for (const name of ["FAKE_LIMA_STATE", "FAKE_LIMA_NATIVE", "LIMA_HOME"]) delete process.env[name];
+  };
+}
+
 /** A sealed Linux bundle with the adapter's worker and the real SDK packages it imports.
  * `image` adds a Sandbox image archive at `images/<hex>.tar` (H38's convention, V7). */
 function makeBundle(tag = "build-one", image = null) {
@@ -66,6 +84,8 @@ function makeBundle(tag = "build-one", image = null) {
 }
 
 const calls = (state) => (existsSync(join(state, "calls.jsonl")) ? readFileSync(join(state, "calls.jsonl"), "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line).argv) : []);
+/** The remote command of a stand-in `ssh` call (unquoted by the fixture), or null. */
+const remoteOf = (argv) => (argv.includes("--") ? argv.slice(argv.indexOf("--") + 1) : null);
 
 /** Every await that could wait on a provider has a ceiling here, so a stuck
  * call fails this case with a name instead of hanging the harness. */
@@ -126,6 +146,13 @@ try {
       for (const host of ["linux", "macos"]) assert.equal(resolveSettings({ home, platform: host, placement: `vm:${provider}` }).placement.provider, provider);
     }
     assert.equal(resolveSettings({ home, platform: "macos", placement: "vm:apple-container" }).placement.provider, "apple-container");
+    // Lima makes vz instances (Virtualization.framework)
+    for (const provider of ["lima"]) {
+      for (const host of ["linux", "windows"]) {
+        assert.throws(() => resolveSettings({ home, platform: host, placement: `vm:${provider}` }), { code: "Unsupported", message: new RegExp(`vm:${provider} runs on macOS hosts, not ${host === "linux" ? "Linux" : "Windows"}`) });
+      }
+      assert.equal(resolveSettings({ home, platform: "macos", placement: `vm:${provider}`, bundle: "/b" }).placement.provider, provider);
+    }
     assert.throws(() => resolveSettings({ home, platform: "linux", placement: "vm:microsandbox", vm: { memory: "8" } }), { code: "InvalidInput", message: /memory/ });
     // vm:ssh settings
     const sshSettings = resolveSettings({
@@ -526,6 +553,82 @@ try {
       restore();
       restoreWorker(work);
     }
+  } else if (selected === "lima") {
+    makeBundle("build-one", "c".repeat(64));
+    const state = join(work, "lima");
+    mkdirSync(state);
+    const restore = limaStandIn(state);
+    const runtime = await LayerFSRuntime.open({ home, bundle, placement: "vm:lima", containerPrefix: prefix, platform: "macos", sweep: false });
+    try {
+      const started = await deadline(60_000, "worker.start", runtime.worker.start("shop"));
+      assert.deepEqual([started.vm.state, started.worker.state, started.vm.store, started.vm.home], ["running", "running", storeName("shop"), home]);
+      const endpoint = endpointAt("shop");
+      assert.equal(endpoint.vm.provider, "lima");
+      // Lima finds a formatted disk by its ext4 label `lima-<disk>` (16 bytes at most): a longer
+      // name would be formatted again at every boot, so the disk has a short name of its own
+      const { diskName, template: limaTemplate } = await import("../src/platform/vm/lima.js");
+      const disk = diskName(storeName("shop"));
+      assert.match(disk, /^lfs[0-9a-f]{8}$/);
+      assert.ok(`lima-${disk}`.length <= 16);
+      const first = calls(state);
+      // ① a raw Lima disk (vz needs raw) of the configured size, made before the instance
+      const made = first.find((argv) => argv[0] === "disk" && argv[1] === "create");
+      assert.deepEqual(made, ["disk", "create", disk, "--size", "20GiB", "--format", "raw"]);
+      const create = first.findIndex((argv) => argv[0] === "create");
+      assert.ok(create > first.indexOf(made), "the Store disk is made before the instance");
+      assert.deepEqual(first[create], ["create", "--name", vmName("shop"), "--tty=false", "-"], "the template comes on stdin");
+      const { template } = JSON.parse(readFileSync(join(state, "vms", `${vmName("shop")}.json`), "utf8"));
+      assert.deepEqual([template.vmType, template.cpus, template.memory, template.mountType], ["vz", 2, "2GiB", "virtiofs"]);
+      assert.deepEqual(template.mounts, [{ location: home, mountPoint: "/layerfs/home", writable: true }]);
+      assert.deepEqual(template.additionalDisks, [{ name: disk, format: true, fsType: "ext4" }], "Lima formats the Store disk ext4 on first attach");
+      assert.deepEqual(template.param, { LAYERFS_STORE: storeName("shop"), LAYERFS_HOME: home }, "the instance keeps the Store volume's name and its home");
+      // ④ the one forwarded port, private to this host's loopback; every other guest port is ignored
+      assert.deepEqual(template.portForwards, [
+        { guestPort: 7070, hostIP: "127.0.0.1", hostPort: endpoint.port },
+        { guestIP: "0.0.0.0", guestPortRange: [1, 65535], ignore: true },
+      ]);
+      // the OCI default does not describe a Lima disk: the Ubuntu cloud image is booted, and Node.js is installed checked
+      assert.match(template.images[0].location, /ubuntu-24\.04-server-cloudimg-arm64\.img$/);
+      assert.match(template.provision[0].script, /nodejs\.org\/dist\/v22\.[0-9.]+\/SHASUMS256\.txt/);
+      assert.match(template.provision[0].script, /sha256sum -c/);
+      // every guest command is root through the instance's own ssh.config
+      const remote = first.filter((argv) => argv[0] === "-F").map((argv) => [argv[1], argv[2], remoteOf(argv)]);
+      assert.ok(remote.length > 0 && remote.every(([config, target, argv]) => config === join(state, "lima-home", vmName("shop"), "ssh.config") && target === `lima-${vmName("shop")}` && argv.slice(0, 3).join(" ") === "sudo -n --"));
+      const scripts = remote.map(([, , argv]) => argv.join(" "));
+      assert.ok(scripts.some((line) => line.includes("mount --bind") && line.endsWith(`/mnt/lima-${disk}`)), "the Store disk is bind-mounted at the Store directory");
+      assert.ok(scripts.some((line) => /max_user_namespaces/.test(line)), "step ③ blocked user namespaces");
+      assert.ok(scripts.some((line) => /nohup node/.test(line)), "step ③ started the worker");
+      // step ② through the home the instance mounts: a private staging folder the guest copies from, then removed
+      assert.ok(scripts.some((line) => /cp -Rp/.test(line) && /\/layerfs\/home\/\.vm-copy-[^/ ]+\/c \/layerfs\/bundle$/.test(line)), "the guest copied the staged bundle onto its own disk");
+      assert.deepEqual(readdirSync(home).filter((entry) => entry.startsWith(".vm-copy-")), [], "no staging folder is left in the home");
+      assert.equal(existsSync(guestPath(state, vmName("shop"), `/layerfs/bundle/images/${"c".repeat(64)}.tar`)), true, "with its Sandbox image");
+      assert.ok(!JSON.stringify(first).includes(endpoint.secret), "no call carried the secret in its arguments");
+      assert.match(readFileSync(guestPath(state, vmName("shop"), "/layerfs/state/worker.env"), "utf8"), new RegExp(`^LAYERFS_WORKER_SECRET=${endpoint.secret}$`, "m"));
+      // a settings image that names a Lima disk is booted as it is
+      assert.deepEqual(JSON.parse(limaTemplate({ name: "x", image: "https://example.com/a.img", cpus: 1, memory: "512M", home, storeName: "d", hostPort: 1, workerPort: 7070 })).images, [{ location: "https://example.com/a.img" }]);
+      // ⑤ stop keeps the instance and its disk; a start boots it and attaches the disk again
+      assert.equal((await deadline(30_000, "vm.stop", runtime.vm.stop("shop"))).state, "stopped");
+      const again = await deadline(60_000, "worker.start after stop", runtime.worker.start("shop"));
+      assert.deepEqual([again.vm.state, again.worker.state], ["running", "running"]);
+      assert.equal(calls(state).filter((argv) => argv[0] === "create").length, 1, "started, not created again");
+      assert.equal(calls(state).filter((argv) => remoteOf(argv)?.join(" ").includes("mount --bind")).length, 2, "the bind mount a reboot drops is made again");
+      assert.equal(endpointAt("shop").port, endpoint.port, "the instance keeps its forwarded port");
+      // V8, then a delete that keeps the disk, then one that discards it
+      project("shop");
+      await assert.rejects(runtime.vm.delete("shop", { confirm: "delete" }), { code: "Unsupported", message: /never destroys a Store that was not pushed/ });
+      forget("shop");
+      assert.equal((await runtime.vm.delete("shop", { confirm: "delete" })).store, "kept");
+      assert.ok(calls(state).some((argv) => argv.join(" ") === `delete --force ${vmName("shop")}`));
+      assert.ok(!calls(state).some((argv) => argv[0] === "disk" && argv[1] === "delete"), "Lima keeps the disk when its instance goes");
+      await runtime.worker.start("shop");
+      assert.equal(calls(state).filter((argv) => argv[0] === "disk" && argv[1] === "create").length, 1, "the kept disk is attached to the new instance, not made again");
+      assert.equal((await runtime.vm.delete("shop", { confirm: "delete", discardStore: true })).store, "discarded");
+      assert.ok(calls(state).some((argv) => argv.join(" ") === `disk delete ${disk}`));
+    } finally {
+      restore();
+      await runtime.close();
+      restoreWorker(work);
+    }
   } else if (selected === "cleanup") {
     // H39v's two findings: a provider create that fails must leave nothing
     // behind — no Store volume for Apple Container (the CLI makes one before it
@@ -567,7 +670,7 @@ try {
       rmSync(hidden, { recursive: true, force: true });
     }
   } else {
-    throw new Error("select settings, flow, two, bundle, delete, hosts, stores, apple-container, ssh or cleanup");
+    throw new Error("select settings, flow, two, bundle, delete, hosts, stores, apple-container, ssh, lima or cleanup");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });
@@ -579,7 +682,7 @@ process.exit(0);
 
 /** The stand-in's worker outlives its CLI: end it from the pid the fixture wrote. */
 function restoreWorker(folder) {
-  for (const provider of ["msb", "container", "ssh"]) {
+  for (const provider of ["msb", "container", "ssh", "lima"]) {
     const guests = join(folder, provider, "guest");
     if (existsSync(guests)) {
       for (const vm of readdirSync(guests)) {

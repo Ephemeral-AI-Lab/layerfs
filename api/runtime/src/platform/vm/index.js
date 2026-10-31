@@ -36,8 +36,9 @@ import { holding, recorded } from "../../sandbox/records.js";
 import microsandbox from "./microsandbox.js";
 import appleContainer from "./apple-container.js";
 import ssh from "./ssh.js";
+import lima from "./lima.js";
 
-const PROVIDERS = { microsandbox, "apple-container": appleContainer, ssh };
+const PROVIDERS = { microsandbox, "apple-container": appleContainer, ssh, lima };
 const WORKER_PORT = 7070;
 const SERVER = "api/runtime/src/worker/server.js";
 /** Bundle hashing in the worker comes first, so readiness takes a while. */

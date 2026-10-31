@@ -15,10 +15,13 @@ const DEFAULT_DOCKER = "/var/run/docker.sock";
  * Linux VM per project (V9), by provider, with the host systems each runs on
  * (#527 step 8). Apple Container is macOS only; Microsandbox runs libkrun
  * microVMs on Linux (KVM) and macOS (Apple silicon); `ssh` needs only the
- * system ssh client and tar. None runs on Windows: the VM placement maps this
- * host's folders into the guest as POSIX paths.
+ * system ssh client and tar; `lima` makes `vmType: vz` instances, which is
+ * Apple's Virtualization.framework, so it is macOS only. None runs on Windows: the VM placement
+ * maps this host's folders into the guest as POSIX paths.
  */
-const PROVIDERS = { microsandbox: ["linux", "macos"], "apple-container": ["macos"], ssh: ["linux", "macos"] };
+const PROVIDERS = {
+  microsandbox: ["linux", "macos"], "apple-container": ["macos"], ssh: ["linux", "macos"], lima: ["macos"],
+};
 const NAMES = { linux: "Linux", macos: "macOS", windows: "Windows" };
 /** The VM's own settings: the image that holds node and the guest base, and its size. */
 const VM = { image: "node:22-trixie-slim", cpus: 2, memory: "2G", storeSize: "20G" };

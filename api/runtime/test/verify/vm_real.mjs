@@ -14,7 +14,8 @@
 // onto a root that boot did not start, the next `sandbox.create` reclaims it and
 // reuses its number, and that Sandbox runs from the same unpacked image. Everything it made (both VMs, their Store disks, the home and
 // the sources) is removed afterwards.
-//   node api/runtime/test/verify/vm_real.mjs <sealed Linux bundle> [microsandbox|apple-container]
+//   node api/runtime/test/verify/vm_real.mjs <sealed Linux bundle> [microsandbox|apple-container|lima]
+// VM_REAL_PREFIX (default `lfs-`) starts every VM, disk and container name.
 // Needs that provider's CLI and the bundle built for the host's Linux VM
 // (aarch64 on an M-series Mac), with a Sandbox image at `images/<64 hex>.tar`.
 // Under 2 minutes for small source folders; the first run pulls the image.
@@ -28,7 +29,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SELF = fileURLToPath(import.meta.url);
-const CLI = { microsandbox: "msb", "apple-container": "container" };
+const CLI = { microsandbox: "msb", "apple-container": "container", lima: "limactl" };
 
 /** An agent process: it names its project, and the endpoint of that project's VM comes from the deployment. */
 async function agent(project, deployment, phase = undefined, extra = {}) {
@@ -202,7 +203,7 @@ if (process.argv[2] === "agent") {
 
 const [bundle, provider = "microsandbox"] = process.argv.slice(2);
 if (!CLI[provider] || !bundle || process.platform !== "darwin") {
-  console.error("usage: vm_real.mjs <sealed Linux bundle> [microsandbox|apple-container] (macOS host)");
+  console.error("usage: vm_real.mjs <sealed Linux bundle> [microsandbox|apple-container|lima] (macOS host)");
   process.exit(2);
 }
 if (!existsSync(bundle)) {
@@ -214,13 +215,17 @@ const { deploymentEnv } = await import("../../src/clients.js");
 const { endpointFile } = await import("../../src/platform/shared.js");
 // the provider module of the VM this run uses: the verify script reads the VM's
 // own disk (filesystem, image cache), which no public call answers
-const DRIVER = { microsandbox: "../../src/platform/vm/microsandbox.js", "apple-container": "../../src/platform/vm/apple-container.js" };
+const DRIVER = {
+  microsandbox: "../../src/platform/vm/microsandbox.js", "apple-container": "../../src/platform/vm/apple-container.js",
+  lima: "../../src/platform/vm/lima.js",
+};
 const driver = (await import(DRIVER[provider])).default;
 
 const shared = process.env.LAYERFS_TEST_DIR || join(homedir(), ".cache", "layerfs-test");
 mkdirSync(shared, { recursive: true });
-const work = mkdtempSync(join(shared, `lfs-${provider}-`));
-const home = join(work, "home"), id = Date.now().toString(36), prefix = `lfs-${provider}-${id}-`;
+const PREFIX = process.env.VM_REAL_PREFIX || "lfs-";
+const work = mkdtempSync(join(shared, `${PREFIX}${provider}-`));
+const home = join(work, "home"), id = Date.now().toString(36), prefix = `${PREFIX}${provider}-${id}-`;
 const sources = {};
 for (const [name, text] of [["shop", "# Shop\n"], ["blog", "# Blog\n"]]) {
   sources[name] = join(work, name);
