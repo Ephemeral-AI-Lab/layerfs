@@ -1,0 +1,51 @@
+# Automated PR review via the official Claude Code action. Reports findings as
+# PR comments; like every lane here it is advisory and never a required check
+# (AGENTS.md §4). Requires secrets.ANTHROPIC_API_KEY (or the OIDC federation
+# vars from anthropics/claude-code-action docs). Draft PRs and bot-authored
+# pushes are skipped to avoid loops.
+name: review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+  id-token: write
+
+concurrency:
+  group: review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    if: |
+      github.event.pull_request.draft == false &&
+      github.actor != 'github-actions[bot]' &&
+      github.actor != 'coderabbitai[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 1
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request against the repository rules in AGENTS.md:
+            the Disposable/WAL/synchronous=OFF persistence profile, the
+            core < engine < api dependency direction, the production-file size
+            ceilings, the no-retry/one-attempt rule, and per-commit production
+            LOC accounting. Focus on real defects, contract violations and
+            boundary breaches, not style. Note: the PR branch is already
+            checked out. Post findings only as PR comments.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --max-turns 30

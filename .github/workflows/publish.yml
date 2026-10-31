@@ -1,0 +1,71 @@
+# npm publish lane: packs and publishes the @layerfs/* packages from api/.
+# Like every lane here it is a report, not a gate (AGENTS.md §4); a failed
+# publish never blocks a merge.
+#
+# Authentication: npm trusted publishing (OIDC). No NPM_TOKEN secret is used.
+# Each package must have a trusted publisher configured on npmjs.com naming:
+#   organization/user: Ephemeral-AI-Lab
+#   repository:        layerfs
+#   workflow filename: publish.yml
+#   environment:       npm-publish
+# The workflow and environment names must match exactly. Provenance
+# attestations are generated automatically (requires a public repo and a
+# public package).
+name: publish
+
+on:
+  # Publish manually for the version already committed in api/*/package.json.
+  workflow_dispatch:
+  # Or by tagging one release: v1.1.0 publishes all four packages.
+  push:
+    tags: ["v*"]
+
+permissions:
+  id-token: write # required for OIDC trusted publishing
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      # Offline tarball pack + import smoke test for all four packages.
+      - run: node api/scripts/prepare-publish.mjs
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: npm-publish
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [agent, backend, runtime, cli]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24" # npm >= 11.5.1 for trusted publishing
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      # A version already on the registry is reported and skipped, not an error:
+      # re-running the workflow for the same tag must be idempotent.
+      - name: Publish @layerfs/${{ matrix.package }}
+        run: |
+          set -e
+          cd "api/${{ matrix.package }}"
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          if npm view "$name@$version" version --silent 2>/dev/null | grep -q .; then
+            echo "::notice::$name@$version is already published; skipping"
+            exit 0
+          fi
+          npm publish --access public
