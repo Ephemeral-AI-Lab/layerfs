@@ -193,6 +193,11 @@ real CLI by `test/verify/vm_real.mjs` and by H40's own run: `microsandbox`
 (`msb` 0.7.8), `apple-container` (`container` 1.6.1) and `ssh` (any Linux host
 the user provides, reached with the system `ssh` client; see
 [the SSH provider](#the-ssh-provider-any-linux-host) below).
+Each provider runs on its own host systems, checked when the settings resolve
+and refused `Unsupported` elsewhere: `apple-container` on macOS only,
+`microsandbox` on Linux (KVM) and macOS (Apple silicon), `ssh` on Linux and
+macOS. No provider runs on a Windows host, since the placement maps this
+host's folders into the guest as POSIX paths (#527 step 8).
 
 ```sh
 LAYERFS_PLACEMENT=vm:microsandbox layerfs-home # any integration that sets it

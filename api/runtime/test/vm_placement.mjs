@@ -117,6 +117,14 @@ try {
     assert.deepEqual([sized.vm.cpus, sized.vm.storeSize], [3, "64G"]);
     assert.throws(() => resolveSettings({ home, platform: "linux", placement: "vm:nope" }), { code: "Unsupported", message: /vm:microsandbox or vm:apple-container/ });
     assert.throws(() => resolveSettings({ home, platform: "linux", placement: "nope" }), { code: "InvalidInput", message: /local.*vm:<provider>/ });
+    // #527 step 8: each provider runs on its own host systems, refused when the settings resolve
+    assert.throws(() => resolveSettings({ home, platform: "linux", placement: "vm:apple-container" }), { code: "Unsupported", message: /vm:apple-container runs on macOS hosts, not Linux/ });
+    assert.throws(() => resolveSettings({ home, platform: "windows", placement: "vm:apple-container" }), { code: "Unsupported", message: /runs on macOS hosts, not Windows/ });
+    for (const provider of ["microsandbox", "ssh"]) {
+      assert.throws(() => resolveSettings({ home, platform: "windows", placement: `vm:${provider}` }), { code: "Unsupported", message: new RegExp(`vm:${provider} runs on Linux and macOS hosts, not Windows`) });
+      for (const host of ["linux", "macos"]) assert.equal(resolveSettings({ home, platform: host, placement: `vm:${provider}` }).placement.provider, provider);
+    }
+    assert.equal(resolveSettings({ home, platform: "macos", placement: "vm:apple-container" }).placement.provider, "apple-container");
     assert.throws(() => resolveSettings({ home, platform: "linux", placement: "vm:microsandbox", vm: { memory: "8" } }), { code: "InvalidInput", message: /memory/ });
     // vm:ssh settings
     const sshSettings = resolveSettings({

@@ -66,8 +66,9 @@ export function sandboxArg(sandbox) {
  * `sandbox` (LAYERFS_SANDBOX) `native` (Linux or macOS), a Sandbox is a host
  * daemon: Linux uses FUSE with a root daemon and nonroot commands (501:20);
  * macOS uses loopback NFS and this user. It needs the daemon and
- * `localDir` (LAYERFS_LOCAL_DIR) and no Docker setting. Unset or `docker` is
- * Docker; any other value is refused. */
+ * `localDir` (LAYERFS_LOCAL_DIR) and no Docker setting; on Windows it is
+ * refused Unsupported. Unset or `docker` is Docker; any other value is
+ * refused. */
 export function deployment(options = {}, postgresql = false) {
   const env = (name) => process.env[`LAYERFS_${name}`] || undefined;
   const sandbox = options.sandbox ?? env("SANDBOX");
@@ -101,13 +102,18 @@ export function deployment(options = {}, postgresql = false) {
  * same digest Docker deploys) and `imageArchive` (LAYERFS_IMAGE_ARCHIVE, the
  * docker-archive the bundle carries). */
 function nativeDeployment(options, env, sandbox) {
+  const backend = options.sandboxBackend ?? env("SANDBOX_BACKEND");
+  // #527 step 8: Windows runs Docker Sandboxes through its WSL2 worker; it has no native or namespaces backend
+  if (process.platform === "win32") {
+    const named = backend === "namespaces" ? "deploy.sandboxBackend (LAYERFS_SANDBOX_BACKEND) namespaces" : "deploy.sandbox (LAYERFS_SANDBOX) native";
+    throw new LayerFSError("Unsupported", `${named} is not supported on Windows: a Windows Sandbox is Docker, through the WSL2 worker; native runs on Linux or macOS, namespaces on Linux`, null);
+  }
   const deploy = {
     sandbox,
     daemon: options.daemon ?? env("DAEMON"),
     localDir: options.localDir ?? env("LOCAL_DIR"),
     containerPrefix: options.containerPrefix ?? env("CONTAINER_PREFIX"),
   };
-  const backend = options.sandboxBackend ?? env("SANDBOX_BACKEND");
   if (backend !== undefined) deploy.sandboxBackend = backend;
   const required = [["daemon", "DAEMON"], ["localDir", "LOCAL_DIR"]];
   if (backend === "namespaces") {

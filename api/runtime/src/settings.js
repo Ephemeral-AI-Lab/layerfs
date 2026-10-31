@@ -9,8 +9,16 @@ import { LayerFSError } from "@layerfs/agent";
 
 const PLATFORMS = { linux: "linux", darwin: "macos", win32: "windows" };
 const DEFAULT_DOCKER = "/var/run/docker.sock";
-/** Where a home's Store and Sandboxes live: this machine (`local`, today) or one Linux VM per home (V9). */
-const PROVIDERS = ["microsandbox", "apple-container", "ssh"];
+/**
+ * Where a home's Store and Sandboxes live: this machine (`local`, today) or one
+ * Linux VM per project (V9), by provider, with the host systems each runs on
+ * (#527 step 8). Apple Container is macOS only; Microsandbox runs libkrun
+ * microVMs on Linux (KVM) and macOS (Apple silicon); `ssh` needs only the
+ * system ssh client and tar. None runs on Windows: the VM placement maps this
+ * host's folders into the guest as POSIX paths.
+ */
+const PROVIDERS = { microsandbox: ["linux", "macos"], "apple-container": ["macos"], ssh: ["linux", "macos"] };
+const NAMES = { linux: "Linux", macos: "macOS", windows: "Windows" };
 /** The VM's own settings: the image that holds node and the guest base, and its size. */
 const VM = { image: "node:22-trixie-slim", cpus: 2, memory: "2G", storeSize: "20G" };
 /** Where the VM sees the home, the Store disk, the bundle and its working state (§5, §6). */
@@ -34,16 +42,19 @@ export const GUEST = Object.freeze({
 /**
  * `placement`: absent or `local` (this machine's Docker, macOS worker container
  * or WSL2 worker; behavior unchanged), or `vm:<provider>` (one Linux VM per
- * home, §6). A VM provider name that is not implemented is refused here, not
- * later, so a typo cannot look like `local`.
+ * home, §6). A VM provider name that is not implemented, or one that does not
+ * run on this host's `platform`, is refused here, not later, so a typo cannot
+ * look like `local`.
  */
-function placement(given) {
+function placement(given, platform) {
   const text = given ?? process.env.LAYERFS_PLACEMENT ?? "local";
   if (typeof text !== "string" || !text) throw new LayerFSError("InvalidInput", "placement must be `local` or `vm:<provider>`", null);
   if (text === "local") return { kind: "local", name: "local" };
   const provider = /^vm:(.+)$/.exec(text)?.[1];
   if (!provider) throw new LayerFSError("InvalidInput", `placement is \`local\` or \`vm:<provider>\`, not ${text}`, null);
-  if (!PROVIDERS.includes(provider)) throw new LayerFSError("Unsupported", `no VM provider is implemented for ${text}; it is vm:${PROVIDERS.join(" or vm:")}`, null);
+  if (!Object.hasOwn(PROVIDERS, provider)) throw new LayerFSError("Unsupported", `no VM provider is implemented for ${text}; it is vm:${Object.keys(PROVIDERS).join(" or vm:")}`, null);
+  const hosts = PROVIDERS[provider];
+  if (!hosts.includes(platform)) throw new LayerFSError("Unsupported", `${text} runs on ${hosts.map((host) => NAMES[host]).join(" and ")} hosts, not ${NAMES[platform]}`, null);
   return { kind: "vm", name: text, provider };
 }
 
@@ -101,7 +112,7 @@ export function resolveSettings(given = {}) {
   const platform = given.platform ?? PLATFORMS[process.platform];
   if (!Object.values(PLATFORMS).includes(platform)) throw new LayerFSError("Unsupported", `LayerFS runs on Linux, macOS and Windows, not ${process.platform}`, null);
   const bundle = given.bundle || null;
-  const where = placement(given.placement);
+  const where = placement(given.placement, platform);
   const settings = {
     platform,
     placement: where,

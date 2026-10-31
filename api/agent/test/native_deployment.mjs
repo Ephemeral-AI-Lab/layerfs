@@ -140,4 +140,34 @@ const plain = await LayerFS.open("website");
 assert.equal("sandbox" in plain.options.deploy, false);
 assert.equal("localDir" in plain.options.deploy, false);
 await plain.close();
+// #527 step 8: on Windows a Sandbox is Docker through the WSL2 worker; native
+// and namespaces are refused Unsupported before anything is made
+const host = Object.getOwnPropertyDescriptor(process, "platform");
+Object.defineProperty(process, "platform", { ...host, value: "win32" });
+try {
+  clear();
+  process.env.LAYERFS_SANDBOX = "native";
+  process.env.LAYERFS_DAEMON = "/opt/layerfs-daemon";
+  process.env.LAYERFS_LOCAL_DIR = "C:/lfs";
+  assert.throws(() => deployment(), (e) => e.code === "Unsupported" && /LAYERFS_SANDBOX\) native is not supported on Windows/.test(e.message));
+  process.env.LAYERFS_SANDBOX_BACKEND = "namespaces";
+  assert.throws(() => deployment(), (e) => e.code === "Unsupported" && /LAYERFS_SANDBOX_BACKEND\) namespaces is not supported on Windows/.test(e.message));
+  // Docker is unchanged there
+  clear();
+  setDocker();
+  assert.deepEqual(deployment(), docker);
+  // sandbox.create reaches no binding call
+  clear();
+  store();
+  process.env.LAYERFS_SANDBOX = "native";
+  process.env.LAYERFS_DAEMON = "/opt/layerfs-daemon";
+  process.env.LAYERFS_LOCAL_DIR = "C:/lfs";
+  const windows = await LayerFS.open("website");
+  const made = native.deploys.length;
+  await assert.rejects(windows.sandbox.create(), { code: "Unsupported" });
+  assert.equal(native.deploys.length, made, "no Sandbox was asked for");
+  await windows.close();
+} finally {
+  Object.defineProperty(process, "platform", host);
+}
 console.log("native_deployment: ok");
