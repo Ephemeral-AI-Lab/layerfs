@@ -25,7 +25,10 @@
 // Other settings: LFS527_DOCKER (macOS Docker socket), LFS527_WORK (work root),
 // LFS527_LOCK (lock dir), LFS527_LOCK_WAIT_MS (default 45000), LFS527_VM_CPUS /
 // LFS527_VM_MEMORY (default 4 / 4G), LFS527_LIMA_VM, LFS527_LIMA_NODE, and for
-// vm-ssh the runtime's own LAYERFS_SSH_* settings.
+// vm-ssh the runtime's own LAYERFS_SSH_* settings. vm-firecracker runs in the
+// Lima vz host LFS527_FIRECRACKER_LIMA (default lfs527-vzkvm) from
+// LFS527_FIRECRACKER_DIR (default /var/lib/lfs527-firecracker), with 2G of
+// memory unless LFS527_VM_MEMORY says otherwise (the host has 4 GiB).
 import { spawn, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmodSync, copyFileSync, existsSync, renameSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -38,7 +41,7 @@ import { CF, command, sha256 } from "./workloads.mjs";
 const SELF = fileURLToPath(import.meta.url);
 const HERE = dirname(SELF);
 const CELL = join(HERE, "cell.mjs");
-const ROWS = ["macos-docker", "macos-native", "linux-docker", "linux-native", "linux-namespaces", "vm-apple-container", "vm-microsandbox", "vm-ssh", "refusals"];
+const ROWS = ["macos-docker", "macos-native", "linux-docker", "linux-native", "linux-namespaces", "vm-apple-container", "vm-microsandbox", "vm-lima", "vm-firecracker", "vm-ssh", "refusals"];
 const REFUSALS = ["macos-namespaces", "vm-docker"];
 
 // ---- arguments ------------------------------------------------------------
@@ -335,7 +338,7 @@ const need = (value, name) => {
   return value;
 };
 const macDocker = () => process.env.LFS527_DOCKER || join(homedir(), ".docker", "run", "docker.sock");
-const vmSize = () => ({ cpus: Number(process.env.LFS527_VM_CPUS || 4), memory: process.env.LFS527_VM_MEMORY || "4G" });
+const vmSize = (provider) => ({ cpus: Number(process.env.LFS527_VM_CPUS || 4), memory: process.env.LFS527_VM_MEMORY || (provider === "firecracker" ? "2G" : "4G") });
 
 const SETUP = {
   async "macos-docker"() {
@@ -382,6 +385,8 @@ const SETUP = {
   },
   "vm-apple-container": () => vmRow("apple-container"),
   "vm-microsandbox": () => vmRow("microsandbox"),
+  "vm-lima": () => vmRow("lima"),
+  "vm-firecracker": () => vmRow("firecracker"),
   "vm-ssh": () => vmRow("ssh"),
 };
 
@@ -392,9 +397,17 @@ async function vmRow(provider) {
     process.env.LAYERFS_SSH_STATE_DIR = join(workRoot(), `lfs527-ssh-state-${id}`);
     receipt.driver.sshStateDir = process.env.LAYERFS_SSH_STATE_DIR;
   }
+  if (provider === "firecracker") {
+    // the provider's settings, read by the runtime in this process; its
+    // microVM records go in this run's own folder (removed with it)
+    process.env.LAYERFS_FIRECRACKER_LIMA ||= process.env.LFS527_FIRECRACKER_LIMA || "lfs527-vzkvm";
+    process.env.LAYERFS_FIRECRACKER_DIR ||= process.env.LFS527_FIRECRACKER_DIR || "/var/lib/lfs527-firecracker";
+    process.env.LAYERFS_FIRECRACKER_STATE_DIR ||= join(workRoot(), `lfs527-firecracker-state-${id}`);
+    receipt.driver.firecracker = { lima: process.env.LAYERFS_FIRECRACKER_LIMA, dir: process.env.LAYERFS_FIRECRACKER_DIR, stateDir: process.env.LAYERFS_FIRECRACKER_STATE_DIR };
+  }
   const made = await runtimeRow({
     bundle,
-    settings: { placement: `vm:${provider}`, ...(provider === "ssh" ? {} : { vm: vmSize() }) },
+    settings: { placement: `vm:${provider}`, ...(provider === "ssh" ? {} : { vm: vmSize(provider) }) },
     after: async (runtime) => {
       if (provider === "ssh") {
         // vm:ssh never touches the user's disk on delete (ssh.js removeStore is
@@ -412,6 +425,7 @@ async function vmRow(provider) {
       }
       await teardownStep("vm.delete", () => runtime.vm.delete(project, { confirm: "delete", discardStore: true }));
       if (provider === "ssh") await teardownStep("ssh state", () => rmSync(process.env.LAYERFS_SSH_STATE_DIR, { recursive: true, force: true }));
+      if (provider === "firecracker") await teardownStep("firecracker state", () => rmSync(process.env.LAYERFS_FIRECRACKER_STATE_DIR, { recursive: true, force: true }));
     },
   });
   receipt.imageDigest = made.env.LAYERFS_IMAGE ?? null;
