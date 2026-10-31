@@ -69,14 +69,14 @@ impl Backing {
         self.closed.store(true, Ordering::Release);
     }
     fn delete(&self) -> io::Result<()> {
-        let metadata = std::fs::symlink_metadata(&self.path)?;
-        let original = self
-            .file
-            .as_ref()
-            .expect("retained identity file")
-            .metadata()?;
         #[cfg(unix)]
         {
+            let metadata = std::fs::symlink_metadata(&self.path)?;
+            let original = self
+                .file
+                .as_ref()
+                .expect("retained identity file")
+                .metadata()?;
             use std::os::unix::fs::MetadataExt;
             if !metadata.is_file()
                 || metadata.nlink() != 1
@@ -89,14 +89,13 @@ impl Backing {
                     "overlay deletion identity",
                 ));
             }
+            std::fs::remove_file(&self.path)
         }
         #[cfg(not(unix))]
-        return Err(io::Error::new(
+        Err(io::Error::new(
             io::ErrorKind::Unsupported,
             "overlay deletion platform",
-        ));
-        #[cfg(unix)]
-        std::fs::remove_file(&self.path)
+        ))
     }
 }
 impl Drop for Backing {

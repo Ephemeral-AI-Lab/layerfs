@@ -21,6 +21,7 @@ use std::sync::Arc;
 /// The daemon's user inside its Sandbox (the runtime's `User` is `0:0`). A
 /// daemon opens only a Store file and directory it owns, so an installer
 /// must run as this user too.
+#[cfg(unix)]
 const DAEMON_UID: u32 = 0;
 
 /// The destination and its exclusive temporary name.
@@ -162,11 +163,21 @@ pub fn install_local(
         installer_user()?;
         let text = |error: io::Error| error.to_string();
         if !directory.exists() {
-            use std::os::unix::fs::DirBuilderExt;
-            fs::DirBuilder::new()
-                .mode(0o700)
-                .create(directory)
-                .map_err(text)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt;
+                fs::DirBuilder::new()
+                    .mode(0o700)
+                    .create(directory)
+                    .map_err(text)?;
+            }
+            #[cfg(not(unix))]
+            {
+                // Unreachable behind the kernel guard above, which refuses
+                // every non-Linux platform before this line; the plain create
+                // only keeps the crate compilable there.
+                fs::DirBuilder::new().create(directory).map_err(text)?;
+            }
         }
         let (target, temporary) = paths(destination).map_err(text)?;
         let mut file = claim(&target, &temporary).map_err(text)?;
@@ -203,6 +214,7 @@ pub fn install_local(
 }
 
 /// Refuses an installer that is not the daemons' user.
+#[cfg(unix)]
 fn installer_user() -> Result<(), String> {
     use std::os::unix::fs::MetadataExt;
     // the owner of /proc/self is this process's effective user
@@ -216,4 +228,11 @@ fn installer_user() -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// Refuses every installer off the daemons' platform: the install is part of
+/// direct Store access, which the kernel guard holds to Linux.
+#[cfg(not(unix))]
+fn installer_user() -> Result<(), String> {
+    Err("the Store install runs on the daemons' Linux kernel only".to_owned())
 }
