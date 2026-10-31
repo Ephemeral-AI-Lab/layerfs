@@ -75,6 +75,13 @@ export const restart = (name) => call(["restart", name], { timeout: CREATE_MS })
 export const remove = (name) => call(["remove", "--force", name], { timeout: CREATE_MS });
 export const removeStore = (storeName) => call(["volume", "remove", storeName]);
 
+/**
+ * V4: the VM-wide user-namespace block. Microsandbox's guest keeps
+ * `/proc/sys` writable; the caller reads the sysctl back, so a block that did
+ * not take is reported, not assumed.
+ */
+export const blockUserNamespaces = (name) => exec(name, ["sh", "-c", "echo 0 > /proc/sys/user/max_user_namespaces"]);
+
 /** Free bytes of the VM's Store disk, or null when `df` cannot answer. */
 export async function storeFree(name) {
   const { code, stdout } = await exec(name, ["df", "-kP", "/layerfs/store"]);
@@ -92,5 +99,5 @@ export const write = (name, path, text) => writeFile(CLI, name, path, text, exec
 export default {
   name: "microsandbox",
   defaultImage: "node:22-trixie-slim",
-  inspect, create, start, stop, restart, remove, removeStore, storeFree, read, write, copy, exec,
+  inspect, create, start, stop, restart, remove, removeStore, blockUserNamespaces, storeFree, read, write, copy, exec,
 };

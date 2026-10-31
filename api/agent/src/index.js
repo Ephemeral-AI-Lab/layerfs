@@ -145,8 +145,9 @@ export class LayerFS {
       storePolicy: env("STORE_POLICY"),
       storePath: env("STORE_PATH"),
     };
-    // not open until a factory has opened its Store; the binding is chosen now, once
-    this[STATE] = { closed: null, transport: binding() };
+    // not open until a factory has opened its Store; the binding is chosen now, once,
+    // for this client's project (a VM placement has one worker per project)
+    this[STATE] = { closed: null, transport: binding(this.projectName) };
     this.fs = bind(this, fsMethods);
     this.project = bind(this, { list_branches, list_sandboxes });
     this.branch = bind(this, { list_commits, diff_commits, diff_branches, fork, merge, publish });

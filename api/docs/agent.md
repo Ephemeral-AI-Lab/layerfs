@@ -105,7 +105,9 @@ the Store on a local filesystem the daemons share (ext4, xfs, btrfs); anywhere
 else opening fails `Unsupported`, and without a `storePath` it fails
 `InvalidInput`. On macOS and Windows, any process that names its LayerFS
 home's worker (`LAYERFS_WORKER_ENDPOINT`, or the endpoint `@layerfs/runtime`
-hands over with `useWorker`) sends the calls there instead. The route is open to any integration (owner,
+hands over with `useWorker` — or that project's endpoint, on a
+`vm:<provider>` home where each project's Store is in its own VM) sends the
+calls there instead. The route is open to any integration (owner,
 2026-10-24); LayerFS names none. A client keeps the binding it was made with: the
 in-process addon, or the worker if one was set when it was made, so a client
 made before `@layerfs/runtime` hands over its worker stays in-process and
@@ -141,7 +143,7 @@ Keep each agent's operations on a Workspace sequential.
 | `LAYERFS_VOLUME` | Existing named local VM volume shared by the project's daemons. |
 | `LAYERFS_DAEMON` | Host path to the built Linux daemon executable. |
 | `LAYERFS_NATIVE` | Optional path of the real addon; defaults to `engine/crates/layerfs-node/layerfs.node`. |
-| `LAYERFS_WORKER_ENDPOINT` | macOS and Windows: the endpoint file of the LayerFS home's worker, which then makes every binding call. Any integration may set it. |
+| `LAYERFS_WORKER_ENDPOINT` | macOS and Windows, and a `vm:<provider>` project VM: the endpoint file of the worker that makes this project's binding calls. Any integration may set it. |
 | `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open: `global/store.sqlite` in the project's volume. On Linux this process opens it, so it must be on a local filesystem the daemons share, such as `/layerfs-store/global/store.sqlite` where the volume is mounted at `/layerfs-store`; otherwise Store calls fail `Unsupported`. On macOS and Windows the worker opens it, so it is the path inside the worker's Linux, `/var/lib/docker/volumes/<volume>/_data/global/store.sqlite`. On any other platform Store calls fail `Unsupported`. Unset, they fail `InvalidInput` everywhere. |
 | `LAYERFS_CONTAINER_PREFIX` | Optional. Names every container this client creates `<prefix><project>-<Sandbox>` (default prefix `layerfs-`); another LayerFS home on the same Docker engine sets its own, so names never collide. Docker's name rule applies (an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128). A name another container holds refuses the create before any effect. |
 | `LAYERFS_DAEMON_HOST` | Optional. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |

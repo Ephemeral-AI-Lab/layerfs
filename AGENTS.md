@@ -165,21 +165,25 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   Store calls in the caller's process, and the worker's rules above (loopback,
   secret, one attempt, no replay) are unchanged.
 - **VM placement (`@layerfs/runtime`, owner 2026-10-31, #515).** A LayerFS
-  home may be placed in one Linux VM on this machine instead of in the host's
+  home may be placed in Linux VMs on this machine instead of in the host's
   Docker: `LAYERFS_PLACEMENT=vm:<provider>` (or the runtime's `placement`
-  setting), with `local` the default and unchanged. The VM holds every
-  project's Store on its own ext4 disk, the Sandboxes are Linux namespaces
-  inside it (`LAYERFS_SANDBOX_BACKEND=namespaces`, documented in
-  [the agent guide](api/docs/agent.md#namespace-sandboxes-linux)) and the
-  worker runs the real SDK as root; the host reaches only the worker's
-  loopback-published port with one attempt per call and no replay, the same
-  rules as the macOS and Windows routes. Store calls therefore leave the
-  caller's process on Linux too, under `vm:` placement only. Implemented
-  providers: `microsandbox` (`msb`) and `apple-container` (`container`, not
-  yet verified against that CLI). One VM per home serves that home's Stores;
-  a VM delete is refused while any of them exists, because no remote Store
-  push exists (#506). `@layerfs/runtime`'s guide and
-  `api/runtime/src/platform/vm/` hold the details.
+  setting), with `local` the default and unchanged. **One Linux VM per Store**
+  (V1): a project's VM holds that project's Store on its own ext4 disk, its
+  Sandboxes are Linux namespaces inside it
+  (`LAYERFS_SANDBOX_BACKEND=namespaces`, documented in
+  [the agent guide](api/docs/agent.md#namespace-sandboxes-linux)), and its
+  worker runs the real SDK as root with its own secret and its own
+  loopback-published port; the host reaches only each VM's worker, with one
+  attempt per call and no replay, the same rules as the macOS and Windows
+  routes. Store calls therefore leave the caller's process on Linux too, under
+  `vm:` placement only, and a process routes them per project
+  (`useWorker((project) => endpoint)`, or that project's
+  `LAYERFS_WORKER_ENDPOINT`). `project.init` makes the project's VM and
+  `project.remove` deletes it with its Store disk; a bare VM delete is refused
+  while the project exists, because that Store is on that disk only and no
+  remote Store push exists (#506). Implemented and verified providers:
+  `microsandbox` (`msb`) and `apple-container` (`container` 1.6.1).
+  `@layerfs/runtime`'s guide and `api/runtime/src/platform/vm/` hold the details.
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
   database, concurrent-writer engine or objects outside it. Writes go one at a

@@ -11,13 +11,15 @@ export async function status(runtime) {
   const { settings, platform } = runtime;
   let docker;
   if (platform.hostDocker === false) {
-    docker = { level: "not-used", detail: `this home is placed in ${platform.name}; its Stores and Sandboxes are inside the VM` };
+    docker = { level: "not-used", detail: `this home is placed in ${platform.name}; its Stores and Sandboxes are inside each project's VM` };
   } else {
     try { docker = { level: "ok", version: await platform.docker(settings, ["version", "--format", "{{.Server.Version}}"]) }; } catch (error) {
       docker = { level: "down", error: error.stderr?.trim() || error.message };
     }
   }
-  const reported = await platform.status(settings).catch((error) => ({ worker: { state: "unknown", error: error.message } }));
+  // a `vm:` placement has one VM per project, so it is asked about each project
+  const projects = await runtime.project.list().then((all) => all.map((project) => project.name), () => []);
+  const reported = await platform.status(settings, projects).catch((error) => ({ worker: { state: "unknown", error: error.message } }));
   let home = null;
   try { const s = statfsSync(settings.home); home = s.bavail * s.bsize; } catch { /* unreadable */ }
   return {

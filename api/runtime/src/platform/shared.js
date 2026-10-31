@@ -23,8 +23,12 @@ export const noHostDocker = (runtime, what, instead) =>
 export const docker = (settings, args, options = {}) =>
   run("docker", ["-H", `unix://${settings.docker}`, ...args], { timeout: 5000, ...options }).then((r) => r.stdout.trim());
 
-/** Where a home's worker endpoint lives: `<home>/worker/endpoint.json`. */
-export const endpointFile = (home) => join(home, "worker", "endpoint.json");
+/**
+ * Where a worker's endpoint lives: `<home>/worker/endpoint.json` for a home
+ * whose one worker serves it (macOS, Windows), or `<home>/worker/<project>.json`
+ * when each project's Store is in its own VM (`vm:<provider>`).
+ */
+export const endpointFile = (home, project = undefined) => join(home, "worker", project ? `${project}.json` : "endpoint.json");
 
 /** Writes an endpoint atomically, readable by this user only. */
 export function writeEndpoint(file, info) {
@@ -66,9 +70,9 @@ export function homeNames(home) {
 // The four Store hooks Init and project removal use, as Docker has them (the
 // `local` placement): a project's Store is a labelled volume, its holders are
 // containers, and removing the project removes the volume. A `vm:` placement
-// implements the same four over its VM instead (vm/index.js). Each takes the
-// runtime, so the hook uses that platform's own Docker CLI (Windows goes
-// through WSL).
+// implements the same four over the project's VM instead (vm/index.js). Each
+// takes the runtime and the project `{ name, volume }`, so the hook uses that
+// platform's own Docker CLI (Windows goes through WSL) or that project's VM.
 
 /** Container states that hold a volume but run nothing (Docker's; a namespace Sandbox's record has none). */
 export const STOPPED = new Set(["created", "exited", "dead"]);
@@ -80,21 +84,21 @@ export async function makeStore(runtime, project) {
 }
 
 /** The containers holding the volume now: [{ id, state }], running or not. */
-export async function storeHolders(runtime, volume) {
+export async function storeHolders(runtime, project) {
   const { settings, platform } = runtime;
-  const rows = await platform.docker(settings, ["ps", "-a", "--filter", `volume=${volume}`, "--format", "{{.ID}} {{.State}}"]);
+  const rows = await platform.docker(settings, ["ps", "-a", "--filter", `volume=${project.volume}`, "--format", "{{.ID}} {{.State}}"]);
   return rows.split("\n").filter(Boolean).map((line) => { const [id, state] = line.split(" "); return { id, state }; });
 }
 
 /** Removes the volume's holders: the running ones only when `force`. */
-export async function releaseStoreHolders(runtime, volume, holders, { force = false } = {}) {
+export async function releaseStoreHolders(runtime, project, holders, { force = false } = {}) {
   const { settings, platform } = runtime;
   if (!holders.length) return;
   await platform.docker(settings, ["rm", ...(force ? ["-f"] : []), ...holders.map((holder) => holder.id)], { timeout: 30_000 });
 }
 
 /** The volume itself, once nothing holds it. */
-export async function removeStore(runtime, volume) {
+export async function removeStore(runtime, project) {
   const { settings, platform } = runtime;
-  await platform.docker(settings, ["volume", "rm", volume], { timeout: 30_000 });
+  await platform.docker(settings, ["volume", "rm", project.volume], { timeout: 30_000 });
 }

@@ -17,8 +17,9 @@ export const BACKEND = /^(backend|runtime)\./;
 
 /** Runs one operation once and returns its value or throws its refusal;
  * `options` are the client's settings, whose `trace` selects its trace file;
- * `transport` is the client's binding (default: the one a new client would use). */
-export async function invoke(op, args, options, transport = binding()) {
+ * `transport` is the client's binding (default: the one a new client of
+ * `args.project` would use). */
+export async function invoke(op, args, options, transport = binding(args.project)) {
   return outcome(await traced(options, op, args, (scope) => {
     if (BACKEND.test(op)) throw new LayerFSError("UnknownMethod", "backend and runtime methods are @layerfs/backend's and @layerfs/runtime's", null);
     return transport.call(op, observed(args, scope));
@@ -26,7 +27,7 @@ export async function invoke(op, args, options, transport = binding()) {
 }
 
 /** One call on the binding's backend table (`backend.*`, `runtime.*`). */
-export async function invokeBackend(op, args, options, transport = binding()) {
+export async function invokeBackend(op, args, options, transport = binding(args?.project)) {
   return outcome(await traced(options, op, args, (scope) => transport.backendCall(op, observed(args, scope))));
 }
 

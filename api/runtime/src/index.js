@@ -55,8 +55,13 @@ export class LayerFSRuntime {
     this.settings = settings;
     this.platform = platformFor(settings);
     this.closed = false;
-    const endpoint = this.platform.endpoint(settings);
-    if (endpoint) useWorker(endpoint);
+    // one worker for the home, or (a `vm:` placement) one endpoint per project
+    const endpoints = this.platform.endpoints?.(settings);
+    if (endpoints) useWorker(endpoints);
+    else {
+      const endpoint = this.platform.endpoint?.(settings);
+      if (endpoint) useWorker(endpoint);
+    }
     this.clients = new Clients(this);
     const jobs = new InitJobs((prepared, report) => runInit(this, prepared, report));
     const live = (method) => async (...args) => {
@@ -72,10 +77,13 @@ export class LayerFSRuntime {
     };
     this.status = live(async () => ({ ...(await status(this)), sweep: this.swept }));
     this.worker = {
-      start: live(() => this.platform.start(settings)),
-      restart: live((options) => {
+      start: live((project) => this.platform.start(settings, project)),
+      restart: live((first, second) => {
+        // `restart(project, { confirm })` on a `vm:` placement, `restart({ confirm })` elsewhere
+        const project = typeof first === "string" ? first : undefined;
+        const options = project ? second : first;
         if (options?.confirm !== "restart") throw new LayerFSError("InvalidInput", "a restart cuts off every project's Store calls; confirm it with { confirm: \"restart\" }", null);
-        return this.platform.restart(settings, options);
+        return this.platform.restart(settings, project, options);
       }),
     };
     this.project = {
@@ -96,12 +104,16 @@ export class LayerFSRuntime {
       list: live(() => listVolumes(this)),
       remove: live((names) => removeVolumes(this, names)),
     };
-    /** `vm:<provider>` only: the VM behind this home (stop, delete); absent on a local placement. */
+    /** `vm:<provider>` only: one project's VM (`status(project)`), else every project's; absent on a local placement. */
     if (this.platform.vm) {
       this.vm = {
-        status: live(async () => (await this.platform.status(settings)).vm ?? null),
-        stop: live(() => this.platform.vm.stop(settings)),
-        delete: live((options) => this.platform.vm.delete(settings, options)),
+        status: live(async (project) => {
+          const names = project ? [project] : (await this.project.list()).map((one) => one.name);
+          const reported = await this.platform.vm.status(settings, names);
+          return project ? reported.vm.vms[0] : reported.vm;
+        }),
+        stop: live((project) => this.platform.vm.stop(settings, project)),
+        delete: live((project, options) => this.platform.vm.delete(settings, project, options)),
       };
     }
     /** The open-time sweep: null when off, else { state: running | done | failed, … }. */

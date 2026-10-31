@@ -97,7 +97,7 @@ export async function runInit(runtime, prepared, report = () => {}) {
       throw error;
     }
     if (error?.code !== "Exists") await platform.removeHome(settings, project.name).catch(() => {});
-    await platform.removeStore(runtime, project.volume).catch(() => {});
+    await platform.removeStore(runtime, project).catch(() => {});
     throw error;
   }
   await client.close();

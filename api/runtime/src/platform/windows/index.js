@@ -143,7 +143,8 @@ export default {
   // rm gets one checked child directory as an argv item, never shell text
   async removeHome(settings, name) { await wsl(settings, ["rm", "-rf", "--", projectHome(settings.wsl, name)], { timeout: 10_000 }); },
   /** Before a volume is deleted, the worker closes its cached Store of it. */
-  async releaseStore(settings, volume) {
+  async releaseStore(settings, project) {
+    const { volume } = project;
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(volume)) throw refuse("InvalidInput", "invalid Store volume name");
     const info = JSON.parse(readFileSync(endpointFile(settings.home), "utf8"));
     const answer = await connection(info).call({ fn: "releaseStore", args: { home: settings.wsl.home, storePath: `/var/lib/docker/volumes/${volume}/_data/global/store.sqlite` } });
