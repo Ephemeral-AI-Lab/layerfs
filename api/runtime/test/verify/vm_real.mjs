@@ -213,12 +213,12 @@ if (!existsSync(bundle)) {
 }
 const { LayerFSRuntime } = await import("@layerfs/runtime");
 const { deploymentEnv } = await import("../../src/clients.js");
-const { endpointFile } = await import("../../src/place/shared.js");
+const { endpointFile } = await import("../../src/platform/shared.js");
 // the provider module of the VM this run uses: the verify script reads the VM's
 // own disk (filesystem, image cache), which no public call answers
 const DRIVER = {
-  microsandbox: "../../src/place/vm/microsandbox.js", "apple-container": "../../src/place/vm/apple-container.js",
-  lima: "../../src/place/vm/lima.js", firecracker: "../../src/place/vm/firecracker.js",
+  microsandbox: "../../src/platform/vm/microsandbox.js", "apple-container": "../../src/platform/vm/apple-container.js",
+  lima: "../../src/platform/vm/lima.js", firecracker: "../../src/platform/vm/firecracker.js",
 };
 const driver = (await import(DRIVER[provider])).default;
 

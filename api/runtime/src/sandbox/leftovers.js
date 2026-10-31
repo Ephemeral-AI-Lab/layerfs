@@ -1,9 +1,9 @@
 // Sandbox containers of this home that no project owns, or that were left
 // stopped, and their removal. From part of the dsh Host's runtime.js (#428).
-// The containers are the Docker group's (place/docker/sandboxes.js).
+// The containers are the Docker group's (platform/docker/sandboxes.js).
 import { LayerFSError } from "@layerfs/agent";
 import { keyOf } from "../project/list.js";
-import { dockerOf, VM_SANDBOXES } from "../place/shared.js";
+import { dockerOf, VM_SANDBOXES } from "../platform/shared.js";
 
 /** This home's Sandbox containers, running or not; refused where the placement has no Docker group. */
 export async function containers(runtime) {

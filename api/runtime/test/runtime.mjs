@@ -274,7 +274,7 @@ try {
     assert.ok(existsSync(join(home, "shop")));
     // a stopped one holds nothing: only the containers are removed then (none run on the volume here)
     native.recordList = { shop: [{ sandbox: "4", name: "layerfs-shop-4", runtime: "native", image: "local", state: "stopped", workspaces: 0 }] };
-    const { storeHolders } = await import("../src/place/docker/stores.js");
+    const { storeHolders } = await import("../src/platform/docker/stores.js");
     assert.deepEqual((await storeHolders(runtime, { name: "shop", volume: "vol-shop", legacy: true })).filter((h) => h.runtime), []);
     delete native.recordList;
     // sweep: only shop has an ended container of a project of this home; created ones and other projects are left alone
@@ -384,7 +384,7 @@ try {
   } else if (selected === "macos-worker") {
     // the macOS worker's start with a stubbed docker CLI and a stand-in worker
     const { fakeWorker } = await import("../../agent/test/fixture/fake-worker.mjs");
-    const macos = (await import("../src/place/docker/macos.js")).default;
+    const macos = (await import("../src/platform/docker/macos.js")).default;
     const worker = await fakeWorker(undefined, { anySecret: true });
     const bundle = join(work, "bundle");
     mkdirSync(bundle);
@@ -445,7 +445,7 @@ try {
     // a running worker closes its cached Store of it; with no endpoint (no worker ever started)
     // or one that does not answer, nothing holds it and Store removal is not failed here
     const { fakeWorker } = await import("../../agent/test/fixture/fake-worker.mjs");
-    const windows = (await import("../src/place/docker/windows/index.js")).default;
+    const windows = (await import("../src/platform/docker/windows/index.js")).default;
     const settings = { home: join(work, "windows-home"), wsl: { home: "/home/me/.layerfs" } };
     const store = { name: "shop", volume: "lfs-shop-store-1", legacy: true };
     assert.equal(existsSync(join(settings.home, "worker", "endpoint.json")), false);

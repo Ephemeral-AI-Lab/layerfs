@@ -8,7 +8,7 @@ import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { PLATFORMS } from "@layerfs/agent/internal";
 
-/** The command each VM provider's adapter runs (place/vm/). */
+/** The command each VM provider's adapter runs (platform/vm/). */
 const TOOLS = { "apple-container": "container", microsandbox: "msb", lima: "limactl", firecracker: "limactl", ssh: "ssh" };
 
 const onPath = (tool) => (process.env.PATH ?? "").split(delimiter).some((dir) => dir && existsSync(join(dir, tool)));

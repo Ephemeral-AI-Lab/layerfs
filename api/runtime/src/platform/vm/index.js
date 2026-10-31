@@ -408,7 +408,7 @@ export function deploymentEnv(settings, project) {
 
 /**
  * The platform object of a `vm:<provider>` home. It has no Docker group
- * (`docker`, place/docker/index.js): host Docker is not this home's, since
+ * (`docker`, platform/docker/index.js): host Docker is not this home's, since
  * its Stores are directories on each VM's own disk and its Sandboxes are
  * Linux namespaces there, so `volume.list`, `volume.remove`, `sandbox.list`,
  * `sandbox.list_leftovers` and `sandbox.clean_leftovers` refuse with that

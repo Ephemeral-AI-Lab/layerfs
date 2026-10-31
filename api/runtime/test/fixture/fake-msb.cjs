@@ -1,5 +1,5 @@
 // The `msb` stand-in for @layerfs/runtime's VM tests (#515 §6): no microVM.
-// It answers the calls `place/vm/microsandbox.js` makes, keeps one record
+// It answers the calls `platform/vm/microsandbox.js` makes, keeps one record
 // per VM (one project's Store = one VM), and maps each guest's absolute paths
 // under FAKE_MSB_STATE/guest/<vm>, so the adapter's guest file reads and writes
 // are real file operations and two VMs never share one.

@@ -124,6 +124,8 @@ it (one kernel, AGENTS.md). With `LAYERFS_PLACEMENT` unchanged:
    (`docker/`, `vm/`), which now clashes with the Sandbox's `platform`. Rename it
    to `src/place/`, as one move-only commit. The Rust `platform/{docker,native,
    namespaces}` already matches the new meaning and stays.
+   **Superseded (owner, 2026-11-01): keep `src/platform/`.** The rename was made
+   (`b3efa9bad9`) and moved back by a later move-only commit.
 7. **Docs.** `api/docs/agent.md`, `runtime.md`, the CLI help and the
    `.agents/skills/layerfs-js-sdk` skill. Rewrite the "There is no placement
    (owner 2026-10-23)" paragraph: a Sandbox now names its platform; the home

@@ -1,5 +1,5 @@
 // The `container` stand-in for @layerfs/runtime's Apple Container test: no VM.
-// It answers the calls `place/vm/apple-container.js` makes **in the shape the
+// It answers the calls `platform/vm/apple-container.js` makes **in the shape the
 // real CLI prints**, copied from `container` 1.6.1 (build aa8d76b) on macOS 27.2,
 // 2026-10-31: `inspect --format json` is an array of
 // `{ id, status: { state, startedDate, networks }, configuration: { image,

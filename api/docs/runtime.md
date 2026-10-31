@@ -168,9 +168,9 @@ lines from now on, or from `since`, each with `actor`, its trace file's name.
 
 ## Platforms and the worker
 
-`src/place/` holds one folder per placement kind (#527 §6, D4):
-`place/docker/` for `local` (`linux.js`, `macos.js` and `windows/`: Docker
-on this host, in Docker Desktop's VM or in WSL2) and `place/vm/` for
+`src/platform/` holds one folder per placement kind (#527 §6, D4):
+`platform/docker/` for `local` (`linux.js`, `macos.js` and `windows/`: Docker
+on this host, in Docker Desktop's VM or in WSL2) and `platform/vm/` for
 `vm:<provider>`. Each platform object implements one interface (`endpoint`,
 `status`, `start`, `restart`, `init`, `path`, the Store hooks `createStore`,
 `storeHolders`, `releaseStoreHolders`, `releaseStore` and `removeStore`, and
@@ -178,11 +178,11 @@ the home and disk helpers) and may declare capabilities instead of being named:
 `initCounts: false` (macOS: this process cannot read Init's counts),
 `uncertainInit: true` (Windows: any failed Init is kept and recorded, never
 cleaned up) and `localSandboxes: true` (Linux: native and namespaces
-Sandboxes can open this placement's Stores, so discovery reads records too); `place/vm/` implements the same interface over a VM
+Sandboxes can open this placement's Stores, so discovery reads records too); `platform/vm/` implements the same interface over a VM
 (see [Placement](#placement-one-linux-vm-per-store)).
 
 The three Docker platforms also carry `platform.docker`, one Docker group
-built in `place/docker/index.js` from that platform's own CLI call: `run`
+built in `platform/docker/index.js` from that platform's own CLI call: `run`
 (the host socket on Linux and macOS, `wsl.exe` on Windows), `version`,
 `sandboxes` (this home's Sandbox containers, `sandboxes.js`), `stores` (Store
 volumes and their hooks, `stores.js`) and `disk` (the engine's volumes,

@@ -19,8 +19,8 @@ const SOURCE = fileURLToPath(new URL("../../src", import.meta.url));
 const SSH = fileURLToPath(new URL("../fixture/fake-ssh.cjs", import.meta.url));
 process.env.LAYERFS_NATIVE = FAKE;
 const { LayerFSRuntime } = await import("@layerfs/runtime");
-const provider = (await import("../../src/place/vm/ssh.js")).default;
-const { endpointFile, ping } = await import("../../src/place/shared.js");
+const provider = (await import("../../src/platform/vm/ssh.js")).default;
+const { endpointFile, ping } = await import("../../src/platform/shared.js");
 const { deploymentEnv } = await import("../../src/clients.js");
 
 const SCENARIOS = ["port", "store", "ext4", "host", "drop", "disconnect", "remote", "delete", "shared"];

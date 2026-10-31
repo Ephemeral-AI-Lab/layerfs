@@ -12,11 +12,11 @@
 // `live` is true while this home has the project that owns the volume (an
 // uncertain Init, which keeps a home entry and no record, counts as live).
 // `size` is Docker's figure, rounded to about four significant digits.
-// The Docker group's `disk` reads the engine (place/docker/disk.js);
+// The Docker group's `disk` reads the engine (platform/docker/disk.js);
 // listing changes nothing.
 import { LayerFSError } from "@layerfs/agent";
 import { entries } from "./store/registry.js";
-import { dockerOf } from "./place/shared.js";
+import { dockerOf } from "./platform/shared.js";
 
 const UNITS = { B: 1, kB: 1e3, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12 };
 /** "84.05MB" -> 84050000; anything else -> null. */
