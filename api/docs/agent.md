@@ -98,14 +98,21 @@ or reinstalling over live state.
 
 Store calls (`fs`, `branch`, `project.list_branches`) run in this process
 against the installed Store file at `storePath` (else `LAYERFS_STORE_PATH`),
-which the factory opened; no Sandbox is involved. That
+which the factory opened; no Sandbox is involved. The project family's
+Sandbox-related calls (`project.list_sandboxes`, `sandbox.*`) still need the
+daemon and refuse `Unsupported` on the Windows-native route (on Linux they
+are served in this process). That
 file is `global/store.sqlite` in the project's volume, so the process runs where
-that volume is mounted (`/layerfs-store` in a Sandbox). This is Linux only, with
-the Store on a local filesystem the daemons share (ext4, xfs, btrfs); anywhere
-else opening fails `Unsupported`, and without a `storePath` it fails
-`InvalidInput`. On macOS and Windows, any process that names its LayerFS
+that volume is mounted (`/layerfs-store` in a Sandbox). On Linux the Store sits
+on a local filesystem the daemons share (ext4, xfs, btrfs); on **Windows the
+Store sits on a local NTFS volume this process opens directly** (the
+Windows-native route, owner 2026-10-25); anywhere else opening fails
+`Unsupported`, without a `storePath` it fails
+`InvalidInput`, and a `storePath` naming no installed file fails
+`NoStore`. On macOS, and on Windows when a worker is preferred, any process that names its LayerFS
 home's worker (`LAYERFS_WORKER_ENDPOINT`, or the endpoint `@layerfs/runtime`
-hands over with `useWorker`) sends the calls there instead. The route is open to any integration (owner,
+hands over with `useWorker`) sends the calls there instead; on Windows the
+in-process native route is the default when no worker endpoint is set. The route is open to any integration (owner,
 2026-10-24); LayerFS names none. A client keeps the binding it was made with: the
 in-process addon, or the worker if one was set when it was made, so a client
 made before `@layerfs/runtime` hands over its worker stays in-process and
@@ -135,14 +142,14 @@ Keep each agent's operations on a Workspace sequential.
 
 | Environment | Meaning |
 | --- | --- |
-| `LAYERFS_HOME` | Absolute private directory for discovery records (projects, Sandboxes) and Init's temporary sealed Store, deleted once its install is recorded. Created as 0700; existing directories must be owned by the current effective user with no group/other access. Records are 0600, not symlinks. |
+| `LAYERFS_HOME` | Absolute private directory for discovery records (projects, Sandboxes) and Init's temporary sealed Store, deleted once its install is recorded. Its parent directory must already exist (creation is one level, like the store directory's parent); on Windows it carries an owner-only DACL and existing entries granting broader access refuse `Unauthorized`. Created as 0700 on unix; existing directories must be owned by the current effective user with no group/other access. Records are 0600, not symlinks. |
 | `LAYERFS_DOCKER` | Local Engine Unix socket; `/var/run/docker.sock` is the default. On the macOS worker route the worker and Init's container use the engine's socket inside its VM instead (the endpoint's `docker`). |
 | `LAYERFS_IMAGE` | Exact immutable runtime `sha256:...` digest a new Sandbox runs. A running Sandbox keeps the image it started with. |
 | `LAYERFS_VOLUME` | Existing named local VM volume shared by the project's daemons. |
 | `LAYERFS_DAEMON` | Host path to the built Linux daemon executable. |
 | `LAYERFS_NATIVE` | Optional path of the real addon; defaults to `engine/crates/layerfs-node/layerfs.node`. |
 | `LAYERFS_WORKER_ENDPOINT` | macOS and Windows: the endpoint file of the LayerFS home's worker, which then makes every binding call. Any integration may set it. |
-| `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open: `global/store.sqlite` in the project's volume. On Linux this process opens it, so it must be on a local filesystem the daemons share, such as `/layerfs-store/global/store.sqlite` where the volume is mounted at `/layerfs-store`; otherwise Store calls fail `Unsupported`. On macOS and Windows the worker opens it, so it is the path inside the worker's Linux, `/var/lib/docker/volumes/<volume>/_data/global/store.sqlite`. On any other platform Store calls fail `Unsupported`. Unset, they fail `InvalidInput` everywhere. |
+| `LAYERFS_STORE_PATH` | The installed Store file this client's Store calls open: `global/store.sqlite` in the project's volume. On Linux this process opens it, so it must be on a local filesystem the daemons share, such as `/layerfs-store/global/store.sqlite` where the volume is mounted at `/layerfs-store`; otherwise Store calls fail `Unsupported`. On Windows the native route opens it in this process, so it is a Windows path on a local NTFS volume, such as `D:\layerfs\home\<project>\volume\global\store.sqlite`; a Store on a share, a junction to one, or a non-NTFS volume fails `Unsupported`. On macOS (and Windows with a worker) the worker opens it, so it is the path inside the worker's Linux, `/var/lib/docker/volumes/<volume>/_data/global/store.sqlite`. On any other platform Store calls fail `Unsupported`. Unset, they fail `InvalidInput` everywhere. |
 | `LAYERFS_CONTAINER_PREFIX` | Optional. Names every container this client creates `<prefix><project>-<Sandbox>` (default prefix `layerfs-`); another LayerFS home on the same Docker engine sets its own, so names never collide. Docker's name rule applies (an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128). A name another container holds refuses the create before any effect. |
 | `LAYERFS_DAEMON_HOST` | Optional. The host this process dials for a daemon's port. Each daemon publishes its port on the Docker host's `127.0.0.1` only, and that stays so. A client inside a container does not share that loopback, so it names the host that reaches it, `host.docker.internal` on Docker Desktop. One resolution, its first address, one connect; nothing is tried again. Unset, the client dials `127.0.0.1`. |
 | `LAYERFS_TRACE` | Optional per-call trace file (see [the call trace](backend.md#the-call-trace)); unset means no trace. |
@@ -307,6 +314,15 @@ identity/timestamps. Destinations are exact and must not exist. Same-path/subtre
 moves or copies are InvalidInput. Mkdir creates parents and an existing directory
 is a no-op. Edit requires exactly one match and streams large files.
 
+Names must be spellable by JavaScript: a path with an unpaired surrogate
+(which the content grammar keeps byte-exact on Windows) cannot cross the JS
+string boundary — a write by such a name lands as an U+FFFD sibling file
+rather than being refused, and listings render the original empty. A merge
+or diff whose walk must build a path over such a name fails `Failed` with
+the cause in the message, and `fs.rm`/`fs.cp` over a subtree holding one
+refuses the same way. The
+byte-carrying path is recorded follow-up work.
+
 A file's or folder's permission bits are an integer `mode` such as `0o755`. A
 `write` (in `fs.write`'s options or an `fs.apply` change) or `mkdir` may carry
 one: a new file gets `mode`, else 0o644; an existing file keeps its mode unless
@@ -405,14 +421,16 @@ makes exactly one SDK call through the SDK's public API, prints the result and
 closes the client. It adds no capability, check or retry of its own: the SDK
 checks the inputs and makes its one attempt, and the command reports what it
 answered. Settings come from the environment exactly as for the SDK, and the
-same platform rules apply (Store calls run in this process on Linux, through
-the LayerFS home's worker on macOS and Windows, and fail `Unsupported` anywhere else).
+same platform rules apply (Store calls run in this process on Linux and, on the
+native route, on Windows; through the LayerFS home's worker on macOS and on
+Windows when one is set; and fail `Unsupported` anywhere else).
 
 ### Install and run
 
 The command is the `api/cli/` folder of a LayerFS checkout; it isn't published to
 npm. It needs Node 20 or newer and the SDK's native addon (`npm run
-build:native` in `api`, or `LAYERFS_NATIVE`).
+build:native` in `api`, or `LAYERFS_NATIVE`; the script builds on Linux, macOS
+and Windows, placing the addon at `engine/crates/layerfs-node/layerfs.node`).
 
 ```bash
 npm --prefix "$LAYERFS_REPO/api" install

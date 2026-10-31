@@ -2,10 +2,17 @@
 //! makes travels as a traced observation under the call's scope, and the
 //! telemetry of the replies is collected for its trace line. An untraced call
 //! sends exactly what it did before. Telemetry never changes a result.
+#[cfg(unix)]
 use crate::pool::{Controls, Lease};
-use layerfs_api::internal::{self, Control};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+#[cfg(unix)]
+use layerfs_api::internal;
+#[cfg(unix)]
+use layerfs_api::internal::Control;
+#[cfg(unix)]
+use layerfs_bridge::control::SdkRefusal;
+use layerfs_bridge::control::SdkValue;
 use std::cell::{Cell, RefCell};
+#[cfg(unix)]
 use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
@@ -71,16 +78,19 @@ pub(crate) fn collect(value: SdkValue) {
 }
 
 /// A Sandbox's control connection, traced while this thread is.
+#[cfg(unix)]
 pub(crate) struct Traced<'a>(Lease<'a>);
 
 /// Lends a control connection for one call's exchanges; the wait for it is
 /// the call's queue time.
+#[cfg(unix)]
 pub(crate) fn control(controls: &Controls) -> Result<Traced<'_>, SdkRefusal> {
     let (mut lease, waited) = controls.lend()?;
     WAITED.set(WAITED.get() + waited);
     internal::trace(&mut lease, SCOPE.get());
     Ok(Traced(lease))
 }
+#[cfg(unix)]
 impl Drop for Traced<'_> {
     fn drop(&mut self) {
         let telemetry = internal::take_telemetry(&mut self.0);
@@ -91,12 +101,14 @@ impl Drop for Traced<'_> {
         });
     }
 }
+#[cfg(unix)]
 impl Deref for Traced<'_> {
     type Target = Control;
     fn deref(&self) -> &Control {
         &self.0
     }
 }
+#[cfg(unix)]
 impl DerefMut for Traced<'_> {
     fn deref_mut(&mut self) -> &mut Control {
         &mut self.0

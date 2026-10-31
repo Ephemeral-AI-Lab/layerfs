@@ -13,6 +13,7 @@
 use layerfs_bridge::control::{Answer, Reply, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use std::io::Write;
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 
 fn hex<const N: usize>(text: &str) -> [u8; N] {
@@ -23,6 +24,7 @@ fn hex<const N: usize>(text: &str) -> [u8; N] {
     bytes.try_into().expect("length")
 }
 
+#[cfg(unix)]
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [home, project, binding, stack, branch, root, bytes, host, daemon] = &args[..] else {
@@ -77,4 +79,11 @@ fn main() {
         .expect("new project.record");
     file.write_all(&record).expect("write project.record");
     println!("{}", path.display());
+}
+
+// The record format this writes (0o600 mode, unix paths) belongs to the
+// Linux restore runbook; Windows discovery saves its own records.
+#[cfg(not(unix))]
+fn main() {
+    eprintln!("restore_record is the Linux restore runbook; not run here");
 }

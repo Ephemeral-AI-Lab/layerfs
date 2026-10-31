@@ -154,7 +154,11 @@ impl Session {
         creation_layout: crate::SqlitePackLayout,
         creation_acquisition: crate::SqliteAcquisitionSchema,
     ) -> Result<Self, BackendError> {
-        if !cfg!(any(target_os = "macos", target_os = "linux")) {
+        if !cfg!(any(
+            target_os = "macos",
+            target_os = "linux",
+            target_os = "windows"
+        )) {
             return Err(BackendError::Integrity);
         }
         let flags = if writable {
@@ -162,7 +166,19 @@ impl Session {
         } else {
             OpenFlags::SQLITE_OPEN_READ_ONLY
         } | OpenFlags::SQLITE_OPEN_NO_MUTEX;
-        let connection = Connection::open_with_flags(path, flags).map_err(rows::error)?;
+        // SQLite itself must also see the verbatim spelling: the plain one
+        // fails beyond MAX_PATH under a host without longPathAware, which
+        // would make a deep Store installable but unopenable.
+        #[cfg(target_os = "windows")]
+        let sqlite_path: std::path::PathBuf = {
+            use std::os::windows::ffi::OsStringExt;
+            let mut wide = super::windows_lane::verbatim_wide(path);
+            wide.pop(); // drop the NUL for the OsString form
+            std::path::PathBuf::from(std::ffi::OsString::from_wide(&wide))
+        };
+        #[cfg(not(target_os = "windows"))]
+        let sqlite_path: std::path::PathBuf = path.to_path_buf();
+        let connection = Connection::open_with_flags(sqlite_path, flags).map_err(rows::error)?;
         connection.set_prepared_statement_cache_capacity(64);
         connection
             .busy_timeout(std::time::Duration::ZERO)
@@ -171,6 +187,17 @@ impl Session {
         connection
             .set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
             .map_err(rows::error)?;
+        // The profile pragmas are this open's first database-touching
+        // statements, where a WAL Store's -shm is created and recovery
+        // runs; two concurrent opens of one Store can meet Busy exactly
+        // there under the no-retry rule. The coarse writer lane replaces
+        // Busy: hold it for this one short setup step and release before
+        // the reads that follow. macOS keeps exact SQLite Busy by design.
+        let writer = super::writer_admission::Writer::acquire(path)?;
+        let connected = (|| -> Result<
+            (ConnectionProfile, crate::SqlitePackLayout, crate::SqliteAcquisitionSchema),
+            BackendError,
+        > {
         profile::apply(&connection, create, selected, creation_acquisition, &work)?;
         let (layout, acquisition) = if create {
             (creation_layout, creation_acquisition)
@@ -244,6 +271,10 @@ impl Session {
                 .map_err(rows::error)? as usize,
         };
         profile::check(&profile)?;
+        Ok((profile, layout, acquisition))
+        })();
+        writer.release().map_err(|_| BackendError::Integrity)?;
+        let (profile, layout, acquisition) = connected?;
         super::thread_work::add(&work.borrow());
         Ok(Self {
             admission: super::admission::Admission::default(),

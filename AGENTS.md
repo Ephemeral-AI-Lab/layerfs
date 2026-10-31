@@ -23,6 +23,7 @@ simplification.
 | Cluster one | Core Content/Storage/History/Telemetry algorithms; Engine Persistence and Project Init | [Cluster-one handbook](docs/general/cluster_one_handbook.md), [CAS/CDC/delta handbook](docs/general/cas_cdc_deltaencoding_handbook.md) |
 | Cluster two | Engine Workspace/FUSE/daemon/Sandbox; API execution and Commit/runtime integration | [Current design index](core/docs/issues/303/README.md) and its seven primary contracts |
 | Legacy reference | v0.1.6, retired from `main` by R9c; read at the recovery tag only | [R9c record](core/docs/issues/307/R9C-COMPLETION-20261010.md) |
+| Windows-native Store | Store engine and the SDK's in-process Store face on native Windows (owner, 2026-10-25); FUSE, daemon and Workspace stay Linux-only | [Direct Store contract](core/docs/issues/352/DIRECT_STORE.md) |
 
 **The LayerFS UI is the dsh LayerFS plugin** (owner, 2026-10-19): the LayerFS tab in
 DeepSeek Harness. It lives in its own repository,
@@ -154,6 +155,29 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   native handles and project discovery. This is independent of the macOS
   adapter and changes neither the product SDK nor the daemon. A lost reply
   is never replayed, and an uncertain Init retains its Linux home and volume.
+- **Windows-native Store route (owner direction 2026-10-25).** The Store
+  engine (SQLite, the cross-process writer lane, the kernel guard) and the
+  SDK's in-process Store face (fs, branch, project, operator) also run
+  natively on Windows — the sandbox family, including
+  `project.list_sandboxes`, still refuses `Unsupported` there: local NTFS
+  volumes only, a named kernel mutex as the
+  cross-process writer lane, real volume-serial + file-index identity for
+  acquisition rows, and bundled SQLite, each in audited FFI modules
+  (engine/AGENTS.md). No WSL2 and no daemon are involved. This supersedes the
+  Linux-only Store sentence above for this route only; Workspace, FUSE, Exec
+  and daemon calls still refuse `Unsupported` on Windows, and the dsh macOS
+  and WSL2 exceptions are unchanged. Recorded limitations: Windows Init has
+  no hard-link membership and synthesizes the mode from the read-only
+  attribute; names travel as lossless WTF-8 — **owner-ratified 2026-10-31
+  ("可以合并") as the long-term content grammar** (an unpaired surrogate's
+  three-byte form is accepted, a pair spelled apart is refused; JS callers
+  cannot spell such names — listings render them empty and a JS write names
+  an U+FFFD sibling; the earlier
+  lossy-names limitation is superseded) — the backing-inside-source check
+  walks the audited volume-serial + file-index identity, and overlay
+  allocation is the real on-disk footprint; homes, discovery records and
+  Stores carry owner-only DACLs. See
+  [the Windows-native route](core/docs/issues/352/DIRECT_STORE.md).
 - **Plugin-neutral LayerFS (owner, 2026-10-24).** LayerFS is agnostic to dsh
   and every other plugin. The macOS and Windows worker routes above are open
   to any integration: `@layerfs/runtime` starts the worker on those platforms
@@ -291,7 +315,8 @@ remain binding; moving them out of this file does not weaken them.
   failure/uncertainty and custody; no guessed resend, deletion or success.
 - **CI reports; it never gates (owner, 2026-10-23).** GitHub Actions runs a
   fast lane after each push or pull request (`.github/workflows/ci.yml`: fmt,
-  guards, Clippy and the fast tests) and a nightly lane (`nightly.yml`: slow and
+  guards, Clippy, the fast tests and — from the Windows-native route — a
+  report-only windows store-suites job) and a nightly lane (`nightly.yml`: slow and
   FUSE mount tests); `format.yml` checks the Ruff formatting below.
   [tools/ci_tests.py](tools/ci_tests.py) decides which tests go in
   which lane. None is a required check, and nothing runs before a push. Do

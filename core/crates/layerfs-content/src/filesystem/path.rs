@@ -1,10 +1,13 @@
 //! Canonical names and paths: byte grammar, ordering and declared bounds.
 //!
-//! A name is one nonempty, at-most-255-byte UTF-8 component without NUL, `/` or
-//! `\`, and never `.` or `..`. A path is either the empty root or a sequence of
-//! such components joined by single separators, at most 4,096 bytes and 256
-//! components. Ordering is byte order, which is what the sorted tree engine
-//! requires and what the reference uses.
+//! A name is one nonempty, at-most-255-byte component without NUL, `/` or
+//! `\`, and never `.` or `..`; its bytes are well-formed UTF-8 or, for a
+//! Windows host name holding an unpaired surrogate, well-formed WTF-8 (the
+//! same encoding with surrogates as their three-byte forms). A path is
+//! either the empty root or a sequence of such components joined by single
+//! separators, at most 4,096 bytes and 256 components. Ordering is byte
+//! order, which is what the sorted tree engine requires and what the
+//! reference uses.
 
 use std::cmp::Ordering;
 
@@ -36,7 +39,8 @@ impl PathName {
         &self.bytes
     }
 
-    /// The name as text; construction proved it is UTF-8.
+    /// The name as text; a WTF-8 name outside UTF-8 answers the empty
+    /// string rather than a lossy spelling — `as_bytes` carries it whole.
     pub fn as_str(&self) -> &str {
         std::str::from_utf8(&self.bytes).map_or("", |value| value)
     }
@@ -97,7 +101,8 @@ impl LogicalPath {
         &self.bytes
     }
 
-    /// The path as text; construction proved it is UTF-8.
+    /// The path as text; a WTF-8 path outside UTF-8 answers the empty
+    /// string rather than a lossy spelling — `as_bytes` carries it whole.
     pub fn as_str(&self) -> &str {
         std::str::from_utf8(&self.bytes).map_or("", |value| value)
     }
@@ -150,7 +155,7 @@ fn validate_path(bytes: &[u8]) -> ContentResult<()> {
     if bytes.is_empty() {
         return Ok(());
     }
-    if std::str::from_utf8(bytes).is_err() {
+    if !is_wtf8(bytes) {
         return Err(ContentError::InvalidUtf8);
     }
     let mut components = 0_usize;
@@ -173,7 +178,7 @@ fn validate_name(bytes: &[u8]) -> ContentResult<()> {
     if bytes.len() > MAXIMUM_NAME_BYTES {
         return Err(ContentError::PathLimitExceeded);
     }
-    if std::str::from_utf8(bytes).is_err() {
+    if !is_wtf8(bytes) {
         return Err(ContentError::InvalidUtf8);
     }
     if bytes == b"."
@@ -185,4 +190,60 @@ fn validate_name(bytes: &[u8]) -> ContentResult<()> {
         return Err(ContentError::InvalidPath);
     }
     Ok(())
+}
+
+/// True for well-formed UTF-8, and for well-formed WTF-8 — the same
+/// grammar with an unpaired surrogate as its three-byte form, which a
+/// Windows host name can hold. A pair spelled as two surrogate sequences
+/// is not canonical WTF-8 and is refused, so one name has one byte
+/// spelling on every platform. Overlong forms, 5-byte leads, truncated
+/// tails and out-of-range values stay refused, so every strict UTF-8
+/// name keeps its exact acceptance.
+fn is_wtf8(bytes: &[u8]) -> bool {
+    let mut index = 0;
+    let mut pending_high_surrogate = false;
+    while index < bytes.len() {
+        let lead = bytes[index];
+        if lead < 0x80 {
+            index += 1;
+            pending_high_surrogate = false;
+            continue;
+        }
+        let (width, minimum, maximum) = match lead {
+            0xC2..=0xDF => (2_usize, 0x80_u32, 0x7FF),
+            0xE0..=0xEF => (3, 0x800, 0xFFFF),
+            0xF0..=0xF4 => (4, 0x10000, 0x10FFFF),
+            _ => return false,
+        };
+        if index + width > bytes.len() {
+            return false;
+        }
+        let mut value = match width {
+            2 => u32::from(lead & 0x1F),
+            3 => u32::from(lead & 0x0F),
+            _ => u32::from(lead & 0x07),
+        };
+        for continuation in &bytes[index + 1..index + width] {
+            if continuation & 0b1100_0000 != 0b1000_0000 {
+                return false;
+            }
+            value = (value << 6) | u32::from(continuation & 0b0011_1111);
+        }
+        if value < minimum || value > maximum {
+            return false;
+        }
+        // A high surrogate immediately followed by its low half as a second
+        // sequence is a pair spelled apart — not canonical WTF-8.
+        if (0xD800..=0xDBFF).contains(&value) {
+            pending_high_surrogate = true;
+        } else if (0xDC00..=0xDFFF).contains(&value) {
+            if pending_high_surrogate {
+                return false;
+            }
+        } else {
+            pending_high_surrogate = false;
+        }
+        index += width;
+    }
+    true
 }

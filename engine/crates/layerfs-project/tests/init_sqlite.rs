@@ -1,38 +1,15 @@
 //! Canonical namespace oracle over both explicit embedded Store profiles.
 //!
-//! The same Store opens on macOS/Linux. Unsupported platforms retain
-//! the explicit before-file-creation refusal.
+//! The same Store opens on macOS, Linux and Windows (owner direction
+//! 2026-10-25). Other platforms keep the product's compile-time refusal.
 mod support;
 use layerfs_history::HistoryCatalogConfig;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 use layerfs_persistence::SqliteAcquisitionSchema;
 use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_storage::StoragePolicy;
 use support::*;
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-#[test]
-fn an_unsupported_platform_refuses_the_store_before_any_file_exists() {
-    use layerfs_storage::port::PersistenceError;
-    for selected in DEVELOPMENT_PROFILES {
-        let fixture = Fixture::new(0);
-        let store = fixture.path.join("store.sqlite");
-        let refused = Handles::create(
-            PersistenceConfig::sqlite(&store).with_sqlite_profile(selected),
-            StoragePolicy::frozen_default(),
-            &HistoryCatalogConfig {
-                binding_key: b"init-sqlite".to_vec(),
-                cursor_key: [71; 32],
-                incarnation: 1,
-            },
-        );
-        assert!(
-            matches!(refused, Err(PersistenceError::BackendUnavailable)),
-            "{selected:?} must be refused on this platform"
-        );
-        assert!(!store.exists(), "a refused Store creates no file");
-    }
-}
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 #[test]
 fn selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle() {
     for selected in DEVELOPMENT_PROFILES {
@@ -76,7 +53,7 @@ fn selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle() {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 fn attempt(
     fixture: &Fixture,
     handles: &Handles,
@@ -103,10 +80,14 @@ fn attempt(
     .0
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 fn create(store: &std::path::Path, acquisition: SqliteAcquisitionSchema) -> Handles {
+    // Disposable is the sole permitted execution profile (owner 2026-10-07);
+    // the constructor's default is Durable, which this suite never executes.
     Handles::create(
-        PersistenceConfig::sqlite(store).with_sqlite_acquisition(acquisition),
+        PersistenceConfig::sqlite(store)
+            .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+            .with_sqlite_acquisition(acquisition),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
             binding_key: b"init-sqlite".to_vec(),
@@ -119,7 +100,7 @@ fn create(store: &std::path::Path, acquisition: SqliteAcquisitionSchema) -> Hand
 
 /// A Store created without the acquisition tables has no working state for
 /// Init, and there is no second acquisition algorithm to fall back to.
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 #[test]
 fn a_store_without_acquisition_tables_refuses_init() {
     use layerfs_history::{HistoryCatalog, LayerStackId};
@@ -146,7 +127,7 @@ fn a_store_without_acquisition_tables_refuses_init() {
 
 /// The Store's own directory is acquisition backing: a Store inside the source
 /// would be read while it is written and acquired as part of the root.
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 #[test]
 fn a_store_inside_the_source_is_refused_before_an_operation_begins() {
     use layerfs_project::ProjectError;
@@ -175,6 +156,108 @@ fn a_store_inside_the_source_is_refused_before_an_operation_begins() {
         })
         .unwrap();
     assert_eq!((owner.operation, owner.epoch), (1, 1));
+}
+
+/// An aliased spelling of the source refuses the backing: a directory
+/// junction names the source's own directories, and the identity walk sees
+/// the same volume serial + file index whatever the spelling.
+#[cfg(target_os = "windows")]
+#[test]
+fn a_junction_spelling_of_the_source_is_refused_as_inside_it() {
+    use layerfs_history::{HistoryName, LayerStackId};
+    use layerfs_project::{InitRequest, ProjectError};
+    use support::memory_acquisition::MemoryAcquisition;
+    let fixture = Fixture::new(5);
+    let handles = create(
+        &fixture.path.join("store.sqlite"),
+        SqliteAcquisitionSchema::Tables,
+    );
+    let junction = fixture.path.join("alias");
+    std::process::Command::new("cmd")
+        .args(["/c", "mklink", "/J"])
+        .arg(&junction)
+        .arg(&fixture.source)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert!(
+        junction.join("d0").is_dir(),
+        "the junction names the source"
+    );
+    let storage = storage(handles.storage.clone());
+    let error = layerfs_telemetry::timer::Timing::disabled("project.init", |scope| {
+        layerfs_project::init(
+            &storage,
+            &handles.history,
+            InitRequest {
+                source: &fixture.source,
+                acquisition: &MemoryAcquisition::placed_in(junction),
+                stack: LayerStackId::from_authority([19; 16]),
+                name: HistoryName::new("main").unwrap(),
+                scope_seed: [29; 32],
+                deadline: std::time::Instant::now() + std::time::Duration::from_secs(60),
+            },
+            scope,
+        )
+    })
+    .0
+    .unwrap_err();
+    assert!(
+        matches!(error, ProjectError::BackingInsideSource),
+        "{error:?}"
+    );
+    std::fs::remove_dir(fixture.path.join("alias")).unwrap();
+}
+
+/// A dangling link initializes with the rest of the tree: the scan stamps a
+/// reparse point's own identity and never follows it to a target that is
+/// gone (unix lstat parity; std classifies a junction as a symlink).
+#[cfg(target_os = "windows")]
+#[test]
+fn a_dangling_junction_initializes_with_the_rest_of_the_tree() {
+    use layerfs_history::{HistoryName, LayerStackId};
+    use layerfs_project::InitRequest;
+    use support::memory_acquisition::MemoryAcquisition;
+    let fixture = Fixture::new(5);
+    let target = fixture.path.join("gone");
+    std::fs::create_dir_all(&target).unwrap();
+    let link = fixture.source.join("dangling");
+    std::process::Command::new("cmd")
+        .args(["/c", "mklink", "/J"])
+        .arg(&link)
+        .arg(&target)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    std::fs::remove_dir(&target).unwrap();
+    let volume = fixture.path.join("volume");
+    std::fs::create_dir_all(&volume).unwrap();
+    let handles = create(
+        &fixture.path.join("store.sqlite"),
+        SqliteAcquisitionSchema::Tables,
+    );
+    let storage = storage(handles.storage.clone());
+    let initialized = layerfs_telemetry::timer::Timing::disabled("project.init", |scope| {
+        layerfs_project::init(
+            &storage,
+            &handles.history,
+            InitRequest {
+                source: &fixture.source,
+                acquisition: &MemoryAcquisition::placed_in(volume),
+                stack: LayerStackId::from_authority([43; 16]),
+                name: HistoryName::new("main").unwrap(),
+                scope_seed: [47; 32],
+                deadline: std::time::Instant::now() + std::time::Duration::from_secs(60),
+            },
+            scope,
+        )
+    })
+    .0
+    .unwrap();
+    // 5 directories + 5 files + the dangling link itself.
+    assert!(initialized.entries >= 11, "{}", initialized.entries);
 }
 
 /// Owner direction 2026-10-07: Disposable is the sole active development

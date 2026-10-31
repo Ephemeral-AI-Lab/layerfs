@@ -23,7 +23,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 use super::sorted::DifferenceWork;
-use super::tree::{binding_changes, inode_differences, join, EntryFacts, TreeTable};
+use super::tree::{binding_changes, inode_differences, join_exact, EntryFacts, TreeTable};
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::directory::read::{list_after, lookup, DirectoryReadWork};
 use crate::filesystem::path::PathName;
@@ -328,7 +328,7 @@ impl<'a> ChangeWalk<'a> {
             let Some((name, [left, right])) = frame.ready.pop_front() else {
                 continue;
             };
-            let path = join(&frame.path, &name);
+            let path = join_exact(&frame.path, &name)?;
             self.stack.push(frame);
             return Ok(Some((path, left, right)));
         }

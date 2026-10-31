@@ -57,7 +57,7 @@ The active Core workspace contains six crates:
 | `layerfs-content` | Canonical identity, file construction/editing, filesystem trees, logical reads | Turn bytes/edits/namespace rows into canonical objects; read logical data |
 | `layerfs-storage` | Reuse, physical encoding, delta selection, packing, bounded Save and Reader | Store canonical objects and acquire authenticated canonical bytes |
 | `layerfs-history` | Typed history records and `HistoryCatalog` semantic operations | Inode reservation, genesis, branches, Commits, Layers |
-| `layerfs-persistence` | Shared SQLite provider for storage and history on macOS/Linux | Create/open the Store and execute provider-owned transactions |
+| `layerfs-persistence` | Shared SQLite provider for storage and history on macOS/Linux/Windows (Windows: local NTFS volumes; owner direction 2026-10-25) | Create/open the Store and execute provider-owned transactions |
 | `layerfs-project` | Native namespace Init orchestration | Import a regular directory and publish its genesis LayerStack |
 | `layerfs-telemetry` | Explicit timing scopes and reports | Observe the same production operations with timing enabled/disabled |
 

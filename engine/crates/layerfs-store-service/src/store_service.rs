@@ -55,11 +55,18 @@ pub struct StoreService {
     capacity: usize,
     bound: AtomicUsize,
     retained: Mutex<Vec<Retained>>,
+    /// The Store file whose writer lane guards this service's close.
+    store_file: std::path::PathBuf,
 }
 
 impl StoreService {
     /// Serves Store calls over `opened`, constructing through `owner`.
     pub fn new(opened: OpenedStore, owner: &Owner) -> Self {
+        Self::at(opened, owner, std::path::PathBuf::new())
+    }
+    /// [`new`](Self::new) with the Store file recorded, for a close that
+    /// coordinates its sessions' teardown under the writer lane.
+    pub fn at(opened: OpenedStore, owner: &Owner, store_file: std::path::PathBuf) -> Self {
         Self {
             store: opened.store.clone(),
             opened,
@@ -68,6 +75,7 @@ impl StoreService {
             capacity: owner.configuration().namespaces,
             bound: AtomicUsize::new(0),
             retained: Mutex::new(Vec::new()),
+            store_file,
         }
     }
 
@@ -84,11 +92,42 @@ impl StoreService {
         template: &Path,
     ) -> Result<Self, OpenRefusal> {
         kernel_guard::check(store).map_err(OpenRefusal::Unsupported)?;
+        // A missing Store answers `Missing` on every platform before any
+        // entry examination: the Windows symlink/ACL block used to run
+        // first and surfaced a missing file as `Failed` (round-6 D1 F4).
         if !store.is_file() {
             return Err(OpenRefusal::Missing(format!(
                 "no installed Store at {}",
                 store.display()
             )));
+        }
+        // The installed Store file answers to its own entry: a substituted
+        // link planted at its spelling is refused, never followed, and on
+        // Windows its DACL must still grant nothing beyond the owner — the
+        // discovery tree's privacy check does not cover the installed file.
+        #[cfg(windows)]
+        {
+            use std::fs::symlink_metadata;
+            let entry = symlink_metadata(store)
+                .map_err(|error| OpenRefusal::Failed(format!("Store entry: {error}")))?;
+            if entry.file_type().is_symlink() {
+                return Err(OpenRefusal::Unsupported(crate::kernel_guard::Unsupported(
+                    format!(
+                        "the installed Store at {} is a link, not the Store file",
+                        store.display()
+                    ),
+                )));
+            }
+            // The Store file itself is the privacy boundary (its owner-only
+            // DACL protects the content); the directory is restricted when
+            // the route creates it, and a caller-pre-created directory is
+            // accepted as the caller shaped it.
+            crate::windows_acl::require_owner_only(store).map_err(|error| {
+                OpenRefusal::Unsupported(crate::kernel_guard::Unsupported(format!(
+                    "the Store at {}: {error}",
+                    store.display()
+                )))
+            })?;
         }
         let opened = open_store_observed(
             PersistenceConfig::sqlite(store)
@@ -100,6 +139,17 @@ impl StoreService {
             ReservationBlocks::default(),
         )
         .map_err(|error| OpenRefusal::Failed(format!("Store open: {error}")))?;
+        // SQLite's `-wal`/`-shm` sidecars inherit the directory's DACL, so
+        // a crash that leaves them behind exposes committed content on a
+        // caller-pre-created directory until the next open; whenever an
+        // open sees them it tightens them (best effort — the next open
+        // retries, and the Store stays usable either way; round-3 A1 F1).
+        #[cfg(windows)]
+        for suffix in ["-wal", "-shm"] {
+            let mut sidecar = store.as_os_str().to_owned();
+            sidecar.push(suffix);
+            let _ = crate::windows_acl::restrict_to_owner(std::path::Path::new(&sidecar));
+        }
         let owner = Owner::start(
             template,
             ProfileConfig {
@@ -109,7 +159,7 @@ impl StoreService {
             OwnerConfig { namespaces: CALLS },
         )
         .map_err(|error| OpenRefusal::Failed(format!("overlay template: {error}")))?;
-        let mut service = Self::new(opened, &owner);
+        let mut service = Self::at(opened, &owner, store.to_path_buf());
         service.owned = Some(owner);
         Ok(service)
     }
@@ -117,10 +167,20 @@ impl StoreService {
     /// Stops the overlay owner this service started. Private Workspaces kept
     /// with an uncertain Commit stay with it until then.
     pub fn close(mut self) -> Result<(), String> {
-        match self.owned.take() {
+        // The overlays stop first: their final Commits take the writer lane
+        // themselves, so no outer hold may surround this.
+        let stopped = match self.owned.take() {
             Some(owner) => owner.stop().map_err(|error| error.to_string()),
             None => Ok(()),
-        }
+        };
+        // The sessions then close under the Store's writer lane, so their
+        // close-time checkpoints never run beside another opener's first
+        // attach. A failed lane acquisition closes bare, as a drop does.
+        let lane = (!self.store_file.as_os_str().is_empty())
+            .then(|| layerfs_persistence::store_lane(&self.store_file));
+        drop(self);
+        drop(lane);
+        stopped
     }
 
     /// One private Workspace on `branch` for one file-changing call.

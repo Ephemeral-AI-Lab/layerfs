@@ -8,9 +8,15 @@
 //! binding) also keeps the background processes it started; the daemon holds
 //! no process record.
 use crate::job::refused;
+#[cfg(unix)]
+use crate::pool::Controls;
+#[cfg(unix)]
 use layerfs_api::MountedWorkspace;
-use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
+#[cfg(unix)]
+use layerfs_bridge::control::WorkspaceToken;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::StoreManifest;
+#[cfg(unix)]
 use layerfs_sandbox::{backend::docker::Sandbox, CommandIdentity};
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
@@ -24,12 +30,14 @@ pub(crate) struct Project {
 }
 
 /// One mounted Workspace.
+#[cfg(unix)]
 pub(crate) struct Mount {
     pub(crate) workspace: MountedWorkspace,
     pub(crate) branch: String,
 }
 
 /// One background process started in a Workspace.
+#[cfg(unix)]
 pub(crate) struct Process {
     pub(crate) path: String,
     pub(crate) command: String,
@@ -39,6 +47,7 @@ pub(crate) struct Process {
 }
 
 /// One live Sandbox: Sandbox `id` (its number) of `project`.
+#[cfg(unix)]
 pub(crate) struct SandboxState {
     pub(crate) id: String,
     pub(crate) project: String,
@@ -47,7 +56,7 @@ pub(crate) struct SandboxState {
     pub(crate) directory: std::path::PathBuf,
     pub(crate) runtime: Sandbox,
     pub(crate) identity: CommandIdentity,
-    pub(crate) controls: crate::pool::Controls,
+    pub(crate) controls: Controls,
     pub(crate) mounts: Mutex<BTreeMap<String, Mount>>,
     pub(crate) processes: Mutex<BTreeMap<String, Process>>,
 }
@@ -56,6 +65,7 @@ pub(crate) struct SandboxState {
 pub(crate) static INITS: LazyLock<Mutex<BTreeMap<String, Arc<layerfs_api::InitCounters>>>> =
     LazyLock::new(Default::default);
 /// This process's live Sandboxes, by their record directory.
+#[cfg(unix)]
 pub(crate) static SANDBOXES: LazyLock<Mutex<BTreeMap<std::path::PathBuf, Arc<SandboxState>>>> =
     LazyLock::new(Default::default);
 
@@ -77,6 +87,7 @@ pub(crate) fn text<'a>(args: &'a SdkValue, name: &str) -> Result<&'a str, SdkRef
 /// mount checks just that mount (`SandboxState::token`, `directory`); one
 /// that needs every mount or process another process may have changed takes
 /// [`sandbox_refreshed`].
+#[cfg(unix)]
 pub(crate) fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
     let directory = crate::discovery::sandbox_dir(args, text(args, "sandbox")?)?;
     let existing = lock(&SANDBOXES)?.get(&directory).cloned();
@@ -95,6 +106,7 @@ pub(crate) fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> 
 /// records (which inspects too). A container found gone or stopped (an idle
 /// Sandbox's daemon ends itself, #373) is the refusal of
 /// `discovery::gone`, and this process forgets the state.
+#[cfg(unix)]
 pub(crate) fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
     let directory = crate::discovery::sandbox_dir(args, text(args, "sandbox")?)?;
     let Some(state) = lock(&SANDBOXES)?.get(&directory).cloned() else {
@@ -116,6 +128,7 @@ pub(crate) fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefu
 }
 
 /// `args` naming Sandbox `id` of their project.
+#[cfg(unix)]
 pub(crate) fn naming(args: &SdkValue, id: &str) -> SdkValue {
     let mut fields = match args {
         SdkValue::Map(fields) => fields
@@ -131,12 +144,14 @@ pub(crate) fn naming(args: &SdkValue, id: &str) -> SdkValue {
 
 /// The Sandbox an operation names, its tables read again from the shared
 /// records and the daemon (one status call per mount).
+#[cfg(unix)]
 pub(crate) fn sandbox_refreshed(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
     let state = sandbox(args)?;
     crate::discovery::refresh(&state)?;
     Ok(state)
 }
 
+#[cfg(unix)]
 impl SandboxState {
     /// The token of the Workspace mounted at `path`.
     pub(crate) fn token(&self, path: &str) -> Result<WorkspaceToken, SdkRefusal> {

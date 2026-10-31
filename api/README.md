@@ -32,10 +32,19 @@ the others as it grows:
   them, and on macOS and Windows starts the worker: add
   [`@layerfs/runtime`](docs/runtime.md).
 
-Store calls run in the calling process on Linux only. On macOS and Windows they
-go through the LayerFS home's worker, which `@layerfs/runtime` starts; see
+Store calls run in the calling process on Linux, and on Windows by default
+(the Windows-native route below) when no worker endpoint is set. On macOS —
+and on Windows when a worker endpoint is set — they go through the LayerFS
+home's worker, which `@layerfs/runtime` starts; see
 [where calls run](docs/agent.md#where-calls-run) and
 [platforms and the worker](docs/runtime.md#platforms-and-the-worker).
+On Windows the native direct route (owner direction 2026-10-25) is the
+default: the binding built from this tree opens a local NTFS Store itself —
+fs, branch, project and operator calls in this process (on Windows,
+`project.list_sandboxes` and the sandbox family still refuse `Unsupported`),
+no worker and no daemon; workspace, exec and daemon calls refuse
+`Unsupported`. See
+[the Windows-native route](../core/docs/issues/352/DIRECT_STORE.md).
 
 ## The folder
 
@@ -75,7 +84,14 @@ addon. It uses Cargo +1.85.1, `--offline --locked --release`, and the repository
 ARM64 inputs. `-- --debug` selects dev. The artifact is atomically renamed into
 place, avoiding stale macOS executable-page signature state. `CARGO_TARGET_DIR`
 must stay inside this worktree; `LAYERFS_NATIVE_OUTPUT` can select a separate
-platform artifact. Keep Linux addons separate from the host addon.
+platform artifact. Keep Linux addons separate from the host addon. The same
+command builds on Windows: the script runs Cargo `+1.85.1 --release --locked`
+against the repository-root manifest and stages
+`target/<profile>/layerfs_node.dll` to the addon path. A first build needs
+the cargo registry warmed (`--offline` cannot fetch); a clean machine
+installs rustup, the 1.85.1 toolchain and VS Build Tools (link.exe) first.
+Node ≥ 20 is the SDK's runtime floor (`api/package.json` engines); the
+build script itself needs no newer Node than that.
 
 At runtime, the Docker Engine server selected by `LAYERFS_DOCKER` must speak
 Engine API v1.48 (Docker 28.0) or newer. Before its first request the SDK reads

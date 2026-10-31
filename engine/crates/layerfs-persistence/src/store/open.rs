@@ -18,7 +18,11 @@ impl Handles {
         history: &HistoryCatalogConfig,
     ) -> Result<Self, PersistenceError> {
         if config.backend != BackendSelection::Sqlite
-            || !cfg!(any(target_os = "macos", target_os = "linux"))
+            || !cfg!(any(
+                target_os = "macos",
+                target_os = "linux",
+                target_os = "windows"
+            ))
         {
             return Err(PersistenceError::BackendUnavailable);
         }
@@ -70,7 +74,11 @@ impl Handles {
         writable: bool,
     ) -> Result<Self, PersistenceError> {
         if config.backend != BackendSelection::Sqlite
-            || !cfg!(any(target_os = "macos", target_os = "linux"))
+            || !cfg!(any(
+                target_os = "macos",
+                target_os = "linux",
+                target_os = "windows"
+            ))
         {
             return Err(PersistenceError::BackendUnavailable);
         }
@@ -84,13 +92,29 @@ impl Handles {
             config.sqlite_acquisition,
         )?);
         if writable {
-            session.add_binding_hints()?;
-            session.add_lineage(crate::history::backfill_lineage)?;
-            session.add_merge_scratch()?;
-            session.add_file_digests()?;
+            // The setup statements are write transactions that two
+            // concurrent opens of one Store can interleave under the
+            // no-retry rule, so the whole block runs inside one held
+            // publication lane: its writer lock serializes the opens
+            // cross-process, and the block's own statements enter as
+            // nested turns, which do not take the lock a second time -
+            // a raw second hold here would self-deadlock on Linux, where
+            // flock is held per open file description.
+            let lane = session.hold_lane()?;
+            let setup = (|| -> Result<(), crate::backend::records::BackendError> {
+                session.add_binding_hints()?;
+                session.add_lineage(crate::history::backfill_lineage)?;
+                session.add_merge_scratch()?;
+                session.add_file_digests()
+            })();
+            drop(lane);
+            setup?;
         }
         let handles = Self::validated(session, directory, binding, cursor_key)?;
         if writable {
+            // The sweep runs as one write transaction whose admission takes
+            // the writer lane itself; the setup block's held lane above is
+            // released by then.
             crate::storage::merge_records::sweep(&handles.storage.session)?;
         }
         Ok(handles)

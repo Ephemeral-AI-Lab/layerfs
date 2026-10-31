@@ -123,3 +123,39 @@ jobs:
           # shellcheck disable=SC2086 # one --test flag per word
           timeout 120 cargo +1.85.1 nextest run --manifest-path Cargo.toml --locked \
             --workspace --exclude layerfs-node $targets --profile ci -E "$filter"
+
+  # The Windows-native Store route's receipts, re-runnable on every push:
+  # the cfg(windows) suites the Linux lanes compile out — the store
+  # serialization and abandoned-mutex lanes, the WTF-8 name round trip and
+  # its end-to-end Init, the alias/dangling-reparse refusals, the overlay
+  # identity/allocation/deletion, the kernel guard, the owner-only DACLs,
+  # and the content name grammar. Report-only like every job here. The Node
+  # binding stays outside CI (owner, 2026-10-23), as above.
+  windows:
+    name: windows store suites
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: rustup toolchain install 1.85.1 --profile minimal
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: . -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Build first so compile time is never counted against the test ceiling;
+      # only the five crates carrying Windows-gated suites are built.
+      - name: Build test binaries
+        run: >
+          cargo +1.85.1 test --manifest-path Cargo.toml --locked --no-run
+          -p layerfs-content -p layerfs-persistence -p layerfs-project
+          -p layerfs-overlay -p layerfs-store-service
+      - name: Run windows store suites (each crate capped at 120 s)
+        shell: bash
+        run: |
+          status=0
+          for crate in layerfs-content layerfs-persistence layerfs-project \
+                       layerfs-overlay layerfs-store-service; do
+            echo "## $crate"
+            timeout 120 cargo +1.85.1 test --manifest-path Cargo.toml --locked -p "$crate" || status=1
+          done
+          exit $status

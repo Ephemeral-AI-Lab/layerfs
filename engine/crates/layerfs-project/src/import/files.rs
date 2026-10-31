@@ -17,9 +17,7 @@ use layerfs_storage::port::acquisition::{self, WRITE_WINDOW_ROWS};
 use layerfs_storage::{Save, Storage};
 use layerfs_telemetry::timer::Timing;
 use std::{
-    ffi::{OsStr, OsString},
     fs::{self, File},
-    os::unix::ffi::{OsStrExt, OsStringExt},
     path::PathBuf,
     sync::{mpsc, Arc, Mutex},
     time::{Duration, Instant},
@@ -39,7 +37,7 @@ impl Job {
         Self {
             id: job.position,
             stamp: Stamp::from_identity(&job.host),
-            path: PathBuf::from(OsString::from_vec(job.host_path)),
+            path: super::host::bytes_to_path(&job.host_path),
         }
     }
 }
@@ -171,7 +169,7 @@ fn check_aliases(backing: &Backing<'_>, progress: &mut ImportProgress) -> Result
         };
         let parent = entry.key.parent.ok_or_else(malformed)?;
         if directory.as_ref().is_none_or(|(held, _)| *held != parent) {
-            let path = OsString::from_vec(backing.directory_path(parent)?);
+            let path = super::host::bytes_to_os(&backing.directory_path(parent)?);
             directory = Some((parent, PathBuf::from(path)));
         }
         if first.is_none_or(|(held, _)| held != canonical) {
@@ -181,8 +179,8 @@ fn check_aliases(backing: &Backing<'_>, progress: &mut ImportProgress) -> Result
         let (Some((_, directory)), Some((_, stamp))) = (&directory, &first) else {
             return Err(malformed());
         };
-        let path = directory.join(OsStr::from_bytes(&entry.key.name));
-        if !stamp.matches_file(&fs::symlink_metadata(&path)?) {
+        let path = directory.join(super::host::bytes_to_os(&entry.key.name));
+        if !stamp.matches_file(&path, &fs::symlink_metadata(&path)?) {
             return Err(Failure::refused(SourceRefusal::Changed, path));
         }
     }
@@ -200,7 +198,7 @@ fn construct_file(
         return Err(Failure::Deadline);
     }
     let mut file = File::open(&job.path)?;
-    if !job.stamp.matches_file(&file.metadata()?) {
+    if !job.stamp.matches_file(&job.path, &file.metadata()?) {
         return Err(Failure::refused(SourceRefusal::Changed, &job.path));
     }
     let (result, _) = Timing::disabled("history.import_file", |scope| {
@@ -214,8 +212,10 @@ fn construct_file(
     });
     let built = result.map_err(content)?;
     if built.logical_len != job.stamp.len
-        || !job.stamp.matches_file(&file.metadata()?)
-        || !job.stamp.matches_file(&fs::symlink_metadata(&job.path)?)
+        || !job.stamp.matches_file(&job.path, &file.metadata()?)
+        || !job
+            .stamp
+            .matches_file(&job.path, &fs::symlink_metadata(&job.path)?)
     {
         return Err(Failure::refused(SourceRefusal::Changed, &job.path));
     }

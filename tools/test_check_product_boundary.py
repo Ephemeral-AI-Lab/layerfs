@@ -83,6 +83,26 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(unsafe_violations(base / "lib.rs", "#![deny(unsafe_code)]"))
         self.assertTrue(unsafe_violations(base / "lib.rs", "pub mod store;"))
 
+    def test_node_discovery_ffi_is_limited_to_the_two_audited_modules(self):
+        base = Path("engine/crates/layerfs-node/src")
+        ffi = "fn turn() { unsafe { WaitForSingleObject(handle, 0); } }"
+        # Both discovery twins are audited: unix flock/geteuid, Windows mutexes.
+        self.assertFalse(unsafe_violations(base / "discovery.rs", ffi))
+        self.assertFalse(unsafe_violations(base / "discovery_windows.rs", ffi))
+        for sibling in ["dispatch.rs", "direct.rs", "project.rs", "job.rs"]:
+            self.assertTrue(unsafe_violations(base / sibling, ffi))
+        self.assertFalse(unsafe_violations(base / "lib.rs", "#![deny(unsafe_code)]\nmod dispatch;"))
+        self.assertTrue(unsafe_violations(base / "lib.rs", "mod dispatch;"))
+
+    def test_store_service_acl_ffi_is_limited_to_the_audited_module(self):
+        base = Path("engine/crates/layerfs-store-service/src")
+        ffi = "fn seal() { unsafe { SetNamedSecurityInfoW(); } }"
+        self.assertFalse(unsafe_violations(base / "windows_acl.rs", ffi))
+        for sibling in ["install.rs", "kernel_guard.rs", "store_service.rs", "overlay/backing.rs"]:
+            self.assertTrue(unsafe_violations(base / sibling, ffi))
+        self.assertFalse(unsafe_violations(base / "lib.rs", "#![deny(unsafe_code)]\npub mod store;"))
+        self.assertTrue(unsafe_violations(base / "lib.rs", "pub mod store;"))
+
     def test_retired_transport_paths_cannot_return(self):
         for relative in (
             "layerfs-api/src/client/call.rs",
@@ -190,7 +210,7 @@ class ProductBoundaryTests(unittest.TestCase):
         )
         root = Path("engine/crates/layerfs-store-service/src/lib.rs")
         self.assertTrue(unsafe_violations(root, "pub mod store;"))
-        self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\npub mod store;"))
+        self.assertFalse(unsafe_violations(root, "#![deny(unsafe_code)]\npub mod store;"))
         self.assertFalse(
             dependency_violations(
                 '[package]\nname="layerfs-persistence"\n[dependencies]\nlayerfs-telemetry={path="../layerfs-telemetry"}\n'
@@ -384,7 +404,7 @@ class ProductBoundaryTests(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("")
             self.assertEqual(
-                [str(p.relative_to(core / "crates" / "store")) for p in production_files(core.parent)],
+                [p.relative_to(core / "crates" / "store").as_posix() for p in production_files(core.parent)],
                 ["sql/schema.sql", "src/lib.rs", "src/sql/query.sql"],
             )
 
@@ -398,7 +418,7 @@ class ProductBoundaryTests(unittest.TestCase):
                 path.write_text("")
             (package / "Cargo.toml").write_text('[package]\nname="layerfs-api"\n')
             self.assertEqual(
-                [str(p.relative_to(package)) for p in production_files(root)],
+                [p.relative_to(package).as_posix() for p in production_files(root)],
                 ["src/fs/read.rs", "src/lib.rs"],
             )
 
@@ -432,11 +452,11 @@ class ProductBoundaryTests(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("")
             (root / "engine/crates/layerfs-node/Cargo.toml").write_text('[package]\nname="layerfs-node"\n')
-            everything = [str(p.relative_to(root)) for p in production_files(core.parent)]
-            self.assertIn("engine/crates/layerfs-node/src/lib.rs", everything)
+            everything = [p.relative_to(root).as_posix() for p in production_files(core.parent)]
+            self.assertIn("engine/crates/layerfs-node/src/lib.rs", [Path(p).as_posix() for p in everything])
             self.assertIn("api/agent/src/index.js", everything)
             self.assertEqual(
-                [str(p.relative_to(root)) for p in production_files(core.parent, include_sdk=False)],
+                [p.relative_to(root).as_posix() for p in production_files(core.parent, include_sdk=False)],
                 ["core/crates/store/src/lib.rs"],
             )
 

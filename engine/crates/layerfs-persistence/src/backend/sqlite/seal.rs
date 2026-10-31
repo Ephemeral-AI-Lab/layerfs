@@ -15,7 +15,7 @@ impl Session {
         if state.quarantined || !state.connection.is_autocommit() {
             return Err(PersistenceError::Uncertain);
         }
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
         let state = {
             let mut state = state;
             state.writer_hold = Some(super::writer_admission::Writer::acquire(&self.path)?);

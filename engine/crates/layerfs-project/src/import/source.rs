@@ -1,9 +1,9 @@
 //! Host source observations; symbolic links are stored without traversal.
+use super::host::{os_to_bytes, HostStat};
 use crate::{ProjectError, SourceRefusal};
 use layerfs_content::filesystem::symlink::SymlinkTarget;
 use std::{
     fs::{self, Metadata},
-    os::unix::{ffi::OsStrExt, fs::MetadataExt},
     path::Path,
 };
 
@@ -13,20 +13,13 @@ pub(super) fn read_link(path: &Path, scanned: &Metadata) -> Result<Vec<u8>, Proj
     let target = fs::read_link(path)?;
     let after = fs::symlink_metadata(path)?;
     if !after.file_type().is_symlink()
-        || after.dev() != scanned.dev()
-        || after.ino() != scanned.ino()
-        || after.len() != scanned.len()
-        || after.mode() != scanned.mode()
-        || after.mtime() != scanned.mtime()
-        || after.mtime_nsec() != scanned.mtime_nsec()
-        || after.ctime() != scanned.ctime()
-        || after.ctime_nsec() != scanned.ctime_nsec()
+        || HostStat::of(path, &after)? != HostStat::of(path, scanned)?
     {
         return Err(ProjectError::refused(SourceRefusal::Changed, path));
     }
     // Keep the canonical target bound/grammar: no normalization or UTF-8 cast.
-    let target = SymlinkTarget::new(target.as_os_str().as_bytes().to_vec())
-        .map_err(ProjectError::Content)?;
+    let target =
+        SymlinkTarget::new(os_to_bytes(target.as_os_str())).map_err(ProjectError::Content)?;
     Ok(target.as_bytes().to_vec())
 }
 
@@ -34,18 +27,54 @@ pub(super) fn read_link(path: &Path, scanned: &Metadata) -> Result<Vec<u8>, Proj
 ///
 /// The placement is resolved through its links first, then each ancestor's
 /// host identity is compared with the source's, so a symlinked or otherwise
-/// aliased spelling of a directory inside the source is recognised. Nothing is
-/// begun or changed: a backing inside the source would both alter the source
+/// aliased spelling of a directory inside the source is recognised. Nothing
+/// is begun or changed: a backing inside the source would both alter the source
 /// while it is read and be acquired as part of it.
-pub(super) fn outside_source(source: &Metadata, placement: &Path) -> Result<(), ProjectError> {
+///
+/// On Windows the same walk runs on the audited volume-serial + file-index
+/// identity: a subst drive or junction whose directories carry the real
+/// volume's identity is recognised and refused, like unix.
+pub(super) fn outside_source(
+    source: &Path,
+    metadata: &Metadata,
+    placement: &Path,
+) -> Result<(), ProjectError> {
+    #[cfg(unix)]
     let mut ancestor = fs::canonicalize(placement)?;
-    loop {
-        let metadata = fs::symlink_metadata(&ancestor)?;
-        if metadata.dev() == source.dev() && metadata.ino() == source.ino() {
-            return Err(ProjectError::BackingInsideSource);
+    #[cfg(unix)]
+    {
+        let _ = source;
+        use std::os::unix::fs::MetadataExt;
+        loop {
+            let entry = fs::symlink_metadata(&ancestor)?;
+            if entry.dev() == metadata.dev() && entry.ino() == metadata.ino() {
+                return Err(ProjectError::BackingInsideSource);
+            }
+            if !ancestor.pop() {
+                return Ok(());
+            }
         }
-        if !ancestor.pop() {
-            return Ok(());
+    }
+    #[cfg(not(unix))]
+    {
+        // Linux's algorithm on the audited Windows identity: canonicalize
+        // the placement once (junctions and symlinks in the spelling
+        // resolve), then compare every ancestor's volume-serial + file
+        // index with the source's. The identity walk sees through drive
+        // aliases a DOS-path comparison misses — a subst drive keeps its
+        // letter under GetFinalPathNameByHandle's DOS volume name, but its
+        // directories carry the real volume's device and index.
+        let source_resolved = fs::canonicalize(source)?;
+        let source_identity = super::host::HostStat::of(&source_resolved, metadata)?;
+        let mut ancestor = fs::canonicalize(placement)?;
+        loop {
+            let entry = super::host::HostStat::of(&ancestor, &fs::symlink_metadata(&ancestor)?)?;
+            if entry.dev == source_identity.dev && entry.ino == source_identity.ino {
+                return Err(ProjectError::BackingInsideSource);
+            }
+            if !ancestor.pop() {
+                return Ok(());
+            }
         }
     }
 }

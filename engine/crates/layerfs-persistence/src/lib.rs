@@ -13,11 +13,16 @@ pub use backend::sqlite::headroom::STORE_HEADROOM_BYTES;
 pub use backend::sqlite::reclamation::{SpaceReclamation, RECLAMATION_PAGE_LIMIT};
 pub use backend::sqlite::statement_work::StatementPhaseWork;
 pub use backend::sqlite::thread_work::thread_work;
+#[cfg(target_os = "windows")]
+pub use backend::sqlite::windows_lane::verbatim_wide;
+#[cfg(target_os = "windows")]
+pub use backend::sqlite::windows_volume_filesystem;
 pub use config::{
     BackendSelection, PersistenceConfig, SqliteAcquisitionSchema, SqlitePackLayout,
     SqlitePersistenceProfile,
 };
 pub use handles::Handles;
+
 pub use history::HistoryProvider;
 pub use storage::acquisition::AcquisitionProvider;
 pub use storage::merge_records::{
@@ -26,6 +31,7 @@ pub use storage::merge_records::{
 pub(crate) use storage::provider as storage_provider;
 pub(crate) use storage::publication;
 pub use storage_provider::StorageProvider;
+pub use store::lane::{store_lane, StoreLane};
 pub use store::seal::SealedStore;
 
 mod metadata;

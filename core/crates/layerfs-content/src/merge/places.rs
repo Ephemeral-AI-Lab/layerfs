@@ -22,7 +22,7 @@ use super::spill::{
     REVIVE_ALL, SURVIVE, TARGET,
 };
 use super::{Conflict, ConflictKind};
-use crate::compare::tree::{join, list_directory, locate};
+use crate::compare::tree::{join_exact, list_directory, locate};
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::path::PathName;
 use crate::object::inode_leaf::InodeValue;
@@ -308,7 +308,7 @@ impl Ctx<'_, '_> {
                 continue;
             }
             let parent_path = self.path_anywhere(parent)?;
-            let target = join(&parent_path, &PathName::new(&name)?);
+            let target = join_exact(&parent_path, &PathName::new(&name)?)?;
             let base_path = self.path(BASE, serial)?;
             let into_path = self.path(self.into, serial)?;
             let cancelled = if into_path != base_path {

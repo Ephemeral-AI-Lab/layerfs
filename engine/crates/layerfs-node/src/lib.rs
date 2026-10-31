@@ -1,16 +1,26 @@
 //! Node entry points for the public SDK and its backend table (#428).
+#![deny(unsafe_code)]
 mod convert;
 mod direct;
+#[cfg(unix)]
+mod discovery;
+#[cfg(windows)]
+#[path = "discovery_windows.rs"]
 mod discovery;
 mod dispatch;
+#[cfg(unix)]
 mod exec;
 mod job;
+#[cfg(unix)]
 mod output;
+#[cfg(unix)]
 mod pool;
 mod project;
 mod registry;
+#[cfg(unix)]
 mod sandbox;
 mod trace;
+#[cfg(unix)]
 mod workspace;
 
 use job::Job;

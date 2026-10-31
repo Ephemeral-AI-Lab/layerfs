@@ -20,7 +20,7 @@ use super::serial::{is_directory, listing, same, Ctx};
 use super::spill::{
     single, ABSORB, CANCEL_MOVE, CANCEL_REMOVE, DONE, DROP, EXTRA, MOVED, NAMED, REVIVE_ALL, TARGET,
 };
-use crate::compare::tree::{binding_changes, join, EntryFacts};
+use crate::compare::tree::{binding_changes, join_exact, EntryFacts};
 use crate::compare::DifferenceWork;
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::directory::read::lookup;
@@ -306,7 +306,7 @@ impl Ctx<'_, '_> {
         let base = Values::entry(&values.b, b);
         let ours = Values::entry(&values.f, f);
         let theirs = Values::entry(&values.i, i);
-        let path = join(&self.slot_path(listing)?, name);
+        let path = join_exact(&self.slot_path(listing)?, name)?;
         let key = named_key(listing.target, name);
         if let (Some(fe), Some(ie)) = (ours, theirs) {
             let absorb = is_directory(Some(fe.value))

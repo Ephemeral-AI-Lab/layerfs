@@ -33,10 +33,29 @@ struct Opened {
 
 static STORES: LazyLock<Mutex<BTreeMap<PathBuf, Opened>>> = LazyLock::new(Default::default);
 
-/// The Store path a call names.
+/// The Store path a call names — absolute, like the home it is set beside:
+/// a relative spelling would resolve against the process's working
+/// directory and silently name another file.
 fn path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
     match args.get_text("storePath") {
-        Some(path) if !path.is_empty() => Ok(PathBuf::from(path)),
+        Some(text) if !text.is_empty() => {
+            // NUL would silently truncate at the Win32 path boundary and
+            // name a different file (round-5 C3 F4).
+            if text.contains('\0') {
+                return Err(refused(
+                    "InvalidInput",
+                    "the client's storePath must not contain NUL",
+                ));
+            }
+            let path = PathBuf::from(text);
+            if !path.is_absolute() {
+                return Err(refused(
+                    "InvalidInput",
+                    "the client's storePath must be absolute (the installed Store file)",
+                ));
+            }
+            Ok(path)
+        }
         _ => Err(refused(
             "InvalidInput",
             "Store calls need the client's storePath (the installed Store file)",
@@ -110,6 +129,8 @@ pub(crate) fn release(args: &SdkValue) -> Outcome {
     }
     let opened = stores.remove(&store).expect("present above");
     drop(stores);
+    // The service's close coordinates its sessions' teardown under the
+    // Store's writer lane itself.
     let closed = match Arc::try_unwrap(opened.service) {
         Ok(service) => service.close().map_err(failed),
         Err(_) => Ok(()),
@@ -174,6 +195,7 @@ pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
 }
 
 /// The Branch id of `name` in the project a call names, read in this process.
+#[cfg(unix)]
 pub(crate) fn branch_id(
     args: &SdkValue,
     name: &str,
@@ -184,6 +206,7 @@ pub(crate) fn branch_id(
 }
 
 /// The newest Commit of `branch`, read in this process; `None` when it has none.
+#[cfg(unix)]
 pub(crate) fn head(
     args: &SdkValue,
     branch: layerfs_history::BranchId,

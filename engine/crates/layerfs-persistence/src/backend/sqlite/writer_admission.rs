@@ -13,10 +13,27 @@ use {
 pub(crate) struct Writer {
     #[cfg(target_os = "linux")]
     lock: Flock<File>,
+    #[cfg(target_os = "windows")]
+    lane: super::windows_lane::LaneMutex,
 }
 
 impl Writer {
+    /// Takes the cross-process writer lane. The blocking wait — another
+    /// process or session holding the lane — is a Store-writer wait like
+    /// the admission queue: the phase that waited reports it as
+    /// `wait.writer`, so an open or a publication that met a held lane is
+    /// visible in timing coverage instead of vanishing into the lock.
     pub(crate) fn acquire(path: &Path) -> Result<Self, BackendError> {
+        let started = std::time::Instant::now();
+        let writer = Self::acquire_lane(path)?;
+        layerfs_telemetry::timer::waits::add(
+            layerfs_telemetry::timer::waits::Wait::Writer,
+            started.elapsed(),
+        );
+        Ok(writer)
+    }
+
+    fn acquire_lane(path: &Path) -> Result<Self, BackendError> {
         #[cfg(target_os = "linux")]
         {
             // Never open another FD to SQLite's main/WAL/SHM files here:
@@ -54,7 +71,28 @@ impl Writer {
             let _ = path;
             Ok(Self {})
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(target_os = "windows")]
+        {
+            // Windows has no flock on a directory handle. One named kernel
+            // mutex per Store directory is the equivalent coarse lane: it
+            // never opens another descriptor to SQLite's main/WAL/SHM files,
+            // and a holder process that exits releases it. Multiple Store
+            // files in one directory share this coarse lane, as on Linux.
+            let directory = path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            if !std::fs::metadata(directory)
+                .map(|metadata| metadata.is_dir())
+                .unwrap_or(false)
+            {
+                return Err(BackendError::Integrity);
+            }
+            let lane = super::windows_lane::LaneMutex::acquire(directory)
+                .map_err(|()| BackendError::Integrity)?;
+            Ok(Self { lane })
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         {
             let _ = path;
             Err(BackendError::Integrity)
@@ -72,9 +110,13 @@ impl Writer {
                 Err((lock, _)) => Err(Self { lock }),
             }
         }
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(target_os = "macos")]
         {
             Ok(())
+        }
+        #[cfg(target_os = "windows")]
+        {
+            self.lane.release().map_err(|lane| Self { lane })
         }
     }
 }

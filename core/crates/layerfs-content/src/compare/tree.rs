@@ -263,13 +263,31 @@ pub fn list_directory(
     }
 }
 
-/// Joins a parent path and one name; the root is "/".
+/// Joins a parent path and one name; the root is "/". This is the
+/// **display** spelling: a name outside UTF-8 renders empty (the SDK
+/// listing contract), so its result must never key a decision.
 pub fn join(parent: &str, name: &PathName) -> String {
     if parent == "/" {
         format!("/{}", name.as_str())
     } else {
         format!("{parent}/{}", name.as_str())
     }
+}
+
+/// Joins for a **decision**: a name outside UTF-8 cannot ride a String
+/// path — rendering it empty would collapse distinct entries under one
+/// key and silently drop the second change of a directory (round-6 D1
+/// F2), so this fence refuses exactly as `name_all` does until the
+/// byte-carrying merge/compare path lands. Every keying, comparison or
+/// merge site uses this twin, never `join`.
+pub fn join_exact(parent: &str, name: &PathName) -> ContentResult<String> {
+    let text = std::str::from_utf8(name.as_bytes())
+        .map_err(|_| ContentError::InvalidRecord("a name outside UTF-8 has no String path"))?;
+    Ok(if parent == "/" {
+        format!("/{text}")
+    } else {
+        format!("{parent}/{text}")
+    })
 }
 
 /// Paths of the wanted serials, breadth first from the root, first path only.
@@ -298,7 +316,7 @@ pub fn locate(
         };
         let mut children = Vec::new();
         list_directory(reader, value.content_root, |name, serial| {
-            children.push((join(&path, name), serial));
+            children.push((join_exact(&path, name)?, serial));
             Ok(true)
         })?;
         let serials = children
@@ -333,7 +351,7 @@ pub fn subtree(
         };
         let mut children = Vec::new();
         list_directory(reader, value.content_root, |name, child| {
-            children.push((join(&path, name), child));
+            children.push((join_exact(&path, name)?, child));
             Ok(true)
         })?;
         let serials = children
@@ -455,7 +473,7 @@ pub fn root_changes(
                 Some(after.content_root),
                 &mut out.work,
                 |name, was, now| {
-                    bindings.push((join(path, name), was, now));
+                    bindings.push((join_exact(path, name)?, was, now));
                     Ok(())
                 },
             )?;

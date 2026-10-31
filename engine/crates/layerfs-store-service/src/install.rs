@@ -21,6 +21,7 @@ use std::sync::Arc;
 /// The daemon's user inside its Sandbox (the runtime's `User` is `0:0`). A
 /// daemon opens only a Store file and directory it owns, so an installer
 /// must run as this user too.
+#[cfg(not(target_os = "windows"))]
 const DAEMON_UID: u32 = 0;
 
 /// The destination and its exclusive temporary name.
@@ -69,6 +70,13 @@ pub fn claim(destination: &Path, temporary: &Path) -> io::Result<File> {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
+    #[cfg(windows)]
+    {
+        let claimed = options.open(temporary)?;
+        crate::windows_acl::restrict_to_owner(temporary)?;
+        Ok(claimed)
+    }
+    #[cfg(not(windows))]
     options.open(temporary)
 }
 
@@ -158,16 +166,29 @@ pub fn install_local(
         let directory = destination
             .parent()
             .ok_or("the Store destination has no directory")?;
-        crate::kernel_guard::check(directory).map_err(|reason| reason.0)?;
-        installer_user()?;
         let text = |error: io::Error| error.to_string();
+        // The directory is created first (owner-only): the guard examines
+        // it as the Store file's parent, and install owns its creation.
         if !directory.exists() {
-            use std::os::unix::fs::DirBuilderExt;
-            fs::DirBuilder::new()
-                .mode(0o700)
-                .create(directory)
-                .map_err(text)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt;
+                fs::DirBuilder::new()
+                    .mode(0o700)
+                    .create(directory)
+                    .map_err(text)?;
+            }
+            #[cfg(not(unix))]
+            {
+                fs::DirBuilder::new().create(directory).map_err(text)?;
+                #[cfg(windows)]
+                crate::windows_acl::restrict_to_owner(directory).map_err(text)?;
+            }
         }
+        // check takes the Store file and strips the parent itself, like
+        // every caller.
+        crate::kernel_guard::check(destination).map_err(|reason| reason.0)?;
+        installer_user()?;
         let (target, temporary) = paths(destination).map_err(text)?;
         let mut file = claim(&target, &temporary).map_err(text)?;
         left.temporary = Some(temporary.clone());
@@ -204,16 +225,24 @@ pub fn install_local(
 
 /// Refuses an installer that is not the daemons' user.
 fn installer_user() -> Result<(), String> {
-    use std::os::unix::fs::MetadataExt;
-    // the owner of /proc/self is this process's effective user
-    let uid = fs::metadata("/proc/self")
-        .map_err(|error| format!("this process's user is unknown: {error}"))?
-        .uid();
-    if uid != DAEMON_UID {
-        return Err(format!(
-            "the Store install runs as user {uid}; it must run as user {DAEMON_UID}, the \
-             daemons' user, which opens only a Store it owns"
-        ));
+    #[cfg(target_os = "windows")]
+    {
+        // Windows has no daemons' uid to check here; the destination's
+        // local-volume discipline is the kernel guard's, which still applies.
+        Ok(())
     }
-    Ok(())
+    #[cfg(not(target_os = "windows"))]
+    {
+        use std::os::unix::fs::MetadataExt;
+        // the owner of /proc/self is this process's effective user
+        let uid = fs::metadata("/proc/self")
+            .map_err(|error| format!("this process's user is unknown: {error}"))?
+            .uid();
+        if uid != DAEMON_UID {
+            return Err(format!(
+                "the Store install runs as user {uid}; it must run as user {DAEMON_UID}, the daemons' user, which opens only a Store it owns"
+            ));
+        }
+        Ok(())
+    }
 }

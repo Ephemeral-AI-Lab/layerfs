@@ -10,10 +10,11 @@ use layerfs_storage::{
     Storage,
 };
 use layerfs_telemetry::timer::Timing;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 use std::{
     collections::BTreeMap,
     fs,
-    os::unix::fs::MetadataExt,
     path::PathBuf,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -120,9 +121,37 @@ impl Fixture {
             )
             .unwrap();
             let metadata = fs::symlink_metadata(self.source.join(&path)).unwrap();
-            assert_eq!(portable.mode, metadata.mode() & 0o7777);
-            assert_eq!(portable.mtime_seconds, metadata.mtime());
-            assert_eq!(portable.mtime_nanoseconds as i64, metadata.mtime_nsec());
+            // The stored portable metadata equals the host's own reading of
+            // the entry: the raw stat identity on unix; on Windows the
+            // synthesized contract of import/host.rs (mode from the
+            // read-only attribute, mtime from the entry's modified time).
+            #[cfg(unix)]
+            {
+                assert_eq!(portable.mode, metadata.mode() & 0o7777);
+                assert_eq!(portable.mtime_seconds, metadata.mtime());
+                assert_eq!(portable.mtime_nanoseconds as i64, metadata.mtime_nsec());
+            }
+            #[cfg(windows)]
+            {
+                use std::time::UNIX_EPOCH;
+                let base = if metadata.is_dir() { 0o555 } else { 0o444 };
+                let mode = if metadata.permissions().readonly() {
+                    base
+                } else {
+                    base | 0o200
+                };
+                assert_eq!(portable.mode, mode);
+                let modified = metadata
+                    .modified()
+                    .unwrap()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap();
+                assert_eq!(portable.mtime_seconds, modified.as_secs() as i64);
+                assert_eq!(
+                    portable.mtime_nanoseconds as i64,
+                    i64::from(modified.subsec_nanos())
+                );
+            }
             if metadata.is_dir() {
                 let mut after = None;
                 loop {
