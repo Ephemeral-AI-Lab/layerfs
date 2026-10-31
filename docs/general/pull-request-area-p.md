@@ -81,25 +81,50 @@ Signed Production Delta:      0 (clean modular integration; zero dead code or sc
 
 ## Verification Evidence & Test Results
 
-### 1. JavaScript Suite & Package Verification
+### 1. Rust Workspace Test Results (WSL2 Linux ext4 / mold 2.40.4)
+- **Area P Core Suite (`layerfs-api/tests/area_p*.rs`)**: 44/44 tests PASS (0.10s–0.39s each):
+  - `area_p1_history`: 8/8 PASS
+  - `area_p1_graph`: 2/2 PASS
+  - `area_p7_attribution`: 11/11 PASS
+  - `area_p8_reads`: 8/8 PASS
+  - `area_p11_statistics`: 3/3 PASS
+  - `area_p12_summary`: 4/4 PASS
+  - `area_p14_paging`: 8/8 PASS
+- **Fast SDK Integration Targets (`layerfs-api/tests/sdk_*.rs`)**: 24/24 target suites PASS.
+- **Persistence Suite (`layerfs-persistence/tests/*.rs`)**: 36/36 test targets PASS (including `writer_admission` 11/11, `sqlite_lock_custody`, `serverless_store`).
+- **Daemon Fast Lane (`layerfs-daemon/tests/*.rs`)**: 9/9 fast targets PASS (`file_digests`, `host_handoff`, `host_install`, `installed_store`, `rename_predecessor`, `shared_cache_pressure`, `store_reader_lifecycle`, `telemetry_recording`, `workspace_databases`).
+- **Core Crates (`layerfs-content`, `layerfs-storage`, `layerfs-history`, `layerfs-telemetry`)**: 100% PASS.
+- **Engine Crates (`layerfs-overlay`, `layerfs-workspace`, `layerfs-project`, `layerfs-sandbox`, `layerfs-bridge`, `layerfs-store-service`, `layerfs-fuse`)**: 100% PASS.
+- **Compiler Lints & Formatting**:
+  - `cargo +1.85.1 fmt --all -- --check`: PASS (clean).
+  - `cargo +1.85.1 clippy --locked --workspace --exclude layerfs-node --all-targets -- -D warnings`: PASS (0 warnings across workspace).
+
+### 2. JavaScript Suite & Package Verification
 - **Area P Suite (`api/agent/test/area-p.mjs`)**: 241/241 cases PASS.
 - **SDK Calls Contract (`api/agent/test/calls.mjs`)**: 66/66 calls PASS.
-- **CLI Commands (`api/cli/test/cli.test.mjs`)**: 106/106 commands PASS.
+- **CLI Commands (`api/cli/test/cli.test.mjs`)**: 106/106 commands PASS (verified on Windows & WSL2 Linux).
 - **MCP Server Stdio (`api/mcp/test/stdio.test.js`)**: 8/8 tests PASS.
+- **MCP Real Store (`api/mcp/test/real-store.test.js`)**: 1/1 test PASS on real SQLite Store.
 - **P10–P13 Focused Suites**: 100% PASS (`area-p10-results.mjs`, `area-p11-storage.mjs`, `area-p12-summary.mjs`, `area-p13-scope.mjs`).
+- **Packaging in Docker (`api/agent/test/packaging.mjs`)**: 7/7 cases PASS in `node:24.21.0-bookworm` container (`surface`, `lifecycle`, `options`, `copy`, `sandbox`, `worker-route`, `transport-order`).
+- **Runtime Lifecycle (`api/runtime/test/runtime.mjs`)**: 13/13 cases PASS in WSL2 Linux (`surface`, `home-mode`, `projects`, `init`, `state`, `events`, `leftovers`, `sandboxes`, `volumes`, `transport-order`, `worker-frames`, `docker-default`, `worker-docker`).
 - **NPM Package Preparation (`prepare-publish.mjs`)**: Verified offline tarball packing and import smoke test for `@layerfs/agent`, `@layerfs/backend`, `@layerfs/runtime`, and `@layerfs/cli`.
 
-### 2. Python SDK & Linux Native Store Tests
+### 3. Python SDK & Linux Native Store Tests
 - **Python SDK Test Suite (`engine/crates/layerfs-python/tests/python/test_*.py`)**: 19/19 PASS on Linux py314 under WSL2.
 - **Python Scope Suite (`test_scope.py`)**: 9/9 scenarios PASS — scope validation, path confinement before dispatch, Commit/Layer ref preservation, history/events refusal, Branch mutation confinement, namespace-filtered paging, Workspace mount/exec binding and unchanged unscoped shapes.
 - **Real-Store Linux Ext4 Test (`test_real_store.py`)**: 2/2 tests PASS on `/var/tmp` ext4 (verified Store project summary, branch fork, and storage statistics).
-- **Node MCP Real Store (`api/mcp/test/real-store.test.js`)**: PASS on ext4.
 
-### 3. Repository Boundary & Tooling Checks
+### 4. Repository Boundary, Tooling & Integrity Checks
 - **Product Boundary Guard (`tools/check_product_boundary.py`)**: PASS (scanned 982 Rust/SQL/JS production files with 0 violations).
-- **Tools Unit Tests (`python -m unittest discover -s tools`)**: 155/155 tests PASS.
-- **Formatting (`cargo +1.85.1 fmt --all -- --check`)**: Clean, no formatting drift.
-- **Clippy (`cargo +1.85.1 clippy --locked --all-targets -- -D warnings`)**: Clean, zero warnings.
+- **Fuser Integrity (`tools/check_fuser_integrity.py`)**: PASS (34 manifests, locks, and authorized fuser patches verified).
+- **Tools Unit Tests (`python3 -B -m unittest discover -s tools -p 'test_*.py'`)**: 155/155 tests PASS.
+
+### 5. Explicit NOT RUN Declarations & Rationale
+- **FUSE Mount Lane**: Target test binaries requiring `/dev/fuse` and fresh Docker containers with `SYS_ADMIN` capability (e.g. `stalled_unmount`, `complete_installed_roots`, `kernel_mount_routes`). Governed by CI nightly runner per `tools/ci_tests.py` and `AGENTS.md` §4; sealed E2E launcher intentionally not exercised in local workspace.
+- **Durable Persistence Profile**: Indefinitely disabled by owner direction (2026-10-07); Disposable / WAL / `synchronous=OFF` is the sole authorized profile.
+- **Push / Pull Synchronization**: Explicitly blocked by Issue #42 R7 specification; never mocked or simulated.
+- **Real Workspace Mount/Exec/Commit on Windows Host**: Linux-only by design; Windows client forwards to authenticated loopback worker in WSL2. Real workspace lifecycle on Windows is tested via the WSL2 transport worker and connect-side Foundation tasks T1–T4.
 
 ---
 
