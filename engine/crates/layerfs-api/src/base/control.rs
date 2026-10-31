@@ -244,6 +244,7 @@ impl Control {
             },
         )
     }
+    #[cfg(unix)] // called only by the (Unix) sandbox connect handshake
     pub(crate) fn clear_io_waits(&self) -> Result<(), ChannelError> {
         self.connection.clear_io_waits()
     }

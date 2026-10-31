@@ -14,7 +14,9 @@ pub struct Backing {
     file: Option<std::fs::File>,
     namespace: i64,
     incarnation: [u8; 32],
+    #[cfg(unix)] // checked in the (Unix) delete identity fence
     device: u64,
+    #[cfg(unix)]
     inode: u64,
     pool: Weak<Workspaces>,
     terminal: AtomicBool,
@@ -42,8 +44,9 @@ impl Backing {
             }
             (metadata.dev(), metadata.ino(), metadata.nlink())
         };
+        // `device`/`inode` exist only on Unix, whose delete path checks them.
         #[cfg(not(unix))]
-        let (device, inode, links) = (0, 0, 0);
+        let links = 0;
         if !metadata.is_file() || links != 1 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -55,7 +58,9 @@ impl Backing {
             file: Some(file),
             namespace,
             incarnation,
+            #[cfg(unix)]
             device,
+            #[cfg(unix)]
             inode,
             pool,
             terminal: AtomicBool::new(false),

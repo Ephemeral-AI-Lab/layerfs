@@ -2,6 +2,7 @@
 use layerfs_content::ContentError;
 use layerfs_history::HistoryError;
 use layerfs_storage::port::acquisition::{AcquisitionError, AcquisitionWork, Owner};
+#[cfg(unix)] // read by the (Unix) outcome and malformed constructors below
 use layerfs_storage::port::PersistenceError;
 use layerfs_storage::StorageError;
 use std::{fmt, io, path::PathBuf};
@@ -88,6 +89,7 @@ impl fmt::Display for SourceRefusal {
 }
 impl ProjectError {
     /// A refusal of the source entry at `path`.
+    #[cfg(unix)] // every caller scans or constructs the (Unix) Init path
     pub(crate) fn refused(reason: SourceRefusal, path: impl Into<PathBuf>) -> Self {
         Self::InvalidInput {
             reason,
