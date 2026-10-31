@@ -503,8 +503,14 @@ async function refusals() {
   };
   receipt.observed[`LAYERFS_SANDBOX=docker on vm:${opts.provider}`] = await attempt({ LAYERFS_SANDBOX: "docker", LAYERFS_VOLUME: `${prefix}none`, LAYERFS_DOCKER: "/var/run/docker.sock", LAYERFS_IMAGE: receipt.bundle.images?.sandbox });
   receipt.observed[`LAYERFS_SANDBOX_BACKEND=docker on vm:${opts.provider}`] = await attempt({ LAYERFS_SANDBOX_BACKEND: "docker" });
-  receipt.verdict = "OBSERVED";
-  receipt.cause = "no documented answer for Docker on a vm: home; see observed";
+  // documented answers (e9b9646148, step 11): vm:docker is no provider, Docker
+  // on a vm: home is Unsupported before it is sent, and the former
+  // LAYERFS_SANDBOX_BACKEND never names docker
+  const codeOf = (seen) => seen?.created?.code ?? seen?.opened?.code ?? seen?.code ?? null;
+  const expected = { "placement vm:docker": "Unsupported", [`LAYERFS_SANDBOX=docker on vm:${opts.provider}`]: "Unsupported", [`LAYERFS_SANDBOX_BACKEND=docker on vm:${opts.provider}`]: "InvalidInput" };
+  const answered = Object.fromEntries(Object.keys(expected).map((name) => [name, codeOf(receipt.observed[name])]));
+  receipt.verdict = Object.entries(expected).every(([name, code]) => answered[name] === code) ? "PASS" : "FAIL";
+  receipt.cause = `expected ${JSON.stringify(expected)}; answered ${JSON.stringify(answered)}`;
 }
 
 // ---- the run ------------------------------------------------------------------
