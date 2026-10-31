@@ -9,6 +9,10 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { deployment, sandboxHost, STATE } from "../src/client.js";
+import { workerClient } from "../src/transport/worker_client.js";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const FAKE = fileURLToPath(new URL("./fixture/fake-native.cjs", import.meta.url));
 const native = createRequire(import.meta.url)(FAKE);
@@ -238,5 +242,28 @@ try {
   assert.throws(() => deployment({}, false, "darwin"), (e) => e.code === "Unsupported");
 } finally {
   Object.defineProperty(process, "platform", host);
+}
+// a vm: placement's worker has no Docker: a Docker deployment sent to it is
+// refused Unsupported before anything is sent (#527 final pass, refusals
+// vm-docker found a raw Io NotFound at volume create instead)
+{
+  const dir = mkdtempSync(join(tmpdir(), "lfs-vm-endpoint-"));
+  const file = join(dir, "endpoint.json");
+  // port 9 answers nothing here; a refusal must come before any connection
+  writeFileSync(file, JSON.stringify({ home: "/layerfs/home", port: 9, secret: "a".repeat(64), vm: { provider: "lima", name: "lfs-x-vm", project: "x" } }));
+  const vm = workerClient(file);
+  for (const deploy of [{ sandbox: "docker", image: docker.image }, { image: docker.image }]) {
+    const answer = await vm.call("sandbox.create", { project: "x", deploy });
+    assert.equal(answer.refused?.code, "Unsupported", JSON.stringify(answer));
+    assert.match(answer.refused.message, /not available on a vm:lima home/);
+  }
+  // a namespaces deployment is sent (and here fails to connect, not Unsupported)
+  const sent = await Promise.race([vm.call("sandbox.create", { project: "x", deploy: { sandbox: "namespaces" } }), new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), 5000))]);
+  assert.notEqual(sent.refused?.code, "Unsupported", JSON.stringify(sent));
+  // a worker with no vm (the macOS and Windows routes) still sends Docker deployments
+  writeFileSync(file, JSON.stringify({ home: "/layerfs/home", port: 9, secret: "a".repeat(64) }));
+  const local = await Promise.race([workerClient(file).call("sandbox.create", { project: "x", deploy: { sandbox: "docker" } }), new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), 5000))]);
+  assert.notEqual(local.refused?.code, "Unsupported", JSON.stringify(local));
+  rmSync(dir, { recursive: true, force: true });
 }
 console.log("native_deployment: ok");

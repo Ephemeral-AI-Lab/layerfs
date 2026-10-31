@@ -138,6 +138,11 @@ export function workerClient(file) {
   async function send(fn, op, args) {
     let info;
     try { info = endpointOf(file); } catch (error) { return refused("Failed", `the LayerFS worker is not running for this home: ${error.message}`); }
+    // a vm: placement's worker has no Docker Engine: its Sandboxes are
+    // namespaces inside its VM, so a Docker deployment is refused before it is sent
+    if (info.vm && args?.deploy && (args.deploy.sandbox ?? "docker") === "docker") {
+      return refused("Unsupported", `deploy.sandbox (LAYERFS_SANDBOX) docker is not available on a vm:${info.vm.provider} home: its Sandboxes are namespaces inside the project's VM ${info.vm.name}; leave LAYERFS_SANDBOX to the runtime`);
+    }
     const deploy = {
       ...args.deploy,
       ...(info.daemonHost ? { daemonHost: args.deploy?.daemonHost ?? info.daemonHost } : {}),
