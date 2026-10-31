@@ -443,14 +443,19 @@ def main():
             print(f"crates/{name}: {RETIRED_PACKAGE}")
             failures += 1
     manifests = {root / "Cargo.toml" for root in crate_directories(root) if (root / "Cargo.toml").is_file()}
-    packages = {manifest.parent: tomllib.loads(manifest.read_text(encoding="utf-8", errors="replace"))["package"]["name"] for manifest in manifests}
+    packages = {
+        manifest.parent: tomllib.loads(manifest.read_text(encoding="utf-8", errors="replace"))["package"]["name"]
+        for manifest in manifests
+    }
     for manifest in sorted(manifests):
         for line, reason in dependency_violations(manifest.read_text(encoding="utf-8", errors="replace")):
             print(f"{manifest.relative_to(root)}:{line}: {reason}")
             failures += 1
     for package in packages:
         for path in sorted((package / "tests").rglob("*.rs")):
-            for line, reason in test_path_violations(path, path.read_text(encoding="utf-8", errors="replace"), packages):
+            for line, reason in test_path_violations(
+                path, path.read_text(encoding="utf-8", errors="replace"), packages
+            ):
                 print(f"{path.relative_to(root)}:{line}: {reason}")
                 failures += 1
     if failures:
