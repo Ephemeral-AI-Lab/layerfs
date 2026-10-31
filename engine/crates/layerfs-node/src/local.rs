@@ -90,7 +90,7 @@ fn start_claimed(
     (runtime, backend, executable, store): (Runtime, crate::runtime::Backend, PathBuf, String),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
-    let sandbox_name = sandbox_name(args, id)?;
+    let sandbox_name = crate::sandbox::sandbox_name(args, id)?;
     let paths = runtime.native_paths(&sandbox_name).map_err(failed)?;
     let path_text = |path: &Path| {
         path.to_str()
@@ -334,22 +334,6 @@ fn native_environment() -> Vec<(String, String)> {
     vec![("LAYERFS_KERNEL".to_owned(), "fuse".to_owned())]
 }
 
-/// A local Sandbox's directory name: `<prefix><project>-<id>`, or
-/// `<prefix><store>.<project>-<id>` for a project of a shared Store (#506),
-/// the name its container would have.
-fn sandbox_name(args: &SdkValue, id: &str) -> Result<String, SdkRefusal> {
-    let prefix = args
-        .get("deploy")
-        .and_then(|d| d.get_text("containerPrefix"))
-        .filter(|prefix| !prefix.is_empty())
-        .unwrap_or(crate::sandbox::PREFIX);
-    let project = text(args, "project")?;
-    Ok(match crate::stores::shared_store(args)? {
-        Some(store) => format!("{prefix}{store}.{project}-{id}"),
-        None => format!("{prefix}{project}-{id}"),
-    })
-}
-
 /// Where this deployment puts Sandbox `id`:
 /// `<LAYERFS_LOCAL_DIR>/<prefix><project>-<id>`, computed from the
 /// configuration alone, as a record's directory must be.
@@ -366,7 +350,7 @@ pub(crate) fn directory(args: &SdkValue, id: &str) -> Result<PathBuf, SdkRefusal
                 ),
             )
         })?;
-    let name = sandbox_name(args, id)?;
+    let name = crate::sandbox::sandbox_name(args, id)?;
     let plain = |path: &Path| {
         !path
             .components()

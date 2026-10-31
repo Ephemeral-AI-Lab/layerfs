@@ -87,6 +87,25 @@ pub(crate) fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
 /// A container name prefix when the deployment sets none.
 pub(crate) const PREFIX: &str = "layerfs-";
 
+/// Sandbox `id`'s name, on every backend: `<prefix><project>-<id>`, or
+/// `<prefix><store>.<project>-<id>` for a project of a shared Store (#506).
+/// The prefix is the deployment's (`layerfs-` by default; another LayerFS
+/// home on the same Engine sets its own), so `docker ps` says what each
+/// container is and whose, and a native or namespaces Sandbox's directory
+/// carries the name its container would have.
+pub(crate) fn sandbox_name(args: &SdkValue, id: &str) -> Result<String, SdkRefusal> {
+    let prefix = args
+        .get("deploy")
+        .and_then(|d| d.get_text("containerPrefix"))
+        .filter(|prefix| !prefix.is_empty())
+        .unwrap_or(PREFIX);
+    let project = text(args, "project")?;
+    Ok(match crate::stores::shared_store(args)? {
+        Some(store) => format!("{prefix}{store}.{project}-{id}"),
+        None => format!("{prefix}{project}-{id}"),
+    })
+}
+
 /// The container labels of Sandbox `id` of `project`: what it is, whose,
 /// and which. Saved in its record, so a reopen expects the same.
 /// A project of a shared Store (#506) also carries `layerfs.store`.
@@ -256,20 +275,8 @@ fn start_claimed(
         }
         DaemonStore::Postgres(selected) => daemon_setup.postgresql = Some(selected.clone()),
     }
-    // The container is `<prefix><project>-<n>`: the deployment's prefix
-    // (`layerfs-` by default; another LayerFS home on the same Engine sets
-    // its own), so `docker ps` says what each one is and whose.
-    let prefix = args
-        .get("deploy")
-        .and_then(|d| d.get_text("containerPrefix"))
-        .filter(|prefix| !prefix.is_empty())
-        .unwrap_or(PREFIX);
-    // a project of a shared Store (#506): `<prefix><store>.<project>-<n>`
     let store = crate::stores::shared_store(args)?;
-    let container_name = match &store {
-        Some(store) => format!("{prefix}{store}.{name}-{id}"),
-        None => format!("{prefix}{name}-{id}"),
-    };
+    let container_name = sandbox_name(args, id)?;
     let docker = Docker::new(docker, ENGINE)
         .map_err(failed)?
         .naming(&container_name)
