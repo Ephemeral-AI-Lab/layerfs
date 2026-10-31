@@ -31,6 +31,9 @@ pub(crate) fn under(directory: &Path) -> io::Result<Vec<PathBuf>> {
 /// process's mount table that is one of its ancestors, and the type recorded
 /// after the separator. A namespaces Sandbox's root is an overlay whose
 /// writable layer must live on a filesystem that can be an overlay upper.
+// Its only caller is the namespaces backend, which lands as its own change;
+// until then this module alone has none and Linux clippy denies dead code.
+#[allow(dead_code)]
 pub(crate) fn filesystem(path: &Path) -> io::Result<String> {
     let table = std::fs::read_to_string("/proc/self/mountinfo")?;
     let mut deepest: Option<(usize, String)> = None;
