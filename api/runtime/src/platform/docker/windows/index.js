@@ -10,9 +10,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { createWriteStream, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
-import { connection, frame, readFrames } from "@layerfs/agent/internal";
-import { endpointFile, ping, ready, refuse, run, writeEndpoint } from "../../shared.js";
-import { dockerGroup } from "../index.js";
+import { frame, readFrames } from "@layerfs/agent/internal";
+import { dfFree, endpointFile, ping, ready, refuse, run, writeEndpoint } from "../../shared.js";
+import { readEndpoint, releaseStore } from "../../../worker/call.js";
+import { dockerGroup, VOLUMES, volumeStore } from "../index.js";
 import { hooks } from "../stores.js";
 import { absoluteLinux, projectHome, wsl, wslArgs } from "./paths.js";
 
@@ -90,8 +91,8 @@ async function launch(settings, held) {
 }
 
 async function status(settings) {
-  let info;
-  try { info = JSON.parse(readFileSync(endpointFile(settings.home), "utf8")); } catch { return { worker: { name: "wsl-worker", state: "missing" } }; }
+  const info = readEndpoint(endpointFile(settings.home));
+  if (!info) return { worker: { name: "wsl-worker", state: "missing" } };
   const reply = await ping(info);
   return { worker: { name: "wsl-worker", state: reply?.ready ? "running" : "unknown", answering: !!reply?.ready, active: reply?.active, stores: reply?.stores, build: reply?.build, startedAt: info.startedAt } };
 }
@@ -137,7 +138,7 @@ export default {
   path: (settings, hostPath) => hostPath,
   docker: dockerGroup(wslRun),
   ...hooks,
-  storePath: (settings, volume) => `/var/lib/docker/volumes/${volume}/_data/global/store.sqlite`,
+  storePath: (settings, volume) => volumeStore(VOLUMES, volume),
   async homeNames(settings) {
     const { stdout } = await wsl(settings, ["find", settings.wsl.home, "-mindepth", "2", "-maxdepth", "2", "-name", "project.record"], { timeout: 5000 }).catch(() => ({ stdout: "" }));
     return stdout.split("\n").filter(Boolean).map((line) => posix.basename(posix.dirname(line))).sort();
@@ -148,15 +149,14 @@ export default {
   async releaseStore(settings, store) {
     const { volume } = store;
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(volume)) throw refuse("InvalidInput", "invalid Store volume name");
+    // the worker this process started wrote it: a missing endpoint is an error here
     const info = JSON.parse(readFileSync(endpointFile(settings.home), "utf8"));
-    const answer = await connection(info).call({ fn: "releaseStore", args: { home: settings.wsl.home, storePath: `/var/lib/docker/volumes/${volume}/_data/global/store.sqlite` } });
-    if (answer.refused) throw refuse(answer.refused.code, answer.refused.message, answer.refused.detail);
+    await releaseStore(info, settings.wsl.home, volumeStore(VOLUMES, volume));
   },
   async free(settings) {
     try {
       const { stdout } = await wsl(settings, ["df", "-kP", settings.wsl.home], { timeout: 5000 });
-      const kb = Number(stdout.trim().split("\n").pop().trim().split(/\s+/)[3]);
-      return Number.isFinite(kb) ? kb * 1024 : null;
+      return dfFree(stdout);
     } catch { return null; }
   },
 };

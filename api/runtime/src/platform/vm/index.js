@@ -28,8 +28,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:net";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { connection } from "@layerfs/agent/internal";
-import { endpointFile, homeNames, noHomeStores, ping, ready, refuse, writeEndpoint } from "../shared.js";
+import { endpointFile, homeNames, localHome, noHomeStores, ping, ready, refuse, writeEndpoint } from "../shared.js";
+import { readEndpoint, releaseStore } from "../../worker/call.js";
 import { callHome, GUEST } from "../../settings.js";
 import { NAME, record as projectRecord } from "../../project/list.js";
 import microsandbox from "./microsandbox.js";
@@ -218,7 +218,7 @@ async function launch(settings, provider, vm, project, bundle) {
 
 /** The endpoint the project's worker was last written at, or null. */
 function endpoint(settings, project) {
-  try { return JSON.parse(readFileSync(endpointFile(settings.home, project), "utf8")); } catch { return null; }
+  return readEndpoint(endpointFile(settings.home, project));
 }
 
 /** Nothing to start when the project's worker already answers with this build. */
@@ -442,16 +442,12 @@ export function vmPlatform(settingName) {
     storePath: () => {
       throw noHomeStores(placement, "a Store path by volume");
     },
-    homeNames: (settings) => homeNames(settings.home),
-    async removeHome(settings, name) {
-      rmSync(join(settings.home, name), { recursive: true, force: true });
-    },
+    ...localHome,
     /** Before a Store is deleted, the project's worker closes the Store it holds open. */
     async releaseStore(settings, store) {
       const info = endpoint(settings, holderOf(settings, store, "a Store release that is not one project's own"));
       if (!info) return;
-      const answer = await connection(info).call({ fn: "releaseStore", args: { home: GUEST.home, storePath: storeFile() } });
-      if (answer.refused) throw refuse(answer.refused.code, answer.refused.message, answer.refused.detail);
+      await releaseStore(info, GUEST.home, storeFile());
     },
     /** Free bytes of every project VM's Store disk, as that VM sees them. */
     async free(settings) {

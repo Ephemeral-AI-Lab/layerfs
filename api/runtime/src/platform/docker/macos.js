@@ -14,12 +14,10 @@
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { connection } from "@layerfs/agent/internal";
-import { endpointFile, homeNames, ping, ready, refuse, writeEndpoint } from "../shared.js";
-import { dockerGroup, socketRun } from "./index.js";
+import { dfFree, endpointFile, localHome, ping, ready, refuse, writeEndpoint } from "../shared.js";
+import { readEndpoint, releaseStore } from "../../worker/call.js";
+import { dockerGroup, socketRun, VOLUMES, volumeStore } from "./index.js";
 import { hooks } from "./stores.js";
-
-const VOLUMES = "/var/lib/docker/volumes";
 const WORKER_PORT = 7070;
 const READY_MS = 15_000, RESTART_MS = 20_000;
 /** Where the worker reaches a daemon's loopback-published port: the Mac. */
@@ -54,8 +52,7 @@ async function status(settings) {
   const [running, label, startedAt, home] = row.split("\t");
   const worker = { name: name(settings), state: running === "true" ? "running" : "stopped", build: label, expected: settings.bundle ? build(settings) : null, home, startedAt };
   if (worker.state === "running") {
-    let info = null;
-    try { info = JSON.parse(readFileSync(endpointFile(settings.home), "utf8")); } catch { /* not written yet */ }
+    const info = readEndpoint(endpointFile(settings.home));
     worker.answering = !!(info && (await ping(info))?.ready);
   }
   return { worker };
@@ -132,27 +129,22 @@ const platform = {
   path: (settings, hostPath) => hostPath,
   docker: dockerGroup(socketRun),
   ...hooks,
-  storePath: (settings, volume) => `${VOLUMES}/${volume}/_data/global/store.sqlite`,
-  homeNames: (settings) => homeNames(settings.home),
-  async removeHome(settings, project) { rmSync(join(settings.home, project), { recursive: true, force: true }); },
+  storePath: (settings, volume) => volumeStore(VOLUMES, volume),
+  ...localHome,
   /** Before a volume is deleted, the worker closes its cached Store of it,
    * as on Windows and `vm:` (#527 §10: it kept the deleted Store open until
    * its quiet minute ended). With no worker endpoint nothing holds it. */
   async releaseStore(settings, store) {
     const { volume } = store;
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(volume)) throw refuse("InvalidInput", "invalid Store volume name");
-    let info;
-    try { info = JSON.parse(readFileSync(endpointFile(settings.home), "utf8")); } catch { return; }
-    if (!(await ping(info))) return;
-    const answer = await connection(info).call({ fn: "releaseStore", args: { home: settings.home, storePath: `${VOLUMES}/${volume}/_data/global/store.sqlite` } });
-    if (answer.refused) throw refuse(answer.refused.code, answer.refused.message, answer.refused.detail);
+    const info = readEndpoint(endpointFile(settings.home));
+    if (!info || !(await ping(info))) return;
+    await releaseStore(info, settings.home, volumeStore(VOLUMES, volume));
   },
   /** Free bytes of Docker's volume disk, as the worker sees it. */
   async free(settings) {
     try {
-      const out = await docker(settings, ["exec", name(settings), "df", "-kP", VOLUMES]);
-      const kb = Number(out.split("\n").pop().trim().split(/\s+/)[3]);
-      return Number.isFinite(kb) ? kb * 1024 : null;
+      return dfFree(await docker(settings, ["exec", name(settings), "df", "-kP", VOLUMES]));
     } catch { return null; }
   },
 };

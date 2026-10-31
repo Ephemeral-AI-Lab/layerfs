@@ -1,7 +1,7 @@
 // What the placements share (docker/ for `local`, vm/ for `vm:<provider>`):
 // refusals, the worker's endpoint file and a bounded ping of a worker.
 import { execFile } from "node:child_process";
-import { existsSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { connect } from "node:net";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -84,4 +84,16 @@ export async function ready(info, ms, what) {
 export function homeNames(home) {
   if (!existsSync(home)) return [];
   return readdirSync(home, { withFileTypes: true }).filter((e) => e.isDirectory() && existsSync(join(home, e.name, "project.record"))).map((e) => e.name).sort();
+}
+
+/** A platform's home helpers where this process reads and writes the home itself (Linux, macOS, `vm:`). */
+export const localHome = {
+  homeNames: (settings) => homeNames(settings.home),
+  async removeHome(settings, name) { rmSync(join(settings.home, name), { recursive: true, force: true }); },
+};
+
+/** Free bytes from the last line of `df -kP <path>`'s output, else null. */
+export function dfFree(stdout) {
+  const kb = Number(String(stdout).trim().split("\n").pop().trim().split(/\s+/)[3]);
+  return Number.isFinite(kb) ? kb * 1024 : null;
 }

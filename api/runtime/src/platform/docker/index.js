@@ -16,6 +16,12 @@ import * as disk from "./disk.js";
 import * as sandboxes from "./sandboxes.js";
 import * as stores from "./stores.js";
 
+/** Docker's volumes directory where the engine runs: Docker Desktop's VM, WSL2 and, by default (settings.volumes), Linux. */
+export const VOLUMES = "/var/lib/docker/volumes";
+
+/** The Store file inside the Docker volume `volume` under the volumes directory `volumes`. */
+export const volumeStore = (volumes, volume) => `${volumes}/${volume}/_data/global/store.sqlite`;
+
 /** One Docker CLI call on the configured engine socket (Linux, macOS): its stdout, trimmed. */
 export const socketRun = (settings, args, options = {}) =>
   execute("docker", ["-H", `unix://${settings.docker}`, ...args], { timeout: 5000, ...options }).then((r) => r.stdout.trim());

@@ -6,6 +6,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, posix } from "node:path";
 import { LayerFSError } from "@layerfs/agent";
+import { VOLUMES } from "./platform/docker/index.js";
 
 const PLATFORMS = { linux: "linux", darwin: "macos", win32: "windows" };
 const DEFAULT_DOCKER = "/var/run/docker.sock";
@@ -122,7 +123,7 @@ export function resolveSettings(given = {}) {
     // a VM runs the bundle's daemon beside its helper, at the guest's path
     daemon: where.kind === "vm" ? GUEST.daemon : given.daemon || (bundle ? (platform === "windows" ? posix.join(bundle, "layerfs-daemon") : join(bundle, "layerfs-daemon")) : null),
     docker: given.docker || defaultDocker(platform),
-    volumes: given.volumes || "/var/lib/docker/volumes",
+    volumes: given.volumes || VOLUMES,
     traceDir: given.traceDir || join(given.home, "traces"),
     containerPrefix: given.containerPrefix || "layerfs-",
     stateDir: given.stateDir || join(given.home, ".runtime"),

@@ -1,8 +1,26 @@
 // One binding call made in Linux by the worker (server.js) or by Init's own
 // process (init.js). Copied from the dsh Host's port/call.mjs (#428). A
 // spooled exec's output is read here and returned whole, then released, so
-// no spool is left for the caller to read.
+// no spool is left for the caller to read. The platforms' side of a worker
+// is here too: reading its endpoint file and asking it to release a Store
+// (#527 F11: once for macOS, Windows and `vm:`).
+import { readFileSync } from "node:fs";
+import { LayerFSError } from "@layerfs/agent";
+import { connection } from "@layerfs/agent/internal";
+
 const PAGE = 1 << 20;
+
+/** The worker endpoint written at `file`, or null when none is (or it cannot be read). */
+export function readEndpoint(file) {
+  try { return JSON.parse(readFileSync(file, "utf8")); } catch { return null; }
+}
+
+/** One `releaseStore` call: the worker at `info` closes its cached Store at `storePath`
+ * (a path in the worker's `home`) before that Store goes. A refusal is thrown. */
+export async function releaseStore(info, home, storePath) {
+  const answer = await connection(info).call({ fn: "releaseStore", args: { home, storePath } });
+  if (answer.refused) throw new LayerFSError(answer.refused.code, answer.refused.message, answer.refused.detail);
+}
 
 /** The Store a call names, as the binding's storeOpen and storeClose take it. */
 export const storeOf = (args) => ({

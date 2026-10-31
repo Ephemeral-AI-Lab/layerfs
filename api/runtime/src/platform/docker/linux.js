@@ -2,10 +2,9 @@
 // there is no worker (AGENTS.md). Init installs the Store straight into the
 // project volume's directory under Docker's volumes directory, which Docker
 // keeps root-only: `init` checks this process can write there first.
-import { accessSync, constants, existsSync, rmSync, statSync, statfsSync } from "node:fs";
-import { join } from "node:path";
-import { homeNames, refuse } from "../shared.js";
-import { dockerGroup, socketRun } from "./index.js";
+import { accessSync, constants, existsSync, statSync, statfsSync } from "node:fs";
+import { localHome, refuse } from "../shared.js";
+import { dockerGroup, socketRun, volumeStore } from "./index.js";
 import { hooks } from "./stores.js";
 
 const NO_WORKER = "Linux runs Store calls in-process; there is no worker";
@@ -30,9 +29,8 @@ export default {
   path: (settings, hostPath) => hostPath,
   docker: dockerGroup(socketRun),
   ...hooks,
-  storePath: (settings, volume) => `${settings.volumes}/${volume}/_data/global/store.sqlite`,
-  homeNames: (settings) => homeNames(settings.home),
-  async removeHome(settings, name) { rmSync(join(settings.home, name), { recursive: true, force: true }); },
+  storePath: (settings, volume) => volumeStore(settings.volumes, volume),
+  ...localHome,
   async releaseStore() {},
   async free(settings) {
     try { const s = statfsSync(settings.volumes); return s.bavail * s.bsize; } catch { return null; }

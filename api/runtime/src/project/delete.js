@@ -20,6 +20,7 @@ import { NAME, dropRecord, keyOf, list, record } from "./list.js";
 import { drop, entries, named, put, storeFields, update } from "../store/registry.js";
 import { removeVolume } from "../store/volume.js";
 import { containers } from "../sandbox/leftovers.js";
+import { STOPPED } from "../platform/docker/sandboxes.js";
 
 const refuse = (code, message) => new LayerFSError(code, message, null);
 
@@ -47,9 +48,6 @@ export async function deleteProject(runtime, name, options = {}) {
   if (entries(settings).some((s) => s.name === name)) drop(settings, name);
   return { kind: "Deleted", project: name, volume };
 }
-
-/** Container states that run nothing. */
-const STOPPED = new Set(["created", "exited", "dead"]);
 
 /** Drops one project's stack from a Store that holds others: its Sandboxes
  * first (Busy while one runs, unless `stopSandboxes`), then the stack. The
