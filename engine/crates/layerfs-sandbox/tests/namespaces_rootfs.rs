@@ -222,6 +222,66 @@ fn a_path_that_is_not_plain_and_relative_is_refused() {
     assert_eq!(temporaries(&scratch.cache).len(), 0);
 }
 
+/// One pax extended-header record, `<length> <key>=<value>\n`, whose length
+/// counts itself.
+fn pax_record(key: &str, value: &str) -> Vec<u8> {
+    let body = format!(" {key}={value}\n");
+    let mut length = body.len() + 1;
+    while format!("{length}").len() + body.len() != length {
+        length += 1;
+    }
+    format!("{length}{body}").into_bytes()
+}
+
+#[test]
+fn a_debian_layers_root_entry_and_long_absolute_link_unpack() {
+    // what the Sandbox image's Debian base layer holds (#527 platform pass):
+    // an entry for `./`, the root itself, and a symbolic link whose absolute,
+    // non-ASCII target does not fit the header, so a pax `linkpath` carries it
+    let scratch = Scratch::new("debian");
+    let target = format!(
+        "/usr/share/ca-certificates/mozilla/{}.crt",
+        "\u{c4}rztekammer_Root_CA_".repeat(5)
+    );
+    let layer = Tar::new()
+        .directory("./", 0o755)
+        .directory("etc/", 0o755)
+        .raw(
+            "PaxHeaders/etc/link",
+            b'x',
+            0o644,
+            &pax_record("linkpath", &target),
+        )
+        .symlink("etc/link", "")
+        .file("etc/marker", 0o644, b"debian\n")
+        .finish();
+    let path = archive(&scratch.base, "image", DIGEST, vec![layer]);
+    let root = unpacked(&scratch, &path, DIGEST);
+    let directory = root.directory();
+    assert_eq!(read(&directory.join("etc/marker")), "debian\n");
+    assert_eq!(
+        fs::read_link(directory.join("etc/link")).unwrap(),
+        PathBuf::from(&target)
+    );
+    // a pax `path` is still checked like any other name
+    let scratch = Scratch::new("pax-path");
+    let layer = Tar::new()
+        .raw(
+            "PaxHeaders/x",
+            b'x',
+            0o644,
+            &pax_record("path", "/etc/outside"),
+        )
+        .file("x", 0o644, b"x")
+        .finish();
+    let path = archive(&scratch.base, "image", DIGEST, vec![layer]);
+    let error = rootfs::ensure(&path, &image(DIGEST), &scratch.cache).unwrap_err();
+    assert!(
+        format!("{error}").contains("absolute or holds a `..` component"),
+        "{error}"
+    );
+}
+
 #[test]
 fn a_symlink_cannot_redirect_a_later_layers_write() {
     let scratch = Scratch::new("symlink");

@@ -103,14 +103,23 @@ impl<R: Read + Seek> Tape<R> {
                     continue;
                 }
                 b'K' => {
-                    self.link = Some(long_name(&self.data(PATH_MAX)?)?);
+                    self.link = Some(link_text(until_nul(&self.data(PATH_MAX)?))?);
                     continue;
                 }
                 _ => {}
             }
             let path = match self.path.take() {
                 Some(path) => path,
-                None => own_name(&header)?,
+                None => {
+                    let name = own_bytes(&header);
+                    // `./`, the archive's entry for the root itself: the root
+                    // already exists, so there is nothing to place
+                    if kind == b'5' && is_root(&name) {
+                        self.link = None;
+                        continue;
+                    }
+                    checked(&name)?
+                }
             };
             let link = match self.link.take() {
                 Some(link) => link,
@@ -202,7 +211,7 @@ impl<R: Read> Read for Tape<R> {
 }
 
 /// The entry's own name: its `name` and, in a ustar archive, its `prefix`.
-fn own_name(header: &[u8; 512]) -> Result<PathBuf, RuntimeError> {
+fn own_bytes(header: &[u8; 512]) -> Vec<u8> {
     let name = text(&header[0..100]);
     let prefix = if &header[257..262] == b"ustar".as_slice() {
         text(&header[345..500])
@@ -215,7 +224,27 @@ fn own_name(header: &[u8; 512]) -> Result<PathBuf, RuntimeError> {
         bytes.push(b'/');
     }
     bytes.extend_from_slice(name);
-    checked(&bytes)
+    bytes
+}
+
+/// Whether a name is the root itself (`.`, `./`), whose every component is
+/// `.`.
+fn is_root(bytes: &[u8]) -> bool {
+    !bytes.is_empty()
+        && Path::new(OsStr::from_bytes(bytes))
+            .components()
+            .all(|component| component == Component::CurDir)
+}
+
+/// A link target from an extended header, taken as the header's own link
+/// field is: a symbolic link's target may be absolute (it is read inside the
+/// Sandbox root, never followed while unpacking), and a hard link's is
+/// checked when its kind is decided.
+fn link_text(bytes: &[u8]) -> Result<PathBuf, RuntimeError> {
+    if bytes.len() > PATH_MAX || bytes.contains(&0) {
+        return Err(refuse("the image archive's link target is too long"));
+    }
+    Ok(PathBuf::from(OsStr::from_bytes(bytes)))
 }
 
 /// The entry's own link target, for the two kinds that carry one.
@@ -295,7 +324,7 @@ fn pax(data: &[u8]) -> Result<(Option<PathBuf>, Option<PathBuf>), RuntimeError> 
             let (key, value) = (&record[..equals], &record[equals + 1..]);
             match key {
                 b"path" => path = Some(checked(value)?),
-                b"linkpath" => link = Some(checked(value)?),
+                b"linkpath" => link = Some(link_text(value)?),
                 _ => {}
             }
         }
@@ -306,11 +335,15 @@ fn pax(data: &[u8]) -> Result<(Option<PathBuf>, Option<PathBuf>), RuntimeError> 
 
 /// A GNU long name's data: the name, up to its first NUL.
 fn long_name(data: &[u8]) -> Result<PathBuf, RuntimeError> {
-    let name = match data.iter().position(|byte| *byte == 0) {
+    checked(until_nul(data))
+}
+
+/// A GNU long name's bytes up to its terminating NUL.
+fn until_nul(data: &[u8]) -> &[u8] {
+    match data.iter().position(|byte| *byte == 0) {
         Some(end) => &data[..end],
         None => data,
-    };
-    checked(name)
+    }
 }
 
 /// A header's NUL- or space-padded octal (or GNU base-256) number.
