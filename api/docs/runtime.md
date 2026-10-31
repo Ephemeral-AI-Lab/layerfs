@@ -274,13 +274,23 @@ home, store, created, worker, disk }] }`, one entry per project of
 `{ reclaimed: {}, failed: [], host: false }`. The SDK's
 `project.list_sandboxes` reads the VM's Sandboxes.
 
+A VM home keeps no Store of its own: each project's Store is in that project's
+VM, so a call on the home's Stores or remotes has no VM to run in (#527 F3).
+`store.create`, `store.remove`, `store.attach_postgresql`, every
+`store.start_*` job, `store.unlink`, `store.check`, every `remote.*` call,
+`postgresql.status` and `project.start_init` with `{ store }` refuse
+`Unsupported` before any effect, and so does a client of a project in a
+PostgreSQL Store. `store.list` still lists the home's records, with `bytes`,
+`open` and `heads` null. A project is made with `project.start_init(name,
+folder)` and removed with `project.delete`.
+
 The real proof is `node api/runtime/test/verify/vm_real.mjs <sealed Linux
 bundle> [microsandbox|apple-container]`: two projects, each in its own VM — Init
 through each VM's worker, a fork, a write, a Sandbox, an exec as the nonroot
 identity with user namespaces blocked, a Commit, a stop/start of one VM and a
 worker restart, then a check that neither Store holds the other's Branch, and
 that removing one project leaves the other's VM running. The unit tests
-(`node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|apple-container|ssh`)
+(`node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|stores|apple-container|ssh|cleanup`)
 use a stand-in provider CLI.
 
 ### The SSH provider (any Linux host)

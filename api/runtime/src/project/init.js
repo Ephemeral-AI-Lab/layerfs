@@ -19,6 +19,7 @@ import { setTimeout as pause } from "node:timers/promises";
 import { INIT_TIMEOUT_MS, LayerFS, LayerFSError } from "@layerfs/agent";
 import { invokeBackend } from "@layerfs/agent/internal";
 import { deploymentEnv, withEnv } from "../clients.js";
+import { homeStores } from "../platform/shared.js";
 import { callHome, missing } from "../settings.js";
 import { NAME, record, saveRecord } from "./list.js";
 import { entries, named, put, storeFields, update } from "../store/registry.js";
@@ -63,6 +64,7 @@ export async function prepare(runtime, name, folder, options = {}, pending = new
 /** An Init into the existing SQLite Store `options.store` (#506): the
  * project gets no volume of its own; a Store policy is the Store's. */
 async function prepareInto(runtime, name, folder, options, pending) {
+  homeStores(runtime, "runtime.project.start_init into a Store");
   if (options.image !== undefined) throw refuse("InvalidInput", "a project added to a Store has no image of its own; its Sandboxes take the runtime's");
   const store = await named(runtime, options.store);
   if (store.kind !== "sqlite") throw refuse("Unsupported", `a project is added only to a SQLite Store; ${store.name} is a PostgreSQL schema (import a SQLite Store into it instead)`);

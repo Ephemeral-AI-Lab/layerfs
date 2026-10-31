@@ -32,11 +32,12 @@ export const shown = (s, local = null) => ({
 
 /** Each local SQLite Store's sizes, open state and heads, from the process that sees its volume
  * (this one on Linux, the worker on macOS and Windows). One call for all; a call that fails
- * (no worker yet, a volume this process cannot read) leaves them null. */
+ * (no worker yet, a volume this process cannot read) leaves them null, and so does a placement
+ * that names no Store path by volume (a `vm:` home, #527 F3), which makes no call. */
 async function locals(runtime, stores) {
-  const asked = stores.filter((s) => s.kind === "sqlite" && s.volume).map((s) => ({ store: s.name, storePath: storeFields(runtime, s).storePath }));
-  if (!asked.length) return new Map();
   try {
+    const asked = stores.filter((s) => s.kind === "sqlite" && s.volume).map((s) => ({ store: s.name, storePath: storeFields(runtime, s).storePath }));
+    if (!asked.length) return new Map();
     const answer = await call("runtime.store.stat", { home: callHome(runtime.settings), stores: asked });
     return new Map(answer.map((entry) => [entry.store, entry]));
   } catch {

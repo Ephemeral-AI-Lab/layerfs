@@ -5,7 +5,7 @@
 // fixture keeps one VM record per project, maps each guest's absolute paths
 // under a temp folder, and starts the adapter's bundle worker so step ④'s
 // readiness is real.
-//   node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|apple-container
+//   node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|stores|apple-container|ssh|cleanup
 import assert from "node:assert/strict";
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -351,6 +351,50 @@ try {
       await runtime.close();
       restoreWorker(work);
     }
+  } else if (selected === "stores") {
+    // #527 F3: a `vm:` home keeps no Store of its own (one Store per project, in its VM), so
+    // every call on the home's Stores, remotes or PostgreSQL refuses Unsupported before any effect
+    makeBundle();
+    const state = join(work, "msb");
+    mkdirSync(state);
+    const restore = standIn("msb", MSB, state);
+    const runtime = await LayerFSRuntime.open({ home, bundle, placement: "vm:microsandbox", containerPrefix: prefix, platform: "linux", sweep: false });
+    try {
+      project("shop");
+      // a PostgreSQL Store a registry could still hold
+      writeFileSync(join(home, "stores.json"), JSON.stringify({ version: 2, stores: [{ name: "pgs", kind: "postgresql", connection: "pgc", schema: "pgs", synchronousCommit: "off", created: 1, projects: [{ name: "pga" }] }] }));
+      const source = join(work, "source");
+      mkdirSync(source);
+      const refused = { code: "Unsupported", message: /vm:microsandbox home: each project's Store is in that project's own VM/ };
+      const url = "postgresql://user@db/layerfs";
+      await assert.rejects(runtime.store.create("fresh"), refused);
+      await assert.rejects(runtime.store.start_load("r2", { file: "fresh" }), refused);
+      await assert.rejects(runtime.store.start_publish("shop", { remote: "r2" }), refused);
+      await assert.rejects(runtime.store.start_push("shop"), refused);
+      await assert.rejects(runtime.store.start_send("shop", { remote: "r2", file: "copy" }), refused);
+      await assert.rejects(runtime.store.remove("shop", { confirm: "shop" }), refused);
+      await assert.rejects(runtime.store.attach_postgresql({ name: "pg2", connection: "pgc", schema: "pg2", url }), refused);
+      await assert.rejects(runtime.store.start_import_postgresql("shop", { connection: "pgc", schema: "pg3", url }), refused);
+      await assert.rejects(runtime.remote.list(), refused);
+      await assert.rejects(runtime.remote.add({ name: "r2", provider: "minio" }), refused);
+      await assert.rejects(runtime.postgresql.status({ url }), refused);
+      await assert.rejects(runtime.project.start_init("blog", source, { store: "shop" }), { ...refused, message: /runtime\.project\.start_init into a Store/ });
+      // the platform hooks those calls reach refuse too, rather than crash on `project.name` or
+      // map every Store of the home to the one guest path each VM holds its own Store at
+      await assert.rejects(runtime.platform.init(runtime.settings), refused);
+      assert.throws(() => runtime.platform.storePath(runtime.settings, "lfs-shop-store-1"), refused);
+      // a PostgreSQL project is refused before its client is made
+      await assert.rejects(runtime.project.get_state("pga", undefined, { store: "pgs", url }), { code: "Unsupported", message: /PostgreSQL Store pgs.*vm:microsandbox/ });
+      // nothing reached the provider: no VM, no disk, no copy
+      assert.deepEqual(calls(state), [], "every refusal came before any effect");
+      assert.equal(existsSync(endpointFile(home, "shop")), false);
+      // the home's Stores are still listed, from its records, with no stats asked of any process
+      assert.deepEqual((await runtime.store.list()).map((s) => [s.name, s.kind, s.bytes]), [["pgs", "postgresql", null], ["shop", "sqlite", null]]);
+    } finally {
+      restore();
+      await runtime.close();
+      restoreWorker(work);
+    }
   } else if (selected === "apple-container") {
     makeBundle();
     const state = join(work, "container");
@@ -466,7 +510,7 @@ try {
       rmSync(hidden, { recursive: true, force: true });
     }
   } else {
-    throw new Error("select settings, flow, two, bundle, delete, hosts, apple-container, ssh or cleanup");
+    throw new Error("select settings, flow, two, bundle, delete, hosts, stores, apple-container, ssh or cleanup");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });

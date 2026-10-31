@@ -29,7 +29,7 @@ import { createServer } from "node:net";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { connection } from "@layerfs/agent/internal";
-import { endpointFile, homeNames, ping, ready, refuse, writeEndpoint } from "../shared.js";
+import { endpointFile, homeNames, noHomeStores, ping, ready, refuse, writeEndpoint } from "../shared.js";
 import { callHome, GUEST } from "../../settings.js";
 import { NAME, record as projectRecord } from "../../project/list.js";
 import microsandbox from "./microsandbox.js";
@@ -367,6 +367,8 @@ const stores = {
 
 /** The guest home, and the deployment inside the project's VM: native Sandboxes, the namespace backend. */
 export function deploymentEnv(settings, project) {
+  // a VM's projects open the SQLite Store on that VM's disk only (#527 F3)
+  if (project.kind === "postgresql") throw refuse("Unsupported", `${project.name} is in the PostgreSQL Store ${project.store}, and this home is placed in ${settings.placement.name}: its projects open only the SQLite Store on their own VM's disk`, null);
   const image = settings.bundle ? bundleImage(settings.bundle) : null;
   return {
     HOME: callHome(settings),
@@ -392,21 +394,27 @@ export function deploymentEnv(settings, project) {
  * there, so `volume.list`, `volume.remove`, `sandbox.list`,
  * `sandbox.list_leftovers` and `sandbox.clean_leftovers` refuse with that
  * reason instead of answering from the host, and `sandbox.sweep` answers
- * `{ host: false }`. `endpoints` answers, per project, the endpoint file
- * `@layerfs/agent` sends that project's calls to.
+ * `{ host: false }`. `homeStores: false` says the home keeps no Store of its
+ * own (#527 F3): the runtime's Store, remote and PostgreSQL calls refuse
+ * before any effect, as `init` without a project and `storePath` do here.
+ * `endpoints` answers, per project, the endpoint file `@layerfs/agent` sends
+ * that project's calls to.
  */
 export function vmPlatform(settingName) {
   if (!PROVIDERS[settingName]) throw refuse("Unsupported", `no VM provider is implemented for vm:${settingName}`, null);
+  const placement = `vm:${settingName}`;
   return {
-    name: `vm:${settingName}`,
+    name: placement,
     hostDocker: false,
     hostSandboxes: false,
+    homeStores: false,
     endpoints: (settings) => (project) => endpointFile(settings.home, project),
     status,
     start,
     restart,
     /** Init runs in that project's worker; the source folder is copied into its VM first. */
     async init(settings, project) {
+      if (typeof project?.name !== "string") throw noHomeStores(placement, "a Store-level setup that names no project");
       await start(settings, project.name);
       const provider = providerOf(settings), name = vmNameOf(settings, project.name);
       const target = importPath(project.source);
@@ -420,7 +428,11 @@ export function vmPlatform(settingName) {
     docker: () => {
       throw refuse("Unsupported", `this home is placed in vm:${settingName}: its Stores and Sandboxes are inside each project's VM, so host Docker does not describe it`, null);
     },
-    storePath: () => storeFile(),
+    // every project's Store is at the same guest path in its own VM: a path by
+    // volume alone would map every Store of the home to that one file
+    storePath: () => {
+      throw noHomeStores(placement, "a Store path by volume");
+    },
     homeNames: (settings) => homeNames(settings.home),
     async removeHome(settings, name) {
       rmSync(join(settings.home, name), { recursive: true, force: true });

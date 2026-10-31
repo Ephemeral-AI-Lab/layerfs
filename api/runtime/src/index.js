@@ -19,6 +19,7 @@
 import { LayerFSError } from "@layerfs/agent";
 import { useWorker } from "@layerfs/agent/internal";
 import { Clients } from "./clients.js";
+import { homeStores } from "./platform/shared.js";
 import { resolveSettings } from "./settings.js";
 import { status } from "./status.js";
 import linux from "./platform/linux/index.js";
@@ -74,6 +75,12 @@ export class LayerFSRuntime {
       if (this.closed) throw new LayerFSError("InvalidInput", "this LayerFS runtime is closed; open another with LayerFSRuntime.open", null);
       return method(...args);
     };
+    /** A call on the home's Stores or remotes, not one project's: refused before any effect where the
+     * placement keeps no home Store (a `vm:` home, #527 F3). */
+    const homeLevel = (what, method) => live(async (...args) => {
+      homeStores(this, what);
+      return method(...args);
+    });
     /** A project this runtime knows (of `store` when its name is in several Stores) with a Store volume,
      * or of a PostgreSQL Store with the call's `url`, which the runtime holds for that call only. */
     const known = async (name, store = undefined, url = undefined) => {
@@ -107,27 +114,27 @@ export class LayerFSRuntime {
     // #506 Store-first (doc section 6): a home holds many Stores, a Store many projects
     this.store = {
       list: live(() => stores.list(this)),
-      create: live((name) => stores.create(this, name)),
-      remove: live((name, options) => stores.remove(this, name, options)),
-      attach_postgresql: live((options) => stores.attach_postgresql(this, options)),
+      create: homeLevel("runtime.store.create", (name) => stores.create(this, name)),
+      remove: homeLevel("runtime.store.remove", (name, options) => stores.remove(this, name, options)),
+      attach_postgresql: homeLevel("runtime.store.attach_postgresql", (options) => stores.attach_postgresql(this, options)),
       // #509: one link per SQLite Store
-      start_publish: live((name, options) => sync.start_publish(this, syncs, name, options)),
-      start_push: live((name, options) => sync.start_push(this, syncs, name, options)),
-      start_pull: live((name, options) => sync.start_pull(this, syncs, name, options)),
-      start_send: live((name, options) => sync.start_send(this, syncs, name, options)),
-      start_load: live((remote, options) => sync.start_load(this, syncs, remote, options)),
-      unlink: live((name, options) => stores.unlink(this, name, options)),
-      start_import_postgresql: live((name, options) => sync.start_import_postgresql(this, syncs, name, options)),
-      check: live((name, options) => stores.check(this, name, options)),
+      start_publish: homeLevel("runtime.store.start_publish", (name, options) => sync.start_publish(this, syncs, name, options)),
+      start_push: homeLevel("runtime.store.start_push", (name, options) => sync.start_push(this, syncs, name, options)),
+      start_pull: homeLevel("runtime.store.start_pull", (name, options) => sync.start_pull(this, syncs, name, options)),
+      start_send: homeLevel("runtime.store.start_send", (name, options) => sync.start_send(this, syncs, name, options)),
+      start_load: homeLevel("runtime.store.start_load", (remote, options) => sync.start_load(this, syncs, remote, options)),
+      unlink: homeLevel("runtime.store.unlink", (name, options) => stores.unlink(this, name, options)),
+      start_import_postgresql: homeLevel("runtime.store.start_import_postgresql", (name, options) => sync.start_import_postgresql(this, syncs, name, options)),
+      check: homeLevel("runtime.store.check", (name, options) => stores.check(this, name, options)),
     };
     this.remote = {
-      list: live(() => stores.remotes(this)),
-      add: live((remote) => stores.addRemote(this, remote)),
-      remove: live((name, options) => stores.removeRemote(this, name, options)),
-      list_stores: live((remote, options) => stores.listStores(this, remote, options)),
-      providers: live(() => stores.providers(this)),
+      list: homeLevel("runtime.remote.list", () => stores.remotes(this)),
+      add: homeLevel("runtime.remote.add", (remote) => stores.addRemote(this, remote)),
+      remove: homeLevel("runtime.remote.remove", (name, options) => stores.removeRemote(this, name, options)),
+      list_stores: homeLevel("runtime.remote.list_stores", (remote, options) => stores.listStores(this, remote, options)),
+      providers: homeLevel("runtime.remote.providers", () => stores.providers(this)),
     };
-    this.postgresql = { status: live((options) => stores.postgresqlStatus(this, options)) };
+    this.postgresql = { status: homeLevel("runtime.postgresql.status", (options) => stores.postgresqlStatus(this, options)) };
     this.sync = { get: live((job) => syncs.get(job, progressOf(this))) };
     this.sandbox = {
       reclaim: live(async (name, options) => reclaim(this, await known(name, options?.store, options?.url))),

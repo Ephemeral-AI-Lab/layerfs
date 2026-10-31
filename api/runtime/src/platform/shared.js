@@ -19,6 +19,20 @@ export const refuse = (code, message, detail = null) => new LayerFSError(code, m
 export const noHostDocker = (runtime, what, instead) =>
   refuse("Unsupported", `${what} reads host Docker, and this home is placed in ${runtime.platform.name}: ${instead}`, null);
 
+/**
+ * The refusal a call on the home's Stores or remotes gives on a home whose
+ * placement keeps no Store of its own (`homeStores: false`, a `vm:<provider>`
+ * home, #527 F3): each project's Store is in that project's own VM, so a call
+ * that names a Store or the home rather than one project has no VM to run in.
+ */
+export const noHomeStores = (placement, what) =>
+  refuse("Unsupported", `${what} is not supported on a ${placement} home: each project's Store is in that project's own VM, so a call on a Store or remote of the home, not one project, has no VM to run in`, null);
+
+/** Refuses `what` before any effect where the platform holds no home Stores. */
+export function homeStores(runtime, what) {
+  if (runtime.platform.homeStores === false) throw noHomeStores(runtime.platform.name, what);
+}
+
 /** One Docker CLI call on the configured engine: its stdout, trimmed. */
 export const docker = (settings, args, options = {}) =>
   run("docker", ["-H", `unix://${settings.docker}`, ...args], { timeout: 5000, ...options }).then((r) => r.stdout.trim());
