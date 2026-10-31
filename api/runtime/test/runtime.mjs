@@ -1,6 +1,6 @@
 // @layerfs/runtime with the agent's stand-in binding and a stub Docker (#428):
 // no Store, Docker or daemon. One case per command:
-//   node api/runtime/test/runtime.mjs surface|home-mode|projects|init|state|events|leftovers|sandboxes|volumes|transport-order|macos-worker|worker-frames|docker-default|worker-docker|stores|backend
+//   node api/runtime/test/runtime.mjs surface|home-mode|projects|init|state|events|leftovers|sandboxes|volumes|transport-order|macos-worker|windows-worker|worker-frames|docker-default|worker-docker|stores|backend
 import assert from "node:assert/strict";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -426,6 +426,29 @@ try {
       macos.docker.run = real;
       worker.close();
     }
+  } else if (selected === "windows-worker") {
+    // the Windows worker's releaseStore, with a stand-in worker: before a Store's volume goes,
+    // a running worker closes its cached Store of it; with no endpoint (no worker ever started)
+    // or one that does not answer, nothing holds it and Store removal is not failed here
+    const { fakeWorker } = await import("../../agent/test/fixture/fake-worker.mjs");
+    const windows = (await import("../src/platform/docker/windows/index.js")).default;
+    const settings = { home: join(work, "windows-home"), wsl: { home: "/home/me/.layerfs" } };
+    const store = { name: "shop", volume: "lfs-shop-store-1", legacy: true };
+    assert.equal(existsSync(join(settings.home, "worker", "endpoint.json")), false);
+    assert.equal(await windows.releaseStore(settings, store), undefined, "no endpoint: nothing to release");
+    const worker = await fakeWorker(() => ({ value: null }));
+    try {
+      mkdirSync(join(settings.home, "worker"), { recursive: true });
+      worker.endpoint(join(settings.home, "worker", "endpoint.json"), settings.wsl.home);
+      await windows.releaseStore(settings, store);
+      assert.deepEqual(worker.calls.map((c) => [c.fn, c.args.home, c.args.storePath]), [["releaseStore", "/home/me/.layerfs", "/var/lib/docker/volumes/lfs-shop-store-1/_data/global/store.sqlite"]]);
+      await assert.rejects(windows.releaseStore(settings, { volume: "../x" }), { code: "InvalidInput" });
+    } finally {
+      worker.close();
+    }
+    // the endpoint of a worker that has ended: it answers no ping, so it holds no Store
+    await windows.releaseStore(settings, store);
+    assert.equal(worker.calls.length, 1, "no release was sent to a worker that is gone");
   } else if (selected === "worker-frames") {
     // the real worker/server.js on a stand-in sealed bundle and binding: the
     // unauthenticated first frame is capped, a silent connection ends after

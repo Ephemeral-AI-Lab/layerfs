@@ -145,12 +145,14 @@ export default {
   },
   // rm gets one checked child directory as an argv item, never shell text
   async removeHome(settings, name) { await wsl(settings, ["rm", "-rf", "--", projectHome(settings.wsl, name)], { timeout: 10_000 }); },
-  /** Before a volume is deleted, the worker closes its cached Store of it. */
+  /** Before a volume is deleted, the worker closes its cached Store of it. With no worker endpoint,
+   * or a worker that does not answer, no worker holds it, so there is nothing to release (as on
+   * macOS): removing a Store no worker ever opened does not fail here. */
   async releaseStore(settings, store) {
     const { volume } = store;
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(volume)) throw refuse("InvalidInput", "invalid Store volume name");
-    // the worker this process started wrote it: a missing endpoint is an error here
-    const info = JSON.parse(readFileSync(endpointFile(settings.home), "utf8"));
+    const info = readEndpoint(endpointFile(settings.home));
+    if (!info || !(await ping(info))) return;
     await releaseStore(info, settings.wsl.home, volumeStore(VOLUMES, volume));
   },
   async free(settings) {
