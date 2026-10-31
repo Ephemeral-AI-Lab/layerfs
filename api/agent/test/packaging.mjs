@@ -24,7 +24,7 @@ for (const name of ["TRACE", "TRACE_STEP", "TRACE_START", "WORKER_ENDPOINT"]) {
 }
 const agent = await import("@layerfs/agent");
 const { LayerFS, CODES } = agent;
-const native = selected === "dispatch" ? null : (await import(FAKE)).default;
+const native = selected === "dispatch" ? null : (await import(pathToFileURL(FAKE).href)).default;
 
 if (selected === "surface") {
   const shop = await LayerFS.open("website");

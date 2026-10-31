@@ -12,8 +12,12 @@
 // (correctness). api/cli/test/cli.test.mjs runs each case through both and
 // checks that the CLI sends and prints exactly what the SDK sends and
 // returns (consistency).
+import { resolve } from "node:path";
+
 const WS = { sandbox: "1", path: "/workspaces/w1" };
 const HANDLE = "1:/workspaces/w1";
+/** Init's source folder: the command resolves it against the host, so the SDK case uses the same path. */
+const SOURCE = resolve("/fake/src");
 const commit = { id: "c0ffee", author: null, labels: [], logical: 120, newCanonical: 40, newStored: 30, newMetadata: 8 };
 const committed = { kind: "Committed", head: "c0ffee", commit };
 const page = { items: [], hasMore: false, nextPagePos: null };
@@ -44,8 +48,8 @@ export const ENV = {
 };
 
 export const CASES = [
-  { name: "init", argv: ["init", "site", "/fake/src", "--timeout", "5000"], sdk: async (lf, LayerFS) => (await LayerFS.init("site", "/fake/src", 5000)).created,
-    op: "project.init", sent: { name: "site", path: "/fake/src", timeoutMs: 5000 },
+  { name: "init", argv: ["init", "site", SOURCE, "--timeout", "5000"], sdk: async (lf, LayerFS) => (await LayerFS.init("site", SOURCE, 5000)).created,
+    op: "project.init", sent: { name: "site", path: SOURCE, timeoutMs: 5000 },
     result: { kind: "Initialized", project: "site", layer: "lay0", root: "r00t", store: "/fake/store.sqlite" } },
   { name: "project list_branches", argv: ["project", "list_branches", "--page-size", "5", "--page-pos", "10"], sdk: (lf) => lf.project.list_branches(5, 10),
     op: "project.list_branches", sent: { pageSize: 5, pagePos: 10 }, result: { items: [{ name: "main", base: "layer0000000000aa", head: null }, { name: "cart", base: "base1234567890ab", head: "head1234567890ab" }], hasMore: false, nextPagePos: null } },

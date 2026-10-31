@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const FAKE = fileURLToPath(new URL("../../agent/test/fixture/fake-native.cjs", import.meta.url));
 process.env.LAYERFS_NATIVE = FAKE;
@@ -14,7 +14,7 @@ for (const name of ["TRACE", "TRACE_STEP", "TRACE_START", "WORKER_ENDPOINT", "HO
   delete process.env[`DSH_LAYERFS_${name}`];
 }
 const { LayerFSRuntime } = await import("@layerfs/runtime");
-const native = (await import(FAKE)).default;
+const native = (await import(pathToFileURL(FAKE).href)).default;
 const selected = process.argv[2];
 const work = mkdtempSync(join(tmpdir(), "layerfs-runtime-"));
 const home = join(work, "home");
