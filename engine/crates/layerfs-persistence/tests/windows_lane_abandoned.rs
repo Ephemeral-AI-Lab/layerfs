@@ -51,7 +51,7 @@ fn a_dead_lane_holder_does_not_block_the_next_writer() {
         let mut tag = [0u8; 8];
         tag.copy_from_slice(&digest[..8]);
         let name: Vec<u16> = format!(
-            "Local\\layerfs-writer-lane-{:016x}",
+            "Global\\layerfs-writer-lane-{:016x}",
             u64::from_be_bytes(tag)
         )
         .encode_utf16()

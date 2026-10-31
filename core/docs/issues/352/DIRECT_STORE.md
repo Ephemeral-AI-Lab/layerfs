@@ -98,7 +98,8 @@ Windows Store shares one Windows kernel and one local NTFS volume. No WSL2 and
 no daemon are involved. Implemented on branch `windows-native-store`:
 
 - The cross-process writer lane is a named kernel mutex
-  (`Local\layerfs-writer-lane-<hash>`); an abandoned mutex is taken by the
+  (`Global\layerfs-writer-lane-<hash>` — one lane per directory across
+  login sessions); an abandoned mutex is taken by the
   next waiter, so a dead writer does not hold the lane.
 - The kernel guard allows local NTFS volumes only: it opens the Store
   directory's own handle, reads its final path (a spelling that lands on
@@ -109,23 +110,23 @@ no daemon are involved. Implemented on branch `windows-native-store`:
   only profile, unchanged.
 - Acquisition identity is the real volume serial and file index
   (`GetFileInformationByHandle`), in audited FFI modules listed in
-  core/AGENTS.md.
+  engine/AGENTS.md.
 - The SDK addon serves fs, branch, project and operator calls in-process
   exactly as on Linux. Workspace, exec and daemon calls refuse `Unsupported`
   on Windows: FUSE, the daemon and Workspaces remain Linux-only, and the dsh
   macOS and WSL2 exceptions are unchanged.
 
-Recorded limitations of this route: the Windows lane and discovery
-mutexes live in the `Local\` namespace, so a session-0 service and a user
-session would each hold its own lane (Linux's directory flock crosses
-sessions); the product opens its Store within one login session today, and
-cross-session coordination would need the `Global\` namespace with a
-privilege evaluation (K3 review F2). Inside one session the named mutexes
-can in principle be squatted by another process of that session before
-this product creates them (the directory ACL is not the capability there,
-as Linux flock's is); the discovery turn waits bounded (60s `Busy`) and
-the writer lane's wait is the readiness wait of the lock model, as
-Linux's blocking flock is. Windows Init carries names as
+Recorded limitations of this route: the writer lane lives in the
+`Global\` namespace, so one login session's scheduled task and another
+session's interactive process share one lane (round-3 A2 F4 closed the
+`Local\` per-session split recorded earlier; a mutant needs no
+create-global privilege); the discovery mutexes remain `Local\` — they
+coordinate one session's discovery only and are no integrity boundary.
+The named mutexes can in principle be squatted by another process of the
+machine before this product creates them (the directory ACL is not the
+capability there, as Linux flock's is); the discovery turn waits bounded
+(60s `Busy`) and the writer lane's wait is the readiness wait of the lock
+model, as Linux's blocking flock is. Windows Init carries names as
 lossless WTF-8 end to end (an unpaired surrogate included, byte-exact
 round trip through the codec and the audited identity probes) and
 synthesizes the mode from the read-only attribute, and has no hard-link
@@ -134,7 +135,10 @@ membership. **The WTF-8 name grammar is owner-ratified 2026-10-31
 merge/compare path lands as follow-up, a merge or compare that must build
 a String path over a name outside UTF-8 is refused (`InvalidRecord`)
 rather than decided on a collapsed path, and SDK listings render such
-names empty. The backing-inside-source check walks the audited
+names empty; a JS write naming one lands as an U+FFFD sibling file
+rather than being refused (the JS string boundary cannot carry an
+unpaired surrogate — the same byte-carrying follow-up). The
+backing-inside-source check walks the audited
 volume-serial + file-index identity of every ancestor (a subst drive or
 junction into the source is recognised and refused, as on Linux), and
 overlay allocation is the entry's real on-disk footprint. Last-owner
@@ -163,11 +167,20 @@ MAX_PATH initialize — but the host process must also carry a
 does not; keep sources and homes within ~260 characters until it does.
 Windows lacks the 64 MiB disk-headroom pre-admission macOS and Linux run
 (a filling disk surfaces mid-transaction as the typed `Capacity`
-refusal instead); an in-session writer-lane squatter parks every Store
+refusal instead); SQLite's `-wal`/`-shm` sidecars inherit the
+directory's DACL, and every open tightens the ones it finds back to
+owner-only (a crash's leftovers wait for the next open); a writer-lane
+squatter parks every Store
 call for as long as it holds the mutex (the readiness wait has no
 bound, exactly as Linux's blocking flock); a killed process leaves one
 overlay directory under `%TEMP%\layerfs-store-*` until the OS cleans
-it; and a `fs.rm`/`fs.cp` over a subtree holding a name outside UTF-8
+it (schema-only and never blocking the next open — accumulation is the
+machine's TEMP policy); the overlay crate's two Win32 path probes
+(entry identity, free space) take raw wide spellings of TEMP-local
+paths — the product-source boundary keeps layerfs-overlay free of
+first-party dependencies, so the shared verbatim helper is not imported
+there and a TEMP tree beyond MAX_PATH fails those probes cleanly; and
+a `fs.rm`/`fs.cp` over a subtree holding a name outside UTF-8
 refuses with a message naming that entry (the SDK cannot spell such a
 name until the byte-carrying path lands — the same follow-up as the
 merge/compare fence above, which surfaces at the SDK as code `Failed`

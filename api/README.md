@@ -87,6 +87,8 @@ against the repository-root manifest and stages
 `target/<profile>/layerfs_node.dll` to the addon path. A first build needs
 the cargo registry warmed (`--offline` cannot fetch); a clean machine
 installs rustup, the 1.85.1 toolchain and VS Build Tools (link.exe) first.
+Node ≥ 20 is the SDK's runtime floor (`api/package.json` engines); the
+build script itself needs no newer Node than that.
 
 At runtime, the Docker Engine server selected by `LAYERFS_DOCKER` must speak
 Engine API v1.48 (Docker 28.0) or newer. Before its first request the SDK reads

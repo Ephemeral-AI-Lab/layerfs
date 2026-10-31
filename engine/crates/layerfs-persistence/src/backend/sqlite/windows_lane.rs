@@ -29,13 +29,17 @@ pub(crate) struct LaneMutex {
 /// encoded bytes, truncated to 64 bits. A versioned-stable digest, not
 /// `DefaultHasher`, whose algorithm may change between Rust releases and
 /// silently split one directory onto two lanes across builds (K3 review F1).
+/// The `Global\` namespace keeps one lane per directory across login
+/// sessions (a session-0 scheduled task and the user session share one
+/// Store file; `Local\` would give each its own lane and two writers —
+/// round-3 A2 F4). A mutant needs no create-global privilege.
 pub(crate) fn lane_name(directory: &Path) -> String {
     let resolved = std::fs::canonicalize(directory).unwrap_or_else(|_| directory.to_path_buf());
     let digest = Sha256::digest(resolved.as_os_str().as_encoded_bytes());
     let mut tag = [0u8; 8];
     tag.copy_from_slice(&digest[..8]);
     format!(
-        "Local\\layerfs-writer-lane-{:016x}",
+        "Global\\layerfs-writer-lane-{:016x}",
         u64::from_be_bytes(tag)
     )
 }
@@ -102,13 +106,15 @@ impl Drop for LaneMutex {
 
 /// A verbatim (`\\?\`-prefixed) wide spelling of an absolute path, NUL
 /// terminated, so the Win32 calls in the audited modules accept trees
-/// deeper than MAX_PATH — a plain spelling fails at 260 characters even
-/// with the host's long-paths registry switch, because the hosting node
-/// process carries no `longPathAware` manifest. Already-verbatim paths
-/// pass through; UNC shares become `\\?\UNC\...`; relative paths pass
-/// through unchanged (every call site is absolute). Forward slashes
-/// become backslashes under the prefix: a verbatim path is not
-/// normalized, and a caller (node) may hand either spelling.
+/// deeper than MAX_PATH — a plain spelling can fail at 260 characters on
+/// hosts without the long-path relaxation (the hosting node process
+/// typically carries no `longPathAware` manifest). Already-verbatim
+/// paths pass through unchanged; UNC shares become `\\?\UNC\...`;
+/// relative paths pass through unchanged (every call site is absolute).
+/// Forward slashes become backslashes in the spelling this function
+/// builds; an already-verbatim input is passed through byte-for-byte —
+/// Win32 does not normalize under the prefix, so a verbatim input
+/// carrying forward slashes fails cleanly at its first use.
 pub fn verbatim_wide(path: &Path) -> Vec<u16> {
     use std::os::windows::ffi::OsStrExt;
     let mut units: Vec<u16> = path.as_os_str().encode_wide().collect();

@@ -1,6 +1,7 @@
 // The in-process transport: the real native addon in this process, from
 // LAYERFS_NATIVE, else engine/crates/layerfs-node/layerfs.node. Store calls open the
-// project's Store here (Linux only, #352 F-020).
+// project's Store here: on Linux and on Windows's native route (#352
+// F-020); on macOS through the worker instead.
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 

@@ -66,6 +66,10 @@ pub fn windows_path_identity(path: &Path) -> io::Result<WindowsIdentity> {
         OPEN_EXISTING,
     };
     // Raw units, not a lossy string: names stay byte-exact (K3-R3 F7).
+    // Deliberately not the shared verbatim_wide: the product-source
+    // boundary keeps this crate free of first-party dependencies, and the
+    // inputs are TEMP-local overlay paths — a TEMP tree beyond MAX_PATH
+    // fails here cleanly (recorded exception, round-3 A1 F5).
     let wide: Vec<u16> = path
         .as_os_str()
         .encode_wide()
@@ -108,6 +112,8 @@ fn identity_of(information: BY_HANDLE_FILE_INFORMATION) -> WindowsIdentity {
 pub(crate) fn windows_free_bytes(directory: &Path) -> io::Result<u64> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    // Raw wide, like the identity probe above: the boundary guard keeps
+    // this crate free of first-party dependencies (round-3 A1 F5).
     let wide: Vec<u16> = directory
         .as_os_str()
         .encode_wide()

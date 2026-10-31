@@ -136,6 +136,17 @@ impl StoreService {
             ReservationBlocks::default(),
         )
         .map_err(|error| OpenRefusal::Failed(format!("Store open: {error}")))?;
+        // SQLite's `-wal`/`-shm` sidecars inherit the directory's DACL, so
+        // a crash that leaves them behind exposes committed content on a
+        // caller-pre-created directory until the next open; whenever an
+        // open sees them it tightens them (best effort — the next open
+        // retries, and the Store stays usable either way; round-3 A1 F1).
+        #[cfg(windows)]
+        for suffix in ["-wal", "-shm"] {
+            let mut sidecar = store.as_os_str().to_owned();
+            sidecar.push(suffix);
+            let _ = crate::windows_acl::restrict_to_owner(std::path::Path::new(&sidecar));
+        }
         let owner = Owner::start(
             template,
             ProfileConfig {

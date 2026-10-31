@@ -41,14 +41,28 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
     // checked first: a refused policy, timeout or Store path leaves no project entry
     let policy = policy(args)?;
     let deadline = deadline(args)?;
-    let store_path =
-        match args.get_text("storePath") {
-            Some(path) if !path.is_empty() => PathBuf::from(path),
-            _ => return Err(refused(
+    let store_path = match args.get_text("storePath") {
+        Some(path) if !path.is_empty() => {
+            let path = PathBuf::from(path);
+            // Absolute, like every Store call's storePath: a relative
+            // spelling would resolve against this process's working
+            // directory and leave a half-initialized project entry
+            // before the install path check refuses it (round-3 A1 F2).
+            if !path.is_absolute() {
+                return Err(refused(
+                        "InvalidInput",
+                        "the client's storePath must be absolute (project.init installs the Store file)",
+                    ));
+            }
+            path
+        }
+        _ => {
+            return Err(refused(
                 "InvalidInput",
                 "project.init installs the Store at the client's storePath (LAYERFS_STORE_PATH)",
-            )),
-        };
+            ))
+        }
+    };
     // The Store's directory is created first (owner-only, like the install
     // does): check takes the Store file and examines its parent's volume,
     // and the SDK layout may not have made it yet.

@@ -5,6 +5,8 @@ target/
 # (K3-R3 F1: a stale addon copy and pnpm trees entered a merge once).
 /sdk/js/native/layerfs.node
 /dsh/
+# A hardened-probe run directory that a mistaken CWD once committed whole.
+/api/agentharden-run/
 /target-linux/
 /eval/runs/
 /eval/datasets/

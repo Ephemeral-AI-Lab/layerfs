@@ -310,6 +310,12 @@ identity/timestamps. Destinations are exact and must not exist. Same-path/subtre
 moves or copies are InvalidInput. Mkdir creates parents and an existing directory
 is a no-op. Edit requires exactly one match and streams large files.
 
+Names must be spellable by JavaScript: a path with an unpaired surrogate
+(which the content grammar keeps byte-exact on Windows) cannot cross the JS
+string boundary — a write by such a name lands as an U+FFFD sibling file
+rather than being refused, and listings render the original empty. The
+byte-carrying path is recorded follow-up work.
+
 A file's or folder's permission bits are an integer `mode` such as `0o755`. A
 `write` (in `fs.write`'s options or an `fs.apply` change) or `mkdir` may carry
 one: a new file gets `mode`, else 0o644; an existing file keeps its mode unless

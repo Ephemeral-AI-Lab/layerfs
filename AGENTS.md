@@ -161,7 +161,7 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   natively on Windows: local NTFS volumes only, a named kernel mutex as the
   cross-process writer lane, real volume-serial + file-index identity for
   acquisition rows, and bundled SQLite, each in audited FFI modules
-  (core/AGENTS.md). No WSL2 and no daemon are involved. This supersedes the
+  (engine/AGENTS.md). No WSL2 and no daemon are involved. This supersedes the
   Linux-only Store sentence above for this route only; Workspace, FUSE, Exec
   and daemon calls still refuse `Unsupported` on Windows, and the dsh macOS
   and WSL2 exceptions are unchanged. Recorded limitations: Windows Init has
