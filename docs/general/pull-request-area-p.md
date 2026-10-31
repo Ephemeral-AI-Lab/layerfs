@@ -8,7 +8,7 @@ Across 15 planned increments (P1–P15) and targeted architectural refactors, Ar
 1. **Multi-Language Public SDKs**: Production TypeScript/JavaScript client (`@layerfs/agent`), Python SDK (`layerfs`), and backend operator facades (`@layerfs/backend`).
 2. **Model Context Protocol (MCP) Server**: Full stdio JSON-RPC 2.0 server (`@layerfs/mcp`) exposing 50 typed tools with runtime Zod schema validation over real Linux ext4 Stores.
 3. **Ergonomic CLI Suite**: Command-line interface (`@layerfs/cli`) with 106 verified commands matching SDK behavior verbatim.
-4. **Folder-Scoped Confinement (P13)**: Sandboxed sub-tree operations with transparent path scoping, branch namespacing (`scoped/<prefix>/<branch>`), and execution directory binding.
+4. **Folder-Scoped Confinement (P13)**: Sandboxed sub-tree operations with transparent path scoping, branch namespacing (`<prefix>.<branch>`), and execution directory binding on `@layerfs/agent` and the Python `layerfs` SDK.
 5. **Storage Diagnostics & Summary (P10–P12)**: Cost-aware statement profiling, disk allocation breakdowns (WAL, pages, commits), and O(1) project summary endpoints.
 6. **Robust Real-Store Transport**: Native PyO3 binding (`_native.so`) and Node addon (`layerfs.node`) with dual-mode Linux ext4 and WSL2/worker loopback fallbacks.
 
@@ -30,7 +30,7 @@ All operations preserve the invariant Disposable / WAL / `synchronous=OFF` persi
 | **P10** | Per-Call Diagnostics & Billing | Transparent per-call accounting metrics (`bytesRead`, `bytesWritten`, `statements`, `costUnits`). |
 | **P11** | Store Physical Storage Stats | Storage diagnostics reporting exact database size, WAL file bytes, and categorized commit page storage. |
 | **P12** | Cheap Project Summary | Constant-time project state inspection (`branches`, `commits`, `mainLayer`, `lastCommit`, `logicalBytes`). |
-| **P13** | Folder-Scoped Confinement | Sandboxed folder client restricting path reads, branch mutations, and exec working directory. |
+| **P13** | Folder-Scoped Confinement | Sandboxed folder client restricting path reads, branch mutations, history/events visibility and exec working directory; implemented in `@layerfs/agent` and mirrored in the Python `layerfs` SDK. |
 | **P14** | Branch Paging Resolution | Scalable branch catalog resolution past the initial 64-item page barrier. |
 | **P15** | Package Preparation & Release | npm packaging metadata, verified licenses, MIT declarations, and offline tarball smoke tests. |
 
@@ -50,6 +50,16 @@ All operations preserve the invariant Disposable / WAL / `synchronous=OFF` persi
    - Distributed push/pull operations remain unsimulated and blocked per Issue #42 R7 specification.
 5. **Strict 120s Test Execution Ceilings**:
    - All verification scripts and test suites execute under strict wall-clock timeout bounds with prior `--no-run` precompilation.
+
+---
+
+## Code Review Resolutions
+
+Three findings from the cross-language review are resolved in this branch:
+
+1. **Scoped `workspace.mount` raw-dispatch parity.** `client.call("workspace.mount", { branch: "main" })` was previously accepted on scoped `@layerfs/agent` clients even though the named method and the P13 contract refuse every caller-supplied Branch. `scopeArgs` now refuses any supplied branch other than the implicit `main` and re-namespaces it to `<prefix>.main`; the same rule is applied in the Python SDK, including an explicit `null`. Both named and raw paths raise `InvalidInput: out of scope: branch` before dispatch.
+2. **Python SDK P13 parity.** The Python `layerfs` SDK now accepts `LayerFS.open(name, { scope: { folder, branch? } })` with the same semantics as `@layerfs/agent`: canonical folder confinement for every path-bearing method, `<prefix>.<branch>` refs with Commit/Layer identity preservation, refusal of path-returning history calls and `events.subscribe`, `backend` hidden on scoped clients, `workspace.mount` selecting the namespace `main`, `workspace.exec` binding `cwd`, and namespace-filtered Branch listing that pages the complete namespace before applying the caller's page. `LayerFS.init` refuses `scope`.
+3. **MCP/Python contract reconciliation.** P12's summary is exposed as `backend.store.project.get_summary()` on both `@layerfs/agent` and the Python SDK. `@layerfs/mcp` mirrors the `@layerfs/backend` operator surface (`get_history`, `get_storage`, `get_comparable`, `list_overwritten`, …) and deliberately adds no separate summary tool; P13 scope is a client-construction option that MCP's strict `options` schema does not accept, so an MCP request carrying `scope` is refused at schema validation rather than silently ignored. MCP and CLI therefore remain unscoped clients by contract, not by accident.
 
 ---
 
@@ -80,7 +90,8 @@ Signed Production Delta:      0 (clean modular integration; zero dead code or sc
 - **NPM Package Preparation (`prepare-publish.mjs`)**: Verified offline tarball packing and import smoke test for `@layerfs/agent`, `@layerfs/backend`, `@layerfs/runtime`, and `@layerfs/cli`.
 
 ### 2. Python SDK & Linux Native Store Tests
-- **Python SDK Test Suite (`engine/crates/layerfs-python/tests/python/test_*.py`)**: 10/10 PASS on Linux py312.
+- **Python SDK Test Suite (`engine/crates/layerfs-python/tests/python/test_*.py`)**: 19/19 PASS on Linux py314 under WSL2.
+- **Python Scope Suite (`test_scope.py`)**: 9/9 scenarios PASS — scope validation, path confinement before dispatch, Commit/Layer ref preservation, history/events refusal, Branch mutation confinement, namespace-filtered paging, Workspace mount/exec binding and unchanged unscoped shapes.
 - **Real-Store Linux Ext4 Test (`test_real_store.py`)**: 2/2 tests PASS on `/var/tmp` ext4 (verified Store project summary, branch fork, and storage statistics).
 - **Node MCP Real Store (`api/mcp/test/real-store.test.js`)**: PASS on ext4.
 
