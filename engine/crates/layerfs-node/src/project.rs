@@ -43,6 +43,14 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
     let deadline = deadline(args)?;
     let store_path = match args.get_text("storePath") {
         Some(path) if !path.is_empty() => {
+            // NUL would silently truncate at the Win32 path boundary and
+            // name a different file (round-5 C3 F4).
+            if path.contains('\0') {
+                return Err(refused(
+                    "InvalidInput",
+                    "the client's storePath must not contain NUL",
+                ));
+            }
             let path = PathBuf::from(path);
             // Absolute, like every Store call's storePath: a relative
             // spelling would resolve against this process's working
@@ -68,15 +76,22 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
     // and the SDK layout may not have made it yet.
     let store_directory = store_path.parent().unwrap_or(&store_path).to_path_buf();
     if !store_directory.as_os_str().is_empty() && !store_directory.exists() {
-        std::fs::create_dir(&store_directory).map_err(failed)?;
         #[cfg(unix)]
-        std::fs::set_permissions(&store_directory, {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::Permissions::from_mode(0o700)
-        })
-        .map_err(failed)?;
+        {
+            // Owner-only from the first instant, as the install does: a
+            // create-then-chmod pair leaves a umask window (round-5 C1 F3).
+            use std::os::unix::fs::DirBuilderExt;
+            std::fs::DirBuilder::new()
+                .mode(0o700)
+                .create(&store_directory)
+                .map_err(failed)?;
+        }
         #[cfg(windows)]
-        layerfs_store_service::windows_acl::restrict_to_owner(&store_directory).map_err(failed)?;
+        {
+            std::fs::create_dir(&store_directory).map_err(failed)?;
+            layerfs_store_service::windows_acl::restrict_to_owner(&store_directory)
+                .map_err(failed)?;
+        }
     }
     layerfs_store_service::kernel_guard::check(&store_path)
         .map_err(|reason| refused("Unsupported", reason.0))?;

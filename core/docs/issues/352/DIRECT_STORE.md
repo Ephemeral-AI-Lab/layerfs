@@ -173,9 +173,17 @@ Windows lacks the 64 MiB disk-headroom pre-admission macOS and Linux run
 refusal instead); SQLite's `-wal`/`-shm` sidecars inherit the
 directory's DACL, and every open tightens the ones it finds back to
 owner-only (a crash's leftovers wait for the next open); a writer-lane
-squatter parks every Store
-call for as long as it holds the mutex (the readiness wait has no
-bound, exactly as Linux's blocking flock); a killed process leaves one
+squatter parks every Store call for as long as it holds the mutex (the
+readiness wait has no bound, exactly as Linux's blocking flock) — round
+5 added two neighbours of that local-adversary availability class: a
+pre-planted lane object carrying a foreign DACL makes the next open
+fail (currently typed `Malformed`; an error-typing improvement is on
+the should-list), and any local user can enumerate lane names in
+`\BaseNamedObjects` (a digest of the directory that reveals write
+activity, not the path); a caller-pre-created wide directory also lets
+another user pre-place `-wal`/`-shm` the per-open tightening cannot
+re-own (create the volume owner-only, as the route's own layout does);
+a killed process leaves one
 overlay directory under `%TEMP%\layerfs-store-*` until the OS cleans
 it (schema-only and never blocking the next open — accumulation is the
 machine's TEMP policy); the overlay crate's two Win32 path probes

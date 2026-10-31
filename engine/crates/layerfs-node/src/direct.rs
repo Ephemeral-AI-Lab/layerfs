@@ -39,6 +39,14 @@ static STORES: LazyLock<Mutex<BTreeMap<PathBuf, Opened>>> = LazyLock::new(Defaul
 fn path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
     match args.get_text("storePath") {
         Some(text) if !text.is_empty() => {
+            // NUL would silently truncate at the Win32 path boundary and
+            // name a different file (round-5 C3 F4).
+            if text.contains('\0') {
+                return Err(refused(
+                    "InvalidInput",
+                    "the client's storePath must not contain NUL",
+                ));
+            }
             let path = PathBuf::from(text);
             if !path.is_absolute() {
                 return Err(refused(

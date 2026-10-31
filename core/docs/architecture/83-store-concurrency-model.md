@@ -41,8 +41,10 @@ The lane's Windows name is SHA-256 of the resolved directory's encoded
 bytes truncated to 64 bits — a version-stable digest, never
 `DefaultHasher`, whose algorithm may change between Rust releases and
 silently split one directory onto two lanes across builds (K3 review F1).
-The mutexes live in the `Local\` namespace: one login session's lanes are
-invisible to another (DIRECT_STORE.md §6).
+The writer lane lives in the `Global\` namespace, so one lane covers every
+login session (moved from `Local\` on the Windows-native route, round 3 —
+DIRECT_STORE.md §6); the discovery mutexes stay `Local\` and only coordinate
+one session's discovery.
 
 The queue and the directory lock replace failure, not add serialization: the
 repository forbids automatic retries and busy handlers (one attempt per
