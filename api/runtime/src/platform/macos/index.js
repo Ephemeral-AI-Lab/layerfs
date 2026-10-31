@@ -14,6 +14,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { connection } from "@layerfs/agent/internal";
 import { docker as cli, endpointFile, homeNames, makeStore, ping, ready, refuse, releaseStoreHolders, removeStore, storeHolders, writeEndpoint } from "../shared.js";
 
 const VOLUMES = "/var/lib/docker/volumes";
@@ -135,7 +136,18 @@ const platform = {
   storePath: (settings, volume) => `${VOLUMES}/${volume}/_data/global/store.sqlite`,
   homeNames: (settings) => homeNames(settings.home),
   async removeHome(settings, project) { rmSync(join(settings.home, project), { recursive: true, force: true }); },
-  async releaseStore() {},
+  /** Before a volume is deleted, the worker closes its cached Store of it,
+   * as on Windows and `vm:` (#527 §10: it kept the deleted Store open until
+   * its quiet minute ended). With no worker endpoint nothing holds it. */
+  async releaseStore(settings, project) {
+    const { volume } = project;
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(volume)) throw refuse("InvalidInput", "invalid Store volume name");
+    let info;
+    try { info = JSON.parse(readFileSync(endpointFile(settings.home), "utf8")); } catch { return; }
+    if (!(await ping(info))) return;
+    const answer = await connection(info).call({ fn: "releaseStore", args: { home: settings.home, storePath: `${VOLUMES}/${volume}/_data/global/store.sqlite` } });
+    if (answer.refused) throw refuse(answer.refused.code, answer.refused.message, answer.refused.detail);
+  },
   /** Free bytes of Docker's volume disk, as the worker sees it. */
   async free(settings) {
     try {

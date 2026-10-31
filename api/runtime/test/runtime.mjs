@@ -364,6 +364,12 @@ try {
       assert.equal("oldStore" in (await runtime.status()), false, "no older Store container is looked for");
       // nothing but the worker is started or removed
       assert.deepEqual(calls.filter((c) => ["stop", "rm", "run"].includes(c.args[0])).map((c) => c.args[0]), ["run"]);
+      // before a Store's volume goes, the worker is asked to close its cached
+      // Store of it (#527 §10: this was a no-op on macOS)
+      await macos.releaseStore(runtime.settings, { volume: "lfs-shop-store-1" });
+      const release = worker.calls.find((call) => call.fn === "releaseStore");
+      assert.equal(release?.args.storePath, "/var/lib/docker/volumes/lfs-shop-store-1/_data/global/store.sqlite");
+      await assert.rejects(macos.releaseStore(runtime.settings, { volume: "../x" }), { code: "InvalidInput" });
       await runtime.close();
     } finally {
       macos.docker = real;
