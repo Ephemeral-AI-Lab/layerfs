@@ -53,10 +53,37 @@ assert.deepEqual(deployment({ image: docker.image }), { sandbox: "native", daemo
 // the backend inside the directory is native unless named; namespaces is
 // passed through (the binding refuses it off Linux, and an unknown value)
 assert.equal(deployment().sandboxBackend, undefined);
+const archive = `/bundle/images/${"a".repeat(64)}.tar`;
 process.env.LAYERFS_SANDBOX_BACKEND = "namespaces";
-assert.equal(deployment().sandboxBackend, "namespaces");
-assert.equal(deployment({ sandboxBackend: "native" }).sandboxBackend, "native");
+process.env.LAYERFS_IMAGE = docker.image;
+process.env.LAYERFS_IMAGE_ARCHIVE = archive;
+// a namespaces Sandbox's root is an image: the same digest Docker deploys
+// and the docker-archive the bundle carries
+assert.deepEqual(deployment(), {
+  sandbox: "native",
+  daemon: "/opt/layerfs-daemon",
+  localDir: "/Users/me/lfs",
+  sandboxBackend: "namespaces",
+  image: docker.image,
+  imageArchive: archive,
+});
+// each of those is named when it is missing
+delete process.env.LAYERFS_IMAGE;
+assert.throws(() => deployment(), (e) => e.code === "InvalidInput" && /\(LAYERFS_IMAGE\)/.test(e.message));
+process.env.LAYERFS_IMAGE = docker.image;
+delete process.env.LAYERFS_IMAGE_ARCHIVE;
+assert.throws(() => deployment(), (e) => e.code === "InvalidInput" && /\(LAYERFS_IMAGE_ARCHIVE\)/.test(e.message));
+process.env.LAYERFS_IMAGE_ARCHIVE = archive;
+// the native backend inside the same directory reads neither of them
+assert.deepEqual(deployment({ sandboxBackend: "native" }), {
+  sandbox: "native",
+  daemon: "/opt/layerfs-daemon",
+  localDir: "/Users/me/lfs",
+  sandboxBackend: "native",
+});
 delete process.env.LAYERFS_SANDBOX_BACKEND;
+delete process.env.LAYERFS_IMAGE;
+delete process.env.LAYERFS_IMAGE_ARCHIVE;
 // the container prefix names native Sandbox directories too
 process.env.LAYERFS_CONTAINER_PREFIX = "ci-";
 assert.equal(deployment().containerPrefix, "ci-");

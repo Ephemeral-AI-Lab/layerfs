@@ -5,8 +5,8 @@ mod options;
 pub use capabilities::{IsolationModel, MountDriver, ProviderCapabilities, SearchPathPolicy};
 pub use launch::{LaunchFailure, LaunchPhase};
 pub use options::{
-    DockerRecord, ExecExit, LaunchRequest, LocalRecord, ProviderLaunchOptions, SandboxInspection,
-    SandboxRecord,
+    DockerRecord, ExecExit, LaunchRequest, LocalRecord, NamespaceRecord, ProviderLaunchOptions,
+    SandboxInspection, SandboxRecord,
 };
 /// Compatible name for the existing exact 64-hex runtime identity.
 pub type SandboxId = crate::ContainerId;

@@ -9,6 +9,6 @@ mod types;
 #[cfg(unix)]
 pub use backend::{Runtime, Sandbox};
 pub use types::{
-    CommandIdentity, ContainerId, ErrorDiagnostic, ExecId, ExecInspection, ExecRequest,
+    CommandIdentity, ContainerId, ErrorDiagnostic, ExecId, ExecInspection, ExecRequest, Image,
     PendingRequest, RuntimeError, WireFailure,
 };

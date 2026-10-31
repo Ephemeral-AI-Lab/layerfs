@@ -140,6 +140,7 @@ export class LayerFS {
         ...(env("SANDBOX") ? { sandbox: env("SANDBOX") } : {}),
         ...(env("SANDBOX_BACKEND") ? { sandboxBackend: env("SANDBOX_BACKEND") } : {}),
         ...(env("LOCAL_DIR") ? { localDir: env("LOCAL_DIR") } : {}),
+        ...(env("IMAGE_ARCHIVE") ? { imageArchive: env("IMAGE_ARCHIVE") } : {}),
         ...(env("DAEMON_HOST") ? { daemonHost: env("DAEMON_HOST") } : {}),
       },
       storePolicy: env("STORE_POLICY"),

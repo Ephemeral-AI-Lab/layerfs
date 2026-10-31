@@ -1,9 +1,7 @@
 //! One ordinary non-TTY Exec creation; exact acknowledged runtime custody.
-use super::{
-    json::{once, Json},
-    strings::quoted,
-    Docker,
-};
+use super::Docker;
+use crate::backend::json::{once, Json};
+use crate::backend::strings::quoted;
 pub use crate::ExecRequest;
 use crate::{ContainerId, ExecId, RuntimeError, WireFailure};
 use std::io::{self, Write};

@@ -94,7 +94,10 @@ export function deployment(options = {}) {
 /** A native Sandbox's settings: the daemon, the directory its Sandboxes
  * live in, the optional name prefix, and the backend inside that directory
  * (`sandboxBackend`, LAYERFS_SANDBOX_BACKEND: `native` when unset, or
- * `namespaces` on Linux). */
+ * `namespaces` on Linux). The namespaces backend gives each Sandbox a root
+ * filesystem from an image, so it also needs `image` (LAYERFS_IMAGE, the
+ * same digest Docker deploys) and `imageArchive` (LAYERFS_IMAGE_ARCHIVE, the
+ * docker-archive the bundle carries). */
 function nativeDeployment(options, env, sandbox) {
   const deploy = {
     sandbox,
@@ -104,7 +107,13 @@ function nativeDeployment(options, env, sandbox) {
   };
   const backend = options.sandboxBackend ?? env("SANDBOX_BACKEND");
   if (backend !== undefined) deploy.sandboxBackend = backend;
-  for (const [name, setting] of [["daemon", "DAEMON"], ["localDir", "LOCAL_DIR"]]) {
+  const required = [["daemon", "DAEMON"], ["localDir", "LOCAL_DIR"]];
+  if (backend === "namespaces") {
+    deploy.image = options.image ?? env("IMAGE");
+    deploy.imageArchive = options.imageArchive ?? env("IMAGE_ARCHIVE");
+    required.push(["image", "IMAGE"], ["imageArchive", "IMAGE_ARCHIVE"]);
+  }
+  for (const [name, setting] of required) {
     if (!deploy[name]) throw new LayerFSError("InvalidInput", `deploy.${name} is not configured (LAYERFS_${setting})`, null);
   }
   if (!deploy.containerPrefix) delete deploy.containerPrefix;

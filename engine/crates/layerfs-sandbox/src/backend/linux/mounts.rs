@@ -27,6 +27,41 @@ pub(crate) fn under(directory: &Path) -> io::Result<Vec<PathBuf>> {
     Ok(found)
 }
 
+/// The filesystem type holding `path`: the deepest mount point in this
+/// process's mount table that is one of its ancestors, and the type recorded
+/// after the separator. A namespaces Sandbox's root is an overlay whose
+/// writable layer must live on a filesystem that can be an overlay upper.
+pub(crate) fn filesystem(path: &Path) -> io::Result<String> {
+    let table = std::fs::read_to_string("/proc/self/mountinfo")?;
+    let mut deepest: Option<(usize, String)> = None;
+    for line in table.lines() {
+        let fields: Vec<&str> = line.split(' ').collect();
+        let Some(separator) = fields.iter().position(|field| *field == "-") else {
+            continue;
+        };
+        let (Some(point), Some(kind)) = (fields.get(4), fields.get(separator + 1)) else {
+            continue;
+        };
+        let point = PathBuf::from(unescape(point));
+        if !path.starts_with(&point) {
+            continue;
+        }
+        let depth = point.components().count();
+        if deepest
+            .as_ref()
+            .is_none_or(|(deepest, _)| depth >= *deepest)
+        {
+            deepest = Some((depth, (*kind).to_owned()));
+        }
+    }
+    deepest.map(|(_, kind)| kind).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("{} is not under any mount of this process", path.display()),
+        )
+    })
+}
+
 fn unescape(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());

@@ -15,7 +15,9 @@ mod exec;
 mod host;
 mod paths;
 mod provider;
+pub mod rootfs;
 mod sandbox;
 
 pub use provider::NamespaceProvider;
+pub use rootfs::ImageRoot;
 pub use sandbox::Sandbox;

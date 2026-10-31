@@ -3,9 +3,15 @@
 //! records from another. Nothing here starts a process.
 use layerfs_sandbox::{
     backend::HelperSpec,
-    provider::{DockerRecord, LocalRecord, SandboxRecord},
+    provider::{DockerRecord, LocalRecord, NamespaceRecord, SandboxRecord},
+    Image,
 };
 use std::path::PathBuf;
+
+/// The image digest these records name.
+fn image() -> Image {
+    Image::parse(&format!("sha256:{}", "a".repeat(64))).unwrap()
+}
 
 fn spec() -> HelperSpec {
     HelperSpec {
@@ -15,6 +21,11 @@ fn spec() -> HelperSpec {
         daemon: PathBuf::from("/var/lib/layerfs/local/sandbox-1/bin/layerfs-daemon"),
         config: PathBuf::from("/var/lib/layerfs/local/sandbox-1/config/daemon.setup"),
         cgroup: PathBuf::from("/sys/fs/cgroup/layerfs/0000000000000000000000000000000000000000000000000000000000000001"),
+        lower: PathBuf::from(
+            "/var/lib/layerfs/local/images/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ),
+        upper: PathBuf::from("/var/lib/layerfs/local/sandbox-1/overlay/upper"),
+        work: PathBuf::from("/var/lib/layerfs/local/sandbox-1/overlay/work"),
     }
 }
 
@@ -25,7 +36,7 @@ fn the_init_spec_roundtrips() {
     assert_eq!(HelperSpec::parse(&encoded).unwrap(), spec);
     // one line per field, key first
     let text = String::from_utf8(encoded).unwrap();
-    assert_eq!(text.lines().count(), 6);
+    assert_eq!(text.lines().count(), 9);
     assert!(text.starts_with("root=/var/lib/layerfs/local/sandbox-1.root\n"));
 }
 
@@ -56,6 +67,21 @@ fn a_path_the_init_stage_cannot_mount_is_refused() {
     assert!(newline.encode().is_err());
     let bytes = newline.encode().unwrap_err();
     assert_eq!(format!("{bytes:?}"), r#"Protocol("helper spec path")"#);
+    // the three overlay paths are one mount option string: neither a comma nor
+    // a colon may appear in them
+    let comma = HelperSpec {
+        upper: PathBuf::from("/var/lib/a,b/upper"),
+        ..spec()
+    };
+    assert!(comma.encode().is_err());
+    let colon = HelperSpec {
+        lower: PathBuf::from("/var/lib/a:b"),
+        ..spec()
+    };
+    assert_eq!(
+        format!("{:?}", colon.encode().unwrap_err()),
+        r#"Protocol("an overlay path holds a `,` or `:`")"#
+    );
 }
 
 #[test]
@@ -91,8 +117,17 @@ fn a_namespaces_record_is_its_own_variant_and_keeps_the_local_facts() {
         port: 41000,
         labels: vec![("layerfs.role".to_owned(), "sandbox".to_owned())],
     };
-    let record = SandboxRecord::Namespaces(local.clone());
-    assert_eq!(record.namespaces(), Some(&local));
+    let namespace = NamespaceRecord {
+        local: local.clone(),
+        image: image(),
+    };
+    let record = SandboxRecord::Namespaces(namespace.clone());
+    assert_eq!(record.namespaces(), Some(&namespace));
+    // the image digest the record keeps is the one its root is an overlay of
+    assert_eq!(
+        record.namespaces().map(|record| record.image().as_str()),
+        Some(image().as_str())
+    );
     assert!(record.local().is_none());
     assert!(record.docker().is_none());
     // the native record of the same facts stays a native record

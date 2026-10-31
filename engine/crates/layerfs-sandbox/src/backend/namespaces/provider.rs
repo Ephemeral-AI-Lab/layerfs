@@ -8,6 +8,7 @@ use super::{
     create::{self, CreateFailure, Options},
     host,
     paths::Paths,
+    rootfs,
     sandbox::Sandbox,
 };
 use crate::backend::native::{Local, LocalPaths};
@@ -37,11 +38,12 @@ impl NamespaceProvider {
     /// host that cannot hold namespace Sandboxes before any effect: not root,
     /// user namespaces not blocked, no cgroup v2, or no `/dev/fuse`.
     pub fn new(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {
-        let local = Local::new(root)?;
+        let local = Local::new(&root)?;
         host::require_root()?;
         host::require_user_namespaces_blocked()?;
         host::require_cgroup_v2()?;
         host::require_fuse()?;
+        host::require_overlay_upper(root.as_ref())?;
         Ok(Self { local })
     }
 
@@ -58,7 +60,7 @@ impl NamespaceProvider {
             name: "namespaces-linux",
             isolation: IsolationModel::MicroVm,
             mount_driver: MountDriver::Fuse,
-            requires_image: false,
+            requires_image: true,
             search_path_policy: SearchPathPolicy::FixedContainer,
             supports_resource_limits: false,
             direct_store_access: true,
@@ -78,6 +80,8 @@ impl NamespaceProvider {
             command_identity,
             environment,
             store,
+            image,
+            archive,
         } = request.options.clone()
         else {
             return Err(fail(RuntimeError::Unsupported(
@@ -90,6 +94,8 @@ impl NamespaceProvider {
             command_identity,
             environment,
             store,
+            image,
+            archive,
         };
         create::create(&self.local, &helper, &request, &options).map_err(|failure| {
             let CreateFailure {
@@ -125,18 +131,17 @@ impl NamespaceProvider {
             ))
         })?;
         let paths = self
-            .record_paths(&record.name)
+            .record_paths(&record.local().name)
             .map_err(WireFailure::local)?;
+        let image = self.image(record).map_err(WireFailure::local)?;
         let helper = helper(None).map_err(WireFailure::local)?;
-        Sandbox::reopen(
-            paths,
-            cgroup::path(&id),
-            id,
-            super::sandbox::process(record),
-            record.port,
-            record.labels.clone(),
-            helper,
-        )
+        let recorded = super::sandbox::Recorded {
+            init: super::sandbox::process(record.local()),
+            port: record.local().port,
+            labels: record.local().labels.clone(),
+            image,
+        };
+        Sandbox::reopen(paths, cgroup::path(&id), id, helper, recorded)
     }
 
     /// A known stopped record admits only the existing runtime's single Delete.
@@ -151,22 +156,40 @@ impl NamespaceProvider {
             ))
         })?;
         let paths = self
-            .record_paths(&record.name)
+            .record_paths(&record.local().name)
             .map_err(WireFailure::local)?;
+        let image = self.image(record).map_err(WireFailure::local)?;
         let helper = helper(None).map_err(WireFailure::local)?;
+        let recorded = super::sandbox::Recorded {
+            init: super::sandbox::process(record.local()),
+            port: record.local().port,
+            labels: record.local().labels.clone(),
+            image,
+        };
         Ok(Sandbox::stopped(
             paths,
             cgroup::path(&id),
             id,
-            super::sandbox::process(record),
-            record.port,
-            record.labels.clone(),
             helper,
+            recorded,
         ))
     }
 
     fn record_paths(&self, name: &str) -> Result<Paths, RuntimeError> {
         Paths::of(self.paths(name)?)
+    }
+
+    /// The record's image, as the root this runtime already holds: a reopen
+    /// starts and unpacks nothing, so a record whose image is gone is refused
+    /// rather than given a different root.
+    fn image(
+        &self,
+        record: &crate::provider::NamespaceRecord,
+    ) -> Result<rootfs::ImageRoot, RuntimeError> {
+        let paths = self.record_paths(&record.local().name)?;
+        let root = (paths.local.directory.parent())
+            .ok_or(RuntimeError::Protocol("namespaces Sandbox root"))?;
+        rootfs::lookup(record.image(), &rootfs::cache(root))
     }
 }
 

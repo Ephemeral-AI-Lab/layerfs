@@ -126,7 +126,7 @@ fn start_claimed(
     )?;
     let labels = crate::sandbox::labels(name, id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
-    let options = launch_options(backend, identity, &setup.store);
+    let options = launch_options(backend, identity, &setup.store, args)?;
     let mut manifest = project.manifest.clone();
     manifest.locator = setup.store.clone();
     let created = api
@@ -265,24 +265,34 @@ fn native_runtime(
 }
 
 /// How the daemon of `backend` is launched: the same local options, and for
-/// the namespace backend the Store file its private root binds.
+/// the namespace backend the Store file its private root binds and the image
+/// archive its root is unpacked from.
 #[cfg(target_os = "linux")]
 fn launch_options(
     backend: crate::runtime::Backend,
     identity: CommandIdentity,
     store: &str,
-) -> ProviderLaunchOptions {
-    match backend {
+    args: &SdkValue,
+) -> Result<ProviderLaunchOptions, SdkRefusal> {
+    Ok(match backend {
         crate::runtime::Backend::Native => ProviderLaunchOptions::Local {
             command_identity: identity,
             environment: native_environment(),
         },
-        crate::runtime::Backend::Namespaces => ProviderLaunchOptions::Namespaces {
-            command_identity: identity,
-            environment: native_environment(),
-            store: PathBuf::from(store),
-        },
-    }
+        crate::runtime::Backend::Namespaces => {
+            let deploy = args
+                .get("deploy")
+                .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
+            let (image, archive) = crate::runtime::namespaces_image(deploy)?;
+            ProviderLaunchOptions::Namespaces {
+                command_identity: identity,
+                environment: native_environment(),
+                store: PathBuf::from(store),
+                image,
+                archive,
+            }
+        }
+    })
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -290,11 +300,12 @@ fn launch_options(
     _: crate::runtime::Backend,
     identity: CommandIdentity,
     _: &str,
-) -> ProviderLaunchOptions {
-    ProviderLaunchOptions::Local {
+    _: &SdkValue,
+) -> Result<ProviderLaunchOptions, SdkRefusal> {
+    Ok(ProviderLaunchOptions::Local {
         command_identity: identity,
         environment: native_environment(),
-    }
+    })
 }
 
 /// What a native Sandbox's daemon starts with besides `PATH`: the NFS
