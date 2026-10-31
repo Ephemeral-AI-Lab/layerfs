@@ -9,7 +9,7 @@ use super::{
     sandbox::Sandbox,
 };
 use crate::backend::listener;
-use crate::backend::native::{search::search_path, Local, LocalPhase, LocalProcess};
+use crate::backend::native::{search::search_path, Local, LocalPhase, LocalProcess, KERNEL_ROUTE};
 use crate::backend::{identity, HelperSpec};
 use crate::{CommandIdentity, Image, RuntimeError};
 use nix::fcntl::OFlag;
@@ -93,6 +93,7 @@ pub(crate) fn create(
             .env_clear()
             .env("PATH", search_path())
             .envs(options.environment.iter().map(|(k, v)| (k, v)))
+            .env(KERNEL_ROUTE, "fuse")
             .current_dir(&paths.local.directory)
             .stdin(Stdio::null())
             .stdout(output)
@@ -183,15 +184,16 @@ fn start_request(
     Ok((paths, image))
 }
 
-/// The daemon starts with the search path and nothing else but these: no
-/// `PATH` override, and only this backend's kernel choice.
+/// The daemon starts with the search path, this backend's kernel route
+/// (FUSE, which only the provider names) and nothing else but these: no
+/// `PATH` or kernel route override.
 fn check_environment(environment: &[(String, String)]) -> Result<(), RuntimeError> {
     let invalid = environment.iter().any(|(key, value)| {
         key.is_empty()
             || key.contains(['=', '\0'])
             || value.contains('\0')
             || key == "PATH"
-            || (key == "LAYERFS_KERNEL" && value != "fuse")
+            || key == KERNEL_ROUTE
     });
     if invalid {
         return Err(RuntimeError::Protocol("namespaces environment"));

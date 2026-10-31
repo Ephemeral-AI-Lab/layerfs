@@ -309,12 +309,13 @@ fn launch_options(
     })
 }
 
-/// What a native Sandbox's daemon starts with besides `PATH`: the NFS
-/// route, and the mount helper and reference overrides this process was
-/// given (`LAYERFS_NFS_*`), so a test host can name its own client.
+/// What a native Sandbox's daemon starts with besides `PATH` and the kernel
+/// route its provider chooses: the NFS mount helper and reference overrides
+/// this process was given (`LAYERFS_NFS_*`), so a test host can name its own
+/// client.
 #[cfg(target_os = "macos")]
 fn native_environment() -> Vec<(String, String)> {
-    let mut environment = vec![("LAYERFS_KERNEL".to_owned(), "nfs".to_owned())];
+    let mut environment = Vec::new();
     for name in [
         "LAYERFS_NFS_MOUNT",
         "LAYERFS_NFS_UNMOUNT",
@@ -329,9 +330,10 @@ fn native_environment() -> Vec<(String, String)> {
     environment
 }
 
+/// Nothing on Linux: the provider chooses FUSE.
 #[cfg(target_os = "linux")]
 fn native_environment() -> Vec<(String, String)> {
-    vec![("LAYERFS_KERNEL".to_owned(), "fuse".to_owned())]
+    Vec::new()
 }
 
 /// Where this deployment puts Sandbox `id`:

@@ -10,6 +10,7 @@ use std::{
 
 pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
     secure_process()?;
+    super::filesystem::check_route()?;
     let mut file = OpenOptions::new()
         .read(true)
         .custom_flags((OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC).bits())

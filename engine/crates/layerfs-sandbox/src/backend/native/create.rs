@@ -125,7 +125,7 @@ impl Local {
         })
     }
     /// Starts the next daemon with `environment` besides its search path (the
-    /// native route's `LAYERFS_KERNEL=nfs` and its mount helpers). Nothing
+    /// kernel route its provider chose and the NFS mount helpers). Nothing
     /// else of this process's environment reaches it.
     pub fn environment(mut self, environment: Vec<(String, String)>) -> Self {
         self.environment = environment;

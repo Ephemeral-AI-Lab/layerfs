@@ -113,7 +113,7 @@ impl Fixture {
             startup_timeout: Duration::from_secs(10),
             options: ProviderLaunchOptions::Namespaces {
                 command_identity: CommandIdentity { uid: 501, gid: 20 },
-                environment: vec![("LAYERFS_KERNEL".to_owned(), "fuse".to_owned())],
+                environment: Vec::new(),
                 store: self.store.join("sealed.sqlite"),
                 image: self.image(),
                 archive: self.archive.clone(),

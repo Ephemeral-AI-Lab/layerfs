@@ -1,5 +1,5 @@
 //! The existing native runtime as a concrete backend; no alternate process engine.
-use super::{Local, LocalPhase, LocalProcess, Sandbox};
+use super::{Local, LocalPhase, LocalProcess, Sandbox, KERNEL_ROUTE};
 use crate::provider::{
     IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, MountDriver,
     ProviderCapabilities, ProviderLaunchOptions, SandboxRecord, SearchPathPolicy,
@@ -90,16 +90,16 @@ impl<const LINUX: bool> NativeProvider<LINUX> {
                     || key.contains(['=', '\0'])
                     || value.contains('\0')
                     || key == "PATH"
-                    || (key == "LAYERFS_KERNEL" && value != if LINUX { "fuse" } else { "nfs" })
+                    || key == KERNEL_ROUTE
             })
         {
             return Err(fail(RuntimeError::Protocol(
                 "native command identity/environment",
             )));
         }
-        environment.retain(|(key, _)| key != "LAYERFS_KERNEL");
+        // The provider alone chooses the kernel route (#527 step 6).
         environment.push((
-            "LAYERFS_KERNEL".into(),
+            KERNEL_ROUTE.into(),
             if LINUX { "fuse" } else { "nfs" }.into(),
         ));
         let local = self
