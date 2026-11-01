@@ -17,7 +17,7 @@ layerfs-project = { path = "../layerfs-project" }
 layerfs-sandbox = { path = "../layerfs-sandbox" }
 layerfs-store-service = { path = "../layerfs-store-service" }
 libc = "=0.2.189"
-nix = { version = "=0.31.3", default-features = false, features = ["fs", "user"] }
+nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal"] }
 
 [features]
 # PostgreSQL Stores (#506): open, import and attach. Off by default; the

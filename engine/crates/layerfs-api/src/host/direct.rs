@@ -162,7 +162,14 @@ pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
                 .filter(|(name, _)| {
                     !matches!(
                         name.as_str(),
-                        "storePath" | "sandbox" | "deploy" | "home" | "store" | "postgresql"
+                        "storePath"
+                            | "sandbox"
+                            | "deploy"
+                            | "home"
+                            | "store"
+                            | "postgresql"
+                            | "store_record"
+                            | "project_record"
                     )
                 })
                 .collect(),

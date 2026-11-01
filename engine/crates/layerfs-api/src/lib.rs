@@ -13,6 +13,7 @@ mod base;
 pub use base::internal;
 pub mod branch;
 pub mod calls;
+mod family;
 pub mod fs;
 pub mod home;
 #[doc(hidden)]
@@ -22,6 +23,8 @@ pub mod names;
 pub mod operator;
 pub mod project;
 pub mod sandbox;
+pub mod store;
+pub mod worker;
 pub use base::dispatch::call;
 pub use base::failure::{OperationCause, OperationFailure};
 pub use base::sdk::{SdkError, SdkResult};

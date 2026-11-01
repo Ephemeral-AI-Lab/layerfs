@@ -1,0 +1,312 @@
+//! The `branch`, `commit` and `file` families (#533 step 7): Store calls on
+//! one project's Branches, Commits and files, each translated to the Store
+//! method that does it and run on the route its Store's records choose.
+use crate::calls::Context;
+use crate::host::outcome::{refused, Outcome};
+use crate::store::route::{store_call, target};
+use layerfs_bridge::control::SdkValue;
+
+type Fields = Vec<(String, SdkValue)>;
+
+fn arg(args: &SdkValue, name: &str) -> Option<SdkValue> {
+    args.get(name)
+        .filter(|v| !matches!(v, SdkValue::Null))
+        .cloned()
+}
+
+/// `(to, value of from)` for each named argument the call carries.
+fn take(args: &SdkValue, names: &[(&str, &str)]) -> Fields {
+    names
+        .iter()
+        .filter_map(|(from, to)| arg(args, from).map(|v| ((*to).to_owned(), v)))
+        .collect()
+}
+
+fn text<'a>(args: &'a SdkValue, name: &str) -> &'a str {
+    args.get_text(name).unwrap_or("")
+}
+
+/// Runs Store method `op` with `fields` on the call's project.
+fn on_project(context: &mut Context<'_>, args: &SdkValue, op: &str, fields: Fields) -> Outcome {
+    let target = target(&context.home, text(args, "project"))?;
+    store_call(context, &target, op, fields)
+}
+
+const PAGE: [(&str, &str); 2] = [("page_size", "pageSize"), ("page_pos", "pagePos")];
+
+/// A diff's page and whether it carries hunks (`paths_only` is its opposite).
+fn diff_options(args: &SdkValue) -> Fields {
+    let mut fields = take(
+        args,
+        &[
+            ("page_size", "pageSize"),
+            ("page_pos", "pagePos"),
+            ("cursor", "cursor"),
+        ],
+    );
+    if let Some(SdkValue::Bool(paths_only)) = args.get("paths_only") {
+        fields.push(("hunks".to_owned(), SdkValue::Bool(!paths_only)));
+    }
+    fields
+}
+
+/// The snapshot a read names: its Branch, or the Commit when given.
+fn at(args: &SdkValue) -> Fields {
+    take(args, &[("branch", "branch"), ("commit", "commit")])
+}
+
+/// Runs one call of the three families.
+pub(crate) fn run(context: &mut Context<'_>, family: &str, call: &str, args: &SdkValue) -> Outcome {
+    match (family, call) {
+        ("branch", "list") => on_project(context, args, "project.list_branches", take(args, &PAGE)),
+        ("branch", "get") => {
+            let fields = take(args, &[("branch", "name")]);
+            let page = on_project(context, args, "project.list_branches", fields)?;
+            first(page, "Branch", text(args, "branch"))
+        }
+        ("branch", "fork") => {
+            let from = arg(args, "from_commit").or_else(|| arg(args, "from_branch"));
+            let mut fields = take(args, &[("name", "name")]);
+            fields.extend(from.map(|from| ("from".to_owned(), from)));
+            on_project(context, args, "branch.fork", fields)
+        }
+        ("branch", "merge") => {
+            let fields = take(
+                args,
+                &[
+                    ("a", "branch"),
+                    ("b", "with"),
+                    ("name", "name"),
+                    ("message", "message"),
+                    ("units", "units"),
+                ],
+            );
+            on_project(context, args, "branch.merge", fields)
+        }
+        ("branch", "publish") => on_project(
+            context,
+            args,
+            "branch.publish",
+            take(args, &[("branch", "branch"), ("commit", "commit")]),
+        ),
+        ("branch", "diff") => {
+            let mut fields = take(args, &[("from_branch", "from"), ("to_branch", "to")]);
+            fields.extend(diff_options(args));
+            on_project(context, args, "branch.diff_branches", fields)
+        }
+        ("commit", "list") => {
+            let mut fields = take(args, &[("branch", "branch")]);
+            fields.extend(take(args, &PAGE));
+            on_project(context, args, "branch.list_commits", fields)
+        }
+        ("commit", "get") => commit_get(context, args),
+        ("commit", "diff") => {
+            let mut fields = take(args, &[("from_commit", "from"), ("to_commit", "to")]);
+            fields.extend(diff_options(args));
+            on_project(context, args, "branch.diff_commits", fields)
+        }
+        ("file", _) => file(context, call, args),
+        _ => Err(refused("InvalidInput", format!("no call {family}.{call}"))),
+    }
+}
+
+/// The one item of a list page whose `name` or `id` is `wanted`.
+fn first(page: SdkValue, what: &str, wanted: &str) -> Outcome {
+    let items = match page.get("items") {
+        Some(SdkValue::List(items)) => items.clone(),
+        _ => Vec::new(),
+    };
+    items
+        .into_iter()
+        .find(|item| item.get_text("name") == Some(wanted) || item.get_text("id") == Some(wanted))
+        .ok_or_else(|| refused("NotFound", format!("no {what} {wanted}")))
+}
+
+/// `commit.get`: the Commit, found by paging the Branch's Commits newest
+/// first, one page of 1000 at a time.
+fn commit_get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let target = target(&context.home, text(args, "project"))?;
+    let wanted = text(args, "commit");
+    let mut pos = 0i64;
+    loop {
+        let fields = vec![
+            ("branch".to_owned(), SdkValue::text(text(args, "branch"))),
+            ("pageSize".to_owned(), SdkValue::Int(1000)),
+            ("pagePos".to_owned(), SdkValue::Int(pos)),
+        ];
+        let page = store_call(context, &target, "branch.list_commits", fields)?;
+        let items = match page.get("items") {
+            Some(SdkValue::List(items)) => items.clone(),
+            _ => Vec::new(),
+        };
+        let found = items.iter().find(|item| {
+            item.get_text("id")
+                .is_some_and(|id| id == wanted || (wanted.len() >= 8 && id.starts_with(wanted)))
+        });
+        if let Some(found) = found {
+            return Ok(found.clone());
+        }
+        if items.len() < 1000 {
+            return Err(refused(
+                "NotFound",
+                format!("no Commit {wanted} on Branch {}", text(args, "branch")),
+            ));
+        }
+        pos += 1000;
+    }
+}
+
+/// One `file` call.
+fn file(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
+    let path = [("path", "path")];
+    let message = [("message", "message")];
+    let (op, fields): (&str, Fields) = match call {
+        "read" => {
+            let mut f = at(args);
+            f.extend(take(
+                args,
+                &[
+                    ("path", "path"),
+                    ("start_line", "startLine"),
+                    ("end_line", "endLine"),
+                ],
+            ));
+            ("fs.read", f)
+        }
+        "stat" | "list" | "glob" | "grep" | "blame" => {
+            let mut f = at(args);
+            f.extend(take(args, &path));
+            f.extend(take(
+                args,
+                &[("pattern", "pattern"), ("from_line", "fromLine")],
+            ));
+            f.extend(take(args, &PAGE));
+            match call {
+                "stat" => ("fs.stat", f),
+                "list" => ("fs.list", f),
+                "glob" => ("fs.glob", f),
+                "grep" => ("fs.grep", f),
+                _ => ("fs.blame", f),
+            }
+        }
+        "diff" => {
+            let side = |branch: &str, commit: &str, path: &str| {
+                let at = arg(args, commit)
+                    .or_else(|| arg(args, branch))
+                    .unwrap_or_default();
+                SdkValue::map([
+                    ("commit", at),
+                    ("path", arg(args, path).unwrap_or_default()),
+                ])
+            };
+            let f = vec![
+                (
+                    "left".to_owned(),
+                    side("left_branch", "left_commit", "left_path"),
+                ),
+                (
+                    "right".to_owned(),
+                    side("right_branch", "right_commit", "right_path"),
+                ),
+            ];
+            ("fs.diff_files", f)
+        }
+        "write" => {
+            let mut f = take(
+                args,
+                &[
+                    ("branch", "branch"),
+                    ("path", "path"),
+                    ("message", "message"),
+                    ("mode", "mode"),
+                ],
+            );
+            match args.get("content") {
+                Some(SdkValue::Bytes(bytes)) => {
+                    f.push(("bytes".to_owned(), SdkValue::Bytes(bytes.clone())))
+                }
+                Some(content) => f.push(("content".to_owned(), content.clone())),
+                None => {}
+            }
+            ("fs.write", f)
+        }
+        "edit" => {
+            let mut f = take(
+                args,
+                &[
+                    ("branch", "branch"),
+                    ("path", "path"),
+                    ("old", "oldText"),
+                    ("new", "newText"),
+                ],
+            );
+            f.extend(take(args, &message));
+            ("fs.edit", f)
+        }
+        "rm" | "mkdir" => {
+            let mut f = take(
+                args,
+                &[("branch", "branch"), ("path", "path"), ("mode", "mode")],
+            );
+            f.extend(take(args, &message));
+            (if call == "rm" { "fs.rm" } else { "fs.mkdir" }, f)
+        }
+        "mv" | "cp" => {
+            let mut f = take(
+                args,
+                &[
+                    ("branch", "branch"),
+                    ("from_path", "from"),
+                    ("to_path", "to"),
+                ],
+            );
+            f.extend(take(args, &message));
+            (if call == "mv" { "fs.mv" } else { "fs.cp" }, f)
+        }
+        "apply" => {
+            let mut f = take(args, &[("branch", "branch")]);
+            f.extend(take(args, &message));
+            f.push(("changes".to_owned(), changes(args.get("changes"))?));
+            ("fs.apply", f)
+        }
+        _ => return Err(refused("InvalidInput", format!("no call file.{call}"))),
+    };
+    on_project(context, args, op, fields)
+}
+
+fn renamed(name: &str) -> &str {
+    match name {
+        "old" => "oldText",
+        "new" => "newText",
+        "from_path" => "from",
+        "to_path" => "to",
+        other => other,
+    }
+}
+
+/// `file.apply`'s changes, from their snake_case fields to the Store's.
+fn changes(value: Option<&SdkValue>) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+    let Some(SdkValue::List(list)) = value else {
+        return Err(refused(
+            "InvalidInput",
+            "`changes` must be a list of changes",
+        ));
+    };
+    let mut out = Vec::with_capacity(list.len());
+    for change in list {
+        let SdkValue::Map(fields) = change else {
+            return Err(refused("InvalidInput", "each change is a record"));
+        };
+        let mut mapped: Fields = Vec::with_capacity(fields.len());
+        for (name, value) in fields {
+            // write content may be bytes: the Store takes those as `bytes`
+            if name == "content" && matches!(value, SdkValue::Bytes(_)) {
+                mapped.push(("bytes".to_owned(), value.clone()));
+            } else {
+                mapped.push((renamed(name).to_owned(), value.clone()));
+            }
+        }
+        out.push(SdkValue::Map(mapped));
+    }
+    Ok(SdkValue::List(out))
+}

@@ -96,29 +96,16 @@ fn bytes32(value: &SdkValue, key: &str) -> Result<[u8; 32]> {
 /// project entry of a Store made by its own Init, or, with no `store`, the
 /// project's entry.
 pub(crate) fn identity(args: &SdkValue) -> Result<Identity> {
+    // a worker is sent its Store's record with each call (2.0, #533 step 7)
+    if let Some(record @ SdkValue::Map(_)) = args.get("store_record") {
+        return identity_of(record);
+    }
     let home = discovery::home(args)?;
     let store = args.get_text("store");
     if let Some(store) = store {
         let path = record_path(&home, store)?;
         if path.exists() {
-            let value = load_record(&path)?;
-            let kind = match value.get_text("kind") {
-                Some("sqlite") => Kind::Sqlite,
-                Some("postgresql") => Kind::Postgresql {
-                    schema: text(&value, "schema")?.to_owned(),
-                    synchronous_commit: text(&value, "synchronous_commit")?.to_owned(),
-                },
-                _ => return Err(refused("InvalidInput", "Store record kind")),
-            };
-            let binding = match value.get("binding") {
-                Some(SdkValue::Bytes(bytes)) => bytes.clone(),
-                _ => return Err(refused("InvalidInput", "Store record binding")),
-            };
-            return Ok(Identity {
-                kind,
-                binding,
-                cursor_key: bytes32(&value, "cursor")?,
-            });
+            return identity_of(&load_record(&path)?);
         }
     }
     // a Store made by its project's own Init: that project's entry
@@ -138,6 +125,27 @@ pub(crate) fn identity(args: &SdkValue) -> Result<Identity> {
         kind: Kind::Sqlite,
         binding: project.manifest.binding,
         cursor_key: project.manifest.cursor_key,
+    })
+}
+
+/// The identity a Store record holds.
+pub(crate) fn identity_of(value: &SdkValue) -> Result<Identity> {
+    let kind = match value.get_text("kind") {
+        Some("sqlite") => Kind::Sqlite,
+        Some("postgresql") => Kind::Postgresql {
+            schema: text(value, "schema")?.to_owned(),
+            synchronous_commit: text(value, "synchronous_commit")?.to_owned(),
+        },
+        _ => return Err(refused("InvalidInput", "Store record kind")),
+    };
+    let binding = match value.get("binding") {
+        Some(SdkValue::Bytes(bytes)) => bytes.clone(),
+        _ => return Err(refused("InvalidInput", "Store record binding")),
+    };
+    Ok(Identity {
+        kind,
+        binding,
+        cursor_key: bytes32(value, "cursor")?,
     })
 }
 

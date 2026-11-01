@@ -25,6 +25,11 @@ impl Context<'_> {
         (self.events)(SdkValue::map([("progress", value)]));
     }
 
+    /// Passes on one event a worker sent, as it came.
+    pub fn event(&mut self, event: SdkValue) {
+        (self.events)(event);
+    }
+
     /// Sends one piece of a command's output, `{ stream, bytes }`.
     pub fn output(&mut self, stream: &str, bytes: &[u8]) {
         (self.events)(SdkValue::map([

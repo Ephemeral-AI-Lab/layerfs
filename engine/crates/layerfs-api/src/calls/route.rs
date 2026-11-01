@@ -11,6 +11,9 @@ pub type Handler = fn(&mut Context<'_>, &SdkValue) -> Outcome;
 
 /// Runs `call`'s function.
 pub fn run(call: &Call, context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    if matches!(call.family, "branch" | "commit" | "file") {
+        return crate::family::files::run(context, call.family, call.call, args);
+    }
     match handler(call) {
         Ok(handler) => handler(context, args),
         Err(step) => Err(refused(
@@ -24,7 +27,6 @@ pub fn run(call: &Call, context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 pub fn handler(call: &Call) -> Result<Handler, u8> {
     Err(match call.family {
         "project" => 9,
-        "branch" | "commit" | "file" => 7,
         "sandbox" | "workspace" => 12,
         "machine" => 6,
         "store" if matches!(call.call, "connect" | "disconnect") => 10,

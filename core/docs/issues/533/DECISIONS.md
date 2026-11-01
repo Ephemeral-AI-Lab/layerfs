@@ -88,3 +88,11 @@ names the smallest safe alternative the docs offer and why.
 
 | # | Recommended | Taken instead | Why |
 | --- | --- | --- | --- |
+| H §7.7 route table | sqlite on `docker` runs in process on Linux | Every sqlite Store not on `native` goes to its machine's worker, on every host | On Linux a `docker` Store lives in a Docker volume whose mountpoint belongs to root; opening it in the caller's process would need the volume path and root access. One route per machine kind is the smaller safe choice; the worker already opens the Store on the same kernel. (2026-11-02, delegated by owner, step 7) |
+
+## Implementation choices (not owner decisions)
+
+Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated by owner.
+
+- `commit.get` pages the Branch's Commits 1000 at a time until it finds the id (or an id prefix of 8+ characters). The Store has no by-id Commit lookup on the public method table; adding one is a later change.
+- Step 7 was committed before step 6: the route reads `worker.json` directly until step 6 lets it start a stopped machine. The order changes no behaviour of either step.
