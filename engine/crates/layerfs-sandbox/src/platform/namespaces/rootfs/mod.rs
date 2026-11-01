@@ -80,7 +80,7 @@ mod layers;
 mod tar;
 mod types;
 
-pub use archive::image_of;
+pub use archive::{holds, image_of};
 pub use cache::{cache, ensure, lookup};
 pub use types::ImageRoot;
 pub(crate) use types::{refuse, PATH_MAX};

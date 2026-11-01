@@ -201,7 +201,8 @@ pub(crate) fn image(runtime: &Sandbox) -> String {
 /// one, else the one image the archive names by its config digest (#529):
 /// `docker` keeps LAYERFS_IMAGE, which Docker's image store may name by
 /// another digest. Both are read before any effect, so a bundle without its
-/// image refuses the start.
+/// image, or a given image the archive does not hold, refuses the start
+/// `InvalidInput`.
 #[cfg(target_os = "linux")]
 pub(crate) fn namespaces_image(deploy: &SdkValue) -> Result<(Image, PathBuf), SdkRefusal> {
     let archive = deploy.get_text("imageArchive").ok_or_else(|| {
@@ -218,15 +219,20 @@ pub(crate) fn namespaces_image(deploy: &SdkValue) -> Result<(Image, PathBuf), Sd
             "deploy.imageArchive (LAYERFS_IMAGE_ARCHIVE) must be an absolute path",
         ));
     }
+    let in_archive = |error| {
+        refused(
+            "InvalidInput",
+            format!("deploy.imageArchive {}: {error}", archive.display()),
+        )
+    };
     let image = match deploy.get_text("image") {
-        Some(digest) => Image::parse(digest)
-            .map_err(|error| refused("InvalidInput", format!("deploy.image: {error}")))?,
-        None => layerfs_sandbox::namespaces::rootfs::image_of(&archive).map_err(|error| {
-            refused(
-                "InvalidInput",
-                format!("deploy.imageArchive {}: {error}", archive.display()),
-            )
-        })?,
+        Some(digest) => {
+            let image = Image::parse(digest)
+                .map_err(|error| refused("InvalidInput", format!("deploy.image: {error}")))?;
+            layerfs_sandbox::namespaces::rootfs::holds(&archive, &image).map_err(in_archive)?;
+            image
+        }
+        None => layerfs_sandbox::namespaces::rootfs::image_of(&archive).map_err(in_archive)?,
     };
     Ok((image, archive))
 }

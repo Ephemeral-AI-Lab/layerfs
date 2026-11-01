@@ -84,6 +84,13 @@ pub fn image_of(archive: &Path) -> Result<Image, RuntimeError> {
     ))
 }
 
+/// Whether `archive` holds `image`: its `manifest.json` names an entry by
+/// that config digest. Read when a deployment is built (#529), so a digest
+/// the archive lacks is refused before any effect.
+pub fn holds(archive: &Path, image: &Image) -> Result<(), RuntimeError> {
+    manifest(archive, Some(image)).map(drop)
+}
+
 /// The archive's `manifest.json`, as the entry whose config digest is
 /// `image`, or with no `image` its one entry.
 fn manifest(archive: &Path, image: Option<&Image>) -> Result<Manifest, RuntimeError> {

@@ -131,6 +131,10 @@ fn an_archive_names_its_one_image_by_its_config_digest() {
     assert_eq!(rootfs::image_of(&path).unwrap().as_str(), DIGEST);
     let legacy = legacy_archive(&scratch.base, "legacy", OTHER, two_layers());
     assert_eq!(rootfs::image_of(&legacy).unwrap().as_str(), OTHER);
+    // a given image is checked against the archive before any effect
+    rootfs::holds(&path, &image(DIGEST)).unwrap();
+    let error = format!("{}", rootfs::holds(&path, &image(OTHER)).unwrap_err());
+    assert!(error.contains(hex(OTHER)), "{error}");
     // an archive naming none or two images is refused, never guessed from
     let config = |digest: &str| format!("blobs/sha256/{}", hex(digest));
     for (name, manifest) in [
