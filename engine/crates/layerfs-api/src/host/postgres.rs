@@ -1,10 +1,11 @@
-//! PostgreSQL Stores (#506): opening one for Store calls, importing a
-//! SQLite Store into a new schema, and attaching an imported schema again.
+//! PostgreSQL Stores (#506): opening one for Store calls and attaching a
+//! LayerFS schema.
 //!
 //! A PostgreSQL Store is one schema; its URL, which may hold a password, is
-//! passed per call (`postgresql: { url }`) and never stored. Init stays
-//! SQLite only, so a PostgreSQL Store gets its data from an import. Built
-//! without the `postgresql` feature, every call here is `Unsupported`.
+//! passed per call (`postgresql: { url }`) and never stored. Nothing
+//! converts a SQLite Store into one (#533 step 10c): a project reaches
+//! PostgreSQL only by an Init into it. Built without the `postgresql`
+//! feature, every call here is `Unsupported`.
 use crate::host::discovery;
 use crate::host::outcome::{refused, Outcome};
 use crate::host::registry::text;
@@ -71,7 +72,11 @@ fn url(args: &SdkValue) -> Result<&str, SdkRefusal> {
 }
 
 #[cfg(feature = "postgresql")]
-fn selection(url: &str, schema: &str, sync: &str) -> layerfs_persistence::PostgresSelection {
+pub(crate) fn selection(
+    url: &str,
+    schema: &str,
+    sync: &str,
+) -> layerfs_persistence::PostgresSelection {
     use layerfs_persistence::SynchronousCommit as S;
     let setting = match sync {
         "local" => S::Local,
@@ -108,57 +113,6 @@ pub(crate) fn open(
     }
 }
 
-/// `runtime.store.import_postgresql { home, store, storePath, target,
-/// postgresql: { url, schema, synchronousCommit } }`: copies the SQLite Store
-/// `store` (every project, the same ids) into the new schema, then records
-/// the PostgreSQL Store `target` with the source's binding.
-pub(crate) fn import(args: &SdkValue) -> Outcome {
-    crate::host::progress::observed(args, || import_once(args))
-}
-
-fn import_once(args: &SdkValue) -> Outcome {
-    let home = discovery::home(args)?;
-    let target = text(args, "target")?;
-    let (url, schema, sync) = (url(args)?, schema(args)?, setting(args)?);
-    let source = stores::identity(args)?;
-    stores::sqlite_only(&source, "an import into PostgreSQL")?;
-    let store_file = stores::store_path(args)?;
-    let directory = stores::claim(&home, target)?;
-    let _guard = discovery::guard(&directory)?;
-    let source_bytes = std::fs::metadata(&store_file).map(|m| m.len()).ok();
-    // the copy is one transaction with no byte count of its own
-    crate::host::progress::begin("copy");
-    let imported = copy(&store_file, url, &schema, &sync, &source);
-    let receipt = match imported {
-        Ok(receipt) => receipt,
-        Err(refusal) => {
-            let _ = std::fs::remove_dir_all(&directory);
-            return Err(refusal);
-        }
-    };
-    let identity = Identity {
-        kind: Kind::Postgresql {
-            schema: schema.clone(),
-            synchronous_commit: sync,
-        },
-        binding: source.binding,
-        cursor_key: source.cursor_key,
-    };
-    crate::host::progress::begin("record");
-    stores::save_record(&home, target, &identity)?;
-    Ok(SdkValue::map([
-        (
-            "sourceBytes",
-            source_bytes.map_or(SdkValue::Null, |n| SdkValue::Int(n as i64)),
-        ),
-        ("kind", SdkValue::text("Imported")),
-        ("store", SdkValue::text(target)),
-        ("schema", SdkValue::text(schema)),
-        ("tables", receipt.0),
-        ("packBytes", SdkValue::Int(receipt.1 as i64)),
-    ]))
-}
-
 /// The binding key the schema of a call's `postgresql { url, schema,
 /// synchronousCommit }` records, read once.
 pub(crate) fn read_binding(args: &SdkValue) -> Result<Vec<u8>, SdkRefusal> {
@@ -175,44 +129,6 @@ fn binding(url: &str, schema: &str, sync: &str) -> Result<Vec<u8>, SdkRefusal> {
     #[cfg(not(feature = "postgresql"))]
     {
         let _ = (url, schema, sync);
-        Err(refused("Unsupported", UNBUILT))
-    }
-}
-
-/// One import: `(tables, pack bytes)`.
-fn copy(
-    store: &Path,
-    url: &str,
-    schema: &str,
-    sync: &str,
-    source: &Identity,
-) -> Result<(SdkValue, u64), SdkRefusal> {
-    #[cfg(feature = "postgresql")]
-    {
-        use layerfs_persistence::{PersistenceConfig, PostgresHandles, SqlitePersistenceProfile};
-        let receipt = PostgresHandles::import(
-            PersistenceConfig::sqlite(store)
-                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
-            &selection(url, schema, sync),
-            &source.binding,
-            source.cursor_key,
-        )
-        .map_err(|error| refused("Failed", format!("import into PostgreSQL: {error}")))?;
-        let tables = receipt
-            .tables
-            .iter()
-            .map(|(table, rows)| {
-                SdkValue::map([
-                    ("table", SdkValue::text(*table)),
-                    ("rows", SdkValue::Int(*rows as i64)),
-                ])
-            })
-            .collect();
-        Ok((SdkValue::List(tables), receipt.pack_bytes))
-    }
-    #[cfg(not(feature = "postgresql"))]
-    {
-        let _ = (store, url, schema, sync, source);
         Err(refused("Unsupported", UNBUILT))
     }
 }

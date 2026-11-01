@@ -31,10 +31,9 @@ PostgreSQL unchanged except `hint_insert_binding` and `statistics_totals`.
   makes a new empty schema in one transaction: the Store tables, Init's
   acquisition tables (`sql/postgresql/acquisition.sql`), the policy row and
   the catalog row with the caller's binding; an existing schema is refused
-  `Refused { status: "schema exists" }`. `PostgresHandles::import` copies a
-  SQLite Store (any pack layout) into a new schema in one PostgreSQL
-  transaction over one SQLite snapshot, keeping every object, root, Commit
-  and inode serial; such a schema has no acquisition tables.
+  `Refused { status: "schema exists" }`. The SQLite-to-PostgreSQL import was
+  removed by #533 step 10c; a schema an earlier release imported has no
+  acquisition tables.
 - **Init into PostgreSQL (#533 step 10b).** `PostgresHandles::acquisition`
   is the acquisition port over the same session, with SQLite's row
   encodings, charges, refusal order and failures. A window of entries is one

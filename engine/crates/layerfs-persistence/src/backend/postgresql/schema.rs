@@ -8,9 +8,10 @@
 //! holds the one row writers lock for the publication lane. The pack-unit
 //! tables are absent: group-row layouts are SQLite physical choices. A
 //! schema made by [`create`] also has Init's acquisition tables (#533 step
-//! 10b, `acquisition.sql`), recorded in its schema source; one imported
-//! before them has none and refuses acquisition. A merge's records live in
-//! the writer connection's temporary tables (`merge_records.rs`), not here.
+//! 10b, `acquisition.sql`), recorded in its schema source; one an earlier
+//! release imported from SQLite has none and refuses acquisition. A merge's
+//! records live in the writer connection's temporary tables
+//! (`merge_records.rs`), not here.
 use super::session::transaction::Transaction;
 use crate::backend::records::{BackendError, Param};
 use layerfs_history::{CatalogId, HistoryCatalogConfig};
@@ -151,20 +152,6 @@ pub(crate) fn validate(
         return Err(BackendError::Integrity);
     }
     Ok((incarnation as u64, acquisition))
-}
-
-/// Records this engine's schema after rows were imported from another engine.
-pub(crate) fn record(tx: &Transaction<'_>) -> Result<(), BackendError> {
-    let definition = definition(tx)?;
-    tx.query(
-        "UPDATE history_meta SET schema_version=$1,schema_source=$2,schema_definition=$3 WHERE id=1",
-        vec![
-            Param::I64(SCHEMA_VERSION),
-            Param::Text(SCHEMA.to_owned()),
-            Param::Text(definition),
-        ],
-    )?;
-    Ok(())
 }
 
 /// Refuses a schema whose tables are not exactly a LayerFS Store's, with or

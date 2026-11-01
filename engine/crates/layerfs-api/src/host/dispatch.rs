@@ -113,7 +113,6 @@ pub fn backend(op: String, args: SdkValue) -> Outcome {
         "runtime.store.load" => crate::host::sync::load_store(&args),
         "runtime.store.unlink" => crate::host::sync::unlink(&args),
         "runtime.store.get_link" => crate::host::sync::last(&args),
-        "runtime.store.import_postgresql" => crate::host::postgres::import(&args),
         // #506 E1-E9: local sizes and heads, copy checks, listing,
         // providers, PostgreSQL status and live job progress
         "runtime.store.stat" => crate::host::local_stores::stat_stores(&args),
