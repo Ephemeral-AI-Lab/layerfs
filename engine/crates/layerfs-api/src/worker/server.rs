@@ -139,6 +139,8 @@ fn run(op: &str, args: SdkValue, root: &Path, _events: &mut dyn FnMut(SdkValue))
                 .to_owned();
             crate::store::files::run(root, &name, &args.get("args").cloned().unwrap_or_default())
         }
+        // a Sandbox or Workspace operation on this machine's own native
+        "sandbox.host" => crate::family::sandboxes::in_worker(root, &args),
         "host.call" | "host.backend" => {
             let name = args
                 .get_text("op")

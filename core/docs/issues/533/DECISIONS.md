@@ -89,6 +89,7 @@ names the smallest safe alternative the docs offer and why.
 | # | Recommended | Taken instead | Why |
 | --- | --- | --- | --- |
 | H §7.7 route table | sqlite on `docker` runs in process on Linux | Every sqlite Store not on `native` goes to its machine's worker, on every host | On Linux a `docker` Store lives in a Docker volume whose mountpoint belongs to root; opening it in the caller's process would need the volume path and root access. One route per machine kind is the smaller safe choice; the worker already opens the Store on the same kernel. (2026-11-02, delegated by owner, step 7) |
+| O27 | Remove the Linux `native` pairing and `backend/native/linux/` | Removed the pairing (`NativeLinuxProvider`, `Runtime::LinuxNative`; a Linux `native` Sandbox request is refused `Unsupported`, naming namespaces); kept `backend/native/linux/` | The namespaces backend runs on native's shared lifecycle and uses `boot`, `stat` and `mounts::filesystem` from that folder, and the host still reopens, stops and deletes `native` Sandbox records a Linux host wrote before 2.0, which uses the rest. (2026-11-02, delegated by owner) |
 
 ## Implementation choices (not owner decisions)
 
@@ -96,3 +97,17 @@ Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated 
 
 - `commit.get` pages the Branch's Commits 1000 at a time until it finds the id (or an id prefix of 8+ characters). The Store has no by-id Commit lookup on the public method table; adding one is a later change.
 - Step 7 was committed before step 6: the route reads `worker.json` directly until step 6 lets it start a stopped machine. The order changes no behaviour of either step.
+- A Sandbox's 2.0 record (name, project, machine, id, platform) is
+  `machine/<machine>/sandbox/<name>/record.json`; the host Sandbox code's
+  own state (daemon keys, mounts, processes) stays where 1.1.0 kept it,
+  under the project's folder, keyed by the Sandbox's number. Moving that
+  state is a later refactor; the name is the only handle callers see.
+- A `native` Sandbox's daemon executable is the native machine record's
+  `daemon`, else the internal `LAYERFS_DAEMON`, else
+  `~/.cache/layerfs/bundle/<version>/<os>-<arch>/layerfs-daemon`.
+- Sandboxes on a VM or ssh machine are sent to its worker (`sandbox.host`),
+  which writes the Store's and project's records under its root and runs
+  the same host Sandbox code on its own `native` (namespaces in the Linux
+  guest). Sandboxes on the `docker` machine and Sandboxes of PostgreSQL
+  Stores are refused `Unsupported` in step 12 (the 1.1.0 Docker path needs
+  the image and volume settings the 1.1.0 JS runtime supplied).

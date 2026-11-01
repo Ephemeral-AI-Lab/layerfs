@@ -4,4 +4,5 @@ pub(crate) mod backups;
 pub(crate) mod files;
 pub(crate) mod postgres;
 pub(crate) mod projects;
+pub(crate) mod sandboxes;
 pub(crate) mod stores;
