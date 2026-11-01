@@ -137,3 +137,13 @@ Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated 
   `/layerfs/data`; the internal `LAYERFS_WORKER_ROOT` names another root
   for tests. The worktree build bundle carries `layerfs` beside the daemon;
   a sealed machine bundle (O16, `bundle.json`) is still placed by hand.
+- Step 16: the Python package lives in `api/python` (beside the Node
+  package); its PyO3 module is the engine crate `layerfs-python`
+  (`layerfs._native`, abi3 for Python 3.10+). PyO3 0.30.1 and its build
+  helper were fetched into this worktree's private Cargo home (G6); no other
+  dependency changed. `layerfs.aio` runs each synchronous call on a thread
+  (`asyncio.to_thread`); the native call releases the interpreter. Wheels:
+  only macOS arm64 was built here (maturin 1.9.6); the Linux x64/arm64 glibc
+  wheels (O20) are NOT_RUN, no Linux build host in this pass. The
+  production LOC counter does not count Python; the package's Python lines
+  are reported beside it in the commit.

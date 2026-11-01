@@ -13,3 +13,6 @@ benchmark-results/*
 !benchmark-results/fs-bench-pro/
 benchmark-results/fs-bench-pro/*
 !benchmark-results/fs-bench-pro/optimization-history.md
+/api/python/src/layerfs/_native*.so
+/api/python/src/layerfs/__pycache__/
+/api/python/test/__pycache__/

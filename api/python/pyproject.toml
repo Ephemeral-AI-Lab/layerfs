@@ -1,0 +1,16 @@
+[build-system]
+requires = ["maturin>=1.16,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "layerfs"
+version = "2.0.0"
+description = "LayerFS for Python: the nine families of the one call table, each a call into the native library (#533)"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[tool.maturin]
+manifest-path = "../../engine/crates/layerfs-python/Cargo.toml"
+module-name = "layerfs._native"
+python-source = "src"
+features = ["pyo3/extension-module"]

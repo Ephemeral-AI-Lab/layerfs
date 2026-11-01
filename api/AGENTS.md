@@ -3,8 +3,9 @@
 > **Status:** Current general guide (LayerFS 2.0, #533).
 
 Read [repository instructions](../AGENTS.md) first. This layer holds the one
-published JavaScript package, `layerfs`, in `node/`, and the addon build
-script in `scripts/`. It holds no Rust: the library `layerfs-api` (the call
+published JavaScript package, `layerfs`, in `node/`, the Python package
+`layerfs` in `python/` (its PyO3 module is the engine crate
+`layerfs-python`), and the addon build script in `scripts/`. It holds no Rust: the library `layerfs-api` (the call
 table and its one dispatcher) and the Node binding `layerfs-node` are engine
 crates (see the [engine guide](../engine/AGENTS.md#scope-and-ownership));
 `scripts/build-native.mjs` builds the addon beside its crate at

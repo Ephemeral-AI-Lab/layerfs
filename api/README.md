@@ -23,7 +23,8 @@ as nine families of functions:
 
 `layerfs.table` lists every call with its arguments and options; it is the
 source for the list above, for the `layerfs` command (`layerfs help`) and for
-the Python package.
+the Python package in [`python/`](python/README.md), which has the same
+families.
 
 ```js
 import layerfs from "layerfs";
