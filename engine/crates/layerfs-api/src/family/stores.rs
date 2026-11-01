@@ -210,6 +210,8 @@ fn sandboxes_of(home: &Path, name: &str) -> Result<Vec<String>> {
 /// one of its projects runs, or a live process moves it. Under the home lock.
 fn idle(home: &Path, name: &str, record: &SdkValue) -> Result<()> {
     route::moving(record, name)?;
+    // this process's own open copy closes first
+    crate::store::open::close(&paths::store_file(home, name))?;
     let holders = lease::holders(home, name)?;
     if !holders.is_empty() {
         return Err(refused(

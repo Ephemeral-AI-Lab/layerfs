@@ -23,6 +23,16 @@ pub struct Served {
 
 /// Serves `listener` until it fails. `root` is the worker's own state root.
 pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::Result<Served> {
+    // the root holds Stores and records: private to the worker's user, as a
+    // home is (a machine's data disk mounts 0755)
+    {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&root)?;
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700))?;
+    }
     let secret = Arc::new(secret);
     let root = Arc::new(root);
     let served = Arc::new(AtomicU64::new(0));
@@ -149,7 +159,21 @@ fn run(op: &str, args: SdkValue, root: &Path, _events: &mut dyn FnMut(SdkValue))
 }
 
 /// `args` with `home` set to the worker's root, whatever the caller sent.
+/// A call that names a valid `store` gets that Store's file under the root
+/// as its `storePath`, whatever the caller sent.
 fn with_home(args: SdkValue, root: &Path) -> SdkValue {
-    let root = SdkValue::text(root.display().to_string());
-    crate::home::with_field(args, "home", root)
+    let file = args
+        .get_text("store")
+        .filter(|store| crate::names::name("store", store).is_ok())
+        .map(|store| crate::home::paths::store_file(root, store));
+    let text = SdkValue::text(root.display().to_string());
+    let args = crate::home::with_field(args, "home", text);
+    match file {
+        Some(file) => crate::home::with_field(
+            args,
+            "storePath",
+            SdkValue::text(file.display().to_string()),
+        ),
+        None => args,
+    }
 }

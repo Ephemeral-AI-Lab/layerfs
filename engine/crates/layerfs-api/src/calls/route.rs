@@ -14,6 +14,9 @@ pub fn run(call: &Call, context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if matches!(call.family, "branch" | "commit" | "file") {
         return crate::family::files::run(context, call.family, call.call, args);
     }
+    if call.family == "project" {
+        return crate::family::projects::run(context, call.call, args);
+    }
     if call.family == "store" && !matches!(call.call, "connect" | "disconnect") {
         return crate::family::stores::run(context, call.call, args);
     }
@@ -43,7 +46,6 @@ pub fn run(call: &Call, context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 /// The function of `call`, or the #533 step that builds it.
 pub fn handler(call: &Call) -> Result<Handler, u8> {
     Err(match call.family {
-        "project" => 9,
         "sandbox" | "workspace" => 12,
         "machine" => 6,
         "store" if matches!(call.call, "connect" | "disconnect") => 10,

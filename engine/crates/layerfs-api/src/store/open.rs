@@ -86,3 +86,14 @@ pub(crate) fn close_idle(idle: Duration) -> usize {
     }
     count
 }
+
+/// Closes the Store at `path` now, if this process holds it open: `store
+/// move` and `store remove` need its file closed. A call still running on
+/// it keeps it open until that call returns.
+pub(crate) fn close(path: &std::path::Path) -> Result<bool, SdkRefusal> {
+    let entry = OPEN.lock().unwrap_or_else(|e| e.into_inner()).remove(path);
+    match entry {
+        Some(entry) => direct::release(&entry.args).map(|_| true),
+        None => Ok(false),
+    }
+}
