@@ -13,7 +13,7 @@ fn a_gone_container_is_reclaimed_by_removing_its_records() {
         &format!(r#"{{"message":"No such container: {CID}"}}"#),
     );
     home.node(
-        "assert.deepEqual(await reclaim(), {value:{kind:'ok',reclaimed:['1']}});",
+        "assert.deepEqual(await reclaim(), {value:{kind:'ok',reclaimed:['1'],skipped:[]}});",
         None,
         Duration::from_secs(5),
     );
@@ -67,7 +67,7 @@ fn a_number_started_again_with_another_container_is_left_alone() {
         },
     );
     home.node(
-        "assert.deepEqual(await reclaim(), {value:{kind:'ok',reclaimed:[]}});",
+        "assert.deepEqual(await reclaim(), {value:{kind:'ok',reclaimed:[],skipped:[]}});",
         None,
         Duration::from_secs(5),
     );
@@ -90,7 +90,7 @@ fn a_stopped_container_is_refused_as_gone_then_reclaimed_by_deleting_it() {
         assert.equal(first.refused.detail.containerGone, true);
         assert.equal(first.refused.detail.containerStopped, true);
         assert.equal(first.refused.detail.container, 'b'.repeat(64));
-        assert.deepEqual(await reclaim(), {value:{kind:'ok',reclaimed:['1']}});
+        assert.deepEqual(await reclaim(), {value:{kind:'ok',reclaimed:['1'],skipped:[]}});
     "#,
         None,
         Duration::from_secs(5),

@@ -46,7 +46,7 @@ function answer(op, args) {
       { name: "main", base: "layer0000000000aa", head: null },
       { name: "cart", base: "base1234567890ab", head: "head1234567890ab" },
     ], hasMore: false, nextPagePos: null } };
-    case "project.list_sandboxes": return { value: { kind: "ok", items: exports.sandboxList } };
+    case "project.list_sandboxes": return { value: { kind: "ok", items: exports.sandboxList, ...(exports.skippedList ? { skipped: exports.skippedList } : {}) } };
     case "branch.fork": return { value: { kind: "Forked", branch: args.name, base: "lay0", head: "not-a-publication" } };
     case "branch.merge": return { value: { kind: "Merged", branch: args.name, head: "m3rge", root: "r00t" } };
     case "branch.publish": return { value: { kind: "Added", source: { branch: "feature", commit: "pub1" }, publishedLayer: { id: "lay1" } } };

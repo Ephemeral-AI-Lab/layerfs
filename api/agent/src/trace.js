@@ -134,7 +134,22 @@ export async function traced(options, method, args, send) {
   } catch {
     write(file, { ...line, ms, ok: !plain.refused });
   }
+  skippedLines(file, line, plain.value?.skipped);
   return plain;
+}
+
+/** One line per Sandbox record the call left out because it was refused
+ * when read (#529 finding 6): listing, reclaim and create skip such a record
+ * and leave it in place; runtime.sandbox.records reports it. */
+function skippedLines(file, { id, method, project }, skipped) {
+  if (!Array.isArray(skipped)) return;
+  for (const item of skipped) {
+    try {
+      write(file, { layerfs_trace: 1, id, method, ...(project ? { project } : {}), phase: "skipped", sandbox: String(item.sandbox), code: item.code ?? null, message: short(String(item.message ?? "")) });
+    } catch {
+      // a trace is diagnostic
+    }
+  }
 }
 
 function queued(ms, { runUs, connectionWaitUs }) {

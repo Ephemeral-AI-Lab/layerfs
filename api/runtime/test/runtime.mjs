@@ -259,7 +259,7 @@ try {
     ] };
     const asked = native.calls.length;
     const both = await runtime.sandbox.list();
-    assert.deepEqual(native.args.slice(asked).filter((a, i) => native.calls[asked + i] === "runtime.sandbox.records").map((a) => [a.project, a.home, "deploy" in a]), [["shop", home, false]], "one records call per project, with no deployment");
+    assert.deepEqual(native.args.slice(asked).filter((a, i) => native.calls[asked + i] === "runtime.sandbox.records").map((a) => [a.project, a.home, a.deploy]), [["shop", home, { containerPrefix: "layerfs-" }]], "one records call per project, with no backend: only the home's name prefix (and LAYERFS_LOCAL_DIR where it has one) to check local records by (#529)");
     assert.deepEqual(both.map((c) => [c.name, c.runtime, c.platform, c.state, c.running, c.owned]), [
       ["layerfs-gone-1", "docker", "docker", "exited", false, false], ["layerfs-shop-1", "docker", "docker", "running", true, true],
       ["layerfs-shop-4", "native", "linux", "running", true, true], ["layerfs-shop-5", "namespaces", "linux", "stopped", false, true],
@@ -296,6 +296,15 @@ try {
     native.recordList = { shop: [{ sandbox: "4", name: "layerfs-shop-4", runtime: "namespaces", platform: "linux", image: IMAGE, state: "stopped", workspaces: 0 }] };
     native.reclaimed = ["4"];
     assert.deepEqual(await runtime.sandbox.sweep(), { reclaimed: { shop: ["4"] }, failed: [] });
+    // #529 finding 6: a record refused when read starts no reclaim and fails nothing;
+    // it may still hold the Store, so it counts among the Store's holders
+    const refusedRecord = { sandbox: "5", name: "layerfs-shop-5", runtime: "native", platform: null, image: "local", state: "refused", workspaces: 0, refusal: { code: "InvalidInput", message: "whose owner marker cannot be read; set LAYERFS_LOCAL_DIR" } };
+    native.recordList = { shop: [refusedRecord] };
+    const none = native.calls.length;
+    assert.deepEqual(await runtime.sandbox.sweep(), { reclaimed: {}, failed: [] });
+    assert.equal(native.calls.slice(none).filter((c) => c === "runtime.sandbox.reclaim").length, 0);
+    const { holding } = await import("../src/sandbox/records.js");
+    assert.equal(holding(refusedRecord), true);
     delete native.recordList;
     delete native.reclaimed;
     await runtime.close();

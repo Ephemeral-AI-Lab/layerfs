@@ -220,7 +220,24 @@ it. `project.list_sandboxes()` skips a stopped Sandbox and keeps its
 records. Listing, reclaim and every call on a Sandbox follow its record,
 whatever the caller's `LAYERFS_SANDBOX` (#529; before it a client left out
 another backend's records); `runtime.sandbox.records` lists every record with
-its `runtime`, `platform` and `state` (#527 step 12); the next mount or `runtime.sandbox.reclaim` that meets a stopped or
+its `runtime`, `platform` and `state` (#527 step 12).
+
+**Records refused when read** (#529 finding 6). A record that cannot be read
+for a call (a damaged file, or a local record failing its directory or owner
+marker checks) no longer fails the call for the whole project:
+`project.list_sandboxes()` leaves it out, with the same answer shape;
+`runtime.sandbox.reclaim`, the sweep and `sandbox.create`'s reclaim skip it and
+leave it in place (nothing is deleted, opened or stopped); and
+`runtime.sandbox.records` keeps it with `state: "refused"` and
+`refusal: { code, message }`. With `LAYERFS_TRACE` set, each call that skips
+one writes one line for it: `{ phase: "skipped", method, sandbox, code,
+message }`, with the call's `id`. A call that names that Sandbox (mount, exec,
+close, `list_workspaces`) is still refused with its own code. A malformed
+`LAYERFS_LOCAL_DIR` or `LAYERFS_SANDBOX` is the caller's setting, not a
+record's, and still refuses the call. Failures to inspect what a readable
+record names (Docker not answering, say) still fail the call.
+
+The next mount or `runtime.sandbox.reclaim` that meets a stopped or
 removed container reclaims the Sandbox: it deletes a stopped container
 (unforced, once) and removes the Sandbox's records, so the number is used
 again. `runtime.sandbox.sweep`, which the runtime runs once when it opens,
@@ -371,9 +388,11 @@ hold the `owner` marker its create wrote (mode 0600, never followed if a
 symlink), naming the real path of the record's own directory
 `LAYERFS_HOME/<project>/sandboxes/<n>`. A record made before #529 has no
 marker, so such a client needs `LAYERFS_LOCAL_DIR` set to use it. Any other
-record is refused `InvalidInput`, before any effect, by every call that reads
-it (listing, reclaim, mount, close), naming `LAYERFS_LOCAL_DIR` as the fix;
-it is left in place and nothing is deleted. A record of the former
+record is refused `InvalidInput` before any effect, naming
+`LAYERFS_LOCAL_DIR` as the fix, and left in place: a call that names that
+Sandbox (mount, exec, close, `list_workspaces`) is refused, and listing,
+reclaim and `sandbox.create` leave it out (see "Records refused when read"
+below). Removing such a record stays a manual step. A record of the former
 `local` runtime (an earlier, unmerged build) is never used: it is refused
 and left out the same way and nothing it names is deleted. A daemon that ends (idle close, crash, kill) is the stopped
 observation: Workspace calls to it are refused, and the next `sandbox.create`

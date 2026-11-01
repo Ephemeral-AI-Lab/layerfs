@@ -442,7 +442,8 @@ fn abandon(directory: &Path, id: &str, mut failure: Box<ProviderFailure>) -> Sdk
 /// `sandbox.create({ image, platform })`: under the project's guard, reclaims the
 /// project's idle-closed Sandboxes, then starts the lowest free number on
 /// the call's image (`deploy.image`) and waits for its daemon:
-/// `{ sandbox, name, image, platform, runtime }`. With `deploy.sandbox`
+/// `{ sandbox, name, image, platform, runtime, skipped }` (`skipped`: the
+/// records its reclaim left out, as listing reports them). With `deploy.sandbox`
 /// `native` or `namespaces` it starts a daemon process instead of a
 /// container; a native one's `image` is `local`. `platform` (#529) is
 /// checked against that backend and recorded. The only call that starts a
@@ -460,7 +461,8 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
     };
     let project = crate::discovery::project_dir(args)?;
     let _placing = crate::discovery::guard(&project)?;
-    crate::workspace::reclaim_gone(args)?;
+    // records refused when read are left in place and reported (#529 finding 6)
+    let skipped = crate::workspace::reclaim_gone(args)?;
     let state = start(args, &project, store)?;
     Ok(SdkValue::map([
         ("sandbox", SdkValue::text(&state.id)),
@@ -474,6 +476,7 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
             "runtime",
             SdkValue::text(crate::runtime::kind(&state.runtime)),
         ),
+        ("skipped", SdkValue::List(skipped)),
     ]))
 }
 

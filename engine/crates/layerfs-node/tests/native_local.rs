@@ -8,7 +8,7 @@ mod support;
 use layerfs_bridge::control::{Answer, Reply, SdkValue};
 use std::{
     io::Write,
-    os::unix::fs::OpenOptionsExt,
+    os::unix::fs::{DirBuilderExt, OpenOptionsExt},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -32,9 +32,25 @@ fn record(
     name: &str,
     edit: impl FnOnce(&mut Vec<(String, SdkValue)>),
 ) {
+    record_of(home, "1", runtime, directory, name, edit)
+}
+
+/// [`record`] for Sandbox `n`, whose directory is made if missing.
+fn record_of(
+    home: &Home,
+    n: &str,
+    runtime: &str,
+    directory: &str,
+    name: &str,
+    edit: impl FnOnce(&mut Vec<(String, SdkValue)>),
+) {
+    let at = home.0.join("proj/sandboxes").join(n);
+    if !at.exists() {
+        std::fs::DirBuilder::new().mode(0o700).create(&at).unwrap();
+    }
     let bytes = |n: u8| SdkValue::Bytes(vec![n; 32]);
     let mut fields: Vec<(String, SdkValue)> = vec![
-        ("id".into(), SdkValue::text("1")),
+        ("id".into(), SdkValue::text(n)),
         ("project".into(), SdkValue::text("proj")),
         ("name".into(), SdkValue::text(name)),
         ("container".into(), SdkValue::text(CID)),
@@ -55,7 +71,7 @@ fn record(
         .create(true)
         .truncate(true)
         .mode(0o600)
-        .open(home.0.join("proj/sandboxes/1/sandbox.record"))
+        .open(at.join("sandbox.record"))
         .unwrap();
     file.write_all(
         &Answer {
@@ -123,7 +139,11 @@ fn owner(home: &Home, own: &Path, n: &str) {
 
 const NEITHER: &str = "assert.equal(r.refused?.code, 'InvalidInput', JSON.stringify(r));
     assert.match(r.refused.message, /neither used nor deleted/);";
-const RECLAIMED: &str = "assert.deepEqual(r, {value:{kind:'ok',reclaimed:['1']}});";
+/// Reclaim leaves a record refused when read in place and names it (#529
+/// finding 6): nothing reclaimed, the call not refused.
+const SKIPPED: &str = "assert.deepEqual([r.value?.reclaimed, r.value?.skipped?.map((s) => [s.sandbox, s.code])], [[], [['1', 'InvalidInput']]], JSON.stringify(r));
+    assert.match(r.value.skipped[0].message, /neither used nor deleted/);";
+const RECLAIMED: &str = "assert.deepEqual(r, {value:{kind:'ok',reclaimed:['1'],skipped:[]}});";
 
 fn text(path: &Path) -> &str {
     path.to_str().unwrap()
@@ -153,7 +173,7 @@ fn a_native_record_naming_another_directory_is_neither_used_nor_deleted() {
         ("/".to_owned(), ""),
     ] {
         record(&home, "native", &directory, name, |_| {});
-        reclaim(&home, "native", Some(r), NEITHER);
+        reclaim(&home, "native", Some(r), SKIPPED);
         assert!(
             home.0.join("proj/sandboxes/1/sandbox.record").exists(),
             "the record of {directory} was removed"
@@ -210,8 +230,7 @@ fn with_no_local_dir_a_record_s_directory_must_be_real_and_owned_by_it() {
     let other = root.join("layerfs-proj-2");
     std::fs::create_dir(&other).unwrap();
     owner(&home, &other, "1");
-    let refused = "assert.equal(r.refused?.code, 'InvalidInput', JSON.stringify(r));
-        assert.match(r.refused.message, /neither used nor deleted/);";
+    let refused = SKIPPED;
     // what the case is, the record's directory and name, and the setup
     type Case<'a> = (&'a str, &'a Path, &'a str, Box<dyn Fn() + 'a>);
     let mut cases: Vec<Case> = vec![
@@ -333,7 +352,9 @@ fn a_damaged_boot_or_port_is_refused_and_removes_nothing() {
             &home,
             "native",
             Some(text(&root)),
-            &format!("assert.equal(r.refused?.code, {code:?}, JSON.stringify(r));"),
+            &format!(
+                "assert.deepEqual([r.value?.reclaimed, r.value?.skipped?.map((s) => [s.sandbox, s.code])], [[], [['1', {code:?}]]], JSON.stringify(r));"
+            ),
         );
         assert!(own.join("daemon.log").exists(), "{key}");
         assert!(
@@ -373,7 +394,7 @@ fn close_refused_as_unused(home: &Home, deploy: &str) {
 
 /// Reclaim leaves a record no host reopens out: nothing is reclaimed,
 /// nothing is refused (#527 step 12).
-const LEFT_OUT: &str = "assert.deepEqual(r, {value:{kind:'ok',reclaimed:[]}});";
+const LEFT_OUT: &str = "assert.deepEqual(r, {value:{kind:'ok',reclaimed:[],skipped:[]}});";
 
 #[test]
 fn a_record_of_the_former_local_runtime_is_never_used_nor_deleted() {
@@ -429,7 +450,7 @@ fn every_backend_s_record_is_listed_with_its_runtime_and_state() {
     home.node(
         &format!(
             "assert.deepEqual({records}, {{value:{{kind:'ok', items:[{{sandbox:'1', name:'layerfs-proj-1', runtime:'native', platform:null, image:'local', workspaces:0, state:'stopped'}}]}}}});
-            assert.deepEqual({listed}, {{value:{{kind:'ok', items:[]}}}});"
+            assert.deepEqual({listed}, {{value:{{kind:'ok', items:[], skipped:[]}}}});"
         ),
         None,
         Duration::from_secs(10),
@@ -553,4 +574,81 @@ fn one_sandbox_setting_maps_the_former_pair_and_refuses_conflicts() {
         Duration::from_secs(10),
     );
     assert!(!own.exists());
+}
+
+#[test]
+fn a_record_refused_when_read_is_left_out_reported_and_kept() {
+    // #529 finding 6: one good record, one from before #529 with no owner
+    // marker read with no LAYERFS_LOCAL_DIR, one damaged; listing and
+    // reclaim leave the two out and fail nothing, records reports them,
+    // nothing is deleted, and a call naming one is still refused
+    let home = Home::new();
+    let root = root(&home).canonicalize().unwrap();
+    let own = own(&root);
+    owner(&home, &own, "1");
+    let stat = std::fs::read_to_string("/proc/self/stat").unwrap();
+    let start = stat[stat.rfind(')').unwrap() + 2..]
+        .split(' ')
+        .nth(19)
+        .unwrap()
+        .to_owned();
+    // Sandbox 1 runs: its record names this test's own process
+    record(&home, "native", text(&own), "layerfs-proj-1", |fields| {
+        set("pid", Some(SdkValue::Int(i64::from(std::process::id()))))(fields);
+        set("start", Some(SdkValue::text(&start)))(fields);
+    });
+    let old = root.join("layerfs-proj-2");
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::write(old.join("daemon.log"), b"log").unwrap();
+    record_of(&home, "2", "native", text(&old), "layerfs-proj-2", |_| {});
+    let damaged = home.0.join("proj/sandboxes/3");
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&damaged)
+        .unwrap();
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(damaged.join("sandbox.record"))
+        .unwrap()
+        .write_all(b"not a record")
+        .unwrap();
+    let docker = "deploy:{sandbox:'docker'}";
+    home.node(
+        &format!(
+            "const listed = await native.call('project.list_sandboxes', {{...args, {docker}}});
+            assert.deepEqual(listed.value.items.map((s) => [s.sandbox, s.runtime]), [['1', 'native']], JSON.stringify(listed));
+            assert.deepEqual(listed.value.skipped.map((s) => s.sandbox), ['2', '3']);
+            assert.equal(listed.value.skipped[0].code, 'InvalidInput');
+            assert.match(listed.value.skipped[0].message, /owner marker.*LAYERFS_LOCAL_DIR/);
+            const records = await native.backendCall('runtime.sandbox.records', {{...args, {docker}}});
+            const [one, two, three] = records.value.items;
+            assert.deepEqual([one.sandbox, one.state], ['1', 'running']);
+            assert.deepEqual([two.sandbox, two.runtime, two.state, two.refusal.code], ['2', 'native', 'refused', 'InvalidInput']);
+            assert.match(two.refusal.message, /owner marker.*LAYERFS_LOCAL_DIR/);
+            assert.deepEqual([three.sandbox, three.runtime, three.state], ['3', null, 'refused']);
+            assert.ok(three.refusal.code && three.refusal.message, JSON.stringify(three));
+            const reclaimed = await native.backendCall('runtime.sandbox.reclaim', {{...args, {docker}}});
+            assert.deepEqual(reclaimed.value.reclaimed, []);
+            assert.deepEqual(reclaimed.value.skipped.map((s) => s.sandbox), ['2', '3']);
+            for (const sandbox of ['2', '3']) {{
+              const closed = await native.call('sandbox.close', {{...args, sandbox, {docker}}});
+              assert.ok(closed.refused, `close ${{sandbox}}: ${{JSON.stringify(closed)}}`);
+            }}
+            const two_ = await native.call('sandbox.close', {{...args, sandbox: '2', {docker}}});
+            assert.equal(two_.refused.code, 'InvalidInput');"
+        ),
+        None,
+        Duration::from_secs(10),
+    );
+    for kept in [
+        home.0.join("proj/sandboxes/1/sandbox.record"),
+        home.0.join("proj/sandboxes/2/sandbox.record"),
+        damaged.join("sandbox.record"),
+        old.join("daemon.log"),
+        own.join("daemon.log"),
+    ] {
+        assert!(kept.exists(), "{} was removed", kept.display());
+    }
 }

@@ -368,6 +368,27 @@ pub(crate) fn directory(
     Ok(root.join(name))
 }
 
+/// The deployment's `localDir` (LAYERFS_LOCAL_DIR), when set, is an absolute
+/// path with no `.` or `..`. A call with another is refused before any record
+/// is read: the setting is the caller's, not a record's (#529 finding 6).
+pub(crate) fn local_dir_setting(args: &SdkValue) -> Result<(), SdkRefusal> {
+    let Some(root) = (args.get("deploy")).and_then(|deploy| deploy.get_text("localDir")) else {
+        return Ok(());
+    };
+    let root = Path::new(root);
+    let dotted = (root.components()).any(|c| matches!(c, Component::ParentDir | Component::CurDir));
+    if root.is_absolute() && !dotted {
+        return Ok(());
+    }
+    Err(refused(
+        "InvalidInput",
+        format!(
+            "deploy.localDir (LAYERFS_LOCAL_DIR) {} must be an absolute path with no . or ..",
+            root.display()
+        ),
+    ))
+}
+
 /// The marker in a local Sandbox's directory naming, after realpath, the
 /// directory of the record that owns it (#529).
 const OWNER: &str = "owner";

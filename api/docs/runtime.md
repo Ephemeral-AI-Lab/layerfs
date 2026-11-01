@@ -20,7 +20,7 @@ try {
   await runtime.project.get_init(job.id);  // { step, scanned, totals, imported, project, error, ended }
   await runtime.project.list();            // [{ name, volume, image, source, created, initialized }]
   await runtime.project.get_state("shop", since);
-  await runtime.sandbox.reclaim("shop");   // { reclaimed: [ids] }
+  await runtime.sandbox.reclaim("shop");   // { reclaimed: [ids] }; records refused when read are kept
   await runtime.sandbox.list_leftovers();
   await runtime.sandbox.clean_leftovers(["layerfs-old-1"]);
   await runtime.sandbox.list();            // [{ name, project, sandbox, runtime, platform, state, running, startedAt, finishedAt, image, ports, scratch, owned }]
@@ -130,13 +130,20 @@ lines from now on, or from `since`, each with `actor`, its trace file's name.
   start native and namespaces Sandboxes on this home's Stores (the platform's
   `localSandboxes` capability), each SQLite project's records are read too,
   through the binding's `runtime.sandbox.records` (#527 step 12, F6): every
-  record with its `runtime` and `state` (`running`, `stopped`, `gone` or
-  `unknown`), whatever backend this runtime's clients use, reopening none.
+  record with its `runtime` and `state` (`running`, `stopped`, `gone`,
+  `refused` or `unknown`), whatever backend this runtime's clients use,
+  reopening none. The call passes the home's `containerPrefix` and, on a
+  Linux `local` home, its `localDir`, so a local record is checked as the
+  home's clients check it (#529); no backend is passed. A record refused when
+  read (damaged, or failing its directory or owner-marker checks) has state
+  `refused` and `refusal: { code, message }` (#529 finding 6); nothing else
+  changes for it.
   Their native and namespaces Sandboxes are listed beside the containers,
   named by their directory, with no container facts (`scratch`,
   `startedAt` and `finishedAt` null, no ports).
 - Removing a Store (`project.delete`, `store.remove`) counts those running
-  native and namespaces Sandboxes (and any whose state is unknown) among its
+  native and namespaces Sandboxes (and any whose state is `refused` or
+  unknown, since what such a record names is not checked) among its
   holders on Linux: they refuse `Busy` like a running container, and with
   `stopSandboxes` still `Busy`, naming each, before any container or volume
   is removed: only a client of their own backend closes them. A `vm:` home's
@@ -149,7 +156,11 @@ lines from now on, or from `since`, each with `actor`, its trace file's name.
   never touched; containers no project records stay for `list_leftovers`.
   On Linux it also reclaims a project whose records name a stopped native
   or namespaces (`linux`) Sandbox; reclaim follows each record, whatever the
-  client's backend (#529).
+  client's backend (#529). A record refused when read starts no reclaim, and
+  reclaim leaves it in place: it fails nothing, is not deleted, opened or
+  stopped, and the client's trace (`LAYERFS_TRACE`) has one `phase:
+  "skipped"` line for it (#529 finding 6). Removing it, when its ownership
+  cannot be checked, stays a manual step.
   `open` runs it once in the background unless `sweep: false`;
   `status().sweep` is `null`, `{ state: "running" }` or
   `{ state: "done" | "failed", at, … }`, and `close` waits for it.

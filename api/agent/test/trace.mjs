@@ -1,5 +1,5 @@
 // Per-call trace checks over a stand-in binding; each case is one command:
-//   node api/agent/test/trace.mjs on|off|failure|layerfs-env|start|ids|no-content|store|daemon-host
+//   node api/agent/test/trace.mjs on|off|failure|layerfs-env|start|ids|no-content|store|daemon-host|skipped
 // No Docker, Store or daemon is used.
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
@@ -305,8 +305,28 @@ try {
         assert.equal(args.deploy?.daemonHost, "host.docker.internal", method);
       }
     }
+  } else if (selected === "skipped") {
+    // #529 finding 6: a record the binding left out because it was refused
+    // when read gets one trace line each; the listing's shape is unchanged
+    const native = (await import(FAKE)).default;
+    native.skippedList = [
+      { sandbox: "2", code: "InvalidInput", message: "Sandbox 2's local record names /x, whose owner marker cannot be read; set LAYERFS_LOCAL_DIR" },
+      { sandbox: "3", code: "Failed", message: "damaged record" },
+    ];
+    const client = await LayerFS.open("website");
+    const untraced = await client.project.list_sandboxes();
+    assert.equal(existsSync(file), false);
+    process.env.LAYERFS_TRACE = file;
+    const listed = await (await LayerFS.open("website")).project.list_sandboxes();
+    assert.deepEqual(listed, untraced);
+    assert.ok(!("skipped" in listed), "the listing's shape is unchanged");
+    const skipped = read(file).filter((line) => line.phase === "skipped");
+    assert.deepEqual(skipped.map((line) => [line.method, line.sandbox, line.code]), [["project.list_sandboxes", "2", "InvalidInput"], ["project.list_sandboxes", "3", "Failed"]]);
+    const call = read(file).find((line) => line.method === "project.list_sandboxes" && line.phase === "end");
+    assert.ok(skipped.every((line) => line.id === call.id && /LAYERFS_LOCAL_DIR|damaged/.test(line.message)));
+    native.skippedList = undefined;
   } else {
-    console.error("usage: trace.mjs on|off|failure|layerfs-env|start|ids|no-content|store|daemon-host");
+    console.error("usage: trace.mjs on|off|failure|layerfs-env|start|ids|no-content|store|daemon-host|skipped");
     process.exit(2);
   }
   console.log(`PASS trace ${selected}`);
