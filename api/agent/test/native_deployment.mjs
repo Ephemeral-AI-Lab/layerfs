@@ -64,19 +64,20 @@ const archive = `/bundle/images/${"a".repeat(64)}.tar`;
 process.env.LAYERFS_SANDBOX_BACKEND = "namespaces";
 process.env.LAYERFS_IMAGE = docker.image;
 process.env.LAYERFS_IMAGE_ARCHIVE = archive;
-// a namespaces Sandbox's root is an image: the same digest Docker deploys
-// and the docker-archive the bundle carries
+// a namespaces Sandbox's root is the one image the bundle's docker-archive
+// holds (#529: LAYERFS_IMAGE stays Docker's; the binding reads the archive)
 assert.deepEqual(deployment(), {
   sandbox: "native",
   daemon: "/opt/layerfs-daemon",
   localDir: "/Users/me/lfs",
   sandboxBackend: "namespaces",
-  image: docker.image,
   imageArchive: archive,
 });
-// each of those is named when it is missing
+// an image the caller gives wins
+assert.equal(deployment({ image: `sha256:${"b".repeat(64)}` }).image, `sha256:${"b".repeat(64)}`);
+// with no LAYERFS_IMAGE at all it is the same; a missing archive is named
 delete process.env.LAYERFS_IMAGE;
-assert.throws(() => deployment(), (e) => e.code === "InvalidInput" && /\(LAYERFS_IMAGE\)/.test(e.message));
+assert.equal(deployment().imageArchive, archive);
 process.env.LAYERFS_IMAGE = docker.image;
 delete process.env.LAYERFS_IMAGE_ARCHIVE;
 assert.throws(() => deployment(), (e) => e.code === "InvalidInput" && /\(LAYERFS_IMAGE_ARCHIVE\)/.test(e.message));
@@ -133,7 +134,8 @@ try {
   process.env.LAYERFS_LOCAL_DIR = "/lfs";
   process.env.LAYERFS_IMAGE = docker.image;
   process.env.LAYERFS_IMAGE_ARCHIVE = archive;
-  const namespaces = { sandbox: "namespaces", daemon: "/opt/layerfs-daemon", localDir: "/lfs", image: docker.image, imageArchive: archive };
+  // its image is the archive's own (#529), not Docker's LAYERFS_IMAGE
+  const namespaces = { sandbox: "namespaces", daemon: "/opt/layerfs-daemon", localDir: "/lfs", imageArchive: archive };
   assert.deepEqual(deployment(), namespaces);
   // it needs the image fields the former pair needed
   delete process.env.LAYERFS_IMAGE_ARCHIVE;

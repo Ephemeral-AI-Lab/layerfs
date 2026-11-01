@@ -45,7 +45,7 @@ enum Magic {
 
 /// Unpacks `archive`'s layers, bottom first, into `root`.
 pub(super) fn unpack(archive: &Path, image: &Image, root: &Path) -> Result<(), RuntimeError> {
-    let manifest = manifest(archive, image)?;
+    let manifest = manifest(archive, Some(image))?;
     let mut wanted = Vec::with_capacity(manifest.layers.len() + 1);
     wanted.push(manifest.config.clone());
     wanted.extend(manifest.layers.iter().cloned());
@@ -70,8 +70,23 @@ pub(super) fn unpack(archive: &Path, image: &Image, root: &Path) -> Result<(), R
     Ok(())
 }
 
-/// The archive's `manifest.json`, as the entry whose config digest is `image`.
-fn manifest(archive: &Path, image: &Image) -> Result<Manifest, RuntimeError> {
+/// The image `archive` holds, by its config digest (#529): the one image its
+/// `manifest.json` names, which is the default of a namespaces Sandbox given
+/// no image. An archive naming none or several is refused, never guessed from.
+pub fn image_of(archive: &Path) -> Result<Image, RuntimeError> {
+    let manifest = manifest(archive, None)?;
+    let name = (manifest.config.file_name())
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| refuse("the image archive's config name"))?;
+    Image::parse(&format!(
+        "sha256:{}",
+        name.strip_suffix(".json").unwrap_or(name)
+    ))
+}
+
+/// The archive's `manifest.json`, as the entry whose config digest is
+/// `image`, or with no `image` its one entry.
+fn manifest(archive: &Path, image: Option<&Image>) -> Result<Manifest, RuntimeError> {
     let located = locate(archive, &[PathBuf::from("manifest.json")])?;
     let blob = located
         .first()
@@ -84,10 +99,12 @@ fn manifest(archive: &Path, image: &Image) -> Result<Manifest, RuntimeError> {
     read_blob(archive, blob, MANIFEST_MAX).and_then(|bytes| parse_manifest(&bytes, image))
 }
 
-/// Reads `manifest.json` and keeps the entry whose config digest is `image`.
-fn parse_manifest(bytes: &[u8], image: &Image) -> Result<Manifest, RuntimeError> {
+/// Reads `manifest.json` and keeps the entry whose config digest is `image`,
+/// or with no `image` the one entry it must hold.
+fn parse_manifest(bytes: &[u8], image: Option<&Image>) -> Result<Manifest, RuntimeError> {
     let mut found: Option<Manifest> = None;
     let mut named: Vec<String> = Vec::new();
+    let mut entries = 0usize;
     let mut json = Json::new(bytes);
     json.array(|element| {
         let mut config: Option<Vec<u8>> = None;
@@ -126,10 +143,11 @@ fn parse_manifest(bytes: &[u8], image: &Image) -> Result<Manifest, RuntimeError>
             return Ok(());
         };
         let config = path_of(&config)?;
+        entries += 1;
         if named.len() < 8 {
             named.push(config.display().to_string());
         }
-        if found.is_none() && check_config(image, &config).is_ok() {
+        if found.is_none() && image.is_none_or(|image| check_config(image, &config).is_ok()) {
             found = Some(Manifest {
                 config,
                 layers: (layers.iter())
@@ -140,6 +158,15 @@ fn parse_manifest(bytes: &[u8], image: &Image) -> Result<Manifest, RuntimeError>
         Ok(())
     })?;
     json.finish()?;
+    let Some(image) = image else {
+        return match (entries, found) {
+            (1, Some(manifest)) => Ok(manifest),
+            _ => Err(refuse(format!(
+                "the image archive names {entries} images ({}); give the Sandbox's image digest",
+                named.join(", ")
+            ))),
+        };
+    };
     found.ok_or_else(|| {
         refuse(format!(
             "the image archive's config digest is {}, not the requested {}: the bundle does not \

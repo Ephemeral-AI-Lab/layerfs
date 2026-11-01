@@ -139,7 +139,7 @@ Keep each agent's operations on a Workspace sequential.
 | --- | --- |
 | `LAYERFS_HOME` | Absolute private directory for discovery records (projects, Sandboxes) and Init's temporary sealed Store, deleted once its install is recorded. Created as 0700; existing directories must be owned by the current effective user with no group/other access. Records are 0600, not symlinks. |
 | `LAYERFS_DOCKER` | Local Engine Unix socket; `/var/run/docker.sock` is the default. On the macOS worker route the worker and Init's container use the engine's socket inside its VM instead (the endpoint's `docker`). |
-| `LAYERFS_IMAGE` | Exact immutable runtime `sha256:...` digest a new Sandbox runs. A running Sandbox keeps the image it started with. |
+| `LAYERFS_IMAGE` | Exact immutable runtime `sha256:...` digest a new `docker` Sandbox runs (a `linux` or VM one runs the image its `LAYERFS_IMAGE_ARCHIVE` holds; see [Platforms](#platforms)). A running Sandbox keeps the image it started with. |
 | `LAYERFS_VOLUME` | Existing named local VM volume shared by the project's daemons. |
 | `LAYERFS_DAEMON` | Host path to the built Linux daemon executable. |
 | `LAYERFS_NATIVE` | Optional path of the real addon; defaults to `engine/crates/layerfs-node/layerfs.node`. |
@@ -179,8 +179,10 @@ Stores live** (#529, replacing "there is no placement", owner 2026-10-23):
 `sandbox.create({ image?, platform? }?)` is the only call that starts one, on
 the platform it names or the home's default. Under the project's lock it
 first reclaims Sandboxes that closed themselves, then starts the lowest free
-number on `image` (default `LAYERFS_IMAGE`) and returns `{ sandbox, image,
-platform }`. One project's Sandboxes may run different images and, on a
+number on `image` and returns `{ sandbox, image, platform }`. With no
+`image`, `docker` uses `LAYERFS_IMAGE`; `linux` and the VM platforms use the
+one image their `LAYERFS_IMAGE_ARCHIVE` holds, by its config digest. One
+project's Sandboxes may run different images and, on a
 Linux home, different platforms; the mount result and
 `project.list_sandboxes()` give each one's `image` and `platform`.
 `workspace.mount(sandbox, branch)` (both required, no options)
@@ -292,11 +294,16 @@ that holds it, so the home decides which platforms it allows;
 - **Settings.** A platform needs its own settings in the client's
   environment: `docker` its Docker settings (`LAYERFS_DOCKER`, `_IMAGE`,
   `_VOLUME`, `_DAEMON`), `linux` the namespaces ones (`LAYERFS_DAEMON`,
-  `_LOCAL_DIR`, `_IMAGE`, `_IMAGE_ARCHIVE`); a missing one is refused
-  `InvalidInput` naming it. The image a namespaces root is unpacked from is
-  named by its config digest, while a Docker engine with the containerd image
-  store names the same image by its index digest, so on such a host pass
-  `image` with the `linux` call.
+  `_LOCAL_DIR`, `_IMAGE_ARCHIVE`); a missing one is refused `InvalidInput`
+  naming it.
+- **Images.** An `image` given to `sandbox.create` wins. Without one, `docker`
+  runs `LAYERFS_IMAGE`, and `linux` and the VM platforms run the one image
+  their `LAYERFS_IMAGE_ARCHIVE` holds, read from its `manifest.json` (an
+  archive naming none or several is refused `InvalidInput`). The two differ
+  on purpose: a namespaces root is named by the image's config digest, while
+  a Docker engine with the containerd image store names the same image by its
+  index digest, so one `LAYERFS_IMAGE` cannot name both. A `linux` `image`
+  must be the archive's config digest.
 - **Linux mixes platforms in one project.** The SDK opens the Store at
   `LAYERFS_STORE_PATH`; a `docker` Sandbox mounts the project's volume, whose
   file that is, and a `linux` Sandbox's daemon opens the same file. Both see
@@ -413,8 +420,8 @@ with `config/daemon.setup`, `overlay/`, `workspaces/<k>`, `tmp/` and
 `daemon.log` — plus `bin/layerfs-daemon` (the daemon executable, copied in
 0755) and its sibling `<prefix><project>-<n>.root/`, the private root its init
 stage builds and pivots to. That root is an overlay: the Sandbox image
-(`LAYERFS_IMAGE`, the same `sha256:` digest Docker deploys, unpacked once per
-digest from the docker-archive `LAYERFS_IMAGE_ARCHIVE` into
+(the config digest of the one image the docker-archive `LAYERFS_IMAGE_ARCHIVE`
+holds, or the `image` given to `sandbox.create`; unpacked once per digest into
 `LAYERFS_LOCAL_DIR/images/`) is its read-only lower layer, and the Sandbox's
 own `overlay/upper` and `overlay/work` are its writable layer, deleted with
 it; the VM's own userland is not part of it. Over it come a private `/proc` (only the

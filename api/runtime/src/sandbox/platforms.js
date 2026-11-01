@@ -17,9 +17,9 @@ const onPath = (tool) => (process.env.PATH ?? "").split(delimiter).some((dir) =>
 export const allowedOf = (settings) =>
   settings.placement.kind === "vm" ? [settings.placement.provider] : settings.platform === "linux" ? ["docker", "linux"] : ["docker"];
 
-/** A linux Sandbox (namespaces on this host) needs its settings, root, FUSE and cgroup v2. */
+/** A linux Sandbox (namespaces on this host) needs its settings, root, FUSE and cgroup v2; its image is the one its archive holds. */
 const linuxMissing = (settings) => [
-  ...["image", "daemon", "localDir", "imageArchive"].filter((name) => !settings[name]),
+  ...["daemon", "localDir", "imageArchive"].filter((name) => !settings[name]),
   ...(process.getuid?.() === 0 ? [] : ["host:root"]),
   ...(existsSync("/dev/fuse") ? [] : ["host:/dev/fuse"]),
   ...(existsSync("/sys/fs/cgroup/cgroup.controllers") ? [] : ["host:cgroup2"]),

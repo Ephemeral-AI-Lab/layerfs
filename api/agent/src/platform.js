@@ -59,6 +59,10 @@ export function checkedPlatform(client, platform, os = process.platform) {
  * The deployment a new Sandbox of `platform` starts with. The home's default
  * keeps the home's own settings as they are (the former pair included, which
  * the binding maps or refuses); another platform names its runtime instead.
+ * The image is the caller's `image`, else the platform's own default: `docker`
+ * LAYERFS_IMAGE; `linux` and the VM platforms the one image their
+ * LAYERFS_IMAGE_ARCHIVE holds (its config digest, which the binding reads),
+ * since Docker's image store may name the same image by another digest.
  */
 export function platformDeployment(client, home, platform, image, os = process.platform) {
   const given = { ...client.options.deploy, ...(image ? { image } : {}) };
@@ -68,6 +72,7 @@ export function platformDeployment(client, home, platform, image, os = process.p
       : platform === "linux" && homeRuntime(given) === "native" ? "native" : "namespaces";
     named = { ...given, sandbox: runtime, sandboxBackend: undefined };
   }
+  if (!image && platform !== "docker" && platform !== "mac") named = { ...named, image: undefined };
   // a worker's Sandboxes run on its Linux host, the addon's on this one
   return deployment(named, Boolean(client.options.postgresql), transportOf(client).worker ? "linux" : os);
 }

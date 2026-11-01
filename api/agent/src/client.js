@@ -104,9 +104,10 @@ export function deployment(options = {}, postgresql = false, host = process.plat
  * daemon, the directory its Sandboxes live in and the optional name prefix.
  * Native on Linux uses FUSE with a root daemon and nonroot commands (501:20);
  * on macOS loopback NFS and this user. Namespaces (Linux) gives each Sandbox
- * a root filesystem from an image, so it also needs `image` (LAYERFS_IMAGE,
- * the same digest Docker deploys) and `imageArchive` (LAYERFS_IMAGE_ARCHIVE,
- * the docker-archive the bundle carries). The former `native` with
+ * a root filesystem from an image, so it also needs `imageArchive`
+ * (LAYERFS_IMAGE_ARCHIVE, the docker-archive the bundle carries); its image
+ * is `image` when given, else the one image that archive holds (#529), which
+ * the binding reads; LAYERFS_IMAGE stays Docker's. The former `native` with
  * `sandboxBackend` `namespaces` needs the same. `host` is the platform the
  * Sandbox runs on: this process's, or Linux when a worker makes it (see
  * platform.js). */
@@ -131,9 +132,11 @@ function localDeployment(options, env, named, host) {
   };
   const required = [["daemon", "DAEMON"], ["localDir", "LOCAL_DIR"]];
   if (namespaces) {
-    deploy.image = options.image ?? env("IMAGE");
     deploy.imageArchive = options.imageArchive ?? env("IMAGE_ARCHIVE");
-    required.push(["image", "IMAGE"], ["imageArchive", "IMAGE_ARCHIVE"]);
+    // a field the options name (even as undefined, see platform.js) is not read from the environment
+    deploy.image = "image" in options ? options.image : deploy.imageArchive ? undefined : env("IMAGE");
+    if (!deploy.image) delete deploy.image;
+    required.push(["imageArchive", "IMAGE_ARCHIVE"]);
   }
   for (const [name, setting] of required) {
     if (!deploy[name]) throw new LayerFSError("InvalidInput", `deploy.${name} is not configured (LAYERFS_${setting})`, null);

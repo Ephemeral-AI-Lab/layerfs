@@ -37,7 +37,7 @@ numbers are used again.
 
 | Arg | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `options.image` | string | no | Exact local image digest `sha256:<64 hex>`; default `LAYERFS_IMAGE`. Every Workspace mounted there runs on it |
+| `options.image` | string | no | Exact local image digest `sha256:<64 hex>`. Default: `LAYERFS_IMAGE` for `docker`; for `linux` and the VM platforms, the image `LAYERFS_IMAGE_ARCHIVE` holds (its config digest). Every Workspace mounted there runs on it |
 | `options.platform` | string | no | `docker`, `mac`, `linux`, `apple-container`, `microsandbox`, `lima`, `firecracker` or `ssh`; default your home's. Your home allows only some (a Linux home `docker` and `linux`; a `vm:` home its provider; macOS and Windows `docker`, or `mac` with `LAYERFS_SANDBOX=native`) |
 
 **Returns:** `{ sandbox, image, platform }`: its number (pass it to `workspace.mount`),

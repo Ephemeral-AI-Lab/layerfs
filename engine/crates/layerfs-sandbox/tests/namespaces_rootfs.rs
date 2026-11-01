@@ -124,6 +124,40 @@ fn an_older_writers_config_name_is_the_same_digest() {
 }
 
 #[test]
+fn an_archive_names_its_one_image_by_its_config_digest() {
+    // #529: a namespaces Sandbox given no image runs the one its archive holds
+    let scratch = Scratch::new("image-of");
+    let path = archive(&scratch.base, "image", DIGEST, two_layers());
+    assert_eq!(rootfs::image_of(&path).unwrap().as_str(), DIGEST);
+    let legacy = legacy_archive(&scratch.base, "legacy", OTHER, two_layers());
+    assert_eq!(rootfs::image_of(&legacy).unwrap().as_str(), OTHER);
+    // an archive naming none or two images is refused, never guessed from
+    let config = |digest: &str| format!("blobs/sha256/{}", hex(digest));
+    for (name, manifest) in [
+        ("none", "[]".to_owned()),
+        (
+            "two",
+            format!(
+                "[{{\"Config\":\"{}\",\"Layers\":[]}},{{\"Config\":\"{}\",\"Layers\":[]}}]",
+                config(DIGEST),
+                config(OTHER)
+            ),
+        ),
+    ] {
+        let tar = Tar::new()
+            .file("manifest.json", 0o644, manifest.as_bytes())
+            .finish();
+        let path = scratch.base.join(format!("{name}.tar"));
+        fs::write(&path, tar).unwrap();
+        let error = format!("{}", rootfs::image_of(&path).unwrap_err());
+        assert!(
+            error.contains("give the Sandbox's image digest"),
+            "{name}: {error}"
+        );
+    }
+}
+
+#[test]
 fn one_unpack_per_digest_however_many_sandboxes_ask_for_it() {
     let scratch = Scratch::new("once");
     let path = archive(&scratch.base, "image", DIGEST, two_layers());

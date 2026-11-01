@@ -43,10 +43,17 @@ try {
   // a vm: home's default is its provider, a namespaces deployment made in its Linux VM
   const { home, platform } = checkedPlatform(vm, undefined, "darwin");
   assert.equal(platform, "lima");
-  assert.equal(platformDeployment(vm, home, platform, undefined, "darwin").sandbox, "namespaces");
+  const vmDeploy = platformDeployment(vm, home, platform, undefined, "darwin");
+  assert.equal(vmDeploy.sandbox, "namespaces");
+  // its image is the one its archive holds (the binding reads it), unless the caller gives one
+  assert.deepEqual([vmDeploy.image, "image" in vmDeploy, vmDeploy.imageArchive], [undefined, false, LOCAL.imageArchive]);
+  assert.equal(platformDeployment(vm, home, platform, `sha256:${"c".repeat(64)}`, "darwin").image, `sha256:${"c".repeat(64)}`);
   for (const other of ["docker", "mac", "linux", "ssh"]) assert.throws(() => checkedPlatform(vm, other, "darwin"), refused("Unsupported", /not available on this vm:lima home, which allows lima/));
   // a record from before #529 on a vm: home reads as its provider
   assert.equal(platformOf({ runtime: "namespaces" }, home, "darwin"), "lima");
+  // so does a native one: a vm: home allows its provider alone (§4)
+  assert.equal(platformOf({ runtime: "native" }, home, "darwin"), "lima");
+  assert.equal(platformOf({ runtime: "native" }, home, "linux"), "lima");
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
@@ -67,8 +74,22 @@ assert.throws(() => checkedPlatform(client({ sandbox: "namespaces", daemon: "/d"
   const docker = platformDeployment(linux, home, "docker", undefined, "linux");
   assert.equal(docker.sandbox, undefined);
   assert.equal(docker.volume, "vol");
+  assert.equal(docker.image, IMAGE, "docker keeps LAYERFS_IMAGE");
   const own = platformDeployment(linux, home, "linux", `sha256:${"b".repeat(64)}`, "linux");
   assert.deepEqual([own.sandbox, own.sandboxBackend, own.image, own.localDir, own.imageArchive], ["namespaces", undefined, `sha256:${"b".repeat(64)}`, LOCAL.localDir, LOCAL.imageArchive]);
+  // no image given: linux leaves Docker's LAYERFS_IMAGE and takes the archive's own (#529)
+  const derived = platformDeployment(linux, home, "linux", undefined, "linux");
+  assert.deepEqual([derived.sandbox, "image" in derived, derived.imageArchive], ["namespaces", false, LOCAL.imageArchive]);
+  // a namespaces home's own default too; with no archive namespaces is refused, as before
+  const nsHome = client({ ...DOCKER, ...LOCAL, sandbox: "namespaces" });
+  assert.equal("image" in platformDeployment(nsHome, homeOf(nsHome, "linux"), "linux", undefined, "linux"), false);
+  process.env.LAYERFS_IMAGE = IMAGE;
+  try {
+    const noArchive = client({ ...DOCKER, localDir: "/l", sandbox: "namespaces" });
+    assert.throws(() => platformDeployment(noArchive, homeOf(noArchive, "linux"), "linux", undefined, "linux"), refused("InvalidInput", /imageArchive is not configured/));
+  } finally {
+    delete process.env.LAYERFS_IMAGE;
+  }
   // a native Linux home's linux is native, and its docker needs Docker's settings
   const nativeHome = client({ sandbox: "native", daemon: "/d", localDir: "/l" });
   assert.equal(platformDeployment(nativeHome, homeOf(nativeHome, "linux"), "linux", undefined, "linux").sandbox, "native");

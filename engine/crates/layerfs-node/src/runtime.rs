@@ -195,25 +195,20 @@ pub(crate) fn image(runtime: &Sandbox) -> String {
     }
 }
 
-/// The image a namespaces deployment's Sandbox root is an overlay of:
-/// `deploy.image` (LAYERFS_IMAGE), the same `sha256:<64 hex>` digest the
-/// Docker backend uses, and `deploy.imageArchive` (LAYERFS_IMAGE_ARCHIVE),
-/// the docker-archive in the bundle that holds it. Both are read before any
-/// effect, so a bundle without its image refuses the start.
+/// The image a namespaces deployment's Sandbox root is an overlay of, and
+/// the docker-archive that holds it (`deploy.imageArchive`,
+/// LAYERFS_IMAGE_ARCHIVE). The image is `deploy.image` when the caller gave
+/// one, else the one image the archive names by its config digest (#529):
+/// `docker` keeps LAYERFS_IMAGE, which Docker's image store may name by
+/// another digest. Both are read before any effect, so a bundle without its
+/// image refuses the start.
 #[cfg(target_os = "linux")]
 pub(crate) fn namespaces_image(deploy: &SdkValue) -> Result<(Image, PathBuf), SdkRefusal> {
-    let digest = deploy.get_text("image").ok_or_else(|| {
-        refused(
-            "InvalidInput",
-            "deploy.image is not configured (LAYERFS_IMAGE); a namespaces Sandbox's root is the              image that digest names",
-        )
-    })?;
-    let image = Image::parse(digest)
-        .map_err(|error| refused("InvalidInput", format!("deploy.image: {error}")))?;
     let archive = deploy.get_text("imageArchive").ok_or_else(|| {
         refused(
             "InvalidInput",
-            "deploy.imageArchive is not configured (LAYERFS_IMAGE_ARCHIVE); a namespaces Sandbox              needs the docker-archive the bundle carries",
+            "deploy.imageArchive is not configured (LAYERFS_IMAGE_ARCHIVE); a namespaces Sandbox \
+             needs the docker-archive the bundle carries",
         )
     })?;
     let archive = PathBuf::from(archive);
@@ -223,6 +218,16 @@ pub(crate) fn namespaces_image(deploy: &SdkValue) -> Result<(Image, PathBuf), Sd
             "deploy.imageArchive (LAYERFS_IMAGE_ARCHIVE) must be an absolute path",
         ));
     }
+    let image = match deploy.get_text("image") {
+        Some(digest) => Image::parse(digest)
+            .map_err(|error| refused("InvalidInput", format!("deploy.image: {error}")))?,
+        None => layerfs_sandbox::namespaces::rootfs::image_of(&archive).map_err(|error| {
+            refused(
+                "InvalidInput",
+                format!("deploy.imageArchive {}: {error}", archive.display()),
+            )
+        })?,
+    };
     Ok((image, archive))
 }
 
