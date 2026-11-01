@@ -324,7 +324,7 @@ fn folder_round_trip() {
 #[test]
 #[ignore = "needs MinIO: layerfs-remote-storage/tests/minio_service.sh"]
 fn minio_round_trip() {
-    let mut settings = MinioSettings::from_env().expect("LAYERFS_REMOTE_* of a running MinIO");
+    let mut settings = minio_from_env().expect("LAYERFS_REMOTE_* of a running MinIO");
     settings.prefix = format!("tests/remote-store-{}", std::process::id());
     // a Store above one 5 MiB part goes up as a multipart upload
     settings.part_size = 5 * MIB as u64;
@@ -344,4 +344,25 @@ fn minio_round_trip() {
     fs::remove_dir_all(work).unwrap();
 
     round_trip("minio", loaded.get("origin").unwrap().clone(), 12 * MIB);
+}
+
+/// The MinIO that tests/minio_service.sh started, from its `LAYERFS_REMOTE_*`
+/// exports (a test's input; the product reads no such setting since #533
+/// step 17).
+fn minio_from_env() -> Option<MinioSettings> {
+    let read = |name: &str| std::env::var(format!("LAYERFS_REMOTE_{name}")).ok();
+    Some(MinioSettings {
+        endpoint: read("ENDPOINT")?,
+        bucket: read("BUCKET")?,
+        prefix: read("PREFIX").unwrap_or_default(),
+        region: read("REGION").unwrap_or_else(|| "us-east-1".to_owned()),
+        credentials: layerfs_store_service::remote::storage::credentials::CredentialRef::parse(
+            &read("layerfs_store_service::remote::storage::credentials::CredentialRef")
+                .unwrap_or_else(|| "env:LAYERFS_REMOTE".to_owned()),
+        )
+        .ok()?,
+        part_size: read("PART_SIZE")
+            .and_then(|t| t.parse().ok())
+            .unwrap_or(layerfs_store_service::remote::storage::minio::DEFAULT_PART_SIZE),
+    })
 }

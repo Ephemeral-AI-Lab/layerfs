@@ -33,38 +33,6 @@ pub struct MinioSettings {
     pub part_size: u64,
 }
 
-impl MinioSettings {
-    /// Reads `LAYERFS_REMOTE_ENDPOINT`, `LAYERFS_REMOTE_BUCKET`, and
-    /// optionally `LAYERFS_REMOTE_PREFIX`, `LAYERFS_REMOTE_REGION`
-    /// (`us-east-1`), `LAYERFS_REMOTE_PART_SIZE` and
-    /// `LAYERFS_REMOTE_CREDENTIALS` (a reference; default
-    /// `env:LAYERFS_REMOTE`, that is `LAYERFS_REMOTE_ACCESS_KEY` and
-    /// `LAYERFS_REMOTE_SECRET_KEY`).
-    pub fn from_env() -> Result<Self, RemoteError> {
-        let read = |name: &str| std::env::var(format!("LAYERFS_REMOTE_{name}")).ok();
-        let required = |name: &str| {
-            read(name)
-                .ok_or_else(|| RemoteError::Invalid(format!("LAYERFS_REMOTE_{name} is not set")))
-        };
-        let part_size = match read("PART_SIZE") {
-            Some(text) => text
-                .parse()
-                .map_err(|_| RemoteError::Invalid("LAYERFS_REMOTE_PART_SIZE".to_owned()))?,
-            None => DEFAULT_PART_SIZE,
-        };
-        Ok(Self {
-            endpoint: required("ENDPOINT")?,
-            bucket: required("BUCKET")?,
-            prefix: read("PREFIX").unwrap_or_default(),
-            region: read("REGION").unwrap_or_else(|| "us-east-1".to_owned()),
-            credentials: CredentialRef::parse(
-                &read("CREDENTIALS").unwrap_or_else(|| "env:LAYERFS_REMOTE".to_owned()),
-            )?,
-            part_size,
-        })
-    }
-}
-
 /// A driver for `settings`, resolving its credentials. Sends nothing.
 pub fn connect(settings: &MinioSettings) -> Result<S3Client, RemoteError> {
     S3Client::new(S3Config {

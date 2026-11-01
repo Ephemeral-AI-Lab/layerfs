@@ -10,9 +10,7 @@
 use layerfs_remote_storage::minio::{self, MinioSettings};
 use layerfs_remote_storage::pieces;
 use layerfs_remote_storage::s3_api::{part_size, S3Client, S3Config, MAX_PARTS, MIN_PART};
-use layerfs_remote_storage::{
-    CredentialRef, Driver, Limits, Metadata, RemoteError, Span,
-};
+use layerfs_remote_storage::{CredentialRef, Driver, Limits, Metadata, RemoteError, Span};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -51,8 +49,8 @@ fn bytes(n: u64, seed: u8) -> Vec<u8> {
 /// The service under test, in its own namespace: `tests/<unique>`, under
 /// `LAYERFS_REMOTE_PREFIX` when that is set.
 fn settings(tag: &str) -> MinioSettings {
-    let mut settings = MinioSettings::from_env()
-        .expect("LAYERFS_REMOTE_* of a running MinIO (tests/minio_service.sh)");
+    let mut settings =
+        minio_from_env().expect("LAYERFS_REMOTE_* of a running MinIO (tests/minio_service.sh)");
     settings.prefix = match settings.prefix.as_str() {
         "" => format!("tests/{}", unique(tag)),
         base => format!("{base}/tests/{}", unique(tag)),
@@ -373,7 +371,7 @@ fn multipart_direct_round_trip() {
 /// The same namespace, reached directly instead of through the proxy.
 fn settings_direct(proxied: &MinioSettings) -> MinioSettings {
     MinioSettings {
-        endpoint: MinioSettings::from_env().unwrap().endpoint,
+        endpoint: minio_from_env().unwrap().endpoint,
         ..proxied.clone()
     }
 }
@@ -511,4 +509,25 @@ fn listing_and_last_modified() {
         .collect();
     assert_eq!(b, ["b/note", "b/store.sqlite"]);
     assert!(remote.list("c/").unwrap().is_empty());
+}
+
+/// The MinIO that tests/minio_service.sh started, from its `LAYERFS_REMOTE_*`
+/// exports (a test's input; the product reads no such setting since #533
+/// step 17).
+fn minio_from_env() -> Option<MinioSettings> {
+    let read = |name: &str| std::env::var(format!("LAYERFS_REMOTE_{name}")).ok();
+    Some(MinioSettings {
+        endpoint: read("ENDPOINT")?,
+        bucket: read("BUCKET")?,
+        prefix: read("PREFIX").unwrap_or_default(),
+        region: read("REGION").unwrap_or_else(|| "us-east-1".to_owned()),
+        credentials: layerfs_remote_storage::credentials::CredentialRef::parse(
+            &read("layerfs_remote_storage::credentials::CredentialRef")
+                .unwrap_or_else(|| "env:LAYERFS_REMOTE".to_owned()),
+        )
+        .ok()?,
+        part_size: read("PART_SIZE")
+            .and_then(|t| t.parse().ok())
+            .unwrap_or(layerfs_remote_storage::minio::DEFAULT_PART_SIZE),
+    })
 }

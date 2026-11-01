@@ -48,14 +48,12 @@ fn sandbox_of(home: &Path, name: &str) -> Result<(String, SdkValue)> {
 }
 
 /// Where a `native` Sandbox's daemon executable is: the native machine
-/// record's `daemon`, else the internal `LAYERFS_DAEMON`, else the bundle's.
+/// record's `daemon` (`import-env` writes it from 1.1.0's `LAYERFS_DAEMON`),
+/// else the bundle's.
 fn daemon(home: &Path) -> Result<String> {
     let record = read_record(&paths::machine_record(home, "native"))?.unwrap_or_default();
     if let Some(path) = record.get_text("daemon") {
         return Ok(path.to_owned());
-    }
-    if let Some(path) = std::env::var_os("LAYERFS_DAEMON").filter(|p| !p.is_empty()) {
-        return Ok(PathBuf::from(path).display().to_string());
     }
     let cache = std::env::var_os("HOME")
         .map(|h| {

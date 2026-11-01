@@ -23,6 +23,7 @@ pub fn main(words: Vec<String>) -> ExitCode {
             ExitCode::SUCCESS
         }
         Some("worker") if words.len() == 1 => worker::main(),
+        Some("import-env") if words.len() == 1 => import_env(),
         Some(family) => {
             let Some(name) = words.get(1) else {
                 return help::print(&[family]);
@@ -38,6 +39,16 @@ pub fn main(words: Vec<String>) -> ExitCode {
                 None => wrong(format!("no command `{family}`; `layerfs help` lists them")),
             }
         }
+    }
+}
+
+/// `layerfs import-env`: this environment's 1.1.0 settings as records, once.
+fn import_env() -> ExitCode {
+    let env: Vec<(String, String)> = std::env::vars().collect();
+    let outcome = calls::home(None).and_then(|home| layerfs_api::home::import_env(&home, &env));
+    match outcome {
+        Ok(value) => output::result(&value, false),
+        Err(refusal) => output::refusal(&refusal),
     }
 }
 

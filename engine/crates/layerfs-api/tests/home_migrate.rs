@@ -281,3 +281,78 @@ fn an_empty_home_is_created_and_the_lock_waits_rather_than_refusing() {
     );
     std::fs::remove_dir_all(home).unwrap();
 }
+
+#[test]
+fn a_1_1_0_environment_becomes_records_once() {
+    let home = old_home();
+    let env: Vec<(String, String)> = [
+        ("LAYERFS_SANDBOX", "docker"),
+        ("LAYERFS_VOLUME", "lfs-solo"),
+        ("LAYERFS_DOCKER", "unix:///tmp/docker.sock"),
+        ("LAYERFS_IMAGE", "sha256:abc"),
+        ("LAYERFS_DAEMON", "/opt/layerfs/layerfs-daemon"),
+        ("LAYERFS_REMOTE_ENDPOINT", "http://127.0.0.1:9000"),
+        ("LAYERFS_REMOTE_BUCKET", "lfs"),
+        ("LAYERFS_REMOTE_ACCESS_KEY", "secret-access"),
+        ("LAYERFS_REMOTE_SECRET_KEY", "secret-key"),
+        ("LAYERFS_SSH_HOST", "ec2.example"),
+        ("LAYERFS_SSH_USER", "ubuntu"),
+        ("LAYERFS_STORE_POSTGRESQL", "postgres://u:pw@db/x"),
+    ]
+    .iter()
+    .map(|(n, v)| ((*n).to_owned(), (*v).to_owned()))
+    .collect();
+    let report = home::import_env(&home, &env).unwrap();
+    let printed = layerfs_api::calls::json::print(&report);
+    let read = |path: PathBuf| read_record(&path).unwrap().unwrap();
+
+    let native = read(paths::machine_record(&home, "native"));
+    assert_eq!(
+        native.get_text("daemon"),
+        Some("/opt/layerfs/layerfs-daemon")
+    );
+    assert_eq!(native.get_text("platform"), Some("native"));
+    let docker = read(paths::machine_record(&home, "docker"));
+    assert_eq!(docker.get_text("docker"), Some("/tmp/docker.sock"));
+    assert_eq!(docker.get_text("image"), Some("sha256:abc"));
+    // solo had no machine after the migration; shop kept its docker volume
+    let solo = read(paths::store_record(&home, "solo"));
+    assert_eq!(solo.get_text("machine"), Some("docker"));
+    assert_eq!(solo.get_text("volume"), Some("lfs-solo"));
+    let shop = read(paths::store_record(&home, "shop"));
+    assert_eq!(shop.get_text("volume"), Some("lfs-shop"));
+    let bucket = read(paths::bucket_record(&home, "remote"));
+    assert_eq!(bucket.get_text("key"), Some("env:LAYERFS_REMOTE"));
+    // no secret reaches the home; ssh is a command to run, not a record
+    for secret in ["secret-access", "secret-key", "pw@db"] {
+        assert!(!printed.contains(secret), "{printed}");
+        assert!(snapshot(&home)
+            .iter()
+            .all(|(_, bytes)| !String::from_utf8_lossy(bytes).contains(secret)));
+    }
+    assert!(
+        printed.contains("layerfs machine connect ssh ec2.example --user ubuntu"),
+        "{printed}"
+    );
+    assert!(!paths::machine_record(&home, "ssh").exists());
+    assert!(printed.contains("LAYERFS_STORE_POSTGRESQL"), "{printed}");
+
+    // with no setting at all, the home answers from its records
+    let listed =
+        layerfs_api::calls::call(Some(&home), "store.list", SdkValue::Null, &mut |_| {}).unwrap();
+    let listed = layerfs_api::calls::json::print(&listed);
+    assert!(
+        listed.contains("\"solo\"") && listed.contains("\"docker\""),
+        "{listed}"
+    );
+
+    // once: a second run with other values changes nothing
+    let other: Vec<(String, String)> = vec![("LAYERFS_DAEMON".to_owned(), "/elsewhere".to_owned())];
+    let again = home::import_env(&home, &other).unwrap();
+    assert_eq!(
+        read(paths::machine_record(&home, "native")).get_text("daemon"),
+        Some("/opt/layerfs/layerfs-daemon")
+    );
+    assert!(layerfs_api::calls::json::print(&again).contains("\"kept\":[{"));
+    std::fs::remove_dir_all(home).unwrap();
+}

@@ -156,3 +156,17 @@ Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated 
   LayerStack. Removing a project from a PostgreSQL Store stays
   `Unsupported`. Sandboxes on PostgreSQL Stores stay `Unsupported` (O3
   needs the docker machine's Sandbox path, not built in step 12).
+- Step 17: the Rust product reads `LAYERFS_HOME`, the trace and
+  measurement settings and the internal names only (`LAYERFS_BUNDLE`,
+  `LAYERFS_WORKER_*`, the daemon's `LAYERFS_DAEMON_LISTEN`, `LAYERFS_KERNEL`,
+  `LAYERFS_SANDBOX_HELPER`, and the daemon's own `LAYERFS_NFS_*` test
+  overrides, which the host no longer passes it). Removed: the host's
+  `LAYERFS_NFS_*` passthrough to native daemons, the `LAYERFS_DAEMON`
+  fallback (the native machine record's `daemon` replaces it) and
+  `MinioSettings::from_env` (its two tests build the settings themselves).
+  `layerfs import-env` is a shell command (not a table call, S §2): it
+  fills only absent record fields, never writes a secret, and answers the
+  `machine create`/`machine connect` command for VM and ssh settings
+  instead of making a VM or connecting a host, because those have effects
+  of their own. 1.1.0's `LAYERFS_LOCAL_DIR` is reported as ignored: native
+  Sandboxes live under `machine/native/` (step 12).

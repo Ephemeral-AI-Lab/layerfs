@@ -294,7 +294,9 @@ fn launch_options(
             let (image, archive) = crate::host::runtime::namespaces_image(deploy)?;
             ProviderLaunchOptions::Namespaces {
                 command_identity: identity,
-                environment: native_environment(),
+                // the daemon starts with `PATH` and its provider's kernel route only;
+                // 2.0 passes it no platform setting (#533 step 17)
+                environment: Vec::new(),
                 store: PathBuf::from(store),
                 image,
                 archive,
@@ -312,35 +314,8 @@ fn launch_options(
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(ProviderLaunchOptions::Local {
         command_identity: identity,
-        environment: native_environment(),
+        environment: Vec::new(),
     })
-}
-
-/// What a native Sandbox's daemon starts with besides `PATH` and the kernel
-/// route its provider chooses: the NFS mount helper and reference overrides
-/// this process was given (`LAYERFS_NFS_*`), so a test host can name its own
-/// client.
-#[cfg(target_os = "macos")]
-fn native_environment() -> Vec<(String, String)> {
-    let mut environment = Vec::new();
-    for name in [
-        "LAYERFS_NFS_MOUNT",
-        "LAYERFS_NFS_UNMOUNT",
-        "LAYERFS_NFS_FORCE",
-        "LAYERFS_NFS_FLUSH",
-        "LAYERFS_NFS_REFRESH",
-    ] {
-        if let Ok(value) = std::env::var(name) {
-            environment.push((name.to_owned(), value));
-        }
-    }
-    environment
-}
-
-/// Nothing on Linux: the provider chooses FUSE.
-#[cfg(target_os = "linux")]
-fn native_environment() -> Vec<(String, String)> {
-    Vec::new()
 }
 
 /// Where this deployment puts Sandbox `id`:

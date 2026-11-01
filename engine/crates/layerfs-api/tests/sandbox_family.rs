@@ -106,6 +106,8 @@ fn named_sandboxes_on_native() {
         return;
     };
     assert!(Path::new(&daemon).is_file());
+    // the daemon is a record, written once from a 1.1.0 environment (step 17)
+    layerfs_api::home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon.clone())]).unwrap();
     let made = ok(
         &home,
         "sandbox.create",
