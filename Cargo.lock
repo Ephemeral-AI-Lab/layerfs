@@ -711,6 +711,7 @@ dependencies = [
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
+ "libc",
  "nix",
  "rusqlite",
 ]

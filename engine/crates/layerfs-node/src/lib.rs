@@ -1,28 +1,7 @@
 //! Node entry points for the public SDK and its backend table (#428).
 mod convert;
-mod copies;
-mod direct;
-mod discovery;
 mod dispatch;
-mod exec;
-mod flock;
 mod job;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-mod local;
-mod local_stores;
-mod output;
-mod pool;
-mod postgres;
-mod progress;
-mod project;
-mod registry;
-mod runtime;
-mod sandbox;
-mod stores;
-mod sync;
-mod trace;
-mod unmount;
-mod workspace;
 
 use job::Job;
 use napi::{bindgen_prelude::AsyncTask, JsUnknown};
@@ -46,13 +25,13 @@ pub fn exec_output(
 /// One more client of the Store at `args.storePath` in this process.
 #[napi]
 pub fn store_open(args: JsUnknown) -> napi::Result<AsyncTask<Job>> {
-    dispatch::store(args, direct::acquire)
+    dispatch::store(args, dispatch::ACQUIRE)
 }
 
 /// One client less of the Store at `args.storePath`; the last one closes it.
 #[napi]
 pub fn store_close(args: JsUnknown) -> napi::Result<AsyncTask<Job>> {
-    dispatch::store(args, direct::release)
+    dispatch::store(args, dispatch::RELEASE)
 }
 
 /// Runs one backend or runtime operation on its separate method table.

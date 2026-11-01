@@ -1,12 +1,12 @@
 //! Private, permission-authorized project and Sandbox discovery. No mutation replay.
 #[cfg(target_os = "linux")]
-use crate::runtime::NAMESPACES;
-use crate::runtime::{LOCAL, NATIVE};
-use crate::{
-    job::{failed, refused},
+use crate::host::runtime::NAMESPACES;
+use crate::host::runtime::{LOCAL, NATIVE};
+use crate::host::{
+    outcome::{failed, refused},
     registry::{self, Mount, Process, Project, SandboxState},
 };
-use layerfs_api::{internal::workspace, BoundWorkspace, MountedWorkspace};
+use crate::{internal::workspace, BoundWorkspace, MountedWorkspace};
 use layerfs_bridge::{
     control::{Reply, SdkRefusal, SdkValue},
     provision::StoreManifest,
@@ -44,7 +44,7 @@ pub(crate) fn private(path: &Path, dir: bool) -> Result<()> {
     if meta.file_type().is_symlink()
         || meta.is_dir() != dir
         || (!dir && !meta.is_file())
-        || meta.uid() != crate::flock::euid()
+        || meta.uid() != crate::host::flock::euid()
         || meta.mode() & 0o077 != 0
     {
         return Err(refused(
@@ -65,7 +65,7 @@ pub(crate) fn directory(path: &Path) -> Result<()> {
 /// This process's effective uid and gid: a native Sandbox's command
 /// identity (its commands run as this user).
 pub(crate) fn user() -> (u32, u32) {
-    (crate::flock::euid(), crate::flock::egid())
+    (crate::host::flock::euid(), crate::host::flock::egid())
 }
 /// Where a project's Sandboxes live: `LAYERFS_HOME/<project>/sandboxes/<n>/`
 /// (#373), numbered from 1 within the project.
@@ -92,7 +92,7 @@ pub(crate) fn sandbox_dir(args: &SdkValue, id: &str) -> Result<PathBuf> {
 /// The project's Sandbox numbers that have a directory, lowest first.
 pub(crate) fn sandbox_ids(args: &SdkValue) -> Result<Vec<String>> {
     // a project of a PostgreSQL Store has an entry once it had a Sandbox
-    if !project_entry(args)?.exists() && crate::stores::postgresql(args)? {
+    if !project_entry(args)?.exists() && crate::host::stores::postgresql(args)? {
         return Ok(Vec::new());
     }
     let mut ids = Vec::new();
@@ -137,8 +137,8 @@ pub(crate) fn project_entry(args: &SdkValue) -> Result<PathBuf> {
     layerfs_history::HistoryName::new(name).map_err(failed)?;
     let home = home(args)?;
     match args.get_text("store") {
-        Some(store) if !(store == name && crate::stores::legacy(&home, store)?) => {
-            Ok(crate::stores::store_dir(&home, store)?
+        Some(store) if !(store == name && crate::host::stores::legacy(&home, store)?) => {
+            Ok(crate::host::stores::store_dir(&home, store)?
                 .join("projects")
                 .join(name))
         }
@@ -168,7 +168,7 @@ impl Drop for Guard {
         // The lock belongs to the open file description, which a child forked
         // meanwhile shares until its exec: closing only this descriptor would
         // leave it held (F-053). Unlock explicitly; the close follows.
-        crate::flock::unlock(&self.file);
+        crate::host::flock::unlock(&self.file);
         let mut held = HELD.lock().unwrap_or_else(|error| error.into_inner());
         held.remove(&self.directory);
         FREED.notify_all();
@@ -222,7 +222,7 @@ fn os_lock(directory: &Path, deadline: std::time::Instant) -> Result<File> {
         .open(&path)
         .map_err(failed)?;
     private(&path, false)?;
-    while !crate::flock::try_lock(&file, true).map_err(failed)? {
+    while !crate::host::flock::try_lock(&file, true).map_err(failed)? {
         if std::time::Instant::now() >= deadline {
             return Err(refused(
                 "Busy",
@@ -377,7 +377,7 @@ pub(crate) fn save_sandbox(
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "deploy"))?;
     // the platform the call named, checked by `create` before any effect (#529)
-    let platform = crate::runtime::platform(args, crate::runtime::backend(deploy)?)?;
+    let platform = crate::host::runtime::platform(args, crate::host::runtime::backend(deploy)?)?;
     let mut fields = vec![
         ("id", SdkValue::text(&state.id)),
         ("platform", SdkValue::text(platform)),
@@ -456,7 +456,7 @@ fn local_fields(
         (
             "directory",
             SdkValue::text(
-                crate::local::directory(args, &state.id, None)?
+                crate::host::local::directory(args, &state.id, None)?
                     .display()
                     .to_string(),
             ),
@@ -601,11 +601,11 @@ fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
 /// one, else (#529: the record decides, so a caller of another backend has
 /// none) beside the record's own directory, which must still carry the
 /// name this deployment gives Sandbox `id` and be owned by this record
-/// ([`crate::local::owned`]).
+/// ([`crate::host::local::owned`]).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathBuf, LocalRecord)> {
     let directory = PathBuf::from(registry::text(value, "directory")?);
-    let expected = crate::local::directory(args, id, directory.parent())?;
+    let expected = crate::host::local::directory(args, id, directory.parent())?;
     // the Sandbox's own directory name, exactly as this deployment names it
     let name = registry::text(value, "name")?;
     if directory != expected || expected.file_name().and_then(|n| n.to_str()) != Some(name) {
@@ -627,7 +627,7 @@ fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathB
         .and_then(|deploy| deploy.get_text("localDir")))
     .is_none()
     {
-        crate::local::owned(args, id, &directory)?;
+        crate::host::local::owned(args, id, &directory)?;
     }
     let process = recorded_process(value)?;
     let port = value
@@ -793,7 +793,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     let recorded = recorded(args, id, &value)?;
     // a local daemon listens on this kernel's loopback; no other host reaches it
     let host = match recorded {
-        Recorded::Docker(..) => crate::pool::daemon_host(args),
+        Recorded::Docker(..) => crate::host::pool::daemon_host(args),
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Recorded::Local { .. } => None,
         #[cfg(target_os = "linux")]
@@ -806,7 +806,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
             failed(failure)
         }
     })?;
-    let dial = crate::pool::Dial {
+    let dial = crate::host::pool::Dial {
         endpoint: runtime.endpoint().map_err(failed)?,
         host,
         secret: bytes(&value, "secret")?,
@@ -822,7 +822,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
         directory,
         runtime,
         identity: recorded_identity(&value),
-        controls: crate::pool::Controls::new(control, dial),
+        controls: crate::host::pool::Controls::new(control, dial),
         mounts: Default::default(),
         processes: Default::default(),
     });
@@ -869,13 +869,14 @@ pub(crate) fn refresh_except(state: &SandboxState, retained: &[String]) -> Resul
                     .get_int("namespace")
                     .ok_or_else(|| refused("InvalidInput", "namespace"))?,
             };
-            let status =
-                match workspace(&mut *crate::trace::control(&state.controls)?).status(token) {
-                    Ok(status) => status,
-                    // Unmounted by the daemon; its owner removes the record next.
-                    Err(failure) if absent(&failure) => continue,
-                    Err(failure) => return Err(failed(failure)),
-                };
+            let status = match workspace(&mut *crate::host::trace::control(&state.controls)?)
+                .status(token)
+            {
+                Ok(status) => status,
+                // Unmounted by the daemon; its owner removes the record next.
+                Err(failure) if absent(&failure) => continue,
+                Err(failure) => return Err(failed(failure)),
+            };
             let ready = status
                 .kernel
                 .and_then(|k| k.ready)
@@ -928,8 +929,8 @@ fn present(path: &Path) -> Result<Option<SdkValue>> {
         Err(refusal) => Err(refusal),
     }
 }
-fn absent(failure: &layerfs_api::OperationFailure) -> bool {
-    matches!(&failure.cause, layerfs_api::OperationCause::Remote(refusal)
+fn absent(failure: &crate::OperationFailure) -> bool {
+    matches!(&failure.cause, crate::OperationCause::Remote(refusal)
         if refusal.code == layerfs_bridge::control::ControlCode::Missing)
 }
 pub(crate) fn workspace_file(

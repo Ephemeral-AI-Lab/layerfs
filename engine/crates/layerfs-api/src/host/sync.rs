@@ -23,10 +23,10 @@
 //! phases to that job's progress cell (`progress.rs`). Pull and load hold
 //! their Store's gate (`local.rs`), so this process's heads reads wait for
 //! neither and never open the Store under them.
-use crate::discovery;
-use crate::job::{failed, refused, Outcome};
-use crate::registry::{random, text};
-use crate::stores::{self, Identity, Kind};
+use crate::host::discovery;
+use crate::host::outcome::{failed, refused, Outcome};
+use crate::host::registry::{random, text};
+use crate::host::stores::{self, Identity, Kind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::HistoryName;
@@ -309,7 +309,7 @@ pub(crate) fn driver(args: &SdkValue) -> Result<(String, Box<dyn Driver>)> {
 /// Records a completed transfer of `store`; a record that fails is reported
 /// beside the transfer, which completed.
 fn record(home: &Path, store: &str, transfer: &Transfer) -> Option<SdkValue> {
-    crate::progress::begin("record");
+    crate::host::progress::begin("record");
     let saved = state::state_path(home, store).and_then(|path| state::save(&path, transfer));
     saved.err().map(SdkValue::text)
 }
@@ -392,7 +392,7 @@ enum Upload {
 /// its linked file `<prefix>/<file>/store.sqlite`, if that file is what the
 /// link's record says (else `Conflict`), or whatever is there with `force`.
 pub(crate) fn push(args: &SdkValue) -> Outcome {
-    crate::progress::observed(args, || upload(args, Upload::Push))
+    crate::host::progress::observed(args, || upload(args, Upload::Push))
 }
 
 /// `runtime.store.publish { home, store, storePath, remote, file,
@@ -400,14 +400,14 @@ pub(crate) fn push(args: &SdkValue) -> Outcome {
 /// there, checked by a HEAD before the snapshot and again before the
 /// upload), whose record links the Store to it.
 pub(crate) fn publish(args: &SdkValue) -> Outcome {
-    crate::progress::observed(args, || upload(args, Upload::Publish))
+    crate::host::progress::observed(args, || upload(args, Upload::Publish))
 }
 
 /// `runtime.store.send { home, store, storePath, remote, file, credentials? }`:
 /// as publish, but the Store's record is not touched: the new file is linked
 /// to no Store.
 pub(crate) fn send(args: &SdkValue) -> Outcome {
-    crate::progress::observed(args, || upload(args, Upload::Send))
+    crate::host::progress::observed(args, || upload(args, Upload::Send))
 }
 
 fn upload(args: &SdkValue, kind: Upload) -> Outcome {
@@ -421,7 +421,7 @@ fn upload(args: &SdkValue, kind: Upload) -> Outcome {
         Upload::Push => expected(args, store, &remote, file)?,
         Upload::Publish | Upload::Send => remote::Expected::Absent,
     };
-    let pushed = crate::direct::with_service(args, |service| {
+    let pushed = crate::host::direct::with_service(args, |service| {
         remote::push(
             &service.opened,
             &path,
@@ -495,8 +495,8 @@ fn failure_text(failure: &remote::PushFailure, kind: Upload) -> String {
 /// lacks is listed in `missing` and kept.
 pub(crate) fn pull(args: &SdkValue) -> Outcome {
     let path = stores::store_path(args)?;
-    crate::local_stores::exclusive(&path, || {
-        crate::progress::observed(args, || pull_once(args))
+    crate::host::local_stores::exclusive(&path, || {
+        crate::host::progress::observed(args, || pull_once(args))
     })
 }
 
@@ -506,7 +506,7 @@ fn pull_once(args: &SdkValue) -> Outcome {
     let identity = stores::identity(args)?;
     stores::sqlite_only(&identity, "pull")?;
     let path = stores::store_path(args)?;
-    if crate::direct::holds(&path)? {
+    if crate::host::direct::holds(&path)? {
         return Err(refused(
             "Busy",
             "this process holds the Store open; close its clients and pull again",
@@ -540,8 +540,8 @@ fn pull_once(args: &SdkValue) -> Outcome {
 /// remote file `file`, with an entry for each project, linked to the file.
 pub(crate) fn load_store(args: &SdkValue) -> Outcome {
     let path = stores::store_path(args)?;
-    crate::local_stores::exclusive(&path, || {
-        crate::progress::observed(args, || load_once(args))
+    crate::host::local_stores::exclusive(&path, || {
+        crate::host::progress::observed(args, || load_once(args))
     })
 }
 
@@ -585,7 +585,7 @@ fn register(args: &SdkValue, identity: &Identity) -> Result<(SdkValue, SdkValue)
     let store = text(args, "store")?;
     let path = stores::store_path(args)?;
     let main = HistoryName::new("main").map_err(failed)?;
-    let found = crate::direct::with_service(args, |service| {
+    let found = crate::host::direct::with_service(args, |service| {
         let sqlite = service.opened.sqlite_version.clone();
         service
             .store

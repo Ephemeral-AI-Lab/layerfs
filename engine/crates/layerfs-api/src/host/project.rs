@@ -12,8 +12,8 @@
 //! and leaves the project usable. Init's first
 //! Branch is named `main` and the SDK never shows it: `main` is the line of
 //! Layers.
-use crate::job::{failed, refused, Outcome};
-use crate::registry::{lock, random, text, Project, INITS};
+use crate::host::outcome::{failed, refused, Outcome};
+use crate::host::registry::{lock, random, text, Project, INITS};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId};
@@ -37,7 +37,7 @@ pub(crate) fn sixteen(bytes: [u8; 32]) -> [u8; 16] {
 pub(crate) fn init(args: &SdkValue) -> Outcome {
     let name = text(args, "name")?;
     let source = PathBuf::from(text(args, "path")?);
-    let home = crate::discovery::home(args)?;
+    let home = crate::host::discovery::home(args)?;
     // checked first: a refused policy, timeout or Store path leaves no project entry
     let policy = policy(args)?;
     let deadline = deadline(args)?;
@@ -68,7 +68,7 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
         std::fs::Permissions::from_mode(0o700)
     })
     .map_err(failed)?;
-    let _guard = crate::discovery::guard(&directory)?;
+    let _guard = crate::host::discovery::guard(&directory)?;
     let history = |text: &str| HistoryName::new(text).map_err(failed);
     let request = InitRequest {
         source,
@@ -103,7 +103,7 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
         manifest: sealed.manifest,
         installed: None,
     };
-    crate::discovery::save_project(&directory, &project)?;
+    crate::host::discovery::save_project(&directory, &project)?;
     let installed = layerfs_store_service::install::install_local(
         &project.store.path,
         &project.manifest,
@@ -111,7 +111,7 @@ pub(crate) fn init(args: &SdkValue) -> Outcome {
     )
     .map_err(|failure| refused("Failed", failure.to_string()))?;
     project.installed = Some(installed);
-    crate::discovery::save_project(&directory, &project)?;
+    crate::host::discovery::save_project(&directory, &project)?;
     let mut answer = vec![
         ("kind", SdkValue::text("Initialized")),
         ("project", SdkValue::text(name)),
@@ -255,7 +255,7 @@ impl Drop for Running<'_> {
 /// `runtime.project.get_init`: how far the project's running Init has come
 /// (`step`, `entries`, `files`, `bytes`), or null when none runs.
 pub(crate) fn progress(args: &SdkValue) -> Outcome {
-    let name = crate::stores::init_key(args, text(args, "project")?);
+    let name = crate::host::stores::init_key(args, text(args, "project")?);
     let Some(counters) = lock(&INITS)?.get(&name).cloned() else {
         return Ok(SdkValue::Null);
     };

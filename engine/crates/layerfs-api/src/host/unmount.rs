@@ -2,9 +2,9 @@
 //! admission and shared-record cleanup, never during the daemon's helper wait.
 //! Mount paths are unique within one daemon lifetime; Sandbox removal clears
 //! the terminal records before that directory can be reused.
-use crate::{
+use crate::host::{
     discovery,
-    job::{failed, refused, Outcome},
+    outcome::{failed, refused, Outcome},
     registry::SandboxState,
 };
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
@@ -28,7 +28,7 @@ fn record(state: &SandboxState, token: WorkspaceToken) -> PathBuf {
 struct Lease(File);
 impl Drop for Lease {
     fn drop(&mut self) {
-        crate::flock::unlock(&self.0);
+        crate::host::flock::unlock(&self.0);
     }
 }
 fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRefusal> {
@@ -41,7 +41,7 @@ fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRe
         .open(path)
         .map_err(failed)?;
     discovery::private(path, false)?;
-    if crate::flock::try_lock(&file, exclusive).map_err(failed)? {
+    if crate::host::flock::try_lock(&file, exclusive).map_err(failed)? {
         Ok(Some(Lease(file)))
     } else {
         Ok(None)
@@ -149,7 +149,7 @@ pub(crate) fn check(state: &SandboxState, path: &str) -> Result<(), SdkRefusal> 
 pub(crate) fn find(state: &SandboxState, path: &str) -> Result<Option<SdkValue>, SdkRefusal> {
     // Steady-state token/directory lookups already have a token: avoid a
     // directory scan proportional to the lifetime's completed unmounts.
-    let known = crate::registry::lock(&state.mounts)?
+    let known = crate::host::registry::lock(&state.mounts)?
         .get(path)
         .map(|mount| mount.workspace.bound.token);
     if let Some(token) = known {
@@ -184,7 +184,7 @@ pub(crate) fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal>
             }
             if let Some(value) = inspect(&entry.path())? {
                 if value.get_text("state") == Some("Retained") {
-                    recoverable.push(crate::registry::text(&value, "path")?.to_owned());
+                    recoverable.push(crate::host::registry::text(&value, "path")?.to_owned());
                 }
             }
         }

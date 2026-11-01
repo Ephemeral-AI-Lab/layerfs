@@ -8,8 +8,8 @@
 //! time, and concurrent calls take separate connections. The Sandbox runtime owner (this
 //! binding) also keeps the background processes it started; the daemon holds
 //! no process record.
-use crate::job::refused;
-use layerfs_api::MountedWorkspace;
+use crate::host::outcome::refused;
+use crate::MountedWorkspace;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
 use layerfs_bridge::provision::StoreManifest;
 use layerfs_sandbox::CommandIdentity;
@@ -49,13 +49,13 @@ pub(crate) struct SandboxState {
     pub(crate) directory: std::path::PathBuf,
     pub(crate) runtime: Box<layerfs_sandbox::Sandbox>,
     pub(crate) identity: CommandIdentity,
-    pub(crate) controls: crate::pool::Controls,
+    pub(crate) controls: crate::host::pool::Controls,
     pub(crate) mounts: Mutex<BTreeMap<String, Mount>>,
     pub(crate) processes: Mutex<BTreeMap<String, Process>>,
 }
 
 /// The live counts of each Init still running, by project name.
-pub(crate) static INITS: LazyLock<Mutex<BTreeMap<String, Arc<layerfs_api::InitCounters>>>> =
+pub(crate) static INITS: LazyLock<Mutex<BTreeMap<String, Arc<crate::InitCounters>>>> =
     LazyLock::new(Default::default);
 /// This process's live Sandboxes, by their record directory.
 pub(crate) static SANDBOXES: LazyLock<Mutex<BTreeMap<std::path::PathBuf, Arc<SandboxState>>>> =
@@ -80,12 +80,12 @@ pub(crate) fn text<'a>(args: &'a SdkValue, name: &str) -> Result<&'a str, SdkRef
 /// that needs every mount or process another process may have changed takes
 /// `discovery::refresh`.
 pub(crate) fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let directory = crate::discovery::sandbox_dir(args, text(args, "sandbox")?)?;
+    let directory = crate::host::discovery::sandbox_dir(args, text(args, "sandbox")?)?;
     let existing = lock(&SANDBOXES)?.get(&directory).cloned();
     match existing {
         Some(state) => Ok(state),
         None => {
-            let state = crate::discovery::reopen(args)?;
+            let state = crate::host::discovery::reopen(args)?;
             lock(&SANDBOXES)?.insert(directory, state.clone());
             Ok(state)
         }
@@ -98,20 +98,20 @@ pub(crate) fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> 
 /// Sandbox's daemon ends itself, #373) is the refusal of
 /// `discovery::gone`, and this process forgets the state.
 pub(crate) fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let directory = crate::discovery::sandbox_dir(args, text(args, "sandbox")?)?;
+    let directory = crate::host::discovery::sandbox_dir(args, text(args, "sandbox")?)?;
     let Some(state) = lock(&SANDBOXES)?.get(&directory).cloned() else {
         return sandbox(args);
     };
     if let Err(failure) = state.runtime.endpoint() {
         lock(&SANDBOXES)?.remove(&directory);
         return Err(if failure.container_gone() || failure.container_stopped() {
-            crate::discovery::gone(
+            crate::host::discovery::gone(
                 &state.id,
                 &state.runtime.identity().to_string(),
                 failure.container_stopped(),
             )
         } else {
-            crate::job::failed(failure)
+            crate::host::outcome::failed(failure)
         });
     }
     Ok(state)
@@ -148,15 +148,17 @@ impl SandboxState {
     /// once, for whatever is mounted there now; the full refresh replaces
     /// the table, so a stale entry goes with it.
     fn mounted<T>(&self, path: &str, pick: impl Fn(&Mount) -> T) -> Result<T, SdkRefusal> {
-        crate::unmount::check(self, path)?;
+        crate::host::unmount::check(self, path)?;
         let known = lock(&self.mounts)?
             .get(path)
             .map(|mount| (mount.workspace.bound.token, pick(mount)));
         match known {
-            Some((token, value)) if crate::discovery::workspace_file(self, token).exists() => {
+            Some((token, value))
+                if crate::host::discovery::workspace_file(self, token).exists() =>
+            {
                 return Ok(value)
             }
-            _ => crate::discovery::refresh(self)?,
+            _ => crate::host::discovery::refresh(self)?,
         }
         lock(&self.mounts)?
             .get(path)
@@ -169,5 +171,5 @@ impl SandboxState {
 pub(crate) fn random() -> Result<[u8; 32], SdkRefusal> {
     layerfs_bridge::duplex::generate_keypair()
         .map(|pair| pair.public)
-        .map_err(crate::job::failed)
+        .map_err(crate::host::outcome::failed)
 }

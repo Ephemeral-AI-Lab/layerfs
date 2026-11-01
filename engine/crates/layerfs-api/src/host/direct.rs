@@ -15,8 +15,8 @@
 //! service; a process that ends without closing leaves its own. Each call
 //! runs once: a refused or failed call returns its own error, nothing is sent
 //! again.
-use crate::job::{failed, refused, Outcome};
-use crate::registry::lock;
+use crate::host::outcome::{failed, refused, Outcome};
+use crate::host::registry::lock;
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_store_service::{telemetry, OpenRefusal, StoreService};
 use std::collections::BTreeMap;
@@ -46,16 +46,16 @@ fn path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
 
 /// Opens the Store at `store` for this process, or refuses.
 fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
-    let identity = crate::stores::identity(args)?;
+    let identity = crate::host::stores::identity(args)?;
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
         std::process::id(),
-        layerfs_bridge::sdk_values::hex(&crate::registry::random()?[..12])
+        layerfs_bridge::sdk_values::hex(&crate::host::registry::random()?[..12])
     ));
     std::fs::create_dir(&directory).map_err(failed)?;
     let template = directory.join("overlay.sqlite");
     let opened = match identity.kind {
-        crate::stores::Kind::Sqlite => {
+        crate::host::stores::Kind::Sqlite => {
             StoreService::open_direct(store, &identity.binding, identity.cursor_key, &template)
                 .map_err(|refusal| match refusal {
                     OpenRefusal::Unsupported(reason) => refused("Unsupported", reason.0),
@@ -63,8 +63,8 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
                     OpenRefusal::Failed(reason) => refused("Failed", reason),
                 })
         }
-        crate::stores::Kind::Postgresql { .. } => {
-            crate::stores::open_postgres(args, &identity, &template)
+        crate::host::stores::Kind::Postgresql { .. } => {
+            crate::host::stores::open_postgres(args, &identity, &template)
         }
     };
     match opened {
@@ -81,7 +81,7 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
 }
 
 /// `storeOpen`: one more client of the Store a call names, opening it first.
-pub(crate) fn acquire(args: &SdkValue) -> Outcome {
+pub fn acquire(args: &SdkValue) -> Outcome {
     let store = path(args)?;
     let mut stores = lock(&STORES)?;
     if !stores.contains_key(&store) {
@@ -99,7 +99,7 @@ pub(crate) fn acquire(args: &SdkValue) -> Outcome {
 /// `storeClose`: one client less; the last one closes the Store and removes
 /// its overlay directory. A call still running keeps the service alive until
 /// it returns, and the service closes when it is dropped then.
-pub(crate) fn release(args: &SdkValue) -> Outcome {
+pub fn release(args: &SdkValue) -> Outcome {
     let store = path(args)?;
     let mut stores = lock(&STORES)?;
     let Some(opened) = stores.get_mut(&store) else {
@@ -177,10 +177,10 @@ pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
         if backend {
             layerfs_store_service::operator::dispatch(&service, &call)
         } else {
-            layerfs_api::call(&service, &call)
+            crate::call(&service, &call)
         }
     };
-    if !crate::trace::traced() {
+    if !crate::host::trace::traced() {
         return run();
     }
     // A traced call records its own timing, SQL and delta work, as a daemon
@@ -196,7 +196,7 @@ pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
     for (name, value) in [("sql", sql), ("delta", delta)] {
         fields.extend(value.map(|value| (name.to_owned(), value)));
     }
-    crate::trace::collect(SdkValue::Map(fields));
+    crate::host::trace::collect(SdkValue::Map(fields));
     outcome
 }
 

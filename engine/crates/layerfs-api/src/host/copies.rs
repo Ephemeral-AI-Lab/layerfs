@@ -3,9 +3,9 @@
 //! a remote, and
 //! the providers this build can add. Each request is sent once; a failure
 //! is answered with a stable code (Unavailable, Denied, Unknown, …).
-use crate::job::{refused, Outcome};
-use crate::registry::text;
-use crate::sync::driver;
+use crate::host::outcome::{refused, Outcome};
+use crate::host::registry::text;
+use crate::host::sync::driver;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_store_service::remote::storage::RemoteError;

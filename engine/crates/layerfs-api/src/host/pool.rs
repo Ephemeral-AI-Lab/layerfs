@@ -11,8 +11,8 @@
 //! has and callers take turns on them, each waiting at most [`LEND_WAIT`]
 //! before it is refused `Busy`. Opening a connection is not an attempt
 //! of any operation: nothing is sent before the connection is ready.
-use crate::job::{failed, refused};
-use layerfs_api::internal::Control;
+use crate::host::outcome::{failed, refused};
+use crate::internal::Control;
 use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
 use layerfs_bridge::duplex::initiate_observed;
 use std::net::SocketAddr;
@@ -21,7 +21,7 @@ use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 /// Most control connections one process keeps to one Sandbox. A Sandbox this
-/// binding creates admits [`crate::sandbox::DAEMON_CONNECTIONS`]; the rest
+/// binding creates admits [`crate::host::sandbox::DAEMON_CONNECTIONS`]; the rest
 /// stay for other processes.
 pub(crate) const CONNECTIONS: usize = 6;
 
@@ -98,7 +98,7 @@ impl Dial {
                         format!(
                             "the Sandbox's daemon admitted no connection for {}s: other processes hold all {} of its connections",
                             wait.as_secs(),
-                            crate::sandbox::DAEMON_CONNECTIONS
+                            crate::host::sandbox::DAEMON_CONNECTIONS
                         ),
                     ))
                 }
@@ -110,7 +110,7 @@ impl Dial {
     /// One authenticated connection, checked to reach the same daemon.
     pub(crate) fn open(&self) -> Result<Control, SdkRefusal> {
         let address =
-            layerfs_api::connect_address(self.endpoint, self.host.as_deref()).map_err(failed)?;
+            crate::connect_address(self.endpoint, self.host.as_deref()).map_err(failed)?;
         let stream = std::net::TcpStream::connect_timeout(&address, Duration::from_secs(10))
             .map_err(failed)?;
         stream

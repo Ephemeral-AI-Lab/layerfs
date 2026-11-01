@@ -8,9 +8,9 @@
 //! from a second command and waits (bounded) until it is gone. A local
 //! Sandbox (`layerfs_sandbox::Sandbox::Native`) runs the same commands as
 //! processes of this kernel, so the same probes and signals apply.
-use crate::job::{refused, Outcome};
-use crate::output::Spool;
-use crate::registry::{lock, naming, sandbox, sandbox_live, text, Process, SandboxState};
+use crate::host::outcome::{refused, Outcome};
+use crate::host::output::Spool;
+use crate::host::registry::{lock, naming, sandbox, sandbox_live, text, Process, SandboxState};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::time::Duration;
 
@@ -29,11 +29,14 @@ fn run(
     arguments: Vec<String>,
     spool: bool,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
-    crate::runtime::run(
+    crate::host::runtime::run(
         &state.runtime,
         state.identity,
         arguments,
-        vec![format!("HOME={}", crate::runtime::scratch(&state.runtime))],
+        vec![format!(
+            "HOME={}",
+            crate::host::runtime::scratch(&state.runtime)
+        )],
         directory,
         spool,
     )
@@ -60,7 +63,7 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
             vec!["bash".into(), "-c".into(), command.into()],
             args.get_bool("spool"),
         )?;
-        let mut streams = crate::output::fields(stdout, stderr)?.into_iter();
+        let mut streams = crate::host::output::fields(stdout, stderr)?.into_iter();
         let mut result = vec![
             ("kind", SdkValue::Text(format!("exit:{code}"))),
             ("exitCode", SdkValue::Int(i64::from(code))),
@@ -76,19 +79,19 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
                 .collect(),
         ));
     }
-    let _guard = crate::discovery::guard(&state.directory)?;
+    let _guard = crate::host::discovery::guard(&state.directory)?;
     // the id names its Sandbox, so `cancel` needs nothing else
     let id = format!(
         "proc_{}_{}",
         state.id,
-        layerfs_bridge::sdk_values::hex(&crate::registry::random()?[..12])
+        layerfs_bridge::sdk_values::hex(&crate::host::registry::random()?[..12])
     );
     // the log path is an argument, not script text: a local Sandbox's
     // scratch directory is under a configured path
     let script = "setsid bash -c \"$0\" >\"$1\" 2>&1 </dev/null & echo $!".to_owned();
     let log = format!(
         "{}/layerfs-{id}.log",
-        crate::runtime::scratch(&state.runtime)
+        crate::host::runtime::scratch(&state.runtime)
     );
     let (code, stdout, stderr) = run(
         &state,
@@ -116,7 +119,7 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
     })?;
     // its own session leaves the command's process group; named, it still
     // ends with a local Sandbox. Unnamed it would outlive it: it ends here, once.
-    if let Err(refusal) = crate::runtime::track(&state.runtime, pid, &start) {
+    if let Err(refusal) = crate::host::runtime::track(&state.runtime, pid, &start) {
         let end = format!("kill -KILL -- -{pid} 2>/dev/null; true");
         let _ = run(
             &state,
@@ -133,7 +136,7 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
         stopped: false,
         start,
     };
-    crate::discovery::save_process(&state, &id, &process)?;
+    crate::host::discovery::save_process(&state, &id, &process)?;
     lock(&state.processes)?.insert(id.clone(), process);
     Ok(SdkValue::map([
         ("kind", SdkValue::text("running")),
@@ -146,7 +149,7 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
 /// The container's first process is the daemon, which does not reap orphans,
 /// so a finished member can stay a zombie that `kill -0` still finds.
 fn start_time(state: &SandboxState, pid: u32) -> Result<Option<String>, SdkRefusal> {
-    let (code, out, _) = run(state, &crate::runtime::scratch(&state.runtime), vec!["bash".into(), "-c".into(), format!("s=$(cat /proc/{pid}/stat 2>/dev/null) || exit 1; set -- ${{s##*) }}; shift 19; printf '%s' \"$1\"")], false)?;
+    let (code, out, _) = run(state, &crate::host::runtime::scratch(&state.runtime), vec!["bash".into(), "-c".into(), format!("s=$(cat /proc/{pid}/stat 2>/dev/null) || exit 1; set -- ${{s##*) }}; shift 19; printf '%s' \"$1\"")], false)?;
     if code == 0 {
         Ok(Some(String::from_utf8_lossy(out.kept()).into_owned()))
     } else {
@@ -161,7 +164,7 @@ fn alive(state: &SandboxState, pid: u32) -> Result<bool, SdkRefusal> {
     );
     let (code, _, _) = run(
         state,
-        &crate::runtime::scratch(&state.runtime),
+        &crate::host::runtime::scratch(&state.runtime),
         vec!["bash".into(), "-c".into(), probe],
         false,
     )?;
@@ -202,9 +205,9 @@ pub(crate) fn running_in(state: &SandboxState, path: &str) -> Result<Vec<String>
 /// with its `sandbox`.
 pub(crate) fn processes(args: &SdkValue) -> Outcome {
     let mut items = Vec::new();
-    for id in crate::discovery::sandbox_ids(args)? {
+    for id in crate::host::discovery::sandbox_ids(args)? {
         let named = naming(args, &id);
-        if !crate::discovery::sandbox_dir(&named, &id)?
+        if !crate::host::discovery::sandbox_dir(&named, &id)?
             .join("sandbox.record")
             .exists()
         {
@@ -212,10 +215,10 @@ pub(crate) fn processes(args: &SdkValue) -> Outcome {
         }
         match sandbox_live(&named) {
             Ok(state) => {
-                crate::discovery::refresh(&state)?;
+                crate::host::discovery::refresh(&state)?;
                 items.extend(listed(&state)?);
             }
-            Err(refusal) if crate::discovery::gone_container(&refusal).is_some() => {}
+            Err(refusal) if crate::host::discovery::gone_container(&refusal).is_some() => {}
             Err(refusal) => return Err(refusal),
         }
     }
@@ -273,8 +276,8 @@ pub(crate) fn cancel(args: &SdkValue) -> Outcome {
         .map(|(sandbox, _)| sandbox)
         .ok_or_else(|| refused("NoSuchProcess", format!("{id} is not a process id")))?;
     let state = sandbox_live(&naming(args, sandbox))?;
-    crate::discovery::refresh(&state)?;
-    let _guard = crate::discovery::guard(&state.directory)?;
+    crate::host::discovery::refresh(&state)?;
+    let _guard = crate::host::discovery::guard(&state.directory)?;
     let (pid, start, stopped) = lock(&state.processes)?
         .get(id)
         .map(|process| (process.pid, process.start.clone(), process.stopped))
@@ -293,7 +296,7 @@ pub(crate) fn cancel(args: &SdkValue) -> Outcome {
     }
     run(
         &state,
-        &crate::runtime::scratch(&state.runtime),
+        &crate::host::runtime::scratch(&state.runtime),
         vec![
             "bash".into(),
             "-c".into(),
@@ -311,7 +314,7 @@ pub(crate) fn cancel(args: &SdkValue) -> Outcome {
     }
     if let Some(process) = lock(&state.processes)?.get_mut(id) {
         process.stopped = gone;
-        crate::discovery::save_process(&state, id, process)?;
+        crate::host::discovery::save_process(&state, id, process)?;
     }
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Stopped")),

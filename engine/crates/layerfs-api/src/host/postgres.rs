@@ -5,10 +5,10 @@
 //! passed per call (`postgresql: { url }`) and never stored. Init stays
 //! SQLite only, so a PostgreSQL Store gets its data from an import. Built
 //! without the `postgresql` feature, every call here is `Unsupported`.
-use crate::discovery;
-use crate::job::{refused, Outcome};
-use crate::registry::text;
-use crate::stores::{self, Identity, Kind};
+use crate::host::discovery;
+use crate::host::outcome::{refused, Outcome};
+use crate::host::registry::text;
+use crate::host::stores::{self, Identity, Kind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_service::StoreService;
 use std::path::Path;
@@ -113,7 +113,7 @@ pub(crate) fn open(
 /// `store` (every project, the same ids) into the new schema, then records
 /// the PostgreSQL Store `target` with the source's binding.
 pub(crate) fn import(args: &SdkValue) -> Outcome {
-    crate::progress::observed(args, || import_once(args))
+    crate::host::progress::observed(args, || import_once(args))
 }
 
 fn import_once(args: &SdkValue) -> Outcome {
@@ -127,7 +127,7 @@ fn import_once(args: &SdkValue) -> Outcome {
     let _guard = discovery::guard(&directory)?;
     let source_bytes = std::fs::metadata(&store_file).map(|m| m.len()).ok();
     // the copy is one transaction with no byte count of its own
-    crate::progress::begin("copy");
+    crate::host::progress::begin("copy");
     let imported = copy(&store_file, url, &schema, &sync, &source);
     let receipt = match imported {
         Ok(receipt) => receipt,
@@ -144,7 +144,7 @@ fn import_once(args: &SdkValue) -> Outcome {
         binding: source.binding,
         cursor_key: source.cursor_key,
     };
-    crate::progress::begin("record");
+    crate::host::progress::begin("record");
     stores::save_record(&home, target, &identity)?;
     Ok(SdkValue::map([
         (
@@ -230,7 +230,10 @@ pub(crate) fn attach(args: &SdkValue) -> Outcome {
                 format!("Store {store} is a SQLite Store"),
             ));
         }
-        (binding(url, &schema, &sync)?, crate::registry::random()?)
+        (
+            binding(url, &schema, &sync)?,
+            crate::host::registry::random()?,
+        )
     } else {
         let recorded = stores::identity(args)?;
         match &recorded.kind {

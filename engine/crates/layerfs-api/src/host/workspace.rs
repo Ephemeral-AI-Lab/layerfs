@@ -7,11 +7,11 @@
 //! A Sandbox whose daemon ended itself when idle is refused `NoSuchSandbox`
 //! by a mount and reclaimed by the next `sandbox.create` or
 //! `runtime.sandbox.reclaim`.
-use crate::job::{failed, Outcome};
-use crate::registry::{lock, naming, random, sandbox, sandbox_live, text, Mount};
-use crate::sandbox::{operation, WORKSPACES};
-use layerfs_api::internal::workspace;
-use layerfs_api::sandbox::{values, Unmounted};
+use crate::host::outcome::{failed, Outcome};
+use crate::host::registry::{lock, naming, random, sandbox, sandbox_live, text, Mount};
+use crate::host::sandbox::{operation, WORKSPACES};
+use crate::internal::workspace;
+use crate::sandbox::{values, Unmounted};
 use layerfs_bridge::control::{CommitControl, SdkRefusal, SdkValue};
 use layerfs_history::WorkspaceId;
 use std::path::Path;
@@ -47,16 +47,16 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     let sandbox = match args.get_text("sandbox") {
         Some(id) if !id.is_empty() => id,
         _ => {
-            return Err(crate::job::refused(
+            return Err(crate::host::outcome::refused(
                 "InvalidInput",
                 "workspace.mount names its Sandbox: workspace.mount(sandbox, branch), with a Sandbox from `sandbox.create()` or `project.list_sandboxes()`",
             ))
         }
     };
-    let directory = crate::discovery::sandbox_dir(args, sandbox)?;
+    let directory = crate::host::discovery::sandbox_dir(args, sandbox)?;
     let record = directory.join("sandbox.record");
     let missing = || {
-        no_sandbox(crate::job::refused(
+        no_sandbox(crate::host::outcome::refused(
             "NoSuchSandbox",
             format!("the project has no Sandbox {sandbox}"),
         ))
@@ -69,13 +69,13 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
             "NoSuchSandbox" => no_sandbox(refusal),
             _ => refusal,
         })?;
-    let _guard = crate::discovery::guard(&state.directory)?;
+    let _guard = crate::host::discovery::guard(&state.directory)?;
     // under the Sandbox's guard: a close may have removed it, or mounts filled it
     if !record.exists() {
         return Err(missing());
     }
     if recorded(&directory)? >= WORKSPACES as usize {
-        return Err(crate::job::refused(
+        return Err(crate::host::outcome::refused(
             "Capacity",
             format!(
                 "Sandbox {sandbox} already holds {WORKSPACES} Workspaces. Create a new Sandbox with `sandbox.create()` and mount there, or list this one's Workspaces with `sandbox.list_workspaces(\"{sandbox}\")` and unmount the ones you are done with (`workspace.unmount(ws)`)"
@@ -84,9 +84,9 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     }
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
     // The Branch is found by name in this process; the daemon binds its id.
-    let branch_id = crate::direct::branch_id(args, branch)?;
+    let branch_id = crate::host::direct::branch_id(args, branch)?;
     let mounted = {
-        let mut control = crate::trace::control(&state.controls)?;
+        let mut control = crate::host::trace::control(&state.controls)?;
         workspace(&mut control).mount(id, branch_id)
     };
     let mounted = mounted.map_err(failed)?;
@@ -96,17 +96,17 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
         fields.push(("container".to_owned(), SdkValue::text(state.name.as_str())));
         fields.push((
             "image".to_owned(),
-            SdkValue::text(crate::runtime::image(&state.runtime)),
+            SdkValue::text(crate::host::runtime::image(&state.runtime)),
         ));
         // what its record names (#529); a record from before has no platform
-        let saved = crate::discovery::load(&record)?;
+        let saved = crate::host::discovery::load(&record)?;
         fields.push(("platform".to_owned(), platform_of(&saved)));
         fields.push((
             "runtime".to_owned(),
-            SdkValue::text(crate::runtime::runtime_name(&saved)),
+            SdkValue::text(crate::host::runtime::runtime_name(&saved)),
         ));
     }
-    crate::discovery::save_workspace(&state, &mounted, branch)?;
+    crate::host::discovery::save_workspace(&state, &mounted, branch)?;
     lock(&state.mounts)?.insert(
         mounted.ready.directory.clone(),
         Mount {
@@ -136,11 +136,13 @@ fn observed(
     record: &SdkValue,
     directory: &Path,
 ) -> Result<Found, SdkRefusal> {
-    let cached = lock(&crate::registry::SANDBOXES)?.get(directory).cloned();
+    let cached = lock(&crate::host::registry::SANDBOXES)?
+        .get(directory)
+        .cloned();
     let observed = match cached {
         Some(state) => state.runtime.endpoint().map(drop),
         // a container, or with the local runtime a daemon process
-        None => match crate::discovery::recorded(args, id, record) {
+        None => match crate::host::discovery::recorded(args, id, record) {
             Ok(recorded) => recorded.reopen().map(drop),
             Err(refusal) => return Ok(Found::Refused(refusal)),
         },
@@ -174,10 +176,10 @@ type Entry = (String, std::path::PathBuf, Result<SdkValue, SdkRefusal>);
 type Readable = Vec<(String, std::path::PathBuf, SdkValue, Found)>;
 fn records(args: &SdkValue) -> Result<(Readable, Vec<SdkValue>), SdkRefusal> {
     if let Some(deploy) = args.get("deploy") {
-        crate::runtime::backend(deploy)?;
+        crate::host::runtime::backend(deploy)?;
     }
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    crate::local::local_dir_setting(args)?;
+    crate::host::local::local_dir_setting(args)?;
     let (mut readable, mut skipped) = (Vec::new(), Vec::new());
     for (id, directory, value) in recorded_all(args)? {
         let record = match value {
@@ -187,7 +189,7 @@ fn records(args: &SdkValue) -> Result<(Readable, Vec<SdkValue>), SdkRefusal> {
                 continue;
             }
         };
-        if crate::runtime::recorded(&record).is_err() {
+        if crate::host::runtime::recorded(&record).is_err() {
             continue;
         }
         match observed(args, &id, &record, &directory)? {
@@ -210,12 +212,12 @@ fn refused_entry(id: &str, refusal: &SdkRefusal) -> SdkValue {
 /// Every recorded Sandbox of the project, lowest number first, with each record.
 fn recorded_all(args: &SdkValue) -> Result<Vec<Entry>, SdkRefusal> {
     let mut found = Vec::new();
-    for id in crate::discovery::sandbox_ids(args)? {
-        let directory = crate::discovery::sandbox_dir(args, &id)?;
+    for id in crate::host::discovery::sandbox_ids(args)? {
+        let directory = crate::host::discovery::sandbox_dir(args, &id)?;
         let record = directory.join("sandbox.record");
         // a number claimed by a start that has not finished is not a Sandbox yet
         if record.exists() {
-            let value = crate::discovery::load(&record);
+            let value = crate::host::discovery::load(&record);
             found.push((id, directory, value));
         }
     }
@@ -230,7 +232,7 @@ pub(crate) fn reclaim_gone(args: &SdkValue) -> Result<Vec<SdkValue>, SdkRefusal>
     let (readable, skipped) = records(args)?;
     for (id, _, _, found) in readable {
         if let Found::Ended(container, stopped) = found {
-            crate::sandbox::reclaim(args, &id, &container, stopped)?;
+            crate::host::sandbox::reclaim(args, &id, &container, stopped)?;
         }
     }
     Ok(skipped)
@@ -270,7 +272,7 @@ pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
             ("platform", platform_of(&value)),
             (
                 "runtime",
-                SdkValue::text(crate::runtime::runtime_name(&value)),
+                SdkValue::text(crate::host::runtime::runtime_name(&value)),
             ),
             ("workspaces", SdkValue::Int(recorded(&directory)? as i64)),
         ]));
@@ -313,13 +315,13 @@ pub(crate) fn all_records(args: &SdkValue) -> Outcome {
             }
         };
         let unknown = |refusal: SdkRefusal| State::Unknown(refusal.message);
-        let (runtime, state) = match crate::runtime::recorded(&value) {
+        let (runtime, state) = match crate::host::runtime::recorded(&value) {
             // a record of the former local runtime is never read
             Err(other) => (
                 Some(other),
                 State::Unknown("a record of the former local runtime is never used".into()),
             ),
-            Ok(kind) => match crate::discovery::recorded(args, &id, &value) {
+            Ok(kind) => match crate::host::discovery::recorded(args, &id, &value) {
                 // a host that cannot run it (Unsupported) is no fault of the
                 // record: its process is read as below
                 Err(refusal) if refusal.code != "Unsupported" => (
@@ -338,7 +340,7 @@ pub(crate) fn all_records(args: &SdkValue) -> Outcome {
                 ),
                 _ => (
                     value.get_text("runtime"),
-                    match crate::discovery::local_running(&value) {
+                    match crate::host::discovery::local_running(&value) {
                         Ok(true) => State::Is("running"),
                         Ok(false) => State::Is("stopped"),
                         Err(refusal) => unknown(refusal),
@@ -421,8 +423,8 @@ pub(crate) fn reclaim(args: &SdkValue) -> Outcome {
         let Found::Ended(container, stopped) = found else {
             continue;
         };
-        let _placing = crate::discovery::guard(&crate::discovery::project_dir(args)?)?;
-        match crate::sandbox::reclaim(args, &id, &container, stopped) {
+        let _placing = crate::host::discovery::guard(&crate::host::discovery::project_dir(args)?)?;
+        match crate::host::sandbox::reclaim(args, &id, &container, stopped) {
             Ok(_) => reclaimed.push(SdkValue::text(&id)),
             // started again under the number meanwhile, or already reclaimed
             Err(refusal) if matches!(refusal.code.as_str(), "Busy" | "NoSuchSandbox") => {}
@@ -442,10 +444,10 @@ pub(crate) fn reclaim(args: &SdkValue) -> Outcome {
 pub(crate) fn status(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;
     let token = state.token(text(args, "path")?)?;
-    let mut control = crate::trace::control(&state.controls)?;
+    let mut control = crate::host::trace::control(&state.controls)?;
     let status = workspace(&mut control).status(token).map_err(operation)?;
     drop(control);
-    let head = crate::direct::head(args, status.binding.branch.id).ok();
+    let head = crate::host::direct::head(args, status.binding.branch.id).ok();
     let mut value = values::status(&status, head);
     if let SdkValue::Map(fields) = &mut value {
         let branch = lock(&state.mounts)?
@@ -460,7 +462,7 @@ pub(crate) fn status(args: &SdkValue) -> Outcome {
 pub(crate) fn commit(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;
     let token = state.token(text(args, "path")?)?;
-    let reply = workspace(&mut *crate::trace::control(&state.controls)?)
+    let reply = workspace(&mut *crate::host::trace::control(&state.controls)?)
         .commit_with(CommitControl {
             token,
             force: args.get_bool("force"),
@@ -475,20 +477,20 @@ pub(crate) fn commit(args: &SdkValue) -> Outcome {
 pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;
     let path = text(args, "path")?;
-    if let Some(value) = crate::unmount::find(&state, path)? {
-        return crate::unmount::repeat(&value);
+    if let Some(value) = crate::host::unmount::find(&state, path)? {
+        return crate::host::unmount::repeat(&value);
     }
-    let guard = crate::discovery::guard(&state.directory)?;
+    let guard = crate::host::discovery::guard(&state.directory)?;
     // Another process may have registered while this call waited for the
     // short admission section. Check again before sending anything.
-    if let Some(value) = crate::unmount::find(&state, path)? {
-        return crate::unmount::repeat(&value);
+    if let Some(value) = crate::host::unmount::find(&state, path)? {
+        return crate::host::unmount::repeat(&value);
     }
     let token = state.token(path)?;
-    crate::discovery::refresh(&state)?;
+    crate::host::discovery::refresh(&state)?;
     // The runtime owner knows its own processes; the daemon's kernel probe
     // still answers Busy for any other holder.
-    let running = crate::exec::running_in(&state, path)?;
+    let running = crate::host::exec::running_in(&state, path)?;
     if !running.is_empty() {
         return Err(SdkRefusal {
             code: "Busy".to_owned(),
@@ -503,13 +505,13 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
             )]),
         });
     }
-    let attempt = crate::unmount::begin(&state, token, path)?;
+    let attempt = crate::host::unmount::begin(&state, token, path)?;
     drop(guard);
     // Only this Workspace's lease remains held. Other Workspaces and
     // processes can take Sandbox ownership while the daemon helper waits.
     let mut sent = false;
     let outcome = (|| {
-        let mut control = crate::trace::control(&state.controls)?;
+        let mut control = crate::host::trace::control(&state.controls)?;
         sent = true;
         let mut api = workspace(&mut control);
         // Forced: one abort write ends the connection, also after a normal
@@ -535,17 +537,17 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     // Preserve the daemon's known outcome before any discovery-lock wait.
     // A file/cleanup failure is separate from an already successful detach.
     let publication = if !sent {
-        crate::unmount::cancel(&attempt)
+        crate::host::unmount::cancel(&attempt)
     } else {
-        crate::unmount::finish(&attempt, path, &outcome)
+        crate::host::unmount::finish(&attempt, path, &outcome)
     };
     if let Err(error) = publication {
-        return crate::unmount::cleanup_failure(outcome, error);
+        return crate::host::unmount::cleanup_failure(outcome, error);
     }
     if outcome.is_ok() {
         let cleanup = (|| {
-            let _guard = crate::discovery::guard(&state.directory)?;
-            match std::fs::remove_file(crate::discovery::workspace_file(&state, token)) {
+            let _guard = crate::host::discovery::guard(&state.directory)?;
+            match std::fs::remove_file(crate::host::discovery::workspace_file(&state, token)) {
                 Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(failed(error)),
@@ -554,7 +556,7 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
             Ok(())
         })();
         if let Err(error) = cleanup {
-            return crate::unmount::cleanup_failure(outcome, error);
+            return crate::host::unmount::cleanup_failure(outcome, error);
         }
     }
     outcome

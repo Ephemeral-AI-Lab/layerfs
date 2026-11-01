@@ -14,6 +14,8 @@ pub use base::internal;
 pub mod branch;
 pub mod fs;
 #[doc(hidden)]
+pub mod host;
+#[doc(hidden)]
 pub mod operator;
 pub mod project;
 pub mod sandbox;
