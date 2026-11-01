@@ -258,7 +258,15 @@ export class LayerFS {
     this[STATE].closed = true;
     let failure;
     try { await closeEvents(this); } catch (error) { failure = error; }
-    try { await storeClose(this); } catch (error) { failure ??= error; }
+    try { await storeClose(this); } catch (error) {
+      failure = failure
+        ? new LayerFSError(
+            failure instanceof LayerFSError ? failure.code : "Failed",
+            `${failure.message}; releasing the Store release also failed: ${error.message}`,
+            null,
+          )
+        : error;
+    }
     if (failure) throw failure;
   }
 }

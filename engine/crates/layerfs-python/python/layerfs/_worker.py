@@ -2,10 +2,15 @@ import asyncio
 import base64
 import json
 import math
+import os
 import re
 
 
 TAG = "layerfs-worker"
+
+# The endpoint file's parsed contents, keyed by (mtime_ns, size): a worker
+# restart changes both, and an unchanged file is served without a disk read.
+_ENDPOINTS = {}
 
 
 def _pack(value):
@@ -76,6 +81,14 @@ def frame(value):
 
 def endpoint_of(file):
     try:
+        stat = os.stat(file)
+    except OSError as error:
+        raise ValueError(f"invalid LayerFS worker endpoint {file}") from error
+    key = (stat.st_mtime_ns, stat.st_size)
+    cached = _ENDPOINTS.get(file)
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    try:
         with open(file, encoding="utf-8") as source:
             info = json.load(source)
         if (
@@ -86,8 +99,10 @@ def endpoint_of(file):
             or not isinstance(info.get("home"), str)
         ):
             raise ValueError
+        _ENDPOINTS[file] = (key, info)
         return info
     except Exception as error:
+        _ENDPOINTS.pop(file, None)
         raise ValueError(f"invalid LayerFS worker endpoint {file}") from error
 
 
