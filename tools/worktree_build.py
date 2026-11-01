@@ -186,6 +186,9 @@ def build(args):
             "layerfs-daemon",
             "-p",
             "layerfs-node",
+            # the `layerfs` command; a machine's guest runs `layerfs worker` (#533)
+            "-p",
+            "layerfs-cli",
             # the namespaces Sandbox backend runs this beside the daemon (#515 §4.5)
             "-p",
             "layerfs-sandbox",
@@ -206,7 +209,9 @@ def build(args):
                     'set -eu; cp "/work/target/$1/layerfs-daemon" /export/layerfs-daemon; '
                     'cp "/work/target/$1/layerfs-sandbox-helper" /export/layerfs-sandbox-helper; '
                     'cp "/work/target/$1/liblayerfs_node.so" /export/layerfs.node; '
-                    'chown "$2:$3" /export/layerfs-daemon /export/layerfs-sandbox-helper /export/layerfs.node'
+                    'cp "/work/target/$1/layerfs" /export/layerfs; '
+                    'chown "$2:$3" /export/layerfs-daemon /export/layerfs-sandbox-helper /export/layerfs.node '
+                    "/export/layerfs"
                 )
                 export = docker_build(
                     record,
@@ -219,6 +224,7 @@ def build(args):
                 profile = Path(record["macos_target"]) / args.profile
                 shutil.copy2(profile / "layerfs-daemon", bundle / "layerfs-daemon")
                 shutil.copy2(profile / "liblayerfs_node.dylib", bundle / "layerfs.node")
+                shutil.copy2(profile / "layerfs", bundle / "layerfs")
             copy_sdk(Path(record["worktree"]), bundle)
             if inputs(record) != before:
                 raise Refused("Source changed during build; partial bundle is not eligible for E2E")

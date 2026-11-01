@@ -154,6 +154,7 @@ class WorktreeTests(unittest.TestCase):
         (target / "layerfs-daemon").write_bytes(b"daemon")
         (target / "layerfs-daemon").chmod(0o755)
         (target / "liblayerfs_node.dylib").write_bytes(b"addon")
+        (target / "layerfs").write_bytes(b"command")
         args = SimpleNamespace(resources=str(self.path), platform="macos", profile="debug", jobs=2, features=features)
 
         def execute(*a, **kw):
@@ -177,6 +178,7 @@ class WorktreeTests(unittest.TestCase):
         ):
             self.assertIn(name, manifest["files"])
         self.assertFalse(any(name.startswith("engine/crates/layerfs-node/") for name in manifest["files"]))
+        self.assertIn("layerfs", manifest["files"])
         # the package finds the addon at the bundle root, three folders up from src/
         self.assertTrue((bundle / "api/node/src/../../../layerfs.node").resolve().is_file())
         (self.repo / "api/node/src/index.js").write_text("later edit\n")

@@ -125,3 +125,15 @@ Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated 
   (#463 discovery reclaim, #508 admission and connection wait) are not
   re-covered on the 2.0 entry point here: there is no Linux host in this
   pass. Recorded as a coverage gap in HANDOFF.md.
+- Step 15: the command is `engine/crates/layerfs-cli` (binary `layerfs`),
+  built from the table like the package. The shell form of a folder scope
+  is `--scope <folder>` with `--scope-branch <name>` (S names none). `--text`
+  is one generic readable form (a file's text as is; a result's list of
+  records as a table; other fields as `key  value` lines), not the per-call
+  layouts S sketches. `workspace exec --stream` writes the output the
+  library sends after the command ends (the library has no live output
+  stream yet), then exits with the command's code. Content from stdin is
+  text when it is UTF-8, else bytes. `layerfs worker` serves
+  `/layerfs/data`; the internal `LAYERFS_WORKER_ROOT` names another root
+  for tests. The worktree build bundle carries `layerfs` beside the daemon;
+  a sealed machine bundle (O16, `bundle.json`) is still placed by hand.

@@ -3,7 +3,7 @@
  * library's structured detail. */
 export class LayerFSError extends Error {
   constructor(code, message, detail) {
-    super(`${code}: ${message}`);
+    super(message);
     this.name = "LayerFSError";
     this.code = code;
     this.detail = detail ?? null;

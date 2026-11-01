@@ -1,0 +1,24 @@
+[package]
+name = "layerfs-cli"
+description = "The `layerfs` command (#533 step 15): the library's call table as a shell, and `layerfs worker` inside a machine"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "layerfs"
+path = "src/main.rs"
+
+[features]
+default = ["machine"]
+# The machine calls run on a host. The guest bundle's `layerfs worker` is
+# built with --no-default-features, so no machine adapter runs in a machine.
+machine = ["layerfs-api/machine"]
+postgresql = ["layerfs-api/postgresql"]
+tls = ["layerfs-api/tls"]
+
+[dependencies]
+layerfs-api = { path = "../layerfs-api" }
+layerfs-bridge = { path = "../layerfs-bridge" }
