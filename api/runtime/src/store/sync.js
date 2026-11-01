@@ -22,7 +22,7 @@ import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { invokeBackend } from "@layerfs/agent/internal";
 import { callHome } from "../settings.js";
-import { credentialsOf, makeVolume, postgresqlTarget, shown, unused } from "./calls.js";
+import { credentialsOf, makeVolume, postgresqlTarget, shown, storeCall, unused } from "./calls.js";
 import { FILE, claim, link, named, put, refuse, storeFields } from "./registry.js";
 import { removeVolume } from "./volume.js";
 
@@ -54,7 +54,7 @@ export class SyncJobs {
     const job = this.jobs.get(id?.id ?? id);
     if (!job) return null;
     if (job.step === "running" && sample) {
-      const now = await sample(job.id).catch(() => null);
+      const now = await sample(job.id, job.store).catch(() => null);
       // a job may have ended meanwhile: its result stands
       if (now && job.step === "running") Object.assign(job, { phase: now.phase, bytes: now.bytes, total: now.total ?? job.total, pieces: now.pieces });
     }
@@ -63,7 +63,8 @@ export class SyncJobs {
 }
 
 /** One running job's sample from the binding that runs it: `{ phase, bytes, total, pieces }` or null. */
-export const progressOf = (runtime) => (id) => call("runtime.sync.progress", { home: callHome(runtime.settings), job: id });
+export const progressOf = (runtime) => (id, store) =>
+  store ? storeCall(runtime, store, "runtime.sync.progress", { home: callHome(runtime.settings), job: id }) : call("runtime.sync.progress", { home: callHome(runtime.settings), job: id });
 
 /** The Store file's size, when this process can see it (Linux). */
 function size(fields) {
@@ -114,7 +115,7 @@ export async function start_publish(runtime, jobs, name, options = {}) {
   try {
     return jobs.begin({ kind: "publish", store: name, ...to, total: size(fields) }, async (job) => {
       try {
-        const answer = await call("runtime.store.publish", { ...fields, ...to, ...credentials, job });
+        const answer = await storeCall(runtime, name, "runtime.store.publish", { ...fields, ...to, ...credentials, job });
         entryOf(runtime, store);
         link(runtime.settings, name, answer.transfer, (s) => {
           if (s.link) throw refuse("Linked", `Store ${name} was linked to ${s.link.remote} / ${s.link.file} meanwhile`);
@@ -140,7 +141,7 @@ export async function start_push(runtime, jobs, name, options = {}) {
   const to = linkOf(store);
   const fields = storeFields(runtime, store);
   return jobs.begin({ kind: "push", store: name, remote: to.remote, file: to.file, total: size(fields) }, async (job) => {
-    const answer = await call("runtime.store.push", { ...fields, remote: to.remote, file: to.file, ...credentialsOf(options), job, ...(options.force ? { force: true } : {}) });
+    const answer = await storeCall(runtime, name, "runtime.store.push", { ...fields, remote: to.remote, file: to.file, ...credentialsOf(options), job, ...(options.force ? { force: true } : {}) });
     link(runtime.settings, name, answer.transfer);
     return answer;
   });
@@ -156,7 +157,7 @@ export async function start_pull(runtime, jobs, name, options = {}) {
   return jobs.begin({ kind: "pull", store: name, remote: from.remote, file: from.file }, async (job) => {
     // this process's clients hold the Store open; a pull refuses an open Store
     await runtime.clients.forgetStore(name);
-    const answer = await call("runtime.store.pull", { ...fields, remote: from.remote, file: from.file, ...credentialsOf(options), job });
+    const answer = await storeCall(runtime, name, "runtime.store.pull", { ...fields, remote: from.remote, file: from.file, ...credentialsOf(options), job });
     link(runtime.settings, name, answer.transfer, (s) => ({ ...s, projects: [...s.projects, ...answer.added.map((p) => ({ name: p }))] }));
     return answer;
   });
@@ -175,7 +176,7 @@ export async function start_send(runtime, jobs, name, options = {}) {
   try {
     return jobs.begin({ kind: "send", store: name, ...to, total: size(fields) }, async (job) => {
       try {
-        const answer = await call("runtime.store.send", { ...fields, ...to, ...credentialsOf(options), job });
+        const answer = await storeCall(runtime, name, "runtime.store.send", { ...fields, ...to, ...credentialsOf(options), job });
         const { bytes, sha256, heads } = answer.transfer;
         return { ...answer, ...to, bytes, sha256, heads: heads ?? null };
       } finally {
@@ -205,7 +206,7 @@ export async function start_load(runtime, jobs, remoteName, options = {}) {
         const store = { name, kind: "sqlite", volume, link: null, created: Date.now(), projects: [] };
         let answer;
         try {
-          answer = await call("runtime.store.load", { ...storeFields(runtime, store), ...from, ...credentialsOf(options), job });
+          answer = await storeCall(runtime, name, "runtime.store.load", { ...storeFields(runtime, store), ...from, ...credentialsOf(options), job });
         } catch (error) {
           if (error?.code !== "Unknown") await removeVolume(runtime, { name, volume }).catch(() => {});
           throw error;
@@ -234,7 +235,7 @@ export async function start_import_postgresql(runtime, jobs, name, options = {})
   const fields = storeFields(runtime, source);
   return jobs.begin({ kind: "import", store: name, target: pgName, total: size(fields) }, async (job) => {
     const postgresql = { url: target.url, schema: target.schema, synchronousCommit: target.synchronousCommit };
-    const answer = await call("runtime.store.import_postgresql", { ...fields, target: pgName, postgresql, job });
+    const answer = await storeCall(runtime, name, "runtime.store.import_postgresql", { ...fields, target: pgName, postgresql, job });
     // #506 E6: the PostgreSQL Store records the SQLite Store it came from
     const importedFrom = { store: name, at: Date.now(), bytes: answer.sourceBytes ?? null };
     const store = { name: pgName, kind: "postgresql", connection: target.connection, schema: target.schema, synchronousCommit: target.synchronousCommit, created: Date.now(), importedFrom };

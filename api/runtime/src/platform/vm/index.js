@@ -70,6 +70,19 @@ function postgresqlStore(settings, project) {
   return entries(settings).find((s) => s.kind === "postgresql" && (store ? s.name === store : s.name === name || (s.projects ?? []).some((p) => p.name === name))) ?? null;
 }
 
+/** The VM key of `project` (a project or Store object or name): its SQLite Store's name (#506), or the project's name. */
+function vmKeyOf(settings, project) {
+  const name = checked(project);
+  if (postgresqlStore(settings, project)) return name;
+  const givenStore = typeof project === "object" && project !== null ? project.store : process.env.LAYERFS_STORE || undefined;
+  if (typeof givenStore === "string" && NAME.test(givenStore)) return givenStore;
+  const sqlites = entries(settings).filter((s) => s.kind === "sqlite");
+  if (sqlites.some((s) => s.name === name) || projectRecord(settings, name) || existsSync(join(settings.home, name, "project.record"))) return name;
+  const holders = sqlites.filter((s) => (s.projects ?? []).some((p) => p.name === name));
+  if (holders.length > 1) throw refuse("InvalidInput", `project ${name} is in Stores ${holders.map((s) => s.name).join(", ")}: name its { store }`, null);
+  return holders[0]?.name ?? name;
+}
+
 /** Inside a VM, loopback is the VM's own, not the host's: a PostgreSQL URL for a `vm:` home must name an address the VM can reach. */
 export function checkVmUrl(url) {
   if (typeof url !== "string" || !url) throw refuse("InvalidInput", "url is the PostgreSQL URL, passed per call and never stored", null);
@@ -107,7 +120,7 @@ const freePort = () => new Promise((resolve, reject) => {
  * guess.
  */
 async function ensure(settings, project) {
-  const projectKey = checked(project), pg = postgresqlStore(settings, project);
+  const projectKey = vmKeyOf(settings, project), pg = postgresqlStore(settings, project);
   const provider = providerOf(settings), name = vmNameOf(settings, projectKey), storeName = pg ? null : storeNameOf(settings, projectKey);
   const current = await provider.inspect(name);
   if (current) {
@@ -262,8 +275,8 @@ async function answering(settings, project, expected) {
 /** One project's VM record and, when it runs, whether its worker answers. It starts nothing. `disk`
  * asks each running VM for its Store disk's free bytes (one guest call), which `status` reports. */
 async function entry(settings, project, disk = false) {
-  const projectKey = checked(project);
-  const provider = providerOf(settings), name = vmNameOf(settings, projectKey);
+  const projectKey = checked(project), storeKey = vmKeyOf(settings, project);
+  const provider = providerOf(settings), name = vmNameOf(settings, storeKey);
   let found;
   try { found = await provider.inspect(name); } catch (error) {
     return { project: projectKey, name, state: "unknown", error: error.message, worker: { state: "unknown", error: error.message } };
@@ -271,7 +284,7 @@ async function entry(settings, project, disk = false) {
   if (!found) return { project: projectKey, name, state: "missing", worker: { state: "missing" } };
   const vm = { project: projectKey, name, state: found.state, image: found.image, home: found.home, store: found.store, created: found.created };
   if (found.state !== "running") return { ...vm, worker: { state: found.state, build: null } };
-  const info = endpoint(settings, projectKey);
+  const info = endpoint(settings, storeKey);
   const reply = info ? await ping(info) : null;
   const worker = { state: reply?.ready ? "running" : "unknown", answering: !!reply?.ready, build: reply?.build ?? info?.build ?? null, port: info?.port ?? null };
   if (!disk) return { ...vm, worker };
@@ -281,54 +294,54 @@ async function entry(settings, project, disk = false) {
 
 /** `{ project, worker, vm }` of one project: what `worker.start` and `vm.stop` answer. */
 async function stateOf(settings, project) {
-  const vm = await entry(settings, checked(project));
+  const vm = await entry(settings, project);
   return { project: vm.project, worker: vm.worker, vm };
 }
 
 /** The runtime's `worker.start(project)`: steps ①–④ for that project's VM. */
 async function start(settings, project) {
-  const name = checked(project);
+  const storeKey = vmKeyOf(settings, project);
   const provider = providerOf(settings), bundle = bundleIdentity(settings.bundle);
-  const held = await answering(settings, name, bundle.build);
-  if (held) return stateOf(settings, name);
+  const held = await answering(settings, storeKey, bundle.build);
+  if (held) return stateOf(settings, project);
   const vm = await ensure(settings, project);
   await install(settings, provider, vm);
   await prepareGuest(provider, vm);
-  await launch(settings, provider, vm, name, bundle);
-  return stateOf(settings, name);
+  await launch(settings, provider, vm, storeKey, bundle);
+  return stateOf(settings, project);
 }
 
 /** One `provider restart`, then the steps a rebooted VM needs again (③, ④). */
 async function restart(settings, project) {
-  const name = checked(project);
+  const storeKey = vmKeyOf(settings, project);
   const provider = providerOf(settings), bundle = bundleIdentity(settings.bundle);
   const vm = await ensure(settings, project);
   if (provider.restart) await provider.restart(vm.name);
   else { await provider.stop(vm.name); await provider.start(vm.name); }
-  rmSync(endpointFile(settings.home, name), { force: true });
+  rmSync(endpointFile(settings.home, storeKey), { force: true });
   await install(settings, provider, vm);
   await prepareGuest(provider, vm);
-  await launch(settings, provider, vm, name, bundle);
-  return stateOf(settings, name);
+  await launch(settings, provider, vm, storeKey, bundle);
+  return stateOf(settings, project);
 }
 
 /** Every project's VM, or all of this home's: `status()` of the runtime and of the `vm` group. */
 async function status(settings, projects = []) {
   providerOf(settings);
   const vms = [];
-  for (const project of projects) vms.push(await entry(settings, checked(project), true));
+  for (const project of projects) vms.push(await entry(settings, project, true));
   return { worker: null, vm: { provider: settings.vm.provider, placement: settings.placement.name, vms } };
 }
 
 /** Step ⑤: stop one project's VM; its Store disk and its Store stay. */
 async function stop(settings, project) {
-  const projectKey = checked(project);
-  const provider = providerOf(settings), name = vmNameOf(settings, projectKey);
+  const projectKey = checked(project), storeKey = vmKeyOf(settings, project);
+  const provider = providerOf(settings), name = vmNameOf(settings, storeKey);
   const found = await provider.inspect(name);
   if (!found) return { project: projectKey, name, state: "missing" };
   if (found.state !== "stopped") await provider.stop(name);
   const after = await provider.inspect(name);
-  rmSync(endpointFile(settings.home, projectKey), { force: true });
+  rmSync(endpointFile(settings.home, storeKey), { force: true });
   return { project: projectKey, name, state: after?.state ?? "missing" };
 }
 
@@ -339,27 +352,42 @@ async function stop(settings, project) {
  * else, and no remote Store push exists (#506).
  */
 async function remove(settings, project, options = {}) {
-  const projectKey = checked(project), pg = postgresqlStore(settings, project);
-  const provider = providerOf(settings), name = vmNameOf(settings, projectKey);
+  const projectKey = checked(project), storeKey = vmKeyOf(settings, project), pg = postgresqlStore(settings, project);
+  const provider = providerOf(settings), name = vmNameOf(settings, storeKey);
   if (options?.confirm !== "delete") throw refuse("InvalidInput", `a VM delete ends the project's VM; confirm it with { confirm: "delete" }`, null);
   const found = await provider.inspect(name);
   if (!found) return { project: projectKey, name, state: "missing", store: "kept" };
-  if (!pg && exists(settings, projectKey)) {
-    throw refuse("Unsupported", `the Store of ${projectKey} is on ${name}'s disk and nowhere else; a VM delete never destroys a Store that was not pushed, and this build has no remote Store push (#506). Remove the project first`, null);
+  if (!pg && exists(settings, storeKey)) {
+    throw refuse("Unsupported", `the Store of ${storeKey} is on ${name}'s disk and nowhere else; a VM delete never destroys a Store that was not pushed, and this build has no remote Store push (#506). Remove the project first`, null);
   }
   await provider.remove(name);
   const hasDisk = !pg && Boolean(found.store);
-  if (options.discardStore && hasDisk) await provider.removeStore(storeNameOf(settings, projectKey));
-  rmSync(endpointFile(settings.home, projectKey), { force: true });
+  if (options.discardStore && hasDisk) await provider.removeStore(storeNameOf(settings, storeKey));
+  rmSync(endpointFile(settings.home, storeKey), { force: true });
   return { project: projectKey, name, state: "deleted", store: options.discardStore && hasDisk ? "discarded" : "kept" };
 }
 
-/** Whether this home still holds the project: its record, or its entry in the home. */
+/** Whether this home still holds the project or SQLite Store: its record, or its entry in the home. */
 function exists(settings, project) {
-  if (projectRecord(settings, project)) return true;
+  if (projectRecord(settings, project) || entries(settings).some((s) => s.kind === "sqlite" && s.name === project)) return true;
   try {
-    return readdirSync(settings.home, { withFileTypes: true }).some((e) => e.isDirectory() && e.name === project && existsSync(join(settings.home, e.name, "project.record")));
+    return existsSync(join(settings.home, project, "project.record")) || existsSync(join(settings.home, ".stores", project, "store.record"));
   } catch { return false; }
+}
+
+/** The projects whose Sandboxes hold `owner` (one project, or every project of a Store). */
+function holderProjects(settings, owner) {
+  if (typeof owner === "object" && owner?.store) return [owner];
+  const name = checked(owner);
+  const store = entries(settings).find((s) => s.name === name);
+  if (store) {
+    const own = store.legacy && exists(settings, name) && !(store.projects ?? []).some((p) => p.name === name) ? [{ name }] : [];
+    return [...own, ...(store.projects ?? [])].map((p) => ({
+      name: p.name, store: store.name, kind: store.kind, volume: store.volume ?? owner?.volume,
+      shared: !(store.legacy && p.name === store.name),
+    }));
+  }
+  return exists(settings, name) ? [typeof owner === "object" ? owner : { name }] : [];
 }
 
 /** The four hooks Init and project removal use instead of host Docker (§4.2 B2, B9). */
@@ -372,35 +400,40 @@ const stores = {
    */
   async makeStore(runtime, project) {
     if (postgresqlStore(runtime.settings, project)) return;
-    const provider = providerOf(runtime.settings), name = vmNameOf(runtime.settings, checked(project));
+    const provider = providerOf(runtime.settings), name = vmNameOf(runtime.settings, vmKeyOf(runtime.settings, project));
     const { code, stderr } = await provider.exec(name, ["sh", "-c", "umask 022 && mkdir -p \"$1\" && chmod 755 \"$1\"", "sh", GUEST.store]);
     if (code !== 0) throw refuse("Failed", `could not make ${GUEST.store} in ${name}: ${stderr.trim()}`, null);
   },
   /** The Sandboxes holding the project's Store now: its running Sandboxes, by number. A stopped VM runs none. */
   async storeHolders(runtime, project) {
     const { settings } = runtime, provider = providerOf(settings);
-    const found = await provider.inspect(vmNameOf(settings, checked(project)));
+    const found = await provider.inspect(vmNameOf(settings, vmKeyOf(settings, project)));
     if (!found || found.state !== "running") return [];
-    const held = await runtime.clients.use(project, (client) => client.project.list_sandboxes(1000, 0));
-    return held.items.map(({ sandbox }) => ({ id: sandbox, state: "running" }));
+    const holders = [];
+    for (const target of holderProjects(settings, project)) {
+      const held = await runtime.clients.use(target, (client) => client.project.list_sandboxes(1000, 0));
+      for (const { sandbox } of held.items) holders.push({ id: sandbox, state: "running", project: target });
+    }
+    return holders;
   },
   /** Stops them the way the SDK does: `sandbox.close`, one per Sandbox. */
   async releaseStoreHolders(runtime, project, holders) {
     const { settings } = runtime, provider = providerOf(settings);
-    const found = await provider.inspect(vmNameOf(settings, checked(project)));
+    const found = await provider.inspect(vmNameOf(settings, vmKeyOf(settings, project)));
     if (!found || found.state !== "running") return;
-    await runtime.clients.use(project, async (client) => {
-      for (const holder of holders) await client.sandbox.close(holder.id);
-    });
+    for (const holder of holders) {
+      await runtime.clients.use(holder.project ?? project, (client) => client.sandbox.close(holder.id));
+    }
   },
   /** Removes the project's VM and, when it has one, its Store disk: no Store copy is left anywhere. */
   async removeStore(runtime, project) {
-    const { settings } = runtime, provider = providerOf(settings), projectKey = checked(project), name = vmNameOf(settings, projectKey);
+    const { settings } = runtime, provider = providerOf(settings), storeKey = vmKeyOf(settings, project), name = vmNameOf(settings, storeKey);
     const pg = postgresqlStore(settings, project);
+    await runtime.clients.forgetStore(storeKey);
     const found = await provider.inspect(name);
     if (found) await provider.remove(name);
-    if (!pg && (!found || found.store)) await provider.removeStore(storeNameOf(settings, projectKey));
-    rmSync(endpointFile(settings.home, projectKey), { force: true });
+    if (!pg && (!found || found.store)) await provider.removeStore(storeNameOf(settings, storeKey));
+    rmSync(endpointFile(settings.home, storeKey), { force: true });
   },
 };
 
@@ -425,6 +458,10 @@ export function deploymentEnv(settings, project) {
       WORKER_ENDPOINT: endpointFile(settings.home, name),
     };
   }
+  const storeKey = vmKeyOf(settings, project);
+  const shared = typeof project === "object" && project !== null
+    ? Boolean(project.shared || (project.store && project.store !== name))
+    : storeKey !== name || entries(settings).some((s) => s.kind === "sqlite" && s.name === storeKey && !s.legacy);
   return {
     HOME: callHome(settings),
     SANDBOX: "native",
@@ -436,9 +473,10 @@ export function deploymentEnv(settings, project) {
     // own copy of the bundle that holds it (both guest paths)
     ...(image ? { IMAGE: image.digest, IMAGE_ARCHIVE: image.archive } : {}),
     STORE_PATH: storeFile(),
+    ...(shared ? { STORE: storeKey } : {}),
     CONTAINER_PREFIX: settings.containerPrefix,
     // a process an integration launches for this project reaches this VM's worker
-    WORKER_ENDPOINT: endpointFile(settings.home, name),
+    WORKER_ENDPOINT: endpointFile(settings.home, storeKey),
   };
 }
 
@@ -458,7 +496,7 @@ export function vmPlatform(settingName) {
     name: `vm:${settingName}`,
     hostDocker: false,
     hostSandboxes: false,
-    endpoints: (settings) => (project) => endpointFile(settings.home, project),
+    endpoints: (settings) => (project) => process.env.LAYERFS_WORKER_ENDPOINT || endpointFile(settings.home, vmKeyOf(settings, project)),
     status,
     start,
     restart,
@@ -467,7 +505,7 @@ export function vmPlatform(settingName) {
       if (!project) return;
       await start(settings, project);
       if (postgresqlStore(settings, project) || !project.source) return;
-      const provider = providerOf(settings), name = vmNameOf(settings, checked(project));
+      const provider = providerOf(settings), name = vmNameOf(settings, vmKeyOf(settings, project));
       const target = importPath(project.source);
       const { code, stderr } = await provider.exec(name, ["rm", "-rf", target]);
       if (code !== 0) throw refuse("Failed", `could not clear ${target} in ${name}: ${stderr.trim()}`, null);
@@ -486,8 +524,8 @@ export function vmPlatform(settingName) {
     },
     /** Before a Store is deleted, the project's worker closes the Store it holds open. */
     async releaseStore(settings, project) {
-      const name = checked(project);
-      const info = endpoint(settings, name);
+      const storeKey = vmKeyOf(settings, project);
+      const info = endpoint(settings, storeKey);
       if (!info) return;
       const pg = postgresqlStore(settings, project);
       const storePath = pg ? `postgresql:${pg.name}` : storeFile();
@@ -497,9 +535,10 @@ export function vmPlatform(settingName) {
     /** Free bytes of every project VM's Store disk, as that VM sees them. */
     async free(settings) {
       const provider = providerOf(settings);
+      const names = new Set([...homeNames(settings.home), ...entries(settings).filter((s) => s.kind === "sqlite").map((s) => s.name)]);
       let total = null;
-      for (const project of homeNames(settings.home)) {
-        const free = await provider.storeFree(vmNameOf(settings, project), GUEST.store).catch(() => null);
+      for (const storeKey of names) {
+        const free = await provider.storeFree(vmNameOf(settings, storeKey), GUEST.store).catch(() => null);
         if (free !== null) total = (total ?? 0) + free;
       }
       return total;

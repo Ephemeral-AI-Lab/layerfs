@@ -263,6 +263,15 @@ reads it there. `deploymentEnv` gives clients and agents the VM's settings:
 `LAYERFS_LOCAL_DIR`, `LAYERFS_HOME=/layerfs/home`, the Store's
 `LAYERFS_STORE_PATH`, this project's `LAYERFS_WORKER_ENDPOINT`, and the bundle
 image's `LAYERFS_IMAGE` when it has one — no `LAYERFS_DOCKER` or `_VOLUME`.
+For a shared SQLite Store (#506), `store.create` and `store.start_load` make
+that Store's VM (`<prefix><store>-vm`) and Store disk
+(`<prefix><store>-vm-store`) instead of a host Docker volume; projects added to
+it (`project.start_init(name, folder, { store })`) share that VM, its disk and
+its worker (`<home>/worker/<store>.json`), with `LAYERFS_STORE=<store>` in
+`deploymentEnv`; `project.delete` drops only that project's Sandboxes and stack
+while keeping the Store's VM and disk; and `store.remove` checks running
+Sandboxes across every project in the Store before removing the VM and its disk
+together.
 For a project of a PostgreSQL Store (#506), `deploymentEnv` keeps the VM's
 `LAYERFS_SANDBOX=native`, `LAYERFS_SANDBOX_BACKEND`, `LAYERFS_DAEMON`,
 `LAYERFS_LOCAL_DIR`, `LAYERFS_IMAGE`, `LAYERFS_IMAGE_ARCHIVE`,
@@ -292,7 +301,7 @@ through each VM's worker, a fork, a write, a Sandbox, an exec as the nonroot
 identity with user namespaces blocked, a Commit, a stop/start of one VM and a
 worker restart, then a check that neither Store holds the other's Branch, and
 that removing one project leaves the other's VM running. The unit tests
-(`node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|apple-container|ssh|cleanup|postgresql`)
+(`node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|apple-container|ssh|cleanup|postgresql|stores`)
 use a stand-in provider CLI.
 
 ### The SSH provider (any Linux host)

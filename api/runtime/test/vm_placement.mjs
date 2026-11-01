@@ -5,7 +5,7 @@
 // fixture keeps one VM record per project, maps each guest's absolute paths
 // under a temp folder, and starts the adapter's bundle worker so step ④'s
 // readiness is real.
-//   node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|apple-container|ssh|cleanup|postgresql
+//   node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|apple-container|ssh|cleanup|postgresql|stores
 import assert from "node:assert/strict";
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -397,6 +397,26 @@ try {
       assert.deepEqual([pgEntry.state, pgEntry.store], ["running", null]);
       await runtime.platform.removeStore(runtime, { name: "pgshop", store: "main", kind: "postgresql" });
       assert.equal(calls(state).some((argv) => argv[0] === "volume" && argv[1] === "delete" && argv[2] === storeName("pgshop")), false);
+      // a shared SQLite Store on Apple Container: one VM and volume for the Store and all its projects
+      const src = join(work, "src");
+      mkdirSync(src, { recursive: true });
+      writeFileSync(join(src, "README.md"), "# Team\n");
+      await runtime.store.create("team");
+      assert.equal(existsSync(join(state, "vms", `${vmName("team")}.json`)), true);
+      assert.equal(existsSync(join(state, "volumes", `${storeName("team")}.json`)), true);
+      let initJob = await runtime.project.start_init("api", src, { store: "team" });
+      for (let i = 0; !initJob.ended && i < 200; i++) {
+        await new Promise((next) => setTimeout(next, 20));
+        initJob = await runtime.project.get_init(initJob.id);
+      }
+      assert.equal(initJob.step, "done", JSON.stringify(initJob.error));
+      assert.equal(existsSync(join(state, "vms", `${vmName("api")}.json`)), false, "no separate VM for a shared Store's project");
+      await runtime.project.delete("api", { store: "team", confirm: "api", stopSandboxes: true });
+      assert.equal(existsSync(join(state, "vms", `${vmName("team")}.json`)), true, "Store VM stays after deleting project");
+      assert.equal(existsSync(join(state, "volumes", `${storeName("team")}.json`)), true, "Store volume stays after deleting project");
+      await runtime.store.remove("team", { confirm: "team" });
+      assert.equal(existsSync(join(state, "vms", `${vmName("team")}.json`)), false);
+      assert.equal(existsSync(join(state, "volumes", `${storeName("team")}.json`)), false);
     } finally {
       restore();
       await runtime.close();
@@ -436,6 +456,23 @@ try {
       assert.equal((await deadline(30_000, "status after stop", runtime.vm.status("shop"))).state, "stopped");
       const again = await deadline(60_000, "worker.start after stop", runtime.worker.start("shop"));
       assert.deepEqual([again.vm.state, again.worker.state], ["running", "running"]);
+      // remove shop's VM, then create a shared SQLite Store on vm:ssh and add/delete a project in it
+      assert.equal((await deadline(30_000, "vm.delete shop", runtime.vm.delete("shop", { confirm: "delete" }))).state, "deleted");
+      const src = join(work, "src");
+      mkdirSync(src, { recursive: true });
+      writeFileSync(join(src, "README.md"), "# SSH Store\n");
+      await deadline(60_000, "ssh store.create", runtime.store.create("rstore"));
+      assert.equal((await deadline(30_000, "ssh vm.status", runtime.vm.status("rstore"))).state, "running");
+      let initJob = await runtime.project.start_init("api", src, { store: "rstore" });
+      for (let i = 0; !initJob.ended && i < 200; i++) {
+        await new Promise((next) => setTimeout(next, 20));
+        initJob = await runtime.project.get_init(initJob.id);
+      }
+      assert.equal(initJob.step, "done", JSON.stringify(initJob.error));
+      await runtime.project.delete("api", { store: "rstore", confirm: "api", stopSandboxes: true });
+      assert.equal((await runtime.vm.status("rstore")).state, "running", "SSH session stays after deleting project");
+      await runtime.store.remove("rstore", { confirm: "rstore" });
+      assert.equal((await runtime.vm.status("rstore")).state, "missing", "SSH session removed with Store");
     } finally {
       await runtime.close();
       restore();
@@ -593,8 +630,140 @@ try {
       await runtime.close();
       restoreWorker(work);
     }
+  } else if (selected === "stores") {
+    const image = "c".repeat(64);
+    makeBundle("build-stores", image);
+    const src = join(work, "src");
+    mkdirSync(src, { recursive: true });
+    writeFileSync(join(src, "README.md"), "# Shared Store\n");
+    const logFile = join(work, "worker-calls.jsonl");
+    process.env.CLI_FAKE_LOG = logFile;
+    const workerCalls = () => (existsSync(logFile) ? readFileSync(logFile, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
+    const ended = async (runtime, job) => {
+      for (let i = 0; i < 300; i++) {
+        const now = (await runtime.sync.get(job.id)) ?? (await runtime.project.get_init(job.id));
+        if (now?.ended) return now;
+        await new Promise((next) => setTimeout(next, 20));
+      }
+      throw new Error(`job ${job.id} did not end`);
+    };
+
+    // 1. Microsandbox (fake-msb): store.create, start_load, project.start_init({ store }), project.delete, store.remove
+    const msbState = join(work, "msb");
+    mkdirSync(msbState);
+    const restoreMsb = standIn("msb", MSB, msbState);
+    const runtime = await LayerFSRuntime.open({ home, bundle, placement: "vm:microsandbox", containerPrefix: prefix, platform: "linux", sweep: false });
+    try {
+      // store.create("work") creates one VM and disk for the Store and runs runtime.store.create in its worker
+      const created = await runtime.store.create("work");
+      assert.deepEqual([created.name, created.kind, created.volume, created.projects], ["work", "sqlite", `${prefix}store-work`, []]);
+      assert.equal(existsSync(join(msbState, "vms", `${vmName("work")}.json`)), true, "the Store's VM exists");
+      assert.equal(existsSync(endpointFile(home, "work")), true, "the Store's worker endpoint exists");
+      const createVm = calls(msbState).find((argv) => argv[0] === "create" && argv.includes(vmName("work")));
+      assert.ok(createVm, "msb create ran for the Store's VM");
+      assert.equal(createVm[createVm.indexOf("--mount-named") + 1], `${storeName("work")}:/layerfs/store:kind=disk,size=20G`);
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.create" && args.store === "work" && args.storePath === `${GUEST.store}/global/store.sqlite` && args.home === GUEST.home));
+      await assert.rejects(runtime.store.create("work"), { code: "Exists" });
+
+      // store.list stats the Store through its VM worker; status().disk.volumes counts its disk
+      const listedWork = (await runtime.store.list()).find((s) => s.name === "work");
+      assert.deepEqual([listedWork.bytes, listedWork.open, listedWork.heads], [{ file: 4096, wal: 512 }, false, "11".repeat(32)]);
+      assert.ok((await runtime.status()).disk.volumes > 0);
+
+      // a failed store.create cleans up the VM, disk and endpoint it made
+      process.env.CLI_FAKE_REFUSE = "runtime.store.create";
+      await assert.rejects(runtime.store.create("bad"), { code: "Conflict" });
+      delete process.env.CLI_FAKE_REFUSE;
+      assert.equal(existsSync(join(msbState, "vms", `${vmName("bad")}.json`)), false, "failed create removed its VM");
+      assert.ok(calls(msbState).some((argv) => argv[0] === "volume" && argv[1] === "remove" && argv[2] === storeName("bad")), "failed create removed its Store disk");
+      assert.equal(existsSync(endpointFile(home, "bad")), false);
+
+      // two projects initialized into Store "work" reuse work's VM and disk (no per-project VM)
+      for (const name of ["shop", "api"]) {
+        const job = await ended(runtime, await runtime.project.start_init(name, src, { store: "work" }));
+        assert.equal(job.step, "done", JSON.stringify(job.error));
+      }
+      assert.equal(existsSync(join(msbState, "vms", `${vmName("shop")}.json`)), false, "no separate VM for shop");
+      assert.equal(existsSync(join(msbState, "vms", `${vmName("api")}.json`)), false, "no separate VM for api");
+      assert.ok(calls(msbState).some((argv) => argv[0] === "copy" && argv[2].startsWith(`${vmName("work")}:/layerfs/import/`)), "source copied into the Store's VM");
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.add_project" && args.store === "work" && args.name === "shop" && args.path.startsWith("/layerfs/import/")));
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.add_project" && args.store === "work" && args.name === "api"));
+
+      // deploymentEnv and get_state for a project in a shared SQLite Store
+      const shopEnv = deploymentEnv(runtime.settings, runtime.platform, { name: "shop", store: "work", shared: true });
+      assert.deepEqual(
+        [shopEnv.SANDBOX, shopEnv.SANDBOX_BACKEND, shopEnv.STORE_PATH, shopEnv.STORE, shopEnv.WORKER_ENDPOINT],
+        ["native", "namespaces", `${GUEST.store}/global/store.sqlite`, "work", endpointFile(home, "work")],
+      );
+      assert.equal((await runtime.project.get_state("shop", undefined, { store: "work" })).kind, "ok");
+      assert.equal((await runtime.project.get_state("api")).kind, "ok");
+      assert.equal((await runtime.vm.status("shop")).name, vmName("work"));
+
+      // store.start_load creates a new VM + disk for the loaded Store and runs runtime.store.load in its worker
+      const loaded = await ended(runtime, await runtime.store.start_load("minio-a", { file: "work-snap", store: "copy" }));
+      assert.equal(loaded.step, "done", JSON.stringify(loaded.error));
+      assert.equal(existsSync(join(msbState, "vms", `${vmName("copy")}.json`)), true, "loaded Store has its own VM");
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.load" && args.store === "copy" && args.storePath === `${GUEST.store}/global/store.sqlite`));
+      const copyStore = (await runtime.store.list()).find((s) => s.name === "copy");
+      assert.deepEqual([copyStore.projects, copyStore.link.file], [["docs", "web"], "work-snap"]);
+      assert.equal((await runtime.project.get_state("docs")).kind, "ok");
+
+      // a failed start_load cleans up the VM and disk it made
+      process.env.CLI_FAKE_REFUSE = "runtime.store.load";
+      const failedLoad = await ended(runtime, await runtime.store.start_load("minio-a", { file: "other-snap", store: "badload" }));
+      delete process.env.CLI_FAKE_REFUSE;
+      assert.equal(failedLoad.step, "failed");
+      assert.equal(existsSync(join(msbState, "vms", `${vmName("badload")}.json`)), false);
+      assert.ok(calls(msbState).some((argv) => argv[0] === "volume" && argv[1] === "remove" && argv[2] === storeName("badload")));
+
+      // adding "web" to "work" when "copy" also has "web": ambiguous without { store }, disambiguated with { store }
+      assert.equal((await ended(runtime, await runtime.project.start_init("web", src, { store: "work" }))).step, "done");
+      await assert.rejects(runtime.project.get_state("web"), { code: "InvalidInput", message: /Stores copy, work/ });
+      assert.equal((await runtime.project.get_state("web", undefined, { store: "work" })).kind, "ok");
+      assert.equal((await runtime.project.get_state("web", undefined, { store: "copy" })).kind, "ok");
+
+      // project.delete on one project of a shared Store: Busy without stopSandboxes; keeps the Store's VM and disk!
+      await assert.rejects(runtime.project.delete("api", { store: "work", confirm: "api" }), { code: "Busy", message: /1 running Sandbox\(es\) of api use Store work/ });
+      const droppedApi = await runtime.project.delete("api", { store: "work", confirm: "api", stopSandboxes: true });
+      assert.deepEqual(droppedApi, { kind: "Deleted", project: "api", store: "work", stack: "5e", packsKept: true });
+      assert.equal(existsSync(join(msbState, "vms", `${vmName("work")}.json`)), true, "deleting a project keeps the shared Store's VM");
+      assert.equal(calls(msbState).some((argv) => argv[0] === "volume" && argv[1] === "remove" && argv[2] === storeName("work")), false, "and keeps its Store disk");
+      assert.deepEqual((await runtime.store.list()).find((s) => s.name === "work").projects, ["shop", "web"]);
+
+      // promoting a solo project's Store ("solo") by adding "extra", then deleting "solo": VM and disk stay for "extra"
+      project("solo");
+      await runtime.worker.start("solo");
+      assert.equal((await ended(runtime, await runtime.project.start_init("extra", src, { store: "solo" }))).step, "done");
+      assert.equal(existsSync(join(msbState, "vms", `${vmName("extra")}.json`)), false);
+      await runtime.project.delete("solo", { store: "solo", confirm: "solo", stopSandboxes: true });
+      assert.equal(existsSync(join(msbState, "vms", `${vmName("solo")}.json`)), true, "solo's VM stays for extra");
+      assert.deepEqual((await runtime.store.list()).find((s) => s.name === "solo").projects, ["extra"]);
+
+      // V8 refuses vm.delete while the shared Store exists; store.remove aggregates holders across all projects in the Store
+      await assert.rejects(runtime.vm.delete("work", { confirm: "delete" }), { code: "Unsupported", message: /never destroys a Store/ });
+      await assert.rejects(runtime.vm.delete("shop", { confirm: "delete" }), { code: "Unsupported", message: /never destroys a Store/ });
+      // "work" has 2 projects ("shop" and "web"), each with 1 running Sandbox in fake-native -> 2 holders
+      await assert.rejects(runtime.store.remove("work", { confirm: "work" }), { code: "Busy", message: /2 running container\(s\) use/ });
+      const removedWork = await runtime.store.remove("work", { confirm: "work", stopSandboxes: true });
+      assert.deepEqual(removedWork, { kind: "Removed", store: "work", volume: `${prefix}store-work` });
+      assert.equal(existsSync(join(msbState, "vms", `${vmName("work")}.json`)), false, "store.remove deleted the Store's VM");
+      assert.ok(calls(msbState).some((argv) => argv[0] === "volume" && argv[1] === "remove" && argv[2] === storeName("work")), "and its Store disk");
+      assert.equal(existsSync(endpointFile(home, "work")), false);
+
+      // an empty Store has 0 holders and is removed without stopSandboxes
+      await runtime.store.create("scratch");
+      await runtime.store.remove("scratch", { confirm: "scratch" });
+      assert.equal(existsSync(join(msbState, "vms", `${vmName("scratch")}.json`)), false);
+      await runtime.store.remove("copy", { confirm: "copy", stopSandboxes: true });
+      await runtime.store.remove("solo", { confirm: "solo", stopSandboxes: true });
+    } finally {
+      delete process.env.CLI_FAKE_LOG;
+      restoreMsb();
+      await runtime.close();
+      restoreWorker(work);
+    }
   } else {
-    throw new Error("select settings, flow, two, bundle, delete, hosts, apple-container, ssh, cleanup or postgresql");
+    throw new Error("select settings, flow, two, bundle, delete, hosts, apple-container, ssh, cleanup, postgresql or stores");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });

@@ -10,6 +10,7 @@
 // PostgreSQL Store is a schema behind a named connection. Every call is one
 // attempt; destructive calls name what they destroy (`confirm`).
 import { invokeBackend } from "@layerfs/agent/internal";
+import { deploymentEnv, withEnv } from "../clients.js";
 import { NAME } from "../project/list.js";
 import { forgetOwn } from "../project/delete.js";
 import { checkVmUrl } from "../platform/vm/index.js";
@@ -20,6 +21,11 @@ import { removeVolume } from "./volume.js";
 const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
 const SYNC = new Set(["off", "local", "remote_write", "on", "remote_apply"]);
 const call = (op, args) => invokeBackend(op, args, {});
+/** Runs a Store backend call through that Store's VM worker on a `vm:` home, else in the home's binding. */
+export const storeCall = (runtime, store, op, args) =>
+  runtime.platform.hostDocker === false
+    ? withEnv(deploymentEnv(runtime.settings, runtime.platform, { name: store, store }), () => call(op, args))
+    : call(op, args);
 
 /** What store.list shows of one Store; `local` is its runtime.store.stat entry (#506 E1, E2). */
 export const shown = (s, local = null) => ({
@@ -37,6 +43,10 @@ export const shown = (s, local = null) => ({
 async function locals(runtime, stores) {
   const asked = stores.filter((s) => s.kind === "sqlite" && s.volume).map((s) => ({ store: s.name, storePath: storeFields(runtime, s).storePath }));
   if (!asked.length) return new Map();
+  if (runtime.platform.hostDocker === false) {
+    const rows = await Promise.all(asked.map((s) => storeCall(runtime, s.store, "runtime.store.stat", { home: callHome(runtime.settings), stores: [s] }).then((r) => r[0], () => null)));
+    return new Map(rows.filter(Boolean).map((entry) => [entry.store, entry]));
+  }
   try {
     const answer = await call("runtime.store.stat", { home: callHome(runtime.settings), stores: asked });
     return new Map(answer.map((entry) => [entry.store, entry]));
@@ -112,6 +122,12 @@ export async function unused(runtime, name) {
 export async function makeVolume(runtime, name) {
   const { settings, platform } = runtime;
   const volume = `${settings.containerPrefix}store-${name}`;
+  if (platform.hostDocker === false) {
+    const store = { name, store: name, volume };
+    await platform.init(settings, store);
+    await platform.makeStore(runtime, store);
+    return volume;
+  }
   const exists = await platform.docker(settings, ["volume", "inspect", "--format", "{{.Name}}", volume]).then(() => true, () => false);
   if (exists) throw refuse("Exists", `the volume ${volume} exists; remove it, or name the Store differently`);
   await platform.docker(settings, ["volume", "create", "--label", "layerfs.role=store", "--label", `layerfs.home=${settings.home}`, "--label", `layerfs.store=${name}`, volume], { timeout: 30_000 });
@@ -126,7 +142,7 @@ export async function create(runtime, name) {
   const volume = await makeVolume(runtime, name);
   const store = { name, kind: "sqlite", volume, link: null, created: Date.now(), projects: [] };
   try {
-    await call("runtime.store.create", storeFields(runtime, store));
+    await storeCall(runtime, name, "runtime.store.create", storeFields(runtime, store));
   } catch (error) {
     // a refused or failed create removed its own files; an uncertain one keeps the volume
     if (error?.code !== "Unknown") await removeVolume(runtime, { name, volume }).catch(() => {});

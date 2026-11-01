@@ -73,10 +73,14 @@ async function prepareInto(runtime, name, folder, options, pending) {
 
 /** Runs `making` (LayerFS.init), reading Init's counts every WATCH_MS in this process until it ends. */
 async function watching(runtime, name, making, report, store = undefined) {
+  const { settings, platform } = runtime;
   let running = true;
   const watch = (async () => {
     while (running) {
-      const counts = await invokeBackend("runtime.project.get_init", { project: name, home: callHome(runtime.settings), ...(store ? { store } : {}) }, {}).catch(() => (running = false, null));
+      const counts = await (platform.hostDocker === false
+        ? withEnv(deploymentEnv(settings, platform, store ? { name, store, shared: true } : { name }), () => invokeBackend("runtime.project.get_init", { project: name, home: callHome(settings), ...(store ? { store } : {}) }, {}))
+        : invokeBackend("runtime.project.get_init", { project: name, home: callHome(settings), ...(store ? { store } : {}) }, {})
+      ).catch(() => (running = false, null));
       if (counts && running) report({ imported: counts });
       if (running) await pause(WATCH_MS);
     }
@@ -132,11 +136,13 @@ async function runInto(runtime, prepared, report) {
   report({ step: "scan" });
   const totals = await scanSource(project.source, (counts) => report({ scanned: counts }));
   report({ step: "volume", totals });
-  await platform.init(settings);
+  await platform.init(settings, project);
   const store = await named(runtime, project.store);
   report({ step: "import" });
   const args = { ...storeFields(runtime, store), name: project.name, path: platform.path(settings, project.source), timeoutMs: timeout ?? INIT_TIMEOUT_MS };
-  const making = invokeBackend("runtime.store.add_project", args, {});
+  const making = platform.hostDocker === false
+    ? withEnv(deploymentEnv(settings, platform, { ...project, volume: store.volume, shared: true }), () => invokeBackend("runtime.store.add_project", args, {}))
+    : invokeBackend("runtime.store.add_project", args, {});
   try {
     await (platform.name === "macos" ? making : watching(runtime, project.name, making, report, store.name));
   } catch (error) {

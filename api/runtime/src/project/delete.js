@@ -16,6 +16,7 @@
 // One attempt each, no retry; a failed step leaves the rest in place.
 import { LayerFSError } from "@layerfs/agent";
 import { invokeBackend } from "@layerfs/agent/internal";
+import { deploymentEnv, withEnv } from "../clients.js";
 import { checkVmUrl } from "../platform/vm/index.js";
 import { NAME, dropRecord, keyOf, list, record } from "./list.js";
 import { drop, entries, named, put, storeFields, update } from "../store/registry.js";
@@ -79,12 +80,15 @@ async function dropStack(runtime, project, options) {
   }
   await runtime.clients.forget(keyOf(project));
   const postgresql = store.kind === "postgresql" ? { postgresql: { url: options.url } } : {};
-  const answer = await invokeBackend("runtime.store.remove_project", { ...storeFields(runtime, store), ...postgresql, project: project.name }, {});
-  if (platform.hostDocker === false) await platform.removeStore(runtime, withUrl);
+  if (platform.hostDocker === false && store.kind === "sqlite") await platform.init(settings, { name: store.name, store: store.name });
+  const answer = await (platform.hostDocker === false
+    ? withEnv(deploymentEnv(settings, platform, withUrl), () => invokeBackend("runtime.store.remove_project", { ...storeFields(runtime, store), ...postgresql, project: project.name }, {}))
+    : invokeBackend("runtime.store.remove_project", { ...storeFields(runtime, store), ...postgresql, project: project.name }, {}));
+  if (platform.hostDocker === false && store.kind === "postgresql") await platform.removeStore(runtime, withUrl);
   const rest = store.projects.filter((p) => p.name !== project.name);
   if (own) {
     put(settings, { ...store, legacy: false, projects: rest });
-    dropRecord(settings, project.name);
+    await forgetOwn(runtime, project.name);
   } else if (entries(settings).some((s) => s.name === store.name)) {
     update(settings, store.name, (s) => ({ ...s, projects: s.projects.filter((p) => p.name !== project.name) }));
   }
