@@ -296,9 +296,7 @@ fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Outcome {
             Some(_) => {
                 return Err(refused(
                     "Unavailable",
-                    format!(
-                        "Store {name}'s machine is not known; run `layerfs store import-env` first"
-                    ),
+                    format!("Store {name}'s machine is not known; run `layerfs import-env` first"),
                 ))
             }
         };

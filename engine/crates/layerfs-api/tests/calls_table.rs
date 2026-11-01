@@ -164,6 +164,21 @@ fn file_family() {
         ])
     )
     .contains("`content` must be text or bytes"));
+    // a change names its paths as the table does, so a folder scope sees them
+    let moved = SdkValue::List(vec![map(&[
+        ("op", t("mv")),
+        ("from", t("/a")),
+        ("to", t("/b")),
+    ])]);
+    assert!(code(
+        "file.apply",
+        map(&[
+            ("project", t("shop/api")),
+            ("branch", t("main")),
+            ("changes", moved)
+        ])
+    )
+    .contains("`from` is not a change field"));
     let reached = code(
         "file.read",
         map(&[

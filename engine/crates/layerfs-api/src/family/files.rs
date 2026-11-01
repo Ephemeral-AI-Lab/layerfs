@@ -299,6 +299,20 @@ fn changes(value: Option<&SdkValue>) -> Result<SdkValue, layerfs_bridge::control
         };
         let mut mapped: Fields = Vec::with_capacity(fields.len());
         for (name, value) in fields {
+            // the Store's own names are not a change's: every path field
+            // must be one the folder scope checks
+            if matches!(
+                name.as_str(),
+                "from" | "to" | "oldText" | "newText" | "bytes"
+            ) {
+                return Err(refused(
+                    "InvalidInput",
+                    format!(
+                        "`{name}` is not a change field; a change uses op, path, from_path, \
+                         to_path, content, old, new and mode"
+                    ),
+                ));
+            }
             // write content may be bytes: the Store takes those as `bytes`
             if name == "content" && matches!(value, SdkValue::Bytes(_)) {
                 mapped.push(("bytes".to_owned(), value.clone()));

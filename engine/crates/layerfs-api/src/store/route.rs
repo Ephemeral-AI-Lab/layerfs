@@ -51,7 +51,7 @@ pub(crate) fn machine(record: &SdkValue, store: &str) -> Result<String, SdkRefus
             "Unavailable",
             format!(
                 "Store {store} came from a 1.1.0 home and its machine is not known; \
-                 run `layerfs store import-env` or `layerfs store move {store} <machine>`"
+                 run `layerfs import-env` or `layerfs store move {store} <machine>`"
             ),
         )),
     }
