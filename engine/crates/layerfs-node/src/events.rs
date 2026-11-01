@@ -15,6 +15,12 @@ const MAX_SAFE: i64 = 9_007_199_254_740_991;
 static SUBSCRIPTIONS: LazyLock<Mutex<BTreeMap<String, Arc<Subscription>>>> =
     LazyLock::new(Default::default);
 static POLLS: AtomicUsize = AtomicUsize::new(0);
+static THREADPOOL: LazyLock<i64> = LazyLock::new(|| {
+    std::env::var("UV_THREADPOOL_SIZE")
+        .ok()
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(4)
+});
 
 struct Event {
     seq: i64,
@@ -91,10 +97,7 @@ impl Admission {
         if timeout == 0 {
             return Ok(None);
         }
-        let workers = std::env::var("UV_THREADPOOL_SIZE")
-            .ok()
-            .and_then(|value| value.parse::<i64>().ok())
-            .unwrap_or(4);
+        let workers = *THREADPOOL;
         let limit = 16.min(workers - 1).max(0) as usize;
         POLLS
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |used| {
