@@ -1,8 +1,6 @@
 //! Real native runtime lifecycle and partial launch custody through the Runtime enum.
-#![cfg(any(target_os = "macos", target_os = "linux"))]
-#[cfg(target_os = "linux")]
-use layerfs_sandbox::native::NativeLinuxProvider as NativeProvider;
-#[cfg(target_os = "macos")]
+//! Native is macOS only (#533 O27).
+#![cfg(target_os = "macos")]
 use layerfs_sandbox::native::NativeMacosProvider as NativeProvider;
 use layerfs_sandbox::{
     CommandIdentity, DockerRecord, LaunchPhase, LaunchRequest, ProviderLaunchOptions, Runtime,
@@ -11,22 +9,12 @@ use layerfs_sandbox::{
 use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
 
 /// The native runtime this host offers, over `root`.
-#[cfg(target_os = "linux")]
-fn native(root: &std::path::Path) -> Runtime {
-    Runtime::LinuxNative(NativeProvider::new(root).unwrap())
-}
-
-#[cfg(target_os = "macos")]
 fn native(root: &std::path::Path) -> Runtime {
     Runtime::MacosNative(NativeProvider::new(root).unwrap())
 }
 
 #[test]
 fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
-    if cfg!(target_os = "linux") && !nix::unistd::Uid::effective().is_root() {
-        assert!(NativeProvider::new("/no-access-required").is_err());
-        return;
-    }
     let base = std::env::temp_dir()
         .canonicalize()
         .unwrap()
@@ -41,14 +29,7 @@ fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
     .unwrap();
     fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
     let provider = native(&base);
-    assert_eq!(
-        provider.capabilities().unwrap().name,
-        if cfg!(target_os = "linux") {
-            "native-linux"
-        } else {
-            "native-macos"
-        }
-    );
+    assert_eq!(provider.capabilities().unwrap().name, "native-macos");
     let request = |name: &str| LaunchRequest {
         name: name.into(),
         daemon_executable: binary.clone(),
@@ -57,16 +38,8 @@ fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
         startup_timeout: Duration::from_secs(2),
         options: ProviderLaunchOptions::Local {
             command_identity: CommandIdentity {
-                uid: if cfg!(target_os = "linux") {
-                    501
-                } else {
-                    nix::unistd::Uid::effective().as_raw()
-                },
-                gid: if cfg!(target_os = "linux") {
-                    20
-                } else {
-                    nix::unistd::Gid::effective().as_raw()
-                },
+                uid: nix::unistd::Uid::effective().as_raw(),
+                gid: nix::unistd::Gid::effective().as_raw(),
             },
             environment: vec![],
         },
@@ -122,7 +95,7 @@ fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
     );
     // #527 step 6: the provider alone names the kernel route. A caller that
     // names it is refused before anything is made; the daemon gets the
-    // platform's route (FUSE on Linux, NFS on macOS).
+    // platform's route (NFS on macOS).
     let mut named = request("named-route");
     if let ProviderLaunchOptions::Local { environment, .. } = &mut named.options {
         environment.push(("LAYERFS_KERNEL".into(), "fuse".into()));
@@ -141,12 +114,7 @@ fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
     )
     .unwrap();
     let mut chosen = provider.launch(request("chosen-route")).unwrap();
-    let expected = if cfg!(target_os = "linux") {
-        "fuse\n"
-    } else {
-        "nfs\n"
-    };
-    assert_eq!(fs::read_to_string(&route).unwrap(), expected);
+    assert_eq!(fs::read_to_string(&route).unwrap(), "nfs\n");
     chosen.stop(1).unwrap();
     chosen.delete().unwrap();
     fs::remove_dir_all(base).unwrap();

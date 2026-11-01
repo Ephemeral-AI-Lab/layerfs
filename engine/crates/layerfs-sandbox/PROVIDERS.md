@@ -13,9 +13,10 @@ its OS facts in `native/linux/` and `native/macos/`) and `namespaces/`
 private: callers use the crate root and one public module per backend,
 `layerfs_sandbox::docker`, `::native` and `::namespaces` (#527 step 9b; they
 were under `layerfs_sandbox::backend`). The root re-exports `Runtime`,
-`Sandbox`, `LaunchFailure`, the shared types, `Docker`, the four providers
-(`DockerProvider`, `NativeMacosProvider`, `NativeLinuxProvider`,
-`NamespaceProvider`) and `HelperSpec`.
+`Sandbox`, `LaunchFailure`, the shared types, `Docker`, the three providers
+(`DockerProvider`, `NativeMacosProvider` on macOS, `NamespaceProvider` on
+Linux) and `HelperSpec`. `NativeLinuxProvider` and `Runtime::LinuxNative`
+were removed in 2.0 (#533 O27).
 
 The same file names hold the same roles in every backend: `provider.rs` (what
 `Runtime` holds), `create.rs` (start one Sandbox), `sandbox.rs` (a running
@@ -29,9 +30,8 @@ and the `DockerInstance`, `NativeLinuxInstance` and `NativeMacosInstance`
 aliases are removed (#527 step 9c).
 
 - `Runtime` is one deployment's selection and is kept for every Sandbox it
-  starts: `Docker(DockerProvider)` (the default), `MacosNative(NativeMacosProvider)`,
-  `LinuxNative(NativeLinuxProvider)` and `Namespaces(NamespaceProvider)` (Linux
-  only).
+  starts: `Docker(DockerProvider)` (the default), `MacosNative(NativeMacosProvider)`
+  (macOS only) and `Namespaces(NamespaceProvider)` (Linux only).
   `Runtime::{capabilities, local_directory, native_paths, launch, reopen,
   reopen_stopped}` dispatch to them.
 - `Sandbox` is what `Runtime::launch`/`reopen` return: `Docker(docker::Sandbox)`,
@@ -99,21 +99,25 @@ absent.
 ## Native
 
 `Runtime::MacosNative(NativeMacosProvider::new(root))` runs the daemon as this
-user and serves loopback NFS; `Runtime::LinuxNative(NativeLinuxProvider::new(root))`
-runs a root daemon serving FUSE with ordinary commands as a nonroot identity.
-Each refuses the wrong platform before root access, and Linux refuses a non-root
-caller the same way. `native` owns the one lifecycle both use; only the
-platform facts differ:
+user and serves loopback NFS. It is compiled on macOS only. Linux has no native
+provider (#533 O27): a Linux host runs local Sandboxes with `namespaces`, which
+builds on `native`'s shared lifecycle (`Local`, `LocalProcess`, `listener`,
+`search`, `streams`) and its Linux facts. On Linux, `native::Sandbox` remains
+only to reopen, stop and delete a Sandbox recorded by the Linux native runtime
+before 2.0. Only the platform facts differ:
 
 - `native/macos/`: `darwin.rs` (`proc_pidinfo`, `sysctl`, the `mount` table and
   `umount -f`) and `mounts.rs` (force detach, deepest first).
 - `native/linux/`: `process.rs` (`/proc/<pid>/stat`, the boot id and the
-  process table) and `mounts.rs` (`/proc/self/mountinfo`, lazy `MNT_DETACH`).
+  process table) and `mounts.rs` (`/proc/self/mountinfo`, lazy `MNT_DETACH`,
+  and the filesystem under a path for the namespaces overlay). Namespaces
+  reads the boot id, `stat` and `filesystem`; the process table and detach
+  serve the stop and delete of a recorded pre-2.0 Linux native Sandbox.
 
 The provider validates the command identity, the environment it is given and
 the daemon executable, then starts one daemon in a private directory with the
-platform's kernel route (`LAYERFS_KERNEL=fuse` on Linux, `nfs` on macOS). Only
-the provider names the route: a caller environment that names
+kernel route `LAYERFS_KERNEL=nfs` (namespaces names `fuse`). Only a provider
+names the route: a caller environment that names
 `LAYERFS_KERNEL` at all is refused at `Validate` (#527 step 6), and the daemon
 refuses at startup any route other than `fuse` or `nfs` (only `nfs` on macOS). Launch preserves the original single-attempt
 process lifecycle and partial owner on failure. `inspect` reports exact process
@@ -124,7 +128,7 @@ ownership.
 ## Namespaces (Linux)
 
 `Runtime::Namespaces(NamespaceProvider::new(root))` is the same local root and
-daemon control as `LinuxNative`, with each Sandbox's daemon in its own mount,
+daemon control as the native runtime, with each Sandbox's daemon in its own mount,
 PID and IPC namespaces and its own cgroup v2 directory. The VM that holds this
 kernel is the boundary (one per Store); the namespaces keep Sandboxes on one
 Store out of each other.

@@ -27,7 +27,9 @@ pub use backend::docker::{self, Docker, DockerProvider};
 #[cfg(target_os = "linux")]
 pub use backend::namespaces::{self, NamespaceProvider};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-pub use backend::native::{self, NativeLinuxProvider, NativeMacosProvider};
+pub use backend::native;
+#[cfg(target_os = "macos")]
+pub use backend::native::NativeMacosProvider;
 #[cfg(unix)]
 pub use helper_spec::HelperSpec;
 #[cfg(unix)]

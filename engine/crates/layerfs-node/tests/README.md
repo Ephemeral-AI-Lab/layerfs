@@ -37,7 +37,7 @@ a native deployment (another deployment's reclaim leaves it out, its close
 refuses it), a record of the former `local` runtime is never used or
 deleted, `LAYERFS_SANDBOX` maps the former pair and refuses conflicts, and
 `runtime.sandbox.records` lists every backend's record with its state. Record handling is the same code on Linux and macOS, so it runs here;
-starting a native Sandbox is supported on macOS (caller identity, loopback NFS) and Linux (root daemon, nonroot 501:20 commands, FUSE). Linux lifecycle qualification also runs `layerfs-sandbox --test native_provider` as root and the SDK smoke with `LAYERFS_SANDBOX=native`.
+starting a native Sandbox is supported on macOS only (caller identity, loopback NFS); Linux refuses `LAYERFS_SANDBOX=native` at start and runs local Sandboxes with `namespaces` (#533 O27). The native records these tests write stand for Sandboxes a Linux host recorded before 2.0, which are still reopened, stopped and reclaimed by their records.
 
 `native_admission` covers initial connection admission and its `Busy` deadline.
 The deadline test pays the product's full 60-second readiness wait.

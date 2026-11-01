@@ -1,7 +1,9 @@
-//! Native and namespaces Sandboxes (`deploy.sandbox` `native` or
-//! `namespaces`, LAYERFS_SANDBOX): the project's daemon runs as a process of
-//! this user instead of in a container. Native isolates nothing beyond the
-//! caller's own sandbox; namespaces adds Linux namespaces and a cgroup.
+//! Native and namespaces Sandboxes (`deploy.sandbox` `native` on macOS or
+//! `namespaces` on Linux, LAYERFS_SANDBOX): the project's daemon runs as a
+//! process of this user instead of in a container. Native isolates nothing
+//! beyond the caller's own sandbox; namespaces adds Linux namespaces and a
+//! cgroup. Linux starts no native Sandbox (#533 O27): `native` there is
+//! refused before any effect.
 //!
 //! Each Sandbox gets a directory `<LAYERFS_LOCAL_DIR>/<prefix><project>-<n>`
 //! with what a container held at fixed paths: its setup
@@ -10,8 +12,8 @@
 //! where this process opens it (`storePath`), so the daemon setup and the
 //! Store's locator name that path instead of `/layerfs-store`. The daemon
 //! listens on 127.0.0.1 only. macOS serves loopback NFS as this user; Linux
-//! keeps the root FUSE daemon and nonroot commands (501:20) from #402. Start,
-//! failure and reclaim follow the Docker route: one attempt, a creation intent while the outcome is open, and a failed start's
+//! namespaces keep the root FUSE daemon and nonroot commands (501:20) from
+//! #402. Start, failure and reclaim follow the Docker route: one attempt, a creation intent while the outcome is open, and a failed start's
 //! daemon stopped and its directory deleted, each once.
 use crate::host::outcome::{failed, refused};
 use crate::host::registry::{lock, text, SandboxState, SANDBOXES};
@@ -23,8 +25,9 @@ use layerfs_sandbox::{LaunchRequest, ProviderLaunchOptions};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
-/// Starts the project's next Sandbox as a native daemon. Linux requires
-/// root before any effect. Called by
+/// Starts the project's next Sandbox as a native (macOS) or namespaces
+/// (Linux) daemon. Linux refuses `native` and requires root before any
+/// effect. Called by
 /// [`crate::host::sandbox::start`] under the project's guard, with the project
 /// and its installed manifest already read.
 pub(crate) fn start(
@@ -37,10 +40,17 @@ pub(crate) fn start(
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
+    #[cfg(target_os = "linux")]
+    if backend == crate::host::runtime::Backend::Native {
+        return Err(refused(
+            "Unsupported",
+            crate::host::runtime::NATIVE_ON_LINUX,
+        ));
+    }
     if cfg!(target_os = "linux") && crate::host::discovery::user().0 != 0 {
         return Err(refused(
             "Unsupported",
-            "LAYERFS_SANDBOX=native or namespaces on Linux needs root for FUSE and commands as uid 501, gid 20; run inside the VM or CI box that isolates it",
+            "LAYERFS_SANDBOX=namespaces on Linux needs root for FUSE and commands as uid 501, gid 20; run inside the VM or CI box that isolates it",
         ));
     }
     let root = deploy.get_text("localDir").ok_or_else(|| {
@@ -234,9 +244,9 @@ fn start_claimed(
     Ok(state)
 }
 
-/// The native runtime this host offers, over `root`: macOS loopback NFS as
-/// this user, or Linux FUSE with a root daemon (this module is built on those
-/// two only). The other platform's provider is refused before root access.
+/// The local runtime this host offers, over `root`: macOS loopback NFS as
+/// this user, or Linux namespaces with a root FUSE daemon (this module is
+/// built on those two only). Linux has no native runtime (#533 O27).
 #[cfg(target_os = "macos")]
 fn native_runtime(
     root: &str,
@@ -251,9 +261,9 @@ fn native_runtime(
     backend: crate::host::runtime::Backend,
 ) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
     match backend {
-        crate::host::runtime::Backend::Native => {
-            layerfs_sandbox::native::NativeLinuxProvider::new(root).map(Runtime::LinuxNative)
-        }
+        crate::host::runtime::Backend::Native => Err(layerfs_sandbox::RuntimeError::Unsupported(
+            crate::host::runtime::NATIVE_ON_LINUX,
+        )),
         crate::host::runtime::Backend::Namespaces => {
             layerfs_sandbox::namespaces::NamespaceProvider::new(root).map(Runtime::Namespaces)
         }
@@ -271,10 +281,12 @@ fn launch_options(
     args: &SdkValue,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(match backend {
-        crate::host::runtime::Backend::Native => ProviderLaunchOptions::Local {
-            command_identity: identity,
-            environment: native_environment(),
-        },
+        crate::host::runtime::Backend::Native => {
+            return Err(refused(
+                "Unsupported",
+                crate::host::runtime::NATIVE_ON_LINUX,
+            ))
+        }
         crate::host::runtime::Backend::Namespaces => {
             let deploy = args
                 .get("deploy")

@@ -1,10 +1,11 @@
-//! A Sandbox's runtime: Docker (default), `LAYERFS_SANDBOX=native` on
-//! Linux (root FUSE daemon, nonroot commands) and macOS (loopback NFS,
-//! caller identity), or `LAYERFS_SANDBOX=namespaces` on Linux. All use the
-//! same authenticated daemon control pipeline and the same concrete
-//! `layerfs_sandbox::Sandbox` handle. A Sandbox also names its platform
-//! (#529), recorded beside the runtime; every later call follows the
-//! record, not the caller's deployment.
+//! A Sandbox's runtime: Docker (default), `LAYERFS_SANDBOX=native` on macOS
+//! (loopback NFS, caller identity), or `LAYERFS_SANDBOX=namespaces` on Linux
+//! (root FUSE daemon, nonroot commands). Linux starts no native Sandbox
+//! (#533 O27); a native record written there before 2.0 is still reopened
+//! by its record. All use the same authenticated daemon control pipeline
+//! and the same concrete `layerfs_sandbox::Sandbox` handle. A Sandbox also
+//! names its platform (#529), recorded beside the runtime; every later call
+//! follows the record, not the caller's deployment.
 use crate::host::outcome::{failed, refused};
 use crate::host::output::Spool;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -20,8 +21,15 @@ use std::path::PathBuf;
 /// record has no `runtime`).
 pub(crate) const LOCAL: &str = "local";
 /// A native Sandbox record's `runtime` (LAYERFS_SANDBOX=native): a local
-/// daemon serving FUSE on Linux or loopback NFS on macOS.
+/// daemon serving loopback NFS on macOS, or FUSE on Linux before 2.0.
 pub(crate) const NATIVE: &str = "native";
+/// Why a native Sandbox does not start on Linux: its host-process pairing is
+/// removed (#533 O27), and a Linux host runs local Sandboxes in namespaces.
+/// Refused before any effect; another backend is never chosen in its place.
+#[cfg(target_os = "linux")]
+pub(crate) const NATIVE_ON_LINUX: &str =
+    "deploy.sandbox (LAYERFS_SANDBOX) native starts host-process Sandboxes on macOS only; \
+     on Linux set LAYERFS_SANDBOX=namespaces";
 /// A namespace Sandbox record's `runtime` (LAYERFS_SANDBOX=namespaces,
 /// Linux): a local daemon in its own mount, PID and IPC namespaces and cgroup.
 pub(crate) const NAMESPACES: &str = "namespaces";
@@ -126,9 +134,9 @@ pub(crate) const PLATFORMS: [&str; 8] = [
 
 /// The platform a `sandbox.create` call names (`platform`), checked against
 /// the backend its deployment selects before any effect: `docker` is a
-/// Docker container; `mac` a native daemon on macOS; `linux` a native or
-/// namespaces daemon on Linux; a VM provider a namespaces daemon in the
-/// project's VM, which is Linux. The agent chooses which platforms a home
+/// Docker container; `mac` a native daemon on macOS; `linux` a namespaces
+/// daemon on Linux (a native one is refused at start, #533 O27); a VM
+/// provider a namespaces daemon in the project's VM, which is Linux. The agent chooses which platforms a home
 /// allows and maps each to its deployment; this refuses a call whose two
 /// facts disagree. A call that names none (an older caller) records the
 /// one its backend implies.

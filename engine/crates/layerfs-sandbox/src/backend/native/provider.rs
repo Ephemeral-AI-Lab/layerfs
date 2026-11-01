@@ -1,5 +1,7 @@
-//! The existing native runtime as a concrete backend; no alternate process engine.
-use super::{Local, LocalPhase, LocalProcess, Sandbox};
+//! The macOS native runtime as a concrete backend; no alternate process engine.
+//! Linux has no native provider (#533 O27): its local Sandboxes run in
+//! namespaces.
+use super::{Local, LocalPhase, LocalProcess, Sandbox, KERNEL_ROUTE};
 use crate::{ContainerId, RuntimeError, WireFailure};
 use crate::{
     IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, MountDriver,
@@ -7,36 +9,16 @@ use crate::{
 };
 use std::path::Path;
 
-/// The daemon's kernel route setting (`fuse` or `nfs`). Only the provider
-/// names it, from the platform it serves; a caller that names it is refused
-/// (#527 step 6), and the daemon checks the value it receives.
-pub(crate) const KERNEL_ROUTE: &str = "LAYERFS_KERNEL";
-
+/// Native macOS processes with loopback NFS and the caller's identity.
 #[derive(Clone, Debug)]
-pub struct NativeProvider<const LINUX: bool> {
+pub struct NativeMacosProvider {
     local: Local,
 }
-/// Native macOS processes with loopback NFS and the caller's identity.
-pub type NativeMacosProvider = NativeProvider<false>;
-/// Native Linux processes with FUSE and a separate nonroot command identity.
-pub type NativeLinuxProvider = NativeProvider<true>;
-impl<const LINUX: bool> NativeProvider<LINUX> {
-    /// Refuses other platforms before accessing the root or launching anything.
+impl NativeMacosProvider {
+    /// Selects `root`; nothing is launched.
     pub fn new(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {
-        if (LINUX && !cfg!(target_os = "linux")) || (!LINUX && !cfg!(target_os = "macos")) {
-            return Err(RuntimeError::Unsupported("native provider platform"));
-        }
-        if LINUX && !nix::unistd::Uid::effective().is_root() {
-            return Err(RuntimeError::Unsupported(
-                "native Linux provider requires root",
-            ));
-        }
         Ok(Self {
-            local: if LINUX {
-                Local::new(root)?
-            } else {
-                Local::native(root)?
-            },
+            local: Local::native(root)?,
         })
     }
     pub fn paths(&self, name: &str) -> Result<super::LocalPaths, RuntimeError> {
@@ -44,23 +26,11 @@ impl<const LINUX: bool> NativeProvider<LINUX> {
     }
     pub fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
-            name: if LINUX {
-                "native-linux"
-            } else {
-                "native-macos"
-            },
+            name: "native-macos",
             isolation: IsolationModel::HostProcess,
-            mount_driver: if LINUX {
-                MountDriver::Fuse
-            } else {
-                MountDriver::LoopbackNfs
-            },
+            mount_driver: MountDriver::LoopbackNfs,
             requires_image: false,
-            search_path_policy: if LINUX {
-                SearchPathPolicy::FixedContainer
-            } else {
-                SearchPathPolicy::InheritHost
-            },
+            search_path_policy: SearchPathPolicy::InheritHost,
             supports_resource_limits: false,
             direct_store_access: true,
         }
@@ -83,9 +53,8 @@ impl<const LINUX: bool> NativeProvider<LINUX> {
             )));
         };
         command_identity.check().map_err(fail)?;
-        if (!LINUX
-            && (command_identity.uid != nix::unistd::Uid::effective().as_raw()
-                || command_identity.gid != nix::unistd::Gid::effective().as_raw()))
+        if command_identity.uid != nix::unistd::Uid::effective().as_raw()
+            || command_identity.gid != nix::unistd::Gid::effective().as_raw()
             || environment.iter().any(|(key, value)| {
                 key.is_empty()
                     || key.contains(['=', '\0'])
@@ -99,10 +68,7 @@ impl<const LINUX: bool> NativeProvider<LINUX> {
             )));
         }
         // The provider alone chooses the kernel route (#527 step 6).
-        environment.push((
-            KERNEL_ROUTE.into(),
-            if LINUX { "fuse" } else { "nfs" }.into(),
-        ));
+        environment.push((KERNEL_ROUTE.into(), "nfs".into()));
         let local = self
             .local
             .clone()

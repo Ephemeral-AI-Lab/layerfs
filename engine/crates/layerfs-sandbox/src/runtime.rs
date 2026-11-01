@@ -5,7 +5,9 @@ use crate::backend::docker::{self, DockerProvider};
 #[cfg(target_os = "linux")]
 use crate::backend::namespaces::{self, NamespaceProvider};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use crate::backend::native::{self, NativeLinuxProvider, NativeMacosProvider};
+use crate::backend::native;
+#[cfg(target_os = "macos")]
+use crate::backend::native::NativeMacosProvider;
 use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
 use crate::{
     ExecExit, LaunchPhase, LaunchRequest, LocalRecord, ProviderCapabilities, SandboxInspection,
@@ -21,13 +23,10 @@ use std::{fmt, io::Write, net::SocketAddr, path::PathBuf};
 pub enum Runtime {
     /// A local Docker Engine container; the default.
     Docker(DockerProvider),
-    /// A local daemon process serving loopback NFS as this user (macOS).
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    /// A local daemon process serving loopback NFS as this user (macOS;
+    /// Linux has no native runtime, #533 O27).
+    #[cfg(target_os = "macos")]
     MacosNative(NativeMacosProvider),
-    /// A root local daemon process serving FUSE, commands as a nonroot
-    /// identity (Linux).
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    LinuxNative(NativeLinuxProvider),
     /// A root daemon in its own mount, PID and IPC namespaces and cgroup,
     /// commands entering them as a nonroot identity (Linux).
     #[cfg(target_os = "linux")]
@@ -38,10 +37,8 @@ impl Runtime {
     pub fn capabilities(&self) -> Result<ProviderCapabilities, RuntimeError> {
         match self {
             Self::Docker(provider) => Ok(provider.capabilities()),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::MacosNative(provider) => Ok(provider.capabilities()),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::LinuxNative(provider) => Ok(provider.capabilities()),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => Ok(provider.capabilities()),
         }
@@ -52,10 +49,8 @@ impl Runtime {
     pub fn local_directory(&self, name: &str) -> Result<Option<PathBuf>, RuntimeError> {
         match self {
             Self::Docker(_) => Ok(None),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::MacosNative(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::LinuxNative(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
         }
@@ -65,8 +60,8 @@ impl Runtime {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub fn native_paths(&self, name: &str) -> Result<native::LocalPaths, RuntimeError> {
         match self {
+            #[cfg(target_os = "macos")]
             Self::MacosNative(provider) => provider.paths(name),
-            Self::LinuxNative(provider) => provider.paths(name),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider.paths(name),
             Self::Docker(_) => Err(RuntimeError::Unsupported(
@@ -79,10 +74,8 @@ impl Runtime {
     pub fn launch(&self, request: LaunchRequest) -> Result<Sandbox, Box<LaunchFailure>> {
         match self {
             Self::Docker(provider) => provider.launch(request).map(Sandbox::Docker),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::MacosNative(provider) => provider.launch(request).map(Sandbox::Native),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::LinuxNative(provider) => provider.launch(request).map(Sandbox::Native),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider
                 .launch(request)
@@ -98,10 +91,8 @@ impl Runtime {
     ) -> Result<Sandbox, Box<WireFailure>> {
         match self {
             Self::Docker(provider) => provider.reopen(id, record).map(Sandbox::Docker),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::MacosNative(provider) => provider.reopen(id, record).map(Sandbox::Native),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::LinuxNative(provider) => provider.reopen(id, record).map(Sandbox::Native),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider
                 .reopen(id, record)
@@ -117,10 +108,8 @@ impl Runtime {
     ) -> Result<Sandbox, Box<WireFailure>> {
         match self {
             Self::Docker(provider) => provider.reopen_stopped(id, record).map(Sandbox::Docker),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(target_os = "macos")]
             Self::MacosNative(provider) => provider.reopen_stopped(id, record).map(Sandbox::Native),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::LinuxNative(provider) => provider.reopen_stopped(id, record).map(Sandbox::Native),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider
                 .reopen_stopped(id, record)
