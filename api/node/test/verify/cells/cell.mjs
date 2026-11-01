@@ -11,11 +11,15 @@
 //   close   the Sandbox, and the home removed.
 // LFS533_DAEMON names the daemon for the `native` machine; it reaches the
 // home's record through `layerfs import-env` (the repository's debug
-// `layerfs`, or LFS533_LAYERFS), as a 1.1.0 environment would.
+// `layerfs`, or LFS533_LAYERFS), as a 1.1.0 environment would. On any other
+// machine the Store moves there after Init; for `docker`, LFS533_IMAGE is
+// the Sandbox image (`machine update docker --image`), and a docker worker
+// this home started (`lfs-<home id>-docker`) is removed with its data
+// volume at the end.
 // One cell per command; nothing else runs a cell at the same time, so the
 // 1.1.0 host-wide lock is not ported. The receipt holds every step's time,
 // the 1-minute load and the verdict.
-import { mkdtempSync, chmodSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, chmodSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -88,6 +92,10 @@ try {
   await step("store.create", () => lfs.store.create("cells"));
   await step("project.init", () => lfs.project.init(project, empty));
   await step("branch.fork", () => lfs.branch.fork(project, "lane", "main"));
+  if (machine === "docker" && process.env.LFS533_IMAGE) {
+    await step("machine.update", () => lfs.machine.update("docker", { image: process.env.LFS533_IMAGE }));
+  }
+  if (machine !== "native") await step("store.move", () => lfs.store.move("cells", machine));
   out.sandbox = (await step("sandbox.create", () => lfs.sandbox.create(project, name, machine))).value;
   sandbox = name;
   const line = timedLine(command(cell));
@@ -143,6 +151,17 @@ try {
     );
   }
   if (sandbox) await step("sandbox.close", () => lfs.sandbox.close(sandbox)).catch((error) => { out.closeError = error.message; });
+  if (machine === "docker") {
+    // this home's own worker container and data volume, never another's
+    const id = JSON.parse(readFileSync(join(home, "layerfs.json"), "utf8")).id.slice(0, 8);
+    for (const args of [["rm", "-f", `lfs-${id}-docker`], ["volume", "rm", `lfs-${id}-docker-data`]]) {
+      try {
+        execFileSync("docker", args, { stdio: "ignore" });
+      } catch {
+        out.steps.push({ name: `cleanup.docker ${args.join(" ")}`, ok: false });
+      }
+    }
+  }
   out.endedAt = new Date().toISOString();
   writeFileSync(receipt, JSON.stringify(out, null, 2) + "\n");
   rmSync(home, { recursive: true, force: true });

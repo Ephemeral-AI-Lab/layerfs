@@ -1,0 +1,41 @@
+# docker-sqlite.sh at a487409fe5, bundle build-linux-0c84a1ae4ed4 (load { 4.43 4.13 4.05 }); 2026-11-01T23:44:13Z
+home=/tmp/lfs533-dks-home.aj4g
+$ layerfs machine update docker --image sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e
+{"name":"docker","platform":"docker","backend":"docker","state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"}
+exit 0
+$ layerfs store create shop
+{"name":"shop","kind":"sqlite","machine":"native","profile":"disposable","created":1793576653674,"sqlite":"3.53.2","projects":[]}
+exit 0
+$ layerfs project init shop/app /tmp/lfs533-dks-src.HX83
+{"project":"shop/app","store":"shop","name":"app","kind":"sqlite","machine":"native","created":1793576653792,"layer":"3255913ad1b5daa3293a12f855272f53357e827dd050714bc745410574ae671fb0","root":"3f8a8ce5b7aaf36ac8dd014fd9783aa0bde97ef9eb1ae67fd7dcd2af36df942e"}
+exit 0
+$ layerfs store move shop docker
+{"store":"shop","from":"native","to":"docker","bytes":212992,"heads":"3ac392a38aa145330eb6b59807375501944bc4eb066d284d8ee6cbb5444834b6"}
+exit 0
+$ layerfs store get shop
+{"name":"shop","kind":"sqlite","machine":"docker","profile":"disposable","created":1793576653674,"sqlite":"3.53.2","in_progress":null,"last_move":{"from":"native","to":"docker","at":1793576654329,"bytes":212992,"sha256":"d1434bcd896d72347177d7b9643ef61887fc2d3948b43ddfbaca28ed148c3f82","heads":"3ac392a38aa145330eb6b59807375501944bc4eb066d284d8ee6cbb5444834b6"},"projects":["app"]}
+exit 0
+$ layerfs sandbox create shop/app t docker
+{"name":"t","project":"shop/app","machine":"docker","state":"running","created":1793576654347,"id":"1","platform":"docker","runtime":"docker","image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"}
+exit 0
+$ layerfs branch fork shop/app work main
+{"kind":"Forked","branch":"work","base":"3255913ad1b5daa3293a12f855272f53357e827dd050714bc745410574ae671fb0","head":null}
+exit 0
+mount: {"kind":"Mounted","path":"/workspaces/1","workspace":"04f2de2101e86750e51498926b55ab50b707b1031aceeb21daf0c053bc9cc22f","namespace":1,"branch":"work","base":null,"base_layer":"3255913ad1b5daa3293a12f855272f53357e827dd050714bc745410574ae671fb0","root":"3f8a8ce5b7aaf36ac8dd014fd9783aa0bde97ef9eb1ae67fd7dcd2af36df942e","sandbox":"1","container":"lfs-dca555b3-shop.app-1","image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e","platform":"docker","runtime":"docker","ws":"t:/workspaces/1"}
+ws=t:/workspaces/1
+$ layerfs workspace exec t:/workspaces/1 cat readme.txt; id -u; echo added-docker > new.txt --stream
+hello
+501
+exit 0
+$ layerfs workspace commit t:/workspaces/1 -m from a Sandbox on the docker machine
+{"kind":"Committed","head":"12bdb9a33fde318a7a43433f6ca286e20fecf7a52c61927d663c0adc77bbb6c06e","commit":{"id":"12bdb9a33fde318a7a43433f6ca286e20fecf7a52c61927d663c0adc77bbb6c06e","branch":null,"parent":null,"second_parent":null,"base":"3255913ad1b5daa3293a12f855272f53357e827dd050714bc745410574ae671fb0","root":"778f8212e6e41408289622779afbd3209cbc23675b7fc74f8431450f6664df77","via":"exec","message":"from a Sandbox on the docker machine","merged_from":null,"time":1793576656999,"logical":19,"new_canonical":533,"new_stored":347,"new_metadata":297,"displaced":null,"lww":[],"lww_truncated":false},"displaced_head":null,"merged":null,"lww":[],"lww_truncated":false}
+exit 0
+$ layerfs workspace unmount t:/workspaces/1
+{"kind":"Unmounted"}
+exit 0
+$ layerfs file read shop/app work /new.txt
+{"kind":"ok","snapshot":"work@bdb9a33fde31","root":"778f8212e6e41408289622779afbd3209cbc23675b7fc74f8431450f6664df77","path":"/new.txt","text":"added-docker\n","start_line":1,"end_line":1,"line_truncated":false,"truncated":false,"next_line":null,"size":13}
+exit 0
+$ layerfs sandbox close t
+{"kind":"Closed","sandbox":"1","closed":"t"}
+exit 0

@@ -109,8 +109,10 @@ Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated 
   which writes the Store's and project's records under its root and runs
   the same host Sandbox code on its own `native` (namespaces in the Linux
   guest). Sandboxes on the `docker` machine and Sandboxes of PostgreSQL
-  Stores are refused `Unsupported` in step 12 (the 1.1.0 Docker path needs
-  the image and volume settings the 1.1.0 JS runtime supplied).
+  Stores were refused `Unsupported` in step 12 (the 1.1.0 Docker path needs
+  the image and volume settings the 1.1.0 JS runtime supplied). **Closed
+  2026-11-02 by owner instruction** (relayed by the parent session: build
+  both before step 19); see the last section.
 - Step 14: the four 1.1.0 packages (`@layerfs/agent`, `@layerfs/cli`,
   `@layerfs/backend`, `@layerfs/runtime`) are deleted, not kept beside
   `layerfs`; their last source is the 1.1.0 tag. The Node binding is one
@@ -179,3 +181,21 @@ Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated 
   this pass, so neither route is verified there. A Linux follow-up must
   either give `docker` on Linux a worker (the row's choice) or make the
   in-process route open the volume's file.
+
+## Step-12 deferral closed (owner instruction, 2026-11-02)
+
+The owner's instruction, relayed by the parent session ("Yes, send it"):
+build the `docker` and PostgreSQL Sandbox paths before step 19 instead of
+shipping them `Unsupported`. Built in `a487409fe5`. The choices below are
+implementation choices, recorded because they are not in the spec.
+
+| Topic | Choice | Why |
+| --- | --- | --- |
+| Where a docker Sandbox's Store comes from | Docker's `-v` source syntax in the existing `store_volume` string: `volume` (1.1.0, Store at `global/store.sqlite`), `volume/sub/path` (a volume subpath), `/host/folder` (a bind mount); the last two put the Store at `/layerfs-store/store.sqlite`. | The 2.0 docker machine keeps every Store in one data volume (`store/<name>/`), so a Sandbox mounts only its Store's folder. Keeping the string keeps the Sandbox record format; volume names hold no `/`, so the forms never overlap. |
+| macOS and Windows | The caller sends the docker machine's image (and the volume folder and `daemonHost` `host.docker.internal`) with the worker call; the worker adds its own Engine socket and the daemon beside its executable, and makes the Store folder `0700`/`0600` (root's) first. | H §7.7: guests never read the home. The daemon requires a private Store folder owned by its user (root in the container). |
+| Linux | The call runs in the caller's process (as `Kind::route` routes it) and bind mounts the Store's home folder; a caller that is not root is refused before any effect. | The daemon (root in the container) must own the folder. **Unverified: nothing ran on Linux.** The earlier correction row still applies; a Linux follow-up may prefer a worker container for `docker` on Linux. |
+| PostgreSQL Sandboxes | `native` and `docker` from the caller's process, which resolves the password; a namespaces Sandbox (Linux `native`) and VMs/ssh are refused. Under Docker Desktop (not Linux) a loopback URL becomes `host.docker.internal` for the daemon only. | O3/G13. In 2.0 the caller makes Store calls itself, so a loopback server must also be reachable from the container. |
+| One-shot calls | An in-process Sandbox call opens its Store first (`store::open::hold`), as Store calls do. | The host code reads the Branch through the open Store; a one-shot command had none. |
+| The docker worker's own image | Falls back to the docker machine record's `image`, as 1.1.0's macOS worker did. | Nothing set `os_image`, so the docker worker could never start. |
+| Docker 29 "no such object" | Matched without case. | Docker 29.5.2 lowercases it, which made `store move <s> docker` fail at its check. |
+

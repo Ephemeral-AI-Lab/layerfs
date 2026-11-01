@@ -1,0 +1,5 @@
+# cargo test -p layerfs-api --features machine,postgresql --test sandbox_machines (load { 3.84 3.96 3.98 })
+test a_postgresql_store_s_sandboxes_on_native_and_docker ... ok
+test a_sandbox_runs_where_its_store_can_be_reached ... ok
+test a_sqlite_store_s_sandbox_on_the_docker_machine ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.64s

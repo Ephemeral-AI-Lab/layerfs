@@ -17,7 +17,7 @@ a copy of a sqlite Store in a bucket.
 | Kind | How many | Made by | Sandboxes run as | Tool |
 | --- | --- | --- | --- | --- |
 | `native` | one, built in | — | macOS: host processes with a loopback NFS mount. Linux: namespaces (needs root). Windows: none; `native` holds only records (O5) | — |
-| `docker` | one, built in | — | Docker containers (not built in 2.0 yet; see below) | `docker` |
+| `docker` | one, built in | — | Docker containers on the image `machine update docker --image` records; see Routes | `docker` |
 | `apple-container` | many | `machine create` | namespaces inside the VM | `container` |
 | `microsandbox` | many | `machine create` | namespaces inside the VM | `msb` |
 | `lima` | many | `machine create` | namespaces inside the VM | `limactl` |
@@ -113,6 +113,12 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   behind a secret, over a forwarded loopback port. The caller sends the
   Store's record with the call; the worker never reads the home.
 - One process can use Stores on several machines at once.
+- A Sandbox on `docker` is a container on the docker machine's image. On
+  macOS (and Windows) the docker worker starts it beside itself, mounting
+  only its Store's folder of the worker's data volume. On Linux the caller
+  starts it and bind mounts the Store's folder, which only a root caller can
+  do (the daemon, root in the container, must own it). A PostgreSQL
+  Store's Sandbox on `native` or `docker` is started by the caller.
 - Not verified: the route table in `layerfs-sandbox` marks `docker` on a
   Linux host as in-process, while the decisions log says every machine
   other than `native` goes to its worker. No Linux host was used on this
@@ -184,9 +190,13 @@ layerfs project init pg-main/load ./load
 - `project init` into a PostgreSQL Store runs in the caller's process.
 - PostgreSQL needs a build with the `postgresql` feature; without it these
   calls are `Unsupported`.
-- Not built: Sandboxes of PostgreSQL Stores, `project remove` from a
-  PostgreSQL Store, and backups of PostgreSQL Stores (back it up with
-  PostgreSQL's own tools).
+- A PostgreSQL Store's Sandboxes run on `native` (macOS, a daemon built
+  with `postgresql`) or `docker`, started from the caller's process, which
+  resolves the password and hands the URL to the daemon. Under Docker
+  Desktop a loopback URL reaches the container's daemon as
+  `host.docker.internal`. On a VM or ssh host they come later (O3).
+- Not built: `project remove` from a PostgreSQL Store, and backups of
+  PostgreSQL Stores (back it up with PostgreSQL's own tools).
 - The step 10a and 10b commits record `store connect` and Init into a
   throwaway `postgres:17` container on macOS. Not run for this manual.
 

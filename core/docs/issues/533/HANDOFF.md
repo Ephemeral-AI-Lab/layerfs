@@ -56,9 +56,12 @@ another parent or has a malformed line; the delta is the same in every case.
 | `707b534eb2` | docs: step 19, the terminal pass | 130235 -> 130235 (delta 0) | same |
 | `73e38ecf27` | api: file.apply refuses the Store's own change field names | 130235 -> 130245 (delta +10) | same |
 | `f7125ae090` | docs: step 18, the 2.0 manual, the SDK skills and the READMEs | 130245 -> 130245 (delta 0) | same |
-| (this file) | docs: the handoff | 130245 -> 130245 (delta 0) | same |
+| `d24961944e` | docs: the handoff | 130245 -> 130245 (delta 0) | same |
+| `72eab2f1ee` | docs: the base is local layerfs_v2_0_0 at ddc7c5696b | 130245 -> 130245 (delta 0) | same |
+| `a487409fe5` | api, sandbox: Sandboxes on the docker machine and of PostgreSQL Stores | 130245 -> 130548 (delta +303) | same |
+| (the commit after `a487409fe5`) | docs, test: the docker and PostgreSQL Sandboxes in the terminal pass | 130548 -> 130548 (delta 0) | same |
 
-Total: 124168 -> 130245 (delta +6077) across the branch, with the 1.1.0
+Total: 124168 -> 130548 (delta +6380) across the branch, with the 1.1.0
 JavaScript packages retired (-4772 in `api`) and the 2.0 library, machine
 layer, command and bindings added in `engine`.
 
@@ -73,8 +76,9 @@ implementation choices per step. Read especially:
 
 - the **correction** at its end: the store route keeps `docker` on Linux
   in-process, contrary to the H §7.7 row; unverified either way;
-- Sandboxes on the `docker` machine and on PostgreSQL Stores are refused
-  `Unsupported` (step 12);
+- the step-12 deferral of Sandboxes on the `docker` machine and of
+  PostgreSQL Stores is **closed** by the owner's instruction (built in
+  `a487409fe5`; its own section at the end of DECISIONS);
 - `import-env` answers commands for VM and ssh settings instead of acting.
 
 ## Tests deleted
@@ -92,11 +96,13 @@ implementation choices per step. Read especially:
 
 ## Not verified
 
-- Every VM kind, ssh, and the docker machine's worker container: no sealed
-  Linux bundle (O16) and no builder for one. The machine adapters have unit
-  tests only.
+- Every VM kind and ssh: not run (outside the owner's instruction; a VM
+  boot outlasts the command rule). The docker machine's worker container
+  ran on macOS at `a487409fe5` from a private test bundle
+  (`LAYERFS_BUNDLE`). The VM adapters have unit tests only.
 - Anything on Linux: the namespaces backend, `remote_store`, the in-process
-  `docker` route, the Linux worker; and Windows (O5).
+  `docker` route and its root-only bind mount of a Store folder, the Linux
+  worker; and Windows (O5).
 - R2 backups (no account here).
 - Release-build timings: the terminal pass used debug builds.
 - One worker serving several Stores, machine boot and worker start times,
@@ -114,6 +120,14 @@ implementation choices per step. Read especially:
 - Exec output over 1 MiB is spooled by the host code; no 2.0 call reads the
   spool back.
 - `project.init` on a PostgreSQL Store answers `machine: "native"`.
+- No installer places the sealed Linux bundle in the user cache (O16), and
+  the launcher's sealed build writes `manifest.json`, not the
+  `bundle.json` this branch reads; the terminal pass hand-wrote one in a
+  private folder.
+- The Node package loads the ignored copy
+  `engine/crates/layerfs-node/layerfs.node`. Install a new build with
+  `api/scripts/build-native.mjs` (staged copy, then rename): copying over
+  the file in place makes macOS kill the next process that loads it.
 - `backup.restore` onto another machine answers `Unsupported`; the spec says
   `InvalidInput`.
 - A small Init emits no progress event.
@@ -150,12 +164,14 @@ committed).
 
 | Resource | Size | Note |
 | --- | --- | --- |
-| `layerfs-issue533-v2/target` | 11 GB | this worktree's macOS target; keep warm only if 2.0 work continues |
+| `layerfs-issue533-v2/target` | 13 GB | this worktree's macOS target; keep warm only if 2.0 work continues |
 | `layerfs-issue533-v2-step5/target` (incl. `target/x86_64-unknown-linux-gnu`) | 5.4 GB | step-5 subagent worktree, branch `issue533-v2-o27`; its commits are cherry-picked |
 | `layerfs-issue533-v2-pg/target` | 7.4 GB | step-10b/10c subagent worktree, branch `issue533-v2-pg`; cherry-picked |
 | `~/.cache/layerfs-worktrees/layerfs-issue533-v2-{5ff20ac6a0aa,pg-550caaac6c6d,step-9d8c05ce2ded}` | ~1.1 GB | launcher state and receipts of the three worktrees |
 | `$TMPDIR/lfs-sbx-{home,folder}-{51039,51054}` | small | leftovers of a failed step-12 run; their removal was refused by the auto-mode classifier, so they were left |
-| containers `lfs533-pg-main` (stopped, `--rm`, so removed) and `lfs533-minio` (removed by `minio_service.sh stop`) | – | nothing left |
+| containers `lfs533-pg-main` and `lfs533-pg-sbx` (stopped, `--rm`, so removed) and `lfs533-minio` (removed by `minio_service.sh stop`) | – | nothing left |
+| Docker volumes `lfs-dev-layerfs-issue533-v2-5ff20ac6a0aa-target` and `-cargo` | 4.5 GB + 354 MB | this worktree's Linux target and Cargo home (launcher-owned), made for the Linux daemon and bundle builds |
+| `~/.cache/layerfs-worktrees/layerfs-issue533-v2-5ff20ac6a0aa/artifacts/build-linux-{38f27b92…,0c84a1ae…}` | 562 MB each | sealed Linux bundles; `0c84a1ae…` is the one the rerun's receipts name, `38f27b92…` was built during edits and is superseded |
 
-`python3 tools/cleanup.py check` at handoff: 168.3 GB free; no cleanup
+`python3 tools/cleanup.py check` at handoff: 160.2 GB free (after the rerun); no cleanup
 needed.

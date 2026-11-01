@@ -1,0 +1,177 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C03",
+  "machine": "native",
+  "product": "a487409fe5",
+  "startedAt": "2026-11-01T23:49:07.039Z",
+  "load1": 3.0810546875,
+  "body": {
+    "sha256": "520773ceacd8c44d633ffd1a40727ceb5d990d63a23259f28af8dd4b96fa204d"
+  },
+  "ok": true,
+  "cause": null,
+  "phases": {
+    "warmup": {
+      "mountMs": 35.401,
+      "exec": {
+        "wallMs": 2722.267,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793576947268201000 1793576949971895000\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 2703.694
+      },
+      "unmountMs": 22.588
+    },
+    "timed": {
+      "mountMs": 26.082,
+      "workspace": {
+        "kind": "Mounted",
+        "path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs533-cell-s9CQah/machine/native/sandbox-root/lfs-22f2bedf-cells.p-1/workspaces/2",
+        "workspace": "ff2aeeb76136121861a5737d3d9eabcdbeba34886b8e9c52c98858e7ce1dd474",
+        "namespace": 2,
+        "branch": "lane",
+        "base": null,
+        "base_layer": "321cbdd05539da1c3556688e0fec49c87a37c50ded4136766fb54b3d3588ad468c",
+        "root": "ae9758b2f322b701855de09325a95a99a3b95eb3cfe18e44cc6202b91d5f6e2e",
+        "sandbox": "1",
+        "container": "lfs-22f2bedf-cells.p-1",
+        "image": "local",
+        "platform": "mac",
+        "runtime": "native",
+        "ws": "c03:/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs533-cell-s9CQah/machine/native/sandbox-root/lfs-22f2bedf-cells.p-1/workspaces/2"
+      },
+      "exec": {
+        "wallMs": 2656.268,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793576950040527000 1793576952677172000\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 2636.645
+      },
+      "commitMs": 136.113,
+      "commit": {
+        "kind": "UpToDate",
+        "head": null,
+        "root": "ae9758b2f322b701855de09325a95a99a3b95eb3cfe18e44cc6202b91d5f6e2e",
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "unmountMs": 25.458
+    },
+    "verify": {
+      "exitCode": 0,
+      "stdout": "VERIFY OK\n",
+      "stderr": ""
+    }
+  },
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 12.484,
+      "ok": true
+    },
+    {
+      "name": "store.create",
+      "ms": 9.23,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 105.807,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 7.969,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 37.781,
+      "ok": true
+    },
+    {
+      "name": "warmup.mount",
+      "ms": 35.393,
+      "ok": true
+    },
+    {
+      "name": "warmup.exec",
+      "ms": 2722.257,
+      "ok": true
+    },
+    {
+      "name": "warmup.unmount",
+      "ms": 22.583,
+      "ok": true
+    },
+    {
+      "name": "timed.mount",
+      "ms": 26.074,
+      "ok": true
+    },
+    {
+      "name": "timed.exec",
+      "ms": 2656.257,
+      "ok": true
+    },
+    {
+      "name": "timed.commit",
+      "ms": 136.105,
+      "ok": true
+    },
+    {
+      "name": "timed.unmount",
+      "ms": 25.449,
+      "ok": true
+    },
+    {
+      "name": "verify.mount",
+      "ms": 26.75,
+      "ok": true
+    },
+    {
+      "name": "verify.identity",
+      "ms": 42.093,
+      "ok": true
+    },
+    {
+      "name": "verify.exec",
+      "ms": 19.777,
+      "ok": true
+    },
+    {
+      "name": "verify.unmount",
+      "ms": 24.671,
+      "ok": true
+    },
+    {
+      "name": "sandbox.close",
+      "ms": 55.59,
+      "ok": true
+    }
+  ],
+  "sandbox": {
+    "name": "c03",
+    "project": "cells/p",
+    "machine": "native",
+    "state": "running",
+    "created": 1793576947178,
+    "id": "1",
+    "platform": "mac",
+    "runtime": "native",
+    "image": "local"
+  },
+  "where": {
+    "kernel": "Darwin 25.4.0",
+    "machine": "arm64",
+    "cpus": "14",
+    "memKiB": null,
+    "memBytes": "38654705664",
+    "cpuMax": null,
+    "id": "501:20"
+  },
+  "endedAt": "2026-11-01T23:49:13.010Z"
+}

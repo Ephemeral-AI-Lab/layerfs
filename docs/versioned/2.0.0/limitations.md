@@ -30,8 +30,9 @@ for this manual.
 
 | What | Refusal |
 | --- | --- |
-| Sandboxes on the `docker` machine | "Sandboxes on the docker machine are not built in 2.0 yet; use native or a VM machine" |
-| Sandboxes of a PostgreSQL Store (O3) | "a Sandbox of a PostgreSQL Store is not built in 2.0 yet" |
+| A PostgreSQL Store's Sandbox on a VM or an ssh host (O3) | "runs on native or docker; on VMs and ssh hosts it comes later (O3)" |
+| A PostgreSQL Store's Sandbox on Linux `native` (namespaces) | "a namespaces Sandbox binds a Store file" |
+| On Linux, a `docker` Sandbox of a sqlite Store by a caller that is not root | the daemon (root in its container) must own the bind-mounted Store folder; run as root, or keep the Store on `native` |
 | A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store move` moves the Store |
 | `project remove` from a PostgreSQL Store | "removing a project from a PostgreSQL Store is not built" |
 | `project init` into a sqlite Store that is not on `native` | move it to `native`, Init, then move it back |
@@ -66,13 +67,15 @@ Also not built:
 
 ## Not verified
 
-None of these was run on this branch. They are taken from the work order's
-"Not verified at writing" list and the step commits.
+None of these was run on this branch, except where a line says what ran.
+They are taken from the work order's "Not verified at writing" list and the
+step commits.
 
 - **VM kinds and ssh.** No real `apple-container`, `microsandbox`, `lima`,
   `firecracker` or ssh machine was created or connected; their adapters
-  were tested with provider tests only. Store moves were tested against a
-  local test worker, not a real VM or the `docker` machine.
+  were tested with provider tests only. On macOS the `docker` machine's
+  worker did run (a private test bundle, `LAYERFS_BUNDLE`): `store move` to
+  `docker`, its Sandboxes and the twelve cells passed; see the terminal pass.
 - **Machine boot, worker start and idle stop.** A guest powering off after
   10 idle minutes and the next call starting it again were not run.
 - **One worker serving several Stores** and the guest-to-host send speed.
@@ -84,8 +87,8 @@ None of these was run on this branch. They are taken from the work order's
   Stores and Init are meant to live in a WSL worker. Not run.
 - **R2.** Backups were run against MinIO only; R2 is `NOT_RUN` (no
   credentials).
-- **PostgreSQL.** `store connect` and Init into PostgreSQL ran against a
-  throwaway `postgres:17` container. Init cost against a sqlite Init was
+- **PostgreSQL.** `store connect`, Init and Sandboxes on `native` and
+  `docker` (macOS) ran against a throwaway `postgres:17` container. Init cost against a sqlite Init was
   not measured. The O6 handling of a LayerFS schema with another name is
   not visible in the connect code, which names only the schema `layerfs`.
 - **Init on macOS's disk** against Init through Docker (owners, modes and
