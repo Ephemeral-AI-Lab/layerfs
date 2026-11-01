@@ -145,8 +145,8 @@ export class LayerFSRuntime {
     if (this.platform.vm) {
       this.vm = {
         status: live(async (project) => {
-          const names = project ? [project] : (await this.project.list()).map((one) => one.name);
-          const reported = await this.platform.vm.status(settings, names);
+          const projects = project ? [project] : await this.project.list();
+          const reported = await this.platform.vm.status(settings, projects);
           return project ? reported.vm.vms[0] : reported.vm;
         }),
         stop: live((project) => this.platform.vm.stop(settings, project)),

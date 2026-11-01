@@ -101,6 +101,11 @@ function entryOf(runtime, store) {
   return store.legacy ? put(runtime.settings, { ...store, projects: store.projects.filter((p) => p.name !== store.name) }) : store;
 }
 
+/** Starts or reuses the Store's VM worker on a `vm:` home before a Store sync call. */
+async function ensureStore(runtime, name) {
+  if (runtime.platform.hostDocker === false) await runtime.platform.init(runtime.settings, { name, store: name });
+}
+
 /** runtime.store.start_publish(store, { remote, file = store, credentials }):
  * uploads an unlinked Store to a new file and links it. Refused `Linked`
  * when the Store has a link, `Exists` when a Store of the home links to the
@@ -115,6 +120,7 @@ export async function start_publish(runtime, jobs, name, options = {}) {
   try {
     return jobs.begin({ kind: "publish", store: name, ...to, total: size(fields) }, async (job) => {
       try {
+        await ensureStore(runtime, name);
         const answer = await storeCall(runtime, name, "runtime.store.publish", { ...fields, ...to, ...credentials, job });
         entryOf(runtime, store);
         link(runtime.settings, name, answer.transfer, (s) => {
@@ -141,6 +147,7 @@ export async function start_push(runtime, jobs, name, options = {}) {
   const to = linkOf(store);
   const fields = storeFields(runtime, store);
   return jobs.begin({ kind: "push", store: name, remote: to.remote, file: to.file, total: size(fields) }, async (job) => {
+    await ensureStore(runtime, name);
     const answer = await storeCall(runtime, name, "runtime.store.push", { ...fields, remote: to.remote, file: to.file, ...credentialsOf(options), job, ...(options.force ? { force: true } : {}) });
     link(runtime.settings, name, answer.transfer);
     return answer;
@@ -157,6 +164,7 @@ export async function start_pull(runtime, jobs, name, options = {}) {
   return jobs.begin({ kind: "pull", store: name, remote: from.remote, file: from.file }, async (job) => {
     // this process's clients hold the Store open; a pull refuses an open Store
     await runtime.clients.forgetStore(name);
+    await ensureStore(runtime, name);
     const answer = await storeCall(runtime, name, "runtime.store.pull", { ...fields, remote: from.remote, file: from.file, ...credentialsOf(options), job });
     link(runtime.settings, name, answer.transfer, (s) => ({ ...s, projects: [...s.projects, ...answer.added.map((p) => ({ name: p }))] }));
     return answer;
@@ -176,6 +184,7 @@ export async function start_send(runtime, jobs, name, options = {}) {
   try {
     return jobs.begin({ kind: "send", store: name, ...to, total: size(fields) }, async (job) => {
       try {
+        await ensureStore(runtime, name);
         const answer = await storeCall(runtime, name, "runtime.store.send", { ...fields, ...to, ...credentialsOf(options), job });
         const { bytes, sha256, heads } = answer.transfer;
         return { ...answer, ...to, bytes, sha256, heads: heads ?? null };
@@ -235,11 +244,12 @@ export async function start_import_postgresql(runtime, jobs, name, options = {})
   const fields = storeFields(runtime, source);
   return jobs.begin({ kind: "import", store: name, target: pgName, total: size(fields) }, async (job) => {
     const postgresql = { url: target.url, schema: target.schema, synchronousCommit: target.synchronousCommit };
+    await ensureStore(runtime, name);
     const answer = await storeCall(runtime, name, "runtime.store.import_postgresql", { ...fields, target: pgName, postgresql, job });
     // #506 E6: the PostgreSQL Store records the SQLite Store it came from
     const importedFrom = { store: name, at: Date.now(), bytes: answer.sourceBytes ?? null };
     const store = { name: pgName, kind: "postgresql", connection: target.connection, schema: target.schema, synchronousCommit: target.synchronousCommit, created: Date.now(), importedFrom };
-    const projects = await call("runtime.store.list_projects", { home: callHome(runtime.settings), store: pgName, storePath: `postgresql:${pgName}`, postgresql: { url: target.url } });
+    const projects = await storeCall(runtime, name, "runtime.store.list_projects", { home: callHome(runtime.settings), store: pgName, storePath: `postgresql:${pgName}`, postgresql: { url: target.url } });
     put(runtime.settings, { ...store, projects: projects.map((p) => ({ name: p.name })) });
     return { ...answer, created: shown({ ...store, projects }) };
   });

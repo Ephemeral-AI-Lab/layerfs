@@ -18,7 +18,7 @@ export async function status(runtime) {
     }
   }
   // a `vm:` placement has one VM per project, so it is asked about each project
-  const projects = await runtime.project.list().then((all) => all.map((project) => project.name), () => []);
+  const projects = await runtime.project.list().catch(() => []);
   const reported = await platform.status(settings, projects).catch((error) => ({ worker: { state: "unknown", error: error.message } }));
   let home = null;
   try { const s = statfsSync(settings.home); home = s.bavail * s.bsize; } catch { /* unreadable */ }

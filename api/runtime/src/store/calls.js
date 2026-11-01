@@ -22,10 +22,12 @@ const SCHEMA = /^[a-z_][a-z0-9_]{0,62}$/;
 const SYNC = new Set(["off", "local", "remote_write", "on", "remote_apply"]);
 const call = (op, args) => invokeBackend(op, args, {});
 /** Runs a Store backend call through that Store's VM worker on a `vm:` home, else in the home's binding. */
-export const storeCall = (runtime, store, op, args) =>
-  runtime.platform.hostDocker === false
-    ? withEnv(deploymentEnv(runtime.settings, runtime.platform, { name: store, store }), () => call(op, args))
+export const storeCall = (runtime, store, op, args) => {
+  const target = typeof store === "object" && store !== null ? { ...store, store: store.store ?? store.name } : { name: store, store };
+  return runtime.platform.hostDocker === false
+    ? withEnv(deploymentEnv(runtime.settings, runtime.platform, target), () => call(op, args))
     : call(op, args);
+};
 
 /** What store.list shows of one Store; `local` is its runtime.store.stat entry (#506 E1, E2). */
 export const shown = (s, local = null) => ({
@@ -66,7 +68,9 @@ export async function list(runtime) {
 export async function check(runtime, name, options = {}) {
   const store = await named(runtime, name);
   if (!store.link) throw refuse("NotLinked", `Store ${name} is linked to no remote file`);
-  return call("runtime.store.check", { home: callHome(runtime.settings), store: name, remote: store.link.remote, file: store.link.file, ...credentialsOf(options) });
+  const credentials = credentialsOf(options);
+  if (runtime.platform.hostDocker === false) await runtime.platform.init(runtime.settings, { name, store: name, kind: store.kind });
+  return storeCall(runtime, name, "runtime.store.check", { home: callHome(runtime.settings), store: name, remote: store.link.remote, file: store.link.file, ...credentials });
 }
 
 /** runtime.store.unlink(store, { confirm }): drops the Store's link and its
@@ -75,7 +79,8 @@ export async function unlink(runtime, name, options = {}) {
   if (options?.confirm !== name) throw refuse("InvalidInput", `confirm with the Store's name, ${name}`);
   const store = await named(runtime, name);
   if (!store.link) throw refuse("NotLinked", `Store ${name} is linked to no remote file`);
-  await call("runtime.store.unlink", { home: callHome(runtime.settings), store: name });
+  if (runtime.platform.hostDocker === false) await runtime.platform.init(runtime.settings, { name, store: name, kind: store.kind });
+  await storeCall(runtime, name, "runtime.store.unlink", { home: callHome(runtime.settings), store: name });
   update(runtime.settings, name, (s) => ({ ...s, link: null }));
   return { kind: "Unlinked", store: name, remote: store.link.remote, file: store.link.file };
 }
@@ -161,10 +166,10 @@ export async function remove(runtime, name, options = {}) {
     if (!store.volume) throw refuse("InvalidInput", `the runtime has no record of Store ${name}'s volume`);
     await removeVolume(runtime, { name, volume: store.volume }, options);
   } else if (platform.hostDocker === false) {
-    for (const project of store.projects ?? []) await platform.removeStore(runtime, { ...project, store: name, kind: "postgresql" });
-    await platform.removeStore(runtime, { name, kind: "postgresql" });
+    await platform.releaseStore(settings, { name, store: name, kind: "postgresql" });
+    await platform.removeStore(runtime, { name, store: name, kind: "postgresql" });
   }
-  await call("runtime.store.forget", { home: callHome(settings), store: name });
+  if (platform.hostDocker !== false) await call("runtime.store.forget", { home: callHome(settings), store: name });
   if (store.legacy) await forgetOwn(runtime, name);
   drop(settings, name);
   return { kind: "Removed", store: name, ...(store.volume ? { volume: store.volume } : {}) };
@@ -188,12 +193,22 @@ export function postgresqlTarget(given = {}, settings = undefined) {
 export async function attach_postgresql(runtime, given = {}) {
   const { name } = given ?? {};
   const target = postgresqlTarget(given, runtime.settings);
-  const known = entries(runtime.settings).find((s) => s.name === name);
+  const known = (await all(runtime)).find((s) => s.name === name);
   if (known && known.kind !== "postgresql") throw refuse("Exists", `Store ${name} is a SQLite Store`);
-  const store = { name, kind: "postgresql", connection: target.connection, schema: target.schema, synchronousCommit: target.synchronousCommit, created: known?.created ?? Date.now() };
-  const answer = await call("runtime.store.attach_postgresql", { ...storeFields(runtime, store), postgresql: { url: target.url, schema: target.schema, synchronousCommit: target.synchronousCommit } });
-  store.projects = answer.projects.map((p) => ({ name: p.name }));
-  return shown(put(runtime.settings, store));
+  const store = { name, store: name, kind: "postgresql", connection: target.connection, schema: target.schema, synchronousCommit: target.synchronousCommit, created: known?.created ?? Date.now() };
+  if (runtime.platform.hostDocker === false) await runtime.platform.init(runtime.settings, store);
+  let answer;
+  try {
+    answer = await storeCall(runtime, store, "runtime.store.attach_postgresql", { ...storeFields(runtime, store), postgresql: { url: target.url, schema: target.schema, synchronousCommit: target.synchronousCommit } });
+  } catch (error) {
+    if (!known && runtime.platform.hostDocker === false && error?.code !== "Unknown") {
+      await runtime.platform.removeStore(runtime, store).catch(() => {});
+    }
+    throw error;
+  }
+  const { store: _, ...entry } = store;
+  entry.projects = answer.projects.map((p) => ({ name: p.name }));
+  return shown(put(runtime.settings, entry));
 }
 
 /** runtime.remote.list(): the home's remotes, with credential references and no secret. */

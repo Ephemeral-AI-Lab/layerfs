@@ -20,6 +20,7 @@ if (process.env.FAKE_WORKER_GUEST) {
   const fs = require("node:fs");
   const origMkdirSync = fs.mkdirSync;
   fs.mkdirSync = (path, options) => origMkdirSync(path === "/layerfs/home" ? process.env.FAKE_WORKER_GUEST : path, options);
+  if (process.env.FAKE_STORE_PROJECTS) require(process.env.LAYERFS_NATIVE).storeProjects = JSON.parse(process.env.FAKE_STORE_PROJECTS);
   return;
 }
 const { appendFileSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } = require("node:fs");

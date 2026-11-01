@@ -199,7 +199,7 @@ try {
       const pgEnv = deploymentEnv(runtime.settings, runtime.platform, { name: "shop", store: "main", kind: "postgresql", url: pgUrl });
       assert.deepEqual(
         [pgEnv.SANDBOX, pgEnv.SANDBOX_BACKEND, pgEnv.DAEMON, pgEnv.LOCAL_DIR, pgEnv.IMAGE, pgEnv.IMAGE_ARCHIVE, pgEnv.STORE_PATH, pgEnv.STORE, pgEnv.STORE_POSTGRESQL, pgEnv.WORKER_ENDPOINT, "DOCKER" in pgEnv, "VOLUME" in pgEnv],
-        ["native", "namespaces", GUEST.daemon, `${GUEST.store}/local`, `sha256:${image}`, `${GUEST.bundle}/images/${image}.tar`, "postgresql:main", "main", JSON.stringify({ url: pgUrl }), endpointFile(home, "shop"), false, false],
+        ["native", "namespaces", GUEST.daemon, `${GUEST.store}/local`, `sha256:${image}`, `${GUEST.bundle}/images/${image}.tar`, "postgresql:main", "main", JSON.stringify({ url: pgUrl }), endpointFile(home, "main"), false, false],
       );
       assert.equal("STORE_POSTGRESQL" in deploymentEnv(runtime.settings, runtime.platform, { name: "shop", store: "main", kind: "postgresql" }), false, "no URL without project.url");
       assert.throws(() => deploymentEnv(runtime.settings, runtime.platform, { name: "shop", store: "main", kind: "postgresql", url: "postgresql://lfs:secret@127.0.0.1:5432/layerfs" }), { code: "InvalidInput", message: /loopback/ });
@@ -390,13 +390,13 @@ try {
       assert.deepEqual([entry.state, entry.store, entry.home, entry.worker.state], ["running", storeName("shop"), home, "running"]);
       // copying the bundle into an Apple Container VM is `container copy HOST NAME:DEST`
       assert.ok(first.some((argv) => argv[0] === "copy" && argv[2] === `${vmName("shop")}:/layerfs/bundle`));
-      // a PostgreSQL project on Apple Container makes and mounts no Store volume
+      // a PostgreSQL Store on Apple Container makes and mounts no Store volume
       await runtime.worker.start({ name: "pgshop", store: "main", kind: "postgresql" });
-      assert.equal(existsSync(join(state, "volumes", `${storeName("pgshop")}.json`)), false, "no Store volume is created for a PostgreSQL project");
-      const pgEntry = await runtime.vm.status("pgshop");
-      assert.deepEqual([pgEntry.state, pgEntry.store], ["running", null]);
+      assert.equal(existsSync(join(state, "volumes", `${storeName("main")}.json`)), false, "no Store volume is created for a PostgreSQL Store");
+      const pgEntry = await runtime.vm.status({ name: "pgshop", store: "main", kind: "postgresql" });
+      assert.deepEqual([pgEntry.name, pgEntry.state, pgEntry.store], [vmName("main"), "running", null]);
       await runtime.platform.removeStore(runtime, { name: "pgshop", store: "main", kind: "postgresql" });
-      assert.equal(calls(state).some((argv) => argv[0] === "volume" && argv[1] === "delete" && argv[2] === storeName("pgshop")), false);
+      assert.equal(calls(state).some((argv) => argv[0] === "volume" && argv[1] === "delete" && argv[2] === storeName("main")), false);
       // a shared SQLite Store on Apple Container: one VM and volume for the Store and all its projects
       const src = join(work, "src");
       mkdirSync(src, { recursive: true });
@@ -524,14 +524,21 @@ try {
     const state = join(work, "msb");
     mkdirSync(state);
     const restore = standIn("msb", MSB, state);
-    const native = (await import(FAKE)).default;
-    native.storeProjects = [{ name: "shop", stack: "01", headLayer: "02" }, { name: "api", stack: "03", headLayer: "04" }];
+    const logFile = join(work, "pg-worker-calls.jsonl");
+    process.env.CLI_FAKE_LOG = logFile;
+    process.env.FAKE_STORE_PROJECTS = JSON.stringify([{ name: "shop", stack: "01", headLayer: "02" }, { name: "api", stack: "03", headLayer: "04" }]);
+    const workerCalls = () => (existsSync(logFile) ? readFileSync(logFile, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
     const secretWord = "PG-VM-SECRET-99";
     const url = `postgresql://lfs:${secretWord}@10.0.2.2:5432/layerfs`;
     const runtime = await LayerFSRuntime.open({ home, bundle, placement: "vm:microsandbox", containerPrefix: prefix, platform: "linux", sweep: false });
     try {
-      // 1. Loopback and host-socket PostgreSQL URLs are refused on a vm: home, without leaking the password
+      // 1. Empty-host, loopback, unspecified and host-socket PostgreSQL URLs are refused on a vm: home, without leaking the password
       for (const bad of [
+        `postgresql:///layerfs?password=${secretWord}`,
+        `postgresql://lfs:${secretWord}@/layerfs`,
+        `dbname=layerfs password=${secretWord}`,
+        `postgresql://lfs:${secretWord}@0.0.0.0:5432/layerfs`,
+        `postgresql://lfs:${secretWord}@[::]:5432/layerfs`,
         `postgresql://lfs:${secretWord}@localhost:5432/layerfs`,
         `postgresql://lfs:${secretWord}@127.0.0.1:5432/layerfs`,
         `postgresql://lfs:${secretWord}@[::1]:5432/layerfs`,
@@ -552,14 +559,24 @@ try {
         );
       }
 
-      // 2. Attach PostgreSQL Store with a VM-reachable address; start_init into it is refused Unsupported
+      // 2. Attach PostgreSQL Store with a VM-reachable address: starts the Store's VM (`main-vm`) and runs attach_postgresql in its worker;
+      //    a failed fresh attach cleans up the empty VM it started
+      process.env.CLI_FAKE_REFUSE = "runtime.store.attach_postgresql";
+      await assert.rejects(runtime.store.attach_postgresql({ name: "badpg", connection: "pg-vm", url, schema: "lfc_bad" }), { code: "Conflict" });
+      delete process.env.CLI_FAKE_REFUSE;
+      assert.equal(existsSync(join(state, "vms", `${vmName("badpg")}.json`)), false, "failed fresh attach removed its VM");
+      assert.equal(existsSync(endpointFile(home, "badpg")), false);
+
       const attached = await runtime.store.attach_postgresql({ name: "main", connection: "pg-vm", url, schema: "lfc_main" });
       assert.deepEqual([attached.name, attached.kind, attached.projects], ["main", "postgresql", ["shop", "api"]]);
+      assert.equal(existsSync(join(state, "vms", `${vmName("main")}.json`)), true, "one VM named after the PostgreSQL Store");
+      assert.equal(existsSync(endpointFile(home, "main")), true, "and one worker endpoint for the PostgreSQL Store");
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.attach_postgresql" && args.store === "main" && args.home === GUEST.home), "attach_postgresql ran in the Store's VM worker");
       const src = join(work, "src");
       mkdirSync(src);
       await assert.rejects(runtime.project.start_init("web", src, { store: "main" }), { code: "Unsupported", message: /PostgreSQL schema/ });
 
-      // 3. deploymentEnv for a registered PostgreSQL project (with and without explicit kind)
+      // 3. deploymentEnv for a registered PostgreSQL project (with and without explicit kind): WORKER_ENDPOINT is the Store's (`main`)
       const withUrl = deploymentEnv(runtime.settings, runtime.platform, { name: "shop", store: "main", url });
       assert.deepEqual(withUrl, {
         HOME: GUEST.home,
@@ -573,28 +590,47 @@ try {
         STORE: "main",
         STORE_POSTGRESQL: JSON.stringify({ url }),
         CONTAINER_PREFIX: prefix,
-        WORKER_ENDPOINT: endpointFile(home, "shop"),
+        WORKER_ENDPOINT: endpointFile(home, "main"),
       });
       const withoutUrl = deploymentEnv(runtime.settings, runtime.platform, { name: "shop", store: "main" });
       assert.equal("STORE_POSTGRESQL" in withoutUrl, false, "URL is omitted when the call gave none");
       assert.equal(withoutUrl.STORE_PATH, "postgresql:main");
       assert.equal(withoutUrl.STORE, "main");
+      assert.equal(withoutUrl.WORKER_ENDPOINT, endpointFile(home, "main"));
 
       // 4. platform.init and platform.makeStore on a PostgreSQL project:
-      //    starts the VM with NO Store disk, does NOT copy source, and does NOT mkdir /layerfs/store
+      //    reuses the Store's VM (`main-vm`) with NO Store disk, does NOT copy source, and does NOT mkdir /layerfs/store
       const pgProject = { name: "shop", store: "main", kind: "postgresql", source: src };
       await runtime.platform.init(runtime.settings, pgProject);
       await runtime.platform.makeStore(runtime, pgProject);
-      const createCall = calls(state).find((argv) => argv[0] === "create");
-      assert.ok(createCall, "the VM was created");
-      assert.equal(createCall.includes("--mount-named"), false, "no Store disk is mounted for a PostgreSQL project");
+      const createCall = calls(state).find((argv) => argv[0] === "create" && argv.includes(vmName("main")));
+      assert.ok(createCall, "the Store's VM was created");
+      assert.equal(createCall.includes("--mount-named"), false, "no Store disk is mounted for a PostgreSQL Store");
+      assert.equal(existsSync(join(state, "vms", `${vmName("shop")}.json`)), false, "no per-project VM for shop");
+      assert.equal(existsSync(join(state, "vms", `${vmName("api")}.json`)), false, "no per-project VM for api");
       assert.equal(calls(state).some((argv) => argv[0] === "copy" && argv[2].includes("/layerfs/import")), false, "no source folder copied for PostgreSQL");
       const mkdirStores = calls(state).filter((argv) => argv[0] === "exec" && argv.at(-1) === GUEST.store);
       assert.equal(mkdirStores.length, 0, "makeStore does not mkdir /layerfs/store in the VM");
       const status = await runtime.vm.status("shop");
-      assert.deepEqual([status.state, status.store, status.worker.state, status.disk.free], ["running", null, "running", null]);
+      assert.deepEqual([status.name, status.state, status.store, status.worker.state, status.disk.free], [vmName("main"), "running", null, "running", null]);
+      assert.equal((await runtime.vm.status("api")).name, vmName("main"));
 
-      // 5. get_state and delete through the VM worker, with URL checks and no Store disk deletion
+      // Cross-Store same-name project (solo SQLite project "shop" + PostgreSQL project "main/shop"):
+      // bare "shop" is refused InvalidInput, disambiguated { name, store } works, and no-arg status() / vm.status() work!
+      project("shop");
+      await runtime.worker.start({ name: "shop", store: "shop" });
+      assert.equal(existsSync(join(state, "vms", `${vmName("shop")}.json`)), true, "solo SQLite project shop has its own VM");
+      await assert.rejects(runtime.vm.status("shop"), { code: "InvalidInput", message: /project shop is in Stores main, shop/ });
+      assert.equal((await runtime.vm.status({ name: "shop", store: "main" })).name, vmName("main"));
+      assert.equal((await runtime.vm.status({ name: "shop", store: "shop" })).name, vmName("shop"));
+      const allVmStatus = await runtime.vm.status();
+      assert.deepEqual(allVmStatus.vms.map((v) => [v.project, v.name]), [["api", vmName("main")], ["shop", vmName("main")], ["shop", vmName("shop")]]);
+      const fullStatus = await runtime.status();
+      assert.equal(fullStatus.worker, null);
+      assert.deepEqual(fullStatus.vm.vms.map((v) => [v.project, v.name]), [["api", vmName("main")], ["shop", vmName("main")], ["shop", vmName("shop")]]);
+
+      // 5. get_state and delete through the VM worker (including when the PostgreSQL Store's VM was stopped first!),
+      //    keeping the PostgreSQL Store's VM for "api" and leaving solo SQLite project "shop"'s VM untouched
       await assert.rejects(runtime.project.get_state("shop", undefined, { store: "main" }), { code: "InvalidInput", message: /url/ });
       await assert.rejects(runtime.project.get_state("shop", undefined, { store: "main", url: `postgresql://lfs:${secretWord}@localhost:5432/layerfs` }), { code: "InvalidInput", message: /loopback/ });
       const projectState = await runtime.project.get_state("shop", undefined, { store: "main", url });
@@ -602,20 +638,34 @@ try {
 
       await assert.rejects(runtime.project.delete("shop", { store: "main", confirm: "shop" }), { code: "InvalidInput", message: /url/ });
       await assert.rejects(runtime.project.delete("shop", { store: "main", confirm: "shop", url: `postgresql://lfs:${secretWord}@127.0.0.1:5432/layerfs` }), { code: "InvalidInput", message: /loopback/ });
+      await runtime.vm.stop("main");
+      assert.equal(existsSync(endpointFile(home, "main")), false, "stopping main's VM removed its endpoint");
       const deleted = await runtime.project.delete("shop", { store: "main", confirm: "shop", stopSandboxes: true, url });
       assert.deepEqual(deleted, { kind: "Deleted", project: "shop", store: "main", stack: "5e", packsKept: true });
-      assert.equal(existsSync(join(state, "vms", `${vmName("shop")}.json`)), false, "the project's VM was removed");
+      assert.equal(existsSync(join(state, "vms", `${vmName("main")}.json`)), true, "deleting one project keeps the PostgreSQL Store's VM");
+      assert.equal(existsSync(join(state, "vms", `${vmName("shop")}.json`)), true, "and does not touch the solo SQLite project shop's VM");
       assert.equal(calls(state).some((argv) => argv[0] === "volume"), false, "no Store disk removal was attempted");
+      forget("shop");
+      await runtime.vm.delete("shop", { confirm: "delete", discardStore: true });
 
-      // 6. vm.delete on the remaining PostgreSQL project: no V8 refusal (Store is in PostgreSQL, not on disk) and no volume removal
-      await runtime.worker.start("api");
+      // 6. vm.delete and store.remove on the PostgreSQL Store: no V8 refusal (Store is in PostgreSQL, not on disk),
+      //    no volume removal, and store.remove cleans up the VM, endpoint and .stores/<name>
       assert.deepEqual(await runtime.vm.delete("api", { confirm: "delete", discardStore: true }), {
         project: "api",
-        name: vmName("api"),
+        name: vmName("main"),
         state: "deleted",
         store: "kept",
       });
-      assert.equal(calls(state).some((argv) => argv[0] === "volume"), false, "discardStore does not delete a non-existent disk");
+      assert.equal(calls(state).some((argv) => argv[0] === "volume" && argv[2] === storeName("main")), false, "discardStore does not delete a non-existent disk");
+
+      await runtime.worker.start("api");
+      mkdirSync(join(home, ".stores", "main"), { recursive: true });
+      writeFileSync(join(home, ".stores", "main", "store.record"), "pg");
+      assert.deepEqual(await runtime.store.remove("main", { confirm: "main" }), { kind: "Removed", store: "main" });
+      assert.equal(existsSync(join(state, "vms", `${vmName("main")}.json`)), false, "store.remove deleted the PostgreSQL Store's VM");
+      assert.equal(existsSync(endpointFile(home, "main")), false);
+      assert.equal(existsSync(join(home, ".stores", "main")), false, "store.remove cleaned up .stores/main on the host");
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.forget" && args.store === "main" && args.home === GUEST.home));
 
       // 7. No URL or secret ever written to stores.json, worker.env, worker.log, calls.jsonl or any file under home or state
       const scanFiles = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? scanFiles(join(dir, e.name)) : [join(dir, e.name)]));
@@ -625,7 +675,8 @@ try {
         assert.equal(text.includes("10.0.2.2:5432"), false, `PostgreSQL URL leaked into ${file}`);
       }
     } finally {
-      delete native.storeProjects;
+      delete process.env.CLI_FAKE_LOG;
+      delete process.env.FAKE_STORE_PROJECTS;
       restore();
       await runtime.close();
       restoreWorker(work);
@@ -716,11 +767,64 @@ try {
       assert.equal(existsSync(join(msbState, "vms", `${vmName("badload")}.json`)), false);
       assert.ok(calls(msbState).some((argv) => argv[0] === "volume" && argv[1] === "remove" && argv[2] === storeName("badload")));
 
-      // adding "web" to "work" when "copy" also has "web": ambiguous without { store }, disambiguated with { store }
+      // adding "web" to "work" when "copy" also has "web": ambiguous without { store }, disambiguated with { store },
+      // and no-arg runtime.status() / runtime.vm.status() keep each project's Store and never throw InvalidInput
       assert.equal((await ended(runtime, await runtime.project.start_init("web", src, { store: "work" }))).step, "done");
       await assert.rejects(runtime.project.get_state("web"), { code: "InvalidInput", message: /Stores copy, work/ });
+      await assert.rejects(runtime.vm.status("web"), { code: "InvalidInput", message: /Stores copy, work/ });
       assert.equal((await runtime.project.get_state("web", undefined, { store: "work" })).kind, "ok");
       assert.equal((await runtime.project.get_state("web", undefined, { store: "copy" })).kind, "ok");
+      const statusWithDup = await runtime.status();
+      assert.equal(statusWithDup.worker, null);
+      assert.ok(statusWithDup.vm, "runtime.status().vm is populated when Stores share a project name");
+      assert.deepEqual(
+        statusWithDup.vm.vms.filter((v) => v.project === "web").map((v) => v.name),
+        [vmName("copy"), vmName("work")],
+      );
+      const vmStatusWithDup = await runtime.vm.status();
+      assert.deepEqual(
+        vmStatusWithDup.vms.filter((v) => v.project === "web").map((v) => v.name),
+        [vmName("copy"), vmName("work")],
+      );
+
+      // solo project "shop" alongside shared Store "work/shop": bare vmKeyOf("shop") refuses InvalidInput
+      project("shop");
+      await assert.rejects(runtime.vm.status("shop"), { code: "InvalidInput", message: /project shop is in Stores shop, work/ });
+      assert.equal((await runtime.vm.status({ name: "shop", store: "work" })).name, vmName("work"));
+      assert.equal((await runtime.vm.status({ name: "shop", store: "shop" })).name, vmName("shop"));
+      forget("shop");
+
+      // store.check, start_push, start_pull, start_send, store.unlink, start_publish and start_import_postgresql
+      // all start a stopped Store VM worker and route their backend calls (including list_projects) through it
+      await runtime.vm.stop("copy");
+      assert.equal((await runtime.store.check("copy")).present, true);
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.check" && args.store === "copy" && args.home === GUEST.home));
+      await runtime.vm.stop("copy");
+      assert.equal((await ended(runtime, await runtime.store.start_push("copy", {}))).step, "done");
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.push" && args.store === "copy" && args.home === GUEST.home));
+      await runtime.vm.stop("copy");
+      assert.equal((await ended(runtime, await runtime.store.start_pull("copy", { confirm: "copy" }))).step, "done");
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.pull" && args.store === "copy" && args.home === GUEST.home));
+      await runtime.vm.stop("copy");
+      assert.equal((await ended(runtime, await runtime.store.start_send("copy", { remote: "minio-a", file: "copy-sent" }))).step, "done");
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.send" && args.store === "copy" && args.home === GUEST.home));
+      await runtime.vm.stop("copy");
+      assert.equal((await runtime.store.unlink("copy", { confirm: "copy" })).kind, "Unlinked");
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.unlink" && args.store === "copy" && args.home === GUEST.home));
+      await runtime.vm.stop("copy");
+      assert.equal((await ended(runtime, await runtime.store.start_publish("copy", { remote: "minio-a", file: "copy-pub" }))).step, "done");
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.publish" && args.store === "copy" && args.home === GUEST.home));
+      await runtime.vm.stop("copy");
+      process.env.FAKE_STORE_PROJECTS = JSON.stringify([{ name: "docs", stack: "01", headLayer: "02" }, { name: "web", stack: "03", headLayer: "04" }]);
+      const pgImport = await ended(runtime, await runtime.store.start_import_postgresql("copy", {
+        name: "copy-pg", connection: "pg-vm", url: "postgresql://lfs:pw@10.0.2.2:5432/layerfs", schema: "lfc_copy",
+      }));
+      delete process.env.FAKE_STORE_PROJECTS;
+      assert.equal(pgImport.step, "done", JSON.stringify(pgImport.error));
+      assert.deepEqual(pgImport.result.created.projects, ["docs", "web"], "list_projects ran in the source Store's VM worker");
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.import_postgresql" && args.store === "copy" && args.target === "copy-pg" && args.home === GUEST.home));
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.list_projects" && args.store === "copy-pg" && args.home === GUEST.home));
+      await runtime.store.remove("copy-pg", { confirm: "copy-pg" });
 
       // project.delete on one project of a shared Store: Busy without stopSandboxes; keeps the Store's VM and disk!
       await assert.rejects(runtime.project.delete("api", { store: "work", confirm: "api" }), { code: "Busy", message: /1 running Sandbox\(es\) of api use Store work/ });
@@ -743,12 +847,20 @@ try {
       await assert.rejects(runtime.vm.delete("work", { confirm: "delete" }), { code: "Unsupported", message: /never destroys a Store/ });
       await assert.rejects(runtime.vm.delete("shop", { confirm: "delete" }), { code: "Unsupported", message: /never destroys a Store/ });
       // "work" has 2 projects ("shop" and "web"), each with 1 running Sandbox in fake-native -> 2 holders
+      mkdirSync(join(home, ".stores", "work"), { recursive: true });
+      writeFileSync(join(home, ".stores", "work", "store.record"), "sqlite");
+      mkdirSync(join(home, "remote-state", "work"), { recursive: true });
+      writeFileSync(join(home, "remote-state", "work", "link.json"), "{}");
       await assert.rejects(runtime.store.remove("work", { confirm: "work" }), { code: "Busy", message: /2 running container\(s\) use/ });
+      assert.equal(existsSync(join(home, ".stores", "work", "store.record")), true, "refused remove keeps .stores/work");
       const removedWork = await runtime.store.remove("work", { confirm: "work", stopSandboxes: true });
       assert.deepEqual(removedWork, { kind: "Removed", store: "work", volume: `${prefix}store-work` });
       assert.equal(existsSync(join(msbState, "vms", `${vmName("work")}.json`)), false, "store.remove deleted the Store's VM");
       assert.ok(calls(msbState).some((argv) => argv[0] === "volume" && argv[1] === "remove" && argv[2] === storeName("work")), "and its Store disk");
       assert.equal(existsSync(endpointFile(home, "work")), false);
+      assert.equal(existsSync(join(home, ".stores", "work")), false, "store.remove cleaned up .stores/work on the host");
+      assert.equal(existsSync(join(home, "remote-state", "work")), false, "store.remove cleaned up remote-state/work on the host");
+      assert.ok(workerCalls().some(([op, args]) => op === "runtime.store.forget" && args.store === "work" && args.home === GUEST.home));
 
       // an empty Store has 0 holders and is removed without stopSandboxes
       await runtime.store.create("scratch");

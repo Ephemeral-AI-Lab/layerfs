@@ -60,27 +60,27 @@ function checked(project) {
   return name;
 }
 
-/** The PostgreSQL Store `project` (a project object or name) belongs to, or null. */
+/** The PostgreSQL Store `project` (a project or Store object or name) belongs to, or null. */
 function postgresqlStore(settings, project) {
+  const storeKey = vmKeyOf(settings, project);
   if (typeof project === "object" && project?.kind === "postgresql") {
-    return { name: project.store ?? project.name, kind: "postgresql" };
+    return { name: storeKey, kind: "postgresql" };
   }
-  const name = typeof project === "object" && project !== null ? project.name : project;
-  const store = typeof project === "object" && project !== null ? project.store : undefined;
-  return entries(settings).find((s) => s.kind === "postgresql" && (store ? s.name === store : s.name === name || (s.projects ?? []).some((p) => p.name === name))) ?? null;
+  return entries(settings).find((s) => s.kind === "postgresql" && s.name === storeKey) ?? null;
 }
 
-/** The VM key of `project` (a project or Store object or name): its SQLite Store's name (#506), or the project's name. */
+/** The VM key of `project` (a project or Store object or name): its Store's name (#506), or the project's name. */
 function vmKeyOf(settings, project) {
   const name = checked(project);
-  if (postgresqlStore(settings, project)) return name;
   const givenStore = typeof project === "object" && project !== null ? project.store : process.env.LAYERFS_STORE || undefined;
   if (typeof givenStore === "string" && NAME.test(givenStore)) return givenStore;
-  const sqlites = entries(settings).filter((s) => s.kind === "sqlite");
-  if (sqlites.some((s) => s.name === name) || projectRecord(settings, name) || existsSync(join(settings.home, name, "project.record"))) return name;
-  const holders = sqlites.filter((s) => (s.projects ?? []).some((p) => p.name === name));
-  if (holders.length > 1) throw refuse("InvalidInput", `project ${name} is in Stores ${holders.map((s) => s.name).join(", ")}: name its { store }`, null);
-  return holders[0]?.name ?? name;
+  const own = Boolean(projectRecord(settings, name)) || existsSync(join(settings.home, name, "project.record"));
+  const holders = [...new Set([
+    ...(own ? [name] : []),
+    ...entries(settings).filter((s) => (s.projects ?? []).some((p) => p.name === name)).map((s) => s.name),
+  ])].sort();
+  if (holders.length > 1) throw refuse("InvalidInput", `project ${name} is in Stores ${holders.join(", ")}: name its { store }`, null);
+  return holders[0] ?? name;
 }
 
 /** Inside a VM, loopback is the VM's own, not the host's: a PostgreSQL URL for a `vm:` home must name an address the VM can reach. */
@@ -94,8 +94,8 @@ export function checkVmUrl(url) {
     host = /\bhost(?:addr)?\s*=\s*([^\s]+)/i.exec(url)?.[1] ?? "";
   }
   const bare = host.replace(/^\[|\]$/g, "").toLowerCase();
-  if (bare === "localhost" || bare === "127.0.0.1" || bare === "::1" || bare.startsWith("127.") || bare.startsWith("/")) {
-    throw refuse("InvalidInput", `PostgreSQL URL host ${host} is loopback or a host socket, which inside a VM reaches the VM itself, not the host; use an address the VM can reach`, null);
+  if (!bare || bare === "localhost" || bare === "127.0.0.1" || bare === "::1" || bare === "0.0.0.0" || bare === "::" || bare.startsWith("127.") || bare.startsWith("/")) {
+    throw refuse("InvalidInput", `PostgreSQL URL host ${host || "(empty)"} is loopback or a host socket, which inside a VM reaches the VM itself, not the host; use an address the VM can reach`, null);
   }
   return url;
 }
@@ -431,9 +431,13 @@ const stores = {
     const pg = postgresqlStore(settings, project);
     await runtime.clients.forgetStore(storeKey);
     const found = await provider.inspect(name);
+    const info = found?.state === "running" ? endpoint(settings, storeKey) : null;
+    if (info) await connection(info).call({ fn: "backendCall", op: "runtime.store.forget", args: { home: GUEST.home, store: storeKey }, open: false }).catch(() => {});
     if (found) await provider.remove(name);
     if (!pg && (!found || found.store)) await provider.removeStore(storeNameOf(settings, storeKey));
     rmSync(endpointFile(settings.home, storeKey), { force: true });
+    rmSync(join(settings.home, ".stores", storeKey), { recursive: true, force: true });
+    rmSync(join(settings.home, "remote-state", storeKey), { recursive: true, force: true });
   },
 };
 
@@ -455,7 +459,7 @@ export function deploymentEnv(settings, project) {
       STORE: pg.name,
       ...(project?.url ? { STORE_POSTGRESQL: JSON.stringify({ url: project.url }) } : {}),
       CONTAINER_PREFIX: settings.containerPrefix,
-      WORKER_ENDPOINT: endpointFile(settings.home, name),
+      WORKER_ENDPOINT: endpointFile(settings.home, pg.name),
     };
   }
   const storeKey = vmKeyOf(settings, project);

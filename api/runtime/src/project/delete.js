@@ -80,11 +80,10 @@ async function dropStack(runtime, project, options) {
   }
   await runtime.clients.forget(keyOf(project));
   const postgresql = store.kind === "postgresql" ? { postgresql: { url: options.url } } : {};
-  if (platform.hostDocker === false && store.kind === "sqlite") await platform.init(settings, { name: store.name, store: store.name });
+  if (platform.hostDocker === false) await platform.init(settings, { name: store.name, store: store.name, kind: store.kind });
   const answer = await (platform.hostDocker === false
     ? withEnv(deploymentEnv(settings, platform, withUrl), () => invokeBackend("runtime.store.remove_project", { ...storeFields(runtime, store), ...postgresql, project: project.name }, {}))
     : invokeBackend("runtime.store.remove_project", { ...storeFields(runtime, store), ...postgresql, project: project.name }, {}));
-  if (platform.hostDocker === false && store.kind === "postgresql") await platform.removeStore(runtime, withUrl);
   const rest = store.projects.filter((p) => p.name !== project.name);
   if (own) {
     put(settings, { ...store, legacy: false, projects: rest });
