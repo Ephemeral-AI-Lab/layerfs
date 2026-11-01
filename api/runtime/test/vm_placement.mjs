@@ -5,7 +5,7 @@
 // fixture keeps one VM record per project, maps each guest's absolute paths
 // under a temp folder, and starts the adapter's bundle worker so step ④'s
 // readiness is real.
-//   node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|apple-container
+//   node api/runtime/test/vm_placement.mjs settings|flow|two|bundle|delete|hosts|apple-container|ssh|cleanup|postgresql
 import assert from "node:assert/strict";
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -194,6 +194,15 @@ try {
       assert.equal(env.IMAGE_ARCHIVE, `${GUEST.bundle}/images/${image}.tar`, "and the archive in this VM's own copy of the bundle");
       assert.equal(env.LOCAL_DIR, `${GUEST.store}/local`, "Sandbox directories are on the Store disk, never the VM's own root");
       assert.match(readFileSync(join(state, "calls.jsonl"), "utf8"), /\/layerfs\/store\/local/, "the guest's Sandbox directory was made on the Store disk");
+      // a PostgreSQL project on a vm: home gets the VM's native/namespaces deployment plus postgresql:<store> and per-call URL
+      const pgUrl = "postgresql://lfs:secret@10.0.2.2:5432/layerfs";
+      const pgEnv = deploymentEnv(runtime.settings, runtime.platform, { name: "shop", store: "main", kind: "postgresql", url: pgUrl });
+      assert.deepEqual(
+        [pgEnv.SANDBOX, pgEnv.SANDBOX_BACKEND, pgEnv.DAEMON, pgEnv.LOCAL_DIR, pgEnv.IMAGE, pgEnv.IMAGE_ARCHIVE, pgEnv.STORE_PATH, pgEnv.STORE, pgEnv.STORE_POSTGRESQL, pgEnv.WORKER_ENDPOINT, "DOCKER" in pgEnv, "VOLUME" in pgEnv],
+        ["native", "namespaces", GUEST.daemon, `${GUEST.store}/local`, `sha256:${image}`, `${GUEST.bundle}/images/${image}.tar`, "postgresql:main", "main", JSON.stringify({ url: pgUrl }), endpointFile(home, "shop"), false, false],
+      );
+      assert.equal("STORE_POSTGRESQL" in deploymentEnv(runtime.settings, runtime.platform, { name: "shop", store: "main", kind: "postgresql" }), false, "no URL without project.url");
+      assert.throws(() => deploymentEnv(runtime.settings, runtime.platform, { name: "shop", store: "main", kind: "postgresql", url: "postgresql://lfs:secret@127.0.0.1:5432/layerfs" }), { code: "InvalidInput", message: /loopback/ });
 
       // the same project again: the VM and its bundle are reused, and only the VM is read
       const counted = () => calls(state).filter((argv) => argv[0] === "create" || argv[0] === "copy" || argv[0] === "exec").length;
@@ -381,6 +390,13 @@ try {
       assert.deepEqual([entry.state, entry.store, entry.home, entry.worker.state], ["running", storeName("shop"), home, "running"]);
       // copying the bundle into an Apple Container VM is `container copy HOST NAME:DEST`
       assert.ok(first.some((argv) => argv[0] === "copy" && argv[2] === `${vmName("shop")}:/layerfs/bundle`));
+      // a PostgreSQL project on Apple Container makes and mounts no Store volume
+      await runtime.worker.start({ name: "pgshop", store: "main", kind: "postgresql" });
+      assert.equal(existsSync(join(state, "volumes", `${storeName("pgshop")}.json`)), false, "no Store volume is created for a PostgreSQL project");
+      const pgEntry = await runtime.vm.status("pgshop");
+      assert.deepEqual([pgEntry.state, pgEntry.store], ["running", null]);
+      await runtime.platform.removeStore(runtime, { name: "pgshop", store: "main", kind: "postgresql" });
+      assert.equal(calls(state).some((argv) => argv[0] === "volume" && argv[1] === "delete" && argv[2] === storeName("pgshop")), false);
     } finally {
       restore();
       await runtime.close();
@@ -465,8 +481,120 @@ try {
       restoreMsb();
       rmSync(hidden, { recursive: true, force: true });
     }
+  } else if (selected === "postgresql") {
+    const image = "b".repeat(64);
+    makeBundle("build-pg", image);
+    const state = join(work, "msb");
+    mkdirSync(state);
+    const restore = standIn("msb", MSB, state);
+    const native = (await import(FAKE)).default;
+    native.storeProjects = [{ name: "shop", stack: "01", headLayer: "02" }, { name: "api", stack: "03", headLayer: "04" }];
+    const secretWord = "PG-VM-SECRET-99";
+    const url = `postgresql://lfs:${secretWord}@10.0.2.2:5432/layerfs`;
+    const runtime = await LayerFSRuntime.open({ home, bundle, placement: "vm:microsandbox", containerPrefix: prefix, platform: "linux", sweep: false });
+    try {
+      // 1. Loopback and host-socket PostgreSQL URLs are refused on a vm: home, without leaking the password
+      for (const bad of [
+        `postgresql://lfs:${secretWord}@localhost:5432/layerfs`,
+        `postgresql://lfs:${secretWord}@127.0.0.1:5432/layerfs`,
+        `postgresql://lfs:${secretWord}@[::1]:5432/layerfs`,
+        `postgresql:///layerfs?host=127.0.0.1&password=${secretWord}`,
+        `host=/var/run/postgresql dbname=layerfs password=${secretWord}`,
+      ]) {
+        assert.throws(
+          () => deploymentEnv(runtime.settings, runtime.platform, { name: "shop", store: "main", kind: "postgresql", url: bad }),
+          (err) => err.code === "InvalidInput" && /loopback|host socket/.test(err.message) && !err.message.includes(secretWord),
+        );
+        await assert.rejects(
+          runtime.store.attach_postgresql({ name: "main", connection: "pg-vm", url: bad, schema: "lfc_main" }),
+          (err) => err.code === "InvalidInput" && !err.message.includes(secretWord),
+        );
+        await assert.rejects(
+          runtime.postgresql.status({ url: bad, schemas: ["lfc_main"] }),
+          (err) => err.code === "InvalidInput" && !err.message.includes(secretWord),
+        );
+      }
+
+      // 2. Attach PostgreSQL Store with a VM-reachable address; start_init into it is refused Unsupported
+      const attached = await runtime.store.attach_postgresql({ name: "main", connection: "pg-vm", url, schema: "lfc_main" });
+      assert.deepEqual([attached.name, attached.kind, attached.projects], ["main", "postgresql", ["shop", "api"]]);
+      const src = join(work, "src");
+      mkdirSync(src);
+      await assert.rejects(runtime.project.start_init("web", src, { store: "main" }), { code: "Unsupported", message: /PostgreSQL schema/ });
+
+      // 3. deploymentEnv for a registered PostgreSQL project (with and without explicit kind)
+      const withUrl = deploymentEnv(runtime.settings, runtime.platform, { name: "shop", store: "main", url });
+      assert.deepEqual(withUrl, {
+        HOME: GUEST.home,
+        SANDBOX: "native",
+        SANDBOX_BACKEND: "namespaces",
+        DAEMON: GUEST.daemon,
+        LOCAL_DIR: GUEST.local,
+        IMAGE: `sha256:${image}`,
+        IMAGE_ARCHIVE: `${GUEST.bundle}/images/${image}.tar`,
+        STORE_PATH: "postgresql:main",
+        STORE: "main",
+        STORE_POSTGRESQL: JSON.stringify({ url }),
+        CONTAINER_PREFIX: prefix,
+        WORKER_ENDPOINT: endpointFile(home, "shop"),
+      });
+      const withoutUrl = deploymentEnv(runtime.settings, runtime.platform, { name: "shop", store: "main" });
+      assert.equal("STORE_POSTGRESQL" in withoutUrl, false, "URL is omitted when the call gave none");
+      assert.equal(withoutUrl.STORE_PATH, "postgresql:main");
+      assert.equal(withoutUrl.STORE, "main");
+
+      // 4. platform.init and platform.makeStore on a PostgreSQL project:
+      //    starts the VM with NO Store disk, does NOT copy source, and does NOT mkdir /layerfs/store
+      const pgProject = { name: "shop", store: "main", kind: "postgresql", source: src };
+      await runtime.platform.init(runtime.settings, pgProject);
+      await runtime.platform.makeStore(runtime, pgProject);
+      const createCall = calls(state).find((argv) => argv[0] === "create");
+      assert.ok(createCall, "the VM was created");
+      assert.equal(createCall.includes("--mount-named"), false, "no Store disk is mounted for a PostgreSQL project");
+      assert.equal(calls(state).some((argv) => argv[0] === "copy" && argv[2].includes("/layerfs/import")), false, "no source folder copied for PostgreSQL");
+      const mkdirStores = calls(state).filter((argv) => argv[0] === "exec" && argv.at(-1) === GUEST.store);
+      assert.equal(mkdirStores.length, 0, "makeStore does not mkdir /layerfs/store in the VM");
+      const status = await runtime.vm.status("shop");
+      assert.deepEqual([status.state, status.store, status.worker.state, status.disk.free], ["running", null, "running", null]);
+
+      // 5. get_state and delete through the VM worker, with URL checks and no Store disk deletion
+      await assert.rejects(runtime.project.get_state("shop", undefined, { store: "main" }), { code: "InvalidInput", message: /url/ });
+      await assert.rejects(runtime.project.get_state("shop", undefined, { store: "main", url: `postgresql://lfs:${secretWord}@localhost:5432/layerfs` }), { code: "InvalidInput", message: /loopback/ });
+      const projectState = await runtime.project.get_state("shop", undefined, { store: "main", url });
+      assert.equal(projectState.kind, "ok");
+
+      await assert.rejects(runtime.project.delete("shop", { store: "main", confirm: "shop" }), { code: "InvalidInput", message: /url/ });
+      await assert.rejects(runtime.project.delete("shop", { store: "main", confirm: "shop", url: `postgresql://lfs:${secretWord}@127.0.0.1:5432/layerfs` }), { code: "InvalidInput", message: /loopback/ });
+      const deleted = await runtime.project.delete("shop", { store: "main", confirm: "shop", stopSandboxes: true, url });
+      assert.deepEqual(deleted, { kind: "Deleted", project: "shop", store: "main", stack: "5e", packsKept: true });
+      assert.equal(existsSync(join(state, "vms", `${vmName("shop")}.json`)), false, "the project's VM was removed");
+      assert.equal(calls(state).some((argv) => argv[0] === "volume"), false, "no Store disk removal was attempted");
+
+      // 6. vm.delete on the remaining PostgreSQL project: no V8 refusal (Store is in PostgreSQL, not on disk) and no volume removal
+      await runtime.worker.start("api");
+      assert.deepEqual(await runtime.vm.delete("api", { confirm: "delete", discardStore: true }), {
+        project: "api",
+        name: vmName("api"),
+        state: "deleted",
+        store: "kept",
+      });
+      assert.equal(calls(state).some((argv) => argv[0] === "volume"), false, "discardStore does not delete a non-existent disk");
+
+      // 7. No URL or secret ever written to stores.json, worker.env, worker.log, calls.jsonl or any file under home or state
+      const scanFiles = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? scanFiles(join(dir, e.name)) : [join(dir, e.name)]));
+      for (const file of [...scanFiles(home), ...scanFiles(state)]) {
+        const text = readFileSync(file, "utf8");
+        assert.equal(text.includes(secretWord), false, `secret leaked into ${file}`);
+        assert.equal(text.includes("10.0.2.2:5432"), false, `PostgreSQL URL leaked into ${file}`);
+      }
+    } finally {
+      delete native.storeProjects;
+      restore();
+      await runtime.close();
+      restoreWorker(work);
+    }
   } else {
-    throw new Error("select settings, flow, two, bundle, delete, hosts, apple-container, ssh or cleanup");
+    throw new Error("select settings, flow, two, bundle, delete, hosts, apple-container, ssh, cleanup or postgresql");
   }
 } finally {
   rmSync(work, { recursive: true, force: true });

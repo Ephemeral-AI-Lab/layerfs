@@ -23,7 +23,7 @@ import { resolveSettings } from "./settings.js";
 import { status } from "./status.js";
 import linux from "./platform/linux/index.js";
 import macos from "./platform/macos/index.js";
-import { vmPlatform } from "./platform/vm/index.js";
+import { checkVmUrl, vmPlatform } from "./platform/vm/index.js";
 import windows from "./platform/windows/index.js";
 import { find, list } from "./project/list.js";
 import * as stores from "./store/calls.js";
@@ -80,6 +80,7 @@ export class LayerFSRuntime {
       const found = await find(this, name, store);
       if (found.kind === "postgresql") {
         if (typeof url !== "string" || !url) throw new LayerFSError("InvalidInput", `${name} is in the PostgreSQL Store ${found.store}: pass its connection's { url } with the call (never stored)`, null);
+        if (this.settings.placement.kind === "vm") checkVmUrl(url);
         return { ...found, url };
       }
       if (!found.volume) throw new LayerFSError("InvalidInput", `the runtime has no record of ${name}'s volume (made outside this runtime)`, null);

@@ -14,9 +14,9 @@
 //! daemon stopped and its directory deleted, each once.
 use crate::job::{failed, refused};
 use crate::registry::{lock, text, SandboxState, SANDBOXES};
+use crate::sandbox::DaemonStore;
 use layerfs_api::{sandbox::ProviderCreate, SandboxApi};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::provision::StoreManifest;
 use layerfs_sandbox::provider::{LaunchRequest, ProviderLaunchOptions};
 use layerfs_sandbox::{CommandIdentity, Runtime, Sandbox};
 use std::path::{Component, Path, PathBuf};
@@ -24,12 +24,12 @@ use std::sync::Arc;
 
 /// Starts the project's next Sandbox as a native daemon. Linux requires
 /// root before any effect. Called by
-/// [`crate::sandbox::start`] under the project's guard, with the project
-/// and its installed manifest already read.
+/// [`crate::sandbox::start`] under the project's guard, with the Store
+/// selection already read.
 pub(crate) fn start(
     args: &SdkValue,
     directory: &Path,
-    project: (&crate::registry::Project, StoreManifest),
+    opened: DaemonStore,
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let deploy = args
         .get("deploy")
@@ -51,9 +51,10 @@ pub(crate) fn start(
     let runtime = native_runtime(root, backend)
         .map_err(|error| refused("InvalidInput", format!("LAYERFS_LOCAL_DIR {root}: {error}")))?;
     let executable = PathBuf::from(text(deploy, "daemon")?);
-    let store = match args.get_text("storePath") {
-        Some(path) if Path::new(path).is_absolute() => path.to_owned(),
-        _ => {
+    let store = match (&opened, args.get_text("storePath")) {
+        (DaemonStore::Postgres(_), _) => crate::project::LOCATOR.to_owned(),
+        (DaemonStore::File(_), Some(path)) if Path::new(path).is_absolute() => path.to_owned(),
+        (DaemonStore::File(_), _) => {
             return Err(refused(
                 "InvalidInput",
                 "a local Sandbox's daemon opens the client's storePath (LAYERFS_STORE_PATH), an absolute path",
@@ -70,7 +71,7 @@ pub(crate) fn start(
         directory,
         &saved_directory,
         &id,
-        project,
+        opened,
         (runtime, backend, executable, store),
     );
     if made.is_err() {
@@ -79,14 +80,14 @@ pub(crate) fn start(
     made
 }
 
-/// Starts the claimed Sandbox `id`: directory and daemon on the installed
+/// Starts the claimed Sandbox `id`: directory and daemon on the selected
 /// Store, its first control connection, then its records.
 fn start_claimed(
     args: &SdkValue,
     directory: &Path,
     saved_directory: &Path,
     id: &str,
-    (project, installed): (&crate::registry::Project, StoreManifest),
+    opened: DaemonStore,
     (runtime, backend, executable, store): (Runtime, crate::runtime::Backend, PathBuf, String),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
@@ -109,11 +110,21 @@ fn start_claimed(
     setup.store = store.clone();
     setup.overlay = path_text(&paths.overlay)?;
     setup.mounts = path_text(&paths.mounts)?;
-    let mut existing = project.manifest.clone();
-    existing.daemon_sqlite = installed.daemon_sqlite;
-    // the Store's path in the daemon's filesystem, which is this one
-    existing.locator = store;
-    setup.existing_store = Some(existing);
+    let launch_store = match &opened {
+        DaemonStore::File(file) => {
+            let (project, installed) = &**file;
+            let mut existing = project.manifest.clone();
+            existing.daemon_sqlite = installed.daemon_sqlite.clone();
+            // the Store's path in the daemon's filesystem, which is this one
+            existing.locator = store.clone();
+            setup.existing_store = Some(existing);
+            store.as_str()
+        }
+        DaemonStore::Postgres(selected) => {
+            setup.postgresql = Some(selected.clone());
+            "/dev/null"
+        }
+    };
     let identity = CommandIdentity {
         uid: setup.command_uid,
         gid: setup.command_gid,
@@ -127,39 +138,40 @@ fn start_claimed(
     let store = crate::stores::shared_store(args)?;
     let labels = crate::sandbox::labels(name, store.as_deref(), id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
-    let options = launch_options(backend, identity, &setup.store, args)?;
-    let mut manifest = project.manifest.clone();
-    manifest.locator = setup.store.clone();
-    let created = api
-        .create_provider_file(
-            ProviderCreate {
-                launch: LaunchRequest {
-                    name: sandbox_name.clone(),
-                    daemon_executable: executable,
-                    daemon_config: Vec::new(),
-                    labels,
-                    startup_timeout: crate::sandbox::STARTUP,
-                    options,
-                },
-                setup,
-                controller_private: controller.private,
-                daemon_peer: daemon.public,
-            },
-            &project.store,
-            &manifest,
+    let options = launch_options(backend, identity, launch_store, args)?;
+    let request = ProviderCreate {
+        launch: LaunchRequest {
+            name: sandbox_name.clone(),
+            daemon_executable: executable,
+            daemon_config: Vec::new(),
+            labels,
+            startup_timeout: crate::sandbox::STARTUP,
+            options,
+        },
+        setup,
+        controller_private: controller.private,
+        daemon_peer: daemon.public,
+    };
+    let created = match &opened {
+        DaemonStore::File(file) => {
+            let mut manifest = file.0.manifest.clone();
+            manifest.locator = request.setup.store.clone();
+            api.create_provider_file(request, &file.0.store, &manifest)
+        }
+        DaemonStore::Postgres(_) => api.create_provider_postgres(request),
+    }
+    .map_err(|mut failure| {
+        drop(failure.control.take());
+        abandon(
+            directory,
+            id,
+            format!(
+                "native sandbox stopped at {:?}: {:?}",
+                failure.phase, failure.cause
+            ),
+            failure.runtime.take(),
         )
-        .map_err(|mut failure| {
-            drop(failure.control.take());
-            abandon(
-                directory,
-                id,
-                format!(
-                    "native sandbox stopped at {:?}: {:?}",
-                    failure.phase, failure.cause
-                ),
-                failure.runtime.take(),
-            )
-        })?;
+    })?;
     let instance = created.startup.instance;
     let (sandbox, control, identity) = layerfs_api::internal::split_provider(created);
     let endpoint = match sandbox.endpoint() {

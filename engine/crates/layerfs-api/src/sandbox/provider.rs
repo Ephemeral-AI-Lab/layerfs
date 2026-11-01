@@ -113,19 +113,20 @@ impl SandboxApi {
         self.create_provider_file(request, &project.store, &project.manifest)
     }
     /// Creates a new daemon on the PostgreSQL Store its setup selects
-    /// (#506): no Store file, volume or install; it starts ready. Only a
-    /// Docker launch that mounts no Store volume opens one.
+    /// (#506): no Store file, volume or install; it starts ready. A Docker
+    /// launch mounts no Store volume; a namespaces launch binds no Store
+    /// directory (`/dev/null`).
     pub fn create_provider_postgres(
         &self,
         request: ProviderCreate,
     ) -> Result<ProviderSandbox, Box<ProviderFailure>> {
-        let no_volume = matches!(
-            &request.launch.options,
-            ProviderLaunchOptions::Docker {
-                store_volume: None,
-                ..
+        let no_volume = match &request.launch.options {
+            ProviderLaunchOptions::Docker { store_volume, .. } => store_volume.is_none(),
+            ProviderLaunchOptions::Local { .. } => true,
+            ProviderLaunchOptions::Namespaces { store, .. } => {
+                store == std::path::Path::new("/dev/null")
             }
-        );
+        };
         if request.setup.postgresql.is_none() || !no_volume {
             return Err(Box::new(ProviderFailure {
                 request,

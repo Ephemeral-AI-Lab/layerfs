@@ -92,22 +92,23 @@ export async function ensureStore(name, size) {
 }
 
 export async function create(config) {
-  const wasNew = newlyCreatedStores.has(config.storeName);
-  const existedBefore = wasNew ? false : (await capture(CLI, ["volume", "inspect", config.storeName])).code === 0;
+  const hasStore = Boolean(config.storeName);
+  const wasNew = hasStore && newlyCreatedStores.has(config.storeName);
+  const existedBefore = !hasStore || wasNew ? false : (await capture(CLI, ["volume", "inspect", config.storeName])).code === 0;
   try {
     await call([
       "run", "--detach", "--name", config.name, "--cpus", String(config.cpus), "--memory", config.memory,
       ...CAPABILITIES,
-      "--mount", `type=volume,source=${config.storeName},target=/layerfs/store`,
+      ...(hasStore ? ["--mount", `type=volume,source=${config.storeName},target=/layerfs/store`] : []),
       "--mount", `type=bind,source=${config.home},target=/layerfs/home`,
       "--publish", `127.0.0.1:${config.hostPort}:${config.workerPort}`,
       "--label", "layerfs.role=vm", "--label", `layerfs.home=${config.home}`,
       config.image, "sleep", "infinity",
     ], { timeout: CREATE_MS });
-    newlyCreatedStores.delete(config.storeName);
+    if (hasStore) newlyCreatedStores.delete(config.storeName);
     return inspect(config.name);
   } catch (error) {
-    if (wasNew || !existedBefore) {
+    if (hasStore && (wasNew || !existedBefore)) {
       newlyCreatedStores.delete(config.storeName);
       await removeStore(config.storeName).catch(() => {});
     }

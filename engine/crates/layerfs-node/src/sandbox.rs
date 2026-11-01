@@ -140,20 +140,11 @@ pub(crate) fn start(
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
     if crate::runtime::local(deploy)? {
-        let DaemonStore::File(file) = store else {
-            return Err(refused(
-                "Unsupported",
-                "a native Sandbox's daemon opens a Store file; a Sandbox of a PostgreSQL Store runs in Docker",
-            ));
-        };
         #[cfg(any(target_os = "linux", target_os = "macos"))]
-        {
-            let (project, installed) = *file;
-            return crate::local::start(args, directory, (&project, installed));
-        }
+        return crate::local::start(args, directory, store);
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
-            drop(file);
+            drop(store);
             return Err(refused(
                 "Unsupported",
                 "LAYERFS_SANDBOX=native requires Linux (FUSE) or macOS (loopback NFS); use Docker",

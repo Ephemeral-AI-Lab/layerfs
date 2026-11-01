@@ -16,6 +16,12 @@
 //       starts the real worker/server.js of the bundle, with the stand-in
 //       binding, listening on the VM's published port).
 // Every call is appended to FAKE_MSB_STATE/calls.jsonl as { at, argv }.
+if (process.env.FAKE_WORKER_GUEST) {
+  const fs = require("node:fs");
+  const origMkdirSync = fs.mkdirSync;
+  fs.mkdirSync = (path, options) => origMkdirSync(path === "/layerfs/home" ? process.env.FAKE_WORKER_GUEST : path, options);
+  return;
+}
 const { appendFileSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } = require("node:fs");
 const { spawn } = require("node:child_process");
 const { homedir } = require("node:os");
@@ -51,8 +57,8 @@ function launchWorker(vm) {
   const script = guest("/layerfs/bundle/api/runtime/src/worker/server.js");
   if (!existsSync(script)) fail("the bundle holds no worker/server.js");
   mkdirSync(dirname(guest("/layerfs/state/worker.log")), { recursive: true });
-  const child = spawn(process.execPath, [script], {
-    env: { ...process.env, ...env, LAYERFS_HOME: guest(env.LAYERFS_HOME), LAYERFS_BUNDLE: guest(env.LAYERFS_BUNDLE), LAYERFS_WORKER_LISTEN: `127.0.0.1:${vm.port}`, LAYERFS_NATIVE: process.env.FAKE_MSB_NATIVE },
+  const child = spawn(process.execPath, ["-r", __filename, script], {
+    env: { ...process.env, ...env, FAKE_WORKER_GUEST: guest(env.LAYERFS_HOME), LAYERFS_BUNDLE: guest(env.LAYERFS_BUNDLE), LAYERFS_WORKER_LISTEN: `127.0.0.1:${vm.port}`, LAYERFS_NATIVE: process.env.FAKE_MSB_NATIVE },
     detached: true, stdio: ["ignore", "ignore", openSync(guest("/layerfs/state/worker.log"), "a")],
   });
   child.unref();
@@ -75,7 +81,7 @@ if (command === "inspect") {
       labels: vm.labels,
       mounts: [
         { guest: "/layerfs/home", host: vm.home, type: "Bind", options: { readonly: false } },
-        { guest: "/layerfs/store", name: vm.store, type: "Named", options: { readonly: false } },
+        ...(vm.store ? [{ guest: "/layerfs/store", name: vm.store, type: "Named", options: { readonly: false } }] : []),
       ],
       network: { ports: [{ guest_port: 7070, host_port: vm.port, host_bind: "127.0.0.1", protocol: "tcp" }] },
     },
@@ -93,7 +99,7 @@ if (command === "inspect") {
   const published = String(at("-p") ?? "").split(":");
   save(name, {
     name, state: "running", created: new Date().toISOString(), image: argv.at(-1), pid: null,
-    labels, home: String(at("-v") ?? "").split(":")[0], store: String(at("--mount-named") ?? "").split(":")[0],
+    labels, home: String(at("-v") ?? "").split(":")[0], store: at("--mount-named") ? String(at("--mount-named")).split(":")[0] : null,
     port: Number(published[1]),
   });
 } else if (command === "start" || command === "restart") {

@@ -65,7 +65,7 @@ export async function create(config) {
   try {
     await call([
       "create", "--name", config.name, "--cpus", String(config.cpus), "--memory", config.memory,
-      "--mount-named", `${config.storeName}:/layerfs/store:kind=disk,size=${config.storeSize}`,
+      ...(config.storeName ? ["--mount-named", `${config.storeName}:/layerfs/store:kind=disk,size=${config.storeSize}`] : []),
       "-v", `${config.home}:/layerfs/home`,
       "-p", `127.0.0.1:${config.hostPort}:${config.workerPort}`,
       "--label", "layerfs.role=vm", "--label", `layerfs.home=${config.home}`,

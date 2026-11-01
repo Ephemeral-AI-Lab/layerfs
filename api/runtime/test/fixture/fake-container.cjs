@@ -17,6 +17,12 @@
 // Records live in FAKE_CONTAINER_STATE/vms/<name>.json, volumes in
 // FAKE_CONTAINER_STATE/volumes/<name>.json, guest paths under
 // FAKE_CONTAINER_STATE/guest/<name>.
+if (process.env.FAKE_WORKER_GUEST) {
+  const fs = require("node:fs");
+  const origMkdirSync = fs.mkdirSync;
+  fs.mkdirSync = (path, options) => origMkdirSync(path === "/layerfs/home" ? process.env.FAKE_WORKER_GUEST : path, options);
+  return;
+}
 const { appendFileSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } = require("node:fs");
 const { spawn } = require("node:child_process");
 const { dirname, join } = require("node:path");
@@ -49,8 +55,8 @@ function launchWorker(vm) {
   endWorker(vm); // a start ends the worker an earlier start left, as the launch script does
   const guest = guestIn(vm.name);
   const env = Object.fromEntries(readFileSync(guest("/layerfs/state/worker.env"), "utf8").split("\n").filter(Boolean).map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]));
-  const child = spawn(process.execPath, [guest("/layerfs/bundle/api/runtime/src/worker/server.js")], {
-    env: { ...process.env, ...env, LAYERFS_HOME: guest(env.LAYERFS_HOME), LAYERFS_BUNDLE: guest(env.LAYERFS_BUNDLE), LAYERFS_WORKER_LISTEN: `127.0.0.1:${vm.port}`, LAYERFS_NATIVE: process.env.FAKE_CONTAINER_NATIVE },
+  const child = spawn(process.execPath, ["-r", __filename, guest("/layerfs/bundle/api/runtime/src/worker/server.js")], {
+    env: { ...process.env, ...env, FAKE_WORKER_GUEST: guest(env.LAYERFS_HOME), LAYERFS_BUNDLE: guest(env.LAYERFS_BUNDLE), LAYERFS_WORKER_LISTEN: `127.0.0.1:${vm.port}`, LAYERFS_NATIVE: process.env.FAKE_CONTAINER_NATIVE },
     detached: true, stdio: ["ignore", "ignore", openSync(guest("/layerfs/state/worker.log"), "a")],
   });
   child.unref();
@@ -78,7 +84,7 @@ if (command === "inspect") {
       labels: vm.labels,
       mounts: [
         { source: vm.home, destination: "/layerfs/home", type: { virtiofs: {} } },
-        { source: join(state, "volumes", `${vm.store}.img`), destination: "/layerfs/store", type: { volume: { name: vm.store, format: "ext4" } } },
+        ...(vm.store ? [{ source: join(state, "volumes", `${vm.store}.img`), destination: "/layerfs/store", type: { volume: { name: vm.store, format: "ext4" } } }] : []),
       ],
       publishedPorts: [{ hostPort: vm.port, containerPort: 7070, hostAddress: "127.0.0.1", count: 1, proto: "tcp" }],
     },
@@ -87,18 +93,18 @@ if (command === "inspect") {
   const name = at("--name");
   if (read(name)) fail(`container ${name} already exists`);
   const mounts = all("--mount").map((value) => Object.fromEntries(value.split(",").map((pair) => pair.split("="))));
-  const store = mounts.find((entry) => entry.target === "/layerfs/store")?.source ?? "";
+  const store = mounts.find((entry) => entry.target === "/layerfs/store")?.source ?? null;
   const home = mounts.find((entry) => entry.target === "/layerfs/home")?.source ?? "";
   // H39v's finding: `container run` makes a named volume it was given before it
   // fails on a busy port, and the container record never appears
   if (process.env.FAKE_CONTAINER_FAIL_RUN === "port") {
-    if (!existsSync(volumeFile(store))) {
+    if (store && !existsSync(volumeFile(store))) {
       mkdirSync(join(state, "volumes"), { recursive: true });
       writeFileSync(volumeFile(store), JSON.stringify({ name: store, size: "20G", format: "ext4", creationDate: new Date().toISOString(), labels: {} }));
     }
     fail(`failed to publish 127.0.0.1:${String(at("--publish") ?? "").split(":")[1]}:7070: port is already allocated`);
   }
-  if (!existsSync(volumeFile(store))) fail(`volume not found: ${store}`);
+  if (store && !existsSync(volumeFile(store))) fail(`volume not found: ${store}`);
   const labels = Object.fromEntries(all("--label").map((pair) => pair.split("=")));
   save({
     name, state: "running", created: new Date().toISOString(), started: new Date().toISOString(), pid: null,

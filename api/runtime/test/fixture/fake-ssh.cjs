@@ -16,6 +16,12 @@
 //     `FAKE_SSH_STORE_MISSING=/path` makes `test -e` fail for that path, and
 //     `FAKE_SSH_STORE_NON_EXT4=xfs` answers that filesystem instead of ext4;
 //   - every call is appended to FAKE_SSH_STATE/calls.jsonl as { at, argv }.
+if (process.env.FAKE_WORKER_GUEST) {
+  const fs = require("node:fs");
+  const origMkdirSync = fs.mkdirSync;
+  fs.mkdirSync = (path, options) => origMkdirSync(path === "/layerfs/home" ? process.env.FAKE_WORKER_GUEST : path, options);
+  return;
+}
 const { appendFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } = require("node:fs");
 const { spawn } = require("node:child_process");
 const { createServer, connect } = require("node:net");
@@ -63,8 +69,8 @@ async function launchWorker() {
   writeFileSync(workerPortFile, `${port}\n`);
   const logFile = guestIn("/layerfs/state/worker.log");
   mkdirSync(dirname(logFile), { recursive: true });
-  const child = spawn(process.execPath, [script], {
-    env: { ...process.env, ...env, LAYERFS_HOME: guestIn(env.LAYERFS_HOME), LAYERFS_BUNDLE: guestIn(env.LAYERFS_BUNDLE), LAYERFS_WORKER_LISTEN: `127.0.0.1:${port}`, LAYERFS_NATIVE: process.env.FAKE_SSH_NATIVE },
+  const child = spawn(process.execPath, ["-r", __filename, script], {
+    env: { ...process.env, ...env, FAKE_WORKER_GUEST: guestIn(env.LAYERFS_HOME), LAYERFS_BUNDLE: guestIn(env.LAYERFS_BUNDLE), LAYERFS_WORKER_LISTEN: `127.0.0.1:${port}`, LAYERFS_NATIVE: process.env.FAKE_SSH_NATIVE },
     detached: true,
     stdio: ["ignore", "ignore", openSync(logFile, "a")],
   });

@@ -52,8 +52,11 @@ pub(super) fn build(spec: &HelperSpec) -> Result<(), String> {
     // the daemon's setup, overlay, Workspace mounts and `tmp`
     bind(&spec.sandbox, &inside(&spec.root, &spec.sandbox)?, false)?;
     // the shared Store's directory: SQLite's WAL and the writers' directory
-    // lock see the same inode as every other opener on this kernel
-    bind(&spec.store, &inside(&spec.root, &spec.store)?, false)?;
+    // lock see the same inode as every other opener on this kernel (a
+    // PostgreSQL Store has no Store file and binds none)
+    if spec.store != Path::new("/dev/null") {
+        bind(&spec.store, &inside(&spec.root, &spec.store)?, false)?;
+    }
     Ok(())
 }
 

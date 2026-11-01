@@ -141,4 +141,24 @@ fn native_resource_paths_are_validated_before_launch() {
         assert!(failure.runtime.is_none() && failure.control.is_none());
         assert!(!paths.directory.exists());
     }
+    // A PostgreSQL Store's Sandbox binds no Store volume or directory.
+    let mut postgres = request;
+    postgres.setup.postgresql = Some(layerfs_bridge::daemon_setup::DaemonPostgres {
+        url: "postgresql://lfs:secret@10.0.2.2:5432/layerfs".into(),
+        schema: "lfc_main".into(),
+        synchronous_commit: "off".into(),
+        binding: b"sdk-existing-project".to_vec(),
+        cursor_key: [7; 32],
+    });
+    let mut with_store = postgres.clone();
+    with_store.launch.options = ProviderLaunchOptions::Namespaces {
+        command_identity: identity,
+        environment: vec![],
+        store: fixture.project.store.path.clone(),
+        image: layerfs_sandbox::Image::parse(&format!("sha256:{}", "a".repeat(64))).unwrap(),
+        archive: PathBuf::from("/layerfs/bundle/images/a.tar"),
+    };
+    let rejected = api.create_provider_postgres(with_store).err().unwrap();
+    assert_eq!(rejected.phase, SandboxPhase::Validate);
+    assert!(rejected.runtime.is_none());
 }

@@ -16,6 +16,7 @@
 // One attempt each, no retry; a failed step leaves the rest in place.
 import { LayerFSError } from "@layerfs/agent";
 import { invokeBackend } from "@layerfs/agent/internal";
+import { checkVmUrl } from "../platform/vm/index.js";
 import { NAME, dropRecord, keyOf, list, record } from "./list.js";
 import { drop, entries, named, put, storeFields, update } from "../store/registry.js";
 import { removeVolume } from "../store/volume.js";
@@ -59,15 +60,27 @@ async function dropStack(runtime, project, options) {
   const { settings, platform } = runtime;
   const store = await named(runtime, project.store);
   const own = store.legacy && project.name === store.name;
-  const sandboxes = (await containers(runtime)).filter((c) => c.key === keyOf(project));
-  const running = sandboxes.filter((c) => !STOPPED.has(c.state)).length;
-  if (running && !options.stopSandboxes) throw refuse("Busy", `${running} running Sandbox(es) of ${project.name} use Store ${store.name}; a Sandbox closes 2 minutes after its last Workspace is unmounted, or pass stopSandboxes`);
-  if (sandboxes.length) await platform.docker(settings, ["rm", ...(running ? ["-f"] : []), ...sandboxes.map((c) => c.name)], { timeout: 30_000 });
-  await runtime.clients.forget(keyOf(project));
   // a PostgreSQL Store's URL is passed per call
-  if (store.kind === "postgresql" && (typeof options.url !== "string" || !options.url)) throw refuse("InvalidInput", `Store ${store.name} is a PostgreSQL schema: pass its { url } for this call`);
+  if (store.kind === "postgresql") {
+    if (typeof options.url !== "string" || !options.url) throw refuse("InvalidInput", `Store ${store.name} is a PostgreSQL schema: pass its { url } for this call`);
+    if (settings.placement.kind === "vm") checkVmUrl(options.url);
+  }
+  const withUrl = store.kind === "postgresql" ? { ...project, url: options.url } : project;
+  if (platform.hostSandboxes === false) {
+    const holders = await platform.storeHolders(runtime, withUrl);
+    const running = holders.filter((c) => !STOPPED.has(c.state)).length;
+    if (running && !options.stopSandboxes) throw refuse("Busy", `${running} running Sandbox(es) of ${project.name} use Store ${store.name}; a Sandbox closes 2 minutes after its last Workspace is unmounted, or pass stopSandboxes`);
+    if (holders.length) await platform.releaseStoreHolders(runtime, withUrl, holders, { force: running > 0 });
+  } else {
+    const sandboxes = (await containers(runtime)).filter((c) => c.key === keyOf(project));
+    const running = sandboxes.filter((c) => !STOPPED.has(c.state)).length;
+    if (running && !options.stopSandboxes) throw refuse("Busy", `${running} running Sandbox(es) of ${project.name} use Store ${store.name}; a Sandbox closes 2 minutes after its last Workspace is unmounted, or pass stopSandboxes`);
+    if (sandboxes.length) await platform.docker(settings, ["rm", ...(running ? ["-f"] : []), ...sandboxes.map((c) => c.name)], { timeout: 30_000 });
+  }
+  await runtime.clients.forget(keyOf(project));
   const postgresql = store.kind === "postgresql" ? { postgresql: { url: options.url } } : {};
   const answer = await invokeBackend("runtime.store.remove_project", { ...storeFields(runtime, store), ...postgresql, project: project.name }, {});
+  if (platform.hostDocker === false) await platform.removeStore(runtime, withUrl);
   const rest = store.projects.filter((p) => p.name !== project.name);
   if (own) {
     put(settings, { ...store, legacy: false, projects: rest });

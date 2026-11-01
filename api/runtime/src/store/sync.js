@@ -228,7 +228,7 @@ export async function start_load(runtime, jobs, remoteName, options = {}) {
  * and registers it as the PostgreSQL Store `name` (default `<store>-pg`). */
 export async function start_import_postgresql(runtime, jobs, name, options = {}) {
   const source = await sqlite(runtime, name, "an import into PostgreSQL");
-  const target = postgresqlTarget(options);
+  const target = postgresqlTarget(options, runtime.settings);
   const pgName = options.name ?? `${name}-pg`;
   await unused(runtime, pgName);
   const fields = storeFields(runtime, source);

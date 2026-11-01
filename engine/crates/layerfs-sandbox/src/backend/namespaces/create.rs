@@ -169,7 +169,9 @@ fn start_request(
         ));
     }
     check_environment(&options.environment)?;
-    check_store(&paths, &options.store)?;
+    if options.store != Path::new("/dev/null") {
+        check_store(&paths, &options.store)?;
+    }
     for path in [&paths.local.directory, &paths.root] {
         match fs::symlink_metadata(path) {
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
@@ -265,12 +267,17 @@ fn prepare(
     private(&paths.local.config)?.write_all(&request.daemon_config)?;
     fs::copy(&request.daemon_executable, &paths.bin)?;
     fs::set_permissions(&paths.bin, Permissions::from_mode(0o755))?;
+    let store = if options.store == Path::new("/dev/null") {
+        options.store.clone()
+    } else {
+        (options.store.parent())
+            .ok_or(RuntimeError::Protocol("namespaces Store directory"))?
+            .to_owned()
+    };
     let spec = HelperSpec {
         root: paths.root.clone(),
         sandbox: paths.local.directory.clone(),
-        store: (options.store.parent())
-            .ok_or(RuntimeError::Protocol("namespaces Store directory"))?
-            .to_owned(),
+        store,
         daemon: paths.bin.clone(),
         config: paths.local.config.clone(),
         cgroup: cgroup::path(id),

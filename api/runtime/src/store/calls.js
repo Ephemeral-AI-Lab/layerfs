@@ -12,6 +12,7 @@
 import { invokeBackend } from "@layerfs/agent/internal";
 import { NAME } from "../project/list.js";
 import { forgetOwn } from "../project/delete.js";
+import { checkVmUrl } from "../platform/vm/index.js";
 import { callHome } from "../settings.js";
 import { all, drop, entries, named, put, refuse, storeFields, update } from "./registry.js";
 import { removeVolume } from "./volume.js";
@@ -87,6 +88,7 @@ export async function providers(runtime) {
 export async function postgresqlStatus(runtime, given = {}) {
   const { url, schemas = [] } = given ?? {};
   if (typeof url !== "string" || !url) throw refuse("InvalidInput", "url is the PostgreSQL URL, passed per call and never stored");
+  if (runtime.settings.placement.kind === "vm") checkVmUrl(url);
   if (!Array.isArray(schemas) || !schemas.every((s) => typeof s === "string" && SCHEMA.test(s))) throw refuse("InvalidInput", "schemas is a list of PostgreSQL schema names");
   return call("runtime.postgresql.status", { home: callHome(runtime.settings), url, schemas });
 }
@@ -142,6 +144,9 @@ export async function remove(runtime, name, options = {}) {
   if (store.kind === "sqlite") {
     if (!store.volume) throw refuse("InvalidInput", `the runtime has no record of Store ${name}'s volume`);
     await removeVolume(runtime, { name, volume: store.volume }, options);
+  } else if (platform.hostDocker === false) {
+    for (const project of store.projects ?? []) await platform.removeStore(runtime, { ...project, store: name, kind: "postgresql" });
+    await platform.removeStore(runtime, { name, kind: "postgresql" });
   }
   await call("runtime.store.forget", { home: callHome(settings), store: name });
   if (store.legacy) await forgetOwn(runtime, name);
@@ -150,12 +155,13 @@ export async function remove(runtime, name, options = {}) {
 }
 
 /** Checks a PostgreSQL target: `{ connection, schema, synchronousCommit, url }`. */
-export function postgresqlTarget(given = {}) {
+export function postgresqlTarget(given = {}, settings = undefined) {
   const { connection, schema, synchronousCommit = "off", url } = given;
   if (typeof connection !== "string" || !NAME.test(connection)) throw refuse("InvalidInput", "connection names the PostgreSQL connection (1-63 lowercase letters, digits, _ . -)");
   if (typeof schema !== "string" || !SCHEMA.test(schema)) throw refuse("InvalidInput", "schema is a PostgreSQL schema name, [a-z_][a-z0-9_]*, at most 63 bytes");
   if (!SYNC.has(synchronousCommit)) throw refuse("InvalidInput", `synchronousCommit is one of ${[...SYNC].join(", ")}`);
   if (typeof url !== "string" || !url) throw refuse("InvalidInput", "url is the PostgreSQL URL, passed per call and never stored");
+  if (settings?.placement?.kind === "vm") checkVmUrl(url);
   return { connection, schema, synchronousCommit, url };
 }
 
@@ -165,7 +171,7 @@ export function postgresqlTarget(given = {}) {
  * binding it records. */
 export async function attach_postgresql(runtime, given = {}) {
   const { name } = given ?? {};
-  const target = postgresqlTarget(given);
+  const target = postgresqlTarget(given, runtime.settings);
   const known = entries(runtime.settings).find((s) => s.name === name);
   if (known && known.kind !== "postgresql") throw refuse("Exists", `Store ${name} is a SQLite Store`);
   const store = { name, kind: "postgresql", connection: target.connection, schema: target.schema, synchronousCommit: target.synchronousCommit, created: known?.created ?? Date.now() };

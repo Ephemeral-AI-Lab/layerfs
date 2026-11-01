@@ -246,7 +246,7 @@ export async function create(config) {
     strictHostKeyChecking: config.strictHostKeyChecking ?? given.strictHostKeyChecking ?? "yes",
     knownHostsFile: config.knownHostsFile ?? given.knownHostsFile ?? null,
     controlMaster: config.controlMaster ?? given.controlMaster ?? false,
-    storePath: String(config.storePath ?? given.storePath ?? STORE_PATH_DEFAULT).trim(),
+    storePath: config.storeName ? String(config.storePath ?? given.storePath ?? STORE_PATH_DEFAULT).trim() : null,
     hostPort: config.hostPort,
     workerPort: config.workerPort ?? WORKER_PORT_DEFAULT,
     home: config.home,
@@ -257,31 +257,35 @@ export async function create(config) {
   if (session.identityFile && !existsSync(session.identityFile)) {
     throw refuse("InvalidInput", `the SSH identity file does not exist: ${session.identityFile}`);
   }
-  const shared = sharedWith(session.name, session.host, session.storePath);
-  if (shared) {
-    throw refuse("Busy", `${session.host}:${session.storePath} already holds the Store of ${shared}; one host serves one Store, so give this project its own host or disk`, null);
+  if (session.storePath) {
+    const shared = sharedWith(session.name, session.host, session.storePath);
+    if (shared) {
+      throw refuse("Busy", `${session.host}:${session.storePath} already holds the Store of ${shared}; one host serves one Store, so give this project its own host or disk`, null);
+    }
   }
 
-  // the host, by fact: a Linux kernel, and the Store path on ext4
+  // the host, by fact: a Linux kernel, and (when a Store disk is used) the Store path on ext4
   const kernel = await remote(session, ["uname", "-s"]).catch((error) => { throw refuse("Failed", `could not reach ${session.host} over SSH: ${error.message}`); });
   if (kernel.code !== 0) throw refuse("Failed", `SSH to ${session.host} failed (exit ${kernel.code}): ${kernel.stderr.trim()}`);
   if (kernel.stdout.trim() !== "Linux") throw refuse("Unsupported", `${session.host} answers ${kernel.stdout.trim() || "nothing"}, not Linux; vm:ssh needs a Linux host`);
 
-  const exists = await remote(session, ["sh", "-c", "test -e \"$1\"", "sh", session.storePath]);
-  if (exists.code !== 0) throw refuse("InvalidInput", `the Store path ${session.storePath} does not exist on ${session.host}; vm:ssh uses a disk the user provides`);
-  const block = (await remote(session, ["sh", "-c", "test -b \"$1\"", "sh", session.storePath])).code === 0;
-  const type = block
-    ? (await remote(session, ["sh", "-c", "blkid -s TYPE -o value \"$1\" 2>/dev/null || lsblk -no FSTYPE \"$1\"", "sh", session.storePath])).stdout.trim()
-    : (await remote(session, ["findmnt", "-T", session.storePath, "-o", "FSTYPE", "-n"])).stdout.trim();
-  if (type !== "ext4") {
-    throw refuse("Unsupported", `the Store path ${session.storePath} on ${session.host} is ${type || "an unreadable filesystem"}, not ext4; LayerFS requires an ext4 Store disk`);
-  }
+  if (session.storePath) {
+    const exists = await remote(session, ["sh", "-c", "test -e \"$1\"", "sh", session.storePath]);
+    if (exists.code !== 0) throw refuse("InvalidInput", `the Store path ${session.storePath} does not exist on ${session.host}; vm:ssh uses a disk the user provides`);
+    const block = (await remote(session, ["sh", "-c", "test -b \"$1\"", "sh", session.storePath])).code === 0;
+    const type = block
+      ? (await remote(session, ["sh", "-c", "blkid -s TYPE -o value \"$1\" 2>/dev/null || lsblk -no FSTYPE \"$1\"", "sh", session.storePath])).stdout.trim()
+      : (await remote(session, ["findmnt", "-T", session.storePath, "-o", "FSTYPE", "-n"])).stdout.trim();
+    if (type !== "ext4") {
+      throw refuse("Unsupported", `the Store path ${session.storePath} on ${session.host} is ${type || "an unreadable filesystem"}, not ext4; LayerFS requires an ext4 Store disk`);
+    }
 
-  // the guest's own view: /layerfs/store is that path (mounted, or bind-mounted)
-  const attached = await remote(session, ["sh", "-c",
-    "if [ \"$1\" = /layerfs/store ]; then exit 0; fi; mkdir -p /layerfs/store && mountpoint -q /layerfs/store || { if [ -b \"$1\" ]; then mount -t ext4 \"$1\" /layerfs/store; else mount --bind \"$1\" /layerfs/store; fi; }",
-    "sh", session.storePath]);
-  if (attached.code !== 0) throw refuse("Failed", `could not attach ${session.storePath} at /layerfs/store on ${session.host}: ${attached.stderr.trim()}`);
+    // the guest's own view: /layerfs/store is that path (mounted, or bind-mounted)
+    const attached = await remote(session, ["sh", "-c",
+      "if [ \"$1\" = /layerfs/store ]; then exit 0; fi; mkdir -p /layerfs/store && mountpoint -q /layerfs/store || { if [ -b \"$1\" ]; then mount -t ext4 \"$1\" /layerfs/store; else mount --bind \"$1\" /layerfs/store; fi; }",
+      "sh", session.storePath]);
+    if (attached.code !== 0) throw refuse("Failed", `could not attach ${session.storePath} at /layerfs/store on ${session.host}: ${attached.stderr.trim()}`);
+  }
 
   try {
     const forward = await startForward(session, session.hostPort, session.workerPort);
