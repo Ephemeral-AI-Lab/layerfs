@@ -1,0 +1,152 @@
+// One #516 cell through the 2.0 `layerfs` package (#533 step 19), ported from
+// 1.1.0's api/runtime/test/verify/cells/cell.mjs (#527/#529). The workload
+// bodies and verifiers (workloads.mjs) are unchanged.
+//   node cell.mjs <C01..C12> <machine> <receipt.json>
+// In a fresh private home: store create, Init from an empty folder, a Branch
+// `lane` forked from main, one Sandbox on <machine>, then
+//   setup   (C09-C11) mount, exec the setup body, Commit, unmount;
+//   warm-up mount, exec the timed line, unmount with discard;
+//   timed   mount, exec, Commit, unmount;
+//   verify  fresh mount, exec the identity and the verifier, unmount with discard;
+//   close   the Sandbox, and the home removed.
+// LFS533_DAEMON names the daemon for the `native` machine; it reaches the
+// home's record through `layerfs import-env` (the repository's debug
+// `layerfs`, or LFS533_LAYERFS), as a 1.1.0 environment would.
+// One cell per command; nothing else runs a cell at the same time, so the
+// 1.1.0 host-wide lock is not ported. The receipt holds every step's time,
+// the 1-minute load and the verdict.
+import { mkdtempSync, chmodSync, rmSync, writeFileSync } from "node:fs";
+import { loadavg, tmpdir } from "node:os";
+import { join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { client } from "../../../src/index.js";
+import { CF, IDENTITY, command, parseIdentity, parseTimed, timedLine, verifier, sha256 } from "./workloads.mjs";
+
+const [cell, machine, receipt] = process.argv.slice(2);
+if (!CF[cell] || !machine || !receipt) {
+  console.error("usage: node cell.mjs <C01..C12> <machine> <receipt.json>");
+  process.exit(2);
+}
+const now = () => performance.now();
+const round = (ms) => Math.round(ms * 1000) / 1000;
+const errorOf = (error) => ({ code: error?.code ?? null, message: String(error?.message ?? error).slice(0, 2000) });
+const head = (() => {
+  try {
+    return execFileSync("git", ["rev-parse", "--short=10", "HEAD"], { encoding: "utf8" }).trim();
+  } catch {
+    return null;
+  }
+})();
+const out = {
+  format: "lfs533-cell/1", cell, machine, product: head, startedAt: new Date().toISOString(),
+  load1: loadavg()[0], body: { sha256: sha256(CF[cell][0]) }, ok: false, cause: null, phases: {}, steps: [],
+};
+
+async function step(name, call) {
+  const at = now();
+  try {
+    const value = await call();
+    out.steps.push({ name, ms: round(now() - at), ok: true });
+    return { value, ms: round(now() - at) };
+  } catch (error) {
+    out.steps.push({ name, ms: round(now() - at), ok: false, error: errorOf(error) });
+    throw Object.assign(new Error(`${name}: ${error?.code ?? ""} ${error?.message ?? error}`.trim()), { step: name });
+  }
+}
+
+const home = mkdtempSync(join(tmpdir(), "lfs533-cell-"));
+chmodSync(home, 0o700);
+const empty = mkdtempSync(join(tmpdir(), "lfs533-src-"));
+const lfs = client({ home });
+const project = "cells/p";
+const name = `c${cell.slice(1)}`;
+let sandbox = null;
+const mounted = new Set();
+const exec = (ws, text, label) => step(label, () => lfs.workspace.exec(ws, text, { message: `lfs533 ${cell} ${label}` }));
+const summary = ({ value, ms }) => ({ wallMs: ms, exitCode: value.exit_code, stdout: value.stdout?.slice(0, 2000), stderr: value.stderr?.slice(0, 2000), ...parseTimed(value.stdout) });
+const mount = async (label) => {
+  const result = await step(`${label}.mount`, () => lfs.workspace.mount(sandbox, "lane"));
+  mounted.add(result.value.ws);
+  return result;
+};
+const unmount = async (label, ws, discard) => {
+  const result = await step(`${label}.unmount`, () => lfs.workspace.unmount(ws, { discard }));
+  mounted.delete(ws);
+  return result;
+};
+const kindOf = (value) => value?.kind ?? value?.outcome ?? null;
+
+try {
+  if (process.env.LFS533_DAEMON) {
+    const binary = process.env.LFS533_LAYERFS ?? new URL("../../../../../target/debug/layerfs", import.meta.url).pathname;
+    await step("import-env", async () =>
+      execFileSync(binary, ["import-env"], {
+        env: { PATH: process.env.PATH, HOME: process.env.HOME, LAYERFS_HOME: home, LAYERFS_DAEMON: process.env.LFS533_DAEMON },
+        encoding: "utf8",
+      }));
+  }
+  await step("store.create", () => lfs.store.create("cells"));
+  await step("project.init", () => lfs.project.init(project, empty));
+  await step("branch.fork", () => lfs.branch.fork(project, "lane", "main"));
+  out.sandbox = (await step("sandbox.create", () => lfs.sandbox.create(project, name, machine))).value;
+  sandbox = name;
+  const line = timedLine(command(cell));
+  if (CF[cell][1]) {
+    const { value } = await mount("setup");
+    const ran = summary(await exec(value.ws, CF[cell][1], "setup.exec"));
+    if (ran.exitCode !== 0) throw Object.assign(new Error(`setup body exited ${ran.exitCode}: ${ran.stderr}`), { step: "setup.exec" });
+    const committed = await step("setup.commit", () => lfs.workspace.commit(value.ws, { message: `lfs533 ${cell} setup` }));
+    await unmount("setup", value.ws, false);
+    out.phases.setup = { exec: ran, commit: committed.value };
+  }
+  {
+    const at = await mount("warmup");
+    const ran = summary(await exec(at.value.ws, line, "warmup.exec"));
+    const left = await unmount("warmup", at.value.ws, true);
+    out.phases.warmup = { mountMs: at.ms, exec: ran, unmountMs: left.ms };
+  }
+  {
+    const at = await mount("timed");
+    const ws = at.value.ws;
+    const ran = summary(await exec(ws, line, "timed.exec"));
+    const committed = await step("timed.commit", () => lfs.workspace.commit(ws, { message: `lfs533 ${cell}` }));
+    const left = await unmount("timed", ws, false);
+    out.phases.timed = { mountMs: at.ms, workspace: at.value, exec: ran, commitMs: committed.ms, commit: committed.value, unmountMs: left.ms };
+  }
+  {
+    const { value } = await mount("verify");
+    const identity = await exec(value.ws, IDENTITY, "verify.identity");
+    out.where = parseIdentity(identity.value.stdout);
+    const checked = await exec(value.ws, verifier(cell), "verify.exec");
+    await unmount("verify", value.ws, true);
+    out.phases.verify = { exitCode: checked.value.exit_code, stdout: checked.value.stdout?.slice(0, 2000), stderr: checked.value.stderr?.slice(0, 2000) };
+  }
+  const timed = out.phases.timed;
+  const problems = [];
+  if (timed.exec.exitCode !== 0) problems.push(`exec exit ${timed.exec.exitCode}`);
+  if (timed.exec.rc !== undefined && timed.exec.rc !== 0) problems.push(`body exit ${timed.exec.rc}`);
+  if (!timed.commit || (!timed.commit.commit && kindOf(timed.commit) !== "UpToDate")) problems.push(`Commit answered ${JSON.stringify(timed.commit)}`);
+  if (out.phases.verify.exitCode !== 0 || !/^VERIFY OK$/m.test(out.phases.verify.stdout ?? "")) {
+    problems.push(`verifier: ${(out.phases.verify.stdout ?? "").trim()} ${(out.phases.verify.stderr ?? "").trim()}`.trim());
+  }
+  out.ok = problems.length === 0;
+  out.cause = problems.join("; ") || null;
+} catch (error) {
+  out.ok = false;
+  out.cause = error.message;
+  out.failedStep = error.step ?? null;
+} finally {
+  for (const ws of mounted) {
+    await lfs.workspace.unmount(ws, { discard: true, force: true }).then(
+      () => out.steps.push({ name: "cleanup.unmount", ok: true }),
+      (error) => out.steps.push({ name: "cleanup.unmount", ok: false, error: errorOf(error) }),
+    );
+  }
+  if (sandbox) await step("sandbox.close", () => lfs.sandbox.close(sandbox)).catch((error) => { out.closeError = error.message; });
+  out.endedAt = new Date().toISOString();
+  writeFileSync(receipt, JSON.stringify(out, null, 2) + "\n");
+  rmSync(home, { recursive: true, force: true });
+  rmSync(empty, { recursive: true, force: true });
+}
+console.log(`${cell} ${machine} ${out.ok ? "PASS" : "FAIL"} ${out.cause ?? ""} timed exec ${out.phases.timed?.exec?.wallMs ?? "-"} ms`);
+process.exit(out.ok ? 0 : 1);
