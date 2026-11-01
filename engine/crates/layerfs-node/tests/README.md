@@ -29,7 +29,9 @@ Node process; the fixture's fork is bounded and released on test unwinding.
 `native_local` covers native Sandbox records (`LAYERFS_SANDBOX=native`) through
 `runtime.sandbox.reclaim`: a record naming any directory other than where its
 deployment puts that Sandbox is refused and nothing is deleted, the configured
-`localDir` must be absolute and plain, a stopped native Sandbox is deleted and its
+`localDir` must be absolute and plain, with no `localDir` the record's
+directory must be real and hold an `owner` marker naming its record's
+directory (#529), a stopped native Sandbox is deleted and its
 number freed, a damaged boot or port is refused, a native record is used only by
 a native deployment (another deployment's reclaim leaves it out, its close
 refuses it), a record of the former `local` runtime is never used or

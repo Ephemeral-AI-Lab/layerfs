@@ -109,6 +109,18 @@ fn reclaim(home: &Home, sandbox: &str, local_dir: Option<&str>, then: &str) {
     );
 }
 
+/// Writes `own`'s owner marker as a create does, naming the real path of
+/// `proj`'s Sandbox `n` record directory.
+fn owner(home: &Home, own: &Path, n: &str) {
+    let record = home
+        .0
+        .join("proj/sandboxes")
+        .canonicalize()
+        .unwrap()
+        .join(n);
+    std::fs::write(own.join("owner"), record.to_str().unwrap()).unwrap();
+}
+
 const NEITHER: &str = "assert.equal(r.refused?.code, 'InvalidInput', JSON.stringify(r));
     assert.match(r.refused.message, /neither used nor deleted/);";
 const RECLAIMED: &str = "assert.deepEqual(r, {value:{kind:'ok',reclaimed:['1']}});";
@@ -174,8 +186,100 @@ fn a_native_record_s_directory_is_checked_with_or_without_a_local_dir() {
     );
     assert!(own.join("daemon.log").exists());
     assert!(home.0.join("proj/sandboxes/1/sandbox.record").exists());
+    owner(&home, &own, "1");
     reclaim(&home, "native", None, RECLAIMED);
     assert!(!own.exists(), "the stopped Sandbox's directory is deleted");
+}
+
+#[test]
+fn with_no_local_dir_a_record_s_directory_must_be_real_and_owned_by_it() {
+    // #529, parent decision 2026-11-01: the record's directory must be its
+    // own real path, carry the deployment's name and hold an owner marker
+    // naming this record's directory; anything else is refused and kept
+    let home = Home::new();
+    let root = root(&home).canonicalize().unwrap();
+    let own = own(&root);
+    let data = home.0.join("data/layerfs-proj-1");
+    std::fs::create_dir_all(&data).unwrap();
+    owner(&home, &data, "1");
+    std::os::unix::fs::symlink(&root, home.0.join("alias")).unwrap();
+    std::fs::create_dir(home.0.join("linked")).unwrap();
+    std::os::unix::fs::symlink(&data, home.0.join("linked/layerfs-proj-1")).unwrap();
+    let alias = home.0.join("alias/layerfs-proj-1");
+    let linked = home.0.join("linked/layerfs-proj-1");
+    let other = root.join("layerfs-proj-2");
+    std::fs::create_dir(&other).unwrap();
+    owner(&home, &other, "1");
+    let refused = "assert.equal(r.refused?.code, 'InvalidInput', JSON.stringify(r));
+        assert.match(r.refused.message, /neither used nor deleted/);";
+    // what the case is, the record's directory and name, and the setup
+    type Case<'a> = (&'a str, &'a Path, &'a str, Box<dyn Fn() + 'a>);
+    let mut cases: Vec<Case> = vec![
+        (
+            "a symlink above it",
+            &alias,
+            "layerfs-proj-1",
+            Box::new(|| owner(&home, &own, "1")),
+        ),
+        (
+            "itself a symlink",
+            &linked,
+            "layerfs-proj-1",
+            Box::new(|| {}),
+        ),
+        (
+            "a wrong last component",
+            &other,
+            "layerfs-proj-2",
+            Box::new(|| {}),
+        ),
+        (
+            "no marker",
+            &own,
+            "layerfs-proj-1",
+            Box::new(|| {
+                let _ = std::fs::remove_file(own.join("owner"));
+            }),
+        ),
+        (
+            "a marker naming Sandbox 2",
+            &own,
+            "layerfs-proj-1",
+            Box::new(|| owner(&home, &own, "2")),
+        ),
+        (
+            "a symlinked marker",
+            &own,
+            "layerfs-proj-1",
+            Box::new(|| {
+                let _ = std::fs::remove_file(own.join("owner"));
+                std::os::unix::fs::symlink(data.join("owner"), own.join("owner")).unwrap();
+            }),
+        ),
+    ];
+    for (case, directory, name, prepare) in cases.drain(..) {
+        prepare();
+        record(&home, "native", text(directory), name, |_| {});
+        reclaim(&home, "native", None, refused);
+        assert!(
+            home.0.join("proj/sandboxes/1/sandbox.record").exists(),
+            "{case}: the record was removed"
+        );
+        assert!(
+            own.join("daemon.log").exists(),
+            "{case}: a delete reached the Sandbox"
+        );
+        assert!(
+            data.join("owner").exists(),
+            "{case}: a delete reached {}",
+            data.display()
+        );
+    }
+    std::fs::remove_file(own.join("owner")).unwrap();
+    owner(&home, &own, "1");
+    record(&home, "native", text(&own), "layerfs-proj-1", |_| {});
+    reclaim(&home, "native", None, RECLAIMED);
+    assert!(!own.exists(), "the owned Sandbox's directory is deleted");
 }
 
 #[test]
@@ -314,6 +418,8 @@ fn every_backend_s_record_is_listed_with_its_runtime_and_state() {
     let home = Home::new();
     let root = root(&home);
     let own = own(&root);
+    // made by #529, so a caller with no LAYERFS_LOCAL_DIR may use it
+    owner(&home, &own, "1");
     let records =
         "await native.backendCall('runtime.sandbox.records', {...args, deploy:{sandbox:'docker'}})";
     let listed =

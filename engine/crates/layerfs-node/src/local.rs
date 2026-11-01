@@ -194,6 +194,7 @@ fn start_claimed(
         processes: Default::default(),
     };
     let recorded = (|| {
+        mark_owner(&self::directory(args, id, None)?, saved_directory)?;
         crate::discovery::save_sandbox(
             &state.directory,
             &state,
@@ -365,6 +366,69 @@ pub(crate) fn directory(
         ));
     }
     Ok(root.join(name))
+}
+
+/// The marker in a local Sandbox's directory naming, after realpath, the
+/// directory of the record that owns it (#529).
+const OWNER: &str = "owner";
+
+/// Writes the Sandbox directory's `owner` marker once, mode 0600: the real
+/// path of its record's directory `record`. A marker already there, or a
+/// symlink in its place, refuses the start.
+fn mark_owner(own: &Path, record: &Path) -> Result<(), SdkRefusal> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let real = std::fs::canonicalize(record).map_err(failed)?;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(own.join(OWNER))
+        .map_err(failed)?;
+    file.write_all(real.as_os_str().as_encoded_bytes())
+        .map_err(failed)
+}
+
+/// With no LAYERFS_LOCAL_DIR, a record's `directory` is used only when it
+/// is its own real path and its `owner` marker (not followed if a symlink)
+/// names the real path of this record's directory
+/// `LAYERFS_HOME/<project>/sandboxes/<id>`. Anything else, including a
+/// record made before the marker, is refused before any effect.
+pub(crate) fn owned(args: &SdkValue, id: &str, own: &Path) -> Result<(), SdkRefusal> {
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+    let refuse = |why: String| {
+        refused(
+            "InvalidInput",
+            format!(
+                "Sandbox {id}'s local record names {}, {why}, so with no LAYERFS_LOCAL_DIR it is \
+                 neither used nor deleted; set LAYERFS_LOCAL_DIR (deploy.localDir) to the \
+                 directory it was made under",
+                own.display()
+            ),
+        )
+    };
+    match std::fs::canonicalize(own) {
+        Ok(real) if real == own => {}
+        Ok(real) => return Err(refuse(format!("which resolves to {}", real.display()))),
+        Err(error) => return Err(refuse(format!("which cannot be resolved ({error})"))),
+    }
+    let mut marker = Vec::new();
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(own.join(OWNER))
+        .and_then(|file| file.take(4096).read_to_end(&mut marker))
+        .map_err(|error| refuse(format!("whose owner marker cannot be read ({error})")))?;
+    let record = std::fs::canonicalize(crate::discovery::sandbox_dir(args, id)?).map_err(failed)?;
+    if marker != record.as_os_str().as_encoded_bytes() {
+        let named = String::from_utf8_lossy(&marker);
+        return Err(refuse(format!(
+            "whose owner marker names {named}, not {}",
+            record.display()
+        )));
+    }
+    Ok(())
 }
 
 /// The refusal for a failed start. Everything a local start makes is its

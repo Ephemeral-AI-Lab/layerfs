@@ -363,11 +363,17 @@ so a reused id is never taken for it. `sandbox.create`, the mount result and
 binding's records say `local`). A record's `runtime` is `native` and its
 `platform` `mac` or `linux`; any client of the home reopens it by its record
 (#529, which replaces #527 step 4: a native record was then used only by a
-native deployment) and the
-same `LAYERFS_LOCAL_DIR` and prefix, so it puts that
-Sandbox exactly where the record says; any other is refused `InvalidInput`
-when it would reopen the record (a mount or close of that Sandbox), and left
-out of listing and reclaim; nothing is deleted. A record of the former
+native deployment). Where the client sets `LAYERFS_LOCAL_DIR`, the record's
+directory must be exactly where that setting and the prefix put the
+Sandbox. Where it sets none, the record's directory must be its own real
+path (no symlink in it), carry the name this home gives that Sandbox, and
+hold the `owner` marker its create wrote (mode 0600, never followed if a
+symlink), naming the real path of the record's own directory
+`LAYERFS_HOME/<project>/sandboxes/<n>`. A record made before #529 has no
+marker, so such a client needs `LAYERFS_LOCAL_DIR` set to use it. Any other
+record is refused `InvalidInput`, before any effect, by every call that reads
+it (listing, reclaim, mount, close), naming `LAYERFS_LOCAL_DIR` as the fix;
+it is left in place and nothing is deleted. A record of the former
 `local` runtime (an earlier, unmerged build) is never used: it is refused
 and left out the same way and nothing it names is deleted. A daemon that ends (idle close, crash, kill) is the stopped
 observation: Workspace calls to it are refused, and the next `sandbox.create`
@@ -443,13 +449,10 @@ is one `cgroup.kill` write followed by waiting for the group to be empty;
 Delete then removes the cgroup and the directory, so a closed Sandbox leaves no
 process, mount or cgroup behind. No graceful filesystem drain exists.
 
-A record's `runtime` is `namespaces`, with the same fields as a native record;
-it is used only by a client whose `LAYERFS_SANDBOX` is `namespaces`
-with the same `LAYERFS_LOCAL_DIR` and prefix. Another backend's record is
-refused `InvalidInput` and nothing is deleted, both ways: a `namespaces`
-record seen by a native deployment, and a `native` record seen by a
-namespaces deployment (#527 step 4; until then a namespaces deployment,
-including every `vm:` home's, reopened native records). Reopen checks the recorded init process (id, start
+A record's `runtime` is `namespaces`, with the same fields as a native record
+and the same directory rules (with or without `LAYERFS_LOCAL_DIR`, above);
+any client of the home reopens it by its record (#529, which replaces #527
+step 4). Reopen checks the recorded init process (id, start
 time, boot) and its cgroup membership, so a reused id, or a process outside
 the Sandbox's cgroup, is never taken for it. Everything else above holds:
 numbered Sandboxes, up to 16 Workspaces each, one daemon per Sandbox, idle

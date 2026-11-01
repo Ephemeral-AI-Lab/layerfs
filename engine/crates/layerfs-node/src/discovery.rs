@@ -611,7 +611,8 @@ fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
 /// deployment puts that Sandbox: under its LAYERFS_LOCAL_DIR when it sets
 /// one, else (#529: the record decides, so a caller of another backend has
 /// none) beside the record's own directory, which must still carry the
-/// name this deployment gives Sandbox `id`.
+/// name this deployment gives Sandbox `id` and be owned by this record
+/// ([`crate::local::owned`]).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathBuf, LocalRecord)> {
     let directory = PathBuf::from(registry::text(value, "directory")?);
@@ -631,6 +632,13 @@ fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathB
                 registry::text(args, "project")?
             ),
         ));
+    }
+    if (args
+        .get("deploy")
+        .and_then(|deploy| deploy.get_text("localDir")))
+    .is_none()
+    {
+        crate::local::owned(args, id, &directory)?;
     }
     let process = recorded_process(value)?;
     let port = value
@@ -683,9 +691,9 @@ pub(crate) fn local_running(_: &SdkValue) -> Result<bool> {
         "a local process is read on Linux or macOS",
     ))
 }
-/// A namespaces record is used only where this backend puts that Sandbox and
-/// only by a deployment that selects it: another backend never reopens or
-/// deletes what this one made.
+/// A namespaces record is used only where its directory checks put that
+/// Sandbox ([`local_record_of`]), by any deployment (#529: the record
+/// decides).
 #[cfg(target_os = "linux")]
 fn namespaces_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
     let (directory, local) = local_record_of(args, id, value)?;
