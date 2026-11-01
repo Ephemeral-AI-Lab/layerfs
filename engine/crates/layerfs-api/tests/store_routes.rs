@@ -7,14 +7,17 @@ use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
 use std::path::PathBuf;
 
+static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn tempdir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "layerfs-route-{tag}-{}-{}",
+        "layerfs-route-{tag}-{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -95,8 +98,14 @@ fn a_postgresql_store_reads_its_url_from_the_named_variable() {
 #[test]
 fn a_store_on_another_machine_goes_to_its_worker_with_its_record() {
     let home = home_with(sqlite_record(t("box")));
-    // no worker yet: Unavailable, nothing sent
-    assert_eq!(read(&home, "shop/api").unwrap_err().0, "Unavailable");
+    write_record(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+    )
+    .unwrap();
+    // no worker yet: refused, nothing sent (with the machine adapters the
+    // caller first tries to start the machine, which has no VM here)
+    assert!(read(&home, "shop/api").is_err());
 
     let root = tempdir("guest");
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -105,8 +114,13 @@ fn a_store_on_another_machine_goes_to_its_worker_with_its_record() {
     std::thread::spawn(move || layerfs_api::worker::serve(listener, "s3cret".to_owned(), guest));
     let worker =
         |secret: &str| SdkValue::map([("address", t(&address.to_string())), ("secret", t(secret))]);
-    write_record(&paths::worker_record(&home, "box"), &worker("wrong")).unwrap();
-    assert_eq!(read(&home, "shop/api").unwrap_err().0, "Denied");
+    // a wrong secret is refused by the worker (with the adapters, a worker
+    // that does not answer its secret counts as not running)
+    #[cfg(not(feature = "machine"))]
+    {
+        write_record(&paths::worker_record(&home, "box"), &worker("wrong")).unwrap();
+        assert_eq!(read(&home, "shop/api").unwrap_err().0, "Denied");
+    }
 
     write_record(&paths::worker_record(&home, "box"), &worker("s3cret")).unwrap();
     let (code, message) = read(&home, "shop/api").unwrap_err();

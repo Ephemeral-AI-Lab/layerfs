@@ -17,6 +17,20 @@ pub fn run(call: &Call, context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if call.family == "store" && !matches!(call.call, "connect" | "disconnect") {
         return crate::family::stores::run(context, call.call, args);
     }
+    #[cfg(feature = "machine")]
+    if call.family == "machine" {
+        use crate::machine as m;
+        return match call.call {
+            "list" => m::list(context, args),
+            "get" => m::get(context, args),
+            "status" => m::status(context, args),
+            "create" => m::create(context, args),
+            "connect" => m::connect(context, args),
+            "remove" => m::remove(context, args),
+            "disconnect" => m::disconnect(context, args),
+            _ => m::update(context, args),
+        };
+    }
     match handler(call) {
         Ok(handler) => handler(context, args),
         Err(step) => Err(refused(

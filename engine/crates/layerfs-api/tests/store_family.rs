@@ -7,14 +7,17 @@ use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 
+static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn tempdir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "layerfs-stores-{tag}-{}-{}",
+        "layerfs-stores-{tag}-{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&dir).unwrap();
     dir

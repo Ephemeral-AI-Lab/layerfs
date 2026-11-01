@@ -3,14 +3,17 @@ use layerfs_api::home::{detect, ensure, Layout, LAYOUT_VERSION};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
+static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn tempdir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "layerfs-home-{tag}-{}-{}",
+        "layerfs-home-{tag}-{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&dir).unwrap();
     dir

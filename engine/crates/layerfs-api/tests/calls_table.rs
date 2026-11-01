@@ -27,14 +27,17 @@ fn run(name: &str, args: SdkValue) -> (Result<SdkValue, (String, String)>, Vec<S
     (outcome.map_err(|r| (r.code, r.message)), events)
 }
 
+static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn tempdir() -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "layerfs-calls-{}-{}",
+        "layerfs-calls-{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&dir).unwrap();
     dir

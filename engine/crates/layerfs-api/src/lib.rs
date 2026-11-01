@@ -18,6 +18,9 @@ pub mod fs;
 pub mod home;
 #[doc(hidden)]
 pub mod host;
+#[cfg(feature = "machine")]
+#[doc(hidden)]
+pub mod machine;
 pub mod names;
 #[doc(hidden)]
 pub mod operator;

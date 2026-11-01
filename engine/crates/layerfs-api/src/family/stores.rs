@@ -286,17 +286,18 @@ fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Outcome {
         if read_record(&paths::machine_record(&home, to))?.is_none() {
             return Err(refused("NotFound", format!("no machine named {to}")));
         }
-        let from =
-            match record.get("machine") {
-                Some(SdkValue::Text(machine)) => machine.clone(),
-                None => "native".to_owned(),
-                Some(_) => return Err(refused(
+        let from = match record.get("machine") {
+            Some(SdkValue::Text(machine)) => machine.clone(),
+            None => "native".to_owned(),
+            Some(_) => {
+                return Err(refused(
                     "Unavailable",
                     format!(
                         "Store {name}'s machine is not known; run `layerfs store import-env` first"
                     ),
-                )),
-            };
+                ))
+            }
+        };
         if from == to {
             return Err(refused(
                 "InvalidInput",

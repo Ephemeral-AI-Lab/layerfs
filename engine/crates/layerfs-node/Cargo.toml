@@ -22,7 +22,7 @@ tls = ["layerfs-api/tls"]
 
 [dependencies]
 layerfs-project = { path = "../layerfs-project" }
-layerfs-api = { path = "../layerfs-api" }
+layerfs-api = { path = "../layerfs-api", features = ["machine"] }
 layerfs-bridge = { path = "../layerfs-bridge" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
 layerfs-persistence = { path = "../layerfs-persistence" }

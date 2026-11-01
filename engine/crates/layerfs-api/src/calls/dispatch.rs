@@ -72,6 +72,9 @@ pub fn call(
     let args = SdkValue::Map(check::check(spec, args)?);
     let home = home(home_path)?;
     crate::home::open(&home).inspect_err(|refusal| crate::home::note_failure(&home, refusal))?;
+    // `machine/native/` and `machine/docker/` exist from the first call
+    #[cfg(feature = "machine")]
+    crate::machine::ensure_built_ins(&home)?;
     let mut context = Context { home, events };
     let value = route::run(spec, &mut context, &args)?;
     Ok(super::keys::snake(value))

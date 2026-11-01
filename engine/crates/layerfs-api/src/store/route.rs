@@ -150,9 +150,19 @@ pub(crate) fn postgresql_url(record: &SdkValue, store: &str) -> Result<String, S
     }
 }
 
-/// The worker of `machine`, or `None` when its Stores open in this
-/// process: `native` is in process; any other machine's worker is the one
-/// its `worker.json` records.
+/// The worker of `machine`, started first if it is stopped, or `None` when
+/// its Stores open in this process (H §7.2, step 6).
+#[cfg(feature = "machine")]
+pub(crate) fn endpoint(
+    home: &Path,
+    machine: &str,
+) -> Result<Option<crate::worker::Endpoint>, SdkRefusal> {
+    crate::machine::running(home, machine)
+}
+
+/// Without the machine adapters (the guest worker's build): `native` is in
+/// process; any other machine's worker is the one its `worker.json` records.
+#[cfg(not(feature = "machine"))]
 pub(crate) fn endpoint(
     home: &Path,
     machine: &str,

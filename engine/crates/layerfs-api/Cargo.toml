@@ -26,6 +26,9 @@ postgresql = ["layerfs-persistence/postgresql", "layerfs-store-service/postgresq
 # https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
 # sealed Linux build the worker runs turns it on.
 tls = ["layerfs-store-service/tls"]
+# The machine calls (2.0, #533): host builds only. The guest worker is built
+# without it, so no machine adapter runs inside a machine.
+machine = ["layerfs-sandbox/machine"]
 
 [dev-dependencies]
 nix = { version = "=0.31.3", features = ["fs", "user", "process"] }

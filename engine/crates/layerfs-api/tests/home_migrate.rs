@@ -9,14 +9,17 @@ use layerfs_store_service::remote::{state, Direction, Provider, Remotes, Transfe
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
+static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn tempdir() -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "layerfs-migrate-{}-{}",
+        "layerfs-migrate-{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     std::fs::DirBuilder::new()
         .recursive(true)
