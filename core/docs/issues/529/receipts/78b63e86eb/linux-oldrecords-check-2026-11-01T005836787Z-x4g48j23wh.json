@@ -1,0 +1,350 @@
+{
+  "receipt": "lfs527-cell/1",
+  "row": "linux-oldrecords",
+  "cell": "check",
+  "verdict": "PASS",
+  "cause": null,
+  "project": "oldrecords",
+  "prefix": "lfs527-vx4g4c63ep-",
+  "startedAt": "2026-11-01T00:58:36.787Z",
+  "host": {
+    "hostname": "Yifans-MacBook-Pro-10.local",
+    "platform": "darwin",
+    "release": "25.4.0",
+    "cpus": 14,
+    "memBytes": 38654705664,
+    "node": "v24.21.0",
+    "uid": 501
+  },
+  "runner": {
+    "run.mjs": "028293bdf594b1f774e889c4dbe39764b68428356fbfead7d8424fb8ee1f305b",
+    "cell.mjs": "7164549b0c70ba4751935010016dbadd39cb42ae0a0142b97b58a60867f94be6",
+    "workloads.mjs": "e22d812db8858758dc8cae491168b881bb81489663e43b8ebac115f9eec99f62",
+    "mixed.mjs": "fc82d2dff2d39eddc7eb67ce08bf7d7c10a0daa181d12d06252bcb651a0f0b25",
+    "make.mjs": "d6014896b93183aacde047506b85771b4fd918a5c941e3464f3197d25978252b",
+    "oldrec.mjs": "f05f7be279ccefcdf9d70fad052574b256500fa7fae170108d3f06c84d31b5a5"
+  },
+  "platform": null,
+  "load1": {
+    "start": 0.16,
+    "end": 3.72900390625
+  },
+  "constructionWorkers": "1",
+  "driver": {
+    "fs": "ext4",
+    "work": "/var/lib/lfs529/lfs527-qycoEp",
+    "initMs": 314,
+    "volume": "lfs527-vx4g4c63ep-oldrecords-store-mvx4g4ha",
+    "teardownMs": 747
+  },
+  "teardown": [
+    {
+      "name": "project.delete",
+      "ok": true,
+      "value": {
+        "kind": "Deleted",
+        "project": "oldrecords",
+        "volume": "lfs527-vx4g4c63ep-oldrecords-store-mvx4g4ha"
+      }
+    },
+    {
+      "name": "runtime.close",
+      "ok": true
+    },
+    {
+      "name": "docker leftovers",
+      "ok": true,
+      "value": []
+    },
+    {
+      "name": "work",
+      "ok": true
+    },
+    {
+      "name": "local dir",
+      "ok": true
+    }
+  ],
+  "imageDigest": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+  "nsImage": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+  "imageArchive": "/Users/yifanxu/.cache/layerfs-test/lfs529-images/1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9.tar",
+  "bundle": {
+    "path": "/Users/yifanxu/.cache/layerfs-worktrees/issue529-sandbox-platfor-4c70637d3da0/artifacts/build-linux-704332543ebd46eeb309b26faa7fc6aa",
+    "id": "build-linux-704332543ebd46eeb309b26faa7fc6aa",
+    "platform": "linux",
+    "profile": "release",
+    "sourceCommit": "78b63e86ebb442ba2d02d8d58edb1fbd2b82b207",
+    "sourceSha256": "773e2437fb7705436f0732ed9627350824ed7e2a76e40aa7d25ac8310d46b7e5",
+    "manifestSha256": "45dfb128dd7dba2bdf742cd94bfaad6a0fc0cd52aaa603073655a25e03e1adf8",
+    "images": {
+      "build": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "runtime": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+      "sandbox": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"
+    },
+    "filesChecked": 221,
+    "mismatched": [],
+    "imageArchives": []
+  },
+  "sourceCommit": "78b63e86ebb442ba2d02d8d58edb1fbd2b82b207",
+  "env": {
+    "LAYERFS_HOME": "/var/lib/lfs529/lfs527-qycoEp/home",
+    "LAYERFS_SANDBOX": "docker",
+    "LAYERFS_LOCAL_DIR": "/var/lib/lfs529/lfs527-local-nfuMkd",
+    "LAYERFS_IMAGE_ARCHIVE": "/Users/yifanxu/.cache/layerfs-test/lfs529-images/1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9.tar",
+    "LAYERFS_DOCKER": "/var/run/docker.sock",
+    "LAYERFS_IMAGE": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+    "LAYERFS_DAEMON": "/Users/yifanxu/.cache/layerfs-worktrees/issue529-sandbox-platfor-4c70637d3da0/artifacts/build-linux-704332543ebd46eeb309b26faa7fc6aa/layerfs-daemon",
+    "LAYERFS_VOLUME": "lfs527-vx4g4c63ep-oldrecords-store-mvx4g4ha",
+    "LAYERFS_STORE_PATH": "/var/lib/docker/volumes/lfs527-vx4g4c63ep-oldrecords-store-mvx4g4ha/_data/global/store.sqlite",
+    "LAYERFS_CONTAINER_PREFIX": "lfs527-vx4g4c63ep-",
+    "LAYERFS_NATIVE": "/Users/yifanxu/.cache/layerfs-worktrees/issue529-sandbox-platfor-4c70637d3da0/artifacts/build-linux-704332543ebd46eeb309b26faa7fc6aa/layerfs.node"
+  },
+  "platforms": [
+    {
+      "id": "docker",
+      "allowed": true,
+      "ready": true,
+      "missing": []
+    },
+    {
+      "id": "mac",
+      "allowed": false,
+      "ready": false,
+      "missing": []
+    },
+    {
+      "id": "linux",
+      "allowed": true,
+      "ready": true,
+      "missing": []
+    },
+    {
+      "id": "apple-container",
+      "allowed": false,
+      "ready": false,
+      "missing": []
+    },
+    {
+      "id": "microsandbox",
+      "allowed": false,
+      "ready": false,
+      "missing": []
+    },
+    {
+      "id": "lima",
+      "allowed": false,
+      "ready": false,
+      "missing": []
+    },
+    {
+      "id": "firecracker",
+      "allowed": false,
+      "ready": false,
+      "missing": []
+    },
+    {
+      "id": "ssh",
+      "allowed": false,
+      "ready": false,
+      "missing": []
+    }
+  ],
+  "oldBundle": {
+    "path": "/Users/yifanxu/.cache/layerfs-worktrees/issue527-platform-pass-e-f55ee57a9aa7/artifacts/build-linux-4ee01388b1e54170bbd20243afe1ca37",
+    "id": "build-linux-4ee01388b1e54170bbd20243afe1ca37",
+    "platform": "linux",
+    "profile": "release",
+    "sourceCommit": "97d408cc5160347bd66b69b4eede91c173703d42",
+    "sourceSha256": "c47fba689c2da30e5066d44893330790165bb3834402b5de9033d2174d82635d",
+    "manifestSha256": "8fd20df6ecc404b6352526c8d8db884ca6d2d88dd791e888a733cfbec696471d",
+    "images": {
+      "build": "sha256:378b799ef43343fc64008b6a5ef456dd6bf0cb8f6ea4cec72e7b42dfc17d2cd6",
+      "runtime": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+      "sandbox": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"
+    },
+    "filesChecked": 215,
+    "mismatched": [],
+    "imageArchives": []
+  },
+  "made": {
+    "docker": {
+      "result": {
+        "project": "oldrecords",
+        "ok": true,
+        "fork": {
+          "kind": "Forked",
+          "branch": "lane",
+          "base": "323b0631fff53bd9eab08c0f0ff77cbb7782be271e33b48bd475f0f20dfbf0f39d",
+          "head": null
+        },
+        "created": {
+          "sandbox": "1",
+          "image": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"
+        }
+      },
+      "exit": {
+        "code": 0,
+        "signal": null,
+        "killed": false,
+        "stderr": ""
+      }
+    },
+    "namespaces": {
+      "result": {
+        "project": "oldrecords",
+        "ok": true,
+        "created": {
+          "sandbox": "2",
+          "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9"
+        }
+      },
+      "exit": {
+        "code": 0,
+        "signal": null,
+        "killed": false,
+        "stderr": ""
+      }
+    }
+  },
+  "cellResult": {
+    "project": "oldrecords",
+    "ok": true,
+    "cause": null,
+    "steps": [
+      {
+        "name": "runtime.sandbox.records",
+        "ok": true
+      },
+      {
+        "name": "open",
+        "ok": true
+      },
+      {
+        "name": "list_sandboxes",
+        "ok": true
+      },
+      {
+        "name": "mount 1",
+        "ok": true
+      },
+      {
+        "name": "exec 1",
+        "ok": true
+      },
+      {
+        "name": "unmount 1",
+        "ok": true
+      },
+      {
+        "name": "close 1",
+        "ok": true
+      },
+      {
+        "name": "mount 2",
+        "ok": true
+      },
+      {
+        "name": "exec 2",
+        "ok": true
+      },
+      {
+        "name": "unmount 2",
+        "ok": true
+      },
+      {
+        "name": "close 2",
+        "ok": true
+      },
+      {
+        "name": "list_sandboxes after",
+        "ok": true
+      }
+    ],
+    "checks": {
+      "records": [
+        {
+          "sandbox": "1",
+          "runtime": "docker",
+          "platform": null,
+          "state": "running"
+        },
+        {
+          "sandbox": "2",
+          "runtime": "namespaces",
+          "platform": null,
+          "state": "running"
+        }
+      ],
+      "noLocalDir": {
+        "localDirOfTheRest": "/var/lib/lfs529/lfs527-local-nfuMkd",
+        "reclaim": {
+          "refused": {
+            "code": "InvalidInput",
+            "message": "InvalidInput: Sandbox 2's local record names /var/lib/lfs529/lfs527-local-nfuMkd/lfs527-vx4g4c63ep-oldrecords-2, whose owner marker cannot be read (No such file or directory (os error 2)), so with no LAYERFS_LOCAL_DIR it is neither used nor deleted; set LAYERFS_LOCAL_DIR (deploy.localDir) to the directory it was made under"
+          }
+        },
+        "kept": [
+          {
+            "sandbox": "1",
+            "state": "running"
+          },
+          {
+            "sandbox": "2",
+            "state": "running"
+          }
+        ]
+      },
+      "listed": [
+        {
+          "sandbox": "1",
+          "name": "lfs527-vx4g4c63ep-oldrecords-1",
+          "image": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+          "platform": "docker",
+          "workspaces": 0
+        },
+        {
+          "sandbox": "2",
+          "name": "lfs527-vx4g4c63ep-oldrecords-2",
+          "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+          "platform": "linux",
+          "workspaces": 0
+        }
+      ],
+      "used": {
+        "1": {
+          "platform": "docker",
+          "image": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+          "exitCode": 0,
+          "stdout": "ok"
+        },
+        "2": {
+          "platform": "linux",
+          "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+          "exitCode": 0,
+          "stdout": "ok"
+        }
+      },
+      "after": []
+    }
+  },
+  "cellExit": {
+    "code": 0,
+    "signal": null,
+    "killed": false,
+    "stderr": ""
+  },
+  "teardownOk": true,
+  "endedAt": "2026-11-01T00:58:42.219Z",
+  "via": {
+    "lima": "lfs529-linux",
+    "lock": {
+      "grants": []
+    },
+    "exit": 0,
+    "stderr": ""
+  },
+  "load1Outer": {
+    "start": 3.79296875
+  },
+  "runnerCopy": "/Users/yifanxu/.cache/layerfs-test/lfs527-runner-0a44bd4a8e54902c"
+}

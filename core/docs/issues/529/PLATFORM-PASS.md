@@ -8,10 +8,13 @@ pass of [#529](README.md) §8: the twelve #516 cells on nine platforms, each San
 made by `sandbox.create({ platform })`, plus the default, refusal, mixed-project and
 old-record checks. Nothing is pushed or merged; that waits for the owner.
 
-- **Product commit of the receipts:** `6f242b72bf`. The only later product change
-  is `33733d0645`, a move-only commit (below).
+- **Product commit of the receipts:** `6f242b72bf` for the full pass. Three later
+  product commits follow the parent's rulings (`91f31613ba`, `4e8999872b`,
+  `78b63e86eb`); the checks they affect were rerun at `78b63e86eb` (see "Rerun
+  after the parent's rulings"). `33733d0645` is move-only (below).
 - **Receipts:** `receipts/6f242b72bf/` beside this file, 111 JSON files in the
-  #527 `lfs527-cell/1` format. Each names its row, cell, platform, verdict, cause,
+  #527 `lfs527-cell/1` format; the rerun's 7 are in `receipts/4e8999872b/` and
+  `receipts/78b63e86eb/`. Each names its row, cell, platform, verdict, cause,
   timings, load, identities, lock and teardown. C01 receipts also carry `extras`
   (the default and refusal checks).
 - **Delegation:** the owner asked for no questions; the parent session held the
@@ -21,7 +24,9 @@ old-record checks. Nothing is pushed or merged; that waits for the owner.
 ## Result
 
 All 108 cells PASS on nine platforms. The mixed project, the default, the
-refusals and the old records PASS.
+refusals and the old records PASS. After the parent's rulings, the affected
+checks were rerun at `78b63e86eb` and PASS (see "Rerun after the parent's
+rulings"); one rerun receipt failed first and led to `78b63e86eb`.
 
 | Platform (row) | C01 | C02 | C03 | C04 | C05 | C06 | C07 | C08 | C09 | C10 | C11 | C12 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -110,15 +115,73 @@ Their records carry no `platform`. With the #529 bundle:
 - each was mounted, ran `printf ok` (exit 0, `ok`), was unmounted and closed;
 - the listing ended empty.
 
+## Rerun after the parent's rulings
+
+The parent ruled on four points after the pass (decisions 5, 6, 13 and 14). Three
+product commits implement them, and the rerun covers the checks they affect:
+the mixed project and the old records, which the parent named, plus C01 on one
+platform per changed path. C01 is the cell that also runs the default and
+refusal extras. Every create now writes the owner marker on `mac`, `linux` and
+the VM platforms, and `linux` and the VM platforms now take their default image
+from the archive. The other 103 cells were not rerun (AGENTS.md §3.4): their
+code paths are unchanged apart from these two create steps, which the rerun's
+C01 cells cover.
+
+| Receipt | Product | Verdict | What it shows |
+| --- | --- | --- | --- |
+| `macos-native-C01-…` (`4e8999872b/`) | `4e8999872b` | PASS | `mac` create writes the marker; default and refusals unchanged. It counts for `78b63e86eb`, whose change is Linux-only code. |
+| `linux-mixed-check-…T005517…` (`4e8999872b/`) | `4e8999872b` | **FAIL**, kept | `linux` given Docker's digest was refused, but as `Failed` at the provider's Validate step, after a Sandbox number was claimed. Fixed by `78b63e86eb` (decision 15). |
+| `linux-mixed-check-…` (`78b63e86eb/`) | `78b63e86eb` | PASS | below |
+| `linux-oldrecords-check-…T005806…` (`78b63e86eb/`) | `78b63e86eb` | PASS, weak | Its no-`LAYERFS_LOCAL_DIR` step sent no name prefix, so the record was refused by the name check, not the marker. Kept; superseded by the next. |
+| `linux-oldrecords-check-…T005836…` (`78b63e86eb/`) | `78b63e86eb` | PASS | below |
+| `linux-namespaces-C01-…` (`78b63e86eb/`) | `78b63e86eb` | PASS | The home's `LAYERFS_IMAGE` is Docker's `sha256:afa1ef9c…`; the Sandbox ran `sha256:1d91885d…`, taken from `LAYERFS_IMAGE_ARCHIVE`. |
+| `vm-lima-C01-…` (`78b63e86eb/`) | `78b63e86eb` | PASS | A VM platform's create, with its image from the bundle's archive. |
+
+**Mixed project (rerun).** As in the first pass, with three changes:
+- **Image defaults.** `linux` was made with no `image`. It listed with
+  `sha256:1d91885d…` (from the archive) beside `docker` with `sha256:afa1ef9c…`.
+  After the first `linux` closed, a second was made with an explicit
+  `image: sha256:1d91885d…` and listed with it.
+- **Docker's digest for `linux`** (`image: sha256:afa1ef9c…`) is refused
+  `InvalidInput` ("the image archive's config digest is … not the requested …"),
+  with the listing empty before and after.
+- **Store identity** (`checks.store.identity`). The Store path is (dev 64769,
+  ino 570866). The `docker` Sandbox's daemon is pid 3663, with the same
+  (64769, 570866) at `/layerfs-store/global/store.sqlite`. The `linux` Sandbox's
+  daemon is pid 3668, with the same (64769, 570866) at the volume's host path.
+  `same: true`.
+
+**Old records (rerun).** The pre-#529 records reopen exactly as in the first
+pass. One step was added first: a reclaim from a client with no
+`LAYERFS_LOCAL_DIR`, keeping the home's name prefix. It was refused
+`InvalidInput`: "Sandbox 2's local record names …, whose owner marker cannot be
+read …; set LAYERFS_LOCAL_DIR (deploy.localDir) to the directory it was made
+under". Both Sandboxes stayed running. The rest of the check, like the first
+pass, runs with the home's `LAYERFS_LOCAL_DIR` (`/var/lib/lfs529/lfs527-local-…`)
+set, as a pre-#529 home had it. The namespaces record reopens through that
+setting, not through the marker.
+
+**Machine.** `lfs529-linux` was made again for the rerun, the same as in the
+first pass (Lima 2.2.1 vz, Ubuntu 24.04, Docker 29.9.2 with the containerd store,
+Node v22.23.4, user namespaces 0). The image archives were made again from
+Docker Desktop's `sha256:afa1ef9c…`; the uncompressed one has the same name
+(`1d91885d…`) and size (2,747,699,200 B). `lfs529-ssh` and `lfs529-vzkvm` were
+not needed.
+
 ## Receipt identities
 
 | Receipts | Product commit | Linux bundle (manifest sha256) | macOS bundle (manifest sha256) | VM bundle | Runner (`run.mjs`) |
 | --- | --- | --- | --- | --- | --- |
 | `receipts/6f242b72bf/` (111) | 6f242b72bf | build-linux-b5f1d388… (`ba1c640b…`), 99 receipts | build-macos-77750910… (`cf18e512…`), 12 receipts | cells-b5f1d388 (the Linux bundle plus `images/1d91885d….tar`, identity `ba1c640b…`) | `028293bd` ×111 |
+| `receipts/4e8999872b/` (2) | 4e8999872b | build-linux-9cc0c9a1… (`e1410fd9…`), 1 receipt | build-macos-509dacd2… (`f7045a44…`), 1 receipt | — | `028293bd` ×2 |
+| `receipts/78b63e86eb/` (5) | 78b63e86eb | build-linux-70433254… (`45dfb128…`), 5 receipts | — | cells-70433254 (the Linux bundle plus `images/1d91885d….tar`, identity `45dfb128…`) | `028293bd` ×5 |
 
 - **Runner files** (all 111): `run.mjs` `028293bd`, `cell.mjs` `7164549b`,
   `workloads.mjs` `e22d812d`, `mixed.mjs` `57fc441b`, `make.mjs` `d6014896`,
   `oldrec.mjs` `6aa3cf37`.
+- **Rerun runner files:** as above except `mixed.mjs` `fc82d2df` (all 7) and
+  `oldrec.mjs` `8c2740bb` (the first four) or `f05f7be2` (the last three, after
+  the prefix fix in this commit).
 - **Old bundle:** build-linux-4ee01388… (`8fd20df6…`, `97d408cc51`), used only to
   make the old records.
 - **Sandbox images.** `docker` uses `sha256:afa1ef9c…` (the index digest, arm64,
@@ -177,14 +240,36 @@ Reversible choices, made at the recommended option and recorded here.
    idle close dispatch on the record's `runtime` only; the deployment's backend no
    longer decides. A record naming a runtime this host never reopens is refused
    `InvalidInput` and left in place (neither used nor deleted).
-5. **A native record reopens without `LAYERFS_LOCAL_DIR`.** Its directory is the
-   deployment's `localDir` when set, else the record's own parent directory, with
-   the same checks as before (absolute, no `..`). So a `linux` (native) or `mac`
-   Sandbox reopens under a docker-default home.
-6. **A Linux home's `linux` Sandbox takes its image per call.** `docker` needs the
-   image's index digest and `linux` its config digest (an uncompressed archive), so
-   one `LAYERFS_IMAGE` cannot serve both (finding 1). The mixed check passes
-   `sandbox.create({ platform: "linux", image })`.
+5. **A local record reopens without `LAYERFS_LOCAL_DIR` only when it owns its
+   directory (parent, 2026-11-01; `4e8999872b`).** With `localDir` set, the
+   record's directory must be exactly where that setting puts the Sandbox, as
+   before. With none, all three must hold:
+   - (a) the directory is its own real path (no symlink in it);
+   - (b) its last component is the name this home gives that Sandbox;
+   - (c) its `owner` marker, written once at create (mode 0600, create-new, not
+     followed if a symlink), equals the real path of the record's own directory
+     `LAYERFS_HOME/<project>/sandboxes/<n>`, the directory the record was read
+     from.
+
+   Anything else is refused `InvalidInput` before any effect, naming
+   `LAYERFS_LOCAL_DIR` as the fix, and left in place. A record made before #529
+   has no marker, so a client with no `LAYERFS_LOCAL_DIR` is refused on it; a
+   pre-#529 home set `LAYERFS_LOCAL_DIR`, and the old-records check keeps it
+   set. The parent's first wording (the record's `directory` must resolve to
+   `LAYERFS_HOME/<project>/sandboxes/<n>`) would have refused every native
+   record, because a native record's `directory` is its working folder under
+   `LAYERFS_LOCAL_DIR`; the marker replaces it, as the parent approved. The
+   first pass ran under the earlier rule (parent directory, absolute, no `..`).
+6. **`image` defaults per platform (parent, 2026-11-01; `91f31613ba`).** When a
+   call leaves `image` out, `docker` uses `LAYERFS_IMAGE`; `linux` and the VM
+   platforms use the image `LAYERFS_IMAGE_ARCHIVE` holds (its config digest)
+   when that is set. An explicit `image` still wins. With no `image`, an
+   archive naming more than one image is refused before any effect. The
+   settings `localDir` and `imageArchive` of `@layerfs/runtime` are approved;
+   the `linux` platform no longer needs `LAYERFS_IMAGE`. The first pass gave
+   `linux` its image per call (`sandbox.create({ platform: "linux", image })`);
+   the rerun's mixed check makes it with no image, then once with an explicit
+   one.
 7. **`platform: null` is `InvalidInput`.** Only an absent `platform` (undefined)
    means the default.
 8. **The deployment's `sandboxHost` field is gone.** A worker's Sandboxes run on its
@@ -201,17 +286,34 @@ Reversible choices, made at the recommended option and recorded here.
     `cp -c` instead.
 12. **Batches.** Cells ran nine at a time across machines (above), as #527's row
     helpers did.
+13. **`native` on a `vm:` home maps to that home's provider (parent,
+    2026-11-01).** §4 allows only the provider there, so `LAYERFS_SANDBOX=native`
+    on a `vm:` home defaults to the provider, like `namespaces`
+    (`platform.mjs` covers it).
+14. **The Store identity receipt holds all three (dev, ino) values and the pids
+    (parent, 2026-11-01).** `mixed.mjs` records the Store path's (dev, ino) and,
+    for every holder, its pid, (dev, ino) and fd target, under
+    `checks.store.identity`, with `same` computed from them.
+15. **A given image the archive lacks is `InvalidInput` before any effect
+    (`78b63e86eb`).** Found by the rerun: Docker's digest given to `linux` was
+    refused `Failed` at the provider's Validate step, after a number was
+    claimed. The deployment now checks the archive names the image, the same
+    read the no-image default does.
 
 ## Findings not fixed in this pass
 
-1. **One `LAYERFS_IMAGE` cannot serve both platforms of a Linux home.** Docker with
-   the containerd store names the image by its index digest; the namespaces backend
-   wants the config digest and an uncompressed archive. A Linux home that offers
-   `linux` beside `docker` needs `image` per call or a second setting. A follow-up
+1. **One `LAYERFS_IMAGE` alone still cannot serve both platforms of a Linux
+   home; fixed by default (decision 6).** Docker with the containerd store
+   names the image by its index digest (`sha256:afa1ef9c…`); the namespaces
+   backend wants the config digest (`sha256:1d91885d…`) and an uncompressed
+   archive. With `LAYERFS_IMAGE_ARCHIVE` set, `linux` now takes the archive's
+   own digest, so no per-call image is needed. Passing the Docker digest to
+   `linux` is refused `InvalidInput` before any effect (decision 15; the
+   rerun's mixed check records it). A follow-up
    could let the namespaces backend accept the index digest.
 2. **`native_discovery::a_dropped_guard_…` needs `cc`**, which `lfs529-linux` does
    not have. The other five tests pass; the code it covers is unchanged.
-3. **`discovery.rs` is at 977 lines** (ceiling 999).
+3. **`discovery.rs` is at 985 lines** (ceiling 999).
 4. **The #527 open findings stand:** `kernel_guard` on macOS checks the OS, not the
    deployment; `layerfs-store-service` does not build for Windows; `vm:ssh` leaves
    `/layerfs/{home,store}` on its host (the runner removes them); and the others in
@@ -219,12 +321,21 @@ Reversible choices, made at the recommended option and recorded here.
 5. **Windows is untested** (no host). `docker` through the WSL2 worker should
    behave as macOS's worker home; the agent treats any worker without a `vm` field
    as a `docker`-only home.
+6. **A refused record fails the call that reads it.** `project.list_sandboxes`,
+   reclaim and the sweep read every record, so one record they refuse (damaged,
+   another `LAYERFS_LOCAL_DIR`, or with no `LAYERFS_LOCAL_DIR` one without its
+   owner marker) refuses the whole call for that project; it is not left out.
+   This was so before #529; `agent.md` said "left out of listing and reclaim"
+   and now says what happens.
+7. **With no `LAYERFS_LOCAL_DIR`, a stopped local record whose directory is
+   gone is not reclaimed.** Its directory cannot be resolved, so decision 5
+   refuses it; a client with `LAYERFS_LOCAL_DIR` set reclaims it as before.
 
 ## Commits
 
 Production LOC uses `tools/production_loc.py` on the first parent and the staged
 tree. The scope is core, engine and api; the reference is absent (retired R9c; last
-counted 65,417 at tree 498dd1917812). Over #529: **123811 → 123966 (delta +155)**.
+counted 65,417 at tree 498dd1917812). Over #529: **123811 → 124059 (delta +248)**.
 
 | Commit | Subject | Production LOC |
 | --- | --- | --- |
@@ -234,7 +345,11 @@ counted 65,417 at tree 498dd1917812). Over #529: **123811 → 123966 (delta +155
 | `6f242b72bf` | test: the cell runner makes each Sandbox with its platform (#529 §8) | 123966 -> 123966 (delta 0) |
 | `33733d0645` | runtime: src/place/ is src/platform/ again (owner 2026-11-01, move only) | 123966 -> 123966 (delta 0) |
 | `71ecd9fc6a` | docs: #529 platform pass, sandbox.create({ platform }) on every platform | 123966 -> 123966 (delta 0) |
-| this commit | docs: #529 platform pass, Connect and cleanup | 123966 -> 123966 (delta 0) |
+| `2fe92d2473` | docs: #529 platform pass, Connect and cleanup | 123966 -> 123966 (delta 0) |
+| `91f31613ba` | sandbox, agent: a linux or VM Sandbox's default image is its archive's (#529) | 123966 -> 123993 (delta +27) |
+| `4e8999872b` | node: with no LAYERFS_LOCAL_DIR a local record must own its directory (#529) | 123993 -> 124051 (delta +58) |
+| `78b63e86eb` | node: a given image the archive lacks is InvalidInput before any effect (#529) | 124051 -> 124059 (delta +8) |
+| this commit | docs, test: #529 rerun after the parent's rulings | 124059 -> 124059 (delta 0) |
 
 `db4b8e4dc8` subtotals: core 41405, engine 77696 (+57), api 4865 (+98). Tests
 changed or deleted there (listed in its message): in `native_local.rs`,
@@ -250,6 +365,22 @@ Checks run before the pass: Clippy `-D warnings` on macOS and Linux
 `packaging` 7 modes, `trace` 9, `runtime.mjs` and `vm_placement` (every mode),
 CLI 78/78. `runtime.mjs` and `vm_placement.mjs` were run again, all modes PASS,
 after `33733d0645`.
+
+After the rulings: subtotals at `78b63e86eb` are core 41405, engine 77787
+(+91 since `db4b8e4dc8`), api 4867 (+2). Tests added: `namespaces_rootfs`'s
+`an_archive_names_its_one_image_by_its_config_digest` (with `holds` in
+`78b63e86eb`) and `native_local`'s
+`with_no_local_dir_a_record_s_directory_must_be_real_and_owned_by_it`. Tests
+changed: `native_deployment.mjs` expectations (a namespaces deployment has no
+image unless given), `platform.mjs` cases (VM, linux, `native` on a `vm:`
+home), and two `native_local` tests that now write the owner marker their
+records stand for. None deleted. Checks: Clippy `-D warnings` on Linux
+(`layerfs-sandbox`, `layerfs-node`) and macOS (`layerfs-node`), `cargo fmt`,
+`check_product_boundary` PASS; `namespaces_rootfs` 14/14 and `native_local`
+11/11 on Linux (the latter in the Node runtime image, since `lfs529-linux` was
+gone then); JS `platform`, `native_deployment`, `calls` 42, `runtime.mjs`
+(surface, sandboxes, backend, docker-default), `vm_placement` (settings, flow,
+bundle), CLI 78/78.
 
 ## Connect
 
@@ -321,6 +452,14 @@ Kept:
 - **`~/.lima/_config` and `_disks`**, which existed before the pass.
 
 Host free space: 208.6 GB before the cells, 219.9 GB after cleanup.
+
+**Rerun.** Removed the same way: `lfs529-linux` with its disk; the `vm-lima`
+cell's own VM (by its teardown, `teardownOk`); the image archives, VM bundle copy,
+share folder, runner copies and lock under `~/.cache/layerfs-test` (empty again);
+Lima's Ubuntu download; the scratch environment scripts. Kept with the worktree:
+the rerun's sealed bundles (build-linux-9cc0c9a1…, build-linux-70433254…,
+build-macos-509dacd2…) beside the first pass's. Host free space: 219.6 GB before
+the rerun, 208.6 GB at its peak, 219.5 GB after.
 
 ## Appendix: per-row identities and timings
 

@@ -35,14 +35,15 @@ try {
   const records = await step("runtime.sandbox.records", () => invokeBackend("runtime.sandbox.records", { project, home: process.env.LAYERFS_HOME }, {}));
   out.checks.records = records.items.map(({ sandbox, runtime, platform, state }) => ({ sandbox, runtime, platform, state }));
   need(out.checks.records.length === Object.keys(expect).length && out.checks.records.every((r) => r.platform === null && r.state === "running"), "the old records are not all running with no platform");
-  // a caller with no LAYERFS_LOCAL_DIR: an old local record has no owner
+  // a caller with no LAYERFS_LOCAL_DIR (the home's name prefix kept, so only
+// the marker rule can refuse): an old local record has no owner
   // marker, so it is refused InvalidInput naming that setting and kept
   // (parent decision, 2026-11-01); the rest below sets it, as an old home did
-  const unset = await invokeBackend("runtime.sandbox.reclaim", { project, home: process.env.LAYERFS_HOME, deploy: { sandbox: "docker" } }, {}).then(
+  const unset = await invokeBackend("runtime.sandbox.reclaim", { project, home: process.env.LAYERFS_HOME, deploy: { sandbox: "docker", ...(process.env.LAYERFS_CONTAINER_PREFIX ? { containerPrefix: process.env.LAYERFS_CONTAINER_PREFIX } : {}) } }, {}).then(
     (value) => ({ value }), (error) => ({ refused: errorOf(error) }));
   const kept = (await invokeBackend("runtime.sandbox.records", { project, home: process.env.LAYERFS_HOME }, {})).items.map(({ sandbox, state }) => ({ sandbox, state }));
   out.checks.noLocalDir = { localDirOfTheRest: process.env.LAYERFS_LOCAL_DIR ?? null, reclaim: unset, kept };
-  need(unset.refused?.code === "InvalidInput" && /LAYERFS_LOCAL_DIR/.test(unset.refused.message) && kept.length === Object.keys(expect).length && kept.every((r) => r.state === "running"),
+  need(unset.refused?.code === "InvalidInput" && /owner marker/.test(unset.refused.message) && /set LAYERFS_LOCAL_DIR/.test(unset.refused.message) && kept.length === Object.keys(expect).length && kept.every((r) => r.state === "running"),
     `with no LAYERFS_LOCAL_DIR the old local record was not refused and kept: ${JSON.stringify(out.checks.noLocalDir)}`);
   layerfs = await step("open", () => LayerFS.open(project));
   out.checks.listed = (await step("list_sandboxes", () => layerfs.project.list_sandboxes(1000, 0))).items;
