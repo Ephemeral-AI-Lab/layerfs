@@ -16,7 +16,7 @@ S: [layerfs-sdk-cli.md](../../proposals/layerfs-sdk-cli.md).
 
 | Gate | Answer taken (2026-11-02, delegated by owner, recommended answer) |
 | --- | --- |
-| G0 | Base is `ddc7c5696b` (head of PR #530, containing #528 and `layerfs_v2_0_0`). No PR is merged on GitHub; branching from that head satisfies it. |
+| G0 | Base is `ddc7c5696b` (head of PR #530, containing #528 and `layerfs_v2_0_0`). No PR is merged on GitHub; branching from that head satisfies it. **Update (owner, 2026-11-02, via the parent session):** the base is local `layerfs_v2_0_0` at `ddc7c5696b`, fast-forwarded locally (not pushed) to this commit; `issue533-v2` is stacked directly on it. If local `layerfs_v2_0_0` moves, its new tip comes into `issue533-v2` by a merge, never a rebase. |
 | G1 | H and S are accepted as the 2.0 direction. |
 | G2 | The H §9.1 AGENTS.md wording is approved and applied in step 1. |
 | G3 | #531 is held; this issue supersedes it. Nothing here builds on #531. |

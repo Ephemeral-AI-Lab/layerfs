@@ -6,7 +6,9 @@
 > pushed, no PR, no merge, no GitHub comment.
 
 - **Worktree:** `/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue533-v2`, branch
-  `issue533-v2`, based on `ddc7c5696b`.
+  `issue533-v2`, stacked on local `layerfs_v2_0_0` at `ddc7c5696b` (owner's
+  choice, 2026-11-02; local only, not pushed). A later move of that branch
+  comes in by a merge, never a rebase.
 - **Terminal pass:** [TERMINAL-PASS.md](TERMINAL-PASS.md).
 - **Steps:** 1–19 all have commits. Step 19 ran on this Mac only; its VM, ssh,
   docker-worker, Linux, R2 and Windows rows are NOT_RUN (reasons there).
