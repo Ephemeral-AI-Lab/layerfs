@@ -6,6 +6,12 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+# The host-only machine layer (src/machine/): making, starting and stopping the
+# kernels Sandboxes run on. Guest builds (the bundle's worker and
+# layerfs-sandbox-helper) leave it off.
+machine = []
+
 [dependencies]
 nix = { version = "=0.31.3", features = [
     "poll",
