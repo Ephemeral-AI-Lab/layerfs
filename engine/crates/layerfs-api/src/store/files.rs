@@ -93,10 +93,52 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
             }
             digest(&file)
         }
+        // a consistent snapshot of the live Store for a backup, staged
+        // beside it; `{ bytes, sha256, heads, sqlite }`
+        "stage" => {
+            let staged = with_suffix(&file, ".backup");
+            let _ = std::fs::remove_file(&staged);
+            let mut fields = match args.clone() {
+                SdkValue::Map(fields) => fields,
+                _ => Vec::new(),
+            };
+            fields.push((
+                "home".to_owned(),
+                SdkValue::text(root.display().to_string()),
+            ));
+            fields.push((
+                "storePath".to_owned(),
+                SdkValue::text(file.display().to_string()),
+            ));
+            let sealed = crate::host::direct::with_service(&SdkValue::Map(fields), |service| {
+                service
+                    .opened
+                    .snapshot_observed(&staged, &mut |_, _| {})
+                    .map_err(|e| refused("Failed", format!("snapshot: {e}")))
+            })?;
+            let digest = digest(&staged)?;
+            Ok(crate::home::with_field(
+                digest,
+                "sqlite",
+                SdkValue::text(sealed.sqlite_version),
+            ))
+        }
+        "unstage" => {
+            match std::fs::remove_file(with_suffix(&file, ".backup")) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(failed(e)),
+                _ => {}
+            }
+            Ok(SdkValue::map([("unstaged", SdkValue::Bool(true))]))
+        }
         "read" => {
             let offset = int(args, "offset")?;
             let len = int(args, "len")?.min(CHUNK);
-            let mut handle = std::fs::File::open(&file).map_err(failed)?;
+            let source = if matches!(args.get("staged"), Some(SdkValue::Bool(true))) {
+                with_suffix(&file, ".backup")
+            } else {
+                file.clone()
+            };
+            let mut handle = std::fs::File::open(&source).map_err(failed)?;
             handle.seek(SeekFrom::Start(offset)).map_err(failed)?;
             let mut bytes = Vec::with_capacity(len as usize);
             handle.take(len).read_to_end(&mut bytes).map_err(failed)?;

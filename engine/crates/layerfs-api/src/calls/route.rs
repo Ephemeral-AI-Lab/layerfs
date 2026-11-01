@@ -14,6 +14,9 @@ pub fn run(call: &Call, context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if matches!(call.family, "branch" | "commit" | "file") {
         return crate::family::files::run(context, call.family, call.call, args);
     }
+    if call.family == "backup" {
+        return crate::family::backups::run(context, call.call, args);
+    }
     if call.family == "project" {
         return crate::family::projects::run(context, call.call, args);
     }
@@ -51,7 +54,6 @@ pub fn handler(call: &Call) -> Result<Handler, u8> {
     Err(match call.family {
         "sandbox" | "workspace" => 12,
         "machine" => 6,
-        "backup" => 11,
         _ => 2,
     })
 }

@@ -1,0 +1,703 @@
+//! The `backup` family (#533 step 11, H §7.3): buckets connected by name in
+//! `backup/<bucket>/record.json` (an r2 or MinIO bucket and prefix with a
+//! key reference, never a secret), and one link per Store per bucket in the
+//! Store's record (O23). A backup is a snapshot on the Store's machine whose
+//! bytes go through the caller's process: machines never hold bucket keys.
+//! Objects are `<prefix>/<file>/store.sqlite` (whole or a manifest) plus its
+//! pieces. LayerFS never deletes a bucket object.
+use crate::calls::Context;
+use crate::home::{self, paths, read_record, with_field, write_record};
+use crate::host::outcome::{failed, refused, Outcome};
+use crate::store::files::CHUNK;
+use crate::store::{lease, route};
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_store_service::remote::storage::cloudflare_r2::R2Settings;
+use layerfs_store_service::remote::storage::minio::{MinioSettings, DEFAULT_PART_SIZE};
+use layerfs_store_service::remote::storage::{
+    pieces, CredentialRef, Driver, Metadata, RemoteError,
+};
+use layerfs_store_service::remote::{self, Provider};
+use std::path::Path;
+
+type Result<T> = std::result::Result<T, SdkRefusal>;
+
+fn bucket_of(home: &Path, name: &str) -> Result<SdkValue> {
+    crate::names::name("bucket", name).map_err(|why| refused("InvalidInput", why))?;
+    read_record(&paths::bucket_record(home, name))?
+        .ok_or_else(|| refused("NotFound", format!("no bucket named {name}")))
+}
+
+fn remote_error(error: RemoteError) -> SdkRefusal {
+    match error {
+        RemoteError::Uncertain(why) => refused("Unknown", why),
+        RemoteError::Invalid(why) => refused("InvalidInput", why),
+        other => refused("Failed", other.to_string()),
+    }
+}
+
+/// The driver of a bucket record. Resolves its key now; sends nothing.
+fn driver(record: &SdkValue) -> Result<Box<dyn Driver>> {
+    let text = |name: &str| record.get_text(name).unwrap_or("").to_owned();
+    let credentials = CredentialRef::parse(&text("key")).map_err(remote_error)?;
+    let part_size = record
+        .get_int("part_size")
+        .map(|n| n as u64)
+        .unwrap_or(DEFAULT_PART_SIZE);
+    let provider = match record.get_text("provider") {
+        Some("minio") => Provider::Minio(MinioSettings {
+            endpoint: text("endpoint"),
+            bucket: text("bucket"),
+            prefix: text("prefix"),
+            region: record.get_text("region").unwrap_or("us-east-1").to_owned(),
+            credentials,
+            part_size,
+        }),
+        Some("r2") => Provider::R2(R2Settings {
+            account: text("account"),
+            jurisdiction: text("jurisdiction"),
+            bucket: text("bucket"),
+            prefix: text("prefix"),
+            credentials,
+            part_size,
+        }),
+        _ => return Err(refused("Failed", "a bucket record names no known provider")),
+    };
+    provider.driver().map_err(remote_error)
+}
+
+/// `(bucket, prefix)` of a URL's path.
+fn bucket_path(path: &str) -> Result<(String, String)> {
+    let path = path.trim_matches('/');
+    let (bucket, prefix) = path.split_once('/').unwrap_or((path, ""));
+    if bucket.is_empty() {
+        return Err(refused("InvalidInput", "the URL names no bucket"));
+    }
+    Ok((bucket.to_owned(), prefix.trim_end_matches('/').to_owned()))
+}
+
+/// A bucket record from `url`: `http(s)://host:port/<bucket>/<prefix>` for
+/// MinIO, `r2://<account>/<bucket>/<prefix>[?jurisdiction=eu|fedramp]` for r2.
+fn bucket_record(name: &str, url: &str, args: &SdkValue) -> Result<SdkValue> {
+    let key = args.get_text("key").map(str::to_owned).unwrap_or_else(|| {
+        format!(
+            "env:LAYERFS_BUCKET_{}",
+            name.to_uppercase().replace(['-', '.'], "_")
+        )
+    });
+    CredentialRef::parse(&key).map_err(remote_error)?;
+    let part_size = SdkValue::Int(
+        args.get_int("part_size")
+            .unwrap_or(DEFAULT_PART_SIZE as i64),
+    );
+    if let Some(rest) = url.strip_prefix("r2://") {
+        let (rest, query) = rest.split_once('?').unwrap_or((rest, ""));
+        let (account, path) = rest.split_once('/').unwrap_or((rest, ""));
+        let (bucket, prefix) = bucket_path(path)?;
+        let jurisdiction = query.strip_prefix("jurisdiction=").unwrap_or("");
+        return Ok(SdkValue::map([
+            ("name", SdkValue::text(name)),
+            ("provider", SdkValue::text("r2")),
+            ("account", SdkValue::text(account)),
+            ("jurisdiction", SdkValue::text(jurisdiction)),
+            ("bucket", SdkValue::text(bucket)),
+            ("prefix", SdkValue::text(prefix)),
+            ("region", SdkValue::text("auto")),
+            ("key", SdkValue::text(key)),
+            ("part_size", part_size),
+        ]));
+    }
+    let scheme = if url.starts_with("http://") {
+        "http://"
+    } else if url.starts_with("https://") {
+        "https://"
+    } else {
+        return Err(refused("InvalidInput", "a bucket URL is r2://<account>/<bucket>/<prefix> or http(s)://<host>/<bucket>/<prefix>"));
+    };
+    let after = &url[scheme.len()..];
+    let (host, path) = after.split_once('/').unwrap_or((after, ""));
+    let (bucket, prefix) = bucket_path(path)?;
+    Ok(SdkValue::map([
+        ("name", SdkValue::text(name)),
+        ("provider", SdkValue::text("minio")),
+        ("endpoint", SdkValue::text(format!("{scheme}{host}"))),
+        ("bucket", SdkValue::text(bucket)),
+        ("prefix", SdkValue::text(prefix)),
+        (
+            "region",
+            SdkValue::text(args.get_text("region").unwrap_or("us-east-1")),
+        ),
+        ("key", SdkValue::text(key)),
+        ("part_size", part_size),
+    ]))
+}
+
+/// Runs one `backup` call.
+pub(crate) fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
+    let home = context.home.clone();
+    match call {
+        "connect" => {
+            let name = args.get_text("name").unwrap_or("");
+            crate::names::name("bucket", name).map_err(|why| refused("InvalidInput", why))?;
+            let record = bucket_record(name, args.get_text("url").unwrap_or(""), args)?;
+            // one listing proves the bucket answers with this key
+            let driver = driver(&record)?;
+            remote::list_stores(driver.as_ref()).map_err(remote_error)?;
+            let _lock = home::lock::take(&home)?;
+            if paths::bucket_record(&home, name).exists() {
+                return Err(refused(
+                    "Exists",
+                    format!("a bucket named {name} is connected"),
+                ));
+            }
+            write_record(&paths::bucket_record(&home, name), &record)?;
+            Ok(record)
+        }
+        "disconnect" => disconnect(&home, args.get_text("name").unwrap_or("")),
+        "list" => list(&home, args.get_text("bucket")),
+        "create" => create(context, args),
+        "restore" => restore(context, args),
+        _ => Err(refused("InvalidInput", format!("no call backup.{call}"))),
+    }
+}
+
+/// Forgets a bucket and every Store's link to it; its objects stay.
+fn disconnect(home: &Path, name: &str) -> Outcome {
+    bucket_of(home, name)?;
+    let _lock = home::lock::take(home)?;
+    let mut unlinked = Vec::new();
+    for store in paths::names(&home.join("store")).map_err(failed)? {
+        let path = paths::store_record(home, &store);
+        let Some(record) = read_record(&path)? else {
+            continue;
+        };
+        if let Some(SdkValue::Map(links)) = record.get("backups") {
+            if links.iter().any(|(bucket, _)| bucket == name) {
+                let kept: Vec<_> = links.iter().filter(|(b, _)| b != name).cloned().collect();
+                write_record(
+                    &path,
+                    &with_field(record.clone(), "backups", SdkValue::Map(kept)),
+                )?;
+                unlinked.push(SdkValue::text(&store));
+            }
+        }
+    }
+    std::fs::remove_dir_all(
+        paths::bucket_record(home, name)
+            .parent()
+            .expect("in a folder"),
+    )
+    .map_err(failed)?;
+    Ok(SdkValue::map([
+        ("disconnected", SdkValue::text(name)),
+        ("unlinked", SdkValue::List(unlinked)),
+    ]))
+}
+
+fn hex(bytes: &[u8; 32]) -> SdkValue {
+    SdkValue::text(pieces::hex(bytes))
+}
+
+/// The heads digest a link records, as hex.
+fn link_heads(link: &SdkValue) -> Option<String> {
+    match link.get("heads") {
+        Some(SdkValue::Text(text)) => Some(text.clone()),
+        Some(SdkValue::Bytes(bytes)) => Some(pieces::hex(bytes)),
+        _ => None,
+    }
+}
+
+/// The current heads of a sqlite Store on `native`, when readable now.
+fn local_heads(home: &Path, store: &str, record: &SdkValue) -> Option<String> {
+    if record.get_text("kind") == Some("postgresql")
+        || route::machine(record, store).ok()? != "native"
+    {
+        return None;
+    }
+    let file = paths::store_file(home, store);
+    remote::heads(&file).ok().map(|h| pieces::hex(&h))
+}
+
+/// `backup.list(bucket?)`: every Store file on the connected buckets, each
+/// with its state against this home's links: `current` (linked, the Store
+/// unchanged since), `store_changed` (linked, the Store changed since),
+/// `unlinked` (no Store of this home links it) or `missing` (linked, gone
+/// from the bucket).
+fn list(home: &Path, only: Option<&str>) -> Outcome {
+    let buckets = match only {
+        Some(name) => vec![name.to_owned()],
+        None => paths::names(&home.join("backup")).map_err(failed)?,
+    };
+    // (bucket, file) -> (store, link)
+    let mut links = Vec::new();
+    for store in paths::names(&home.join("store")).map_err(failed)? {
+        let Some(record) = read_record(&paths::store_record(home, &store))? else {
+            continue;
+        };
+        if let Some(SdkValue::Map(fields)) = record.get("backups") {
+            for (bucket, link) in fields {
+                let file = link.get_text("file").unwrap_or(&store).to_owned();
+                links.push((
+                    bucket.clone(),
+                    file,
+                    store.clone(),
+                    link.clone(),
+                    record.clone(),
+                ));
+            }
+        }
+    }
+    let mut items = Vec::new();
+    for bucket in buckets {
+        let record = bucket_of(home, &bucket)?;
+        let copies = remote::list_stores(driver(&record)?.as_ref()).map_err(remote_error)?;
+        for copy in &copies {
+            let linked = links
+                .iter()
+                .find(|(b, f, ..)| *b == bucket && *f == copy.file);
+            let (state, store) = match linked {
+                None => ("unlinked", SdkValue::Null),
+                Some((_, _, store, link, record)) => {
+                    let now = local_heads(home, store, record);
+                    let state = match (now, link_heads(link)) {
+                        (Some(now), Some(then)) if now != then => "store_changed",
+                        _ => "current",
+                    };
+                    (state, SdkValue::text(store))
+                }
+            };
+            items.push(SdkValue::map([
+                ("bucket", SdkValue::text(&bucket)),
+                ("file", SdkValue::text(&copy.file)),
+                ("bytes", SdkValue::Int(copy.bytes as i64)),
+                (
+                    "modified",
+                    copy.modified
+                        .map(|m| SdkValue::Int(m as i64))
+                        .unwrap_or_default(),
+                ),
+                ("heads", copy.heads.as_ref().map(hex).unwrap_or_default()),
+                ("store", store),
+                ("state", SdkValue::text(state)),
+            ]));
+        }
+        for (b, file, store, ..) in &links {
+            if *b == bucket && !copies.iter().any(|c| c.file == *file) {
+                items.push(SdkValue::map([
+                    ("bucket", SdkValue::text(&bucket)),
+                    ("file", SdkValue::text(file)),
+                    ("store", SdkValue::text(store)),
+                    ("state", SdkValue::text("missing")),
+                ]));
+            }
+        }
+    }
+    Ok(SdkValue::map([("items", SdkValue::List(items))]))
+}
+
+/// The Store's link to `bucket` after a transfer.
+fn save_link(home: &Path, store: &str, bucket: &str, link: SdkValue) -> Result<()> {
+    let _lock = home::lock::take(home)?;
+    let path = paths::store_record(home, store);
+    let record = read_record(&path)?
+        .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
+    let links = match record.get("backups") {
+        Some(SdkValue::Map(fields)) => SdkValue::Map(fields.clone()),
+        _ => SdkValue::Map(Vec::new()),
+    };
+    write_record(
+        &path,
+        &with_field(record, "backups", with_field(links, bucket, link)),
+    )
+}
+
+fn link(file: &str, op: &str, bytes: u64, sha256: &[u8; 32], heads: Option<&[u8; 32]>) -> SdkValue {
+    SdkValue::map([
+        ("file", SdkValue::text(file)),
+        ("heads", heads.map(hex).unwrap_or_default()),
+        (
+            "last",
+            SdkValue::map([
+                ("op", SdkValue::text(op)),
+                ("at", SdkValue::Int(home::now_ms())),
+                ("bytes", SdkValue::Int(bytes as i64)),
+                ("sha256", hex(sha256)),
+            ]),
+        ),
+    ])
+}
+
+fn progress(context: &mut Context<'_>, phase: &str) {
+    context.progress(SdkValue::map([("phase", SdkValue::text(phase))]));
+}
+
+/// What the bucket must hold for a create: the copy this home last moved
+/// through the Store's link to that file, or nothing.
+fn expected(record: &SdkValue, bucket: &str, file: &str) -> remote::Expected {
+    let link = record.get("backups").and_then(|b| b.get(bucket));
+    match link {
+        Some(link) if link.get_text("file") == Some(file) => {
+            let sha = link.get("last").and_then(|l| match l.get("sha256") {
+                Some(SdkValue::Text(t)) => pieces::parse_hex32(t),
+                Some(SdkValue::Bytes(b)) => b.as_slice().try_into().ok(),
+                _ => None,
+            });
+            sha.map_or(remote::Expected::Any, remote::Expected::Sha256)
+        }
+        _ => remote::Expected::Absent,
+    }
+}
+
+/// `backup.create(store, bucket, file?)`.
+fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let home = context.home.clone();
+    let store = args.get_text("store").unwrap_or("");
+    let bucket = args.get_text("bucket").unwrap_or("");
+    let file = args.get_text("file").unwrap_or(store).to_owned();
+    let bucket_record = bucket_of(&home, bucket)?;
+    let record = read_record(&paths::store_record(&home, store))?
+        .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
+    if record.get_text("kind") == Some("postgresql") {
+        return Err(refused(
+            "InvalidInput",
+            format!("Store {store} is a PostgreSQL database; back it up with PostgreSQL's tools"),
+        ));
+    }
+    route::moving(&record, store)?;
+    let driver = driver(&bucket_record)?;
+    let expected = expected(&record, bucket, &file);
+    let identity = crate::host::stores::identity_of(&record)?;
+    let machine = route::machine(&record, store)?;
+    let _lease = lease::hold(&home, store)?;
+    progress(context, "snapshot");
+    let pushed = match route::endpoint(&home, &machine)? {
+        None => {
+            let path = paths::store_file(&home, store);
+            let args = SdkValue::map([
+                ("home", SdkValue::text(home.display().to_string())),
+                ("store", SdkValue::text(store)),
+                ("store_record", record.clone()),
+                ("storePath", SdkValue::text(path.display().to_string())),
+            ]);
+            progress(context, "upload");
+            crate::host::direct::with_service(&args, |service| {
+                remote::push(
+                    &service.opened,
+                    &path,
+                    driver.as_ref(),
+                    &file,
+                    &identity.binding,
+                    expected,
+                )
+                .map_err(|failure| push_refusal(&failure))
+            })?
+        }
+        Some(endpoint) => from_worker(
+            context,
+            &endpoint,
+            store,
+            &record,
+            driver.as_ref(),
+            &file,
+            &identity.binding,
+            expected,
+        )?,
+    };
+    let saved = link(
+        &file,
+        "create",
+        pushed.bytes,
+        &pushed.sha256,
+        pushed.heads.as_ref(),
+    );
+    save_link(&home, store, bucket, saved)?;
+    Ok(SdkValue::map([
+        ("store", SdkValue::text(store)),
+        ("bucket", SdkValue::text(bucket)),
+        ("file", SdkValue::text(&file)),
+        ("object", SdkValue::text(&pushed.object)),
+        ("bytes", SdkValue::Int(pushed.bytes as i64)),
+        ("pieces", SdkValue::Int(pushed.pieces as i64)),
+        ("sha256", hex(&pushed.sha256)),
+        ("heads", pushed.heads.as_ref().map(hex).unwrap_or_default()),
+    ]))
+}
+
+fn push_refusal(failure: &remote::PushFailure) -> SdkRefusal {
+    use layerfs_store_service::remote::storage::RemoteError as E;
+    let code = match failure {
+        remote::PushFailure::Invalid(_) => "InvalidInput",
+        remote::PushFailure::Space { .. } => "Capacity",
+        remote::PushFailure::RemoteMoved { .. } => "Conflict",
+        remote::PushFailure::Remote(E::Uncertain(_)) => "Unknown",
+        _ => "Failed",
+    };
+    refused(code, failure.to_string())
+}
+
+/// A backup of a Store behind a worker: the worker snapshots it beside the
+/// Store, the bytes come here in pieces into a staged copy in the home,
+/// and this process uploads that copy. The worker never sees the key.
+#[allow(clippy::too_many_arguments)]
+fn from_worker(
+    context: &mut Context<'_>,
+    endpoint: &crate::worker::Endpoint,
+    store: &str,
+    record: &SdkValue,
+    driver: &dyn Driver,
+    file: &str,
+    binding: &[u8],
+    expected: remote::Expected,
+) -> Result<remote::Pushed> {
+    let home = context.home.clone();
+    let step = |op: &str, more: Vec<(&str, SdkValue)>| {
+        let mut fields = vec![
+            ("store", SdkValue::text(store)),
+            ("store_record", record.clone()),
+        ];
+        fields.extend(more);
+        let args = SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
+        let request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
+        crate::worker::call(endpoint, "store.file", request, &mut |_| {})
+    };
+    let object = remote::store_object(file).map_err(|why| refused("InvalidInput", why))?;
+    check(driver, &object, expected)?;
+    let staged = step("stage", vec![])?;
+    let local = paths::store_dir(&home, store).join("backup.staging");
+    let result = (|| {
+        progress(context, "send");
+        let mut out = std::fs::File::create(&local).map_err(failed)?;
+        let mut offset = 0u64;
+        loop {
+            let piece = step(
+                "read",
+                vec![
+                    ("offset", SdkValue::Int(offset as i64)),
+                    ("len", SdkValue::Int(CHUNK as i64)),
+                    ("staged", SdkValue::Bool(true)),
+                ],
+            )?;
+            let Some(SdkValue::Bytes(bytes)) = piece.get("bytes") else {
+                break;
+            };
+            std::io::Write::write_all(&mut out, bytes).map_err(failed)?;
+            offset += bytes.len() as u64;
+            if (bytes.len() as u64) < CHUNK {
+                break;
+            }
+        }
+        drop(out);
+        let (bytes, sha256) = pieces::sha256_file(&local, None).map_err(remote_error)?;
+        if Some(pieces::hex(&sha256).as_str()) != staged.get_text("sha256") {
+            return Err(refused(
+                "Failed",
+                "the staged copy is not the snapshot the worker made",
+            ));
+        }
+        let heads = staged.get_text("heads").and_then(pieces::parse_hex32);
+        let mut metadata = Metadata::from([
+            (
+                remote::push::SQLITE_VERSION.to_owned(),
+                staged.get_text("sqlite").unwrap_or("").to_owned(),
+            ),
+            (remote::push::BINDING.to_owned(), pieces::hex(binding)),
+        ]);
+        if let Some(heads) = &heads {
+            metadata.insert(remote::HEADS.to_owned(), pieces::hex(heads));
+        }
+        progress(context, "upload");
+        check(driver, &object, expected)?;
+        let moved = pieces::upload(driver, &object, &local, &metadata).map_err(remote_error)?;
+        Ok(remote::Pushed {
+            object: object.clone(),
+            bytes,
+            sha256,
+            pieces: moved.pieces,
+            heads,
+            cleanup: moved.cleanup,
+        })
+    })();
+    let _ = std::fs::remove_file(&local);
+    let _ = step("unstage", vec![]);
+    result
+}
+
+/// The bucket holds what this home expects at `object`.
+fn check(driver: &dyn Driver, object: &str, expected: remote::Expected) -> Result<()> {
+    let found = driver.stat(object).map_err(remote_error)?;
+    let ok = match (expected, &found) {
+        (remote::Expected::Any, _) => true,
+        (remote::Expected::Absent, None) => true,
+        (remote::Expected::Sha256(want), Some(meta)) => {
+            meta.metadata
+                .get(pieces::SHA256)
+                .and_then(|s| pieces::parse_hex32(s))
+                == Some(want)
+        }
+        _ => false,
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(refused(
+            "Conflict",
+            format!(
+                "the bucket's {object} is not the copy this home last moved; nothing was uploaded"
+            ),
+        ))
+    }
+}
+
+/// `backup.restore(store, bucket, file?)`: the backup as a sqlite Store on
+/// `native`: a new Store when `store` does not exist, else it replaces an
+/// idle Store on `native` unchanged since its last backup or restore
+/// (`Conflict` otherwise).
+fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let home = context.home.clone();
+    let store = args.get_text("store").unwrap_or("");
+    crate::names::name("store", store).map_err(|why| refused("InvalidInput", why))?;
+    let bucket = args.get_text("bucket").unwrap_or("");
+    let bucket_record = bucket_of(&home, bucket)?;
+    let driver = driver(&bucket_record)?;
+    let existing = read_record(&paths::store_record(&home, store))?;
+    let file = args
+        .get_text("file")
+        .map(str::to_owned)
+        .or_else(|| {
+            existing.as_ref().and_then(|r| {
+                r.get("backups")?
+                    .get(bucket)?
+                    .get_text("file")
+                    .map(str::to_owned)
+            })
+        })
+        .unwrap_or_else(|| store.to_owned());
+    let destination = paths::store_file(&home, store);
+    progress(context, "download");
+    let (bytes, sha256, heads) = match &existing {
+        None => {
+            let _lock = home::lock::take(&home)?;
+            home::private_dir(&paths::store_dir(&home, store))?;
+            let cursor = crate::host::registry::random()?;
+            let loaded = match remote::load(driver.as_ref(), &file, &destination, cursor) {
+                Ok(loaded) => loaded,
+                Err(failure) => {
+                    let _ = std::fs::remove_dir_all(paths::store_dir(&home, store));
+                    return Err(refused("Failed", failure.to_string()));
+                }
+            };
+            let record = SdkValue::map([
+                ("name", SdkValue::text(store)),
+                ("kind", SdkValue::text("sqlite")),
+                ("binding", SdkValue::Bytes(loaded.binding.clone())),
+                ("cursor", SdkValue::Bytes(cursor.to_vec())),
+                ("machine", SdkValue::text("native")),
+                ("profile", SdkValue::text("disposable")),
+                ("created", SdkValue::Int(home::now_ms())),
+            ]);
+            write_record(&paths::store_record(&home, store), &record)?;
+            (loaded.bytes, loaded.sha256, loaded.heads)
+        }
+        Some(record) => {
+            if record.get_text("kind") == Some("postgresql") {
+                return Err(refused(
+                    "InvalidInput",
+                    format!("Store {store} is a PostgreSQL database"),
+                ));
+            }
+            let machine = route::machine(record, store)?;
+            if machine != "native" {
+                return Err(refused("Unsupported", format!("Store {store} is on {machine}; a restore replaces a Store on native: move it there first")));
+            }
+            let _lock = home::lock::take(&home)?;
+            route::moving(record, store)?;
+            crate::store::open::close(&destination)?;
+            let holders = lease::holders(&home, store)?;
+            if !holders.is_empty() {
+                return Err(refused(
+                    "InUse",
+                    format!("Store {store} is open in process {holders:?}"),
+                ));
+            }
+            let linked = record
+                .get("backups")
+                .and_then(|b| b.get(bucket))
+                .and_then(link_heads);
+            let now = remote::heads(&destination).ok().map(|h| pieces::hex(&h));
+            if linked.is_none() || now != linked {
+                return Err(refused(
+                    "Conflict",
+                    format!("Store {store} changed since its last backup or restore through {bucket}; back it up first or restore under a new name"),
+                ));
+            }
+            let identity = crate::host::stores::identity_of(record)?;
+            let pulled = remote::pull(
+                driver.as_ref(),
+                &file,
+                &destination,
+                &identity.binding,
+                identity.cursor_key,
+            )
+            .map_err(|failure| refused("Failed", failure.to_string()))?;
+            (pulled.bytes, pulled.sha256, pulled.heads)
+        }
+    };
+    save_link(
+        &home,
+        store,
+        bucket,
+        link(&file, "restore", bytes, &sha256, heads.as_ref()),
+    )?;
+    let projects = rebuild_projects(&home, store)?;
+    Ok(SdkValue::map([
+        ("store", SdkValue::text(store)),
+        ("bucket", SdkValue::text(bucket)),
+        ("file", SdkValue::text(&file)),
+        ("bytes", SdkValue::Int(bytes as i64)),
+        ("sha256", hex(&sha256)),
+        ("heads", heads.as_ref().map(hex).unwrap_or_default()),
+        ("projects", projects),
+    ]))
+}
+
+/// The project records of a restored Store, rebuilt from the Store itself:
+/// one per project it holds; a record whose project it lacks is removed.
+fn rebuild_projects(home: &Path, store: &str) -> Result<SdkValue> {
+    let record = read_record(&paths::store_record(home, store))?
+        .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
+    let args = SdkValue::map([
+        ("home", SdkValue::text(home.display().to_string())),
+        ("store", SdkValue::text(store)),
+        ("store_record", record),
+        (
+            "storePath",
+            SdkValue::text(paths::store_file(home, store).display().to_string()),
+        ),
+    ]);
+    let listed = crate::host::stores::list_projects(&args)?;
+    let SdkValue::List(items) = listed else {
+        return Err(refused("Failed", "the Store's project list is not a list"));
+    };
+    let mut names = Vec::new();
+    for item in &items {
+        let Some(name) = item.get_text("name") else {
+            continue;
+        };
+        let path = paths::project_record(home, store, name);
+        if read_record(&path)?.is_none() {
+            write_record(
+                &path,
+                &SdkValue::map([
+                    ("name", SdkValue::text(name)),
+                    ("stack", item.get("stack").cloned().unwrap_or_default()),
+                ]),
+            )?;
+        }
+        names.push(SdkValue::text(name));
+    }
+    for old in paths::names(&paths::store_dir(home, store).join("project")).map_err(failed)? {
+        if !names.contains(&SdkValue::text(&old)) {
+            std::fs::remove_dir_all(paths::project_dir(home, store, &old)).map_err(failed)?;
+        }
+    }
+    Ok(SdkValue::List(names))
+}
