@@ -147,3 +147,12 @@ Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated 
   wheels (O20) are NOT_RUN, no Linux build host in this pass. The
   production LOC counter does not count Python; the package's Python lines
   are reported beside it in the commit.
+- Steps 10b/10c ran in a subagent worktree (branch `issue533-v2-pg`, from
+  step 9) and were cherry-picked onto step 16. The library wiring is a
+  separate commit: `store.connect` on an empty database makes the fixed
+  `layerfs` schema with a new binding (an existing LayerFS schema keeps
+  its binding), and `project.init` into a PostgreSQL Store runs the live
+  add in the caller's process and writes the project record with its
+  LayerStack. Removing a project from a PostgreSQL Store stays
+  `Unsupported`. Sandboxes on PostgreSQL Stores stay `Unsupported` (O3
+  needs the docker machine's Sandbox path, not built in step 12).

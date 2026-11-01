@@ -147,11 +147,9 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         )
     })?;
     route::moving(&record, store)?;
+    let timeout = args.get_int("timeout").unwrap_or(INIT_TIMEOUT_MS);
     if record.get_text("kind") == Some("postgresql") {
-        return Err(refused(
-            "Unsupported",
-            format!("Init into PostgreSQL Store {store} is not built; Init into a sqlite Store and attach it"),
-        ));
+        return init_postgresql(context, store, name, folder, timeout, &record);
     }
     let machine = route::machine(&record, store)?;
     if machine != "native" {
@@ -164,7 +162,6 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ));
     }
     let _lease = lease::hold(&home, store)?;
-    let timeout = args.get_int("timeout").unwrap_or(INIT_TIMEOUT_MS);
     let call = host_args(
         &home,
         store,
@@ -175,12 +172,34 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ],
     );
     let watch = host_args(&home, store, vec![("project", SdkValue::text(name))]);
-    // the add runs on its own thread; this one reports its counts
+    let added = observed(context, &watch, || crate::host::stores::add_project(&call))?;
+    // the project's record keeps when it was made
+    let path = paths::project_record(&home, store, name);
+    if let Some(record) = read_record(&path)? {
+        let record =
+            crate::home::with_field(record, "created", SdkValue::Int(crate::home::now_ms()));
+        crate::home::write_record(&path, &record)?;
+    }
+    let mut out = summary(&home, store, name, &record);
+    for field in ["layer", "root"] {
+        if let Some(value) = added.get(field) {
+            out = crate::home::with_field(out, field, value.clone());
+        }
+    }
+    Ok(out)
+}
+
+/// Runs an add on its own thread while this one reports its counts.
+fn observed(
+    context: &mut Context<'_>,
+    watch: &SdkValue,
+    add: impl FnOnce() -> Outcome + Send,
+) -> Outcome {
     let outcome = std::thread::scope(|scope| {
-        let worker = scope.spawn(|| crate::host::stores::add_project(&call));
+        let worker = scope.spawn(add);
         let mut last = SdkValue::Null;
         while !worker.is_finished() {
-            if let Ok(progress) = crate::host::project::progress(&watch) {
+            if let Ok(progress) = crate::host::project::progress(watch) {
                 if progress != SdkValue::Null && progress != last {
                     context.progress(progress.clone());
                     last = progress;
@@ -190,15 +209,55 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         }
         worker.join()
     });
-    let added = outcome.map_err(|_| refused("Failed", "the Init thread panicked"))??;
-    // the project's record keeps when it was made
+    outcome.map_err(|_| refused("Failed", "the Init thread panicked"))?
+}
+
+/// `project.init` into a PostgreSQL Store (#533 step 10b): the live add
+/// runs in this process against the schema; the project's record names its
+/// LayerStack, as `store.connect` writes it for the projects it finds.
+fn init_postgresql(
+    context: &mut Context<'_>,
+    store: &str,
+    name: &str,
+    folder: &str,
+    timeout: i64,
+    record: &SdkValue,
+) -> Outcome {
+    let home = context.home.clone();
     let path = paths::project_record(&home, store, name);
-    if let Some(record) = read_record(&path)? {
-        let record =
-            crate::home::with_field(record, "created", SdkValue::Int(crate::home::now_ms()));
-        crate::home::write_record(&path, &record)?;
+    if path.exists() {
+        return Err(refused(
+            "Exists",
+            format!("Store {store} already has a project named {name}"),
+        ));
     }
-    let mut out = summary(&home, store, name, &record);
+    let call = host_args(
+        &home,
+        store,
+        vec![
+            ("name", SdkValue::text(name)),
+            ("path", SdkValue::text(folder)),
+            ("timeoutMs", SdkValue::Int(timeout)),
+            ("store_record", record.clone()),
+            (
+                "postgresql",
+                crate::family::postgres::selection(record, store)?,
+            ),
+        ],
+    );
+    let watch = host_args(&home, store, vec![("project", SdkValue::text(name))]);
+    let added = observed(context, &watch, || {
+        crate::host::postgres_init::add_project(&call)
+    })?;
+    crate::home::write_record(
+        &path,
+        &SdkValue::map([
+            ("name", SdkValue::text(name)),
+            ("stack", added.get("stack").cloned().unwrap_or_default()),
+            ("created", SdkValue::Int(crate::home::now_ms())),
+        ]),
+    )?;
+    let mut out = summary(&home, store, name, record);
     for field in ["layer", "root"] {
         if let Some(value) = added.get(field) {
             out = crate::home::with_field(out, field, value.clone());

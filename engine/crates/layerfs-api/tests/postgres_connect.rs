@@ -1,9 +1,11 @@
-//! PostgreSQL Stores (#533 step 10a): connect records a database's `layerfs`
-//! schema as a Store, with the password a reference resolved per call;
-//! Store calls then run on it; disconnect forgets it and keeps its data.
-//! Needs LAYERFS_TEST_PG_URL (a server URL without a password, to a
-//! database with no `layerfs` schema; the test leaves one behind) and
-//! LAYERFS_TEST_PG_PASSWORD; without them the test says so and passes.
+//! PostgreSQL Stores (#533 steps 10a and 10b): connect makes the `layerfs`
+//! schema in an empty database and records it as a Store, with the password
+//! a reference resolved per call; Init writes a project into it; Store
+//! calls then run on it; disconnect forgets it and keeps its data, and a
+//! second connect finds the project. Needs LAYERFS_TEST_PG_URL (a server
+//! URL without a password, to a database with no `layerfs` schema; the
+//! test leaves one behind) and LAYERFS_TEST_PG_PASSWORD; without them the
+//! test says so and passes.
 #![cfg(feature = "postgresql")]
 use layerfs_api::calls;
 use layerfs_api::home::{self, paths};
@@ -59,57 +61,38 @@ fn connect_read_and_disconnect() {
     );
     assert_eq!(refused.unwrap_err().0, "InvalidInput");
     let password = || ("password", t("env:LAYERFS_TEST_PG_PASSWORD"));
-    // an empty database has no layerfs schema: nothing is recorded
-    let empty = call(
-        &home,
-        "store.connect",
-        &[("name", t("pg")), ("url", t(&url)), password()],
-    );
-    assert!(empty.is_err(), "{empty:?}");
-    assert!(!paths::store_dir(&home, "pg").exists());
-
-    // a populated layerfs schema: a sqlite Store Inited, then copied in by
-    // the 1.1.0 import (until step 10b gives Init into PostgreSQL)
-    let folder = tempdir("folder");
-    std::fs::write(folder.join("README.md"), "hello pg\n").unwrap();
-    ok(&home, "store.create", &[("name", t("shop"))]);
-    ok(
-        &home,
-        "project.init",
-        &[
-            ("project", t("shop/api")),
-            ("folder", t(&folder.display().to_string())),
-        ],
-    );
-    let full = {
-        let pass = std::env::var("LAYERFS_TEST_PG_PASSWORD").unwrap();
-        format!("{scheme}://{user}:{pass}@{host}")
-    };
-    let import = SdkValue::map([
-        ("home", t(&home.display().to_string())),
-        ("store", t("shop")),
-        (
-            "storePath",
-            t(&paths::store_file(&home, "shop").display().to_string()),
-        ),
-        ("target", t("copied")),
-        (
-            "postgresql",
-            SdkValue::map([("url", t(&full)), ("schema", t("layerfs"))]),
-        ),
-    ]);
-    layerfs_api::host::dispatch::backend("runtime.store.import_postgresql".to_owned(), import)
-        .unwrap_or_else(|e| panic!("import: {} {}", e.code, e.message));
-    std::fs::remove_dir_all(paths::store_dir(&home, "copied")).unwrap();
-
+    // an empty database: connect makes the schema, with no project yet
     let connected = ok(
         &home,
         "store.connect",
         &[("name", t("pg")), ("url", t(&url)), password()],
     );
+    assert_eq!(connected.get("projects"), Some(&SdkValue::List(vec![])));
+    // Init into it, with progress on the call's stream
+    let folder = tempdir("folder");
+    std::fs::write(folder.join("README.md"), "hello pg\n").unwrap();
+    let made = ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("pg/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+    assert_eq!(made.get_text("project"), Some("pg/api"));
+    assert!(paths::project_record(&home, "pg", "api").is_file());
     assert_eq!(
-        connected.get("projects"),
-        Some(&SdkValue::List(vec![t("api")]))
+        call(
+            &home,
+            "project.init",
+            &[
+                ("project", t("pg/api")),
+                ("folder", t(&folder.display().to_string())),
+            ],
+        )
+        .unwrap_err()
+        .0,
+        "Exists"
     );
     let record = std::fs::read_to_string(paths::store_record(&home, "pg")).unwrap();
     assert!(
@@ -137,6 +120,25 @@ fn connect_read_and_disconnect() {
         ],
     );
     assert_eq!(read.get_text("text"), Some("hello pg\n"));
+    ok(
+        &home,
+        "branch.fork",
+        &[
+            ("project", t("pg/api")),
+            ("name", t("fix")),
+            ("from_branch", t("main")),
+        ],
+    );
+    ok(
+        &home,
+        "file.write",
+        &[
+            ("project", t("pg/api")),
+            ("branch", t("fix")),
+            ("path", t("/NEW.md")),
+            ("content", t("written\n")),
+        ],
+    );
     let status = ok(&home, "store.status", &[("name", t("pg"))]);
     assert_eq!(
         status.get("server").and_then(|s| s.get("reachable")),
@@ -163,6 +165,16 @@ fn connect_read_and_disconnect() {
         Some(&SdkValue::List(vec![t("api")])),
         "the data stayed"
     );
+    let kept = ok(
+        &home,
+        "file.read",
+        &[
+            ("project", t("pg2/api")),
+            ("branch", t("fix")),
+            ("path", t("/NEW.md")),
+        ],
+    );
+    assert_eq!(kept.get_text("text"), Some("written\n"));
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }

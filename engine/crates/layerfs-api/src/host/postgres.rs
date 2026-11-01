@@ -20,7 +20,7 @@ const UNBUILT: &str =
 
 /// `synchronous_commit` as the call or record names it: off (default),
 /// local, remote_write, on or remote_apply.
-fn setting(args: &SdkValue) -> Result<String, SdkRefusal> {
+pub(crate) fn setting(args: &SdkValue) -> Result<String, SdkRefusal> {
     let given = args
         .get("postgresql")
         .and_then(|p| p.get_text("synchronousCommit"))
@@ -37,7 +37,7 @@ fn setting(args: &SdkValue) -> Result<String, SdkRefusal> {
 }
 
 /// The schema a call names: `[a-z_][a-z0-9_]*`, at most 63 bytes.
-fn schema(args: &SdkValue) -> Result<String, SdkRefusal> {
+pub(crate) fn schema(args: &SdkValue) -> Result<String, SdkRefusal> {
     let schema = args
         .get("postgresql")
         .and_then(|p| p.get_text("schema"))
@@ -60,7 +60,7 @@ fn schema(args: &SdkValue) -> Result<String, SdkRefusal> {
     Ok(schema.to_owned())
 }
 
-fn url(args: &SdkValue) -> Result<&str, SdkRefusal> {
+pub(crate) fn url(args: &SdkValue) -> Result<&str, SdkRefusal> {
     args.get("postgresql")
         .and_then(|p| p.get_text("url"))
         .ok_or_else(|| {

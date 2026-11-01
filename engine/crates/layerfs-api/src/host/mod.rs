@@ -16,6 +16,7 @@ pub mod outcome;
 pub mod output;
 pub(crate) mod pool;
 pub(crate) mod postgres;
+pub(crate) mod postgres_init;
 pub(crate) mod progress;
 pub(crate) mod project;
 pub(crate) mod registry;

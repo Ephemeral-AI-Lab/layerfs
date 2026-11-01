@@ -474,7 +474,7 @@ pub(crate) fn add_project(args: &SdkValue) -> Outcome {
     }
     let added = match added {
         Ok(added) => added,
-        Err(failure) => return Err(add_failure(failure.error, &entry, name, store)),
+        Err(failure) => return Err(add_failure(failure.error, Some(&entry), name, store)),
     };
     let root = added.initialized.root.to_bytes();
     save_entry(
@@ -509,8 +509,14 @@ pub(crate) fn add_project(args: &SdkValue) -> Outcome {
 
 /// An add's refusal. One that wrote nothing to the Store (the name taken,
 /// no acquisition tables, another add working, or a refused source entry)
-/// removes the entry this call made; any other keeps it for diagnosis.
-fn add_failure(error: InitError, entry: &Path, name: &str, store: &str) -> SdkRefusal {
+/// removes the entry this call made, if any; any other keeps it for
+/// diagnosis.
+pub(crate) fn add_failure(
+    error: InitError,
+    entry: Option<&Path>,
+    name: &str,
+    store: &str,
+) -> SdkRefusal {
     let refusal = match &error {
         InitError::Exists => refused(
             "Exists",
@@ -533,7 +539,9 @@ fn add_failure(error: InitError, entry: &Path, name: &str, store: &str) -> SdkRe
         ),
         _ => return failed(format!("adding project {name} to Store {store}: {error:?}")),
     };
-    let _ = std::fs::remove_dir_all(entry);
+    if let Some(entry) = entry {
+        let _ = std::fs::remove_dir_all(entry);
+    }
     refusal
 }
 

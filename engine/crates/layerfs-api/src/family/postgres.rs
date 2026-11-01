@@ -100,7 +100,7 @@ fn with_password(url: &str, password: Option<&str>) -> Result<String> {
 }
 
 /// The host operations' `postgresql` argument for a Store record.
-fn selection(record: &SdkValue, store: &str) -> Result<SdkValue> {
+pub(crate) fn selection(record: &SdkValue, store: &str) -> Result<SdkValue> {
     Ok(SdkValue::map([
         ("url", SdkValue::text(url(record, store)?)),
         ("schema", SdkValue::text(SCHEMA)),
@@ -161,15 +161,25 @@ fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
     if paths::store_record(home, name).exists() {
         return Err(refused("Exists", format!("a Store named {name} exists")));
     }
-    // the schema's binding, read once; this home's own cursor key
+    // an empty database gets the schema, with a new binding (#533 step
+    // 10b); an existing LayerFS schema keeps its binding, read once. The
+    // cursor key is this home's own either way.
     let probe = SdkValue::map([("postgresql", selection.clone())]);
-    let binding = crate::host::postgres::read_binding(&probe)?;
+    let fresh = crate::host::stores::Identity {
+        kind: crate::host::stores::Kind::Postgresql {
+            schema: SCHEMA.to_owned(),
+            synchronous_commit: sync.to_owned(),
+        },
+        binding: crate::host::registry::random()?.to_vec(),
+        cursor_key: crate::host::registry::random()?,
+    };
+    let binding = if crate::host::postgres_init::create_schema(&probe, &fresh)? {
+        fresh.binding
+    } else {
+        crate::host::postgres::read_binding(&probe)?
+    };
     let record = home::with_field(record, "binding", SdkValue::Bytes(binding));
-    let record = home::with_field(
-        record,
-        "cursor",
-        SdkValue::Bytes(crate::host::registry::random()?.to_vec()),
-    );
+    let record = home::with_field(record, "cursor", SdkValue::Bytes(fresh.cursor_key.to_vec()));
     let directory = paths::store_dir(home, name);
     home::private_dir(&directory)?;
     write_record(&paths::store_record(home, name), &record)?;
