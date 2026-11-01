@@ -57,6 +57,22 @@ pub(crate) fn machine(record: &SdkValue, store: &str) -> Result<String, SdkRefus
     }
 }
 
+/// Refuses `InUse` while a live process moves the Store (its record's
+/// `in_progress`); a move whose process is gone does not block.
+pub(crate) fn moving(record: &SdkValue, store: &str) -> Result<(), SdkRefusal> {
+    let Some(progress @ SdkValue::Map(_)) = record.get("in_progress") else {
+        return Ok(());
+    };
+    let pid = progress.get_int("pid").unwrap_or(0) as u32;
+    if pid != 0 && pid != std::process::id() && lease::alive(pid) {
+        return Err(refused(
+            "InUse",
+            format!("Store {store} is being moved by process {pid}"),
+        ));
+    }
+    Ok(())
+}
+
 /// Runs Store method `op` with `args` on the Store of `target`.
 pub(crate) fn store_call(
     context: &mut Context<'_>,
@@ -71,6 +87,7 @@ pub(crate) fn store_call(
         ("store".to_owned(), SdkValue::text(&target.store)),
         ("store_record".to_owned(), target.record.clone()),
     ]);
+    moving(&target.record, &target.store)?;
     if target.record.get_text("kind") == Some("postgresql") {
         return postgresql(&home, target, op, fields);
     }
@@ -136,7 +153,10 @@ pub(crate) fn postgresql_url(record: &SdkValue, store: &str) -> Result<String, S
 /// The worker of `machine`, or `None` when its Stores open in this
 /// process: `native` is in process; any other machine's worker is the one
 /// its `worker.json` records.
-fn endpoint(home: &Path, machine: &str) -> Result<Option<crate::worker::Endpoint>, SdkRefusal> {
+pub(crate) fn endpoint(
+    home: &Path,
+    machine: &str,
+) -> Result<Option<crate::worker::Endpoint>, SdkRefusal> {
     if machine == "native" {
         return Ok(None);
     }

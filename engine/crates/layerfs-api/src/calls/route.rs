@@ -14,6 +14,9 @@ pub fn run(call: &Call, context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if matches!(call.family, "branch" | "commit" | "file") {
         return crate::family::files::run(context, call.family, call.call, args);
     }
+    if call.family == "store" && !matches!(call.call, "connect" | "disconnect") {
+        return crate::family::stores::run(context, call.call, args);
+    }
     match handler(call) {
         Ok(handler) => handler(context, args),
         Err(step) => Err(refused(
@@ -30,7 +33,6 @@ pub fn handler(call: &Call) -> Result<Handler, u8> {
         "sandbox" | "workspace" => 12,
         "machine" => 6,
         "store" if matches!(call.call, "connect" | "disconnect") => 10,
-        "store" => 8,
         "backup" => 11,
         _ => 2,
     })

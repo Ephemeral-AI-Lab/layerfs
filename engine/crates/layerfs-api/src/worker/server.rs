@@ -121,6 +121,14 @@ fn run(op: &str, args: SdkValue, root: &Path, _events: &mut dyn FnMut(SdkValue))
             );
             crate::store::open::run(&name, inner, None)
         }
+        // one step of a Store move or remove on this machine
+        "store.file" => {
+            let name = args
+                .get_text("op")
+                .ok_or_else(|| refused("InvalidInput", "Store step name"))?
+                .to_owned();
+            crate::store::files::run(root, &name, &args.get("args").cloned().unwrap_or_default())
+        }
         "host.call" | "host.backend" => {
             let name = args
                 .get_text("op")

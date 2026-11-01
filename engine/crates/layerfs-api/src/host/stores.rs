@@ -267,7 +267,7 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
 
 /// Creates and seals the empty Store at `<destination>.creating`, then
 /// renames it into place; a failure removes this call's own file.
-fn make_empty(
+pub(crate) fn make_empty(
     global: &Path,
     destination: &Path,
     identity: &Identity,
