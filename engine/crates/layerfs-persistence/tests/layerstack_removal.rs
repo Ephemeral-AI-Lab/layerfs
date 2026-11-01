@@ -1,7 +1,7 @@
 //! #506: removing one project (LayerStack) from a Store that holds two leaves
 //! the other whole, frees the name, and takes the removed project's logical
 //! bytes out of the totals. Runs on SQLite; with `LAYERFS_TEST_POSTGRES_URL`
-//! set it also runs on a PostgreSQL Store imported from the same SQLite Store.
+//! set it also runs on a new PostgreSQL Store given the same two projects.
 mod support;
 
 use layerfs_history::error::Missing;
@@ -76,28 +76,26 @@ fn commit(history: &dyn HistoryCatalog, branch: BranchId, tag: u8) -> CommitReco
     *record
 }
 
-/// The two projects in a new SQLite Store, `api` first so the totals of a
-/// Store holding only `api` are known. Returns the Store, those totals, and
-/// the Commits of `api` and `shop`.
-fn two_projects(temp: &Temp) -> (Handles, u64, CommitRecord, CommitRecord) {
-    let created = Handles::create(
-        sqlite(temp.join("store")),
-        StoragePolicy::frozen_default(),
-        &HistoryCatalogConfig {
-            binding_key: BINDING.to_vec(),
-            cursor_key: CURSOR,
-            incarnation: 3,
-        },
-    )
-    .unwrap();
-    let api = project(&created.history, 2, "api", 20);
-    let api_commit = commit(&created.history, api, 5);
-    let api_only = created.history.statistics().unwrap().logical;
-    let shop = project(&created.history, 1, "shop", 1000);
-    let first = commit(&created.history, shop, 6);
-    commit(&created.history, shop, 7);
+fn catalog() -> HistoryCatalogConfig {
+    HistoryCatalogConfig {
+        binding_key: BINDING.to_vec(),
+        cursor_key: CURSOR,
+        incarnation: 3,
+    }
+}
+
+/// The two projects in a new Store, `api` first so the totals of a Store
+/// holding only `api` are known. Returns those totals and the Commits of
+/// `api` and `shop`.
+fn two_projects(history: &dyn HistoryCatalog) -> (u64, CommitRecord, CommitRecord) {
+    let api = project(history, 2, "api", 20);
+    let api_commit = commit(history, api, 5);
+    let api_only = history.statistics().unwrap().logical;
+    let shop = project(history, 1, "shop", 1000);
+    let first = commit(history, shop, 6);
+    commit(history, shop, 7);
     assert_eq!(first.stack, stack(1));
-    (created, api_only, api_commit, first)
+    (api_only, api_commit, first)
 }
 
 /// Removes `shop` and checks what stays and what goes.
@@ -152,7 +150,13 @@ fn removes_one_project(
 #[test]
 fn removing_one_project_leaves_the_other_whole_on_sqlite() {
     let temp = Temp::new("layerstack-removal");
-    let (created, api_only, api_commit, shop_commit) = two_projects(&temp);
+    let created = Handles::create(
+        sqlite(temp.join("store")),
+        StoragePolicy::frozen_default(),
+        &catalog(),
+    )
+    .unwrap();
+    let (api_only, api_commit, shop_commit) = two_projects(&created.history);
     removes_one_project(&created.history, api_only, &api_commit, &shop_commit);
 }
 
@@ -172,16 +176,16 @@ fn removing_one_project_leaves_the_other_whole_on_postgresql() {
             }
         }
     }
-    let temp = Temp::new("layerstack-removal-pg");
-    let (created, api_only, api_commit, shop_commit) = two_projects(&temp);
-    let copy = created.snapshot(&temp.join("copy")).unwrap();
     let schema = Schema(
         url.clone(),
         format!("lfs506_removal_{}", std::process::id()),
     );
     let selection = PostgresSelection::new(&url, &schema.1);
-    PostgresHandles::import(sqlite(copy.path), &selection, BINDING, CURSOR).unwrap();
-    // A home that did not import the schema reads its binding to open it.
+    let created =
+        PostgresHandles::create(&selection, StoragePolicy::frozen_default(), &catalog()).unwrap();
+    let (api_only, api_commit, shop_commit) = two_projects(&created.history);
+    drop(created);
+    // A home that did not create the schema reads its binding to open it.
     assert_eq!(PostgresHandles::binding(&selection).unwrap(), BINDING);
     let pg = PostgresHandles::open_writable(&selection, BINDING, CURSOR).unwrap();
     removes_one_project(&pg.history, api_only, &api_commit, &shop_commit);

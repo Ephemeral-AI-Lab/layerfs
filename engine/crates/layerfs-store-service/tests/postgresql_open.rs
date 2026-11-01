@@ -3,10 +3,7 @@
 #![cfg(feature = "postgresql")]
 use layerfs_history::records::StackInitialization;
 use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
-use layerfs_persistence::{
-    BackendSelection, Handles, PersistenceConfig, PostgresHandles, PostgresSelection,
-    SqlitePersistenceProfile,
-};
+use layerfs_persistence::{PersistenceConfig, PostgresHandles, PostgresSelection};
 use layerfs_storage::{ReservationBlocks, StoragePolicy};
 use layerfs_store_service::bootstrap::open_store_observed;
 
@@ -21,42 +18,36 @@ fn a_postgresql_store_opens_through_the_store_open_path() {
     };
     let dir = std::env::temp_dir().join(format!("lfs506-open-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let sqlite = |path| {
-        PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
-    };
-    let created = Handles::create(
-        sqlite(dir.join("store")),
-        StoragePolicy::frozen_default(),
-        &HistoryCatalogConfig {
-            binding_key: BINDING.to_vec(),
-            cursor_key: CURSOR,
-            incarnation: 2,
-        },
-    )
-    .unwrap();
     let id = |tag: u8| layerfs_content::ObjectId::for_bytes(&[tag]);
     let stack = LayerStackId::from_authority([5; 16]);
-    layerfs_history::HistoryCatalog::initialize_layerstack(
-        &created.history,
-        &StackInitialization {
-            logical: 0,
-            stack,
-            name: HistoryName::new("main").unwrap(),
-            scope: id(1),
-            profile: id(2),
-            genesis_root: id(3),
-        },
-    )
-    .unwrap();
-    let copy = created.snapshot(&dir.join("copy")).unwrap();
     let schema = format!("lfs506_open_{}", std::process::id());
     let selection = PostgresSelection::new(&url, &schema);
     let result = (|| {
-        PostgresHandles::import(sqlite(copy.path.clone()), &selection, BINDING, CURSOR).unwrap();
-        let mut config = sqlite(dir.join("unused"));
-        config.backend = BackendSelection::Postgres(selection.clone());
+        let created = PostgresHandles::create(
+            &selection,
+            StoragePolicy::frozen_default(),
+            &HistoryCatalogConfig {
+                binding_key: BINDING.to_vec(),
+                cursor_key: CURSOR,
+                incarnation: 2,
+            },
+        )
+        .unwrap();
+        layerfs_history::HistoryCatalog::initialize_layerstack(
+            &created.history,
+            &StackInitialization {
+                logical: 0,
+                stack,
+                name: HistoryName::new("main").unwrap(),
+                scope: id(1),
+                profile: id(2),
+                genesis_root: id(3),
+            },
+        )
+        .unwrap();
+        drop(created);
         let opened = open_store_observed(
-            config,
+            PersistenceConfig::postgresql(selection.clone()),
             BINDING,
             CURSOR,
             4,

@@ -1,7 +1,6 @@
 //! #506: one project on SQLite and on PostgreSQL gives identical object, root
-//! and Commit ids. The project starts on SQLite (Init stays SQLite only), is
-//! snapshotted and imported into PostgreSQL, then both engines take the same
-//! further Saves and Commits.
+//! and Commit ids. A new Store on each engine (#533 step 10b: a PostgreSQL
+//! Store is created, not imported) takes the same Saves and Commits.
 //!
 //! Needs a PostgreSQL server: set `LAYERFS_TEST_POSTGRES_URL` (for example
 //! `host=127.0.0.1 port=55432 user=postgres password=... dbname=layerfs
@@ -14,6 +13,7 @@ use layerfs_history::records::{
     BindingHint, CommitMeta, CommitOutcome, CommitRecord, CommitVia, FileDigest, ForkRequest,
     ForkSource, StackInitialization,
 };
+use layerfs_history::LayerStackRecord;
 use layerfs_history::{BranchId, HistoryCatalog, HistoryCatalogConfig};
 use layerfs_persistence::{
     Handles, PersistenceConfig, PostgresHandles, PostgresSelection, SqliteAcquisitionSchema,
@@ -119,6 +119,51 @@ impl Drop for Schema {
     }
 }
 
+fn catalog() -> HistoryCatalogConfig {
+    HistoryCatalogConfig {
+        binding_key: BINDING.to_vec(),
+        cursor_key: CURSOR,
+        incarnation: 9,
+    }
+}
+
+/// The new Store `selection` names, on PostgreSQL.
+fn create_postgresql(selection: &PostgresSelection) -> PostgresHandles {
+    PostgresHandles::create(selection, StoragePolicy::frozen_default(), &catalog()).unwrap()
+}
+
+/// A project's start on one engine: its genesis, Branch `work`, a file and
+/// a first Commit. Returns the stack, the file's root and the Commit.
+fn start(
+    storage: &Storage,
+    history: &dyn HistoryCatalog,
+    branch: BranchId,
+    file: &[u8],
+) -> (LayerStackRecord, ObjectId, CommitRecord) {
+    let genesis_root = save(storage, b"genesis tree of the project");
+    let stack_record = history
+        .initialize_layerstack(&StackInitialization {
+            logical: 0,
+            stack: stack(1),
+            name: name("main"),
+            scope: root(200),
+            profile: root(201),
+            genesis_root,
+        })
+        .unwrap();
+    history
+        .fork(&ForkRequest {
+            stack: stack(1),
+            branch,
+            name: name("work"),
+            source: ForkSource::Layer(stack_record.head_layer),
+        })
+        .unwrap();
+    let first_root = save(storage, file);
+    let first = commit(history, branch, first_root);
+    (stack_record, first_root, first)
+}
+
 /// The same work on one engine: a new file, an edited file, a Commit held in
 /// the publication lane, and a second Commit.
 fn continue_project(
@@ -149,42 +194,14 @@ fn one_project_has_identical_ids_on_sqlite_and_postgresql() {
     let created = Handles::create(
         sqlite(temp.join("store")),
         StoragePolicy::frozen_default(),
-        &HistoryCatalogConfig {
-            binding_key: BINDING.to_vec(),
-            cursor_key: CURSOR,
-            incarnation: 9,
-        },
+        &catalog(),
     )
     .unwrap();
     let sqlite_storage = Storage::new(created.storage.clone()).unwrap();
-    let genesis_root = save(&sqlite_storage, b"genesis tree of the project");
-    let stack_record = created
-        .history
-        .initialize_layerstack(&StackInitialization {
-            logical: 0,
-            stack: stack(1),
-            name: name("main"),
-            scope: root(200),
-            profile: root(201),
-            genesis_root,
-        })
-        .unwrap();
     let branch = branch_id(1);
-    created
-        .history
-        .fork(&ForkRequest {
-            stack: stack(1),
-            branch,
-            name: name("work"),
-            source: ForkSource::Layer(stack_record.head_layer),
-        })
-        .unwrap();
     let file = bytes(2, 400_000);
-    let first_root = save(&sqlite_storage, &file);
-    let first = commit(&created.history, branch, first_root);
+    let (stack_record, first_root, first) = start(&sqlite_storage, &created.history, branch, &file);
 
-    // The project moves to PostgreSQL as a snapshot of the live SQLite Store.
-    let copy = created.snapshot(&temp.join("copy")).unwrap();
     let schema = Schema {
         url: url.clone(),
         name: format!(
@@ -197,12 +214,17 @@ fn one_project_has_identical_ids_on_sqlite_and_postgresql() {
         ),
     };
     let selection = PostgresSelection::new(&url, &schema.name);
-    let receipt = PostgresHandles::import(sqlite(copy.path), &selection, BINDING, CURSOR).unwrap();
-    let packs = receipt.tables.iter().find(|(t, _)| *t == "pack").unwrap().1;
-    assert!(packs > 0 && receipt.pack_bytes > 0, "{receipt:?}");
+    let made = create_postgresql(&selection);
+    let made_storage = Storage::new(made.storage.clone() as Arc<dyn PackPersistence>).unwrap();
+    let (pg_stack, pg_root, pg_first) = start(&made_storage, &made.history, branch, &file);
+    // The same identities; only the Commit's wall-clock time differs.
+    assert_eq!((pg_stack, pg_root), (stack_record.clone(), first_root));
+    let ids = |c: &CommitRecord| (c.id, c.root, c.parent, c.base_layer, c.stack);
+    assert_eq!(ids(&pg_first), ids(&first));
+    drop((made_storage, made));
     // An existing schema is refused, never merged into.
     assert!(
-        PostgresHandles::import(sqlite(temp.join("copy")), &selection, BINDING, CURSOR).is_err()
+        PostgresHandles::create(&selection, StoragePolicy::frozen_default(), &catalog()).is_err()
     );
     // A wrong binding is refused at open.
     assert!(PostgresHandles::open_writable(&selection, b"another-binding", CURSOR).is_err());
@@ -216,14 +238,14 @@ fn one_project_has_identical_ids_on_sqlite_and_postgresql() {
     )
     .unwrap();
     let pg_storage = Storage::new(pg.storage.clone() as Arc<dyn PackPersistence>).unwrap();
-    // The imported project is the same project.
+    // A new session reads the same project.
     assert_eq!(read(&pg_storage, first_root, file.len()), file);
     assert_eq!(
         pg.history.branch(branch).unwrap(),
         created.history.branch(branch).unwrap()
     );
-    let imported = pg.history.commit(first.id).unwrap().unwrap();
-    assert_eq!((imported.id, imported.root), (first.id, first.root));
+    let stored = pg.history.commit(first.id).unwrap().unwrap();
+    assert_eq!((stored.id, stored.root), (first.id, first.root));
     assert_eq!(
         pg.history.layer_stack(stack(1)).unwrap(),
         created.history.layer_stack(stack(1)).unwrap()
@@ -290,18 +312,12 @@ fn a_held_lane_makes_another_writer_wait_then_fail_busy_once() {
         eprintln!("NOT_RUN: LAYERFS_TEST_POSTGRES_URL is unset");
         return;
     };
-    let temp = Temp::new("postgresql-lane");
-    let created = Handles::create(
-        sqlite(temp.join("store")),
-        StoragePolicy::frozen_default(),
-        &HistoryCatalogConfig {
-            binding_key: BINDING.to_vec(),
-            cursor_key: CURSOR,
-            incarnation: 9,
-        },
-    )
-    .unwrap();
-    created
+    let schema = Schema {
+        url: url.clone(),
+        name: format!("lfs506_lane_{}", std::process::id()),
+    };
+    let mut selection = PostgresSelection::new(&url, &schema.name);
+    create_postgresql(&selection)
         .history
         .initialize_layerstack(&StackInitialization {
             logical: 0,
@@ -312,13 +328,6 @@ fn a_held_lane_makes_another_writer_wait_then_fail_busy_once() {
             genesis_root: root(0),
         })
         .unwrap();
-    let copy = created.snapshot(&temp.join("copy")).unwrap();
-    let schema = Schema {
-        url: url.clone(),
-        name: format!("lfs506_lane_{}", std::process::id()),
-    };
-    let mut selection = PostgresSelection::new(&url, &schema.name);
-    PostgresHandles::import(sqlite(copy.path), &selection, BINDING, CURSOR).unwrap();
     selection.lock_timeout_ms = 200;
     let holder = PostgresHandles::open_writable(&selection, BINDING, CURSOR).unwrap();
     let other = PostgresHandles::open_writable(&selection, BINDING, CURSOR).unwrap();
@@ -362,25 +371,24 @@ fn hints_and_digests_in_arrays_read_back_as_on_sqlite() {
     let created = Handles::create(
         sqlite(temp.join("store")),
         StoragePolicy::frozen_default(),
-        &HistoryCatalogConfig {
-            binding_key: BINDING.to_vec(),
-            cursor_key: CURSOR,
-            incarnation: 9,
-        },
+        &catalog(),
     )
     .unwrap();
     let saved = save(
         &Storage::new(created.storage.clone()).unwrap(),
         b"a saved file",
     );
-    let copy = created.snapshot(&temp.join("copy")).unwrap();
     let schema = Schema {
         url: url.clone(),
         name: format!("lfs506_arrays_{}", std::process::id()),
     };
     let selection = PostgresSelection::new(&url, &schema.name);
-    PostgresHandles::import(sqlite(copy.path), &selection, BINDING, CURSOR).unwrap();
-    let pg = PostgresHandles::open_writable(&selection, BINDING, CURSOR).unwrap();
+    let pg = create_postgresql(&selection);
+    let pg_saved = save(
+        &Storage::new(pg.storage.clone() as Arc<dyn PackPersistence>).unwrap(),
+        b"a saved file",
+    );
+    assert_eq!(pg_saved, saved);
     let engines: [&dyn HistoryCatalog; 2] = [&created.history, &pg.history];
 
     let mut hints: Vec<BindingHint> = (0..1500u64)
