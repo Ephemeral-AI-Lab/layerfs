@@ -1,7 +1,5 @@
 //! The binding's two functions and the task that runs one call.
-use layerfs_api::calls::{self, json, Scope};
-use layerfs_api::host::outcome::refused;
-use layerfs_bridge::control::SdkValue;
+use layerfs_api::calls;
 use napi::bindgen_prelude::AsyncTask;
 use napi::threadsafe_function::{
     ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
@@ -53,49 +51,27 @@ pub struct Call {
     events: Option<ThreadsafeFunction<String, ErrorStrategy::Fatal>>,
 }
 
-impl Call {
-    fn run(&mut self) -> layerfs_api::host::outcome::Outcome {
-        let parse = |text: &str| json::parse(text).map_err(|why| refused("InvalidInput", why.0));
-        let args = parse(&self.args)?;
-        let scope = match &self.scope {
-            Some(text) => Some(Scope::parse(&parse(text)?)?),
-            None => None,
-        };
-        let events = self.events.clone();
-        let mut send = move |event: SdkValue| {
-            if let Some(events) = &events {
-                events.call(json::print(&event), ThreadsafeFunctionCallMode::Blocking);
-            }
-        };
-        calls::call_scoped(
-            self.home.as_deref(),
-            scope.as_ref(),
-            &self.name,
-            args,
-            &mut send,
-        )
-    }
-}
-
 impl Task for Call {
     type Output = String;
     type JsValue = String;
 
     fn compute(&mut self) -> napi::Result<String> {
-        let answer = match self.run() {
-            Ok(value) => SdkValue::map([("value", value)]),
-            Err(refusal) => SdkValue::map([(
-                "refused",
-                SdkValue::map([
-                    ("code", SdkValue::Text(refusal.code)),
-                    ("message", SdkValue::Text(refusal.message)),
-                    ("detail", refusal.detail),
-                ]),
-            )]),
+        let events = self.events.clone();
+        let mut send = move |event: String| {
+            if let Some(events) = &events {
+                events.call(event, ThreadsafeFunctionCallMode::Blocking);
+            }
         };
+        let answer = calls::call_json(
+            self.home.as_deref(),
+            self.scope.as_deref(),
+            &self.name,
+            &self.args,
+            &mut send,
+        );
         // the event function is released with the call
         self.events = None;
-        Ok(json::print(&answer))
+        Ok(answer)
     }
 
     fn resolve(&mut self, _env: Env, answer: String) -> napi::Result<String> {
