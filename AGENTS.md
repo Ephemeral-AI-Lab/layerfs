@@ -125,13 +125,15 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   deletes global history.
 - Target (owner direction 2026-10-07, Store calls revised 2026-10-18): every
   daemon opens the global Store directly from a volume the daemons share and
-  reads, saves and publishes in-process. Project Init creates and seals one
-  Store file, installed into that volume. **SDK Store calls (fs, branch,
-  project, operator) run in the SDK's own process, which opens the same Store
-  directly; this is the only route.** It is Linux only: every opener shares
-  one Linux kernel and a local filesystem holding the Store (ext4, xfs,
-  btrfs). Anywhere else Store calls fail `Unsupported`, with no fallback; the
-  daemon does not serve Store calls. Workspace calls (mount, Exec, Commit,
+  reads, saves and publishes in-process. Project Init adds a project to an
+  existing Store as a live add (2.0, #533). **sqlite Store calls run in a
+  process on the Store's kernel; postgresql Store calls, and bucket (s3) I/O,
+  run in the caller's process on any OS (owner, 2026-11-02, #533 G2).** A
+  sqlite Store's openers share one kernel and a local filesystem holding the
+  Store (ext4, xfs, btrfs on Linux; apfs, hfs on macOS); a process on another
+  kernel reaches it only through that machine's worker. Anywhere else sqlite
+  Store calls fail `Unsupported`, with no fallback; the daemon does not serve
+  Store calls. Workspace calls (mount, Exec, Commit,
   status, unmount) go to the daemon. Do not revive `layerfs-server` or build a
   host/server adapter in the data path; the host-mediated SDK runtime is
   retired, not extended. See the
@@ -154,46 +156,39 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   native handles and project discovery. This is independent of the macOS
   adapter and changes neither the product SDK nor the daemon. A lost reply
   is never replayed, and an uncertain Init retains its Linux home and volume.
-- **Additional exception (owner, 2026-11-01, #527 D5): native macOS.** With
-  `LAYERFS_SANDBOX=native` on macOS, the SDK loads the macOS addon in its own
-  process and opens the project's Store directly on a local apfs or hfs
+- **Additional exception (owner, 2026-11-01, #527 D5; renamed 2026-11-02,
+  #533 G2): the `native` machine on macOS.** For a Store on the `native`
+  machine on macOS, the library runs in the caller's own process and opens the project's Store directly on a local apfs or hfs
   directory (`kernel_guard` admits those two there, #427). Its Sandboxes are
   daemon processes serving loopback NFS to this Mac's own client, one user,
   no container (see the agent guide's native Sandboxes). Every opener is a
   process on this one Mac, so the one-kernel, local-filesystem rule holds;
   network and other filesystems are still refused. The Docker, worker and
   `vm:` routes on macOS are unchanged.
-- **Plugin-neutral LayerFS (owner, 2026-10-24).** LayerFS is agnostic to dsh
-  and every other plugin. The macOS and Windows worker routes above are open
-  to any integration: `@layerfs/runtime` starts the worker on those platforms
-  and any process given its endpoint (`useWorker(endpoint)` or
-  `LAYERFS_WORKER_ENDPOINT`) sends its Store calls there. There is no adapter
-  name, no integration check and no code that names a plugin. LayerFS reads
-  `LAYERFS_*` settings only. An integration that can set only its own
-  prefixed names, such as dsh's `DSH_*`, maps them itself. Linux still makes
-  Store calls in the caller's process, and the worker's rules above (loopback,
+- **Plugin-neutral LayerFS (owner, 2026-10-24; revised 2026-11-02, #533
+  G2).** LayerFS is agnostic to dsh and every other plugin. The `layerfs`
+  package routes by the home's records: a call's route comes from its
+  Store's and machine's records, so one process uses Stores on several
+  machines at once, and the worker routes above are open to any caller of
+  the package. LayerFS reads `LAYERFS_HOME` and the trace settings only.
+  There is no adapter name, no integration check and no code that names a
+  plugin. An integration that can set only its own prefixed names, such as
+  dsh's `DSH_*`, maps them itself. The worker's rules above (loopback,
   secret, one attempt, no replay) are unchanged.
-- **VM placement (`@layerfs/runtime`, owner 2026-10-31, #515).** A LayerFS
-  home may be placed in Linux VMs on this machine instead of in the host's
-  Docker: `LAYERFS_PLACEMENT=vm:<provider>` (or the runtime's `placement`
-  setting), with `local` the default and unchanged. **One Linux VM per Store**
-  (V1): a project's VM holds that project's Store on its own ext4 disk, its
-  Sandboxes are Linux namespaces inside it
-  (`LAYERFS_SANDBOX=namespaces`, documented in
-  [the agent guide](api/docs/agent.md#namespace-sandboxes-linux)), and its
-  worker runs the real SDK as root with its own secret and its own
-  loopback-published port; the host reaches only each VM's worker, with one
-  attempt per call and no replay, the same rules as the macOS and Windows
-  routes. Store calls therefore leave the caller's process on Linux too, under
-  `vm:` placement only, and a process routes them per project
-  (`useWorker((project) => endpoint)`, or that project's
-  `LAYERFS_WORKER_ENDPOINT`). `project.start_init` makes the project's VM and
-  `project.delete` deletes it with its Store disk; a bare VM delete is refused
-  while the project exists, because that Store is on that disk only and no
-  remote Store push exists (#506). Implemented providers: `microsandbox`
-  (`msb`), `apple-container` (`container` 1.6.1) and `ssh`; verified with
-  stand-in providers; real runs: see the #527 platform pass.
-  `@layerfs/runtime`'s guide and `api/runtime/src/platform/vm/` hold the details.
+- **Machines (owner 2026-11-02, #533 G2; replaces the 2026-10-31 VM
+  placement, V1).** A VM machine holds many Stores, with one worker per
+  machine. Machines are created, removed and started by the `machine` calls,
+  and the routes come from the home's records (`machine/<name>/record.json`,
+  `store/<name>/record.json`). `native` and `docker` are built in; VM kinds
+  (`apple-container`, `microsandbox`, `lima`, `firecracker`) are created by
+  name; ssh hosts are connected. Each VM machine's data disk is mounted at
+  `/layerfs/data` and holds `store/<name>/store.sqlite` per Store. Its
+  worker runs as root behind its own secret, reached through one loopback
+  port on the host, with one attempt per call and no replay, the same rules
+  as the macOS and Windows routes. Guests never read the home: the caller
+  sends each worker call the settings it needs and writes every record.
+  See [#533](core/docs/issues/533/README.md) and the
+  [proposal](core/docs/proposals/host-platform-connections.md).
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
   database, concurrent-writer engine or objects outside it. Writes go one at a

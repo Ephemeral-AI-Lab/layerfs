@@ -209,7 +209,9 @@ not replace authority, reference closure, mutable history or safe GC.
 
 Project's native import consumes SQLite-backed acquisition through its
 backend-neutral port. Its Store composition lives in `layerfs-project::store`:
-Init creates and seals the Store, and install streams the sealed file. The
+Init into an existing Store is a live add through the Store's own writer
+(2.0, #533); the older Init that creates, seals and installs a Store file stays
+for the Store's own creation and install. The
 owner-approved first-party edges include Bridge provisioning types and
 Persistence; the exact allowlist still bounds those edges, and Project still
 cannot use a third-party database driver directly. Canonical construction stays
