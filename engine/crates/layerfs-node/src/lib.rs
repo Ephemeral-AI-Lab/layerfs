@@ -5,6 +5,7 @@ mod direct;
 mod discovery;
 mod dispatch;
 mod exec;
+mod flock;
 mod job;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod local;

@@ -10,18 +10,11 @@ use crate::{
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
 use std::{
     fs::{File, OpenOptions},
-    os::unix::{fs::OpenOptionsExt, io::AsRawFd},
+    os::unix::fs::OpenOptionsExt,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
-extern "C" {
-    fn flock(fd: i32, operation: i32) -> i32;
-}
-const LOCK_SH: i32 = 1;
-const LOCK_EX: i32 = 2;
-const LOCK_NB: i32 = 4;
-const LOCK_UN: i32 = 8;
 fn millis() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -35,10 +28,10 @@ fn record(state: &SandboxState, token: WorkspaceToken) -> PathBuf {
 struct Lease(File);
 impl Drop for Lease {
     fn drop(&mut self) {
-        unsafe { flock(self.0.as_raw_fd(), LOCK_UN) };
+        crate::flock::unlock(&self.0);
     }
 }
-fn lease(path: &std::path::Path, operation: i32) -> Result<Option<Lease>, SdkRefusal> {
+fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRefusal> {
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -48,14 +41,10 @@ fn lease(path: &std::path::Path, operation: i32) -> Result<Option<Lease>, SdkRef
         .open(path)
         .map_err(failed)?;
     discovery::private(path, false)?;
-    if unsafe { flock(file.as_raw_fd(), operation | LOCK_NB) } == 0 {
-        return Ok(Some(Lease(file)));
-    }
-    let error = std::io::Error::last_os_error();
-    if error.kind() == std::io::ErrorKind::WouldBlock {
-        Ok(None)
+    if crate::flock::try_lock(&file, exclusive).map_err(failed)? {
+        Ok(Some(Lease(file)))
     } else {
-        Err(failed(error))
+        Ok(None)
     }
 }
 /// Explicit unlock matters when a concurrent fork inherited the descriptor.
@@ -125,7 +114,7 @@ fn inspect(path: &std::path::Path) -> Result<Option<SdkValue>, SdkRefusal> {
     if value.get_text("state") != Some("Unmounting") {
         return Ok(Some(value));
     }
-    let available = lease(&path.with_extension("unmount-lock"), LOCK_SH)?;
+    let available = lease(&path.with_extension("unmount-lock"), false)?;
     // Publication may have completed between our read and lease acquisition.
     let latest = observed(path)?;
     match latest {
@@ -187,7 +176,7 @@ pub(crate) fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal>
             // Even a published result may still be cleaning its Workspace
             // record. Close must not delete/reuse the Sandbox directory in
             // that short interval while the original lease is held.
-            let probe = lease(&entry.path().with_extension("unmount-lock"), LOCK_SH)?;
+            let probe = lease(&entry.path().with_extension("unmount-lock"), false)?;
             if probe.is_none() {
                 if let Some(value) = observed(&entry.path())? {
                     return Err(progress(&value, true));
@@ -209,7 +198,7 @@ pub(crate) fn begin(
     path: &str,
 ) -> Result<Attempt, SdkRefusal> {
     let path_record = record(state, token);
-    let file = lease(&path_record.with_extension("unmount-lock"), LOCK_EX)?
+    let file = lease(&path_record.with_extension("unmount-lock"), true)?
         .ok_or_else(|| refused("Busy", "Workspace is Unmounting"))?;
     let attempt = Attempt {
         _lease: file,

@@ -20,22 +20,11 @@ use layerfs_sandbox::{LocalRecord, SandboxRecord};
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
-    os::unix::{
-        fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
-        io::AsRawFd,
-    },
+    os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::Duration,
 };
-extern "C" {
-    fn geteuid() -> u32;
-    fn getegid() -> u32;
-    fn flock(fd: i32, operation: i32) -> i32;
-}
-const LOCK_EX: i32 = 2;
-const LOCK_NB: i32 = 4;
-const LOCK_UN: i32 = 8;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 pub(crate) fn home(args: &SdkValue) -> Result<PathBuf> {
@@ -55,7 +44,7 @@ pub(crate) fn private(path: &Path, dir: bool) -> Result<()> {
     if meta.file_type().is_symlink()
         || meta.is_dir() != dir
         || (!dir && !meta.is_file())
-        || meta.uid() != unsafe { geteuid() }
+        || meta.uid() != crate::flock::euid()
         || meta.mode() & 0o077 != 0
     {
         return Err(refused(
@@ -76,7 +65,7 @@ pub(crate) fn directory(path: &Path) -> Result<()> {
 /// This process's effective uid and gid: a native Sandbox's command
 /// identity (its commands run as this user).
 pub(crate) fn user() -> (u32, u32) {
-    unsafe { (geteuid(), getegid()) }
+    (crate::flock::euid(), crate::flock::egid())
 }
 /// Where a project's Sandboxes live: `LAYERFS_HOME/<project>/sandboxes/<n>/`
 /// (#373), numbered from 1 within the project.
@@ -179,7 +168,7 @@ impl Drop for Guard {
         // The lock belongs to the open file description, which a child forked
         // meanwhile shares until its exec: closing only this descriptor would
         // leave it held (F-053). Unlock explicitly; the close follows.
-        unsafe { flock(self.file.as_raw_fd(), LOCK_UN) };
+        crate::flock::unlock(&self.file);
         let mut held = HELD.lock().unwrap_or_else(|error| error.into_inner());
         held.remove(&self.directory);
         FREED.notify_all();
@@ -233,7 +222,7 @@ fn os_lock(directory: &Path, deadline: std::time::Instant) -> Result<File> {
         .open(&path)
         .map_err(failed)?;
     private(&path, false)?;
-    while unsafe { flock(file.as_raw_fd(), LOCK_EX | LOCK_NB) } != 0 {
+    while !crate::flock::try_lock(&file, true).map_err(failed)? {
         if std::time::Instant::now() >= deadline {
             return Err(refused(
                 "Busy",
