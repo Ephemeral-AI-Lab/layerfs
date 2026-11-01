@@ -51,11 +51,18 @@ pub(crate) fn store_dir(home: &Path, store: &str) -> Result<PathBuf> {
             format!("a Store name is 1-63 lowercase letters, digits, _ . - (not {store:?})"),
         )
     })?;
-    Ok(home.join(".stores").join(store))
+    Ok(crate::home::paths::store_dir(home, store))
 }
 
 fn record_path(home: &Path, store: &str) -> Result<PathBuf> {
-    Ok(store_dir(home, store)?.join("store.record"))
+    store_dir(home, store)?;
+    Ok(crate::home::paths::store_record(home, store))
+}
+
+/// The Store record at `path` (`store/<name>/record.json`).
+fn load_record(path: &Path) -> Result<SdkValue> {
+    crate::home::read_record(path)?
+        .ok_or_else(|| refused("NoSuchStore", format!("no Store record {}", path.display())))
 }
 
 /// Whether `store` has no Store record: a Store made by its project's own Init.
@@ -94,12 +101,12 @@ pub(crate) fn identity(args: &SdkValue) -> Result<Identity> {
     if let Some(store) = store {
         let path = record_path(&home, store)?;
         if path.exists() {
-            let value = discovery::load(&path)?;
+            let value = load_record(&path)?;
             let kind = match value.get_text("kind") {
                 Some("sqlite") => Kind::Sqlite,
                 Some("postgresql") => Kind::Postgresql {
                     schema: text(&value, "schema")?.to_owned(),
-                    synchronous_commit: text(&value, "synchronousCommit")?.to_owned(),
+                    synchronous_commit: text(&value, "synchronous_commit")?.to_owned(),
                 },
                 _ => return Err(refused("InvalidInput", "Store record kind")),
             };
@@ -137,6 +144,7 @@ pub(crate) fn identity(args: &SdkValue) -> Result<Identity> {
 /// Saves a Store record; `store_dir` must exist.
 pub(crate) fn save_record(home: &Path, store: &str, identity: &Identity) -> Result<()> {
     let mut fields = vec![
+        ("name", SdkValue::text(store)),
         ("binding", SdkValue::Bytes(identity.binding.clone())),
         ("cursor", SdkValue::Bytes(identity.cursor_key.to_vec())),
     ];
@@ -148,27 +156,30 @@ pub(crate) fn save_record(home: &Path, store: &str, identity: &Identity) -> Resu
         } => fields.extend([
             ("kind", SdkValue::text("postgresql")),
             ("schema", SdkValue::text(schema)),
-            ("synchronousCommit", SdkValue::text(synchronous_commit)),
+            ("synchronous_commit", SdkValue::text(synchronous_commit)),
         ]),
     }
-    discovery::save(
-        &record_path(home, store)?,
-        SdkValue::Map(fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect()),
-    )
+    // the identity fields are this module's; the record's other fields
+    // (machine, backups) are kept
+    let path = record_path(home, store)?;
+    let mut record = crate::home::read_record(&path)?.unwrap_or(SdkValue::Map(Vec::new()));
+    for (name, value) in fields {
+        record = crate::home::with_field(record, name, value);
+    }
+    crate::home::write_record(&path, &record)
 }
 
 /// Makes `<home>/.stores/<store>/` (owner-only), refusing a Store name
 /// already in use: a record, or a project of that name with its own Store.
 pub(crate) fn claim(home: &Path, store: &str) -> Result<PathBuf> {
     let directory = store_dir(home, store)?;
-    if record_path(home, store)?.exists() || home.join(store).join("project.record").exists() {
+    if record_path(home, store)?.exists() {
         return Err(refused(
             "Exists",
             format!("a LayerFS Store named {store} exists"),
         ));
     }
-    discovery::directory(&home.join(".stores"))?;
-    discovery::directory(&directory)?;
+    crate::home::private_dir(&directory)?;
     Ok(directory)
 }
 
@@ -189,7 +200,7 @@ pub(crate) fn postgresql(args: &SdkValue) -> Result<bool> {
         return Ok(false);
     };
     let path = record_path(&discovery::home(args)?, store)?;
-    Ok(path.exists() && discovery::load(&path)?.get_text("kind") == Some("postgresql"))
+    Ok(path.exists() && load_record(&path)?.get_text("kind") == Some("postgresql"))
 }
 
 /// Refuses a call on a PostgreSQL Store that needs a Store file.
@@ -367,13 +378,11 @@ pub(crate) fn save_entry(
 }
 
 /// Makes the entry of project `name` of the shared Store `store` once,
-/// owner-only, with its parents: `<home>/.stores/<store>/projects/<name>/`.
+/// owner-only, with its parents: `<home>/store/<store>/project/<name>/`.
 pub(crate) fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
     let directory = store_dir(home, store)?;
-    discovery::directory(&home.join(".stores"))?;
-    discovery::directory(&directory)?;
-    discovery::directory(&directory.join("projects"))?;
-    let entry = directory.join("projects").join(name);
+    crate::home::private_dir(&directory.join("project"))?;
+    let entry = crate::home::paths::project_dir(home, store, name);
     std::fs::create_dir(&entry).map_err(|error| {
         if error.kind() == std::io::ErrorKind::AlreadyExists {
             refused("Exists", format!("project {name} exists in Store {store}"))
@@ -533,11 +542,7 @@ pub(crate) fn remove_project(args: &SdkValue) -> Outcome {
     let name = text(args, "project")?;
     let identity = identity(args)?;
     let own = name == store && legacy(&home, store)?;
-    let entry = if own {
-        home.join(name)
-    } else {
-        store_dir(&home, store)?.join("projects").join(name)
-    };
+    let entry = crate::home::paths::project_dir(&home, store, name);
     let stack = crate::host::direct::with_service(args, |service| {
         let stacks = service
             .store
@@ -562,8 +567,7 @@ pub(crate) fn remove_project(args: &SdkValue) -> Outcome {
     })?;
     // the own project's entry carried the Store's identity until now
     if own {
-        discovery::directory(&home.join(".stores"))?;
-        discovery::directory(&store_dir(&home, store)?)?;
+        crate::home::private_dir(&store_dir(&home, store)?)?;
         save_record(&home, store, &identity)?;
     }
     if entry.exists() {

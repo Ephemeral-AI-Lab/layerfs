@@ -136,14 +136,10 @@ pub(crate) fn project_entry(args: &SdkValue) -> Result<PathBuf> {
     let name = registry::text(args, "project")?;
     layerfs_history::HistoryName::new(name).map_err(failed)?;
     let home = home(args)?;
-    match args.get_text("store") {
-        Some(store) if !(store == name && crate::host::stores::legacy(&home, store)?) => {
-            Ok(crate::host::stores::store_dir(&home, store)?
-                .join("projects")
-                .join(name))
-        }
-        _ => Ok(home.join(name)),
-    }
+    // 2.0 (#533 step 4): every project is named with its Store
+    let store = args.get_text("store").unwrap_or(name);
+    crate::host::stores::store_dir(&home, store)?;
+    Ok(crate::home::paths::project_dir(&home, store, name))
 }
 /// Calls take turns on one directory: in this process before its OS lock,
 /// and between processes on the lock itself. The wait is readiness, bounded,
@@ -304,29 +300,37 @@ fn bytes<const N: usize>(value: &SdkValue, key: &str) -> Result<[u8; N]> {
     }
 }
 pub(crate) fn save_project(path: &Path, project: &Project) -> Result<()> {
-    save(
-        &path.join("project.record"),
-        SdkValue::map([
-            (
-                "manifest",
-                SdkValue::Bytes(project.manifest.encode().map_err(failed)?),
-            ),
-            (
-                "installed",
-                project
-                    .installed
-                    .as_ref()
-                    .map(|m| m.encode().map(SdkValue::Bytes))
-                    .transpose()
-                    .map_err(failed)?
-                    .unwrap_or_default(),
-            ),
-        ]),
-    )
+    let old = crate::home::read_record(&path.join("record.json"))?.unwrap_or_default();
+    let mut record = SdkValue::map([
+        (
+            "manifest",
+            SdkValue::Bytes(project.manifest.encode().map_err(failed)?),
+        ),
+        (
+            "installed",
+            project
+                .installed
+                .as_ref()
+                .map(|m| m.encode().map(SdkValue::Bytes))
+                .transpose()
+                .map_err(failed)?
+                .unwrap_or_default(),
+        ),
+    ]);
+    // the record's other fields (its name and Store) are kept
+    if let SdkValue::Map(fields) = old {
+        for (name, value) in fields {
+            if name != "manifest" && name != "installed" {
+                record = crate::home::with_field(record, &name, value);
+            }
+        }
+    }
+    crate::home::write_record(&path.join("record.json"), &record)
 }
 pub(crate) fn project(args: &SdkValue) -> Result<Project> {
     let path = project_dir(args)?;
-    let value = load(&path.join("project.record"))?;
+    let value = crate::home::read_record(&path.join("record.json"))?
+        .ok_or_else(|| refused("NoSuchProject", "no project record"))?;
     let decode = |name| match value.get(name) {
         Some(SdkValue::Bytes(bytes)) => StoreManifest::decode(bytes).map_err(failed),
         _ => Err(refused("NoSuchProject", "no complete project manifest")),

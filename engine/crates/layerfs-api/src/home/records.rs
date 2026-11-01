@@ -1,6 +1,7 @@
 //! Record files in the home: one JSON value each, private to this user
 //! (0600 files, 0700 folders), replaced whole by a rename so a reader sees
-//! the old record or the new one, never a part.
+//! the old record or the new one, never a part. Bytes are written as
+//! `{"hex": "..."}` and read back as bytes, so a record keeps its types.
 use crate::calls::json;
 use crate::host::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -26,7 +27,7 @@ pub fn read_record(path: &Path) -> Result<Option<SdkValue>, SdkRefusal> {
         Err(error) => return Err(refused("Failed", format!("{}: {error}", path.display()))),
     };
     json::parse(&text)
-        .map(Some)
+        .map(|value| Some(from_hex(value)))
         .map_err(|error| refused("Failed", format!("{}: {}", path.display(), error.0)))
 }
 
@@ -49,7 +50,7 @@ pub fn write_record(path: &Path, value: &SdkValue) -> Result<(), SdkRefusal> {
         .mode(0o600)
         .open(&temporary)
         .map_err(failed)?;
-    let mut text = json::print(value);
+    let mut text = json::print(&to_hex(value.clone()));
     text.push('\n');
     let written = file.write_all(text.as_bytes()).map_err(failed);
     drop(file);
@@ -60,4 +61,80 @@ pub fn write_record(path: &Path, value: &SdkValue) -> Result<(), SdkRefusal> {
             Err(refusal)
         }
     }
+}
+
+fn to_hex(value: SdkValue) -> SdkValue {
+    match value {
+        SdkValue::Bytes(bytes) => SdkValue::map([(
+            "hex",
+            SdkValue::Text(layerfs_bridge::sdk_values::hex(&bytes)),
+        )]),
+        SdkValue::List(items) => SdkValue::List(items.into_iter().map(to_hex).collect()),
+        SdkValue::Map(fields) => {
+            SdkValue::Map(fields.into_iter().map(|(n, v)| (n, to_hex(v))).collect())
+        }
+        other => other,
+    }
+}
+
+fn from_hex(value: SdkValue) -> SdkValue {
+    match value {
+        SdkValue::Map(fields) => {
+            if let [(name, SdkValue::Text(text))] = fields.as_slice() {
+                if name == "hex" {
+                    if let Some(bytes) = unhex(text) {
+                        return SdkValue::Bytes(bytes);
+                    }
+                }
+            }
+            SdkValue::Map(fields.into_iter().map(|(n, v)| (n, from_hex(v))).collect())
+        }
+        SdkValue::List(items) => SdkValue::List(items.into_iter().map(from_hex).collect()),
+        other => other,
+    }
+}
+
+fn unhex(text: &str) -> Option<Vec<u8>> {
+    if text.len() % 2 != 0 {
+        return None;
+    }
+    (0..text.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(text.get(i..i + 2)?, 16).ok())
+        .collect()
+}
+
+/// `value` (a record) with field `name` set to `field`, added when absent.
+pub fn with_field(value: SdkValue, name: &str, field: SdkValue) -> SdkValue {
+    let mut fields = match value {
+        SdkValue::Map(fields) => fields,
+        _ => Vec::new(),
+    };
+    match fields.iter_mut().find(|(n, _)| n == name) {
+        Some((_, slot)) => *slot = field,
+        None => fields.push((name.to_owned(), field)),
+    }
+    SdkValue::Map(fields)
+}
+
+/// Appends one JSON line to `log/<name>`.
+pub fn log_line(home: &Path, name: &str, value: &SdkValue) -> Result<(), SdkRefusal> {
+    let dir = super::paths::log_dir(home);
+    private_dir(&dir)?;
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .mode(0o600)
+        .open(dir.join(name))
+        .map_err(failed)?;
+    let mut text = json::print(&to_hex(value.clone()));
+    text.push('\n');
+    file.write_all(text.as_bytes()).map_err(failed)
+}
+
+/// Milliseconds since the Unix epoch.
+pub fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as i64)
 }

@@ -65,10 +65,9 @@ pub fn call(
     let spec = table::find(name)
         .ok_or_else(|| refused("InvalidInput", format!("no call named `{name}`")))?;
     let args = SdkValue::Map(check::check(spec, args)?);
-    let mut context = Context {
-        home: home(home_path)?,
-        events,
-    };
+    let home = home(home_path)?;
+    crate::home::open(&home).inspect_err(|refusal| crate::home::note_failure(&home, refusal))?;
+    let mut context = Context { home, events };
     let value = route::run(spec, &mut context, &args)?;
     Ok(super::keys::snake(value))
 }
