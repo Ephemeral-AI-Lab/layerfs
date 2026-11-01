@@ -111,3 +111,17 @@ Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated 
   guest). Sandboxes on the `docker` machine and Sandboxes of PostgreSQL
   Stores are refused `Unsupported` in step 12 (the 1.1.0 Docker path needs
   the image and volume settings the 1.1.0 JS runtime supplied).
+- Step 14: the four 1.1.0 packages (`@layerfs/agent`, `@layerfs/cli`,
+  `@layerfs/backend`, `@layerfs/runtime`) are deleted, not kept beside
+  `layerfs`; their last source is the 1.1.0 tag. The Node binding is one
+  `call(name, argsJson, home?, scopeJson?, onEvent?)` plus `table()`; the
+  package builds its families from the table, so it names no call.
+  `api/scripts/recover-records.mjs` and `layerfs-node`'s
+  `examples/restore_record.rs` (1.1.0 `project.record` recovery) go with
+  them: step 4's migration reads 1.1.0 records instead.
+- Step 14 deletes `layerfs-node`'s four Linux test files (21 tests). They
+  drove the removed `call`/`backendCall` entry points over 1.1.0's Docker
+  discovery, admission and connection wait. The behaviours they guarded
+  (#463 discovery reclaim, #508 admission and connection wait) are not
+  re-covered on the 2.0 entry point here: there is no Linux host in this
+  pass. Recorded as a coverage gap in HANDOFF.md.

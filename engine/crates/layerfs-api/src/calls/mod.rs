@@ -6,8 +6,11 @@ mod dispatch;
 pub mod json;
 pub mod keys;
 mod route;
+pub mod scope;
 pub mod table;
 
 pub use check::size;
-pub use dispatch::{call, home, Context};
+pub use dispatch::{call, call_scoped, home, Context};
+pub use scope::Scope;
+pub use table::table_json;
 pub use table::{find, Arg, Call, Kind, CALLS, FAMILIES};

@@ -1,0 +1,21 @@
+{
+  "name": "layerfs",
+  "version": "2.0.0",
+  "description": "LayerFS for Node: the nine families of the one call table (project, branch, commit, file, sandbox, workspace, machine, store, backup), each a call into the native library (#533).",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "layerfs.node"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/*.mjs"
+  },
+  "license": "Apache-2.0"
+}

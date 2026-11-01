@@ -796,18 +796,9 @@ version = "1.1.0"
 dependencies = [
  "layerfs-api",
  "layerfs-bridge",
- "layerfs-history",
- "layerfs-persistence",
- "layerfs-project",
- "layerfs-sandbox",
- "layerfs-storage",
- "layerfs-store-service",
- "layerfs-telemetry",
- "libc",
  "napi",
  "napi-build",
  "napi-derive",
- "nix",
 ]
 
 [[package]]

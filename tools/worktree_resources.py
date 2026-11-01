@@ -229,13 +229,8 @@ def inputs(record):
         "core/crates",
         "engine/vendor",
         "engine/crates",
-        "api/agent",
-        "api/backend",
-        "api/runtime",
+        "api/node",
         "api/package.json",
-        "api/cli/src",
-        "api/cli/test",
-        "api/cli/package.json",
     ]
     result = {}
     for relative in selected:

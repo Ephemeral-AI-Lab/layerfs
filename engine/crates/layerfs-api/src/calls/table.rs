@@ -642,3 +642,36 @@ pub fn find(name: &str) -> Option<&'static Call> {
     let (family, call) = name.split_once('.')?;
     CALLS.iter().find(|c| c.family == family && c.call == call)
 }
+
+/// The whole table as JSON text, for front ends that build their functions
+/// from it: `[{ family, call, args: [{ name, kind, optional }], options,
+/// help }]`.
+pub fn table_json() -> String {
+    use layerfs_bridge::control::SdkValue;
+    let arg = |a: &Arg| {
+        SdkValue::map([
+            ("name", SdkValue::text(a.name)),
+            (
+                "kind",
+                SdkValue::text(format!("{:?}", a.kind).to_lowercase()),
+            ),
+            ("optional", SdkValue::Bool(a.optional)),
+        ])
+    };
+    let calls = CALLS
+        .iter()
+        .map(|c| {
+            SdkValue::map([
+                ("family", SdkValue::text(c.family)),
+                ("call", SdkValue::text(c.call)),
+                ("args", SdkValue::List(c.args.iter().map(arg).collect())),
+                (
+                    "options",
+                    SdkValue::List(c.options.iter().map(arg).collect()),
+                ),
+                ("help", SdkValue::text(c.help)),
+            ])
+        })
+        .collect();
+    super::json::print(&SdkValue::List(calls))
+}

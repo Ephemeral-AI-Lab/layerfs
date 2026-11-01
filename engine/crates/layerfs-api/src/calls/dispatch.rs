@@ -67,9 +67,24 @@ pub fn call(
     args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
 ) -> Outcome {
+    call_scoped(home_path, None, name, args, events)
+}
+
+/// [`call`] for a client with a folder scope (O32): the scope guards and
+/// rewrites the checked arguments before any effect.
+pub fn call_scoped(
+    home_path: Option<&Path>,
+    scope: Option<&super::Scope>,
+    name: &str,
+    args: SdkValue,
+    events: &mut dyn FnMut(SdkValue),
+) -> Outcome {
     let spec = table::find(name)
         .ok_or_else(|| refused("InvalidInput", format!("no call named `{name}`")))?;
-    let args = SdkValue::Map(check::check(spec, args)?);
+    let mut args = SdkValue::Map(check::check(spec, args)?);
+    if let Some(scope) = scope {
+        args = scope.apply(name, args)?;
+    }
     let home = home(home_path)?;
     crate::home::open(&home).inspect_err(|refusal| crate::home::note_failure(&home, refusal))?;
     // `machine/native/` and `machine/docker/` exist from the first call
@@ -77,5 +92,20 @@ pub fn call(
     crate::machine::ensure_built_ins(&home)?;
     let mut context = Context { home, events };
     let value = route::run(spec, &mut context, &args)?;
+    let value = match scope {
+        Some(scope) if name == "branch.list" => scope.branches(value),
+        Some(scope) if name == "branch.get" => {
+            let prefix = format!("{}.", scope.branch.as_deref().unwrap_or(""));
+            match value
+                .get_text("name")
+                .and_then(|n| n.strip_prefix(&prefix))
+                .map(str::to_owned)
+            {
+                Some(name) => crate::home::with_field(value, "name", SdkValue::Text(name)),
+                None => value,
+            }
+        }
+        _ => value,
+    };
     Ok(super::keys::snake(value))
 }

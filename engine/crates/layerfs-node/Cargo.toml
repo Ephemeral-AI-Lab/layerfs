@@ -1,6 +1,6 @@
 [package]
 name = "layerfs-node"
-description = "Node binding for the LayerFS JavaScript SDK: Store calls in-process (layerfs-store-service), Sandbox calls over layerfs-api"
+description = "Node front end of the layerfs package: the library's one call and its call table (#533)"
 publish = false
 workspace = "../../.."
 edition.workspace = true
@@ -13,26 +13,15 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [features]
-# PostgreSQL Stores (#506): open, import and attach. Off by default; the
-# sealed Linux build the worker runs turns it on.
+# PostgreSQL Stores (#506). Off by default.
 postgresql = ["layerfs-api/postgresql"]
-# https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
-# sealed Linux build the worker runs turns it on.
+# https:// buckets: Cloudflare R2, MinIO behind TLS. Off by default.
 tls = ["layerfs-api/tls"]
 
 [dependencies]
-layerfs-project = { path = "../layerfs-project" }
 layerfs-api = { path = "../layerfs-api", features = ["machine"] }
 layerfs-bridge = { path = "../layerfs-bridge" }
-layerfs-history = { path = "../../../core/crates/layerfs-history" }
-layerfs-persistence = { path = "../layerfs-persistence" }
-layerfs-sandbox = { path = "../layerfs-sandbox" }
-layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
-layerfs-store-service = { path = "../layerfs-store-service" }
-layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
-libc = "=0.2.189"
-nix = { version = "=0.31.3", default-features = false, features = ["fs", "user"] }
-napi = "=2.16.17"
+napi = { version = "=2.16.17", features = ["napi4"] }
 napi-derive = "=2.16.13"
 
 [build-dependencies]
