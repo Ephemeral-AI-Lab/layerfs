@@ -114,15 +114,15 @@ pub(crate) fn store_call(
     }
 }
 
-/// A PostgreSQL Store's call in this process: its URL from the record's
-/// `url_env` variable (H §7.4; the URL itself is never written down).
+/// A PostgreSQL Store's call in this process: its URL from the record, the
+/// password reference resolved now (H §7.4).
 fn postgresql(
     home: &Path,
     target: &Target,
     op: &str,
     mut fields: Vec<(String, SdkValue)>,
 ) -> Outcome {
-    let url = crate::store::route::postgresql_url(&target.record, &target.store)?;
+    let url = crate::family::postgres::url(&target.record, &target.store)?;
     fields.push((
         "postgresql".to_owned(),
         SdkValue::map([("url", SdkValue::text(url))]),
@@ -134,20 +134,6 @@ fn postgresql(
         SdkValue::text(key.display().to_string()),
     ));
     open::run(op, SdkValue::Map(fields), None)
-}
-
-/// The URL of a PostgreSQL Store: the environment variable its record names.
-pub(crate) fn postgresql_url(record: &SdkValue, store: &str) -> Result<String, SdkRefusal> {
-    let name = record
-        .get_text("url_env")
-        .unwrap_or("LAYERFS_POSTGRESQL_URL");
-    match std::env::var(name) {
-        Ok(url) if !url.is_empty() => Ok(url),
-        _ => Err(refused(
-            "Unavailable",
-            format!("PostgreSQL Store {store} reads its URL from {name}, which is not set"),
-        )),
-    }
 }
 
 /// The worker of `machine`, started first if it is stopped, or `None` when

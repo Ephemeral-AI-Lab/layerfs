@@ -79,11 +79,12 @@ fn a_converted_store_with_no_machine_says_how_to_place_it() {
 }
 
 #[test]
-fn a_postgresql_store_reads_its_url_from_the_named_variable() {
+fn a_postgresql_store_resolves_its_password_reference_per_call() {
     let home = home_with(SdkValue::map([
         ("name", t("shop")),
         ("kind", t("postgresql")),
-        ("url_env", t("LAYERFS_TEST_ROUTE_PG_UNSET")),
+        ("url", t("postgresql://lfs@127.0.0.1:1/db")),
+        ("password", t("env:LAYERFS_TEST_ROUTE_PG_UNSET")),
         ("schema", t("shop")),
         ("synchronous_commit", t("off")),
         ("binding", SdkValue::Bytes(vec![7; 16])),

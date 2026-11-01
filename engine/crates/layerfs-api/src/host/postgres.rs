@@ -159,6 +159,12 @@ fn import_once(args: &SdkValue) -> Outcome {
     ]))
 }
 
+/// The binding key the schema of a call's `postgresql { url, schema,
+/// synchronousCommit }` records, read once.
+pub(crate) fn read_binding(args: &SdkValue) -> Result<Vec<u8>, SdkRefusal> {
+    binding(url(args)?, &schema(args)?, &setting(args)?)
+}
+
 /// The binding key the LayerFS schema `schema` records.
 fn binding(url: &str, schema: &str, sync: &str) -> Result<Vec<u8>, SdkRefusal> {
     #[cfg(feature = "postgresql")]
@@ -209,81 +215,6 @@ fn copy(
         let _ = (store, url, schema, sync, source);
         Err(refused("Unsupported", UNBUILT))
     }
-}
-
-/// `runtime.store.attach_postgresql { home, store, postgresql: { url,
-/// schema, synchronousCommit } }`: records the PostgreSQL Store `store`
-/// and checks that it opens with that URL. A schema this home imported
-/// keeps its recorded binding and cursor key; any other LayerFS schema
-/// gets the binding it records (read once, read-only) and a fresh cursor
-/// key, as a clone does. The write setting is the call's.
-pub(crate) fn attach(args: &SdkValue) -> Outcome {
-    let home = discovery::home(args)?;
-    let store = text(args, "store")?;
-    let (schema, sync) = (schema(args)?, setting(args)?);
-    let url = url(args)?;
-    let fresh = stores::legacy(&home, store)?;
-    let (binding, cursor_key) = if fresh {
-        if home.join(store).join("project.record").exists() {
-            return Err(refused(
-                "Exists",
-                format!("Store {store} is a SQLite Store"),
-            ));
-        }
-        (
-            binding(url, &schema, &sync)?,
-            crate::host::registry::random()?,
-        )
-    } else {
-        let recorded = stores::identity(args)?;
-        match &recorded.kind {
-            Kind::Postgresql {
-                schema: recorded, ..
-            } if *recorded != schema => {
-                return Err(refused(
-                    "InvalidInput",
-                    format!("Store {store} is schema {recorded}, not {schema}"),
-                ))
-            }
-            Kind::Postgresql { .. } => {}
-            Kind::Sqlite => {
-                return Err(refused(
-                    "Exists",
-                    format!("Store {store} is a SQLite Store"),
-                ))
-            }
-        }
-        (recorded.binding, recorded.cursor_key)
-    };
-    let identity = Identity {
-        kind: Kind::Postgresql {
-            schema: schema.clone(),
-            synchronous_commit: sync.clone(),
-        },
-        binding,
-        cursor_key,
-    };
-    let directory = stores::store_dir(&home, store)?;
-    discovery::directory(&home.join(".stores"))?;
-    discovery::directory(&directory)?;
-    let _guard = discovery::guard(&directory)?;
-    stores::save_record(&home, store, &identity)?;
-    let projects = match stores::list_projects(args) {
-        Ok(projects) => projects,
-        // a schema that does not open is not attached
-        Err(refusal) if fresh => {
-            let _ = std::fs::remove_dir_all(&directory);
-            return Err(refusal);
-        }
-        Err(refusal) => return Err(refusal),
-    };
-    Ok(SdkValue::map([
-        ("kind", SdkValue::text("Attached")),
-        ("store", SdkValue::text(store)),
-        ("schema", SdkValue::text(schema)),
-        ("synchronousCommit", SdkValue::text(sync)),
-        ("projects", projects),
-    ]))
 }
 
 /// The PostgreSQL Store a `sandbox.create` call's daemon opens (#506), or

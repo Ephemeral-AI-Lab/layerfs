@@ -17,7 +17,10 @@ pub fn run(call: &Call, context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if call.family == "project" {
         return crate::family::projects::run(context, call.call, args);
     }
-    if call.family == "store" && !matches!(call.call, "connect" | "disconnect") {
+    if call.family == "store" {
+        if matches!(call.call, "connect" | "disconnect") {
+            return crate::family::postgres::run(context, call.call, args);
+        }
         return crate::family::stores::run(context, call.call, args);
     }
     #[cfg(feature = "machine")]
@@ -48,7 +51,6 @@ pub fn handler(call: &Call) -> Result<Handler, u8> {
     Err(match call.family {
         "sandbox" | "workspace" => 12,
         "machine" => 6,
-        "store" if matches!(call.call, "connect" | "disconnect") => 10,
         "backup" => 11,
         _ => 2,
     })

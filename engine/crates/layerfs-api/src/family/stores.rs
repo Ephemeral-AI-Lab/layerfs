@@ -132,7 +132,9 @@ fn status(home: &Path, name: &str) -> Outcome {
             record.get("in_progress").cloned().unwrap_or_default(),
         ),
     ];
-    if record.get_text("kind") != Some("postgresql") {
+    if record.get_text("kind") == Some("postgresql") {
+        fields.push(("server", crate::family::postgres::status(&record, name)));
+    } else {
         let machine = route::machine(&record, name)?;
         fields.push(("machine", SdkValue::text(&machine)));
         // the file's size where it lives; a machine that is down says why
