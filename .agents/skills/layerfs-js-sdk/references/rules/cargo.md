@@ -1,14 +1,17 @@
 # Rust and Cargo in a Workspace
 
 > **Status:** Current general guide. Live Cargo 1.85.1 checks in issue #337
-> Phase A used product `db5b1bac9`; at that pin the receipt path was
-> `core/target/issue337/phase-a/`. These are diagnostics, not benchmarks.
+> Phase A used product `db5b1bac9` (1.1.0 era); at that pin the receipt path was
+> `core/target/issue337/phase-a/`. These are diagnostics, not benchmarks. Call
+> names are updated for LayerFS 2.0 (#533); the Cargo workflow was not re-run
+> on 2.0.
 
 ## Put all mutable Cargo state in the view
 
-Supply Rust/Rustfmt/Clippy and SQLite build prerequisites in the pinned runtime
-image. On every Bash call set the cache/output variables again: shell exports
-do not persist between calls, and Workspace commands start with HOME=/tmp.
+Supply Rust/Rustfmt/Clippy and SQLite build prerequisites in the Sandbox's
+image (or, on a `native` Sandbox, on the host). On every Bash call set the
+cache/output variables again: shell exports do not persist between calls, and
+in 1.1.0 Workspace commands started with HOME=/tmp (not re-checked on 2.0).
 
 ```sh
 timeout 110 bash -c 'set -eu
@@ -33,8 +36,8 @@ as its build cache. The #337 image has no application dependency cache.
 The ordinary default remains one mount/exec/commit/unmount per call. Cargo
 steps may instead keep one Workspace mounted across a declared build sequence,
 calling exec then commit for every step and unmounting at the end. This is the
-existing [longer-lived Workspace behavior](../methods/workspace.md#workspaces).
-Use the returned Workspace for every call; do not invent a fixed mount path.
+existing [longer-lived Workspace behavior](../methods/workspace.md#shared-rules).
+Use the returned `ws` for every call; do not invent a fixed mount path.
 
 A fresh mount is a different Workspace, with a different path. The #337 probe observed dependency
 compilation after fresh mounts, while the unchanged build on a retained mount
@@ -44,7 +47,7 @@ is an observation to check, not a guarantee inferred from the presence of target
 Cargo's dep-info paths are absolute by default; its output layout is internal.
 A source edit that the same Workspace must see before Commit may be performed
 by a bounded command in that Workspace, as documented for workspace.exec. For
-other targeted edits use fs.* and mount a fresh view before reading/building them.
+other targeted edits use `file.*` and mount a fresh view before reading/building them.
 
 ## Split and label the work
 

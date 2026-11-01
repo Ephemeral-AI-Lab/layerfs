@@ -3,10 +3,16 @@
 > **Status:** Implemented #327/#328 source description, 2026-10-15, with the
 > #352 and #373 source updates below. Correctness receipts and the component
 > counter screen are distinct from this architecture.
+> **Superseded for front ends by LayerFS 2.0 (#533):** the binding's
+> `call`/`backendCall` channel and the four JavaScript packages are replaced
+> by one call table and dispatcher in `layerfs-api` (`calls::call`), which
+> the `layerfs` command, Node and Python call alike; see
+> [the 2.0.0 manual](../../../docs/versioned/2.0.0/README.md). The 1.1.0
+> description below is kept for history.
 
 The JavaScript SDK has 27 positional methods in four groups (29 before #373
 replaced the `sandbox` group with `workspace`; see the #373 update below). The
-[SDK guide](../../../api/docs/agent.md) lists signatures, environment configuration,
+[SDK guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/v1.1.0/api/docs/agent.md) lists signatures, environment configuration,
 read/page limits and compatibility. [SPEC](../issues/327/SPEC.md) describes the
 UI/server integration; [VERIFICATION](../issues/327/VERIFICATION.md) owns acceptance.
 No harness, agent/call metadata, remove alias or public inspect is retained.
@@ -258,7 +264,7 @@ a process id names its Sandbox. The native ops are `workspace.*`,
 control records and its timing names (`sandbox.mount.bind`,
 `sandbox.mount.attach`) are unchanged. Design and owner decisions:
 [#373](../issues/373/README.md); placement and idle close are described in the
-[SDK guide](../../../api/docs/agent.md#sandboxes-and-workspaces).
+[SDK guide](https://github.com/Ephemeral-AI-Lab/layerfs/blob/v1.1.0/api/docs/agent.md#sandboxes-and-workspaces).
 
 
 ## Issue #428 source update (2026-10-23): backend names and packages

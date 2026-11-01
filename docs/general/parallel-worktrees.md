@@ -43,7 +43,7 @@ registered checkout without copying scripts into it or merging branches first.
 | Linux Cargo target | Labelled private Docker volume at `/work/target` |
 | Linux Cargo home | Separate labelled private Docker volume at `/cargo-home` |
 | Toolchain/images | Pinned toolchain and shared immutable installed images |
-| E2E artifacts | Unique sealed bundle containing daemon, addon, SDK runtime/operator/test files, the `layerfs` command (`api/cli/src`, `api/cli/test`), hashes and source identity |
+| E2E artifacts | Unique sealed bundle containing daemon, addon, the `layerfs` command, the `layerfs` package (`api/node`), hashes and source identity |
 | E2E writable state | Unique per-run Store volume and SDK home, container prefix, trace, and output receipt |
 
 ## Prepare dependencies and optional target seeds
@@ -134,7 +134,7 @@ refuses workspace aggregates, target/config overrides and `fs-bench-pro`.
 ## Run pinned Linux E2E artifacts
 
 ```sh
-python3 tools/worktree.py run --resources /absolute/path/resources.json --bundle /absolute/path/to/sealed-linux-bundle --timeout 90 -- node api/agent/test/verify/direct_locking_real.mjs inner
+python3 tools/worktree.py run --resources /absolute/path/resources.json --bundle /absolute/path/to/sealed-linux-bundle --timeout 90 -- node api/node/test/calls.mjs
 ```
 
 Select the owning test's Linux entrypoint. Tests that bootstrap their own outer

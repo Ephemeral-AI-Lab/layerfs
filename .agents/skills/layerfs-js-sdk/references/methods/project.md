@@ -1,158 +1,123 @@
-# project methods
+# project calls
 
-> **Status:** Current general guide. Part of the `layerfs-js-sdk` skill. Examples were
-> captured live in issue #334 Phase A at `b30e4fb8f`. Opaque IDs are shortened;
-> the full replies and trace are in `target/issue334/phase-a/`. The client
-> factories and `list_sandboxes` are #428's; result shapes are unchanged.
+> **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
+> `layerfs-js-sdk` skill. Results were captured from the built `layerfs`
+> command in a private home on 2026-11-02; ids are shortened.
 
-Examples use `layerfs` as connected in [SKILL.md](../../SKILL.md#connect-to-a-project).
-
-## `LayerFS.open(name)` and `close()`
-
-A client of an existing project. It takes no options: settings come from the
-environment (`LAYERFS_*` only), and an options object is
-refused `InvalidInput`. `open` opens the project's Store and looks the project
-up once, so a missing project is refused `NoSuchProject` at once; if it fails, nothing
-stays open. There is no `new LayerFS(…)`: it's refused `InvalidInput`.
+A project is imported once from a host folder into an existing Store, and is
+always named with its Store: `<store>/<project>`, such as `shop/api`. A bare
+`api` is refused `InvalidInput`.
 
 ```js
-import { LayerFS } from "@layerfs/agent";
-
-const layerfs = await LayerFS.open("shop");
-try {
-  // … calls …
-} finally {
-  await layerfs.close();
-}
+project.init(project, folder, { timeout, on_progress })
+project.list(store?, { page_size, page_pos })
+project.get(project)
+project.remove(project)
 ```
 
-`close()` releases the Store and leaves Workspaces mounted. Every later call on that
-client is refused `InvalidInput`; a second `close()` does nothing. `await using layerfs =
-await LayerFS.open("shop")` closes it at the end of the block.
+## `project.init`
 
-## `LayerFS.init(name, sourcePath, timeout?)`
+`project.init(project, folder, { timeout, on_progress })`
 
-Creates the project, then opens it: copies a host folder into a new Store, once.
-Afterwards the files live only in LayerFS.
+Imports the host folder `folder` as a new project into the Store named before
+the `/`. Init never creates a Store: make one first with `store.create`.
+Everything in the folder is imported, including `.git` and ignored files.
 
-| Arg | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `name` | string | yes | 1–63 characters from `a-z`, `0-9`, `_`, `-`, `.`, starting and ending with a letter or digit |
-| `sourcePath` | string | yes | Host folder to copy. Everything in it is imported, including `.git` and ignored files |
-| `timeout` | number | no | Milliseconds Init may take, a positive whole number. **Default 300 s (300000); no unlimited option**. Init reads every file, so a large tree (`node_modules`, build output) takes a while |
+| Arg | Meaning |
+| --- | --- |
+| `project` | `<store>/<project>`; names are 1–63 lowercase letters, digits, `_ . -`, starting and ending alphanumeric |
+| `folder` | An absolute host folder path |
+| `timeout` | Milliseconds Init may take; default 300000 |
+| `on_progress` | A function called with each progress update (shell: `--progress`, JSON lines on stderr) |
 
-**Returns:** an open client; what Init returned is on its `created`:
-`{ kind: "Initialized", project, layer, … }`, where `layer` is `main`'s first Layer.
+```js
+import layerfs from "layerfs";
+
+await layerfs.store.create("shop");
+const p = await layerfs.project.init("shop/api", "/work/api", { on_progress: (u) => console.log(u) });
+```
+
+```bash
+layerfs store create shop
+layerfs project init shop/api /work/api --progress
+```
+
+```json
+{"project":"shop/api","store":"shop","name":"api","kind":"sqlite","machine":"native",
+ "created":1793574061265,"layer":"3275838904b6…","root":"be88b05d4e0c…"}
+```
+
+`layer` is `main`'s first Layer. The new project has one line, `main`, and no
+Branch: fork one before you change anything. (S, the spec, describes the result
+as `{ project, branch: "main", commit }`; the build returns the record above.)
+A tiny folder sent no progress update in the live run.
+
+Where Init can run depends on the Store: a sqlite Store must be on `native`
+(Init reads the host folder in your process); a PostgreSQL Store is written
+directly. For a sqlite Store on another machine, move it to `native` first.
 
 **Refusals**
 
 | Code | Meaning | Do |
 | --- | --- | --- |
-| `Exists` | This `LAYERFS_HOME` already has the project | Don't init again: the project is ready to use |
-| `InvalidInput` | Bad path, name or timeout, or an options object | Use an absolute folder path and a positive whole `timeout`; settings go in the environment |
-| `Failed` with `Deadline` in the message | Init ran longer than `timeout`; the project's entry is kept | Stop and report; don't init the name again |
-| `Unknown`, `Failed` | Init is uncertain or failed | Stop and report |
+| `NotFound` | No Store of that name (message: ``store create <name>` makes one``) | Create the Store, or check the name |
+| `Exists` | The Store already holds that project | Don't init again; the project is ready |
+| `InvalidInput` | A bad name, a relative path or a bare project name | Fix the call |
+| `Unsupported` | The sqlite Store is on another machine (from source; S says `InvalidInput`) | `store move <store> native`, Init, then move it back |
+| `Failed`, `Unknown` | Init failed or its outcome is uncertain | Stop and report; read `project.list` and `log/init-failures.jsonl` in the home before acting |
 
-**Start from a small skeleton** (shell): a folder with a `README.md` and a `.git/HEAD`,
-the shape the SDK's own test harness uses.
+**Start from a small skeleton** (shell), with a `.gitignore` and the
+[`/.lww`](../rules/lww.md) it needs:
 
 ```bash
-mkdir -p /work/shop-skeleton/.git
-printf 'ref: refs/heads/main\n' > /work/shop-skeleton/.git/HEAD
-printf '# Shop\n' > /work/shop-skeleton/README.md
+mkdir -p /work/api/.git
+printf 'ref: refs/heads/main\n' > /work/api/.git/HEAD
+printf '# API\n' > /work/api/README.md
+printf 'node_modules/\ndist/\ncoverage/\n*.log\n' > /work/api/.gitignore
+printf '%%include .gitignore\n' > /work/api/.lww
 ```
 
-```js
-const layerfs = await LayerFS.init("shop-a-methods", "/work/shop-skeleton");
-console.log(JSON.stringify(layerfs.created, null, 2));
+## `project.list`
+
+`project.list(store?, { page_size, page_pos })`
+
+Every project in the home, or one Store's.
+
+```bash
+layerfs project list
 ```
+
 ```json
-{
-  "kind": "Initialized",
-  "project": "shop-a-methods",
-  "layer": "324afe090aa7…",
-  "root": "e34e2dc43565…",
-  "store": "/layerfs-store/global/store.sqlite"
-}
+{"items":[{"project":"shop/api","store":"shop","name":"api","kind":"sqlite","machine":"native","created":1793574061265}],"next_page_pos":null}
 ```
 
-`store` is the installed Store file (`LAYERFS_STORE_PATH`). A `leftover: { path, message }`
-field appears only if Init could not delete its temporary sealed copy; the project is
-still ready, so report it and go on.
+The live result had `next_page_pos` but no `has_more`.
 
-**Notes:** run it once per project. Later processes with the same `LAYERFS_HOME` use
-`LayerFS.open(name)`; `fs.*` and `branch.*` calls work right away.
+## `project.get`
 
-## `project.list_branches(pageSize?, pagePos?)`
+`project.get(project)`
 
-Lists the project's Branches, including the synthetic `main` entry. For `main`,
-`id` and `head` are null and `base` is its current publication Layer, even after
-publication. Record the Layer and its published source Commit when reporting the
-final main reference.
+The project's record: its Store, the Store's kind and machine.
 
-| Arg | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `pageSize` | number | no | 1–1000, default 50 |
-| `pagePos` | number | no | Offset, default 0 |
-
-**Returns:** a page `{ items, hasMore, nextPagePos }`. Each item:
-
-| Field | Meaning |
-| --- | --- |
-| `name` | Branch name |
-| `id` | Branch id |
-| `base` | The `main` Layer it's based on |
-| `head` | Newest Commit, or `null` before its first Commit |
-| `forkedFrom` | The node it was forked from, or `null` |
-
-**Refusals:** `NoSuchProject` (wrong name, or `init` not run with this `LAYERFS_HOME`),
-`InvalidInput`.
-
-```js
-const page = await layerfs.project.list_branches();
-const exists = page.items.some((b) => b.name === "cart");
-console.log(JSON.stringify(page, null, 2));
-```
 ```json
-{
-  "items": [
-    {
-      "name": "main",
-      "id": null,
-      "base": "3279dac7de68…",
-      "head": null
-    },
-    {
-      "name": "work",
-      "id": "1190a141ae4473594aaf0536f674a3fb99",
-      "base": "32a35edb1f9f…",
-      "head": "12804de7ce8d…",
-      "forkedFrom": "32a35edb1f9f…"
-    }
-  ],
-  "hasMore": false,
-  "nextPagePos": null
-}
+{"project":"shop/api","store":"shop","name":"api","kind":"sqlite","machine":"native","created":1793574061265}
 ```
 
-## `project.list_sandboxes(pageSize?, pagePos?)`
+## `project.remove`
 
-The project's running Sandboxes, lowest number first, from their records. It
-inspects each recorded container once, dials no daemon and starts nothing; a Sandbox
-that closed itself or whose container is gone is left out (the runtime reclaims it).
+`project.remove(project)`
 
-| Arg | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `pageSize` | number | no | 1–1000, default 50 |
-| `pagePos` | number | no | Offset, default 0 |
+Removes one project from its Store. Its Branches, Commits and `main` go with
+it; there is no undo. The live result:
 
-**Returns:** a page `{ items, hasMore, nextPagePos }`. Each item is
-`{ sandbox, name, image, platform, workspaces }`: its number, its container name, the
-image digest it runs (`null` for a `mac` or native `linux` one; one project's Sandboxes
-may differ), its platform and how many Workspaces it holds. Every platform's running
-Sandboxes are listed.
-
-```js
-const { items } = await layerfs.project.list_sandboxes();
-for (const s of items) console.log(s.sandbox, s.name, s.workspaces);
+```json
+{"stack":"3104401f11fb…","packs_kept":true,"project":"shop/api"}
 ```
+
+`packs_kept: true`: the project's records are gone, but its stored content
+stays in the Store file. Removing a project from a PostgreSQL Store is
+`Unsupported` in this build. To delete a whole Store with every project in it,
+use `store.remove`.
+
+An agent working on a project never needs `remove`; it is for whoever owns the
+home.

@@ -14,9 +14,9 @@ yours, from your fork and under your name: once it is merged, you are a LayerFS 
 
 ## Build a plugin
 
-A plugin builds on LayerFS's JavaScript packages. Their wiki,
-[`api/README.md`](../../api/README.md), says which one a plugin needs and links each one's
-guide. To have a coding agent design and build a plugin around them, paste this into one
+A plugin builds on LayerFS's `layerfs` package (Node or Python) or the `layerfs` command
+(LayerFS 2.0, #533; listings pinned to a 1.1.0 commit keep building on that commit's four
+packages). [`api/README.md`](../../api/README.md) describes the package. To have a coding agent design and build a plugin around them, paste this into one
 running in your plugin's repository. On [layerfs.ai/plugins](https://layerfs.ai/plugins/)
 `{{layerfs.commit}}` is filled in with the LayerFS commit plugins build on now.
 
@@ -29,24 +29,17 @@ Build a LayerFS plugin with me: <what it should do>.
    out commit {{layerfs.commit}}. Build against that commit only, and record it in this
    repository as layerfs.json: { "commit": "<the 40-character SHA>" }. The listing
    prompt reads it from there.
-2. Read api/README.md in that checkout: it maps LayerFS's JavaScript packages and links
-   each one's guide. Decide which kind of plugin this is, and tell me before writing
-   code:
-   - a tool or skill for agents: @layerfs/agent. Agents that only have Bash use its
-     layerfs command.
-   - something that shows a project: also @layerfs/backend.
-   - a host that runs projects for its users: also @layerfs/runtime.
-3. Read the guides for the packages you chose, and the skill in
-   .agents/skills/layerfs-js-sdk/. If agents will call LayerFS through the plugin, give
-   them that skill.
+2. Read api/README.md in that checkout: the `layerfs` package (Node, and Python in
+   api/python) has nine families of calls from one table; agents that only have Bash use
+   the `layerfs` command, which makes the same calls. Tell me which calls the plugin
+   needs before writing code.
+3. Read the skill in .agents/skills/layerfs-js-sdk/. If agents will call LayerFS through
+   the plugin, give them that skill.
 4. Design within these rules:
-   - Use only the packages' public calls. Never import @layerfs/agent/internal or
-     LayerFS source files.
-   - Settings are the LAYERFS_* environment names. If the host can only set its own
-     names, map them in the plugin.
-   - Store calls run in the calling process on Linux only. On macOS and Windows, start
-     the worker with @layerfs/runtime and pass its endpoint to agents
-     (LAYERFS_WORKER_ENDPOINT).
+   - Use only the package's public calls. Never import LayerFS source files.
+   - The one setting is LAYERFS_HOME (default ~/.layerfs). Machines, Stores and buckets
+     are records in the home, made by the machine, store and backup calls; where a call
+     runs comes from those records, not from the plugin.
    - Each call is attempted once. Handle a refusal (Conflict, Busy, NoSuchSandbox, …)
      the way the guides say; never retry or replay a call on your own.
    - Change nothing in the LayerFS checkout. If the plugin needs something LayerFS
@@ -142,7 +135,7 @@ Every listing has all four.
 | `repository` | yes | `https://github.com/<owner>/<repo>`, public |
 | `tags` | yes | 1 to 6 lowercase tags: a–z, 0–9 and dashes |
 | `platforms` | yes | any of `linux`, `macos`, `windows-wsl2` |
-| `uses` | yes | what it builds on: any of `agent` (`@layerfs/agent` and the `layerfs` command), `backend` (`@layerfs/backend`), `runtime` (`@layerfs/runtime`), `daemon` (`layerfs-daemon` run directly) |
+| `uses` | yes | what it builds on: any of `agent` (2.0: the `layerfs` package or command; 1.1.0: `@layerfs/agent` and the `layerfs` command), `backend` (1.1.0 `@layerfs/backend`), `runtime` (1.1.0 `@layerfs/runtime`), `daemon` (`layerfs-daemon` run directly) |
 | `status` | yes | `preview` (works, partly checked) or `available` (used and checked) |
 | `versions` | yes | at least one, **newest first** (below) |
 | `host` | no | the tool it plugs into: `{ "name": "…", "url": "…" }` |

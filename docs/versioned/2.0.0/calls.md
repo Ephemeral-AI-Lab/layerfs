@@ -1,0 +1,394 @@
+# The calls
+
+> **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
+
+Part of the [2.0.0 manual](README.md). The source is the one call table,
+[`engine/crates/layerfs-api/src/calls/table.rs`](../../../engine/crates/layerfs-api/src/calls/table.rs),
+and the command in `engine/crates/layerfs-cli/src/`. The shell parser, the
+help, and the Node and Python functions are all built from that table, so
+the three front ends take the same arguments.
+
+There are 57 calls in nine families. `layerfs help` lists them, and
+`layerfs help <family> [<call>]` prints one family or one call.
+
+## How a call is written
+
+```
+layerfs <family> <call> <positionals> [--options] [--text]
+```
+
+```js
+await layerfs.<family>.<call>(<positionals>, { <options> })
+```
+
+```python
+layerfs.<family>.<call>(<positionals>, <option>=...)
+```
+
+- **Positionals go from the outside in:** the owner (project, Store,
+  Sandbox or Workspace), then the Branch, then the path or new name, then
+  other inputs. An optional Commit is last (D7).
+- **Options say how.** A shell option is the option's name with `-` for
+  `_`: `--start-line` is `start_line`.
+- An optional positional is simply left off. In Python, optional
+  positionals and options may be keywords.
+- A function option (`on_progress`, and `stdout`/`stderr` of
+  `workspace.exec`) exists only in Node and Python. The shell has
+  `--progress` and `--stream` instead.
+
+### Names
+
+| Thing | Form | Unique in |
+| --- | --- | --- |
+| machine | `dev` | the home |
+| Store | `shop` | the home |
+| bucket | `r2-main` | the home (apart from Stores) |
+| project | `shop/api` | always written `<store>/<project>`; a bare `api` is `InvalidInput` |
+| Branch | `main`, `agent` | its project |
+| Commit | an id, or a prefix of 8 or more characters for `commit.get` | its project |
+| Sandbox | `tests` | the home |
+| Workspace | `tests:/…`, answered by `workspace.mount` | — |
+
+Machine, Store, bucket, project and Sandbox names are 1 to 63 lowercase
+letters, digits, `_`, `.` and `-`, starting and ending with a letter or
+digit. Windows device names (`con`, `nul`, `aux`, `prn`, `com1`–`com9`,
+`lpt1`–`lpt9`) are refused. `native` and `docker` name the built-in
+machines and are refused as new machine names.
+
+### Argument kinds
+
+| Kind | Accepts | Shell |
+| --- | --- | --- |
+| name | a machine, Store, bucket, Branch or Sandbox name, or a Commit id | a word |
+| project | `<store>/<project>` | a word |
+| text | a path, URL or other text | a word |
+| whole number | an integer | a word; not a number is exit 2 |
+| bool | true or false | `--flag` alone is true; `--flag=false` |
+| JSON | any JSON value | JSON text; `file apply`'s changes come from stdin or `--from` |
+| content | text or bytes | stdin, or `--from <file>`; text when UTF-8, else bytes |
+| size | bytes as a number, or text with `K`, `M` or `G` (`512M`, `8G`) | a word |
+| function | a callback (Node, Python only) | — |
+
+## The 57 calls
+
+`[x]` is an optional positional. Every family's results are snake_case.
+
+### `project` (4)
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `init` | `project`, `folder` | `timeout` (ms, default 1 hour), `on_progress` | imports a host folder as a new project into an existing Store |
+| `list` | `[store]` | `page_size`, `page_pos` | every project in the home, or one Store's |
+| `get` | `project` | — | a project's record: its Store, kind and machine |
+| `remove` | `project` | — | removes one project from its Store |
+
+- `init` never creates a Store; a missing one is `NotFound`. A sqlite Store
+  must be on `native` (move it there first); a PostgreSQL Store is written
+  from the caller's process. Run: answers `project`, `store`, `name`,
+  `kind`, `machine`, `created`, `layer` and `root`.
+- `remove` is refused while a Sandbox of the project runs, and is
+  `Unsupported` for a PostgreSQL Store.
+
+### `branch` (6)
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `list` | `project` | `page_size`, `page_pos` | a project's Branches |
+| `get` | `project`, `branch` | — | one Branch and its head Commit |
+| `fork` | `project`, `name`, `from_branch`, `[from_commit]` | — | a new Branch from another Branch's head or Commit |
+| `merge` | `project`, `name`, `a`, `b` | `message`, `units` (JSON) | merges two Branches into a new one |
+| `publish` | `project`, `branch`, `[commit]` | — | a Branch's head or Commit as `main`'s next Layer |
+| `diff` | `project`, `from_branch`, `to_branch` | `paths_only`, `page_size`, `page_pos`, `cursor` | files that differ between two Branches' heads |
+
+Run: `fork` answers `{kind: "Forked", branch, base, head}`; `publish`
+answers `{kind: "Added", source, published_layer, based_on, overwrote_count,
+overwrote, overwrote_has_more}`; `merge` answers `{kind: "Merged",
+fast_forward, branch, head, root, sources, merge_base, conflicts, lww,
+units, …}`.
+
+### `commit` (3)
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `list` | `project`, `branch` | `page_size`, `page_pos` | a Branch's Commits, newest first |
+| `get` | `project`, `branch`, `commit` | — | one Commit of a Branch |
+| `diff` | `project`, `from_commit`, `to_commit` | `paths_only`, `page_size`, `page_pos`, `cursor` | files that differ between two Commits |
+
+A Commit record has `id`, `branch`, `parent`, `second_parent`, `base`,
+`root`, `via`, `message`, `merged_from`, `time`, `logical`,
+`new_canonical`, `new_stored`, `new_metadata`, `displaced`, `lww` and
+`lww_truncated`. `commit.get` accepts an id prefix of 8 or more characters.
+
+### `file` (14)
+
+1.1.0's `fs` family, renamed (O13). Paths are absolute, starting with `/`.
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `read` | `project`, `branch`, `path`, `[commit]` | `start_line`, `end_line` | reads a text file, or a window of its lines |
+| `stat` | `project`, `branch`, `path`, `[commit]` | — | a path's kind, size and mode |
+| `list` | `project`, `branch`, `path`, `[commit]` | `page_size`, `page_pos` | a folder's entries |
+| `glob` | `project`, `branch`, `path`, `pattern`, `[commit]` | `page_size`, `page_pos` | paths under `path` matching a glob |
+| `grep` | `project`, `branch`, `path`, `pattern`, `[commit]` | `page_size`, `page_pos` | lines under `path` matching a regular expression |
+| `blame` | `project`, `branch`, `path`, `[commit]` | `from_line` | the Commit of each line |
+| `diff` | `project`, `left_branch`, `left_path`, `right_branch`, `right_path` | `left_commit`, `right_commit` | the difference between two files (O29) |
+| `write` | `project`, `branch`, `path`, `content` | `message`, `mode` | writes a file; one Commit |
+| `edit` | `project`, `branch`, `path` | `old`, `new`, `message` | replaces one unique text in a file; one Commit |
+| `rm` | `project`, `branch`, `path` | `message` | removes a path; one Commit |
+| `mkdir` | `project`, `branch`, `path` | `message`, `mode` | makes a folder; one Commit |
+| `mv` | `project`, `branch`, `from_path`, `to_path` | `message` | moves a path; one Commit |
+| `cp` | `project`, `branch`, `from_path`, `to_path` | `message` | copies a path; one Commit |
+| `apply` | `project`, `branch`, `changes` (JSON) | `message` | applies a list of changes; one Commit, all or none |
+
+- Reads answer `kind: "ok"`, the `snapshot` they read (such as
+  `agent@3a54ebd60426`), its `root` and the call's fields. `read` answers
+  `text`, `start_line`, `end_line`, `truncated`, `next_line` and `size`.
+  A file that is not text is refused `Binary`.
+- Writes answer `{kind: "Committed", branch, head, commit}`. Without a
+  message, the Commit message is `Apply filesystem changes`.
+- `mode` is a whole number permission mode, 0 to 0o7777 (in the shell, a
+  decimal number such as `420` for 0644).
+- In the shell, `write` reads its content and `apply` its JSON from stdin,
+  or from `--from <file>`. `edit` also takes `--old-from <file>` and
+  `--new-from <file>`.
+- `apply`'s changes are objects with an `op`: `write` (`path`, `content`
+  as text or bytes, `mode`), `mkdir` (`path`, `mode`), `chmod` (`path`,
+  `mode`), `rm` (`path`), `cp` and `mv` (`from_path`, `to_path`), and `edit`
+  (`path`, `old`, `new`), the same names as the single calls
+  (`engine/crates/layerfs-api/src/family/files.rs` maps them to the Store's).
+  The Store's own names (`from`, `to`, `oldText`, `newText`, `bytes`) are
+  refused `InvalidInput`, so a folder scope sees every path.
+
+Run:
+
+```console
+$ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","path":"/src"},{"op":"mv","from_path":"/docs/a.txt","to_path":"/src/a.txt"}]' \
+    | layerfs file apply shop/api agent -m batch
+{"kind":"Committed","branch":"agent","head":"1271…","commit":{…,"message":"batch",…}}
+```
+
+### `sandbox` (4)
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `create` | `project`, `name`, `machine` | `image` | starts a named Sandbox of a project on a machine |
+| `list` | `[project]` | `page_size`, `page_pos` | every Sandbox in the home, or one project's |
+| `get` | `name` | `page_size`, `page_pos` | a Sandbox and its Workspaces |
+| `close` | `name` | `force` | stops a Sandbox |
+
+- `create` answers the Sandbox's record: `name`, `project`, `machine`,
+  `state`, `created`, `id`, `platform`, `runtime` and `image`. A Sandbox
+  name taken anywhere in the home is `Exists`.
+- A sqlite project's Sandbox runs on the machine that holds its Store;
+  another machine is `Unsupported`, naming the Store's machine.
+- `close` with `force` stops the Sandbox through its backend and records
+  `Unknown` for Workspaces it could not drain (O31). Closing a Sandbox that
+  is already gone answers `{closed, was_gone: true}`.
+- Not run for this manual. See
+  [limitations](limitations.md#not-built-refused-as-unsupported).
+
+### `workspace` (5)
+
+A Workspace is `<sandbox>:<path>`, answered as `ws` by `mount`.
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `mount` | `sandbox`, `branch` | — | mounts a Branch in a Sandbox |
+| `exec` | `ws`, `command` | `message`, `stream`, `stdout`, `stderr` | runs one bash command in a Workspace |
+| `commit` | `ws` | `message`, `force` | commits a Workspace's changes to its Branch |
+| `unmount` | `ws` | `discard`, `force` | ends a Workspace |
+| `status` | `ws` | — | a Workspace's changes since its base (O14) |
+
+- `exec` answers `kind` (`exit:<code>`), `exit_code`, `stdout`, `stderr`,
+  `message` and `truncated`. A command that exits non-zero is still exit 0
+  for the shell unless `--stream` is given.
+- `stdout` and `stderr` (Node, Python) are functions given the command's
+  output. The library sends that output after the command ends; there is
+  no live output stream yet.
+- `commit` merges first when the Branch moved since the mount; `force`
+  publishes over a moved head instead.
+- `unmount` with `discard` drops uncommitted changes; `force` aborts its
+  connection.
+- Not run for this manual.
+
+### `machine` (8)
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `list` | — | — | every machine, and the platforms that could be created here |
+| `get` | `name` | — | a machine's record |
+| `status` | `name` | — | a machine's live state, free disk and tool version |
+| `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image`, `nested`, `host` | creates a VM machine |
+| `connect` | `name`, `host` | `user`, `port`, `identity`, `known_hosts`, `root` | connects an ssh host as a machine |
+| `remove` | `name` | — | deletes a VM machine and its disk |
+| `disconnect` | `name` | — | forgets an ssh machine; its data root stays |
+| `update` | `name` | `cpus`, `memory`, `image`, `docker`, `wsl` | resizes a VM, or sets a built-in machine's image and Docker socket (O11) |
+
+Run:
+
+```console
+$ layerfs machine list
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","state":"ready",…,"stores":["shop"],"sandboxes":[]}],"can_create":[{"platform":"apple-container","ready":true,"missing":[],"version":"container CLI version 1.6.1 …"},{"platform":"microsandbox","ready":false,"missing":["tool:msb"],"version":null},{"platform":"lima","ready":true,…},{"platform":"firecracker","ready":true,…},{"platform":"ssh","ready":true,…}]}
+
+$ layerfs machine status native
+{"name":"native","platform":"native","state":"running","free_disk":null,"tool_version":null,"down_reason":null,"stores":["shop"]}
+```
+
+See [machines](machines-and-stores.md#machines) for kinds, defaults and
+refusals.
+
+### `store` (8)
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `list` | — | — | every Store, from the home's records |
+| `get` | `name` | — | a Store's record |
+| `status` | `name` | — | a Store's live state |
+| `create` | `name` | — | an empty sqlite Store on `native` |
+| `connect` | `name`, `url` | `password`, `synchronous_commit` | attaches a PostgreSQL database as a Store |
+| `move` | `name`, `machine` | `on_progress` | moves a sqlite Store to another machine |
+| `remove` | `name` | — | deletes a sqlite Store with every project in it |
+| `disconnect` | `name` | — | forgets a PostgreSQL Store; its data stays |
+
+Run:
+
+```console
+$ layerfs store get shop --text
+name  shop
+kind  sqlite
+machine  native
+profile  disposable
+created  1793574130507
+sqlite  3.53.2
+
+PROJECTS  (none)
+
+$ layerfs store status shop
+{"name":"shop","kind":"sqlite","state":"idle","holders":[],"in_progress":null,"machine":"native","file":{"exists":true,"bytes":212992,"wal_bytes":271952}}
+```
+
+`state` is `idle`, `in_use` or `moving`. See
+[Stores](machines-and-stores.md#stores).
+
+### `backup` (5)
+
+| Call | Positionals | Options | Does |
+| --- | --- | --- | --- |
+| `connect` | `name`, `url` | `key`, `region`, `part_size` (size) | connects an r2 or MinIO bucket |
+| `disconnect` | `name` | — | forgets a bucket and this home's links to it |
+| `list` | `[bucket]` | — | every Store file on the connected buckets |
+| `create` | `store`, `bucket`, `[file]` | `on_progress` | uploads a sqlite Store to a bucket |
+| `restore` | `store`, `bucket`, `[file]` | `on_progress` | downloads a backup as a sqlite Store on `native` |
+
+See [backups](machines-and-stores.md#backups). Not run for this manual.
+
+## Results
+
+- **stdout** carries the call's result as one line of JSON.
+- **`--text`** prints a readable form instead: a file's text as it is; a
+  result's list of records as a table with upper-case headers; other fields
+  as `key  value` lines. It is one generic form, not a layout per call.
+- Paged results carry `items`, `has_more` (most families) and
+  `next_page_pos`; pass `next_page_pos` back as `page_pos`. The diff calls
+  also carry `next_cursor`, passed back as `cursor`.
+- Result keys are snake_case in every front end. Only identifier-like keys
+  change; a key that holds a path or a name never does.
+- Bytes are `Buffer`s in Node and `bytes` in Python.
+
+## Errors and exit codes
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | the call succeeded |
+| 2 | the command line is wrong (wrong number of positionals, unknown option, a value that is not a whole number or not `true`/`false`, bad JSON, an unreadable `--from` file); nothing was called |
+| 125 | LayerFS refused or failed the call; the refusal is JSON on stderr |
+
+`workspace exec --stream` exits with the command's own code instead; 125
+still means LayerFS failed. `layerfs help` and `layerfs --version` need no
+home.
+
+A refusal is `{"code", "message", "detail"}`. Run:
+
+```console
+$ layerfs file read shop/api
+layerfs: file.read takes 3 to 4 positional arguments, not 1
+$ echo $?
+2
+
+$ layerfs file read shop/api agent /nope
+{"code":"NoSuchPath","message":"/nope does not exist at agent@71e889e68390","detail":{"path":"/nope"}}
+$ echo $?
+125
+```
+
+Codes seen in the 2.0 library include:
+
+| Code | Meaning |
+| --- | --- |
+| `InvalidInput` | the request is wrong for this name or kind; nothing happened |
+| `NotFound` | no machine, Store, bucket or project of that name |
+| `NoSuchPath`, `NoSuchSandbox`, `NoSuchProcess`, … | 1.1.0's codes for paths, Sandboxes and processes |
+| `Exists` | the name is taken, or the same host or database is already connected |
+| `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine, a move in progress |
+| `Unsupported` | not possible here, or not built (see [limitations](limitations.md)); a missing tool is listed in `detail.missing` |
+| `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret |
+| `Conflict` | a merge or Commit conflict; for `backup.restore`, the Store changed since its last backup or restore |
+| `Binary` | `file.read` of a file that is not text |
+| `Capacity` | a Sandbox's Workspace limit |
+| `Busy` | another project is being added to the same Store |
+| `Failed` | it was tried and did not happen; whatever exists is kept |
+| `Unknown` | the outcome is not known; both sides are kept and logged in `log/uncertain.jsonl` |
+
+Every call is one attempt. After `Unknown`, read the state with `list`,
+`get` or `status` before acting again.
+
+## Shell switches
+
+| Switch | Calls | Does |
+| --- | --- | --- |
+| `--text` | all | a readable result instead of JSON |
+| `--progress` | `project init`, `store move`, `backup create`, `backup restore` | progress as one JSON line per update on stderr, `{"progress": {…}}` |
+| `--stream` | `workspace exec` | passes the command's stdout and stderr through and exits with its code |
+| `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
+| `--<option>-from <file>` | any optional text option (`--old-from`, `--new-from`, `--message-from`) | reads the option's value from a file |
+| `-m <text>` | calls with `message` | the same as `--message` |
+| `--scope <folder>` | all | a folder scope (see below) |
+| `--scope-branch <name>` | all, with `--scope` | the scope's Branch namespace |
+| `--` | all | every later word is a positional |
+
+`--option=value` works for every option. `machine create … --nested` alone
+is true; `--nested=false` is false.
+
+`project init --progress` printed no lines for a small folder in the run
+for this manual; `store move` reports its phases (`check`, `snapshot`,
+`send`, …) as progress.
+
+## Folder scope
+
+A folder scope (O32) limits a client to one folder of a project and,
+optionally, one Branch namespace. Node: `layerfs.client({ scope: { folder,
+branch } })`. Python: `layerfs.client(scope={"folder": ..., "branch":
+...})`. Shell: `--scope <folder> [--scope-branch <name>]`.
+
+- `folder` is a canonical absolute project path. Every path a `file` call
+  names must be the folder or beneath it; paths stay absolute.
+- With `branch`, Branch names are relative to the namespace and composed as
+  `<branch>.<name>`; `branch.list` answers only that namespace's Branches,
+  named relative to it. Without `branch`, every call that names a Branch is
+  refused. A 66-character Commit id is left as it is.
+- `commit` calls and `branch.diff` are refused as history.
+- `workspace.mount` mounts only the namespace's `main`; `workspace.exec`
+  starts the command in the scope's folder.
+- A refusal is `InvalidInput` with `out of scope: path`, `branch` or
+  `history`, before any effect.
+- A scope guards calls. It is not filesystem isolation: a command can still
+  `cd` anywhere in the mounted tree.
+
+Run:
+
+```console
+$ layerfs commit list shop/api agent --scope /src
+{"code":"InvalidInput","message":"out of scope: history","detail":null}
+$ layerfs file list shop/api agent /src --scope /src
+{"code":"InvalidInput","message":"out of scope: branch","detail":null}
+```

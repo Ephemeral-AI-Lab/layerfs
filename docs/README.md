@@ -2,10 +2,17 @@
 
 > **Status:** Current documentation entry point; v0.1.7 release documentation.
 
+## LayerFS 2.0 (#533, not released)
+
+- [2.0.0 manual](versioned/2.0.0/README.md): one home, machines and Stores, one call table
+- [The `layerfs` package](../api/README.md) for Node and [Python](../api/python/README.md)
+- [Work order](../core/docs/issues/533/README.md) and [decisions](../core/docs/issues/533/DECISIONS.md)
+
 ## LayerFS 1.1.0 (release candidate)
 
 - [Release record, compatibility and the owner waiver](release-notes/1.1.0/README.md)
-- [JavaScript packages wiki](../api/README.md) and its [how-to guides](../api/docs/)
+- JavaScript packages wiki and how-to guides: `api/README.md` and `api/docs/` at the
+  [v1.1.0 tag](https://github.com/Ephemeral-AI-Lab/layerfs/tree/v1.1.0/api) (replaced in 2.0)
 
 ## Use LayerFS v0.1.7
 

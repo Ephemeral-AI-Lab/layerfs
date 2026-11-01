@@ -1,71 +1,78 @@
 # Storage metrics over a long history
 
-> **Status:** Current general guide. Part of the `layerfs-sdk-observe` skill. The backend
-> statistics and the trace `sizes` and `commit` fields (#333) are on `main`.
+> **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
+> `layerfs-sdk-observe` skill. The per-Commit counters were seen live on
+> Commit records on 2026-11-02. 1.1.0's Store totals
+> (`backend.store.project.get_storage`) have no 2.0 call, so this page is
+> narrower than its 1.1.0 version.
 
 ## Sources
 
 | Source | Gives | When |
 | --- | --- | --- |
-| `backend.store.project.get_storage()` | Store totals: `logical`, `canonical`, `stored`, `metadata`, `file`, `free`, `dedupe`, `compression`, and `init`, the import counts and Store totals Init left | Snapshot at start, every N Commits, end |
-| `backend.store.branch.list_commit_storage(branch, pageSize, pagePos)` | Per Commit, newest first along first parents: `commit`, `logical`, `newCanonical`, `newStored`, `newMetadata` | Once after the run, for every Branch; dedupe by `commit` |
-| Trace `commit` and `sizes` | The same per-Commit counters on the line of the call that made the Commit, plus its step and time | During the run, free |
+| `commit.list(project, branch)` | Per Commit, newest first along first parents: `id`, `time`, `message`, `logical`, `new_canonical`, `new_stored`, `new_metadata` | Once after the run, for every Branch; dedupe by `id` |
+| Write results (`file.*`, `workspace.commit`) | The same record in `commit`, at the moment of the call | During the run, free, if your harness keeps results |
+| `store.status(store)` | `file.bytes`, `file.wal_bytes` of a sqlite Store | Snapshot at start, every N Commits, end |
+
+**Not available in 2.0:** Store-wide `canonical`, `stored`, `metadata`,
+`file`/`free` pages, `dedupe` and `compression`, and Init's own storage counts.
 
 | Term | Meaning |
 | --- | --- |
-| logical | Bytes of regular files as written. Per Commit: the whole tree's size. Store: summed over every Commit and Layer record, counting each hardlink path |
+| logical | Bytes of regular files as written. Per Commit: the whole tree's size |
 | canonical | Distinct registered object bytes, after content-addressed dedupe |
 | stored | Pack bodies after compression and delta encoding |
-| metadata | Metadata pack bodies plus SQLite space outside pack bodies |
-| file / free | Committed database pages / reusable free pages, in bytes |
-| dedupe | logical / canonical (`null` when canonical is 0) |
-| compression | canonical / stored (`null` when stored is 0) |
+| metadata | Metadata pack bodies |
 
-`newCanonical`, `newStored` and `newMetadata` describe that Commit's acknowledged
-Save. `newStored` includes metadata-domain packs; `newMetadata` is that subset,
-not additional bytes. Store `metadata` adds SQLite overhead to that same subset.
-Do not add `stored + metadata` to derive physical space. The exact accounted
-SQLite overhead is `file - free - stored`. They are not exclusive per-path allocation. Per-file physical bytes are not
-reported.
+`new_canonical`, `new_stored` and `new_metadata` describe that Commit's Save.
+`new_stored` includes metadata-domain packs; `new_metadata` is that subset,
+not additional bytes. Do not add `new_stored + new_metadata`. They are not
+per-path allocation; per-file physical bytes are not reported.
 
 ## The curve over history
 
-Order the Commits oldest first. For Commit i:
+Order a Branch's Commits oldest first. For Commit i:
 
-- cumulative canonical C_i = C_0 + Σ newCanonical, cumulative stored S_i = S_0 + Σ
-  newStored, cumulative metadata M_i = M_0 + Σ newMetadata;
+- cumulative canonical C_i = Σ new_canonical, cumulative stored
+  S_i = Σ new_stored, cumulative metadata M_i = Σ new_metadata, each over
+  Commits 1..i of this run;
 - `logical_i` is the tree size at that Commit;
-- C_0, S_0 and M_0 come from the start snapshot of `store.stats()` (Init and anything
-  before the run).
+- the run's compression so far is C_i / S_i. A Store-wide dedupe ratio
+  (logical / canonical over every record) cannot be rebuilt from these.
 
-Then check the end snapshot: `store.stats().canonical` should be close to C_n. Report any gap rather than hiding it. Logical Store totals also include
-publication Layers. Per-Commit `newMetadata` omits SQLite overhead growth, so
-compare the metadata gap against the change in `file - free - stored`. Unrecorded
-Saves, failed constructions or omitted histories can leave other gaps; preserve
-that uncertainty. `store.commits("main")` refuses because main is a Layer chain.
+1.1.0 started these sums at the Store totals from a start snapshot (C_0, S_0,
+M_0). 2.0 has no call for those, so the sums cover the run's Commits only, not
+Init or earlier history. Say so in any report. Check the end against
+`store.status`: the growth of `file.bytes + file.wal_bytes` over the run
+should be of the order of S_n plus SQLite overhead; report any gap rather than
+hiding it. Publication Layers and merges add records that no Branch's
+`commit.list` attributes.
 
 ## Blow-up signals
 
 | Signal | Healthy | Investigate when |
 | --- | --- | --- |
-| `newMetadata` per Commit vs paths changed in that Commit | Grows with paths changed | It grows with tree size at a steady change size |
-| `newStored` per Commit vs bytes changed | Roughly bytes changed ÷ compression | Much larger than the change: a rewrite where a delta was expected |
-| `newCanonical` on a re-install of unchanged `node_modules` | Near 0 (deduplicated) | Near the size of `node_modules` |
-| Store `dedupe` over time | Rises as history repeats content | Falls steadily |
-| Store `compression` over time | Stable | Falls steadily |
-| `file - free - stored` | SQLite overhead, separate from pack bodies | Overhead grows disproportionately to object and history counts |
+| `new_metadata` per Commit vs paths changed in it | Grows with paths changed | It grows with tree size at a steady change size |
+| `new_stored` per Commit vs bytes changed | Roughly bytes changed ÷ compression | Much larger than the change: a rewrite where a delta was expected |
+| `new_canonical` on a re-install of unchanged `node_modules` | Near 0 (deduplicated) | Near the size of `node_modules` |
+| Cumulative C_i / S_i over time | Stable | Falls steadily |
+| `store.status` file + WAL growth vs Σ new_stored | Close, plus overhead | Overhead grows out of proportion to Commits |
 
-Paths changed per Commit: `branch.diff_commits(parent, commit)` (count `items`; skip
-directories). Bytes changed: sum the sizes of changed files from `fs.stat` on both
-sides, or use `sizes.logical` deltas as a rough proxy.
+Paths changed per Commit: `commit.diff(project, parent, id, { paths_only: true })`
+(count `items`; skip `type: "dir"`). Bytes changed: `file.stat` sizes on both
+sides, or `logical` deltas as a rough proxy.
 
 ## One row per step
 
-Join the trace (by `step` and `commit`), `store.commits` (by `commit`) and the decoded
-daemon records (by `scope`, see [daemon logs](daemon-logs.md)):
+With no trace in 2.0, join the Commit records by `id` and take the step from
+the Commit message:
 
-| step | method | ms | slowest phase | logical | new canonical | new stored | new metadata | cumulative dedupe | cumulative compression |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| step (message) | via | time | logical | new canonical | new stored | new metadata | cumulative C/S |
+| --- | --- | --- | --- | --- | --- | --- | --- |
 
-A short Node script over `trace.jsonl` and the saved `store.commits` pages is enough;
-keep it with the run's evidence.
+```bash
+layerfs commit list shop/api work --page-size 1000 | jq -r '.items | reverse | .[] |
+  [.message, .via, .time, .logical, .new_canonical, .new_stored, .new_metadata] | @tsv'
+```
+
+Keep the script and the saved pages with the run's evidence.

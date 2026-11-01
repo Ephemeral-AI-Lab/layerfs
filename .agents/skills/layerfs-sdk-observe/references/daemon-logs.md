@@ -1,57 +1,59 @@
 # Daemon logs and observation records
 
-> **Status:** Current general guide. Part of the `layerfs-sdk-observe` skill. The records,
-> traced SDK calls requesting them and the decoder (#333) are on `main`.
+> **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
+> `layerfs-sdk-observe` skill. **Not run in this pass** (no Sandbox was
+> started). Read from `engine/crates/layerfs-sandbox/src/backend/native/`,
+> `engine/crates/layerfs-api/src/family/sandboxes.rs` and the daemon's
+> `application/idle.rs`. 1.1.0's `backend.daemon.sandbox.get_log` has no 2.0
+> call.
 
 ## What the daemon writes
 
-Each Sandbox daemon writes to its stderr, which Docker keeps as the container log. The
-container is `<prefix><project>-<n>` (`layerfs-<project>-<n>` by default), and its
-identifier is `get_log`'s `container` (also in the plain-text file
-`$LAYERFS_HOME/<project>/sandboxes/<n>/container`).
+Each Sandbox runs one LayerFS daemon. It writes to its stdout and stderr:
 
 - **Failures:** a fatal startup cause, or a control-connection failure.
-- **Observation records (tracing on):** for every traced control exchange,
-  fixed-schema numeric records marked `"layerfs_observation":1`:
-  - SQL work (statements, steps);
-  - owner lock wait and hold times per job family;
-  - Store reader and cache work;
-  - FUSE kernel counters (Linux);
-  - Workspace resources.
+- **The idle exit:** `LAYERFS_DAEMON_IDLE_EXIT after 120 s with no Workspace
+  and no call`, last.
+- **Observation records** (`"layerfs_observation":1`): fixed-schema numeric
+  records of SQL work, owner lock waits and holds, Store reader and cache work,
+  FUSE kernel counters (Linux) and Workspace resources. The daemon writes them
+  only for **traced** control exchanges. In this build no front end traces a
+  call (see [tracing](tracing.md)), so expect none.
 
 There is no general log level or logging framework.
 
-## Saving and decoding
+## Where the log is
 
-Save each Sandbox's log through the backend; it reads Docker where the SDK's binding
-runs, so it also works on macOS and Windows:
+| Sandbox on | Log |
+| --- | --- |
+| `native` (macOS host processes, Linux namespaces) | The file `daemon.log` (stdout and stderr together, mode 0600) in the Sandbox's private folder under `$LAYERFS_HOME/machine/native/sandbox-root/`. The folder is named after the Sandbox's container name, the `container` field of `workspace.mount`'s result |
+| a VM or ssh machine | Inside that machine, under its worker's root; no call reads it from the host |
+| `docker` | Sandboxes on `docker` are `Unsupported` in this build |
 
-```js
-import { writeFileSync } from "node:fs";
-const log = await backend.daemon.sandbox.get_log(ws.sandbox, { lines: 2000 });   // { sandbox, container, text, bytes }
-writeFileSync(`${run}/daemon-${log.container}.log`, log.text);
-```
-
-`get_log` keeps the last 2000 lines and at most 64 KiB. For a whole log of a long run,
-where your process can reach Docker, `docker logs <container> >
-<run>/daemon-<container>.log 2>&1` still works. Then decode:
+Copy the file while the Sandbox runs: a Sandbox closes itself 120 s after its
+last Workspace is unmounted, and `sandbox.close` deletes its folder with the
+log.
 
 ```bash
-# from the LayerFS checkout
-python3 tools/decode_observations.py --trace <run>/trace.jsonl < <run>/daemon-<container>.log > <run>/daemon-<container>.jsonl
+# from source; check the folder name against workspace.mount's `container`
+ls "$LAYERFS_HOME/machine/native/sandbox-root/"
+cp "$LAYERFS_HOME/machine/native/sandbox-root/<container>/daemon.log" run/daemon-<container>.log
+```
+
+When a Sandbox fails to start, `sandbox.create`'s `Failed` message carries
+the cause, including the end of its daemon log when it could be read.
+
+## Decoding old logs
+
+`tools/decode_observations.py` (in this checkout) still decodes 1.1.0 daemon
+logs joined to a 1.1.0 trace:
+
+```bash
+python3 tools/decode_observations.py --trace run/trace.jsonl < run/daemon-<container>.log > run/daemon-<container>.jsonl
 ```
 
 Each output line is one daemon call: `daemon`, `scope`, `call`, `operation`,
-`complete`, the joined trace line's `id` as `trace`, and named `sections`. Unavailable
-sections are `null`, never zero. Values are **cumulative** daemon counters at that call:
-subtract the previous call's values to get per-call work.
-
-Save the logs while the Sandbox runs. A Sandbox closes itself two minutes after its
-last Workspace is unmounted (its daemon writes `LAYERFS_DAEMON_IDLE_EXIT` last), and the
-next mount or the runtime's `sandbox.reclaim` deletes the stopped container and its log.
-
-## When a diagnostic write fails
-
-If the daemon can't write its records, or the telemetry doesn't fit the reply, the trace
-line's `daemon` entry carries `diagnosticError: { kind, message }`. With SDK tracing the
-call's result and its connection are unaffected.
+`complete`, the joined trace line's `id` as `trace`, and named `sections`.
+Unavailable sections are `null`, never zero. Values are **cumulative** daemon
+counters: subtract the previous call's values to get per-call work. On a 2.0
+log with no observation records it has nothing to decode.

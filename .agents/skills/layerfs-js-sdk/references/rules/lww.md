@@ -1,8 +1,9 @@
 # Merge rules: `/.lww`
 
 > **Status:** Current general guide. Part of the `layerfs-js-sdk` skill. Read from
-> `core/crates/layerfs-content/src/merge/lww.rs` and the compare-and-merge contract on
-> `main`; the Commit case is covered by verification case B10.
+> `core/crates/layerfs-content/src/merge/lww.rs` and the compare-and-merge contract;
+> the Commit case is covered by verification case B10. Call names updated for
+> LayerFS 2.0 (#533); the merge rules themselves did not change.
 
 ## Treat it as your `.gitignore`
 
@@ -45,9 +46,9 @@ LayerFS merges in exactly two places, and `/.lww` applies to both:
 | Merge | When it happens | Which `/.lww` is read | "ours" / "theirs" |
 | --- | --- | --- | --- |
 | **Commit merge** | `workspace.commit` when the Branch moved since the mount | The one on the Branch's current head | ours = the Workspace, theirs = the head |
-| **Branch merge** | `branch.merge(a, b, name)` | The one on `a` | ours = `a`, theirs = `b` |
+| **Branch merge** | `branch.merge(project, name, a, b)` | The one on `a` | ours = `a`, theirs = `b` |
 
-Nothing else merges, so nothing else reads it: `fs.*` writes are refused with
+Nothing else merges, so nothing else reads it: `file.*` writes are refused with
 `HeadMoved` if the Branch moved during the call, and `branch.publish` replaces `main`'s
 view. A path only one side changed takes that side's change, with or without a rule. A
 change to `/.lww` takes effect once it's committed on the Branch the merge reads.

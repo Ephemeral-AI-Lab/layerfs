@@ -31,10 +31,13 @@
 
 https://github.com/user-attachments/assets/70c25887-86a1-4d81-bd78-571cf1c09a18
 
-> **Status:** [LayerFS 1.1.0](https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v1.1.0),
-> released as source: the JavaScript API split into `@layerfs/agent`, `@layerfs/backend`
-> and `@layerfs/runtime` under [`api/`](api/README.md), plus the `layerfs` command. It breaks
-> code written for 1.0.0; see the [release record](docs/release-notes/1.1.0/README.md).
+> **Status:** the latest release is [LayerFS 1.1.0](https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v1.1.0)
+> ([release record](docs/release-notes/1.1.0/README.md)). This tree is LayerFS 2.0
+> ([#533](core/docs/issues/533/README.md), not released): one home (`LAYERFS_HOME`),
+> machines and Stores as records, and one call table behind the `layerfs` package for
+> Node and Python ([`api/`](api/README.md)) and the native `layerfs` command. It replaces
+> 1.1.0's `@layerfs/agent`, `@layerfs/backend`, `@layerfs/runtime` and `@layerfs/cli`;
+> see the [2.0.0 manual](docs/versioned/2.0.0/README.md).
 > The results below are 1.0.0's, measured on `main` at `e5c7aaae05`. The Store runs in its Disposable profile only, with no
 > crash or power-loss durability: use LayerFS for agent work and its history, not
 > as the only copy of data you cannot rebuild.

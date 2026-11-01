@@ -1,88 +1,154 @@
-# sandbox methods
+# sandbox calls
 
-> **Status:** Current general guide. Part of the `layerfs-js-sdk` skill. The methods
-> are #428's; behaviour is from the source and its Docker checks
-> (`api/agent/test/verify/sandbox_real.mjs`).
-
-Examples use `layerfs` as connected in [SKILL.md](../../SKILL.md#connect-to-a-project).
-
-**A mount names its Sandbox.** `sandbox.create()` is the only call that starts a
-Sandbox, and `workspace.mount(sandbox, branch)` mounts in the one it names. A Sandbox
-names its platform (#529); every later call on it follows that, not your settings. A Sandbox holds up to 16 Workspaces of any Branches; reuse one with room (see
-`project.list_sandboxes()`), or create one, and close it when you're done.
+> **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
+> `layerfs-js-sdk` skill. **Not run in this pass** (no Sandbox was started):
+> everything here is read from `engine/crates/layerfs-api/src/family/sandboxes.rs`,
+> `host/sandbox.rs` and the table, except `sandbox.list` on an empty home
+> (`{"items":[]}`, seen live).
 
 ```js
-const own = await layerfs.sandbox.create();                    // { sandbox: "2", image, platform }
+sandbox.create(project, name, machine, { image })
+sandbox.list(project?, { page_size, page_pos })
+sandbox.get(name, { page_size, page_pos })
+sandbox.close(name, { force })
+```
+
+A Sandbox is named (unique in the home), bound to one project when created, and
+runs one LayerFS daemon on one machine. It holds up to 16 Workspaces of any
+Branches of its project. `sandbox.create` is the only call that starts one;
+`workspace.mount(sandbox, branch)` mounts in the one it names.
+
+```js
+import layerfs from "layerfs";
+
+const P = "shop/api";
+await layerfs.sandbox.create(P, "build-1", "native");
 try {
-  const ws = await layerfs.workspace.mount(own.sandbox, "work");
+  const { ws } = await layerfs.workspace.mount("build-1", "work");
   try {
-    const run = await layerfs.workspace.exec(ws, "timeout 110 npm run build", "step 20");
-    await layerfs.workspace.commit(ws, `step 20: npm run build (exit ${run.exitCode})`);
+    const run = await layerfs.workspace.exec(ws, "timeout 110 npm run build", { message: "step 20" });
+    await layerfs.workspace.commit(ws, { message: `step 20: npm run build (exit ${run.exit_code})` });
   } finally {
     await layerfs.workspace.unmount(ws);
   }
 } finally {
-  await layerfs.sandbox.close(own.sandbox);
+  await layerfs.sandbox.close("build-1");
 }
 ```
 
-Another agent may mount in a Sandbox you created when it names it; `close` then refuses
-`MountsActive` until that Workspace is unmounted.
+```bash
+layerfs sandbox create shop/api build-1 native
+```
 
-## `sandbox.create(options?)`
+## `sandbox.create`
 
-Starts the project's next Sandbox and waits for its daemon. The only call that starts a
-Sandbox. It first reclaims the project's Sandboxes that closed themselves, so their
-numbers are used again.
+`sandbox.create(project, name, machine, { image })`
 
-| Arg | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `options.image` | string | no | Exact local image digest `sha256:<64 hex>`. Default: `LAYERFS_IMAGE` for `docker`; for `linux` and the VM platforms, the image `LAYERFS_IMAGE_ARCHIVE` holds (its config digest). Every Workspace mounted there runs on it |
-| `options.platform` | string | no | `docker`, `mac`, `linux`, `apple-container`, `microsandbox`, `lima`, `firecracker` or `ssh`; default your home's. Your home allows only some (a Linux home `docker` and `linux`; a `vm:` home its provider; macOS and Windows `docker`, or `mac` with `LAYERFS_SANDBOX=native`) |
+Starts a Sandbox, binds it to the project and returns its record when it is
+ready.
 
-**Returns:** `{ sandbox, image, platform }`: its number (pass it to `workspace.mount`),
-its image (`null` for a `mac` or native `linux` one) and its platform. Its container,
-or daemon folder, is named `<prefix><project>-<n>`.
-
-**Refusals**
-
-| Code | Meaning | Do |
-| --- | --- | --- |
-| `Failed` | Starting it failed. With `detail.removed: true` its container is already removed and nothing of it is left, and `detail.log` holds its daemon's last log lines (also in the message); otherwise it names what stays | Stop and report the message |
-| `Unknown` | An earlier Sandbox start of this project has an unknown outcome; every start is refused until it is resolved | Stop and report the message, which says what a person must remove; don't remove or retry anything yourself |
-| `Busy` | Another call held the project's lock for 60 seconds | Stop and report |
-| `InvalidInput` | A missing `LAYERFS_*` deployment variable, an image that isn't a digest, or a platform that is not one of the eight names (`windows`, `native` and `namespaces` are not platforms) | Check the environment ([SKILL.md](../../SKILL.md#connect-to-a-project)) |
-| `Unsupported` | Your home does not allow that platform; the message names what it allows | Leave `platform` out, or pick one it names |
-
-**Notes:** like any Sandbox, it closes itself two minutes after its last Workspace is
-unmounted, with no call in flight.
-
-## `sandbox.list_workspaces(sandbox, pageSize?, pagePos?)`
-
-The mounted Workspaces of one running Sandbox, from its daemon.
-
-**Returns:** a page `{ items, hasMore, nextPagePos, version }`. Each item:
-
-| Field | Meaning |
+| Arg | Meaning |
 | --- | --- |
-| `sandbox`, `path` | The Workspace, as `mount` returned it |
-| `branch`, `base` | Its Branch and the Commit it's based on |
-| `activity` | `Idle`; `Busy` while a Commit or mount runs in it; `Closing`, `Uncertain` or `Failed` (unmount it only after a look); any other daemon state as the daemon names it |
-| `changed` | Whether it holds uncommitted changes (`null` when unknown) |
-| `headMovedSinceMount`, `pendingMerge` | As in the backend's `workspace.status` |
+| `project` | `<store>/<project>` |
+| `name` | 1–63 lowercase letters, digits, `_ . -`; unique in the home |
+| `machine` | Where it runs. For a sqlite Store it must be the machine the Store is on (`store.get` names it) |
+| `image` | An image digest, where the machine allows one |
 
-**Refusals:** `NoSuchSandbox` (not running), `InvalidInput`.
+**What runs where in this build** (from source):
 
-## `sandbox.close(sandbox)`
+| Machine | Sandbox |
+| --- | --- |
+| `native` on macOS | host processes, Workspaces over loopback NFS. Needs the daemon: the native machine record's `daemon`, else `~/.cache/layerfs/bundle/<version>/<os>-<arch>/layerfs-daemon` (`Unavailable` when missing) |
+| `native` on Linux | Linux namespaces |
+| a VM or ssh machine | sent to that machine's worker, which runs it on its own `native` |
+| `docker` | `Unsupported` ("not built in 2.0 yet") |
+| any machine, PostgreSQL Store | `Unsupported` ("not built in 2.0 yet") |
 
-Stops a Sandbox now: stop, then delete, each attempted once, then its records.
-
-**Returns:** `{ kind: "Closed", sandbox }`.
+**Returns:** the Sandbox's record: `{ name, project, machine, state: "running",
+created, id, platform, runtime, image }`. `name` is what you pass to every other
+call; `id` is the host's internal number.
 
 **Refusals**
 
 | Code | Meaning | Do |
 | --- | --- | --- |
-| `MountsActive` | A Workspace is still mounted there; `detail.workspaces` lists them | Commit or unmount them first (yours), or leave the Sandbox to close itself |
-| `NoSuchSandbox` | No such Sandbox, or it already closed itself | Nothing to do |
-| `Failed`, `Unknown` | The stop or delete failed, or its outcome is uncertain | Stop and report the message |
+| `Exists` | A Sandbox with that name is recorded in the home (even one that closed itself) | Pick another name, or `sandbox.close(name)` first to drop the old record |
+| `NotFound` | No machine of that name, or no such Store | Check `machine.list`, `project.get` |
+| `Unsupported` | The machine is not the Store's (message names the Store's machine), `docker`, or a PostgreSQL Store | Use the Store's machine, or `store.move` the Store |
+| `Unavailable` | The daemon bundle is missing | Report it; the home's owner installs the bundle |
+| `InvalidInput` | A bad name or project | Fix the call |
+| `Failed` | Starting it failed; its record is removed | Stop and report the message |
+| `Unknown` | The start's outcome is unknown; the record is kept with `state: "unknown"` | Stop and report; don't create it again |
+
+## `sandbox.list`
+
+`sandbox.list(project?, { page_size, page_pos })`
+
+Every Sandbox record in the home, or one project's: `{ items: [record, …] }`.
+It reads the home's records only; it does not ask the daemons whether they
+still run. (The table takes page options; the source returns every record.)
+
+## `sandbox.get`
+
+`sandbox.get(name, { page_size, page_pos })`
+
+The Sandbox's record plus `workspaces`, the daemon's list of mounted
+Workspaces. From source, each entry has `workspace`, `namespace`, `branch`,
+`base`, `base_layer`, `root`, `activity`, `mounted`, `directory` (its path,
+the part after `:` in `ws`), `head_moved_since_mount`, `dirty`
+(`{ inodes, entries }` or `null`), `pending_merge` and `revision`. Not
+checked live.
+
+`activity` is `Idle` when nothing runs in the Workspace; `Busy` while a Commit
+or mount runs; `Closing`, `Uncertain` or `Failed` need a look before you
+unmount.
+
+## `sandbox.close`
+
+`sandbox.close(name, { force })`
+
+Stops the Sandbox now (stop, then delete, each attempted once), then removes
+its record.
+
+- **Returns:** `{ kind: "Closed", sandbox: <id>, closed: <name> }`. For a
+  Sandbox that was already gone (it closed itself), `{ closed, was_gone: true }`
+  and its record is removed.
+- `MountsActive` while any Workspace is mounted in it (`detail.workspaces`
+  lists them): commit or unmount them first.
+- `force` is in the table (O31), but this build's close does not read it
+  (from source): treat it as having no effect.
+
+## Idle close
+
+A Sandbox's daemon exits by itself 120 seconds after its last Workspace is
+unmounted with no call in flight (`IDLE_EXIT_S` in `host/sandbox.rs`). Its
+record stays in the home. A mount there is then refused `NoSuchSandbox`, and
+`sandbox.create` with the same name is refused `Exists` until
+`sandbox.close(name)` drops the record. So after an idle close: close, then
+create again (or use a new name).
+
+## Clearing idle Workspaces
+
+Nothing unmounts a Workspace for you: a script that exits or throws before its
+`unmount` leaves it mounted, and its Sandbox never closes. To clear leftovers,
+list each Sandbox's Workspaces and unmount only those that are idle, hold
+nothing uncommitted and that no agent is keeping on purpose (a build Workspace,
+one running a dev server). Field names are from source:
+
+```js
+const keep = new Set([/* "<sandbox>:<path>" Workspaces agents said they keep */]);
+for (const sb of (await layerfs.sandbox.list("shop/api")).items) {
+  const got = await layerfs.sandbox.get(sb.name);
+  for (const w of got.workspaces ?? []) {
+    const ws = `${sb.name}:${w.directory}`;
+    if (w.activity === "Idle" && w.dirty === null && !w.pending_merge && !keep.has(ws)) {
+      await layerfs.workspace.unmount(ws);   // no discard: a Dirty one stays for its owner
+    }
+  }
+}
+```
+
+Don't pass `discard` for a Workspace another agent mounted. Without it, a
+Workspace with uncommitted changes is refused `Dirty` and stays mounted.
+(`dirty` may be `{ inodes: 0, entries: 0 }` rather than `null` when clean; the
+unmount without `discard` is the real check.)

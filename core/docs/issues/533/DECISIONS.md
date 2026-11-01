@@ -170,3 +170,12 @@ Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated 
   instead of making a VM or connecting a host, because those have effects
   of their own. 1.1.0's `LAYERFS_LOCAL_DIR` is reported as ignored: native
   Sandboxes live under `machine/native/` (step 12).
+- Correction to the H §7.7 row above (found while writing the 2.0
+  manual): the code does not do what that row says. Store routes follow
+  `Kind::route` (`layerfs-sandbox` `machine/kind.rs`), which keeps `docker`
+  on a Linux host in-process, and that machine's adapter starts no worker
+  there; a Store moved to `docker` on Linux would then be opened from the
+  home's own store file, not from a Docker volume. Nothing ran on Linux in
+  this pass, so neither route is verified there. A Linux follow-up must
+  either give `docker` on Linux a worker (the row's choice) or make the
+  in-process route open the volume's file.
