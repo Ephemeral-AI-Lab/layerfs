@@ -28,15 +28,17 @@ pub enum ProviderLaunchOptions {
         environment: Vec<(String, String)>,
     },
     /// The Linux namespace backend: a namespaced daemon plus the Store file it
-    /// opens. `store` is the exact file; its directory is what the Sandbox's
-    /// private root binds, so SQLite's WAL and the writers' directory lock see
-    /// the same inode as every other opener on this kernel. `image` is the
-    /// digest its root is an overlay of, and `archive` the docker-archive in
-    /// the bundle that digest names, which is unpacked once per digest.
+    /// opens. `store` is the exact file (`None` binds no Store directory, for a
+    /// PostgreSQL Store, #506); its directory is what the Sandbox's private
+    /// root binds, so SQLite's WAL and the writers' directory lock see the
+    /// same inode as every other opener on this kernel. `image` is the digest
+    /// its root is an overlay of, and `archive` the docker-archive in the
+    /// bundle that digest names, which is unpacked once per digest.
     Namespaces {
         command_identity: CommandIdentity,
         environment: Vec<(String, String)>,
-        store: PathBuf,
+        /// The Store file; None binds no Store directory (a PostgreSQL Store, #506).
+        store: Option<PathBuf>,
         image: crate::Image,
         archive: PathBuf,
     },

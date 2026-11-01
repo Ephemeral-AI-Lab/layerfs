@@ -140,6 +140,14 @@ pub(crate) fn start(
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
     if crate::runtime::local(deploy)? {
+        if matches!(store, DaemonStore::Postgres(_))
+            && crate::runtime::backend(deploy)? != crate::runtime::Backend::Namespaces
+        {
+            return Err(refused(
+                "Unsupported",
+                "a native Sandbox's daemon opens a Store file; a Sandbox of a PostgreSQL Store runs in Docker",
+            ));
+        }
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         return crate::local::start(args, directory, store);
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]

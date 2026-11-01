@@ -17,7 +17,7 @@ fn spec() -> HelperSpec {
     HelperSpec {
         root: PathBuf::from("/var/lib/layerfs/local/sandbox-1.root"),
         sandbox: PathBuf::from("/var/lib/layerfs/local/sandbox-1"),
-        store: PathBuf::from("/layerfs-store/project"),
+        store: Some(PathBuf::from("/layerfs-store/project")),
         daemon: PathBuf::from("/var/lib/layerfs/local/sandbox-1/bin/layerfs-daemon"),
         config: PathBuf::from("/var/lib/layerfs/local/sandbox-1/config/daemon.setup"),
         cgroup: PathBuf::from("/sys/fs/cgroup/layerfs/0000000000000000000000000000000000000000000000000000000000000001"),
@@ -38,12 +38,22 @@ fn the_init_spec_roundtrips() {
     let text = String::from_utf8(encoded).unwrap();
     assert_eq!(text.lines().count(), 9);
     assert!(text.starts_with("root=/var/lib/layerfs/local/sandbox-1.root\n"));
+    // a PostgreSQL Store has no Store directory: `store` is omitted and decodes as `None`
+    let without_store = HelperSpec {
+        store: None,
+        ..spec
+    };
+    let encoded = without_store.encode().unwrap();
+    let text = String::from_utf8(encoded.clone()).unwrap();
+    assert_eq!(text.lines().count(), 8);
+    assert!(!text.lines().any(|line| line.starts_with("store=")));
+    assert_eq!(HelperSpec::parse(&encoded).unwrap(), without_store);
 }
 
 #[test]
 fn a_value_may_hold_an_equals_sign() {
     let mut spec = spec();
-    spec.store = PathBuf::from("/layerfs-store/a=b");
+    spec.store = Some(PathBuf::from("/layerfs-store/a=b"));
     let encoded = spec.encode().unwrap();
     assert_eq!(HelperSpec::parse(&encoded).unwrap().store, spec.store);
 }
@@ -67,6 +77,11 @@ fn a_path_the_init_stage_cannot_mount_is_refused() {
     assert!(newline.encode().is_err());
     let bytes = newline.encode().unwrap_err();
     assert_eq!(format!("{bytes:?}"), r#"Protocol("helper spec path")"#);
+    let relative_store = HelperSpec {
+        store: Some(PathBuf::from("relative/store")),
+        ..spec()
+    };
+    assert!(relative_store.encode().is_err());
     // the three overlay paths are one mount option string: neither a comma nor
     // a colon may appear in them
     let comma = HelperSpec {
@@ -94,9 +109,14 @@ fn a_spec_is_refused_unless_every_field_appears_once() {
         .filter(|line| !line.starts_with("cgroup="))
         .collect::<Vec<_>>();
     assert!(HelperSpec::parse(missing.join("\n").as_bytes()).is_err());
-    // one field twice
+    // one field twice (including optional `store`)
     let twice = format!("{text}cgroup=/sys/fs/cgroup/layerfs/2\n");
     assert!(HelperSpec::parse(twice.as_bytes()).is_err());
+    let twice_store = format!("{text}store=/layerfs-store/other\n");
+    assert!(HelperSpec::parse(twice_store.as_bytes()).is_err());
+    // an empty `store=` value (omission is `None`, not an empty path)
+    let empty_store = text.replace("store=/layerfs-store/project\n", "store=\n");
+    assert!(HelperSpec::parse(empty_store.as_bytes()).is_err());
     // an unknown field
     let unknown = format!("{text}kernel=nfs\n");
     assert!(HelperSpec::parse(unknown.as_bytes()).is_err());

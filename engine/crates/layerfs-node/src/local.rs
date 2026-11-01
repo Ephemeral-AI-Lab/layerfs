@@ -118,11 +118,11 @@ fn start_claimed(
             // the Store's path in the daemon's filesystem, which is this one
             existing.locator = store.clone();
             setup.existing_store = Some(existing);
-            store.as_str()
+            Some(PathBuf::from(&store))
         }
         DaemonStore::Postgres(selected) => {
             setup.postgresql = Some(selected.clone());
-            "/dev/null"
+            None
         }
     };
     let identity = CommandIdentity {
@@ -278,13 +278,13 @@ fn native_runtime(
 }
 
 /// How the daemon of `backend` is launched: the same local options, and for
-/// the namespace backend the Store file its private root binds and the image
-/// archive its root is unpacked from.
+/// the namespace backend the Store file its private root binds (`None` for a
+/// PostgreSQL Store) and the image archive its root is unpacked from.
 #[cfg(target_os = "linux")]
 fn launch_options(
     backend: crate::runtime::Backend,
     identity: CommandIdentity,
-    store: &str,
+    store: Option<PathBuf>,
     args: &SdkValue,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(match backend {
@@ -300,7 +300,7 @@ fn launch_options(
             ProviderLaunchOptions::Namespaces {
                 command_identity: identity,
                 environment: native_environment(),
-                store: PathBuf::from(store),
+                store,
                 image,
                 archive,
             }
@@ -312,7 +312,7 @@ fn launch_options(
 fn launch_options(
     _: crate::runtime::Backend,
     identity: CommandIdentity,
-    _: &str,
+    _: Option<PathBuf>,
     _: &SdkValue,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(ProviderLaunchOptions::Local {

@@ -29,8 +29,9 @@ use std::{
 pub(crate) struct Options {
     pub(crate) command_identity: CommandIdentity,
     pub(crate) environment: Vec<(String, String)>,
-    /// The exact Store file the daemon opens; its directory is bound in.
-    pub(crate) store: PathBuf,
+    /// The exact Store file the daemon opens (`None` for a PostgreSQL Store);
+    /// its directory is bound in when present.
+    pub(crate) store: Option<PathBuf>,
     /// The image digest the Sandbox's root is an overlay of, and the
     /// docker-archive in the bundle that holds it.
     pub(crate) image: Image,
@@ -169,8 +170,8 @@ fn start_request(
         ));
     }
     check_environment(&options.environment)?;
-    if options.store != Path::new("/dev/null") {
-        check_store(&paths, &options.store)?;
+    if let Some(store) = &options.store {
+        check_store(&paths, store)?;
     }
     for path in [&paths.local.directory, &paths.root] {
         match fs::symlink_metadata(path) {
@@ -267,12 +268,13 @@ fn prepare(
     private(&paths.local.config)?.write_all(&request.daemon_config)?;
     fs::copy(&request.daemon_executable, &paths.bin)?;
     fs::set_permissions(&paths.bin, Permissions::from_mode(0o755))?;
-    let store = if options.store == Path::new("/dev/null") {
-        options.store.clone()
-    } else {
-        (options.store.parent())
-            .ok_or(RuntimeError::Protocol("namespaces Store directory"))?
-            .to_owned()
+    let store = match &options.store {
+        Some(store) => Some(
+            (store.parent())
+                .ok_or(RuntimeError::Protocol("namespaces Store directory"))?
+                .to_owned(),
+        ),
+        None => None,
     };
     let spec = HelperSpec {
         root: paths.root.clone(),

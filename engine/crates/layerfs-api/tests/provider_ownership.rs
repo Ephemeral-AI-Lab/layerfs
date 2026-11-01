@@ -58,8 +58,9 @@ impl Drop for ProjectFixture {
 
 #[test]
 fn native_resource_paths_are_validated_before_launch() {
-    use layerfs_api::{sandbox::ProviderCreate, SandboxApi, SandboxPhase};
+    use layerfs_api::{sandbox::ProviderCreate, SandboxApi, SandboxCause, SandboxPhase};
     use layerfs_bridge::{
+        control::ControlError,
         daemon_setup::{DaemonLimits, DaemonSetup},
         duplex,
     };
@@ -141,7 +142,8 @@ fn native_resource_paths_are_validated_before_launch() {
         assert!(failure.runtime.is_none() && failure.control.is_none());
         assert!(!paths.directory.exists());
     }
-    // A PostgreSQL Store's Sandbox binds no Store volume or directory.
+    // A PostgreSQL Store's Sandbox rejects host Local launch options and
+    // Namespaces options with a Store directory, and admits Namespaces with `store: None`.
     let mut postgres = request;
     postgres.setup.postgresql = Some(layerfs_bridge::daemon_setup::DaemonPostgres {
         url: "postgresql://lfs:secret@10.0.2.2:5432/layerfs".into(),
@@ -150,15 +152,42 @@ fn native_resource_paths_are_validated_before_launch() {
         binding: b"sdk-existing-project".to_vec(),
         cursor_key: [7; 32],
     });
+    let local_rejected = api
+        .create_provider_postgres(postgres.clone())
+        .err()
+        .unwrap();
+    assert_eq!(local_rejected.phase, SandboxPhase::Validate);
+    assert!(local_rejected.runtime.is_none());
+    assert!(matches!(
+        local_rejected.cause,
+        SandboxCause::Setup(ControlError("PostgreSQL Store with no volume"))
+    ));
+    let image = layerfs_sandbox::Image::parse(&format!("sha256:{}", "a".repeat(64))).unwrap();
+    let archive = PathBuf::from("/layerfs/bundle/images/a.tar");
     let mut with_store = postgres.clone();
     with_store.launch.options = ProviderLaunchOptions::Namespaces {
         command_identity: identity,
         environment: vec![],
-        store: fixture.project.store.path.clone(),
-        image: layerfs_sandbox::Image::parse(&format!("sha256:{}", "a".repeat(64))).unwrap(),
-        archive: PathBuf::from("/layerfs/bundle/images/a.tar"),
+        store: Some(fixture.project.store.path.clone()),
+        image: image.clone(),
+        archive: archive.clone(),
     };
     let rejected = api.create_provider_postgres(with_store).err().unwrap();
     assert_eq!(rejected.phase, SandboxPhase::Validate);
     assert!(rejected.runtime.is_none());
+    assert!(matches!(
+        rejected.cause,
+        SandboxCause::Setup(ControlError("PostgreSQL Store with no volume"))
+    ));
+    let mut without_store = postgres;
+    without_store.launch.options = ProviderLaunchOptions::Namespaces {
+        command_identity: identity,
+        environment: vec![],
+        store: None,
+        image,
+        archive,
+    };
+    let accepted = api.create_provider_postgres(without_store).err().unwrap();
+    assert!(matches!(accepted.cause, SandboxCause::Provider(_)));
+    assert!(accepted.runtime.is_none());
 }

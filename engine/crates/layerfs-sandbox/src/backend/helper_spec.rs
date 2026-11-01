@@ -31,9 +31,10 @@ pub struct HelperSpec {
     /// The Sandbox directory, bound at its own path inside the private root,
     /// so the daemon's setup, overlay and Workspace mounts keep one naming.
     pub sandbox: PathBuf,
-    /// The Store's directory, bound read-write: SQLite's WAL and the writers'
-    /// directory lock then see the same inode as every other opener.
-    pub store: PathBuf,
+    /// The Store's directory, bound read-write (`None` for a PostgreSQL Store,
+    /// which binds none): SQLite's WAL and the writers' directory lock then
+    /// see the same inode as every other opener.
+    pub store: Option<PathBuf>,
     /// The daemon executable inside the private root.
     pub daemon: PathBuf,
     /// The daemon's setup file, 0600.
@@ -54,6 +55,9 @@ impl HelperSpec {
     pub fn encode(&self) -> Result<Vec<u8>, RuntimeError> {
         let mut out = Vec::new();
         for (index, (field, path)) in self.fields().into_iter().enumerate() {
+            let Some(path) = path else {
+                continue;
+            };
             check(path)?;
             if index >= LAYERS {
                 check_overlay(path)?;
@@ -88,11 +92,12 @@ impl HelperSpec {
             check(&path)?;
             values[index] = Some(path);
         }
+        let store = values[2].take();
         let mut take = |index: usize| values[index].take().ok_or(RuntimeError::Protocol(FIELD));
         let spec = Self {
             root: take(0)?,
             sandbox: take(1)?,
-            store: take(2)?,
+            store,
             daemon: take(3)?,
             config: take(4)?,
             cgroup: take(5)?,
@@ -106,17 +111,17 @@ impl HelperSpec {
         Ok(spec)
     }
 
-    fn fields(&self) -> [(&'static str, &Path); 9] {
+    fn fields(&self) -> [(&'static str, Option<&Path>); 9] {
         [
-            (FIELDS[0], &self.root),
-            (FIELDS[1], &self.sandbox),
-            (FIELDS[2], &self.store),
-            (FIELDS[3], &self.daemon),
-            (FIELDS[4], &self.config),
-            (FIELDS[5], &self.cgroup),
-            (FIELDS[6], &self.lower),
-            (FIELDS[7], &self.upper),
-            (FIELDS[8], &self.work),
+            (FIELDS[0], Some(&self.root)),
+            (FIELDS[1], Some(&self.sandbox)),
+            (FIELDS[2], self.store.as_deref()),
+            (FIELDS[3], Some(&self.daemon)),
+            (FIELDS[4], Some(&self.config)),
+            (FIELDS[5], Some(&self.cgroup)),
+            (FIELDS[6], Some(&self.lower)),
+            (FIELDS[7], Some(&self.upper)),
+            (FIELDS[8], Some(&self.work)),
         ]
     }
 }

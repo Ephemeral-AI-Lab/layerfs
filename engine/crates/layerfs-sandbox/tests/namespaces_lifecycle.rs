@@ -114,7 +114,7 @@ impl Fixture {
             options: ProviderLaunchOptions::Namespaces {
                 command_identity: CommandIdentity { uid: 501, gid: 20 },
                 environment: vec![("LAYERFS_KERNEL".to_owned(), "fuse".to_owned())],
-                store: self.store.join("sealed.sqlite"),
+                store: Some(self.store.join("sealed.sqlite")),
                 image: self.image(),
                 archive: self.archive.clone(),
             },
@@ -598,7 +598,7 @@ fn a_request_is_refused_before_any_effect() {
     request.options = ProviderLaunchOptions::Namespaces {
         command_identity: CommandIdentity { uid: 0, gid: 0 },
         environment: Vec::new(),
-        store: fixture.store.join("sealed.sqlite"),
+        store: Some(fixture.store.join("sealed.sqlite")),
         image: fixture.image(),
         archive: fixture.archive.clone(),
     };
@@ -622,7 +622,7 @@ fn a_request_is_refused_before_any_effect() {
     request.options = ProviderLaunchOptions::Namespaces {
         command_identity: CommandIdentity { uid: 501, gid: 20 },
         environment: Vec::new(),
-        store: fixture.root.join("sealed.sqlite"),
+        store: Some(fixture.root.join("sealed.sqlite")),
         image: fixture.image(),
         archive: fixture.archive.clone(),
     };
@@ -634,7 +634,7 @@ fn a_request_is_refused_before_any_effect() {
     request.options = ProviderLaunchOptions::Namespaces {
         command_identity: CommandIdentity { uid: 501, gid: 20 },
         environment: Vec::new(),
-        store: fixture.store.join("sealed.sqlite"),
+        store: Some(fixture.store.join("sealed.sqlite")),
         image: fixture.image(),
         archive: fixture.base.join("no-such-image.tar"),
     };
@@ -648,7 +648,7 @@ fn a_request_is_refused_before_any_effect() {
     request.options = ProviderLaunchOptions::Namespaces {
         command_identity: CommandIdentity { uid: 501, gid: 20 },
         environment: Vec::new(),
-        store: fixture.store.join("sealed.sqlite"),
+        store: Some(fixture.store.join("sealed.sqlite")),
         image: other.clone(),
         archive: fixture.archive.clone(),
     };
