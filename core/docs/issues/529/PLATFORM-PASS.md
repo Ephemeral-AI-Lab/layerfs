@@ -14,7 +14,7 @@ old-record checks. Nothing is pushed or merged; that waits for the owner.
   after the parent's rulings"). `33733d0645` is move-only (below).
 - **Receipts:** `receipts/6f242b72bf/` beside this file, 111 JSON files in the
   #527 `lfs527-cell/1` format; the rerun's 7 are in `receipts/4e8999872b/` and
-  `receipts/78b63e86eb/`. Each names its row, cell, platform, verdict, cause,
+  `receipts/78b63e86eb/`, and the finding 6 rerun's 1 in `receipts/a3e956dd40/`. Each names its row, cell, platform, verdict, cause,
   timings, load, identities, lock and teardown. C01 receipts also carry `extras`
   (the default and refusal checks).
 - **Delegation:** the owner asked for no questions; the parent session held the
@@ -136,6 +136,25 @@ C01 cells cover.
 | `linux-oldrecords-check-…T005836…` (`78b63e86eb/`) | `78b63e86eb` | PASS | below |
 | `linux-namespaces-C01-…` (`78b63e86eb/`) | `78b63e86eb` | PASS | The home's `LAYERFS_IMAGE` is Docker's `sha256:afa1ef9c…`; the Sandbox ran `sha256:1d91885d…`, taken from `LAYERFS_IMAGE_ARCHIVE`. |
 | `vm-lima-C01-…` (`78b63e86eb/`) | `78b63e86eb` | PASS | A VM platform's create, with its image from the bundle's archive. |
+| `linux-oldrecords-check-…` (`a3e956dd40/`) | `a3e956dd40` | PASS | Finding 6 fixed (below). |
+
+**Old records after `a3e956dd40` (finding 6).** The no-`LAYERFS_LOCAL_DIR` step
+now expects the old namespaces record to be refused when read, not to refuse
+the call. With the home's name prefix and no `LAYERFS_LOCAL_DIR`:
+- `runtime.sandbox.records` showed Sandbox 1 (`docker`) `running` and Sandbox 2
+  (the old namespaces one) `refused`, `refusal.code` `InvalidInput`: "…whose
+  owner marker cannot be read …; set LAYERFS_LOCAL_DIR (deploy.localDir) to the
+  directory it was made under";
+- a client opened with no `LAYERFS_LOCAL_DIR` listed Sandbox 1 alone, with
+  Sandbox 2 in the binding's `skipped`;
+- its reclaim reclaimed nothing and skipped Sandbox 2.
+
+Both stayed running. Then, with the home's `LAYERFS_LOCAL_DIR` as before #529,
+both listed with their platforms and were mounted, used, unmounted and closed.
+The VM was made a third time from the same Ubuntu image (digest
+`50e24e1f…348e`). Canonical's `releases/24.04/release` redirect was slow, so
+the image was fetched from `cloud-images.ubuntu.com/noble/current/`, checked
+against that folder's `SHA256SUMS`, and given to Lima as a local file.
 
 **Mixed project (rerun).** As in the first pass, with three changes:
 - **Image defaults.** `linux` was made with no `image`. It listed with
@@ -175,6 +194,7 @@ not needed.
 | `receipts/6f242b72bf/` (111) | 6f242b72bf | build-linux-b5f1d388… (`ba1c640b…`), 99 receipts | build-macos-77750910… (`cf18e512…`), 12 receipts | cells-b5f1d388 (the Linux bundle plus `images/1d91885d….tar`, identity `ba1c640b…`) | `028293bd` ×111 |
 | `receipts/4e8999872b/` (2) | 4e8999872b | build-linux-9cc0c9a1… (`e1410fd9…`), 1 receipt | build-macos-509dacd2… (`f7045a44…`), 1 receipt | — | `028293bd` ×2 |
 | `receipts/78b63e86eb/` (5) | 78b63e86eb | build-linux-70433254… (`45dfb128…`), 5 receipts | — | cells-70433254 (the Linux bundle plus `images/1d91885d….tar`, identity `45dfb128…`) | `028293bd` ×5 |
+| `receipts/a3e956dd40/` (1) | a3e956dd40 | build-linux-ab4a0253… (`27923eca…`), 1 receipt | — | — | `028293bd` ×1 (`oldrec.mjs` `04b028c6`) |
 
 - **Runner files** (all 111): `run.mjs` `028293bd`, `cell.mjs` `7164549b`,
   `workloads.mjs` `e22d812d`, `mixed.mjs` `57fc441b`, `make.mjs` `d6014896`,
@@ -321,21 +341,35 @@ Reversible choices, made at the recommended option and recorded here.
 5. **Windows is untested** (no host). `docker` through the WSL2 worker should
    behave as macOS's worker home; the agent treats any worker without a `vm` field
    as a `docker`-only home.
-6. **A refused record fails the call that reads it.** `project.list_sandboxes`,
-   reclaim and the sweep read every record, so one record they refuse (damaged,
-   another `LAYERFS_LOCAL_DIR`, or with no `LAYERFS_LOCAL_DIR` one without its
-   owner marker) refuses the whole call for that project; it is not left out.
-   This was so before #529; `agent.md` said "left out of listing and reclaim"
-   and now says what happens.
+6. **Fixed in `a3e956dd40` (parent, with the owner's go-ahead): a record refused
+   when read no longer fails the call.** Before, `project.list_sandboxes`,
+   reclaim, the sweep and `sandbox.create` read every record, so one refused
+   record (damaged, another `LAYERFS_LOCAL_DIR`, or with no `LAYERFS_LOCAL_DIR`
+   one without its owner marker) refused the whole call for that project; that
+   was so before #529 too. Now:
+   - listing leaves it out, with the same answer shape;
+   - `runtime.sandbox.records` keeps it as `state: "refused"` with
+     `refusal: { code, message }`;
+   - reclaim, the sweep and `sandbox.create`'s reclaim skip it and leave it in
+     place, with one `phase: "skipped"` trace line each;
+   - a call naming that Sandbox is still refused with its own code.
+
+   A malformed `LAYERFS_LOCAL_DIR` or `LAYERFS_SANDBOX` still refuses the
+   call, and so does a failure to inspect what a readable record names. The
+   runtime now reads records with the home's `containerPrefix` and `localDir`,
+   and counts a refused record among a Store's holders.
 7. **With no `LAYERFS_LOCAL_DIR`, a stopped local record whose directory is
    gone is not reclaimed.** Its directory cannot be resolved, so decision 5
-   refuses it; a client with `LAYERFS_LOCAL_DIR` set reclaims it as before.
+   refuses it; since `a3e956dd40` it is skipped and kept rather than failing
+   the call. A client with `LAYERFS_LOCAL_DIR` set reclaims it as before;
+   otherwise removing a record whose ownership cannot be checked stays a
+   manual step (the docs say so).
 
 ## Commits
 
 Production LOC uses `tools/production_loc.py` on the first parent and the staged
 tree. The scope is core, engine and api; the reference is absent (retired R9c; last
-counted 65,417 at tree 498dd1917812). Over #529: **123811 → 124059 (delta +248)**.
+counted 65,417 at tree 498dd1917812). Over #529: **123811 → 124168 (delta +357)**.
 
 | Commit | Subject | Production LOC |
 | --- | --- | --- |
@@ -349,7 +383,9 @@ counted 65,417 at tree 498dd1917812). Over #529: **123811 → 124059 (delta +248
 | `91f31613ba` | sandbox, agent: a linux or VM Sandbox's default image is its archive's (#529) | 123966 -> 123993 (delta +27) |
 | `4e8999872b` | node: with no LAYERFS_LOCAL_DIR a local record must own its directory (#529) | 123993 -> 124051 (delta +58) |
 | `78b63e86eb` | node: a given image the archive lacks is InvalidInput before any effect (#529) | 124051 -> 124059 (delta +8) |
-| this commit | docs, test: #529 rerun after the parent's rulings | 124059 -> 124059 (delta 0) |
+| `7bfb4d692d` | docs, test: #529 rerun after the parent's rulings | 124059 -> 124059 (delta 0) |
+| `a3e956dd40` | node, agent, runtime: a record refused when read no longer fails the call (#529 finding 6) | 124059 -> 124168 (delta +109) |
+| this commit | docs, test: #529 finding 6 fixed, old records rerun | 124168 -> 124168 (delta 0) |
 
 `db4b8e4dc8` subtotals: core 41405, engine 77696 (+57), api 4865 (+98). Tests
 changed or deleted there (listed in its message): in `native_local.rs`,
@@ -381,6 +417,23 @@ records stand for. None deleted. Checks: Clippy `-D warnings` on Linux
 gone then); JS `platform`, `native_deployment`, `calls` 42, `runtime.mjs`
 (surface, sandboxes, backend, docker-default), `vm_placement` (settings, flow,
 bundle), CLI 78/78.
+
+`a3e956dd40` (finding 6): subtotals core 41405, engine 77884 (+97), api 4879
+(+12). Test added: `native_local`'s
+`a_record_refused_when_read_is_left_out_reported_and_kept`, trace mode
+`skipped`, and a `runtime.mjs` sandboxes check (the sweep starts no reclaim
+for a refused record; `holding` counts it). Changed to the new contract:
+`native_local`'s reclaim assertions on refused records, `native_discovery`'s
+three reclaim answers (`skipped: []`), the `runtime.mjs` records-call
+assertion, and `oldrec.mjs`. None deleted. Checks: Clippy on Linux and macOS,
+fmt, `check_product_boundary`; `native_local` 12/12, `native_admission` 2/2,
+`native_connection_wait` 1/1 and `native_discovery` 5/6 (the fork test's C
+fixture is not mounted in the Node runtime image these ran in; finding 2) on
+Linux; agent `trace` (10 modes), `platform`, `native_deployment`, `calls` 42,
+`exec_output`, `packaging` (6 modes); `runtime.mjs` (16 modes), `vm_placement`
+(12 modes); CLI 78/78. `init_refusals`, `reinit`, `binary_write` and
+`packaging dispatch` need the real built addon of the Linux E2E launcher and
+were not run.
 
 ## Connect
 
@@ -460,6 +513,12 @@ Lima's Ubuntu download; the scratch environment scripts. Kept with the worktree:
 the rerun's sealed bundles (build-linux-9cc0c9a1…, build-linux-70433254…,
 build-macos-509dacd2…) beside the first pass's. Host free space: 219.6 GB before
 the rerun, 208.6 GB at its peak, 219.5 GB after.
+
+**Finding 6 rerun.** `lfs529-linux` was made, used for the one old-records check
+and deleted with its disk, together with the image archives, the downloaded
+Ubuntu image, the share folder, the runner copies and Lima's partial download;
+`~/.cache/layerfs-test` is empty again. Kept: the new sealed bundle
+build-linux-ab4a0253…, with the worktree. Host free space after: 207.9 GB.
 
 ## Appendix: per-row identities and timings
 
