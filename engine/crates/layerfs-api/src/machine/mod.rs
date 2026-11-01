@@ -14,8 +14,10 @@ mod record;
 mod start;
 
 #[cfg(feature = "machine")]
+pub(crate) use bundle::bundle;
+#[cfg(feature = "machine")]
 pub(crate) use calls::{connect, create, disconnect, get, list, remove, status, update};
 #[cfg(feature = "machine")]
-pub(crate) use record::ensure_built_ins;
+pub(crate) use record::{ensure_built_ins, vm_name};
 #[cfg(feature = "machine")]
 pub use start::running;

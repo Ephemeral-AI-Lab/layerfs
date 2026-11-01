@@ -110,8 +110,9 @@ impl SandboxApi {
         self.create_provider_file(request, &project.store, &project.manifest)
     }
     /// Creates a new daemon on the PostgreSQL Store its setup selects
-    /// (#506): no Store file, volume or install; it starts ready. Only a
-    /// Docker launch that mounts no Store volume opens one.
+    /// (#506): no Store file, volume or install; it starts ready. A Docker
+    /// launch that mounts no Store volume opens one, and so does a native
+    /// (macOS) daemon process (#533 O3); a namespaces root binds a Store file.
     pub fn create_provider_postgres(
         &self,
         request: ProviderCreate,
@@ -121,7 +122,7 @@ impl SandboxApi {
             ProviderLaunchOptions::Docker {
                 store_volume: None,
                 ..
-            }
+            } | ProviderLaunchOptions::Local { .. }
         );
         if request.setup.postgresql.is_none() || !no_volume {
             return Err(Box::new(ProviderFailure {

@@ -6,7 +6,12 @@
 //! Sandbox code: host processes over loopback NFS on macOS, namespaces on
 //! Linux. On any other machine the same call runs in that machine's worker,
 //! which keeps the Sandbox's records under its own root; this home keeps
-//! the name, the project and the machine.
+//! the name, the project and the machine. A Sandbox on `docker` is a
+//! container whose image and settings come from the docker machine's record
+//! and travel with the call (H §7.6, §7.7): from this process where the
+//! docker machine's Stores open here (Linux, and every PostgreSQL Store),
+//! else from its worker. A PostgreSQL Store's Sandboxes run on `native` or
+//! `docker` from this process, which resolves the password (O3).
 use crate::calls::Context;
 use crate::home::{self, paths, read_record, write_record};
 use crate::host::outcome::{failed, refused, Outcome};
@@ -81,32 +86,52 @@ fn daemon(home: &Path) -> Result<String> {
     Ok(path.display().to_string())
 }
 
-/// The host Sandbox operations' arguments for project `<store>/<project>`
-/// on `native`, plus `more`.
+/// The host Sandbox operations' arguments for project `<store>/<project>`,
+/// plus `more`: on `native`, or in a container when `docker` gives the
+/// docker machine's settings ([`docker_settings`], completed by the side
+/// that runs the call).
 fn host_args(
     home: &Path,
-    store: &str,
-    project: &str,
-    record: &SdkValue,
+    (store, project, record): (&str, &str, &SdkValue),
+    docker: Option<SdkValue>,
     more: Vec<(&str, SdkValue)>,
 ) -> Result<SdkValue> {
-    let backend = if cfg!(target_os = "macos") {
-        "native"
-    } else {
-        "namespaces"
+    let prefix = SdkValue::text(format!("lfs-{}-", &home::open(home)?.id[..8]));
+    let in_container = docker.is_some();
+    let deploy = match docker {
+        Some(SdkValue::Map(mut settings)) => {
+            settings.push(("sandbox".to_owned(), SdkValue::text("docker")));
+            settings.push(("containerPrefix".to_owned(), prefix));
+            SdkValue::Map(settings)
+        }
+        Some(_) => return Err(refused("InvalidInput", "docker settings are a map")),
+        None => {
+            let backend = if cfg!(target_os = "macos") {
+                "native"
+            } else {
+                "namespaces"
+            };
+            // the local runtime's root: this user's, traversable (0755), as
+            // the runtime requires
+            let local = paths::machine_dir(home, "native").join("sandbox-root");
+            {
+                use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+                std::fs::DirBuilder::new()
+                    .recursive(true)
+                    .mode(0o755)
+                    .create(&local)
+                    .map_err(failed)?;
+                std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o755))
+                    .map_err(failed)?;
+            }
+            SdkValue::map([
+                ("sandbox", SdkValue::text(backend)),
+                ("localDir", SdkValue::text(local.display().to_string())),
+                ("daemon", SdkValue::text(daemon(home)?)),
+                ("containerPrefix", prefix),
+            ])
+        }
     };
-    // the local runtime's root: this user's, traversable (0755), as the
-    // runtime requires
-    let local = paths::machine_dir(home, "native").join("sandbox-root");
-    {
-        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-        std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o755)
-            .create(&local)
-            .map_err(failed)?;
-        std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o755)).map_err(failed)?;
-    }
     let mut fields = vec![
         ("home", SdkValue::text(home.display().to_string())),
         ("store", SdkValue::text(store)),
@@ -114,25 +139,43 @@ fn host_args(
         ("store_record", record.clone()),
         (
             "storePath",
-            SdkValue::text(paths::store_file(home, store).display().to_string()),
+            SdkValue::text(store_path(home, store, record).display().to_string()),
         ),
-        (
-            "deploy",
-            SdkValue::map([
-                ("sandbox", SdkValue::text(backend)),
-                ("localDir", SdkValue::text(local.display().to_string())),
-                ("daemon", SdkValue::text(daemon(home)?)),
-                (
-                    "containerPrefix",
-                    SdkValue::text(format!("lfs-{}-", &home::open(home)?.id[..8])),
-                ),
-            ]),
-        ),
+        ("deploy", deploy),
     ];
+    // a PostgreSQL Store's URL with its password, resolved now and never
+    // written (H §7.4)
+    if record.get_text("kind") == Some("postgresql") {
+        let url = crate::family::postgres::url(record, store)?;
+        let mut postgresql = vec![("url", SdkValue::text(&url))];
+        if in_container && cfg!(not(target_os = "linux")) {
+            if let Some(daemon_url) = layerfs_sandbox::docker::desktop_url(&url) {
+                postgresql.push(("daemon_url", SdkValue::text(daemon_url)));
+            }
+        }
+        fields.push((
+            "postgresql",
+            SdkValue::Map(
+                postgresql
+                    .into_iter()
+                    .map(|(n, v)| (n.to_owned(), v))
+                    .collect(),
+            ),
+        ));
+    }
     fields.extend(more);
     Ok(SdkValue::Map(
         fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
     ))
+}
+
+/// The path the open-Store cache keys `store` by: its file, or for a
+/// PostgreSQL Store the path [`route`] keys it by, which no file has.
+fn store_path(home: &Path, store: &str, record: &SdkValue) -> PathBuf {
+    match record.get_text("kind") {
+        Some("postgresql") => paths::store_dir(home, store).join("postgresql"),
+        _ => paths::store_file(home, store),
+    }
 }
 
 /// Runs one `sandbox` call.
@@ -213,19 +256,15 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         return Err(refused("NotFound", format!("no machine named {machine}")));
     }
     if target.record.get_text("kind") == Some("postgresql") {
-        return Err(refused(
-            "Unsupported",
-            "a Sandbox of a PostgreSQL Store is not built in 2.0 yet",
-        ));
-    }
-    if machine == "docker" {
-        return Err(refused(
-            "Unsupported",
-            "Sandboxes on the docker machine are not built in 2.0 yet; use native or a VM machine",
-        ));
-    }
-    let store_machine = route::machine(&target.record, &target.store)?;
-    if store_machine != machine {
+        // a PostgreSQL Store is on no machine; its daemon dials the server
+        if !matches!(machine, "native" | "docker") {
+            return Err(refused(
+                "Unsupported",
+                format!("a Sandbox of PostgreSQL Store {} runs on native or docker; on VMs and ssh hosts it comes later (O3)", target.store),
+            ));
+        }
+    } else if route::machine(&target.record, &target.store)? != machine {
+        let store_machine = route::machine(&target.record, &target.store)?;
         return Err(refused(
             "Unsupported",
             format!("Store {} is on machine {store_machine}; a Sandbox of {project} runs there (`store move` moves the Store)", target.store),
@@ -304,9 +343,51 @@ fn on_machine(
     if let Some(id) = record.get_text("id") {
         more.push(("sandbox", SdkValue::text(id)));
     }
-    match route::endpoint(&home, machine)? {
+    let image = record.get_text("image").filter(|_| op != "sandbox.create");
+    let image = more
+        .iter()
+        .find(|(n, _)| *n == "image")
+        .and_then(|(_, v)| match v {
+            SdkValue::Text(text) => Some(text.as_str()),
+            _ => None,
+        })
+        .or(image)
+        .map(str::to_owned);
+    let postgresql = target.record.get_text("kind") == Some("postgresql");
+    let worker = if postgresql {
+        None
+    } else {
+        route::endpoint(&home, machine)?
+    };
+    let docker = match machine {
+        "docker" => Some(docker_settings(
+            &home,
+            &target.store,
+            image.as_deref(),
+            postgresql,
+            worker.is_some(),
+        )?),
+        _ => None,
+    };
+    match worker {
         None => {
-            let args = host_args(&home, &target.store, &target.project, &target.record, more)?;
+            let args = host_args(
+                &home,
+                (&target.store, &target.project, &target.record),
+                docker
+                    .map(|settings| docker_here(&home, settings))
+                    .transpose()?,
+                more,
+            )?;
+            // the host code reads the project's Branches through its open Store
+            let lease = match postgresql {
+                true => None,
+                false => Some(crate::store::lease::hold(&home, &target.store)?),
+            };
+            crate::store::open::hold(&args, lease)?;
+            if op == "backend.daemon.workspace.status" {
+                return crate::host::dispatch::backend(op.to_owned(), args);
+            }
             crate::host::dispatch::call(op, args)
         }
         Some(endpoint) => {
@@ -325,6 +406,9 @@ fn on_machine(
                 ("store_record", target.record.clone()),
                 ("project_record", project_record),
             ];
+            if let Some(settings) = docker {
+                fields.push(("docker", settings));
+            }
             fields.push((
                 "more",
                 SdkValue::Map(more.into_iter().map(|(n, v)| (n.to_owned(), v)).collect()),
@@ -385,11 +469,144 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue) -> Outcome {
             .collect(),
         _ => Vec::new(),
     };
-    let host = host_args(root, store, project, &record, more)?;
+    let docker = match args.get("docker") {
+        Some(settings @ SdkValue::Map(_)) => Some(docker_in_worker(root, store, settings)?),
+        _ => None,
+    };
+    let host = host_args(root, (store, project, &record), docker, more)?;
+    crate::store::open::hold(&host, None)?;
     if op == "backend.daemon.workspace.status" {
         return crate::host::dispatch::backend(op.to_owned(), host);
     }
     crate::host::dispatch::call(op, host)
+}
+
+/// The docker machine's settings for a Sandbox of `store`: the image (the
+/// call's, else the record's), where its Store folder comes from, and for a
+/// worker the host it dials. The side that runs the call adds its own
+/// Docker socket and Linux daemon ([`docker_here`], [`docker_in_worker`]).
+fn docker_settings(
+    home: &Path,
+    store: &str,
+    image: Option<&str>,
+    postgresql: bool,
+    worker: bool,
+) -> Result<SdkValue> {
+    let record = read_record(&paths::machine_record(home, "docker"))?.unwrap_or_default();
+    let image = image.or(record.get_text("image")).ok_or_else(|| {
+        refused(
+            "InvalidInput",
+            "the docker machine names no Sandbox image; `layerfs machine update docker --image sha256:<digest>`",
+        )
+    })?;
+    let mut fields = vec![("image", SdkValue::text(image))];
+    if !postgresql {
+        let source = if worker {
+            // the worker's data volume, the Store's folder in it
+            format!("{}-data/store/{store}", docker_vm(home, &record)?)
+        } else {
+            paths::store_dir(home, store).display().to_string()
+        };
+        fields.push(("volume", SdkValue::text(source)));
+    }
+    if worker {
+        // the worker dials a Sandbox container's loopback-published port as
+        // 1.1.0's macOS worker did
+        fields.push((
+            "daemonHost",
+            SdkValue::text(layerfs_sandbox::docker::DESKTOP_HOST),
+        ));
+    }
+    Ok(SdkValue::Map(
+        fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
+    ))
+}
+
+/// The docker machine's worker container name.
+#[cfg(feature = "machine")]
+fn docker_vm(home: &Path, record: &SdkValue) -> Result<String> {
+    Ok(match record.get_text("vm_name") {
+        Some(name) => name.to_owned(),
+        None => crate::machine::vm_name(&home::open(home)?.id, "docker"),
+    })
+}
+
+#[cfg(not(feature = "machine"))]
+fn docker_vm(_: &Path, _: &SdkValue) -> Result<String> {
+    Err(refused(
+        "Unsupported",
+        "a docker machine's worker is reached from a host build",
+    ))
+}
+
+/// Completes the docker settings in this process: the docker machine's
+/// socket and the Linux daemon it uploads (the record's `daemon`, else on
+/// Linux this host's own, else the sealed bundle's). A Store folder bind
+/// mounted from here must be the container's root user's, as the daemon
+/// requires of it, so only a root caller binds one.
+fn docker_here(home: &Path, settings: SdkValue) -> Result<SdkValue> {
+    let record = read_record(&paths::machine_record(home, "docker"))?.unwrap_or_default();
+    if settings.get("volume").is_some() && crate::host::discovery::user().0 != 0 {
+        return Err(refused(
+            "Unsupported",
+            "a docker Sandbox of a sqlite Store opened in this process bind mounts the Store's folder, which its daemon (root in the container) must own; run as root, or keep the Store on native",
+        ));
+    }
+    let socket = record
+        .get_text("docker")
+        .unwrap_or("/var/run/docker.sock")
+        .to_owned();
+    let daemon = match record.get_text("daemon") {
+        Some(path) => path.to_owned(),
+        None if cfg!(target_os = "linux") => daemon(home)?,
+        None => bundle_daemon()?,
+    };
+    let SdkValue::Map(mut fields) = settings else {
+        return Err(refused("InvalidInput", "docker settings are a map"));
+    };
+    fields.push(("docker".to_owned(), SdkValue::text(socket)));
+    fields.push(("daemon".to_owned(), SdkValue::text(daemon)));
+    Ok(SdkValue::Map(fields))
+}
+
+/// The sealed bundle's Linux daemon.
+#[cfg(feature = "machine")]
+fn bundle_daemon() -> Result<String> {
+    let bundle = crate::machine::bundle()?;
+    Ok(bundle.dir.join("layerfs-daemon").display().to_string())
+}
+
+#[cfg(not(feature = "machine"))]
+fn bundle_daemon() -> Result<String> {
+    Err(refused(
+        "Unsupported",
+        "no Linux daemon for a docker Sandbox; set the docker machine's daemon",
+    ))
+}
+
+/// Completes the docker settings in the worker: the Engine socket mounted
+/// into its container and the daemon beside its own executable (the
+/// bundle's). The Store's folder in the data volume is made the container
+/// root user's alone first, as the daemon requires.
+fn docker_in_worker(root: &Path, store: &str, settings: &SdkValue) -> Result<SdkValue> {
+    use std::os::unix::fs::PermissionsExt;
+    let daemon = std::env::current_exe()
+        .map_err(failed)?
+        .with_file_name("layerfs-daemon");
+    let folder = paths::store_dir(root, store);
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o700)).map_err(failed)?;
+    let file = paths::store_file(root, store);
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).map_err(failed)?;
+    let SdkValue::Map(mut fields) = settings.clone() else {
+        return Err(refused("InvalidInput", "docker settings are a map"));
+    };
+    fields.retain(|(name, _)| matches!(name.as_str(), "image" | "volume" | "daemonHost"));
+    fields.push(("docker".to_owned(), SdkValue::text("/var/run/docker.sock")));
+    fields.push((
+        "daemon".to_owned(),
+        SdkValue::text(daemon.display().to_string()),
+    ));
+    Ok(SdkValue::Map(fields))
 }
 
 /// `(sandbox, path)` of a Workspace written `<sandbox>:<path>`.
@@ -449,19 +666,7 @@ pub(crate) fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) 
         "status" => "backend.daemon.workspace.status",
         _ => return Err(refused("InvalidInput", format!("no call workspace.{call}"))),
     };
-    let out =
-        if op == "backend.daemon.workspace.status" && route::endpoint(&home, &machine)?.is_none() {
-            let target = route::target(&home, record.get_text("project").unwrap_or(""))?;
-            if let Some(id) = record.get_text("id") {
-                more.push(("sandbox", SdkValue::text(id)));
-            }
-            crate::host::dispatch::backend(
-                op.to_owned(),
-                host_args(&home, &target.store, &target.project, &target.record, more)?,
-            )?
-        } else {
-            on_machine(context, &machine, &record, op, more)?
-        };
+    let out = on_machine(context, &machine, &record, op, more)?;
     if call == "exec" {
         // the command's output as events too, for front ends that stream
         for stream in ["stdout", "stderr"] {

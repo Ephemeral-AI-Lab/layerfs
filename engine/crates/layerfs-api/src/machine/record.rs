@@ -114,7 +114,12 @@ pub fn spec(home: &Path, home_id: &str, name: &str, record: &SdkValue) -> Result
         memory: int(record, "memory", DEFAULT_MEMORY) as u64,
         disk: int(record, "disk", DEFAULT_DISK) as u64,
         image: record.get_text("image_archive").map(PathBuf::from),
-        os_image: record.get_text("os_image").map(str::to_owned),
+        // the docker machine's worker container runs its Sandbox image, as
+        // 1.1.0's macOS worker did
+        os_image: record
+            .get_text("os_image")
+            .or(record.get_text("image").filter(|_| kind == Kind::Docker))
+            .map(str::to_owned),
         nested: matches!(record.get("nested"), Some(SdkValue::Bool(true))),
         host,
         ssh,

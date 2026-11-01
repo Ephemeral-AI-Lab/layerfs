@@ -17,9 +17,9 @@
 //! daemon stopped and its directory deleted, each once.
 use crate::host::outcome::{failed, refused};
 use crate::host::registry::{lock, text, SandboxState, SANDBOXES};
+use crate::host::sandbox::DaemonStore;
 use crate::{sandbox::ProviderCreate, SandboxApi};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::provision::StoreManifest;
 use layerfs_sandbox::{CommandIdentity, Runtime, Sandbox};
 use layerfs_sandbox::{LaunchRequest, ProviderLaunchOptions};
 use std::path::{Component, Path, PathBuf};
@@ -28,12 +28,14 @@ use std::sync::Arc;
 /// Starts the project's next Sandbox as a native (macOS) or namespaces
 /// (Linux) daemon. Linux refuses `native` and requires root before any
 /// effect. Called by
-/// [`crate::host::sandbox::start`] under the project's guard, with the project
-/// and its installed manifest already read.
+/// [`crate::host::sandbox::start`] under the project's guard, with the
+/// project's installed Store file or its PostgreSQL Store already read. A
+/// PostgreSQL Store runs on a native daemon only (#533 O3): a namespaces root
+/// binds a Store file.
 pub(crate) fn start(
     args: &SdkValue,
     directory: &Path,
-    project: (&crate::host::registry::Project, StoreManifest),
+    project: DaemonStore,
     backend: crate::host::runtime::Backend,
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let deploy = args
@@ -45,6 +47,14 @@ pub(crate) fn start(
         return Err(refused(
             "Unsupported",
             crate::host::runtime::NATIVE_ON_LINUX,
+        ));
+    }
+    if matches!(project, DaemonStore::Postgres(_))
+        && backend == crate::host::runtime::Backend::Namespaces
+    {
+        return Err(refused(
+            "Unsupported",
+            "a Sandbox of a PostgreSQL Store runs on native (macOS) or docker; a namespaces Sandbox binds a Store file",
         ));
     }
     if cfg!(target_os = "linux") && crate::host::discovery::user().0 != 0 {
@@ -97,7 +107,7 @@ fn start_claimed(
     directory: &Path,
     saved_directory: &Path,
     id: &str,
-    (project, installed): (&crate::host::registry::Project, StoreManifest),
+    project: DaemonStore,
     (runtime, backend, executable, store): (
         Runtime,
         crate::host::runtime::Backend,
@@ -125,11 +135,21 @@ fn start_claimed(
     setup.store = store.clone();
     setup.overlay = path_text(&paths.overlay)?;
     setup.mounts = path_text(&paths.mounts)?;
-    let mut existing = project.manifest.clone();
-    existing.daemon_sqlite = installed.daemon_sqlite;
     // the Store's path in the daemon's filesystem, which is this one
-    existing.locator = store;
-    setup.existing_store = Some(existing);
+    let file = match project {
+        DaemonStore::File(file) => {
+            let (project, installed) = *file;
+            let mut existing = project.manifest.clone();
+            existing.daemon_sqlite = installed.daemon_sqlite.clone();
+            existing.locator = store;
+            setup.existing_store = Some(existing);
+            Some((project, installed))
+        }
+        DaemonStore::Postgres(selected) => {
+            setup.postgresql = Some(selected);
+            None
+        }
+    };
     let identity = CommandIdentity {
         uid: setup.command_uid,
         gid: setup.command_gid,
@@ -144,38 +164,39 @@ fn start_claimed(
     let labels = crate::host::sandbox::labels(name, store.as_deref(), id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
     let options = launch_options(backend, identity, &setup.store, args)?;
-    let mut manifest = project.manifest.clone();
-    manifest.locator = setup.store.clone();
-    let created = api
-        .create_provider_file(
-            ProviderCreate {
-                launch: LaunchRequest {
-                    name: sandbox_name.clone(),
-                    daemon_executable: executable,
-                    daemon_config: Vec::new(),
-                    labels,
-                    startup_timeout: crate::host::sandbox::STARTUP,
-                    options,
-                },
-                setup,
-                controller_private: controller.private,
-                daemon_peer: daemon.public,
-            },
-            &project.store,
-            &manifest,
+    let request = ProviderCreate {
+        launch: LaunchRequest {
+            name: sandbox_name.clone(),
+            daemon_executable: executable,
+            daemon_config: Vec::new(),
+            labels,
+            startup_timeout: crate::host::sandbox::STARTUP,
+            options,
+        },
+        setup,
+        controller_private: controller.private,
+        daemon_peer: daemon.public,
+    };
+    let created = match &file {
+        Some((project, _)) => {
+            let mut manifest = project.manifest.clone();
+            manifest.locator = request.setup.store.clone();
+            api.create_provider_file(request, &project.store, &manifest)
+        }
+        None => api.create_provider_postgres(request),
+    };
+    let created = created.map_err(|mut failure| {
+        drop(failure.control.take());
+        abandon(
+            directory,
+            id,
+            format!(
+                "native sandbox stopped at {:?}: {:?}",
+                failure.phase, failure.cause
+            ),
+            failure.runtime.take(),
         )
-        .map_err(|mut failure| {
-            drop(failure.control.take());
-            abandon(
-                directory,
-                id,
-                format!(
-                    "native sandbox stopped at {:?}: {:?}",
-                    failure.phase, failure.cause
-                ),
-                failure.runtime.take(),
-            )
-        })?;
+    })?;
     let instance = created.startup.instance;
     let (sandbox, control, identity) = crate::internal::split_provider(created);
     let endpoint = match sandbox.endpoint() {

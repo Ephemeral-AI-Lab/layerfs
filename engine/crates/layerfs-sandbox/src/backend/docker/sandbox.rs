@@ -7,7 +7,8 @@ use std::io::Read;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SandboxRequest {
     pub image: String,
-    /// The Store volume mounted at `/layerfs-store`; None mounts nothing (a
+    /// Where the Store mounted at `/layerfs-store` comes from, written as
+    /// Docker's `-v` source ([`store_source`]); None mounts nothing (a
     /// PostgreSQL Store, #506).
     pub store_volume: Option<String>,
     pub port: u16,
@@ -24,6 +25,84 @@ fn volume_name(name: &str) -> bool {
             .enumerate()
             .all(|(i, b)| b.is_ascii_alphanumeric() || (i != 0 && matches!(b, b'_' | b'-' | b'.')))
 }
+/// Where a Sandbox's Store folder comes from.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum StoreSource<'a> {
+    /// A volume, whole (1.1.0: one volume per Store, the Store at
+    /// `global/store.sqlite`) or one folder of it (`<volume>/<path>`: the
+    /// docker machine's one data volume, the Store at `store.sqlite`).
+    Volume {
+        name: &'a str,
+        subpath: Option<&'a str>,
+    },
+    /// An absolute host folder, bind mounted (the caller's own Store
+    /// folder, the Store at `store.sqlite`).
+    Bind(&'a str),
+}
+/// Parses a Store source as Docker's `-v` writes one: an absolute path is a
+/// host folder, `<volume>/<path>` a folder in a volume, else a volume. A
+/// volume name holds no `/`, so the forms never overlap.
+pub(crate) fn store_source(text: &str) -> Option<StoreSource<'_>> {
+    if let Some(rest) = text.strip_prefix('/') {
+        let plain = text.len() <= 1024
+            && !text.chars().any(char::is_control)
+            && rest
+                .split('/')
+                .all(|p| !p.is_empty() && p != "." && p != "..");
+        return plain.then_some(StoreSource::Bind(text));
+    }
+    let (name, subpath) = match text.split_once('/') {
+        Some((name, path)) => (name, Some(path)),
+        None => (text, None),
+    };
+    (volume_name(name) && subpath.is_none_or(|path| path.split('/').all(volume_name)))
+        .then_some(StoreSource::Volume { name, subpath })
+}
+impl StoreSource<'_> {
+    /// The Store's path inside the container.
+    pub(crate) fn locator(self) -> &'static str {
+        match self {
+            StoreSource::Volume { subpath: None, .. } => "/layerfs-store/global/store.sqlite",
+            _ => "/layerfs-store/store.sqlite",
+        }
+    }
+}
+/// The Store's path inside a container whose Store comes from `source`
+/// ([`SandboxRequest::store_volume`]); None for a malformed source.
+pub fn store_locator(source: &str) -> Option<&'static str> {
+    store_source(source).map(StoreSource::locator)
+}
+/// The name a container under Docker Desktop (macOS, Windows) reaches the
+/// host's loopback by.
+pub const DESKTOP_HOST: &str = "host.docker.internal";
+/// A PostgreSQL URL on this host's loopback as a container under Docker
+/// Desktop (macOS, Windows) reaches it: its host `host.docker.internal`.
+/// `None` for any other URL, which the container dials as given.
+pub fn desktop_url(url: &str) -> Option<String> {
+    let (scheme, rest) = url.split_once("://")?;
+    let end = rest.find(['/', '?']).unwrap_or(rest.len());
+    let (authority, tail) = rest.split_at(end);
+    let (user, host_port) = match authority.rsplit_once('@') {
+        Some((user, host_port)) => (Some(user), host_port),
+        None => (None, authority),
+    };
+    let (host, port) = match host_port.strip_prefix('[') {
+        Some(v6) => {
+            let (host, after) = v6.split_once(']')?;
+            (host, after)
+        }
+        None => match host_port.rsplit_once(':') {
+            Some((host, port)) => (host, &host_port[host.len()..][..port.len() + 1]),
+            None => (host_port, ""),
+        },
+    };
+    if !matches!(host, "127.0.0.1" | "localhost" | "::1") {
+        return None;
+    }
+    let user = user.map(|u| format!("{u}@")).unwrap_or_default();
+    Some(format!("{scheme}://{user}{DESKTOP_HOST}{port}{tail}"))
+}
+
 /// A label key or value of plain characters that need no JSON escape.
 fn label_text(text: &str) -> bool {
     !text.is_empty()
@@ -49,9 +128,11 @@ impl SandboxRequest {
         if self
             .store_volume
             .as_deref()
-            .is_some_and(|v| !volume_name(v))
+            .is_some_and(|v| store_source(v).is_none())
         {
-            return Err(RuntimeError::Protocol("existing named VM volume"));
+            return Err(RuntimeError::Protocol(
+                "Store volume, volume folder or host folder",
+            ));
         }
         for (i, (key, value)) in self.labels.iter().enumerate() {
             if !label_text(key)

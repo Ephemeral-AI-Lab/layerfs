@@ -159,20 +159,13 @@ pub(crate) fn start(
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
     if let Some(backend) = crate::host::runtime::backend(deploy)? {
-        let DaemonStore::File(file) = store else {
-            return Err(refused(
-                "Unsupported",
-                "a native or namespaces Sandbox's daemon opens a Store file; a Sandbox of a PostgreSQL Store runs in Docker",
-            ));
-        };
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
-            let (project, installed) = *file;
-            return crate::host::local::start(args, directory, (&project, installed), backend);
+            return crate::host::local::start(args, directory, store, backend);
         }
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
-            drop((file, backend));
+            drop((store, backend));
             return Err(refused(
                 "Unsupported",
                 "LAYERFS_SANDBOX=native requires Linux (FUSE) or macOS (loopback NFS); use Docker",
@@ -266,11 +259,23 @@ fn start_claimed(
     let controller = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let mut daemon_setup = setup(daemon.private, controller.public);
+    // the Store's path in the container follows where its folder comes from
+    let mut manifest = None;
     match &opened {
         DaemonStore::File(file) => {
             let (project, installed) = &**file;
+            let source = store_volume.as_deref().unwrap_or_default();
+            let locator = layerfs_sandbox::docker::store_locator(source).ok_or_else(|| {
+                refused(
+                    "InvalidInput",
+                    format!("deploy.volume {source:?} is no volume, volume folder or host folder"),
+                )
+            })?;
             let mut existing = project.manifest.clone();
+            existing.locator = locator.to_owned();
+            manifest = Some(existing.clone());
             existing.daemon_sqlite = installed.daemon_sqlite.clone();
+            daemon_setup.store = locator.to_owned();
             daemon_setup.existing_store = Some(existing);
         }
         DaemonStore::Postgres(selected) => daemon_setup.postgresql = Some(selected.clone()),
@@ -307,9 +312,11 @@ fn start_claimed(
     };
     let api = SandboxApi::with_runtime(provider);
     let created = match &opened {
-        DaemonStore::File(file) => {
-            api.create_provider_file(request, &file.0.store, &file.0.manifest)
-        }
+        DaemonStore::File(file) => api.create_provider_file(
+            request,
+            &file.0.store,
+            manifest.as_ref().unwrap_or(&file.0.manifest),
+        ),
         DaemonStore::Postgres(_) => api.create_provider_postgres(request),
     };
     let owner = created.map_err(|failure| abandon(directory, id, failure))?;

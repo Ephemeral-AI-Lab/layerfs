@@ -1,4 +1,5 @@
 //! Exact observed daemon identity, security and kernel-access settings, and volume placement.
+use super::sandbox::{store_source, StoreSource};
 use super::SandboxRequest;
 use crate::json::{once, Json};
 use crate::RuntimeError;
@@ -146,27 +147,39 @@ fn fuse_device<R: Read>(j: &mut Json<R>) -> Result<bool, RuntimeError> {
 }
 /// Exactly the Store mount, read-write at `/layerfs-store`, or none for a
 /// request with no Store volume; any other, missing or repeated mount is a
-/// topology mismatch.
+/// topology mismatch. A volume (or a folder of one) shows its name and the
+/// `local` driver; a host folder shows its path.
 pub(super) fn mounts<R: Read>(
     j: &mut Json<R>,
     request: &SandboxRequest,
 ) -> Result<bool, RuntimeError> {
+    let expected = request.store_volume.as_deref().and_then(store_source);
+    let bind = matches!(expected, Some(StoreSource::Bind(_)));
     let mut count = 0;
     let mut valid = true;
     j.array(|j| {
         count += 1;
         let mut bits = 0;
-        let (mut volume, mut name, mut destination, mut rw, mut local) =
-            (false, false, false, false, false);
+        let (mut kind, mut name, mut source, mut destination, mut rw, mut local) =
+            (false, false, false, false, false, false);
         j.object(|j, key| {
             if key.equals("Type") {
                 once(&mut bits, 1)?;
-                volume = j.string_equals("volume")?;
-            } else if key.equals("Name") {
+                kind = j.string_equals(if bind { "bind" } else { "volume" })?;
+            } else if key.equals("Name") && !bind {
                 once(&mut bits, 2)?;
-                name = match &request.store_volume {
-                    Some(volume) => j.string_equals(volume)?,
-                    None => {
+                name = match expected {
+                    Some(StoreSource::Volume { name, .. }) => j.string_equals(name)?,
+                    _ => {
+                        j.skip(3)?;
+                        false
+                    }
+                };
+            } else if key.equals("Source") && bind {
+                once(&mut bits, 32)?;
+                source = match expected {
+                    Some(StoreSource::Bind(path)) => j.string_equals(path)?,
+                    _ => {
                         j.skip(3)?;
                         false
                     }
@@ -177,7 +190,7 @@ pub(super) fn mounts<R: Read>(
             } else if key.equals("RW") {
                 once(&mut bits, 8)?;
                 rw = j.boolean()?;
-            } else if key.equals("Driver") {
+            } else if key.equals("Driver") && !bind {
                 once(&mut bits, 16)?;
                 local = j.string_equals("local")?;
             } else {
@@ -185,10 +198,17 @@ pub(super) fn mounts<R: Read>(
             }
             Ok(())
         })?;
-        valid &= bits == 31 && volume && name && destination && rw && local;
+        valid &= kind
+            && destination
+            && rw
+            && if bind {
+                bits == 1 | 4 | 8 | 32 && source
+            } else {
+                bits == 31 && name && local
+            };
         Ok(())
     })?;
-    Ok(valid && count == usize::from(request.store_volume.is_some()))
+    Ok(valid && count == usize::from(expected.is_some()))
 }
 fn strings<R: Read>(j: &mut Json<R>, expected: &[&str]) -> Result<bool, RuntimeError> {
     let mut index = 0;

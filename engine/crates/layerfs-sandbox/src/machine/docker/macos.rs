@@ -36,7 +36,9 @@ fn inspect(spec: &Spec) -> Result<Option<(String, String)>, MachineError> {
         "docker inspect",
     )?;
     if !out.ok() {
-        if out.stderr.contains("No such object") || out.stderr.contains("No such container") {
+        // Docker 29 says `error: no such object`; older Engines capitalise it
+        let said = out.stderr.to_ascii_lowercase();
+        if said.contains("no such object") || said.contains("no such container") {
             return Ok(None);
         }
         return Err(MachineError::new(

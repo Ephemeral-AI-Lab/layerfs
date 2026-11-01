@@ -1,6 +1,8 @@
 //! One-attempt create and start, with no implicit adoption or volume deletion.
 use super::{
-    sandbox::{CreatePhase, Sandbox, SandboxCreateFailure, SandboxRequest},
+    sandbox::{
+        store_source, CreatePhase, Sandbox, SandboxCreateFailure, SandboxRequest, StoreSource,
+    },
     topology::SECCOMP,
     Docker,
 };
@@ -33,10 +35,23 @@ impl SandboxRequest {
         w.write_all(b":{}},\"HostConfig\":{\"Init\":true,\"RestartPolicy\":{\"Name\":\"no\"},\"LogConfig\":{\"Type\":\"json-file\",\"Config\":{\"max-size\":\"10m\",\"max-file\":\"2\"}},\"Privileged\":false,\"CapAdd\":[\"CAP_SYS_ADMIN\"],\"Devices\":[{\"PathOnHost\":\"/dev/fuse\",\"PathInContainer\":\"/dev/fuse\",\"CgroupPermissions\":\"rwm\"}],\"SecurityOpt\":[\"no-new-privileges=true\",\"apparmor=unconfined\",")?;
         quoted(w, SECCOMP)?;
         w.write_all(b"],\"Mounts\":[")?;
-        if let Some(volume) = &self.store_volume {
-            w.write_all(b"{\"Type\":\"volume\",\"Source\":")?;
-            quoted(w, volume)?;
-            w.write_all(b",\"Target\":\"/layerfs-store\",\"ReadOnly\":false,\"VolumeOptions\":{\"NoCopy\":true}}")?;
+        match self.store_volume.as_deref().and_then(store_source) {
+            Some(StoreSource::Volume { name, subpath }) => {
+                w.write_all(b"{\"Type\":\"volume\",\"Source\":")?;
+                quoted(w, name)?;
+                w.write_all(b",\"Target\":\"/layerfs-store\",\"ReadOnly\":false,\"VolumeOptions\":{\"NoCopy\":true")?;
+                if let Some(path) = subpath {
+                    w.write_all(b",\"Subpath\":")?;
+                    quoted(w, path)?;
+                }
+                w.write_all(b"}}")?;
+            }
+            Some(StoreSource::Bind(path)) => {
+                w.write_all(b"{\"Type\":\"bind\",\"Source\":")?;
+                quoted(w, path)?;
+                w.write_all(b",\"Target\":\"/layerfs-store\",\"ReadOnly\":false}")?;
+            }
+            None => {}
         }
         w.write_all(b"],\"PortBindings\":{")?;
         quoted(w, &format!("{}/tcp", self.port))?;
@@ -101,8 +116,10 @@ impl Docker {
                 .check()
                 .map_err(|e| super::client::http::failure(false, 0, None, e, None))?;
             phase = CreatePhase::Volume;
-            if let Some(volume) = &request.store_volume {
-                self.plain_volume(volume)?;
+            if let Some(StoreSource::Volume { name, .. }) =
+                request.store_volume.as_deref().and_then(store_source)
+            {
+                self.plain_volume(name)?;
             }
             phase = CreatePhase::Create;
             // `naming` admitted only characters that need no URL escape.

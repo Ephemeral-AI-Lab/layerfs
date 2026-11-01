@@ -33,30 +33,7 @@ fn store_path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
 /// opening it first if this process holds it not yet. `lease` is held for
 /// as long as the Store stays open.
 pub(crate) fn run(op: &str, args: SdkValue, lease: Option<Lease>) -> Outcome {
-    let path = store_path(&args)?;
-    {
-        let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
-        match open.get_mut(&path) {
-            Some(entry) => entry.last = Instant::now(),
-            None => {
-                direct::acquire(&args)?;
-                open.insert(
-                    path.clone(),
-                    Entry {
-                        args: args.clone(),
-                        last: Instant::now(),
-                        _lease: lease,
-                    },
-                );
-                REAPER.call_once(|| {
-                    std::thread::spawn(|| loop {
-                        std::thread::sleep(Duration::from_secs(5));
-                        close_idle(IDLE);
-                    });
-                });
-            }
-        }
-    }
+    let path = hold(&args, lease)?;
     let outcome = direct::call(op, args, false);
     if let Some(entry) = OPEN
         .lock()
@@ -66,6 +43,35 @@ pub(crate) fn run(op: &str, args: SdkValue, lease: Option<Lease>) -> Outcome {
         entry.last = Instant::now();
     }
     outcome
+}
+
+/// Opens the Store `args` name (`storePath`) in this process if it is not
+/// open yet, `lease` held while it stays open: Store methods and the host
+/// Sandbox code that reads a Branch through it both find it. Its path.
+pub(crate) fn hold(args: &SdkValue, lease: Option<Lease>) -> Result<PathBuf, SdkRefusal> {
+    let path = store_path(args)?;
+    let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
+    match open.get_mut(&path) {
+        Some(entry) => entry.last = Instant::now(),
+        None => {
+            direct::acquire(args)?;
+            open.insert(
+                path.clone(),
+                Entry {
+                    args: args.clone(),
+                    last: Instant::now(),
+                    _lease: lease,
+                },
+            );
+            REAPER.call_once(|| {
+                std::thread::spawn(|| loop {
+                    std::thread::sleep(Duration::from_secs(5));
+                    close_idle(IDLE);
+                });
+            });
+        }
+    }
+    Ok(path)
 }
 
 /// Closes every Store unused for at least `idle`; returns how many.
