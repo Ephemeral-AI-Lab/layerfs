@@ -1,11 +1,11 @@
 //! The concrete runtimes a Sandbox can run on: one enum names the deployment's
 //! choice, and [`Sandbox`] is the launched owner over it. There is no provider
 //! trait; each backend is a concrete type and dispatch is a `match` here.
-use crate::platform::docker::{self, DockerProvider};
+use crate::backend::docker::{self, DockerProvider};
 #[cfg(target_os = "linux")]
-use crate::platform::namespaces::{self, NamespaceProvider};
+use crate::backend::namespaces::{self, NamespaceProvider};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use crate::platform::native::{self, NativeLinuxProvider, NativeMacosProvider};
+use crate::backend::native::{self, NativeLinuxProvider, NativeMacosProvider};
 use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
 use crate::{
     ExecExit, LaunchPhase, LaunchRequest, LocalRecord, ProviderCapabilities, SandboxInspection,

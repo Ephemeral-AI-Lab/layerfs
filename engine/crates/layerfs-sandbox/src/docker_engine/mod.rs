@@ -3,9 +3,9 @@
 //! the standard multiplexed stream header (`mux`) and API version
 //! negotiation (`version`). The rest of the Docker backend reads its
 //! `Socket`, `Body` and `mux::header` directly.
-pub(in crate::platform::docker) mod body;
-pub(in crate::platform::docker) mod http;
-pub(in crate::platform::docker) mod mux;
-pub(in crate::platform::docker) mod socket;
+pub(crate) mod body;
+pub(crate) mod http;
+pub(crate) mod mux;
+pub(crate) mod socket;
 mod version;
 pub use http::Docker;

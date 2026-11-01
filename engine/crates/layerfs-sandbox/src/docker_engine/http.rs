@@ -17,22 +17,22 @@ const KEPT_IDLE: Duration = Duration::from_secs(30);
 /// Concrete local Docker Engine endpoint. Control waits never apply to command streams.
 #[derive(Clone, Debug)]
 pub struct Docker {
-    pub(in crate::platform::docker) socket: PathBuf,
-    pub(in crate::platform::docker) control_wait: Duration,
-    pub(in crate::platform::docker) deadline: Option<Instant>,
+    pub(crate) socket: PathBuf,
+    pub(crate) control_wait: Duration,
+    pub(crate) deadline: Option<Instant>,
     /// The name the next container this client creates gets; None lets the
     /// Engine choose one.
-    pub(in crate::platform::docker) container_name: Option<String>,
+    pub(crate) container_name: Option<String>,
     /// One idle keep-alive connection, shared by this client's clones, for
     /// Exec create and inspect (#352): each takes it, or connects when it is
     /// absent, stale or in use, and returns it after reading its whole body.
-    pub(in crate::platform::docker) kept: Kept,
+    pub(crate) kept: Kept,
     /// The Engine API minor version every request of this client and its
     /// clones uses, set by the first request (see `version.rs`).
-    pub(in crate::platform::docker) minor: Arc<OnceLock<u32>>,
+    pub(crate) minor: Arc<OnceLock<u32>>,
 }
 #[derive(Clone, Default)]
-pub(in crate::platform::docker) struct Kept(Arc<Mutex<Option<(Socket, Instant)>>>);
+pub(crate) struct Kept(Arc<Mutex<Option<(Socket, Instant)>>>);
 impl fmt::Debug for Kept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Kept")
@@ -52,7 +52,7 @@ impl Kept {
         }
     }
 }
-pub(in crate::platform::docker) struct Response {
+pub(crate) struct Response {
     pub status: u16,
     pub body: Body<BufReader<Socket>>,
     pub writer: Socket,
@@ -96,7 +96,7 @@ impl Docker {
         self.container_name = Some(name.to_owned());
         Ok(self)
     }
-    pub(in crate::platform::docker) fn exchange(
+    pub(crate) fn exchange(
         &self,
         method: &str,
         path: &str,
@@ -112,7 +112,7 @@ impl Docker {
     /// One metadata exchange on the kept keep-alive connection (Exec create
     /// and inspect). One attempt: a kept connection is used only while idle
     /// and quiet, and a failure on it is the request's failure, never resent.
-    pub(in crate::platform::docker) fn exchange_kept(
+    pub(crate) fn exchange_kept(
         &self,
         method: &str,
         path: &str,
@@ -125,7 +125,7 @@ impl Docker {
         })
     }
     /// Streams one known-length body once; no pre-read or file-sized allocation.
-    pub(in crate::platform::docker) fn exchange_body(
+    pub(crate) fn exchange_body(
         &self,
         method: &str,
         path: &str,
@@ -149,7 +149,7 @@ impl Docker {
         let path = format!("/v1.{}{path}", self.minor()?);
         self.transmit(method, &path, mode, media, length, encode)
     }
-    pub(in crate::platform::docker) fn transmit(
+    pub(crate) fn transmit(
         &self,
         method: &str,
         path: &str,
@@ -250,7 +250,7 @@ impl Docker {
 }
 /// The connection header a request sends.
 #[derive(Clone, Copy)]
-pub(in crate::platform::docker) enum Mode {
+pub(crate) enum Mode {
     Close,
     Upgrade,
     Keep,
@@ -320,7 +320,7 @@ impl Response {
         result
     }
 }
-pub(in crate::platform::docker) fn failure(
+pub(crate) fn failure(
     attempted: bool,
     sent_bytes: u64,
     status: Option<u16>,

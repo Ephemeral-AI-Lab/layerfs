@@ -1,8 +1,8 @@
 //! Local Docker Engine API1.48 to 1.54, negotiated once, with exact IDs and no command replay.
 //! One container per Sandbox: `create` starts it, `sandbox` owns it (stop,
-//! delete), `exec` runs one command in it, and `client/` is the Engine HTTP
-//! client the rest reads.
-mod client;
+//! delete), `exec` runs one command in it, and `client` (the crate's
+//! `docker_engine/`) is the Engine HTTP client the rest reads.
+use crate::docker_engine as client;
 mod create;
 mod endpoint;
 mod exec;

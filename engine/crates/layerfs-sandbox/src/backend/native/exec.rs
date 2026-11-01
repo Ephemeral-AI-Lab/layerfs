@@ -5,7 +5,7 @@
 //! the Sandbox until it is empty, so what it leaves running ends with the
 //! Sandbox.
 use super::{groups, process, process::LocalProcess, sandbox::Sandbox, search::search_path};
-use crate::platform::native::streams;
+use crate::backend::native::streams;
 use crate::{ExecExit, ExecRequest, RuntimeError, WireFailure};
 use nix::sys::signal::{killpg, Signal};
 use std::{

@@ -2,13 +2,13 @@
 //! strict header grammar ([`field`]) is shared by initial metadata and chunk
 //! trailers.
 use std::io::{self, Read};
-pub(in crate::platform::docker) enum Framing {
+pub(crate) enum Framing {
     Fixed(u64),
     Chunked,
     Close,
     Hijacked,
 }
-pub(in crate::platform::docker) struct Body<R> {
+pub(crate) struct Body<R> {
     inner: R,
     mode: Framing,
     remaining: u64,
@@ -151,7 +151,7 @@ impl<R: Read> Read for Body<R> {
         }
     }
 }
-pub(in crate::platform::docker) fn exact(reader: &mut impl Read, out: &mut [u8]) -> io::Result<()> {
+pub(crate) fn exact(reader: &mut impl Read, out: &mut [u8]) -> io::Result<()> {
     let mut done = 0;
     while done < out.len() {
         let n = reader.read(&mut out[done..])?;
@@ -162,10 +162,7 @@ pub(in crate::platform::docker) fn exact(reader: &mut impl Read, out: &mut [u8])
     }
     Ok(())
 }
-pub(in crate::platform::docker) fn line(
-    reader: &mut impl Read,
-    limit: usize,
-) -> io::Result<Vec<u8>> {
+pub(crate) fn line(reader: &mut impl Read, limit: usize) -> io::Result<Vec<u8>> {
     let mut out = Vec::with_capacity(limit.min(256));
     loop {
         let mut one = [0];

@@ -3,7 +3,7 @@
 //! Drop cleans up; a Drop only reaps an init process this process started
 //! that has already exited, so it never stays a zombie of this process.
 use super::{cgroup, host, paths::Paths, rootfs::ImageRoot};
-use crate::platform::native::LocalProcess;
+use crate::backend::native::LocalProcess;
 use crate::{ContainerId, RuntimeError, WireFailure};
 use crate::{LocalRecord, NamespaceRecord, SandboxRecord};
 use std::{

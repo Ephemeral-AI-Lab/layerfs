@@ -9,7 +9,7 @@ use std::{
     path::Path,
     time::{Duration, Instant},
 };
-pub(in crate::platform::docker) struct Socket {
+pub(crate) struct Socket {
     pub stream: UnixStream,
     pub wait: Option<Duration>,
     pub deadline: Option<Instant>,

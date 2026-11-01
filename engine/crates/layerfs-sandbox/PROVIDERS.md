@@ -6,10 +6,10 @@ Status: Current general guide.
 There are no provider or instance traits: each backend is an ordinary concrete
 type and the only dispatch is one `match` per method.
 
-Each backend has one folder under `src/platform/`, named as `LAYERFS_SANDBOX`
-names it: `docker/`, `native/` (with its OS facts in `native/linux/` and
-`native/macos/`) and `namespaces/` (Linux). Here `platform/` means the
-backend; in `@layerfs/runtime` it means placement (#527 D7). The modules are
+Each backend has one folder under `src/backend/` (named `platform/` until
+#533 step 5), named as `LAYERFS_SANDBOX` names it: `docker/`, `native/` (with
+its OS facts in `native/linux/` and `native/macos/`) and `namespaces/`
+(Linux). The modules are
 private: callers use the crate root and one public module per backend,
 `layerfs_sandbox::docker`, `::native` and `::namespaces` (#527 step 9b; they
 were under `layerfs_sandbox::backend`). The root re-exports `Runtime`,
@@ -21,7 +21,8 @@ The same file names hold the same roles in every backend: `provider.rs` (what
 `Runtime` holds), `create.rs` (start one Sandbox), `sandbox.rs` (a running
 Sandbox: stop, delete, inspect) and `exec.rs` (one command); `listener.rs` and
 `streams.rs` match between Docker and native. Docker's Engine HTTP client is
-`docker/client/` (`http`, `socket`, `body`, `mux`, `version`). Native reads its
+`src/docker_engine/` (`http`, `socket`, `body`, `mux`, `version`), at the
+crate root since #533 step 5 so the host-only `machine/` layer can use it. Native reads its
 OS facts through the alias `os` (`native/linux/` or `native/macos/`). Every
 backend's `run` returns the shared `ExecExit` (native's `LocalExit` is gone),
 and the `DockerInstance`, `NativeLinuxInstance` and `NativeMacosInstance`

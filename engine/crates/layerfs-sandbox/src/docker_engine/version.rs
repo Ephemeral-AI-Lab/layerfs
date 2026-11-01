@@ -17,7 +17,7 @@ impl Docker {
     /// daemon older than [`OLDEST`] is refused before the request is sent. A
     /// daemon that does not answer it readably gets [`NEWEST`], as before
     /// negotiation, and its own refusal of that version reaches the caller.
-    pub(in crate::platform::docker) fn minor(&self) -> Result<u32, Box<WireFailure>> {
+    pub(crate) fn minor(&self) -> Result<u32, Box<WireFailure>> {
         if let Some(minor) = self.minor.get() {
             return Ok(*minor);
         }

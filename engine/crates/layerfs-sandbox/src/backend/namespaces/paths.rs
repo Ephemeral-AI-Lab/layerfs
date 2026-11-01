@@ -1,7 +1,7 @@
 //! Where one namespace Sandbox keeps its parts: the same private directory a
 //! local Sandbox uses, plus the executable it runs and the private root its
 //! mount namespace pivots to.
-use crate::platform::native::LocalPaths;
+use crate::backend::native::LocalPaths;
 use crate::RuntimeError;
 use std::path::PathBuf;
 
