@@ -6,8 +6,8 @@ pub enum BackendSelection {
     /// Embedded local SQLite.
     Sqlite,
     /// A PostgreSQL Store (#506), opened through `PostgresHandles` when the
-    /// `postgresql` feature is built. Init stays SQLite only: `Handles`
-    /// refuses this selection with `BackendUnavailable`.
+    /// `postgresql` feature is built; `Handles` refuses this selection with
+    /// `BackendUnavailable`.
     Postgres(PostgresSelection),
 }
 /// PostgreSQL `synchronous_commit` for every write transaction, applied with
@@ -149,6 +149,17 @@ impl PersistenceConfig {
             backend: BackendSelection::Sqlite,
             path: path.into(),
             sqlite_profile: SqlitePersistenceProfile::Durable,
+            sqlite_pack_layout: SqlitePackLayout::Monolithic,
+            sqlite_acquisition: SqliteAcquisitionSchema::Absent,
+        }
+    }
+    /// Selects the PostgreSQL Store `selection` (#506). The SQLite fields
+    /// are unused: no path, the Disposable profile, no layout or tables.
+    pub fn postgresql(selection: PostgresSelection) -> Self {
+        Self {
+            backend: BackendSelection::Postgres(selection),
+            path: PathBuf::new(),
+            sqlite_profile: SqlitePersistenceProfile::Disposable,
             sqlite_pack_layout: SqlitePackLayout::Monolithic,
             sqlite_acquisition: SqliteAcquisitionSchema::Absent,
         }

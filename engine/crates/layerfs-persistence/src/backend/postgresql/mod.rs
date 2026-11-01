@@ -1,5 +1,7 @@
 //! PostgreSQL Store engine (#506): connection with TLS, settings, schema,
-//! lane, objects, metadata and history statements, and import from SQLite.
+//! lane, objects, metadata and history statements, Init's acquisition, and
+//! import from SQLite.
+pub(crate) mod acquisition;
 pub(crate) mod history;
 pub(crate) mod import;
 pub(crate) mod lane;

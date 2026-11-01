@@ -20,9 +20,13 @@ libc = "=0.2.189"
 nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal"] }
 
 [features]
-# PostgreSQL Stores (#506): open, import and attach. Off by default; the
-# sealed Linux build the worker runs turns it on.
-postgresql = ["layerfs-persistence/postgresql", "layerfs-store-service/postgresql"]
+# PostgreSQL Stores (#506, #533): open, import, attach, create and Init.
+# Off by default; the sealed Linux build the worker runs turns it on.
+postgresql = [
+    "layerfs-persistence/postgresql",
+    "layerfs-project/postgresql",
+    "layerfs-store-service/postgresql",
+]
 # https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
 # sealed Linux build the worker runs turns it on.
 tls = ["layerfs-store-service/tls"]

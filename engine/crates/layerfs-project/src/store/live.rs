@@ -7,14 +7,19 @@
 //! short job at a time, while daemons and SDK processes keep using it. It
 //! never seals or replaces the Store. Init statistics are recorded once per
 //! Store, by its first Init, so an added project records none.
-use crate::store::InitError;
+//!
+//! The Store is a SQLite file or, with the `postgresql` feature, a
+//! PostgreSQL schema (#533 step 10b); its selection decides which. The Init
+//! is the same on both: only the opened handles differ.
+use crate::store::{live_open::Opened, InitError};
 use crate::{InitCounters, InitStep, Initialized, ProjectError};
 use layerfs_history::{
     BranchId, BranchSnapshot, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig,
     HistoryName, HistoryResult, LayerStackId, LayerStackRecord, Page,
 };
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SealedStore, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    BackendSelection, Handles, PersistenceConfig, SealedStore, SqliteAcquisitionSchema,
+    SqlitePersistenceProfile,
 };
 use layerfs_storage::port::{acquisition::AcquisitionError, PersistenceError};
 use layerfs_storage::{Storage, StoragePolicy};
@@ -25,7 +30,9 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 /// projects can be added to it later.
 #[derive(Debug)]
 pub struct CreateRequest {
-    /// New Store file, explicit Disposable profile; must not exist.
+    /// New Store file, explicit Disposable profile; must not exist. For
+    /// [`super::ProjectApi::create_postgresql_store`], the PostgreSQL
+    /// selection ([`PersistenceConfig::postgresql`]) whose schema must not exist.
     pub store: PersistenceConfig,
     /// Frozen content/storage policy every project of the Store shares.
     pub policy: StoragePolicy,
@@ -38,7 +45,8 @@ pub struct CreateRequest {
 pub struct AddRequest {
     /// Complete source directory, with no Git-ignore filtering.
     pub source: PathBuf,
-    /// The live Store file, explicit Disposable profile.
+    /// The live Store: a SQLite file with the explicit Disposable profile,
+    /// or a PostgreSQL schema ([`PersistenceConfig::postgresql`]).
     pub store: PersistenceConfig,
     /// The Store's binding key.
     pub binding: Vec<u8>,
@@ -65,7 +73,8 @@ pub struct AddedProject {
     pub initialized: Initialized,
     /// Original acknowledged first Branch.
     pub branch: BranchSnapshot,
-    /// The SQLite version of this session.
+    /// The SQLite version of this session; for a PostgreSQL Store,
+    /// `postgresql <server version>`.
     pub sqlite_version: String,
 }
 
@@ -88,7 +97,9 @@ impl std::fmt::Display for AddFailure {
 impl std::error::Error for AddFailure {}
 
 fn disposable(store: &PersistenceConfig) -> Result<(), InitError> {
-    if store.sqlite_profile != SqlitePersistenceProfile::Disposable {
+    if store.backend == BackendSelection::Sqlite
+        && store.sqlite_profile != SqlitePersistenceProfile::Disposable
+    {
         return Err(InitError::Manifest(
             "explicit Disposable Store profile required",
         ));
@@ -98,6 +109,9 @@ fn disposable(store: &PersistenceConfig) -> Result<(), InitError> {
 
 /// Creates and seals one Store holding no project.
 pub(crate) fn create(request: CreateRequest) -> Result<SealedStore, InitError> {
+    if request.store.backend != BackendSelection::Sqlite {
+        return Err(InitError::Manifest("a Store file selection required"));
+    }
     disposable(&request.store)?;
     let config = request
         .store
@@ -116,23 +130,21 @@ pub(crate) fn add(
     let mut initialized = None;
     let result = (|| {
         disposable(&request.store)?;
-        let handles =
-            Handles::open_writable(request.store.clone(), &request.binding, request.cursor_key)
-                .map_err(InitError::Persistence)?;
-        let taken = handles
-            .history
+        let handles = Opened::writable(&request.store, &request.binding, request.cursor_key)?;
+        let history = handles.history();
+        let taken = history
             .layer_stack_named(&request.stack_name)
             .map_err(InitError::History)?;
         if taken.is_some() {
             return Err(InitError::Exists);
         }
-        let storage = Storage::new(handles.storage.clone()).map_err(InitError::Storage)?;
+        let storage = Storage::new(handles.storage()).map_err(InitError::Storage)?;
         let imported = crate::init_observed(
             &storage,
-            &handles.history,
+            history,
             crate::InitRequest {
                 source: &request.source,
-                acquisition: &handles.acquisition,
+                acquisition: handles.acquisition(),
                 stack: request.stack,
                 name: request.stack_name.clone(),
                 scope_seed: request.scope_seed,
@@ -145,8 +157,7 @@ pub(crate) fn add(
         counters.step(InitStep::Seal);
         let source = ForkSource::Layer(imported.stack.head_layer);
         initialized = Some(imported);
-        let branch = handles
-            .history
+        let branch = history
             .fork(&ForkRequest {
                 stack: request.stack,
                 branch: request.branch,
@@ -154,7 +165,7 @@ pub(crate) fn add(
                 source,
             })
             .map_err(InitError::History)?;
-        let sqlite_version = handles.profile().sqlite_version.clone();
+        let sqlite_version = handles.version();
         drop(storage);
         handles.close();
         Ok((branch, sqlite_version))

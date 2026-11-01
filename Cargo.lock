@@ -850,6 +850,7 @@ dependencies = [
  "layerfs-persistence",
  "layerfs-storage",
  "layerfs-telemetry",
+ "postgres",
  "sha2 0.11.0",
 ]
 

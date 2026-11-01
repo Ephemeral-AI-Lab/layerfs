@@ -4,6 +4,7 @@ mod init;
 mod install;
 mod install_types;
 mod live;
+mod live_open;
 pub use init::{InitError, InitFailure, InitRequest, ProjectApi, SealedProject};
 pub use install::{install, install_file};
 pub use install_types::{InstallError, InstallFailure, InstallWork, Installed};

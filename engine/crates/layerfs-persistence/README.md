@@ -14,7 +14,7 @@ explicitly; there is no error-driven fallback between them.
 `lane/`, `objects/`, `metadata/`, `storage/` (merge records), `acquisition/`,
 `lifecycle/`, plus `schema.rs` and `snapshot.rs`. `postgresql/` mirrors it:
 `session/`, `lane/`, `objects/`, `metadata/`, `history/`, `storage/`,
-`schema.rs` and `import.rs`. Code above `backend/` holds no SQL: history,
+`acquisition/`, `schema.rs` and `import.rs`. Code above `backend/` holds no SQL: history,
 the Metadata/Objects bounds and publication validation are shared and reach
 an engine through two traits (`Mechanics`, `HistoryStatements`). History
 statements are named; the shipped SQLite texts are portable and run on
@@ -27,10 +27,23 @@ PostgreSQL unchanged except `hint_insert_binding` and `statistics_totals`.
 - **PostgreSQL Store.** `PostgresHandles::open_writable`/`open_read_only` over
   a `PostgresSelection` (URL, schema, `synchronous_commit`, lane
   `lock_timeout`). Opening validates the schema and binding and never
-  creates or migrates anything. Init stays SQLite only:
-  `PostgresHandles::import` copies a SQLite Store (any pack layout) into a new
-  schema in one PostgreSQL transaction over one SQLite snapshot, keeping every
-  object, root, Commit and inode serial.
+  creates or migrates anything. `PostgresHandles::create` (#533 step 10b)
+  makes a new empty schema in one transaction: the Store tables, Init's
+  acquisition tables (`sql/postgresql/acquisition.sql`), the policy row and
+  the catalog row with the caller's binding; an existing schema is refused
+  `Refused { status: "schema exists" }`. `PostgresHandles::import` copies a
+  SQLite Store (any pack layout) into a new schema in one PostgreSQL
+  transaction over one SQLite snapshot, keeping every object, root, Commit
+  and inode serial; such a schema has no acquisition tables.
+- **Init into PostgreSQL (#533 step 10b).** `PostgresHandles::acquisition`
+  is the acquisition port over the same session, with SQLite's row
+  encodings, charges, refusal order and failures. A window of entries is one
+  dependency check and two array inserts when its rows cannot conflict; the
+  first row that might runs alone, in order. Reads are index range scans in
+  key order, each in one `REPEATABLE READ` snapshot after the owner check;
+  writes take the lane like every write. A schema without the acquisition
+  tables refuses every unit (`BackendUnavailable`). Both table sets are
+  schema version 1; the recorded schema source says which.
 - **Transactions.** Reads are `REPEATABLE READ READ ONLY`; writes are `READ
   COMMITTED`, never SERIALIZABLE, with `SET LOCAL synchronous_commit` (default
   `off`) in the same round trip as `BEGIN`. Every write first locks the
@@ -52,9 +65,9 @@ PostgreSQL unchanged except `hint_insert_binding` and `statistics_totals`.
   file digests and the stack's allocator scope stay; reclaiming packs is #411.
 - **Attaching a schema.** `PostgresHandles::binding` reads the binding key a
   LayerFS schema records, so a home that did not import it can open it.
-- **Not on PostgreSQL in this phase:** Init and acquisition, merge records
-  (merges are refused), seal/snapshot/reclamation (no file), and the host
-  SQLite cache #420 found necessary for one round trip per Commit.
+- **Not on PostgreSQL in this phase:** merge records (merges are refused),
+  seal/snapshot/reclamation (no file), and the host SQLite cache #420 found
+  necessary for one round trip per Commit.
 
 The twelve logical tables are `pack`; `store_policy`, `object_location`,
 `inode_value`, `content_signature`; and `history_meta`,

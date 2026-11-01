@@ -246,9 +246,25 @@ impl ProjectApi {
     ) -> Result<SealedStore, InitError> {
         super::live::create(request)
     }
+    /// Creates the PostgreSQL schema `request.store` selects
+    /// ([`PersistenceConfig::postgresql`]), which must not exist, as an
+    /// empty Store with the acquisition tables projects are added through
+    /// (#533 step 10b), in one transaction. An existing schema is refused
+    /// `Persistence(Refused { status: "schema exists" })` with nothing
+    /// written; a build without the `postgresql` feature refuses
+    /// `Persistence(BackendUnavailable)`.
+    pub fn create_postgresql_store(
+        &self,
+        request: super::live::CreateRequest,
+    ) -> Result<(), InitError> {
+        super::live_open::create_postgresql(&request.store, request.policy, &request.catalog)
+    }
     /// Imports a folder as a new project of the live Store (#506), through
     /// its admission and writer lane; the Store is neither sealed nor
-    /// replaced. `counters` follow it as for [`ProjectApi::init_observed`].
+    /// replaced. `request.store` is a SQLite file or, built with the
+    /// `postgresql` feature, a PostgreSQL schema made by
+    /// [`ProjectApi::create_postgresql_store`] (#533 step 10b).
+    /// `counters` follow it as for [`ProjectApi::init_observed`].
     pub fn add_project(
         &self,
         request: super::live::AddRequest,

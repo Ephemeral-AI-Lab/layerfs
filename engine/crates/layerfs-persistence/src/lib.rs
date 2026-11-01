@@ -33,7 +33,9 @@ pub(crate) use storage::provider as storage_provider;
 pub(crate) use storage::publication;
 pub use storage_provider::StorageProvider;
 #[cfg(feature = "postgresql")]
-pub use store::postgresql::{ImportReceipt, PostgresHandles, PostgresLaneHold, PostgresStorage};
+pub use store::postgresql::{
+    ImportReceipt, PostgresAcquisition, PostgresHandles, PostgresLaneHold, PostgresStorage,
+};
 pub use store::seal::SealedStore;
 
 mod metadata;
