@@ -9,8 +9,10 @@
 //! a lost answer is `Unknown`, never resent.
 mod client;
 mod frame;
+mod idle;
 mod server;
 
 pub use client::{call, ping, Endpoint};
 pub use frame::{read_frame, write_frame, MAX_FRAME};
+pub use idle::{idle, serve_until_idle, IDLE};
 pub use server::{last_active, serve, Served};

@@ -31,6 +31,8 @@ cat /proc/sys/user/max_user_namespaces"#;
 /// Step 3: ends a worker an earlier start left (by its pid, if that pid is
 /// still a `layerfs` process), then starts the bundle's `layerfs worker`
 /// detached as root, its settings in its environment and its secret in a file.
+/// `LAYERFS_WORKER_POWEROFF=1` (a VM guest, not an ssh host) has an idle
+/// worker power its guest off when it stops (step 13).
 const LAUNCH: &str = r#"s=/layerfs/state
 if [ -f $s/worker.pid ]; then
   p=$(cat $s/worker.pid)
@@ -39,7 +41,7 @@ if [ -f $s/worker.pid ]; then
     while kill -0 "$p" 2>/dev/null && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done
   fi
 fi
-LAYERFS_WORKER_LISTEN="$1" LAYERFS_WORKER_SECRET=$s/secret setsid nohup "$2/layerfs" worker >> $s/worker.log 2>&1 < /dev/null &
+LAYERFS_WORKER_LISTEN="$1" LAYERFS_WORKER_SECRET=$s/secret LAYERFS_WORKER_POWEROFF="$3" setsid nohup "$2/layerfs" worker >> $s/worker.log 2>&1 < /dev/null &
 echo $! > $s/worker.pid"#;
 
 /// One readiness look: whether the worker still runs, then the guest's TCP sockets.
@@ -105,7 +107,17 @@ pub(crate) fn launch(
     let secret = tool::secret()?;
     guest.write_file(tools, &format!("{STATE}/secret"), &secret)?;
     let listen = format!("{bind}:{WORKER_PORT}");
-    guest.script(tools, "starting the worker", LAUNCH, &[&listen, BUNDLE])?;
+    let poweroff = if spec.kind == super::Kind::Ssh {
+        "0"
+    } else {
+        "1"
+    };
+    guest.script(
+        tools,
+        "starting the worker",
+        LAUNCH,
+        &[&listen, BUNDLE, poweroff],
+    )?;
     ready(spec, guest, address)?;
     Ok(Endpoint {
         address,

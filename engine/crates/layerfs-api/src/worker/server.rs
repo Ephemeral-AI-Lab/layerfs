@@ -78,6 +78,7 @@ fn answer(mut stream: TcpStream, secret: &str, root: &Path) -> bool {
         Ok(Some(request)) => request,
         _ => return false,
     };
+    let _busy = super::idle::Busy::start();
     let outcome = if !same(request.get_text("secret").unwrap_or(""), secret) {
         Err(refused("Denied", "the worker's secret does not match"))
     } else {
