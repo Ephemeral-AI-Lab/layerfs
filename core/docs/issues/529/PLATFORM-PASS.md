@@ -233,7 +233,8 @@ counted 65,417 at tree 498dd1917812). Over #529: **123811 → 123966 (delta +155
 | `db4b8e4dc8` | sandbox, agent, runtime: a Sandbox names its platform (#529) | 123811 -> 123966 (delta +155) |
 | `6f242b72bf` | test: the cell runner makes each Sandbox with its platform (#529 §8) | 123966 -> 123966 (delta 0) |
 | `33733d0645` | runtime: src/place/ is src/platform/ again (owner 2026-11-01, move only) | 123966 -> 123966 (delta 0) |
-| this commit | docs: #529 platform pass | 123966 -> 123966 (delta 0) |
+| `71ecd9fc6a` | docs: #529 platform pass, sandbox.create({ platform }) on every platform | 123966 -> 123966 (delta 0) |
+| this commit | docs: #529 platform pass, Connect and cleanup | 123966 -> 123966 (delta 0) |
 
 `db4b8e4dc8` subtotals: core 41405, engine 77696 (+57), api 4865 (+98). Tests
 changed or deleted there (listed in its message): in `native_local.rs`,
@@ -252,11 +253,74 @@ after `33733d0645`.
 
 ## Connect
 
-Pending; see the final report.
+**PASS in the harness simulations; live NOT_RUN** (Connect's LayerFS link is not
+moved to this unmerged branch).
+
+The changes are in `~/Ephemeral-AI-Lab/layerfs-connect`, uncommitted, on top of
+the Connect UI polish session's uncommitted work. That checkout is on
+`feat/connect-ui-polish` (`988d525`), not `main`. Nothing was switched, stashed,
+discarded or committed there. The parent session was told and had not answered when
+the edits began; editing in place is reversible, so the recommended option was taken.
+
+- **Badge.** Every Sandbox row names its platform after the Sandbox's name (mark
+  and name; the mark alone below 24rem). A host on an older LayerFS names no
+  platform, and the badge reads it from the Sandbox's place and runtime.
+- **New Sandbox.** An open project row offers a menu built from
+  `HostStatus.platforms` (the host passes `runtime.status().platforms` through):
+  - ready platforms are choices;
+  - allowed but not ready ones are disabled and say what they need;
+  - not allowed ones are left out;
+  - a one-platform home adds the line about per-project places.
+
+  The choice calls a new host route, `POST /api/projects/:name/sandboxes
+  { platform }`, which runs `sandbox.create({ platform })`.
+- **Host.** Each `SandboxInfo` carries `platform` when LayerFS names it.
+- **Harness.** Ten cases, three of them new: `mac-native`, `linux-mixed` and
+  `platforms` (every badge, and a platform that needs setup). Each was checked at
+  360 px in dark mode and at 1100 px in light mode:
+  - one badge per Sandbox row, none outside the page;
+  - the menu only where the project's place answers;
+  - no horizontal overflow from these changes.
+
+  Screenshots were checked for `linux-mixed`, `platforms` and `mac-native`.
+- **Checks.** `tsc` (web and node) is clean, and `host/test/server.test.js` passes
+  11/11 (with the new route). `host/test/compute.test.js` cannot load in this
+  checkout: Connect's `connect-main` LayerFS link has no `node_modules`, an
+  environment problem that does not depend on this change. Its new `sandboxTag`
+  assertions passed when run on their own.
+- **Found, not fixed (Connect polish).**
+  - At 360 px the "Other places" setup list overflows.
+  - At 360 px a Sandbox row's state chip overlaps the `n / 16` column. The badge
+    does not cause it: the column widths are the same with the badge hidden.
+  - The Later line still lists native Sandboxes as not in LayerFS.
 
 ## Cleanup
 
-Pending; see the final report.
+Removed:
+- **Per-cell resources:** every per-cell VM, microVM, Sandbox, container, volume and
+  Store, by each cell's teardown (`teardownOk` in all 111 receipts). Checked after
+  the pass:
+  - the Lima VMs held no containers, volumes, Stores or Firecracker VMs;
+  - huge pages were back to 1100;
+  - Apple Container, Microsandbox and Docker Desktop held nothing named `lfs52*`.
+- **Lima VMs:** `lfs529-linux`, `lfs529-ssh` and `lfs529-vzkvm`, with their disks
+  (`/var/lib/lfs529-nlt*` went with `lfs529-linux`). Also Lima's Ubuntu image
+  download (`by-url-sha256/002fbe46…`).
+- **Pulled images:** `node:22-trixie-slim` from Apple Container and Microsandbox.
+- **Apple Container:** its service is stopped (the pass had started it).
+- **Caches under `~/.cache/layerfs-test`:** the VM bundle copy, the image archives,
+  the SSH test keys, the share folder, the runner copy and the receipt folder
+  (committed here first). The folder is empty, as it was before the pass.
+- **Scratch:** the environment scripts.
+
+Kept:
+- **This worktree**, its sealed bundles and its private Cargo targets, warm for the
+  owner's review (409 MB under `~/.cache/layerfs-worktrees`, plus the target
+  volumes in Docker). Once the branch is merged or dropped, release them with
+  `tools/worktree.py cleanup-scope --release-caches`.
+- **`~/.lima/_config` and `_disks`**, which existed before the pass.
+
+Host free space: 208.6 GB before the cells, 219.9 GB after cleanup.
 
 ## Appendix: per-row identities and timings
 
