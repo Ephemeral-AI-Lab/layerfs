@@ -14,6 +14,7 @@ pub use base::internal;
 pub mod branch;
 pub mod calls;
 pub mod fs;
+pub mod home;
 #[doc(hidden)]
 pub mod host;
 pub mod names;

@@ -3,26 +3,26 @@
 //! project discovery, Sandboxes and their daemons, Store registry, remote
 //! transfers and PostgreSQL Stores. layerfs-node keeps only the napi
 //! conversion.
-mod copies;
+pub(crate) mod copies;
 pub mod direct;
-mod discovery;
+pub(crate) mod discovery;
 pub mod dispatch;
-mod exec;
-mod flock;
+pub(crate) mod exec;
+pub(crate) mod flock;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-mod local;
-mod local_stores;
+pub(crate) mod local;
+pub(crate) mod local_stores;
 pub mod outcome;
 pub mod output;
-mod pool;
-mod postgres;
-mod progress;
-mod project;
-mod registry;
-mod runtime;
-mod sandbox;
-mod stores;
-mod sync;
+pub(crate) mod pool;
+pub(crate) mod postgres;
+pub(crate) mod progress;
+pub(crate) mod project;
+pub(crate) mod registry;
+pub(crate) mod runtime;
+pub(crate) mod sandbox;
+pub(crate) mod stores;
+pub(crate) mod sync;
 pub mod trace;
-mod unmount;
-mod workspace;
+pub(crate) mod unmount;
+pub(crate) mod workspace;
