@@ -366,6 +366,11 @@ ENGINE_CRATES = {
     "layerfs-workspace",
     "layerfs-api",
     "layerfs-node",
+    # The NFS export was missing here and counted under core (#533 step 2).
+    "layerfs-nfs",
+    # The 2.0 front ends over layerfs-api (#533): the binary and Python.
+    "layerfs-cli",
+    "layerfs-python",
 }
 # Crate folders directly under api/ before the regrouping, by folder name.
 OLD_API_CRATES = {"layerfs-api": "layerfs-api", "binding": "layerfs-node"}

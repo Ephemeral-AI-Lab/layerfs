@@ -41,6 +41,11 @@ class CounterTests(unittest.TestCase):
         shutil.move(self.root / "api/layerfs-api", self.root / "engine/crates/layerfs-api")
         self.assertEqual(production_loc.scan(self.root), after)
 
+    def test_front_ends_and_nfs_are_engine_crates(self):
+        # #533 step 2: the binary, the PyO3 module and the NFS export.
+        for name in ("layerfs-cli", "layerfs-python", "layerfs-nfs"):
+            self.assertEqual(production_loc.crate_layer(name), "engine")
+
     def test_api_regrouping_keeps_every_crate_and_count(self):
         import shutil
 

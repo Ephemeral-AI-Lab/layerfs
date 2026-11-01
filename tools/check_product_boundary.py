@@ -39,6 +39,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-daemon",
     "layerfs-api",
     "layerfs-bridge",
+    "layerfs-cli",
 )
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
@@ -56,6 +57,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-api": "#![forbid(unsafe_code)]",
     "layerfs-bridge": "#![forbid(unsafe_code)]",
     "layerfs-sandbox": "#![deny(unsafe_code)]",
+    "layerfs-cli": "#![forbid(unsafe_code)]",
 }
 
 
@@ -134,6 +136,9 @@ ALLOWED_DEPENDENCIES = {
     },
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
     "layerfs-sandbox": set(),
+    # The 2.0 front ends (#533): thin layers over the library's call table.
+    "layerfs-cli": {"layerfs-api", "layerfs-bridge"},
+    "layerfs-python": {"layerfs-api", "layerfs-bridge"},
 }
 DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history"}
 LAYER_ORDER = ("core", "engine", "api")
@@ -158,6 +163,9 @@ LAYER = {
     # only the published JavaScript packages, so no crate is in the api layer.
     "layerfs-api": ENGINE,
     "layerfs-node": ENGINE,
+    # The 2.0 front ends (#533): the `layerfs` binary and the PyO3 module.
+    "layerfs-cli": ENGINE,
+    "layerfs-python": ENGINE,
 }
 
 
