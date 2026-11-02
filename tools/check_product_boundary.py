@@ -159,13 +159,12 @@ LAYER = {
     "layerfs-store-service": ENGINE,
     "layerfs-remote-storage": ENGINE,
     "layerfs-workspace": ENGINE,
-    # The SDK method surface and the Node binding are engine crates; api/ holds
-    # only the published JavaScript packages, so no crate is in the api layer.
-    "layerfs-api": ENGINE,
-    "layerfs-node": ENGINE,
-    # The 2.0 front ends (#533): the `layerfs` binary and the PyO3 module.
-    "layerfs-cli": ENGINE,
-    "layerfs-python": ENGINE,
+    # The public surface under api/crates: the library and its 2.0 front ends
+    # (#533), the `layerfs` binary, the Node binding and the PyO3 module.
+    "layerfs-api": API,
+    "layerfs-cli": API,
+    "layerfs-node": API,
+    "layerfs-python": API,
 }
 
 
@@ -177,7 +176,7 @@ def layer_violations(name, dependency, kind):
     return []
 
 
-CRATE_ROOTS = ("core/crates", "engine/crates", "api")
+CRATE_ROOTS = ("core/crates", "engine/crates", "api/crates", "api")
 
 
 def crate_directories(root):
@@ -419,7 +418,7 @@ def production_files(root, include_sdk=True):
     """Known product inputs; tests/examples/tools are deliberately outside this scope."""
     files = set()
     for package in crate_directories(root):
-        if not include_sdk and package == root / "engine/crates/layerfs-node":
+        if not include_sdk and package == root / "api/crates/layerfs-node":
             continue
         if not package.is_dir():
             continue

@@ -36,15 +36,20 @@ class CounterTests(unittest.TestCase):
         after = production_loc.scan(self.root)
         self.assertEqual(before, after)
         self.assertEqual(after["scopes"]["core"]["crates"], {"layerfs-content": 2})
-        # layerfs-api is an engine crate wherever it sits.
-        self.assertEqual(after["scopes"]["engine"]["crates"], {"layerfs-project": 2, "layerfs-api": 2})
+        self.assertEqual(after["scopes"]["engine"]["crates"], {"layerfs-project": 2})
+        # layerfs-api is an api crate wherever it sits.
+        self.assertEqual(after["scopes"]["api"]["crates"], {"layerfs-api": 2})
         shutil.move(self.root / "api/layerfs-api", self.root / "engine/crates/layerfs-api")
         self.assertEqual(production_loc.scan(self.root), after)
+        (self.root / "api/crates").mkdir()
+        shutil.move(self.root / "engine/crates/layerfs-api", self.root / "api/crates/layerfs-api")
+        self.assertEqual(production_loc.scan(self.root), after)
 
-    def test_front_ends_and_nfs_are_engine_crates(self):
-        # #533 step 2: the binary, the PyO3 module and the NFS export.
-        for name in ("layerfs-cli", "layerfs-python", "layerfs-nfs"):
-            self.assertEqual(production_loc.crate_layer(name), "engine")
+    def test_library_and_front_ends_are_api_crates_and_nfs_is_engine(self):
+        # #533 step 2: the NFS export; the library, binary, binding and PyO3 module.
+        self.assertEqual(production_loc.crate_layer("layerfs-nfs"), "engine")
+        for name in ("layerfs-api", "layerfs-cli", "layerfs-node", "layerfs-python"):
+            self.assertEqual(production_loc.crate_layer(name), "api")
 
     def test_api_regrouping_keeps_every_crate_and_count(self):
         import shutil
@@ -68,24 +73,27 @@ class CounterTests(unittest.TestCase):
         shutil.move(self.root / "api/agent-sdk", self.root / "api/agent")
         after = production_loc.scan(self.root)
         self.assertEqual(before, after)
+        self.assertEqual(after["scopes"]["engine"]["crates"], {"layerfs-daemon": 1})
         self.assertEqual(
-            after["scopes"]["engine"]["crates"], {"layerfs-daemon": 1, "layerfs-api": 1, "layerfs-node": 2}
+            after["scopes"]["api"]["crates"],
+            {"@layerfs/agent": 1, "@layerfs/cli": 1, "@layerfs/backend": 1, "layerfs-api": 1, "layerfs-node": 2},
         )
-        self.assertEqual(
-            after["scopes"]["api"]["crates"], {"@layerfs/agent": 1, "@layerfs/cli": 1, "@layerfs/backend": 1}
-        )
+        (self.root / "api/crates").mkdir()
+        for name in ("layerfs-api", "layerfs-node"):
+            shutil.move(self.root / "engine/crates" / name, self.root / "api/crates" / name)
+        self.assertEqual(production_loc.scan(self.root), after)
 
     def test_nested_api_members_count_only_product_source(self):
         for name in ("core/src/lib.rs", "sdk/src/client.rs", "sdk/tests/route.rs", "mcp/src/lib.rs", "cli/src/main.rs"):
             write(self.root, f"core/crates/layerfs-api/{name}", "pub fn value() {}\n")
-        files = production_loc.scope_files(self.root, "engine")
+        files = production_loc.scope_files(self.root, "api")
         self.assertEqual(
             [str(path.relative_to(self.root / "core/crates/layerfs-api")) for path in files],
             ["core/src/lib.rs", "sdk/src/client.rs"],
         )
-        self.assertEqual(production_loc.scan(self.root)["scopes"]["engine"]["lines"], 2)
+        self.assertEqual(production_loc.scan(self.root)["scopes"]["api"]["lines"], 2)
 
-    def test_api_counts_each_package_by_its_name_and_the_binding_as_engine(self):
+    def test_api_counts_each_package_and_the_binding_by_name(self):
         write(self.root, "api/package.json", '{"name": "layerfs-js"}\n')
         for folder, name in (
             ("agent/sdk", "@layerfs/agent"),
@@ -111,25 +119,27 @@ class CounterTests(unittest.TestCase):
                 "agent/sdk/src/index.js",
                 "backend/src/index.js",
                 "backend/src/store/get.js",
+                "binding/src/lib.rs",
                 "runtime/src/index.js",
             ],
         )
         scan = production_loc.scan(self.root)
         scope = scan["scopes"]["api"]
+        # The binding's Rust is an api crate, tests and examples excluded.
         self.assertEqual(
             (scope["lines"], scope["crates"]),
             (
-                5,
+                6,
                 {
                     "@layerfs/agent": 1,
                     "@layerfs/backend": 2,
                     "@layerfs/cli": 1,
                     "@layerfs/runtime": 1,
+                    "layerfs-node": 1,
                 },
             ),
         )
-        # The binding's Rust is an engine crate, tests and examples excluded.
-        self.assertEqual(scan["scopes"]["engine"]["crates"], {"layerfs-node": 1})
+        self.assertEqual(scan["scopes"]["engine"]["crates"], {})
 
     def test_api_still_counts_the_layouts_before_the_move(self):
         """sdk/js and cli/ (the former `sdk` and `cli` scopes) count as `api`."""

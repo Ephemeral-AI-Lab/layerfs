@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | Settings `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | read by `@layerfs/agent` (`api/agent/sdk/src/trace.js` at tag `v1.1.0`) | kept as the only settings besides `LAYERFS_HOME` (S §2.5), but **read by nothing** |
 | The trace line writer | in that JavaScript file | deleted with `@layerfs/agent` (#533 step 14); no Rust replacement yet |
-| In-process collector | `host/trace.rs` in the Node binding | `engine/crates/layerfs-api/src/host/trace.rs`: takes a 64-hex scope from an `observe` argument, traces the call's daemon control exchanges under it and collects up to 64 telemetry values. **No front end calls it** (`take_scope` and `run` have no callers) |
+| In-process collector | `host/trace.rs` in the Node binding | `api/crates/layerfs-api/src/host/trace.rs`: takes a 64-hex scope from an `observe` argument, traces the call's daemon control exchanges under it and collects up to 64 telemetry values. **No front end calls it** (`take_scope` and `run` have no callers) |
 | The home's `trace/` folder | `traces/` | reserved (`paths::trace_dir`; a 1.1.0 `traces/` folder is renamed to it); O26 makes trace files there the event feed. Nothing writes it yet |
 
 So, today: turning tracing on costs nothing and records nothing. Use Commit

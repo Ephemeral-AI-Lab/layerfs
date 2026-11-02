@@ -20,7 +20,7 @@ tls = ["layerfs-api/tls"]
 
 [dependencies]
 layerfs-api = { path = "../layerfs-api", features = ["machine"] }
-layerfs-bridge = { path = "../layerfs-bridge" }
+layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 napi = { version = "=2.16.17", features = ["napi4"] }
 napi-derive = "=2.16.13"
 

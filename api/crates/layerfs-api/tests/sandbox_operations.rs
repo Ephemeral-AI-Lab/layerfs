@@ -1,7 +1,7 @@
 //! Bounded original Engine/control peers qualify SDK close custody and ordinary exec routing.
 #![cfg(unix)]
 #[allow(dead_code)]
-#[path = "../../layerfs-sandbox/tests/support/engine.rs"]
+#[path = "../../../../engine/crates/layerfs-sandbox/tests/support/engine.rs"]
 mod engine;
 use engine::{fixed, frame, upgrade, Peer};
 use layerfs_api::{

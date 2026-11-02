@@ -3,7 +3,7 @@
 > **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
 > `layerfs-sdk-observe` skill. **Not run in this pass** (no Sandbox was
 > started). Read from `engine/crates/layerfs-sandbox/src/backend/native/`,
-> `engine/crates/layerfs-api/src/family/sandboxes.rs` and the daemon's
+> `api/crates/layerfs-api/src/family/sandboxes.rs` and the daemon's
 > `application/idle.rs`. 1.1.0's `backend.daemon.sandbox.get_log` has no 2.0
 > call.
 

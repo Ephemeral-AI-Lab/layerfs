@@ -2,7 +2,7 @@
 
 > **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
 > `layerfs-js-sdk` skill. **Not run in this pass** (no Sandbox was started).
-> Shapes are read from `engine/crates/layerfs-api/src/family/sandboxes.rs`,
+> Shapes are read from `api/crates/layerfs-api/src/family/sandboxes.rs`,
 > `host/workspace.rs`, `host/exec.rs` and `sandbox/values.rs`, with keys in
 > snake_case as the library returns them. Only `workspace status` on a missing
 > Sandbox was run (`NoSuchSandbox`).

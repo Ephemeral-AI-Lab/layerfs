@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 
 [tool.maturin]
-manifest-path = "../../engine/crates/layerfs-python/Cargo.toml"
+manifest-path = "../crates/layerfs-python/Cargo.toml"
 module-name = "layerfs._native"
 python-source = "src"
 features = ["pyo3/extension-module"]

@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const candidates = [
   fileURLToPath(new URL("../layerfs.node", import.meta.url)),
   fileURLToPath(new URL("../../../layerfs.node", import.meta.url)),
-  fileURLToPath(new URL("../../../engine/crates/layerfs-node/layerfs.node", import.meta.url)),
+  fileURLToPath(new URL("../../crates/layerfs-node/layerfs.node", import.meta.url)),
 ];
 const found = candidates.find((path) => existsSync(path));
 if (!found) {

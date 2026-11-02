@@ -2,7 +2,7 @@
 
 > **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
 > `layerfs-js-sdk` skill. **Not run in this pass** (no Sandbox was started):
-> everything here is read from `engine/crates/layerfs-api/src/family/sandboxes.rs`,
+> everything here is read from `api/crates/layerfs-api/src/family/sandboxes.rs`,
 > `host/sandbox.rs` and the table, except `sandbox.list` on an empty home
 > (`{"items":[]}`, seen live).
 

@@ -2,9 +2,7 @@ import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest import mock
 
-import check_product_boundary
 from check_product_boundary import (
     RETIRED_PACKAGES,
     crate_directories,
@@ -115,11 +113,11 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertTrue(dependency_violations(f'[package]\nname="{name}"\n'), name)
 
     def test_sdk_source_edges_and_unsafe_boundary(self):
-        path = Path("engine/crates/layerfs-api/src/project/init.rs")
+        path = Path("api/crates/layerfs-api/src/project/init.rs")
         self.assertFalse(violations(path, "use layerfs_persistence::Handles;"))
         self.assertTrue(violations(path, "use layerfs_server::Server;"))
         self.assertTrue(unsafe_violations(path, "unsafe fn extend_lifetime() {}"))
-        root = Path("engine/crates/layerfs-api/src/lib.rs")
+        root = Path("api/crates/layerfs-api/src/lib.rs")
         self.assertTrue(unsafe_violations(root, "mod init;"))
         self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\nmod init;"))
 
@@ -183,7 +181,7 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertTrue(violations(path, "use layerfs_api::Runtime;"))
         sdk = '[package]\nname="layerfs-api"\n[dependencies]\n'
         self.assertTrue(dependency_violations(sdk + 'layerfs-daemon={path="../../layerfs-daemon"}'))
-        self.assertTrue(violations(Path("engine/crates/layerfs-api/src/project/init.rs"), "use layerfs_daemon::Owner;"))
+        self.assertTrue(violations(Path("api/crates/layerfs-api/src/project/init.rs"), "use layerfs_daemon::Owner;"))
 
     def test_store_service_engine_edges(self):
         prefix = '[package]\nname="layerfs-store-service"\n[dependencies]\n'
@@ -211,7 +209,7 @@ class ProductBoundaryTests(unittest.TestCase):
             source = f'[package]\nname="{package}"\n[dependencies]\nlayerfs-workspace={{path="../layerfs-workspace"}}\n'
             self.assertEqual(bool(dependency_violations(source)), package == "layerfs-api")
             path = (
-                Path("engine/crates/layerfs-api/src/project/init.rs")
+                Path("api/crates/layerfs-api/src/project/init.rs")
                 if package == "layerfs-api"
                 else Path("engine/crates/layerfs-daemon/src/commands.rs")
             )
@@ -235,11 +233,11 @@ class ProductBoundaryTests(unittest.TestCase):
                     source = f'[package]\nname="{package}"\n[{table}]\nrenamed={{package="{dependency}",path="../{dependency}"}}\n'
                     self.assertTrue(dependency_violations(source))
                 source = f'[package]\nname="{package}"\n[dev-dependencies]\n"{dependency}"={{path="../{dependency}"}}\n'
-                # Dev edges now obey layers too; project -> workspace and project ->
-                # layerfs-api stay within engine.
+                # Dev edges now obey layers too; project -> workspace stays within
+                # engine, while project -> layerfs-api is an upward edge into api.
                 self.assertEqual(
                     bool(dependency_violations(source)),
-                    not (package == "layerfs-project" and dependency in ("layerfs-workspace", "layerfs-api")),
+                    not (package == "layerfs-project" and dependency == "layerfs-workspace"),
                 )
         self.assertFalse(
             dependency_violations(
@@ -400,7 +398,7 @@ class ProductBoundaryTests(unittest.TestCase):
     def test_flat_api_product_scope(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            package = root / "engine/crates/layerfs-api"
+            package = root / "api/crates/layerfs-api"
             for name in ("src/lib.rs", "src/fs/read.rs", "tests/route.rs", "examples/demo.rs"):
                 path = package / name
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -418,7 +416,7 @@ class ProductBoundaryTests(unittest.TestCase):
             for relative, name in (
                 ("core/crates/layerfs-content", "layerfs-content"),
                 ("engine/crates/layerfs-project", "layerfs-project"),
-                ("engine/crates/layerfs-node", "layerfs-node"),
+                ("api/crates/layerfs-node", "layerfs-node"),
                 ("api/layerfs-new", "layerfs-new"),
             ):
                 package = root / relative
@@ -435,14 +433,14 @@ class ProductBoundaryTests(unittest.TestCase):
             core = root / "core"
             for path in (
                 core / "crates/store/src/lib.rs",
-                root / "engine/crates/layerfs-node/src/lib.rs",
+                root / "api/crates/layerfs-node/src/lib.rs",
                 root / "api/agent/src/index.js",
             ):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("")
-            (root / "engine/crates/layerfs-node/Cargo.toml").write_text('[package]\nname="layerfs-node"\n')
+            (root / "api/crates/layerfs-node/Cargo.toml").write_text('[package]\nname="layerfs-node"\n')
             everything = [str(p.relative_to(root)) for p in production_files(core.parent)]
-            self.assertIn("engine/crates/layerfs-node/src/lib.rs", everything)
+            self.assertIn("api/crates/layerfs-node/src/lib.rs", everything)
             self.assertIn("api/agent/src/index.js", everything)
             self.assertEqual(
                 [str(p.relative_to(root)) for p in production_files(core.parent, include_sdk=False)],
@@ -463,9 +461,6 @@ class LayerBoundaryTests(unittest.TestCase):
                 if upward:
                     self.assertTrue(any("upward" in reason for _, reason in dependency_violations(source)))
 
-    # No Rust crate sits in the api layer (layerfs-api and layerfs-node are engine
-    # crates), so upward-edge checks use a stand-in api crate.
-    @mock.patch.dict(check_product_boundary.LAYER, {"layerfs-mcp": "api"})
     def test_dev_edges_reject_all_upward_dependencies(self):
         for table in ("dev-dependencies", "target.'cfg(unix)'.dev-dependencies"):
             for name, dependency, upward in (
@@ -473,11 +468,11 @@ class LayerBoundaryTests(unittest.TestCase):
                 ("layerfs-content", "layerfs-project", True),
                 ("layerfs-content", "layerfs-api", True),
                 ("layerfs-project", "layerfs-workspace", False),
-                ("layerfs-daemon", "layerfs-api", False),
-                ("layerfs-daemon", "layerfs-mcp", True),
-                ("layerfs-workspace", "layerfs-mcp", True),
+                ("layerfs-daemon", "layerfs-api", True),
+                ("layerfs-workspace", "layerfs-cli", True),
+                ("layerfs-api", "layerfs-daemon", False),
                 ("layerfs-node", "layerfs-api", False),
-                ("layerfs-node", "layerfs-mcp", True),
+                ("layerfs-cli", "layerfs-api", False),
             ):
                 with self.subTest(table=table, name=name, dependency=dependency):
                     source = f'[package]\nname="{name}"\n[{table}]\nrenamed={{package="{dependency}"}}'
@@ -494,7 +489,6 @@ class LayerBoundaryTests(unittest.TestCase):
             dependency_violations('[package]\nname="layerfs-persistence"\n[dev-dependencies]\nrusqlite="1"')
         )
 
-    @mock.patch.dict(check_product_boundary.LAYER, {"layerfs-mcp": "api"})
     def test_path_escape_rejects_all_upward_includes(self):
         with TemporaryDirectory() as directory:
             core = Path(directory) / "core"
@@ -504,13 +498,14 @@ class LayerBoundaryTests(unittest.TestCase):
                     "layerfs-content",
                     "layerfs-storage",
                     "layerfs-daemon",
-                    "layerfs-mcp",
+                    "layerfs-api",
                 )
             }
             content, storage, daemon, api = packages
             cases = (
                 (content / "tests/read.rs", storage / "tests/helper.rs", False),
                 (content / "tests/read.rs", api / "tests/helper.rs", True),
+                (api / "tests/mount_control.rs", daemon / "tests/support/host_install.rs", False),
                 (daemon / "tests/merge_report.rs", api / "tests/support/sdk.rs", True),
                 (daemon / "tests/concurrent_commits.rs", api / "tests/support/installed_store.rs", True),
                 (daemon / "tests/lane_merge.rs", api / "tests/support/sdk.rs", True),

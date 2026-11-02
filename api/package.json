@@ -1,7 +1,7 @@
 {
   "name": "layerfs-js",
   "version": "2.0.0",
-  "description": "The LayerFS JavaScript package (#533): `layerfs` under node/, which loads the engine's native addon (engine/crates/layerfs-node). `npm install` here links it; it downloads nothing.",
+  "description": "The LayerFS JavaScript package (#533): `layerfs` under node/, which loads its native addon (api/crates/layerfs-node). `npm install` here links it; it downloads nothing.",
   "private": true,
   "type": "module",
   "workspaces": [

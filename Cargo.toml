@@ -5,6 +5,7 @@ resolver = "2"
 members = [
     "core/crates/*",
     "engine/crates/*",
+    "api/crates/*",
 ]
 exclude = [
     "engine/vendor/fuser-0.18.0",

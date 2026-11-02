@@ -21,19 +21,19 @@
 #[path = "support/daemon_binary.rs"]
 mod daemon_binary;
 #[allow(dead_code)]
-#[path = "../../layerfs-daemon/tests/support/installed_store.rs"]
+#[path = "../../../../engine/crates/layerfs-daemon/tests/support/installed_store.rs"]
 mod installed;
 #[allow(dead_code)]
-#[path = "../../layerfs-daemon/tests/support/namespace_model.rs"]
+#[path = "../../../../engine/crates/layerfs-daemon/tests/support/namespace_model.rs"]
 mod model;
 #[allow(dead_code)]
-#[path = "../../layerfs-daemon/tests/support/mounted.rs"]
+#[path = "../../../../engine/crates/layerfs-daemon/tests/support/mounted.rs"]
 mod mounted;
 #[allow(dead_code)]
-#[path = "../../layerfs-daemon/tests/support/mounted_commit.rs"]
+#[path = "../../../../engine/crates/layerfs-daemon/tests/support/mounted_commit.rs"]
 mod rig;
 #[allow(dead_code)]
-#[path = "../../layerfs-daemon/tests/support/host_install.rs"]
+#[path = "../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
 use layerfs_api::internal::Control;
 use layerfs_bridge::{

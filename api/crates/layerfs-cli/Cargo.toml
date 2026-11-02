@@ -21,4 +21,4 @@ tls = ["layerfs-api/tls"]
 
 [dependencies]
 layerfs-api = { path = "../layerfs-api" }
-layerfs-bridge = { path = "../layerfs-bridge" }
+layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }

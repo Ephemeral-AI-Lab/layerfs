@@ -229,6 +229,7 @@ def inputs(record):
         "core/crates",
         "engine/vendor",
         "engine/crates",
+        "api/crates",
         "api/node",
         "api/package.json",
     ]

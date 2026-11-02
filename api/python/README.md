@@ -5,7 +5,7 @@
 
 The same nine families as the [JavaScript package](../README.md), from the
 same call table, through the PyO3 module `layerfs._native`
-(`engine/crates/layerfs-python`). Calls are synchronous; `layerfs.aio` has
+(`api/crates/layerfs-python`). Calls are synchronous; `layerfs.aio` has
 the same calls as coroutines (O19).
 
 ```python

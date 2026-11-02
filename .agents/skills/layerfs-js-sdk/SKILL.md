@@ -8,9 +8,9 @@ description: Use when building, editing, testing or inspecting a project through
 > **Status:** Current general guide for LayerFS 2.0 (#533, branch `issue533-v2`).
 > It replaces the 1.1.0 guide for `@layerfs/agent`, `@layerfs/cli`,
 > `@layerfs/runtime` and `@layerfs/backend`, which are deleted. Sources: the
-> call table (`engine/crates/layerfs-api/src/calls/table.rs`), the package
+> call table (`api/crates/layerfs-api/src/calls/table.rs`), the package
 > (`api/node/src/index.js`, [api/README.md](../../../api/README.md)), the
-> command (`engine/crates/layerfs-cli/src`) and
+> command (`api/crates/layerfs-cli/src`) and
 > [the decisions log](../../../core/docs/issues/533/DECISIONS.md). File,
 > Branch, Commit, project and Store results below were captured on macOS from
 > the built `layerfs` command and the Node package in a private home on

@@ -2,19 +2,21 @@
 """Count first-party production source lines for the per-commit LOC rule.
 
 Production code is nonblank, non-comment first-party product implementation:
-the product under core/crates/*/src and engine/crates/*/src (layerfs-api and the
-layerfs-node binding were api/layerfs-api and api/binding before the api/
-regrouping, and are counted there too), and the reference product under crates/*/src, plus shipped runtime SQL under
+the product under core/crates/*/src, engine/crates/*/src and api/crates/*/src
+(layerfs-api and the layerfs-node binding were api/layerfs-api and api/binding
+before the api/ regrouping, then engine/crates, and are counted there too), and
+the reference product under crates/*/src, plus shipped runtime SQL under
 <crate>/sql/. Tests, examples, benches, fixtures, benchmark harnesses,
 development tools, docs, manifests and generated artifacts are excluded. Legacy
 inline #[cfg(test)] items are removed before counting, because the reference tree
 keeps tests inside src/.
 
-Rust crates are assigned by name to core or engine in every layout: the
-layerfs-api method surface and the layerfs-node binding are engine crates
-wherever they sit. Unknown historical crates remain counted in core.
+Rust crates are assigned by name to core, engine or api in every layout: the
+library layerfs-api and its front ends layerfs-cli, layerfs-node and
+layerfs-python are api crates wherever they sit. Unknown historical crates
+remain counted in core.
 
-The `api` scope is the published JavaScript (#428): the src/ JavaScript of
+The `api` scope also holds the published JavaScript (#428): the src/ JavaScript of
 each package under api/ (api/agent is @layerfs/agent, api/cli is @layerfs/cli,
 api/backend and api/runtime; api/agent/sdk and api/agent/cli before the
 regrouping), one crate per package, named by its package.json. Tests and
@@ -364,14 +366,11 @@ ENGINE_CRATES = {
     "layerfs-store-service",
     "layerfs-remote-storage",
     "layerfs-workspace",
-    "layerfs-api",
-    "layerfs-node",
     # The NFS export was missing here and counted under core (#533 step 2).
     "layerfs-nfs",
-    # The 2.0 front ends over layerfs-api (#533): the binary and Python.
-    "layerfs-cli",
-    "layerfs-python",
 }
+# The library and its 2.0 front ends (#533): the binary, Node and Python.
+API_CRATES = {"layerfs-api", "layerfs-cli", "layerfs-node", "layerfs-python"}
 # Crate folders directly under api/ before the regrouping, by folder name.
 OLD_API_CRATES = {"layerfs-api": "layerfs-api", "binding": "layerfs-node"}
 
@@ -379,13 +378,20 @@ OLD_API_CRATES = {"layerfs-api": "layerfs-api", "binding": "layerfs-node"}
 def crate_layer(name: str) -> str:
     if name in ENGINE_CRATES:
         return "engine"
+    if name in API_CRATES:
+        return "api"
     # Historical and synthetic crates remain counted rather than disappearing.
     return "core"
 
 
 def replacement_packages(root: Path) -> list:
     return sorted(
-        [p for base in (root / "core/crates", root / "engine/crates") for p in base.glob("*") if p.is_dir()]
+        [
+            p
+            for base in (root / "core/crates", root / "engine/crates", root / "api/crates")
+            for p in base.glob("*")
+            if p.is_dir()
+        ]
         + [root / "api" / folder for folder in OLD_API_CRATES if (root / "api" / folder).is_dir()]
     )
 
@@ -469,16 +475,25 @@ def dsh_crate(base: Path, path: Path) -> str:
     return package if package == "dsh-layerfs" else f"@dsh-layerfs/{package}"
 
 
+def rust_crate(root: Path, path: Path):
+    """The crate of a file under <layer>/crates or an old api/ crate folder."""
+    parts = path.relative_to(root).parts
+    if len(parts) > 1 and parts[0] == "api" and parts[1] in OLD_API_CRATES:
+        return OLD_API_CRATES[parts[1]]
+    if len(parts) > 2 and parts[0] in {"core", "engine", "api"} and parts[1] == "crates":
+        return parts[2]
+    return None
+
+
 def crate_of(root: Path, scope: str, path: Path) -> str:
     base = scope_base(root, scope)
+    if scope in {"core", "engine", "api"} and rust_crate(root, path):
+        return rust_crate(root, path)
     if scope == "api":
         return api_crate(root, path)
     if scope == "dsh":
         return dsh_crate(base, path)
-    parts = path.relative_to(root).parts
-    if scope in {"core", "engine"}:
-        return OLD_API_CRATES[parts[1]] if parts[0] == "api" else parts[2]
-    return parts[1]
+    return path.relative_to(root).parts[1]
 
 
 def rust_files(base: Path) -> list:

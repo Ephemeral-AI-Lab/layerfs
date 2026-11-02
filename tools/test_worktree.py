@@ -30,11 +30,11 @@ class WorktreeTests(unittest.TestCase):
             "core/crates/example/src",
             "engine/vendor",
             "engine/crates/example/src",
-            "engine/crates/layerfs-api/src",
+            "api/crates/layerfs-api/src",
             ".cargo",
             "api/node/src",
             "api/node/test",
-            "engine/crates/layerfs-node/src",
+            "api/crates/layerfs-node/src",
         ):
             (self.repo / folder).mkdir(parents=True)
         for name in ("Cargo.toml", "Cargo.lock", ".cargo/config.toml", "api/package.json"):
@@ -66,7 +66,7 @@ class WorktreeTests(unittest.TestCase):
         for relative in (
             "core/crates/example/src/lib.rs",
             "engine/crates/example/src/lib.rs",
-            "engine/crates/layerfs-api/src/lib.rs",
+            "api/crates/layerfs-api/src/lib.rs",
         ):
             path = self.repo / relative
             path.write_text("pub fn layer() {}\n")
@@ -177,7 +177,7 @@ class WorktreeTests(unittest.TestCase):
             "api/node/test/calls.mjs",
         ):
             self.assertIn(name, manifest["files"])
-        self.assertFalse(any(name.startswith("engine/crates/layerfs-node/") for name in manifest["files"]))
+        self.assertFalse(any(name.startswith("api/crates/layerfs-node/") for name in manifest["files"]))
         self.assertIn("layerfs", manifest["files"])
         # the package finds the addon at the bundle root, three folders up from src/
         self.assertTrue((bundle / "api/node/src/../../../layerfs.node").resolve().is_file())

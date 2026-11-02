@@ -8,18 +8,15 @@ product mental model or campaign-specific benchmark procedures.
 
 ## Scope and ownership
 
-- Engine owns Bridge, daemon, FUSE, Overlay, Persistence, Project, Sandbox,
-  Store service and Workspace, plus the SDK method surface `layerfs-api` and the
-  Node binding `layerfs-node`. Core owns content, history, storage and telemetry;
-  `api/` holds only the published JavaScript packages.
+- Engine owns Bridge, daemon, FUSE, NFS, Overlay, Persistence, Project,
+  remote storage, Sandbox, Store service and Workspace. Core owns content,
+  history, storage and telemetry. The library `layerfs-api` and its front ends
+  (`layerfs-cli`, `layerfs-node`, `layerfs-python`) are API crates under
+  `api/crates`; see the [API guide](../api/AGENTS.md). No engine crate may
+  depend on them.
 - Project Store Init and install belong to `layerfs-project::store`; `layerfs-api`
-  retains its public re-exports and the binding makes one direct Project Init
-  call. SDK-facing daemon integration tests live in `layerfs-api/tests`, with
-  cheap includes of daemon fixtures. Build the ordinary daemon binary before
-  running tests that launch it. `LAYERFS_TEST_DAEMON` may select an explicit
-  binary; otherwise the tests locate the sibling Cargo output. The binding's
-  [external proof guide](crates/layerfs-node/tests/README.md) describes its
-  Linux addon tests; the owner keeps `layerfs-node` out of CI.
+  retains its public re-exports. Its SDK-facing daemon integration tests
+  include daemon and Sandbox test fixtures from this layer.
   The v0.1.6 reference under
   root `crates/` and the archived `core/reference-tests` were retired by R9c
   (2026-10-10) and are absent at HEAD; recover them at
@@ -233,7 +230,7 @@ visibility and protection of Store, Overlay and daemon credentials. Ordinary
 runtime execution owns standard I/O, exit status and caller-requested cancellation.
 SDK public organization is the eleven operations documented in
 [the implemented SDK surface](../docs/general/sdk.md), with operation files under
-[layerfs-api/src](crates/layerfs-api/src). Project offers init/fork/
+[layerfs-api/src](../api/crates/layerfs-api/src). Project offers init/fork/
 branches/commits; Sandbox offers create/close; Workspace offers mount/exec/
 commit/status/unmount. Shared control/recovery/diagnostic plumbing lives in
 base/ and the hidden internal module. Optional WorkspaceApi.exec selects the

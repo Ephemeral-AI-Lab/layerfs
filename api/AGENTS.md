@@ -2,23 +2,34 @@
 
 > **Status:** Current general guide (LayerFS 2.0, #533).
 
-Read [repository instructions](../AGENTS.md) first. This layer holds the one
-published JavaScript package, `layerfs`, in `node/`, the Python package
-`layerfs` in `python/` (its PyO3 module is the engine crate
-`layerfs-python`), and the addon build script in `scripts/`. It holds no Rust: the library `layerfs-api` (the call
-table and its one dispatcher) and the Node binding `layerfs-node` are engine
-crates (see the [engine guide](../engine/AGENTS.md#scope-and-ownership));
-`scripts/build-native.mjs` builds the addon beside its crate at
-`engine/crates/layerfs-node/layerfs.node`. The package is a thin shell over
-the table: each function is one library call, made once. Nothing in core or
-engine may depend on it.
+Read [repository instructions](../AGENTS.md) first. This layer holds the
+public surface:
 
-All API product code, and the engine crates it loads, follow the
+- `crates/layerfs-api`: the library, the call table and its one dispatcher.
+- `crates/layerfs-cli`: the `layerfs` command and the machine worker.
+- `crates/layerfs-node`: the Node binding, built as an addon beside its crate
+  at `crates/layerfs-node/layerfs.node` by `scripts/build-native.mjs`.
+- `crates/layerfs-python`: the PyO3 module `layerfs._native`.
+- `node/`: the one published JavaScript package, `layerfs`.
+- `python/`: the Python package `layerfs`.
+
+The packages are thin shells over the table: each function is one library
+call, made once. API crates may depend on engine and core crates, including
+dev dependencies and test includes; nothing in core or engine may depend on
+anything here.
+
+SDK-facing daemon integration tests live in `crates/layerfs-api/tests`, with
+cheap includes of daemon and Sandbox fixtures from `engine/crates`. Build the
+ordinary daemon binary before running tests that launch it.
+`LAYERFS_TEST_DAEMON` may select an explicit binary; otherwise the tests
+locate the sibling Cargo output. The owner keeps `layerfs-node` out of CI.
+
+All API product code follows the
 [production size and responsibility rules](../engine/AGENTS.md#production-file-size-and-responsibility)
 and [checks and completion rules](../engine/AGENTS.md#checks-and-completion),
 including bounded test commands, build-before-run, locked dependencies, ARM64
 flags, per-commit LOC and the Disposable-only profile. Preserve the existing
 unsafe-code boundaries; do not add test hooks or inline tests to production src.
 Do not add a call, argument or result name in JavaScript: change the table in
-`engine/crates/layerfs-api/src/calls/table.rs` and the package follows. CI
+`crates/layerfs-api/src/calls/table.rs` and the package follows. CI
 reports and does not gate a push.
