@@ -2,8 +2,9 @@
 //! [`call`], that makes exactly the library's `calls::call` on a native
 //! worker thread, and [`table`], the call table the package builds its nine
 //! families from. Arguments, results and events cross as JSON text, bytes
-//! as `{ "base64": … }`. The Promise always resolves: `{ value }` or
-//! `{ refused: { code, message, detail } }`. Nothing is retried here.
+//! as `{ "base64": … }`. The Promise always resolves, to `{ events, answer }`
+//! with `answer` `{ value }` or `{ refused: { code, message, detail } }`.
+//! Nothing is retried here.
 mod call;
 
 pub use call::{call, table, Call};

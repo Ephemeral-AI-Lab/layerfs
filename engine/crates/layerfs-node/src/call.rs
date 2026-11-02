@@ -4,7 +4,7 @@ use napi::bindgen_prelude::AsyncTask;
 use napi::threadsafe_function::{
     ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
 };
-use napi::{Env, JsFunction, Task};
+use napi::{Env, JsFunction, Status, Task};
 use napi_derive::napi;
 use std::path::PathBuf;
 
@@ -15,8 +15,12 @@ pub fn table() -> String {
 }
 
 /// Runs the call `name` once with JSON `args`, in `home` (else the
-/// library's default) and under `scope` (JSON `{ folder, branch? }`), each
-/// event sent to `on_event` as JSON text.
+/// library's default) and under `scope` (JSON `{ project, folder, branch? }`),
+/// each event sent to `on_event` as JSON text. Resolves to JSON text
+/// `{ events, answer }`: `events` counts the events queued to `on_event`,
+/// which arrive on their own handle and may come after the resolve, so the
+/// package waits for that many before it settles. `on_event` must not
+/// throw: the package catches every error of its handlers.
 #[napi]
 pub fn call(
     name: String,
@@ -56,10 +60,15 @@ impl Task for Call {
     type JsValue = String;
 
     fn compute(&mut self) -> napi::Result<String> {
-        let events = self.events.clone();
-        let mut send = move |event: String| {
+        // the event function is released with the call; events already
+        // queued are still delivered
+        let events = self.events.take();
+        let mut queued = 0u64;
+        let mut send = |event: String| {
             if let Some(events) = &events {
-                events.call(event, ThreadsafeFunctionCallMode::Blocking);
+                if events.call(event, ThreadsafeFunctionCallMode::Blocking) == Status::Ok {
+                    queued += 1;
+                }
             }
         };
         let answer = calls::call_json(
@@ -69,9 +78,8 @@ impl Task for Call {
             &self.args,
             &mut send,
         );
-        // the event function is released with the call
-        self.events = None;
-        Ok(answer)
+        drop(events);
+        Ok(format!("{{\"events\":{queued},\"answer\":{answer}}}"))
     }
 
     fn resolve(&mut self, _env: Env, answer: String) -> napi::Result<String> {

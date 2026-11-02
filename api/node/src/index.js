@@ -53,19 +53,43 @@ function bind(client, spec) {
         args[key] = value;
       }
     }
+    // `stream: true` passes the command's output on as it comes: to the
+    // stdout and stderr functions, else to this process's own
+    if (args.stream === true) {
+      on.stdout ??= (bytes) => process.stdout.write(bytes);
+      on.stderr ??= (bytes) => process.stderr.write(bytes);
+    }
+    // Events arrive on their own handle: count them, and settle only once
+    // every event the call queued has been passed on. A handler that
+    // throws does not stop the call: its error is reported as a warning.
+    let received = 0;
+    let settle = null;
     const onEvent = Object.keys(on).length === 0 ? undefined : (text) => {
-      const event = decode(text);
-      if (event.progress !== undefined) on.on_progress?.(event.progress);
-      else if (event.stream === "stdout") on.stdout?.(event.bytes);
-      else if (event.stream === "stderr") on.stderr?.(event.bytes);
+      try {
+        const event = decode(text);
+        if (event.progress !== undefined) on.on_progress?.(event.progress);
+        else if (event.stream === "stdout") on.stdout?.(event.bytes);
+        else if (event.stream === "stderr") on.stderr?.(event.bytes);
+      } catch (error) {
+        process.emitWarning(`${name}: an event handler threw: ${error?.stack ?? error}`, "LayerFSHandlerWarning");
+      } finally {
+        received += 1;
+        settle?.();
+      }
     };
-    const answer = decode(await native.call(
+    const reply = decode(await native.call(
       name,
       encode(args),
       client.home ?? null,
       client.scope ? encode(client.scope) : null,
       onEvent,
     ));
+    if (received < reply.events) {
+      await new Promise((resolve) => {
+        settle = () => { if (received >= reply.events) resolve(); };
+      });
+    }
+    const answer = reply.answer;
     if (answer.refused) throw new LayerFSError(answer.refused.code, answer.refused.message, answer.refused.detail);
     return answer.value;
   };

@@ -16,5 +16,6 @@ if (!found) {
   throw new Error(`the LayerFS native addon is not built; run node api/scripts/build-native.mjs (looked in ${candidates.join(", ")})`);
 }
 
-/** `{ table(), call(name, argsJson, home, scopeJson, onEvent) }`. */
+/** `{ table(), call(name, argsJson, home, scopeJson, onEvent) }`; `call`
+ * resolves to JSON `{ events, answer }`. */
 export const native = require(found);
