@@ -16,6 +16,10 @@
 // the Sandbox image (`machine update docker --image`), and a docker worker
 // this home started (`lfs-<home id>-docker`) is removed with its data
 // volume at the end.
+// LFS533_HOME names an existing home that already holds <machine> (a VM is
+// made once per kind, not per cell): the cell's own Store `c<nn>` is made
+// there, moved native -> <machine> and, after the cells, back to native, then
+// removed; the home stays.
 // One cell per command; nothing else runs a cell at the same time, so the
 // 1.1.0 host-wide lock is not ported. The receipt holds every step's time,
 // the 1-minute load and the verdict.
@@ -58,11 +62,14 @@ async function step(name, call) {
   }
 }
 
-const home = mkdtempSync(join(tmpdir(), "lfs533-cell-"));
-chmodSync(home, 0o700);
+const shared = process.env.LFS533_HOME;
+const home = shared ?? mkdtempSync(join(tmpdir(), "lfs533-cell-"));
+if (!shared) chmodSync(home, 0o700);
 const empty = mkdtempSync(join(tmpdir(), "lfs533-src-"));
 const lfs = client({ home });
-const project = "cells/p";
+const storeName = shared ? `c${cell.slice(1)}` : "cells";
+const project = `${storeName}/p`;
+let moved = false;
 const name = `c${cell.slice(1)}`;
 let sandbox = null;
 const mounted = new Set();
@@ -89,13 +96,16 @@ try {
         encoding: "utf8",
       }));
   }
-  await step("store.create", () => lfs.store.create("cells"));
+  await step("store.create", () => lfs.store.create(storeName));
   await step("project.init", () => lfs.project.init(project, empty));
   await step("branch.fork", () => lfs.branch.fork(project, "lane", "main"));
   if (machine === "docker" && process.env.LFS533_IMAGE) {
     await step("machine.update", () => lfs.machine.update("docker", { image: process.env.LFS533_IMAGE }));
   }
-  if (machine !== "native") await step("store.move", () => lfs.store.move("cells", machine));
+  if (machine !== "native") {
+    await step("store.move", () => lfs.store.move(storeName, machine));
+    moved = true;
+  }
   out.sandbox = (await step("sandbox.create", () => lfs.sandbox.create(project, name, machine))).value;
   sandbox = name;
   const line = timedLine(command(cell));
@@ -151,7 +161,12 @@ try {
     );
   }
   if (sandbox) await step("sandbox.close", () => lfs.sandbox.close(sandbox)).catch((error) => { out.closeError = error.message; });
-  if (machine === "docker") {
+  if (shared) {
+    // the Store comes back to native, then goes; the home and its machine stay
+    if (moved) await step("store.move.back", () => lfs.store.move(storeName, "native")).catch((error) => { out.moveBackError = error.message; });
+    await step("store.remove", () => lfs.store.remove(storeName)).catch((error) => { out.removeError = error.message; });
+  }
+  if (machine === "docker" && !shared) {
     // this home's own worker container and data volume, never another's
     const id = JSON.parse(readFileSync(join(home, "layerfs.json"), "utf8")).id.slice(0, 8);
     for (const args of [["rm", "-f", `lfs-${id}-docker`], ["volume", "rm", `lfs-${id}-docker-data`]]) {
@@ -164,8 +179,13 @@ try {
   }
   out.endedAt = new Date().toISOString();
   writeFileSync(receipt, JSON.stringify(out, null, 2) + "\n");
-  rmSync(home, { recursive: true, force: true });
+  if (!shared) rmSync(home, { recursive: true, force: true });
   rmSync(empty, { recursive: true, force: true });
+}
+if (out.moveBackError || out.removeError) {
+  out.ok = false;
+  out.cause = [out.cause, out.moveBackError, out.removeError].filter(Boolean).join("; ");
+  writeFileSync(receipt, JSON.stringify(out, null, 2) + "\n");
 }
 console.log(`${cell} ${machine} ${out.ok ? "PASS" : "FAIL"} ${out.cause ?? ""} timed exec ${out.phases.timed?.exec?.wallMs ?? "-"} ms`);
 process.exit(out.ok ? 0 : 1);
