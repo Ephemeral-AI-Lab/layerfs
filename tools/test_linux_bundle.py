@@ -1,9 +1,12 @@
 """The sealed Linux bundle builder (#533 O16): per-package steps, the source check
 before sealing, bundle.json and placement. Docker and Cargo are stubbed."""
 
+import gzip
 import hashlib
+import io
 import json
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +14,45 @@ from unittest.mock import patch
 
 import linux_bundle as bundle
 from cleanup_state import Refused
+
+CONFIG = b'{"architecture":"arm64","os":"linux"}'
+CONFIG_HEX = hashlib.sha256(CONFIG).hexdigest()
+
+
+def layer_tar():
+    """One small layer: a tar holding /hello."""
+    data = io.BytesIO()
+    with tarfile.open(fileobj=data, mode="w", format=tarfile.USTAR_FORMAT) as tar:
+        info = tarfile.TarInfo("hello")
+        info.size = 5
+        tar.addfile(info, io.BytesIO(b"hello"))
+    return data.getvalue()
+
+
+def saved_archive(path):
+    """What `docker save` writes with the containerd store: OCI blobs, one
+    gzip layer and one empty layer (1024 zero bytes, gzipped)."""
+    blobs = {
+        CONFIG_HEX: CONFIG,
+        "aa" * 32: gzip.compress(layer_tar()),
+        "bb" * 32: gzip.compress(b"\0" * 1024),
+    }
+    listing = [
+        {
+            "Config": f"blobs/sha256/{CONFIG_HEX}",
+            "RepoTags": [],
+            "Layers": [f"blobs/sha256/{h}" for h in ("aa" * 32, "bb" * 32)],
+        }
+    ]
+    with tarfile.open(path, "w") as tar:
+        for name, data in [
+            *((f"blobs/sha256/{h}", b) for h, b in blobs.items()),
+            ("manifest.json", json.dumps(listing).encode()),
+        ]:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    path.chmod(0o600)
 
 
 class LinuxBundleTests(unittest.TestCase):
@@ -49,8 +91,7 @@ class LinuxBundleTests(unittest.TestCase):
             for name in bundle.BINARIES:
                 (export / name).write_bytes(name.encode())
         if command[:2] == ["docker", "save"]:
-            Path(command[3]).write_bytes(b"image")
-            Path(command[3]).chmod(0o600)
+            saved_archive(Path(command[3]))
 
     def test_each_package_is_its_own_bounded_step(self):
         for step in ("daemon", "worker", "helper"):
@@ -95,10 +136,20 @@ class LinuxBundleTests(unittest.TestCase):
         self.assertEqual(names, sorted([*bundle.BINARIES, bundle.ARCHIVE, "bundle.json"]))
         manifest = json.loads((final / "bundle.json").read_text())
         files = {n: hashlib.sha256(n.encode()).hexdigest() for n in bundle.BINARIES}
-        files[bundle.ARCHIVE] = hashlib.sha256(b"image").hexdigest()
+        files[bundle.ARCHIVE] = hashlib.sha256((final / bundle.ARCHIVE).read_bytes()).hexdigest()
         self.assertEqual(manifest["files"], files)
+        # the namespaces backend's shape: uncompressed layers, config named by its digest
+        with tarfile.open(final / bundle.ARCHIVE) as tar:
+            listing = json.load(tar.extractfile("manifest.json"))
+            self.assertEqual(
+                listing, [{"Config": CONFIG_HEX + ".json", "RepoTags": None, "Layers": ["0/layer.tar", "1/layer.tar"]}]
+            )
+            self.assertEqual(tar.extractfile(CONFIG_HEX + ".json").read(), CONFIG)
+            self.assertEqual(tar.extractfile("0/layer.tar").read(), layer_tar())
+            self.assertEqual(tar.extractfile("1/layer.tar").read(), b"\0" * 1024)
+        self.assertEqual(manifest["image"], "sha256:" + CONFIG_HEX)
         self.assertEqual(manifest["hash"], hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest())
-        self.assertEqual((manifest["image"], manifest["platform"]), ("sha256:s", "linux-aarch64"))
+        self.assertEqual((manifest["saved_from"], manifest["platform"]), ("sha256:s", "linux-aarch64"))
         self.assertEqual(sorted(p.name for p in final.parent.iterdir()), ["linux-aarch64"], "no partial or old left")
         self.assertEqual((final / bundle.ARCHIVE).stat().st_mode & 0o777, 0o644)
         save = [c for c, _ in self.commands if c[:2] == ["docker", "save"]]

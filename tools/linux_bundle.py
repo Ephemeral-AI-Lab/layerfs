@@ -4,8 +4,12 @@
 ~/.cache) holds what every VM, ssh host and `docker` on macOS runs: the guest
 `layerfs` (its worker, without the host-only machine layer), `layerfs-daemon`
 (with PostgreSQL), `layerfs-sandbox-helper` and `sandbox-image.tar` (the Sandbox
-image, saved by `docker save`). `bundle.json` names each file's sha256 and the
+image). `bundle.json` names each file's sha256, the image's config digest and the
 bundle hash a machine compares before copying the bundle in again.
+
+The namespaces backend reads a docker-archive with uncompressed layers, named by
+its config digest (#527). Docker with the containerd store saves gzip layers, so
+`seal` rewrites `docker save`'s output into that shape, one layer at a time.
 
 The binaries are built in Docker with this worktree's warm, private Linux target
 from its launcher registration (tools/worktree.py, docs/general/parallel-worktrees.md).
@@ -24,12 +28,15 @@ while a QUIET file exists in the main checkout.
 """
 
 import argparse
+import gzip
 import hashlib
+import io
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import time
 import tomllib
 import uuid
@@ -175,9 +182,12 @@ def seal(record, profile, image, dest, timeout):
                 ["--mount", f"type=bind,src={stage},dst=/export"],
             )
             execute(export, record["worktree"], timeout=timeout, log=receipt / "export.log")
-            save = ["docker", "save", "-o", str(stage / ARCHIVE), image]
+            saved = stage / ".saved.tar"
+            save = ["docker", "save", "-o", str(saved), image]
             execute(save, record["worktree"], timeout=timeout, log=receipt / "save.log")
-        # docker save writes 0600; a guest and the docker worker read it as root through a mount
+        config = docker_archive(saved, stage / ARCHIVE, stage)
+        saved.unlink()
+        # a guest and the docker worker read it as root through a mount
         (stage / ARCHIVE).chmod(0o644)
         files = {f: digest(stage / f) for f in (*BINARIES, ARCHIVE)}
         manifest = {
@@ -185,7 +195,8 @@ def seal(record, profile, image, dest, timeout):
             "version": version(record["worktree"]),
             "platform": name,
             "profile": profile,
-            "image": image,
+            "image": config,
+            "saved_from": image,
             "source": {"head": now["head"], "sha256": now["sha256"]},
             "toolchain": TOOLCHAIN,
             "files": files,
@@ -200,6 +211,50 @@ def seal(record, profile, image, dest, timeout):
     write(receipt / "receipt.json", {"status": "sealed", "bundle": str(final), **manifest})
     print(f"sealed {final} (hash {manifest['hash']})")
     return final
+
+
+def docker_archive(saved, out, scratch):
+    """Rewrites a `docker save` archive holding one image as a docker-archive
+    whose layers are uncompressed (`<n>/layer.tar`) and whose config is
+    `<config hex>.json`: the shape the namespaces backend reads. Answers the
+    config digest. Each layer is decompressed to a scratch file, added, removed."""
+    with tarfile.open(saved) as source:
+        entries = json.load(source.extractfile("manifest.json"))
+        if len(entries) != 1:
+            raise Refused(f"the saved image archive holds {len(entries)} images, not one")
+        entry = entries[0]
+        config_name = entry["Config"]
+        hexes = Path(config_name).name.removesuffix(".json")
+        if len(hexes) != 64 or any(c not in "0123456789abcdef" for c in hexes):
+            raise Refused(f"the saved archive names its config {config_name!r}, not by its digest")
+        with tarfile.open(out, "w", format=tarfile.PAX_FORMAT) as archive:
+            data = source.extractfile(config_name).read()
+            if hashlib.sha256(data).hexdigest() != hexes:
+                raise Refused("the saved archive's config does not hash to its name")
+            info = tarfile.TarInfo(hexes + ".json")
+            info.size, info.mode = len(data), 0o644
+            archive.addfile(info, io.BytesIO(data))
+            layers = []
+            for n, name in enumerate(entry["Layers"]):
+                plain = scratch / f".layer-{n}.tar"
+                with source.extractfile(name) as blob, plain.open("wb") as sink:
+                    head = blob.read(2)
+                    blob.seek(0)
+                    stream = gzip.GzipFile(fileobj=blob) if head == b"\x1f\x8b" else blob
+                    shutil.copyfileobj(stream, sink, 1 << 20)
+                with plain.open("rb") as check:
+                    block = check.read(512)
+                    # an empty layer is a tar of zero blocks
+                    if block[257:262] != b"ustar" and block.strip(b"\0"):
+                        raise Refused(f"the saved layer {name} is not a tar once decompressed")
+                archive.add(plain, arcname=f"{n}/layer.tar")
+                plain.unlink()
+                layers.append(f"{n}/layer.tar")
+            listing = json.dumps([{"Config": hexes + ".json", "RepoTags": None, "Layers": layers}]).encode()
+            info = tarfile.TarInfo("manifest.json")
+            info.size, info.mode = len(listing), 0o644
+            archive.addfile(info, io.BytesIO(listing))
+    return "sha256:" + hexes
 
 
 def main(argv=None):
