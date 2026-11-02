@@ -72,8 +72,9 @@ impl StoreSource<'_> {
 pub fn store_locator(source: &str) -> Option<&'static str> {
     store_source(source).map(StoreSource::locator)
 }
-/// The name a container under Docker Desktop (macOS, Windows) reaches the
-/// host's loopback by.
+/// The name a container reaches the host's loopback by: Docker Desktop's
+/// own (macOS, Windows), and on Linux the Engine's `host-gateway`, which
+/// every Sandbox container is given at create.
 pub const DESKTOP_HOST: &str = "host.docker.internal";
 /// A PostgreSQL URL on this host's loopback as a container under Docker
 /// Desktop (macOS, Windows) reaches it: its host `host.docker.internal`.

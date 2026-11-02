@@ -2,6 +2,7 @@
 use super::{
     sandbox::{
         store_source, CreatePhase, Sandbox, SandboxCreateFailure, SandboxRequest, StoreSource,
+        DESKTOP_HOST,
     },
     topology::SECCOMP,
     Docker,
@@ -18,6 +19,8 @@ impl SandboxRequest {
     /// The Engine's init is PID 1 and the daemon its child: a process a
     /// command leaves behind is reaped when it exits instead of staying a
     /// zombie, and the daemon's own waits keep their children's statuses.
+    /// On Linux `host.docker.internal` is added as the Engine's
+    /// `host-gateway`, as Docker Desktop already names it.
     fn encode(&self, w: &mut dyn Write) -> io::Result<()> {
         w.write_all(b"{\"Image\":")?;
         quoted(w, &self.image)?;
@@ -34,7 +37,16 @@ impl SandboxRequest {
         quoted(w, &format!("{}/tcp", self.port))?;
         w.write_all(b":{}},\"HostConfig\":{\"Init\":true,\"RestartPolicy\":{\"Name\":\"no\"},\"LogConfig\":{\"Type\":\"json-file\",\"Config\":{\"max-size\":\"10m\",\"max-file\":\"2\"}},\"Privileged\":false,\"CapAdd\":[\"CAP_SYS_ADMIN\"],\"Devices\":[{\"PathOnHost\":\"/dev/fuse\",\"PathInContainer\":\"/dev/fuse\",\"CgroupPermissions\":\"rwm\"}],\"SecurityOpt\":[\"no-new-privileges=true\",\"apparmor=unconfined\",")?;
         quoted(w, SECCOMP)?;
-        w.write_all(b"],\"Mounts\":[")?;
+        w.write_all(b"],")?;
+        if cfg!(target_os = "linux") {
+            // a Linux Engine has no `host.docker.internal` of its own: the
+            // name `reach` gives a loopback PostgreSQL server (#535 §7.4)
+            // resolves to the bridge's gateway, the host
+            w.write_all(b"\"ExtraHosts\":[")?;
+            quoted(w, &format!("{DESKTOP_HOST}:host-gateway"))?;
+            w.write_all(b"],")?;
+        }
+        w.write_all(b"\"Mounts\":[")?;
         match self.store_volume.as_deref().and_then(store_source) {
             Some(StoreSource::Volume { name, subpath }) => {
                 w.write_all(b"{\"Type\":\"volume\",\"Source\":")?;
