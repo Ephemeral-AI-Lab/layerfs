@@ -51,14 +51,14 @@ SLOW = {
     ("layerfs-api", "observed_application"): 6.30,
     # Linux functional run at the relocated tree, 2026-10-27.
     ("layerfs-persistence", "writer_admission"): 9.74,
-    ("layerfs-api", "scale_lineage_cap"): 24.3,
-    ("layerfs-api", "sdk_merge_scale"): 23.8,
+    ("layerfs-store-service", "scale_lineage_cap"): 24.3,
+    ("layerfs-store-service", "sdk_merge_scale"): 23.8,
     ("layerfs-daemon", "complete_installed_roots"): 9.0,
-    ("layerfs-api", "sdk_diff_entries"): 8.1,
-    ("layerfs-api", "history_ancestry_oracle"): 7.6,
-    ("layerfs-api", "sdk_list_entries"): 7.6,
-    ("layerfs-api", "history_diff_oracle"): 6.0,
-    ("layerfs-api", "sdk_text_scan"): 5.9,
+    ("layerfs-store-service", "sdk_diff_entries"): 8.1,
+    ("layerfs-store-service", "history_ancestry_oracle"): 7.6,
+    ("layerfs-store-service", "sdk_list_entries"): 7.6,
+    ("layerfs-store-service", "history_diff_oracle"): 6.0,
+    ("layerfs-store-service", "sdk_text_scan"): 5.9,
 }
 
 # (package, test target): build CPU seconds in the cold mold build of CI run

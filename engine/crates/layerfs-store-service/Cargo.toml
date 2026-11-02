@@ -1,6 +1,6 @@
 [package]
 name = "layerfs-store-service"
-description = "The Store engine: typed reads, file changes and Branch history over the global Store, the operator Store calls, and the Store and overlay ports Workspace Commits use. No SDK method names, FUSE, socket or Sandbox."
+description = "The Store engine: typed reads, file changes and Branch history over the global Store, the SDK Store-call facade (methods/), the operator Store calls, and the Store and overlay ports Workspace Commits use. read, write and history know no SDK method names; methods/ is the SDK facade. No FUSE, socket or Sandbox."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -23,3 +23,10 @@ layerfs-persistence = { path = "../layerfs-persistence" }
 nix = { version = "=0.31.3", default-features = false, features = ["fs"] }
 # Only the `postgresql` feature's tests use it directly (schema cleanup).
 postgres = { version = "=0.19.14", optional = true }
+
+[dev-dependencies]
+# The method-table tests (#536 step 1.1) Init their Store through Project,
+# count its rows and time BLAKE3 over the bytes they write.
+layerfs-project = { path = "../layerfs-project" }
+rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
+blake3 = { version = "=1.8.5", default-features = false }
