@@ -64,7 +64,11 @@ Rows added when the code contradicts a spec fact. The code wins; the step is adj
 
 | Topic | Choice | Why |
 | --- | --- | --- |
+| Daemon-needing method tests (C1) | `concurrent_commits`, `lane_merge`, `merge_report` go to `layerfs-daemon/tests` (including store-service's `support/{installed_store,sdk}.rs` by `#[path]`), not store-service. | A store-service dev-dependency on the daemon would build two copies of store-service in one test binary; these tests lived in the daemon before `3cae8b1a1e`. |
+| Tests left in api (C1) | `commit_get_pages` (uses `calls`, `home`), `sdk_merge_diagnostics` (uses `sandbox`), `remote_store` (Linux only; deleted later per §9.5) stay in `layerfs-api`. | They drive more than the method table. |
+| `layerfs_api::call` (C1) | Kept as a re-export of `layerfs_store_service::methods::call`; `layerfs_api::fs` and `::branch` are no longer public (nothing used them). | Front ends, examples and remaining tests keep their path. |
 
 ## Open items
 
 ## Phase log
+- Step C1 (§11 1.1) done at `c73fda2d57`: lane C1 (subagent, branch `issue535-C-methods`) `a6fea806de`, merged `c73fda2d57`. Ruff was not run on the three changed Python tools (not installed); `remote_store`'s new `#[path]` includes were not compiled on Linux (the lane's Linux Cargo home was empty).

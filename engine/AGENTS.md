@@ -21,6 +21,12 @@ product mental model or campaign-specific benchmark procedures.
   persistence (SQLite and PostgreSQL, D2), the daemon, the overlay,
   Workspaces and the kernel routes (FUSE and NFS as peers over
   `layerfs-mount-ports`, D3). No engine crate may depend on a connect crate.
+- `layerfs-store-service` owns the SDK Store calls in `src/methods/` (#536
+  H3): the method table (`methods::call`), its argument reader and one file
+  per `file.*`/`branch.*` call. `read`, `write` and `history` know no SDK
+  method names; `methods/` is the facade over them. Their tests live in
+  store-service's `tests/` (`concurrent_commits`, `lane_merge` and
+  `merge_report`, which need a daemon, in `layerfs-daemon`'s).
 - Project Store Init and install belong to `layerfs-project::store`; `layerfs-api`
   retains its public re-exports. Its SDK-facing daemon integration tests
   include daemon and Sandbox test fixtures from this layer.
