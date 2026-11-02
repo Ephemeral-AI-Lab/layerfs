@@ -1,11 +1,13 @@
 //! The concrete runtimes a Sandbox can run on: one enum names the deployment's
-//! choice, and [`Sandbox`] is the launched owner over it. There is no provider
-//! trait; each backend is a concrete type and dispatch is a `match` here.
+//! choice, and [`Sandbox`] is the launched owner over it. What is fixed per
+//! backend (capabilities) comes from its `BackendAdapter` (`backend::adapter`);
+//! each provider and Sandbox is a concrete type, matched here.
 use crate::backend::docker::{self, DockerProvider};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use crate::backend::host_process;
 #[cfg(target_os = "linux")]
 use crate::backend::namespaces::{self, NamespaceProvider};
+use crate::backend::{adapter, Backend};
 #[cfg(target_os = "macos")]
 use crate::host_process::HostProcessProvider;
 use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
@@ -34,14 +36,19 @@ pub enum Runtime {
 }
 
 impl Runtime {
-    pub fn capabilities(&self) -> Result<ProviderCapabilities, RuntimeError> {
+    /// The backend this runtime is.
+    pub fn backend(&self) -> Backend {
         match self {
-            Self::Docker(provider) => Ok(provider.capabilities()),
+            Self::Docker(_) => Backend::Docker,
             #[cfg(target_os = "macos")]
-            Self::HostProcess(provider) => Ok(provider.capabilities()),
+            Self::HostProcess(_) => Backend::HostProcess,
             #[cfg(target_os = "linux")]
-            Self::Namespaces(provider) => Ok(provider.capabilities()),
+            Self::Namespaces(_) => Backend::Namespaces,
         }
+    }
+
+    pub fn capabilities(&self) -> Result<ProviderCapabilities, RuntimeError> {
+        Ok(adapter(self.backend()).capabilities())
     }
 
     /// Local resource ownership, checked by API before encoding daemon topology.
@@ -131,6 +138,17 @@ pub enum Sandbox {
 }
 
 impl Sandbox {
+    /// The backend that launched it.
+    pub fn backend(&self) -> Backend {
+        match self {
+            Self::Docker(_) => Backend::Docker,
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Self::HostProcess(_) => Backend::HostProcess,
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(_) => Backend::Namespaces,
+        }
+    }
+
     pub fn identity(&self) -> ContainerId {
         match self {
             Self::Docker(sandbox) => sandbox.identity(),

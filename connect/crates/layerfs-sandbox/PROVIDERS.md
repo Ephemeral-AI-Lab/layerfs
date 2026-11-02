@@ -3,8 +3,13 @@
 Status: Current general guide.
 
 `src/runtime.rs` holds the concrete runtime choice and the launched owner.
-There are no provider or instance traits: each backend is an ordinary concrete
-type and the only dispatch is one `match` per method.
+There are no public provider or instance traits: each backend is an ordinary
+concrete type and the dispatch is one `match` per method. What is fixed per
+backend (its stored name, description and capabilities) is the crate-private,
+sealed `BackendAdapter` (`src/backend/adapter.rs`, #535 G2): each backend
+folder holds its `ADAPTER`, reached through one exhaustive `adapter(Backend)`
+match, and `Backend::{stored_name, parse, description, capabilities}` read it.
+Stored names do not follow the Rust names: `HostProcess` is `"native"` (G6).
 
 Each backend has one folder under `src/backend/` (named `platform/` until
 #533 step 5), named as `LAYERFS_SANDBOX` names it: `docker/`, `native/` (with
@@ -32,8 +37,9 @@ aliases are removed (#527 step 9c).
 - `Runtime` is one deployment's selection and is kept for every Sandbox it
   starts: `Docker(DockerProvider)` (the default), `MacosNative(NativeMacosProvider)`
   (macOS only) and `Namespaces(NamespaceProvider)` (Linux only).
-  `Runtime::{capabilities, local_directory, native_paths, launch, reopen,
-  reopen_stopped}` dispatch to them.
+  `Runtime::{local_directory, native_paths, launch, reopen, reopen_stopped}`
+  dispatch to them; `Runtime::backend` names the backend and
+  `Runtime::capabilities` reads its adapter.
 - `Sandbox` is what `Runtime::launch`/`reopen` return: `Docker(docker::Sandbox)`,
   `Native(native::Sandbox)` or `Namespaces(Box<namespaces::Sandbox>)`, with
   `identity`, `endpoint`, `run`, `track`, `log_tail`, `inspect`, `stop`,

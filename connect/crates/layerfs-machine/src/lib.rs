@@ -4,23 +4,28 @@
 //! worker's endpoint; it knows nothing of the LayerFS home, so the caller
 //! passes every path and setting and writes every record.
 //!
-//! The kind-to-backend table lives once, in `platform.rs` ([`Platform::backend`],
-//! [`Platform::route`], [`Platform::worker_bind`]); this file only declares. There
-//! is no provider trait: [`create`], [`start`] and the other calls match
-//! once on the kind. This layer uses only `layerfs-sandbox`'s shared types,
-//! its `json`, and nothing of `backend/`; `backend/` never uses it.
+//! The platform table lives once, in `platform.rs`: one [`Profile`] per
+//! platform (its `PROFILE` in `platforms/<p>/profile.rs`), read through
+//! [`Platform::profile`]; every refusal of a platform, host and Store kind
+//! comes from the one support table, `support.rs`. This file only declares. This layer uses only
+//! `layerfs-sandbox`'s shared types, its `json`, and nothing of `backend/`;
+//! `backend/` never uses it.
 #![cfg(unix)]
 #![forbid(unsafe_code)]
+mod adapter;
 mod error;
 mod facts;
+mod options;
 mod platform;
 pub(crate) mod platforms;
 mod probe;
 mod setup;
 mod spec;
+mod support;
 pub use error::{Code, MachineError};
 pub use layerfs_sandbox::Backend;
-pub use platform::{HostOs, Platform, Route};
+pub use options::{OptKind, OptSpec};
+pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Route};
 pub use probe::{native_missing, nested_missing, probe, Probe};
 pub use setup::{
     connect, copy_in, copy_out, create, host_identity, remove, start, status, status_within, stop,
@@ -29,4 +34,8 @@ pub use setup::{
 pub use spec::{
     parse_size, Bundle, Endpoint, Lasting, Running, Spec, SshSpec, Tools, BUNDLE, DATA, IMAGE,
     STATE, WORKER_PORT,
+};
+pub use support::{
+    platforms, sandbox_allowed, support, support_json, CallSite, PostgresqlSupport, StoreKind,
+    SupportRow, Supports,
 };

@@ -13,10 +13,7 @@ use super::{
 };
 use crate::local::{Local, LocalPaths};
 use crate::{ContainerId, RuntimeError, WireFailure};
-use crate::{
-    IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, MountDriver, ProviderCapabilities,
-    ProviderLaunchOptions, SandboxRecord, SearchPathPolicy,
-};
+use crate::{LaunchFailure, LaunchPhase, LaunchRequest, ProviderLaunchOptions, SandboxRecord};
 use std::{
     env,
     path::{Path, PathBuf},
@@ -50,21 +47,6 @@ impl NamespaceProvider {
     /// The named Sandbox's paths, for its daemon setup.
     pub fn paths(&self, name: &str) -> Result<LocalPaths, RuntimeError> {
         self.local.clone().naming(name)?.paths()
-    }
-
-    /// What this backend supports. The isolation boundary is the VM that
-    /// holds this one kernel (one per Store); a Sandbox inside it owns its
-    /// mount, PID and IPC namespaces and its cgroup, not a VM of its own.
-    pub fn capabilities(&self) -> ProviderCapabilities {
-        ProviderCapabilities {
-            name: "namespaces-linux",
-            isolation: IsolationModel::MicroVm,
-            mount_driver: MountDriver::Fuse,
-            requires_image: true,
-            search_path_policy: SearchPathPolicy::FixedContainer,
-            supports_resource_limits: false,
-            direct_store_access: true,
-        }
     }
 
     /// Starts one Sandbox once; a failed start keeps the acknowledged owner.

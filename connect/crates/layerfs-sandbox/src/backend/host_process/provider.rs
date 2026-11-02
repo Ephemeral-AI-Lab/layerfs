@@ -5,8 +5,7 @@ use super::sandbox::Sandbox;
 use crate::local::{Local, LocalPhase, LocalProcess};
 use crate::{ContainerId, RuntimeError, WireFailure};
 use crate::{
-    IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, MountDriver,
-    ProviderCapabilities, ProviderLaunchOptions, SandboxRecord, SearchPathPolicy,
+    LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, ProviderLaunchOptions, SandboxRecord,
 };
 use std::path::Path;
 
@@ -24,17 +23,6 @@ impl HostProcessProvider {
     }
     pub fn paths(&self, name: &str) -> Result<crate::local::LocalPaths, RuntimeError> {
         self.local.clone().naming(name)?.paths()
-    }
-    pub fn capabilities(&self) -> ProviderCapabilities {
-        ProviderCapabilities {
-            name: "native-macos",
-            isolation: IsolationModel::HostProcess,
-            mount_driver: MountDriver::LoopbackNfs,
-            requires_image: false,
-            search_path_policy: SearchPathPolicy::InheritHost,
-            supports_resource_limits: false,
-            direct_store_access: true,
-        }
     }
     pub fn launch(&self, request: LaunchRequest) -> Result<Sandbox, Box<LaunchFailure>> {
         let fail = |cause| {

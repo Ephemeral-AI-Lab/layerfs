@@ -1,5 +1,9 @@
-//! The seven machine kinds and the one table that pairs each with its Sandbox
-//! backend, its route and its guest worker's listen address (H §7.10.1).
+//! The seven machine platforms and the one table that describes each: its
+//! [`Profile`], one `PROFILE` per platform folder (H §7.10.1, #535 §6.2).
+//! [`Platform::profile`] is the one match; every other per-platform value is
+//! read from the profile.
+use crate::options::OptSpec;
+use crate::platforms::{apple_container, docker, firecracker, lima, microsandbox, native, ssh};
 use layerfs_sandbox::Backend;
 use std::net::Ipv4Addr;
 
@@ -24,6 +28,37 @@ pub enum Route {
     Worker,
 }
 
+/// Who runs a sqlite Store's calls for a machine (#535 §6.2, G8).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExecutorKind {
+    /// The caller's own process.
+    Local,
+    /// The machine's worker.
+    Worker,
+}
+
+/// How a machine of a platform comes to exist.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum How {
+    /// One each, never created or removed (`native`, `docker`).
+    BuiltIn,
+    /// Made and removed by `machine create` / `machine remove`.
+    Created,
+    /// Connected and disconnected (`ssh`).
+    Connected,
+}
+
+/// The kernel filesystem route a platform's daemons serve, with the names
+/// of the bridge's `KernelRoute` (the boundary guard does not let this
+/// crate depend on `layerfs-bridge`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum KernelRoute {
+    /// A kernel FUSE mount.
+    Fuse,
+    /// A loopback NFS export.
+    Nfs,
+}
+
 /// The operating system of the host the caller runs on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostOs {
@@ -33,7 +68,57 @@ pub enum HostOs {
     Other,
 }
 
+/// One platform's facts (#535 §6.2), read through [`Platform::profile`].
+#[derive(Clone, Copy, Debug)]
+pub struct Profile {
+    /// The name callers write (`layerfs machine create dev lima`).
+    pub name: &'static str,
+    /// The provider CLI the platform runs, if any.
+    pub tool: Option<&'static str>,
+    pub how: How,
+    /// The hosts a machine of this platform can be on.
+    pub hosts: &'static [HostOs],
+    /// The Sandbox backend on this platform for a host, or none.
+    pub backend: fn(HostOs) -> Option<Backend>,
+    /// The kernel route its Sandboxes' daemons serve, or none.
+    pub kernel: fn(HostOs) -> Option<KernelRoute>,
+    /// Who runs a sqlite Store's calls.
+    pub executor: fn(HostOs) -> ExecutorKind,
+    /// The guest address the worker binds.
+    pub worker_bind: Ipv4Addr,
+    /// `LAYERFS_WORKER_POWEROFF`: what the worker does to its guest once idle.
+    pub guest_stop: &'static str,
+    /// The options `machine create` or `machine connect` takes.
+    pub options: &'static [OptSpec],
+    /// One line: what a machine of this platform is.
+    pub description: &'static str,
+}
+
+impl How {
+    /// Its stable lowercase name.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::BuiltIn => "built_in",
+            Self::Created => "created",
+            Self::Connected => "connected",
+        }
+    }
+}
+
+impl KernelRoute {
+    /// Its stable lowercase name.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Fuse => "fuse",
+            Self::Nfs => "nfs",
+        }
+    }
+}
+
 impl HostOs {
+    /// The hosts LayerFS names; `Other` is none of them.
+    pub const NAMED: [HostOs; 3] = [HostOs::Macos, HostOs::Linux, HostOs::Windows];
+
     /// The host this build runs on.
     pub fn current() -> Self {
         if cfg!(target_os = "linux") {
@@ -46,6 +131,36 @@ impl HostOs {
             Self::Other
         }
     }
+
+    /// Its stable lowercase name.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Linux => "linux",
+            Self::Macos => "macos",
+            Self::Windows => "windows",
+            Self::Other => "other",
+        }
+    }
+}
+
+/// Every named host.
+pub(crate) const ANY_HOST: &[HostOs] = &HostOs::NAMED;
+/// macOS only.
+pub(crate) const MACOS: &[HostOs] = &[HostOs::Macos];
+
+/// A VM or ssh machine's backend: Linux namespaces in its guest.
+pub(crate) fn namespaces(_: HostOs) -> Option<Backend> {
+    Some(Backend::Namespaces)
+}
+
+/// A FUSE kernel route on every host.
+pub(crate) fn fuse(_: HostOs) -> Option<KernelRoute> {
+    Some(KernelRoute::Fuse)
+}
+
+/// The machine's worker on every host.
+pub(crate) fn worker(_: HostOs) -> ExecutorKind {
+    ExecutorKind::Worker
 }
 
 impl Platform {
@@ -59,17 +174,22 @@ impl Platform {
         Platform::Ssh,
     ];
 
+    /// The platform's profile: the one match over platforms for its facts.
+    pub fn profile(self) -> &'static Profile {
+        match self {
+            Self::Native => &native::PROFILE,
+            Self::Docker => &docker::PROFILE,
+            Self::AppleContainer => &apple_container::PROFILE,
+            Self::Microsandbox => &microsandbox::PROFILE,
+            Self::Lima => &lima::PROFILE,
+            Self::Firecracker => &firecracker::PROFILE,
+            Self::Ssh => &ssh::PROFILE,
+        }
+    }
+
     /// The kind's name as callers write it (`layerfs machine create dev lima`).
     pub fn name(self) -> &'static str {
-        match self {
-            Self::Native => "native",
-            Self::Docker => "docker",
-            Self::AppleContainer => "apple-container",
-            Self::Microsandbox => "microsandbox",
-            Self::Lima => "lima",
-            Self::Firecracker => "firecracker",
-            Self::Ssh => "ssh",
-        }
+        self.profile().name
     }
 
     pub fn parse(name: &str) -> Option<Self> {
@@ -78,51 +198,42 @@ impl Platform {
 
     /// `native` and `docker`: one each, never created or removed.
     pub fn built_in(self) -> bool {
-        matches!(self, Self::Native | Self::Docker)
+        self.profile().how == How::BuiltIn
     }
 
     /// The kinds `machine create` makes: each its own VM.
     pub fn created(self) -> bool {
-        matches!(
-            self,
-            Self::AppleContainer | Self::Microsandbox | Self::Lima | Self::Firecracker
-        )
+        self.profile().how == How::Created
     }
 
     /// The provider CLI the kind runs, if any.
     pub fn tool(self) -> Option<&'static str> {
-        match self {
-            Self::Native => None,
-            Self::Docker => Some("docker"),
-            Self::AppleContainer => Some("container"),
-            Self::Microsandbox => Some("msb"),
-            Self::Lima | Self::Firecracker => Some("limactl"),
-            Self::Ssh => Some("ssh"),
-        }
+        self.profile().tool
     }
 
     /// The Sandbox backend on this kind of machine, or none (`native` on
     /// Windows holds only records, §13 O5).
     pub fn backend(self, host: HostOs) -> Option<Backend> {
-        match self {
-            Self::Native => match host {
-                HostOs::Macos => Some(Backend::HostProcess),
-                HostOs::Linux => Some(Backend::Namespaces),
-                HostOs::Windows | HostOs::Other => None,
-            },
-            Self::Docker => Some(Backend::Docker),
-            _ => Some(Backend::Namespaces),
-        }
+        (self.profile().backend)(host)
+    }
+
+    /// The kernel route its Sandboxes' daemons serve on `host`, or none.
+    pub fn kernel(self, host: HostOs) -> Option<KernelRoute> {
+        (self.profile().kernel)(host)
+    }
+
+    /// Who runs a sqlite Store's calls on this machine (G8).
+    pub fn executor(self, host: HostOs) -> ExecutorKind {
+        (self.profile().executor)(host)
     }
 
     /// Where Store calls for a sqlite Store on this machine run: in-process
-    /// for `native` (except Windows, whose Stores are in the WSL worker) and
-    /// for `docker` on Linux; the machine's worker otherwise.
+    /// for `native` (except Windows, whose Stores are in the WSL worker);
+    /// the machine's worker otherwise, `docker` on every host included (G8).
     pub fn route(self, host: HostOs) -> Route {
-        match (self, host) {
-            (Self::Native, HostOs::Windows) => Route::Worker,
-            (Self::Native, _) => Route::InProcess,
-            _ => Route::Worker,
+        match self.executor(host) {
+            ExecutorKind::Local => Route::InProcess,
+            ExecutorKind::Worker => Route::Worker,
         }
     }
 
@@ -133,10 +244,7 @@ impl Platform {
     /// `firecracker`'s forward ends at its tap address, `docker` publishes a
     /// container port). The worker's secret guards it either way.
     pub fn worker_bind(self) -> Ipv4Addr {
-        match self {
-            Self::Lima | Self::Ssh => Ipv4Addr::LOCALHOST,
-            _ => Ipv4Addr::UNSPECIFIED,
-        }
+        self.profile().worker_bind
     }
 
     /// What the worker does to its guest once idle
@@ -146,11 +254,6 @@ impl Platform {
     /// process (it has no init or `CAP_SYS_BOOT`), a power-off in every
     /// other VM.
     pub fn guest_stop(self) -> &'static str {
-        match self {
-            Self::Ssh => "0",
-            Self::Firecracker => "reboot",
-            Self::AppleContainer => "init",
-            _ => "1",
-        }
+        self.profile().guest_stop
     }
 }

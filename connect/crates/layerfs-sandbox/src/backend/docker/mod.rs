@@ -3,6 +3,7 @@
 //! delete), `exec` runs one command in it, and `client` (the crate's
 //! `docker_engine/`) is the Engine HTTP client the rest reads.
 use crate::docker_engine as client;
+mod adapter;
 mod create;
 mod endpoint;
 mod exec;
@@ -13,6 +14,7 @@ mod sandbox;
 mod streams;
 mod topology;
 mod upload;
+pub(crate) use adapter::ADAPTER;
 pub use client::Docker;
 pub(crate) use exec::run as run_command;
 pub use exec::{ExecCreateFailure, ExecCreated, ExecRequest};

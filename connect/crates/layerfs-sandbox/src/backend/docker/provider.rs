@@ -1,10 +1,7 @@
 //! Docker's existing one-attempt runtime as a concrete backend.
 use super::{Docker, Sandbox, SandboxRequest};
 use crate::{ContainerId, RuntimeError, WireFailure};
-use crate::{
-    IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, MountDriver, ProviderCapabilities,
-    ProviderLaunchOptions, SandboxRecord, SearchPathPolicy,
-};
+use crate::{LaunchFailure, LaunchPhase, LaunchRequest, ProviderLaunchOptions, SandboxRecord};
 use std::fs::File;
 
 /// Negotiation and all transfers use the supplied client's original policy and version cache.
@@ -16,17 +13,6 @@ impl DockerProvider {
     /// Negotiation and all transfers use the supplied client's original policy and version cache.
     pub fn new(docker: Docker) -> Self {
         Self { docker }
-    }
-    pub fn capabilities(&self) -> ProviderCapabilities {
-        ProviderCapabilities {
-            name: "docker",
-            isolation: IsolationModel::Container,
-            mount_driver: MountDriver::Fuse,
-            requires_image: true,
-            search_path_policy: SearchPathPolicy::FixedContainer,
-            supports_resource_limits: false,
-            direct_store_access: true,
-        }
     }
     pub fn launch(&self, request: LaunchRequest) -> Result<Sandbox, Box<LaunchFailure>> {
         let mut phase = LaunchPhase::Validate;
