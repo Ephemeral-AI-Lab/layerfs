@@ -6,8 +6,8 @@
 //! unknown operation) do not restart its idle clock (final review, finding
 //! 3). A request that does work does. Its own test binary: the
 //! idle clock is one per process.
-use layerfs_api::worker;
 use layerfs_bridge::control::SdkValue;
+use layerfs_control::machine::worker;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -24,9 +24,7 @@ machine = ["layerfs-control/machine"]
 
 [dev-dependencies]
 nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
-layerfs-daemon = { path = "../../../engine/crates/layerfs-daemon" }
-layerfs-fuse = { path = "../../../engine/crates/layerfs-fuse" }
-# The daemon fixtures and store-service's SDK support bind private Workspaces.
+# store-service's SDK support (remote_store) binds private Workspaces.
 layerfs-overlay = { path = "../../../engine/crates/layerfs-overlay" }
 layerfs-workspace = { path = "../../../engine/crates/layerfs-workspace" }
 # The tests drive these crates directly beside the call surface.

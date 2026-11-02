@@ -36,3 +36,11 @@ tls = ["layerfs-store-backup/tls"]
 # The machine calls (2.0, #533): host builds only. The guest worker is built
 # without it, so no machine adapter runs inside a machine.
 machine = ["dep:layerfs-machine"]
+
+[dev-dependencies]
+nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
+layerfs-daemon = { path = "../../../engine/crates/layerfs-daemon" }
+layerfs-fuse = { path = "../../../engine/crates/layerfs-fuse" }
+# The daemon fixtures bind private Workspaces.
+layerfs-overlay = { path = "../../../engine/crates/layerfs-overlay" }
+layerfs-workspace = { path = "../../../engine/crates/layerfs-workspace" }

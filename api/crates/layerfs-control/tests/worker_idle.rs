@@ -2,9 +2,9 @@
 //! call is in flight, no Store is open, no Sandbox is recorded under its
 //! root (where the host Sandbox code records it), no Firecracker microVM it
 //! hosts runs, and the idle time has passed since its last call.
-use layerfs_api::home::{paths, write_record};
-use layerfs_api::worker;
 use layerfs_bridge::control::SdkValue;
+use layerfs_control::common::home::{paths, write_record};
+use layerfs_control::machine::worker;
 use std::net::TcpListener;
 use std::time::{Duration, Instant};
 

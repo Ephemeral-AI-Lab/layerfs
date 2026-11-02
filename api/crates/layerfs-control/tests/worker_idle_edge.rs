@@ -5,8 +5,8 @@
 //! late the request comes. A connection that comes after the decision is
 //! refused `Unavailable` before its request is sent. Its own test binary:
 //! the idle clock is one per process.
-use layerfs_api::worker;
 use layerfs_bridge::control::SdkValue;
+use layerfs_control::machine::worker;
 use std::net::{TcpListener, TcpStream};
 use std::time::{Duration, Instant};
 

@@ -2,9 +2,9 @@
 //! worker runs on it gets the caller's home id, sent with the request; the
 //! root is never converted or given an id of its own, even when it holds
 //! files a 1.1.0 home would.
-use layerfs_api::home;
-use layerfs_api::worker::{self, Endpoint};
 use layerfs_bridge::control::SdkValue;
+use layerfs_control::common::home;
+use layerfs_control::machine::worker::{self, Endpoint};
 use std::path::{Path, PathBuf};
 
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

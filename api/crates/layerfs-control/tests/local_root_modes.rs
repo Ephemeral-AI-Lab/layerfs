@@ -3,9 +3,9 @@
 //! folders down to `machine/native/sandbox-root` must let others pass (o+x),
 //! while staying unlistable. Folders above the home are left alone, and the
 //! host's private-home check accepts o+x on a folder and nothing more.
-use layerfs_api::home;
-use layerfs_api::worker;
 use layerfs_bridge::control::SdkValue;
+use layerfs_control::common::home;
+use layerfs_control::machine::worker;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -97,7 +97,7 @@ fn a_private_home_may_be_passable_and_nothing_more() {
                 SdkValue::text(home.join("v/global/store.sqlite").display().to_string()),
             ),
         ]);
-        layerfs_api::sandbox::dispatch::backend("runtime.store.create".to_owned(), args)
+        layerfs_control::sandbox::dispatch::backend("runtime.store.create".to_owned(), args)
     };
     for open in [0o750, 0o711, 0o705, 0o702] {
         set(&home, open);

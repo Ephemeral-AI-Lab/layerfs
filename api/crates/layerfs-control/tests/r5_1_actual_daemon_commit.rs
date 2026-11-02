@@ -35,13 +35,13 @@ mod rig;
 #[allow(dead_code)]
 #[path = "../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
-use layerfs_api::internal::Control;
 use layerfs_bridge::{
     control::{Activity, DaemonPhase, HelloRequest, ReadyMount, Reply, Request, WorkspaceToken},
     daemon_setup::{DaemonLimits, DaemonSetup},
     duplex,
 };
 use layerfs_bridge::{DaemonStore, KernelRoute};
+use layerfs_control::internal::Control;
 use layerfs_history::{BranchId, CommitOutcome, CommitRecord, WorkspaceId};
 use model::{assert_same, Flat};
 use mounted::COMMAND;
@@ -209,7 +209,7 @@ fn quiet(control: &mut Control, token: WorkspaceToken) {
     let deadline = Instant::now() + Duration::from_secs(8);
     let mut last = None;
     loop {
-        let work = layerfs_api::internal::workspace(control)
+        let work = layerfs_control::internal::workspace(control)
             .status(token)
             .unwrap()
             .kernel
@@ -231,7 +231,7 @@ fn quiet(control: &mut Control, token: WorkspaceToken) {
 /// The terminal Unmount through the executable, and the kernel's table after.
 fn unmount(control: &mut Control, ready: &ReadyMount) {
     quiet(control, ready.token);
-    layerfs_api::internal::workspace(control)
+    layerfs_control::internal::workspace(control)
         .unmount(ready.token, false)
         .unwrap();
     assert!(
@@ -277,7 +277,7 @@ fn r5_1_the_actual_daemon_commits_a_change_by_external_bash_and_a_fresh_mount_is
 
     // Direct Store installation into the running executable, then readiness.
     let mut channel = connect(address);
-    let installed = layerfs_api::internal::install(&f.project, &mut channel).unwrap();
+    let installed = layerfs_control::internal::install(&f.project, &mut channel).unwrap();
     assert!(installed.manifest.daemon_sqlite.is_some());
     let mut control = Control::new(channel);
     let hello = match control
@@ -295,11 +295,11 @@ fn r5_1_the_actual_daemon_commits_a_change_by_external_bash_and_a_fresh_mount_is
     let branch = f.project.branch.branch.id;
 
     // Logical bind, then the kernel Attach.
-    let bound = layerfs_api::internal::workspace(&mut control)
+    let bound = layerfs_control::internal::workspace(&mut control)
         .bind(WorkspaceId::from_authority([150; 32]).unwrap(), branch)
         .unwrap();
     assert_eq!(bound.binding.branch.head_commit, None);
-    let ready = layerfs_api::internal::workspace(&mut control)
+    let ready = layerfs_control::internal::workspace(&mut control)
         .attach(bound.token)
         .unwrap();
     let guard = MountGuard(ready.directory.clone());
@@ -363,11 +363,11 @@ fn r5_1_the_actual_daemon_commits_a_change_by_external_bash_and_a_fresh_mount_is
     assert!(!live.contains_key(b"alias".as_slice()));
 
     // One control Commit over the authenticated connection.
-    let before = layerfs_api::internal::workspace(&mut control)
+    let before = layerfs_control::internal::workspace(&mut control)
         .status(bound.token)
         .unwrap();
     assert_eq!(before.activity, Activity::Idle);
-    let record = match layerfs_api::internal::workspace(&mut control)
+    let record = match layerfs_control::internal::workspace(&mut control)
         .commit(bound.token)
         .unwrap()
     {
@@ -376,7 +376,7 @@ fn r5_1_the_actual_daemon_commits_a_change_by_external_bash_and_a_fresh_mount_is
     };
     assert_eq!(record.parent, None);
     assert_ne!(record.root, bound.binding.effective_root);
-    let after = layerfs_api::internal::workspace(&mut control)
+    let after = layerfs_control::internal::workspace(&mut control)
         .status(bound.token)
         .unwrap();
     assert_eq!(
@@ -407,7 +407,7 @@ fn r5_1_the_actual_daemon_commits_a_change_by_external_bash_and_a_fresh_mount_is
 
     // A fresh Workspace of the Branch selects the committed root; its mount
     // is the replay, and the kernel's own table agrees with the model.
-    let fresh = layerfs_api::internal::workspace(&mut control)
+    let fresh = layerfs_control::internal::workspace(&mut control)
         .bind(WorkspaceId::from_authority([151; 32]).unwrap(), branch)
         .unwrap();
     assert_eq!(
@@ -417,7 +417,7 @@ fn r5_1_the_actual_daemon_commits_a_change_by_external_bash_and_a_fresh_mount_is
         ),
         (record.root, Some(record.id))
     );
-    let again = layerfs_api::internal::workspace(&mut control)
+    let again = layerfs_control::internal::workspace(&mut control)
         .attach(fresh.token)
         .unwrap();
     let guard = MountGuard(again.directory.clone());
@@ -435,7 +435,7 @@ fn r5_1_the_actual_daemon_commits_a_change_by_external_bash_and_a_fresh_mount_is
     );
     // An unchanged fresh Workspace commits nothing new.
     assert!(matches!(
-        layerfs_api::internal::workspace(&mut control).commit(fresh.token).unwrap(),
+        layerfs_control::internal::workspace(&mut control).commit(fresh.token).unwrap(),
         CommitOutcome::UpToDate { head, root } if head == Some(record.id) && root == record.root
     ));
     assert_eq!(history(&installed.manifest, branch), [record.clone()]);

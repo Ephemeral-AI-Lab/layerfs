@@ -1,5 +1,5 @@
 //! `layerfs.json` and the layout version (#533 step 3): one test per layout.
-use layerfs_api::home::{detect, ensure, Layout, LAYOUT_VERSION};
+use layerfs_control::common::home::{detect, ensure, Layout, LAYOUT_VERSION};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 

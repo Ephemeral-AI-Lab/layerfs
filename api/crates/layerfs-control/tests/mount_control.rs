@@ -6,8 +6,8 @@ mod held_writer;
 #[allow(dead_code)]
 #[path = "../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
-use layerfs_api::{internal::Control, OperationCause};
 use layerfs_bridge::control::{Activity, ControlCode, Reply, Request, WorkspaceToken};
+use layerfs_control::{internal::Control, OperationCause};
 use layerfs_daemon::control::Service;
 use layerfs_history::{BranchId, CommitOutcome, WorkspaceId};
 use std::sync::{
@@ -23,13 +23,13 @@ fn mount(
     workspace: WorkspaceId,
     branch: BranchId,
 ) -> (WorkspaceToken, layerfs_history::BranchSnapshot) {
-    let bound = layerfs_api::internal::workspace(client)
+    let bound = layerfs_control::internal::workspace(client)
         .bind(workspace, branch)
         .unwrap();
     (bound.token, bound.binding)
 }
 fn committed(client: &mut Control, token: WorkspaceToken) -> layerfs_history::CommitRecord {
-    match layerfs_api::internal::workspace(client)
+    match layerfs_control::internal::workspace(client)
         .commit(token)
         .unwrap()
     {
@@ -38,12 +38,12 @@ fn committed(client: &mut Control, token: WorkspaceToken) -> layerfs_history::Co
     }
 }
 fn status(client: &mut Control, token: WorkspaceToken) -> layerfs_bridge::control::WorkspaceStatus {
-    layerfs_api::internal::workspace(client)
+    layerfs_control::internal::workspace(client)
         .status(token)
         .unwrap()
 }
 fn close(client: &mut Control, token: WorkspaceToken) {
-    layerfs_api::internal::workspace(client)
+    layerfs_control::internal::workspace(client)
         .unmount(token, false)
         .unwrap();
 }
@@ -101,7 +101,7 @@ fn control_busy_keeps_the_channel_healthy_for_a_later_explicit_call() {
     let writer =
         held_writer::HeldWriter::acquire(&std::path::PathBuf::from(&f.installed.manifest.locator));
     assert!(
-        matches!(layerfs_api::internal::workspace(&mut client).commit(token).unwrap_err().cause, OperationCause::Remote(value) if value.code==ControlCode::Busy)
+        matches!(layerfs_control::internal::workspace(&mut client).commit(token).unwrap_err().cause, OperationCause::Remote(value) if value.code==ControlCode::Busy)
     );
     writer.release();
     let observed = status(&mut client, token);
@@ -140,7 +140,7 @@ fn original_lost_control_reply_is_not_replayed_or_settled_by_an_observer() {
     fixture::write(&f.service, token, b'L');
     let server_fence = fence.recv_timeout(Duration::from_secs(3)).unwrap();
     let calling =
-        std::thread::spawn(move || layerfs_api::internal::workspace(&mut client).commit(token));
+        std::thread::spawn(move || layerfs_control::internal::workspace(&mut client).commit(token));
     entered.recv_timeout(Duration::from_secs(3)).unwrap();
     server_fence.close().unwrap();
     send_release.send(()).unwrap();
@@ -558,7 +558,7 @@ fn forced_unmount_refuses_a_workspace_without_a_connection_before_any_effect() {
     }
     // The SDK operation carries the same refusal.
     assert!(
-        matches!(layerfs_api::internal::workspace(&mut client).unmount(token, true).unwrap_err().cause, OperationCause::Remote(value) if value.code == ControlCode::Invalid && value.phase == "force:admission")
+        matches!(layerfs_control::internal::workspace(&mut client).unmount(token, true).unwrap_err().cause, OperationCause::Remote(value) if value.code == ControlCode::Invalid && value.phase == "force:admission")
     );
     // At the control owner: the original typed failure, and the ordinary
     // token refusals ahead of it.

@@ -2,8 +2,8 @@
 //! in a small frame, so a wrong secret or an oversized first frame is
 //! refused before a large body is read; reads are bounded in time; a
 //! refusal before the request was sent is a plain refusal, not `Unknown`.
-use layerfs_api::worker::{self, read_frame_within, write_frame, Endpoint, MAX_HELLO};
 use layerfs_bridge::control::SdkValue;
+use layerfs_control::machine::worker::{self, read_frame_within, write_frame, Endpoint, MAX_HELLO};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::time::{Duration, Instant};

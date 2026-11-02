@@ -1,7 +1,7 @@
 //! The public SDK conversion exposes diagnostic omission without changing refusal.
-use layerfs_api::daemon::{values, workspace::CommitReply};
 use layerfs_bridge::control::{ConflictReport, SdkValue};
 use layerfs_content::merge::{Conflict, ConflictKind, LwwDecision};
+use layerfs_control::daemon::{values, workspace::CommitReply};
 
 #[test]
 fn sdk_conflict_keeps_its_outcome_and_explicit_byte_window_flags() {

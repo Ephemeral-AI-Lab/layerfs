@@ -4,9 +4,9 @@
 //! fails at the missing Linux bundle; the host's `start.lock` shows that
 //! its start ran first. One test, because it sets the process's environment.
 #![cfg(feature = "machine")]
-use layerfs_api::home::{self, paths};
-use layerfs_api::machine;
 use layerfs_bridge::control::SdkValue;
+use layerfs_control::common::home::{self, paths};
+use layerfs_control::machine;
 use std::path::PathBuf;
 
 fn tempdir(tag: &str) -> PathBuf {

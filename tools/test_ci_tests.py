@@ -33,8 +33,8 @@ class SelectionAgainstTheTree(unittest.TestCase):
         self.assertIn("forced_unavailable", names)
         self.assertIn("kernel_application", names)
         self.assertNotIn("lane_merge", names)
-        self.assertIn(("layerfs-api", "kernel_application"), mount)
-        self.assertIn(("layerfs-api", "observed_application"), mount)
+        self.assertIn(("layerfs-control", "kernel_application"), mount)
+        self.assertIn(("layerfs-control", "observed_application"), mount)
         self.assertIn(("layerfs-daemon", "forced_unavailable"), mount)
 
     def test_fast_filter_excludes_the_nightly_groups_and_nightly_selects_them(self):
@@ -42,7 +42,7 @@ class SelectionAgainstTheTree(unittest.TestCase):
         nightly = ci_tests.filter_for("nightly", self.meta)
         self.assertTrue(fast.startswith("not ("))
         self.assertIn("binary_id(layerfs-store-service::scale_lineage_cap)", fast)
-        self.assertIn("binary_id(layerfs-api::mount_control)", fast)
+        self.assertIn("binary_id(layerfs-control::mount_control)", fast)
         self.assertIn("binary_id(layerfs-daemon::forced_unavailable)", fast)
         self.assertNotIn("forced_unavailable", nightly)
         self.assertEqual(nightly.count("binary_id("), len(ci_tests.NIGHTLY))

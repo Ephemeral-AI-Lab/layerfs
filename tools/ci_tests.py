@@ -9,7 +9,7 @@ the targets it runs: building, not running, is what its time goes to.
   slow     binaries that take 5 s or more to run (macOS host, 2026-10-23)
   heavy    binaries that take 5 s or more of build CPU (moved by the owner,
            2026-10-23)
-  mount    daemon targets and the SDK mount targets that are Linux-only (`#![cfg(target_os =
+  mount    daemon targets and the control mount targets that are Linux-only (`#![cfg(target_os =
            "linux")]`): they mount FUSE and need /dev/fuse, SYS_ADMIN and a
            fresh container each (forced_unavailable needs fusectl unmounted)
   nightly  slow and heavy, run together on the nightly runner
@@ -36,6 +36,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "Cargo.toml"
 LINUX_ONLY = '#![cfg(target_os = "linux")]'
 MOUNT_PACKAGE = "layerfs-daemon"
+# The management library's daemon mount targets (moved from layerfs-api, #536).
+CONTROL_PACKAGE = "layerfs-control"
 API_MOUNT_TARGETS = {"kernel_mount_routes", "kernel_application", "observed_application", "r5_1_actual_daemon_commit"}
 
 # (package, test target): run seconds on the macOS host, 2026-10-23.
@@ -48,7 +50,7 @@ SLOW = {
     # Linux native binding proof (#508), run in the runtime image, 2026-10-30.
     ("layerfs-node", "native_connection_wait"): 66.11,
     # Linux SDK mount proof after the ownership move, 2026-10-27.
-    ("layerfs-api", "observed_application"): 6.30,
+    ("layerfs-control", "observed_application"): 6.30,
     # Linux functional run at the relocated tree, 2026-10-27.
     ("layerfs-persistence", "writer_admission"): 9.74,
     ("layerfs-store-service", "scale_lineage_cap"): 24.3,
@@ -64,7 +66,7 @@ SLOW = {
 # (package, test target): build CPU seconds in the cold mold build of CI run
 # 39924955411 (4-CPU runner, test profile without debuginfo).
 HEAVY = {
-    ("layerfs-api", "mount_control"): 20.6,
+    ("layerfs-control", "mount_control"): 20.6,
     ("layerfs-daemon", "store_commit"): 19.1,
     ("layerfs-workspace", "captured_namespace_cursor"): 9.3,
     ("layerfs-workspace", "captured_namespace_holds"): 9.0,
@@ -89,7 +91,7 @@ NIGHTLY = {
     target
     for target in set(SLOW) | set(HEAVY)
     if target[0] != "layerfs-node"
-    and not (target[0] == "layerfs-api" and target[1] in API_MOUNT_TARGETS)
+    and not (target[0] == CONTROL_PACKAGE and target[1] in API_MOUNT_TARGETS)
     and target != (MOUNT_PACKAGE, "stalled_unmount")
 }
 
@@ -118,7 +120,7 @@ def test_targets(meta):
 def mount_targets(meta):
     found = []
     for package, name, source in test_targets(meta):
-        if package == "layerfs-api" and name in API_MOUNT_TARGETS:
+        if package == CONTROL_PACKAGE and name in API_MOUNT_TARGETS:
             found.append((package, name))
             continue
         if package != MOUNT_PACKAGE:

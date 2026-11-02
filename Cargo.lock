@@ -706,8 +706,6 @@ dependencies = [
  "layerfs-bridge",
  "layerfs-content",
  "layerfs-control",
- "layerfs-daemon",
- "layerfs-fuse",
  "layerfs-history",
  "layerfs-machine",
  "layerfs-overlay",
@@ -753,8 +751,11 @@ version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
  "layerfs-content",
+ "layerfs-daemon",
+ "layerfs-fuse",
  "layerfs-history",
  "layerfs-machine",
+ "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
  "layerfs-sandbox",
@@ -762,6 +763,7 @@ dependencies = [
  "layerfs-store-backup",
  "layerfs-store-service",
  "layerfs-telemetry",
+ "layerfs-workspace",
  "libc",
  "nix",
 ]

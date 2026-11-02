@@ -5,7 +5,6 @@ mod daemon_binary;
 #[allow(dead_code)]
 #[path = "../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
-use layerfs_api::internal::Control;
 use layerfs_bridge::control::{CleanupObservation, ControlCode};
 use layerfs_bridge::{
     control::{Reply, Request},
@@ -15,6 +14,7 @@ use layerfs_bridge::{
 };
 #[cfg(target_os = "linux")]
 use layerfs_bridge::{DaemonStore, KernelRoute};
+use layerfs_control::internal::Control;
 use layerfs_history::WorkspaceId;
 use std::{
     collections::BTreeSet,
@@ -138,7 +138,7 @@ fn start_with(
     let manifest = match deployment.existing_store {
         Some(manifest) => manifest,
         None => {
-            layerfs_api::internal::install(&f.project, &mut connection)
+            layerfs_control::internal::install(&f.project, &mut connection)
                 .unwrap()
                 .manifest
         }
@@ -242,7 +242,7 @@ fn equal_calls_and_reused_slot_have_distinct_public_observation_identity() {
     let f = support::Fixture::new("observed-correlation", None);
     let log = f.directory.join("stderr.log");
     let (process, address, mut initial) = start(&f, File::create(&log).unwrap());
-    let bound = layerfs_api::internal::workspace(&mut initial)
+    let bound = layerfs_control::internal::workspace(&mut initial)
         .bind(
             WorkspaceId::from_authority([111; 32]).unwrap(),
             f.project.branch.branch.id,
@@ -257,7 +257,7 @@ fn equal_calls_and_reused_slot_have_distinct_public_observation_identity() {
     let mut second = Control::new(connect(address));
     for (channel, scope) in [(&mut first, [7; 32]), (&mut second, [8; 32])] {
         assert_eq!(
-            layerfs_api::internal::with_observations(channel, &scope)
+            layerfs_control::internal::with_observations(channel, &scope)
                 .status(bound.token)
                 .unwrap()
                 .token,
@@ -281,7 +281,7 @@ fn equal_calls_and_reused_slot_have_distinct_public_observation_identity() {
     }
     let mut later = Control::new(connect(address));
     assert_eq!(
-        layerfs_api::internal::with_observations(&mut later, &[9; 32])
+        layerfs_control::internal::with_observations(&mut later, &[9; 32])
             .status(bound.token)
             .unwrap()
             .token,
@@ -327,7 +327,7 @@ fn equal_calls_and_reused_slot_have_distinct_public_observation_identity() {
         later.call(Request::EndSession).unwrap(),
         Reply::SessionEnded
     );
-    layerfs_api::internal::workspace(&mut initial)
+    layerfs_control::internal::workspace(&mut initial)
         .unmount(bound.token, false)
         .unwrap();
     assert_eq!(
@@ -344,14 +344,14 @@ fn diagnostic_sink_failure_does_not_repeat_or_hide_successful_bind() {
     let (process, address, mut control) =
         start(&f, File::options().write(true).open("/dev/full").unwrap());
     let workspace = WorkspaceId::from_authority([99; 32]).unwrap();
-    let bound = layerfs_api::internal::with_observations(&mut control, &[7; 32])
+    let bound = layerfs_control::internal::with_observations(&mut control, &[7; 32])
         .bind(workspace, f.project.branch.branch.id)
         .unwrap();
     // A fresh authenticated observer establishes existing state; it neither
     // replays the bind nor settles a previously unknown reply.
     let mut observer = Control::new(connect(address));
     assert_eq!(
-        layerfs_api::internal::workspace(&mut observer)
+        layerfs_control::internal::workspace(&mut observer)
             .status(bound.token)
             .unwrap()
             .token,
@@ -362,12 +362,12 @@ fn diagnostic_sink_failure_does_not_repeat_or_hide_successful_bind() {
         Reply::Refused(refusal) if refusal.code == ControlCode::Busy)
     );
     assert_eq!(
-        layerfs_api::internal::workspace(&mut observer)
+        layerfs_control::internal::workspace(&mut observer)
             .cleanup(bound.token)
             .unwrap(),
         CleanupObservation::Live
     );
-    layerfs_api::internal::workspace(&mut observer)
+    layerfs_control::internal::workspace(&mut observer)
         .unmount(bound.token, false)
         .unwrap();
     assert_eq!(
@@ -403,14 +403,14 @@ fn traced_diagnostic_failure_is_reported_and_keeps_the_connection() {
     let f = support::Fixture::new("observed-traced-sink", None);
     let (process, _address, mut control) =
         start(&f, File::options().write(true).open("/dev/full").unwrap());
-    layerfs_api::internal::trace(&mut control, Some([7; 32]));
-    let bound = layerfs_api::internal::workspace(&mut control)
+    layerfs_control::internal::trace(&mut control, Some([7; 32]));
+    let bound = layerfs_control::internal::workspace(&mut control)
         .bind(
             WorkspaceId::from_authority([77; 32]).unwrap(),
             f.project.branch.branch.id,
         )
         .unwrap();
-    let telemetry = layerfs_api::internal::take_telemetry(&mut control);
+    let telemetry = layerfs_control::internal::take_telemetry(&mut control);
     assert_eq!(telemetry.len(), 1);
     let error = telemetry[0]
         .get("diagnosticError")
@@ -423,20 +423,20 @@ fn traced_diagnostic_failure_is_reported_and_keeps_the_connection() {
     );
     assert!(names.iter().any(|name| name == "store.bind"));
     // The same connection keeps serving, traced and then untraced.
-    let status = layerfs_api::internal::workspace(&mut control)
+    let status = layerfs_control::internal::workspace(&mut control)
         .status(bound.token)
         .unwrap();
     assert_eq!(status.token, bound.token);
-    let telemetry = layerfs_api::internal::take_telemetry(&mut control);
+    let telemetry = layerfs_control::internal::take_telemetry(&mut control);
     assert_eq!(telemetry.len(), 1);
     assert!(telemetry[0].get("diagnosticError").is_some());
-    layerfs_api::internal::trace(&mut control, None);
-    let status = layerfs_api::internal::workspace(&mut control)
+    layerfs_control::internal::trace(&mut control, None);
+    let status = layerfs_control::internal::workspace(&mut control)
         .status(bound.token)
         .unwrap();
     assert_eq!(status.binding, bound.binding);
-    assert!(layerfs_api::internal::take_telemetry(&mut control).is_empty());
-    layerfs_api::internal::workspace(&mut control)
+    assert!(layerfs_control::internal::take_telemetry(&mut control).is_empty());
+    layerfs_control::internal::workspace(&mut control)
         .unmount(bound.token, false)
         .unwrap();
     assert_eq!(
@@ -452,23 +452,23 @@ fn traced_records_share_the_scope_and_untraced_replies_stay_plain() {
     let f = support::Fixture::new("observed-traced-records", None);
     let log = f.directory.join("stderr.log");
     let (process, _address, mut control) = start(&f, File::create(&log).unwrap());
-    let bound = layerfs_api::internal::workspace(&mut control)
+    let bound = layerfs_control::internal::workspace(&mut control)
         .bind(
             WorkspaceId::from_authority([78; 32]).unwrap(),
             f.project.branch.branch.id,
         )
         .unwrap();
-    assert!(layerfs_api::internal::take_telemetry(&mut control).is_empty());
-    layerfs_api::internal::trace(&mut control, Some([5; 32]));
-    let status = layerfs_api::internal::workspace(&mut control)
+    assert!(layerfs_control::internal::take_telemetry(&mut control).is_empty());
+    layerfs_control::internal::trace(&mut control, Some([5; 32]));
+    let status = layerfs_control::internal::workspace(&mut control)
         .status(bound.token)
         .unwrap();
     assert_eq!(status.token, bound.token);
-    let telemetry = layerfs_api::internal::take_telemetry(&mut control);
+    let telemetry = layerfs_control::internal::take_telemetry(&mut control);
     assert_eq!(telemetry.len(), 1);
     assert!(telemetry[0].get("diagnosticError").is_none());
     assert!(telemetry[0].get("storage").is_none());
-    layerfs_api::internal::trace(&mut control, None);
+    layerfs_control::internal::trace(&mut control, None);
     let text = fs::read_to_string(&log).unwrap();
     assert!(accepts_unique_completed_groups(&text));
     let word = u64::from_be_bytes([5; 8]);
@@ -477,7 +477,7 @@ fn traced_records_share_the_scope_and_untraced_replies_stay_plain() {
         .filter(|line| identity_words(line, "scope") == [word; 4])
         .collect();
     validate(&rows);
-    layerfs_api::internal::workspace(&mut control)
+    layerfs_control::internal::workspace(&mut control)
         .unmount(bound.token, false)
         .unwrap();
     assert_eq!(
@@ -515,14 +515,14 @@ fn traced_calls_carry_sql_work_and_status_unmount_carry_opcodes() {
     let f = support::Fixture::new("observed-traced-work", None);
     let log = f.directory.join("stderr.log");
     let (process, _address, mut control) = start(&f, File::create(&log).unwrap());
-    layerfs_api::internal::trace(&mut control, Some([6; 32]));
-    let bound = layerfs_api::internal::workspace(&mut control)
+    layerfs_control::internal::trace(&mut control, Some([6; 32]));
+    let bound = layerfs_control::internal::workspace(&mut control)
         .bind(
             WorkspaceId::from_authority([79; 32]).unwrap(),
             f.project.branch.branch.id,
         )
         .unwrap();
-    let telemetry = layerfs_api::internal::take_telemetry(&mut control);
+    let telemetry = layerfs_control::internal::take_telemetry(&mut control);
     assert_eq!(telemetry.len(), 1);
     let bind = &telemetry[0];
     assert_eq!(width(bind, &["sql", "writer"]), 27);
@@ -533,31 +533,31 @@ fn traced_calls_carry_sql_work_and_status_unmount_carry_opcodes() {
     assert!(counter(bind, &["sql", "readers"], "statements") > 0);
     assert!(bind.get("fuse").is_none(), "bind carries no opcode counts");
     assert!(bind.get("delta").is_none(), "bind finishes no Save");
-    let ready = layerfs_api::internal::workspace(&mut control)
+    let ready = layerfs_control::internal::workspace(&mut control)
         .attach(bound.token)
         .unwrap();
     let guard = MountGuard(ready.directory.clone());
-    let attach = layerfs_api::internal::take_telemetry(&mut control);
+    let attach = layerfs_control::internal::take_telemetry(&mut control);
     assert!(attach.iter().all(|value| value.get("fuse").is_none()));
     let file = Path::new(&ready.directory).join("traced.txt");
     fs::write(&file, b"traced").unwrap();
     assert_eq!(fs::read(&file).unwrap(), b"traced");
     // A Commit finishes a Save: its delta selection work is the Store's Save
     // totals after it minus before it.
-    layerfs_api::internal::workspace(&mut control)
+    layerfs_control::internal::workspace(&mut control)
         .commit(bound.token)
         .unwrap();
-    let commit = layerfs_api::internal::take_telemetry(&mut control);
+    let commit = layerfs_control::internal::take_telemetry(&mut control);
     assert_eq!(commit.len(), 1);
     assert_eq!(width(&commit[0], &["delta", "payload"]), 11);
     assert_eq!(width(&commit[0], &["delta", "metadata"]), 7);
     assert!(counter(&commit[0], &["delta", "metadata"], "leaves") > 0);
     // Unmount is admitted on a quiet connection: observe untraced, bounded.
-    layerfs_api::internal::trace(&mut control, None);
+    layerfs_control::internal::trace(&mut control, None);
     let deadline = std::time::Instant::now() + Duration::from_secs(8);
     let mut last = None;
     loop {
-        let work = layerfs_api::internal::workspace(&mut control)
+        let work = layerfs_control::internal::workspace(&mut control)
             .status(bound.token)
             .unwrap()
             .kernel
@@ -575,11 +575,11 @@ fn traced_calls_carry_sql_work_and_status_unmount_carry_opcodes() {
         );
         thread::sleep(Duration::from_millis(2));
     }
-    layerfs_api::internal::trace(&mut control, Some([6; 32]));
-    layerfs_api::internal::workspace(&mut control)
+    layerfs_control::internal::trace(&mut control, Some([6; 32]));
+    layerfs_control::internal::workspace(&mut control)
         .status(bound.token)
         .unwrap();
-    let status = layerfs_api::internal::take_telemetry(&mut control);
+    let status = layerfs_control::internal::take_telemetry(&mut control);
     assert_eq!(status.len(), 1);
     let status = &status[0];
     // 39 opcode counts, 10 counters, and the `ns` and `phases` maps.
@@ -587,10 +587,10 @@ fn traced_calls_carry_sql_work_and_status_unmount_carry_opcodes() {
     for name in ["lookup", "create", "write", "release", "served"] {
         assert!(counter(status, &["fuse"], name) > 0, "{name}");
     }
-    layerfs_api::internal::workspace(&mut control)
+    layerfs_control::internal::workspace(&mut control)
         .unmount(bound.token, false)
         .unwrap();
-    let unmount = layerfs_api::internal::take_telemetry(&mut control);
+    let unmount = layerfs_control::internal::take_telemetry(&mut control);
     assert_eq!(unmount.len(), 1);
     // Counts are since attach: the final ones are at least the status ones.
     for name in ["lookup", "write", "served"] {
@@ -598,7 +598,7 @@ fn traced_calls_carry_sql_work_and_status_unmount_carry_opcodes() {
     }
     assert!(width(&unmount[0], &["sql"]) > 0);
     drop(guard);
-    layerfs_api::internal::trace(&mut control, None);
+    layerfs_control::internal::trace(&mut control, None);
     assert_eq!(
         control.call(Request::EndSession).unwrap(),
         Reply::SessionEnded
@@ -612,7 +612,7 @@ fn resource_and_output_failure_preserve_original_status_reply() {
     let f = support::Fixture::new("observed-resource-and-sink", None);
     let (process, address, mut control) =
         start(&f, File::options().write(true).open("/dev/full").unwrap());
-    let bound = layerfs_api::internal::workspace(&mut control)
+    let bound = layerfs_control::internal::workspace(&mut control)
         .bind(
             WorkspaceId::from_authority([123; 32]).unwrap(),
             f.project.branch.branch.id,
@@ -621,7 +621,7 @@ fn resource_and_output_failure_preserve_original_status_reply() {
     let backing = f.directory.join("overlay.sqlite");
     fs::rename(&backing, f.directory.join("original-overlay.sqlite")).unwrap();
     fs::write(&backing, b"external physical identity change").unwrap();
-    let original = layerfs_api::internal::with_observations(&mut control, &[17; 32])
+    let original = layerfs_control::internal::with_observations(&mut control, &[17; 32])
         .status(bound.token)
         .unwrap();
     assert_eq!(original.token, bound.token);
@@ -631,7 +631,7 @@ fn resource_and_output_failure_preserve_original_status_reply() {
     // the original live state and does not repeat any mutation or binding.
     let mut observer = Control::new(connect(address));
     assert_eq!(
-        layerfs_api::internal::workspace(&mut observer)
+        layerfs_control::internal::workspace(&mut observer)
             .status(bound.token)
             .unwrap()
             .token,
@@ -721,18 +721,18 @@ fn configured_serial_low_water_reaches_a_mounted_create_on_both_startup_routes()
         assert_eq!(manifest.is_some(), route == "existing");
         assert!(served.daemon_sqlite.is_some());
         manifest = Some(served);
-        let bound = layerfs_api::internal::workspace(&mut control)
+        let bound = layerfs_control::internal::workspace(&mut control)
             .bind(
                 WorkspaceId::from_authority([140 + run; 32]).unwrap(),
                 f.project.branch.branch.id,
             )
             .unwrap();
-        let ready = layerfs_api::internal::workspace(&mut control)
+        let ready = layerfs_control::internal::workspace(&mut control)
             .attach(bound.token)
             .unwrap();
         let guard = MountGuard(ready.directory.clone());
         let observe = |control: &mut Control| {
-            layerfs_api::internal::with_observations(control, &[21; 32])
+            layerfs_control::internal::with_observations(control, &[21; 32])
                 .status(bound.token)
                 .unwrap();
             serial_reservations(&log)
@@ -768,7 +768,7 @@ fn configured_serial_low_water_reaches_a_mounted_create_on_both_startup_routes()
         let deadline = std::time::Instant::now() + Duration::from_secs(8);
         let mut last = None;
         loop {
-            let work = layerfs_api::internal::workspace(&mut control)
+            let work = layerfs_control::internal::workspace(&mut control)
                 .status(bound.token)
                 .unwrap()
                 .kernel
@@ -786,7 +786,7 @@ fn configured_serial_low_water_reaches_a_mounted_create_on_both_startup_routes()
             );
             thread::sleep(Duration::from_millis(2));
         }
-        layerfs_api::internal::workspace(&mut control)
+        layerfs_control::internal::workspace(&mut control)
             .unmount(bound.token, false)
             .unwrap();
         drop(guard);
@@ -909,7 +909,7 @@ fn an_idle_daemon_exits_and_a_workspace_keeps_it() {
             idle_exit_s: 2,
         },
     );
-    let bound = layerfs_api::internal::workspace(&mut control)
+    let bound = layerfs_control::internal::workspace(&mut control)
         .bind(
             WorkspaceId::from_authority([81; 32]).unwrap(),
             f.project.branch.branch.id,
@@ -920,7 +920,7 @@ fn an_idle_daemon_exits_and_a_workspace_keeps_it() {
         process.0.try_wait().unwrap().is_none(),
         "a Workspace keeps the daemon"
     );
-    layerfs_api::internal::workspace(&mut control)
+    layerfs_control::internal::workspace(&mut control)
         .unmount(bound.token, false)
         .unwrap();
     let unmounted = std::time::Instant::now();

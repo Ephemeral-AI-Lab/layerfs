@@ -5,13 +5,13 @@ mod daemon_binary;
 #[allow(dead_code)]
 #[path = "../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
-use layerfs_api::internal::Control;
 use layerfs_bridge::{
     control::{ControlCode, DaemonPhase, HelloRequest, Reply, Request},
     daemon_setup::{DaemonLimits, DaemonSetup},
     duplex,
 };
 use layerfs_bridge::{DaemonStore, KernelRoute};
+use layerfs_control::internal::Control;
 use layerfs_history::WorkspaceId;
 use std::{
     fs::{self, File},
@@ -120,7 +120,7 @@ fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
         Reply::SessionEnded
     );
     let mut channel = connect(address);
-    let installed = layerfs_api::internal::install(&f.project, &mut channel).unwrap();
+    let installed = layerfs_control::internal::install(&f.project, &mut channel).unwrap();
     assert!(installed.manifest.daemon_sqlite.is_some());
     let mut control = Control::new(channel);
     let ready = match control
@@ -138,13 +138,13 @@ fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
     assert!(
         matches!(control.call(Request::Hello(HelloRequest {expected_instance:Some([99;32]),wait_for_store:false})).unwrap(), Reply::Refused(v) if v.code == ControlCode::Invalid)
     );
-    let bound = layerfs_api::internal::workspace(&mut control)
+    let bound = layerfs_control::internal::workspace(&mut control)
         .bind(
             WorkspaceId::from_authority([88; 32]).unwrap(),
             f.project.branch.branch.id,
         )
         .unwrap();
-    let before = layerfs_api::internal::workspace(&mut control)
+    let before = layerfs_control::internal::workspace(&mut control)
         .status(bound.token)
         .unwrap();
     // The real binary's Commit of an unchanged Workspace: the same root, no
@@ -152,14 +152,14 @@ fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
     assert!(
         matches!(control.call(Request::Commit(layerfs_bridge::control::CommitControl { token: bound.token, force: false, message: None, })).unwrap(), Reply::Committed(layerfs_history::CommitOutcome::UpToDate { head: None, root }) if root == bound.binding.effective_root)
     );
-    let after = layerfs_api::internal::workspace(&mut control)
+    let after = layerfs_control::internal::workspace(&mut control)
         .status(bound.token)
         .unwrap();
     assert_eq!(after.binding, before.binding);
     assert_eq!(after.activity, before.activity);
     let history = support::commits(&installed.manifest, bound.binding.branch.id, 1);
     assert!(history.records.is_empty());
-    layerfs_api::internal::workspace(&mut control)
+    layerfs_control::internal::workspace(&mut control)
         .unmount(bound.token, false)
         .unwrap();
     assert_eq!(
@@ -167,7 +167,7 @@ fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
         Reply::SessionEnded
     );
     assert!(!control.call(Request::EndSession).unwrap_err().attempted);
-    let mut ended = layerfs_api::internal::into_connection(control);
+    let mut ended = layerfs_control::internal::into_connection(control);
     assert!(matches!(
         ended.send.send(b"cannot reset ended session"),
         Err(duplex::ChannelError::Quarantined)

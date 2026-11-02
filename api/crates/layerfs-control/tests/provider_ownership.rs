@@ -9,7 +9,7 @@ use std::{
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 struct ProjectFixture {
     directory: PathBuf,
-    project: layerfs_api::SealedProject,
+    project: layerfs_control::SealedProject,
 }
 impl ProjectFixture {
     fn new() -> Self {
@@ -24,7 +24,7 @@ impl ProjectFixture {
         let source = directory.join("source");
         fs::create_dir(&source).unwrap();
         fs::write(source.join("payload"), b"original complete project").unwrap();
-        let request = layerfs_api::InitRequest {
+        let request = layerfs_control::InitRequest {
             source,
             store: PersistenceConfig::sqlite(directory.join("store.sqlite"))
                 .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
@@ -43,7 +43,7 @@ impl ProjectFixture {
             deadline: Instant::now() + Duration::from_secs(10),
         };
         let project = layerfs_telemetry::timer::Timing::disabled("sdk.existing.project", |timer| {
-            layerfs_api::ProjectApi::new().init(request, timer)
+            layerfs_control::ProjectApi::new().init(request, timer)
         })
         .0
         .unwrap();
@@ -58,12 +58,12 @@ impl Drop for ProjectFixture {
 
 #[test]
 fn native_resource_paths_are_validated_before_launch() {
-    use layerfs_api::{sandbox::ProviderCreate, SandboxApi, SandboxPhase};
     use layerfs_bridge::{
         daemon_setup::{DaemonLimits, DaemonSetup},
         duplex,
     };
     use layerfs_bridge::{DaemonStore, KernelRoute};
+    use layerfs_control::{sandbox::ProviderCreate, SandboxApi, SandboxPhase};
     use layerfs_sandbox::{
         host_process::HostProcessProvider, CommandIdentity, LaunchRequest, ProviderLaunchOptions,
         Runtime,

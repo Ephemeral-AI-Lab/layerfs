@@ -1,11 +1,11 @@
 //! Normal and observed facades use one authenticated lifecycle with exact tokens.
-use layerfs_api::{
-    internal::{Control, ControlPhase},
-    WorkspaceApi,
-};
 use layerfs_bridge::{
     control::{Answer, Call, CleanupObservation, Reply, Request, UnmountControl, WorkspaceToken},
     duplex,
+};
+use layerfs_control::{
+    internal::{Control, ControlPhase},
+    WorkspaceApi,
 };
 use layerfs_history::WorkspaceId;
 use std::{
@@ -68,19 +68,19 @@ fn facade_observation_is_explicit_and_does_not_persist_on_channel() {
         }
     });
     assert_eq!(
-        layerfs_api::internal::workspace(&mut control)
+        layerfs_control::internal::workspace(&mut control)
             .cleanup(token())
             .unwrap(),
         CleanupObservation::Gone
     );
     assert_eq!(
-        layerfs_api::internal::with_observations(&mut control, &[7; 32])
+        layerfs_control::internal::with_observations(&mut control, &[7; 32])
             .cleanup(token())
             .unwrap(),
         CleanupObservation::Gone
     );
     assert_eq!(
-        layerfs_api::internal::workspace(&mut control)
+        layerfs_control::internal::workspace(&mut control)
             .cleanup(token())
             .unwrap(),
         CleanupObservation::Gone
@@ -161,16 +161,16 @@ fn unmount_force_selects_one_original_request_without_unknown_relinquishment() {
         }
     });
     assert_eq!(
-        layerfs_api::internal::workspace(&mut control)
+        layerfs_control::internal::workspace(&mut control)
             .unmount(token(), false)
             .unwrap(),
         None
     );
-    let failure = layerfs_api::internal::workspace(&mut control)
+    let failure = layerfs_control::internal::workspace(&mut control)
         .unmount(token(), true)
         .unwrap_err();
     assert!(
-        matches!(failure.cause, layerfs_api::OperationCause::Remote(ref cause) if cause.code == ControlCode::Busy && cause.phase == "force:admission")
+        matches!(failure.cause, layerfs_control::OperationCause::Remote(ref cause) if cause.code == ControlCode::Busy && cause.phase == "force:admission")
     );
     worker.join().unwrap();
 }

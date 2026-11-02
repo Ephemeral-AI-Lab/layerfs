@@ -5,8 +5,8 @@ mod fixture;
 #[allow(dead_code)]
 #[path = "../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
-use layerfs_api::{internal::Control, Unmounted};
 use layerfs_content::filesystem::PathName;
+use layerfs_control::{internal::Control, Unmounted};
 use layerfs_daemon::control::Service;
 use layerfs_history::WorkspaceId;
 use layerfs_workspace::{Operation, Outcome, Time};
@@ -58,7 +58,7 @@ fn refusal(tag: u8, operations: impl Fn(Serials) -> Vec<Operation>) -> Unmounted
         f.installed.opened.store.policy().construction(),
     );
     let workspace = WorkspaceId::from_authority([tag; 32]).unwrap();
-    let token = layerfs_api::internal::workspace(&mut client)
+    let token = layerfs_control::internal::workspace(&mut client)
         .bind(workspace, branch)
         .unwrap()
         .token;
@@ -100,11 +100,11 @@ fn refusal(tag: u8, operations: impl Fn(Serials) -> Vec<Operation>) -> Unmounted
         .release_base_source(route, source)
         .unwrap();
     drop(operation);
-    let refused = layerfs_api::internal::workspace(&mut client)
+    let refused = layerfs_control::internal::workspace(&mut client)
         .unmount_checked(token, false)
         .unwrap();
     if matches!(refused, Unmounted::Dirty(_)) {
-        let closed = layerfs_api::internal::workspace(&mut client)
+        let closed = layerfs_control::internal::workspace(&mut client)
             .unmount_checked(token, true)
             .unwrap();
         assert!(matches!(closed, Unmounted::Closed), "{closed:?}");
