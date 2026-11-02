@@ -9,7 +9,7 @@
 use crate::common::outcome::{refused, Outcome};
 use crate::host::discovery;
 use crate::host::registry::text;
-use crate::host::stores::{self, Identity, Kind};
+use crate::store::identity::{self as stores, Identity, Kind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_service::StoreService;
 use std::path::Path;

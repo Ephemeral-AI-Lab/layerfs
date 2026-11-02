@@ -6,7 +6,7 @@
 //! reaper skips it and `close` refuses `InUse`.
 use crate::common::home::lease::Lease;
 use crate::common::outcome::{refused, Outcome};
-use crate::host::direct;
+use crate::store::service as direct;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -29,7 +29,7 @@ static OPEN: Mutex<BTreeMap<PathBuf, Entry>> = Mutex::new(BTreeMap::new());
 static REAPER: Once = Once::new();
 
 fn store_path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
-    crate::host::stores::store_path(args)
+    crate::store::identity::store_path(args)
 }
 
 /// Runs Store method `op` once on the Store `args` name (`storePath`),

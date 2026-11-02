@@ -5,7 +5,7 @@
 //! synchronousCommit }`) and is never stored.
 use crate::common::outcome::{refused, Outcome};
 use crate::host::registry::{lock, random, text, INITS};
-use crate::host::stores::{self, Identity};
+use crate::store::identity::{self as stores, Identity};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ const UNBUILT: &str =
 pub(crate) fn create_schema(args: &SdkValue, identity: &Identity) -> Result<bool, SdkRefusal> {
     #[cfg(feature = "postgresql")]
     {
-        use crate::host::postgres::{schema, selection, setting, url};
+        use crate::store::postgres::{schema, selection, setting, url};
         use layerfs_history::HistoryCatalogConfig;
         use layerfs_project::store::{CreateRequest, InitError, ProjectApi};
         use layerfs_storage::port::PersistenceError;
@@ -64,7 +64,7 @@ pub(crate) fn add_project(args: &SdkValue) -> Outcome {
     if !matches!(identity.kind, stores::Kind::Postgresql { .. }) {
         return Err(refused("InvalidInput", "the Store is not PostgreSQL"));
     }
-    let deadline = crate::host::project::deadline(args)?;
+    let deadline = crate::project::init::deadline(args)?;
     let counters = Arc::new(layerfs_project::InitCounters::new());
     let key = stores::init_key(args, name);
     lock(&INITS)?.insert(key.clone(), Arc::clone(&counters));
@@ -98,12 +98,12 @@ fn run(
 ) -> Result<(Added, Vec<u8>), SdkRefusal> {
     #[cfg(feature = "postgresql")]
     {
-        use crate::host::postgres::{schema, selection, setting, url};
+        use crate::store::postgres::{schema, selection, setting, url};
         use layerfs_history::{BranchId, HistoryName, LayerStackId};
         use layerfs_project::store::{AddRequest, ProjectApi};
         let history = |text: &str| HistoryName::new(text).map_err(crate::common::outcome::failed);
-        let stack = LayerStackId::from_authority(crate::host::project::sixteen(random()?));
-        let branch = BranchId::from_authority(crate::host::project::sixteen(random()?));
+        let stack = LayerStackId::from_authority(crate::project::init::sixteen(random()?));
+        let branch = BranchId::from_authority(crate::project::init::sixteen(random()?));
         let request = AddRequest {
             source: std::path::PathBuf::from(text(args, "path")?),
             store: layerfs_persistence::StoreSelection::Postgres(selection(

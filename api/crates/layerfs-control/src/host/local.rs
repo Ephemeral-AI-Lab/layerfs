@@ -172,7 +172,7 @@ fn start_claimed(
         DaemonStore::Sqlite { locator, .. } => locator.clone(),
         _ => String::new(),
     };
-    let store = crate::host::stores::shared_store(args)?;
+    let store = crate::store::identity::shared_store(args)?;
     let labels = crate::host::sandbox::labels(name, store.as_deref(), id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
     let options = launch_options(backend, identity, &daemon_locator, args)?;

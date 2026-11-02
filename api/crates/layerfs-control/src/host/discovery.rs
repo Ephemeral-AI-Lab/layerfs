@@ -98,7 +98,7 @@ pub(crate) fn sandbox_dir(args: &SdkValue, id: &str) -> Result<PathBuf> {
 /// The project's Sandbox numbers that have a directory, lowest first.
 pub(crate) fn sandbox_ids(args: &SdkValue) -> Result<Vec<String>> {
     // a project of a PostgreSQL Store has an entry once it had a Sandbox
-    if !project_entry(args)?.exists() && crate::host::stores::postgresql(args)? {
+    if !project_entry(args)?.exists() && crate::store::identity::postgresql(args)? {
         return Ok(Vec::new());
     }
     let mut ids = Vec::new();
@@ -144,7 +144,7 @@ pub(crate) fn project_entry(args: &SdkValue) -> Result<PathBuf> {
     let home = home(args)?;
     // 2.0 (#533 step 4): every project is named with its Store
     let store = args.get_text("store").unwrap_or(name);
-    crate::host::stores::store_dir(&home, store)?;
+    crate::store::identity::store_dir(&home, store)?;
     Ok(crate::common::home::paths::project_dir(&home, store, name))
 }
 /// Calls take turns on one directory: in this process before its OS lock,

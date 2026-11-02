@@ -13,7 +13,7 @@
 use crate::common::outcome::{failed, refused, Outcome};
 use crate::host::discovery;
 use crate::host::registry::{lock, random, text, Project, INITS};
-use crate::store::store_ref::{kind_of, required, StoreKind, StoreRef};
+use crate::store::record::{kind_of, required, StoreKind, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_bridge::sdk_values::hex;
@@ -232,7 +232,7 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
     let home = discovery::home(args)?;
     let store = text(args, "store")?;
     let destination = store_path(args)?;
-    let policy = crate::host::project::policy(args)?;
+    let policy = crate::project::init::policy(args)?;
     let global = destination
         .parent()
         .ok_or_else(|| refused("InvalidInput", "storePath has no directory"))?;
@@ -318,7 +318,7 @@ pub(crate) fn make_empty(
 /// `runtime.store.list_projects { home, store, storePath, postgresql? }`:
 /// `[{ name, stack, headLayer }]` by name, read from the Store itself.
 pub(crate) fn list_projects(args: &SdkValue) -> Outcome {
-    crate::host::direct::with_service(args, |service| {
+    crate::store::service::with_service(args, |service| {
         let stacks = service
             .store
             .published(layerfs_project::store::projects)
@@ -354,7 +354,7 @@ pub(crate) fn manifest(
     let bytes = std::fs::metadata(store).map_err(failed)?.len();
     let manifest = StoreManifest {
         provider: ProviderKind::Sqlite,
-        locator: crate::host::project::LOCATOR.into(),
+        locator: crate::project::init::LOCATOR.into(),
         profile: StoreProfile::Disposable,
         binding: identity.binding.clone(),
         cursor_key: identity.cursor_key,
@@ -428,7 +428,7 @@ pub(crate) fn add_project(args: &SdkValue) -> Outcome {
             "a project added to a Store uses the Store's policy; policy is refused",
         ));
     }
-    let deadline = crate::host::project::deadline(args)?;
+    let deadline = crate::project::init::deadline(args)?;
     let store_file = store_path(args)?;
     let global = store_file.parent().unwrap_or(&store_file);
     layerfs_store_service::kernel_guard::check(global)
@@ -451,8 +451,8 @@ pub(crate) fn add_project(args: &SdkValue) -> Outcome {
     let entry = make_entry(&home, store, name)?;
     let _guard = discovery::guard(&entry)?;
     let history = |text: &str| HistoryName::new(text).map_err(failed);
-    let stack = LayerStackId::from_authority(crate::host::project::sixteen(random()?));
-    let branch = BranchId::from_authority(crate::host::project::sixteen(random()?));
+    let stack = LayerStackId::from_authority(crate::project::init::sixteen(random()?));
+    let branch = BranchId::from_authority(crate::project::init::sixteen(random()?));
     let request = AddRequest {
         source,
         store: PersistenceConfig::sqlite(&store_file)
@@ -563,7 +563,7 @@ pub(crate) fn remove_project(args: &SdkValue) -> Outcome {
     let identity = identity(args)?;
     let own = name == store && legacy(&home, store)?;
     let entry = crate::common::home::paths::project_dir(&home, store, name);
-    let stack = crate::host::direct::with_service(args, |service| {
+    let stack = crate::store::service::with_service(args, |service| {
         let stacks = service
             .store
             .published(layerfs_project::store::projects)
@@ -641,5 +641,5 @@ pub(crate) fn open_postgres(
                 "a PostgreSQL Store call needs postgresql.url (passed per call, never stored)",
             )
         })?;
-    crate::host::postgres::open(url, schema, synchronous_commit, identity, template)
+    crate::store::postgres::open(url, schema, synchronous_commit, identity, template)
 }

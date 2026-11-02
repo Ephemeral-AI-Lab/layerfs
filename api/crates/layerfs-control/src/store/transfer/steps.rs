@@ -116,7 +116,7 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
                 "storePath".to_owned(),
                 SdkValue::text(file.display().to_string()),
             ));
-            let sealed = crate::host::direct::with_service(&SdkValue::Map(fields), |service| {
+            let sealed = crate::store::service::with_service(&SdkValue::Map(fields), |service| {
                 service
                     .opened
                     .file()

@@ -12,7 +12,7 @@
 use crate::home::{paths, read_record, with_field};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_control::common::outcome::refused;
-use layerfs_control::family::files::NAMESPACE;
+use layerfs_control::store::calls::NAMESPACE;
 use std::path::Path;
 
 /// A checked scope.

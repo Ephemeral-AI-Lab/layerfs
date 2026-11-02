@@ -4,7 +4,7 @@
 //! become the adapters' [`Spec`]; nothing in the adapters reads the home.
 use crate::common::home::{self, paths, read_record, with_field, write_record};
 use crate::common::outcome::refused;
-use crate::store::store_ref::{Placement, StoreRef};
+use crate::store::record::{Placement, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_machine::{
     Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, SshSpec, Tools,

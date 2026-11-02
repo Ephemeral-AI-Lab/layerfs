@@ -26,7 +26,7 @@
 use crate::common::outcome::{failed, refused, Outcome};
 use crate::host::discovery;
 use crate::host::registry::{random, text};
-use crate::host::stores::{self, Identity, Kind};
+use crate::store::identity::{self as stores, Identity, Kind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::HistoryName;
@@ -423,7 +423,7 @@ fn upload(args: &SdkValue, kind: Upload) -> Outcome {
         Upload::Push => expected(args, store, &remote, file)?,
         Upload::Publish | Upload::Send => remote::Expected::Absent,
     };
-    let pushed = crate::host::direct::with_service(args, |service| {
+    let pushed = crate::store::service::with_service(args, |service| {
         remote::push(
             &service.opened,
             &path,
@@ -508,7 +508,7 @@ fn pull_once(args: &SdkValue) -> Outcome {
     let identity = stores::identity(args)?;
     stores::sqlite_only(&identity, "pull")?;
     let path = stores::store_path(args)?;
-    if crate::host::direct::holds(&path)? {
+    if crate::store::service::holds(&path)? {
         return Err(refused(
             "Busy",
             "this process holds the Store open; close its clients and pull again",
@@ -587,7 +587,7 @@ fn register(args: &SdkValue, identity: &Identity) -> Result<(SdkValue, SdkValue)
     let store = text(args, "store")?;
     let path = stores::store_path(args)?;
     let main = HistoryName::new("main").map_err(failed)?;
-    let found = crate::host::direct::with_service(args, |service| {
+    let found = crate::store::service::with_service(args, |service| {
         let sqlite = service.opened.sqlite_version.clone();
         service
             .store

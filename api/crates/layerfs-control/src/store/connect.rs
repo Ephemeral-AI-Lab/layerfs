@@ -7,7 +7,7 @@ use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::{self, paths, read_record, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::store::store_ref::{kind_of, StoreKind};
+use crate::store::record::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -295,25 +295,25 @@ fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
     // 10b); an existing LayerFS schema keeps its binding, read once. The
     // cursor key is this home's own either way.
     let probe = SdkValue::map([("postgresql", selection.clone())]);
-    let fresh = crate::host::stores::Identity {
-        kind: crate::host::stores::Kind::Postgresql {
+    let fresh = crate::store::identity::Identity {
+        kind: crate::store::identity::Kind::Postgresql {
             schema: SCHEMA.to_owned(),
             synchronous_commit: sync.to_owned(),
         },
         binding: crate::host::registry::random()?.to_vec(),
         cursor_key: crate::host::registry::random()?,
     };
-    let binding = if crate::host::postgres_init::create_schema(&probe, &fresh)? {
+    let binding = if crate::project::postgres_init::create_schema(&probe, &fresh)? {
         fresh.binding
     } else {
-        crate::host::postgres::read_binding(&probe)?
+        crate::store::postgres::read_binding(&probe)?
     };
     let record = home::with_field(record, "binding", SdkValue::Bytes(binding.clone()));
     let record = home::with_field(record, "cursor", SdkValue::Bytes(fresh.cursor_key.to_vec()));
     let directory = paths::store_dir(home, name);
     // the projects the schema holds become this home's project records; a
     // schema that does not open is not connected
-    let listed = crate::host::stores::list_projects(&SdkValue::map([
+    let listed = crate::store::identity::list_projects(&SdkValue::map([
         ("home", SdkValue::text(home.display().to_string())),
         ("store", SdkValue::text(name)),
         ("store_record", record.clone()),
@@ -385,6 +385,6 @@ pub(crate) fn status(record: &SdkValue, name: &str) -> SdkValue {
         ("url", SdkValue::text(url)),
         ("schemas", SdkValue::List(vec![SdkValue::text(SCHEMA)])),
     ]);
-    crate::host::postgres::status(&args)
+    crate::store::postgres::status(&args)
         .unwrap_or_else(|refusal| SdkValue::map([("unavailable", SdkValue::Text(refusal.message))]))
 }

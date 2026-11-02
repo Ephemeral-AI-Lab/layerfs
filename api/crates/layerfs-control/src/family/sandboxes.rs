@@ -16,8 +16,9 @@ use super::deploy;
 use crate::common::context::Context;
 use crate::common::home::{self, paths, read_record, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::store::route;
-use crate::store::store_ref::{kind_of, StoreKind, StoreRef};
+use crate::common::place;
+use crate::store::record::{kind_of, StoreKind, StoreRef};
+use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
@@ -131,7 +132,7 @@ fn host_args(
     // a PostgreSQL Store's URL with its password, resolved now and never
     // written (H §7.4)
     if kind == StoreKind::Postgresql {
-        let url = crate::family::postgres::url(record, store)?;
+        let url = crate::store::connect::url(record, store)?;
         let mut postgresql = vec![("url", SdkValue::text(&url))];
         if in_container && cfg!(not(target_os = "linux")) {
             if let Some(daemon_url) = layerfs_sandbox::docker::desktop_url(&url) {
@@ -256,8 +257,8 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     // the Store's place, a move and the name are checked under the lock
     // that claims the name, so a store.move cannot pass between them
     let _lock = home::lock::take(&home)?;
-    let target = route::target(&home, project)?;
-    route::moving(&target.record, &target.store)?;
+    let target = resolve::target(&home, project)?;
+    resolve::moving(&target.record, &target.store)?;
     // refused too while the machine is being removed
     #[cfg(feature = "machine")]
     {
@@ -368,7 +369,7 @@ fn on_machine(
 ) -> Outcome {
     let home = context.home.clone();
     let project = record.get_text("project").unwrap_or("");
-    let target = route::target(&home, project)?;
+    let target = resolve::target(&home, project)?;
     let mut more = more;
     if let Some(id) = record.get_text("id") {
         more.push(("sandbox", SdkValue::text(id)));
@@ -390,7 +391,7 @@ fn on_machine(
     let worker = if postgresql {
         None
     } else {
-        route::endpoint(&home, machine)?
+        place::endpoint(&home, machine)?
     };
     let docker = match machine {
         "docker" => Some(deploy::docker_settings(

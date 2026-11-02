@@ -232,7 +232,11 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
                 .get_text("op")
                 .ok_or_else(|| refused("InvalidInput", "Store step name"))?
                 .to_owned();
-            crate::store::files::run(root, &name, &args.get("args").cloned().unwrap_or_default())
+            crate::store::transfer::steps::run(
+                root,
+                &name,
+                &args.get("args").cloned().unwrap_or_default(),
+            )
         }
         // a Sandbox or Workspace operation on this machine's own native
         "sandbox.host" => crate::family::sandboxes::in_worker(root, &args, events),

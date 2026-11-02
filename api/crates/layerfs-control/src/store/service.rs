@@ -46,7 +46,7 @@ fn path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
 
 /// Opens the Store at `store` for this process, or refuses.
 fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
-    let identity = crate::host::stores::identity(args)?;
+    let identity = crate::store::identity::identity(args)?;
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
         std::process::id(),
@@ -55,7 +55,7 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
     std::fs::create_dir(&directory).map_err(failed)?;
     let template = directory.join("overlay.sqlite");
     let opened = match identity.kind {
-        crate::host::stores::Kind::Sqlite => {
+        crate::store::identity::Kind::Sqlite => {
             StoreService::open_direct(store, &identity.binding, identity.cursor_key, &template)
                 .map_err(|refusal| match refusal {
                     OpenRefusal::Unsupported(reason) => refused("Unsupported", reason.0),
@@ -63,8 +63,8 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
                     OpenRefusal::Failed(reason) => refused("Failed", reason),
                 })
         }
-        crate::host::stores::Kind::Postgresql { .. } => {
-            crate::host::stores::open_postgres(args, &identity, &template)
+        crate::store::identity::Kind::Postgresql { .. } => {
+            crate::store::identity::open_postgres(args, &identity, &template)
         }
     };
     match opened {

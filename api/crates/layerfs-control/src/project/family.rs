@@ -8,8 +8,9 @@ use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::{paths, read_record};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::store::route;
-use crate::store::store_ref::{kind_of, StoreRef};
+use crate::common::place;
+use crate::store::record::{kind_of, StoreRef};
+use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -63,7 +64,7 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
         "list" => list(&home, args),
         "get" => {
             let project = args.get_text("project").unwrap_or("");
-            let target = route::target(&home, project)?;
+            let target = resolve::target(&home, project)?;
             Ok(summary(
                 &home,
                 &target.store,
@@ -150,7 +151,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             format!("no Store named {store}; `store create {store}` makes one"),
         )
     })?;
-    route::moving(&record, store)?;
+    resolve::moving(&record, store)?;
     let timeout = args.get_int("timeout").unwrap_or(INIT_TIMEOUT_MS);
     let store_ref = StoreRef::from_record(store, &record)?;
     if let StoreRef::Postgres { .. } = store_ref {
@@ -177,7 +178,9 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ],
     );
     let watch = host_args(&home, store, vec![("project", SdkValue::text(name))]);
-    let added = observed(context, &watch, || crate::host::stores::add_project(&call))?;
+    let added = observed(context, &watch, || {
+        crate::store::identity::add_project(&call)
+    })?;
     // the project's record keeps when it was made
     let path = paths::project_record(&home, store, name);
     {
@@ -210,7 +213,7 @@ fn observed(
         let worker = scope.spawn(add);
         let mut last = SdkValue::Null;
         while !worker.is_finished() {
-            if let Ok(progress) = crate::host::project::progress(watch) {
+            if let Ok(progress) = crate::project::init::progress(watch) {
                 if progress != SdkValue::Null && progress != last {
                     context.progress(progress.clone());
                     last = progress;
@@ -252,13 +255,13 @@ fn init_postgresql(
             ("store_record", record.clone()),
             (
                 "postgresql",
-                crate::family::postgres::selection(record, store)?,
+                crate::store::connect::selection(record, store)?,
             ),
         ],
     );
     let watch = host_args(&home, store, vec![("project", SdkValue::text(name))]);
     let added = observed(context, &watch, || {
-        crate::host::postgres_init::add_project(&call)
+        crate::project::postgres_init::add_project(&call)
     })?;
     crate::common::home::write_record(
         &path,
@@ -282,8 +285,8 @@ fn init_postgresql(
 /// be closed first; the other projects stay.
 fn remove(context: &mut Context<'_>, project: &str) -> Outcome {
     let home = context.home.clone();
-    let target = route::target(&home, project)?;
-    route::moving(&target.record, &target.store)?;
+    let target = resolve::target(&home, project)?;
+    resolve::moving(&target.record, &target.store)?;
     for machine in paths::names(&home.join("machine")).map_err(failed)? {
         let dir = paths::machine_dir(&home, &machine).join("sandbox");
         for sandbox in paths::names(&dir).map_err(failed)? {
@@ -307,10 +310,10 @@ fn remove(context: &mut Context<'_>, project: &str) -> Outcome {
         ));
     } else {
         let machine = target.store_ref.machine()?.to_owned();
-        match route::endpoint(&home, &machine)? {
+        match place::endpoint(&home, &machine)? {
             None => {
                 let _lease = lease::hold(&home, &target.store)?;
-                crate::host::stores::remove_project(&host_args(&home, &target.store, args))?
+                crate::store::identity::remove_project(&host_args(&home, &target.store, args))?
             }
             Some(endpoint) => {
                 let _lease = lease::hold(&home, &target.store)?;

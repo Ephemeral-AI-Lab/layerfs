@@ -84,7 +84,7 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     }
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
     // The Branch is found by name in this process; the daemon binds its id.
-    let branch_id = crate::host::direct::branch_id(args, branch)?;
+    let branch_id = crate::store::service::branch_id(args, branch)?;
     let mounted = {
         let mut control = crate::common::trace::control(&state.controls)?;
         workspace(&mut control).mount(id, branch_id)
@@ -447,7 +447,7 @@ pub(crate) fn status(args: &SdkValue) -> Outcome {
     let mut control = crate::common::trace::control(&state.controls)?;
     let status = workspace(&mut control).status(token).map_err(operation)?;
     drop(control);
-    let head = crate::host::direct::head(args, status.binding.branch.id).ok();
+    let head = crate::store::service::head(args, status.binding.branch.id).ok();
     let mut value = values::status(&status, head);
     if let SdkValue::Map(fields) = &mut value {
         let branch = lock(&state.mounts)?

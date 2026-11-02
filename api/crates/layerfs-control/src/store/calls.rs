@@ -3,7 +3,8 @@
 //! method that does it and run on the route its Store's records choose.
 use crate::common::context::Context;
 use crate::common::outcome::{refused, Outcome};
-use crate::store::route::{store_call, target};
+use crate::store::call::store_call;
+use crate::store::resolve::target;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 
 /// The argument a scoped `branch.list` carries to its family: the Branch

@@ -8,6 +8,7 @@
 mod base;
 #[doc(hidden)]
 pub use base::internal;
+pub mod backup;
 pub mod common;
 #[doc(hidden)]
 pub mod family;

@@ -255,7 +255,7 @@ impl Drop for Running<'_> {
 /// `runtime.project.get_init`: how far the project's running Init has come
 /// (`step`, `entries`, `files`, `bytes`), or null when none runs.
 pub(crate) fn progress(args: &SdkValue) -> Outcome {
-    let name = crate::host::stores::init_key(args, text(args, "project")?);
+    let name = crate::store::identity::init_key(args, text(args, "project")?);
     let Some(counters) = lock(&INITS)?.get(&name).cloned() else {
         return Ok(SdkValue::Null);
     };

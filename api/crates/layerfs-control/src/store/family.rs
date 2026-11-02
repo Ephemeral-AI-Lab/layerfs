@@ -14,10 +14,11 @@ use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::{self, paths, read_record, with_field, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
+use crate::common::place;
 use crate::machine::worker::Endpoint;
-use crate::store::files::CHUNK;
-use crate::store::route;
-use crate::store::store_ref::StoreRef;
+use crate::store::record::StoreRef;
+use crate::store::resolve;
+use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -85,7 +86,7 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
 /// One step on the machine that holds a Store's file.
 fn step(home: &Path, endpoint: &Option<Endpoint>, op: &str, args: SdkValue) -> Outcome {
     match endpoint {
-        None => crate::store::files::run(home, op, &args),
+        None => crate::store::transfer::steps::run(home, op, &args),
         Some(endpoint) => {
             let request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
             crate::machine::worker::call(endpoint, "store.file", request, &mut |_| {})
@@ -112,17 +113,17 @@ fn status(home: &Path, name: &str) -> Outcome {
         let _lock = home::lock::take(home)?;
         lease::holders(home, name)?
     };
-    let moving = route::moving(&record, name).is_err();
+    let moving = resolve::moving(&record, name).is_err();
     let mut down = None;
     let mut more = Vec::new();
     let store_ref = StoreRef::from_record(name, &record)?;
     if let StoreRef::Postgres { .. } = store_ref {
-        more.push(("server", crate::family::postgres::status(&record, name)));
+        more.push(("server", crate::store::connect::status(&record, name)));
     } else {
         let machine = store_ref.machine()?.to_owned();
         more.push(("machine", SdkValue::text(&machine)));
         // the file's size where it lives; a machine that is down says why
-        let file = route::endpoint_now(home, &machine)
+        let file = place::endpoint_now(home, &machine)
             .and_then(|endpoint| step(home, &endpoint, "stat", of_store(name, vec![])));
         let file = file.unwrap_or_else(|why| {
             down = Some(why.message.clone());
@@ -171,14 +172,14 @@ fn create(home: &Path, name: &str) -> Outcome {
     }
     let directory = paths::store_dir(home, name);
     home::private_dir(&directory)?;
-    let identity = crate::host::stores::Identity {
-        kind: crate::host::stores::Kind::Sqlite,
+    let identity = crate::store::identity::Identity {
+        kind: crate::store::identity::Kind::Sqlite,
         binding: crate::host::registry::random()?.to_vec(),
         cursor_key: crate::host::registry::random()?,
     };
     let file = paths::store_file(home, name);
     let policy = layerfs_storage::StoragePolicy::frozen_default();
-    let sealed = match crate::host::stores::make_empty(&directory, &file, &identity, policy) {
+    let sealed = match crate::store::identity::make_empty(&directory, &file, &identity, policy) {
         Ok(sealed) => sealed,
         Err(refusal) => {
             // nothing was published: this call's own directory goes
@@ -186,7 +187,7 @@ fn create(home: &Path, name: &str) -> Outcome {
             return Err(refusal);
         }
     };
-    crate::host::stores::save_record(home, name, &identity)?;
+    crate::store::identity::save_record(home, name, &identity)?;
     let path = paths::store_record(home, name);
     let mut record = read_record(&path)?.unwrap_or_default();
     for (field, value) in [
@@ -224,7 +225,7 @@ fn sandboxes_of(home: &Path, name: &str) -> Result<Vec<String>> {
 /// one of its projects runs, or a live process moves or removes it. Under
 /// the home lock.
 fn idle(home: &Path, name: &str, record: &SdkValue) -> Result<()> {
-    route::moving(record, name)?;
+    resolve::moving(record, name)?;
     let holders = lease::holders(home, name)?;
     if !holders.is_empty() {
         return Err(refused(
@@ -323,12 +324,12 @@ fn remove(home: &Path, name: &str) -> Outcome {
     let machine = store_ref.machine()?.to_owned();
     let endpoint = match machine.as_str() {
         "native" => None,
-        _ => route::endpoint(home, &machine)?,
+        _ => place::endpoint(home, &machine)?,
     };
     {
         let _lock = home::lock::take(home)?;
         let record = record_of(home, name)?;
-        if route::machine(&record, name)? != machine {
+        if resolve::machine(&record, name)? != machine {
             return Err(refused(
                 "Conflict",
                 format!("Store {name} moved off {machine} meanwhile; nothing was removed"),
@@ -394,7 +395,7 @@ fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Outcome {
         if read_record(&paths::machine_record(&home, to))?.is_none() {
             return Err(refused("NotFound", format!("no machine named {to}")));
         }
-        let from = route::machine(&record, name)?;
+        let from = resolve::machine(&record, name)?;
         if from == to {
             return Err(refused(
                 "InvalidInput",
@@ -435,8 +436,8 @@ fn at<T>(phase: &'static str, result: Result<T>) -> Phased<T> {
 
 fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased<SdkValue> {
     let home = context.home.clone();
-    let source = at("check", route::endpoint(&home, from))?;
-    let target = at("check", route::endpoint(&home, to))?;
+    let source = at("check", place::endpoint(&home, from))?;
+    let target = at("check", place::endpoint(&home, to))?;
     let exists = at(
         "check",
         step(&home, &target, "stat", of_store(name, vec![])),

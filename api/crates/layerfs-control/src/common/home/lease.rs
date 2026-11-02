@@ -83,7 +83,7 @@ pub(crate) fn claim(home: &Path, store: &str) -> Result<(Lease, SdkValue), SdkRe
     let _lock = home::lock::take(home)?;
     let record = read_record(&paths::store_record(home, store))?
         .ok_or_else(|| refused("NoSuchStore", format!("no Store named {store}")))?;
-    crate::store::route::moving(&record, store)?;
+    crate::store::resolve::moving(&record, store)?;
     Ok((hold_locked(home, store)?, record))
 }
 

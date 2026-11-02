@@ -105,7 +105,7 @@ pub(crate) fn sandbox_name(args: &SdkValue, id: &str) -> Result<String, SdkRefus
         .filter(|prefix| !prefix.is_empty())
         .unwrap_or(PREFIX);
     let project = text(args, "project")?;
-    Ok(match crate::host::stores::shared_store(args)? {
+    Ok(match crate::store::identity::shared_store(args)? {
         Some(store) => format!("{prefix}{store}.{project}-{id}"),
         None => format!("{prefix}{project}-{id}"),
     })
@@ -138,8 +138,8 @@ pub(crate) enum OpenedStore {
 fn installed(args: &SdkValue) -> Result<OpenedStore, SdkRefusal> {
     let name = text(args, "project")?;
     if args.get_text("store").is_some() {
-        let identity = crate::host::stores::identity(args)?;
-        crate::host::stores::sqlite_only(&identity, "a Sandbox of a Store file")?;
+        let identity = crate::store::identity::identity(args)?;
+        crate::store::identity::sqlite_only(&identity, "a Sandbox of a Store file")?;
     }
     let project = crate::host::discovery::project(args)?;
     let Some(installed) = project.installed.clone() else {
@@ -293,7 +293,7 @@ fn start_claimed(
         daemon_store,
         KernelRoute::Fuse,
     );
-    let store = crate::host::stores::shared_store(args)?;
+    let store = crate::store::identity::shared_store(args)?;
     let container_name = sandbox_name(args, id)?;
     let docker = Docker::new(docker, ENGINE)
         .map_err(failed)?
@@ -475,7 +475,7 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     let platform = crate::host::runtime::platform(args, crate::host::runtime::backend(deploy)?)?;
     // a PostgreSQL Store's URL is the call's; its project's entry is made here
-    let store = match crate::host::postgres::sandbox_store(args)? {
+    let store = match crate::store::postgres::sandbox_store(args)? {
         Some(selected) => OpenedStore::Postgres(Box::new(selected)),
         None => installed(args)?,
     };

@@ -11,7 +11,7 @@
 //! `log/import-env.jsonl`.
 use super::{lock, log_line, now_ms, paths, read_record, with_field, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::store::store_ref::{kind_of, StoreKind};
+use crate::store::record::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 

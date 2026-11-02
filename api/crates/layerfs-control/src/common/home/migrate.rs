@@ -20,7 +20,7 @@ use super::layout::{create, detect, HomeFile, Layout, OLD};
 use super::paths;
 use super::records::{log_line, now_ms, private_dir, read_record, with_field, write_record};
 use crate::common::outcome::{failed, refused};
-use crate::store::store_ref::{kind_of, StoreKind};
+use crate::store::record::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_backup::backup::{link as state, Provider, Remotes};
 use std::fs;

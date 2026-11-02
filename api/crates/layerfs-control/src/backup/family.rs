@@ -9,9 +9,10 @@ use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::{self, paths, read_record, with_field, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::store::files::CHUNK;
-use crate::store::route;
-use crate::store::store_ref::{kind_of, StoreKind};
+use crate::common::place;
+use crate::store::record::{kind_of, StoreKind};
+use crate::store::resolve;
+use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_backup::backup::{self as remote, Provider};
 use layerfs_store_backup::bucket::minio::{MinioSettings, DEFAULT_PART_SIZE};
@@ -219,7 +220,7 @@ fn store_changed(
     if let Ok(StoreKind::Postgresql) = kind_of(record) {
         return Err(format!("Store {store} is a PostgreSQL database"));
     }
-    let machine = route::machine(record, store).map_err(|refusal| refusal.message)?;
+    let machine = resolve::machine(record, store).map_err(|refusal| refusal.message)?;
     if machine != "native" {
         return Err(format!(
             "Store {store} is on {machine}; its heads are read on native only"
@@ -431,14 +432,14 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             format!("Store {store} is a PostgreSQL database; back it up with PostgreSQL's tools"),
         ));
     }
-    route::moving(&record, store)?;
+    resolve::moving(&record, store)?;
     let driver = driver(&bucket_record)?;
     let expected = expected(&record, bucket, &file);
-    let identity = crate::host::stores::identity_of(&record)?;
-    let machine = route::machine(&record, store)?;
+    let identity = crate::store::identity::identity_of(&record)?;
+    let machine = resolve::machine(&record, store)?;
     let home_id = home::ensure(&home)?.id;
     let object = remote::store_object(&file).map_err(|why| refused("InvalidInput", why))?;
-    let endpoint = route::endpoint(&home, &machine)?;
+    let endpoint = place::endpoint(&home, &machine)?;
     let _lease = lease::hold(&home, store)?;
     check(driver.as_ref(), &object, expected, &home_id)?;
     progress(context, "snapshot");
@@ -450,7 +451,7 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         fields.extend(more);
         let args = SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
         match &endpoint {
-            None => crate::store::files::run(&home, op, &args),
+            None => crate::store::transfer::steps::run(&home, op, &args),
             Some(endpoint) => {
                 let request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
                 crate::machine::worker::call(endpoint, "store.file", request, &mut |_| {})
@@ -625,7 +626,7 @@ fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
                     format!("Store {store} is a PostgreSQL database"),
                 ));
             }
-            let identity = crate::host::stores::identity_of(record)?;
+            let identity = crate::store::identity::identity_of(record)?;
             // refused before the download too; checked again before the install
             {
                 let _lock = home::lock::take(&home)?;
@@ -752,11 +753,11 @@ impl Drop for Staging {
 /// `native`, unchanged since its last backup or restore through `bucket`.
 /// Under the home lock.
 fn replaceable(home: &Path, store: &str, bucket: &str, record: &SdkValue) -> Result<()> {
-    let machine = route::machine(record, store)?;
+    let machine = resolve::machine(record, store)?;
     if machine != "native" {
         return Err(refused("Unsupported", format!("Store {store} is on {machine}; a restore replaces a Store on native: move it there first")));
     }
-    route::moving(record, store)?;
+    resolve::moving(record, store)?;
     let destination = paths::store_file(home, store);
     // this process's own open copy closes first
     crate::store::open::close(&destination)?;
@@ -836,7 +837,7 @@ fn projects_in(
         ("store_record", record.clone()),
         ("storePath", SdkValue::text(file.display().to_string())),
     ]);
-    let SdkValue::List(items) = crate::host::stores::list_projects(&args)? else {
+    let SdkValue::List(items) = crate::store::identity::list_projects(&args)? else {
         return Err(refused("Failed", "the Store's project list is not a list"));
     };
     Ok(items

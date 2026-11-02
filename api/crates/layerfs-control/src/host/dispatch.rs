@@ -3,7 +3,9 @@
 //! sandbox, workspace) and the backend table (`backend`: `backend.store.*`,
 //! `backend.daemon.*` and the runtime's `runtime.*` reads and actions).
 use crate::common::outcome::{self, refused, Outcome};
-use crate::host::{direct, exec, output, project, registry, workspace};
+use crate::host::{exec, output, registry, workspace};
+use crate::project::init as project;
+use crate::store::service as direct;
 use layerfs_bridge::control::SdkValue;
 
 /// Runs one public SDK operation once.
@@ -99,13 +101,13 @@ pub fn backend(op: String, args: SdkValue) -> Outcome {
         "backend.daemon.process.start" => exec::exec(&args),
         "backend.daemon.process.list" => exec::processes(&args),
         "backend.daemon.process.cancel" => exec::cancel(&args),
-        "runtime.project.get_init" => crate::host::project::progress(&args),
+        "runtime.project.get_init" => crate::project::init::progress(&args),
         // #506 Store-first: Stores, their projects, remotes and transfers
-        "runtime.store.create" => crate::host::stores::create(&args),
-        "runtime.store.list_projects" => crate::host::stores::list_projects(&args),
-        "runtime.store.add_project" => crate::host::stores::add_project(&args),
-        "runtime.store.remove_project" => crate::host::stores::remove_project(&args),
-        "runtime.store.forget" => crate::host::stores::forget(&args),
+        "runtime.store.create" => crate::store::identity::create(&args),
+        "runtime.store.list_projects" => crate::store::identity::list_projects(&args),
+        "runtime.store.add_project" => crate::store::identity::add_project(&args),
+        "runtime.store.remove_project" => crate::store::identity::remove_project(&args),
+        "runtime.store.forget" => crate::store::identity::forget(&args),
         "runtime.store.push" => crate::host::sync::push(&args),
         "runtime.store.publish" => crate::host::sync::publish(&args),
         "runtime.store.send" => crate::host::sync::send(&args),
@@ -119,7 +121,7 @@ pub fn backend(op: String, args: SdkValue) -> Outcome {
         "runtime.store.check" => crate::host::copies::check(&args),
         "runtime.remote.list_stores" => crate::host::copies::list_stores(&args),
         "runtime.remote.providers" => crate::host::copies::providers(&args),
-        "runtime.postgresql.status" => crate::host::postgres::status(&args),
+        "runtime.postgresql.status" => crate::store::postgres::status(&args),
         "runtime.sync.progress" => crate::host::progress::get(&args),
         "runtime.remote.list" => crate::host::sync::list(&args),
         "runtime.remote.add" => crate::host::sync::add(&args),
