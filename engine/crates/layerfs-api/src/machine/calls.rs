@@ -5,8 +5,8 @@
 //! an `Unknown` outcome keeps everything and is logged.
 use super::bundle::bundle;
 use super::record::{
-    self, backend_name, hosted_on, kind_of, machine_of, refusal, sandboxes_on, save_running,
-    stores_on, update as update_record,
+    self, backend_name, hosted_on, kind_of, machine_of, refusal, removing, sandboxes_on,
+    save_running, stores_on, update as update_record,
 };
 use crate::calls::Context;
 use crate::home::{self, lock, paths, read_record, with_field, write_record};
@@ -14,15 +14,71 @@ use crate::host::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_sandbox::machine::{self as adapters, Code, HostOs, Kind};
 use std::path::Path;
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
+
+/// How long `machine.list` and `machine.get` wait for their live probes, all
+/// together. A probe that has not answered by then is `unknown`.
+const PROBE: Duration = Duration::from_secs(10);
+
+/// A machine's live state and, when it could not be read, why.
+type Live = Option<(String, Option<String>)>;
 
 fn home_id(home: &Path) -> Result<String> {
     Ok(home::open(home)?.id)
 }
 
-fn summary(home: &Path, name: &str, record: &SdkValue) -> Result<SdkValue> {
+/// The live state of each VM and ssh machine, read as `machine.status`
+/// reads it: in parallel, starting nothing, outside the home lock, all within
+/// [`PROBE`]. A probe that fails or does not answer in time is `unknown`, with
+/// the reason. Nothing is written back. `None` keeps the record's state: a
+/// built-in machine, or one being created or removed.
+fn live(home: &Path, records: &[(String, SdkValue)]) -> Result<Vec<Live>> {
+    let id = home_id(home)?;
+    let (send, answers) = mpsc::channel();
+    let late = format!("its probe did not answer within {} s", PROBE.as_secs());
+    let mut out: Vec<Live> = vec![None; records.len()];
+    let mut waiting = 0;
+    for (index, (name, record)) in records.iter().enumerate() {
+        let in_flight = record.get_text("state") == Some("creating") || removing(record).is_some();
+        if kind_of(record)?.built_in() || in_flight {
+            continue;
+        }
+        match record::spec(home, &id, name, record) {
+            Ok(spec) => {
+                let send = send.clone();
+                std::thread::spawn(move || drop(send.send((index, adapters::status(&spec)))));
+                out[index] = Some(("unknown".to_owned(), Some(late.clone())));
+                waiting += 1;
+            }
+            Err(why) => out[index] = Some(("unknown".to_owned(), Some(why.message))),
+        }
+    }
+    let until = Instant::now() + PROBE;
+    while waiting > 0 {
+        let Some(left) = until.checked_duration_since(Instant::now()) else {
+            break;
+        };
+        let Ok((index, answer)) = answers.recv_timeout(left) else {
+            break;
+        };
+        waiting -= 1;
+        out[index] = Some(match answer {
+            Ok(status) => (status.state.as_str().to_owned(), None),
+            Err(error) => ("unknown".to_owned(), Some(refusal(error).message)),
+        });
+    }
+    Ok(out)
+}
+
+fn summary(home: &Path, name: &str, record: &SdkValue, live: Live) -> Result<SdkValue> {
     let kind = kind_of(record)?;
+    let (state, error) = match live {
+        Some((state, error)) => (Some(state), error),
+        None => (record.get_text("state").map(str::to_owned), None),
+    };
     let list = |items: Vec<String>| SdkValue::List(items.into_iter().map(SdkValue::Text).collect());
     let mut fields = vec![
         ("name", SdkValue::text(name)),
@@ -30,7 +86,7 @@ fn summary(home: &Path, name: &str, record: &SdkValue) -> Result<SdkValue> {
         ("backend", SdkValue::text(backend_name(kind))),
         (
             "state",
-            SdkValue::text(record.get_text("state").unwrap_or(if kind.built_in() {
+            SdkValue::text(state.as_deref().unwrap_or(if kind.built_in() {
                 "ready"
             } else {
                 "stopped"
@@ -43,9 +99,15 @@ fn summary(home: &Path, name: &str, record: &SdkValue) -> Result<SdkValue> {
         ("sandboxes", list(sandboxes_on(home, name)?)),
     ];
     for extra in ["image", "host", "nested", "docker", "wsl", "error"] {
-        if let Some(value) = record.get(extra) {
+        if let Some(value) = record
+            .get(extra)
+            .filter(|_| extra != "error" || error.is_none())
+        {
             fields.push((extra, value.clone()));
         }
+    }
+    if let Some(error) = error {
+        fields.push(("error", SdkValue::Text(error)));
     }
     if let Some(ssh) = record.get("ssh") {
         fields.push(("ssh", ssh.clone()));
@@ -55,14 +117,20 @@ fn summary(home: &Path, name: &str, record: &SdkValue) -> Result<SdkValue> {
     ))
 }
 
-/// `machine.list()`: every machine, and the platforms that could be created here.
+/// `machine.list()`: every machine with its live state, and the platforms
+/// that could be created here.
 pub fn list(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
     let home = &context.home;
-    let mut machines = Vec::new();
+    let mut records = Vec::new();
     for name in paths::names(&home.join("machine")).map_err(failed)? {
         if let Some(record) = read_record(&paths::machine_record(home, &name))? {
-            machines.push(summary(home, &name, &record)?);
+            records.push((name, record));
         }
+    }
+    let states = live(home, &records)?;
+    let mut machines = Vec::new();
+    for ((name, record), state) in records.iter().zip(states) {
+        machines.push(summary(home, name, record, state)?);
     }
     let tools = record::tools(home)?;
     let mut can = Vec::new();
@@ -93,11 +161,13 @@ pub fn list(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
     ]))
 }
 
-/// `machine.get(name)`: its record, with its Stores and Sandboxes.
+/// `machine.get(name)`: its record with its live state, Stores and Sandboxes.
 pub fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let name = args.get_text("name").unwrap_or("");
     let record = machine_of(&context.home, name)?;
-    summary(&context.home, name, &record)
+    let rows = [(name.to_owned(), record)];
+    let state = live(&context.home, &rows)?.pop().flatten();
+    summary(&context.home, name, &rows[0].1, state)
 }
 
 /// `machine.status(name)`: live state, free disk, the tool's version and
@@ -266,7 +336,7 @@ fn finish(
         Ok(running) => {
             save_running(home, name, &running)?;
             let record = machine_of(home, name)?;
-            summary(home, name, &record)
+            summary(home, name, &record, None)
         }
         Err(error) if error.code == Code::Unknown => {
             update_record(home, name, |r| {
@@ -553,5 +623,5 @@ pub fn update(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         }
     }
     write_record(&paths::machine_record(&home, name), &record)?;
-    summary(&home, name, &record)
+    summary(&home, name, &record, None)
 }

@@ -28,7 +28,11 @@ a copy of a sqlite Store in a bucket.
   Sandbox runs; the kind decides.
 - `machine list` answers every machine and, under `can_create`, each kind
   that could be made here, with `ready`, `missing` (such as `tool:msb`) and
-  the tool's `version`.
+  the tool's `version`. A VM or ssh machine's `state` is read live, as
+  `machine status` reads it, for all of them at once within 10 s; it starts
+  nothing and writes nothing. A machine whose probe fails or does not answer
+  in time is `unknown`, with the reason in `error`; one being created or
+  removed keeps its recorded state. `machine get` answers the same state.
 - `native` and `docker` are never created, removed or disconnected.
 
 ### Creating a VM machine
