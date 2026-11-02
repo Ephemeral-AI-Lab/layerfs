@@ -209,6 +209,42 @@ fn firecracker_on_a_stopped_host_is_unavailable() {
 }
 
 #[test]
+fn a_microvm_chooses_its_huge_pages_at_each_boot() {
+    // the terminal pass: a host's huge pages do not outlive its reboot, so
+    // a choice made at create made a restarted microVM fail to load
+    let scratch = Scratch::new("fc-boot");
+    scratch.tool(
+        "limactl",
+        &format!(
+            "[ \"$1\" = list ] && printf 'Running\\t{}\\n'; exit 0",
+            scratch.path("lima-host").display()
+        ),
+    );
+    scratch.tool(
+        "ssh",
+        r#"case "$*" in
+  *"echo running; else echo stopped"*) printf 'stopped\n172.30.1.2\n' ;;
+  *firecracker.pid*) exit 1 ;;
+esac
+exit 0"#,
+    );
+    let mut host = scratch.spec(Kind::Lima);
+    host.nested = true;
+    let mut spec = scratch.spec(Kind::Firecracker);
+    spec.host = Some(Box::new(host));
+    machine::start(&spec, &scratch.bundle()).unwrap_err();
+    let log = scratch.log();
+    let boot = log
+        .split("ssh ")
+        .find(|call| call.contains("--config-file"))
+        .unwrap_or_else(|| panic!("no boot in:\n{log}"));
+    let choose = boot.find("huge=None").expect("chosen at boot");
+    let rewrite = boot.find(r#"sed -i "s/\"huge_pages\""#).expect("written");
+    let start = boot.find("--config-file").unwrap();
+    assert!(choose < rewrite && rewrite < start, "{boot}");
+}
+
+#[test]
 fn built_in_machines_are_never_created_or_removed() {
     let scratch = Scratch::new("built-in");
     for kind in [Kind::Native, Kind::Docker] {

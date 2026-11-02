@@ -56,24 +56,28 @@ mkdir "$d"
 printf 'INDEX=%s\nTAP=lfsfc%s\nHOST_IP=172.30.%s.1\nGUEST_IP=172.30.%s.2\n' "$n" "$n" "$n" "$n" > "$d/vm.env"
 cp --sparse=always "$root/rootfs.ext4" "$d/rootfs.ext4"
 mac=$(printf '06:00:AC:1E:%02X:02' "$n")
-huge='"None"'
-[ "$(( $(awk '/^HugePages_Free/ {print $2}' /proc/meminfo) * 2 ))" -ge "$mem" ] && huge='"2M"'
 cat > "$d/config.json" <<EOF
 {"boot-source":{"kernel_image_path":"$root/vmlinux","boot_args":"console=ttyS0 reboot=k panic=1 pci=off ip=172.30.$n.2::172.30.$n.1:255.255.255.252::eth0:off"},
  "drives":[{"drive_id":"rootfs","path_on_host":"$d/rootfs.ext4","is_root_device":true,"is_read_only":false},
   {"drive_id":"data","path_on_host":"$disk","is_root_device":false,"is_read_only":false}],
- "machine-config":{"vcpu_count":$cpus,"mem_size_mib":$mem,"huge_pages":$huge},
+ "machine-config":{"vcpu_count":$cpus,"mem_size_mib":$mem,"huge_pages":"None"},
  "network-interfaces":[{"iface_id":"eth0","guest_mac":"$mac","host_dev_name":"lfsfc$n"}]}
 EOF
 echo "$n""#;
 
 /// Boots the microVM (unless it runs), waits for its sshd (a readiness wait,
-/// at most 60 s), and mounts its data disk at `/layerfs/data`.
+/// at most 60 s), and mounts its data disk at `/layerfs/data`. Its memory
+/// uses 2 MiB huge pages when the host has enough free at this boot, else
+/// none: a host's huge pages do not outlive its reboot.
 const BOOT_VM: &str = r#"set -eu
 root=$1 d="$1/vms/$2"
 . "$d/vm.env"
 G="-o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5"
 if ! { [ -f "$d/firecracker.pid" ] && kill -0 "$(cat "$d/firecracker.pid")" 2>/dev/null; }; then
+  mem=$(sed -n 's/.*"mem_size_mib":\([0-9]*\).*/\1/p' "$d/config.json")
+  huge=None
+  [ "$(( $(awk '/^HugePages_Free/ {print $2}' /proc/meminfo) * 2 ))" -ge "$mem" ] && huge=2M
+  sed -i "s/\"huge_pages\":\"[A-Za-z0-9]*\"/\"huge_pages\":\"$huge\"/" "$d/config.json"
   ip link show "$TAP" >/dev/null 2>&1 || ip tuntap add dev "$TAP" mode tap
   ip addr replace "$HOST_IP/30" dev "$TAP"
   ip link set "$TAP" up
