@@ -3,8 +3,8 @@
 //! kind. Sizes become whole bytes. Front ends strip their functions
 //! (`on_progress`, exec sinks) before the call reaches the library.
 use super::table::{Call, Kind};
-use crate::host::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_control::common::outcome::refused;
 
 /// `args` as the call's checked fields, in the table's order.
 pub fn check(call: &Call, args: SdkValue) -> Result<Vec<(String, SdkValue)>, SdkRefusal> {

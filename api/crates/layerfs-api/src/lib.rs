@@ -1,5 +1,7 @@
-//! The SDK's public surface: project provisioning (`project`) and Sandbox
-//! Workspace control (`sandbox`). The `fs`, `branch` and
+//! The SDK's public surface: the call table and its one dispatcher
+//! (`calls`), over the management library `layerfs-control`, whose public
+//! paths it re-exports for the front ends: project provisioning (`project`)
+//! and Sandbox Workspace control (`sandbox`). The `fs`, `branch` and
 //! `project.list_branches` methods (file reads and one-Commit writes, Branch
 //! history and listing) are the Store engine's SDK facade
 //! (layerfs-store-service `methods/`), run in the caller's process, the only
@@ -7,35 +9,30 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-mod base;
-#[doc(hidden)]
-pub use base::internal;
 pub mod calls;
-mod family;
-pub mod home;
+pub use layerfs_control::common::{home, names};
 #[doc(hidden)]
-pub mod host;
+pub use layerfs_control::host;
+#[doc(hidden)]
+pub use layerfs_control::internal;
 #[cfg(feature = "machine")]
 #[doc(hidden)]
-pub mod machine;
-pub mod names;
+pub use layerfs_control::machine;
+pub use layerfs_control::machine::worker;
 #[doc(hidden)]
-pub mod operator;
-pub mod project;
-pub mod sandbox;
-pub mod store;
-pub mod worker;
-pub use base::failure::{OperationCause, OperationFailure};
-pub use base::sdk::{SdkError, SdkResult};
-pub use layerfs_project::store::{
-    projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitError, InitFailure,
-    InitRequest, InstallError, InstallFailure, InstallWork, Installed, ProjectApi, SealedProject,
+pub use layerfs_control::operator;
+pub use layerfs_control::{
+    call, projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitCounters, InitCounts,
+    InitError, InitFailure, InitRequest, InitStep, InstallError, InstallFailure, InstallWork,
+    Installed, OperationCause, OperationFailure, ProjectApi, ProjectError, SdkError, SdkResult,
+    SealedProject, SourceRefusal,
 };
-pub use layerfs_project::{InitCounters, InitCounts, InitStep, ProjectError, SourceRefusal};
-pub use layerfs_store_service::methods::call;
+pub use layerfs_control::{daemon, project, sandbox, store};
+pub use layerfs_control::{
+    BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
+};
 #[cfg(unix)]
 pub use sandbox::{
     connect_address, ProviderCreate, ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause,
     SandboxPhase,
 };
-pub use sandbox::{BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi};

@@ -10,13 +10,10 @@
 //! (a command can still `cd` anywhere in the mounted tree). Every refusal
 //! comes before dispatch.
 use crate::home::{paths, read_record, with_field};
-use crate::host::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_control::common::outcome::refused;
+use layerfs_control::store::calls::NAMESPACE;
 use std::path::Path;
-
-/// The argument a scoped `branch.list` carries to its family: the Branch
-/// namespace, which only a scope sets (the table has no such argument).
-pub(crate) const NAMESPACE: &str = "namespace";
 
 /// A checked scope.
 #[derive(Clone, Debug, PartialEq, Eq)]

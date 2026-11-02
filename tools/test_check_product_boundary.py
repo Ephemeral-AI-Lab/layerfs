@@ -114,7 +114,7 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertTrue(dependency_violations(f'[package]\nname="{name}"\n'), name)
 
     def test_sdk_source_edges_and_unsafe_boundary(self):
-        path = Path("api/crates/layerfs-api/src/project/init.rs")
+        path = Path("api/crates/layerfs-control/src/project/init.rs")
         self.assertFalse(violations(path, "use layerfs_persistence::SqliteHandles;"))
         self.assertTrue(violations(path, "use layerfs_server::Server;"))
         self.assertTrue(unsafe_violations(path, "unsafe fn extend_lifetime() {}"))
@@ -205,11 +205,25 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertTrue(dependency_violations(prefix + f'{dependency}={{path="../{dependency}"}}'))
 
     def test_sdk_dependency_edges(self):
+        # #536: the call surface reaches records, machines and Stores only
+        # through the management library, which holds the old api edges.
         prefix = '[package]\nname="layerfs-api"\n[dependencies]\n'
-        self.assertFalse(dependency_violations(prefix + 'layerfs-persistence={path="../../layerfs-persistence"}'))
-        self.assertTrue(dependency_violations(prefix + 'layerfs-server={path="../../layerfs-server"}'))
-        self.assertFalse(dependency_violations(prefix + 'layerfs-project={path="../../layerfs-project"}'))
-        self.assertTrue(dependency_violations(prefix + 'layerfs-workspace={path="../../layerfs-workspace"}'))
+        self.assertFalse(dependency_violations(prefix + 'layerfs-control={path="../layerfs-control"}'))
+        self.assertFalse(dependency_violations(prefix + 'layerfs-bridge={path="../../layerfs-bridge"}'))
+        self.assertTrue(dependency_violations(prefix + 'layerfs-persistence={path="../../layerfs-persistence"}'))
+        self.assertTrue(dependency_violations(prefix + 'layerfs-project={path="../../layerfs-project"}'))
+        self.assertTrue(violations(Path("api/crates/layerfs-api/src/calls/route.rs"), "use layerfs_project::Init;"))
+        self.assertFalse(violations(Path("api/crates/layerfs-api/src/calls/route.rs"), "use layerfs_control::family;"))
+        control = '[package]\nname="layerfs-control"\n[dependencies]\n'
+        self.assertFalse(dependency_violations(control + 'layerfs-persistence={path="../../layerfs-persistence"}'))
+        self.assertTrue(dependency_violations(control + 'layerfs-server={path="../../layerfs-server"}'))
+        self.assertFalse(dependency_violations(control + 'layerfs-project={path="../../layerfs-project"}'))
+        self.assertTrue(dependency_violations(control + 'layerfs-workspace={path="../../layerfs-workspace"}'))
+        self.assertTrue(dependency_violations(control + 'layerfs-api={path="../layerfs-api"}'))
+        self.assertTrue(unsafe_violations(Path("api/crates/layerfs-control/src/lib.rs"), "pub mod home;"))
+        self.assertFalse(
+            unsafe_violations(Path("api/crates/layerfs-control/src/lib.rs"), "#![forbid(unsafe_code)]\npub mod home;")
+        )
 
     def test_daemon_direct_store_and_control_edges_without_host_runtime(self):
         prefix = '[package]\nname="layerfs-daemon"\n[dependencies]\n'
@@ -237,7 +251,7 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertFalse(dependency_violations(prefix + f'{dependency}={{path="../{dependency}"}}'))
         for dependency in ("layerfs-daemon", "layerfs-api", "layerfs-fuse", "layerfs-sandbox"):
             self.assertTrue(dependency_violations(prefix + f'{dependency}={{path="../{dependency}"}}'))
-        for package in ("layerfs-api", "layerfs-daemon"):
+        for package in ("layerfs-control", "layerfs-daemon"):
             source = f'[package]\nname="{package}"\n[dependencies]\nlayerfs-store-service={{path="../layerfs-store-service"}}\n'
             self.assertFalse(dependency_violations(source))
         self.assertTrue(

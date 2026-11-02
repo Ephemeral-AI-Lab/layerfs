@@ -39,6 +39,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-nfs",
     "layerfs-daemon",
     "layerfs-api",
+    "layerfs-control",
     "layerfs-bridge",
     "layerfs-cli",
     "layerfs-machine",
@@ -58,6 +59,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-nfs": "#![forbid(unsafe_code)]",
     "layerfs-daemon": "#![forbid(unsafe_code)]",
     "layerfs-api": "#![forbid(unsafe_code)]",
+    "layerfs-control": "#![forbid(unsafe_code)]",
     "layerfs-bridge": "#![forbid(unsafe_code)]",
     "layerfs-sandbox": "#![deny(unsafe_code)]",
     "layerfs-cli": "#![forbid(unsafe_code)]",
@@ -146,7 +148,11 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-persistence",
         "layerfs-telemetry",
     },
-    "layerfs-api": {
+    # The SDK call surface (#536): the call table over the management library.
+    "layerfs-api": {"layerfs-control", "layerfs-bridge"},
+    # The management library (#536): home records, machines and workers,
+    # Stores, projects, Sandboxes, Workspaces and backups.
+    "layerfs-control": {
         "layerfs-content",
         "layerfs-storage",
         "layerfs-history",
@@ -191,9 +197,11 @@ LAYER = {
     "layerfs-sandbox": CONNECT,
     "layerfs-machine": CONNECT,
     "layerfs-store-backup": CONNECT,
-    # The public surface under api/crates: the library and its 2.0 front ends
-    # (#533), the `layerfs` binary, the Node binding and the PyO3 module.
+    # The public surface under api/crates: the call surface, the management
+    # library under it (#536) and the 2.0 front ends (#533), the `layerfs`
+    # binary, the Node binding and the PyO3 module.
     "layerfs-api": API,
+    "layerfs-control": API,
     "layerfs-cli": API,
     "layerfs-node": API,
     "layerfs-python": API,
@@ -257,6 +265,7 @@ ENGINES_AND_CLUSTER2 = {
     "layerfs-sdk",
     "layerfs-api",
     "layerfs-api-core",
+    "layerfs-control",
 }
 
 

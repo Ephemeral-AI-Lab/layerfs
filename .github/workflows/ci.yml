@@ -6,7 +6,7 @@
 # The Node binding (api/crates/layerfs-node) and the JavaScript and Python
 # packages in api/ stay outside CI (owner, 2026-10-23): no path trigger, excluded
 # from Clippy/tests and skipped by the guard. The other Rust crates under
-# api/crates (layerfs-api, layerfs-cli, layerfs-python) are included.
+# api/crates (layerfs-api, layerfs-control, layerfs-cli, layerfs-python) are included.
 name: ci
 
 on:
