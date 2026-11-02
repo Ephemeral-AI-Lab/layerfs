@@ -192,7 +192,7 @@ fn init_files_branches_move_and_remove() {
     ok(&home, "project.remove", &[p()]);
     assert_eq!(
         call(&home, "project.get", &[p()]).unwrap_err().0,
-        "NotFound"
+        "NoSuchProject"
     );
 
     std::fs::remove_dir_all(home).unwrap();

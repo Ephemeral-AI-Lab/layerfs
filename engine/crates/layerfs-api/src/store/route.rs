@@ -21,7 +21,8 @@ pub(crate) struct Target {
     pub record: SdkValue,
 }
 
-/// Splits `<store>/<project>` and reads both records.
+/// Splits `<store>/<project>` and reads both records: no Store is
+/// `NoSuchStore`, no project `NoSuchProject` (1.1.0's codes, S §2.9).
 pub(crate) fn target(home: &Path, project: &str) -> Result<Target, SdkRefusal> {
     let (store, name) = project.split_once('/').ok_or_else(|| {
         refused(
@@ -30,9 +31,9 @@ pub(crate) fn target(home: &Path, project: &str) -> Result<Target, SdkRefusal> {
         )
     })?;
     let record = read_record(&paths::store_record(home, store))?
-        .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
+        .ok_or_else(|| refused("NoSuchStore", format!("no Store named {store}")))?;
     if read_record(&paths::project_record(home, store, name))?.is_none() {
-        return Err(refused("NotFound", format!("no project {project}")));
+        return Err(refused("NoSuchProject", format!("no project {project}")));
     }
     Ok(Target {
         store: store.to_owned(),

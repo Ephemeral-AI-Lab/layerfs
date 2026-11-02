@@ -62,10 +62,10 @@ fn read(home: &std::path::Path, project: &str) -> Result<SdkValue, (String, Stri
 }
 
 #[test]
-fn a_missing_store_or_project_is_not_found() {
+fn a_missing_store_or_project_keeps_the_1_1_0_codes() {
     let home = home_with(sqlite_record(t("native")));
-    assert_eq!(read(&home, "nope/api").unwrap_err().0, "NotFound");
-    assert_eq!(read(&home, "shop/web").unwrap_err().0, "NotFound");
+    assert_eq!(read(&home, "nope/api").unwrap_err().0, "NoSuchStore");
+    assert_eq!(read(&home, "shop/web").unwrap_err().0, "NoSuchProject");
     std::fs::remove_dir_all(home).unwrap();
 }
 
