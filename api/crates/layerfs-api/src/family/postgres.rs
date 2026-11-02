@@ -7,6 +7,7 @@ use crate::calls::Context;
 use crate::home::{self, paths, read_record, write_record};
 use crate::host::outcome::{failed, refused, Outcome};
 use crate::store::lease;
+use crate::store::store_ref::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -233,7 +234,7 @@ fn unclaimed(
         let Some(record) = read_record(&paths::store_record(home, &other))? else {
             continue;
         };
-        if record.get_text("kind") != Some("postgresql") {
+        if kind_of(&record)? != StoreKind::Postgresql {
             continue;
         }
         let same_url = record
@@ -355,7 +356,7 @@ fn disconnect(home: &Path, name: &str) -> Outcome {
     let _lock = home::lock::take(home)?;
     let record = read_record(&paths::store_record(home, name))?
         .ok_or_else(|| refused("NotFound", format!("no Store named {name}")))?;
-    if record.get_text("kind") != Some("postgresql") {
+    if kind_of(&record)? != StoreKind::Postgresql {
         return Err(refused(
             "InvalidInput",
             format!("Store {name} is a sqlite Store; `store remove` deletes it"),

@@ -9,6 +9,7 @@ use crate::calls::Context;
 use crate::home::{self, paths, read_record, with_field, write_record};
 use crate::host::outcome::{failed, refused, Outcome};
 use crate::store::files::CHUNK;
+use crate::store::store_ref::{kind_of, StoreKind};
 use crate::store::{lease, route};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_backup::backup::{self as remote, Provider};
@@ -213,7 +214,7 @@ fn store_changed(
     link: &SdkValue,
 ) -> std::result::Result<bool, String> {
     let then = link_heads(link).ok_or("the link records no heads")?;
-    if record.get_text("kind") == Some("postgresql") {
+    if let Ok(StoreKind::Postgresql) = kind_of(record) {
         return Err(format!("Store {store} is a PostgreSQL database"));
     }
     let machine = route::machine(record, store).map_err(|refusal| refusal.message)?;
@@ -422,7 +423,7 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let bucket_record = bucket_of(&home, bucket)?;
     let record = read_record(&paths::store_record(&home, store))?
         .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
-    if record.get_text("kind") == Some("postgresql") {
+    if kind_of(&record)? == StoreKind::Postgresql {
         return Err(refused(
             "InvalidInput",
             format!("Store {store} is a PostgreSQL database; back it up with PostgreSQL's tools"),
@@ -616,7 +617,7 @@ fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let identity = match &existing {
         None => None,
         Some(record) => {
-            if record.get_text("kind") == Some("postgresql") {
+            if kind_of(record)? == StoreKind::Postgresql {
                 return Err(refused(
                     "InvalidInput",
                     format!("Store {store} is a PostgreSQL database"),

@@ -7,6 +7,7 @@
 use crate::calls::Context;
 use crate::home::{paths, read_record};
 use crate::host::outcome::{refused, Outcome};
+use crate::store::store_ref::StoreRef;
 use crate::store::{lease, open};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -19,6 +20,8 @@ pub(crate) struct Target {
     pub project: String,
     /// `store/<store>/record.json`.
     pub record: SdkValue,
+    /// The record, parsed once.
+    pub store_ref: StoreRef,
 }
 
 /// Splits `<store>/<project>` and reads both records: no Store is
@@ -38,6 +41,7 @@ pub(crate) fn target(home: &Path, project: &str) -> Result<Target, SdkRefusal> {
     Ok(Target {
         store: store.to_owned(),
         project: name.to_owned(),
+        store_ref: StoreRef::from_record(store, &record)?,
         record,
     })
 }
@@ -45,17 +49,9 @@ pub(crate) fn target(home: &Path, project: &str) -> Result<Target, SdkRefusal> {
 /// The machine a sqlite Store's record names; `native` for a Store with no
 /// machine field, refused for one the 1.1.0 conversion could not place.
 pub(crate) fn machine(record: &SdkValue, store: &str) -> Result<String, SdkRefusal> {
-    match record.get("machine") {
-        None => Ok("native".to_owned()),
-        Some(SdkValue::Text(machine)) => Ok(machine.clone()),
-        Some(_) => Err(refused(
-            "Unavailable",
-            format!(
-                "Store {store} came from a 1.1.0 home and its machine is not known; \
-                 run `layerfs import-env` or `layerfs store move {store} <machine>`"
-            ),
-        )),
-    }
+    StoreRef::from_record(store, record)?
+        .machine()
+        .map(str::to_owned)
 }
 
 /// Refuses `InUse` while a live process moves or removes the Store (its
@@ -89,7 +85,7 @@ pub(crate) fn store_call(
 ) -> Outcome {
     let home = context.home.clone();
     moving(&target.record, &target.store)?;
-    if target.record.get_text("kind") == Some("postgresql") {
+    if let StoreRef::Postgres { .. } = target.store_ref {
         let fields = with_target(args, target, &target.record);
         return postgresql(&home, target, op, fields);
     }

@@ -7,6 +7,7 @@
 use crate::calls::Context;
 use crate::home::{paths, read_record};
 use crate::host::outcome::{failed, refused, Outcome};
+use crate::store::store_ref::{kind_of, StoreRef};
 use crate::store::{lease, route};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -34,14 +35,15 @@ fn summary(home: &Path, store: &str, name: &str, record: &SdkValue) -> SdkValue 
         .as_ref()
         .and_then(|p| p.get("created").cloned())
         .unwrap_or_default();
+    // a record whose kind is not one LayerFS writes shows none
+    let kind = kind_of(record)
+        .map(|kind| SdkValue::text(kind.as_str()))
+        .unwrap_or_default();
     SdkValue::map([
         ("project", SdkValue::text(format!("{store}/{name}"))),
         ("store", SdkValue::text(store)),
         ("name", SdkValue::text(name)),
-        (
-            "kind",
-            SdkValue::text(record.get_text("kind").unwrap_or("sqlite")),
-        ),
+        ("kind", kind),
         (
             "machine",
             record
@@ -148,10 +150,11 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     })?;
     route::moving(&record, store)?;
     let timeout = args.get_int("timeout").unwrap_or(INIT_TIMEOUT_MS);
-    if record.get_text("kind") == Some("postgresql") {
+    let store_ref = StoreRef::from_record(store, &record)?;
+    if let StoreRef::Postgres { .. } = store_ref {
         return init_postgresql(context, store, name, folder, timeout, &record);
     }
-    let machine = route::machine(&record, store)?;
+    let machine = store_ref.machine()?.to_owned();
     if machine != "native" {
         return Err(refused(
             "Unsupported",
@@ -292,13 +295,13 @@ fn remove(context: &mut Context<'_>, project: &str) -> Outcome {
         ("project", SdkValue::text(&target.project)),
         ("store_record", target.record.clone()),
     ];
-    let removed = if target.record.get_text("kind") == Some("postgresql") {
+    let removed = if let StoreRef::Postgres { .. } = target.store_ref {
         return Err(refused(
             "Unsupported",
             "removing a project from a PostgreSQL Store is not built",
         ));
     } else {
-        let machine = route::machine(&target.record, &target.store)?;
+        let machine = target.store_ref.machine()?.to_owned();
         match route::endpoint(&home, &machine)? {
             None => {
                 let _lease = lease::hold(&home, &target.store)?;

@@ -4,6 +4,7 @@
 //! become the adapters' [`Spec`]; nothing in the adapters reads the home.
 use crate::home::{self, paths, read_record, with_field, write_record};
 use crate::host::outcome::refused;
+use crate::store::store_ref::{Placement, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_machine::{
     Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, SshSpec, Tools,
@@ -236,9 +237,14 @@ pub fn stores_on(home: &Path, name: &str) -> Result<Vec<String>> {
     let mut stores = Vec::new();
     for store in paths::names(&home.join("store")).map_err(crate::host::outcome::failed)? {
         if let Some(record) = read_record(&paths::store_record(home, &store))? {
-            let machine = record.get_text("machine").unwrap_or("native");
-            if record.get_text("kind") != Some("postgresql") && machine == name {
-                stores.push(store);
+            if let StoreRef::Sqlite {
+                machine: Placement::Machine(machine),
+                ..
+            } = StoreRef::from_record(&store, &record)?
+            {
+                if machine == name {
+                    stores.push(store);
+                }
             }
         }
     }

@@ -14,6 +14,7 @@ use crate::calls::Context;
 use crate::home::{self, paths, read_record, with_field, write_record};
 use crate::host::outcome::{failed, refused, Outcome};
 use crate::store::files::CHUNK;
+use crate::store::store_ref::StoreRef;
 use crate::store::{lease, route};
 use crate::worker::Endpoint;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -113,10 +114,11 @@ fn status(home: &Path, name: &str) -> Outcome {
     let moving = route::moving(&record, name).is_err();
     let mut down = None;
     let mut more = Vec::new();
-    if record.get_text("kind") == Some("postgresql") {
+    let store_ref = StoreRef::from_record(name, &record)?;
+    if let StoreRef::Postgres { .. } = store_ref {
         more.push(("server", crate::family::postgres::status(&record, name)));
     } else {
-        let machine = route::machine(&record, name)?;
+        let machine = store_ref.machine()?.to_owned();
         more.push(("machine", SdkValue::text(&machine)));
         // the file's size where it lives; a machine that is down says why
         let file = route::endpoint_now(home, &machine)
@@ -138,10 +140,7 @@ fn status(home: &Path, name: &str) -> Outcome {
     };
     let mut fields = vec![
         ("name", SdkValue::text(name)),
-        (
-            "kind",
-            SdkValue::text(record.get_text("kind").unwrap_or("sqlite")),
-        ),
+        ("kind", SdkValue::text(store_ref.kind().as_str())),
         ("state", SdkValue::text(state)),
         (
             "holders",
@@ -313,13 +312,14 @@ fn ended(home: &Path, call: &str, name: &str, phase: &str, refusal: &SdkRefusal,
 /// before the home lock is taken, never under it.
 fn remove(home: &Path, name: &str) -> Outcome {
     let record = record_of(home, name)?;
-    if record.get_text("kind") == Some("postgresql") {
+    let store_ref = StoreRef::from_record(name, &record)?;
+    if let StoreRef::Postgres { .. } = store_ref {
         return Err(refused(
             "InvalidInput",
             format!("Store {name} is a PostgreSQL database; `store disconnect` forgets it and keeps its data"),
         ));
     }
-    let machine = route::machine(&record, name)?;
+    let machine = store_ref.machine()?.to_owned();
     let endpoint = match machine.as_str() {
         "native" => None,
         _ => route::endpoint(home, &machine)?,
@@ -384,7 +384,7 @@ fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Outcome {
     let from = {
         let _lock = home::lock::take(&home)?;
         let record = record_of(&home, name)?;
-        if record.get_text("kind") == Some("postgresql") {
+        if let StoreRef::Postgres { .. } = StoreRef::from_record(name, &record)? {
             return Err(refused(
                 "InvalidInput",
                 format!("Store {name} is a PostgreSQL database; it does not move"),

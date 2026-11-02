@@ -13,6 +13,7 @@
 use crate::host::discovery;
 use crate::host::outcome::{failed, refused, Outcome};
 use crate::host::registry::{lock, random, text, Project, INITS};
+use crate::store::store_ref::{kind_of, required, StoreKind, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_bridge::sdk_values::hex;
@@ -130,13 +131,13 @@ pub(crate) fn identity(args: &SdkValue) -> Result<Identity> {
 
 /// The identity a Store record holds.
 pub(crate) fn identity_of(value: &SdkValue) -> Result<Identity> {
-    let kind = match value.get_text("kind") {
-        Some("sqlite") => Kind::Sqlite,
-        Some("postgresql") => Kind::Postgresql {
-            schema: text(value, "schema")?.to_owned(),
-            synchronous_commit: text(value, "synchronous_commit")?.to_owned(),
+    let name = value.get_text("name").unwrap_or("");
+    let kind = match StoreRef::from_record(name, value)? {
+        StoreRef::Sqlite { .. } => Kind::Sqlite,
+        StoreRef::Postgres { server, .. } => Kind::Postgresql {
+            schema: required(server.schema, "schema")?,
+            synchronous_commit: required(server.synchronous_commit, "synchronous_commit")?,
         },
-        _ => return Err(refused("InvalidInput", "Store record kind")),
     };
     let binding = match value.get("binding") {
         Some(SdkValue::Bytes(bytes)) => bytes.clone(),
@@ -209,7 +210,7 @@ pub(crate) fn postgresql(args: &SdkValue) -> Result<bool> {
         return Ok(false);
     };
     let path = record_path(&discovery::home(args)?, store)?;
-    Ok(path.exists() && load_record(&path)?.get_text("kind") == Some("postgresql"))
+    Ok(path.exists() && kind_of(&load_record(&path)?)? == StoreKind::Postgresql)
 }
 
 /// Refuses a call on a PostgreSQL Store that needs a Store file.

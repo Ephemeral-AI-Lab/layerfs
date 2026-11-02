@@ -20,6 +20,7 @@ use super::layout::{create, detect, HomeFile, Layout, OLD};
 use super::paths;
 use super::records::{log_line, now_ms, private_dir, read_record, with_field, write_record};
 use crate::host::outcome::{failed, refused};
+use crate::store::store_ref::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_backup::backup::{link as state, Provider, Remotes};
 use std::fs;
@@ -131,7 +132,7 @@ fn convert(home: &Path, volumes: &Path) -> Result<SdkValue> {
         let Some(record) = read_record(&paths::store_record(home, &store))? else {
             continue;
         };
-        if record.get_text("kind") == Some("postgresql") {
+        if kind_of(&record)? == StoreKind::Postgresql {
             continue;
         }
         let was_native = record.get_text("machine") == Some("native");
@@ -211,16 +212,14 @@ fn shared_store(home: &Path, store: &str, report: &mut Report) -> Result<()> {
     let old = dir.join("store.record");
     if old.is_file() && read_record(&paths::store_record(home, store))?.is_none() {
         let value = crate::host::discovery::load(&old)?;
+        let kind = kind_of(&value)?;
         let mut record = SdkValue::map([
             ("name", SdkValue::text(store)),
-            (
-                "kind",
-                SdkValue::text(value.get_text("kind").unwrap_or("sqlite")),
-            ),
+            ("kind", SdkValue::text(kind.as_str())),
             ("binding", value.get("binding").cloned().unwrap_or_default()),
             ("cursor", value.get("cursor").cloned().unwrap_or_default()),
         ]);
-        if value.get_text("kind") == Some("postgresql") {
+        if kind == StoreKind::Postgresql {
             for (from, to) in [
                 ("schema", "schema"),
                 ("synchronousCommit", "synchronous_commit"),

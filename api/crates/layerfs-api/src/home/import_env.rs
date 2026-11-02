@@ -11,6 +11,7 @@
 //! `log/import-env.jsonl`.
 use super::{lock, log_line, now_ms, paths, read_record, with_field, write_record};
 use crate::host::outcome::{failed, refused, Outcome};
+use crate::store::store_ref::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -228,7 +229,7 @@ fn stores(home: &Path, env: &[(String, String)], report: &mut Report) -> Result<
         let Some(record) = read_record(&path)? else {
             continue;
         };
-        if record.get_text("kind") == Some("postgresql") {
+        if kind_of(&record)? == StoreKind::Postgresql {
             continue;
         }
         match (record.get("machine"), machine) {

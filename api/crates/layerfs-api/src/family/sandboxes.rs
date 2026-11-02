@@ -17,6 +17,7 @@ use crate::calls::Context;
 use crate::home::{self, paths, read_record, write_record};
 use crate::host::outcome::{failed, refused, Outcome};
 use crate::store::route;
+use crate::store::store_ref::{kind_of, StoreKind, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
@@ -115,6 +116,7 @@ fn host_args(
             SdkValue::Map(fields)
         }
     };
+    let kind = kind_of(record)?;
     let mut fields = vec![
         ("home", SdkValue::text(home.display().to_string())),
         ("store", SdkValue::text(store)),
@@ -122,13 +124,13 @@ fn host_args(
         ("store_record", record.clone()),
         (
             "storePath",
-            SdkValue::text(store_path(home, store, record).display().to_string()),
+            SdkValue::text(store_path(home, store, kind).display().to_string()),
         ),
         ("deploy", deploy),
     ];
     // a PostgreSQL Store's URL with its password, resolved now and never
     // written (H §7.4)
-    if record.get_text("kind") == Some("postgresql") {
+    if kind == StoreKind::Postgresql {
         let url = crate::family::postgres::url(record, store)?;
         let mut postgresql = vec![("url", SdkValue::text(&url))];
         if in_container && cfg!(not(target_os = "linux")) {
@@ -154,10 +156,10 @@ fn host_args(
 
 /// The path the open-Store cache keys `store` by: its file, or for a
 /// PostgreSQL Store the path [`route`] keys it by, which no file has.
-fn store_path(home: &Path, store: &str, record: &SdkValue) -> PathBuf {
-    match record.get_text("kind") {
-        Some("postgresql") => paths::store_dir(home, store).join("postgresql"),
-        _ => paths::store_file(home, store),
+fn store_path(home: &Path, store: &str, kind: StoreKind) -> PathBuf {
+    match kind {
+        StoreKind::Postgresql => paths::store_dir(home, store).join("postgresql"),
+        StoreKind::Sqlite => paths::store_file(home, store),
     }
 }
 
@@ -263,7 +265,7 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if read_record(&paths::machine_record(&home, machine))?.is_none() {
         return Err(refused("NotFound", format!("no machine named {machine}")));
     }
-    if target.record.get_text("kind") == Some("postgresql") {
+    if let StoreRef::Postgres { .. } = target.store_ref {
         // a PostgreSQL Store is on no machine; its daemon dials the server
         if !matches!(machine, "native" | "docker") {
             return Err(refused(
@@ -271,8 +273,8 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
                 format!("a Sandbox of PostgreSQL Store {} runs on native or docker; on VMs and ssh hosts it comes later (O3)", target.store),
             ));
         }
-    } else if route::machine(&target.record, &target.store)? != machine {
-        let store_machine = route::machine(&target.record, &target.store)?;
+    } else if target.store_ref.machine()? != machine {
+        let store_machine = target.store_ref.machine()?;
         return Err(refused(
             "Unsupported",
             format!("Store {} is on machine {store_machine}; a Sandbox of {project} runs there (`store move` moves the Store)", target.store),
@@ -364,7 +366,7 @@ fn on_machine(
             .filter(|_| op != "sandbox.create")
             .map(str::to_owned),
     };
-    let postgresql = target.record.get_text("kind") == Some("postgresql");
+    let postgresql = target.store_ref.kind() == StoreKind::Postgresql;
     let worker = if postgresql {
         None
     } else {
