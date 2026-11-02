@@ -1,13 +1,15 @@
 //! Store leases (H §7.8): every process that uses a sqlite Store holds
 //! `store/<name>/open/<pid>`: the process that opens it, or, for a Store
-//! behind a worker, the host process that sends it calls. `store move` and
-//! `store remove` read them under the home lock and refuse `InUse` while one
-//! is held. A lease names its process by id, kernel start time and boot, so
+//! behind a worker, the host process that sends it calls. A lease is taken
+//! under the home lock after the Store's record shows no move or remove
+//! running (`in_progress`), so a lease and a move never overlap. `store
+//! move` and `store remove` read leases under the home lock and refuse
+//! `InUse` while one is held. A lease names its process by id, kernel start time and boot, so
 //! a reused id does not keep it alive; a lease whose process is not alive on
 //! this host is stale: it is removed under the home lock and the removal is
 //! logged (O35).
-use crate::home::{self, paths};
-use crate::host::outcome::failed;
+use crate::home::{self, paths, read_record};
+use crate::host::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_sandbox::native::LocalProcess;
 use std::collections::BTreeMap;
@@ -69,9 +71,26 @@ pub(crate) fn recorded_alive(value: &SdkValue) -> bool {
     )
 }
 
-/// Holds Store `store`'s lease for this process.
+/// Holds Store `store`'s lease for this process. Under the home lock it
+/// re-reads the Store's record: no record is `NoSuchStore`, a move or remove
+/// running (by any live process, this one included) is `InUse`.
 pub fn hold(home: &Path, store: &str) -> Result<Lease, SdkRefusal> {
-    let dir = paths::lease_dir(home, store);
+    claim(home, store).map(|(lease, _)| lease)
+}
+
+/// [`hold`], answering the Store's record as read under the home lock.
+pub(crate) fn claim(home: &Path, store: &str) -> Result<(Lease, SdkValue), SdkRefusal> {
+    let _lock = home::lock::take(home)?;
+    let record = read_record(&paths::store_record(home, store))?
+        .ok_or_else(|| refused("NoSuchStore", format!("no Store named {store}")))?;
+    crate::store::route::moving(&record, store)?;
+    Ok((hold_locked(home, store)?, record))
+}
+
+/// Holds Store `store`'s lease under `root` with no record check: the
+/// caller holds the home lock, or is a worker under its own root.
+pub(crate) fn hold_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal> {
+    let dir = paths::lease_dir(root, store);
     let path = dir.join(std::process::id().to_string());
     let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
     let count = held.entry(path.clone()).or_insert(0);
@@ -89,6 +108,14 @@ pub fn hold(home: &Path, store: &str) -> Result<Lease, SdkRefusal> {
     }
     *held.get_mut(&path).expect("counted above") += 1;
     Ok(Lease { path })
+}
+
+/// Whether this process holds Store `store`'s lease under `root` now.
+pub(crate) fn held_here(root: &Path, store: &str) -> bool {
+    let path = paths::lease_dir(root, store).join(std::process::id().to_string());
+    HELD.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains_key(&path)
 }
 
 /// Whether process `pid` is alive on this host. Ids 0 and above `i32::MAX`

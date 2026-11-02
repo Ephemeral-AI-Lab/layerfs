@@ -57,17 +57,23 @@ pub(crate) fn machine(record: &SdkValue, store: &str) -> Result<String, SdkRefus
     }
 }
 
-/// Refuses `InUse` while a live process moves the Store (its record's
-/// `in_progress`); a move whose process is gone does not block.
+/// Refuses `InUse` while a live process moves or removes the Store (its
+/// record's `in_progress`), this process included: a move's own steps take
+/// no lease and make no Store call, so nothing else in its process may
+/// either. A move whose process is gone does not block.
 pub(crate) fn moving(record: &SdkValue, store: &str) -> Result<(), SdkRefusal> {
     let Some(progress @ SdkValue::Map(_)) = record.get("in_progress") else {
         return Ok(());
     };
-    let pid = progress.get_int("pid").unwrap_or(0);
-    if pid != i64::from(std::process::id()) && lease::recorded_alive(progress) {
+    if lease::recorded_alive(progress) {
+        let pid = progress.get_int("pid").unwrap_or(0);
+        let doing = match progress.get_text("op") {
+            Some("remove") => "removed",
+            _ => "moved",
+        };
         return Err(refused(
             "InUse",
-            format!("Store {store} is being moved by process {pid}"),
+            format!("Store {store} is being {doing} by process {pid}"),
         ));
     }
     Ok(())
@@ -81,17 +87,16 @@ pub(crate) fn store_call(
     args: Vec<(String, SdkValue)>,
 ) -> Outcome {
     let home = context.home.clone();
-    let mut fields = args;
-    fields.extend([
-        ("project".to_owned(), SdkValue::text(&target.project)),
-        ("store".to_owned(), SdkValue::text(&target.store)),
-        ("store_record".to_owned(), target.record.clone()),
-    ]);
     moving(&target.record, &target.store)?;
     if target.record.get_text("kind") == Some("postgresql") {
+        let fields = with_target(args, target, &target.record);
         return postgresql(&home, target, op, fields);
     }
-    let machine = machine(&target.record, &target.store)?;
+    // the lease is taken under the home lock with the record read there: a
+    // move or remove that started since `target` was read refuses it
+    let (lease, record) = lease::claim(&home, &target.store)?;
+    let mut fields = with_target(args, target, &record);
+    let machine = machine(&record, &target.store)?;
     match endpoint(&home, &machine)? {
         None => {
             let file = paths::store_file(&home, &target.store);
@@ -99,12 +104,11 @@ pub(crate) fn store_call(
                 "storePath".to_owned(),
                 SdkValue::text(file.display().to_string()),
             ));
-            let lease = lease::hold(&home, &target.store)?;
             open::run(op, SdkValue::Map(fields), Some(lease))
         }
         Some(endpoint) => {
             // the host process holds the lease while it sends the call
-            let _lease = lease::hold(&home, &target.store)?;
+            let _lease = lease;
             let request =
                 SdkValue::map([("op", SdkValue::text(op)), ("args", SdkValue::Map(fields))]);
             crate::worker::call(&endpoint, "store.call", request, &mut |event| {
@@ -112,6 +116,21 @@ pub(crate) fn store_call(
             })
         }
     }
+}
+
+/// A call's arguments with its project, Store and Store record.
+fn with_target(
+    args: Vec<(String, SdkValue)>,
+    target: &Target,
+    record: &SdkValue,
+) -> Vec<(String, SdkValue)> {
+    let mut fields = args;
+    fields.extend([
+        ("project".to_owned(), SdkValue::text(&target.project)),
+        ("store".to_owned(), SdkValue::text(&target.store)),
+        ("store_record".to_owned(), record.clone()),
+    ]);
+    fields
 }
 
 /// A PostgreSQL Store's call in this process: its URL from the record, the

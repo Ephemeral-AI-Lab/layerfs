@@ -1,9 +1,14 @@
 //! The sqlite half of the `store` family (#533 step 8, H §7.3): list, get,
 //! status, create, remove and move. `move` and `remove` read leases under
-//! the home lock and refuse `InUse`. A move runs its phases once each
-//! (check, snapshot, send, verify, install, record, retire); a failure names
-//! its phase and keeps whatever exists. An uncertain step (`Unknown`) keeps
-//! both copies, leaves the record's `in_progress` and is logged to
+//! the home lock, refuse `InUse` and write the record's `in_progress`, which
+//! refuses every later lease; then, past the lock, they close this process's
+//! own open copy and find the Store idle once more before any step. The home
+//! lock is held only for those checks and record writes: never across a
+//! machine start, a Store step or Store I/O. A move runs its phases once
+//! each (check, snapshot, send, verify, install, record, retire); a failure
+//! names its phase and keeps whatever exists. An uncertain step (`Unknown`,
+//! or any failure of the record phase, after both copies exist) keeps both
+//! copies, leaves the record's `in_progress` and is logged to
 //! `log/uncertain.jsonl`; nothing is cleaned up on a guess.
 use crate::calls::Context;
 use crate::home::{self, paths, read_record, with_field, write_record};
@@ -209,11 +214,10 @@ fn sandboxes_of(home: &Path, name: &str) -> Result<Vec<String>> {
 }
 
 /// Refuses `InUse` while another process holds the Store, a Sandbox of
-/// one of its projects runs, or a live process moves it. Under the home lock.
+/// one of its projects runs, or a live process moves or removes it. Under
+/// the home lock.
 fn idle(home: &Path, name: &str, record: &SdkValue) -> Result<()> {
     route::moving(record, name)?;
-    // this process's own open copy closes first
-    crate::store::open::close(&paths::store_file(home, name))?;
     let holders = lease::holders(home, name)?;
     if !holders.is_empty() {
         return Err(refused(
@@ -234,10 +238,73 @@ fn idle(home: &Path, name: &str, record: &SdkValue) -> Result<()> {
     Ok(())
 }
 
-/// `store.remove`: deletes a sqlite Store wherever it is, with every project
-/// in it. Its backups stay in their buckets.
-fn remove(home: &Path, name: &str) -> Outcome {
+/// After `in_progress` is written: closes this process's own open copy
+/// (Store I/O, so past the home lock; `InUse` while a call runs on it),
+/// then, under the home lock, finds the Store idle once more: no other
+/// holder, no lease of this process, no Sandbox. Answers this process's
+/// lease, taken there.
+fn settle(home: &Path, name: &str) -> Result<lease::Lease> {
+    crate::store::open::close(&paths::store_file(home, name))?;
     let _lock = home::lock::take(home)?;
+    if lease::held_here(home, name) {
+        return Err(refused(
+            "InUse",
+            format!("Store {name} is in use in this process"),
+        ));
+    }
+    let holders = lease::holders(home, name)?;
+    if !holders.is_empty() {
+        return Err(refused(
+            "InUse",
+            format!("Store {name} is open in process {holders:?}"),
+        ));
+    }
+    let sandboxes = sandboxes_of(home, name)?;
+    if !sandboxes.is_empty() {
+        return Err(refused(
+            "InUse",
+            format!(
+                "Store {name} has running Sandboxes: {}",
+                sandboxes.join(", ")
+            ),
+        ));
+    }
+    lease::hold_locked(home, name)
+}
+
+/// The record's `in_progress` for this process's `op`, with `more`.
+fn in_progress(op: &str, more: Vec<(&str, SdkValue)>) -> SdkValue {
+    let mut fields = vec![("op", SdkValue::text(op))];
+    fields.extend(more);
+    fields.extend(lease::identity());
+    fields.push(("started", SdkValue::Int(home::now_ms())));
+    fields_map(fields)
+}
+
+/// Ends a move or remove that failed after writing `in_progress`: a certain
+/// failure clears it; an uncertain one keeps it and is logged.
+fn ended(home: &Path, call: &str, name: &str, phase: &str, refusal: &SdkRefusal, uncertain: bool) {
+    if uncertain {
+        let _ = home::log_line(
+            home,
+            "uncertain.jsonl",
+            &SdkValue::map([
+                ("at", SdkValue::Int(home::now_ms())),
+                ("call", SdkValue::text(call)),
+                ("store", SdkValue::text(name)),
+                ("phase", SdkValue::text(phase)),
+                ("message", SdkValue::text(&refusal.message)),
+            ]),
+        );
+    } else {
+        let _ = mark(home, name, SdkValue::Null);
+    }
+}
+
+/// `store.remove`: deletes a sqlite Store wherever it is, with every project
+/// in it. Its backups stay in their buckets. A stopped machine is started
+/// before the home lock is taken, never under it.
+fn remove(home: &Path, name: &str) -> Outcome {
     let record = record_of(home, name)?;
     if record.get_text("kind") == Some("postgresql") {
         return Err(refused(
@@ -245,14 +312,41 @@ fn remove(home: &Path, name: &str) -> Outcome {
             format!("Store {name} is a PostgreSQL database; `store disconnect` forgets it and keeps its data"),
         ));
     }
-    idle(home, name, &record)?;
-    let machine = route::machine(&record, name).unwrap_or_else(|_| "native".to_owned());
-    if machine != "native" {
-        let endpoint = route::endpoint(home, &machine)?;
-        step(home, &endpoint, "remove", of_store(name, vec![]))?;
+    let machine = route::machine(&record, name)?;
+    let endpoint = match machine.as_str() {
+        "native" => None,
+        _ => route::endpoint(home, &machine)?,
+    };
+    {
+        let _lock = home::lock::take(home)?;
+        let record = record_of(home, name)?;
+        if route::machine(&record, name)? != machine {
+            return Err(refused(
+                "Conflict",
+                format!("Store {name} moved off {machine} meanwhile; nothing was removed"),
+            ));
+        }
+        idle(home, name, &record)?;
+        let at = in_progress("remove", vec![("machine", SdkValue::text(&machine))]);
+        write_record(
+            &paths::store_record(home, name),
+            &with_field(record, "in_progress", at),
+        )?;
     }
-    let directory = paths::store_dir(home, name);
-    std::fs::remove_dir_all(&directory).map_err(failed)?;
+    let removed = settle(home, name).and_then(|lease| {
+        drop(lease);
+        match machine.as_str() {
+            "native" => Ok(SdkValue::Null),
+            _ => step(home, &endpoint, "remove", of_store(name, vec![])),
+        }
+    });
+    if let Err(refusal) = removed {
+        let uncertain = refusal.code == "Unknown";
+        ended(home, "store.remove", name, "remove", &refusal, uncertain);
+        return Err(refusal);
+    }
+    let _lock = home::lock::take(home)?;
+    std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
     Ok(SdkValue::map([("removed", SdkValue::text(name))]))
 }
 
@@ -290,16 +384,7 @@ fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Outcome {
         if read_record(&paths::machine_record(&home, to))?.is_none() {
             return Err(refused("NotFound", format!("no machine named {to}")));
         }
-        let from = match record.get("machine") {
-            Some(SdkValue::Text(machine)) => machine.clone(),
-            None => "native".to_owned(),
-            Some(_) => {
-                return Err(refused(
-                    "Unavailable",
-                    format!("Store {name}'s machine is not known; run `layerfs import-env` first"),
-                ))
-            }
-        };
+        let from = route::machine(&record, name)?;
         if from == to {
             return Err(refused(
                 "InvalidInput",
@@ -307,38 +392,23 @@ fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Outcome {
             ));
         }
         idle(&home, name, &record)?;
-        let mut at = vec![("from", SdkValue::text(&from)), ("to", SdkValue::text(to))];
-        at.extend(lease::identity());
-        at.push(("started", SdkValue::Int(home::now_ms())));
-        let at = fields_map(at);
+        let at = in_progress(
+            "move",
+            vec![("from", SdkValue::text(&from)), ("to", SdkValue::text(to))],
+        );
         write_record(
             &paths::store_record(&home, name),
             &with_field(record, "in_progress", at),
         )?;
         from
     };
-    let _lease = lease::hold(&home, name)?;
-    let result = phases(context, name, &from, to);
-    match &result {
-        Ok(_) => {}
-        Err((phase, refusal)) if refusal.code == "Unknown" => {
-            let _ = home::log_line(
-                &home,
-                "uncertain.jsonl",
-                &SdkValue::map([
-                    ("at", SdkValue::Int(home::now_ms())),
-                    ("call", SdkValue::text("store.move")),
-                    ("store", SdkValue::text(name)),
-                    ("from", SdkValue::text(&from)),
-                    ("to", SdkValue::text(to)),
-                    ("phase", SdkValue::text(*phase)),
-                    ("message", SdkValue::text(&refusal.message)),
-                ]),
-            );
-        }
-        Err(_) => {
-            let _ = mark(&home, name, SdkValue::Null);
-        }
+    let result =
+        at("check", settle(&home, name)).and_then(|_lease| phases(context, name, &from, to));
+    if let Err((phase, refusal)) = &result {
+        // past install both copies exist: a record phase that failed (its
+        // lock wait expired, say) leaves the outcome open
+        let uncertain = refusal.code == "Unknown" || *phase == "record";
+        ended(&home, "store.move", name, phase, refusal, uncertain);
     }
     result.map_err(|(phase, mut refusal)| {
         refusal.message = format!("store move, {phase}: {}", refusal.message);
