@@ -1,5 +1,5 @@
-//! Backups (#533 step 11) against a real MinIO: connect, create, the four
-//! list states, the restore Conflict, a restore as a new Store, a backup of
+//! Backups (#533 step 11) against a real MinIO: connect, create, the list
+//! states, the restore Conflict, a restore as a new Store, a backup of
 //! a Store behind a worker, and disconnect keeping the objects. Needs the
 //! LAYERFS_REMOTE_* variables tests/minio_service.sh of layerfs-remote-storage
 //! prints; without them the test says NOT_RUN and passes.
@@ -224,13 +224,27 @@ fn backups_against_minio() {
     let mut links = record.get("backups").cloned().unwrap();
     links = home::with_field(links, "b1", SdkValue::map([("file", t("gone"))]));
     write_record(&path, &home::with_field(record.clone(), "backups", links)).unwrap();
+    // shop is on box now: its heads are not read here, so its state is
+    // unknown, with the reason, never current
     assert_eq!(
         states(&home),
         vec![
-            pair("from-box", "current"),
+            pair("from-box", "unknown"),
             pair("gone", "missing"),
             pair("shop", "unlinked")
         ]
+    );
+    let listed = ok(&home, "backup.list", &[]);
+    let SdkValue::List(items) = listed.get("items").unwrap() else {
+        panic!()
+    };
+    let boxed = items
+        .iter()
+        .find(|i| i.get_text("file") == Some("from-box"))
+        .unwrap();
+    assert!(
+        boxed.get_text("reason").unwrap().contains("on box"),
+        "{boxed:?}"
     );
     write_record(&path, &record).unwrap();
     assert!(states(&home).contains(&pair("shop", "store_changed")));
@@ -404,6 +418,134 @@ fn foreign_copies_and_unrecorded_links() {
     assert_eq!(refused.0, "Conflict", "{refused:?}");
 
     for dir in [home, folder, other] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+/// `(file, store, state)` of every listed item, sorted.
+fn linked_states(home: &Path) -> Vec<(String, String, String)> {
+    let listed = ok(home, "backup.list", &[]);
+    let SdkValue::List(items) = listed.get("items").unwrap() else {
+        panic!()
+    };
+    let mut out: Vec<_> = items
+        .iter()
+        .map(|i| {
+            (
+                i.get_text("file").unwrap().to_owned(),
+                i.get_text("store").unwrap_or("-").to_owned(),
+                i.get_text("state").unwrap().to_owned(),
+            )
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+fn triple(file: &str, store: &str, state: &str) -> (String, String, String) {
+    (file.to_owned(), store.to_owned(), state.to_owned())
+}
+
+fn write(home: &Path, project: &str, path: &str) {
+    ok(
+        home,
+        "file.write",
+        &[
+            ("project", t(project)),
+            ("branch", t("dev")),
+            ("path", t(path)),
+            ("content", t(path)),
+        ],
+    );
+}
+
+/// The list states (#533 review P1-14): the Store's heads and the bucket
+/// copy's sha256 each against the link's last transfer, one item per
+/// linked Store; a link that cannot be compared is `unknown` with a reason.
+#[test]
+fn list_states_compare_the_store_and_the_copy() {
+    let Some((home, folder, _)) = backed_up("states") else {
+        return;
+    };
+    // a writable Branch, backed up
+    ok(
+        &home,
+        "branch.fork",
+        &[
+            ("project", t("shop/api")),
+            ("name", t("dev")),
+            ("from_branch", t("main")),
+        ],
+    );
+    ok(
+        &home,
+        "backup.create",
+        &[("store", t("shop")), ("bucket", t("b1"))],
+    );
+    ok(
+        &home,
+        "backup.restore",
+        &[
+            ("store", t("twin")),
+            ("bucket", t("b1")),
+            ("file", t("shop")),
+        ],
+    );
+    assert_eq!(
+        linked_states(&home),
+        vec![
+            triple("shop", "shop", "current"),
+            triple("shop", "twin", "current")
+        ]
+    );
+    // twin writes the shared file: the copy shop linked changed under it
+    write(&home, "twin/api", "/T1");
+    ok(
+        &home,
+        "backup.create",
+        &[
+            ("store", t("twin")),
+            ("bucket", t("b1")),
+            ("file", t("shop")),
+        ],
+    );
+    assert_eq!(
+        linked_states(&home),
+        vec![
+            triple("shop", "shop", "bucket_changed"),
+            triple("shop", "twin", "current")
+        ]
+    );
+    write(&home, "shop/api", "/S1");
+    write(&home, "twin/api", "/T2");
+    assert_eq!(
+        linked_states(&home),
+        vec![
+            triple("shop", "shop", "both_changed"),
+            triple("shop", "twin", "store_changed")
+        ]
+    );
+    // a link without its last copy's sha256 cannot say
+    let path = paths::store_record(&home, "twin");
+    let record = read_record(&path).unwrap().unwrap();
+    let link = record.get("backups").unwrap().get("b1").unwrap().clone();
+    let heads = link.get("heads").unwrap().clone();
+    let bare = SdkValue::map([("b1", SdkValue::map([("file", t("shop")), ("heads", heads)]))]);
+    write_record(&path, &home::with_field(record, "backups", bare)).unwrap();
+    let listed = ok(&home, "backup.list", &[]);
+    let SdkValue::List(items) = listed.get("items").unwrap() else {
+        panic!()
+    };
+    let twin = items
+        .iter()
+        .find(|i| i.get_text("store") == Some("twin"))
+        .unwrap();
+    assert_eq!(twin.get_text("state"), Some("unknown"));
+    assert!(
+        twin.get_text("reason").unwrap().contains("sha256"),
+        "{twin:?}"
+    );
+    for dir in [home, folder] {
         let _ = std::fs::remove_dir_all(dir);
     }
 }

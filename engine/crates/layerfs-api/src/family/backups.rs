@@ -206,28 +206,77 @@ fn link_heads(link: &SdkValue) -> Option<String> {
     }
 }
 
-/// The current heads of a sqlite Store on `native`, when readable now.
-fn local_heads(home: &Path, store: &str, record: &SdkValue) -> Option<String> {
-    if record.get_text("kind") == Some("postgresql")
-        || route::machine(record, store).ok()? != "native"
-    {
-        return None;
+/// Whether linked Store `store` changed since its link's last transfer: its
+/// heads now against the link's. `Err` says why that cannot be read here.
+fn store_changed(
+    home: &Path,
+    store: &str,
+    record: &SdkValue,
+    link: &SdkValue,
+) -> std::result::Result<bool, String> {
+    let then = link_heads(link).ok_or("the link records no heads")?;
+    if record.get_text("kind") == Some("postgresql") {
+        return Err(format!("Store {store} is a PostgreSQL database"));
     }
-    let file = paths::store_file(home, store);
-    remote::heads(&file).ok().map(|h| pieces::hex(&h))
+    let machine = route::machine(record, store).map_err(|refusal| refusal.message)?;
+    if machine != "native" {
+        return Err(format!(
+            "Store {store} is on {machine}; its heads are read on native only"
+        ));
+    }
+    let now = remote::heads(&paths::store_file(home, store))?;
+    Ok(pieces::hex(&now) != then)
 }
 
-/// `backup.list(bucket?)`: every Store file on the connected buckets, each
-/// with its state against this home's links: `current` (linked, the Store
-/// unchanged since), `store_changed` (linked, the Store changed since),
-/// `unlinked` (no Store of this home links it) or `missing` (linked, gone
-/// from the bucket).
+/// Whether the bucket's copy changed since the link's last transfer: its
+/// sha256 against the one that transfer moved.
+fn bucket_changed(link: &SdkValue, copy: &remote::Copy) -> std::result::Result<bool, String> {
+    let then = link_sha256(link).ok_or("the link records no sha256 of its last copy")?;
+    let now = copy.sha256.ok_or(format!(
+        "the listing read no sha256 of {} (at most {} stats per listing)",
+        copy.file,
+        remote::copies::MAX_LIST_STATS
+    ))?;
+    Ok(now != then)
+}
+
+/// A linked copy's state and, for `unknown`, why.
+fn state(
+    home: &Path,
+    store: &str,
+    record: &SdkValue,
+    link: &SdkValue,
+    copy: &remote::Copy,
+) -> (&'static str, Option<String>) {
+    match (
+        store_changed(home, store, record, link),
+        bucket_changed(link, copy),
+    ) {
+        (Ok(false), Ok(false)) => ("current", None),
+        (Ok(true), Ok(false)) => ("store_changed", None),
+        (Ok(false), Ok(true)) => ("bucket_changed", None),
+        (Ok(true), Ok(true)) => ("both_changed", None),
+        (store, bucket) => {
+            let why: Vec<String> = [store.err(), bucket.err()].into_iter().flatten().collect();
+            ("unknown", Some(why.join("; ")))
+        }
+    }
+}
+
+/// `backup.list(bucket?)`: every Store file on the connected buckets, one
+/// item per Store of this home linked to it (one with no `store` when none
+/// is), each with its state: `current` (neither the Store nor the copy
+/// changed since the link's last transfer), `store_changed` (the Store
+/// has), `bucket_changed` (the copy has: written by another Store or
+/// home), `both_changed`, `unknown` (with its `reason`: a Store on another
+/// machine, a link or listing without a heads or sha256), `unlinked` (no
+/// Store of this home links it) or `missing` (linked, gone from the bucket).
 fn list(home: &Path, only: Option<&str>) -> Outcome {
     let buckets = match only {
         Some(name) => vec![name.to_owned()],
         None => paths::names(&home.join("backup")).map_err(failed)?,
     };
-    // (bucket, file) -> (store, link)
+    // (bucket, file, store, link, store record)
     let mut links = Vec::new();
     for store in paths::names(&home.join("store")).map_err(failed)? {
         let Some(record) = read_record(&paths::store_record(home, &store))? else {
@@ -251,34 +300,37 @@ fn list(home: &Path, only: Option<&str>) -> Outcome {
         let record = bucket_of(home, &bucket)?;
         let copies = remote::list_stores(driver(&record)?.as_ref()).map_err(remote_error)?;
         for copy in &copies {
-            let linked = links
-                .iter()
-                .find(|(b, f, ..)| *b == bucket && *f == copy.file);
-            let (state, store) = match linked {
-                None => ("unlinked", SdkValue::Null),
-                Some((_, _, store, link, record)) => {
-                    let now = local_heads(home, store, record);
-                    let state = match (now, link_heads(link)) {
-                        (Some(now), Some(then)) if now != then => "store_changed",
-                        _ => "current",
-                    };
-                    (state, SdkValue::text(store))
+            let item = |store: SdkValue, state: &str, reason: Option<String>| {
+                let mut fields = vec![
+                    ("bucket", SdkValue::text(&bucket)),
+                    ("file", SdkValue::text(&copy.file)),
+                    ("bytes", SdkValue::Int(copy.bytes as i64)),
+                    (
+                        "modified",
+                        copy.modified
+                            .map(|m| SdkValue::Int(m as i64))
+                            .unwrap_or_default(),
+                    ),
+                    ("heads", copy.heads.as_ref().map(hex).unwrap_or_default()),
+                    ("store", store),
+                    ("state", SdkValue::text(state)),
+                ];
+                if let Some(reason) = reason {
+                    fields.push(("reason", SdkValue::text(reason)));
                 }
+                SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect())
             };
-            items.push(SdkValue::map([
-                ("bucket", SdkValue::text(&bucket)),
-                ("file", SdkValue::text(&copy.file)),
-                ("bytes", SdkValue::Int(copy.bytes as i64)),
-                (
-                    "modified",
-                    copy.modified
-                        .map(|m| SdkValue::Int(m as i64))
-                        .unwrap_or_default(),
-                ),
-                ("heads", copy.heads.as_ref().map(hex).unwrap_or_default()),
-                ("store", store),
-                ("state", SdkValue::text(state)),
-            ]));
+            let mut linked = links
+                .iter()
+                .filter(|(b, f, ..)| *b == bucket && *f == copy.file)
+                .peekable();
+            if linked.peek().is_none() {
+                items.push(item(SdkValue::Null, "unlinked", None));
+            }
+            for (_, _, store, link, record) in linked {
+                let (state, reason) = state(home, store, record, link, copy);
+                items.push(item(SdkValue::text(store), state, reason));
+            }
         }
         for (b, file, store, ..) in &links {
             if *b == bucket && !copies.iter().any(|c| c.file == *file) {
