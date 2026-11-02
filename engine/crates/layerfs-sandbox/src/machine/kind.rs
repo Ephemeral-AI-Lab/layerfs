@@ -131,7 +131,7 @@ impl Kind {
     pub fn route(self, host: HostOs) -> Route {
         match (self, host) {
             (Self::Native, HostOs::Windows) => Route::Worker,
-            (Self::Native, _) | (Self::Docker, HostOs::Linux) => Route::InProcess,
+            (Self::Native, _) => Route::InProcess,
             _ => Route::Worker,
         }
     }

@@ -1,8 +1,8 @@
-//! `docker` on macOS: one worker container, `<vm_name>`, started detached
-//! (the port of `docker/macos.js`). It mounts Docker's own socket, the Store
+//! `docker` on macOS and Linux: one worker container, `<vm_name>`, started
+//! detached (the port of `docker/macos.js`). It mounts Docker's own socket, the Store
 //! volume `<vm_name>-data` at `/layerfs/data` and the bundle read-only; never
 //! the host home. Its worker listens behind a secret on a port published to
-//! the Mac's loopback only. The secret is written into a private tmpfs after
+//! the host's loopback only. The secret is written into a private tmpfs after
 //! the container starts, so it is in no command line and no container config.
 use super::cli::{docker, engine_version};
 use crate::machine::error::{Code, MachineError};
@@ -15,8 +15,9 @@ use std::time::Duration;
 const CALL: Duration = Duration::from_secs(30);
 /// The label that marks a container as a machine's worker.
 const ROLE: &str = "layerfs.role=machine-worker";
-/// The Engine's socket inside Docker Desktop's VM, which the worker's
-/// Sandbox backend uses; the Mac's own socket path means nothing there.
+/// The Engine's socket as the Engine's kernel sees it (inside Docker
+/// Desktop's VM, or the Linux host), which the worker's Sandbox backend
+/// uses; a Mac's own socket path means nothing there.
 const VM_DOCKER: &str = "/var/run/docker.sock";
 /// The container's main process waits (bounded) for its secret, then becomes the worker.
 const ENTRY: &str = r#"i=0

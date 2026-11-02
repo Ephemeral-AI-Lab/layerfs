@@ -30,8 +30,8 @@ pub(crate) enum Guest {
         root: String,
         vm: String,
     },
-    /// `docker exec` in the macOS worker container.
-    #[cfg(target_os = "macos")]
+    /// `docker exec` in the docker machine's worker container (macOS, Linux).
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     Docker { socket: PathBuf, container: String },
 }
 
@@ -89,7 +89,7 @@ impl Guest {
                 inner.extend(escaped.iter().map(String::as_str));
                 return host.command(tools, &inner, stdin);
             }
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             Self::Docker { socket, container } => {
                 let mut c = tool::command(&tool::find(tools, "docker")?, ["-H"]);
                 c.arg(format!("unix://{}", socket.display())).arg("exec");

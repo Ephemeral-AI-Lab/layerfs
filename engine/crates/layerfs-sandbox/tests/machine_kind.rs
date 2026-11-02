@@ -52,11 +52,12 @@ fn backends_follow_the_kind_and_host() {
 }
 
 #[test]
-fn routes_are_in_process_only_for_native_and_linux_docker() {
+fn routes_are_in_process_only_for_native() {
     assert_eq!(Kind::Native.route(HostOs::Linux), Route::InProcess);
     assert_eq!(Kind::Native.route(HostOs::Macos), Route::InProcess);
     assert_eq!(Kind::Native.route(HostOs::Windows), Route::Worker);
-    assert_eq!(Kind::Docker.route(HostOs::Linux), Route::InProcess);
+    // the terminal pass: a Linux docker Store lives in a Docker volume, behind a worker
+    assert_eq!(Kind::Docker.route(HostOs::Linux), Route::Worker);
     assert_eq!(Kind::Docker.route(HostOs::Macos), Route::Worker);
     assert_eq!(Kind::Docker.route(HostOs::Windows), Route::Worker);
     for host in [HostOs::Linux, HostOs::Macos, HostOs::Windows] {

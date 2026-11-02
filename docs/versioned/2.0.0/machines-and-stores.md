@@ -145,15 +145,13 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   deletes the file.
 - One process can use Stores on several machines at once.
 - A Sandbox on `docker` is a container on the docker machine's image. On
-  macOS (and Windows) the docker worker starts it beside itself, mounting
-  only its Store's folder of the worker's data volume. On Linux the caller
-  starts it and bind mounts the Store's folder, which only a root caller can
-  do (the daemon, root in the container, must own it). A PostgreSQL
-  Store's Sandbox on `native` or `docker` is started by the caller.
-- Not verified: the route table in `layerfs-sandbox` marks `docker` on a
-  Linux host as in-process, while the decisions log says every machine
-  other than `native` goes to its worker. No Linux host was used on this
-  branch.
+  macOS and Linux the docker worker (a container on that image) starts it
+  beside itself, mounting only its Store's folder of the worker's data
+  volume. A PostgreSQL Store's Sandbox on `native` or `docker` is started by
+  the caller.
+- Every machine other than `native` is reached through its worker, `docker`
+  on Linux included (its sqlite Stores live in a Docker volume). Checked in
+  the terminal pass on a Linux VM.
 
 ## Stores
 

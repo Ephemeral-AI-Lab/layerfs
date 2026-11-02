@@ -286,20 +286,9 @@ fn a_bundle_without_its_binaries_is_refused_before_any_effect() {
     assert!(scratch.log().is_empty());
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
-fn docker_on_linux_runs_in_process_and_starts_nothing() {
-    let scratch = Scratch::new("docker-linux");
-    scratch.tool("docker", "exit 0");
-    let spec = scratch.spec(Kind::Docker);
-    assert!(machine::start(&spec, &scratch.bundle()).unwrap().is_none());
-    machine::stop(&spec).unwrap();
-    assert!(scratch.log().is_empty());
-}
-
-#[cfg(target_os = "macos")]
-#[test]
-fn docker_on_macos_starts_one_worker_container_without_the_home() {
+fn docker_on_macos_and_linux_starts_one_worker_container_without_the_home() {
     let scratch = Scratch::new("docker-macos");
     scratch.tool(
         "docker",
@@ -341,9 +330,9 @@ esac"#,
     );
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
-fn docker_on_macos_leaves_a_foreign_container_alone() {
+fn docker_leaves_a_foreign_container_alone() {
     let scratch = Scratch::new("docker-foreign");
     scratch.tool(
         "docker",
