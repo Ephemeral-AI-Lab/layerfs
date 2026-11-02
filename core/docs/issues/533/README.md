@@ -110,6 +110,9 @@ only when the 12 #516 cells PASS on every one of the seven machine kinds:
 `native`, `docker`, `apple-container`, `microsandbox`, `lima`,
 `firecracker` and `ssh`. A NOT_RUN or a refusal on any kind means step 19
 is not passed. This replaces "passes on macOS and Linux" as the bar.
+**Status (2026-11-02): met at `6837bcfce2`**, 12/12 on all seven kinds and
+on the two Linux rows; see [TERMINAL-PASS.md](TERMINAL-PASS.md). Step 19's
+other items keep their own verdicts there.
 
 The other open decisions are named in the step they touch. They default to
 H's recommendation unless the owner says otherwise:
@@ -457,6 +460,7 @@ reference. Apply the H §9.1 AGENTS.md wording that G2 approved.
   kinds, each kind 12/12 PASS (owner direction 2026-11-02; see §3): a
   NOT_RUN or a refusal on any kind fails the step. Each VM kind's cells
   move their Store from `native` to that machine first and back after;
+  **met at `6837bcfce2` (2026-11-02)**;
 - two Lima machines of different sizes, each with two Stores, used at once;
 - Init on `native`, moves to `docker` (macOS) and one VM, and back;
 - backup to and restore from MinIO and R2, and `backup list`;

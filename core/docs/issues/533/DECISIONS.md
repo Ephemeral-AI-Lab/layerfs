@@ -190,7 +190,8 @@ Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated 
   home's own store file, not from a Docker volume. Nothing ran on Linux in
   this pass, so neither route is verified there. A Linux follow-up must
   either give `docker` on Linux a worker (the row's choice) or make the
-  in-process route open the volume's file.
+  in-process route open the volume's file. **Resolved by `4c740437cd`**
+  (the row's choice; see "Terminal pass fixes" below).
 
 ## Step-12 deferral closed (owner instruction, 2026-11-02)
 
@@ -203,7 +204,7 @@ implementation choices, recorded because they are not in the spec.
 | --- | --- | --- |
 | Where a docker Sandbox's Store comes from | Docker's `-v` source syntax in the existing `store_volume` string: `volume` (1.1.0, Store at `global/store.sqlite`), `volume/sub/path` (a volume subpath), `/host/folder` (a bind mount); the last two put the Store at `/layerfs-store/store.sqlite`. | The 2.0 docker machine keeps every Store in one data volume (`store/<name>/`), so a Sandbox mounts only its Store's folder. Keeping the string keeps the Sandbox record format; volume names hold no `/`, so the forms never overlap. |
 | macOS and Windows | The caller sends the docker machine's image (and the volume folder and `daemonHost` `host.docker.internal`) with the worker call; the worker adds its own Engine socket and the daemon beside its executable, and makes the Store folder `0700`/`0600` (root's) first. | H §7.7: guests never read the home. The daemon requires a private Store folder owned by its user (root in the container). |
-| Linux | The call runs in the caller's process (as `Kind::route` routes it) and bind mounts the Store's home folder; a caller that is not root is refused before any effect. | The daemon (root in the container) must own the folder. **Unverified: nothing ran on Linux.** The earlier correction row still applies; a Linux follow-up may prefer a worker container for `docker` on Linux. |
+| Linux | The call runs in the caller's process (as `Kind::route` routes it) and bind mounts the Store's home folder; a caller that is not root is refused before any effect. | The daemon (root in the container) must own the folder. **Unverified: nothing ran on Linux.** The earlier correction row still applies; a Linux follow-up may prefer a worker container for `docker` on Linux. **Superseded by `4c740437cd`:** Linux now takes the macOS row's route through the worker container. |
 | PostgreSQL Sandboxes | `native` and `docker` from the caller's process, which resolves the password; a namespaces Sandbox (Linux `native`) and VMs/ssh are refused. Under Docker Desktop (not Linux) a loopback URL becomes `host.docker.internal` for the daemon only. | O3/G13. In 2.0 the caller makes Store calls itself, so a loopback server must also be reachable from the container. |
 | One-shot calls | An in-process Sandbox call opens its Store first (`store::open::hold`), as Store calls do. | The host code reads the Branch through the open Store; a one-shot command had none. |
 | The docker worker's own image | Falls back to the docker machine record's `image`, as 1.1.0's macOS worker did. | Nothing set `os_image`, so the docker worker could never start. |
@@ -294,3 +295,41 @@ Linux bundle builder `tools/linux_bundle.py` (`6263b95871`, O16).
 | Forced close (O31) | The Workspaces not drained are answered in the reply as `unknown` (their paths); nothing else records them. O31's "records `Unknown`" is read as this answer. | `37f1bbd2b9` |
 | Removing a machine | Not a new `state` value: the record gets `removing: { pid }` under the home lock while the VM is deleted outside it; `machine_of` refuses `InUse` while that process lives. A refused delete restores the record; an unknown one sets `state: "unknown"` and `error`. | `539cc0e771` |
 | `start.lock` on create and remove | Both take it (readiness wait up to 600 s) before the home lock, as the on-demand start does; the start re-reads the record once it holds it. | `539cc0e771` |
+
+## Terminal pass fixes (2026-11-02)
+
+Running the seven-kind pass found seven defects that no stand-in test
+reached. Each was fixed, given a test, and the affected cells were run again
+as new samples; the failed receipts are kept (TERMINAL-PASS, "Samples that
+failed"). None of these is an owner decision. The pass then ran 12/12 on all
+seven kinds and both Linux rows at `6837bcfce2`.
+
+| Topic | Choice | Where |
+| --- | --- | --- |
+| Folders above a namespaces Sandbox's local root | The worker's root (`/layerfs/data`) is 0701, not 0700. Before a namespaces Sandbox starts, `home::traversable` adds o+x (never read) to the home's folders down to `machine/native/sandbox-root`; folders above the home are unchanged, and the runtime still refuses one that is closed. macOS native is unchanged. Not taken: moving the local root outside the home, which H §7.8's layout keeps inside it. | `005a30c93c` (first C01 on `lima`: "`/layerfs/data` is not traversable by others") |
+| The host's private-folder check | A folder may carry o+x and nothing else from group or others; a file still may carry nothing. | `44db721d95` (the next C01: "`/layerfs/data` must be owned by this user and private") |
+| Firecracker's files | The bundle copy every machine gets leaves out `firecracker/`; a nested Lima host copies that folder from the host straight to `/layerfs/data/firecracker`, once per bundle hash, before its worker starts. Before, a multi-GB root filesystem would have been copied into every VM, ssh host and microVM. `bundle.json`'s hash does not cover `firecracker/`. | `e1cfcde498` |
+| Idle stop in containers | `apple-container` and `microsandbox` machines never stopped when idle: `poweroff` is missing in the Sandbox image, and the main process ignored the signal. The worker now powers off with `reboot(2)` when `poweroff` is missing (`layerfs_api::worker::power_off`); a new stop mode `init` (`sync; kill -TERM 1`) is `apple-container`'s, whose main process now exits on TERM. Seen live afterwards: `ac1`, `msb1`, `lima1` and `fch` stopped themselves, `ssh1`'s worker exited. | `0170995ce4` |
+| Firecracker huge pages | Create writes `"huge_pages":"None"`; each boot picks `2M` when the host has enough free 2 MiB pages for `mem_size_mib`, otherwise `None`. Before, a config made with huge pages could not boot after the host rebooted and lost them. | `164e1297cb` (a warm-up move after a reboot: "Cannot load kernel due to invalid memory configuration") |
+| Ending an old worker | The guest's launch script (`LAUNCH`) and the ssh `END_WORKER` end only a process whose command line is exactly `<bundle>/layerfs worker` and which is not the script itself. Before, a pattern match also matched the launching shell when its pid was reused, so it killed itself (exit 143). | `b10dbcac8c` (`ac1` C01 restarting from stopped) |
+| `docker` on Linux | Routes to its worker container, as on macOS (`Kind::route`: only `native` is in process); `docker/linux.rs` is removed and `macos.rs` serves both. Before, a Store moved to `docker` on Linux stayed in the home's own file, so the next Store of that name was refused `Exists`. Resolves the correction to the H §7.7 row. Deleted test: `docker_on_linux_runs_in_process_and_starts_nothing`. | `4c740437cd` (Linux `docker` C01: "machine docker already holds a Store file named cells") |
+
+Gaps seen in the pass and left open:
+
+- A running machine keeps the worker and bundle it started with until it
+  stops (idle stop or reboot); there is no `machine stop`. To load a rebuilt
+  bundle mid-pass, a VM was stopped with `limactl stop`, which has the same
+  effect as the idle stop.
+- Nothing sets a nested host's huge pages; since `164e1297cb` the microVM
+  uses 2 MiB pages when enough are free at boot and boots without them
+  otherwise. The pass set 1,100 on the Firecracker host by hand, as #516 and
+  #527 did (declared setup).
+- `tools/linux_bundle.py` does not build or place `firecracker/`; the pass
+  built it from #516's checksum-verified downloads and added it to the sealed
+  bundle after sealing (see TERMINAL-PASS).
+- The sealed bundle's hash differs on every seal of the same source: the
+  layer tar records file times. Two seals of `6837bcfce2` are not
+  byte-identical; the pass used one seal (`4a77c75e…`) for every row.
+- Linux setup is the host's: `native` Sandboxes need
+  `user.max_user_namespaces=0` (#527 lists it), and the Linux VM needed
+  Docker installed by hand. Neither is done by LayerFS.

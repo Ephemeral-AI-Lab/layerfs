@@ -1,0 +1,207 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C06",
+  "machine": "docker",
+  "product": "44db721d95",
+  "startedAt": "2026-11-02T01:26:05.966Z",
+  "load1": 4.56298828125,
+  "body": {
+    "sha256": "68c36eedeb7daf07516db93ca0ac0263bf3859d42549f7d490b1f074475ffc9d"
+  },
+  "ok": true,
+  "cause": null,
+  "phases": {
+    "warmup": {
+      "mountMs": 17.301,
+      "exec": {
+        "wallMs": 792.263,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793582768827785381 1793582769577200964\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 749.415583
+      },
+      "unmountMs": 13.053
+    },
+    "timed": {
+      "mountMs": 12.972,
+      "workspace": {
+        "kind": "Mounted",
+        "path": "/workspaces/2",
+        "workspace": "29229442f96b98714a13fd08cad03babcf32902f1baf78a88d562ae0de11d746",
+        "namespace": 2,
+        "branch": "lane",
+        "base": null,
+        "base_layer": "32f3677ff34f40d2556dc688279b927be615ba1050200996ca0184e791084772c9",
+        "root": "e5984c15d71c33ca00c17f6371c448fce6b409ad0685d2166b065e9218e229c4",
+        "sandbox": "1",
+        "container": "lfs-1b2f1b7c-cells.p-1",
+        "image": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+        "platform": "docker",
+        "runtime": "docker",
+        "ws": "c06:/workspaces/2"
+      },
+      "exec": {
+        "wallMs": 789.606,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793582769639650381 1793582770393978256\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 754.327875
+      },
+      "commitMs": 4341.338,
+      "commit": {
+        "kind": "Committed",
+        "head": "12d3deb77d9ead7b061deb637f38b3051e9802ed3764969fefe07060004f0c1cec",
+        "commit": {
+          "id": "12d3deb77d9ead7b061deb637f38b3051e9802ed3764969fefe07060004f0c1cec",
+          "branch": null,
+          "parent": null,
+          "second_parent": null,
+          "base": "32f3677ff34f40d2556dc688279b927be615ba1050200996ca0184e791084772c9",
+          "root": "19f15d0d7b5fda0bc360f3f08ebd27f6a35a7060538241371702deb316bf7386",
+          "via": "exec",
+          "message": "lfs533 C06",
+          "merged_from": null,
+          "time": 1793582774628,
+          "logical": 67108864,
+          "new_canonical": 39263,
+          "new_stored": 748,
+          "new_metadata": 672,
+          "displaced": null,
+          "lww": [],
+          "lww_truncated": false
+        },
+        "displaced_head": null,
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "unmountMs": 12.963
+    },
+    "verify": {
+      "exitCode": 0,
+      "stdout": "VERIFY OK\n",
+      "stderr": ""
+    }
+  },
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 4.794,
+      "ok": true
+    },
+    {
+      "name": "store.create",
+      "ms": 6.401,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 108.956,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 8.326,
+      "ok": true
+    },
+    {
+      "name": "machine.update",
+      "ms": 1.275,
+      "ok": true
+    },
+    {
+      "name": "store.move",
+      "ms": 750.215,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 1924.924,
+      "ok": true
+    },
+    {
+      "name": "warmup.mount",
+      "ms": 17.291,
+      "ok": true
+    },
+    {
+      "name": "warmup.exec",
+      "ms": 792.256,
+      "ok": true
+    },
+    {
+      "name": "warmup.unmount",
+      "ms": 13.048,
+      "ok": true
+    },
+    {
+      "name": "timed.mount",
+      "ms": 12.967,
+      "ok": true
+    },
+    {
+      "name": "timed.exec",
+      "ms": 789.597,
+      "ok": true
+    },
+    {
+      "name": "timed.commit",
+      "ms": 4341.333,
+      "ok": true
+    },
+    {
+      "name": "timed.unmount",
+      "ms": 12.958,
+      "ok": true
+    },
+    {
+      "name": "verify.mount",
+      "ms": 12.391,
+      "ok": true
+    },
+    {
+      "name": "verify.identity",
+      "ms": 44.99,
+      "ok": true
+    },
+    {
+      "name": "verify.exec",
+      "ms": 400.424,
+      "ok": true
+    },
+    {
+      "name": "verify.unmount",
+      "ms": 10.637,
+      "ok": true
+    },
+    {
+      "name": "sandbox.close",
+      "ms": 254.088,
+      "ok": true
+    }
+  ],
+  "sandbox": {
+    "name": "c06",
+    "project": "cells/p",
+    "machine": "docker",
+    "state": "running",
+    "created": 1793582766849,
+    "pid": 51063,
+    "id": "1",
+    "platform": "docker",
+    "runtime": "docker",
+    "image": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"
+  },
+  "where": {
+    "kernel": "Linux 6.12.76-linuxkit",
+    "machine": "aarch64",
+    "cpus": "8",
+    "memKiB": "8126948",
+    "memBytes": null,
+    "cpuMax": "max 100000",
+    "id": "501:20"
+  },
+  "endedAt": "2026-11-02T01:26:15.727Z"
+}

@@ -10,8 +10,12 @@
   choice, 2026-11-02; local only, not pushed). A later move of that branch
   comes in by a merge, never a rebase.
 - **Terminal pass:** [TERMINAL-PASS.md](TERMINAL-PASS.md).
-- **Steps:** 1–19 all have commits. Step 19 ran on this Mac only; its VM, ssh,
-  docker-worker, Linux, R2 and Windows rows are NOT_RUN (reasons there).
+- **Steps:** 1–19 all have commits. **Step 19's pass condition is met at
+  `6837bcfce2`:** the 12 #516 cells PASS on all seven machine kinds and on
+  the two Linux rows (a Lima QEMU VM), 108 receipts. The pass found seven
+  defects, each fixed with a test (DECISIONS, "Terminal pass fixes"). Still
+  NOT_RUN in step 19: two Lima machines with two Stores each at once, the
+  VM kinds with Docker stopped, R2; Windows is paused for the owner (P1-28).
 
 ## Commits and production LOC
 
@@ -102,10 +106,33 @@ rewritten; this table is the record.
 | `94671c974c` | fix, test(533): live exec output in Node and Python; Python writes text | 131766 -> 131766 (delta 0) | same |
 | `2793ee114c` | build(533): require the maturin that builds the wheel, 1.9.6 | 131766 -> 131766 (delta 0) | same |
 | `4194d34001` | docs(533): step 19 passes only with 12/12 on all seven machine kinds (owner direction) | 131766 -> 131766 (delta 0) | same |
+| `6f3ec06232` | tools(533): the bundle's Sandbox image is an uncompressed docker-archive named by its config digest | 131766 -> 131766 (delta 0) | same |
+| `2f5cc7f180` | test(533): the cell runner can use one home per machine kind | 131766 -> 131766 (delta 0) | same |
+| `005a30c93c` | fix(533): let namespaces Sandboxes pass the folders above their local root | 131766 -> 131782 (delta +16) | same |
+| `44db721d95` | fix(533): a private home folder may let others pass through (o+x) | 131782 -> 131783 (delta +1) | same |
+| `e1cfcde498` | fix(533): only a nested Lima host takes the bundle's firecracker/ folder | 131783 -> 131794 (delta +11) | same |
+| `33a04f067d` | docs(533): receipts name the temp folder <tmp>, not this Mac's path (P2-30) | 131794 -> 131794 (delta 0) | same |
+| `7b93496b00` | docs(533): test commands show their 120 s wall limit (P2-30) | 131794 -> 131794 (delta 0) | same |
+| `6d39bf53eb` | docs(533): HANDOFF records every commit's production LOC and the deleted JS tests (P2-29) | 131794 -> 131794 (delta 0) | same |
+| `b96288fe20` | docs(533): DECISIONS records the routes taken instead of G0, G4, step 5.2 and per-step branches; resize deferred (P2-31) | 131794 -> 131794 (delta 0) | same |
+| `cfa795496e` | docs(533): the folder scope is { project, folder, branch? } with --scope-project | 131794 -> 131794 (delta 0) | same |
+| `da3fa4a26c` | docs(533): backup list's seven states, exported-from and restore's InUse in the manual | 131794 -> 131794 (delta 0) | same |
+| `8bbccbf45c` | docs(533): limitations drops what the review fixes built and the import-env item (P2-32) | 131794 -> 131794 (delta 0) | same |
+| `89176fa936` | docs(533): the 2.0 manual follows the review fixes' behaviour | 131794 -> 131794 (delta 0) | same |
+| `0fccb16cd0` | docs(533): the SDK skill's method pages follow the review fixes | 131794 -> 131794 (delta 0) | same |
+| `4ce9fb2138` | docs(533): DECISIONS records each review finding's fix and the fixes' choices | 131794 -> 131794 (delta 0) | same |
+| `0170995ce4` | fix(533): an idle worker stops apple-container and microsandbox machines | 131794 -> 131813 (delta +19) | same |
+| `164e1297cb` | fix(533): a Firecracker microVM chooses its huge pages at each boot | 131813 -> 131815 (delta +2) | same |
+| `b10dbcac8c` | fix(533): a restarted guest ends only the bundle's worker, never itself | 131815 -> 131816 (delta +1) | same |
+| `4c740437cd` | fix(533): docker on Linux reaches its Stores through its worker container | 131816 -> 131767 (delta -49) | same |
+| `6837bcfce2` | test(533): the cell runner takes its product commit from LFS533_PRODUCT | 131767 -> 131767 (delta 0) | same |
 
-Total: 124168 -> 131766 (delta +7598) across the branch: 124168 -> 130548
+Total: 124168 -> 131767 (delta +7599) across the branch: 124168 -> 130548
 (delta +6380) to `b2ca5fceb5`, the commit the review read beside
-`707b534eb2`, then +1218 for the review fixes. The 1.1.0 JavaScript
+`707b534eb2`, then +1218 for the review fixes, then +1 for the terminal
+pass fixes (`005a30c93c` … `4c740437cd`: +50, then -49 when `docker` on
+Linux dropped its in-process adapter). Head recounted at `6837bcfce2` with
+`tools/production_loc.py` on `git archive HEAD`: 131767. The 1.1.0 JavaScript
 packages are retired in `b07cde28d5` (api 4879 -> 107); the 2.0 library,
 machine layer, command and bindings are added in `engine`. The counter does
 not count Python (`api/python`).
@@ -143,6 +170,10 @@ owner). Read especially:
 
 - **O27** (`68c6ce368c`): `layerfs-sandbox` `tests/native_platform.rs` (2
   tests) and the Linux half of `native_provider` (listed in that commit).
+- **Terminal pass** (`4c740437cd`): `layerfs-sandbox`
+  `docker_on_linux_runs_in_process_and_starts_nothing` (the in-process
+  route it checked is gone; `docker` on Linux is covered by the worker
+  route's tests).
 - **Step 14** (`b07cde28d5`): `layerfs-node` `tests/native_admission.rs` (2),
   `native_connection_wait.rs` (1), `native_discovery.rs` (6),
   `native_local.rs` (12), `tests/support/` and `tests/README.md`; and the 63
@@ -227,13 +258,16 @@ gives only the count). They include the tests' fixtures and the
 
 ## Not verified
 
-- Every VM kind and ssh: not run (outside the owner's instruction; a VM
-  boot outlasts the command rule). The docker machine's worker container
-  ran on macOS at `a487409fe5` from a private test bundle
-  (`LAYERFS_BUNDLE`). The VM adapters have unit tests only.
-- Anything on Linux: the namespaces backend, `remote_store`, the in-process
-  `docker` route and its root-only bind mount of a Store folder, the Linux
-  worker; and Windows (O5).
+- Now verified by the seven-kind pass at `6837bcfce2` (TERMINAL-PASS): every
+  VM kind and ssh, the docker worker on macOS and Linux, the namespaces
+  backend on Linux, the Linux worker, the Store moving native → machine →
+  native, machines started by the first call, and (at `0170995ce4`) the idle
+  stop. The earlier entries for them here no longer apply.
+- Two Lima machines of different sizes with two Stores each, used at once;
+  the VM kinds with Docker stopped (Docker is shared with other sessions).
+- `remote_store` on Linux; Windows (O5, P1-28 paused).
+- Machine boot and Init of a large project against the cell limits: `fc1`
+  was warmed by a move before its cells (declared setup).
 - R2 backups (no account here).
 - Release-build timings: the terminal pass used debug builds.
 - One worker serving several Stores, machine boot and worker start times,
@@ -300,18 +334,17 @@ against the fix commits' messages and code at `4194d34001`).
 ## Cache releases for the cleanup script
 
 All owner-released at handoff; none holds evidence (the receipts are
-committed).
+committed). Refreshed after the seven-kind pass; the step-5 and pg subagent
+worktrees and their targets listed before are already gone.
 
 | Resource | Size | Note |
 | --- | --- | --- |
-| `layerfs-issue533-v2/target` | 13 GB | this worktree's macOS target; keep warm only if 2.0 work continues |
-| `layerfs-issue533-v2-step5/target` (incl. `target/x86_64-unknown-linux-gnu`) | 5.4 GB | step-5 subagent worktree, branch `issue533-v2-o27`; its commits are cherry-picked |
-| `layerfs-issue533-v2-pg/target` | 7.4 GB | step-10b/10c subagent worktree, branch `issue533-v2-pg`; cherry-picked |
-| `~/.cache/layerfs-worktrees/layerfs-issue533-v2-{5ff20ac6a0aa,pg-550caaac6c6d,step-9d8c05ce2ded}` | ~1.1 GB | launcher state and receipts of the three worktrees |
+| `layerfs-issue533-v2/target` | 22 GB | this worktree's macOS target; keep warm only if 2.0 work continues |
+| Docker volumes `lfs-dev-layerfs-issue533-v2-5ff20ac6a0aa-target` and `-cargo` | 9.6 GB + 354 MB | this worktree's Linux target and Cargo home (launcher-owned), for the Linux daemon and bundle builds |
+| `~/.cache/layerfs-worktrees/layerfs-issue533-v2-5ff20ac6a0aa` | 1.5 GB | launcher state, receipts and two older sealed builds (`build-linux-0c84a1ae…`, `38f27b92…`), both superseded |
+| `~/.cache/layerfs/bundle/2.0.0/linux-aarch64` | 2.9 GB | the sealed bundle the seven-kind pass used (`4a77c75e…`, source `6837bcfce2`); its `firecracker/` folder is already removed. Keep it for further VM work; any later seal replaces it |
 | `$TMPDIR/lfs-sbx-{home,folder}-{51039,51054}` | small | leftovers of a failed step-12 run; their removal was refused by the auto-mode classifier, so they were left |
-| containers `lfs533-pg-main` and `lfs533-pg-sbx` (stopped, `--rm`, so removed) and `lfs533-minio` (removed by `minio_service.sh stop`) | – | nothing left |
-| Docker volumes `lfs-dev-layerfs-issue533-v2-5ff20ac6a0aa-target` and `-cargo` | 4.5 GB + 354 MB | this worktree's Linux target and Cargo home (launcher-owned), made for the Linux daemon and bundle builds |
-| `~/.cache/layerfs-worktrees/layerfs-issue533-v2-5ff20ac6a0aa/artifacts/build-linux-{38f27b92…,0c84a1ae…}` | 562 MB each | sealed Linux bundles; `0c84a1ae…` is the one the rerun's receipts name, `38f27b92…` was built during edits and is superseded |
+| VMs, machines and containers of the pass | – | all removed (TERMINAL-PASS, "Cleanup") |
 
-`python3 tools/cleanup.py check` at handoff: 160.2 GB free (after the rerun); no cleanup
-needed.
+`python3 tools/cleanup.py check` at handoff: 297.7 GB free (after the
+seven-kind pass and its cleanup); no cleanup needed.

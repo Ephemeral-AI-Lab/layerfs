@@ -1,0 +1,269 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C10",
+  "machine": "fc1",
+  "product": "164e1297cb",
+  "startedAt": "2026-11-02T02:26:48.758Z",
+  "load1": 2.97021484375,
+  "body": {
+    "sha256": "60f896e83f6fa71e1713ddd4ffd7e8c14d1ecf17bddb5f191f0ea4f2bdebabed"
+  },
+  "ok": true,
+  "cause": null,
+  "phases": {
+    "setup": {
+      "exec": {
+        "wallMs": 1283.594,
+        "exitCode": 0,
+        "stdout": "",
+        "stderr": "",
+        "rc": null,
+        "ms": null
+      },
+      "commit": {
+        "kind": "Committed",
+        "head": "124f6ad8a489058de08a296d70188daca3dab6935702e1cbfbe37f7e68a836f727",
+        "commit": {
+          "id": "124f6ad8a489058de08a296d70188daca3dab6935702e1cbfbe37f7e68a836f727",
+          "branch": null,
+          "parent": null,
+          "second_parent": null,
+          "base": "32df70b509092cf217234190c9d8dd8e005e52f04af1b4f3f4722902d81c4a2f63",
+          "root": "dcf8d66cfee37ad0385e10c429eaa803e105dc8abee852cb8fbe11b0d8349f25",
+          "via": "exec",
+          "message": "lfs533 C10 setup",
+          "merged_from": null,
+          "time": 1793586417395,
+          "logical": 67108864,
+          "new_canonical": 39263,
+          "new_stored": 748,
+          "new_metadata": 672,
+          "displaced": null,
+          "lww": [],
+          "lww_truncated": false
+        },
+        "displaced_head": null,
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      }
+    },
+    "warmup": {
+      "mountMs": 16.58,
+      "exec": {
+        "wallMs": 1501.942,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793586417651897909 1793586419102999535\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 1451.101626
+      },
+      "unmountMs": 20.345
+    },
+    "timed": {
+      "mountMs": 16.487,
+      "workspace": {
+        "kind": "Mounted",
+        "path": "/layerfs/data/machine/native/sandbox-root/lfs-0d868af2-c10.p-1/workspaces/3",
+        "workspace": "26856b38db260f4cd18f256f5ad9b5aa3579bdfcb9e144cd714555e2e3cbb944",
+        "namespace": 3,
+        "branch": "lane",
+        "base": "124f6ad8a489058de08a296d70188daca3dab6935702e1cbfbe37f7e68a836f727",
+        "base_layer": "32df70b509092cf217234190c9d8dd8e005e52f04af1b4f3f4722902d81c4a2f63",
+        "root": "dcf8d66cfee37ad0385e10c429eaa803e105dc8abee852cb8fbe11b0d8349f25",
+        "sandbox": "1",
+        "container": "lfs-0d868af2-c10.p-1",
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "platform": "linux",
+        "runtime": "namespaces",
+        "ws": "c10:/layerfs/data/machine/native/sandbox-root/lfs-0d868af2-c10.p-1/workspaces/3"
+      },
+      "exec": {
+        "wallMs": 1453.13,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793586419170382160 1793586420593691702\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 1423.309542
+      },
+      "commitMs": 183.135,
+      "commit": {
+        "kind": "Committed",
+        "head": "1212aa8f3d1a6642bdc19ad0ea079c75a0d6590eaa6060dd68ad5603968590bc18",
+        "commit": {
+          "id": "1212aa8f3d1a6642bdc19ad0ea079c75a0d6590eaa6060dd68ad5603968590bc18",
+          "branch": null,
+          "parent": "124f6ad8a489058de08a296d70188daca3dab6935702e1cbfbe37f7e68a836f727",
+          "second_parent": null,
+          "base": "32df70b509092cf217234190c9d8dd8e005e52f04af1b4f3f4722902d81c4a2f63",
+          "root": "83d9edfac8946b5d279a0648bf377fcaf6aa649bd94d50e3bbb8bc847c227396",
+          "via": "exec",
+          "message": "lfs533 C10",
+          "merged_from": null,
+          "time": 1793586420613,
+          "logical": 134217728,
+          "new_canonical": 487,
+          "new_stored": 300,
+          "new_metadata": 300,
+          "displaced": null,
+          "lww": [],
+          "lww_truncated": false
+        },
+        "displaced_head": null,
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "unmountMs": 20.644
+    },
+    "verify": {
+      "exitCode": 0,
+      "stdout": "VERIFY OK\n",
+      "stderr": ""
+    }
+  },
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 6.059,
+      "ok": true
+    },
+    {
+      "name": "store.create",
+      "ms": 9.577,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 107.031,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 8.256,
+      "ok": true
+    },
+    {
+      "name": "store.move",
+      "ms": 82.151,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 393.331,
+      "ok": true
+    },
+    {
+      "name": "setup.mount",
+      "ms": 44.683,
+      "ok": true
+    },
+    {
+      "name": "setup.exec",
+      "ms": 1283.588,
+      "ok": true
+    },
+    {
+      "name": "setup.commit",
+      "ms": 7095.109,
+      "ok": true
+    },
+    {
+      "name": "setup.unmount",
+      "ms": 20.923,
+      "ok": true
+    },
+    {
+      "name": "warmup.mount",
+      "ms": 16.574,
+      "ok": true
+    },
+    {
+      "name": "warmup.exec",
+      "ms": 1501.936,
+      "ok": true
+    },
+    {
+      "name": "warmup.unmount",
+      "ms": 20.341,
+      "ok": true
+    },
+    {
+      "name": "timed.mount",
+      "ms": 16.48,
+      "ok": true
+    },
+    {
+      "name": "timed.exec",
+      "ms": 1453.123,
+      "ok": true
+    },
+    {
+      "name": "timed.commit",
+      "ms": 183.129,
+      "ok": true
+    },
+    {
+      "name": "timed.unmount",
+      "ms": 20.637,
+      "ok": true
+    },
+    {
+      "name": "verify.mount",
+      "ms": 15.444,
+      "ok": true
+    },
+    {
+      "name": "verify.identity",
+      "ms": 32.86,
+      "ok": true
+    },
+    {
+      "name": "verify.exec",
+      "ms": 1275.108,
+      "ok": true
+    },
+    {
+      "name": "verify.unmount",
+      "ms": 14.224,
+      "ok": true
+    },
+    {
+      "name": "sandbox.close",
+      "ms": 97.664,
+      "ok": true
+    },
+    {
+      "name": "store.move.back",
+      "ms": 73.105,
+      "ok": true
+    },
+    {
+      "name": "store.remove",
+      "ms": 2.38,
+      "ok": true
+    }
+  ],
+  "sandbox": {
+    "name": "c10",
+    "project": "c10/p",
+    "machine": "fc1",
+    "state": "running",
+    "created": 1793586408976,
+    "pid": 68593,
+    "id": "1",
+    "platform": "linux",
+    "runtime": "namespaces",
+    "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9"
+  },
+  "where": {
+    "kernel": "Linux 6.18.56+",
+    "machine": "aarch64",
+    "cpus": "2",
+    "memKiB": "2034748",
+    "memBytes": null,
+    "cpuMax": null,
+    "id": "501:20"
+  },
+  "endedAt": "2026-11-02T02:27:02.537Z"
+}

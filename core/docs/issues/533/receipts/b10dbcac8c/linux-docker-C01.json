@@ -1,0 +1,56 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C01",
+  "machine": "docker",
+  "product": "b10dbcac8c",
+  "startedAt": "2026-11-02T02:48:21.224Z",
+  "load1": 2.14,
+  "body": {
+    "sha256": "418f8a9d6b71111a34e41a8f4d0a5ba6b1869b684f2d84d72432e65edb8e29b5"
+  },
+  "ok": false,
+  "cause": "store.move: Exists store move, check: machine docker already holds a Store file named cells",
+  "phases": {},
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 14.359,
+      "ok": true
+    },
+    {
+      "name": "store.create",
+      "ms": 32.175,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 102.856,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 11.405,
+      "ok": true
+    },
+    {
+      "name": "machine.update",
+      "ms": 0.416,
+      "ok": true
+    },
+    {
+      "name": "store.move",
+      "ms": 1.06,
+      "ok": false,
+      "error": {
+        "code": "Exists",
+        "message": "store move, check: machine docker already holds a Store file named cells"
+      }
+    },
+    {
+      "name": "cleanup.docker volume rm lfs-6cc49745-docker-data",
+      "ok": false
+    }
+  ],
+  "failedStep": "store.move",
+  "endedAt": "2026-11-02T02:48:21.412Z"
+}

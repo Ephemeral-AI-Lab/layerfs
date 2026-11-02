@@ -1,0 +1,188 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C03",
+  "machine": "docker",
+  "product": "6837bcfce2",
+  "startedAt": "2026-11-02T03:04:45.421Z",
+  "load1": 4.00048828125,
+  "body": {
+    "sha256": "520773ceacd8c44d633ffd1a40727ceb5d990d63a23259f28af8dd4b96fa204d"
+  },
+  "ok": true,
+  "cause": null,
+  "phases": {
+    "warmup": {
+      "mountMs": 20.252,
+      "exec": {
+        "wallMs": 1097.114,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793588688777434759 1793588689832535843\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 1055.101084
+      },
+      "unmountMs": 8.276
+    },
+    "timed": {
+      "mountMs": 16.317,
+      "workspace": {
+        "kind": "Mounted",
+        "path": "/workspaces/2",
+        "workspace": "2e5b2f7c8ceb9a4f5f8427bb00f3381e3b0ca741695d56af09d77556b928b22c",
+        "namespace": 2,
+        "branch": "lane",
+        "base": null,
+        "base_layer": "32613d7bc7ecda1e34774da2d06ae8bf0824eeb1deb1fb2960589e266dba223764",
+        "root": "62767bcd73164c6acde71fb8b878ed8c0cc5fa15ad9b7b6efb75356048445d9e",
+        "sandbox": "1",
+        "container": "lfs-79053ea6-cells.p-1",
+        "image": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+        "platform": "docker",
+        "runtime": "docker",
+        "ws": "c03:/workspaces/2"
+      },
+      "exec": {
+        "wallMs": 1088.495,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793588689896514968 1793588690946698594\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 1050.183626
+      },
+      "commitMs": 25.153,
+      "commit": {
+        "kind": "UpToDate",
+        "head": null,
+        "root": "62767bcd73164c6acde71fb8b878ed8c0cc5fa15ad9b7b6efb75356048445d9e",
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "unmountMs": 7.488
+    },
+    "verify": {
+      "exitCode": 0,
+      "stdout": "VERIFY OK\n",
+      "stderr": ""
+    }
+  },
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 6.243,
+      "ok": true
+    },
+    {
+      "name": "store.create",
+      "ms": 8.386,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 114.022,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 7.935,
+      "ok": true
+    },
+    {
+      "name": "machine.update",
+      "ms": 0.783,
+      "ok": true
+    },
+    {
+      "name": "store.move",
+      "ms": 809.923,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 2348.455,
+      "ok": true
+    },
+    {
+      "name": "warmup.mount",
+      "ms": 20.247,
+      "ok": true
+    },
+    {
+      "name": "warmup.exec",
+      "ms": 1097.11,
+      "ok": true
+    },
+    {
+      "name": "warmup.unmount",
+      "ms": 8.273,
+      "ok": true
+    },
+    {
+      "name": "timed.mount",
+      "ms": 16.311,
+      "ok": true
+    },
+    {
+      "name": "timed.exec",
+      "ms": 1088.489,
+      "ok": true
+    },
+    {
+      "name": "timed.commit",
+      "ms": 25.146,
+      "ok": true
+    },
+    {
+      "name": "timed.unmount",
+      "ms": 7.484,
+      "ok": true
+    },
+    {
+      "name": "verify.mount",
+      "ms": 13.621,
+      "ok": true
+    },
+    {
+      "name": "verify.identity",
+      "ms": 41.108,
+      "ok": true
+    },
+    {
+      "name": "verify.exec",
+      "ms": 44.949,
+      "ok": true
+    },
+    {
+      "name": "verify.unmount",
+      "ms": 7.862,
+      "ok": true
+    },
+    {
+      "name": "sandbox.close",
+      "ms": 275.751,
+      "ok": true
+    }
+  ],
+  "sandbox": {
+    "name": "c03",
+    "project": "cells/p",
+    "machine": "docker",
+    "state": "running",
+    "created": 1793588686372,
+    "pid": 82230,
+    "id": "1",
+    "platform": "docker",
+    "runtime": "docker",
+    "image": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"
+  },
+  "where": {
+    "kernel": "Linux 6.12.76-linuxkit",
+    "machine": "aarch64",
+    "cpus": "8",
+    "memKiB": "8126948",
+    "memBytes": null,
+    "cpuMax": "max 100000",
+    "id": "501:20"
+  },
+  "endedAt": "2026-11-02T03:04:51.636Z"
+}

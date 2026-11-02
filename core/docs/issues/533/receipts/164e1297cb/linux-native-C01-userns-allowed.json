@@ -1,0 +1,47 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C01",
+  "machine": "native",
+  "product": "164e1297cb",
+  "startedAt": "2026-11-02T02:37:56.381Z",
+  "load1": 1.01,
+  "body": {
+    "sha256": "418f8a9d6b71111a34e41a8f4d0a5ba6b1869b684f2d84d72432e65edb8e29b5"
+  },
+  "ok": false,
+  "cause": "sandbox.create: InvalidInput deploy.localDir /tmp/lfs533-cell-L1XVKn/machine/native/sandbox-root: unsupported runtime capability: user namespaces are not blocked; a command could unshare one and keep its own copy of the Workspace mount. Set user.max_user_namespaces=0 in the project's VM before a namespaces Sandbox starts",
+  "phases": {},
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 6.388,
+      "ok": true
+    },
+    {
+      "name": "store.create",
+      "ms": 32.79,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 105.952,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 13.109,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 1.33,
+      "ok": false,
+      "error": {
+        "code": "InvalidInput",
+        "message": "deploy.localDir /tmp/lfs533-cell-L1XVKn/machine/native/sandbox-root: unsupported runtime capability: user namespaces are not blocked; a command could unshare one and keep its own copy of the Workspace mount. Set user.max_user_namespaces=0 in the project's VM before a namespaces Sandbox starts"
+      }
+    }
+  ],
+  "failedStep": "sandbox.create",
+  "endedAt": "2026-11-02T02:37:56.543Z"
+}

@@ -1,0 +1,62 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C01",
+  "machine": "lima1",
+  "product": "2f5cc7f180",
+  "startedAt": "2026-11-02T01:09:47.255Z",
+  "load1": 4.04833984375,
+  "body": {
+    "sha256": "418f8a9d6b71111a34e41a8f4d0a5ba6b1869b684f2d84d72432e65edb8e29b5"
+  },
+  "ok": false,
+  "cause": "sandbox.create: InvalidInput deploy.localDir /layerfs/data/machine/native/sandbox-root: runtime I/O: /layerfs/data is not traversable by others (o+x); local Sandbox commands run as another identity and must pass it to reach their Workspace",
+  "phases": {},
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 5.73,
+      "ok": true
+    },
+    {
+      "name": "store.create",
+      "ms": 41.08,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 111.085,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 12.656,
+      "ok": true
+    },
+    {
+      "name": "store.move",
+      "ms": 63.498,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 11.22,
+      "ok": false,
+      "error": {
+        "code": "InvalidInput",
+        "message": "deploy.localDir /layerfs/data/machine/native/sandbox-root: runtime I/O: /layerfs/data is not traversable by others (o+x); local Sandbox commands run as another identity and must pass it to reach their Workspace"
+      }
+    },
+    {
+      "name": "store.move.back",
+      "ms": 58.262,
+      "ok": true
+    },
+    {
+      "name": "store.remove",
+      "ms": 1.858,
+      "ok": true
+    }
+  ],
+  "failedStep": "sandbox.create",
+  "endedAt": "2026-11-02T01:09:47.563Z"
+}
