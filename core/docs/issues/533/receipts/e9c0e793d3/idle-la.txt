@@ -1,0 +1,13 @@
+# Short idle check, product e9c0e793d3, bundle 1ac24656 (an admitted connection holds the worker up; only work restarts the idle clock).
+# la's last real use: its C01, 13:04:09-13:04:22. Every line: one machine list and one machine status la, about every 60 s, until la is not running.
+13:06:04 list (0.56 s): ac1=running fch=running la=running msb1=running ssh1=running | status la=running
+13:07:00 list (0.72 s): ac1=running fc1=creating fch=running la=running msb1=running ssh1=running | status la=running
+13:07:55 list (0.72 s): ac1=running fc1=running fch=running la=running msb1=running ssh1=running | status la=running
+13:08:51 list (0.81 s): ac1=running fc1=running fch=running la=running msb1=running ssh1=running | status la=running
+13:09:47 list (0.41 s): la=running | status la=running
+13:10:43 list (0.38 s): la=running | status la=running
+13:11:38 list (0.41 s): la=running | status la=running
+13:12:34 list (0.40 s): la=running | status la=running
+13:13:29 list (0.36 s): la=running | status la=running
+13:14:25 list (0.36 s): la=stopped | status la=stopped
+13:14:25 la is stopped

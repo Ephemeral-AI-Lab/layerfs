@@ -23,7 +23,12 @@
   fixed in `c89727281a`, `1f41e6bc4f` and `f43ec45fa0`. The last one is the
   guest worker, so the bundle was resealed (`c8baa5a9…`); C01 passed on it
   on every VM kind and ssh, and the idle demo ran there under polling.
-  **Final product commit: `f43ec45fa0`.**
+  The final review found five more points in those commits and the docs
+  (DECISIONS, "Final review fixes"), fixed in `b15c89334d` and
+  `e9c0e793d3`; the guest worker changed again, so the bundle was resealed
+  (`1ac24656…`) and C01 and a short idle check ran on it (TERMINAL-PASS,
+  "After the final review").
+  **Final product commit: `e9c0e793d3`.**
 
 ## Commits and production LOC
 
@@ -138,17 +143,22 @@ rewritten; this table is the record.
 | `c89727281a` | fix(533): machine list and get answer each VM machine's live state | 131767 -> 131825 (delta +58) | same |
 | `1f41e6bc4f` | fix(533): a machine's worker counts as up only when it answers its secret | 131825 -> 131850 (delta +25) | same |
 | `f43ec45fa0` | fix(533): only a request that does work restarts a worker's idle clock | 131850 -> 131852 (delta +2) | same |
-| (this commit) | docs(533): the other step-19 items, the fixes after the pass and O36 | 131852 -> 131852 (delta 0) | same |
+| `62e3b3f877` | docs(533): the other step-19 items, the fixes after the pass and O36 | 131852 -> 131852 (delta 0) | same |
+| `89eeef0ce9` | docs(533): Windows deferred by the owner (P1-28) | 131852 -> 131852 (delta 0) | same |
+| `b15c89334d` | fix(533): a worker cannot stop with an authenticated connection open | 131852 -> 131903 (delta +51) | same |
+| `e9c0e793d3` | fix(533): a list probe past its bound is killed and reaped | 131903 -> 131936 (delta +33) | same |
+| (this commit) | docs(533): the final review fixes, a resealed bundle and C01 on it | 131936 -> 131936 (delta 0) | same |
 
-Total: 124168 -> 131852 (delta +7684) across the branch, final product
-commit `f43ec45fa0`. To `6837bcfce2` it was 124168 -> 131767 (delta +7599): 124168 -> 130548
+Total: 124168 -> 131936 (delta +7768) across the branch, final product
+commit `e9c0e793d3`. To `6837bcfce2` it was 124168 -> 131767 (delta +7599): 124168 -> 130548
 (delta +6380) to `b2ca5fceb5`, the commit the review read beside
 `707b534eb2`, then +1218 for the review fixes, then +1 for the terminal
 pass fixes (`005a30c93c` … `4c740437cd`: +50, then -49 when `docker` on
 Linux dropped its in-process adapter). Head recounted at `6837bcfce2` with
 `tools/production_loc.py` on `git archive HEAD`: 131767. Then +85 for the
 three fixes after the pass (`c89727281a` +58, `1f41e6bc4f` +25,
-`f43ec45fa0` +2). The 1.1.0 JavaScript
+`f43ec45fa0` +2), and +84 for the final review fixes (`b15c89334d` +51,
+`e9c0e793d3` +33). The 1.1.0 JavaScript
 packages are retired in `b07cde28d5` (api 4879 -> 107); the 2.0 library,
 machine layer, command and bindings are added in `engine`. The counter does
 not count Python (`api/python`).
@@ -205,6 +215,13 @@ P0-1 to P2-32; P1-28, the Windows cfg gates, is deferred by owner
   the idle clock, a request does). `tests/worker_idle.rs` now keeps its
   worker up with a refused `store.call` instead of a ping; its assertions
   are unchanged.
+- **Final review** (`b15c89334d`, `e9c0e793d3`): no test deleted. Added
+  `layerfs-api` `tests/worker_idle_edge.rs` (a call admitted at the edge of
+  the idle window is answered; one after the stop decision is refused, not
+  sent). `worker_idle_probes` also probes with `{}` and an unknown
+  operation; `machine_list_live` checks that a late probe's processes are
+  killed and reaped, and that a `Denied` reply or a silent accept is no
+  worker. No assertion was weakened.
 
 The 63 files under the four packages' `test/` folders that `b07cde28d5`
 deleted (`git show --stat --diff-filter=D b07cde28d5`; the commit message
@@ -390,9 +407,9 @@ worktrees and their targets listed before are already gone.
 | `layerfs-issue533-v2/target` | 26 GB | this worktree's macOS target; keep warm only if 2.0 work continues |
 | Docker volumes `lfs-dev-layerfs-issue533-v2-5ff20ac6a0aa-target` and `-cargo` | 9.6 GB + 354 MB | this worktree's Linux target and Cargo home (launcher-owned), for the Linux daemon and bundle builds |
 | `~/.cache/layerfs-worktrees/layerfs-issue533-v2-5ff20ac6a0aa` | 1.5 GB | launcher state, receipts and two older sealed builds (`build-linux-0c84a1ae…`, `38f27b92…`), both superseded |
-| `~/.cache/layerfs/bundle/2.0.0/linux-aarch64` | 2.9 GB | the resealed bundle (`c8baa5a9…`, source `f43ec45fa0`) the C01 reruns and the idle demo used; it replaced the seven-kind pass's `4a77c75e…`. Its `firecracker/` folder is already removed. Keep it for further VM work; any later seal replaces it |
+| `~/.cache/layerfs/bundle/2.0.0/linux-aarch64` | 2.9 GB | the resealed bundle (`1ac24656…`, source `e9c0e793d3`) the final C01 reruns and idle check used; it replaced `c8baa5a9…` (source `f43ec45fa0`), which replaced the seven-kind pass's `4a77c75e…`. Its `firecracker/` folder is already removed. Keep it for further VM work; any later seal replaces it |
 | `$TMPDIR/lfs-sbx-{home,folder}-{51039,51054}` | small | leftovers of a failed step-12 run; their removal was refused by the auto-mode classifier, so they were left |
 | VMs, machines and containers of the pass | – | all removed (TERMINAL-PASS, "Cleanup") |
 
-`python3 tools/cleanup.py check` at handoff: 290.5 GB free (after the
-other step-19 items, the reseal and the second cleanup); no cleanup needed.
+`python3 tools/cleanup.py check` at handoff: 291.2 GB free (after the
+final review's fixes, the reseal and the third cleanup); no cleanup needed.

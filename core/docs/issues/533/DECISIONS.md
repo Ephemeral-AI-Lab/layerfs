@@ -383,6 +383,31 @@ Gaps seen in the pass and left open:
   `user.max_user_namespaces=0` (#527 lists it), and the Linux VM needed
   Docker installed by hand. Neither is done by LayerFS.
 
+## Final review fixes (2026-11-02)
+
+The final review (read-only, of `c89727281a`, `1f41e6bc4f`, `f43ec45fa0` and
+`62e3b3f877`), relayed by the parent session before the push to
+`origin/layerfs_v2_0_0`. Each finding was checked in the code before it was
+fixed; none was refuted. With the old behaviour put back, each new test
+fails; with the fix, it passes.
+
+| # | Finding, as checked | Fix | Where |
+| --- | --- | --- | --- |
+| 1 | Confirmed: `machine/start.rs` treats a successful ping as up and then sends its call once, and since `f43ec45fa0` a ping no longer restarts the idle clock. A call arriving about 600 s after the last request could have its ping answered and then meet a worker that the 5 s look had stopped before reading its request (`Busy` began only after the read), so it was refused or its answer lost. | The stop decision and the admission of a connection whose secret matched take one lock (`worker::idle::Gate`). An admitted connection holds the worker up until it closes, so its request is read and answered; one that comes after the decision is refused `Unavailable` before `ready`, so its request is not sent. A probe closes at once and still does not extend the idle time. What remains: a call whose ping was answered just before the decision is refused `Unavailable` (not sent), and the next call starts the machine again. Test `worker_idle_edge` (fails with the old behaviour: "the worker stopped with a connection open"). | `b15c89334d` |
+| 2 | Confirmed: past the 10 s bound, `machine.list` dropped a probe's answer but its thread and child (`limactl`, `ssh`) kept running, so polling could pile up stuck processes. | `layerfs-sandbox` `machine::status_within`: every command a probe runs is in its own process group, and one still running at the probe's deadline (200 ms after the list's bound) is killed with its group and reaped by the probe's thread. `machine_list_live`'s stand-in now leaves a `sleep 40` grandchild; both processes are gone after the list (fails with the old behaviour: "the late probe's process … outlived it"). | `e9c0e793d3` |
+| 3 | Confirmed: any authenticated JSON frame other than `worker.ping` counted as work, `{}` and unknown operations included, unlike `idle.rs`, the `f43ec45fa0` message and the row above. | Only `store.call`, `store.file`, `sandbox.host`, `host.call` and `host.backend` restart the idle clock. `worker_idle_probes` also probes with `{}` and an unknown operation (fails with the old behaviour: "stopped after 5.7 s despite 47 probe rounds"). | `b15c89334d` |
+| 4 | Confirmed: `receipts/164e1297cb/linux-native-C01-userns-allowed` (`ok: false`) had been moved out of "Samples that failed" as a "negative check". | Put back in the failure table as recorded, with a note that it ran before the declared setup `user.max_user_namespaces=0`. | TERMINAL-PASS |
+| 5 | Confirmed: the idle row said every VM stopped while polling, but `ac1` and `lb` had stopped before polling began at 12:23:51; the header said "every other step-19 item PASS" though Docker-unavailable is PASS (simulated). | Both said as they are. | TERMINAL-PASS |
+| 6 | Confirmed: no test covered the host's secret check against a `Denied` reply or an accept that never answers. | `machine_list_live`: a worker that refuses the secret is stopped; one that never answers is stopped after the 2 s limit (1.9–4 s). | `e9c0e793d3` |
+| 7 | Confirmed: `62e3b3f877`'s Scope line used other wording. | Later commits use "combined (core, engine, api)"; that commit's message stays. | – |
+
+The row "What restarts a worker's idle clock" above describes `f43ec45fa0`
+as it was; finding 3 narrows it. Findings 1 and 3 change the guest worker,
+so the bundle was resealed at `e9c0e793d3`: hash `1ac2465687733096ecfb33810e7ecb14393fedb2d653e253bc5cf145abf5e657`, the same
+Sandbox image. C01 then ran once on each VM kind and ssh on it, and one
+machine was polled until it idle-stopped (TERMINAL-PASS, "After the final
+review").
+
 ## Owner direction: Windows deferred (2026-11-02)
 
 The owner: "Defer Windows". P1-28 (the Windows cfg gates) is out of 2.0's
