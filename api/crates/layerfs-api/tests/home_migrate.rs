@@ -4,7 +4,7 @@
 use layerfs_api::home::{self, paths, read_record, Layout};
 use layerfs_bridge::control::{Answer, Reply, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
-use layerfs_store_backup::backup::{state, Direction, Provider, Remotes, Transfer};
+use layerfs_store_backup::backup::{link as state, Direction, Provider, Remotes, Transfer};
 use layerfs_store_backup::bucket::{minio::MinioSettings, CredentialRef};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};

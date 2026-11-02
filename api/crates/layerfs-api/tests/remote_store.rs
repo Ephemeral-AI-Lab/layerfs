@@ -20,7 +20,7 @@ mod support;
 use layerfs_bridge::control::SdkValue;
 use layerfs_history::BranchId;
 use layerfs_persistence::{PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile};
-use layerfs_store_backup::backup::state::{self, Direction, Transfer};
+use layerfs_store_backup::backup::link::{self as state, Direction, Transfer};
 use layerfs_store_backup::backup::{
     self as remote, store_object, Expected, Provider, PushFailure, Remotes,
 };

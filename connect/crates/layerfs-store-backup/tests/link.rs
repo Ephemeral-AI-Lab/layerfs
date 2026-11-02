@@ -1,6 +1,6 @@
 //! A project's named remotes (#506 R): the settings file round-trips, keeps
 //! a credential reference and refuses any other key, so no secret is stored.
-use layerfs_store_backup::backup::state::{self, Direction, Transfer};
+use layerfs_store_backup::backup::link::{self as state, Direction, Transfer};
 use layerfs_store_backup::backup::Expected;
 use layerfs_store_backup::backup::{store_object, Provider, Remotes};
 use layerfs_store_backup::bucket::minio::{MinioSettings, DEFAULT_PART_SIZE};

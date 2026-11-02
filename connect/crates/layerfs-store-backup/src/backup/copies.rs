@@ -5,7 +5,7 @@
 //! named by its `file` (#509: the object `<file>/store.sqlite`), which a
 //! local Store links to; the name need not be the Store's.
 use crate::backup::heads::HEADS;
-use crate::backup::settings::{store_object, STORE_FILE};
+use crate::backup::link::{store_object, STORE_FILE};
 use crate::bucket::pieces::{self, parse_hex32};
 use crate::bucket::{Driver, Metadata, RemoteError};
 

@@ -8,7 +8,7 @@
 //! (#506 E2). Progress (#506 E4) reports `check`, `snapshot` (bytes copied),
 //! then the upload's `hash` and `upload` to the thread's transfer progress.
 use crate::backup::heads::{heads, HEADS};
-use crate::backup::settings::store_object;
+use crate::backup::link::store_object;
 use crate::bucket::pieces::{self, MAX_MANIFEST};
 use crate::bucket::{progress, Driver, Metadata, RemoteError};
 use layerfs_persistence::STORE_HEADROOM_BYTES;

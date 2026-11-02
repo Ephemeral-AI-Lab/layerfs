@@ -13,13 +13,12 @@
 pub mod copies;
 pub mod create;
 pub mod heads;
+pub mod link;
 pub mod restore;
-pub mod settings;
-pub mod state;
 
 pub use copies::{check, list_stores, Checked, Copy};
 pub use create::{push, Expected, PushFailure, Pushed};
 pub use heads::{heads, HEADS};
+pub use link::{store_object, Provider, Remotes, STORE_FILE};
+pub use link::{Direction, Transfer};
 pub use restore::{load, pull, Loaded, PullFailure, Pulled};
-pub use settings::{store_object, Provider, Remotes, STORE_FILE};
-pub use state::{Direction, Transfer};

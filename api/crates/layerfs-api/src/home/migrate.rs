@@ -21,7 +21,7 @@ use super::paths;
 use super::records::{log_line, now_ms, private_dir, read_record, with_field, write_record};
 use crate::host::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_store_backup::backup::{state, Provider, Remotes};
+use layerfs_store_backup::backup::{link as state, Provider, Remotes};
 use std::fs;
 use std::path::{Path, PathBuf};
 

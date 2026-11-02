@@ -30,7 +30,9 @@ use crate::host::stores::{self, Identity, Kind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::HistoryName;
-use layerfs_store_backup::backup::{self as remote, state, Direction, Provider, Remotes, Transfer};
+use layerfs_store_backup::backup::{
+    self as remote, link as state, Direction, Provider, Remotes, Transfer,
+};
 use layerfs_store_backup::bucket::{
     minio::{self, MinioSettings, DEFAULT_PART_SIZE},
     r2::R2Settings,

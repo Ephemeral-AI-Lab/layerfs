@@ -19,7 +19,7 @@
 //! `download` (bytes received), `verify` and `install`.
 use crate::backup::create::BINDING;
 use crate::backup::heads::heads;
-use crate::backup::settings::store_object;
+use crate::backup::link::store_object;
 use crate::bucket::pieces::{self, hex};
 use crate::bucket::{progress, Driver};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
