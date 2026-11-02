@@ -16,7 +16,7 @@
 use super::client::HELLO_WAIT;
 use super::frame::{read_frame, read_frame_within, write_frame, MAX_HELLO};
 use super::idle::Gate;
-use crate::host::outcome::{refused, Outcome};
+use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -67,7 +67,7 @@ pub(crate) fn serve_gated(
             .create(&root)?;
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o701))?;
     }
-    crate::home::guest::serve_root(&root);
+    crate::common::home::guest::serve_root(&root);
     let secret = Arc::new(secret);
     let root = Arc::new(root);
     let served = Arc::new(AtomicU64::new(0));
@@ -95,7 +95,7 @@ static LAST: AtomicU64 = AtomicU64::new(0);
 /// Marks this worker active now (the idle clock restarts): at the start and
 /// the end of a request that does work.
 fn touch() {
-    LAST.store(crate::home::now_ms() as u64, Ordering::Relaxed);
+    LAST.store(crate::common::home::now_ms() as u64, Ordering::Relaxed);
 }
 
 /// A request that does work: the idle clock restarts when it starts and
@@ -169,7 +169,7 @@ fn answer(mut stream: TcpStream, secret: &str, root: &Path, gate: &Gate) -> bool
     let _ = stream.set_read_timeout(None);
     let works = request.get_text("op").is_some_and(|op| WORK.contains(&op));
     let _work = works.then(Work::start);
-    let _home = crate::home::guest::sent(request.get_text("home_id"));
+    let _home = crate::common::home::guest::sent(request.get_text("home_id"));
     let outcome = run(
         request.get_text("op").unwrap_or(""),
         request.get("args").cloned().unwrap_or_default(),
@@ -213,12 +213,13 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
             let store = inner
                 .get_text("store")
                 .ok_or_else(|| refused("InvalidInput", "a Store call names its Store"))?;
-            crate::names::name("store", store).map_err(|why| refused("InvalidInput", why))?;
-            let file = crate::home::paths::store_file(root, store);
+            crate::common::names::name("store", store)
+                .map_err(|why| refused("InvalidInput", why))?;
+            let file = crate::common::home::paths::store_file(root, store);
             // the worker holds the Store's lease under its root while it
             // keeps the Store open
-            let lease = crate::store::lease::hold_locked(root, store)?;
-            let inner = crate::home::with_field(
+            let lease = crate::common::home::lease::hold_locked(root, store)?;
+            let inner = crate::common::home::with_field(
                 inner,
                 "storePath",
                 SdkValue::text(file.display().to_string()),
@@ -260,12 +261,12 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
 fn with_home(args: SdkValue, root: &Path) -> SdkValue {
     let file = args
         .get_text("store")
-        .filter(|store| crate::names::name("store", store).is_ok())
-        .map(|store| crate::home::paths::store_file(root, store));
+        .filter(|store| crate::common::names::name("store", store).is_ok())
+        .map(|store| crate::common::home::paths::store_file(root, store));
     let text = SdkValue::text(root.display().to_string());
-    let args = crate::home::with_field(args, "home", text);
+    let args = crate::common::home::with_field(args, "home", text);
     match file {
-        Some(file) => crate::home::with_field(
+        Some(file) => crate::common::home::with_field(
             args,
             "storePath",
             SdkValue::text(file.display().to_string()),

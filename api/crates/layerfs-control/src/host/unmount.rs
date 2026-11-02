@@ -2,11 +2,8 @@
 //! admission and shared-record cleanup, never during the daemon's helper wait.
 //! Mount paths are unique within one daemon lifetime; Sandbox removal clears
 //! the terminal records before that directory can be reused.
-use crate::host::{
-    discovery,
-    outcome::{failed, refused, Outcome},
-    registry::SandboxState,
-};
+use crate::common::outcome::{failed, refused, Outcome};
+use crate::host::{discovery, registry::SandboxState};
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
 use std::{
     fs::{File, OpenOptions},
@@ -28,7 +25,7 @@ fn record(state: &SandboxState, token: WorkspaceToken) -> PathBuf {
 struct Lease(File);
 impl Drop for Lease {
     fn drop(&mut self) {
-        crate::host::flock::unlock(&self.0);
+        crate::common::home::flock::unlock(&self.0);
     }
 }
 fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRefusal> {
@@ -41,7 +38,7 @@ fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRe
         .open(path)
         .map_err(failed)?;
     discovery::private(path, false)?;
-    if crate::host::flock::try_lock(&file, exclusive).map_err(failed)? {
+    if crate::common::home::flock::try_lock(&file, exclusive).map_err(failed)? {
         Ok(Some(Lease(file)))
     } else {
         Ok(None)

@@ -8,7 +8,7 @@
 //! from a second command and waits (bounded) until it is gone. A local
 //! Sandbox (`layerfs_sandbox::Sandbox::HostProcess`) runs the same commands as
 //! processes of this kernel, so the same probes and signals apply.
-use crate::host::outcome::{refused, Outcome};
+use crate::common::outcome::{refused, Outcome};
 use crate::host::output::Spool;
 use crate::host::registry::{lock, naming, sandbox, sandbox_live, text, Process, SandboxState};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};

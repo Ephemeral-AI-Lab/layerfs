@@ -2,7 +2,7 @@
 //! the machine a sqlite Store is on, and a PostgreSQL Store's server. Every
 //! decision on a Store's kind matches on [`StoreRef`] or [`StoreKind`]; no
 //! caller compares a record's `kind` text.
-use crate::host::outcome::refused;
+use crate::common::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 pub(crate) use layerfs_bridge::StoreKind;
 

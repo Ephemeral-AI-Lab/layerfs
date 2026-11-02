@@ -23,8 +23,8 @@
 //! phases to that job's progress cell (`progress.rs`). Pull and load hold
 //! their Store's gate (`local.rs`), so this process's heads reads wait for
 //! neither and never open the Store under them.
+use crate::common::outcome::{failed, refused, Outcome};
 use crate::host::discovery;
-use crate::host::outcome::{failed, refused, Outcome};
 use crate::host::registry::{random, text};
 use crate::host::stores::{self, Identity, Kind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};

@@ -8,9 +8,9 @@
 //! output and the progress of `project.init`, `store.move`, `backup.create`
 //! and `backup.restore`. Result keys are snake_case in every front end.
 use super::{check, route, table};
-use crate::host::outcome::{refused, Outcome};
 use layerfs_bridge::control::SdkValue;
-pub use layerfs_control::context::Context;
+pub use layerfs_control::common::context::Context;
+use layerfs_control::common::outcome::{refused, Outcome};
 use std::path::{Path, PathBuf};
 
 /// The home a call uses: `explicit` when given, else `LAYERFS_HOME`, else

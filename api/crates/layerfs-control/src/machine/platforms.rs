@@ -3,8 +3,8 @@
 //! (`ready`, `missing`, `version`). It starts no machine (P4). Also the
 //! per-machine `supports` of `machine.list` and `machine.get` (P3).
 use super::record;
-use crate::context::Context;
-use crate::host::outcome::Outcome;
+use crate::common::context::Context;
+use crate::common::outcome::Outcome;
 use layerfs_bridge::control::SdkValue;
 use layerfs_machine::{self as adapters, HostOs, Platform, Probe, SupportRow, Supports};
 

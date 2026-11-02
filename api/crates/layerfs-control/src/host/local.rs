@@ -16,7 +16,7 @@
 //! namespaces keep the root FUSE daemon and nonroot commands (501:20) from
 //! #402. Start, failure and reclaim follow the Docker route: one attempt, a creation intent while the outcome is open, and a failed start's
 //! daemon stopped and its directory deleted, each once.
-use crate::host::outcome::{failed, refused};
+use crate::common::outcome::{failed, refused};
 use crate::host::registry::{lock, text, SandboxState, SANDBOXES};
 use crate::host::sandbox::OpenedStore;
 use crate::{sandbox::ProviderCreate, SandboxApi};

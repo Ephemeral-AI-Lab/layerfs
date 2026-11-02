@@ -8,11 +8,9 @@ pub mod direct;
 pub(crate) mod discovery;
 pub mod dispatch;
 pub(crate) mod exec;
-pub(crate) mod flock;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) mod local;
 pub(crate) mod local_stores;
-pub mod outcome;
 pub mod output;
 pub(crate) mod pool;
 pub(crate) mod postgres;
@@ -24,6 +22,5 @@ pub(crate) mod runtime;
 pub(crate) mod sandbox;
 pub(crate) mod stores;
 pub(crate) mod sync;
-pub mod trace;
 pub(crate) mod unmount;
 pub(crate) mod workspace;

@@ -9,7 +9,7 @@
 //! `workspace.exec_release` closes it. The Sandbox backend reads the command's stream only as fast as
 //! this sink takes it (an 8 KiB window), so a slow disk holds the command
 //! back. No total is capped: a spooled stream is bounded by free space.
-use crate::host::outcome::{failed, refused, Outcome};
+use crate::common::outcome::{failed, refused, Outcome};
 use crate::host::registry::{lock, text};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::collections::HashMap;

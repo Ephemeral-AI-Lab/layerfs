@@ -10,8 +10,8 @@
 //! (a command can still `cd` anywhere in the mounted tree). Every refusal
 //! comes before dispatch.
 use crate::home::{paths, read_record, with_field};
-use crate::host::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_control::common::outcome::refused;
 use layerfs_control::family::files::NAMESPACE;
 use std::path::Path;
 

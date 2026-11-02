@@ -10,7 +10,7 @@
 //! Every name it read and what became of it is in the answer and in
 //! `log/import-env.jsonl`.
 use super::{lock, log_line, now_ms, paths, read_record, with_field, write_record};
-use crate::host::outcome::{failed, refused, Outcome};
+use crate::common::outcome::{failed, refused, Outcome};
 use crate::store::store_ref::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;

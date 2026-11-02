@@ -15,7 +15,7 @@
 //! service; a process that ends without closing leaves its own. Each call
 //! runs once: a refused or failed call returns its own error, nothing is sent
 //! again.
-use crate::host::outcome::{failed, refused, Outcome};
+use crate::common::outcome::{failed, refused, Outcome};
 use crate::host::registry::lock;
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_store_service::{telemetry, OpenRefusal, StoreService};
@@ -187,7 +187,7 @@ pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
             layerfs_store_service::methods::call(&service, &call)
         }
     };
-    if !crate::host::trace::traced() {
+    if !crate::common::trace::traced() {
         return run();
     }
     // A traced call records its own timing, SQL and delta work, as a daemon
@@ -203,7 +203,7 @@ pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
     for (name, value) in [("sql", sql), ("delta", delta)] {
         fields.extend(value.map(|value| (name.to_owned(), value)));
     }
-    crate::host::trace::collect(SdkValue::Map(fields));
+    crate::common::trace::collect(SdkValue::Map(fields));
     outcome
 }
 

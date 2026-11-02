@@ -3,8 +3,8 @@
 //! any effect.
 use super::dispatch::Context;
 use super::table::Call;
-use crate::host::outcome::{refused, Outcome};
 use layerfs_bridge::control::SdkValue;
+use layerfs_control::common::outcome::{refused, Outcome};
 
 /// One family function: the running call and its checked arguments.
 pub type Handler = fn(&mut Context<'_>, &SdkValue) -> Outcome;

@@ -4,7 +4,7 @@
 //! native transfer reports its phases and bytes to it (at most every 250 ms
 //! for bytes), and `runtime.sync.progress { job }` copies its sample. The
 //! call is not changed otherwise: one attempt, no thread, no cancel.
-use crate::host::outcome::Outcome;
+use crate::common::outcome::Outcome;
 use crate::host::registry::lock;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_backup::bucket::progress::{self, Cell, Sample, INTERVAL};

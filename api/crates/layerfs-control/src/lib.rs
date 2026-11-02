@@ -8,17 +8,14 @@
 mod base;
 #[doc(hidden)]
 pub use base::internal;
-pub mod context;
+pub mod common;
 #[doc(hidden)]
 pub mod family;
-pub mod home;
 #[doc(hidden)]
 pub mod host;
-pub mod json;
 #[cfg(feature = "machine")]
 #[doc(hidden)]
 pub mod machine;
-pub mod names;
 #[doc(hidden)]
 pub mod operator;
 pub mod project;

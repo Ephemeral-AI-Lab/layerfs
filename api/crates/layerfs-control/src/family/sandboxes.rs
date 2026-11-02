@@ -13,9 +13,9 @@
 //! else from its worker. A PostgreSQL Store's Sandboxes run on `native` or
 //! `docker` from this process, which resolves the password (O3).
 use super::deploy;
-use crate::context::Context;
-use crate::home::{self, paths, read_record, write_record};
-use crate::host::outcome::{failed, refused, Outcome};
+use crate::common::context::Context;
+use crate::common::home::{self, paths, read_record, write_record};
+use crate::common::outcome::{failed, refused, Outcome};
 use crate::store::route;
 use crate::store::store_ref::{kind_of, StoreKind, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -39,7 +39,7 @@ fn all(home: &Path) -> Result<Vec<(String, String, SdkValue)>> {
 
 /// The Sandbox named `name`: its machine and record, or `NoSuchSandbox`.
 fn sandbox_of(home: &Path, name: &str) -> Result<(String, SdkValue)> {
-    crate::names::name("sandbox", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::name("sandbox", name).map_err(|why| refused("InvalidInput", why))?;
     all(home)?
         .into_iter()
         .find(|(_, n, _)| n == name)
@@ -246,7 +246,7 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let project = args.get_text("project").unwrap_or("");
     let name = args.get_text("name").unwrap_or("");
     let machine = args.get_text("machine").unwrap_or("");
-    crate::names::name("sandbox", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::name("sandbox", name).map_err(|why| refused("InvalidInput", why))?;
     if matches!(name, "native" | "docker") {
         return Err(refused(
             "InvalidInput",
@@ -417,7 +417,7 @@ fn on_machine(
             // the host code reads the project's Branches through its open Store
             let lease = match postgresql {
                 true => None,
-                false => Some(crate::store::lease::hold(&home, &target.store)?),
+                false => Some(crate::common::home::lease::hold(&home, &target.store)?),
             };
             crate::store::open::hold(&args, lease)?;
             if op == "backend.daemon.workspace.status" {
@@ -488,8 +488,8 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     }
     let store = args.get_text("store").unwrap_or("");
     let project = args.get_text("project").unwrap_or("");
-    crate::names::name("store", store).map_err(|why| refused("InvalidInput", why))?;
-    crate::names::name("project", project).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::name("store", store).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::name("project", project).map_err(|why| refused("InvalidInput", why))?;
     let record = home::with_field(
         args.get("store_record").cloned().unwrap_or_default(),
         "machine",
@@ -608,7 +608,7 @@ fn close_unstarted(home: &Path, machine: &str, name: &str) -> Result<Option<SdkV
     }
     let state = record.get_text("state").unwrap_or("creating").to_owned();
     let pid = record.get_int("pid").unwrap_or(0);
-    if state == "creating" && pid > 0 && crate::store::lease::alive(pid as u32) {
+    if state == "creating" && pid > 0 && crate::common::home::lease::alive(pid as u32) {
         return Err(refused(
             "InUse",
             format!("Sandbox {name} is being created by process {pid}"),

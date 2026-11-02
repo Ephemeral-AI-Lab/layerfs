@@ -4,11 +4,12 @@
 //! is not running. The caller sends the worker the Store's record with the
 //! call, so a guest never reads the home; the worker finds the Store file
 //! under its own root.
-use crate::context::Context;
-use crate::home::{paths, read_record};
-use crate::host::outcome::{refused, Outcome};
+use crate::common::context::Context;
+use crate::common::home::lease;
+use crate::common::home::{paths, read_record};
+use crate::common::outcome::{refused, Outcome};
+use crate::store::open;
 use crate::store::store_ref::StoreRef;
-use crate::store::{lease, open};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 

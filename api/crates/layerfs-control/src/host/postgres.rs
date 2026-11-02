@@ -6,8 +6,8 @@
 //! converts a SQLite Store into one (#533 step 10c): a project reaches
 //! PostgreSQL only by an Init into it. Built without the `postgresql`
 //! feature, every call here is `Unsupported`.
+use crate::common::outcome::{refused, Outcome};
 use crate::host::discovery;
-use crate::host::outcome::{refused, Outcome};
 use crate::host::registry::text;
 use crate::host::stores::{self, Identity, Kind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};

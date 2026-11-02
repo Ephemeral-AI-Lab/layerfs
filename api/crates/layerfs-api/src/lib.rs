@@ -10,6 +10,7 @@
 #![deny(missing_docs)]
 
 pub mod calls;
+pub use layerfs_control::common::{home, names};
 use layerfs_control::family;
 #[doc(hidden)]
 pub use layerfs_control::host;
@@ -26,7 +27,7 @@ pub use layerfs_control::{
     Installed, OperationCause, OperationFailure, ProjectApi, ProjectError, SdkError, SdkResult,
     SealedProject, SourceRefusal,
 };
-pub use layerfs_control::{home, names, project, sandbox, store, worker};
+pub use layerfs_control::{project, sandbox, store, worker};
 #[cfg(unix)]
 pub use sandbox::{
     connect_address, ProviderCreate, ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause,

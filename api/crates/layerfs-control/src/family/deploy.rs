@@ -3,8 +3,8 @@
 //! that runs the call: this process from the home's records and the sealed
 //! bundle in the user cache (O16), or a machine's worker from its own
 //! bundle folder (a guest never reads the home, H §7.7).
-use crate::home::{paths, read_record};
-use crate::host::outcome::{failed, refused};
+use crate::common::home::{paths, read_record};
+use crate::common::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
@@ -112,7 +112,7 @@ pub(super) fn docker_settings(
 pub(super) fn docker_vm(home: &Path, record: &SdkValue) -> Result<String> {
     Ok(match record.get_text("vm_name") {
         Some(name) => name.to_owned(),
-        None => crate::machine::vm_name(&crate::home::open(home)?.id, "docker"),
+        None => crate::machine::vm_name(&crate::common::home::open(home)?.id, "docker"),
     })
 }
 

@@ -8,8 +8,8 @@
 //! a reused id does not keep it alive; a lease whose process is not alive on
 //! this host is stale: it is removed under the home lock and the removal is
 //! logged (O35).
-use crate::home::{self, paths, read_record};
-use crate::host::outcome::{failed, refused};
+use crate::common::home::{self, paths, read_record};
+use crate::common::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_sandbox::local::LocalProcess;
 use std::collections::BTreeMap;

@@ -4,14 +4,14 @@
 //! outside every home, `<cache>/layerfs/bundle/<version>/linux-<arch>/`,
 //! with its hash in `bundle.json`; `tools/linux_bundle.py` builds and places
 //! it. `LAYERFS_BUNDLE` (internal) names another folder.
-use crate::host::outcome::refused;
+use crate::common::outcome::refused;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_machine::Bundle;
 
 /// The bundle of this build, or `Unsupported` naming where it is expected.
 pub fn bundle() -> Result<Bundle, SdkRefusal> {
     let dir = crate::family::deploy::bundle_dir("linux")?;
-    let manifest = crate::home::read_record(&dir.join("bundle.json"))?;
+    let manifest = crate::common::home::read_record(&dir.join("bundle.json"))?;
     let hash = manifest
         .as_ref()
         .and_then(|m| m.get_text("hash"))

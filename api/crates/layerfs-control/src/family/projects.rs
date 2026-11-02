@@ -4,11 +4,12 @@
 //! process, into a sqlite Store on `native`; a project for another machine
 //! is made on `native` and moved with its Store. Records in the home list
 //! projects; `remove` drops one project's history from its Store.
-use crate::context::Context;
-use crate::home::{paths, read_record};
-use crate::host::outcome::{failed, refused, Outcome};
+use crate::common::context::Context;
+use crate::common::home::lease;
+use crate::common::home::{paths, read_record};
+use crate::common::outcome::{failed, refused, Outcome};
+use crate::store::route;
 use crate::store::store_ref::{kind_of, StoreRef};
-use crate::store::{lease, route};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -80,7 +81,8 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
 fn list(home: &Path, args: &SdkValue) -> Outcome {
     let stores = match args.get_text("store") {
         Some(store) => {
-            crate::names::name("store", store).map_err(|why| refused("InvalidInput", why))?;
+            crate::common::names::name("store", store)
+                .map_err(|why| refused("InvalidInput", why))?;
             if !paths::store_record(home, store).exists() {
                 return Err(refused("NotFound", format!("no Store named {store}")));
             }
@@ -134,7 +136,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let project = args.get_text("project").unwrap_or("");
     let (store, name) = split(project)?;
-    crate::names::name("project", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::name("project", name).map_err(|why| refused("InvalidInput", why))?;
     let folder = args.get_text("folder").unwrap_or("");
     if !Path::new(folder).is_absolute() {
         return Err(refused(
@@ -179,17 +181,20 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     // the project's record keeps when it was made
     let path = paths::project_record(&home, store, name);
     {
-        let _lock = crate::home::lock::take(&home)?;
+        let _lock = crate::common::home::lock::take(&home)?;
         if let Some(record) = read_record(&path)? {
-            let record =
-                crate::home::with_field(record, "created", SdkValue::Int(crate::home::now_ms()));
-            crate::home::write_record(&path, &record)?;
+            let record = crate::common::home::with_field(
+                record,
+                "created",
+                SdkValue::Int(crate::common::home::now_ms()),
+            );
+            crate::common::home::write_record(&path, &record)?;
         }
     }
     let mut out = summary(&home, store, name, &record);
     for field in ["layer", "root"] {
         if let Some(value) = added.get(field) {
-            out = crate::home::with_field(out, field, value.clone());
+            out = crate::common::home::with_field(out, field, value.clone());
         }
     }
     Ok(out)
@@ -255,18 +260,18 @@ fn init_postgresql(
     let added = observed(context, &watch, || {
         crate::host::postgres_init::add_project(&call)
     })?;
-    crate::home::write_record(
+    crate::common::home::write_record(
         &path,
         &SdkValue::map([
             ("name", SdkValue::text(name)),
             ("stack", added.get("stack").cloned().unwrap_or_default()),
-            ("created", SdkValue::Int(crate::home::now_ms())),
+            ("created", SdkValue::Int(crate::common::home::now_ms())),
         ]),
     )?;
     let mut out = summary(&home, store, name, record);
     for field in ["layer", "root"] {
         if let Some(value) = added.get(field) {
-            out = crate::home::with_field(out, field, value.clone());
+            out = crate::common::home::with_field(out, field, value.clone());
         }
     }
     Ok(out)
@@ -325,7 +330,7 @@ fn remove(context: &mut Context<'_>, project: &str) -> Outcome {
     if entry.exists() {
         std::fs::remove_dir_all(&entry).map_err(failed)?;
     }
-    Ok(crate::home::with_field(
+    Ok(crate::common::home::with_field(
         removed,
         "project",
         SdkValue::text(project),

@@ -12,7 +12,7 @@
 //! and leaves the project usable. Init's first
 //! Branch is named `main` and the SDK never shows it: `main` is the line of
 //! Layers.
-use crate::host::outcome::{failed, refused, Outcome};
+use crate::common::outcome::{failed, refused, Outcome};
 use crate::host::registry::{lock, random, text, Project, INITS};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;

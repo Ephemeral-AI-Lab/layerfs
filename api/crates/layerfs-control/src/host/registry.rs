@@ -8,7 +8,7 @@
 //! time, and concurrent calls take separate connections. The Sandbox runtime owner (this
 //! binding) also keeps the background processes it started; the daemon holds
 //! no process record.
-use crate::host::outcome::refused;
+use crate::common::outcome::refused;
 use crate::MountedWorkspace;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
 use layerfs_bridge::provision::StoreManifest;
@@ -116,7 +116,7 @@ pub(crate) fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefu
                 failure.container_stopped(),
             )
         } else {
-            crate::host::outcome::failed(failure)
+            crate::common::outcome::failed(failure)
         });
     }
     Ok(state)
@@ -176,5 +176,5 @@ impl SandboxState {
 pub(crate) fn random() -> Result<[u8; 32], SdkRefusal> {
     layerfs_bridge::duplex::generate_keypair()
         .map(|pair| pair.public)
-        .map_err(crate::host::outcome::failed)
+        .map_err(crate::common::outcome::failed)
 }

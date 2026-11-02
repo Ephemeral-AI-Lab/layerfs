@@ -19,7 +19,7 @@
 use super::layout::{create, detect, HomeFile, Layout, OLD};
 use super::paths;
 use super::records::{log_line, now_ms, private_dir, read_record, with_field, write_record};
-use crate::host::outcome::{failed, refused};
+use crate::common::outcome::{failed, refused};
 use crate::store::store_ref::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_backup::backup::{link as state, Provider, Remotes};
@@ -281,7 +281,7 @@ fn own_store(home: &Path, name: &str, dir: &Path, report: &mut Report) -> Result
         // the 1.1.0 runtime's record of the project names its Store's volume
         let runtime = home.join(".runtime/projects").join(format!("{name}.json"));
         if let Ok(text) = fs::read_to_string(&runtime) {
-            let value = crate::json::parse(&text)
+            let value = crate::common::json::parse(&text)
                 .map_err(|e| refused("Failed", format!("{}: {}", runtime.display(), e.0)))?;
             if let Some(volume) = value.get_text("volume") {
                 record = with_field(record, "volume", SdkValue::text(volume));
@@ -341,7 +341,7 @@ fn fold_registry(home: &Path, file: &Path, report: &mut Report) -> Result<()> {
     let Ok(text) = fs::read_to_string(file) else {
         return Ok(());
     };
-    let doc = crate::json::parse(&text)
+    let doc = crate::common::json::parse(&text)
         .map_err(|e| refused("Failed", format!("{}: {}", file.display(), e.0)))?;
     let Some(SdkValue::List(stores)) = doc.get("stores") else {
         return Ok(());

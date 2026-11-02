@@ -1,11 +1,9 @@
 //! Private, permission-authorized project and Sandbox discovery. No mutation replay.
+use crate::common::outcome::{failed, refused};
+use crate::host::registry::{self, Mount, Process, Project, SandboxState};
 #[cfg(target_os = "linux")]
 use crate::host::runtime::NAMESPACES;
 use crate::host::runtime::{LOCAL, NATIVE};
-use crate::host::{
-    outcome::{failed, refused},
-    registry::{self, Mount, Process, Project, SandboxState},
-};
 use crate::{internal::workspace, BoundWorkspace, MountedWorkspace};
 use layerfs_bridge::{
     control::{Reply, SdkRefusal, SdkValue},
@@ -42,14 +40,14 @@ pub(crate) fn home(args: &SdkValue) -> Result<PathBuf> {
 }
 /// `path` is this user's and nobody else may read or change it. A folder
 /// may let others pass through by name (o+x), as the folders above a
-/// namespaces Sandbox's local root must ([`crate::home::traversable`]).
+/// namespaces Sandbox's local root must ([`crate::common::home::traversable`]).
 pub(crate) fn private(path: &Path, dir: bool) -> Result<()> {
     let meta = fs::symlink_metadata(path).map_err(failed)?;
     let others = if dir { 0o076 } else { 0o077 };
     if meta.file_type().is_symlink()
         || meta.is_dir() != dir
         || (!dir && !meta.is_file())
-        || meta.uid() != crate::host::flock::euid()
+        || meta.uid() != crate::common::home::flock::euid()
         || meta.mode() & others != 0
     {
         return Err(refused(
@@ -70,7 +68,10 @@ pub(crate) fn directory(path: &Path) -> Result<()> {
 /// This process's effective uid and gid: a native Sandbox's command
 /// identity (its commands run as this user).
 pub(crate) fn user() -> (u32, u32) {
-    (crate::host::flock::euid(), crate::host::flock::egid())
+    (
+        crate::common::home::flock::euid(),
+        crate::common::home::flock::egid(),
+    )
 }
 /// Where a project's Sandboxes live: `LAYERFS_HOME/<project>/sandboxes/<n>/`
 /// (#373), numbered from 1 within the project.
@@ -144,7 +145,7 @@ pub(crate) fn project_entry(args: &SdkValue) -> Result<PathBuf> {
     // 2.0 (#533 step 4): every project is named with its Store
     let store = args.get_text("store").unwrap_or(name);
     crate::host::stores::store_dir(&home, store)?;
-    Ok(crate::home::paths::project_dir(&home, store, name))
+    Ok(crate::common::home::paths::project_dir(&home, store, name))
 }
 /// Calls take turns on one directory: in this process before its OS lock,
 /// and between processes on the lock itself. The wait is readiness, bounded,
@@ -169,7 +170,7 @@ impl Drop for Guard {
         // The lock belongs to the open file description, which a child forked
         // meanwhile shares until its exec: closing only this descriptor would
         // leave it held (F-053). Unlock explicitly; the close follows.
-        crate::host::flock::unlock(&self.file);
+        crate::common::home::flock::unlock(&self.file);
         let mut held = HELD.lock().unwrap_or_else(|error| error.into_inner());
         held.remove(&self.directory);
         FREED.notify_all();
@@ -223,7 +224,7 @@ fn os_lock(directory: &Path, deadline: std::time::Instant) -> Result<File> {
         .open(&path)
         .map_err(failed)?;
     private(&path, false)?;
-    while !crate::host::flock::try_lock(&file, true).map_err(failed)? {
+    while !crate::common::home::flock::try_lock(&file, true).map_err(failed)? {
         if std::time::Instant::now() >= deadline {
             return Err(refused(
                 "Busy",
@@ -311,8 +312,8 @@ pub(crate) fn save_project(path: &Path, project: &Project) -> Result<()> {
         .ancestors()
         .nth(4)
         .filter(|_| path.parent().and_then(Path::file_name) == Some("project".as_ref()));
-    let _lock = home.map(crate::home::lock::take).transpose()?;
-    let old = crate::home::read_record(&path.join("record.json"))?.unwrap_or_default();
+    let _lock = home.map(crate::common::home::lock::take).transpose()?;
+    let old = crate::common::home::read_record(&path.join("record.json"))?.unwrap_or_default();
     let mut record = SdkValue::map([
         (
             "manifest",
@@ -333,15 +334,15 @@ pub(crate) fn save_project(path: &Path, project: &Project) -> Result<()> {
     if let SdkValue::Map(fields) = old {
         for (name, value) in fields {
             if name != "manifest" && name != "installed" {
-                record = crate::home::with_field(record, &name, value);
+                record = crate::common::home::with_field(record, &name, value);
             }
         }
     }
-    crate::home::write_record(&path.join("record.json"), &record)
+    crate::common::home::write_record(&path.join("record.json"), &record)
 }
 pub(crate) fn project(args: &SdkValue) -> Result<Project> {
     let path = project_dir(args)?;
-    let value = crate::home::read_record(&path.join("record.json"))?
+    let value = crate::common::home::read_record(&path.join("record.json"))?
         .ok_or_else(|| refused("NoSuchProject", "no project record"))?;
     let decode = |name| match value.get(name) {
         Some(SdkValue::Bytes(bytes)) => StoreManifest::decode(bytes).map_err(failed),
@@ -885,7 +886,7 @@ pub(crate) fn refresh_except(state: &SandboxState, retained: &[String]) -> Resul
                     .get_int("namespace")
                     .ok_or_else(|| refused("InvalidInput", "namespace"))?,
             };
-            let status = match workspace(&mut *crate::host::trace::control(&state.controls)?)
+            let status = match workspace(&mut *crate::common::trace::control(&state.controls)?)
                 .status(token)
             {
                 Ok(status) => status,

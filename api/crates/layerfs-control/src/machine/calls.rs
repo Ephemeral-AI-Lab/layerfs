@@ -8,9 +8,9 @@ use super::record::{
     self, backend_name, hosted_on, kind_of, machine_of, refusal, removing, sandboxes_on,
     save_running, stores_on, update as update_record,
 };
-use crate::context::Context;
-use crate::home::{self, lock, paths, read_record, with_field, write_record};
-use crate::host::outcome::{failed, refused, Outcome};
+use crate::common::context::Context;
+use crate::common::home::{self, lock, paths, read_record, with_field, write_record};
+use crate::common::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_machine::{self as adapters, Code, HostOs, Platform};
 use std::path::Path;
@@ -192,8 +192,8 @@ pub fn status(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 
 /// A new machine's name: valid, not built in, not taken.
 fn new_name(home: &Path, name: &str) -> Result<()> {
-    crate::names::name("machine", name).map_err(|why| refused("InvalidInput", why))?;
-    if crate::names::BUILT_IN.contains(&name) {
+    crate::common::names::name("machine", name).map_err(|why| refused("InvalidInput", why))?;
+    if crate::common::names::BUILT_IN.contains(&name) {
         return Err(refused(
             "InvalidInput",
             format!("{name} is a built-in machine"),

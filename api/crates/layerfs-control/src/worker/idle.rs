@@ -73,7 +73,7 @@ pub fn idle(root: &Path, idle: Duration, started_ms: u64) -> bool {
         return false;
     }
     let last = super::server::last_active().max(started_ms);
-    let now = crate::home::now_ms() as u64;
+    let now = crate::common::home::now_ms() as u64;
     now.saturating_sub(last) >= idle.as_millis() as u64
 }
 
@@ -82,7 +82,7 @@ pub fn idle(root: &Path, idle: Duration, started_ms: u64) -> bool {
 /// `store/<s>/project/<p>/sandboxes/<n>/` (its daemon may outlive a worker
 /// restart). An unreadable folder counts as one, so the guest stays up.
 fn sandboxes_held(root: &Path) -> bool {
-    use crate::home::paths;
+    use crate::common::home::paths;
     if crate::host::registry::live_sandboxes() > 0 {
         return true;
     }
@@ -110,7 +110,7 @@ fn sandboxes_held(root: &Path) -> bool {
 /// An unreadable folder or pid file counts as one running.
 fn microvms_running(root: &Path) -> bool {
     let vms = root.join("firecracker/vms");
-    let Ok(names) = crate::home::paths::names(&vms) else {
+    let Ok(names) = crate::common::home::paths::names(&vms) else {
         return true;
     };
     names.iter().any(
@@ -120,7 +120,7 @@ fn microvms_running(root: &Path) -> bool {
             Ok(text) => text
                 .trim()
                 .parse::<u32>()
-                .map_or(true, crate::store::lease::alive),
+                .map_or(true, crate::common::home::lease::alive),
         },
     )
 }
@@ -134,7 +134,7 @@ pub fn serve_until_idle(
     idle_for: Duration,
     every: Duration,
 ) -> std::io::Result<()> {
-    let started = crate::home::now_ms() as u64;
+    let started = crate::common::home::now_ms() as u64;
     let looked = root.clone();
     let gate = std::sync::Arc::new(Gate::default());
     let served = gate.clone();

@@ -2,8 +2,8 @@
 //! dispatch.rs (#533 step 2): the public table (`call`: project, branch, fs,
 //! sandbox, workspace) and the backend table (`backend`: `backend.store.*`,
 //! `backend.daemon.*` and the runtime's `runtime.*` reads and actions).
-use crate::host::outcome::{refused, Outcome};
-use crate::host::{direct, exec, outcome, output, project, registry, workspace};
+use crate::common::outcome::{self, refused, Outcome};
+use crate::host::{direct, exec, output, project, registry, workspace};
 use layerfs_bridge::control::SdkValue;
 
 /// Runs one public SDK operation once.
@@ -79,7 +79,7 @@ fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
         other => other,
     };
     let answer = crate::operator::call(
-        &mut *crate::host::trace::control(&state.controls)?,
+        &mut *crate::common::trace::control(&state.controls)?,
         op,
         args,
     );

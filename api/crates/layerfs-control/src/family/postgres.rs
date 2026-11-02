@@ -3,10 +3,10 @@
 //! forgets it (its data stays). The record keeps the URL without a password
 //! and the password as a reference (`env:NAME` or `file:/path`), resolved on
 //! each call; the full URL is never written down.
-use crate::context::Context;
-use crate::home::{self, paths, read_record, write_record};
-use crate::host::outcome::{failed, refused, Outcome};
-use crate::store::lease;
+use crate::common::context::Context;
+use crate::common::home::lease;
+use crate::common::home::{self, paths, read_record, write_record};
+use crate::common::outcome::{failed, refused, Outcome};
 use crate::store::store_ref::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -116,7 +116,7 @@ pub(crate) fn selection(record: &SdkValue, store: &str) -> Result<SdkValue> {
 pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
-    crate::names::name("store", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::name("store", name).map_err(|why| refused("InvalidInput", why))?;
     match call {
         "connect" => connect(&home, name, args),
         _ => disconnect(&home, name),

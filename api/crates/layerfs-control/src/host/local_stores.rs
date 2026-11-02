@@ -11,7 +11,7 @@
 //! serialized with its pull and clone in this process: while either runs,
 //! the remembered value is answered and nothing is opened; a pull waits for
 //! a read in flight, which is one short query.
-use crate::host::outcome::{refused, Outcome};
+use crate::common::outcome::{refused, Outcome};
 use crate::host::registry::{lock, text};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;

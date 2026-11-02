@@ -10,8 +10,8 @@
 //! no record: it is named after its one project, whose entry
 //! `<home>/<project>/` carries the Store's binding. Every Store-level call
 //! is one attempt; nothing is retried.
+use crate::common::outcome::{failed, refused, Outcome};
 use crate::host::discovery;
-use crate::host::outcome::{failed, refused, Outcome};
 use crate::host::registry::{lock, random, text, Project, INITS};
 use crate::store::store_ref::{kind_of, required, StoreKind, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -52,17 +52,17 @@ pub(crate) fn store_dir(home: &Path, store: &str) -> Result<PathBuf> {
             format!("a Store name is 1-63 lowercase letters, digits, _ . - (not {store:?})"),
         )
     })?;
-    Ok(crate::home::paths::store_dir(home, store))
+    Ok(crate::common::home::paths::store_dir(home, store))
 }
 
 fn record_path(home: &Path, store: &str) -> Result<PathBuf> {
     store_dir(home, store)?;
-    Ok(crate::home::paths::store_record(home, store))
+    Ok(crate::common::home::paths::store_record(home, store))
 }
 
 /// The Store record at `path` (`store/<name>/record.json`).
 fn load_record(path: &Path) -> Result<SdkValue> {
-    crate::home::read_record(path)?
+    crate::common::home::read_record(path)?
         .ok_or_else(|| refused("NoSuchStore", format!("no Store record {}", path.display())))
 }
 
@@ -171,12 +171,12 @@ pub(crate) fn save_record(home: &Path, store: &str, identity: &Identity) -> Resu
     // the identity fields are this module's; the record's other fields
     // (machine, backups) are kept, read and written under the home lock
     let path = record_path(home, store)?;
-    let _lock = crate::home::lock::take(home)?;
-    let mut record = crate::home::read_record(&path)?.unwrap_or(SdkValue::Map(Vec::new()));
+    let _lock = crate::common::home::lock::take(home)?;
+    let mut record = crate::common::home::read_record(&path)?.unwrap_or(SdkValue::Map(Vec::new()));
     for (name, value) in fields {
-        record = crate::home::with_field(record, name, value);
+        record = crate::common::home::with_field(record, name, value);
     }
-    crate::home::write_record(&path, &record)
+    crate::common::home::write_record(&path, &record)
 }
 
 /// Makes `<home>/.stores/<store>/` (owner-only), refusing a Store name
@@ -189,7 +189,7 @@ pub(crate) fn claim(home: &Path, store: &str) -> Result<PathBuf> {
             format!("a LayerFS Store named {store} exists"),
         ));
     }
-    crate::home::private_dir(&directory)?;
+    crate::common::home::private_dir(&directory)?;
     Ok(directory)
 }
 
@@ -392,8 +392,8 @@ pub(crate) fn save_entry(
 /// owner-only, with its parents: `<home>/store/<store>/project/<name>/`.
 pub(crate) fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
     let directory = store_dir(home, store)?;
-    crate::home::private_dir(&directory.join("project"))?;
-    let entry = crate::home::paths::project_dir(home, store, name);
+    crate::common::home::private_dir(&directory.join("project"))?;
+    let entry = crate::common::home::paths::project_dir(home, store, name);
     std::fs::create_dir(&entry).map_err(|error| {
         if error.kind() == std::io::ErrorKind::AlreadyExists {
             refused("Exists", format!("project {name} exists in Store {store}"))
@@ -562,7 +562,7 @@ pub(crate) fn remove_project(args: &SdkValue) -> Outcome {
     let name = text(args, "project")?;
     let identity = identity(args)?;
     let own = name == store && legacy(&home, store)?;
-    let entry = crate::home::paths::project_dir(&home, store, name);
+    let entry = crate::common::home::paths::project_dir(&home, store, name);
     let stack = crate::host::direct::with_service(args, |service| {
         let stacks = service
             .store
@@ -587,7 +587,7 @@ pub(crate) fn remove_project(args: &SdkValue) -> Outcome {
     })?;
     // the own project's entry carried the Store's identity until now
     if own {
-        crate::home::private_dir(&store_dir(&home, store)?)?;
+        crate::common::home::private_dir(&store_dir(&home, store)?)?;
         save_record(&home, store, &identity)?;
     }
     if entry.exists() {

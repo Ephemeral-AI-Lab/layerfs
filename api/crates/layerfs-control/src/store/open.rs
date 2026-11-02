@@ -4,9 +4,9 @@
 //! machine's worker. Each entry keeps what must live as long as the open
 //! Store: its lease. A Store with a call running is never closed: the
 //! reaper skips it and `close` refuses `InUse`.
+use crate::common::home::lease::Lease;
+use crate::common::outcome::{refused, Outcome};
 use crate::host::direct;
-use crate::host::outcome::{refused, Outcome};
-use crate::store::lease::Lease;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::collections::BTreeMap;
 use std::path::PathBuf;

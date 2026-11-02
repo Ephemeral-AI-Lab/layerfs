@@ -7,7 +7,7 @@
 //! A Sandbox whose daemon ended itself when idle is refused `NoSuchSandbox`
 //! by a mount and reclaimed by the next `sandbox.create` or
 //! `runtime.sandbox.reclaim`.
-use crate::host::outcome::{failed, Outcome};
+use crate::common::outcome::{failed, Outcome};
 use crate::host::registry::{lock, naming, random, sandbox, sandbox_live, text, Mount};
 use crate::host::sandbox::{operation, WORKSPACES};
 use crate::internal::workspace;
@@ -47,7 +47,7 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     let sandbox = match args.get_text("sandbox") {
         Some(id) if !id.is_empty() => id,
         _ => {
-            return Err(crate::host::outcome::refused(
+            return Err(crate::common::outcome::refused(
                 "InvalidInput",
                 "workspace.mount names its Sandbox: workspace.mount(sandbox, branch), with a Sandbox from `sandbox.create()` or `project.list_sandboxes()`",
             ))
@@ -56,7 +56,7 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     let directory = crate::host::discovery::sandbox_dir(args, sandbox)?;
     let record = directory.join("sandbox.record");
     let missing = || {
-        no_sandbox(crate::host::outcome::refused(
+        no_sandbox(crate::common::outcome::refused(
             "NoSuchSandbox",
             format!("the project has no Sandbox {sandbox}"),
         ))
@@ -75,7 +75,7 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
         return Err(missing());
     }
     if recorded(&directory)? >= WORKSPACES as usize {
-        return Err(crate::host::outcome::refused(
+        return Err(crate::common::outcome::refused(
             "Capacity",
             format!(
                 "Sandbox {sandbox} already holds {WORKSPACES} Workspaces. Create a new Sandbox with `sandbox.create()` and mount there, or list this one's Workspaces with `sandbox.list_workspaces(\"{sandbox}\")` and unmount the ones you are done with (`workspace.unmount(ws)`)"
@@ -86,7 +86,7 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     // The Branch is found by name in this process; the daemon binds its id.
     let branch_id = crate::host::direct::branch_id(args, branch)?;
     let mounted = {
-        let mut control = crate::host::trace::control(&state.controls)?;
+        let mut control = crate::common::trace::control(&state.controls)?;
         workspace(&mut control).mount(id, branch_id)
     };
     let mounted = mounted.map_err(failed)?;
@@ -444,7 +444,7 @@ pub(crate) fn reclaim(args: &SdkValue) -> Outcome {
 pub(crate) fn status(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;
     let token = state.token(text(args, "path")?)?;
-    let mut control = crate::host::trace::control(&state.controls)?;
+    let mut control = crate::common::trace::control(&state.controls)?;
     let status = workspace(&mut control).status(token).map_err(operation)?;
     drop(control);
     let head = crate::host::direct::head(args, status.binding.branch.id).ok();
@@ -462,7 +462,7 @@ pub(crate) fn status(args: &SdkValue) -> Outcome {
 pub(crate) fn commit(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;
     let token = state.token(text(args, "path")?)?;
-    let reply = workspace(&mut *crate::host::trace::control(&state.controls)?)
+    let reply = workspace(&mut *crate::common::trace::control(&state.controls)?)
         .commit_with(CommitControl {
             token,
             force: args.get_bool("force"),
@@ -511,7 +511,7 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     // processes can take Sandbox ownership while the daemon helper waits.
     let mut sent = false;
     let outcome = (|| {
-        let mut control = crate::host::trace::control(&state.controls)?;
+        let mut control = crate::common::trace::control(&state.controls)?;
         sent = true;
         let mut api = workspace(&mut control);
         // Forced: one abort write ends the connection, also after a normal

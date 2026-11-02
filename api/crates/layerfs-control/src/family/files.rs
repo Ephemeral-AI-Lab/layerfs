@@ -1,8 +1,8 @@
 //! The `branch`, `commit` and `file` families (#533 step 7): Store calls on
 //! one project's Branches, Commits and files, each translated to the Store
 //! method that does it and run on the route its Store's records choose.
-use crate::context::Context;
-use crate::host::outcome::{refused, Outcome};
+use crate::common::context::Context;
+use crate::common::outcome::{refused, Outcome};
 use crate::store::route::{store_call, target};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 
@@ -215,7 +215,7 @@ fn branches_in(context: &mut Context<'_>, args: &SdkValue, namespace: &str) -> O
                 more = true;
                 break 'pages;
             } else {
-                kept.push(crate::home::with_field(item, "name", name));
+                kept.push(crate::common::home::with_field(item, "name", name));
             }
         }
         match next {

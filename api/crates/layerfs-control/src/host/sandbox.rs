@@ -12,7 +12,7 @@
 //! before the delete. One whose effect is unknown keeps the intent, which
 //! refuses later starts until a person resolves it. Nothing is retried on
 //! the caller's behalf.
-use crate::host::outcome::{failed, refused, Outcome};
+use crate::common::outcome::{failed, refused, Outcome};
 use crate::host::registry::{lock, text, SandboxState, SANDBOXES};
 use crate::internal::split_provider;
 use crate::sandbox::{values, ProviderCreate, ProviderFailure};

@@ -2,8 +2,8 @@
 //! ssh host, lasting guest state, state) and `machine/<name>/worker.json`
 //! (endpoint, secret, live forward; 0600, while the worker runs). Records
 //! become the adapters' [`Spec`]; nothing in the adapters reads the home.
-use crate::home::{self, paths, read_record, with_field, write_record};
-use crate::host::outcome::refused;
+use crate::common::home::{self, paths, read_record, with_field, write_record};
+use crate::common::outcome::refused;
 use crate::store::store_ref::{Placement, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_machine::{
@@ -26,14 +26,14 @@ pub fn ensure_built_ins(home: &Path) -> Result<()> {
     let missing = |name: &str| -> Result<bool> {
         Ok(read_record(&paths::machine_record(home, name))?.is_none())
     };
-    if !crate::names::BUILT_IN
+    if !crate::common::names::BUILT_IN
         .iter()
         .any(|name| missing(name).unwrap_or(true))
     {
         return Ok(());
     }
     let _lock = home::lock::take(home)?;
-    for name in crate::names::BUILT_IN {
+    for name in crate::common::names::BUILT_IN {
         let path = paths::machine_record(home, name);
         if missing(name)? {
             write_record(
@@ -65,7 +65,7 @@ pub fn machine_of(home: &Path, name: &str) -> Result<SdkValue> {
 
 /// Machine `name`'s record as it is, being removed or not.
 pub fn raw(home: &Path, name: &str) -> Result<SdkValue> {
-    crate::names::name("machine", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::name("machine", name).map_err(|why| refused("InvalidInput", why))?;
     read_record(&paths::machine_record(home, name))?
         .ok_or_else(|| refused("NotFound", format!("no machine named {name}")))
 }
@@ -73,7 +73,7 @@ pub fn raw(home: &Path, name: &str) -> Result<SdkValue> {
 /// The live process removing a machine, from its record.
 pub fn removing(record: &SdkValue) -> Option<i64> {
     let pid = record.get("removing")?.get_int("pid")?;
-    crate::store::lease::alive(u32::try_from(pid).ok()?).then_some(pid)
+    crate::common::home::lease::alive(u32::try_from(pid).ok()?).then_some(pid)
 }
 
 /// A record's kind.
@@ -235,7 +235,7 @@ pub fn update(home: &Path, name: &str, change: impl FnOnce(SdkValue) -> SdkValue
 /// The Stores whose record names machine `name`.
 pub fn stores_on(home: &Path, name: &str) -> Result<Vec<String>> {
     let mut stores = Vec::new();
-    for store in paths::names(&home.join("store")).map_err(crate::host::outcome::failed)? {
+    for store in paths::names(&home.join("store")).map_err(crate::common::outcome::failed)? {
         if let Some(record) = read_record(&paths::store_record(home, &store))? {
             if let StoreRef::Sqlite {
                 machine: Placement::Machine(machine),
@@ -254,13 +254,13 @@ pub fn stores_on(home: &Path, name: &str) -> Result<Vec<String>> {
 /// The Sandboxes recorded under machine `name`.
 pub fn sandboxes_on(home: &Path, name: &str) -> Result<Vec<String>> {
     paths::names(&paths::machine_dir(home, name).join("sandbox"))
-        .map_err(crate::host::outcome::failed)
+        .map_err(crate::common::outcome::failed)
 }
 
 /// The Firecracker machines a Lima machine hosts.
 pub fn hosted_on(home: &Path, name: &str) -> Result<Vec<String>> {
     let mut hosted = Vec::new();
-    for machine in paths::names(&home.join("machine")).map_err(crate::host::outcome::failed)? {
+    for machine in paths::names(&home.join("machine")).map_err(crate::common::outcome::failed)? {
         if let Some(record) = read_record(&paths::machine_record(home, &machine))? {
             if record.get_text("host") == Some(name) {
                 hosted.push(machine);

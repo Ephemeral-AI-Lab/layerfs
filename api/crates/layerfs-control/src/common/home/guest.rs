@@ -8,7 +8,7 @@
 //! opened (every call opens its home first); the worker client sends it.
 //! On a worker's thread, it is the one the request being served carried.
 use super::layout::{HomeFile, LAYOUT_VERSION};
-use crate::host::outcome::refused;
+use crate::common::outcome::refused;
 use layerfs_bridge::control::SdkRefusal;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};

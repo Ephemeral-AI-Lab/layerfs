@@ -6,7 +6,7 @@
 //! Firecracker machine's Lima host is started the same way first: its own
 //! worker may have stopped it.
 use super::record::{self, machine_of, refusal, save_running};
-use crate::host::outcome::{failed, refused};
+use crate::common::outcome::{failed, refused};
 use crate::worker::Endpoint;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_machine::{self as adapters, HostOs, Platform, Route};
@@ -40,13 +40,13 @@ pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> 
         if let Some(endpoint) = answering(home, name)? {
             return Ok(Some(endpoint));
         }
-        let id = crate::home::open(home)?.id;
+        let id = crate::common::home::open(home)?.id;
         let spec = record::spec(home, &id, name, &record)?;
         let bundle = super::bundle::bundle()?;
         match adapters::start(&spec, &bundle).map_err(refusal)? {
             None => Ok(None),
             Some(running) => {
-                let _lock = crate::home::lock::take(home)?;
+                let _lock = crate::common::home::lock::take(home)?;
                 save_running(home, name, &running)?;
                 Ok(Some(endpoint_of(&running.endpoint)))
             }
@@ -62,12 +62,12 @@ pub(crate) struct StartLock(std::fs::File);
 
 impl Drop for StartLock {
     fn drop(&mut self) {
-        crate::host::flock::unlock(&self.0);
+        crate::common::home::flock::unlock(&self.0);
     }
 }
 
 pub(crate) fn start_lock(home: &Path, name: &str) -> Result<StartLock, SdkRefusal> {
-    let lock_path = crate::home::paths::machine_dir(home, name).join("start.lock");
+    let lock_path = crate::common::home::paths::machine_dir(home, name).join("start.lock");
     let file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
@@ -77,7 +77,7 @@ pub(crate) fn start_lock(home: &Path, name: &str) -> Result<StartLock, SdkRefusa
         .open(&lock_path)
         .map_err(failed)?;
     let deadline = Instant::now() + START_WAIT;
-    while !crate::host::flock::try_lock(&file, true).map_err(failed)? {
+    while !crate::common::home::flock::try_lock(&file, true).map_err(failed)? {
         if Instant::now() >= deadline {
             return Err(refused(
                 "Unavailable",

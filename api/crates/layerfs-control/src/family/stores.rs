@@ -10,12 +10,13 @@
 //! or any failure of the record phase, after both copies exist) keeps both
 //! copies, leaves the record's `in_progress` and is logged to
 //! `log/uncertain.jsonl`; nothing is cleaned up on a guess.
-use crate::context::Context;
-use crate::home::{self, paths, read_record, with_field, write_record};
-use crate::host::outcome::{failed, refused, Outcome};
+use crate::common::context::Context;
+use crate::common::home::lease;
+use crate::common::home::{self, paths, read_record, with_field, write_record};
+use crate::common::outcome::{failed, refused, Outcome};
 use crate::store::files::CHUNK;
+use crate::store::route;
 use crate::store::store_ref::StoreRef;
-use crate::store::{lease, route};
 use crate::worker::Endpoint;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -23,7 +24,7 @@ use std::path::Path;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 fn record_of(home: &Path, name: &str) -> Result<SdkValue> {
-    crate::names::name("store", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::name("store", name).map_err(|why| refused("InvalidInput", why))?;
     read_record(&paths::store_record(home, name))?
         .ok_or_else(|| refused("NotFound", format!("no Store named {name}")))
 }
@@ -163,7 +164,7 @@ fn status(home: &Path, name: &str) -> Outcome {
 
 /// `store.create`: an empty sqlite Store on `native`.
 fn create(home: &Path, name: &str) -> Outcome {
-    crate::names::name("store", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::name("store", name).map_err(|why| refused("InvalidInput", why))?;
     let _lock = home::lock::take(home)?;
     if paths::store_record(home, name).exists() {
         return Err(refused("Exists", format!("a Store named {name} exists")));
@@ -378,7 +379,7 @@ fn mark(home: &Path, name: &str, value: SdkValue) -> Result<()> {
 /// `store.move`: the Store's file from its machine to `to`.
 fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Outcome {
     let home = context.home.clone();
-    crate::names::name("machine", to).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::name("machine", to).map_err(|why| refused("InvalidInput", why))?;
     // check: names, the target machine, the Store idle
     progress(context, "check", 0, 0);
     let from = {

@@ -4,8 +4,8 @@
 //! machine is unknown and never starts a machine under the home lock. All
 //! from records: no Store is opened, so these run on any host.
 use layerfs_api::calls;
+use layerfs_api::home::lease;
 use layerfs_api::home::{self, paths, read_record, write_record};
-use layerfs_api::store::lease;
 use layerfs_bridge::control::SdkValue;
 use layerfs_sandbox::local::LocalProcess;
 use std::net::TcpListener;

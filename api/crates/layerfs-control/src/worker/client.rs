@@ -1,6 +1,6 @@
 //! The caller's side: one request per connection, sent once.
 use super::frame::{frame_bytes, read_frame, read_frame_within, write_frame, MAX_HELLO};
-use crate::host::outcome::{refused, Outcome};
+use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
@@ -50,8 +50,8 @@ fn exchange(
 ) -> Outcome {
     let mut request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
     // the caller's home id: the worker's root has none of its own (O33)
-    if let Some(id) = crate::home::guest::current_id() {
-        request = crate::home::with_field(request, "home_id", SdkValue::Text(id));
+    if let Some(id) = crate::common::home::guest::current_id() {
+        request = crate::common::home::with_field(request, "home_id", SdkValue::Text(id));
     }
     let request = frame_bytes(&request)?;
     let unavailable = |why: &dyn std::fmt::Display| {

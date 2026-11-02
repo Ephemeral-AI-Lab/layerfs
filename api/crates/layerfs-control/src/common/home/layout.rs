@@ -5,7 +5,7 @@
 //! machine names its containers with it (O33) and backups record it as
 //! where they were exported from. Reading never changes anything.
 use super::records::{private_dir, read_record, write_record};
-use crate::host::outcome::refused;
+use crate::common::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 

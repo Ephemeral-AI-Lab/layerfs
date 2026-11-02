@@ -5,12 +5,13 @@
 //! bytes go through the caller's process: machines never hold bucket keys.
 //! Objects are `<prefix>/<file>/store.sqlite` (whole or a manifest) plus its
 //! pieces. LayerFS never deletes a bucket object.
-use crate::context::Context;
-use crate::home::{self, paths, read_record, with_field, write_record};
-use crate::host::outcome::{failed, refused, Outcome};
+use crate::common::context::Context;
+use crate::common::home::lease;
+use crate::common::home::{self, paths, read_record, with_field, write_record};
+use crate::common::outcome::{failed, refused, Outcome};
 use crate::store::files::CHUNK;
+use crate::store::route;
 use crate::store::store_ref::{kind_of, StoreKind};
-use crate::store::{lease, route};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_backup::backup::{self as remote, Provider};
 use layerfs_store_backup::bucket::minio::{MinioSettings, DEFAULT_PART_SIZE};
@@ -21,7 +22,7 @@ use std::path::Path;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 fn bucket_of(home: &Path, name: &str) -> Result<SdkValue> {
-    crate::names::name("bucket", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::name("bucket", name).map_err(|why| refused("InvalidInput", why))?;
     read_record(&paths::bucket_record(home, name))?
         .ok_or_else(|| refused("NotFound", format!("no bucket named {name}")))
 }
@@ -136,7 +137,8 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     match call {
         "connect" => {
             let name = args.get_text("name").unwrap_or("");
-            crate::names::name("bucket", name).map_err(|why| refused("InvalidInput", why))?;
+            crate::common::names::name("bucket", name)
+                .map_err(|why| refused("InvalidInput", why))?;
             let record = bucket_record(name, args.get_text("url").unwrap_or(""), args)?;
             // one listing proves the bucket answers with this key
             let driver = driver(&record)?;
@@ -596,7 +598,7 @@ fn check(
 fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let store = args.get_text("store").unwrap_or("");
-    crate::names::name("store", store).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::name("store", store).map_err(|why| refused("InvalidInput", why))?;
     let bucket = args.get_text("bucket").unwrap_or("");
     let bucket_record = bucket_of(&home, bucket)?;
     let driver = driver(&bucket_record)?;

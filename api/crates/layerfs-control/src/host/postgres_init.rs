@@ -3,7 +3,7 @@
 //! to it through the same live add as a sqlite Store, in this process.
 //! The schema's URL is the call's (`postgresql: { url, schema,
 //! synchronousCommit }`) and is never stored.
-use crate::host::outcome::{refused, Outcome};
+use crate::common::outcome::{refused, Outcome};
 use crate::host::registry::{lock, random, text, INITS};
 use crate::host::stores::{self, Identity};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -101,7 +101,7 @@ fn run(
         use crate::host::postgres::{schema, selection, setting, url};
         use layerfs_history::{BranchId, HistoryName, LayerStackId};
         use layerfs_project::store::{AddRequest, ProjectApi};
-        let history = |text: &str| HistoryName::new(text).map_err(crate::host::outcome::failed);
+        let history = |text: &str| HistoryName::new(text).map_err(crate::common::outcome::failed);
         let stack = LayerStackId::from_authority(crate::host::project::sixteen(random()?));
         let branch = BranchId::from_authority(crate::host::project::sixteen(random()?));
         let request = AddRequest {
