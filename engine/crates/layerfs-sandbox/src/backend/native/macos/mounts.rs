@@ -8,10 +8,14 @@ use std::{
 };
 
 /// Mount points at or under `directory`, deepest first, from this
-/// process's mount table.
+/// process's mount table. The table names real paths (`/private/var/...`
+/// for `/var/...`), so the directory's real path is matched too.
 pub(crate) fn under(directory: &Path) -> io::Result<Vec<PathBuf>> {
+    let real = directory.canonicalize().ok();
     let mut found: Vec<PathBuf> = (super::mount_points()?.into_iter())
-        .filter(|point| point.starts_with(directory))
+        .filter(|point| {
+            point.starts_with(directory) || real.as_deref().is_some_and(|r| point.starts_with(r))
+        })
         .collect();
     found.sort_by_key(|point| std::cmp::Reverse(point.components().count()));
     found.dedup();

@@ -11,6 +11,9 @@ use std::{
 /// process's mount table.
 pub(crate) fn under(directory: &Path) -> io::Result<Vec<PathBuf>> {
     let table = std::fs::read_to_string("/proc/self/mountinfo")?;
+    // the table names real paths; a directory reached through a symlink
+    // is matched by its real path too
+    let real = directory.canonicalize().ok();
     let mut found = Vec::new();
     for line in table.lines() {
         // field 5 is the mount point, with space, tab, newline and backslash octal-escaped
@@ -18,7 +21,7 @@ pub(crate) fn under(directory: &Path) -> io::Result<Vec<PathBuf>> {
             continue;
         };
         let point = PathBuf::from(unescape(point));
-        if point.starts_with(directory) {
+        if point.starts_with(directory) || real.as_deref().is_some_and(|r| point.starts_with(r)) {
             found.push(point);
         }
     }
