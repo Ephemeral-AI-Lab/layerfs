@@ -1,22 +1,30 @@
 //! The worker's side: `layerfs worker` serves one request per connection.
 //!
-//! A request is `{ secret, op, args }`. `worker.ping` answers who it is;
+//! A connection starts with a small frame `{ secret }`: the worker reads at
+//! most [`MAX_HELLO`] bytes, waiting at most [`HELLO_WAIT`], and answers
+//! `{ ready: true }`, or refuses a wrong secret and closes, before it reads
+//! anything larger. Then a request `{ op, args }`, read with at most
+//! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
 //! `host.call` and `host.backend` run one host operation (`args.op` with
 //! `args.args`) on this machine, with `home` set to the worker's own root
-//! (the machine's data disk), never a path the caller sends. A wrong secret
-//! is refused before anything runs. Answers are `{ value }` or
+//! (the machine's data disk), never a path the caller sends. Answers are `{ value }` or
 //! `{ refused }`, after any `{ event }` frames.
 //!
 //! A request may carry `home_id`, the caller's home id: the root is not a
 //! home and has no id of its own (O33), so host code that asks for one
 //! gets the caller's, and the root is never converted or written as a home.
-use super::frame::{read_frame, write_frame};
+use super::client::HELLO_WAIT;
+use super::frame::{read_frame, read_frame_within, write_frame, MAX_HELLO};
 use crate::host::outcome::{refused, Outcome};
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
+
+/// The longest the worker waits for the next byte of a request.
+pub const REQUEST_WAIT: Duration = Duration::from_secs(30);
 
 /// What a worker served before it stopped.
 #[derive(Debug, Default)]
@@ -79,37 +87,58 @@ fn same(a: &str, b: &str) -> bool {
 
 fn answer(mut stream: TcpStream, secret: &str, root: &Path) -> bool {
     let _ = stream.set_nodelay(true);
+    // the secret first, from a small frame: nothing larger is read, and
+    // nothing is waited for long, before it matches
+    if stream.set_read_timeout(Some(HELLO_WAIT)).is_err() {
+        return false;
+    }
+    let hello = match read_frame_within(&mut stream, MAX_HELLO) {
+        Ok(Some(hello)) => hello,
+        _ => return false,
+    };
+    if !same(hello.get_text("secret").unwrap_or(""), secret) {
+        let denied = refused("Denied", "the worker's secret does not match");
+        let _ = write_frame(&mut stream, &refusal_frame(denied));
+        return false;
+    }
+    let ready = SdkValue::map([("ready", SdkValue::Bool(true))]);
+    if write_frame(&mut stream, &ready).is_err()
+        || stream.set_read_timeout(Some(REQUEST_WAIT)).is_err()
+    {
+        return false;
+    }
     let request = match read_frame(&mut stream) {
         Ok(Some(request)) => request,
         _ => return false,
     };
+    let _ = stream.set_read_timeout(None);
     let _busy = super::idle::Busy::start();
     let _home = crate::home::guest::sent(request.get_text("home_id"));
-    let outcome = if !same(request.get_text("secret").unwrap_or(""), secret) {
-        Err(refused("Denied", "the worker's secret does not match"))
-    } else {
-        touch();
-        run(
-            request.get_text("op").unwrap_or(""),
-            request.get("args").cloned().unwrap_or_default(),
-            root,
-            &mut |event| {
-                let _ = write_frame(&mut stream, &SdkValue::map([("event", event)]));
-            },
-        )
-    };
+    touch();
+    let outcome = run(
+        request.get_text("op").unwrap_or(""),
+        request.get("args").cloned().unwrap_or_default(),
+        root,
+        &mut |event| {
+            let _ = write_frame(&mut stream, &SdkValue::map([("event", event)]));
+        },
+    );
     let frame = match outcome {
         Ok(value) => SdkValue::map([("value", value)]),
-        Err(refusal) => SdkValue::map([(
-            "refused",
-            SdkValue::map([
-                ("code", SdkValue::Text(refusal.code)),
-                ("message", SdkValue::Text(refusal.message)),
-                ("detail", refusal.detail),
-            ]),
-        )]),
+        Err(refusal) => refusal_frame(refusal),
     };
     write_frame(&mut stream, &frame).is_ok()
+}
+
+fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
+    SdkValue::map([(
+        "refused",
+        SdkValue::map([
+            ("code", SdkValue::Text(refusal.code)),
+            ("message", SdkValue::Text(refusal.message)),
+            ("detail", refusal.detail),
+        ]),
+    )])
 }
 
 fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) -> Outcome {

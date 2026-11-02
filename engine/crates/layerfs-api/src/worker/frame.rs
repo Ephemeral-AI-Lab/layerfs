@@ -8,21 +8,45 @@ use std::io::{Read, Write};
 /// The largest frame either side accepts.
 pub const MAX_FRAME: usize = 512 << 20;
 
-/// Writes `value` as one frame.
-pub fn write_frame(out: &mut impl Write, value: &SdkValue) -> std::io::Result<()> {
+/// The largest first frame: the caller's secret, or the worker's answer to
+/// it. The worker reads no more than this before the secret matches.
+pub const MAX_HELLO: usize = 4 << 10;
+
+/// `value` as the bytes of one frame; a value larger than [`MAX_FRAME`] is
+/// refused `TooLarge`, before anything is sent.
+pub fn frame_bytes(value: &SdkValue) -> Result<Vec<u8>, SdkRefusal> {
     let text = json::print(&typed(value.clone()));
     if text.len() > MAX_FRAME {
-        return Err(std::io::Error::other(
-            "frame larger than the worker accepts",
+        return Err(refused(
+            "TooLarge",
+            "a frame larger than the worker accepts; nothing was sent",
         ));
     }
-    out.write_all(&(text.len() as u32).to_be_bytes())?;
-    out.write_all(text.as_bytes())?;
+    let mut bytes = Vec::with_capacity(4 + text.len());
+    bytes.extend_from_slice(&(text.len() as u32).to_be_bytes());
+    bytes.extend_from_slice(text.as_bytes());
+    Ok(bytes)
+}
+
+/// Writes `value` as one frame.
+pub fn write_frame(out: &mut impl Write, value: &SdkValue) -> std::io::Result<()> {
+    let bytes = frame_bytes(value).map_err(|refusal| std::io::Error::other(refusal.message))?;
+    out.write_all(&bytes)?;
     out.flush()
 }
 
-/// Reads one frame; `Ok(None)` at a clean end before any byte.
+/// Reads one frame of at most [`MAX_FRAME`] bytes; `Ok(None)` at a clean
+/// end before any byte.
 pub fn read_frame(input: &mut impl Read) -> Result<Option<SdkValue>, SdkRefusal> {
+    read_frame_within(input, MAX_FRAME)
+}
+
+/// Reads one frame of at most `max` bytes. A longer one is refused
+/// `TooLarge` from its length alone: none of its body is read.
+pub fn read_frame_within(
+    input: &mut impl Read,
+    max: usize,
+) -> Result<Option<SdkValue>, SdkRefusal> {
     let mut length = [0u8; 4];
     match input.read(&mut length[..1]) {
         Ok(0) => return Ok(None),
@@ -38,7 +62,7 @@ pub fn read_frame(input: &mut impl Read) -> Result<Option<SdkValue>, SdkRefusal>
         .read_exact(&mut length[1..])
         .map_err(|error| refused("Unavailable", format!("worker connection: {error}")))?;
     let length = u32::from_be_bytes(length) as usize;
-    if length > MAX_FRAME {
+    if length > max {
         return Err(refused("TooLarge", "a worker frame is larger than allowed"));
     }
     let mut text = vec![0u8; length];
