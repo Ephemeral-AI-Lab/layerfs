@@ -210,6 +210,49 @@ class Calls(unittest.TestCase):
         shutil.rmtree(home)
         shutil.rmtree(folder)
 
+    @unittest.skipUnless(os.environ.get("LAYERFS_DAEMON") and COMMAND.exists(), "NOT_RUN: LAYERFS_DAEMON unset")
+    def test_exec_output_through_functions_and_stream_without_them(self):
+        home, folder = temp("stream"), temp("stream-folder")
+        Path(folder, "README.md").write_text("streamed\n")
+        lfs = layerfs.client(home=home)
+        lfs.store.create("shop")
+        imported = subprocess.run(
+            [str(COMMAND), "import-env"], env={**os.environ, "LAYERFS_HOME": home}, capture_output=True, timeout=30
+        )
+        self.assertEqual(imported.returncode, 0, imported.stderr)
+        lfs.project.init("shop/api", folder)
+        lfs.branch.fork("shop/api", "dev", "main")
+        lfs.sandbox.create("shop/api", "s1", "native")
+        ws = None
+        try:
+            ws = lfs.workspace.mount("s1", "dev")["ws"]
+            out, err = [], []
+            ran = lfs.workspace.exec(ws, "cat README.md; echo oops >&2", stdout=out.append, stderr=err.append)
+            self.assertEqual(ran["exit_code"], 0)
+            # output is text when it is UTF-8, else bytes
+            self.assertEqual("".join(out), "streamed\n")
+            self.assertEqual("".join(err), "oops\n")
+            # stream=True and no functions: this process's own stdout and stderr
+            script = (
+                "import sys; sys.path.insert(0, sys.argv[1]); import layerfs; "
+                "layerfs.client().workspace.exec(sys.argv[2], 'cat README.md; echo oops >&2', stream=True)"
+            )
+            child = subprocess.run(
+                [sys.executable, "-c", script, str(HERE.parent / "src"), ws],
+                env={**os.environ, "LAYERFS_HOME": home},
+                capture_output=True,
+                timeout=60,
+            )
+            self.assertEqual(child.returncode, 0, child.stderr)
+            self.assertEqual(child.stdout, b"streamed\n")
+            self.assertEqual(child.stderr, b"oops\n")
+        finally:
+            if ws:
+                lfs.workspace.unmount(ws)
+            lfs.sandbox.close("s1")
+            shutil.rmtree(home)
+            shutil.rmtree(folder)
+
 
 if __name__ == "__main__":
     unittest.main()

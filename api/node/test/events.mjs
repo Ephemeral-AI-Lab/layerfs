@@ -5,7 +5,7 @@
 // build) sends a progress event at each phase.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from "node:fs";
 import { createServer, connect } from "node:net";
 import { tmpdir } from "node:os";
@@ -96,5 +96,49 @@ test("a throwing on_progress does not stop a move; every event comes before it s
     box.stop();
     rmSync(home, { recursive: true, force: true });
     rmSync(guest, { recursive: true, force: true });
+  }
+});
+
+// The live half needs the native daemon at LAYERFS_DAEMON; without it, it
+// is skipped (NOT_RUN).
+test("exec output: the stdout and stderr functions, and stream: true without them", { timeout: 60_000, skip: !process.env.LAYERFS_DAEMON && "NOT_RUN: LAYERFS_DAEMON unset" }, async () => {
+  const home = temp("stream");
+  const folder = temp("stream-folder");
+  writeFileSync(join(folder, "README.md"), "streamed\n");
+  const lfs = client({ home });
+  await lfs.store.create("shop");
+  const imported = spawnSync(command, ["import-env"], { env: { ...process.env, LAYERFS_HOME: home }, timeout: 30_000 });
+  assert.equal(imported.status, 0, String(imported.stderr));
+  await lfs.project.init("shop/api", folder);
+  await lfs.branch.fork("shop/api", "dev", "main");
+  await lfs.sandbox.create("shop/api", "s1", "native");
+  let ws;
+  try {
+    ({ ws } = await lfs.workspace.mount("s1", "dev"));
+    const out = [];
+    const err = [];
+    const ran = await lfs.workspace.exec(ws, "cat README.md; echo oops >&2", {
+      stdout: (bytes) => out.push(Buffer.from(bytes).toString()),
+      stderr: (bytes) => err.push(Buffer.from(bytes).toString()),
+    });
+    assert.equal(ran.exit_code, 0);
+    assert.equal(out.join(""), "streamed\n", "before the call settled");
+    assert.equal(err.join(""), "oops\n");
+
+    // stream: true and no functions: this process's own stdout and stderr
+    const script = `import { client } from ${JSON.stringify(new URL("../src/index.js", import.meta.url).href)};
+      await client().workspace.exec(${JSON.stringify(ws)}, "cat README.md; echo oops >&2", { stream: true });`;
+    const child = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+      env: { ...process.env, LAYERFS_HOME: home },
+      timeout: 60_000,
+    });
+    assert.equal(child.status, 0, String(child.stderr));
+    assert.equal(String(child.stdout), "streamed\n");
+    assert.equal(String(child.stderr), "oops\n");
+  } finally {
+    if (ws) await lfs.workspace.unmount(ws);
+    await lfs.sandbox.close("s1");
+    rmSync(home, { recursive: true, force: true });
+    rmSync(folder, { recursive: true, force: true });
   }
 });

@@ -22,8 +22,13 @@ def _invalid(message):
 
 
 def _write(stream, data):
+    """One piece of output, text or bytes, to ``stream``."""
     target = getattr(stream, "buffer", None)
-    if target is not None:
+    if isinstance(data, str):
+        stream.write(data)
+        stream.flush()
+    elif target is not None:
+        stream.flush()
         target.write(data)
         target.flush()
     else:
