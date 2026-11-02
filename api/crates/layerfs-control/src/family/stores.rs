@@ -14,10 +14,10 @@ use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::{self, paths, read_record, with_field, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
+use crate::machine::worker::Endpoint;
 use crate::store::files::CHUNK;
 use crate::store::route;
 use crate::store::store_ref::StoreRef;
-use crate::worker::Endpoint;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -88,7 +88,7 @@ fn step(home: &Path, endpoint: &Option<Endpoint>, op: &str, args: SdkValue) -> O
         None => crate::store::files::run(home, op, &args),
         Some(endpoint) => {
             let request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
-            crate::worker::call(endpoint, "store.file", request, &mut |_| {})
+            crate::machine::worker::call(endpoint, "store.file", request, &mut |_| {})
         }
     }
 }

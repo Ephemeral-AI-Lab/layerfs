@@ -13,7 +13,6 @@ pub mod common;
 pub mod family;
 #[doc(hidden)]
 pub mod host;
-#[cfg(feature = "machine")]
 #[doc(hidden)]
 pub mod machine;
 #[doc(hidden)]
@@ -21,7 +20,6 @@ pub mod operator;
 pub mod project;
 pub mod sandbox;
 pub mod store;
-pub mod worker;
 pub use base::failure::{OperationCause, OperationFailure};
 pub use base::sdk::{SdkError, SdkResult};
 pub use layerfs_project::store::{

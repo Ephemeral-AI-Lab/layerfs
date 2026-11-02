@@ -453,7 +453,7 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             None => crate::store::files::run(&home, op, &args),
             Some(endpoint) => {
                 let request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
-                crate::worker::call(endpoint, "store.file", request, &mut |_| {})
+                crate::machine::worker::call(endpoint, "store.file", request, &mut |_| {})
             }
         }
     };

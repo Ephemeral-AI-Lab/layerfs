@@ -109,7 +109,7 @@ pub(crate) fn store_call(
             let _lease = lease;
             let request =
                 SdkValue::map([("op", SdkValue::text(op)), ("args", SdkValue::Map(fields))]);
-            crate::worker::call(&endpoint, "store.call", request, &mut |event| {
+            crate::machine::worker::call(&endpoint, "store.call", request, &mut |event| {
                 context.event(event)
             })
         }
@@ -159,7 +159,7 @@ fn postgresql(
 pub(crate) fn endpoint(
     home: &Path,
     machine: &str,
-) -> Result<Option<crate::worker::Endpoint>, SdkRefusal> {
+) -> Result<Option<crate::machine::worker::Endpoint>, SdkRefusal> {
     crate::machine::running(home, machine)
 }
 
@@ -169,7 +169,7 @@ pub(crate) fn endpoint(
 pub(crate) fn endpoint(
     home: &Path,
     machine: &str,
-) -> Result<Option<crate::worker::Endpoint>, SdkRefusal> {
+) -> Result<Option<crate::machine::worker::Endpoint>, SdkRefusal> {
     if machine == "native" {
         return Ok(None);
     }
@@ -182,7 +182,7 @@ pub(crate) fn endpoint(
 pub(crate) fn endpoint_now(
     home: &Path,
     machine: &str,
-) -> Result<Option<crate::worker::Endpoint>, SdkRefusal> {
+) -> Result<Option<crate::machine::worker::Endpoint>, SdkRefusal> {
     if machine == "native" {
         return Ok(None);
     }
@@ -200,7 +200,10 @@ pub(crate) fn endpoint_now(
 }
 
 /// The worker `machine`'s `worker.json` records.
-fn recorded(home: &Path, machine: &str) -> Result<Option<crate::worker::Endpoint>, SdkRefusal> {
+fn recorded(
+    home: &Path,
+    machine: &str,
+) -> Result<Option<crate::machine::worker::Endpoint>, SdkRefusal> {
     let Some(value) = read_record(&paths::worker_record(home, machine))? else {
         return Err(refused(
             "Unavailable",
@@ -216,7 +219,7 @@ fn recorded(home: &Path, machine: &str) -> Result<Option<crate::worker::Endpoint
                 format!("machine {machine}'s worker.json has no address"),
             )
         })?;
-    Ok(Some(crate::worker::Endpoint {
+    Ok(Some(crate::machine::worker::Endpoint {
         address,
         secret: value.get_text("secret").unwrap_or("").to_owned(),
     }))

@@ -320,7 +320,7 @@ fn remove(context: &mut Context<'_>, project: &str) -> Outcome {
                     ("op", SdkValue::text("runtime.store.remove_project")),
                     ("args", SdkValue::Map(fields)),
                 ]);
-                crate::worker::call(&endpoint, "host.backend", request, &mut |e| {
+                crate::machine::worker::call(&endpoint, "host.backend", request, &mut |e| {
                     context.event(e)
                 })?
             }

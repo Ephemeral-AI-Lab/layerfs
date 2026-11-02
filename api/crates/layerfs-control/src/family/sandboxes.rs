@@ -456,7 +456,7 @@ fn on_machine(
             ));
             let request =
                 SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
-            crate::worker::call(&endpoint, "sandbox.host", request, &mut |event| {
+            crate::machine::worker::call(&endpoint, "sandbox.host", request, &mut |event| {
                 context.event(event)
             })
         }

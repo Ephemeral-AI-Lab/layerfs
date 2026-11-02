@@ -19,6 +19,7 @@ pub use layerfs_control::internal;
 #[cfg(feature = "machine")]
 #[doc(hidden)]
 pub use layerfs_control::machine;
+pub use layerfs_control::machine::worker;
 #[doc(hidden)]
 pub use layerfs_control::operator;
 pub use layerfs_control::{
@@ -27,7 +28,7 @@ pub use layerfs_control::{
     Installed, OperationCause, OperationFailure, ProjectApi, ProjectError, SdkError, SdkResult,
     SealedProject, SourceRefusal,
 };
-pub use layerfs_control::{project, sandbox, store, worker};
+pub use layerfs_control::{project, sandbox, store};
 #[cfg(unix)]
 pub use sandbox::{
     connect_address, ProviderCreate, ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause,

@@ -7,7 +7,7 @@
 //! worker may have stopped it.
 use super::record::{self, machine_of, refusal, save_running};
 use crate::common::outcome::{failed, refused};
-use crate::worker::Endpoint;
+use crate::machine::worker::Endpoint;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_machine::{self as adapters, HostOs, Platform, Route};
 use std::os::unix::fs::OpenOptionsExt;
@@ -102,5 +102,7 @@ fn answering(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> {
         return Ok(None);
     };
     let endpoint = endpoint_of(&recorded);
-    Ok(crate::worker::ping(&endpoint).is_ok().then_some(endpoint))
+    Ok(crate::machine::worker::ping(&endpoint)
+        .is_ok()
+        .then_some(endpoint))
 }
