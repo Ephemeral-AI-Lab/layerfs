@@ -3,6 +3,8 @@ built from the library's call table. Each function takes its positionals
 in the table's order; optional positionals and options may be keywords.
 Every call is one call into the library, made once."""
 
+import sys
+
 from . import _native
 from ._errors import LayerFSError
 from ._values import decode, encode
@@ -17,6 +19,23 @@ _FUNCTION = "function"
 
 def _invalid(message):
     return LayerFSError("InvalidInput", message, None)
+
+
+def _write(stream, data):
+    target = getattr(stream, "buffer", None)
+    if target is not None:
+        target.write(data)
+        target.flush()
+    else:
+        stream.write(data.decode("utf-8", "replace"))
+        stream.flush()
+
+
+def _streamed(handlers):
+    """``stream=True``: the command's output passed on as it comes, to the
+    ``stdout`` and ``stderr`` functions, else to this process's own."""
+    handlers.setdefault("stdout", lambda data: _write(sys.stdout, data))
+    handlers.setdefault("stderr", lambda data: _write(sys.stderr, data))
 
 
 def _event_handler(handlers):
@@ -62,6 +81,8 @@ def _bind(client, spec):
                     args[key] = value
             else:
                 raise _invalid(f'{name}: unknown option "{key}"')
+        if args.get("stream") is True:
+            _streamed(handlers)
         scope = encode(client.scope) if client.scope is not None else None
         answer = decode(_native.call(name, encode(args), client.home, scope, _event_handler(handlers)))
         refused = answer.get("refused")

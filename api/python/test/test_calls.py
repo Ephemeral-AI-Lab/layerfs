@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -153,6 +154,61 @@ class Calls(unittest.TestCase):
         listed = asyncio.run(run())
         self.assertEqual(sorted(s["name"] for s in listed["items"]), ["one", "three", "two"])
         shutil.rmtree(home)
+
+    def test_aio_functions_run_on_the_loop_before_the_call_returns(self):
+        home = temp("aio-loop")
+        lfs = aio.client(home=home)
+        seen = []
+
+        async def run():
+            await lfs.store.create("shop")
+            # a move sends its first progress event, then finds no machine
+            try:
+                await lfs.store.move("shop", "nosuch", on_progress=lambda p: seen.append((threading.get_ident(), p)))
+            except layerfs.LayerFSError as error:
+                return threading.get_ident(), error.code, list(seen)
+            return None
+
+        loop_thread, code, at_return = asyncio.run(run())
+        self.assertEqual(code, "NotFound")
+        self.assertEqual([p["phase"] for _, p in at_return], ["check"], "delivered before the call returned")
+        self.assertEqual({thread for thread, _ in at_return}, {loop_thread}, "on the loop's thread")
+        shutil.rmtree(home)
+
+    def test_a_cancelled_aio_call_stops_its_functions_and_the_call_runs_to_its_end(self):
+        home, folder = temp("aio-cancel"), temp("aio-cancel-folder")
+        for i in range(5000):
+            Path(folder, f"f{i}.txt").write_text(f"file {i}\n")
+        lfs = aio.client(home=home)
+        seen = []
+
+        async def run():
+            await lfs.store.create("shop")
+            loop = asyncio.get_running_loop()
+            first = asyncio.Event()
+
+            def on_progress(progress):
+                seen.append(progress)
+                # wakes the loop from any thread
+                loop.call_soon_threadsafe(first.set)
+
+            task = asyncio.create_task(lfs.project.init("shop/api", folder, on_progress=on_progress))
+            await asyncio.wait_for(first.wait(), 60)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            at_cancel = len(seen)
+            # the native call runs on to its end on its thread
+            await asyncio.get_running_loop().shutdown_default_executor()
+            await asyncio.sleep(0.2)
+            return at_cancel
+
+        at_cancel = asyncio.run(run())
+        self.assertGreaterEqual(at_cancel, 1)
+        self.assertEqual(len(seen), at_cancel, "no function ran after the cancel")
+        self.assertEqual(layerfs.client(home=home).project.get("shop/api")["project"], "shop/api")
+        shutil.rmtree(home)
+        shutil.rmtree(folder)
 
 
 if __name__ == "__main__":
