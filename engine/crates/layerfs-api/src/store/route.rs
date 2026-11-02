@@ -175,6 +175,34 @@ pub(crate) fn endpoint(
     if machine == "native" {
         return Ok(None);
     }
+    recorded(home, machine)
+}
+
+/// The worker of `machine` as its records say now, starting nothing: `None`
+/// when its Stores open in this process, `Unavailable` when it has no
+/// worker recorded. A recorded worker that is gone fails when called.
+pub(crate) fn endpoint_now(
+    home: &Path,
+    machine: &str,
+) -> Result<Option<crate::worker::Endpoint>, SdkRefusal> {
+    if machine == "native" {
+        return Ok(None);
+    }
+    #[cfg(feature = "machine")]
+    {
+        use layerfs_sandbox::machine::{HostOs, Kind, Route};
+        let record = read_record(&paths::machine_record(home, machine))?
+            .ok_or_else(|| refused("NotFound", format!("no machine named {machine}")))?;
+        let kind = record.get_text("platform").and_then(Kind::parse);
+        if kind.map(|kind| kind.route(HostOs::current())) == Some(Route::InProcess) {
+            return Ok(None);
+        }
+    }
+    recorded(home, machine)
+}
+
+/// The worker `machine`'s `worker.json` records.
+fn recorded(home: &Path, machine: &str) -> Result<Option<crate::worker::Endpoint>, SdkRefusal> {
     let Some(value) = read_record(&paths::worker_record(home, machine))? else {
         return Err(refused(
             "Unavailable",

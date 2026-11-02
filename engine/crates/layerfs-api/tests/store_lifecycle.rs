@@ -1,7 +1,7 @@
 //! Store lifecycle races and machines (#533 review, group store): a lease
 //! and a move or remove never overlap, even inside the mover's own process;
-//! `store.remove` refuses a Store whose machine is unknown and never starts
-//! a machine under the home lock. All
+//! `store.status` starts no machine; `store.remove` refuses a Store whose
+//! machine is unknown and never starts a machine under the home lock. All
 //! from records: no Store is opened, so these run on any host.
 use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record};
@@ -197,6 +197,20 @@ fn home_with_stopped(machine_field: SdkValue) -> PathBuf {
     )
     .unwrap();
     home
+}
+
+#[test]
+fn status_of_a_store_on_a_stopped_machine_starts_nothing_and_says_down() {
+    let home = home_with_stopped(t("vm"));
+    let status = call(&home, "store.status", &[("name", t("shop"))]).unwrap();
+    assert_eq!(status.get_text("state"), Some("down"));
+    let reason = status.get_text("down_reason").unwrap_or("");
+    assert!(reason.contains("not running"), "{reason}");
+    assert!(
+        !paths::machine_dir(&home, "vm").join("start.lock").exists(),
+        "no start was attempted"
+    );
+    std::fs::remove_dir_all(home).unwrap();
 }
 
 #[test]

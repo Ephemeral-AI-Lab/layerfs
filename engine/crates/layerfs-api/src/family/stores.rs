@@ -101,7 +101,9 @@ fn of_store(name: &str, more: Vec<(&str, SdkValue)>) -> SdkValue {
     fields_map(fields)
 }
 
-/// `store.status`: who holds it, whether a move is running, its size.
+/// `store.status`: who holds it, whether a move is running, its size. It
+/// starts no machine: a Store whose machine is not running is `down`, with
+/// the reason (O34).
 fn status(home: &Path, name: &str) -> Outcome {
     let record = record_of(home, name)?;
     let holders = {
@@ -109,8 +111,26 @@ fn status(home: &Path, name: &str) -> Outcome {
         lease::holders(home, name)?
     };
     let moving = route::moving(&record, name).is_err();
+    let mut down = None;
+    let mut more = Vec::new();
+    if record.get_text("kind") == Some("postgresql") {
+        more.push(("server", crate::family::postgres::status(&record, name)));
+    } else {
+        let machine = route::machine(&record, name)?;
+        more.push(("machine", SdkValue::text(&machine)));
+        // the file's size where it lives; a machine that is down says why
+        let file = route::endpoint_now(home, &machine)
+            .and_then(|endpoint| step(home, &endpoint, "stat", of_store(name, vec![])));
+        let file = file.unwrap_or_else(|why| {
+            down = Some(why.message.clone());
+            SdkValue::map([("unavailable", SdkValue::Text(why.message))])
+        });
+        more.push(("file", file));
+    }
     let state = if moving {
         "moving"
+    } else if down.is_some() {
+        "down"
     } else if holders.is_empty() {
         "idle"
     } else {
@@ -136,22 +156,9 @@ fn status(home: &Path, name: &str) -> Outcome {
             "in_progress",
             record.get("in_progress").cloned().unwrap_or_default(),
         ),
+        ("down_reason", down.map(SdkValue::Text).unwrap_or_default()),
     ];
-    if record.get_text("kind") == Some("postgresql") {
-        fields.push(("server", crate::family::postgres::status(&record, name)));
-    } else {
-        let machine = route::machine(&record, name)?;
-        fields.push(("machine", SdkValue::text(&machine)));
-        // the file's size where it lives; a machine that is down says why
-        let file = route::endpoint(home, &machine)
-            .and_then(|endpoint| step(home, &endpoint, "stat", of_store(name, vec![])));
-        fields.push((
-            "file",
-            file.unwrap_or_else(|why| {
-                SdkValue::map([("unavailable", SdkValue::Text(why.message))])
-            }),
-        ));
-    }
+    fields.extend(more);
     Ok(fields_map(fields))
 }
 
