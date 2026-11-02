@@ -2,8 +2,8 @@
 
 > **Status:** Current general guide.
 
-Repository-wide instructions for LayerFS. Also read the applicable [core](core/AGENTS.md), [engine](engine/AGENTS.md)
-and [API](api/AGENTS.md) guides for implementation in those layers. Current owner instructions and documented
+Repository-wide instructions for LayerFS. Also read the applicable [core](core/AGENTS.md), [engine](engine/AGENTS.md),
+[connect](connect/AGENTS.md) and [API](api/AGENTS.md) guides for implementation in those layers. Current owner instructions and documented
 supersessions govern; a closed handoff or historical receipt is not a new assignment.
 
 ## Product scope and current workstreams
@@ -187,8 +187,18 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   port on the host, with one attempt per call and no replay, the same rules
   as the macOS and Windows routes. Guests never read the home: the caller
   sends each worker call the settings it needs and writes every record.
-  See [#533](core/docs/issues/533/README.md) and the
-  [proposal](core/docs/proposals/host-platform-connections.md).
+  **Every machine uses both Store kinds (owner, 2026-11-03, #535 D9, G1,
+  G3):** a machine holds any number of sqlite Stores and any number of
+  PostgreSQL attachments (`store.attach <store> <machine>`). A sqlite Store
+  is on exactly one machine; a PostgreSQL Store's calls still run in the
+  caller's process, and its Sandboxes run on every machine it is attached
+  to where the support table (`layerfs-machine` `support.rs`,
+  `connect/SUPPORT.json`) marks the platform supported; elsewhere they are
+  refused with the table's reason. The password is resolved only in the
+  caller and travels only in one worker request and the Sandbox's private
+  daemon setup file. This supersedes #533 O3/G13 ("VMs and ssh later").
+  See [#533](core/docs/issues/533/README.md), [#535](core/docs/issues/535/README.md)
+  and the [proposal](core/docs/proposals/host-platform-connections.md).
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
   database, concurrent-writer engine or objects outside it. Writes go one at a
@@ -465,7 +475,11 @@ The root manifest builds four core crates, eleven engine crates and four API
 crates under `api/crates`: the library `layerfs-api`, the `layerfs` command
 `layerfs-cli`, the Node binding `layerfs-node` and the PyO3 module
 `layerfs-python`. `api/` also holds the published JavaScript and Python
-packages. The dependency direction is
-`core < engine < api`, including dev dependencies and test includes. Workstream names do not change this layering.
+packages. The connect layer (`connect/crates`, owner 2026-11-03, #535 D4)
+holds the crates that reach a machine or the network: `layerfs-machine`,
+`layerfs-sandbox` and `layerfs-store-backup`, moved there from `engine/crates`
+by #535 phase 1; see the [connect guide](connect/AGENTS.md). The dependency
+direction is `core < engine < connect < api`, including dev dependencies and
+test includes; nothing in engine depends on connect. Workstream names do not change this layering.
 After rebasing across #463, update each selected worktree's own target registration and prepare again
 for the root `target/` path; never migrate another worktree's resource record.

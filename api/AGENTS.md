@@ -14,9 +14,11 @@ public surface:
 - `python/`: the Python package `layerfs`.
 
 The packages are thin shells over the table: each function is one library
-call, made once. API crates may depend on engine and core crates, including
-dev dependencies and test includes; nothing in core or engine may depend on
-anything here.
+call, made once. API crates may depend on connect, engine and core crates,
+including dev dependencies and test includes; nothing in core, engine or
+connect may depend on anything here. Layers are
+`core < engine < connect < api` (#535 D4); `layerfs-api` reaches
+`layerfs-machine` only through its optional `machine` feature.
 
 SDK-facing daemon integration tests live in `crates/layerfs-api/tests`, with
 cheap includes of daemon and Sandbox fixtures from `engine/crates`. Build the
