@@ -34,8 +34,9 @@ await layerfs.project.init("shop/api", "/src/api", { on_progress: console.log })
 await layerfs.branch.fork("shop/api", "agent", "main");
 await layerfs.file.write("shop/api", "agent", "/README.md", "hello\n");
 
-// another home, and a folder scope: paths and Branches are relative to it
-const lfs = layerfs.client({ home: "/data/lfs", scope: { folder: "/web", branch: "agent" } });
+// another home, and a folder scope bound to one project: paths stay in
+// its folder and Branches are relative to its namespace
+const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/api", folder: "/web", branch: "agent" } });
 ```
 
 Each function takes its positional arguments in the table's order and then an

@@ -28,7 +28,7 @@ await layerfs.project.init("shop/api", "/src/api", { on_progress: console.log })
 await layerfs.branch.fork("shop/api", "agent", "main");
 await layerfs.file.write("shop/api", "agent", "/README.md", "hello\n");
 
-const lfs = layerfs.client({ home: "/data/lfs", scope: { folder: "/web", branch: "agent" } });
+const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", folder: "/web", branch: "agent" } });
 ```
 
 - Node 20 or later. The package is an ES module.
@@ -36,7 +36,7 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { folder: "/web", branch:
   `file`, `sandbox`, `workspace`, `machine`, `store` and `backup` use the
   default home (`LAYERFS_HOME`, else `~/.layerfs`).
 - `layerfs.client({ home, scope })` makes a client of another home, with an
-  optional [folder scope](calls.md#folder-scope).
+  optional [folder scope](calls.md#folder-scope) `{ project, folder, branch? }`.
 - Every call is `async`. Positionals come in the table's order, then an
   options object. A trailing plain object is read as the options unless its
   slot takes JSON, so an optional positional can be left off:
@@ -65,7 +65,7 @@ layerfs.branch.fork("shop/api", "agent", "main")
 layerfs.file.write("shop/api", "agent", "/README.md", "hello\n", message="docs")
 text = layerfs.file.read("shop/api", "agent", "/README.md")["text"]
 
-lfs = layerfs.client(home="/data/lfs", scope={"folder": "/web", "branch": "agent"})
+lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "/web", "branch": "agent"})
 ```
 
 - Python 3.10 or later (abi3). The native module is `layerfs._native`,

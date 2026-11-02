@@ -352,7 +352,8 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
 | `--<option>-from <file>` | any optional text option (`--old-from`, `--new-from`, `--message-from`) | reads the option's value from a file |
 | `-m <text>` | calls with `message` | the same as `--message` |
-| `--scope <folder>` | all | a folder scope (see below) |
+| `--scope <folder>` | all | a folder scope (see below); needs `--scope-project` |
+| `--scope-project <store>/<project>` | all, with `--scope` | the one project the scope is bound to |
 | `--scope-branch <name>` | all, with `--scope` | the scope's Branch namespace |
 | `--` | all | every later word is a positional |
 
@@ -365,10 +366,20 @@ for this manual; `store move` reports its phases (`check`, `snapshot`,
 
 ## Folder scope
 
-A folder scope (O32) limits a client to one folder of a project and,
-optionally, one Branch namespace. Node: `layerfs.client({ scope: { folder,
-branch } })`. Python: `layerfs.client(scope={"folder": ..., "branch":
-...})`. Shell: `--scope <folder> [--scope-branch <name>]`.
+A folder scope (O32) binds a client to one project, one folder of it and,
+optionally, one Branch namespace: `{ project, folder, branch? }`. Node:
+`layerfs.client({ scope: { project, folder, branch } })`. Python:
+`layerfs.client(scope={"project": ..., "folder": ..., "branch": ...})`.
+Shell: `--scope <folder> --scope-project <store>/<project> [--scope-branch
+<name>]`; `--scope` without `--scope-project` is exit 2.
+
+- It is an allow list: the `file` calls, `branch` `list`, `get`, `fork`,
+  `merge` and `publish`, and the `workspace` calls. Every other call
+  (Stores, machines, backups, projects, Sandboxes) is refused `out of
+  scope: <call>`, such as `out of scope: store.remove`.
+- Every `file` and `branch` call must name the scope's project (`out of
+  scope: project`); a `workspace` call's Sandbox must be recorded for that
+  project (`out of scope: sandbox`).
 
 - `folder` is a canonical absolute project path. Every path a `file` call
   names must be the folder or beneath it; paths stay absolute.
@@ -376,19 +387,22 @@ branch } })`. Python: `layerfs.client(scope={"folder": ..., "branch":
   `<branch>.<name>`; `branch.list` answers only that namespace's Branches,
   named relative to it. Without `branch`, every call that names a Branch is
   refused. A 66-character Commit id is left as it is.
-- `commit` calls and `branch.diff` are refused as history.
+- `commit` calls and `branch.diff` are refused as history. A scoped
+  `branch.list` reads every page of the project's Branches and pages the
+  namespace's own.
 - `workspace.mount` mounts only the namespace's `main`; `workspace.exec`
   starts the command in the scope's folder.
-- A refusal is `InvalidInput` with `out of scope: path`, `branch` or
-  `history`, before any effect.
+- A refusal is `InvalidInput` with `out of scope: path`, `branch`,
+  `history`, `project`, `sandbox` or the call's name, before any effect.
 - A scope guards calls. It is not filesystem isolation: a command can still
   `cd` anywhere in the mounted tree.
 
-Run:
+Run before the scope named its project (`797ecca2c7`), shown here in the
+current form; the answers follow from the code but were not rerun:
 
 ```console
-$ layerfs commit list shop/api agent --scope /src
+$ layerfs commit list shop/api agent --scope /src --scope-project shop/api
 {"code":"InvalidInput","message":"out of scope: history","detail":null}
-$ layerfs file list shop/api agent /src --scope /src
+$ layerfs file list shop/api agent /src --scope /src --scope-project shop/api
 {"code":"InvalidInput","message":"out of scope: branch","detail":null}
 ```

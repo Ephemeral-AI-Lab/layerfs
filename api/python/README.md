@@ -17,7 +17,7 @@ layerfs.branch.fork("shop/api", "agent", "main")
 layerfs.file.write("shop/api", "agent", "/README.md", "hello\n", message="docs")
 text = layerfs.file.read("shop/api", "agent", "/README.md")["text"]
 
-lfs = layerfs.client(home="/data/lfs", scope={"folder": "/web", "branch": "agent"})
+lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/api", "folder": "/web", "branch": "agent"})
 ```
 
 Positionals follow the table's order; optional positionals and options may

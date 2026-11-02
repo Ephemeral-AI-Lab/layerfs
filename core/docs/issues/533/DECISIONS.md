@@ -70,7 +70,7 @@ S: [layerfs-sdk-cli.md](../../proposals/layerfs-sdk-cli.md).
 | O29 | `fs.diff` (now `file.diff`) takes positional sides: `(project, left_branch, left_path, right_branch, right_path, { left_commit, right_commit })`. |
 | O30 | Commits stay ids. |
 | O31 | `sandbox.close(name, { force })` stops the Sandbox through its backend and records `Unknown` for Workspaces it could not drain. |
-| O32 | Folder scope is ported into the library as a client option of every front end; MCP is dropped from 2.0 (not a fourth front end here). |
+| O32 | Folder scope is ported into the library as a client option of every front end; MCP is dropped from 2.0 (not a fourth front end here). Since `797ecca2c7` (review P1-19) the scope is `{ project, folder, branch? }`, bound to one project as #521's client was, and allows only the file, Branch (list, get, fork, merge, publish) and Workspace calls; the shell form is `--scope <folder> --scope-project <store>/<project> [--scope-branch <name>]`, with `--scope-project` required. |
 | O33 | The `docker` machine names containers with the home id from `layerfs.json`. |
 | O34 | `machine.status` reports state, free disk, the provider tool's version and why a machine is down; no change event. |
 | O35 | A lease `store/<name>/open/<pid>` whose process is not alive on this host is stale, removed under the home lock, and the removal is logged. |
@@ -135,7 +135,9 @@ Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated 
   pass. Recorded as a coverage gap in HANDOFF.md.
 - Step 15: the command is `engine/crates/layerfs-cli` (binary `layerfs`),
   built from the table like the package. The shell form of a folder scope
-  is `--scope <folder>` with `--scope-branch <name>` (S names none). `--text`
+  is `--scope <folder>` with `--scope-branch <name>` (S names none);
+  since `797ecca2c7`, also `--scope-project <store>/<project>`, required
+  with `--scope` (see O32). `--text`
   is one generic readable form (a file's text as is; a result's list of
   records as a table; other fields as `key  value` lines), not the per-call
   layouts S sketches. `workspace exec --stream` writes the output the

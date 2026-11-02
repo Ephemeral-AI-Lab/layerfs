@@ -31,9 +31,11 @@ Branch, and how to reach the package or the command.
 - **One setting:** `LAYERFS_HOME`, the home folder that holds every record
   (default `~/.layerfs`). Nothing else is needed. 1.1.0's other `LAYERFS_*`
   settings are gone.
-- **The integration may give you a folder scope** (`--scope`, or
-  `client({ scope })`). Then your paths must stay inside that folder and your
-  Branch names are relative to a namespace. See [folder scope](#folder-scope).
+- **The integration may give you a folder scope** (`--scope <folder>
+  --scope-project <store>/<project>`, or `client({ scope })`). Then you work
+  in that one project, your paths must stay inside that folder, your Branch
+  names are relative to a namespace, and only file, Branch and Workspace
+  calls are allowed. See [folder scope](#folder-scope).
 - Don't look into Docker, Store files, the home's records or the integration's
   source. The calls are the only way in.
 - Your current folder is for scratch files only: your scripts and notes. Files
@@ -224,20 +226,22 @@ layerfs file read shop/api work /hello.js --text
 
 ## Folder scope
 
-A scope limits a client to one folder of the project and one Branch namespace.
-It guards calls; it is not isolation (a command in a Workspace can still `cd`
-anywhere).
+A scope `{ project, folder, branch? }` binds a client to one project, one
+folder of it and one Branch namespace. It guards calls; it is not isolation (a
+command in a Workspace can still `cd` anywhere).
 
 ```js
-const lfs = layerfs.client({ scope: { folder: "/web", branch: "agent" } });
+const lfs = layerfs.client({ scope: { project: "shop/api", folder: "/web", branch: "agent" } });
 await lfs.file.read("shop/api", "main", "/web/index.html");   // reads Branch agent.main
 ```
 
 ```bash
-layerfs file read shop/api main /web/index.html --scope /web --scope-branch agent
+layerfs file read shop/api main /web/index.html --scope /web --scope-project shop/api --scope-branch agent
 ```
 
-Checked live:
+`--scope` without `--scope-project` is a usage error (exit 2).
+
+Checked live (before the scope named its project; the rules below still hold):
 
 - Paths must be canonical and inside `folder`; anything else is refused
   `InvalidInput` (`out of scope: path`).
@@ -252,6 +256,14 @@ Checked live:
 - From source, not run: `workspace.mount` under a scope accepts only `main`
   (mounting `agent.main`), and `workspace.exec` starts the command in the
   folder.
+- From source (`797ecca2c7`): every `file` and `branch` call must name the
+  scope's project (`out of scope: project`), and a `workspace` call's Sandbox
+  must be one of that project's (`out of scope: sandbox`). Only the `file`
+  calls, `branch` list/get/fork/merge/publish and the `workspace` calls are
+  allowed; every other call (Stores, machines, backups, projects, Sandboxes)
+  is refused `out of scope: <call>`, such as `out of scope: store.remove`,
+  before any effect. Create the Sandbox and fork the namespace's `main`
+  without a scope.
 
 ## Which call for which job
 
