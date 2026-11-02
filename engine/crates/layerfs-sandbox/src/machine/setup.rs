@@ -8,6 +8,7 @@ use super::kind::{HostOs, Kind, Route};
 use super::spec::{Bundle, Running, Spec};
 use super::{docker, native, vm, worker};
 use std::path::Path;
+use std::time::Instant;
 
 /// A machine's state as its provider reports it now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -133,6 +134,14 @@ pub fn status(spec: &Spec) -> Result<Status, MachineError> {
         Kind::Firecracker => vm::firecracker::status(spec),
         Kind::Ssh => vm::ssh::status(spec),
     }
+}
+
+/// [`status`], with every command it runs ending by `deadline`: one still
+/// running then is killed with its process group and reaped, and the answer
+/// is that command's `Unknown`. For callers that wait for a probe a bounded
+/// time (`machine.list`), so a probe past it leaves no process behind.
+pub fn status_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineError> {
+    super::tool::within(deadline, || status(spec))
 }
 
 /// The identity of an ssh machine's host: its host key's fingerprint, else

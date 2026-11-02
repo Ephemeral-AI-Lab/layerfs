@@ -21,6 +21,23 @@ use std::time::{Duration, Instant};
 const KEEP: usize = 1 << 20;
 const POLL: Duration = Duration::from_millis(20);
 
+thread_local! {
+    /// This thread's probe deadline, set by [`within`]: every command the
+    /// thread runs meanwhile ends by then.
+    static CAP: std::cell::Cell<Option<Instant>> = const { std::cell::Cell::new(None) };
+}
+
+/// Runs `probe` with every command it starts on this thread ending by
+/// `deadline`: each runs in its own process group, and one still running
+/// then is killed with its whole group (a `limactl shell`'s `ssh`, say) and
+/// reaped, so a probe past its time leaves no process behind.
+pub(crate) fn within<T>(deadline: Instant, probe: impl FnOnce() -> T) -> T {
+    let before = CAP.replace(Some(deadline));
+    let out = probe();
+    CAP.set(before);
+    out
+}
+
 /// A finished command: its exit code (`None` when a signal ended it) and output.
 #[derive(Debug)]
 pub(crate) struct Output {
@@ -102,6 +119,12 @@ pub(crate) fn run(
         })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    let cap = CAP.get();
+    if cap.is_some() {
+        command.process_group(0);
+    }
+    let own = Instant::now() + timeout;
+    let deadline = cap.map_or(own, |cap| cap.min(own));
     let mut child = command.spawn().map_err(|e| spawn_failed(what, &e))?;
     let feeder = match (input, child.stdin.take()) {
         (Some(bytes), Some(mut stdin)) => {
@@ -115,7 +138,7 @@ pub(crate) fn run(
     };
     let out = collect(child.stdout.take());
     let err = collect(child.stderr.take());
-    let status = wait(&mut child, Instant::now() + timeout)
+    let status = wait_for(&mut child, deadline, cap.is_some())
         .map_err(|e| MachineError::new(Code::Unknown, format!("{what}: waiting failed: {e}")))?;
     if let Some(feeder) = feeder {
         let _ = feeder.join();
@@ -130,10 +153,14 @@ pub(crate) fn run(
         }),
         None => Err(MachineError::new(
             Code::Unknown,
-            format!(
-                "{what} did not end within {} s and was stopped; its outcome is not known",
-                timeout.as_secs()
-            ),
+            if deadline < own {
+                format!("{what} did not end by its probe's deadline and was stopped")
+            } else {
+                format!(
+                    "{what} did not end within {} s and was stopped; its outcome is not known",
+                    timeout.as_secs()
+                )
+            },
         )),
     }
 }
@@ -162,12 +189,20 @@ fn collect<R: Read + Send + 'static>(stream: Option<R>) -> thread::JoinHandle<St
 /// Waits for `child` until `deadline`; past it the child is killed and `None`
 /// is returned.
 pub(crate) fn wait(child: &mut Child, deadline: Instant) -> io::Result<Option<ExitStatus>> {
+    wait_for(child, deadline, false)
+}
+
+/// [`wait`]; `group` kills the child's whole process group (it leads one).
+fn wait_for(child: &mut Child, deadline: Instant, group: bool) -> io::Result<Option<ExitStatus>> {
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(Some(status));
         }
         if Instant::now() >= deadline {
-            let _ = child.kill();
+            match i32::try_from(child.id()) {
+                Ok(pid) if group => drop(kill(Pid::from_raw(-pid), Signal::SIGKILL)),
+                _ => drop(child.kill()),
+            }
             child.wait()?;
             return Ok(None);
         }

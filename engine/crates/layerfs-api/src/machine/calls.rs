@@ -33,14 +33,19 @@ fn home_id(home: &Path) -> Result<String> {
 /// The live state of each VM and ssh machine, read as `machine.status`
 /// reads it: in parallel, starting nothing, outside the home lock, all within
 /// [`PROBE`]. A probe that fails or does not answer in time is `unknown`, with
-/// the reason. Nothing is written back. `None` keeps the record's state: a
-/// built-in machine, or one being created or removed.
+/// the reason; a command it still runs then is killed with its process group
+/// and reaped by the probe's thread. Nothing is written back. `None` keeps
+/// the record's state: a built-in machine, or one being created or removed.
 fn live(home: &Path, records: &[(String, SdkValue)]) -> Result<Vec<Live>> {
     let id = home_id(home)?;
     let (send, answers) = mpsc::channel();
     let late = format!("its probe did not answer within {} s", PROBE.as_secs());
     let mut out: Vec<Live> = vec![None; records.len()];
     let mut waiting = 0;
+    let until = Instant::now() + PROBE;
+    // the probes' commands are stopped just after the list stops waiting,
+    // so a late probe is reported as late, not as its stopped command
+    let stop = until + Duration::from_millis(200);
     for (index, (name, record)) in records.iter().enumerate() {
         let in_flight = record.get_text("state") == Some("creating") || removing(record).is_some();
         if kind_of(record)?.built_in() || in_flight {
@@ -49,14 +54,15 @@ fn live(home: &Path, records: &[(String, SdkValue)]) -> Result<Vec<Live>> {
         match record::spec(home, &id, name, record) {
             Ok(spec) => {
                 let send = send.clone();
-                std::thread::spawn(move || drop(send.send((index, adapters::status(&spec)))));
+                std::thread::spawn(move || {
+                    drop(send.send((index, adapters::status_within(&spec, stop))));
+                });
                 out[index] = Some(("unknown".to_owned(), Some(late.clone())));
                 waiting += 1;
             }
             Err(why) => out[index] = Some(("unknown".to_owned(), Some(why.message))),
         }
     }
-    let until = Instant::now() + PROBE;
     while waiting > 0 {
         let Some(left) = until.checked_duration_since(Instant::now()) else {
             break;

@@ -7,6 +7,11 @@
 //! worker's secret (an `ssh -L` or Lima forward with no worker behind it) is
 //! `stopped`; one whose worker answers is `running`, and the probe sends no
 //! request. Nothing is started and the records are not rewritten.
+//!
+//! Final review: a probe past the bound is stopped, its command killed with
+//! its process group and reaped (finding 2), and the host's secret check
+//! counts a `Denied` reply, or an accept that never answers (its 2 s
+//! limit), as no worker (finding 6).
 #![cfg(feature = "machine")]
 use layerfs_api::calls;
 use layerfs_api::home::{paths, read_record, write_record};
@@ -22,8 +27,8 @@ echo "$*" >> "${0%/*}/calls.log"
 case "$1" in
   --version) echo "limactl version 0.0-stand-in" ;;
   list) case "$*" in
-    *-slow*) exec /bin/sleep 40 ;;
-    *-fwd*|*-up*) printf 'Running\t/nonexistent\n' ;;
+    *-slow*) /bin/sleep 40 & echo "$$ $!" > "${0%/*}/slow.pid"; wait ;;
+    *-fwd*|*-up*|*-deny*|*-mute*) printf 'Running\t/nonexistent\n' ;;
     *) printf 'Stopped\t/nonexistent\n' ;;
   esac ;;
   *) echo "the stand-in refuses: $*" >&2; exit 9 ;;
@@ -68,10 +73,22 @@ fn recorded_running(home: &Path, name: &str) {
     .unwrap();
 }
 
-/// A worker endpoint for machine `name`: `answer` makes it reply to the
-/// secret as the worker does; otherwise it accepts and closes, as a forward
-/// with nothing behind it. The thread reports whether a request followed.
-fn endpoint(home: &Path, name: &str, answer: bool) -> std::thread::JoinHandle<Option<bool>> {
+/// How a stand-in worker endpoint meets the host's secret.
+#[derive(Clone, Copy, PartialEq)]
+enum Meet {
+    /// Accepts and closes, as a forward with nothing behind it.
+    Close,
+    /// Answers `ready`, as the worker does.
+    Answer,
+    /// Refuses the secret `Denied`, as a worker with another secret does.
+    Deny,
+    /// Reads the secret and never answers.
+    Mute,
+}
+
+/// A worker endpoint for machine `name`. The thread reports whether a
+/// request followed a `ready`.
+fn endpoint(home: &Path, name: &str, meet: Meet) -> std::thread::JoinHandle<Option<bool>> {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     write_record(
         &paths::worker_record(home, name),
@@ -86,7 +103,7 @@ fn endpoint(home: &Path, name: &str, answer: bool) -> std::thread::JoinHandle<Op
     .unwrap();
     std::thread::spawn(move || {
         let (mut stream, _) = listener.accept().ok()?;
-        if !answer {
+        if meet == Meet::Close {
             return None;
         }
         stream.set_read_timeout(Some(Duration::from_secs(5))).ok()?;
@@ -95,6 +112,19 @@ fn endpoint(home: &Path, name: &str, answer: bool) -> std::thread::JoinHandle<Op
         let mut hello = vec![0; u32::from_be_bytes(length) as usize];
         stream.read_exact(&mut hello).ok()?;
         assert_eq!(hello, br#"{"secret":"5e"}"#);
+        if meet == Meet::Mute {
+            // holds the connection past the host's 2 s limit
+            std::thread::sleep(Duration::from_secs(4));
+            return None;
+        }
+        if meet == Meet::Deny {
+            let denied = br#"{"refused":{"code":"Denied","message":"the worker's secret does not match","detail":null}}"#;
+            stream
+                .write_all(&(denied.len() as u32).to_be_bytes())
+                .ok()?;
+            stream.write_all(denied).ok()?;
+            return None;
+        }
         let ready = br#"{"ready":true}"#;
         stream.write_all(&(ready.len() as u32).to_be_bytes()).ok()?;
         stream.write_all(ready).ok()?;
@@ -125,8 +155,8 @@ fn list_and_get_answer_the_live_state() {
     for name in ["quiet", "slow", "fwd", "up"] {
         recorded_running(&home, name);
     }
-    let fwd = endpoint(&home, "fwd", false);
-    let up = endpoint(&home, "up", true);
+    let fwd = endpoint(&home, "fwd", Meet::Close);
+    let up = endpoint(&home, "up", Meet::Answer);
 
     let begun = Instant::now();
     let list = call(&home, "machine.list", &[]);
@@ -148,11 +178,43 @@ fn list_and_get_answer_the_live_state() {
     assert_eq!(fwd.join().unwrap(), None);
     assert_eq!(up.join().unwrap(), Some(false), "the probe sent a request");
 
+    // the late probe's command and its child were killed and reaped: no
+    // process (not even a zombie) is left once the probe's thread has
+    // stopped them, just after the list's bound
+    let pids = std::fs::read_to_string(tools.join("slow.pid")).unwrap();
+    for pid in pids.split_whitespace() {
+        let gone = Instant::now() + Duration::from_secs(3);
+        while alive(pid) && Instant::now() < gone {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(!alive(pid), "the late probe's process {pid} outlived it");
+    }
+
     let got = call(&home, "machine.get", &[("name", "quiet")]);
     assert_eq!(got.get_text("state"), Some("stopped"));
 
+    // a worker that refuses the secret, and one that never answers it, are
+    // no worker; the silent one costs the host its 2 s limit, no more
+    for name in ["deny", "mute"] {
+        recorded_running(&home, name);
+    }
+    let deny = endpoint(&home, "deny", Meet::Deny);
+    let mute = endpoint(&home, "mute", Meet::Mute);
+    let got = call(&home, "machine.get", &[("name", "deny")]);
+    assert_eq!(got.get_text("state"), Some("stopped"), "{got:?}");
+    let begun = Instant::now();
+    let got = call(&home, "machine.get", &[("name", "mute")]);
+    let took = begun.elapsed();
+    assert_eq!(got.get_text("state"), Some("stopped"), "{got:?}");
+    assert!(
+        took >= Duration::from_millis(1900) && took < Duration::from_secs(4),
+        "the silent worker held the probe {took:?}"
+    );
+    assert_eq!(deny.join().unwrap(), None);
+    assert_eq!(mute.join().unwrap(), None);
+
     // read-only: the records still say what they said, and nothing started
-    for name in ["quiet", "slow", "fwd", "up"] {
+    for name in ["quiet", "slow", "fwd", "up", "deny", "mute"] {
         let record = read_record(&paths::machine_record(&home, name))
             .unwrap()
             .unwrap();
@@ -167,4 +229,13 @@ fn list_and_get_answer_the_live_state() {
     assert!(!log.contains("start"), "{log}");
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(tools);
+}
+
+/// Whether process `pid` exists, a zombie included (`kill -0` finds one).
+fn alive(pid: &str) -> bool {
+    std::process::Command::new("/bin/kill")
+        .args(["-0", pid])
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
 }

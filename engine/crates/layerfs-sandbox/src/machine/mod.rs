@@ -26,7 +26,8 @@ pub use error::{Code, MachineError};
 pub use kind::{Backend, HostOs, Kind, Route};
 pub use probe::{native_missing, nested_missing, probe, Probe};
 pub use setup::{
-    connect, copy_in, copy_out, create, host_identity, remove, start, status, stop, State, Status,
+    connect, copy_in, copy_out, create, host_identity, remove, start, status, status_within, stop,
+    State, Status,
 };
 pub use spec::{
     parse_size, Bundle, Endpoint, Lasting, Running, Spec, SshSpec, Tools, BUNDLE, DATA, IMAGE,
