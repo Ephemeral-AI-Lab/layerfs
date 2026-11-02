@@ -91,9 +91,12 @@ fn one(call: &calls::Call, words: &[String]) -> ExitCode {
         Err(refusal) => output::refusal(&refusal),
         Ok(value) if stream => {
             let _ = std::io::stdout().flush();
-            // the command's own exit code, as 1.1.0 passed it through
-            let code = value.get_int("exit_code").unwrap_or(i64::from(REFUSED));
-            ExitCode::from(u8::try_from(code).unwrap_or(REFUSED))
+            // the command's own exit code, as 1.1.0 passed it through; a
+            // result with none is a plain success (125 is for refusals)
+            match value.get_int("exit_code") {
+                None => ExitCode::SUCCESS,
+                Some(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
+            }
         }
         Ok(value) => output::result(&value, switches.text),
     }
