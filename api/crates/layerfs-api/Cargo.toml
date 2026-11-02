@@ -1,6 +1,6 @@
 [package]
 name = "layerfs-api"
-description = "The SDK's public surface behind the JavaScript SDK, one function per method: project Init and Branches, fs and branch Store methods over layerfs-store-service, and Sandbox control"
+description = "The SDK's public surface: the call table and its one dispatcher over layerfs-control, whose public paths it re-exports for the front ends"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,34 +8,19 @@ license.workspace = true
 
 [dependencies]
 layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
-layerfs-content = { path = "../../../core/crates/layerfs-content" }
-layerfs-history = { path = "../../../core/crates/layerfs-history" }
-layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
-layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
-layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
-layerfs-project = { path = "../../../engine/crates/layerfs-project" }
-layerfs-sandbox = { path = "../../../connect/crates/layerfs-sandbox" }
-layerfs-machine = { path = "../../../connect/crates/layerfs-machine", optional = true }
-layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
-# Store backup to a bucket (#535).
-layerfs-store-backup = { path = "../../../connect/crates/layerfs-store-backup" }
-libc = "=0.2.189"
-nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal", "reboot"] }
+# The management library every call runs in (#536).
+layerfs-control = { path = "../layerfs-control" }
 
 [features]
 # PostgreSQL Stores (#506, #533): open, attach, create and Init.
 # Off by default; the sealed Linux build the worker runs turns it on.
-postgresql = [
-    "layerfs-persistence/postgresql",
-    "layerfs-project/postgresql",
-    "layerfs-store-service/postgresql",
-]
+postgresql = ["layerfs-control/postgresql"]
 # https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
 # sealed Linux build the worker runs turns it on.
-tls = ["layerfs-store-backup/tls"]
+tls = ["layerfs-control/tls"]
 # The machine calls (2.0, #533): host builds only. The guest worker is built
 # without it, so no machine adapter runs inside a machine.
-machine = ["dep:layerfs-machine"]
+machine = ["layerfs-control/machine"]
 
 [dev-dependencies]
 nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
@@ -44,3 +29,14 @@ layerfs-fuse = { path = "../../../engine/crates/layerfs-fuse" }
 # The daemon fixtures and store-service's SDK support bind private Workspaces.
 layerfs-overlay = { path = "../../../engine/crates/layerfs-overlay" }
 layerfs-workspace = { path = "../../../engine/crates/layerfs-workspace" }
+# The tests drive these crates directly beside the call surface.
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
+layerfs-project = { path = "../../../engine/crates/layerfs-project" }
+layerfs-sandbox = { path = "../../../connect/crates/layerfs-sandbox" }
+layerfs-machine = { path = "../../../connect/crates/layerfs-machine" }
+layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
+layerfs-store-backup = { path = "../../../connect/crates/layerfs-store-backup" }

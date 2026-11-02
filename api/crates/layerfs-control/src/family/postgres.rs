@@ -3,7 +3,7 @@
 //! forgets it (its data stays). The record keeps the URL without a password
 //! and the password as a reference (`env:NAME` or `file:/path`), resolved on
 //! each call; the full URL is never written down.
-use crate::calls::Context;
+use crate::context::Context;
 use crate::home::{self, paths, read_record, write_record};
 use crate::host::outcome::{failed, refused, Outcome};
 use crate::store::lease;
@@ -113,7 +113,7 @@ pub(crate) fn selection(record: &SdkValue, store: &str) -> Result<SdkValue> {
 }
 
 /// Runs `store.connect` or `store.disconnect`.
-pub(crate) fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
+pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
     crate::names::name("store", name).map_err(|why| refused("InvalidInput", why))?;

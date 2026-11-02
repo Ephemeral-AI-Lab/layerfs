@@ -4,7 +4,7 @@
 //! process, into a sqlite Store on `native`; a project for another machine
 //! is made on `native` and moved with its Store. Records in the home list
 //! projects; `remove` drops one project's history from its Store.
-use crate::calls::Context;
+use crate::context::Context;
 use crate::home::{paths, read_record};
 use crate::host::outcome::{failed, refused, Outcome};
 use crate::store::store_ref::{kind_of, StoreRef};
@@ -56,7 +56,7 @@ fn summary(home: &Path, store: &str, name: &str, record: &SdkValue) -> SdkValue 
 }
 
 /// Runs one `project` call.
-pub(crate) fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
+pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     match call {
         "list" => list(&home, args),

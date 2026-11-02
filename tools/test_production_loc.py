@@ -64,7 +64,7 @@ class CounterTests(unittest.TestCase):
     def test_library_and_front_ends_are_api_crates_and_nfs_is_engine(self):
         # #533 step 2: the NFS export; the library, binary, binding and PyO3 module.
         self.assertEqual(production_loc.crate_layer("layerfs-nfs"), "engine")
-        for name in ("layerfs-api", "layerfs-cli", "layerfs-node", "layerfs-python"):
+        for name in ("layerfs-api", "layerfs-control", "layerfs-cli", "layerfs-node", "layerfs-python"):
             self.assertEqual(production_loc.crate_layer(name), "api")
 
     def test_api_regrouping_keeps_every_crate_and_count(self):

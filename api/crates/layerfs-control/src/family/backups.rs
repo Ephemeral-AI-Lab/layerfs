@@ -5,7 +5,7 @@
 //! bytes go through the caller's process: machines never hold bucket keys.
 //! Objects are `<prefix>/<file>/store.sqlite` (whole or a manifest) plus its
 //! pieces. LayerFS never deletes a bucket object.
-use crate::calls::Context;
+use crate::context::Context;
 use crate::home::{self, paths, read_record, with_field, write_record};
 use crate::host::outcome::{failed, refused, Outcome};
 use crate::store::files::CHUNK;
@@ -131,7 +131,7 @@ fn bucket_record(name: &str, url: &str, args: &SdkValue) -> Result<SdkValue> {
 }
 
 /// Runs one `backup` call.
-pub(crate) fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
+pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     match call {
         "connect" => {

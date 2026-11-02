@@ -705,6 +705,7 @@ version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
  "layerfs-content",
+ "layerfs-control",
  "layerfs-daemon",
  "layerfs-fuse",
  "layerfs-history",
@@ -718,7 +719,6 @@ dependencies = [
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
- "libc",
  "nix",
 ]
 
@@ -745,6 +745,25 @@ version = "2.0.0"
 dependencies = [
  "blake3",
  "layerfs-telemetry",
+]
+
+[[package]]
+name = "layerfs-control"
+version = "2.0.0"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-content",
+ "layerfs-history",
+ "layerfs-machine",
+ "layerfs-persistence",
+ "layerfs-project",
+ "layerfs-sandbox",
+ "layerfs-storage",
+ "layerfs-store-backup",
+ "layerfs-store-service",
+ "layerfs-telemetry",
+ "libc",
+ "nix",
 ]
 
 [[package]]

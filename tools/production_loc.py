@@ -13,9 +13,10 @@ inline #[cfg(test)] items are removed before counting, because the reference tre
 keeps tests inside src/.
 
 Rust crates are assigned by name to core, engine, connect or api in every
-layout: the library layerfs-api and its front ends layerfs-cli, layerfs-node
-and layerfs-python are api crates wherever they sit, and layerfs-sandbox,
-layerfs-machine and layerfs-store-backup are connect crates wherever they sit,
+layout: the call surface layerfs-api, the management library layerfs-control
+and the front ends layerfs-cli, layerfs-node and layerfs-python are api
+crates wherever they sit, and layerfs-sandbox, layerfs-machine and
+layerfs-store-backup are connect crates wherever they sit,
 so a pre-move tree counts them under connect too. Unknown historical crates
 remain counted in core.
 
@@ -382,8 +383,9 @@ CONNECT_CRATES = {
     # counts it under connect too.
     "layerfs-remote-storage",
 }
-# The library and its 2.0 front ends (#533): the binary, Node and Python.
-API_CRATES = {"layerfs-api", "layerfs-cli", "layerfs-node", "layerfs-python"}
+# The call surface, the management library under it (#536) and the 2.0 front
+# ends (#533): the binary, Node and Python.
+API_CRATES = {"layerfs-api", "layerfs-control", "layerfs-cli", "layerfs-node", "layerfs-python"}
 # Crate folders directly under api/ before the regrouping, by folder name.
 OLD_API_CRATES = {"layerfs-api": "layerfs-api", "binding": "layerfs-node"}
 

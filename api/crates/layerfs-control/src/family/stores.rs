@@ -10,7 +10,7 @@
 //! or any failure of the record phase, after both copies exist) keeps both
 //! copies, leaves the record's `in_progress` and is logged to
 //! `log/uncertain.jsonl`; nothing is cleaned up on a guess.
-use crate::calls::Context;
+use crate::context::Context;
 use crate::home::{self, paths, read_record, with_field, write_record};
 use crate::host::outcome::{failed, refused, Outcome};
 use crate::store::files::CHUNK;
@@ -56,7 +56,7 @@ fn public(home: &Path, name: &str, record: &SdkValue) -> Result<SdkValue> {
 }
 
 /// Runs one sqlite `store` call.
-pub(crate) fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
+pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
     match call {

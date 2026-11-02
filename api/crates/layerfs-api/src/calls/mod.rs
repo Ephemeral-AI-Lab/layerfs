@@ -3,7 +3,7 @@
 //! See [`table::CALLS`] and [`call`].
 mod check;
 mod dispatch;
-pub mod json;
+pub use layerfs_control::json;
 pub mod keys;
 mod route;
 pub mod scope;

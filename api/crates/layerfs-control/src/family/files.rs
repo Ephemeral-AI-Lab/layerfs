@@ -1,11 +1,14 @@
 //! The `branch`, `commit` and `file` families (#533 step 7): Store calls on
 //! one project's Branches, Commits and files, each translated to the Store
 //! method that does it and run on the route its Store's records choose.
-use crate::calls::scope::NAMESPACE;
-use crate::calls::Context;
+use crate::context::Context;
 use crate::host::outcome::{refused, Outcome};
 use crate::store::route::{store_call, target};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+
+/// The argument a scoped `branch.list` carries to its family: the Branch
+/// namespace, which only a scope sets (the table has no such argument).
+pub const NAMESPACE: &str = "namespace";
 
 type Fields = Vec<(String, SdkValue)>;
 
@@ -57,7 +60,7 @@ fn at(args: &SdkValue) -> Fields {
 }
 
 /// Runs one call of the three families.
-pub(crate) fn run(context: &mut Context<'_>, family: &str, call: &str, args: &SdkValue) -> Outcome {
+pub fn run(context: &mut Context<'_>, family: &str, call: &str, args: &SdkValue) -> Outcome {
     match (family, call) {
         ("branch", "list") => match args.get_text(NAMESPACE) {
             Some(namespace) => branches_in(context, args, namespace),

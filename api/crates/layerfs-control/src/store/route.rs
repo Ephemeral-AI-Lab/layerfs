@@ -4,7 +4,7 @@
 //! is not running. The caller sends the worker the Store's record with the
 //! call, so a guest never reads the home; the worker finds the Store file
 //! under its own root.
-use crate::calls::Context;
+use crate::context::Context;
 use crate::home::{paths, read_record};
 use crate::host::outcome::{refused, Outcome};
 use crate::store::store_ref::StoreRef;

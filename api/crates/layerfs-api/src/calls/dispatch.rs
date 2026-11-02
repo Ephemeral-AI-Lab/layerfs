@@ -10,34 +10,8 @@
 use super::{check, route, table};
 use crate::host::outcome::{refused, Outcome};
 use layerfs_bridge::control::SdkValue;
+pub use layerfs_control::context::Context;
 use std::path::{Path, PathBuf};
-
-/// What one running call can reach: its home and its event stream.
-pub struct Context<'a> {
-    /// The home every record lives in.
-    pub home: PathBuf,
-    events: &'a mut dyn FnMut(SdkValue),
-}
-
-impl Context<'_> {
-    /// Sends one progress update, `{ progress: value }`.
-    pub fn progress(&mut self, value: SdkValue) {
-        (self.events)(SdkValue::map([("progress", value)]));
-    }
-
-    /// Passes on one event a worker sent, as it came.
-    pub fn event(&mut self, event: SdkValue) {
-        (self.events)(event);
-    }
-
-    /// Sends one piece of a command's output, `{ stream, bytes }`.
-    pub fn output(&mut self, stream: &str, bytes: &[u8]) {
-        (self.events)(SdkValue::map([
-            ("stream", SdkValue::text(stream)),
-            ("bytes", SdkValue::Bytes(bytes.to_vec())),
-        ]));
-    }
-}
 
 /// The home a call uses: `explicit` when given, else `LAYERFS_HOME`, else
 /// `~/.layerfs` (O28). It must be an absolute path.
@@ -93,7 +67,7 @@ pub fn call_scoped(
     if let Some(scope) = scope {
         scope.owns(&home, name, &args)?;
     }
-    let mut context = Context { home, events };
+    let mut context = Context::new(home, events);
     let value = route::run(spec, &mut context, &args)?;
     // a scoped `branch.list` names its Branches relative to the namespace
     // in the family (it pages through them there)

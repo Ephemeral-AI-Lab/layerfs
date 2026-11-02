@@ -13,7 +13,7 @@
 //! else from its worker. A PostgreSQL Store's Sandboxes run on `native` or
 //! `docker` from this process, which resolves the password (O3).
 use super::deploy;
-use crate::calls::Context;
+use crate::context::Context;
 use crate::home::{self, paths, read_record, write_record};
 use crate::host::outcome::{failed, refused, Outcome};
 use crate::store::route;
@@ -164,7 +164,7 @@ fn store_path(home: &Path, store: &str, kind: StoreKind) -> PathBuf {
 }
 
 /// Runs one `sandbox` call.
-pub(crate) fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
+pub fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     match call {
         "create" => create(context, args),
@@ -643,7 +643,7 @@ fn ws(text: &str) -> Result<(&str, &str)> {
 }
 
 /// Runs one `workspace` call.
-pub(crate) fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
+pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     if call == "mount" {
         let name = args.get_text("sandbox").unwrap_or("");
