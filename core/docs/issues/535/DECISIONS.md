@@ -52,6 +52,10 @@ wins; the step is adjusted.
 | Spec | Code at the base | Effect |
 | --- | --- | --- |
 | §10 phase 0: "root, engine and api AGENTS.md … the PostgreSQL Sandbox wording" | Root, engine and api AGENTS.md hold no "VMs and ssh later" or other PostgreSQL Sandbox restriction; the restriction is only in #533's README and DECISIONS. | Phase 0 adds the G1/D9 rule to the root "Machines" paragraph instead of replacing old wording. |
+| §5, §10 1.8: "the pre-2.0 Linux reopen/stop/delete path goes to `host_process/legacy_linux.rs`" | There is no separate pre-2.0 Linux path. It is the same `Sandbox` type (`backend/host_process/sandbox.rs`), compiled on Linux so that `layerfs-api` `host/discovery.rs` can reopen, stop and delete old Linux native records, plus the Linux `cfg` arms in `runtime.rs`. | `legacy_linux.rs` is not created; `host_process/` stays compiled on Linux and macOS, `provider.rs` macOS only, and `host_process/mod.rs` says the Linux build exists only for pre-2.0 records. Item 1.10 would remove that Linux build. |
+| §10 1.10: delete the legacy path "once the 2.0 conversion is shown to reclaim pre-2.0 Linux native Sandboxes" | Not shown: no receipt exists that the 2.0 conversion reclaims pre-2.0 Linux native Sandboxes, and this pass has no pre-2.0 Linux home to show it on. | 1.10 is **not run** and stays open (see Open items). |
+| §5: `layerfs-sandbox` `backend/mod.rs` holds `Backend` | The guard's declaration-only rule refuses an enum in `mod.rs`, and `backend/backend.rs` trips `clippy::module_inception`. | `Backend` lives in `backend/kind.rs`, re-exported from `backend/mod.rs` and the crate root (1.2). |
+| §5: `docker/` platform files `cli.rs unix.rs windows.rs power.rs network.rs` | The docker machine's adapter was `docker/macos.rs`, serving macOS and Linux since #533 `4c740437cd`. | Renamed `unix.rs`; `power.rs` (start, stop) and `network.rs` (the published port) split out (1.3). |
 
 ## Implementation choices (not owner decisions)
 
@@ -61,5 +65,27 @@ rules.
 | Topic | Choice | Why |
 | --- | --- | --- |
 | #533 supersession form | A new section appended to #533 DECISIONS; the superseded rows keep their text. | Historical records and verdicts stay unchanged (root AGENTS.md); the new section is the pointer. |
+| LOC counter scopes | `tools/production_loc.py` gains a `connect` scope; `layerfs-sandbox`, `layerfs-machine`, `layerfs-store-backup` and the historical `layerfs-remote-storage` are classified by name in every layout. | A pre-move tree then counts them under connect too, so per-crate and per-layer comparisons across a move are like for like (as #463 did for api). |
+| Move commits and import lines | A move that splits a file or a crate adds `use` lines, `mod.rs` declarations and rustfmt rewraps; their production LOC is reported per file in the commit (1.2 +19, 1.3 +132, 1.4 +10). No function body changed (checked item by item). | Splitting into folders (D7, spec 1.3) cannot keep every file's imports; the bodies are what the move check protects. |
+| Platform folders (1.3) | `observe.rs`, `create.rs` (ssh `connect.rs`), `power.rs` per platform; `network.rs` only where existing code was about ports (docker); lima `template.rs`, firecracker `scripts.rs`, ssh `host_key.rs`. | No empty files; `network.rs` arrives with `reach` and `forward` (phases 5, 6). |
+| Store backup module paths (1.6) | `store-service`'s `remote::storage` alias is dropped: callers import `layerfs_store_backup::bucket::…` and `layerfs_store_backup::backup::…`; `push.rs` → `create.rs`, `pull.rs` → `restore.rs` with function names kept. `settings.rs` + `state.rs` → `link.rs` in its own refactor commit (1.6b). | Keeps the move commit a move; the merge is a separate refactor with its own LOC line. |
+| `local::os` (1.8) | `local/os/mod.rs` is declared `#[path] mod os_impl`, so `crate::local::os` stays the per-platform alias the moved code already uses. | Avoids touching every `os::` use in the moved files. |
+| `Sandbox::Native` (1.9) | Renamed `Sandbox::HostProcess` with the three renames G6 lists, and `layerfs-api` `host::runtime::Backend::Native` likewise. | The enums that name the backend name it alike; stored and displayed values stay `"native"`. |
+
+## Corrections to commit messages
+
+History is not rewritten; these rows correct numbers a commit message got wrong.
+
+| Commit | Message says | Recounted (`tools/production_loc.py` on clean archives) |
+| --- | --- | --- |
+| `990e43f166` (1.7) | `Production LOC: 132097 -> 132096 (delta -1)` | `132097 -> 132093 (delta -4)` |
+
+## Open items
+
+- 1.10 (delete the pre-2.0 Linux native path) not run; needs a shown 2.0 conversion of a pre-2.0 Linux native Sandbox.
+- `layerfs-api` `machine_host_start` failed once at the 1.5 staging (one failure at 10.7 s, output not kept) and passed on the next run of the same build. Watch for it; keep the output if it fails again.
 
 ## Phase log
+
+- Phase 0 done at `451916521e`.
+- Phase 1 done at `791d510b18`: moves 1.1 `aacdd17433`, 1.2 `4398b0fd41`, 1.3 `7035f0c71b`, 1.4 `77c59c524a`, 1.5 `1f40eb9e92`, 1.6 `0cada61acc` (+ 1.6b `236b7aceb2`), 1.7 `990e43f166`, 1.8 `0106ba8285`, 1.9 `791d510b18`; 1.10 not run.
