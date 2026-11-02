@@ -2,9 +2,10 @@
 //! calls reuse it; a Store unused for [`IDLE`] is closed by a reaper thread
 //! (H §7.7). The same cache serves the caller's in-process route and a
 //! machine's worker. Each entry keeps what must live as long as the open
-//! Store: the in-process route's lease.
+//! Store: its lease. A Store with a call running is never closed: the
+//! reaper skips it and `close` refuses `InUse`.
 use crate::host::direct;
-use crate::host::outcome::Outcome;
+use crate::host::outcome::{refused, Outcome};
 use crate::store::lease::Lease;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::collections::BTreeMap;
@@ -19,6 +20,8 @@ struct Entry {
     /// The arguments it was opened with: what `direct::release` needs.
     args: SdkValue,
     last: Instant,
+    /// Calls running on it now.
+    calls: usize,
     _lease: Option<Lease>,
 }
 
@@ -31,28 +34,43 @@ fn store_path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
 
 /// Runs Store method `op` once on the Store `args` name (`storePath`),
 /// opening it first if this process holds it not yet. `lease` is held for
-/// as long as the Store stays open.
+/// as long as the Store stays open. The Store stays open while it runs.
 pub(crate) fn run(op: &str, args: SdkValue, lease: Option<Lease>) -> Outcome {
-    let path = hold(&args, lease)?;
+    let running = Running(enter(&args, lease, 1)?);
     let outcome = direct::call(op, args, false);
-    if let Some(entry) = OPEN
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get_mut(&path)
-    {
-        entry.last = Instant::now();
-    }
+    drop(running);
     outcome
+}
+
+/// One call running on an open Store; its drop ends it.
+struct Running(PathBuf);
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(entry) = open.get_mut(&self.0) {
+            entry.calls = entry.calls.saturating_sub(1);
+            entry.last = Instant::now();
+        }
+    }
 }
 
 /// Opens the Store `args` name (`storePath`) in this process if it is not
 /// open yet, `lease` held while it stays open: Store methods and the host
 /// Sandbox code that reads a Branch through it both find it. Its path.
 pub(crate) fn hold(args: &SdkValue, lease: Option<Lease>) -> Result<PathBuf, SdkRefusal> {
+    enter(args, lease, 0)
+}
+
+/// [`hold`], counting `calls` more calls running on it.
+fn enter(args: &SdkValue, lease: Option<Lease>, calls: usize) -> Result<PathBuf, SdkRefusal> {
     let path = store_path(args)?;
     let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
     match open.get_mut(&path) {
-        Some(entry) => entry.last = Instant::now(),
+        Some(entry) => {
+            entry.last = Instant::now();
+            entry.calls += calls;
+        }
         None => {
             direct::acquire(args)?;
             open.insert(
@@ -60,6 +78,7 @@ pub(crate) fn hold(args: &SdkValue, lease: Option<Lease>) -> Result<PathBuf, Sdk
                 Entry {
                     args: args.clone(),
                     last: Instant::now(),
+                    calls,
                     _lease: lease,
                 },
             );
@@ -74,13 +93,14 @@ pub(crate) fn hold(args: &SdkValue, lease: Option<Lease>) -> Result<PathBuf, Sdk
     Ok(path)
 }
 
-/// Closes every Store unused for at least `idle`; returns how many.
+/// Closes every Store unused for at least `idle` with no call running;
+/// returns how many.
 pub(crate) fn close_idle(idle: Duration) -> usize {
     let stale: Vec<Entry> = {
         let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
         let names: Vec<PathBuf> = open
             .iter()
-            .filter(|(_, entry)| entry.last.elapsed() >= idle)
+            .filter(|(_, entry)| entry.calls == 0 && entry.last.elapsed() >= idle)
             .map(|(path, _)| path.clone())
             .collect();
         names.iter().filter_map(|path| open.remove(path)).collect()
@@ -94,10 +114,21 @@ pub(crate) fn close_idle(idle: Duration) -> usize {
 }
 
 /// Closes the Store at `path` now, if this process holds it open: `store
-/// move` and `store remove` need its file closed. A call still running on
-/// it keeps it open until that call returns.
+/// move` and `store remove` need its file closed. A call running on it is
+/// `InUse`, and the Store stays open.
 pub(crate) fn close(path: &std::path::Path) -> Result<bool, SdkRefusal> {
-    let entry = OPEN.lock().unwrap_or_else(|e| e.into_inner()).remove(path);
+    let entry = {
+        let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
+        match open.get(path) {
+            Some(entry) if entry.calls > 0 => {
+                return Err(refused(
+                    "InUse",
+                    format!("a call is running on {} in this process", path.display()),
+                ))
+            }
+            _ => open.remove(path),
+        }
+    };
     match entry {
         Some(entry) => direct::release(&entry.args).map(|_| true),
         None => Ok(false),

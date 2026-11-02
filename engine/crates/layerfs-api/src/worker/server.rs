@@ -125,12 +125,15 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
                 .ok_or_else(|| refused("InvalidInput", "a Store call names its Store"))?;
             crate::names::name("store", store).map_err(|why| refused("InvalidInput", why))?;
             let file = crate::home::paths::store_file(root, store);
+            // the worker holds the Store's lease under its root while it
+            // keeps the Store open
+            let lease = crate::store::lease::hold_locked(root, store)?;
             let inner = crate::home::with_field(
                 inner,
                 "storePath",
                 SdkValue::text(file.display().to_string()),
             );
-            crate::store::open::run(&name, inner, None)
+            crate::store::open::run(&name, inner, Some(lease))
         }
         // one step of a Store move or remove on this machine
         "store.file" => {

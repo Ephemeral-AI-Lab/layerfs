@@ -2,7 +2,10 @@
 //! `store move` and a `store remove` take on each side. They run in the
 //! caller's process for `native` (under the home) and in a machine's worker
 //! for every other machine (under the worker's root). Paths come from the
-//! root and the Store's name only, never from the caller.
+//! root and the Store's name only, never from the caller. The steps that
+//! read, replace or delete the file close this process's open copy first
+//! (a worker keeps a Store open after its calls); a call running on it is
+//! `InUse`.
 use crate::home::paths;
 use crate::host::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -63,6 +66,9 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
     crate::names::name("store", store).map_err(|why| refused("InvalidInput", why))?;
     let file = paths::store_file(root, store);
     let incoming = with_suffix(&file, ".incoming");
+    if matches!(op, "snapshot" | "install" | "retire" | "remove") {
+        crate::store::open::close(&file)?;
+    }
     match op {
         // whether the file is here, and its size with its write-ahead log
         "stat" => Ok(SdkValue::map([
