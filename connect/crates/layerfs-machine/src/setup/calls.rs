@@ -1,12 +1,12 @@
 //! The machine calls: create, connect, start, stop, remove and status, each
-//! dispatched once on the machine's kind to its adapter. Setup steps 1 to 4
+//! dispatched to the platform's adapter (`crate::adapter`). Setup steps 1 to 4
 //! (VM and disk, bundle, worker, forward and readiness) end in a [`Running`];
 //! writing `worker.json` and `record.json` is the caller's step 5.
 use super::guest::Guest;
 use super::worker;
-use crate::error::{Code, MachineError};
-use crate::platform::{HostOs, Platform, Route};
-use crate::platforms::{self as vm, docker, native};
+use crate::adapter::{adapter, refused};
+use crate::error::MachineError;
+use crate::platform::{HostOs, How, Route};
 use crate::spec::{Bundle, Running, Spec};
 use std::path::Path;
 use std::time::Instant;
@@ -50,14 +50,10 @@ pub struct Status {
 pub fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
     spec.validate()?;
     worker::check_bundle(bundle)?;
-    match spec.kind {
-        Platform::AppleContainer => vm::apple_container::create(spec, bundle),
-        Platform::Microsandbox => vm::microsandbox::create(spec, bundle),
-        Platform::Lima => vm::lima::create(spec, bundle),
-        Platform::Firecracker => vm::firecracker::create(spec, bundle),
-        Platform::Ssh => Err(refused(spec, "is connected, not created")),
-        Platform::Native | Platform::Docker => Err(refused(spec, "is built in and never created")),
+    if spec.kind.profile().how == How::Connected {
+        return Err(refused(spec, "is connected, not created"));
     }
+    adapter(spec.kind).create(spec, bundle)
 }
 
 /// Connects an ssh host: checks it, copies the bundle in, starts the worker
@@ -66,10 +62,10 @@ pub fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
 pub fn connect(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
     spec.validate()?;
     worker::check_bundle(bundle)?;
-    match spec.kind {
-        Platform::Ssh => vm::ssh::connect(spec, bundle),
-        _ => Err(refused(spec, "is created, not connected")),
+    if spec.kind.profile().how != How::Connected {
+        return Err(refused(spec, "is created, not connected"));
     }
+    adapter(spec.kind).create(spec, bundle)
 }
 
 /// Starts a stopped machine (or only its worker, where its kernel still
@@ -81,15 +77,7 @@ pub fn start(spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineErr
         return Ok(None);
     }
     worker::check_bundle(bundle)?;
-    match spec.kind {
-        Platform::Native => native::start(spec),
-        Platform::Docker => docker::start(spec, bundle).map(Some),
-        Platform::AppleContainer => vm::apple_container::start(spec, bundle).map(Some),
-        Platform::Microsandbox => vm::microsandbox::start(spec, bundle).map(Some),
-        Platform::Lima => vm::lima::start(spec, bundle).map(Some),
-        Platform::Firecracker => vm::firecracker::start(spec, bundle).map(Some),
-        Platform::Ssh => vm::ssh::start(spec, bundle).map(Some),
-    }
+    adapter(spec.kind).start(spec, bundle)
 }
 
 /// Stops the machine's worker and, where it has one, its VM; disks stay.
@@ -97,15 +85,7 @@ pub fn start(spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineErr
 /// has nothing to stop.
 pub fn stop(spec: &Spec) -> Result<(), MachineError> {
     spec.validate()?;
-    match spec.kind {
-        Platform::Native => Ok(()),
-        Platform::Docker => docker::stop(spec),
-        Platform::AppleContainer => vm::apple_container::stop(spec),
-        Platform::Microsandbox => vm::microsandbox::stop(spec),
-        Platform::Lima => vm::lima::stop(spec),
-        Platform::Firecracker => vm::firecracker::stop(spec),
-        Platform::Ssh => vm::ssh::stop(spec),
-    }
+    adapter(spec.kind).stop(spec)
 }
 
 /// `machine remove` deletes a VM and its data disk; for `ssh` it is
@@ -113,28 +93,13 @@ pub fn stop(spec: &Spec) -> Result<(), MachineError> {
 /// `/layerfs/state` go, never the data root. `InUse` is the caller's check.
 pub fn remove(spec: &Spec) -> Result<(), MachineError> {
     spec.validate()?;
-    match spec.kind {
-        Platform::AppleContainer => vm::apple_container::remove(spec),
-        Platform::Microsandbox => vm::microsandbox::remove(spec),
-        Platform::Lima => vm::lima::remove(spec),
-        Platform::Firecracker => vm::firecracker::remove(spec),
-        Platform::Ssh => vm::ssh::disconnect(spec),
-        Platform::Native | Platform::Docker => Err(refused(spec, "is built in and never removed")),
-    }
+    adapter(spec.kind).remove(spec)
 }
 
 /// The machine's state now; it starts nothing.
 pub fn status(spec: &Spec) -> Result<Status, MachineError> {
     spec.validate()?;
-    match spec.kind {
-        Platform::Native => Ok(native::status()),
-        Platform::Docker => docker::status(spec),
-        Platform::AppleContainer => vm::apple_container::status(spec),
-        Platform::Microsandbox => vm::microsandbox::status(spec),
-        Platform::Lima => vm::lima::status(spec),
-        Platform::Firecracker => vm::firecracker::status(spec),
-        Platform::Ssh => vm::ssh::status(spec),
-    }
+    adapter(spec.kind).status(spec)
 }
 
 /// [`status`], with every command it runs ending by `deadline`: one still
@@ -150,10 +115,7 @@ pub fn status_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineEr
 /// `Exists`.
 pub fn host_identity(spec: &Spec) -> Result<String, MachineError> {
     spec.validate()?;
-    match spec.kind {
-        Platform::Ssh => vm::ssh::identity(spec),
-        _ => Err(refused(spec, "has no ssh host")),
-    }
+    adapter(spec.kind).host_identity(spec)
 }
 
 /// Streams `entry` of the host folder `dir` (or all of it) into the guest
@@ -177,26 +139,7 @@ pub fn copy_out(spec: &Spec, source: &str, file: &Path) -> Result<(), MachineErr
 /// How the host reaches a running machine's guest; an in-process machine
 /// has none (its files are the host's own).
 fn guest_of(spec: &Spec) -> Result<Guest, MachineError> {
-    match spec.kind {
-        Platform::AppleContainer => Ok(vm::apple_container::guest(spec)),
-        Platform::Microsandbox => Ok(vm::microsandbox::guest(spec)),
-        Platform::Lima => vm::lima::guest(spec),
-        Platform::Firecracker => vm::firecracker::machine_guest(spec),
-        Platform::Ssh => vm::ssh::machine_guest(spec),
-        Platform::Docker if Platform::Docker.route(HostOs::current()) == Route::Worker => {
-            docker::guest(spec)
-        }
-        Platform::Native | Platform::Docker => {
-            Err(refused(spec, "runs in-process; its files are the host's"))
-        }
-    }
-}
-
-fn refused(spec: &Spec, why: &str) -> MachineError {
-    MachineError::new(
-        Code::InvalidInput,
-        format!("the {} machine {} {why}", spec.kind.name(), spec.name),
-    )
+    adapter(spec.kind).guest(spec)
 }
 
 /// The status of a machine whose worker the host reaches through `spec.worker`:

@@ -11,6 +11,7 @@
 //! `backend/` never uses it.
 #![cfg(unix)]
 #![forbid(unsafe_code)]
+mod adapter;
 mod error;
 mod facts;
 mod options;

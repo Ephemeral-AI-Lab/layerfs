@@ -3,6 +3,7 @@
 //! container behind a secret on a loopback-published port, which opens its
 //! sqlite Stores in a Docker volume (DECISIONS, H §7.7 row). Docker through
 //! WSL2 (Windows) is not designed and answers `Unsupported`.
+mod adapter;
 mod cli;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod network;
@@ -13,6 +14,7 @@ mod profile;
 mod unix;
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 mod windows;
+pub(crate) use adapter::ADAPTER;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) use power::{start, stop};
 pub(crate) use profile::PROFILE;
