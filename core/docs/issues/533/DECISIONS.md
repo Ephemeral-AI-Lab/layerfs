@@ -101,7 +101,7 @@ instead and why.
 
 Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated by owner.
 
-- `commit.get` pages the Branch's Commits 1000 at a time until it finds the id (or an id prefix of 8+ characters). The Store has no by-id Commit lookup on the public method table; adding one is a later change.
+- `commit.get` pages the Branch's Commits 1000 at a time until it finds the id (or an id prefix of 8+ characters). The Store has no by-id Commit lookup on the public method table; adding one is a later change. **Since `88b033cfa9`** (review P1-17) it follows `nextPagePos` to the end, since a page holds only what fits the reply budget; see Review fixes.
 - Step 7 was committed before step 6: the route reads `worker.json` directly until step 6 lets it start a stopped machine. The order changes no behaviour of either step.
 - A Sandbox's 2.0 record (name, project, machine, id, platform) is
   `machine/<machine>/sandbox/<name>/record.json`; the host Sandbox code's
@@ -152,7 +152,9 @@ Recorded here so a reviewer sees them with the decisions. 2026-11-02, delegated 
   (`layerfs._native`, abi3 for Python 3.10+). PyO3 0.30.1 and its build
   helper were fetched into this worktree's private Cargo home (G6); no other
   dependency changed. `layerfs.aio` runs each synchronous call on a thread
-  (`asyncio.to_thread`); the native call releases the interpreter. Wheels:
+  (`asyncio.to_thread`); the native call releases the interpreter. (Since
+  `771823d728`, its functions are marshalled to the event loop; see Review
+  fixes.) Wheels:
   only macOS arm64 was built here (maturin 1.9.6); the Linux x64/arm64 glibc
   wheels (O20) are NOT_RUN, no Linux build host in this pass. The
   production LOC counter does not count Python; the package's Python lines
@@ -225,3 +227,70 @@ as the method:
 | firecracker | #516's recipe as #527 used it: Firecracker v1.17.0, the CI kernel and rootfs, nested in a Lima `vz` host with nested virtualisation and huge pages, 2 GiB per microVM; files already on this host are reused. | Needs the P0-6 fixes (dfd444bd9b): the host stays up and starts first, and the microVM resets. |
 | The sealed bundle's builder | `tools/linux_bundle.py` (6263b95871) builds and places `<cache>/layerfs/bundle/<version>/linux-<arch>/`; `tools/worktree.py build --bundle` is not reused. | `worktree.py build` builds four packages in one Cargo command (the owner asked for one bounded command per package), and seals the E2E SDK bundle (`manifest.json`, `api/`, `layerfs.node`), not the guest bundle: no Sandbox image archive, no `bundle.json` hash, and nothing placed where LayerFS looks. Both share the launcher's registered Linux target and helpers (`docker_build`, `execute`, `inputs`). |
 
+## Review fixes (2026-11-02)
+
+The review of `707b534eb2` (items P0 1–8, P1 9–28, P2 29–32) was fixed
+under the same delegation, on four fix branches (`issue533-v2-store`,
+`-home`, `-backups`, `-calls`) cherry-picked onto `issue533-v2`, plus
+commits made on it directly; the docs items were done on
+`issue533-v2-docs`. Each fix was checked against the code first; each
+commit message names its findings, its tests and its Production LOC line.
+No finding was found wrong. Two were already fixed by commits after
+`707b534eb2` and before the fix series: P2-32's `layerfs store import-env`
+text (`73e38ecf27`) and P0-4's docker worker image key (`a487409fe5`, the
+fallback to the record's `image`).
+
+| Finding | Status |
+| --- | --- |
+| P0-1 Store call vs move/remove race | Fixed in `e375e333db`: `lease::hold` takes the home lock, re-reads the record and refuses `InUse` during a move or remove, the mover's own process included (no own-pid exemption); the mover re-checks holders, its own process's leases and Sandboxes under the lock before the snapshot. |
+| P0-2 reaper releases a Store mid-call | Fixed in `73624c56b9`: each open entry counts its running calls; the reaper closes only an idle entry with none, and `open::close` refuses `InUse` while one runs. |
+| P0-3 worker open cache holds Stores unleased | Fixed in `73624c56b9`: a worker holds the Store's lease while its cache keeps it open; snapshot, install, retire and remove close this process's open copy first. |
+| P0-4 namespaces Sandboxes never start; image keys | Fixed in `6f2a43c4fd` (after the move `c3175b6eb9`): `deploy.imageArchive` and `deploy.image` are passed, the worker uses its bundle's daemon and archive, a record's `image` naming a file is the machine's archive. The docker worker's image key was fixed in `a487409fe5`. |
+| P0-5 VM worker idles off under Sandboxes | Fixed in `155e11f2fa`: it counts the Sandboxes it runs and those recorded under `store/<s>/project/<p>/sandboxes/`. |
+| P0-6 Firecracker host | Fixed in `dfd444bd9b`: the Lima host counts live microVMs, a Firecracker start starts its host first, an idle microVM resets (`sync; reboot -f`). |
+| P0-7 store remove deadlocks on a stopped machine | Fixed in `e375e333db`: the machine is started (or refused) before the home lock; a machine that moved meanwhile is `Conflict`. |
+| P0-8 restore over live Sandboxes; concurrent restores | Fixed in `842b4058b9`: `InUse` while a Sandbox runs or SQLite's sidecars exist; a new name is re-checked under the lock, the first install wins, the other is `Exists`. |
+| P1-9 home lock held across slow work | Fixed for Stores (`e375e333db`), backups (`842b4058b9`), PostgreSQL (`67a4723ea3`) and machines (`539cc0e771`): the lock covers checks and record writes only; a move whose record phase fails keeps `in_progress` with both copies. |
+| P1-10 store status boots a VM | Fixed in `75f83ec9b6`: `route::endpoint_now` starts nothing; `state: "down"` with `down_reason` (O34). |
+| P1-11 shared temporary name; writers outside the lock | Fixed in `bd8f90860b`: a per-process counter in the temporary name; the record writers take the (now reentrant) home lock. |
+| P1-12 every new home looks like 1.1.0 | Fixed in `d1153d1776`: a 1.1.0 home is recognised by its own records. |
+| P1-13 migrated Stores have no file | Fixed in `92c2db72b3`: the 1.1.0 file is hard-linked or copied (sha256 checked) to `store/<name>/store.sqlite` where this host can read it; otherwise reported. Not verified: Linux, the copy fallback, a real Docker volume on macOS (report only). |
+| P1-14 backup list states; exported-from; `Expected::Any` | Fixed in `943363f5b0` (seven states, `unknown` with `reason`) and `dfe87f9b68` (`layerfs-exported-from` written and checked, `Exists` for another home; a link without sha256 expects the file absent). Deferred: reading heads of a Store not on `native` through its worker (it is `unknown` meanwhile), and an exported-from column in `--text`. |
+| P1-15 PostgreSQL second name; URL password | Fixed in `67a4723ea3`. |
+| P1-16 remove treats an unknown machine as native | Fixed in `e375e333db` (`Unavailable`), with the follow-up `d6c844eb33` (an in-process machine's Store deleted once). |
+| P1-17 commit.get stops at a short page | Fixed in `88b033cfa9`: follows `nextPagePos` to the end; a position that does not move on is `Failed`. Its cost grows with the Branch's history (the calls agent noted it may be quadratic; not measured). |
+| P1-18 exec output over 1 MiB lost | Fixed in `37f1bbd2b9`: spooled streams go to the caller as output events, 1 MiB per page, and the spool is closed; the reply keeps the stream `null` with its byte count and `streamed: true`; non-UTF-8 inline output is bytes. Still after the command ends, not live. |
+| P1-19 scope lets uncovered calls through | Fixed in `797ecca2c7`: an allow list, bound to `{ project, folder, branch? }`; the shell needs `--scope-project`. |
+| P1-20 workspace.commit drops `force` | Fixed in `37f1bbd2b9`. |
+| P1-21 O31 not built | Fixed in `37f1bbd2b9` (with `cc75955474`, mounts found by the real path). |
+| P1-22 Sandbox records without id; names; lock; stale project record | Fixed in `37f1bbd2b9`. |
+| P1-23 start.lock in create/remove; microsandbox volume | Fixed in `539cc0e771`. |
+| P1-24 Node handler kills the process; late events | Fixed in `f67d5a9f6f`. |
+| P1-25 codes, paging, stream, exit 125, scoped branch.list, aio | Fixed: `NoSuchStore`/`NoSuchProject` (`9a4d9528e0`), `NoSuchBranch`/`NoSuchCommit` (`88b033cfa9`), Sandbox paging (`37f1bbd2b9`), Node `stream` (`f67d5a9f6f`), Python `stream` and aio on the loop with cancel stopping the functions (`771823d728`, `94671c974c`), `--stream` exit 0 for no code (`0f7b2b652f`), scoped `branch.list` across pages (`797ecca2c7`). Not done: cancelling the native call itself (it runs to its end; the docstring says so). |
+| P1-26 worker frames read before the secret; no timeouts | Fixed in `e70c038586`. |
+| P1-27 lease pid reuse; pid 0 / u32::MAX | Fixed in `6908c9a0af`. |
+| P1-28 Windows cfg gates | **Not done: paused, waiting on the owner.** A Windows `cargo check` on this Mac could not get past the `zstd-sys` and `blake3` build scripts, which need an MSVC C toolchain this Mac lacks, so the gates could not be checked. |
+| P2-29 LOC lines; deleted JS tests; postgres_connect | Done in the docs series: [HANDOFF.md](HANDOFF.md) has a recounted LOC table for every commit, the 63 files and the `d244cdb3af` note. History is not rewritten. |
+| P2-30 temp paths in receipts; test timeouts | Done in the docs series: receipts read `<tmp>/…`; TERMINAL-PASS's command cells and the api and Python READMEs show the ≤120 s limit. |
+| P2-31 Replaced rows | Done in the docs series: G0, G4, step 5.2, the single branch; G10 resize recorded as deferred. |
+| P2-32 small fixes | `layerfs import-env` text: `73e38ecf27` (code) and the docs series (limitations); `LAYERFS_LOCAL_DIR` text and `start.lock` in the H §7.8 layout: `7cf2368a9d`; maturin: `2793ee114c` (requires `>=1.9.6,<2.0`); a guest worker's home id (O33): `e6a5f38b68`; machine update `InUse` while Sandboxes run: `539cc0e771`. |
+
+The same series also built what the review's covering message asked
+besides the findings: the version `2.0.0` (`085376a7a8`) and the sealed
+Linux bundle builder `tools/linux_bundle.py` (`6263b95871`, O16).
+
+### Implementation choices in the fixes (not owner decisions)
+
+| Topic | Choice | Where |
+| --- | --- | --- |
+| Lease identity | A lease file records `<at> <start> <boot>`; a move's `in_progress` records `pid_start` and `pid_boot` (`LocalProcess`: `proc_pidinfo` on macOS, `/proc` on Linux). A reused id is stale; a lease without them is matched by id alone; ids 0 and above `i32::MAX` are never alive. | `6908c9a0af` |
+| Worker hello | A connection opens with `{ secret }`, at most 4 KiB, read within 10 s, answered `{ ready: true }` or `Denied`, before the request `{ op, args, home_id }` (at most 30 s between bytes). `ping` waits 10 s for its answer; other operations as long as they run. No answer before the request is `Unavailable`; only a connection lost after it is `Unknown`. | `e70c038586` |
+| Node events | The native call resolves to `{ events, answer }`; the package settles once it has delivered that many events. A throwing function is a `LayerFSHandlerWarning`. | `f67d5a9f6f` |
+| Home lock | Reentrant for the thread that holds it, so a record writer locks whether or not its caller does. | `bd8f90860b` |
+| Home id to workers | Every worker request carries the calling home's id; a worker's root is marked and never converted or given its own id. | `e6a5f38b68` |
+| Exported-from | `layerfs-exported-from: <home id>/<machine>` on every backup object; a `native` Store's snapshot is staged in this process and uploaded with its sha256, heads, binding and exported-from (`remote::push` is no longer used; this route does not pre-check free space or bound the manifest). | `dfe87f9b68` |
+| URL passwords | Refused in the user part and in any query parameter whose decoded name contains `password`, any case, before any effect. | `67a4723ea3` |
+| Exec output | Over 1 MiB per stream, sent as output events (`{ stream, bytes }`) after the command ends, 1 MiB per event; the reply's stream is `null` with `stdout_bytes`/`stderr_bytes` and `streamed: true`. A caller with no function, `stream` or `--stream` does not get those bytes. | `37f1bbd2b9` |
+| Forced close (O31) | The Workspaces not drained are answered in the reply as `unknown` (their paths); nothing else records them. O31's "records `Unknown`" is read as this answer. | `37f1bbd2b9` |
+| Removing a machine | Not a new `state` value: the record gets `removing: { pid }` under the home lock while the VM is deleted outside it; `machine_of` refuses `InUse` while that process lives. A refused delete restores the record; an unknown one sets `state: "unknown"` and `error`. | `539cc0e771` |
+| `start.lock` on create and remove | Both take it (readiness wait up to 600 s) before the home lock, as the on-demand start does; the start re-reads the record once it holds it. | `539cc0e771` |

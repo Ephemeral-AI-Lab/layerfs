@@ -126,8 +126,11 @@ says so. `9b12a211b6` rewrote the test on Init into PostgreSQL and ran it
 ## Decisions
 
 All are in [DECISIONS.md](DECISIONS.md): G0–G16 and O1–O35 with the
-recommended answer, the replaced recommendations (H §7.7 route, O27), and the
-implementation choices per step. Read especially:
+recommended answer, the replaced recommendations (H §7.7 route, O27, G0,
+G4, step 5.2, the single branch, and G10's VM resize deferred), the
+implementation choices per step, and the review fixes (one row per finding
+P0-1 to P2-32; P1-28, the Windows cfg gates, is not done and waits on the
+owner). Read especially:
 
 - the **correction** at its end: the store route keeps `docker` on Linux
   in-process, contrary to the H §7.7 row; unverified either way;
