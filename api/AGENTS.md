@@ -5,7 +5,15 @@
 Read [repository instructions](../AGENTS.md) first. This layer holds the
 public surface:
 
-- `crates/layerfs-api`: the library, the call table and its one dispatcher.
+- `crates/layerfs-api`: the SDK call surface: the call table, argument
+  checks, scopes and the JSON text form; one route per call into
+  `layerfs-control`. It depends only on `layerfs-control` and
+  `layerfs-bridge` and re-exports what the front ends use (#536).
+- `crates/layerfs-control`: the management library, by entity (`common/`,
+  `machine/` with the worker protocol, `store/`, `project/`, `backup/`,
+  `sandbox/`, `workspace/`, `daemon/`): home records, placement, the
+  worker protocol and the daemon channel (#536 C1). It is one library with
+  no `layerfs-sdk` crate (amends #533 O21a's wording, keeps its intent).
 - `crates/layerfs-cli`: the `layerfs` command and the machine worker.
 - `crates/layerfs-node`: the Node binding, built as an addon beside its crate
   at `crates/layerfs-node/layerfs.node` by `scripts/build-native.mjs`.
@@ -17,10 +25,13 @@ The packages are thin shells over the table: each function is one library
 call, made once. API crates may depend on connect, engine and core crates,
 including dev dependencies and test includes; nothing in core, engine or
 connect may depend on anything here. Layers are
-`core < engine < connect < api` (#535 D4); `layerfs-api` reaches
-`layerfs-machine` only through its optional `machine` feature.
+`core < engine < connect < api` (#535 D4); `layerfs-control` reaches
+`layerfs-machine` only through its optional `machine` feature, which
+`layerfs-api` passes through.
 
-SDK-facing daemon integration tests live in `crates/layerfs-api/tests`, with
+Tests that drive the call surface live in `crates/layerfs-api/tests`;
+SDK-facing daemon integration tests and tests of control internals live in
+`crates/layerfs-control/tests`, with
 cheap includes of daemon fixtures from `engine/crates` and Sandbox fixtures
 from `connect/crates`. Build the
 ordinary daemon binary before running tests that launch it.

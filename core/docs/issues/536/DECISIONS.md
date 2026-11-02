@@ -66,9 +66,18 @@ Rows added when the code contradicts a spec fact. The code wins; the step is adj
 | --- | --- | --- |
 | Daemon-needing method tests (C1) | `concurrent_commits`, `lane_merge`, `merge_report` go to `layerfs-daemon/tests` (including store-service's `support/{installed_store,sdk}.rs` by `#[path]`), not store-service. | A store-service dev-dependency on the daemon would build two copies of store-service in one test binary; these tests lived in the daemon before `3cae8b1a1e`. |
 | Tests left in api (C1) | `commit_get_pages` (uses `calls`, `home`), `sdk_merge_diagnostics` (uses `sandbox`), `remote_store` (Linux only; deleted later per §9.5) stay in `layerfs-api`. | They drive more than the method table. |
+| Family files kept whole (C) | `family/{stores,projects,backups,sandboxes}.rs` are `store/family.rs`, `project/family.rs`, `backup/family.rs`, `sandbox/family.rs` (with the `workspace` calls), not split per op. `home/migrate.rs` and `place.rs` stay whole (not `migrate/{mod,v110}.rs`). | Each `run()` has inline match arms and shared helpers: a per-op split would change function bodies, which a move may not. Splitting is for the typed-model step (F). |
+| Places §9.2 does not name (C) | `host/flock.rs` → `common/home/flock.rs`; `host/postgres.rs` → `store/postgres.rs`; `host/registry.rs` → `sandbox/registry.rs`; `base/internal.rs` → `daemon/internal.rs`; `base/recovery.rs` → `daemon/workspace/recovery.rs`; `operator/call.rs` → `daemon/operator.rs`; `host/dispatch.rs` → `sandbox/dispatch.rs` (not merged into `serve.rs`); `host/project.rs` + `host/postgres_init.rs` → `project/init.rs` + `project/postgres_init.rs`; the live facade `sandbox/{provider,create,connection}.rs` and `host/local.rs` → `sandbox/launch/`; `store/route.rs` → `store/{resolve,call}.rs` + `common/place.rs`; `machine/start.rs` → `machine/endpoint.rs`. Dead 1.1 files stay in `host/` and `operator/inspect/` for step D. Renamed modules are imported under their old names (`identity as stores`, …) so bodies did not change. | Moves only; merges change bodies. |
+| `calls/` pieces moved down (C) | `calls/json.rs` → `common/json.rs`; `Context` → `common/context.rs` with a `Context::new` constructor (+5); `NAMESPACE` → `store/calls.rs`. | The moved code used them; the dependency must point down (control under api). |
+| Tests (C7) | 18 targets that use control internals (including `sdk_merge_diagnostics`, which now drives only `daemon::values`) moved to `layerfs-control/tests` with `support/daemon_binary.rs`; `machine_take_down` stays in api (it calls `calls::call`). | Placed by what they drive. |
 | `layerfs_api::call` (C1) | Kept as a re-export of `layerfs_store_service::methods::call`; `layerfs_api::fs` and `::branch` are no longer public (nothing used them). | Front ends, examples and remaining tests keep their path. |
 
 ## Open items
 
+- `common/place.rs` (Store-call routing) and `common/home/place.rs` (1.1.0 file placing) share a name; rename when `migrate/` is split.
+- `sandbox/files.rs` is 993 physical lines (889 production), near the 999 ceiling; step D removes its dead functions.
+- `PROVIDERS.md` stays in `layerfs-api` and describes the facade now in control `sandbox/launch/`.
+
 ## Phase log
 - Step C1 (§11 1.1) done at `c73fda2d57`: lane C1 (subagent, branch `issue535-C-methods`) `a6fea806de`, merged `c73fda2d57`. Ruff was not run on the three changed Python tools (not installed); `remote_store`'s new `#[path]` includes were not compiled on Linux (the lane's Linux Cargo home was empty).
+- Step C (§11 1.2–1.7, reordered) done at `4fd096335e`: lane C (subagent, branch `issue535-C-control`) C2 `17c17a188c`, C3 `bec9cc372c`, C4 `7f51e79799`, C5 `936fd2175b`, C6 `2997ad6710`, C7 `210fb14a44`, merged `4fd096335e`.
