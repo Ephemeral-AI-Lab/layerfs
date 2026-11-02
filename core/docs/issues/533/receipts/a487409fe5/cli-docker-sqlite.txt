@@ -1,12 +1,12 @@
 # docker-sqlite.sh at a487409fe5, bundle build-linux-0c84a1ae4ed4 (load { 4.43 4.13 4.05 }); 2026-11-01T23:44:13Z
-home=/tmp/lfs533-dks-home.aj4g
+home=<tmp>/lfs533-dks-home.aj4g
 $ layerfs machine update docker --image sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e
 {"name":"docker","platform":"docker","backend":"docker","state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"}
 exit 0
 $ layerfs store create shop
 {"name":"shop","kind":"sqlite","machine":"native","profile":"disposable","created":1793576653674,"sqlite":"3.53.2","projects":[]}
 exit 0
-$ layerfs project init shop/app /tmp/lfs533-dks-src.HX83
+$ layerfs project init shop/app <tmp>/lfs533-dks-src.HX83
 {"project":"shop/app","store":"shop","name":"app","kind":"sqlite","machine":"native","created":1793576653792,"layer":"3255913ad1b5daa3293a12f855272f53357e827dd050714bc745410574ae671fb0","root":"3f8a8ce5b7aaf36ac8dd014fd9783aa0bde97ef9eb1ae67fd7dcd2af36df942e"}
 exit 0
 $ layerfs store move shop docker

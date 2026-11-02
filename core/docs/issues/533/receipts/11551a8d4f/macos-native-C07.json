@@ -27,7 +27,7 @@
       "mountMs": 32.72,
       "workspace": {
         "kind": "Mounted",
-        "path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs533-cell-9K9br8/machine/native/sandbox-root/lfs-df29f430-cells.p-1/workspaces/2",
+        "path": "<tmp>/lfs533-cell-9K9br8/machine/native/sandbox-root/lfs-df29f430-cells.p-1/workspaces/2",
         "workspace": "5dee250693706c11d6d75afc239345d5e846f562a621badfe4a47e9ffa920e63",
         "namespace": 2,
         "branch": "lane",
@@ -39,7 +39,7 @@
         "image": "local",
         "platform": "mac",
         "runtime": "native",
-        "ws": "c07:/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs533-cell-9K9br8/machine/native/sandbox-root/lfs-df29f430-cells.p-1/workspaces/2"
+        "ws": "c07:<tmp>/lfs533-cell-9K9br8/machine/native/sandbox-root/lfs-df29f430-cells.p-1/workspaces/2"
       },
       "exec": {
         "wallMs": 3501.02,

@@ -2,7 +2,7 @@
 $ layerfs store connect pg postgres://postgres@127.0.0.1:49755/fin_n --password env:LFSPW
 {"name":"pg","kind":"postgresql","schema":"layerfs","synchronous_commit":"off","projects":[]}
 exit 0
-$ layerfs project init pg/app /tmp/lfs533-pgn-src.IhL5
+$ layerfs project init pg/app <tmp>/lfs533-pgn-src.IhL5
 {"project":"pg/app","store":"pg","name":"app","kind":"postgresql","machine":"native","created":1793576646526,"layer":"32ddaac87fe6b265fc69d5d499e50425e4ab315d3340e087c936b13270cff407da","root":"d8a7aeba0eddd523bc8752e8f263b58518c898090e0e8a997698a5bc39ee02ee"}
 exit 0
 $ layerfs sandbox create pg/app t native
@@ -11,15 +11,15 @@ exit 0
 $ layerfs branch fork pg/app work main
 {"kind":"Forked","branch":"work","base":"32ddaac87fe6b265fc69d5d499e50425e4ab315d3340e087c936b13270cff407da","head":null}
 exit 0
-mount: {"kind":"Mounted","path":"/tmp/lfs533-pgn-home.7mje/machine/native/sandbox-root/lfs-69b8c8ee-pg.app-1/workspaces/1","workspace":"286083372d69545d1388ba7f18ff738cbef960956020c2ba4d69c83b68c49863","namespace":1,"branch":"work","base":null,"base_layer":"32ddaac87fe6b265fc69d5d499e50425e4ab315d3340e087c936b13270cff407da","root":"d8a7aeba0eddd523bc8752e8f263b58518c898090e0e8a997698a5bc39ee02ee","sandbox":"1","container":"lfs-69b8c8ee-pg.app-1","image":"local","platform":"mac","runtime":"native","ws":"t:/tmp/lfs533-pgn-home.7mje/machine/native/sandbox-root/lfs-69b8c8ee-pg.app-1/workspaces/1"}
-ws=t:/tmp/lfs533-pgn-home.7mje/machine/native/sandbox-root/lfs-69b8c8ee-pg.app-1/workspaces/1
-$ layerfs workspace exec t:/tmp/lfs533-pgn-home.7mje/machine/native/sandbox-root/lfs-69b8c8ee-pg.app-1/workspaces/1 cat readme.txt; echo added-fin_n > new.txt --stream
+mount: {"kind":"Mounted","path":"<tmp>/lfs533-pgn-home.7mje/machine/native/sandbox-root/lfs-69b8c8ee-pg.app-1/workspaces/1","workspace":"286083372d69545d1388ba7f18ff738cbef960956020c2ba4d69c83b68c49863","namespace":1,"branch":"work","base":null,"base_layer":"32ddaac87fe6b265fc69d5d499e50425e4ab315d3340e087c936b13270cff407da","root":"d8a7aeba0eddd523bc8752e8f263b58518c898090e0e8a997698a5bc39ee02ee","sandbox":"1","container":"lfs-69b8c8ee-pg.app-1","image":"local","platform":"mac","runtime":"native","ws":"t:<tmp>/lfs533-pgn-home.7mje/machine/native/sandbox-root/lfs-69b8c8ee-pg.app-1/workspaces/1"}
+ws=t:<tmp>/lfs533-pgn-home.7mje/machine/native/sandbox-root/lfs-69b8c8ee-pg.app-1/workspaces/1
+$ layerfs workspace exec t:<tmp>/lfs533-pgn-home.7mje/machine/native/sandbox-root/lfs-69b8c8ee-pg.app-1/workspaces/1 cat readme.txt; echo added-fin_n > new.txt --stream
 hello
 exit 0
-$ layerfs workspace commit t:/tmp/lfs533-pgn-home.7mje/machine/native/sandbox-root/lfs-69b8c8ee-pg.app-1/workspaces/1 -m from a native Sandbox of a PostgreSQL Store
+$ layerfs workspace commit t:<tmp>/lfs533-pgn-home.7mje/machine/native/sandbox-root/lfs-69b8c8ee-pg.app-1/workspaces/1 -m from a native Sandbox of a PostgreSQL Store
 {"kind":"Committed","head":"1204dcdb6cde5224fd3824f9f67b2b74cb9bc498a516d3b6a415a1a7a9758a40d5","commit":{"id":"1204dcdb6cde5224fd3824f9f67b2b74cb9bc498a516d3b6a415a1a7a9758a40d5","branch":null,"parent":null,"second_parent":null,"base":"32ddaac87fe6b265fc69d5d499e50425e4ab315d3340e087c936b13270cff407da","root":"5b954c692267e86a94f136a4c422f6be35a395d093ec8765fdab49bd883107cc","via":"exec","message":"from a native Sandbox of a PostgreSQL Store","merged_from":null,"time":1793576647824,"logical":18,"new_canonical":532,"new_stored":346,"new_metadata":297,"displaced":null,"lww":[],"lww_truncated":false},"displaced_head":null,"merged":null,"lww":[],"lww_truncated":false}
 exit 0
-$ layerfs workspace unmount t:/tmp/lfs533-pgn-home.7mje/machine/native/sandbox-root/lfs-69b8c8ee-pg.app-1/workspaces/1
+$ layerfs workspace unmount t:<tmp>/lfs533-pgn-home.7mje/machine/native/sandbox-root/lfs-69b8c8ee-pg.app-1/workspaces/1
 {"kind":"Unmounted"}
 exit 0
 $ layerfs file read pg/app work /new.txt

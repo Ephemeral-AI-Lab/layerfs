@@ -5,7 +5,7 @@ exit 0
 $ layerfs store connect pg postgres://postgres@127.0.0.1:49755/fin_d --password env:LFSPW
 {"name":"pg","kind":"postgresql","schema":"layerfs","synchronous_commit":"off","projects":[]}
 exit 0
-$ layerfs project init pg/app /tmp/lfs533-pgd-src.HiDA
+$ layerfs project init pg/app <tmp>/lfs533-pgd-src.HiDA
 {"project":"pg/app","store":"pg","name":"app","kind":"postgresql","machine":"native","created":1793576649500,"layer":"32fc5a08b464261b3badec3089a53ec5da5d74531bb4bb5ba05d2434c0af61cbb6","root":"e1ce0e17f7dedc83b99009f53c1dcbe97412c3a0f1093805509571e51f1153db"}
 exit 0
 $ layerfs sandbox create pg/app t docker
