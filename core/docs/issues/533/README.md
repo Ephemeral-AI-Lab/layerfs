@@ -52,7 +52,8 @@ Done means:
 - every 1.1.0 call has the fate S §5 states, and nothing else is removed;
 - the home has the layout of H §7.8 and nothing else; the platform settings
   are gone;
-- the terminal pass (step 19) passes on macOS and Linux;
+- the terminal pass (step 19) passes: the 12 #516 cells PASS on all seven
+  machine kinds, and the Linux rows pass;
 - every commit reports Production LOC, and no step leaves a Durable Store, a
   retry, or a host server in the data path.
 
@@ -103,6 +104,12 @@ recommended answer.
 | G14 | O4 widened: old settings, and old Connect and dsh homes | removed, with `layerfs import-env` once | 17 |
 | G15 | O13 `fs` or `file`; O14 `workspace.status`; O15 package names; O19 Python style; O20 prebuilt targets; O29 `fs.diff` argument form | see H §13 | 14–16 |
 | G16 | O27: the Linux `native` backend (`native` on Linux uses namespaces in 2.0) | remove it | 5 |
+
+**Terminal pass condition (owner direction, 2026-11-02).** Step 19 passes
+only when the 12 #516 cells PASS on every one of the seven machine kinds:
+`native`, `docker`, `apple-container`, `microsandbox`, `lima`,
+`firecracker` and `ssh`. A NOT_RUN or a refusal on any kind means step 19
+is not passed. This replaces "passes on macOS and Linux" as the bar.
 
 The other open decisions are named in the step they touch. They default to
 H's recommendation unless the owner says otherwise:
@@ -446,7 +453,10 @@ reference. Apply the H §9.1 AGENTS.md wording that G2 approved.
 
 ### Step 19. Terminal pass
 
-- one home, one process, the 12 cells of #516 on each machine kind;
+- one home, one process, the 12 cells of #516 on each of the seven machine
+  kinds, each kind 12/12 PASS (owner direction 2026-11-02; see §3): a
+  NOT_RUN or a refusal on any kind fails the step. Each VM kind's cells
+  move their Store from `native` to that machine first and back after;
 - two Lima machines of different sizes, each with two Stores, used at once;
 - Init on `native`, moves to `docker` (macOS) and one VM, and back;
 - backup to and restore from MinIO and R2, and `backup list`;
@@ -457,8 +467,12 @@ reference. Apply the H §9.1 AGENTS.md wording that G2 approved.
 - the same calls from the binary, Node and Python, compared.
 
 The macOS host covers `native`, `docker`, `apple-container`, `microsandbox`,
-`lima`, `firecracker` and `ssh`. A Linux host covers `native` and `docker`.
-Windows is not run (O5).
+`lima`, `firecracker` and `ssh`, by #527's platform-pass method
+(`core/docs/issues/527/PLATFORM-PASS.md`): `msb` from `~/.microsandbox/bin`
+on `PATH`; `ssh` against a throwaway Lima VM that LayerFS does not manage;
+`firecracker` nested in a Lima `vz` host. The Linux rows (`native` with
+namespaces and `docker`) run as root in a Lima QEMU VM, relayed by the
+runner, as #527 ran them. Windows is not run (O5).
 
 ## 7. Handoff
 

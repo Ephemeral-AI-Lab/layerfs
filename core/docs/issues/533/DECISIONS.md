@@ -199,3 +199,21 @@ implementation choices, recorded because they are not in the spec.
 | The docker worker's own image | Falls back to the docker machine record's `image`, as 1.1.0's macOS worker did. | Nothing set `os_image`, so the docker worker could never start. |
 | Docker 29 "no such object" | Matched without case. | Docker 29.5.2 lowercases it, which made `store move <s> docker` fail at its check. |
 
+## Terminal pass condition (owner direction, 2026-11-02)
+
+The owner's direction, relayed by the parent session: "can we update the
+terminal pass condition to be all 7 platforms to pass the 12 cell tests?"
+Step 19 now passes only when the 12 #516 cells PASS on all seven machine
+kinds (`native`, `docker`, `apple-container`, `microsandbox`, `lima`,
+`firecracker`, `ssh`); a NOT_RUN or a refusal on any kind fails it. README
+§1, §3 and step 19 say so. The owner also pointed at #527's platform pass
+as the method:
+
+| Topic | Choice | Why |
+| --- | --- | --- |
+| microsandbox | `~/.microsandbox/bin` on `PATH` for the cell runs, recorded in TERMINAL-PASS; the probe still looks on `PATH` only and still reports `missing: tool:msb` without it. | As #527 and #529 ran it (msb 0.7.11); 1.1.0 also found `msb` on `PATH` only. |
+| Linux rows | `native` (namespaces) and `docker` on Linux, as root in a Lima QEMU VM (Ubuntu 24.04) relayed by the runner, labelled as such. | This Mac has no Linux host; #527 ran its Linux rows this way. Replaces the earlier plan of a privileged Docker container. |
+| ssh | A throwaway Lima VM that LayerFS does not manage, removed after. | #527's `vm:ssh` target. |
+| firecracker | #516's recipe as #527 used it: Firecracker v1.17.0, the CI kernel and rootfs, nested in a Lima `vz` host with nested virtualisation and huge pages, 2 GiB per microVM; files already on this host are reused. | Needs the P0-6 fixes (dfd444bd9b): the host stays up and starts first, and the microVM resets. |
+| The sealed bundle's builder | `tools/linux_bundle.py` (6263b95871) builds and places `<cache>/layerfs/bundle/<version>/linux-<arch>/`; `tools/worktree.py build --bundle` is not reused. | `worktree.py build` builds four packages in one Cargo command (the owner asked for one bounded command per package), and seals the E2E SDK bundle (`manifest.json`, `api/`, `layerfs.node`), not the guest bundle: no Sandbox image archive, no `bundle.json` hash, and nothing placed where LayerFS looks. Both share the launcher's registered Linux target and helpers (`docker_build`, `execute`, `inputs`). |
+
