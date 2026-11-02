@@ -273,7 +273,7 @@ of the other rows relies on.
 | Init on `native`, moves to `docker` and one VM, and back | **PASS** | VMs: every VM-kind cell above Inits on native and moves its Store native → machine → native (`store.move` / `store.move.back` in each receipt). `docker`: `receipts/f43ec45fa0/docker-round-trip.txt`, Init on native, `store move rt docker`, a read there, `store move rt native`, the same read (root `a8c4f009…`), same heads both ways. The docker cells move out only and remove their home. |
 | Linux host (`native`, `docker`) | **PASS** | The two Linux rows above, 12/12 each in a Lima QEMU VM. |
 | Backup to and restore from R2 | **NOT_RUN** | No R2 account or credentials on this host. |
-| Windows | **NOT_RUN** | Not considered (O5); P1-28 is paused for the owner. |
+| Windows | **NOT_RUN** | Deferred by owner (2026-11-02): no MSVC toolchain and no Windows host to build or test on (O5); P1-28 out of 2.0's verified scope (DECISIONS). |
 | Durable Store profile | **NOT_RUN** | Disabled by owner until explicit reauthorization; every Store here was Disposable. |
 | Init into PostgreSQL, then `docker` and `native` Sandboxes on it | **PASS** | Throwaway `postgres:17-bookworm` (17.11) `lfs533-pg2`, one fresh database per run, a generated password (in no receipt or home). `pg-postgres_connect.txt` 1/1 (connect made the `layerfs` schema, 22 tables). `pg-sandbox_machines.txt` 3/3 live: a PostgreSQL Store's Sandboxes on `native` and `docker` each committing into the Store, and a sqlite Store's Sandbox on the docker machine. `cli-pg-native.txt` and `cli-pg-docker.txt`: connect, Init, a Sandbox, fork, mount, exec, Commit into PostgreSQL, read back (`added-lfs_native`, `added-lfs_docker`), close, no password in the home; the docker run's worker container and volume removed after. The macOS CLI and daemon for these were built with `postgresql` (a copy outside `target/debug`, so the cells' binaries stayed as they were); the sealed bundle's daemon already has it. |
 | The same calls from the binary, Node and Python, compared | **PASS** | `calls-node.txt`: `node --test api/node/test/calls.mjs api/node/test/shell.mjs` 5/5 (the Node addon built at this source). `calls-python.txt`: `test_calls.py -v` 7/7 with `LAYERFS_DAEMON` set, so the live exec test ran too (the module rebuilt at this source; a first run without the daemon skipped that one test and is not kept). |
@@ -382,7 +382,8 @@ msb1, Linux native; lima1 C01–C06).
 - The full 12 cells on the resealed bundle (`f43ec45fa0`): one cell (C01)
   per VM kind ran there; the 108 hold for the reasons given above.
 - Docker really stopped: simulated only (other sessions use it).
-- Windows: not considered (P1-28 paused for the owner).
+- Windows: deferred by owner (2026-11-02); no MSVC toolchain and no Windows
+  host (O5, P1-28).
 
 ### Cleanup
 

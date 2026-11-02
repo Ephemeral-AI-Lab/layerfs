@@ -18,7 +18,7 @@
   Stores each at once, an agent creating and removing a machine, the VM
   kinds with Docker unavailable (simulated), MinIO, PostgreSQL, the
   binary/Node/Python comparison, the idle stop); only R2 (no account),
-  Windows (paused for the owner, P1-28) and Durable (disabled) are NOT_RUN.
+  Windows (deferred by owner, P1-28) and Durable (disabled) are NOT_RUN.
   Showing the idle stop through `machine list` found three more defects,
   fixed in `c89727281a`, `1f41e6bc4f` and `f43ec45fa0`. The last one is the
   guest worker, so the bundle was resealed (`c8baa5a9…`); C01 passed on it
@@ -172,8 +172,8 @@ All are in [DECISIONS.md](DECISIONS.md): G0–G16 and O1–O35 with the
 recommended answer, the replaced recommendations (H §7.7 route, O27, G0,
 G4, step 5.2, the single branch, and G10's VM resize deferred), the
 implementation choices per step, and the review fixes (one row per finding
-P0-1 to P2-32; P1-28, the Windows cfg gates, is not done and waits on the
-owner). Read especially:
+P0-1 to P2-32; P1-28, the Windows cfg gates, is deferred by owner
+(2026-11-02) and not done). Read especially:
 
 - the **correction** at its end: the store route keeps `docker` on Linux
   in-process, contrary to the H §7.7 row; unverified either way;
@@ -288,7 +288,8 @@ gives only the count). They include the tests' fixtures and the
   stop. The earlier entries for them here no longer apply.
 - Docker really stopped: only simulated (no `docker` on `PATH`, a missing
   socket), since Docker is shared with other sessions.
-- `remote_store` on Linux; Windows (O5, P1-28 paused).
+- `remote_store` on Linux; Windows (O5, P1-28 deferred by owner
+  2026-11-02: no MSVC toolchain and no Windows host).
 - Machine boot and Init of a large project against the cell limits: `fc1`
   was warmed by a move before its cells (declared setup).
 - R2 backups (no account here).

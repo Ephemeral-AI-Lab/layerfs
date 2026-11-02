@@ -296,7 +296,7 @@ fallback to the record's `image`).
 | P1-25 codes, paging, stream, exit 125, scoped branch.list, aio | Fixed: `NoSuchStore`/`NoSuchProject` (`9a4d9528e0`), `NoSuchBranch`/`NoSuchCommit` (`88b033cfa9`), Sandbox paging (`37f1bbd2b9`), Node `stream` (`f67d5a9f6f`), Python `stream` and aio on the loop with cancel stopping the functions (`771823d728`, `94671c974c`), `--stream` exit 0 for no code (`0f7b2b652f`), scoped `branch.list` across pages (`797ecca2c7`). Not done: cancelling the native call itself (it runs to its end; the docstring says so). |
 | P1-26 worker frames read before the secret; no timeouts | Fixed in `e70c038586`. |
 | P1-27 lease pid reuse; pid 0 / u32::MAX | Fixed in `6908c9a0af`. |
-| P1-28 Windows cfg gates | **Not done: paused, waiting on the owner.** A Windows `cargo check` on this Mac could not get past the `zstd-sys` and `blake3` build scripts, which need an MSVC C toolchain this Mac lacks, so the gates could not be checked. |
+| P1-28 Windows cfg gates | **Deferred by the owner (2026-11-02, "Defer Windows"); out of 2.0's verified scope.** See "Owner direction: Windows deferred" below. A Windows `cargo check` on this Mac could not get past the `zstd-sys` and `blake3` build scripts, which need an MSVC C toolchain this Mac lacks, so the gates could not be checked. |
 | P2-29 LOC lines; deleted JS tests; postgres_connect | Done in the docs series: [HANDOFF.md](HANDOFF.md) has a recounted LOC table for every commit, the 63 files and the `d244cdb3af` note. History is not rewritten. |
 | P2-30 temp paths in receipts; test timeouts | Done in the docs series: receipts read `<tmp>/…`; TERMINAL-PASS's command cells and the api and Python READMEs show the ≤120 s limit. |
 | P2-31 Replaced rows | Done in the docs series: G0, G4, step 5.2, the single branch; G10 resize recorded as deferred. |
@@ -382,3 +382,20 @@ Gaps seen in the pass and left open:
 - Linux setup is the host's: `native` Sandboxes need
   `user.max_user_namespaces=0` (#527 lists it), and the Linux VM needed
   Docker installed by hand. Neither is done by LayerFS.
+
+## Owner direction: Windows deferred (2026-11-02)
+
+The owner: "Defer Windows". P1-28 (the Windows cfg gates) is out of 2.0's
+verified scope, and Windows stays NOT_RUN in the terminal pass.
+
+- **Why:** there is no MSVC toolchain and no Windows host to build or test
+  on (O5). A Windows `cargo check` from this Mac stops in the `zstd-sys`
+  and `blake3` build scripts, so not even the gates could be checked.
+- **What doing it later needs:**
+  - cfg gates around the `std::os::unix` uses in `layerfs-api`'s `home/`,
+    `store/` and `worker/`, `machine/start.rs` and `family/sandboxes.rs`;
+  - `layerfs-sandbox`'s `machine/docker/windows.rs` (the Windows docker
+    machine) brought up and checked;
+  - a Windows host or CI runner with MSVC to build, check and run them,
+    then the O5 rows (Windows home, `native` records with sqlite Stores and
+    Init in the WSL worker, Sandboxes on `docker`) run there.
