@@ -77,7 +77,7 @@ call; `id` is the host's internal number.
 | `NotFound` | No machine of that name, or no such Store | Check `machine.list`, `project.get` |
 | `Unsupported` | The machine is not the Store's (message names the Store's machine), `docker`, or a PostgreSQL Store | Use the Store's machine, or `store.move` the Store |
 | `Unavailable` | The daemon bundle is missing | Report it; the home's owner installs the bundle |
-| `InvalidInput` | A bad name or project | Fix the call |
+| `InvalidInput` | A bad name or project, or the name `native` or `docker` (they name the built-in machines) | Fix the call |
 | `Failed` | Starting it failed; its record is removed | Stop and report the message |
 | `Unknown` | The start's outcome is unknown; the record is kept with `state: "unknown"` | Stop and report; don't create it again |
 
@@ -85,16 +85,18 @@ call; `id` is the host's internal number.
 
 `sandbox.list(project?, { page_size, page_pos })`
 
-Every Sandbox record in the home, or one project's: `{ items: [record, …] }`.
-It reads the home's records only; it does not ask the daemons whether they
-still run. (The table takes page options; the source returns every record.)
+Every Sandbox record in the home, or one project's, one page at a time:
+`{ items: [record, …], next_page_pos }` (`page_size` 1–1000, default 50;
+`next_page_pos` is `null` after the last page). It reads the home's records
+only; it does not ask the daemons whether they still run.
 
 ## `sandbox.get`
 
 `sandbox.get(name, { page_size, page_pos })`
 
-The Sandbox's record plus `workspaces`, the daemon's list of mounted
-Workspaces. From source, each entry has `workspace`, `namespace`, `branch`,
+The Sandbox's record plus `workspaces`, one page of the daemon's list of
+mounted Workspaces, and `next_page_pos` (`page_size`, `page_pos` as for
+`list`). From source, each entry has `workspace`, `namespace`, `branch`,
 `base`, `base_layer`, `root`, `activity`, `mounted`, `directory` (its path,
 the part after `:` in `ws`), `head_moved_since_mount`, `dirty`
 (`{ inodes, entries }` or `null`), `pending_merge` and `revision`. Not
@@ -116,8 +118,16 @@ its record.
   and its record is removed.
 - `MountsActive` while any Workspace is mounted in it (`detail.workspaces`
   lists them): commit or unmount them first.
-- `force` is in the table (O31), but this build's close does not read it
-  (from source): treat it as having no effect.
+- `force` (O31, built in `37f1bbd2b9`, from source): stops the Sandbox
+  through its backend despite mounted Workspaces and answers
+  `{ kind: "Closed", sandbox, unknown: [path, …] }`, the Workspaces it could
+  not drain. Their uncommitted changes and processes end with the Sandbox:
+  commit first what you want to keep.
+- A record with no `id` (a create still running, one whose outcome was
+  unknown, or one whose process ended) closes too: `InUse` while the
+  creating process lives, otherwise the record goes and the name is free
+  (`{ closed, was }`; for an unknown create, `left` says a Sandbox may remain
+  on its machine).
 
 ## Idle close
 

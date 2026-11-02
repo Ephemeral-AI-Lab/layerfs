@@ -93,19 +93,25 @@ working directory is the Workspace root, so use relative paths
 | --- | --- |
 | `kind` | `"exit:<code>"` |
 | `exit_code` | The command's exit code. Non-zero is **not** a refusal |
-| `stdout`, `stderr` | Each stream, whole |
+| `stdout`, `stderr` | Each stream, whole, up to 1 MiB (bytes when it is not UTF-8). A stream over 1 MiB is `null` here, with `stdout_bytes`/`stderr_bytes` and `streamed: true`: its bytes went to the functions or `stream` only |
 | `message` | Your message, echoed; it creates no history |
 | `truncated` | `false`: no output is cut |
 
 **Output streaming.** In this build the library sends the output as events
-**after the command ends**, not live:
+**after the command ends**, not live (from source and the commits' live
+tests, `f67d5a9f6f`, `771823d728`, `94671c974c`, `37f1bbd2b9`):
 
-- Node: `{ stdout: (buf) => …, stderr: (buf) => … }` are called with a
-  `Buffer` each. `{ stream: true }` alone writes nothing to your process.
-- Python: `stdout=`, `stderr=` functions, the same way.
+- Node: `{ stdout: (piece) => …, stderr: (piece) => … }` are called with each
+  piece: a string when it is UTF-8, else a `Buffer`. `{ stream: true }`
+  without them writes the output to your process's own stdout and stderr.
+- Python: `stdout=`, `stderr=` functions, the same way (`str` or `bytes`);
+  `stream=True` alone writes to `sys.stdout`/`sys.stderr`.
 - Shell: `--stream` writes the output to stdout and stderr and exits with the
-  command's own code (125 still means LayerFS failed). Without `--stream`, the
-  JSON result goes to stdout and the exit code is 0.
+  command's own code (0 when the result has none; 125 still means LayerFS
+  failed). Without `--stream`, the JSON result goes to stdout and the exit
+  code is 0.
+- Output over 1 MiB arrives only this way, 1 MiB per piece; without a
+  function, `stream` or `--stream` those bytes are not kept.
 
 **Limits**
 
@@ -113,7 +119,8 @@ working directory is the Workspace root, so use relative paths
 - It waits until everything holding its output has ended, background jobs
   included. Start a server, probe it and stop it in **one** call, with its
   output redirected to `/tmp`.
-- Output is returned whole. For a long log, redirect to a file in `/tmp` and
+- Output up to 1 MiB per stream is returned whole; more comes only through
+  the functions or `stream`. For a long log, redirect to a file in `/tmp` and
   read the end in a second call.
 
 ```js
@@ -152,9 +159,9 @@ Branch moved since the mount, it merges first. The Workspace stays mounted.
 `commit` is the record [`commit.list`](commit.md#commitlist) shows, with
 `via: "exec"`.
 
-**`force` does not work in this build.** The table accepts it, but the
-library passes only `message` to the daemon (`family/sandboxes.rs`), so a
-forced Commit merges like a normal one. Don't rely on it.
+**`force`** (passed to the daemon since `37f1bbd2b9`): publishes over a
+moved head instead of merging, replacing what the other writer committed.
+Use it only when you mean to discard that.
 
 | Code | Meaning | Do |
 | --- | --- | --- |

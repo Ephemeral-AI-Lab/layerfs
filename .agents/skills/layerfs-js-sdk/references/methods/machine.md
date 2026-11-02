@@ -63,10 +63,10 @@ started:
 | --- | --- | --- |
 | `create(name, platform, …)` | Makes and starts a VM | `Unsupported` when the platform's tool is missing; `InvalidInput` for `native`, `docker` or `ssh`. `memory`, `disk`: bytes or text with `K`, `M`, `G`. `nested` is for `lima` only; `host` (required for `firecracker`) names a nested `lima` machine |
 | `connect(name, host, …)` | Records an existing Linux host over ssh | `user` defaults to `root`, `port` to 22, `root` to `/layerfs/data`; the host key must already be known. `Unavailable` or `Denied` records nothing; a second machine for the same host is `Exists` |
-| `remove(name)` | Deletes a VM and its disk | `InUse` while it holds Stores, Sandboxes or Firecracker machines |
+| `remove(name)` | Deletes a VM and its disk | `InUse` while it holds Stores, Sandboxes or Firecracker machines. While it runs, the record is marked `removing` and every call that would start, update, remove or use the machine is `InUse` |
 | `disconnect(name)` | Forgets an ssh machine; its data root stays | `InUse` as above |
-| `update(name, …)` | Resizes a VM, or sets `native`/`docker`'s image, Docker socket (`docker`) and WSL distribution (`wsl`) | `InUse` while Sandboxes run on it; `wsl` only on a Windows host |
+| `update(name, …)` | Sets `native`/`docker`'s image, Docker socket (`docker`) and WSL distribution (`wsl`) | `InUse` while Sandboxes run on it; `wsl` only on a Windows host; resizing a VM (`cpus`, `memory`) is `Unsupported`, not built |
 
-`native` and `docker` are never created, removed or disconnected. In this
-build a Sandbox on the `docker` machine is `Unsupported` (see
+`native` and `docker` are never created, removed or disconnected. A Sandbox
+on the `docker` machine runs in a container on its image (see
 [sandbox](sandbox.md)).

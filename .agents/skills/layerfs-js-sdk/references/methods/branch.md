@@ -33,7 +33,8 @@ work   1197d2181af4… 3275838904b6…  12ad2061f04f…  3275838904b6…
 
 Each item is `{ name, id, base, head, forked_from }`. `base` is the `main`
 Layer underneath; `head` is the newest Commit, `null` before the first one.
-`branch.get` returns one item, or `NotFound` (`no Branch <name>`).
+`branch.get` returns one item, or `NoSuchBranch` (`no Branch <name>`;
+`NotFound` before `88b033cfa9`).
 
 ## `branch.fork`
 

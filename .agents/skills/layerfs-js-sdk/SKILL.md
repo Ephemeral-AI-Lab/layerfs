@@ -294,7 +294,7 @@ and examples.
 | [branch](references/methods/branch.md) | `list(project)`, `get(project, branch)`, `fork(project, name, from_branch, from_commit?)`, `merge(project, name, a, b, { message, units })`, `publish(project, branch, commit?)`, `diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor })` |
 | [commit](references/methods/commit.md) | `list(project, branch)`, `get(project, branch, commit)`, `diff(project, from_commit, to_commit, { paths_only, … })` |
 | [file](references/methods/file.md) | reads `read`, `stat`, `list`, `glob`, `grep`, `blame`, `diff`; writes `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |
-| [sandbox](references/methods/sandbox.md) | `create(project, name, machine, { image })`, `list(project?)`, `get(name)`, `close(name, { force })` |
+| [sandbox](references/methods/sandbox.md) | `create(project, name, machine, { image })`, `list(project?, { page_size, page_pos })`, `get(name, { page_size, page_pos })`, `close(name, { force })` |
 | [workspace](references/methods/workspace.md) | `mount(sandbox, branch)`, `exec(ws, command, { message, stream, stdout, stderr })`, `commit(ws, { message, force })`, `unmount(ws, { discard, force })`, `status(ws)` |
 | [machine](references/methods/machine.md) | `list`, `get`, `status`, `create`, `connect`, `remove`, `disconnect`, `update` |
 | [store](references/methods/store.md) | `list`, `get`, `status`, `create`, `connect`, `move`, `remove`, `disconnect` |

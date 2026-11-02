@@ -48,8 +48,9 @@ and 2.0 has no call that lists its Layers. After an uncertain outcome
 
 `commit.get(project, branch, commit)`: one Commit of that Branch, as the record
 above. It also takes an id prefix of 8 or more characters. A Commit that is not
-on that Branch's first-parent line is refused `NotFound`
-(`no Commit <id> on Branch <branch>`). It pages the Branch's history to find
+on that Branch's first-parent line is refused `NoSuchCommit`
+(`no Commit <id> on Branch <branch>`; `NotFound` before `88b033cfa9`). It
+pages the Branch's history to the end (following `next_page_pos`) to find
 the id, so it is slower on a long Branch.
 
 ```bash

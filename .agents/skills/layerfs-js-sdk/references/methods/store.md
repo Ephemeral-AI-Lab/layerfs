@@ -42,15 +42,19 @@ Disposable (WAL, `synchronous=OFF`), the only allowed profile.
 `holders` are processes holding the Store open; `in_progress` names a move
 under way (`{ from, to, pid, started, … }`). For a PostgreSQL Store a `server`
 field carries the server's status instead of `file` (not run here).
+`store.status` starts no machine (from source, `75f83ec9b6`): a Store whose
+machine is stopped, or whose worker does not answer, is `state: "down"` with
+`down_reason` and `file.unavailable`. `state` is `idle`, `in_use`, `moving`
+or `down`.
 
 ## Changes
 
 | Call | What it does | Notes |
 | --- | --- | --- |
 | `create(name)` | An empty sqlite Store on `native` | Live result: the record above, with `projects: []`. `Exists` for a taken name |
-| `connect(name, url, …)` | Attaches a PostgreSQL database | `url` is `postgresql://<user>@<host>:<port>/<database>[?sslmode=…]` without a password; `password` is a reference, `env:LAYERFS_<NAME>` or `file:/path`. `synchronous_commit` defaults to `off` |
-| `move(name, machine, …)` | Moves a sqlite Store's file to another machine | Progress `{ phase, done, total }` on `on_progress` / `--progress`. `InUse` while the Store is held (Sandboxes running, processes with it open) |
-| `remove(name)` | Deletes a sqlite Store with every project in it | Returns `{ removed }`. `NotFound` for an unknown name (live). Backups stay |
+| `connect(name, url, …)` | Attaches a PostgreSQL database | `url` is `postgresql://<user>@<host>:<port>/<database>[?sslmode=…]` without a password (one in the user part or in any query parameter whose name contains `password` is `InvalidInput`); `password` is a reference, `env:LAYERFS_<NAME>` or `file:/path`. `synchronous_commit` defaults to `off`. The same database under a second name is `Exists` |
+| `move(name, machine, …)` | Moves a sqlite Store's file to another machine | Progress `{ phase, done, total }` on `on_progress` / `--progress`. `InUse` while the Store is held (Sandboxes running, processes with it open); while it runs, Store calls on it are `InUse`, from the mover's process too |
+| `remove(name)` | Deletes a sqlite Store with every project in it | Returns `{ removed }`. `NotFound` for an unknown name (live); `Unavailable` for a Store whose machine is unknown. Backups stay |
 | `disconnect(name)` | Forgets a PostgreSQL Store; its data stays | |
 
 Moving a Store moves where its Sandboxes can run: a Sandbox of a sqlite Store
