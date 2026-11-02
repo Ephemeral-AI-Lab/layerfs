@@ -4,8 +4,8 @@
 //! the providers this build can add. Each request is sent once; a failure
 //! is answered with a stable code (Unavailable, Denied, Unknown, …).
 use crate::common::outcome::{refused, Outcome};
-use crate::host::registry::text;
 use crate::host::sync::driver;
+use crate::sandbox::registry::text;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_store_backup::backup::{self as remote, Checked, Copy};

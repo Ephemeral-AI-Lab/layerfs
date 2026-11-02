@@ -17,8 +17,8 @@
 //! #402. Start, failure and reclaim follow the Docker route: one attempt, a creation intent while the outcome is open, and a failed start's
 //! daemon stopped and its directory deleted, each once.
 use crate::common::outcome::{failed, refused};
-use crate::host::registry::{lock, text, SandboxState, SANDBOXES};
-use crate::host::sandbox::OpenedStore;
+use crate::sandbox::registry::{lock, text, SandboxState, SANDBOXES};
+use crate::sandbox::serve::OpenedStore;
 use crate::{sandbox::ProviderCreate, SandboxApi};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::{DaemonStore, KernelRoute};
@@ -30,7 +30,7 @@ use std::sync::Arc;
 /// Starts the project's next Sandbox as a native (macOS) or namespaces
 /// (Linux) daemon. Linux refuses `native` and requires root before any
 /// effect. Called by
-/// [`crate::host::sandbox::start`] under the project's guard, with the
+/// [`crate::sandbox::serve::start`] under the project's guard, with the
 /// project's installed Store file or its PostgreSQL Store already read. A
 /// PostgreSQL Store runs on a native daemon only (#533 O3): a namespaces root
 /// binds a Store file.
@@ -38,28 +38,28 @@ pub(crate) fn start(
     args: &SdkValue,
     directory: &Path,
     project: OpenedStore,
-    backend: crate::host::runtime::Backend,
+    backend: crate::sandbox::runtime::Backend,
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let deploy = args
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
     #[cfg(target_os = "linux")]
-    if backend == crate::host::runtime::Backend::HostProcess {
+    if backend == crate::sandbox::runtime::Backend::HostProcess {
         return Err(refused(
             "Unsupported",
-            crate::host::runtime::NATIVE_ON_LINUX,
+            crate::sandbox::runtime::NATIVE_ON_LINUX,
         ));
     }
     if matches!(project, OpenedStore::Postgres(_))
-        && backend == crate::host::runtime::Backend::Namespaces
+        && backend == crate::sandbox::runtime::Backend::Namespaces
     {
         return Err(refused(
             "Unsupported",
             "a Sandbox of a PostgreSQL Store runs on native (macOS) or docker; a namespaces Sandbox binds a Store file",
         ));
     }
-    if cfg!(target_os = "linux") && crate::host::discovery::user().0 != 0 {
+    if cfg!(target_os = "linux") && crate::sandbox::files::user().0 != 0 {
         return Err(refused(
             "Unsupported",
             "LAYERFS_SANDBOX=namespaces on Linux needs root for FUSE and commands as uid 501, gid 20; run inside the VM or CI box that isolates it",
@@ -83,11 +83,11 @@ pub(crate) fn start(
             ))
         }
     };
-    crate::host::sandbox::unresolved(
+    crate::sandbox::serve::unresolved(
         directory,
         &format!("a directory under {root} named for it, and its daemon process"),
     )?;
-    let (id, saved_directory) = crate::host::discovery::claim_next(args)?;
+    let (id, saved_directory) = crate::sandbox::files::claim_next(args)?;
     let made = start_claimed(
         args,
         directory,
@@ -112,13 +112,13 @@ fn start_claimed(
     project: OpenedStore,
     (runtime, backend, executable, store): (
         Runtime,
-        crate::host::runtime::Backend,
+        crate::sandbox::runtime::Backend,
         PathBuf,
         String,
     ),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
-    let sandbox_name = crate::host::sandbox::sandbox_name(args, id)?;
+    let sandbox_name = crate::sandbox::serve::sandbox_name(args, id)?;
     let paths = runtime.native_paths(&sandbox_name).map_err(failed)?;
     let path_text = |path: &Path| {
         path.to_str()
@@ -128,7 +128,7 @@ fn start_claimed(
     let controller = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let route = match backend {
-        crate::host::runtime::Backend::HostProcess => KernelRoute::Nfs,
+        crate::sandbox::runtime::Backend::HostProcess => KernelRoute::Nfs,
         _ => KernelRoute::Fuse,
     };
     // the Store's path in the daemon's filesystem, which is this one
@@ -149,11 +149,11 @@ fn start_claimed(
         OpenedStore::Postgres(selected) => (None, *selected),
     };
     let mut setup =
-        crate::host::sandbox::setup(daemon.private, controller.public, daemon_store, route);
+        crate::sandbox::serve::setup(daemon.private, controller.public, daemon_store, route);
     // macOS uses the caller; Linux keeps #402's separate nonroot identity.
     #[cfg(target_os = "macos")]
     {
-        (setup.command_uid, setup.command_gid) = crate::host::discovery::user();
+        (setup.command_uid, setup.command_gid) = crate::sandbox::files::user();
     }
     setup.listen = "127.0.0.1:0".into();
     setup.overlay = path_text(&paths.overlay)?;
@@ -164,7 +164,7 @@ fn start_claimed(
     };
     setup.encode().map_err(failed)?;
     // Read only if this process ends before the intent is resolved.
-    crate::host::discovery::save(
+    crate::sandbox::files::save(
         &directory.join("create.intent"),
         SdkValue::text(format!("creation of Sandbox {id} began and never finished")),
     )?;
@@ -173,7 +173,7 @@ fn start_claimed(
         _ => String::new(),
     };
     let store = crate::store::identity::shared_store(args)?;
-    let labels = crate::host::sandbox::labels(name, store.as_deref(), id);
+    let labels = crate::sandbox::serve::labels(name, store.as_deref(), id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
     let options = launch_options(backend, identity, &daemon_locator, args)?;
     let request = ProviderCreate {
@@ -182,7 +182,7 @@ fn start_claimed(
             daemon_executable: executable,
             daemon_config: Vec::new(),
             labels,
-            startup_timeout: crate::host::sandbox::STARTUP,
+            startup_timeout: crate::sandbox::serve::STARTUP,
             options,
         },
         setup,
@@ -223,7 +223,7 @@ fn start_claimed(
             ));
         }
     };
-    let dial = crate::host::pool::Dial {
+    let dial = crate::daemon::pool::Dial {
         endpoint,
         host: None,
         secret: controller.private,
@@ -237,13 +237,13 @@ fn start_claimed(
         directory: saved_directory.to_owned(),
         runtime: sandbox,
         identity,
-        controls: crate::host::pool::Controls::new(control, dial),
+        controls: crate::daemon::pool::Controls::new(control, dial),
         mounts: Default::default(),
         processes: Default::default(),
     };
     let recorded = (|| {
         mark_owner(&self::directory(args, id, None)?, saved_directory)?;
-        crate::host::discovery::save_sandbox(
+        crate::sandbox::files::save_sandbox(
             &state.directory,
             &state,
             args,
@@ -251,7 +251,7 @@ fn start_claimed(
             daemon.public,
             instance,
         )?;
-        crate::host::discovery::save_text(
+        crate::sandbox::files::save_text(
             &state.directory.join("container"),
             &state.runtime.identity().to_string(),
         )?;
@@ -283,7 +283,7 @@ fn start_claimed(
 #[cfg(target_os = "macos")]
 fn native_runtime(
     root: &str,
-    _: crate::host::runtime::Backend,
+    _: crate::sandbox::runtime::Backend,
 ) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
     layerfs_sandbox::host_process::HostProcessProvider::new(root).map(Runtime::HostProcess)
 }
@@ -291,13 +291,13 @@ fn native_runtime(
 #[cfg(target_os = "linux")]
 fn native_runtime(
     root: &str,
-    backend: crate::host::runtime::Backend,
+    backend: crate::sandbox::runtime::Backend,
 ) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
     match backend {
-        crate::host::runtime::Backend::HostProcess => Err(
-            layerfs_sandbox::RuntimeError::Unsupported(crate::host::runtime::NATIVE_ON_LINUX),
+        crate::sandbox::runtime::Backend::HostProcess => Err(
+            layerfs_sandbox::RuntimeError::Unsupported(crate::sandbox::runtime::NATIVE_ON_LINUX),
         ),
-        crate::host::runtime::Backend::Namespaces => {
+        crate::sandbox::runtime::Backend::Namespaces => {
             layerfs_sandbox::namespaces::NamespaceProvider::new(root).map(Runtime::Namespaces)
         }
     }
@@ -308,23 +308,23 @@ fn native_runtime(
 /// archive its root is unpacked from.
 #[cfg(target_os = "linux")]
 fn launch_options(
-    backend: crate::host::runtime::Backend,
+    backend: crate::sandbox::runtime::Backend,
     identity: CommandIdentity,
     store: &str,
     args: &SdkValue,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(match backend {
-        crate::host::runtime::Backend::HostProcess => {
+        crate::sandbox::runtime::Backend::HostProcess => {
             return Err(refused(
                 "Unsupported",
-                crate::host::runtime::NATIVE_ON_LINUX,
+                crate::sandbox::runtime::NATIVE_ON_LINUX,
             ))
         }
-        crate::host::runtime::Backend::Namespaces => {
+        crate::sandbox::runtime::Backend::Namespaces => {
             let deploy = args
                 .get("deploy")
                 .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
-            let (image, archive) = crate::host::runtime::namespaces_image(deploy)?;
+            let (image, archive) = crate::sandbox::runtime::namespaces_image(deploy)?;
             ProviderLaunchOptions::Namespaces {
                 command_identity: identity,
                 // the daemon starts with `PATH` and its provider's kernel route only;
@@ -340,7 +340,7 @@ fn launch_options(
 
 #[cfg(not(target_os = "linux"))]
 fn launch_options(
-    _: crate::host::runtime::Backend,
+    _: crate::sandbox::runtime::Backend,
     identity: CommandIdentity,
     _: &str,
     _: &SdkValue,
@@ -374,7 +374,7 @@ pub(crate) fn directory(
                 ),
             )
         })?;
-    let name = crate::host::sandbox::sandbox_name(args, id)?;
+    let name = crate::sandbox::serve::sandbox_name(args, id)?;
     let plain = |path: &Path| {
         !path
             .components()
@@ -467,7 +467,7 @@ pub(crate) fn owned(args: &SdkValue, id: &str, own: &Path) -> Result<(), SdkRefu
         .and_then(|file| file.take(4096).read_to_end(&mut marker))
         .map_err(|error| refuse(format!("whose owner marker cannot be read ({error})")))?;
     let record =
-        std::fs::canonicalize(crate::host::discovery::sandbox_dir(args, id)?).map_err(failed)?;
+        std::fs::canonicalize(crate::sandbox::files::sandbox_dir(args, id)?).map_err(failed)?;
     if marker != record.as_os_str().as_encoded_bytes() {
         let named = String::from_utf8_lossy(&marker);
         return Err(refuse(format!(
@@ -494,8 +494,8 @@ fn abandon(
     let mut left = None;
     if let Some(mut sandbox) = sandbox {
         match sandbox.log_tail(
-            crate::host::sandbox::LOG_LINES,
-            crate::host::sandbox::LOG_BYTES,
+            crate::sandbox::serve::LOG_LINES,
+            crate::sandbox::serve::LOG_BYTES,
         ) {
             Ok(bytes) => {
                 let text = String::from_utf8_lossy(&bytes).trim_end().to_owned();
@@ -523,7 +523,7 @@ fn abandon(
         },
         Some(left) => {
             let state = format!("creation of Sandbox {id} failed ({cause}); {left}");
-            let kept = crate::host::discovery::save(&intent, SdkValue::text(&state))
+            let kept = crate::sandbox::files::save(&intent, SdkValue::text(&state))
                 .err()
                 .map(|error| format!(" (recording it failed: {})", error.message))
                 .unwrap_or_default();

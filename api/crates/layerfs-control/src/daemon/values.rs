@@ -4,7 +4,7 @@
 //! these functions give them the same value shapes the SDK channel uses, and
 //! turn a Commit conflict, a Dirty unmount and a daemon control refusal into
 //! refusals with stable codes.
-use super::{CommitReply, MountedWorkspace, Unmounted};
+use super::workspace::{CommitReply, MountedWorkspace, Unmounted};
 use crate::{OperationCause, OperationFailure};
 use layerfs_bridge::control::{ForcedOutcome, SdkRefusal, SdkValue, WorkspaceStatus};
 use layerfs_bridge::sdk_values::{

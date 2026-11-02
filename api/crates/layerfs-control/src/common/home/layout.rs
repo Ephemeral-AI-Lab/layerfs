@@ -121,7 +121,7 @@ pub fn ensure(home: &Path) -> Result<HomeFile, SdkRefusal> {
 /// Writes a new `layerfs.json` with a new id.
 pub(crate) fn create(home: &Path) -> Result<HomeFile, SdkRefusal> {
     private_dir(home)?;
-    let random = crate::host::registry::random()?;
+    let random = crate::sandbox::registry::random()?;
     let file = HomeFile {
         layout: LAYOUT_VERSION,
         id: layerfs_bridge::sdk_values::hex(&random[..16]),

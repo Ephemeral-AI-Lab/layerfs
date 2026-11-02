@@ -4,7 +4,7 @@
 //! The schema's URL is the call's (`postgresql: { url, schema,
 //! synchronousCommit }`) and is never stored.
 use crate::common::outcome::{refused, Outcome};
-use crate::host::registry::{lock, random, text, INITS};
+use crate::sandbox::registry::{lock, random, text, INITS};
 use crate::store::identity::{self as stores, Identity};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;

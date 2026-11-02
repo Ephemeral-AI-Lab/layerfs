@@ -24,8 +24,8 @@
 //! their Store's gate (`local.rs`), so this process's heads reads wait for
 //! neither and never open the Store under them.
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::host::discovery;
-use crate::host::registry::{random, text};
+use crate::sandbox::files as discovery;
+use crate::sandbox::registry::{random, text};
 use crate::store::identity::{self as stores, Identity, Kind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;

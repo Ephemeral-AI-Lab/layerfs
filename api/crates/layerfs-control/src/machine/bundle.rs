@@ -10,7 +10,7 @@ use layerfs_machine::Bundle;
 
 /// The bundle of this build, or `Unsupported` naming where it is expected.
 pub fn bundle() -> Result<Bundle, SdkRefusal> {
-    let dir = crate::family::deploy::bundle_dir("linux")?;
+    let dir = crate::sandbox::deploy::bundle_dir("linux")?;
     let manifest = crate::common::home::read_record(&dir.join("bundle.json"))?;
     let hash = manifest
         .as_ref()

@@ -88,7 +88,7 @@ pub(super) fn hello(
     request: HelloRequest,
 ) -> Result<DaemonStatus, Box<OperationFailure>> {
     let request = Request::Hello(request);
-    match crate::base::failure::exchange(control, request.clone())? {
+    match crate::daemon::failure::exchange(control, request.clone())? {
         Reply::Hello(status) => Ok(status),
         reply => Err(OperationFailure::unexpected(request, reply)),
     }

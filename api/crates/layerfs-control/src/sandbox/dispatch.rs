@@ -3,9 +3,10 @@
 //! sandbox, workspace) and the backend table (`backend`: `backend.store.*`,
 //! `backend.daemon.*` and the runtime's `runtime.*` reads and actions).
 use crate::common::outcome::{self, refused, Outcome};
-use crate::host::{exec, output, registry, workspace};
 use crate::project::init as project;
+use crate::sandbox::{exec, output, registry};
 use crate::store::service as direct;
+use crate::workspace::serve as workspace;
 use layerfs_bridge::control::SdkValue;
 
 /// Runs one public SDK operation once.
@@ -25,8 +26,8 @@ pub fn call(op: &str, args: SdkValue) -> Outcome {
         "project.init" => project::init(&args),
         "project.list_sandboxes" => workspace::sandboxes(&args),
         "sandbox.list_workspaces" => listed(daemon_backend(op, args)?),
-        "sandbox.create" => crate::host::sandbox::create(&args),
-        "sandbox.close" => crate::host::sandbox::close(&args),
+        "sandbox.create" => crate::sandbox::serve::create(&args),
+        "sandbox.close" => crate::sandbox::serve::close(&args),
         "workspace.mount" => workspace::mount(&args),
         "workspace.commit" => workspace::commit(&args),
         "workspace.unmount" => workspace::unmount(&args),
@@ -69,7 +70,7 @@ fn listed(answer: SdkValue) -> Outcome {
 fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
     let state = registry::sandbox_live(&args)?;
     if let Some(path) = args.get_text("path") {
-        crate::host::unmount::check(&state, path)?;
+        crate::workspace::unmount_guard::check(&state, path)?;
     }
     let args = match args {
         SdkValue::Map(fields) => SdkValue::Map(
@@ -80,7 +81,7 @@ fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
         ),
         other => other,
     };
-    let answer = crate::operator::call(
+    let answer = crate::daemon::operator::call(
         &mut *crate::common::trace::control(&state.controls)?,
         op,
         args,
@@ -88,7 +89,7 @@ fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
     answer.map_err(|error| match error {
         crate::SdkError::Refused(refusal) => refusal,
         crate::SdkError::Operation(failure) => {
-            crate::sandbox::values::refusal(&failure).unwrap_or_else(|| outcome::failed(failure))
+            crate::daemon::values::refusal(&failure).unwrap_or_else(|| outcome::failed(failure))
         }
         crate::SdkError::Mount(failure) => outcome::failed(failure),
     })
@@ -128,7 +129,7 @@ pub fn backend(op: String, args: SdkValue) -> Outcome {
         "runtime.remote.remove" => crate::host::sync::remove(&args),
         "runtime.sandbox.reclaim" => workspace::reclaim(&args),
         "runtime.sandbox.records" => workspace::all_records(&args),
-        "backend.daemon.sandbox.get_log" => crate::host::sandbox::get_log(&args),
+        "backend.daemon.sandbox.get_log" => crate::sandbox::serve::get_log(&args),
         "backend.store.project.get_history"
         | "backend.store.project.get_storage"
         | "backend.store.project.list_overwritten"

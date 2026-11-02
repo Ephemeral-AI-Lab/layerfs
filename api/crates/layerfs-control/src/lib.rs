@@ -5,13 +5,11 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-mod base;
 #[doc(hidden)]
-pub use base::internal;
+pub use daemon::internal;
 pub mod backup;
 pub mod common;
-#[doc(hidden)]
-pub mod family;
+pub mod daemon;
 #[doc(hidden)]
 pub mod host;
 #[doc(hidden)]
@@ -21,8 +19,12 @@ pub mod operator;
 pub mod project;
 pub mod sandbox;
 pub mod store;
-pub use base::failure::{OperationCause, OperationFailure};
-pub use base::sdk::{SdkError, SdkResult};
+pub mod workspace;
+pub use daemon::call::{SdkError, SdkResult};
+pub use daemon::failure::{OperationCause, OperationFailure};
+pub use daemon::workspace::{
+    BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
+};
 pub use layerfs_project::store::{
     projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitError, InitFailure,
     InitRequest, InstallError, InstallFailure, InstallWork, Installed, ProjectApi, SealedProject,
@@ -34,4 +36,3 @@ pub use sandbox::{
     connect_address, ProviderCreate, ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause,
     SandboxPhase,
 };
-pub use sandbox::{BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi};

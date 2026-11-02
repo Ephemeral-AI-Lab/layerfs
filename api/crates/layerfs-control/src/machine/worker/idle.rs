@@ -83,7 +83,7 @@ pub fn idle(root: &Path, idle: Duration, started_ms: u64) -> bool {
 /// restart). An unreadable folder counts as one, so the guest stays up.
 fn sandboxes_held(root: &Path) -> bool {
     use crate::common::home::paths;
-    if crate::host::registry::live_sandboxes() > 0 {
+    if crate::sandbox::registry::live_sandboxes() > 0 {
         return true;
     }
     let Ok(stores) = paths::names(&root.join("store")) else {

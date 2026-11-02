@@ -2,7 +2,7 @@
 //! makes travels as a traced observation under the call's scope, and the
 //! telemetry of the replies is collected for its trace line. An untraced call
 //! sends exactly what it did before. Telemetry never changes a result.
-use crate::host::pool::{Controls, Lease};
+use crate::daemon::pool::{Controls, Lease};
 use crate::internal::{self, Control};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::cell::{Cell, RefCell};

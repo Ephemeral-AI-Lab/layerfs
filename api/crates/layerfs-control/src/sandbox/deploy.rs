@@ -131,7 +131,7 @@ pub(super) fn docker_vm(_: &Path, _: &SdkValue) -> Result<String> {
 /// requires of it, so only a root caller binds one.
 pub(super) fn docker_here(home: &Path, settings: SdkValue) -> Result<SdkValue> {
     let record = read_record(&paths::machine_record(home, "docker"))?.unwrap_or_default();
-    if settings.get("volume").is_some() && crate::host::discovery::user().0 != 0 {
+    if settings.get("volume").is_some() && crate::sandbox::files::user().0 != 0 {
         return Err(refused(
             "Unsupported",
             "a docker Sandbox of a sqlite Store opened in this process bind mounts the Store's folder, which its daemon (root in the container) must own; run as root, or keep the Store on native",

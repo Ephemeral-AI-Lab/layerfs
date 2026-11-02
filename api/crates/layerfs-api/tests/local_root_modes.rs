@@ -97,7 +97,7 @@ fn a_private_home_may_be_passable_and_nothing_more() {
                 SdkValue::text(home.join("v/global/store.sqlite").display().to_string()),
             ),
         ]);
-        layerfs_api::host::dispatch::backend("runtime.store.create".to_owned(), args)
+        layerfs_api::sandbox::dispatch::backend("runtime.store.create".to_owned(), args)
     };
     for open in [0o750, 0o711, 0o705, 0o702] {
         set(&home, open);

@@ -1,9 +1,9 @@
 //! Private, permission-authorized project and Sandbox discovery. No mutation replay.
 use crate::common::outcome::{failed, refused};
-use crate::host::registry::{self, Mount, Process, Project, SandboxState};
+use crate::sandbox::registry::{self, Mount, Process, Project, SandboxState};
 #[cfg(target_os = "linux")]
-use crate::host::runtime::NAMESPACES;
-use crate::host::runtime::{LOCAL, NATIVE};
+use crate::sandbox::runtime::NAMESPACES;
+use crate::sandbox::runtime::{LOCAL, NATIVE};
 use crate::{internal::workspace, BoundWorkspace, MountedWorkspace};
 use layerfs_bridge::{
     control::{Reply, SdkRefusal, SdkValue},
@@ -394,7 +394,8 @@ pub(crate) fn save_sandbox(
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "deploy"))?;
     // the platform the call named, checked by `create` before any effect (#529)
-    let platform = crate::host::runtime::platform(args, crate::host::runtime::backend(deploy)?)?;
+    let platform =
+        crate::sandbox::runtime::platform(args, crate::sandbox::runtime::backend(deploy)?)?;
     let mut fields = vec![
         ("id", SdkValue::text(&state.id)),
         ("platform", SdkValue::text(platform)),
@@ -473,7 +474,7 @@ fn local_fields(
         (
             "directory",
             SdkValue::text(
-                crate::host::local::directory(args, &state.id, None)?
+                crate::sandbox::launch::local::directory(args, &state.id, None)?
                     .display()
                     .to_string(),
             ),
@@ -618,11 +619,11 @@ fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
 /// one, else (#529: the record decides, so a caller of another backend has
 /// none) beside the record's own directory, which must still carry the
 /// name this deployment gives Sandbox `id` and be owned by this record
-/// ([`crate::host::local::owned`]).
+/// ([`crate::sandbox::launch::local::owned`]).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathBuf, LocalRecord)> {
     let directory = PathBuf::from(registry::text(value, "directory")?);
-    let expected = crate::host::local::directory(args, id, directory.parent())?;
+    let expected = crate::sandbox::launch::local::directory(args, id, directory.parent())?;
     // the Sandbox's own directory name, exactly as this deployment names it
     let name = registry::text(value, "name")?;
     if directory != expected || expected.file_name().and_then(|n| n.to_str()) != Some(name) {
@@ -644,7 +645,7 @@ fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathB
         .and_then(|deploy| deploy.get_text("localDir")))
     .is_none()
     {
-        crate::host::local::owned(args, id, &directory)?;
+        crate::sandbox::launch::local::owned(args, id, &directory)?;
     }
     let process = recorded_process(value)?;
     let port = value
@@ -810,7 +811,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     let recorded = recorded(args, id, &value)?;
     // a local daemon listens on this kernel's loopback; no other host reaches it
     let host = match recorded {
-        Recorded::Docker(..) => crate::host::pool::daemon_host(args),
+        Recorded::Docker(..) => crate::daemon::pool::daemon_host(args),
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Recorded::Local { .. } => None,
         #[cfg(target_os = "linux")]
@@ -823,7 +824,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
             failed(failure)
         }
     })?;
-    let dial = crate::host::pool::Dial {
+    let dial = crate::daemon::pool::Dial {
         endpoint: runtime.endpoint().map_err(failed)?,
         host,
         secret: bytes(&value, "secret")?,
@@ -839,7 +840,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
         directory,
         runtime,
         identity: recorded_identity(&value),
-        controls: crate::host::pool::Controls::new(control, dial),
+        controls: crate::daemon::pool::Controls::new(control, dial),
         mounts: Default::default(),
         processes: Default::default(),
     });

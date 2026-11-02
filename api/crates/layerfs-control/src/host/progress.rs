@@ -5,7 +5,7 @@
 //! for bytes), and `runtime.sync.progress { job }` copies its sample. The
 //! call is not changed otherwise: one attempt, no thread, no cancel.
 use crate::common::outcome::Outcome;
-use crate::host::registry::lock;
+use crate::sandbox::registry::lock;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_backup::bucket::progress::{self, Cell, Sample, INTERVAL};
 use std::collections::BTreeMap;
@@ -56,7 +56,7 @@ fn shown(sample: &Sample) -> SdkValue {
 /// `runtime.sync.progress { home, job }`: `{ phase, bytes, total, pieces }`
 /// of the job's running call, or null when none runs in this process.
 pub(crate) fn get(args: &SdkValue) -> Outcome {
-    let job = crate::host::registry::text(args, "job")?;
+    let job = crate::sandbox::registry::text(args, "job")?;
     let cell = lock(&JOBS)?.get(job).cloned();
     Ok(cell.map_or(SdkValue::Null, |cell| shown(&cell.sample())))
 }

@@ -638,7 +638,7 @@ fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     };
     let cursor = match &identity {
         Some(identity) => identity.cursor_key,
-        None => crate::host::registry::random()?,
+        None => crate::sandbox::registry::random()?,
     };
     progress(context, "download");
     let staging = Staging::make(&home)?;
@@ -734,7 +734,7 @@ struct Staging(std::path::PathBuf);
 
 impl Staging {
     fn make(home: &Path) -> Result<Self> {
-        let random = crate::host::registry::random()?;
+        let random = crate::sandbox::registry::random()?;
         let dir = home
             .join("store")
             .join(format!(".restore-{}", pieces::hex(&random[..12])));

@@ -11,8 +11,8 @@
 //! `<home>/<project>/` carries the Store's binding. Every Store-level call
 //! is one attempt; nothing is retried.
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::host::discovery;
-use crate::host::registry::{lock, random, text, Project, INITS};
+use crate::sandbox::files as discovery;
+use crate::sandbox::registry::{lock, random, text, Project, INITS};
 use crate::store::record::{kind_of, required, StoreKind, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};

@@ -17,5 +17,5 @@ pub fn call(control: &mut Control, method: &str, args: SdkValue) -> SdkResult {
             detail: SdkValue::Null,
         }));
     }
-    crate::base::sdk::exchange_call(control, method, args)
+    crate::daemon::call::exchange_call(control, method, args)
 }

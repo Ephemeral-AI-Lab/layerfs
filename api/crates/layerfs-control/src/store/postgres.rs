@@ -7,8 +7,8 @@
 //! PostgreSQL only by an Init into it. Built without the `postgresql`
 //! feature, every call here is `Unsupported`.
 use crate::common::outcome::{refused, Outcome};
-use crate::host::discovery;
-use crate::host::registry::text;
+use crate::sandbox::files as discovery;
+use crate::sandbox::registry::text;
 use crate::store::identity::{self as stores, Identity, Kind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_service::StoreService;

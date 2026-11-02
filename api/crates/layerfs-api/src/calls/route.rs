@@ -15,10 +15,10 @@ pub fn run(call: &Call, context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         return layerfs_control::store::calls::run(context, call.family, call.call, args);
     }
     if call.family == "sandbox" {
-        return crate::family::sandboxes::sandbox(context, call.call, args);
+        return layerfs_control::sandbox::family::sandbox(context, call.call, args);
     }
     if call.family == "workspace" {
-        return crate::family::sandboxes::workspace(context, call.call, args);
+        return layerfs_control::sandbox::family::workspace(context, call.call, args);
     }
     if call.family == "backup" {
         return layerfs_control::backup::family::run(context, call.call, args);

@@ -10,7 +10,7 @@
 //! this sink takes it (an 8 KiB window), so a slow disk holds the command
 //! back. No total is capped: a spooled stream is bounded by free space.
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::host::registry::{lock, text};
+use crate::sandbox::registry::{lock, text};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
@@ -51,7 +51,7 @@ impl Spool {
         let name = std::env::temp_dir().join(format!(
             "layerfs-exec-{}",
             layerfs_bridge::sdk_values::hex(
-                &crate::host::registry::random()
+                &crate::sandbox::registry::random()
                     .map_err(|refusal| io::Error::other(refusal.message))?[..12]
             )
         ));
@@ -145,7 +145,7 @@ pub(crate) fn fields(
     }
     let id = format!(
         "out_{}",
-        layerfs_bridge::sdk_values::hex(&crate::host::registry::random()?[..12])
+        layerfs_bridge::sdk_values::hex(&crate::sandbox::registry::random()?[..12])
     );
     lock(outputs())?.insert(id.clone(), spooled);
     let size = |n: u64| SdkValue::Int(i64::try_from(n).unwrap_or(i64::MAX));

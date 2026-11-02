@@ -13,9 +13,10 @@
 //! refuses later starts until a person resolves it. Nothing is retried on
 //! the caller's behalf.
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::host::registry::{lock, text, SandboxState, SANDBOXES};
+use crate::daemon::values;
 use crate::internal::split_provider;
-use crate::sandbox::{values, ProviderCreate, ProviderFailure};
+use crate::sandbox::registry::{lock, text, SandboxState, SANDBOXES};
+use crate::sandbox::{ProviderCreate, ProviderFailure};
 use crate::{OperationFailure, SandboxApi, SandboxCause, SandboxPhase};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonSetup};
@@ -51,7 +52,7 @@ const IDLE_EXIT_S: u32 = 120;
 /// `Capacity`.
 pub(crate) const WORKSPACES: u32 = 16;
 
-/// Control connections a Sandbox's daemon admits: [`crate::host::pool::CONNECTIONS`]
+/// Control connections a Sandbox's daemon admits: [`crate::daemon::pool::CONNECTIONS`]
 /// for this process and the rest for others (#352 F-017).
 pub(crate) const DAEMON_CONNECTIONS: u16 = 8;
 
@@ -130,7 +131,7 @@ pub(crate) fn labels(project: &str, store: Option<&str>, id: &str) -> Vec<(Strin
 /// project's installed Store file, or a PostgreSQL Store (#506), whose
 /// Sandbox mounts no volume.
 pub(crate) enum OpenedStore {
-    File(Box<(crate::host::registry::Project, StoreManifest)>),
+    File(Box<(crate::sandbox::registry::Project, StoreManifest)>),
     Postgres(Box<DaemonStore>),
 }
 
@@ -141,7 +142,7 @@ fn installed(args: &SdkValue) -> Result<OpenedStore, SdkRefusal> {
         let identity = crate::store::identity::identity(args)?;
         crate::store::identity::sqlite_only(&identity, "a Sandbox of a Store file")?;
     }
-    let project = crate::host::discovery::project(args)?;
+    let project = crate::sandbox::files::project(args)?;
     let Some(installed) = project.installed.clone() else {
         return Err(refused(
             "NoStore",
@@ -164,10 +165,10 @@ pub(crate) fn start(
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
-    if let Some(backend) = crate::host::runtime::backend(deploy)? {
+    if let Some(backend) = crate::sandbox::runtime::backend(deploy)? {
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
-            return crate::host::local::start(args, directory, store, backend);
+            return crate::sandbox::launch::local::start(args, directory, store, backend);
         }
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
@@ -213,7 +214,7 @@ pub(crate) fn start(
     unresolved(directory, &format!("docker ps -a --filter {left}"))?;
     // The number is claimed before anything is made; a failed start gives it
     // back (its directory holds no record yet), so the number is used again.
-    let (id, saved_directory) = crate::host::discovery::claim_next(args)?;
+    let (id, saved_directory) = crate::sandbox::files::claim_next(args)?;
     let made = start_claimed(
         args,
         directory,
@@ -234,7 +235,7 @@ pub(crate) fn start(
 pub(crate) fn unresolved(directory: &Path, left: &str) -> Result<(), SdkRefusal> {
     let intent = directory.join("create.intent");
     if intent.exists() {
-        let state = match crate::host::discovery::load(&intent) {
+        let state = match crate::sandbox::files::load(&intent) {
             Ok(SdkValue::Text(state)) => state,
             _ => "its record is unreadable".to_owned(),
         };
@@ -301,7 +302,7 @@ fn start_claimed(
         .map_err(|_| refused("InvalidInput", format!("container name {container_name}")))?;
     let provider = Arc::new(Runtime::Docker(DockerProvider::new(docker)));
     // Read only if this process ends before the intent is resolved.
-    crate::host::discovery::save(
+    crate::sandbox::files::save(
         &directory.join("create.intent"),
         SdkValue::text(format!("creation of Sandbox {id} began and never finished")),
     )?;
@@ -316,7 +317,7 @@ fn start_claimed(
                 image,
                 store_volume,
                 port: PORT,
-                connect_host: crate::host::pool::daemon_host(args),
+                connect_host: crate::daemon::pool::daemon_host(args),
             },
         },
         setup: daemon_setup,
@@ -336,9 +337,9 @@ fn start_claimed(
     let container = owner.runtime.identity().to_string();
     let instance = owner.startup.instance;
     let (runtime, control, identity) = split_provider(owner);
-    let dial = crate::host::pool::Dial {
+    let dial = crate::daemon::pool::Dial {
         endpoint: runtime.endpoint().map_err(failed)?,
-        host: crate::host::pool::daemon_host(args),
+        host: crate::daemon::pool::daemon_host(args),
         secret: controller.private,
         peer: daemon.public,
         instance,
@@ -350,11 +351,11 @@ fn start_claimed(
         directory: saved_directory.to_owned(),
         runtime,
         identity,
-        controls: crate::host::pool::Controls::new(control, dial),
+        controls: crate::daemon::pool::Controls::new(control, dial),
         mounts: Default::default(),
         processes: Default::default(),
     });
-    crate::host::discovery::save_sandbox(
+    crate::sandbox::files::save_sandbox(
         &state.directory,
         &state,
         args,
@@ -364,7 +365,7 @@ fn start_claimed(
     )?;
     // plain text beside the record, for people and tools reading daemon logs:
     // docker logs $(cat "$LAYERFS_HOME/<project>/sandboxes/<n>/container")
-    crate::host::discovery::save_text(&state.directory.join("container"), &container)?;
+    crate::sandbox::files::save_text(&state.directory.join("container"), &container)?;
     std::fs::remove_file(directory.join("create.intent")).map_err(failed)?;
     lock(&SANDBOXES)?.insert(state.directory.clone(), state.clone());
     Ok(state)
@@ -441,7 +442,7 @@ fn abandon(directory: &Path, id: &str, mut failure: Box<ProviderFailure>) -> Sdk
                 "creation of Sandbox {id} failed ({cause}); container {}; {left}",
                 container.as_deref().unwrap_or("none acknowledged")
             );
-            let kept = crate::host::discovery::save(&intent, SdkValue::text(&state))
+            let kept = crate::sandbox::files::save(&intent, SdkValue::text(&state))
                 .err()
                 .map(|error| format!(" (recording it failed: {})", error.message))
                 .unwrap_or_default();
@@ -473,28 +474,29 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
     let deploy = args
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
-    let platform = crate::host::runtime::platform(args, crate::host::runtime::backend(deploy)?)?;
+    let platform =
+        crate::sandbox::runtime::platform(args, crate::sandbox::runtime::backend(deploy)?)?;
     // a PostgreSQL Store's URL is the call's; its project's entry is made here
     let store = match crate::store::postgres::sandbox_store(args)? {
         Some(selected) => OpenedStore::Postgres(Box::new(selected)),
         None => installed(args)?,
     };
-    let project = crate::host::discovery::project_dir(args)?;
-    let _placing = crate::host::discovery::guard(&project)?;
+    let project = crate::sandbox::files::project_dir(args)?;
+    let _placing = crate::sandbox::files::guard(&project)?;
     // records refused when read are left in place and reported (#529 finding 6)
-    let skipped = crate::host::workspace::reclaim_gone(args)?;
+    let skipped = crate::workspace::serve::reclaim_gone(args)?;
     let state = start(args, &project, store)?;
     Ok(SdkValue::map([
         ("sandbox", SdkValue::text(&state.id)),
         ("name", SdkValue::text(&state.name)),
         (
             "image",
-            SdkValue::text(crate::host::runtime::image(&state.runtime)),
+            SdkValue::text(crate::sandbox::runtime::image(&state.runtime)),
         ),
         ("platform", SdkValue::text(platform)),
         (
             "runtime",
-            SdkValue::text(crate::host::runtime::kind(&state.runtime)),
+            SdkValue::text(crate::sandbox::runtime::kind(&state.runtime)),
         ),
         ("skipped", SdkValue::List(skipped)),
     ]))
@@ -511,9 +513,9 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
 /// cause; the records go after the delete.
 pub(crate) fn close(args: &SdkValue) -> Outcome {
     let id = text(args, "sandbox")?.to_owned();
-    let project = crate::host::discovery::project_dir(args)?;
-    let _placing = crate::host::discovery::guard(&project)?;
-    let directory = crate::host::discovery::sandbox_dir(args, &id)?;
+    let project = crate::sandbox::files::project_dir(args)?;
+    let _placing = crate::sandbox::files::guard(&project)?;
+    let directory = crate::sandbox::files::sandbox_dir(args, &id)?;
     let record = directory.join("sandbox.record");
     if !record.exists() {
         return Err(refused(
@@ -521,10 +523,10 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
             format!("the project has no Sandbox {id}"),
         ));
     }
-    let state = crate::host::registry::sandbox_live(args)?;
-    let _guard = crate::host::discovery::guard(&state.directory)?;
-    let recoverable = crate::host::unmount::check_all(&state)?;
-    crate::host::discovery::refresh_except(&state, &recoverable)?;
+    let state = crate::sandbox::registry::sandbox_live(args)?;
+    let _guard = crate::sandbox::files::guard(&state.directory)?;
+    let recoverable = crate::workspace::unmount_guard::check_all(&state)?;
+    crate::sandbox::files::refresh_except(&state, &recoverable)?;
     // Explicit close can take over an orphaned/retained unmount, but must
     // still refuse every unrelated live Workspace. Stop detaches before
     // killing the daemon; Delete independently checks physical detach.
@@ -547,8 +549,8 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
             )]),
         });
     }
-    let value = crate::host::discovery::load(&record)?;
-    let mut owner = crate::host::discovery::recorded(args, &id, &value)?
+    let value = crate::sandbox::files::load(&record)?;
+    let mut owner = crate::sandbox::files::recorded(args, &id, &value)?
         .reopen()
         .map_err(failed)?;
     owner.stop(STOP_S).map_err(failed)?;
@@ -579,25 +581,25 @@ pub(crate) fn get_log(args: &SdkValue) -> Outcome {
         Some(SdkValue::Int(n)) if (1..=2000).contains(n) => *n as u16,
         _ => return Err(refused("InvalidInput", "lines is a count from 1 to 2000")),
     };
-    let directory = crate::host::discovery::sandbox_dir(args, &id)?;
+    let directory = crate::sandbox::files::sandbox_dir(args, &id)?;
     let record = directory.join("sandbox.record");
     let missing = || refused("NoSuchSandbox", format!("the project has no Sandbox {id}"));
     if !record.exists() {
         return Err(missing());
     }
     let value = {
-        let _guard = crate::host::discovery::guard(&directory)?;
+        let _guard = crate::sandbox::files::guard(&directory)?;
         if !record.exists() {
             return Err(missing());
         }
-        crate::host::discovery::load(&record)?
+        crate::sandbox::files::load(&record)?
     };
     let container = text(&value, "container")?.to_owned();
-    let sandbox = crate::host::discovery::recorded(args, &id, &value)?.stopped();
+    let sandbox = crate::sandbox::files::recorded(args, &id, &value)?.stopped();
     let bytes = match sandbox.log_tail(lines, GET_LOG_BYTES) {
         Ok(bytes) => bytes,
         Err(failure) if failure.container_gone() => {
-            return Err(crate::host::discovery::gone(&id, &container, false))
+            return Err(crate::sandbox::files::gone(&id, &container, false))
         }
         Err(failure) => return Err(failed(failure)),
     };
@@ -623,8 +625,8 @@ const STOP_S: u16 = 5;
 /// another container and is left alone (`Busy`). A Delete the Engine refuses
 /// (the container runs again) removes nothing.
 pub(crate) fn reclaim(args: &SdkValue, id: &str, container: &str, stopped: bool) -> Outcome {
-    let directory = crate::host::discovery::sandbox_dir(args, id)?;
-    let _guard = crate::host::discovery::guard(&directory)?;
+    let directory = crate::sandbox::files::sandbox_dir(args, id)?;
+    let _guard = crate::sandbox::files::guard(&directory)?;
     let record = directory.join("sandbox.record");
     if !record.exists() {
         return Err(refused(
@@ -632,7 +634,7 @@ pub(crate) fn reclaim(args: &SdkValue, id: &str, container: &str, stopped: bool)
             format!("the project has no Sandbox {id}"),
         ));
     }
-    let value = crate::host::discovery::load(&record)?;
+    let value = crate::sandbox::files::load(&record)?;
     if text(&value, "container")? != container {
         return Err(refused(
             "Busy",
@@ -640,7 +642,7 @@ pub(crate) fn reclaim(args: &SdkValue, id: &str, container: &str, stopped: bool)
         ));
     }
     if stopped {
-        match crate::host::discovery::recorded(args, id, &value)?
+        match crate::sandbox::files::recorded(args, id, &value)?
             .stopped()
             .delete()
         {

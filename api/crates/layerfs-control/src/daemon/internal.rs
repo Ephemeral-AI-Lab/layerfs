@@ -1,5 +1,5 @@
 //! Hidden original-channel access for recovery, diagnostics and external proofs.
-pub use super::control::{Control, ControlCause, ControlFailure, ControlPhase};
+pub use super::channel::{Control, ControlCause, ControlFailure, ControlPhase};
 use crate::{BoundWorkspace, OperationFailure, WorkspaceApi};
 use layerfs_bridge::{
     control::{CleanupObservation, ForcedOutcome, ReadyMount, WorkspaceStatus, WorkspaceToken},

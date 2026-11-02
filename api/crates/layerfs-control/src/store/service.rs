@@ -16,7 +16,7 @@
 //! runs once: a refused or failed call returns its own error, nothing is sent
 //! again.
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::host::registry::lock;
+use crate::sandbox::registry::lock;
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
 use layerfs_store_service::{telemetry, OpenRefusal, StoreService};
 use std::collections::BTreeMap;
@@ -50,7 +50,7 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
         std::process::id(),
-        layerfs_bridge::sdk_values::hex(&crate::host::registry::random()?[..12])
+        layerfs_bridge::sdk_values::hex(&crate::sandbox::registry::random()?[..12])
     ));
     std::fs::create_dir(&directory).map_err(failed)?;
     let template = directory.join("overlay.sqlite");

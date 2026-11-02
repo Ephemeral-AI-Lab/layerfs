@@ -422,9 +422,9 @@ fn on_machine(
             };
             crate::store::open::hold(&args, lease)?;
             if op == "backend.daemon.workspace.status" {
-                return crate::host::dispatch::backend(op.to_owned(), args);
+                return crate::sandbox::dispatch::backend(op.to_owned(), args);
             }
-            let out = crate::host::dispatch::call(op, args)?;
+            let out = crate::sandbox::dispatch::call(op, args)?;
             drain(out, &mut |event| context.event(event))
         }
         Some(endpoint) => {
@@ -524,9 +524,9 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     let host = host_args(root, (store, project, &record), how, more)?;
     crate::store::open::hold(&host, None)?;
     if op == "backend.daemon.workspace.status" {
-        return crate::host::dispatch::backend(op.to_owned(), host);
+        return crate::sandbox::dispatch::backend(op.to_owned(), host);
     }
-    drain(crate::host::dispatch::call(op, host)?, events)
+    drain(crate::sandbox::dispatch::call(op, host)?, events)
 }
 
 /// An exec result whose output the host spooled (a stream over 1 MiB):
@@ -539,7 +539,7 @@ fn drain(out: SdkValue, emit: &mut dyn FnMut(SdkValue)) -> Outcome {
     let Some(id) = out.get_text("output").map(str::to_owned) else {
         return Ok(out);
     };
-    let mut buffer = vec![0u8; crate::host::output::INLINE];
+    let mut buffer = vec![0u8; crate::sandbox::output::INLINE];
     let sent = (|| {
         for (stream, size) in [("stdout", "stdoutBytes"), ("stderr", "stderrBytes")] {
             if !matches!(out.get(stream), Some(SdkValue::Null)) || out.get_int(size) == Some(0) {
@@ -552,7 +552,7 @@ fn drain(out: SdkValue, emit: &mut dyn FnMut(SdkValue)) -> Outcome {
                     ("stream", SdkValue::text(stream)),
                     ("offset", SdkValue::Int(offset)),
                 ]);
-                let read = crate::host::output::page(&args, &mut buffer)?;
+                let read = crate::sandbox::output::page(&args, &mut buffer)?;
                 let length = read.get_int("length").unwrap_or(0);
                 if length > 0 {
                     emit(SdkValue::map([
@@ -568,7 +568,7 @@ fn drain(out: SdkValue, emit: &mut dyn FnMut(SdkValue)) -> Outcome {
         }
         Ok::<(), SdkRefusal>(())
     })();
-    crate::host::output::release(&SdkValue::map([("output", SdkValue::text(&id))]))?;
+    crate::sandbox::output::release(&SdkValue::map([("output", SdkValue::text(&id))]))?;
     sent?;
     let out = match out {
         SdkValue::Map(fields) => {

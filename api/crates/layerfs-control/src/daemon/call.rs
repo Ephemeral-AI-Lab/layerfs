@@ -3,7 +3,7 @@
 //! Its arguments and result are plain values, and a refusal carries a stable
 //! code. Store calls are not daemon calls (#352 F-020).
 use crate::{
-    base::failure::exchange_with,
+    daemon::failure::exchange_with,
     internal::{Control, ControlCause, ControlPhase},
     OperationCause, OperationFailure,
 };

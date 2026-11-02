@@ -239,7 +239,7 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
             )
         }
         // a Sandbox or Workspace operation on this machine's own native
-        "sandbox.host" => crate::family::sandboxes::in_worker(root, &args, events),
+        "sandbox.host" => crate::sandbox::family::in_worker(root, &args, events),
         "host.call" | "host.backend" => {
             let name = args
                 .get_text("op")
@@ -247,9 +247,9 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
                 .to_owned();
             let inner = with_home(args.get("args").cloned().unwrap_or_default(), root);
             if op == "host.call" {
-                crate::host::dispatch::call(&name, inner)
+                crate::sandbox::dispatch::call(&name, inner)
             } else {
-                crate::host::dispatch::backend(name, inner)
+                crate::sandbox::dispatch::backend(name, inner)
             }
         }
         _ => Err(refused(

@@ -300,8 +300,8 @@ fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
             schema: SCHEMA.to_owned(),
             synchronous_commit: sync.to_owned(),
         },
-        binding: crate::host::registry::random()?.to_vec(),
-        cursor_key: crate::host::registry::random()?,
+        binding: crate::sandbox::registry::random()?.to_vec(),
+        cursor_key: crate::sandbox::registry::random()?,
     };
     let binding = if crate::project::postgres_init::create_schema(&probe, &fresh)? {
         fresh.binding

@@ -174,8 +174,8 @@ fn create(home: &Path, name: &str) -> Outcome {
     home::private_dir(&directory)?;
     let identity = crate::store::identity::Identity {
         kind: crate::store::identity::Kind::Sqlite,
-        binding: crate::host::registry::random()?.to_vec(),
-        cursor_key: crate::host::registry::random()?,
+        binding: crate::sandbox::registry::random()?.to_vec(),
+        cursor_key: crate::sandbox::registry::random()?,
     };
     let file = paths::store_file(home, name);
     let policy = layerfs_storage::StoragePolicy::frozen_default();

@@ -21,7 +21,7 @@ use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 /// Most control connections one process keeps to one Sandbox. A Sandbox this
-/// binding creates admits [`crate::host::sandbox::DAEMON_CONNECTIONS`]; the rest
+/// binding creates admits [`crate::sandbox::serve::DAEMON_CONNECTIONS`]; the rest
 /// stay for other processes.
 pub(crate) const CONNECTIONS: usize = 6;
 
@@ -98,7 +98,7 @@ impl Dial {
                         format!(
                             "the Sandbox's daemon admitted no connection for {}s: other processes hold all {} of its connections",
                             wait.as_secs(),
-                            crate::host::sandbox::DAEMON_CONNECTIONS
+                            crate::sandbox::serve::DAEMON_CONNECTIONS
                         ),
                     ))
                 }

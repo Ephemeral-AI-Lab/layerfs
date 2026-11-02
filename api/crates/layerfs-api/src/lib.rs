@@ -11,7 +11,6 @@
 
 pub mod calls;
 pub use layerfs_control::common::{home, names};
-use layerfs_control::family;
 #[doc(hidden)]
 pub use layerfs_control::host;
 #[doc(hidden)]
@@ -28,10 +27,12 @@ pub use layerfs_control::{
     Installed, OperationCause, OperationFailure, ProjectApi, ProjectError, SdkError, SdkResult,
     SealedProject, SourceRefusal,
 };
-pub use layerfs_control::{project, sandbox, store};
+pub use layerfs_control::{daemon, project, sandbox, store};
+pub use layerfs_control::{
+    BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
+};
 #[cfg(unix)]
 pub use sandbox::{
     connect_address, ProviderCreate, ProviderFailure, ProviderSandbox, SandboxApi, SandboxCause,
     SandboxPhase,
 };
-pub use sandbox::{BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi};

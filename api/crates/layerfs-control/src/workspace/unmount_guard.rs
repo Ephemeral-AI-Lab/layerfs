@@ -3,7 +3,8 @@
 //! Mount paths are unique within one daemon lifetime; Sandbox removal clears
 //! the terminal records before that directory can be reused.
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::host::{discovery, registry::SandboxState};
+use crate::sandbox::files as discovery;
+use crate::sandbox::registry::SandboxState;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
 use std::{
     fs::{File, OpenOptions},
@@ -146,7 +147,7 @@ pub(crate) fn check(state: &SandboxState, path: &str) -> Result<(), SdkRefusal> 
 pub(crate) fn find(state: &SandboxState, path: &str) -> Result<Option<SdkValue>, SdkRefusal> {
     // Steady-state token/directory lookups already have a token: avoid a
     // directory scan proportional to the lifetime's completed unmounts.
-    let known = crate::host::registry::lock(&state.mounts)?
+    let known = crate::sandbox::registry::lock(&state.mounts)?
         .get(path)
         .map(|mount| mount.workspace.bound.token);
     if let Some(token) = known {
@@ -181,7 +182,7 @@ pub(crate) fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal>
             }
             if let Some(value) = inspect(&entry.path())? {
                 if value.get_text("state") == Some("Retained") {
-                    recoverable.push(crate::host::registry::text(&value, "path")?.to_owned());
+                    recoverable.push(crate::sandbox::registry::text(&value, "path")?.to_owned());
                 }
             }
         }

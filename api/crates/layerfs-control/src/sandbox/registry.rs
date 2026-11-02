@@ -49,7 +49,7 @@ pub(crate) struct SandboxState {
     pub(crate) directory: std::path::PathBuf,
     pub(crate) runtime: Box<layerfs_sandbox::Sandbox>,
     pub(crate) identity: CommandIdentity,
-    pub(crate) controls: crate::host::pool::Controls,
+    pub(crate) controls: crate::daemon::pool::Controls,
     pub(crate) mounts: Mutex<BTreeMap<String, Mount>>,
     pub(crate) processes: Mutex<BTreeMap<String, Process>>,
 }
@@ -85,12 +85,12 @@ pub(crate) fn text<'a>(args: &'a SdkValue, name: &str) -> Result<&'a str, SdkRef
 /// that needs every mount or process another process may have changed takes
 /// `discovery::refresh`.
 pub(crate) fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let directory = crate::host::discovery::sandbox_dir(args, text(args, "sandbox")?)?;
+    let directory = crate::sandbox::files::sandbox_dir(args, text(args, "sandbox")?)?;
     let existing = lock(&SANDBOXES)?.get(&directory).cloned();
     match existing {
         Some(state) => Ok(state),
         None => {
-            let state = crate::host::discovery::reopen(args)?;
+            let state = crate::sandbox::files::reopen(args)?;
             lock(&SANDBOXES)?.insert(directory, state.clone());
             Ok(state)
         }
@@ -103,14 +103,14 @@ pub(crate) fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> 
 /// Sandbox's daemon ends itself, #373) is the refusal of
 /// `discovery::gone`, and this process forgets the state.
 pub(crate) fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let directory = crate::host::discovery::sandbox_dir(args, text(args, "sandbox")?)?;
+    let directory = crate::sandbox::files::sandbox_dir(args, text(args, "sandbox")?)?;
     let Some(state) = lock(&SANDBOXES)?.get(&directory).cloned() else {
         return sandbox(args);
     };
     if let Err(failure) = state.runtime.endpoint() {
         lock(&SANDBOXES)?.remove(&directory);
         return Err(if failure.container_gone() || failure.container_stopped() {
-            crate::host::discovery::gone(
+            crate::sandbox::files::gone(
                 &state.id,
                 &state.runtime.identity().to_string(),
                 failure.container_stopped(),
@@ -153,17 +153,15 @@ impl SandboxState {
     /// once, for whatever is mounted there now; the full refresh replaces
     /// the table, so a stale entry goes with it.
     fn mounted<T>(&self, path: &str, pick: impl Fn(&Mount) -> T) -> Result<T, SdkRefusal> {
-        crate::host::unmount::check(self, path)?;
+        crate::workspace::unmount_guard::check(self, path)?;
         let known = lock(&self.mounts)?
             .get(path)
             .map(|mount| (mount.workspace.bound.token, pick(mount)));
         match known {
-            Some((token, value))
-                if crate::host::discovery::workspace_file(self, token).exists() =>
-            {
+            Some((token, value)) if crate::sandbox::files::workspace_file(self, token).exists() => {
                 return Ok(value)
             }
-            _ => crate::host::discovery::refresh(self)?,
+            _ => crate::sandbox::files::refresh(self)?,
         }
         lock(&self.mounts)?
             .get(path)

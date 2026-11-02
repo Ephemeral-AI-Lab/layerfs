@@ -211,7 +211,7 @@ fn shared_store(home: &Path, store: &str, report: &mut Report) -> Result<()> {
     let dir = home.join(".stores").join(store);
     let old = dir.join("store.record");
     if old.is_file() && read_record(&paths::store_record(home, store))?.is_none() {
-        let value = crate::host::discovery::load(&old)?;
+        let value = crate::sandbox::files::load(&old)?;
         let kind = kind_of(&value)?;
         let mut record = SdkValue::map([
             ("name", SdkValue::text(store)),
@@ -259,7 +259,7 @@ fn sqlite_defaults(record: SdkValue) -> SdkValue {
 /// A project with its own 1.1.0 Store: Store `<p>` holding project `<p>`.
 fn own_store(home: &Path, name: &str, dir: &Path, report: &mut Report) -> Result<()> {
     if read_record(&paths::store_record(home, name))?.is_none() {
-        let value = crate::host::discovery::load(&dir.join("project.record"))?;
+        let value = crate::sandbox::files::load(&dir.join("project.record"))?;
         let manifest = match value.get("manifest") {
             Some(SdkValue::Bytes(bytes)) => {
                 layerfs_bridge::provision::StoreManifest::decode(bytes).map_err(failed)?
@@ -314,7 +314,7 @@ fn move_project(
     fs::rename(from, &to).map_err(failed)?;
     let old = to.join("project.record");
     if old.is_file() {
-        let value = crate::host::discovery::load(&old)?;
+        let value = crate::sandbox::files::load(&old)?;
         let record = SdkValue::map([
             ("name", SdkValue::text(project)),
             ("store", SdkValue::text(store)),
