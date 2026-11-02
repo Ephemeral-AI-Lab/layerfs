@@ -29,6 +29,10 @@ pub(crate) trait Adapter: Sync {
     fn status(&self, spec: &Spec) -> Result<Status, MachineError>;
     /// The identity of the machine's host (`ssh`).
     fn host_identity(&self, spec: &Spec) -> Result<String, MachineError>;
+    /// The PostgreSQL Store URL the machine's Sandbox daemons dial for
+    /// `url`: a loopback host becomes the machine's host alias, or is
+    /// refused naming what is missing (`crate::reach`). Starts nothing.
+    fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError>;
 }
 
 /// The platform's adapter: the one match over platforms for what they do.

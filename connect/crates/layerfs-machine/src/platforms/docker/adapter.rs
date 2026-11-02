@@ -4,6 +4,7 @@ use crate::adapter::{refused, Adapter};
 use crate::error::MachineError;
 use crate::platform::{ExecutorKind, HostOs, Platform};
 use crate::probe::first_line;
+use crate::reach::{dial, Loopback};
 use crate::setup::guest::Guest;
 use crate::setup::{tool, Status};
 use crate::spec::{Bundle, Running, Spec, Tools};
@@ -55,5 +56,12 @@ impl Adapter for Docker {
     }
     fn host_identity(&self, spec: &Spec) -> Result<String, MachineError> {
         Err(refused(spec, "has no ssh host"))
+    }
+    fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
+        dial(
+            spec,
+            url,
+            Loopback::Alias(layerfs_sandbox::docker::DESKTOP_HOST),
+        )
     }
 }

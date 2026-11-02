@@ -1,7 +1,8 @@
-//! The machine calls: create, connect, start, stop, remove and status, each
-//! dispatched to the platform's adapter (`crate::adapter`). Setup steps 1 to 4
-//! (VM and disk, bundle, worker, forward and readiness) end in a [`Running`];
-//! writing `worker.json` and `record.json` is the caller's step 5.
+//! The machine calls: create, connect, start, stop, remove, status and
+//! reach, each dispatched to the platform's adapter (`crate::adapter`).
+//! Setup steps 1 to 4 (VM and disk, bundle, worker, forward and readiness)
+//! end in a [`Running`]; writing `worker.json` and `record.json` is the
+//! caller's step 5.
 use super::guest::Guest;
 use super::worker;
 use crate::adapter::{adapter, refused};
@@ -116,6 +117,19 @@ pub fn status_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineEr
 pub fn host_identity(spec: &Spec) -> Result<String, MachineError> {
     spec.validate()?;
     adapter(spec.kind).host_identity(spec)
+}
+
+/// The PostgreSQL Store URL a Sandbox daemon on `spec`'s machine dials for
+/// `url` (#535 §7.3): `native` uses it as given; a loopback host becomes the
+/// machine's host alias (`docker`: `host.docker.internal`, `lima`:
+/// `host.lima.internal`, `firecracker`: `172.30.<n>.1`) or is refused
+/// (`ssh`, and `apple-container` and `microsandbox` until their aliases are
+/// verified, G7); a rewrite is refused when the URL asks for
+/// `sslmode=verify-full`. Every other host is used as given. Starts nothing;
+/// no message holds any part of the URL.
+pub fn reach(spec: &Spec, url: &str) -> Result<String, MachineError> {
+    spec.validate()?;
+    adapter(spec.kind).reach(spec, url)
 }
 
 /// Streams `entry` of the host folder `dir` (or all of it) into the guest

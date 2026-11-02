@@ -161,6 +161,11 @@ fn a_loopback_postgresql_url_names_the_desktop_host() {
         "postgres://u@db.example.com:5432/db",
         "postgres://u@127.0.0.2/db",
         "not a url",
+        // a port that is not 1 to 5 digits (here a password's unescaped `/`
+        // cut the authority) is not read
+        "postgres://u:pw/x@localhost/db",
+        "postgres://u@localhost:/db",
+        "postgres://u@[::1]x/db",
     ] {
         assert_eq!(desktop_url(other), None, "{other}");
     }

@@ -4,9 +4,14 @@ use crate::adapter::{refused, Adapter};
 use crate::error::MachineError;
 use crate::platform::HostOs;
 use crate::probe::{macos_missing, tool_version};
+use crate::reach::{dial, Loopback};
 use crate::setup::guest::Guest;
 use crate::setup::Status;
 use crate::spec::{Bundle, Running, Spec, Tools};
+
+/// The name a lima guest reaches the host's loopback by (#535 §7.3; not yet
+/// verified live, G7: `support.rs` refuses its PostgreSQL Sandboxes).
+const HOST_ALIAS: &str = "host.lima.internal";
 
 pub(crate) struct Lima;
 pub(crate) static ADAPTER: Lima = Lima;
@@ -36,5 +41,8 @@ impl Adapter for Lima {
     }
     fn host_identity(&self, spec: &Spec) -> Result<String, MachineError> {
         Err(refused(spec, "has no ssh host"))
+    }
+    fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
+        dial(spec, url, Loopback::Alias(HOST_ALIAS))
     }
 }

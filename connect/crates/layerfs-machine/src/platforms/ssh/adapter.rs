@@ -4,9 +4,14 @@ use crate::adapter::Adapter;
 use crate::error::MachineError;
 use crate::platform::HostOs;
 use crate::probe::first_line;
+use crate::reach::{dial, Loopback};
 use crate::setup::guest::Guest;
 use crate::setup::{tool, Status};
 use crate::spec::{Bundle, Running, Spec, Tools};
+
+/// Why an ssh machine's daemons cannot dial the caller's loopback: they run
+/// on another host, whose own loopback is not the caller's.
+const LOOPBACK: &str = "an ssh machine cannot reach the caller's loopback";
 
 pub(crate) struct Ssh;
 pub(crate) static ADAPTER: Ssh = Ssh;
@@ -39,5 +44,8 @@ impl Adapter for Ssh {
     }
     fn host_identity(&self, spec: &Spec) -> Result<String, MachineError> {
         identity(spec)
+    }
+    fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
+        dial(spec, url, Loopback::Refused(LOOPBACK))
     }
 }

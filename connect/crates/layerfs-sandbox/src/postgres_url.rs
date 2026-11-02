@@ -19,7 +19,9 @@ pub struct PostgresUrl<'a> {
 }
 
 impl<'a> PostgresUrl<'a> {
-    /// Splits `url`; `None` when it has no `://` or an unclosed `[`.
+    /// Splits `url`; `None` when it has no `://`, an unclosed `[`, or a
+    /// port that is not 1 to 5 digits (a host list `h1,h2:5433` reads as
+    /// one host holding a `,`).
     pub fn parse(url: &'a str) -> Option<Self> {
         let (scheme, rest) = url.split_once("://")?;
         let end = rest.find(['/', '?']).unwrap_or(rest.len());
@@ -35,6 +37,15 @@ impl<'a> PostgresUrl<'a> {
                 None => (host_port, ""),
             },
         };
+        let port_ok = match port.strip_prefix(':') {
+            Some(digits) => {
+                (1..=5).contains(&digits.len()) && digits.bytes().all(|b| b.is_ascii_digit())
+            }
+            None => port.is_empty(),
+        };
+        if !port_ok {
+            return None;
+        }
         Some(Self {
             scheme,
             userinfo,
@@ -53,6 +64,16 @@ impl<'a> PostgresUrl<'a> {
     /// or `::1`.
     pub fn loopback(&self) -> bool {
         matches!(self.host, "127.0.0.1" | "localhost" | "::1")
+    }
+
+    /// The values of the query parameter `key`, in order (not
+    /// percent-decoded).
+    pub fn query(&self, key: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+        let query = self.tail.split_once('?').map_or("", |(_, query)| query);
+        query.split('&').filter_map(move |pair| {
+            let (name, value) = pair.split_once('=').unwrap_or((pair, ""));
+            (name == key).then_some(value)
+        })
     }
 
     /// The same URL with `host` in place of its host; everything else,
