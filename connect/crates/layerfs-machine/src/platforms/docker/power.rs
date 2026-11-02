@@ -1,18 +1,10 @@
-//! `docker` on macOS and Linux: one worker container, `<vm_name>`, started
-//! detached (the port of `docker/macos.js`). It mounts Docker's own socket, the Store
-//! volume `<vm_name>-data` at `/layerfs/data` and the bundle read-only; never
-//! the host home. Its worker listens behind a secret on a port published to
-//! the host's loopback only. The secret is written into a private tmpfs after
-//! the container starts, so it is in no command line and no container config.
-use super::cli::{docker, engine_version};
+//! `docker` power: start and stop the worker container.
+use super::network::published_port;
+use super::unix::{guest, inspect, run};
 use crate::error::{Code, MachineError};
-use crate::setup::guest::Guest;
 use crate::setup::{tool, worker};
-use crate::setup::{with_worker, State, Status};
 use crate::spec::{Bundle, Running, Spec, DATA, STATE, WORKER_PORT};
-use std::time::Duration;
 
-const CALL: Duration = Duration::from_secs(30);
 /// The label that marks a container as a machine's worker.
 const ROLE: &str = "layerfs.role=machine-worker";
 /// The Engine's socket as the Engine's kernel sees it (inside Docker
@@ -23,34 +15,6 @@ const VM_DOCKER: &str = "/var/run/docker.sock";
 const ENTRY: &str = r#"i=0
 while [ ! -s /layerfs/state/secret ]; do i=$((i+1)); [ $i -le 600 ] || exit 1; sleep 0.1; done
 exec /layerfs/bundle/layerfs worker"#;
-
-fn run(spec: &Spec, args: &[&str], what: &str) -> Result<tool::Output, MachineError> {
-    tool::run(docker(spec, args)?, None, CALL, what)
-}
-
-/// The container's `{{.State.Status}}` and role label, or `None` when it does not exist.
-fn inspect(spec: &Spec) -> Result<Option<(String, String)>, MachineError> {
-    let format = "{{.State.Status}}\t{{index .Config.Labels \"layerfs.role\"}}";
-    let out = run(
-        spec,
-        &["inspect", "-f", format, &spec.vm_name],
-        "docker inspect",
-    )?;
-    if !out.ok() {
-        // Docker 29 says `error: no such object`; older Engines capitalise it
-        let said = out.stderr.to_ascii_lowercase();
-        if said.contains("no such object") || said.contains("no such container") {
-            return Ok(None);
-        }
-        return Err(MachineError::new(
-            Code::Failed,
-            format!("docker inspect failed: {}", out.said()),
-        ));
-    }
-    let line = out.stdout.trim();
-    let (state, role) = line.split_once('\t').unwrap_or((line, ""));
-    Ok(Some((state.to_owned(), role.to_owned())))
-}
 
 /// A fresh worker container: an earlier one of ours is replaced (its Store
 /// volume stays); a container of that name that is not a worker is refused.
@@ -121,20 +85,6 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
     })
 }
 
-/// The host port of `docker port`'s answer (`127.0.0.1:55012`, maybe a second IPv6 line).
-pub(crate) fn published_port(answer: &str) -> Option<u16> {
-    answer
-        .lines()
-        .find_map(|line| line.rsplit_once(':')?.1.trim().parse().ok())
-}
-
-pub(crate) fn guest(spec: &Spec) -> Result<Guest, MachineError> {
-    Ok(Guest::Docker {
-        socket: spec.tools.docker_socket.clone(),
-        container: spec.vm_name.clone(),
-    })
-}
-
 /// Stops the worker container; Docker itself and the Store volume stay.
 pub(crate) fn stop(spec: &Spec) -> Result<(), MachineError> {
     if inspect(spec)?.is_none() {
@@ -147,30 +97,4 @@ pub(crate) fn stop(spec: &Spec) -> Result<(), MachineError> {
     )?
     .answer("stopping the worker container")?;
     Ok(())
-}
-
-pub(crate) fn status(spec: &Spec) -> Result<Status, MachineError> {
-    let version = engine_version(spec);
-    if version.is_none() {
-        return Ok(Status {
-            state: State::Stopped,
-            free_disk: None,
-            tool_version: None,
-            down_reason: Some(format!(
-                "the Docker Engine at {} does not answer",
-                spec.tools.docker_socket.display()
-            )),
-        });
-    }
-    let kernel = match inspect(spec)? {
-        None => State::Stopped,
-        Some((state, _)) if state == "running" => State::Running,
-        Some((state, _)) if state == "dead" => State::Failed,
-        Some(_) => State::Stopped,
-    };
-    let free = match (kernel, guest(spec)) {
-        (State::Running, Ok(guest)) => worker::free_disk(spec, &guest),
-        _ => None,
-    };
-    Ok(with_worker(spec, kernel, free, version))
 }
