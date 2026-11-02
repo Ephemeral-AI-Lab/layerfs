@@ -83,6 +83,7 @@ fn microsandbox_creates_a_disk_volume_and_runs_setup_through_msb_exec() {
         "msb",
         r#"case "$1" in
   inspect) [ -e "$SCRATCH/made" ] && { echo '{"status":"Stopped"}'; exit 0; }; echo "sandbox not found" >&2; exit 1 ;;
+  volume) [ "$2" = list ] && echo "NAME SIZE"; exit 0 ;;
   create) touch "$SCRATCH/made" ;;
   exec) echo "no guest agent" >&2; exit 1 ;;
 esac"#,
@@ -100,6 +101,24 @@ esac"#,
     assert!(log.contains("msb start lfs-dev"));
     assert!(line(&log, "msb exec").starts_with("msb exec lfs-dev --no-tty -- sh -c"));
     assert!(!log.contains("/layerfs/home") && !log.contains(" -v "));
+}
+
+#[test]
+fn microsandbox_leaves_a_volume_that_was_there_before() {
+    // #533 review P1-23: a create must neither reuse nor remove it
+    let scratch = Scratch::new("msb-volume");
+    scratch.tool(
+        "msb",
+        r#"case "$1" in
+  inspect) echo "sandbox not found" >&2; exit 1 ;;
+  volume) [ "$2" = list ] && printf 'NAME SIZE\nlfs-dev-data 10G\n'; exit 0 ;;
+esac"#,
+    );
+    let error = machine::create(&scratch.spec(Kind::Microsandbox), &scratch.bundle()).unwrap_err();
+    assert_eq!(error.code, Code::Exists, "{error}");
+    let log = scratch.log();
+    assert!(!log.contains("msb create"), "{log}");
+    assert!(!log.contains("volume remove"), "{log}");
 }
 
 #[test]

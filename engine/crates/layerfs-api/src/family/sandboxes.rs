@@ -251,6 +251,10 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let _lock = home::lock::take(&home)?;
     let target = route::target(&home, project)?;
     route::moving(&target.record, &target.store)?;
+    // refused too while the machine is being removed
+    #[cfg(feature = "machine")]
+    crate::machine::machine_of(&home, machine)?;
+    #[cfg(not(feature = "machine"))]
     if read_record(&paths::machine_record(&home, machine))?.is_none() {
         return Err(refused("NotFound", format!("no machine named {machine}")));
     }

@@ -33,27 +33,10 @@ pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> 
             running(home, host)?;
         }
     }
-    let lock_path = crate::home::paths::machine_dir(home, name).join("start.lock");
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .mode(0o600)
-        .open(&lock_path)
-        .map_err(failed)?;
-    let deadline = Instant::now() + START_WAIT;
-    while !crate::host::flock::try_lock(&file, true).map_err(failed)? {
-        if Instant::now() >= deadline {
-            return Err(refused(
-                "Unavailable",
-                format!("machine {name} is being started by another process"),
-            ));
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    let started = (|| {
-        // another process may have started it meanwhile
+    let _start = start_lock(home, name)?;
+    (|| {
+        // another process may have started it, or removed it, meanwhile
+        let record = machine_of(home, name)?;
         if let Some(endpoint) = answering(home, name)? {
             return Ok(Some(endpoint));
         }
@@ -68,9 +51,42 @@ pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> 
                 Ok(Some(endpoint_of(&running.endpoint)))
             }
         }
-    })();
-    crate::host::flock::unlock(&file);
-    started
+    })()
+}
+
+/// Machine `name`'s `start.lock`, held until dropped. Starting, creating and
+/// removing a machine take it, always before the home lock, so an
+/// on-demand start never runs beside a create or a remove of the same VM.
+/// A wait for it, at most [`START_WAIT`], is not a retry.
+pub(crate) struct StartLock(std::fs::File);
+
+impl Drop for StartLock {
+    fn drop(&mut self) {
+        crate::host::flock::unlock(&self.0);
+    }
+}
+
+pub(crate) fn start_lock(home: &Path, name: &str) -> Result<StartLock, SdkRefusal> {
+    let lock_path = crate::home::paths::machine_dir(home, name).join("start.lock");
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .open(&lock_path)
+        .map_err(failed)?;
+    let deadline = Instant::now() + START_WAIT;
+    while !crate::host::flock::try_lock(&file, true).map_err(failed)? {
+        if Instant::now() >= deadline {
+            return Err(refused(
+                "Unavailable",
+                format!("machine {name} is being started, made or removed by another process"),
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Ok(StartLock(file))
 }
 
 fn endpoint_of(endpoint: &adapters::Endpoint) -> Endpoint {

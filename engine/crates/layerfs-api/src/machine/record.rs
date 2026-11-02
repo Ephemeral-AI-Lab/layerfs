@@ -39,10 +39,30 @@ pub fn ensure_built_ins(home: &Path) -> Result<()> {
 }
 
 /// The machine `name`'s record, or `NotFound`.
+/// Refused `InUse` while a live process removes the machine (its record's
+/// `removing` pid), so no call starts, moves to or runs on it meanwhile.
 pub fn machine_of(home: &Path, name: &str) -> Result<SdkValue> {
+    let record = raw(home, name)?;
+    if let Some(pid) = removing(&record) {
+        return Err(refused(
+            "InUse",
+            format!("machine {name} is being removed by process {pid}"),
+        ));
+    }
+    Ok(record)
+}
+
+/// Machine `name`'s record as it is, being removed or not.
+pub fn raw(home: &Path, name: &str) -> Result<SdkValue> {
     crate::names::name("machine", name).map_err(|why| refused("InvalidInput", why))?;
     read_record(&paths::machine_record(home, name))?
         .ok_or_else(|| refused("NotFound", format!("no machine named {name}")))
+}
+
+/// The live process removing a machine, from its record.
+pub fn removing(record: &SdkValue) -> Option<i64> {
+    let pid = record.get("removing")?.get_int("pid")?;
+    crate::store::lease::alive(u32::try_from(pid).ok()?).then_some(pid)
 }
 
 /// A record's kind.

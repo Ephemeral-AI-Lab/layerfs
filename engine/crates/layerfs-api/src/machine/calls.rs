@@ -250,6 +250,8 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ("phase", SdkValue::text("create")),
         ("machine", SdkValue::text(&name)),
     ]));
+    // a first call that needs the machine waits for its create
+    let _start = super::start::start_lock(&home, &name)?;
     finish(&home, &name, adapters::create(&spec, &bundle))
 }
 
@@ -419,11 +421,53 @@ fn idle(home: &Path, name: &str) -> Result<()> {
     ))
 }
 
+/// The home lock covers only the checks and the record writes: the record
+/// says `removing` (with this process) while the VM is deleted under the
+/// machine's start lock, so no call starts it, moves to it or runs on it
+/// meanwhile. A refused delete puts the record back as it was; one whose
+/// outcome is unknown records `unknown`.
 fn take_down(context: &mut Context<'_>, args: &SdkValue, ssh: bool) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
+    machine_of(&home, name)?;
+    let _start = super::start::start_lock(&home, name)?;
+    let (record, spec) = {
+        let _lock = lock::take(&home)?;
+        let (record, spec) = removable(&home, name, ssh)?;
+        let marked = with_field(
+            record.clone(),
+            "removing",
+            SdkValue::map([("pid", SdkValue::Int(i64::from(std::process::id())))]),
+        );
+        write_record(&paths::machine_record(&home, name), &marked)?;
+        (record, spec)
+    };
+    if let Err(error) = adapters::remove(&spec) {
+        // an unknown outcome says so in the record; a refused one leaves it as it was
+        let record = match error.code {
+            Code::Unknown => with_field(
+                with_field(record, "state", SdkValue::text("unknown")),
+                "error",
+                SdkValue::text(&error.message),
+            ),
+            _ => record,
+        };
+        let _lock = lock::take(&home)?;
+        write_record(&paths::machine_record(&home, name), &record)?;
+        return Err(refusal(error));
+    }
     let _lock = lock::take(&home)?;
-    let record = machine_of(&home, name)?;
+    std::fs::remove_dir_all(paths::machine_dir(&home, name)).map_err(failed)?;
+    Ok(SdkValue::map([
+        ("name", SdkValue::text(name)),
+        ("removed", SdkValue::Bool(true)),
+    ]))
+}
+
+/// The checks before a remove or disconnect, under the home lock: the
+/// machine's record and spec.
+fn removable(home: &Path, name: &str, ssh: bool) -> Result<(SdkValue, adapters::Spec)> {
+    let record = machine_of(home, name)?;
     let kind = kind_of(&record)?;
     if kind.built_in() {
         return Err(refused(
@@ -442,14 +486,9 @@ fn take_down(context: &mut Context<'_>, args: &SdkValue, ssh: bool) -> Outcome {
             format!("{name} is a {} machine; use {call}", kind.name()),
         ));
     }
-    idle(&home, name)?;
-    let spec = record::spec(&home, &home_id(&home)?, name, &record)?;
-    adapters::remove(&spec).map_err(refusal)?;
-    std::fs::remove_dir_all(paths::machine_dir(&home, name)).map_err(failed)?;
-    Ok(SdkValue::map([
-        ("name", SdkValue::text(name)),
-        ("removed", SdkValue::Bool(true)),
-    ]))
+    idle(home, name)?;
+    let spec = record::spec(home, &home_id(home)?, name, &record)?;
+    Ok((record, spec))
 }
 
 /// `machine.remove(name)`: deletes a VM and its disk.
@@ -487,10 +526,18 @@ pub fn update(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if args.get("wsl").is_some() && HostOs::current() != HostOs::Windows {
         return Err(refused("InvalidInput", "wsl is a Windows host's setting"));
     }
+    // a running Sandbox keeps the image and settings it started with
+    let running = sandboxes_on(&home, name)?;
+    if !running.is_empty() {
+        return Err(refused(
+            "InUse",
+            format!(
+                "Sandboxes [{}] run on {name}; close them before changing it",
+                running.join(", ")
+            ),
+        ));
+    }
     if resize {
-        if !sandboxes_on(&home, name)?.is_empty() {
-            return Err(refused("InUse", format!("Sandboxes run on {name}")));
-        }
         return Err(refused(
             "Unsupported",
             format!(

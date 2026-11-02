@@ -59,6 +59,24 @@ pub(crate) fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErr
     }
     let port = new_port(spec)?;
     let volume = data_volume(spec);
+    // a volume already under the name is someone's data: never reused or
+    // removed by this create's cleanup (one listing; a failed one refuses)
+    let listed = call(spec, CLI, &["volume", "list"], CALL)?;
+    if !listed.ok() {
+        return Err(MachineError::new(
+            Code::Failed,
+            format!(
+                "msb volume list failed, so the data volume {volume} could not be checked: {}",
+                listed.said()
+            ),
+        ));
+    }
+    if listed.stdout.split_whitespace().any(|word| word == volume) {
+        return Err(MachineError::new(
+            Code::Exists,
+            format!("the volume {volume} already exists; it is left alone"),
+        ));
+    }
     let cpus = spec.cpus.to_string();
     let memory = mib(spec.memory);
     let mount = format!("{volume}:{DATA}:kind=disk,size={}", mib(spec.disk));
