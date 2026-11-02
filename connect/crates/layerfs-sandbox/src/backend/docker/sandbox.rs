@@ -79,28 +79,8 @@ pub const DESKTOP_HOST: &str = "host.docker.internal";
 /// Desktop (macOS, Windows) reaches it: its host `host.docker.internal`.
 /// `None` for any other URL, which the container dials as given.
 pub fn desktop_url(url: &str) -> Option<String> {
-    let (scheme, rest) = url.split_once("://")?;
-    let end = rest.find(['/', '?']).unwrap_or(rest.len());
-    let (authority, tail) = rest.split_at(end);
-    let (user, host_port) = match authority.rsplit_once('@') {
-        Some((user, host_port)) => (Some(user), host_port),
-        None => (None, authority),
-    };
-    let (host, port) = match host_port.strip_prefix('[') {
-        Some(v6) => {
-            let (host, after) = v6.split_once(']')?;
-            (host, after)
-        }
-        None => match host_port.rsplit_once(':') {
-            Some((host, port)) => (host, &host_port[host.len()..][..port.len() + 1]),
-            None => (host_port, ""),
-        },
-    };
-    if !matches!(host, "127.0.0.1" | "localhost" | "::1") {
-        return None;
-    }
-    let user = user.map(|u| format!("{u}@")).unwrap_or_default();
-    Some(format!("{scheme}://{user}{DESKTOP_HOST}{port}{tail}"))
+    let url = crate::PostgresUrl::parse(url)?;
+    url.loopback().then(|| url.with_host(DESKTOP_HOST))
 }
 
 /// A label key or value of plain characters that need no JSON escape.

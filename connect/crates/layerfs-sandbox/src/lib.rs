@@ -4,8 +4,9 @@
 //! `namespaces`), named as `LAYERFS_SANDBOX` names them. `docker_engine/` is
 //! the Docker Engine HTTP client. `runtime.rs` matches over the backends'
 //! providers and Sandboxes; `backend/adapter.rs` is the one match for what is
-//! fixed per backend (G2); `types/` holds what they share; `json/` and `helper_spec.rs` are
-//! the shared formats. The kernels Sandboxes run on live in the
+//! fixed per backend (G2); `types/` holds what they share; `json/`,
+//! `helper_spec.rs` and `postgres_url.rs` are the shared formats. The
+//! kernels Sandboxes run on live in the
 //! `layerfs-machine` crate (host only).
 // unsafe only in local/os/macos/darwin.rs: macOS process facts come
 // from proc_pidinfo, a system call (`ps` is setuid, which Seatbelt refuses)
@@ -20,6 +21,8 @@ mod docker_engine;
 mod helper_spec;
 #[cfg(unix)]
 pub mod json;
+#[cfg(unix)]
+mod postgres_url;
 #[cfg(unix)]
 mod runtime;
 mod types;
@@ -36,6 +39,8 @@ pub mod local;
 pub use backend::host_process::HostProcessProvider;
 #[cfg(unix)]
 pub use helper_spec::HelperSpec;
+#[cfg(unix)]
+pub use postgres_url::PostgresUrl;
 #[cfg(unix)]
 pub use runtime::{LaunchFailure, Runtime, Sandbox};
 pub use types::{
