@@ -2,7 +2,7 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_machine::{native_missing, nested_missing, probe, HostOs, Kind};
+use layerfs_machine::{native_missing, nested_missing, probe, HostOs, Platform};
 use standin::Scratch;
 
 #[test]
@@ -10,12 +10,12 @@ fn an_empty_search_path_names_every_missing_tool() {
     let scratch = Scratch::new("probe-empty");
     let tools = scratch.tools();
     for (kind, tool) in [
-        (Kind::Docker, "tool:docker"),
-        (Kind::AppleContainer, "tool:container"),
-        (Kind::Microsandbox, "tool:msb"),
-        (Kind::Lima, "tool:limactl"),
-        (Kind::Firecracker, "tool:limactl"),
-        (Kind::Ssh, "tool:ssh"),
+        (Platform::Docker, "tool:docker"),
+        (Platform::AppleContainer, "tool:container"),
+        (Platform::Microsandbox, "tool:msb"),
+        (Platform::Lima, "tool:limactl"),
+        (Platform::Firecracker, "tool:limactl"),
+        (Platform::Ssh, "tool:ssh"),
     ] {
         let found = probe(kind, &tools);
         assert_eq!(found.kind, kind);
@@ -34,7 +34,11 @@ fn macos_only_kinds_name_the_host_elsewhere() {
     let scratch = Scratch::new("probe-host");
     let tools = scratch.tools();
     let on_macos = HostOs::current() == HostOs::Macos;
-    for kind in [Kind::Lima, Kind::Firecracker, Kind::AppleContainer] {
+    for kind in [
+        Platform::Lima,
+        Platform::Firecracker,
+        Platform::AppleContainer,
+    ] {
         let found = probe(kind, &tools);
         assert_eq!(
             found.missing.contains(&"host:macos".to_owned()),
@@ -42,7 +46,7 @@ fn macos_only_kinds_name_the_host_elsewhere() {
             "{kind:?}"
         );
     }
-    let firecracker = probe(Kind::Firecracker, &tools);
+    let firecracker = probe(Platform::Firecracker, &tools);
     for fact in nested_missing(HostOs::current()) {
         assert!(firecracker.missing.contains(&fact));
     }
@@ -55,14 +59,14 @@ fn a_stand_in_tool_reports_its_version() {
     scratch.tool("msb", "echo 'msb 0.7.8'");
     scratch.tool("ssh", "echo 'OpenSSH_9.9p1' >&2");
     let tools = scratch.tools();
-    let lima = probe(Kind::Lima, &tools);
+    let lima = probe(Platform::Lima, &tools);
     assert!(!lima.missing.contains(&"tool:limactl".to_owned()));
     assert_eq!(lima.version.as_deref(), Some("limactl version 9.9.9"));
     assert_eq!(lima.ready, HostOs::current() == HostOs::Macos);
-    let msb = probe(Kind::Microsandbox, &tools);
+    let msb = probe(Platform::Microsandbox, &tools);
     assert!(msb.ready);
     assert_eq!(msb.version.as_deref(), Some("msb 0.7.8"));
-    let ssh = probe(Kind::Ssh, &tools);
+    let ssh = probe(Platform::Ssh, &tools);
     assert!(ssh.ready);
     assert_eq!(ssh.version.as_deref(), Some("OpenSSH_9.9p1"));
 }
@@ -76,7 +80,7 @@ fn docker_without_an_engine_names_its_socket() {
     );
     let mut tools = scratch.tools();
     tools.docker_socket = scratch.path("docker.sock");
-    let found = probe(Kind::Docker, &tools);
+    let found = probe(Platform::Docker, &tools);
     assert!(!found.ready);
     assert_eq!(
         found.missing,
@@ -90,7 +94,7 @@ fn docker_without_an_engine_names_its_socket() {
 
 #[test]
 fn native_names_only_linux_host_facts() {
-    let found = probe(Kind::Native, &Scratch::new("probe-native").tools());
+    let found = probe(Platform::Native, &Scratch::new("probe-native").tools());
     assert_eq!(found.missing, native_missing(HostOs::current()));
     match HostOs::current() {
         HostOs::Macos => assert!(found.ready),

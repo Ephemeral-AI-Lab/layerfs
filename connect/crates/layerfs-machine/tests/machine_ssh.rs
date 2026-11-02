@@ -4,7 +4,7 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_machine::{self as machine, Code, Kind, Spec};
+use layerfs_machine::{self as machine, Code, Platform, Spec};
 use standin::{read, Scratch};
 use std::os::unix::fs::PermissionsExt;
 
@@ -25,7 +25,7 @@ fn ssh_spec(scratch: &Scratch) -> Spec {
         format!("other.test ssh-rsa AAAA\n{KEY}\n"),
     )
     .unwrap();
-    let mut spec = scratch.spec(Kind::Ssh);
+    let mut spec = scratch.spec(Platform::Ssh);
     spec.ssh.as_mut().unwrap().port = 2222;
     spec
 }
@@ -110,7 +110,7 @@ fn identity_is_the_host_key_fingerprint() {
         machine::host_identity(&spec).unwrap(),
         "SHA256:abcdefFingerprint"
     );
-    let lima = scratch.spec(Kind::Lima);
+    let lima = scratch.spec(Platform::Lima);
     assert_eq!(
         machine::host_identity(&lima).unwrap_err().code,
         Code::InvalidInput

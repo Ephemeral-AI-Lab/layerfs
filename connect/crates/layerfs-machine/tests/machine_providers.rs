@@ -3,7 +3,7 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_machine::{self as machine, Code, HostOs, Kind, State};
+use layerfs_machine::{self as machine, Code, HostOs, Platform, State};
 use standin::Scratch;
 
 fn line<'a>(log: &'a str, prefix: &str) -> &'a str {
@@ -24,7 +24,7 @@ fn apple_container_runs_one_container_with_its_data_volume_and_no_home() {
 esac"#,
     );
     let error =
-        machine::create(&scratch.spec(Kind::AppleContainer), &scratch.bundle()).unwrap_err();
+        machine::create(&scratch.spec(Platform::AppleContainer), &scratch.bundle()).unwrap_err();
     if HostOs::current() != HostOs::Macos || std::env::consts::ARCH != "aarch64" {
         assert_eq!(error.code, Code::Unsupported);
         assert!(scratch.log().is_empty());
@@ -63,7 +63,7 @@ fn apple_container_status_reads_status_state_from_inspect() {
   exec) echo "Filesystem 1024-blocks Used Available Capacity Mounted on"; echo "/dev/vdb 10000 10 9990 1% /layerfs/data" ;;
 esac"#,
     );
-    let status = machine::status(&scratch.spec(Kind::AppleContainer)).unwrap();
+    let status = machine::status(&scratch.spec(Platform::AppleContainer)).unwrap();
     // the VM runs, but no worker answers at a recorded endpoint
     assert_eq!(status.state, State::Stopped);
     assert_eq!(status.free_disk, Some(9990 * 1024));
@@ -89,7 +89,8 @@ fn microsandbox_creates_a_disk_volume_and_runs_setup_through_msb_exec() {
   exec) echo "no guest agent" >&2; exit 1 ;;
 esac"#,
     );
-    let error = machine::create(&scratch.spec(Kind::Microsandbox), &scratch.bundle()).unwrap_err();
+    let error =
+        machine::create(&scratch.spec(Platform::Microsandbox), &scratch.bundle()).unwrap_err();
     assert_eq!(error.code, Code::Failed, "{error}");
     assert!(error.vm_exists, "the VM exists once msb create succeeded");
     let log = scratch.log();
@@ -115,7 +116,8 @@ fn microsandbox_leaves_a_volume_that_was_there_before() {
   volume) [ "$2" = list ] && printf 'NAME SIZE\nlfs-dev-data 10G\n'; exit 0 ;;
 esac"#,
     );
-    let error = machine::create(&scratch.spec(Kind::Microsandbox), &scratch.bundle()).unwrap_err();
+    let error =
+        machine::create(&scratch.spec(Platform::Microsandbox), &scratch.bundle()).unwrap_err();
     assert_eq!(error.code, Code::Exists, "{error}");
     let log = scratch.log();
     assert!(!log.contains("msb create"), "{log}");
@@ -129,7 +131,7 @@ fn microsandbox_remove_takes_the_record_then_the_volume() {
         "msb",
         r#"[ "$1" = inspect ] && { echo '{"status":"Running"}'; exit 0; }; exit 0"#,
     );
-    machine::remove(&scratch.spec(Kind::Microsandbox)).unwrap();
+    machine::remove(&scratch.spec(Platform::Microsandbox)).unwrap();
     let log = scratch.log();
     let calls: Vec<&str> = log.lines().collect();
     assert_eq!(
@@ -155,11 +157,11 @@ fn firecracker_names_what_its_lima_host_lacks() {
         "ssh",
         r#"echo "/dev/kvm"; echo "/layerfs/data/firecracker/vmlinux"; echo "tool:flock""#,
     );
-    let mut host = scratch.spec(Kind::Lima);
+    let mut host = scratch.spec(Platform::Lima);
     host.name = "fc-host".into();
     host.vm_name = "lfs-fc-host".into();
     host.nested = true;
-    let mut spec = scratch.spec(Kind::Firecracker);
+    let mut spec = scratch.spec(Platform::Firecracker);
     spec.host = Some(Box::new(host));
     let error = machine::create(&spec, &scratch.bundle()).unwrap_err();
     assert_eq!(error.code, Code::Unsupported, "{error}");
@@ -194,9 +196,9 @@ fn firecracker_on_a_stopped_host_is_unavailable() {
         "limactl",
         "[ \"$1\" = list ] && printf 'Stopped\\t/tmp/x\\n'; exit 0",
     );
-    let mut host = scratch.spec(Kind::Lima);
+    let mut host = scratch.spec(Platform::Lima);
     host.nested = true;
-    let mut spec = scratch.spec(Kind::Firecracker);
+    let mut spec = scratch.spec(Platform::Firecracker);
     spec.host = Some(Box::new(host));
     let error = machine::create(&spec, &scratch.bundle()).unwrap_err();
     assert_eq!(error.code, Code::Unsupported, "no ssh stand-in: {error}");
@@ -228,9 +230,9 @@ fn a_microvm_chooses_its_huge_pages_at_each_boot() {
 esac
 exit 0"#,
     );
-    let mut host = scratch.spec(Kind::Lima);
+    let mut host = scratch.spec(Platform::Lima);
     host.nested = true;
-    let mut spec = scratch.spec(Kind::Firecracker);
+    let mut spec = scratch.spec(Platform::Firecracker);
     spec.host = Some(Box::new(host));
     machine::start(&spec, &scratch.bundle()).unwrap_err();
     let log = scratch.log();
@@ -247,7 +249,7 @@ exit 0"#,
 #[test]
 fn built_in_machines_are_never_created_or_removed() {
     let scratch = Scratch::new("built-in");
-    for kind in [Kind::Native, Kind::Docker] {
+    for kind in [Platform::Native, Platform::Docker] {
         let spec = scratch.spec(kind);
         assert_eq!(
             machine::create(&spec, &scratch.bundle()).unwrap_err().code,
@@ -259,7 +261,7 @@ fn built_in_machines_are_never_created_or_removed() {
             Code::InvalidInput
         );
     }
-    let native = scratch.spec(Kind::Native);
+    let native = scratch.spec(Platform::Native);
     assert!(machine::start(&native, &scratch.bundle())
         .unwrap()
         .is_none());
@@ -273,12 +275,12 @@ fn a_bundle_without_its_binaries_is_refused_before_any_effect() {
     let scratch = Scratch::new("bundle");
     let mut bundle = scratch.bundle();
     std::fs::remove_file(bundle.dir.join("layerfs")).unwrap();
-    let error = machine::create(&scratch.spec(Kind::Microsandbox), &bundle).unwrap_err();
+    let error = machine::create(&scratch.spec(Platform::Microsandbox), &bundle).unwrap_err();
     assert_eq!(error.code, Code::InvalidInput);
     assert_eq!(error.missing, ["bundle:layerfs"]);
     bundle.hash = "not hex".into();
     assert_eq!(
-        machine::create(&scratch.spec(Kind::Microsandbox), &bundle)
+        machine::create(&scratch.spec(Platform::Microsandbox), &bundle)
             .unwrap_err()
             .code,
         Code::InvalidInput
@@ -297,7 +299,7 @@ fn docker_on_macos_and_linux_starts_one_worker_container_without_the_home() {
   run) echo "pull access denied" >&2; exit 1 ;;
 esac"#,
     );
-    let mut spec = scratch.spec(Kind::Docker);
+    let mut spec = scratch.spec(Platform::Docker);
     let bundle = scratch.bundle();
     let error = machine::start(&spec, &bundle).unwrap_err();
     assert_eq!(
@@ -338,7 +340,7 @@ fn docker_leaves_a_foreign_container_alone() {
         "docker",
         r#"[ "$3" = inspect ] && printf 'running\tsomething-else\n'; exit 0"#,
     );
-    let mut spec = scratch.spec(Kind::Docker);
+    let mut spec = scratch.spec(Platform::Docker);
     spec.os_image = Some("debian:trixie-slim".into());
     let error = machine::start(&spec, &scratch.bundle()).unwrap_err();
     assert_eq!(error.code, Code::Exists);

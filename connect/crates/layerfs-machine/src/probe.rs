@@ -1,7 +1,7 @@
 //! What each kind needs on this host and what is missing (`machine list`):
 //! `tool:<cli>` for a command not on the search path, `host:<fact>` for what
 //! the host lacks. A probe starts nothing.
-use crate::kind::{HostOs, Kind};
+use crate::platform::{HostOs, Platform};
 use crate::setup::tool;
 use crate::spec::Tools;
 use std::path::Path;
@@ -11,7 +11,7 @@ use std::time::Duration;
 /// One kind's readiness on this host.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Probe {
-    pub kind: Kind,
+    pub kind: Platform,
     pub ready: bool,
     pub missing: Vec<String>,
     /// The provider tool's version, when it answers.
@@ -21,13 +21,13 @@ pub struct Probe {
 const ANSWER: Duration = Duration::from_secs(10);
 
 /// Probes `kind` on this host.
-pub fn probe(kind: Kind, tools: &Tools) -> Probe {
+pub fn probe(kind: Platform, tools: &Tools) -> Probe {
     let host = HostOs::current();
     let mut missing = Vec::new();
     let mut version = None;
     match kind {
-        Kind::Native => missing.extend(native_missing(host)),
-        Kind::Docker => {
+        Platform::Native => missing.extend(native_missing(host)),
+        Platform::Docker => {
             if host == HostOs::Windows {
                 missing.push("host:wsl2".into());
             } else if let Some(docker) = tool::lookup(tools, "docker") {
@@ -43,26 +43,26 @@ pub fn probe(kind: Kind, tools: &Tools) -> Probe {
                 missing.push("tool:docker".into());
             }
         }
-        Kind::AppleContainer => {
+        Platform::AppleContainer => {
             missing.extend(macos_missing(host));
             if host == HostOs::Macos && std::env::consts::ARCH != "aarch64" {
                 missing.push("host:apple-silicon".into());
             }
             version = tool_version(tools, "container", &["--version"], &mut missing);
         }
-        Kind::Microsandbox => {
+        Platform::Microsandbox => {
             version = tool_version(tools, "msb", &["--version"], &mut missing);
         }
-        Kind::Lima => {
+        Platform::Lima => {
             missing.extend(macos_missing(host));
             version = tool_version(tools, "limactl", &["--version"], &mut missing);
         }
-        Kind::Firecracker => {
+        Platform::Firecracker => {
             missing.extend(macos_missing(host));
             missing.extend(nested_missing(host));
             version = tool_version(tools, "limactl", &["--version"], &mut missing);
         }
-        Kind::Ssh => {
+        Platform::Ssh => {
             if let Some(ssh) = tool::lookup(tools, "ssh") {
                 version = first_line(tool::command(&ssh, ["-V"]), true);
             } else {

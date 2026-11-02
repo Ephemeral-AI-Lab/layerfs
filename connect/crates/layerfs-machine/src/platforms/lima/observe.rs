@@ -19,7 +19,7 @@
 //!   the quoting is this crate's, not the CLI's.
 use crate::error::{Code, MachineError};
 use crate::facts;
-use crate::kind::HostOs;
+use crate::platform::HostOs;
 use crate::probe::{first_line, nested_missing};
 use crate::setup::guest::Guest;
 use crate::setup::vm::{call, checked, CALL};

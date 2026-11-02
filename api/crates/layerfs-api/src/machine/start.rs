@@ -9,7 +9,7 @@ use super::record::{self, machine_of, refusal, save_running};
 use crate::host::outcome::{failed, refused};
 use crate::worker::Endpoint;
 use layerfs_bridge::control::SdkRefusal;
-use layerfs_machine::{self as adapters, HostOs, Kind, Route};
+use layerfs_machine::{self as adapters, HostOs, Platform, Route};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -28,7 +28,7 @@ pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> 
     if let Some(endpoint) = answering(home, name)? {
         return Ok(Some(endpoint));
     }
-    if kind == Kind::Firecracker {
+    if kind == Platform::Firecracker {
         if let Some(host) = record.get_text("host") {
             running(home, host)?;
         }

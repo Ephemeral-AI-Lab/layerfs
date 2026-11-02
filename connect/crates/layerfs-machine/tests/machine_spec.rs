@@ -2,7 +2,7 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_machine::{parse_size, Code, Kind, Spec};
+use layerfs_machine::{parse_size, Code, Platform, Spec};
 use standin::Scratch;
 
 #[test]
@@ -42,8 +42,8 @@ fn refused(spec: &Spec) -> String {
 #[test]
 fn a_plain_vm_spec_is_valid() {
     let scratch = Scratch::new("spec-ok");
-    for kind in Kind::ALL {
-        if kind != Kind::Firecracker {
+    for kind in Platform::ALL {
+        if kind != Platform::Firecracker {
             scratch.spec(kind).validate().unwrap();
         }
     }
@@ -52,25 +52,25 @@ fn a_plain_vm_spec_is_valid() {
 #[test]
 fn names_sizes_and_paths_are_checked() {
     let scratch = Scratch::new("spec-bad");
-    let mut spec = scratch.spec(Kind::Lima);
+    let mut spec = scratch.spec(Platform::Lima);
     spec.name = "-dev".into();
     assert!(refused(&spec).contains("machine name"));
-    let mut spec = scratch.spec(Kind::Lima);
+    let mut spec = scratch.spec(Platform::Lima);
     spec.vm_name = "lfs dev".into();
     assert!(refused(&spec).contains("VM name"));
-    let mut spec = scratch.spec(Kind::Docker);
+    let mut spec = scratch.spec(Platform::Docker);
     spec.vm_name = "--privileged".into();
     assert!(refused(&spec).contains("VM name"));
-    let mut spec = scratch.spec(Kind::Lima);
+    let mut spec = scratch.spec(Platform::Lima);
     spec.memory = 100 << 20;
     assert!(refused(&spec).contains("memory"));
-    let mut spec = scratch.spec(Kind::Lima);
+    let mut spec = scratch.spec(Platform::Lima);
     spec.disk = 1 << 20;
     assert!(refused(&spec).contains("disk"));
-    let mut spec = scratch.spec(Kind::Lima);
+    let mut spec = scratch.spec(Platform::Lima);
     spec.cpus = 0;
     assert!(refused(&spec).contains("CPU"));
-    let mut spec = scratch.spec(Kind::Lima);
+    let mut spec = scratch.spec(Platform::Lima);
     spec.work_dir = "relative/work".into();
     assert!(refused(&spec).contains("absolute"));
 }
@@ -78,41 +78,41 @@ fn names_sizes_and_paths_are_checked() {
 #[test]
 fn kind_specific_fields_belong_to_their_kind() {
     let scratch = Scratch::new("spec-kinds");
-    let mut spec = scratch.spec(Kind::AppleContainer);
+    let mut spec = scratch.spec(Platform::AppleContainer);
     spec.nested = true;
     assert!(refused(&spec).contains("nested"));
 
-    let spec = scratch.spec(Kind::Firecracker);
+    let spec = scratch.spec(Platform::Firecracker);
     assert!(refused(&spec).contains("lima host"));
 
-    let mut spec = scratch.spec(Kind::Firecracker);
-    spec.host = Some(Box::new(scratch.spec(Kind::Lima)));
+    let mut spec = scratch.spec(Platform::Firecracker);
+    spec.host = Some(Box::new(scratch.spec(Platform::Lima)));
     assert!(refused(&spec).contains("not a nested lima"));
 
-    let mut host = scratch.spec(Kind::Lima);
+    let mut host = scratch.spec(Platform::Lima);
     host.nested = true;
-    let mut spec = scratch.spec(Kind::Firecracker);
+    let mut spec = scratch.spec(Platform::Firecracker);
     spec.host = Some(Box::new(host.clone()));
     spec.validate().unwrap();
     spec.state.network = Some(251);
     assert!(refused(&spec).contains("251"));
 
-    let mut spec = scratch.spec(Kind::Lima);
+    let mut spec = scratch.spec(Platform::Lima);
     spec.host = Some(Box::new(host));
     assert!(refused(&spec).contains("only a firecracker"));
 
-    let mut spec = scratch.spec(Kind::Ssh);
+    let mut spec = scratch.spec(Platform::Ssh);
     spec.ssh = None;
     assert!(refused(&spec).contains("needs its host"));
 
-    let mut spec = scratch.spec(Kind::Lima);
-    spec.ssh = scratch.spec(Kind::Ssh).ssh;
+    let mut spec = scratch.spec(Platform::Lima);
+    spec.ssh = scratch.spec(Platform::Ssh).ssh;
     assert!(refused(&spec).contains("only an ssh"));
 
-    let mut spec = scratch.spec(Kind::Ssh);
+    let mut spec = scratch.spec(Platform::Ssh);
     spec.ssh.as_mut().unwrap().host = "-oProxyCommand=x".into();
     assert!(refused(&spec).contains("host"));
-    let mut spec = scratch.spec(Kind::Ssh);
+    let mut spec = scratch.spec(Platform::Ssh);
     spec.ssh.as_mut().unwrap().data_root = "data".into();
     assert!(refused(&spec).contains("data root"));
 }

@@ -3,7 +3,7 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_machine::{self as machine, nested_missing, Code, HostOs, Kind, State};
+use layerfs_machine::{self as machine, nested_missing, Code, HostOs, Platform, State};
 use standin::{read, Scratch};
 
 /// A `limactl` that knows no instance or disk, saves `create`'s stdin as
@@ -26,7 +26,7 @@ fn lima(label: &str) -> Scratch {
 #[test]
 fn create_writes_a_vz_template_with_the_data_disk_and_no_home_mount() {
     let scratch = lima("lima-create");
-    let spec = scratch.spec(Kind::Lima);
+    let spec = scratch.spec(Platform::Lima);
     let error = machine::create(&spec, &scratch.bundle()).unwrap_err();
     if HostOs::current() != HostOs::Macos {
         assert_eq!(error.code, Code::Unsupported);
@@ -78,7 +78,7 @@ fn a_create_that_fails_before_the_vm_exists_removes_its_disk() {
     }
     let scratch = lima("lima-fail");
     std::fs::write(scratch.path("fail-create"), b"").unwrap();
-    let error = machine::create(&scratch.spec(Kind::Lima), &scratch.bundle()).unwrap_err();
+    let error = machine::create(&scratch.spec(Platform::Lima), &scratch.bundle()).unwrap_err();
     assert_eq!(error.code, Code::Failed);
     assert!(!error.vm_exists);
     assert!(error.message.contains("no image"), "{error}");
@@ -98,7 +98,7 @@ fn an_existing_instance_is_refused_and_left_alone() {
         "limactl",
         "[ \"$1\" = list ] && printf 'Running\\t/tmp/lima/lfs-dev\\n'; exit 0",
     );
-    let error = machine::create(&scratch.spec(Kind::Lima), &scratch.bundle()).unwrap_err();
+    let error = machine::create(&scratch.spec(Platform::Lima), &scratch.bundle()).unwrap_err();
     if HostOs::current() != HostOs::Macos {
         assert_eq!(error.code, Code::Unsupported);
         return;
@@ -110,7 +110,7 @@ fn an_existing_instance_is_refused_and_left_alone() {
 #[test]
 fn nested_adds_nested_virtualization_or_names_what_the_mac_lacks() {
     let scratch = lima("lima-nested");
-    let mut spec = scratch.spec(Kind::Lima);
+    let mut spec = scratch.spec(Platform::Lima);
     spec.nested = true;
     let error = machine::create(&spec, &scratch.bundle()).unwrap_err();
     let lacking = nested_missing(HostOs::current());
@@ -158,7 +158,7 @@ exit 0"#,
     let bundle = scratch.bundle();
     std::fs::create_dir_all(bundle.dir.join("firecracker")).unwrap();
     std::fs::write(bundle.dir.join("firecracker/vmlinux"), b"").unwrap();
-    let mut spec = scratch.spec(Kind::Lima);
+    let mut spec = scratch.spec(Platform::Lima);
     spec.nested = true;
     machine::create(&spec, &bundle).unwrap_err();
     let log = scratch.log();
@@ -202,7 +202,7 @@ esac
 exit 0"#,
     );
     scratch.tool("tar", "exit 0");
-    machine::create(&scratch.spec(Kind::Lima), &scratch.bundle()).unwrap_err();
+    machine::create(&scratch.spec(Platform::Lima), &scratch.bundle()).unwrap_err();
     let log = scratch.log();
     let launch = log
         .split("ssh ")
@@ -226,7 +226,7 @@ fn an_image_url_or_path_replaces_the_default_image() {
         return;
     }
     let scratch = lima("lima-image");
-    let mut spec = scratch.spec(Kind::Lima);
+    let mut spec = scratch.spec(Platform::Lima);
     spec.os_image = Some("/images/debian \"13\".img".into());
     let _ = machine::create(&spec, &scratch.bundle());
     let template = read(&scratch.path("template.json"));
@@ -243,7 +243,7 @@ fn status_reports_a_stopped_instance_and_the_tool_version() {
         "limactl",
         "case \"$1\" in list) printf 'Stopped\\t/tmp/x\\n';; --version) echo 'limactl version 9.9.9';; esac",
     );
-    let status = machine::status(&scratch.spec(Kind::Lima)).unwrap();
+    let status = machine::status(&scratch.spec(Platform::Lima)).unwrap();
     assert_eq!(status.state, State::Stopped);
     assert_eq!(
         status.tool_version.as_deref(),
@@ -256,7 +256,7 @@ fn status_reports_a_stopped_instance_and_the_tool_version() {
 #[test]
 fn start_needs_the_recorded_port_and_an_existing_instance() {
     let scratch = lima("lima-start");
-    let mut spec = scratch.spec(Kind::Lima);
+    let mut spec = scratch.spec(Platform::Lima);
     let error = machine::start(&spec, &scratch.bundle()).unwrap_err();
     assert_eq!(error.code, Code::NotFound, "{error}");
     spec.state.port = None;
@@ -269,7 +269,7 @@ fn remove_deletes_the_instance_then_its_disk() {
     let scratch = lima("lima-remove");
     // the disk's name comes from the template a create writes (macOS); elsewhere none is listed
     let disk = if HostOs::current() == HostOs::Macos {
-        let _ = machine::create(&scratch.spec(Kind::Lima), &scratch.bundle());
+        let _ = machine::create(&scratch.spec(Platform::Lima), &scratch.bundle());
         let template = read(&scratch.path("template.json"));
         let rest = template
             .split("\"additionalDisks\": [{\"name\": \"")
@@ -291,7 +291,7 @@ exit 0"#,
             mac = u8::from(HostOs::current() == HostOs::Macos),
         ),
     );
-    machine::remove(&scratch.spec(Kind::Lima)).unwrap();
+    machine::remove(&scratch.spec(Platform::Lima)).unwrap();
     let log = scratch.log();
     let calls: Vec<&str> = log.lines().collect();
     assert_eq!(calls[1], "limactl delete --force lfs-dev", "{log}");

@@ -3,7 +3,7 @@
 //! machine layer finds them through `Tools::path`, so no real VM, ssh host
 //! or Docker Engine is touched.
 #![allow(dead_code)]
-use layerfs_machine::{Bundle, Kind, Lasting, Spec, SshSpec, Tools};
+use layerfs_machine::{Bundle, Lasting, Platform, Spec, SshSpec, Tools};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -76,7 +76,7 @@ impl Scratch {
     }
 
     /// A 2-CPU, 2G-memory, 10G-disk machine of `kind` named `dev`, VM `lfs-dev`.
-    pub fn spec(&self, kind: Kind) -> Spec {
+    pub fn spec(&self, kind: Platform) -> Spec {
         Spec {
             name: "dev".into(),
             kind,
@@ -88,7 +88,7 @@ impl Scratch {
             os_image: None,
             nested: false,
             host: None,
-            ssh: (kind == Kind::Ssh)
+            ssh: (kind == Platform::Ssh)
                 .then(|| SshSpec::new("example.test", self.dir.join("known_hosts"))),
             state: Lasting {
                 port: Some(45678),

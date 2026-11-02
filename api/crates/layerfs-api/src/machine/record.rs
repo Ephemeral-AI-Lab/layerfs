@@ -6,7 +6,7 @@ use crate::home::{self, paths, read_record, with_field, write_record};
 use crate::host::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_machine::{
-    Endpoint, HostOs, Kind, Lasting, MachineError, Running, Spec, SshSpec, Tools,
+    Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, SshSpec, Tools,
 };
 use std::path::{Path, PathBuf};
 
@@ -76,10 +76,10 @@ pub fn removing(record: &SdkValue) -> Option<i64> {
 }
 
 /// A record's kind.
-pub fn kind_of(record: &SdkValue) -> Result<Kind> {
+pub fn kind_of(record: &SdkValue) -> Result<Platform> {
     record
         .get_text("platform")
-        .and_then(Kind::parse)
+        .and_then(Platform::parse)
         .ok_or_else(|| refused("Failed", "a machine record names no known platform"))
 }
 
@@ -112,7 +112,7 @@ pub fn tools(home: &Path) -> Result<Tools> {
 pub fn spec(home: &Path, home_id: &str, name: &str, record: &SdkValue) -> Result<Spec> {
     let kind = kind_of(record)?;
     let host = match record.get_text("host") {
-        Some(host) if kind == Kind::Firecracker => {
+        Some(host) if kind == Platform::Firecracker => {
             let host_record = machine_of(home, host)?;
             Some(Box::new(spec(home, home_id, host, &host_record)?))
         }
@@ -154,7 +154,9 @@ pub fn spec(home: &Path, home_id: &str, name: &str, record: &SdkValue) -> Result
         // 1.1.0's macOS worker did
         os_image: record
             .get_text("os_image")
-            .or(record.get_text("image").filter(|_| kind == Kind::Docker))
+            .or(record
+                .get_text("image")
+                .filter(|_| kind == Platform::Docker))
             .map(str::to_owned),
         nested: matches!(record.get("nested"), Some(SdkValue::Bool(true))),
         host,
@@ -276,7 +278,7 @@ pub fn refusal(error: MachineError) -> SdkRefusal {
 }
 
 /// The backend a machine's Sandboxes run on, on this host.
-pub fn backend_name(kind: Kind) -> &'static str {
+pub fn backend_name(kind: Platform) -> &'static str {
     use layerfs_machine::Backend;
     match kind.backend(HostOs::current()) {
         Some(Backend::Native) => "native",

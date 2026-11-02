@@ -1,7 +1,7 @@
 //! `native`: the host itself. Nothing is made, started or stopped; its
 //! Sandbox backend runs in the caller's process. On Windows it holds only
 //! records and its Stores are in the WSL worker, which is not designed yet.
-use crate::kind::HostOs;
+use crate::platform::HostOs;
 use crate::probe::native_missing;
 use crate::setup::{State, Status};
 

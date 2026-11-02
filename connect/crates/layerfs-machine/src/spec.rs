@@ -2,7 +2,7 @@
 //! lasting guest state. It names no LayerFS home path; every path and setting
 //! comes from the caller.
 use crate::error::{Code, MachineError};
-use crate::kind::Kind;
+use crate::platform::Platform;
 use std::ffi::OsString;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -15,7 +15,7 @@ pub const WORKER_PORT: u16 = 7070;
 pub struct Spec {
     /// The machine's name (`dev`).
     pub name: String,
-    pub kind: Kind,
+    pub kind: Platform,
     /// The provider's name for the machine's VM or worker container,
     /// `<prefix><machine>`, chosen by the caller.
     pub vm_name: String,
@@ -186,7 +186,7 @@ impl Spec {
         if !plain_name(&self.name) {
             return refuse(format!("machine name {:?} is not a plain name", self.name));
         }
-        if self.kind != Kind::Native && !plain_name(&self.vm_name) {
+        if self.kind != Platform::Native && !plain_name(&self.vm_name) {
             return refuse(format!("VM name {:?} is not a plain name", self.vm_name));
         }
         if !self.work_dir.is_absolute() {
@@ -203,15 +203,15 @@ impl Spec {
                 return refuse("a VM's data disk needs at least 1G".into());
             }
         }
-        if self.nested && self.kind != Kind::Lima {
+        if self.nested && self.kind != Platform::Lima {
             return refuse("only a lima machine can be nested".into());
         }
         match (&self.host, self.kind) {
-            (None, Kind::Firecracker) => {
+            (None, Platform::Firecracker) => {
                 return refuse("a firecracker machine names its lima host".into())
             }
-            (Some(host), Kind::Firecracker) => {
-                if host.kind != Kind::Lima || !host.nested {
+            (Some(host), Platform::Firecracker) => {
+                if host.kind != Platform::Lima || !host.nested {
                     return refuse(format!(
                         "the firecracker host {} is not a nested lima machine",
                         host.name
@@ -228,8 +228,8 @@ impl Spec {
             }
         }
         match (&self.ssh, self.kind) {
-            (None, Kind::Ssh) => refuse("an ssh machine needs its host".into()),
-            (Some(ssh), Kind::Ssh) => ssh.validate(),
+            (None, Platform::Ssh) => refuse("an ssh machine needs its host".into()),
+            (Some(ssh), Platform::Ssh) => ssh.validate(),
             (Some(_), _) => refuse("only an ssh machine has an ssh host".into()),
             (None, _) => Ok(()),
         }

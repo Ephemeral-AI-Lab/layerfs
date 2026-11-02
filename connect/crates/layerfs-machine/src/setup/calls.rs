@@ -5,7 +5,7 @@
 use super::guest::Guest;
 use super::worker;
 use crate::error::{Code, MachineError};
-use crate::kind::{HostOs, Kind, Route};
+use crate::platform::{HostOs, Platform, Route};
 use crate::platforms::{self as vm, docker, native};
 use crate::spec::{Bundle, Running, Spec};
 use std::path::Path;
@@ -51,12 +51,12 @@ pub fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
     spec.validate()?;
     worker::check_bundle(bundle)?;
     match spec.kind {
-        Kind::AppleContainer => vm::apple_container::create(spec, bundle),
-        Kind::Microsandbox => vm::microsandbox::create(spec, bundle),
-        Kind::Lima => vm::lima::create(spec, bundle),
-        Kind::Firecracker => vm::firecracker::create(spec, bundle),
-        Kind::Ssh => Err(refused(spec, "is connected, not created")),
-        Kind::Native | Kind::Docker => Err(refused(spec, "is built in and never created")),
+        Platform::AppleContainer => vm::apple_container::create(spec, bundle),
+        Platform::Microsandbox => vm::microsandbox::create(spec, bundle),
+        Platform::Lima => vm::lima::create(spec, bundle),
+        Platform::Firecracker => vm::firecracker::create(spec, bundle),
+        Platform::Ssh => Err(refused(spec, "is connected, not created")),
+        Platform::Native | Platform::Docker => Err(refused(spec, "is built in and never created")),
     }
 }
 
@@ -67,7 +67,7 @@ pub fn connect(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
     spec.validate()?;
     worker::check_bundle(bundle)?;
     match spec.kind {
-        Kind::Ssh => vm::ssh::connect(spec, bundle),
+        Platform::Ssh => vm::ssh::connect(spec, bundle),
         _ => Err(refused(spec, "is created, not connected")),
     }
 }
@@ -82,13 +82,13 @@ pub fn start(spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineErr
     }
     worker::check_bundle(bundle)?;
     match spec.kind {
-        Kind::Native => native::start(spec),
-        Kind::Docker => docker::start(spec, bundle).map(Some),
-        Kind::AppleContainer => vm::apple_container::start(spec, bundle).map(Some),
-        Kind::Microsandbox => vm::microsandbox::start(spec, bundle).map(Some),
-        Kind::Lima => vm::lima::start(spec, bundle).map(Some),
-        Kind::Firecracker => vm::firecracker::start(spec, bundle).map(Some),
-        Kind::Ssh => vm::ssh::start(spec, bundle).map(Some),
+        Platform::Native => native::start(spec),
+        Platform::Docker => docker::start(spec, bundle).map(Some),
+        Platform::AppleContainer => vm::apple_container::start(spec, bundle).map(Some),
+        Platform::Microsandbox => vm::microsandbox::start(spec, bundle).map(Some),
+        Platform::Lima => vm::lima::start(spec, bundle).map(Some),
+        Platform::Firecracker => vm::firecracker::start(spec, bundle).map(Some),
+        Platform::Ssh => vm::ssh::start(spec, bundle).map(Some),
     }
 }
 
@@ -98,13 +98,13 @@ pub fn start(spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineErr
 pub fn stop(spec: &Spec) -> Result<(), MachineError> {
     spec.validate()?;
     match spec.kind {
-        Kind::Native => Ok(()),
-        Kind::Docker => docker::stop(spec),
-        Kind::AppleContainer => vm::apple_container::stop(spec),
-        Kind::Microsandbox => vm::microsandbox::stop(spec),
-        Kind::Lima => vm::lima::stop(spec),
-        Kind::Firecracker => vm::firecracker::stop(spec),
-        Kind::Ssh => vm::ssh::stop(spec),
+        Platform::Native => Ok(()),
+        Platform::Docker => docker::stop(spec),
+        Platform::AppleContainer => vm::apple_container::stop(spec),
+        Platform::Microsandbox => vm::microsandbox::stop(spec),
+        Platform::Lima => vm::lima::stop(spec),
+        Platform::Firecracker => vm::firecracker::stop(spec),
+        Platform::Ssh => vm::ssh::stop(spec),
     }
 }
 
@@ -114,12 +114,12 @@ pub fn stop(spec: &Spec) -> Result<(), MachineError> {
 pub fn remove(spec: &Spec) -> Result<(), MachineError> {
     spec.validate()?;
     match spec.kind {
-        Kind::AppleContainer => vm::apple_container::remove(spec),
-        Kind::Microsandbox => vm::microsandbox::remove(spec),
-        Kind::Lima => vm::lima::remove(spec),
-        Kind::Firecracker => vm::firecracker::remove(spec),
-        Kind::Ssh => vm::ssh::disconnect(spec),
-        Kind::Native | Kind::Docker => Err(refused(spec, "is built in and never removed")),
+        Platform::AppleContainer => vm::apple_container::remove(spec),
+        Platform::Microsandbox => vm::microsandbox::remove(spec),
+        Platform::Lima => vm::lima::remove(spec),
+        Platform::Firecracker => vm::firecracker::remove(spec),
+        Platform::Ssh => vm::ssh::disconnect(spec),
+        Platform::Native | Platform::Docker => Err(refused(spec, "is built in and never removed")),
     }
 }
 
@@ -127,13 +127,13 @@ pub fn remove(spec: &Spec) -> Result<(), MachineError> {
 pub fn status(spec: &Spec) -> Result<Status, MachineError> {
     spec.validate()?;
     match spec.kind {
-        Kind::Native => Ok(native::status()),
-        Kind::Docker => docker::status(spec),
-        Kind::AppleContainer => vm::apple_container::status(spec),
-        Kind::Microsandbox => vm::microsandbox::status(spec),
-        Kind::Lima => vm::lima::status(spec),
-        Kind::Firecracker => vm::firecracker::status(spec),
-        Kind::Ssh => vm::ssh::status(spec),
+        Platform::Native => Ok(native::status()),
+        Platform::Docker => docker::status(spec),
+        Platform::AppleContainer => vm::apple_container::status(spec),
+        Platform::Microsandbox => vm::microsandbox::status(spec),
+        Platform::Lima => vm::lima::status(spec),
+        Platform::Firecracker => vm::firecracker::status(spec),
+        Platform::Ssh => vm::ssh::status(spec),
     }
 }
 
@@ -151,7 +151,7 @@ pub fn status_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineEr
 pub fn host_identity(spec: &Spec) -> Result<String, MachineError> {
     spec.validate()?;
     match spec.kind {
-        Kind::Ssh => vm::ssh::identity(spec),
+        Platform::Ssh => vm::ssh::identity(spec),
         _ => Err(refused(spec, "has no ssh host")),
     }
 }
@@ -178,15 +178,15 @@ pub fn copy_out(spec: &Spec, source: &str, file: &Path) -> Result<(), MachineErr
 /// has none (its files are the host's own).
 fn guest_of(spec: &Spec) -> Result<Guest, MachineError> {
     match spec.kind {
-        Kind::AppleContainer => Ok(vm::apple_container::guest(spec)),
-        Kind::Microsandbox => Ok(vm::microsandbox::guest(spec)),
-        Kind::Lima => vm::lima::guest(spec),
-        Kind::Firecracker => vm::firecracker::machine_guest(spec),
-        Kind::Ssh => vm::ssh::machine_guest(spec),
-        Kind::Docker if Kind::Docker.route(HostOs::current()) == Route::Worker => {
+        Platform::AppleContainer => Ok(vm::apple_container::guest(spec)),
+        Platform::Microsandbox => Ok(vm::microsandbox::guest(spec)),
+        Platform::Lima => vm::lima::guest(spec),
+        Platform::Firecracker => vm::firecracker::machine_guest(spec),
+        Platform::Ssh => vm::ssh::machine_guest(spec),
+        Platform::Docker if Platform::Docker.route(HostOs::current()) == Route::Worker => {
             docker::guest(spec)
         }
-        Kind::Native | Kind::Docker => {
+        Platform::Native | Platform::Docker => {
             Err(refused(spec, "runs in-process; its files are the host's"))
         }
     }

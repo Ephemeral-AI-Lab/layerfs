@@ -12,7 +12,7 @@ use crate::calls::Context;
 use crate::home::{self, lock, paths, read_record, with_field, write_record};
 use crate::host::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_machine::{self as adapters, Code, HostOs, Kind};
+use layerfs_machine::{self as adapters, Code, HostOs, Platform};
 use std::path::Path;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -141,11 +141,11 @@ pub fn list(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
     let tools = record::tools(home)?;
     let mut can = Vec::new();
     for kind in [
-        Kind::AppleContainer,
-        Kind::Microsandbox,
-        Kind::Lima,
-        Kind::Firecracker,
-        Kind::Ssh,
+        Platform::AppleContainer,
+        Platform::Microsandbox,
+        Platform::Lima,
+        Platform::Firecracker,
+        Platform::Ssh,
     ] {
         let probe = adapters::probe(kind, &tools);
         can.push(SdkValue::map([
@@ -235,14 +235,14 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("").to_owned();
     let platform = args.get_text("platform").unwrap_or("");
-    let kind = Kind::parse(platform)
+    let kind = Platform::parse(platform)
         .ok_or_else(|| refused("InvalidInput", format!("no platform named {platform}")))?;
     if !kind.created() {
         return Err(refused(
             "InvalidInput",
             format!(
                 "a {platform} machine is {}",
-                if kind == Kind::Ssh {
+                if kind == Platform::Ssh {
                     "connected, not created"
                 } else {
                     "built in"
@@ -250,10 +250,10 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             ),
         ));
     }
-    if args.get("nested").is_some() && kind != Kind::Lima {
+    if args.get("nested").is_some() && kind != Platform::Lima {
         return Err(refused("InvalidInput", "only a lima machine is nested"));
     }
-    if kind == Kind::Firecracker && args.get_text("host").is_none() {
+    if kind == Platform::Firecracker && args.get_text("host").is_none() {
         return Err(refused(
             "InvalidInput",
             "a firecracker machine names its lima --nested host",
@@ -303,7 +303,7 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         new_name(&home, &name)?;
         if let Some(host) = args.get_text("host") {
             let host_record = machine_of(&home, host)?;
-            if kind_of(&host_record)? != Kind::Lima
+            if kind_of(&host_record)? != Platform::Lima
                 || !matches!(host_record.get("nested"), Some(SdkValue::Bool(true)))
             {
                 return Err(refused(
@@ -386,7 +386,7 @@ pub fn connect(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             .map(|h| std::path::PathBuf::from(h).join(".ssh/known_hosts"))
             .ok_or_else(|| refused("InvalidInput", "known_hosts is unset and so is HOME"))?,
     };
-    let probe = adapters::probe(Kind::Ssh, &record::tools(&home)?);
+    let probe = adapters::probe(Platform::Ssh, &record::tools(&home)?);
     if !probe.ready {
         return Err(refusal(adapters::MachineError::missing(
             "ssh is not usable here",
@@ -551,7 +551,7 @@ fn removable(home: &Path, name: &str, ssh: bool) -> Result<(SdkValue, adapters::
             format!("{name} is built in and never removed"),
         ));
     }
-    if (kind == Kind::Ssh) != ssh {
+    if (kind == Platform::Ssh) != ssh {
         let call = if ssh {
             "machine remove"
         } else {

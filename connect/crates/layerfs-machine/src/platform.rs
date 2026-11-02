@@ -5,7 +5,7 @@ use std::net::Ipv4Addr;
 
 /// Which kernel Sandboxes run on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Kind {
+pub enum Platform {
     Native,
     Docker,
     AppleContainer,
@@ -48,15 +48,15 @@ impl HostOs {
     }
 }
 
-impl Kind {
-    pub const ALL: [Kind; 7] = [
-        Kind::Native,
-        Kind::Docker,
-        Kind::AppleContainer,
-        Kind::Microsandbox,
-        Kind::Lima,
-        Kind::Firecracker,
-        Kind::Ssh,
+impl Platform {
+    pub const ALL: [Platform; 7] = [
+        Platform::Native,
+        Platform::Docker,
+        Platform::AppleContainer,
+        Platform::Microsandbox,
+        Platform::Lima,
+        Platform::Firecracker,
+        Platform::Ssh,
     ];
 
     /// The kind's name as callers write it (`layerfs machine create dev lima`).

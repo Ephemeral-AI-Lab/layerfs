@@ -9,7 +9,7 @@
 //! `delete --force` ends a running container; `volume delete` removes the disk.
 use crate::error::{Code, MachineError};
 use crate::facts;
-use crate::kind::HostOs;
+use crate::platform::HostOs;
 use crate::probe::first_line;
 use crate::setup::guest::Guest;
 use crate::setup::vm::{call, CALL};

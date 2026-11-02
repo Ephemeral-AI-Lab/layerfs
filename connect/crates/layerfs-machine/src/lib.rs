@@ -4,8 +4,8 @@
 //! worker's endpoint; it knows nothing of the LayerFS home, so the caller
 //! passes every path and setting and writes every record.
 //!
-//! The kind-to-backend table lives once, in `kind.rs` ([`Kind::backend`],
-//! [`Kind::route`], [`Kind::worker_bind`]); this file only declares. There
+//! The kind-to-backend table lives once, in `platform.rs` ([`Platform::backend`],
+//! [`Platform::route`], [`Platform::worker_bind`]); this file only declares. There
 //! is no provider trait: [`create`], [`start`] and the other calls match
 //! once on the kind. This layer uses only `layerfs-sandbox`'s shared types,
 //! its `json`, and nothing of `backend/`; `backend/` never uses it.
@@ -13,14 +13,14 @@
 #![forbid(unsafe_code)]
 mod error;
 mod facts;
-mod kind;
+mod platform;
 pub(crate) mod platforms;
 mod probe;
 mod setup;
 mod spec;
 pub use error::{Code, MachineError};
-pub use kind::{HostOs, Kind, Route};
 pub use layerfs_sandbox::Backend;
+pub use platform::{HostOs, Platform, Route};
 pub use probe::{native_missing, nested_missing, probe, Probe};
 pub use setup::{
     connect, copy_in, copy_out, create, host_identity, remove, start, status, status_within, stop,
