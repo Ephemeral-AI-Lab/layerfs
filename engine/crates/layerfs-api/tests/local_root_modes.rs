@@ -1,7 +1,8 @@
 //! The folders above a namespaces Sandbox's local root (#533 terminal pass):
 //! its commands run as another identity, so the worker's root and the home's
 //! folders down to `machine/native/sandbox-root` must let others pass (o+x),
-//! while staying unlistable. Folders above the home are left alone.
+//! while staying unlistable. Folders above the home are left alone, and the
+//! host's private-home check accepts o+x on a folder and nothing more.
 use layerfs_api::home;
 use layerfs_api::worker;
 use layerfs_bridge::control::SdkValue;
@@ -50,7 +51,7 @@ fn the_home_s_folders_down_to_the_local_root_let_others_pass() {
 }
 
 #[test]
-fn a_worker_s_root_is_passable_and_unlistable() {
+fn a_worker_s_root_is_passable_and_private() {
     let top = tempdir("worker");
     let root = top.join("data");
     std::fs::create_dir(&root).unwrap();
@@ -78,6 +79,44 @@ fn a_worker_s_root_is_passable_and_unlistable() {
         &mut |_| {},
     )
     .unwrap();
-    assert_eq!(mode(&root), 0o711);
+    assert_eq!(mode(&root), 0o701);
     let _ = std::fs::remove_dir_all(&top);
+}
+
+#[test]
+fn a_private_home_may_be_passable_and_nothing_more() {
+    let top = tempdir("private");
+    let home = top.join("h");
+    std::fs::create_dir(&home).unwrap();
+    let create = |home: &Path| {
+        let args = SdkValue::map([
+            ("home", SdkValue::text(home.display().to_string())),
+            ("store", SdkValue::text("s")),
+            (
+                "storePath",
+                SdkValue::text(home.join("v/global/store.sqlite").display().to_string()),
+            ),
+        ]);
+        layerfs_api::host::dispatch::backend("runtime.store.create".to_owned(), args)
+    };
+    for open in [0o750, 0o711, 0o705, 0o702] {
+        set(&home, open);
+        let refused = create(&home).unwrap_err();
+        assert_eq!(
+            refused.code, "Unauthorized",
+            "{open:o}: {}",
+            refused.message
+        );
+    }
+    for passable in [0o700, 0o701] {
+        set(&home, passable);
+        if let Err(refused) = create(&home) {
+            assert_ne!(
+                refused.code, "Unauthorized",
+                "{passable:o}: {}",
+                refused.message
+            );
+        }
+    }
+    std::fs::remove_dir_all(&top).unwrap();
 }

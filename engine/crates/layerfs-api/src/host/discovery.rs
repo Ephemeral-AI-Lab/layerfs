@@ -39,13 +39,17 @@ pub(crate) fn home(args: &SdkValue) -> Result<PathBuf> {
     directory(&home)?;
     Ok(home)
 }
+/// `path` is this user's and nobody else may read or change it. A folder
+/// may let others pass through by name (o+x), as the folders above a
+/// namespaces Sandbox's local root must ([`crate::home::traversable`]).
 pub(crate) fn private(path: &Path, dir: bool) -> Result<()> {
     let meta = fs::symlink_metadata(path).map_err(failed)?;
+    let others = if dir { 0o076 } else { 0o077 };
     if meta.file_type().is_symlink()
         || meta.is_dir() != dir
         || (!dir && !meta.is_file())
         || meta.uid() != crate::host::flock::euid()
-        || meta.mode() & 0o077 != 0
+        || meta.mode() & others != 0
     {
         return Err(refused(
             "Unauthorized",
