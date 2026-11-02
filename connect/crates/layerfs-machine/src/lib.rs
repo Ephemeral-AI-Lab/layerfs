@@ -6,7 +6,8 @@
 //!
 //! The platform table lives once, in `platform.rs`: one [`Profile`] per
 //! platform (its `PROFILE` in `platforms/<p>/profile.rs`), read through
-//! [`Platform::profile`]; this file only declares. This layer uses only
+//! [`Platform::profile`]; every refusal of a platform, host and Store kind
+//! comes from the one support table, `support.rs`. This file only declares. This layer uses only
 //! `layerfs-sandbox`'s shared types, its `json`, and nothing of `backend/`;
 //! `backend/` never uses it.
 #![cfg(unix)]
@@ -20,6 +21,7 @@ pub(crate) mod platforms;
 mod probe;
 mod setup;
 mod spec;
+mod support;
 pub use error::{Code, MachineError};
 pub use layerfs_sandbox::Backend;
 pub use options::{OptKind, OptSpec};
@@ -32,4 +34,8 @@ pub use setup::{
 pub use spec::{
     parse_size, Bundle, Endpoint, Lasting, Running, Spec, SshSpec, Tools, BUNDLE, DATA, IMAGE,
     STATE, WORKER_PORT,
+};
+pub use support::{
+    platforms, sandbox_allowed, support, support_json, CallSite, PostgresqlSupport, StoreKind,
+    SupportRow, Supports,
 };
