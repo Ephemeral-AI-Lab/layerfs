@@ -38,8 +38,11 @@ module beside the package:
 ```bash
 cargo +1.85.1 build -p layerfs-python -p layerfs-cli
 cp target/debug/lib_native.dylib api/python/src/layerfs/_native.abi3.so
-python3 api/python/test/test_calls.py
+perl -e 'alarm 100; exec @ARGV' python3 api/python/test/test_calls.py
 ```
 
 (`lib_native.so` on Linux.) The tests compare every call with the
 `layerfs` command, which `api/node/test/shell.mjs` compares with Node.
+
+The test command runs under a wall limit of at most 120 s (here 100 s;
+macOS has no `timeout`, so `perl`'s `alarm` ends it).

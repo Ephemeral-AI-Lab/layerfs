@@ -61,9 +61,12 @@ owner until explicit reauthorization. One attempted operation; no retry or repla
 ## Tests
 
 ```bash
-node --test api/node/test/calls.mjs
+perl -e 'alarm 100; exec @ARGV' node --test api/node/test/calls.mjs
 ```
 
 They run over the real addon (build it first) in a private temporary home:
 the table, every call refused with `InvalidInput` when its arguments are
 missing, and one live flow (a Store, Init, files, bytes and a folder scope).
+
+Every test command runs under a wall limit of at most 120 s (here 100 s;
+macOS has no `timeout`, so `perl`'s `alarm` ends it).
