@@ -547,9 +547,10 @@ class LayerBoundaryTests(unittest.TestCase):
                     "layerfs-storage",
                     "layerfs-daemon",
                     "layerfs-api",
+                    "layerfs-store-service",
                 )
             }
-            content, storage, daemon, api = packages
+            content, storage, daemon, api, store_service = packages
             cases = (
                 (content / "tests/read.rs", storage / "tests/helper.rs", False),
                 (content / "tests/read.rs", api / "tests/helper.rs", True),
@@ -559,6 +560,8 @@ class LayerBoundaryTests(unittest.TestCase):
                 (daemon / "tests/lane_merge.rs", api / "tests/support/sdk.rs", True),
                 (daemon / "tests/other.rs", api / "tests/support/sdk.rs", True),
                 (daemon / "tests/merge_report.rs", api / "tests/other.rs", True),
+                (daemon / "tests/lane_merge.rs", store_service / "tests/support/sdk.rs", False),
+                (api / "tests/remote_store.rs", store_service / "tests/support/sdk.rs", False),
             )
             for path, target, upward in cases:
                 source = f'#[path = "{os.path.relpath(target, path.parent)}"]\nmod helper;'

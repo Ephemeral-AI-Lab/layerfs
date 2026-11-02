@@ -10,10 +10,10 @@
 //! with `engine/crates/layerfs-store-backup/tests/minio_service.sh`, set
 //! its `LAYERFS_REMOTE_*`, then run it with `--ignored`.
 #![cfg(target_os = "linux")]
-#[path = "support/installed_store.rs"]
+#[path = "../../../../engine/crates/layerfs-store-service/tests/support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;
-#[path = "support/sdk.rs"]
+#[path = "../../../../engine/crates/layerfs-store-service/tests/support/sdk.rs"]
 #[allow(dead_code)]
 mod support;
 

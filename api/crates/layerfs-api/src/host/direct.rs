@@ -184,7 +184,7 @@ pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
         if backend {
             layerfs_store_service::operator::dispatch(&service, &call)
         } else {
-            crate::call(&service, &call)
+            layerfs_store_service::methods::call(&service, &call)
         }
     };
     if !crate::host::trace::traced() {

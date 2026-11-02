@@ -41,7 +41,7 @@ class SelectionAgainstTheTree(unittest.TestCase):
         fast = ci_tests.filter_for("fast", self.meta)
         nightly = ci_tests.filter_for("nightly", self.meta)
         self.assertTrue(fast.startswith("not ("))
-        self.assertIn("binary_id(layerfs-api::scale_lineage_cap)", fast)
+        self.assertIn("binary_id(layerfs-store-service::scale_lineage_cap)", fast)
         self.assertIn("binary_id(layerfs-api::mount_control)", fast)
         self.assertIn("binary_id(layerfs-daemon::forced_unavailable)", fast)
         self.assertNotIn("forced_unavailable", nightly)

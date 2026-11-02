@@ -41,9 +41,6 @@ machine = ["dep:layerfs-machine"]
 nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
 layerfs-daemon = { path = "../../../engine/crates/layerfs-daemon" }
 layerfs-fuse = { path = "../../../engine/crates/layerfs-fuse" }
-# #364: the write-cost harness times BLAKE3 over the bytes it writes.
-blake3 = { version = "=1.8.5", default-features = false }
-# The Store method tests bind private Workspaces and count the Store's rows.
+# The daemon fixtures and store-service's SDK support bind private Workspaces.
 layerfs-overlay = { path = "../../../engine/crates/layerfs-overlay" }
 layerfs-workspace = { path = "../../../engine/crates/layerfs-workspace" }
-rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }

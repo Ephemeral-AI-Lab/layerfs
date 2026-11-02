@@ -703,7 +703,6 @@ dependencies = [
 name = "layerfs-api"
 version = "2.0.0"
 dependencies = [
- "blake3",
  "layerfs-bridge",
  "layerfs-content",
  "layerfs-daemon",
@@ -721,7 +720,6 @@ dependencies = [
  "layerfs-workspace",
  "libc",
  "nix",
- "rusqlite",
 ]
 
 [[package]]
@@ -920,16 +918,19 @@ dependencies = [
 name = "layerfs-store-service"
 version = "2.0.0"
 dependencies = [
+ "blake3",
  "layerfs-bridge",
  "layerfs-content",
  "layerfs-history",
  "layerfs-overlay",
  "layerfs-persistence",
+ "layerfs-project",
  "layerfs-storage",
  "layerfs-telemetry",
  "layerfs-workspace",
  "nix",
  "postgres",
+ "rusqlite",
 ]
 
 [[package]]
