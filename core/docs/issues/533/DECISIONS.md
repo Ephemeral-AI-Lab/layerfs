@@ -16,17 +16,17 @@ S: [layerfs-sdk-cli.md](../../proposals/layerfs-sdk-cli.md).
 
 | Gate | Answer taken (2026-11-02, delegated by owner, recommended answer) |
 | --- | --- |
-| G0 | Base is `ddc7c5696b` (head of PR #530, containing #528 and `layerfs_v2_0_0`). No PR is merged on GitHub; branching from that head satisfies it. **Update (owner, 2026-11-02, via the parent session):** the base is local `layerfs_v2_0_0` at `ddc7c5696b`, fast-forwarded locally (not pushed) to this commit; `issue533-v2` is stacked directly on it. If local `layerfs_v2_0_0` moves, its new tip comes into `issue533-v2` by a merge, never a rebase. |
+| G0 | Base is `ddc7c5696b` (head of PR #530, containing #528 and `layerfs_v2_0_0`). No PR is merged on GitHub; branching from that head satisfies it. **Update (owner, 2026-11-02, via the parent session):** the base is local `layerfs_v2_0_0` at `ddc7c5696b`, fast-forwarded locally (not pushed) to this commit; `issue533-v2` is stacked directly on it. If local `layerfs_v2_0_0` moves, its new tip comes into `issue533-v2` by a merge, never a rebase. The recommendation (merge first) was not followed; see [Replaced recommendations](#replaced-recommendations). |
 | G1 | H and S are accepted as the 2.0 direction. |
 | G2 | The H §9.1 AGENTS.md wording is approved and applied in step 1. |
 | G3 | #531 is held; this issue supersedes it. Nothing here builds on #531. |
-| G4 | #521 is not merged on GitHub. Its branch (`origin/area-p/complete-p1-p15`) is read; folder scope is ported into the library (step 14) and its PyO3 binding is used as a reference (step 16). MCP follows O32. |
+| G4 | #521 is not merged on GitHub. Its branch (`origin/area-p/complete-p1-p15`) is read; folder scope is ported into the library (step 14) and its PyO3 binding is used as a reference (step 16). MCP follows O32. The recommendation (merge first) was not followed; see [Replaced recommendations](#replaced-recommendations). |
 | G5 | O21a: `layerfs-api` grows into the library (no `layerfs-sdk` crate). O21b: the crates stay in `engine/crates/` for 2.0. |
 | G6 | PyO3 is accepted as a new dependency, and maturin for wheels. |
 | G7 | O22: one `on_progress` stream; no job registry. |
 | G8 | O23: one backup link per Store per bucket; replaces `send` and `store.unlink`. |
 | G9 | O24: `project.remove` added as a 55th call. O25: the 14 `@layerfs/backend` operator and diagnostic calls are dropped from the 54; what Connect needs stays behind the trace files. O26: trace files are the feed; no subscribe call. |
-| G10 | O11 widened: `machine update` is added (a call beyond the 54), also for `native` and `docker` (image, Docker socket, WSL distribution). |
+| G10 | O11 widened: `machine update` is added (a call beyond the 54), also for `native` and `docker` (image, Docker socket, WSL distribution). Resizing a VM is deferred; see [Replaced recommendations](#replaced-recommendations). |
 | G11 | O16: the sealed Linux bundle and the built-in machines' binaries come from a per-build user cache, outside every home, pinned by the package version. |
 | G12 | O17: `machine create --nested` adds Firecracker's files to the Lima host. |
 | G13 | O3: PostgreSQL Sandboxes on `native` now (plus `docker` as today); VMs and ssh later. |
@@ -83,13 +83,19 @@ renamed `file`, plus `project.remove`, `workspace.status` and
 
 ## Replaced recommendations
 
-Rows added here when a recommendation proved wrong against the code. Each
-names the smallest safe alternative the docs offer and why.
+Rows added here when a recommendation proved wrong against the code, or
+the work took another route than the spec's. Each names what was taken
+instead and why.
 
 | # | Recommended | Taken instead | Why |
 | --- | --- | --- | --- |
 | H §7.7 route table | sqlite on `docker` runs in process on Linux | Every sqlite Store not on `native` goes to its machine's worker, on every host | On Linux a `docker` Store lives in a Docker volume whose mountpoint belongs to root; opening it in the caller's process would need the volume path and root access. One route per machine kind is the smaller safe choice; the worker already opens the Store on the same kernel. (2026-11-02, delegated by owner, step 7) |
 | O27 | Remove the Linux `native` pairing and `backend/native/linux/` | Removed the pairing (`NativeLinuxProvider`, `Runtime::LinuxNative`; a Linux `native` Sandbox request is refused `Unsupported`, naming namespaces); kept `backend/native/linux/` | The namespaces backend runs on native's shared lifecycle and uses `boot`, `stat` and `mounts::filesystem` from that folder, and the host still reopens, stops and deletes `native` Sandbox records a Linux host wrote before 2.0, which uses the rest. (2026-11-02, delegated by owner) |
+| G0 | #528 and #530 merge into `layerfs_v2_0_0` first; this work branches from there | Branched from the unmerged head of PR #530, `ddc7c5696b`; nothing merged on GitHub. Later (owner, 2026-11-02) local `layerfs_v2_0_0` was fast-forwarded to `ddc7c5696b`, not pushed | Merging a PR on GitHub was outside the delegation (no push, no merge, no comment). `ddc7c5696b` contains #528, and `origin/layerfs_v2_0_0` (`81f8758bcf`) is its ancestor, so the merge G0 asks for would bring no source this base lacks; the PRs themselves stay open. Recorded after review P2-31. |
+| G4 | Merge #521 first; port its Python binding and folder scope into the library | #521 not merged: its branch `origin/area-p/complete-p1-p15` was read; the folder scope was ported (step 14, bound to its project as #521's client was since `797ecca2c7`) and its PyO3 binding was a reference for step 16 | The same delegation limit as G0. The parts G4 uses were ported; its MCP server is dropped by O32, so no #521 code is needed as merged code. #521 stays open. Recorded after review P2-31. |
+| Step 5.2 | `machine/` holds the Machine trait, one adapter per kind | No trait: `machine/kind.rs` holds the kind table and `setup.rs`'s `create`, `start` and the other calls match once on the kind (`9e52bb9306`) | Every caller already knows the kind from the machine record, so nothing needs dynamic dispatch; one `match` per call keeps each kind's steps in its own module without a trait and seven impl blocks. Recorded after review P2-31. |
+| Workflow | One branch per step, `issue533-<step>` | One branch, `issue533-v2`, with one or more counted commits per step; subagent worktrees (`issue533-v2-step5`, `-o27`, `-pg`, and the review fix branches `-store`, `-home`, `-backups`, `-calls`) were cherry-picked onto it | Each step builds on the one before (call table, home layout, routes), so per-step branches would have been one chain anyway; one branch keeps the stacking on `layerfs_v2_0_0` (G0) in one place. Every commit message names its step or finding, and cherry-picks name their source. Recorded after review P2-31. |
+| G10 / O11 resize | `machine update` with new `cpus` and `memory`, restarting the VM where the provider cannot resize live | **Deferred.** `machine update` sets the built-in machines' `image`, `docker` and `wsl`; `cpus` or `memory` on a VM is refused `InUse` while Sandboxes run, else `Unsupported` ("resizing a <kind> machine is not built yet; nothing was changed"). `cpus`/`memory` on `native` or `docker` is `InvalidInput` | Not built in this pass. Building it needs, per VM kind, the provider's own way to change a stopped VM's CPUs and memory (none is wired in `layerfs-sandbox` `machine/`); a stop of the machine with no Sandbox, open Store or call in flight, under its `start.lock`; the new size written to the record before the next on-demand start; the outcome `Unknown` and logged when the provider's change is uncertain; and a live test per kind. ssh hosts have no size. Recorded after review P2-31. |
 
 ## Implementation choices (not owner decisions)
 
