@@ -53,7 +53,8 @@ Machine, Store, bucket, project and Sandbox names are 1 to 63 lowercase
 letters, digits, `_`, `.` and `-`, starting and ending with a letter or
 digit. Windows device names (`con`, `nul`, `aux`, `prn`, `com1`–`com9`,
 `lpt1`–`lpt9`) are refused. `native` and `docker` name the built-in
-machines and are refused as new machine names.
+machines and are refused (`InvalidInput`) as new machine names and as
+Sandbox names (H §7.6).
 
 ### Argument kinds
 
@@ -178,12 +179,24 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 
 - `create` answers the Sandbox's record: `name`, `project`, `machine`,
   `state`, `created`, `id`, `platform`, `runtime` and `image`. A Sandbox
-  name taken anywhere in the home is `Exists`.
+  name taken anywhere in the home is `Exists`. The Store's machine, a
+  running `store move` and the name are checked under one home lock.
 - A sqlite project's Sandbox runs on the machine that holds its Store;
   another machine is `Unsupported`, naming the Store's machine.
-- `close` with `force` stops the Sandbox through its backend and records
-  `Unknown` for Workspaces it could not drain (O31). Closing a Sandbox that
-  is already gone answers `{closed, was_gone: true}`.
+- `list` and `get` page: `list` its Sandboxes, `get` the Sandbox's
+  `workspaces` (`page_size` 1 to 1000, default 50; `page_pos`), with
+  `next_page_pos`, `null` after the last page.
+- `close` without `force` is `MountsActive` while a Workspace is mounted.
+  With `force` (O31) it stops the Sandbox through its backend anyway and
+  answers `{kind: "Closed", sandbox, unknown}`: `unknown` lists the
+  Workspaces it could not drain, whose uncommitted changes and processes
+  end with the Sandbox. Closing a Sandbox that is already gone answers
+  `{closed, was_gone: true}`.
+- A record with no id yet (a create in flight, one whose outcome was
+  unknown, or one whose process ended) is closed too: `InUse` while the
+  creating process lives, else the record goes and the name is free
+  (`{closed, was}`; for `unknown`, `left` says a Sandbox may remain on its
+  machine).
 - Not run for this manual. See
   [limitations](limitations.md#not-built-refused-as-unsupported).
 
@@ -201,10 +214,17 @@ A Workspace is `<sandbox>:<path>`, answered as `ws` by `mount`.
 
 - `exec` answers `kind` (`exit:<code>`), `exit_code`, `stdout`, `stderr`,
   `message` and `truncated`. A command that exits non-zero is still exit 0
-  for the shell unless `--stream` is given.
+  for the shell unless `--stream` is given. Inline output that is not UTF-8
+  comes back as bytes.
+- A stream over 1 MiB is not inline: it is sent as output events, one
+  1 MiB page at a time, and the reply has that stream `null` with
+  `stdout_bytes` or `stderr_bytes` and `streamed: true`. Only the
+  `stdout`/`stderr` functions, `stream: true` (Node, Python) and `--stream`
+  (shell) receive those bytes; without one of them they are not kept.
 - `stdout` and `stderr` (Node, Python) are functions given the command's
-  output. The library sends that output after the command ends; there is
-  no live output stream yet.
+  output. `stream: true` without them writes it to the calling process's
+  own stdout and stderr. The library sends the output after the command
+  ends; there is no live output stream yet.
 - `commit` merges first when the Branch moved since the mount; `force`
   publishes over a moved head instead.
 - `unmount` with `discard` drops uncommitted changes; `force` aborts its
@@ -222,7 +242,7 @@ A Workspace is `<sandbox>:<path>`, answered as `ws` by `mount`.
 | `connect` | `name`, `host` | `user`, `port`, `identity`, `known_hosts`, `root` | connects an ssh host as a machine |
 | `remove` | `name` | — | deletes a VM machine and its disk |
 | `disconnect` | `name` | — | forgets an ssh machine; its data root stays |
-| `update` | `name` | `cpus`, `memory`, `image`, `docker`, `wsl` | resizes a VM, or sets a built-in machine's image and Docker socket (O11) |
+| `update` | `name` | `cpus`, `memory`, `image`, `docker`, `wsl` | sets a built-in machine's image, Docker socket and WSL distribution (O11); `InUse` while Sandboxes run on the machine; resizing a VM is not built |
 
 Run:
 
@@ -267,7 +287,9 @@ $ layerfs store status shop
 {"name":"shop","kind":"sqlite","state":"idle","holders":[],"in_progress":null,"machine":"native","file":{"exists":true,"bytes":212992,"wal_bytes":271952}}
 ```
 
-`state` is `idle`, `in_use` or `moving`. See
+`state` is `idle`, `in_use`, `moving` or `down`. `store status` starts no
+machine: a Store whose machine is stopped, or whose recorded worker does
+not answer, is `down`, with `down_reason` and `file.unavailable` (O34). See
 [Stores](machines-and-stores.md#stores).
 
 ### `backup` (5)
@@ -303,8 +325,9 @@ See [backups](machines-and-stores.md#backups). Not run for this manual.
 | 2 | the command line is wrong (wrong number of positionals, unknown option, a value that is not a whole number or not `true`/`false`, bad JSON, an unreadable `--from` file); nothing was called |
 | 125 | LayerFS refused or failed the call; the refusal is JSON on stderr |
 
-`workspace exec --stream` exits with the command's own code instead; 125
-still means LayerFS failed. `layerfs help` and `layerfs --version` need no
+`workspace exec --stream` exits with the command's own code instead (0 for
+a result with no exit code, 1 for a code outside 0 to 255); 125 still means
+LayerFS refused or failed. `layerfs help` and `layerfs --version` need no
 home.
 
 A refusal is `{"code", "message", "detail"}`. Run:
@@ -326,10 +349,12 @@ Codes seen in the 2.0 library include:
 | Code | Meaning |
 | --- | --- |
 | `InvalidInput` | the request is wrong for this name or kind; nothing happened |
-| `NotFound` | no machine, Store, bucket or project of that name |
+| `NotFound` | no machine, bucket or Store of that name, for a call that names it directly (`store get`, `machine get`, `backup create`, the Store of `project init`, …) |
+| `NoSuchStore`, `NoSuchProject` | a call that names `<store>/<project>` whose Store or project is missing (1.1.0's codes, S §2.9) |
+| `NoSuchBranch`, `NoSuchCommit` | no such Branch, or no such Commit on it (`branch.get`, `commit.get`, …) |
 | `NoSuchPath`, `NoSuchSandbox`, `NoSuchProcess`, … | 1.1.0's codes for paths, Sandboxes and processes |
-| `Exists` | the name is taken, or the same host or database is already connected |
-| `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine, a move in progress |
+| `Exists` | the name is taken, the same host or database is already connected (under any name), or a bucket object was exported from another home |
+| `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine, a move or remove in progress, a machine being removed, a Sandbox still being created |
 | `Unsupported` | not possible here, or not built (see [limitations](limitations.md)); a missing tool is listed in `detail.missing` |
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret |
 | `Conflict` | a merge or Commit conflict; for `backup.restore`, the Store changed since its last backup or restore |
@@ -348,7 +373,7 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 | --- | --- | --- |
 | `--text` | all | a readable result instead of JSON |
 | `--progress` | `project init`, `store move`, `backup create`, `backup restore` | progress as one JSON line per update on stderr, `{"progress": {…}}` |
-| `--stream` | `workspace exec` | passes the command's stdout and stderr through and exits with its code |
+| `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too) and exits with its code |
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
 | `--<option>-from <file>` | any optional text option (`--old-from`, `--new-from`, `--message-from`) | reads the option's value from a file |
 | `-m <text>` | calls with `message` | the same as `--message` |

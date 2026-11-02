@@ -61,7 +61,12 @@ layerfs machine create fc1 firecracker --host host1
   VM exists, a failure keeps it with state `failed` and its `error`.
   `Unknown` keeps everything and is logged.
 - The home lock is held only to claim the name and to record the outcome,
-  never while the VM boots.
+  never while the VM boots. A create also holds the machine's `start.lock`
+  (taken before the home lock), so an on-demand start cannot overwrite the
+  new machine's secret.
+- A `microsandbox` create refuses `Exists` when a `<vm>-data` volume of its
+  name is already there (as `apple-container` does), so its cleanup after a
+  failure never deletes a volume it did not make.
 
 ### Connecting an ssh host
 
@@ -84,10 +89,18 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
 - `machine remove` (VMs) and `machine disconnect` (ssh) are `InUse` while
   the machine holds Stores, Sandboxes or hosted Firecracker machines. Each
   is `InvalidInput` on the other kind.
+- A remove takes the machine's `start.lock` first, then, under the home
+  lock, marks the record `removing` with its process id. The VM is deleted
+  outside the home lock. While that process lives, every call that would
+  start the machine, move a Store to it, create a Sandbox on it, update or
+  remove it is `InUse`. A refused delete puts the record back as it was;
+  one whose outcome is unknown records `state: "unknown"` and the error. A
+  remover that is gone holds nothing.
 - `machine update native` and `machine update docker` set `image` and
-  `docker` (the Docker socket); `wsl` is a Windows host's setting.
-- Resizing a VM with `machine update` is `InUse` while Sandboxes run on it
-  and otherwise `Unsupported` ("not built yet"); nothing is changed.
+  `docker` (the Docker socket); `wsl` is a Windows host's setting. Any
+  update is `InUse` while Sandboxes run on the machine, naming them.
+- Resizing a VM with `machine update` is `Unsupported` ("not built yet");
+  nothing is changed.
 
 ### Start on demand and idle stop
 
@@ -96,11 +109,19 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   and records `worker.json`. That wait is a readiness wait, not a retry;
   the call is then sent once.
 - Two processes that need the same stopped machine take turns on its
-  `start.lock`. The second waits up to 600 s, then is refused
-  `Unavailable`.
+  `start.lock`, which `machine create` and `machine remove` also take. The
+  second waits up to 600 s, then is refused `Unavailable`. The lock is
+  always taken before the home lock, and the start re-reads the record once
+  it holds it.
+- A `firecracker` machine's first call starts its `lima` host the same way
+  (its `start.lock`, readiness wait and `worker.json`) before the microVM.
 - The worker stops after 10 minutes (O2) with no open Store, no Sandbox, no
-  call in flight and no call. In a VM guest it then powers the guest off.
-  On an ssh host only the worker stops.
+  call in flight and no call. It counts the Sandboxes it runs and every one
+  recorded under `/layerfs/data/store/<s>/project/<p>/sandboxes/`, and on a
+  `lima` host each live Firecracker microVM; an unreadable entry counts as
+  in use. In a VM guest it then powers the guest off; a Firecracker microVM
+  resets instead (`sync; reboot -f`), since its VMM ignores a power-off. On
+  an ssh host only the worker stops.
 - `machine status` answers `state`, `free_disk`, `tool_version` and
   `down_reason` (O34). A stopped VM answers without being started. There is
   no change event; callers poll.
@@ -111,7 +132,17 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   in the caller's process.
 - Calls on a sqlite Store on any other machine go to that machine's worker,
   behind a secret, over a forwarded loopback port. The caller sends the
-  Store's record with the call; the worker never reads the home.
+  Store's record and the home id with the call; the worker never reads the
+  home, and its own root (`/layerfs/data`) is never treated as a home.
+- A connection starts with a small frame holding only the secret (at most
+  4 KiB, read within 10 s); the worker answers it, or refuses `Denied` and
+  closes, before it reads the request. A caller that gets no answer in 10 s
+  is `Unavailable`; in both cases the request was not sent. Only a
+  connection lost after the request was sent is `Unknown`. One attempt;
+  nothing is resent.
+- A worker holds a Store's lease for as long as it keeps the Store open,
+  and closes its own open copy before a move, retire or remove reads or
+  deletes the file.
 - One process can use Stores on several machines at once.
 - A Sandbox on `docker` is a container on the docker machine's image. On
   macOS (and Windows) the docker worker starts it beside itself, mounting
@@ -147,6 +178,15 @@ $ layerfs store move shop dev --progress   # not run
   between two machines other than `native` is one call (O12).
   - It is `InUse` while any process holds the Store, a Sandbox of one of
     its projects runs, or another live process moves it.
+  - A Store call made while a move or remove runs is `InUse`, from the
+    mover's own process too: the lease is taken, and the record re-read,
+    under the home lock. The mover writes `in_progress` under the lock,
+    closes its own open copy, then re-checks the leases (another thread's
+    included) and Sandboxes under the lock again before the snapshot.
+  - The home lock covers only the checks and record writes, never a machine
+    start, a Store step or the close of an open Store. A move whose record
+    phase fails (its lock wait expired, say) keeps `in_progress` with both
+    copies and logs the uncertain outcome.
   - It is `Exists` when the target already holds a Store file of that name,
     and `InvalidInput` for the Store's own machine or a postgresql Store.
   - A failure names its phase in the message and in `detail.phase`, and
@@ -157,7 +197,16 @@ $ layerfs store move shop dev --progress   # not run
     `in_progress`.
 - `store remove` deletes a sqlite Store wherever it is, with every project
   in it. Its backups stay in their buckets. It is `InUse` while the Store is
-  held.
+  held. A Store whose machine is unknown is `Unavailable` (as for a move).
+  A stopped machine is started (or the call refused) before the home lock is
+  taken; a Store whose machine changed meanwhile is `Conflict`. A certain
+  failure clears `in_progress`.
+- `store status` starts no machine. A Store whose machine is not running,
+  or whose recorded worker does not answer, has `state: "down"` with
+  `down_reason`, and `file.unavailable` (O34).
+- A lease records its process's start time and boot, so a lease or move
+  whose process id was reused by another process is stale. A lease written
+  without them is matched by id alone.
 - Init writes only into a sqlite Store on `native`. To add a project to a
   Store on another machine, move it to `native`, Init, and move it back.
 - A Sandbox of a sqlite project runs only on the Store's machine.
@@ -172,15 +221,24 @@ layerfs project init pg-main/load ./load
 ```
 
 - The URL starts `postgresql://` or `postgres://` and names its user. A URL
-  that holds a password is `InvalidInput`; give the password as a
-  reference with `--password` (`env:NAME` or `file:/absolute/path`). It is
-  resolved on each call and never written to the home.
+  that holds a password is `InvalidInput`, before any effect: in its user
+  part, or as any query parameter whose name contains `password`
+  (`password`, `sslpassword`, any case). Give the password as a reference
+  with `--password` (`env:NAME` or `file:/absolute/path`). It is resolved on
+  each call and never written to the home.
 - `synchronous_commit` is `off` (the default), `local`, `remote_write`,
   `on` or `remote_apply`.
 - The Store lives in the fixed schema `layerfs`. An empty database gets the
   schema with a new identity. A database that already holds the `layerfs`
   schema keeps its identity, and its projects become this home's project
-  records. A Store name already in the home is `Exists`.
+  records. A Store name already in the home is `Exists`, and so is the same
+  database under a second name: checked before any request by the URL's
+  server and database (as libpq reads them; port 5432 and the user's
+  database by default, the host in lower case), and again under the home
+  lock by the schema's binding, which catches another spelling of the same
+  host or a copy of the schema. The schema is made or read before the home
+  lock, which covers the re-checks and the record writes only; a connect
+  refused under the lock after it made the schema leaves that empty schema.
 - Not verified: the decisions log (O6) says a database whose one LayerFS
   schema has another name is opened and one with several is refused. The
   connect code names only the schema `layerfs`.

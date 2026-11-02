@@ -52,7 +52,10 @@ hold a password or a bucket key. They are not settings; see
 ```
 
 - **Records** are one JSON value each, written to a private temporary file
-  and renamed into place, so a reader sees the old record or the new one.
+  (named with the process id and a per-process counter, so threads never
+  share one) and renamed into place, so a reader sees the old record or the
+  new one. Every writer that reads, changes and writes a record holds the
+  home lock.
   Files are 0600 and folders 0700. Bytes are stored as `{"hex": "…"}`.
 - **`layerfs.json`** holds `{"layout": 2, "id": "<32 hex digits>"}`. The id
   is written once. The `docker` machine names its containers with it (O33),
@@ -62,16 +65,20 @@ hold a password or a bucket key. They are not settings; see
 - **`layerfs.lock`** guards record writes and Sandbox-name uniqueness.
   Taking it waits up to 120 s for another holder; that is a readiness wait,
   not a retry. If it is still held, the call is refused `Unavailable` and
-  nothing changes.
+  nothing changes. A thread that already holds it takes it again at once.
+  It is held only for checks and record writes, never across a machine
+  start, a Store step, a download or a VM's deletion.
 - **`machine/native/` and `machine/docker/`** exist from the first call and
   are never removed.
 - **`store/<name>/open/<pid>`** is a lease. Every process that uses a sqlite
   Store holds one: the process that opens it, or, for a Store behind a
   worker, the host process that sends it calls. `store move` and
   `store remove` read the leases under the home lock and refuse `InUse`
-  while one is held. A lease whose process is no longer alive on this host
-  is stale; it is removed under the home lock and the removal is logged
-  (O35).
+  while one is held. A lease is taken under the home lock, and refused
+  `InUse` while a move or remove of the Store runs. It records its
+  process's start time and boot: a lease whose process is no longer alive
+  on this host, or whose id now names another process, is stale; it is
+  removed under the home lock and the removal is logged (O35).
 - **A Sandbox's own state** (daemon keys, mounts) is still kept where 1.1.0
   kept it, under the project's folder; only its 2.0 record is under
   `machine/<machine>/sandbox/<name>/`. The name is the only handle callers
@@ -98,14 +105,18 @@ $ cat /tmp/lfs-new/layerfs.json
 
 ## A 1.1.0 home
 
-A folder with files but no `layerfs.json` is a 1.1.0 home. The first 2.0
-call on it converts it once, under the home lock:
+A folder without `layerfs.json` that holds 1.1.0's own records (`.stores`,
+`stores.json`, `stores.v1.json`, `stores.json.lock`, `remotes`,
+`remote-state`, `.runtime`, `worker`, `traces`, or a `<p>/project.record`)
+is a 1.1.0 home; any other folder, with or without files of its own, is a
+new home. The first 2.0 call on a 1.1.0 home converts it once, under the
+home lock:
 
 | 1.1.0 | 2.0 |
 | --- | --- |
 | `.stores/<s>/store.record` and its `projects/` | `store/<s>/record.json` and `store/<s>/project/<p>/record.json` |
 | `<home>/<p>/project.record` (a project with a Store of its own) | Store `<p>` holding project `<p>` |
-| `stores.json`, `stores.v1.json` | folded into each Store's record (created time; a Docker volume sets the machine to `docker`) |
+| `stores.json`, `stores.v1.json` | folded into each Store's record (created time; a Docker volume sets the machine to `docker`, unless its file is placed, below) |
 | `remote-state/<s>` | the Store's backup link in the bucket of the same name |
 | `remotes` | one `backup/<bucket>/record.json` per r2 or MinIO remote |
 | `.runtime/init-failures.jsonl` | `log/init-failures.jsonl` |
@@ -120,12 +131,22 @@ call on it converts it once, under the home lock:
   `log/1.1.0/remotes`.
 - A PostgreSQL Store from 1.1.0 kept no URL. Run `store connect` for it
   again.
+- Each sqlite Store's file is placed where 2.0 opens it when this host can
+  read it in 1.1.0's Docker volume (`<volumes>/<volume>/_data/global/store.sqlite`,
+  Docker on Linux): a hard link at `store/<name>/store.sqlite`, or across
+  filesystems a copy whose sha256 is checked before it is renamed in. The
+  1.1.0 file is never moved or deleted. A placed Store's record says
+  `machine: native` and `file_1_1_0: <path>`, and `log/migration.json`
+  lists it under `placed`. A file with a write-ahead log, or one this host
+  cannot read (Docker Desktop's VM on macOS and Windows), is not placed:
+  the Store keeps its `volume` and the report says where the file is.
 - A sqlite Store whose machine 1.1.0 did not record has `machine: null`.
   Calls on it are refused `Unavailable` until `layerfs import-env` or
   `store move` names its machine.
 - Sandbox folders stay inside their project's folder.
 
-Run (a folder with a `traces/` folder and one unknown file):
+Run (a folder with a `traces/` folder and one unknown file; before
+`92c2db72b3` added `placed` to the report):
 
 ```console
 $ LAYERFS_HOME=./old layerfs store list

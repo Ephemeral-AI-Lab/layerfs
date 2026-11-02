@@ -129,9 +129,16 @@ layerfs sandbox close tests
   that string to the other `workspace` calls.
 - `workspace exec` answers `exit_code`, `stdout` and `stderr` with exit 0.
   With `--stream` the shell writes the output and exits with the command's
-  own code.
+  own code. Output over 1 MiB reaches only `--stream` (or the package's
+  `stdout`/`stderr` functions); the JSON answer has that stream `null`
+  with its byte count and `streamed: true`.
 - `workspace commit` saves the Workspace's changes to its Branch, merging
-  first if the Branch moved since the mount.
+  first if the Branch moved since the mount; `--force` publishes over a
+  moved head instead.
+- `sandbox close` refuses `MountsActive` while a Workspace is mounted;
+  `--force` stops the Sandbox anyway and lists the Workspaces it could not
+  drain under `unknown`.
+- A Sandbox is not named `native` or `docker` (`InvalidInput`).
 
 ## 5. The same in JavaScript
 

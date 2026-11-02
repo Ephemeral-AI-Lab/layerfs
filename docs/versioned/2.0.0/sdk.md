@@ -71,8 +71,12 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
 - Python 3.10 or later (abi3). The native module is `layerfs._native`,
   built by PyO3 from `engine/crates/layerfs-python`.
 - Calls are synchronous (O19). `layerfs.aio` has the same families and
-  calls as coroutines; each runs the synchronous call on a thread
-  (`asyncio.to_thread`), and the native call releases the interpreter.
+  calls as coroutines; each runs the synchronous call on a thread, and the
+  native call releases the interpreter. Its function options run on the
+  event loop's thread, in order, all before the coroutine returns.
+  Cancelling the coroutine stops its functions at once, but the native call
+  cannot be cancelled: it runs to its end and its outcome is dropped, so
+  read the state again after a cancel.
 - Positionals come in the table's order. Optional positionals and options
   may be keywords: `file.read(p, b, path, start_line=2)`. A positional
   given twice, an unknown keyword or too many positionals raises
@@ -83,9 +87,10 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
   `.detail`.
 - `layerfs.TABLE` is the call table and `layerfs.FAMILIES` the nine
   families.
-- Build: `cd api/python && maturin build --locked`. Only a macOS arm64
-  wheel was built on this branch; the Linux x64 and arm64 glibc wheels
-  (O20) are `NOT_RUN`.
+- Build: `cd api/python && maturin build --locked` (maturin 1.9.6 or a
+  later 1.x, as `pyproject.toml` requires since `2793ee114c`). Only a macOS
+  arm64 wheel was built on this branch; the Linux x64 and arm64 glibc
+  wheels (O20) are `NOT_RUN`.
 
 ```python
 import asyncio
@@ -104,12 +109,24 @@ asyncio.run(main())
 | Option | Calls | Called with |
 | --- | --- | --- |
 | `on_progress` | `project.init`, `store.move`, `backup.create`, `backup.restore` | each progress update (an object or dict) |
-| `stdout`, `stderr` | `workspace.exec` | the command's output, as bytes |
+| `stdout`, `stderr` | `workspace.exec` | the command's output, piece by piece: a string when the piece is UTF-8, else a `Buffer` (Node) or `bytes` (Python) |
 
 There is one progress stream and no job registry (O22). Another process
 cannot watch a call it did not start; `store status` shows a move in
 progress. `workspace.exec` sends its output after the command ends; there
-is no live output stream yet.
+is no live output stream yet. A stream over 1 MiB comes only through these
+functions (one 1 MiB piece at a time) or `stream: true`; the result then
+has that stream `null`, its byte count and `streamed: true`.
+
+- `stream: true` on `workspace.exec` passes the output to the `stdout` and
+  `stderr` functions, or, without them, to this process's own stdout and
+  stderr (Python writes text to the text stream and bytes to its buffer).
+- Every function's events are passed on before the call settles: Node
+  counts the events the native call queued and resolves only once it has
+  delivered that many.
+- A function that throws does not stop the call. Node reports the error
+  with `process.emitWarning` (`LayerFSHandlerWarning`); Python reports it
+  as an unraisable exception.
 
 ## Where a call runs
 
@@ -122,12 +139,19 @@ call on a Store on another machine goes to that machine's worker. See
 
 From the step commits, not repeated for this manual:
 
-- `node --test api/node/test/shell.mjs test/calls.mjs`: 5/5. All 57 calls
-  are refused identically by the command and the package when their
-  arguments are missing; a live Store read both ways gives identical JSON.
+- `node --test api/node/test/shell.mjs api/node/test/calls.mjs`: 5/5. All
+  57 calls are refused identically by the command and the package when
+  their arguments are missing; a live Store read both ways gives identical
+  JSON.
 - `python3 api/python/test/test_calls.py`: 4/4. All 57 calls are refused
   as the command refuses them; a live Store read gives the same result,
   with bytes, a keyword Commit and a folder scope; `aio`.
+- Later, with the review fixes: `api/node/test/events.mjs` (a throwing
+  `on_progress` during a Store move; live exec output with `stream`) 2/2,
+  and `test_calls.py` 7/7 with the native daemon (`94671c974c`).
+
+Run each under a wall limit of at most 120 s, for example
+`perl -e 'alarm 100; exec @ARGV' node --test api/node/test/calls.mjs`.
 
 For this manual, short Node and Python flows were run on macOS against a
 private home (Store, Init, Branch, file write and read, a refusal, paging,
