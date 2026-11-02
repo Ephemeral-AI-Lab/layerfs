@@ -1,6 +1,7 @@
 //! The worker's idle stop (H §7.2, #533 step 13, O2): with no open Store, no
-//! Sandbox (live, or recorded by the host Sandbox code), no call in flight and no call for [`IDLE`], the worker stops
-//! serving; its front end then exits, and in a VM guest powers it off. The
+//! Sandbox (live, or recorded by the host Sandbox code), no running
+//! Firecracker microVM it hosts, no call in flight and no call for [`IDLE`],
+//! the worker stops serving; its front end then exits, and in a VM guest powers it off. The
 //! host notices at its next call (the worker does not answer) and starts
 //! the machine again: a readiness wait, not a retry.
 use std::path::Path;
@@ -34,7 +35,7 @@ pub fn idle(root: &Path, idle: Duration, started_ms: u64) -> bool {
     if IN_FLIGHT.load(Ordering::SeqCst) > 0 || crate::store::open::count() > 0 {
         return false;
     }
-    if sandboxes_held(root) {
+    if sandboxes_held(root) || microvms_running(root) {
         return false;
     }
     let last = super::server::last_active().max(started_ms);
@@ -67,6 +68,27 @@ fn sandboxes_held(root: &Path) -> bool {
         }
     }
     false
+}
+
+/// Whether a Firecracker microVM this guest hosts still runs: a live
+/// `firecracker/vms/<vm>/firecracker.pid` under the root (a Lima host's
+/// data disk). Powering the host off would stop it under its own worker.
+/// An unreadable folder or pid file counts as one running.
+fn microvms_running(root: &Path) -> bool {
+    let vms = root.join("firecracker/vms");
+    let Ok(names) = crate::home::paths::names(&vms) else {
+        return true;
+    };
+    names.iter().any(
+        |vm| match std::fs::read_to_string(vms.join(vm).join("firecracker.pid")) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+            Err(_) => true,
+            Ok(text) => text
+                .trim()
+                .parse::<u32>()
+                .map_or(true, crate::store::lease::alive),
+        },
+    )
 }
 
 /// Serves on `listener` on its own thread until the worker has been idle

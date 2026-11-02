@@ -107,6 +107,16 @@ fn built_in_created_and_tools() {
 }
 
 #[test]
+fn an_idle_worker_resets_a_microvm_and_powers_other_vms_off() {
+    // #533 review P0-6: a Firecracker VMM ignores an ACPI power-off
+    assert_eq!(Kind::Firecracker.guest_stop(), "reboot");
+    assert_eq!(Kind::Ssh.guest_stop(), "0");
+    for kind in [Kind::Lima, Kind::AppleContainer, Kind::Microsandbox] {
+        assert_eq!(kind.guest_stop(), "1", "{kind:?}");
+    }
+}
+
+#[test]
 fn the_current_host_is_named() {
     let expected = if cfg!(target_os = "linux") {
         HostOs::Linux

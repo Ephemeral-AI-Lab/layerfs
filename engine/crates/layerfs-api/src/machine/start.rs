@@ -2,12 +2,14 @@
 //! caller finds the worker gone, starts the machine and its worker, waits
 //! until it is ready and replaces `worker.json`. That wait is a readiness
 //! wait, not a retry; the call itself is then sent once. Two processes that
-//! need the same stopped machine take turns on its `start.lock`.
+//! need the same stopped machine take turns on its `start.lock`. A
+//! Firecracker machine's Lima host is started the same way first: its own
+//! worker may have stopped it.
 use super::record::{self, machine_of, refusal, save_running};
 use crate::host::outcome::{failed, refused};
 use crate::worker::Endpoint;
 use layerfs_bridge::control::SdkRefusal;
-use layerfs_sandbox::machine::{self as adapters, HostOs, Route};
+use layerfs_sandbox::machine::{self as adapters, HostOs, Kind, Route};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -25,6 +27,11 @@ pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> 
     }
     if let Some(endpoint) = answering(home, name)? {
         return Ok(Some(endpoint));
+    }
+    if kind == Kind::Firecracker {
+        if let Some(host) = record.get_text("host") {
+            running(home, host)?;
+        }
     }
     let lock_path = crate::home::paths::machine_dir(home, name).join("start.lock");
     let file = std::fs::OpenOptions::new()

@@ -107,16 +107,11 @@ pub(crate) fn launch(
     let secret = tool::secret()?;
     guest.write_file(tools, &format!("{STATE}/secret"), &secret)?;
     let listen = format!("{bind}:{WORKER_PORT}");
-    let poweroff = if spec.kind == super::Kind::Ssh {
-        "0"
-    } else {
-        "1"
-    };
     guest.script(
         tools,
         "starting the worker",
         LAUNCH,
-        &[&listen, BUNDLE, poweroff],
+        &[&listen, BUNDLE, spec.kind.guest_stop()],
     )?;
     ready(spec, guest, address)?;
     Ok(Endpoint {

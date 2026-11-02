@@ -148,4 +148,16 @@ impl Kind {
             _ => Ipv4Addr::UNSPECIFIED,
         }
     }
+
+    /// What the worker does to its guest once idle
+    /// (`LAYERFS_WORKER_POWEROFF`): nothing on an ssh host (not ours to
+    /// stop), a reset in a Firecracker microVM (its VMM exits on a reset and
+    /// ignores an ACPI power-off), a power-off in every other VM.
+    pub fn guest_stop(self) -> &'static str {
+        match self {
+            Self::Ssh => "0",
+            Self::Firecracker => "reboot",
+            _ => "1",
+        }
+    }
 }

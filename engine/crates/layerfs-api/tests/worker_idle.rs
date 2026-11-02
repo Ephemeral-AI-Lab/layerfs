@@ -1,7 +1,7 @@
 //! The worker's idle stop (#533 step 13): it stops serving only when no
 //! call is in flight, no Store is open, no Sandbox is recorded under its
-//! root (where the host Sandbox code records it), and the idle time has
-//! passed since its last call.
+//! root (where the host Sandbox code records it), no Firecracker microVM it
+//! hosts runs, and the idle time has passed since its last call.
 use layerfs_api::home::{paths, write_record};
 use layerfs_api::worker;
 use layerfs_bridge::control::SdkValue;
@@ -26,6 +26,26 @@ fn an_idle_worker_stops_and_a_busy_one_does_not() {
     let old = paths::machine_dir(&root, "native").join("sandbox/t1/record.json");
     write_record(&old, &SdkValue::map([("name", SdkValue::text("t1"))])).unwrap();
     assert!(worker::idle(&root, Duration::ZERO, 0));
+
+    // a Lima host stays up while a Firecracker microVM it hosts runs
+    // (#533 review P0-6): a live firecracker.pid holds it, a dead one does not
+    let vm = root.join("firecracker/vms/lfs-fc");
+    std::fs::create_dir_all(&vm).unwrap();
+    std::fs::write(vm.join("vm.env"), "INDEX=1\n").unwrap();
+    assert!(
+        worker::idle(&root, Duration::ZERO, 0),
+        "no pid: not running"
+    );
+    std::fs::write(vm.join("firecracker.pid"), std::process::id().to_string()).unwrap();
+    assert!(!worker::idle(&root, Duration::ZERO, 0));
+    std::fs::write(vm.join("firecracker.pid"), "not a pid").unwrap();
+    assert!(!worker::idle(&root, Duration::ZERO, 0), "unreadable counts");
+    let mut ended = std::process::Command::new("true").spawn().unwrap();
+    let pid = ended.id();
+    ended.wait().unwrap();
+    std::fs::write(vm.join("firecracker.pid"), pid.to_string()).unwrap();
+    assert!(worker::idle(&root, Duration::ZERO, 0));
+    std::fs::remove_dir_all(root.join("firecracker")).unwrap();
 
     // a worker answered recently is not idle for a minute
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
