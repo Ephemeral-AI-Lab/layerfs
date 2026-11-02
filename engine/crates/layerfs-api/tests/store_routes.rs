@@ -164,3 +164,45 @@ fn leases_are_held_counted_and_stale_ones_removed() {
     assert!(log.contains("2147483646"), "{log}");
     std::fs::remove_dir_all(home).unwrap();
 }
+
+#[test]
+fn a_lease_names_its_process_so_a_reused_or_group_pid_never_holds() {
+    // ids 0 and above i32::MAX are process groups to kill(2): never alive
+    for pid in [0, i32::MAX as u32 + 1, u32::MAX] {
+        assert!(!lease::alive(pid), "{pid}");
+    }
+    let home = home_with(sqlite_record(t("native")));
+    let dir = paths::lease_dir(&home, "shop");
+    std::fs::create_dir_all(&dir).unwrap();
+    for pid in ["0", "4294967295"] {
+        std::fs::write(dir.join(pid), "1\n").unwrap();
+    }
+    assert_eq!(lease::holders(&home, "shop").unwrap(), Vec::<u32>::new());
+    assert!(!dir.join("0").exists() && !dir.join("4294967295").exists());
+
+    // a live process holds with its start time; the same id with another
+    // start time is a reused id: stale
+    let mut child = std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    let seen = layerfs_sandbox::native::LocalProcess::observe(pid).unwrap();
+    let boot = seen.boot.unwrap();
+    let lease = dir.join(pid.to_string());
+    std::fs::write(&lease, format!("1 {} {boot:032x}\n", seen.start)).unwrap();
+    assert_eq!(lease::holders(&home, "shop").unwrap(), vec![pid]);
+    std::fs::write(&lease, format!("1 {} {boot:032x}\n", seen.start + 1)).unwrap();
+    assert_eq!(lease::holders(&home, "shop").unwrap(), Vec::<u32>::new());
+    assert!(!lease.exists(), "the reused id's lease is removed");
+
+    // this process's own lease records its start time
+    let mine = lease::hold(&home, "shop").unwrap();
+    let text = std::fs::read_to_string(dir.join(std::process::id().to_string())).unwrap();
+    let me = layerfs_sandbox::native::LocalProcess::observe(std::process::id()).unwrap();
+    assert!(text.contains(&me.start.to_string()), "{text}");
+    drop(mine);
+    let _ = child.kill();
+    let _ = child.wait();
+    std::fs::remove_dir_all(home).unwrap();
+}

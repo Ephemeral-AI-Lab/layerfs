@@ -307,12 +307,10 @@ fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Outcome {
             ));
         }
         idle(&home, name, &record)?;
-        let at = SdkValue::map([
-            ("from", SdkValue::text(&from)),
-            ("to", SdkValue::text(to)),
-            ("pid", SdkValue::Int(i64::from(std::process::id()))),
-            ("started", SdkValue::Int(home::now_ms())),
-        ]);
+        let mut at = vec![("from", SdkValue::text(&from)), ("to", SdkValue::text(to))];
+        at.extend(lease::identity());
+        at.push(("started", SdkValue::Int(home::now_ms())));
+        let at = fields_map(at);
         write_record(
             &paths::store_record(&home, name),
             &with_field(record, "in_progress", at),

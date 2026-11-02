@@ -2,14 +2,17 @@
 //! `store/<name>/open/<pid>`: the process that opens it, or, for a Store
 //! behind a worker, the host process that sends it calls. `store move` and
 //! `store remove` read them under the home lock and refuse `InUse` while one
-//! is held. A lease whose process is not alive on this host is stale: it is
-//! removed under the home lock and the removal is logged (O35).
+//! is held. A lease names its process by id, kernel start time and boot, so
+//! a reused id does not keep it alive; a lease whose process is not alive on
+//! this host is stale: it is removed under the home lock and the removal is
+//! logged (O35).
 use crate::home::{self, paths};
 use crate::host::outcome::failed;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_sandbox::native::LocalProcess;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 /// This process's leases and how many holders use each.
 static HELD: Mutex<BTreeMap<PathBuf, usize>> = Mutex::new(BTreeMap::new());
@@ -32,6 +35,40 @@ impl Drop for Lease {
     }
 }
 
+/// This process as leases name it, read once; `None` where the kernel does
+/// not say (its leases are then matched by id alone).
+fn me() -> Option<(u64, u128)> {
+    static ME: OnceLock<Option<(u64, u128)>> = OnceLock::new();
+    *ME.get_or_init(|| {
+        let process = LocalProcess::observe(std::process::id()).ok()?;
+        Some((process.start, process.boot?))
+    })
+}
+
+/// The fields that name this process in a record (a move's `in_progress`).
+pub(crate) fn identity() -> Vec<(&'static str, SdkValue)> {
+    let mut fields = vec![("pid", SdkValue::Int(i64::from(std::process::id())))];
+    if let Some((start, boot)) = me() {
+        fields.push(("pid_start", SdkValue::text(start.to_string())));
+        fields.push(("pid_boot", SdkValue::text(format!("{boot:032x}"))));
+    }
+    fields
+}
+
+/// Whether the process a record's [`identity`] fields name is alive.
+pub(crate) fn recorded_alive(value: &SdkValue) -> bool {
+    let Some(pid) = value.get_int("pid").and_then(|p| u32::try_from(p).ok()) else {
+        return false;
+    };
+    alive_as(
+        pid,
+        value.get_text("pid_start").and_then(|s| s.parse().ok()),
+        value
+            .get_text("pid_boot")
+            .and_then(|b| u128::from_str_radix(b, 16).ok()),
+    )
+}
+
 /// Holds Store `store`'s lease for this process.
 pub fn hold(home: &Path, store: &str) -> Result<Lease, SdkRefusal> {
     let dir = paths::lease_dir(home, store);
@@ -40,7 +77,11 @@ pub fn hold(home: &Path, store: &str) -> Result<Lease, SdkRefusal> {
     let count = held.entry(path.clone()).or_insert(0);
     if *count == 0 {
         home::private_dir(&dir)?;
-        let text = format!("{}\n", home::now_ms());
+        let mut text = home::now_ms().to_string();
+        if let Some((start, boot)) = me() {
+            text.push_str(&format!(" {start} {boot:032x}"));
+        }
+        text.push('\n');
         if let Err(error) = std::fs::write(&path, text) {
             held.remove(&path);
             return Err(failed(error));
@@ -50,14 +91,45 @@ pub fn hold(home: &Path, store: &str) -> Result<Lease, SdkRefusal> {
     Ok(Lease { path })
 }
 
-/// Whether process `pid` is alive on this host.
+/// Whether process `pid` is alive on this host. Ids 0 and above `i32::MAX`
+/// name no single process (`kill` would read them as a group): never alive.
 pub fn alive(pid: u32) -> bool {
     use nix::errno::Errno;
-    match nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), None) {
+    let id = match i32::try_from(pid) {
+        Ok(id) if id > 0 => id,
+        _ => return false,
+    };
+    match nix::sys::signal::kill(nix::unistd::Pid::from_raw(id), None) {
         Ok(()) => true,
         Err(Errno::EPERM) => true,
         Err(_) => false,
     }
+}
+
+/// Whether `pid` is alive and, when its start time and boot were recorded,
+/// still the same process.
+fn alive_as(pid: u32, start: Option<u64>, boot: Option<u128>) -> bool {
+    if !alive(pid) {
+        return false;
+    }
+    match (start, boot) {
+        (Some(start), Some(boot)) => LocalProcess {
+            pid,
+            start,
+            boot: Some(boot),
+        }
+        .alive(),
+        _ => true,
+    }
+}
+
+/// Whether lease text `text` (`<at> [<start> <boot>]`) of `pid` names a
+/// live process.
+fn lease_alive(pid: u32, text: &str) -> bool {
+    let mut fields = text.split_ascii_whitespace().skip(1);
+    let start = fields.next().and_then(|s| s.parse().ok());
+    let boot = fields.next().and_then(|b| u128::from_str_radix(b, 16).ok());
+    alive_as(pid, start, boot)
 }
 
 /// The processes holding Store `store`, other than this one; stale leases
@@ -82,7 +154,13 @@ pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
         if pid == std::process::id() {
             continue;
         }
-        if alive(pid) {
+        let text = match std::fs::read_to_string(entry.path()) {
+            Ok(text) => text,
+            // its holder dropped it meanwhile
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(failed(e)),
+        };
+        if lease_alive(pid, &text) {
             live.push(pid);
         } else {
             std::fs::remove_file(entry.path()).map_err(failed)?;

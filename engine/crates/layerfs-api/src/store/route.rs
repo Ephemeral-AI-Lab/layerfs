@@ -63,8 +63,8 @@ pub(crate) fn moving(record: &SdkValue, store: &str) -> Result<(), SdkRefusal> {
     let Some(progress @ SdkValue::Map(_)) = record.get("in_progress") else {
         return Ok(());
     };
-    let pid = progress.get_int("pid").unwrap_or(0) as u32;
-    if pid != 0 && pid != std::process::id() && lease::alive(pid) {
+    let pid = progress.get_int("pid").unwrap_or(0);
+    if pid != i64::from(std::process::id()) && lease::recorded_alive(progress) {
         return Err(refused(
             "InUse",
             format!("Store {store} is being moved by process {pid}"),
