@@ -93,28 +93,12 @@ fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
         provider.launch(wrong_options).err().unwrap().phase,
         LaunchPhase::Validate
     );
-    // #527 step 6: the provider alone names the kernel route. A caller that
-    // names it is refused before anything is made; the daemon gets the
-    // platform's route (NFS on macOS).
-    let mut named = request("named-route");
-    if let ProviderLaunchOptions::Local { environment, .. } = &mut named.options {
-        environment.push(("LAYERFS_KERNEL".into(), "fuse".into()));
-    }
-    assert_eq!(
-        provider.launch(named).err().unwrap().phase,
-        LaunchPhase::Validate
-    );
-    let route = base.join("route");
     fs::write(
         &binary,
-        format!(
-            "#!/bin/sh\necho \"$LAYERFS_KERNEL\" > {}\necho LAYERFS_DAEMON_LISTEN 127.0.0.1:40405\nexec /bin/sleep 30\n",
-            route.display()
-        ),
+        "#!/bin/sh\necho LAYERFS_DAEMON_LISTEN 127.0.0.1:40405\nexec /bin/sleep 30\n",
     )
     .unwrap();
     let mut chosen = provider.launch(request("chosen-route")).unwrap();
-    assert_eq!(fs::read_to_string(&route).unwrap(), "nfs\n");
     chosen.stop(1).unwrap();
     chosen.delete().unwrap();
     fs::remove_dir_all(base).unwrap();

@@ -140,7 +140,7 @@ fn binding(url: &str, schema: &str, sync: &str) -> Result<Vec<u8>, SdkRefusal> {
 /// records, is made here (owner-only) the first time.
 pub(crate) fn sandbox_store(
     args: &SdkValue,
-) -> Result<Option<layerfs_bridge::daemon_setup::DaemonPostgres>, SdkRefusal> {
+) -> Result<Option<layerfs_bridge::DaemonStore>, SdkRefusal> {
     if !stores::postgresql(args)? {
         return Ok(None);
     }
@@ -172,12 +172,14 @@ pub(crate) fn sandbox_store(
         discovery::directory(projects)?;
     }
     discovery::directory(&entry)?;
-    Ok(Some(layerfs_bridge::daemon_setup::DaemonPostgres {
+    Ok(Some(layerfs_bridge::DaemonStore::Postgres {
         url,
         schema,
         synchronous_commit,
-        binding: identity.binding,
-        cursor_key: identity.cursor_key,
+        authority: layerfs_bridge::StoreAuthority {
+            binding: identity.binding,
+            cursor_key: identity.cursor_key,
+        },
     }))
 }
 

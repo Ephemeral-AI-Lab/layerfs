@@ -18,8 +18,9 @@ use crate::internal::split_provider;
 use crate::sandbox::{values, ProviderCreate, ProviderFailure};
 use crate::{OperationFailure, SandboxApi, SandboxCause, SandboxPhase};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonPostgres, DaemonSetup};
+use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonSetup};
 use layerfs_bridge::provision::StoreManifest;
+use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_sandbox::docker::{CreatePhase, Docker, DockerProvider};
 use layerfs_sandbox::Runtime;
 use layerfs_sandbox::{LaunchRequest, ProviderLaunchOptions};
@@ -54,12 +55,17 @@ pub(crate) const WORKSPACES: u32 = 16;
 /// for this process and the rest for others (#352 F-017).
 pub(crate) const DAEMON_CONNECTIONS: u16 = 8;
 
-pub(crate) fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
+pub(crate) fn setup(
+    private: [u8; 32],
+    peer: [u8; 32],
+    store: DaemonStore,
+    route: KernelRoute,
+) -> DaemonSetup {
     DaemonSetup {
         listen: format!("0.0.0.0:{PORT}"),
         private_key: private,
         control_peer: peer,
-        store: crate::host::project::LOCATOR.into(),
+        route,
         overlay: "/layerfs-local/overlay/overlay.sqlite".into(),
         mounts: "/workspaces".into(),
         command_uid: 501,
@@ -79,8 +85,7 @@ pub(crate) fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
             serial_low_water: 256,
             idle_exit_s: IDLE_EXIT_S,
         },
-        existing_store: None,
-        postgresql: None,
+        store,
     }
 }
 
@@ -121,15 +126,16 @@ pub(crate) fn labels(project: &str, store: Option<&str>, id: &str) -> Vec<(Strin
     .collect()
 }
 
-/// The Store a Sandbox's daemon opens: the project's installed Store file,
-/// or a PostgreSQL Store (#506), whose Sandbox mounts no volume.
-pub(crate) enum DaemonStore {
+/// The Store a call's project selected for its Sandbox's daemon: the
+/// project's installed Store file, or a PostgreSQL Store (#506), whose
+/// Sandbox mounts no volume.
+pub(crate) enum OpenedStore {
     File(Box<(crate::host::registry::Project, StoreManifest)>),
-    Postgres(DaemonPostgres),
+    Postgres(Box<DaemonStore>),
 }
 
 /// The installed Store file of the project a call names.
-fn installed(args: &SdkValue) -> Result<DaemonStore, SdkRefusal> {
+fn installed(args: &SdkValue) -> Result<OpenedStore, SdkRefusal> {
     let name = text(args, "project")?;
     if args.get_text("store").is_some() {
         let identity = crate::host::stores::identity(args)?;
@@ -142,7 +148,7 @@ fn installed(args: &SdkValue) -> Result<DaemonStore, SdkRefusal> {
             format!("project {name} has no installed Store: its Import did not finish, so import it again"),
         ));
     };
-    Ok(DaemonStore::File(Box::new((project, installed))))
+    Ok(OpenedStore::File(Box::new((project, installed))))
 }
 
 /// Starts the project's next Sandbox (the lowest free number) on the
@@ -152,7 +158,7 @@ fn installed(args: &SdkValue) -> Result<DaemonStore, SdkRefusal> {
 pub(crate) fn start(
     args: &SdkValue,
     directory: &Path,
-    store: DaemonStore,
+    store: OpenedStore,
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let deploy = args
         .get("deploy")
@@ -196,8 +202,8 @@ pub(crate) fn start(
         ));
     }
     let store_volume = match &store {
-        DaemonStore::File(_) => Some(text(deploy, "volume")?.to_owned()),
-        DaemonStore::Postgres(_) => None,
+        OpenedStore::File(_) => Some(text(deploy, "volume")?.to_owned()),
+        OpenedStore::Postgres(_) => None,
     };
     let executable = PathBuf::from(text(deploy, "daemon")?);
     let left = match &store_volume {
@@ -252,17 +258,16 @@ fn start_claimed(
     directory: &Path,
     saved_directory: &Path,
     id: &str,
-    opened: DaemonStore,
+    opened: OpenedStore,
     (docker, image, store_volume, executable): (&str, String, Option<String>, PathBuf),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
     let controller = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
-    let mut daemon_setup = setup(daemon.private, controller.public);
     // the Store's path in the container follows where its folder comes from
     let mut manifest = None;
-    match &opened {
-        DaemonStore::File(file) => {
+    let daemon_store = match &opened {
+        OpenedStore::File(file) => {
             let (project, installed) = &**file;
             let source = store_volume.as_deref().unwrap_or_default();
             let locator = layerfs_sandbox::docker::store_locator(source).ok_or_else(|| {
@@ -275,11 +280,19 @@ fn start_claimed(
             existing.locator = locator.to_owned();
             manifest = Some(existing.clone());
             existing.daemon_sqlite = installed.daemon_sqlite.clone();
-            daemon_setup.store = locator.to_owned();
-            daemon_setup.existing_store = Some(existing);
+            DaemonStore::Sqlite {
+                locator: locator.to_owned(),
+                install: Some(existing),
+            }
         }
-        DaemonStore::Postgres(selected) => daemon_setup.postgresql = Some(selected.clone()),
-    }
+        OpenedStore::Postgres(selected) => (**selected).clone(),
+    };
+    let daemon_setup = setup(
+        daemon.private,
+        controller.public,
+        daemon_store,
+        KernelRoute::Fuse,
+    );
     let store = crate::host::stores::shared_store(args)?;
     let container_name = sandbox_name(args, id)?;
     let docker = Docker::new(docker, ENGINE)
@@ -312,12 +325,12 @@ fn start_claimed(
     };
     let api = SandboxApi::with_runtime(provider);
     let created = match &opened {
-        DaemonStore::File(file) => api.create_provider_file(
+        OpenedStore::File(file) => api.create_provider_file(
             request,
             &file.0.store,
             manifest.as_ref().unwrap_or(&file.0.manifest),
         ),
-        DaemonStore::Postgres(_) => api.create_provider_postgres(request),
+        OpenedStore::Postgres(_) => api.create_provider_postgres(request),
     };
     let owner = created.map_err(|failure| abandon(directory, id, failure))?;
     let container = owner.runtime.identity().to_string();
@@ -463,7 +476,7 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
     let platform = crate::host::runtime::platform(args, crate::host::runtime::backend(deploy)?)?;
     // a PostgreSQL Store's URL is the call's; its project's entry is made here
     let store = match crate::host::postgres::sandbox_store(args)? {
-        Some(selected) => DaemonStore::Postgres(selected),
+        Some(selected) => OpenedStore::Postgres(Box::new(selected)),
         None => installed(args)?,
     };
     let project = crate::host::discovery::project_dir(args)?;

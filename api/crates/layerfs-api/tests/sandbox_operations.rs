@@ -12,6 +12,7 @@ use layerfs_bridge::{
     daemon_setup::{DaemonLimits, DaemonSetup},
     duplex,
 };
+use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_sandbox::docker::DockerProvider;
 use layerfs_sandbox::Runtime;
 use layerfs_sandbox::{LaunchRequest, ProviderLaunchOptions};
@@ -38,7 +39,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
         listen: "0.0.0.0:30421".into(),
         private_key: private,
         control_peer: peer,
-        store: "/layerfs-store/global/store.sqlite".into(),
+        route: KernelRoute::Fuse,
         overlay: "/layerfs-local/overlay/overlay.sqlite".into(),
         mounts: "/workspaces".into(),
         command_uid: 501,
@@ -52,8 +53,10 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
             serial_low_water: 256,
             idle_exit_s: 0,
         },
-        existing_store: None,
-        postgresql: None,
+        store: DaemonStore::Sqlite {
+            locator: "/layerfs-store/global/store.sqlite".into(),
+            install: None,
+        },
     }
 }
 
@@ -142,7 +145,10 @@ impl Fixture {
         if let Some(project) = project {
             let mut manifest = project.manifest.clone();
             manifest.daemon_sqlite = Some("3.51.0".into());
-            deployment_setup.existing_store = Some(manifest);
+            deployment_setup.store = DaemonStore::Sqlite {
+                locator: manifest.locator.clone(),
+                install: Some(manifest),
+            };
         }
         let request = ProviderCreate {
             launch: LaunchRequest {
@@ -448,7 +454,10 @@ fn create_mismatched_existing_project_refuses_before_any_deployment_or_control_e
     let mut deployment_setup = setup([32; 32], duplex::public_key(&[31; 32]).unwrap());
     let mut manifest = project.project.manifest.clone();
     manifest.root[0] ^= 1;
-    deployment_setup.existing_store = Some(manifest);
+    deployment_setup.store = DaemonStore::Sqlite {
+        locator: manifest.locator.clone(),
+        install: Some(manifest),
+    };
     let result = api.create(
         ProviderCreate {
             launch: LaunchRequest {

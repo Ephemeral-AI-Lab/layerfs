@@ -105,11 +105,10 @@ before 2.0. Only the platform facts differ:
   serve the stop and delete of a recorded pre-2.0 Linux native Sandbox.
 
 The provider validates the command identity, the environment it is given and
-the daemon executable, then starts one daemon in a private directory with the
-kernel route `LAYERFS_KERNEL=nfs` (namespaces names `fuse`). Only a provider
-names the route: a caller environment that names
-`LAYERFS_KERNEL` at all is refused at `Validate` (#527 step 6), and the daemon
-refuses at startup any route other than `fuse` or `nfs` (only `nfs` on macOS). Launch preserves the original single-attempt
+the daemon executable, then starts one daemon in a private directory. The
+kernel route travels in the daemon setup the caller sends (`nfs` for a
+host_process daemon, `fuse` for namespaces and docker); the daemon refuses
+at startup any route other than `fuse` or `nfs` (only `nfs` on macOS). Launch preserves the original single-attempt
 process lifecycle and partial owner on failure. `inspect` reports exact process
 liveness; unknown exit/storage facts stay absent. Records remain the Node
 binding's responsibility; runtimes neither scan directories nor infer project

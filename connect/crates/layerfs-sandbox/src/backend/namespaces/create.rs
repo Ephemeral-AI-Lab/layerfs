@@ -9,7 +9,7 @@ use super::{
     sandbox::Sandbox,
 };
 use crate::local::listener;
-use crate::local::{search::search_path, Local, LocalPhase, LocalProcess, KERNEL_ROUTE};
+use crate::local::{search::search_path, Local, LocalPhase, LocalProcess};
 use crate::HelperSpec;
 use crate::{CommandIdentity, Image, RuntimeError};
 use nix::fcntl::OFlag;
@@ -94,7 +94,6 @@ pub(crate) fn create(
             .env_clear()
             .env("PATH", search_path())
             .envs(options.environment.iter().map(|(k, v)| (k, v)))
-            .env(KERNEL_ROUTE, "fuse")
             .current_dir(&paths.local.directory)
             .stdin(Stdio::null())
             .stdout(output)
@@ -190,11 +189,7 @@ fn start_request(
 /// `PATH` or kernel route override.
 fn check_environment(environment: &[(String, String)]) -> Result<(), RuntimeError> {
     let invalid = environment.iter().any(|(key, value)| {
-        key.is_empty()
-            || key.contains(['=', '\0'])
-            || value.contains('\0')
-            || key == "PATH"
-            || key == KERNEL_ROUTE
+        key.is_empty() || key.contains(['=', '\0']) || value.contains('\0') || key == "PATH"
     });
     if invalid {
         return Err(RuntimeError::Protocol("namespaces environment"));

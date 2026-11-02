@@ -124,7 +124,11 @@ impl SandboxApi {
                 ..
             } | ProviderLaunchOptions::Local { .. }
         );
-        if request.setup.postgresql.is_none() || !no_volume {
+        if !matches!(
+            request.setup.store,
+            layerfs_bridge::DaemonStore::Postgres { .. }
+        ) || !no_volume
+        {
             return Err(Box::new(ProviderFailure {
                 request,
                 phase: SandboxPhase::Validate,
@@ -156,7 +160,11 @@ impl SandboxApi {
                 if std::path::Path::new(&request.setup.overlay)
                     != directory.join("overlay/overlay.sqlite")
                     || std::path::Path::new(&request.setup.mounts) != directory.join("workspaces")
-                    || std::path::Path::new(&request.setup.store).starts_with(&directory)
+                    || matches!(
+                        &request.setup.store,
+                        layerfs_bridge::DaemonStore::Sqlite { locator, .. }
+                            if std::path::Path::new(locator).starts_with(&directory)
+                    )
                     || request.setup.listen != "127.0.0.1:0"
                 {
                     return Err(SandboxCause::Setup(ControlError(
@@ -272,7 +280,11 @@ impl SandboxApi {
                 if std::path::Path::new(&request.setup.overlay)
                     != directory.join("overlay/overlay.sqlite")
                     || std::path::Path::new(&request.setup.mounts) != directory.join("workspaces")
-                    || std::path::Path::new(&request.setup.store).starts_with(&directory)
+                    || matches!(
+                        &request.setup.store,
+                        layerfs_bridge::DaemonStore::Sqlite { locator, .. }
+                            if std::path::Path::new(locator).starts_with(&directory)
+                    )
                     || request.setup.listen != "127.0.0.1:0"
                 {
                     return Err(SandboxCause::Setup(ControlError(
@@ -300,12 +312,7 @@ impl SandboxApi {
                     )));
                 }
             }
-            if request
-                .setup
-                .existing_store
-                .as_ref()
-                .is_some_and(|m| m.locator != request.setup.store)
-                || launch.startup_timeout.is_zero()
+            if launch.startup_timeout.is_zero()
                 || public_key(&request.controller_private).map_err(SandboxCause::Channel)?
                     != request.setup.control_peer
                 || public_key(&request.setup.private_key).map_err(SandboxCause::Channel)?
@@ -315,7 +322,11 @@ impl SandboxApi {
                     "provider topology/identity",
                 )));
             }
-            if let Some(selected) = &request.setup.existing_store {
+            if let layerfs_bridge::DaemonStore::Sqlite {
+                install: Some(selected),
+                ..
+            } = &request.setup.store
+            {
                 let mut expected = manifest.clone();
                 expected.daemon_sqlite = selected.daemon_sqlite.clone();
                 if *selected != expected {
@@ -355,7 +366,7 @@ impl SandboxApi {
                 request.daemon_peer,
                 request.setup.opens_existing(),
             )?;
-            if request.setup.existing_store.is_none() {
+            if !request.setup.opens_existing() {
                 let mut phase = SandboxPhase::Install;
                 let result = super::connection::install(
                     progress.control.as_mut().expect("authenticated"),

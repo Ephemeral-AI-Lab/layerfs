@@ -12,6 +12,7 @@ use layerfs_bridge::{
     daemon_setup::{DaemonLimits, DaemonSetup},
     duplex as transport,
 };
+use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_sandbox::docker::{Docker, DockerProvider};
@@ -85,7 +86,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
         listen: "0.0.0.0:30421".into(),
         private_key: private,
         control_peer: peer,
-        store: "/layerfs-store/global/store.sqlite".into(),
+        route: KernelRoute::Fuse,
         overlay: "/layerfs-local/overlay/overlay.sqlite".into(),
         mounts: "/workspaces".into(),
         command_uid: 501,
@@ -99,8 +100,10 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
             serial_low_water: 256,
             idle_exit_s: 0,
         },
-        existing_store: None,
-        postgresql: None,
+        store: DaemonStore::Sqlite {
+            locator: "/layerfs-store/global/store.sqlite".into(),
+            install: None,
+        },
     }
 }
 enum Directory<'a> {

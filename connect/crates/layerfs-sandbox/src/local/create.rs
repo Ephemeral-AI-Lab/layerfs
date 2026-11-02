@@ -17,11 +17,6 @@ use std::{
     time::Duration,
 };
 
-/// The daemon's kernel route setting (`fuse` or `nfs`). Only a provider
-/// names it, from the platform it serves; a caller that names it is refused
-/// (#527 step 6), and the daemon checks the value it receives.
-pub(crate) const KERNEL_ROUTE: &str = "LAYERFS_KERNEL";
-
 /// A local runtime root: one directory per Sandbox under it.
 #[derive(Clone, Debug)]
 pub struct Local {

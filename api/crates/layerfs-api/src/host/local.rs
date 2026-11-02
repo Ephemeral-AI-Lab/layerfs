@@ -18,9 +18,10 @@
 //! daemon stopped and its directory deleted, each once.
 use crate::host::outcome::{failed, refused};
 use crate::host::registry::{lock, text, SandboxState, SANDBOXES};
-use crate::host::sandbox::DaemonStore;
+use crate::host::sandbox::OpenedStore;
 use crate::{sandbox::ProviderCreate, SandboxApi};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_sandbox::{CommandIdentity, Runtime, Sandbox};
 use layerfs_sandbox::{LaunchRequest, ProviderLaunchOptions};
 use std::path::{Component, Path, PathBuf};
@@ -36,7 +37,7 @@ use std::sync::Arc;
 pub(crate) fn start(
     args: &SdkValue,
     directory: &Path,
-    project: DaemonStore,
+    project: OpenedStore,
     backend: crate::host::runtime::Backend,
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let deploy = args
@@ -50,7 +51,7 @@ pub(crate) fn start(
             crate::host::runtime::NATIVE_ON_LINUX,
         ));
     }
-    if matches!(project, DaemonStore::Postgres(_))
+    if matches!(project, OpenedStore::Postgres(_))
         && backend == crate::host::runtime::Backend::Namespaces
     {
         return Err(refused(
@@ -108,7 +109,7 @@ fn start_claimed(
     directory: &Path,
     saved_directory: &Path,
     id: &str,
-    project: DaemonStore,
+    project: OpenedStore,
     (runtime, backend, executable, store): (
         Runtime,
         crate::host::runtime::Backend,
@@ -126,31 +127,37 @@ fn start_claimed(
     };
     let controller = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
-    let mut setup = crate::host::sandbox::setup(daemon.private, controller.public);
+    let route = match backend {
+        crate::host::runtime::Backend::HostProcess => KernelRoute::Nfs,
+        _ => KernelRoute::Fuse,
+    };
+    // the Store's path in the daemon's filesystem, which is this one
+    let (file, daemon_store) = match project {
+        OpenedStore::File(file) => {
+            let (project, installed) = *file;
+            let mut existing = project.manifest.clone();
+            existing.daemon_sqlite = installed.daemon_sqlite.clone();
+            existing.locator = store.clone();
+            (
+                Some((project, installed)),
+                DaemonStore::Sqlite {
+                    locator: store.clone(),
+                    install: Some(existing),
+                },
+            )
+        }
+        OpenedStore::Postgres(selected) => (None, *selected),
+    };
+    let mut setup =
+        crate::host::sandbox::setup(daemon.private, controller.public, daemon_store, route);
     // macOS uses the caller; Linux keeps #402's separate nonroot identity.
     #[cfg(target_os = "macos")]
     {
         (setup.command_uid, setup.command_gid) = crate::host::discovery::user();
     }
     setup.listen = "127.0.0.1:0".into();
-    setup.store = store.clone();
     setup.overlay = path_text(&paths.overlay)?;
     setup.mounts = path_text(&paths.mounts)?;
-    // the Store's path in the daemon's filesystem, which is this one
-    let file = match project {
-        DaemonStore::File(file) => {
-            let (project, installed) = *file;
-            let mut existing = project.manifest.clone();
-            existing.daemon_sqlite = installed.daemon_sqlite.clone();
-            existing.locator = store;
-            setup.existing_store = Some(existing);
-            Some((project, installed))
-        }
-        DaemonStore::Postgres(selected) => {
-            setup.postgresql = Some(selected);
-            None
-        }
-    };
     let identity = CommandIdentity {
         uid: setup.command_uid,
         gid: setup.command_gid,
@@ -161,10 +168,14 @@ fn start_claimed(
         &directory.join("create.intent"),
         SdkValue::text(format!("creation of Sandbox {id} began and never finished")),
     )?;
+    let daemon_locator = match &setup.store {
+        DaemonStore::Sqlite { locator, .. } => locator.clone(),
+        _ => String::new(),
+    };
     let store = crate::host::stores::shared_store(args)?;
     let labels = crate::host::sandbox::labels(name, store.as_deref(), id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
-    let options = launch_options(backend, identity, &setup.store, args)?;
+    let options = launch_options(backend, identity, &daemon_locator, args)?;
     let request = ProviderCreate {
         launch: LaunchRequest {
             name: sandbox_name.clone(),
@@ -181,7 +192,7 @@ fn start_claimed(
     let created = match &file {
         Some((project, _)) => {
             let mut manifest = project.manifest.clone();
-            manifest.locator = request.setup.store.clone();
+            manifest.locator = daemon_locator.clone();
             api.create_provider_file(request, &project.store, &manifest)
         }
         None => api.create_provider_postgres(request),

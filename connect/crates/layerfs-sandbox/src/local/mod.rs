@@ -12,7 +12,6 @@ pub(crate) mod os_impl;
 pub(crate) mod process;
 pub(crate) mod search;
 pub(crate) mod streams;
-pub(crate) use create::KERNEL_ROUTE;
 pub use create::{Local, LocalCreateFailure, LocalPaths, LocalPhase};
 #[cfg(target_os = "linux")]
 pub(crate) use os_impl::linux as os;

@@ -2,7 +2,7 @@
 //! Linux has no native provider (#533 O27): its local Sandboxes run in
 //! namespaces.
 use super::sandbox::Sandbox;
-use crate::local::{Local, LocalPhase, LocalProcess, KERNEL_ROUTE};
+use crate::local::{Local, LocalPhase, LocalProcess};
 use crate::{ContainerId, RuntimeError, WireFailure};
 use crate::{
     IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, MountDriver,
@@ -46,7 +46,7 @@ impl HostProcessProvider {
         };
         let ProviderLaunchOptions::Local {
             command_identity,
-            mut environment,
+            environment,
         } = request.options
         else {
             return Err(fail(RuntimeError::Unsupported(
@@ -57,19 +57,13 @@ impl HostProcessProvider {
         if command_identity.uid != nix::unistd::Uid::effective().as_raw()
             || command_identity.gid != nix::unistd::Gid::effective().as_raw()
             || environment.iter().any(|(key, value)| {
-                key.is_empty()
-                    || key.contains(['=', '\0'])
-                    || value.contains('\0')
-                    || key == "PATH"
-                    || key == KERNEL_ROUTE
+                key.is_empty() || key.contains(['=', '\0']) || value.contains('\0') || key == "PATH"
             })
         {
             return Err(fail(RuntimeError::Protocol(
                 "native command identity/environment",
             )));
         }
-        // The provider alone chooses the kernel route (#527 step 6).
-        environment.push((KERNEL_ROUTE.into(), "nfs".into()));
         let local = self
             .local
             .clone()

@@ -6,7 +6,6 @@ mod daemon_binary;
 #[path = "../../../../engine/crates/layerfs-daemon/tests/support/host_install.rs"]
 mod support;
 use layerfs_api::internal::Control;
-#[cfg(target_os = "linux")]
 use layerfs_bridge::control::{CleanupObservation, ControlCode};
 use layerfs_bridge::{
     control::{Reply, Request},
@@ -14,6 +13,8 @@ use layerfs_bridge::{
     duplex,
     provision::StoreManifest,
 };
+#[cfg(target_os = "linux")]
+use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_history::WorkspaceId;
 use std::{
     collections::BTreeSet,
@@ -70,7 +71,7 @@ fn configure(f: &support::Fixture, deployment: &Deployment) -> PathBuf {
         listen: "127.0.0.1:0".into(),
         private_key: support::SERVER_PRIVATE,
         control_peer: duplex::public_key(&support::CLIENT_PRIVATE).unwrap(),
-        store: f.project.manifest.locator.clone(),
+        route: KernelRoute::Fuse,
         overlay: deployment.overlay.to_str().unwrap().into(),
         mounts: deployment.mounts.to_str().unwrap().into(),
         command_uid: 65534,
@@ -84,8 +85,10 @@ fn configure(f: &support::Fixture, deployment: &Deployment) -> PathBuf {
             serial_low_water: deployment.serial_low_water,
             idle_exit_s: deployment.idle_exit_s,
         },
-        existing_store: deployment.existing_store.clone(),
-        postgresql: None,
+        store: DaemonStore::Sqlite {
+            locator: "/layerfs-store/global/store.sqlite".into(),
+            install: deployment.existing_store.clone(),
+        },
     };
     let config = f.directory.join("daemon.config");
     fs::write(&config, setup.encode().unwrap()).unwrap();

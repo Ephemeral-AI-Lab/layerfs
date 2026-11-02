@@ -63,6 +63,7 @@ fn native_resource_paths_are_validated_before_launch() {
         daemon_setup::{DaemonLimits, DaemonSetup},
         duplex,
     };
+    use layerfs_bridge::{DaemonStore, KernelRoute};
     use layerfs_sandbox::{
         host_process::HostProcessProvider, CommandIdentity, LaunchRequest, ProviderLaunchOptions,
         Runtime,
@@ -86,13 +87,15 @@ fn native_resource_paths_are_validated_before_launch() {
         listen: "127.0.0.1:0".into(),
         private_key: [32; 32],
         control_peer: duplex::public_key(&[31; 32]).unwrap(),
-        store: fixture.project.store.path.display().to_string(),
+        route: KernelRoute::Nfs,
         overlay: paths.overlay.display().to_string(),
         mounts: paths.mounts.display().to_string(),
         command_uid: identity.uid,
         command_gid: identity.gid,
-        existing_store: None,
-        postgresql: None,
+        store: DaemonStore::Sqlite {
+            locator: fixture.project.store.path.display().to_string(),
+            install: None,
+        },
         limits: DaemonLimits {
             connections: 2,
             handshake_ms: 1000,
@@ -128,7 +131,10 @@ fn native_resource_paths_are_validated_before_launch() {
             }
             "mounts" => invalid.setup.mounts = root.join("other/workspaces").display().to_string(),
             "store" => {
-                invalid.setup.store = paths.directory.join("store.sqlite").display().to_string()
+                invalid.setup.store = DaemonStore::Sqlite {
+                    locator: paths.directory.join("store.sqlite").display().to_string(),
+                    install: None,
+                }
             }
             _ => invalid.setup.listen = "0.0.0.0:30421".into(),
         }

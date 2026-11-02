@@ -6,6 +6,7 @@ use layerfs_bridge::{
     daemon_setup::{DaemonLimits, DaemonSetup},
     duplex as transport,
 };
+use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId, WorkspaceId};
 use layerfs_persistence::{PersistenceConfig, SqlitePersistenceProfile};
 use layerfs_sandbox::docker::{Docker, DockerProvider};
@@ -24,7 +25,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
         listen: "0.0.0.0:30421".into(),
         private_key: private,
         control_peer: peer,
-        store: "/layerfs-store/global/store.sqlite".into(),
+        route: KernelRoute::Fuse,
         overlay: "/layerfs-local/overlay/overlay.sqlite".into(),
         mounts: "/workspaces".into(),
         command_uid: 501,
@@ -38,8 +39,10 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
             serial_low_water: 256,
             idle_exit_s: 0,
         },
-        existing_store: None,
-        postgresql: None,
+        store: DaemonStore::Sqlite {
+            locator: "/layerfs-store/global/store.sqlite".into(),
+            install: None,
+        },
     }
 }
 fn ordinary(owner: &ProviderSandbox) -> Result<(), Box<dyn std::error::Error>> {
@@ -140,7 +143,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         installed.manifest.host_sqlite, installed.manifest.daemon_sqlite, ready.instance
     );
     let mut second_setup = setup(daemon.private, keys.public);
-    second_setup.existing_store = Some(installed.manifest.clone());
+    second_setup.store = DaemonStore::Sqlite {
+        locator: installed.manifest.locator.clone(),
+        install: Some(installed.manifest.clone()),
+    };
     let second = api
         .create(make("second", second_setup), &project)
         .map_err(|f| format!("second {f:?}"))?;
@@ -170,7 +176,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("OWNED_CLEANUP container={container} disposition=Deleted_acknowledged_by_close");
     }
     let mut reopened_setup = setup(daemon.private, keys.public);
-    reopened_setup.existing_store = Some(installed.manifest.clone());
+    reopened_setup.store = DaemonStore::Sqlite {
+        locator: installed.manifest.locator.clone(),
+        install: Some(installed.manifest.clone()),
+    };
     let mut reopened = api
         .create(make("reopened", reopened_setup), &project)
         .map_err(|f| format!("reopen {f:?}"))?;

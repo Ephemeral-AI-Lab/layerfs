@@ -41,6 +41,7 @@ use layerfs_bridge::{
     daemon_setup::{DaemonLimits, DaemonSetup},
     duplex,
 };
+use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_history::{BranchId, CommitOutcome, CommitRecord, WorkspaceId};
 use model::{assert_same, Flat};
 use mounted::COMMAND;
@@ -108,7 +109,7 @@ fn start(f: &support::Fixture, mounts: &Path) -> (Process, SocketAddr) {
         listen: "127.0.0.1:0".into(),
         private_key: support::SERVER_PRIVATE,
         control_peer: duplex::public_key(&support::CLIENT_PRIVATE).unwrap(),
-        store: f.project.manifest.locator.clone(),
+        route: KernelRoute::Fuse,
         overlay: f.directory.join("overlay.sqlite").to_str().unwrap().into(),
         mounts: mounts.to_str().unwrap().into(),
         command_uid: COMMAND,
@@ -122,8 +123,10 @@ fn start(f: &support::Fixture, mounts: &Path) -> (Process, SocketAddr) {
             serial_low_water: 0,
             idle_exit_s: 0,
         },
-        existing_store: None,
-        postgresql: None,
+        store: DaemonStore::Sqlite {
+            locator: f.project.manifest.locator.clone(),
+            install: None,
+        },
     };
     let config = f.directory.join("daemon.config");
     fs::write(&config, setup.encode().unwrap()).unwrap();

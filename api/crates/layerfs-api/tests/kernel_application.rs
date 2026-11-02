@@ -11,6 +11,7 @@ use layerfs_bridge::{
     daemon_setup::{DaemonLimits, DaemonSetup},
     duplex,
 };
+use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_history::WorkspaceId;
 use std::{
     fs::{self, File},
@@ -46,7 +47,7 @@ fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
         listen: "127.0.0.1:0".into(),
         private_key: support::SERVER_PRIVATE,
         control_peer: duplex::public_key(&support::CLIENT_PRIVATE).unwrap(),
-        store: f.project.manifest.locator.clone(),
+        route: KernelRoute::Fuse,
         overlay: f.directory.join("overlay.sqlite").to_str().unwrap().into(),
         mounts: f.directory.join("mounts").to_str().unwrap().into(),
         command_uid: 65534,
@@ -60,8 +61,10 @@ fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
             serial_low_water: 0,
             idle_exit_s: 0,
         },
-        existing_store: None,
-        postgresql: None,
+        store: DaemonStore::Sqlite {
+            locator: f.project.manifest.locator.clone(),
+            install: None,
+        },
     };
     let config = f.directory.join("daemon.config");
     fs::write(&config, setup.encode().unwrap()).unwrap();
