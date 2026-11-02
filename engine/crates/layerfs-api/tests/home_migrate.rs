@@ -283,6 +283,28 @@ fn an_empty_home_is_created_and_the_lock_waits_rather_than_refusing() {
 }
 
 #[test]
+fn a_new_home_is_not_a_1_1_0_home() {
+    // a fresh folder, and one a stopped first call left with its lock and a
+    // log line, and one holding a file of the user's
+    for leftover in [None, Some("layerfs.lock"), Some("notes.txt")] {
+        let home = tempdir();
+        if let Some(name) = leftover {
+            std::fs::write(home.join(name), "").unwrap();
+            dir(&home.join("log"));
+        }
+        assert_eq!(home::detect(&home).unwrap(), Layout::Empty);
+        let file = home::open(&home).unwrap();
+        assert_eq!(home::detect(&home).unwrap(), Layout::Current(file));
+        assert!(
+            !home.join("log/migration.json").exists(),
+            "{leftover:?}: no conversion report"
+        );
+        assert!(!home.join("log/1.1.0").exists(), "{leftover:?}");
+        std::fs::remove_dir_all(home).unwrap();
+    }
+}
+
+#[test]
 fn a_1_1_0_environment_becomes_records_once() {
     let home = old_home();
     let env: Vec<(String, String)> = [

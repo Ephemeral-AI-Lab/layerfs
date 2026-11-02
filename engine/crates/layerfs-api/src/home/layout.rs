@@ -21,12 +21,27 @@ pub struct HomeFile {
     pub id: String,
 }
 
+/// The 1.1.0 records at the top of a home; `<p>/project.record` marks one
+/// too. A home with none of them and no `layerfs.json` is new, whatever
+/// else is in it (such as the `layerfs.lock` the first call takes).
+pub(super) const OLD: [&str; 9] = [
+    ".stores",
+    "stores.json",
+    "stores.v1.json",
+    "stores.json.lock",
+    "remotes",
+    "remote-state",
+    ".runtime",
+    "worker",
+    "traces",
+];
+
 /// Which layout a home has.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Layout {
-    /// No home folder, or an empty one.
+    /// No `layerfs.json` and no 1.1.0 record: a new home.
     Empty,
-    /// 1.1.0's layout: files but no `layerfs.json`.
+    /// 1.1.0's layout: its records but no `layerfs.json`.
     Old,
     /// The 2.0 layout, with its `layerfs.json`.
     Current(HomeFile),
@@ -38,16 +53,25 @@ pub fn detect(home: &Path) -> Result<Layout, SdkRefusal> {
     let file = home.join("layerfs.json");
     match read_record(&file)? {
         Some(value) => parse(&value).map(Layout::Current),
-        None => match std::fs::read_dir(home) {
+        None => match old_records(home) {
+            Ok(true) => Ok(Layout::Old),
+            Ok(false) => Ok(Layout::Empty),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Layout::Empty),
             Err(error) => Err(refused("Failed", format!("{}: {error}", home.display()))),
-            Ok(mut entries) => Ok(if entries.next().is_some() {
-                Layout::Old
-            } else {
-                Layout::Empty
-            }),
         },
     }
+}
+
+/// Whether `home` holds a 1.1.0 record.
+fn old_records(home: &Path) -> std::io::Result<bool> {
+    for entry in std::fs::read_dir(home)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if OLD.iter().any(|old| name == *old) || entry.path().join("project.record").is_file() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn parse(value: &SdkValue) -> Result<HomeFile, SdkRefusal> {

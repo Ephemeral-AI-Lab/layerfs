@@ -14,7 +14,7 @@
 //! nothing is deleted. An unknown file is left where it is and reported.
 //! `layerfs.json` is written last, so a conversion stopped part way is
 //! continued by the next call, and a second run changes nothing.
-use super::layout::{create, detect, HomeFile, Layout};
+use super::layout::{create, detect, HomeFile, Layout, OLD};
 use super::paths;
 use super::records::{log_line, now_ms, private_dir, read_record, with_field, write_record};
 use crate::host::outcome::{failed, refused};
@@ -34,17 +34,6 @@ const OWNED: [&str; 7] = [
     "backup",
     "trace",
     "log",
-];
-/// 1.1.0 names this conversion reads and moves.
-const OLD: [&str; 8] = [
-    ".stores",
-    "stores.json",
-    "stores.v1.json",
-    "stores.json.lock",
-    "remotes",
-    "remote-state",
-    ".runtime",
-    "worker",
 ];
 
 /// The home ready for 2.0 calls: created when empty, converted once when it
@@ -105,7 +94,7 @@ fn convert(home: &Path) -> Result<SdkValue> {
     }
     // 2. projects with a Store of their own: <home>/<p>/project.record
     for name in paths::names(home).map_err(failed)? {
-        if OWNED.contains(&name.as_str()) || OLD.contains(&name.as_str()) || name == "traces" {
+        if OWNED.contains(&name.as_str()) || OLD.contains(&name.as_str()) {
             continue;
         }
         let dir = home.join(&name);
@@ -138,7 +127,7 @@ fn convert(home: &Path) -> Result<SdkValue> {
         report.moved.push("traces -> trace".to_owned());
     }
     // 7. every old file read moves, unchanged, under log/1.1.0/
-    for name in OLD {
+    for name in OLD.into_iter().filter(|name| *name != "traces") {
         let from = home.join(name);
         if from.exists() {
             private_dir(&old)?;
