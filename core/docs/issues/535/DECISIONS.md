@@ -90,6 +90,7 @@ rules.
 | Store backup module paths (1.6) | `store-service`'s `remote::storage` alias is dropped: callers import `layerfs_store_backup::bucket::…` and `layerfs_store_backup::backup::…`; `push.rs` → `create.rs`, `pull.rs` → `restore.rs` with function names kept. `settings.rs` + `state.rs` → `link.rs` in its own refactor commit (1.6b). | Keeps the move commit a move; the merge is a separate refactor with its own LOC line. |
 | `local::os` (1.8) | `local/os/mod.rs` is declared `#[path] mod os_impl`, so `crate::local::os` stays the per-platform alias the moved code already uses. | Avoids touching every `os::` use in the moved files. |
 | `Handles` naming (2b) | The unified persistence type is the enum `Handles { Sqlite(SqliteHandles), Postgres(PostgresHandles) }`; the former struct `Handles` is `SqliteHandles`, which keeps `create`, `open` and `seal()`. 2b's doc sweep renamed `Handles::seal()` and the struct to `SqliteHandles` in root and engine AGENTS.md, the architecture docs, the #303 contracts and the handbooks, which matches the code. The spec copy from `layerfs-v2-merge` (§4, §6.1, §10 phase 2) says `Handles` where it means the unified type or the base's struct; the spec is not re-edited. | Current docs name the type that holds the method; the spec text is the owner's. |
+| `StoreRef` (2c) | `api/crates/layerfs-api/src/store/store_ref.rs`, not `place/store_ref.rs`; `kind_of` returns the bridge's `StoreKind`. PostgreSQL `schema`/`synchronous_commit` stay optional in `PgServer` and are required (`store_ref::required`) only where `identity_of` required them. | #536 step C moves `store/` into `layerfs-control` `store/` (I3); a fixture without schema (`sandbox_machines`) showed stricter parsing would change routing. |
 | `Sandbox::Native` (1.9) | Renamed `Sandbox::HostProcess` with the three renames G6 lists, and `layerfs-api` `host::runtime::Backend::Native` likewise. | The enums that name the backend name it alike; stored and displayed values stay `"native"`. |
 
 ## Corrections to commit messages
@@ -99,6 +100,7 @@ History is not rewritten; these rows correct numbers a commit message got wrong.
 | Commit | Message says | Recounted (`tools/production_loc.py` on clean archives) |
 | --- | --- | --- |
 | `990e43f166` (1.7) | `Production LOC: 132097 -> 132096 (delta -1)` | `132097 -> 132093 (delta -4)` |
+| `86d4ec0652` (2c) | per-file split "store_ref.rs +76, call sites +14" | store_ref.rs +81, call sites +9 (total +90 is right) |
 
 ## Corrections to the 2b doc sweep
 
@@ -121,3 +123,5 @@ proposals) keep the sweep.
 - Phase 1 done at `791d510b18`: moves 1.1 `aacdd17433`, 1.2 `4398b0fd41`, 1.3 `7035f0c71b`, 1.4 `77c59c524a`, 1.5 `1f40eb9e92`, 1.6 `0cada61acc` (+ 1.6b `236b7aceb2`), 1.7 `990e43f166`, 1.8 `0106ba8285`, 1.9 `791d510b18`; 1.10 not run.
 - Phase 2a done at `dffd241aee` (`DaemonStore`, `KernelRoute`, `LAYERFS_KERNEL` gone; `LFSD\x07`).
 - Phase 2b done at `c7e14c15a3` (persistence `StoreSelection`, `StoreFile`, one `Handles`; store-service fake path removed).
+- Fix `48a50e4950`: two imports 2b left unused under `--features postgresql` (`host/postgres_init.rs`); the default-feature check set did not see them.
+- Phase 2c done at `86d4ec0652` (api `StoreRef`; no `get_text("kind")` left in `layerfs-api`). **Phase 2 done at `86d4ec0652`.**
