@@ -203,6 +203,7 @@ The home (H §7.8). Guests never see it.
     record.json                kind, size, lasting state
     worker.json                endpoint, secret, live forward
     known_hosts                ssh only
+    start.lock                 starting, making or removing the machine
     sandbox/<name>/
       record.json
       work/

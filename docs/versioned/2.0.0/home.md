@@ -36,7 +36,7 @@ hold a password or a bucket key. They are not settings; see
     record.json                kind, size, lasting state
     worker.json                endpoint, secret, live forward (0600)
     known_hosts                ssh machines only
-    start.lock                 taken while a process starts the machine
+    start.lock                 taken while a process starts, makes or removes the machine
     sandbox/<name>/
       record.json              name, project, machine, id, platform, state
   store/<name>/

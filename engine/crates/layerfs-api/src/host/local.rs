@@ -5,7 +5,8 @@
 //! cgroup. Linux starts no native Sandbox (#533 O27): `native` there is
 //! refused before any effect.
 //!
-//! Each Sandbox gets a directory `<LAYERFS_LOCAL_DIR>/<prefix><project>-<n>`
+//! Each Sandbox gets a directory `<deploy.localDir>/<prefix><project>-<n>` (in 2.0 the home's
+//! `machine/native/sandbox-root`)
 //! with what a container held at fixed paths: its setup
 //! (`/layerfs-local/config`), overlay template (`/layerfs-local/overlay`) and
 //! Workspace mounts (`/workspaces`). The daemon opens the installed Store
@@ -66,11 +67,11 @@ pub(crate) fn start(
     let root = deploy.get_text("localDir").ok_or_else(|| {
         refused(
             "InvalidInput",
-            "deploy.localDir is not configured (LAYERFS_LOCAL_DIR); a native Sandbox needs it",
+            "deploy.localDir is not configured; a native Sandbox needs it (the home's machine/native/sandbox-root)",
         )
     })?;
     let runtime = native_runtime(root, backend)
-        .map_err(|error| refused("InvalidInput", format!("LAYERFS_LOCAL_DIR {root}: {error}")))?;
+        .map_err(|error| refused("InvalidInput", format!("deploy.localDir {root}: {error}")))?;
     let executable = PathBuf::from(text(deploy, "daemon")?);
     let store = match args.get_text("storePath") {
         Some(path) if Path::new(path).is_absolute() => path.to_owned(),
@@ -121,7 +122,7 @@ fn start_claimed(
     let path_text = |path: &Path| {
         path.to_str()
             .map(str::to_owned)
-            .ok_or_else(|| refused("InvalidInput", "LAYERFS_LOCAL_DIR must be UTF-8"))
+            .ok_or_else(|| refused("InvalidInput", "deploy.localDir must be UTF-8"))
     };
     let controller = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
@@ -340,8 +341,8 @@ fn launch_options(
 }
 
 /// Where this deployment puts Sandbox `id`:
-/// `<LAYERFS_LOCAL_DIR>/<prefix><project>-<id>`, computed from the
-/// configuration, as a record's directory must be. With no LAYERFS_LOCAL_DIR
+/// `<deploy.localDir>/<prefix><project>-<id>`, computed from the
+/// configuration, as a record's directory must be. With no deploy.localDir
 /// configured, `recorded` (a record's own parent directory) stands in for
 /// it: a call on a Sandbox follows its record (#529).
 pub(crate) fn directory(
@@ -358,7 +359,7 @@ pub(crate) fn directory(
                 "InvalidInput",
                 format!(
                     "Sandbox {id} is a local Sandbox; its record is used only with \
-                     LAYERFS_LOCAL_DIR (deploy.localDir) configured"
+                     deploy.localDir configured"
                 ),
             )
         })?;
@@ -381,7 +382,7 @@ pub(crate) fn directory(
     Ok(root.join(name))
 }
 
-/// The deployment's `localDir` (LAYERFS_LOCAL_DIR), when set, is an absolute
+/// The deployment's `localDir`, when set, is an absolute
 /// path with no `.` or `..`. A call with another is refused before any record
 /// is read: the setting is the caller's, not a record's (#529 finding 6).
 pub(crate) fn local_dir_setting(args: &SdkValue) -> Result<(), SdkRefusal> {
@@ -396,7 +397,7 @@ pub(crate) fn local_dir_setting(args: &SdkValue) -> Result<(), SdkRefusal> {
     Err(refused(
         "InvalidInput",
         format!(
-            "deploy.localDir (LAYERFS_LOCAL_DIR) {} must be an absolute path with no . or ..",
+            "deploy.localDir {} must be an absolute path with no . or ..",
             root.display()
         ),
     ))
@@ -423,7 +424,7 @@ fn mark_owner(own: &Path, record: &Path) -> Result<(), SdkRefusal> {
         .map_err(failed)
 }
 
-/// With no LAYERFS_LOCAL_DIR, a record's `directory` is used only when it
+/// With no deploy.localDir, a record's `directory` is used only when it
 /// is its own real path and its `owner` marker (not followed if a symlink)
 /// names the real path of this record's directory
 /// `LAYERFS_HOME/<project>/sandboxes/<id>`. Anything else, including a
@@ -435,8 +436,8 @@ pub(crate) fn owned(args: &SdkValue, id: &str, own: &Path) -> Result<(), SdkRefu
         refused(
             "InvalidInput",
             format!(
-                "Sandbox {id}'s local record names {}, {why}, so with no LAYERFS_LOCAL_DIR it is \
-                 neither used nor deleted; set LAYERFS_LOCAL_DIR (deploy.localDir) to the \
+                "Sandbox {id}'s local record names {}, {why}, so with no deploy.localDir it is \
+                 neither used nor deleted; set deploy.localDir to the \
                  directory it was made under",
                 own.display()
             ),
