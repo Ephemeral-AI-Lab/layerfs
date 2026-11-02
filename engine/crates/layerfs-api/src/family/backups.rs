@@ -335,24 +335,35 @@ fn progress(context: &mut Context<'_>, phase: &str) {
     context.progress(SdkValue::map([("phase", SdkValue::text(phase))]));
 }
 
+/// Metadata key naming the home and machine a backup came from,
+/// `<home id>/<machine>`.
+const EXPORTED_FROM: &str = "layerfs-exported-from";
+
+/// The sha256 of the copy a link's last transfer moved.
+fn link_sha256(link: &SdkValue) -> Option<[u8; 32]> {
+    link.get("last").and_then(|l| match l.get("sha256") {
+        Some(SdkValue::Text(t)) => pieces::parse_hex32(t),
+        Some(SdkValue::Bytes(b)) => b.as_slice().try_into().ok(),
+        _ => None,
+    })
+}
+
 /// What the bucket must hold for a create: the copy this home last moved
-/// through the Store's link to that file, or nothing.
+/// through the Store's link to that file, or nothing. A link that records
+/// no sha256 knows no copy, so the file must be absent.
 fn expected(record: &SdkValue, bucket: &str, file: &str) -> remote::Expected {
     let link = record.get("backups").and_then(|b| b.get(bucket));
-    match link {
-        Some(link) if link.get_text("file") == Some(file) => {
-            let sha = link.get("last").and_then(|l| match l.get("sha256") {
-                Some(SdkValue::Text(t)) => pieces::parse_hex32(t),
-                Some(SdkValue::Bytes(b)) => b.as_slice().try_into().ok(),
-                _ => None,
-            });
-            sha.map_or(remote::Expected::Any, remote::Expected::Sha256)
-        }
-        _ => remote::Expected::Absent,
+    match link.filter(|link| link.get_text("file") == Some(file)) {
+        Some(link) => link_sha256(link).map_or(remote::Expected::Absent, remote::Expected::Sha256),
+        None => remote::Expected::Absent,
     }
 }
 
-/// `backup.create(store, bucket, file?)`.
+/// `backup.create(store, bucket, file?)`: the Store's machine stages a
+/// consistent snapshot beside the Store (`store.file` `stage`, in this
+/// process for `native`); this process uploads it with its sha256, heads,
+/// binding and `layerfs-exported-from`. A worker's snapshot comes here in
+/// pieces first: the worker never sees the key.
 fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let store = args.get_text("store").unwrap_or("");
@@ -372,88 +383,12 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let expected = expected(&record, bucket, &file);
     let identity = crate::host::stores::identity_of(&record)?;
     let machine = route::machine(&record, store)?;
+    let home_id = home::ensure(&home)?.id;
+    let object = remote::store_object(&file).map_err(|why| refused("InvalidInput", why))?;
+    let endpoint = route::endpoint(&home, &machine)?;
     let _lease = lease::hold(&home, store)?;
+    check(driver.as_ref(), &object, expected, &home_id)?;
     progress(context, "snapshot");
-    let pushed = match route::endpoint(&home, &machine)? {
-        None => {
-            let path = paths::store_file(&home, store);
-            let args = SdkValue::map([
-                ("home", SdkValue::text(home.display().to_string())),
-                ("store", SdkValue::text(store)),
-                ("store_record", record.clone()),
-                ("storePath", SdkValue::text(path.display().to_string())),
-            ]);
-            progress(context, "upload");
-            crate::host::direct::with_service(&args, |service| {
-                remote::push(
-                    &service.opened,
-                    &path,
-                    driver.as_ref(),
-                    &file,
-                    &identity.binding,
-                    expected,
-                )
-                .map_err(|failure| push_refusal(&failure))
-            })?
-        }
-        Some(endpoint) => from_worker(
-            context,
-            &endpoint,
-            store,
-            &record,
-            driver.as_ref(),
-            &file,
-            &identity.binding,
-            expected,
-        )?,
-    };
-    let saved = link(
-        &file,
-        "create",
-        pushed.bytes,
-        &pushed.sha256,
-        pushed.heads.as_ref(),
-    );
-    save_link(&home, store, bucket, saved)?;
-    Ok(SdkValue::map([
-        ("store", SdkValue::text(store)),
-        ("bucket", SdkValue::text(bucket)),
-        ("file", SdkValue::text(&file)),
-        ("object", SdkValue::text(&pushed.object)),
-        ("bytes", SdkValue::Int(pushed.bytes as i64)),
-        ("pieces", SdkValue::Int(pushed.pieces as i64)),
-        ("sha256", hex(&pushed.sha256)),
-        ("heads", pushed.heads.as_ref().map(hex).unwrap_or_default()),
-    ]))
-}
-
-fn push_refusal(failure: &remote::PushFailure) -> SdkRefusal {
-    use layerfs_store_service::remote::storage::RemoteError as E;
-    let code = match failure {
-        remote::PushFailure::Invalid(_) => "InvalidInput",
-        remote::PushFailure::Space { .. } => "Capacity",
-        remote::PushFailure::RemoteMoved { .. } => "Conflict",
-        remote::PushFailure::Remote(E::Uncertain(_)) => "Unknown",
-        _ => "Failed",
-    };
-    refused(code, failure.to_string())
-}
-
-/// A backup of a Store behind a worker: the worker snapshots it beside the
-/// Store, the bytes come here in pieces into a staged copy in the home,
-/// and this process uploads that copy. The worker never sees the key.
-#[allow(clippy::too_many_arguments)]
-fn from_worker(
-    context: &mut Context<'_>,
-    endpoint: &crate::worker::Endpoint,
-    store: &str,
-    record: &SdkValue,
-    driver: &dyn Driver,
-    file: &str,
-    binding: &[u8],
-    expected: remote::Expected,
-) -> Result<remote::Pushed> {
-    let home = context.home.clone();
     let step = |op: &str, more: Vec<(&str, SdkValue)>| {
         let mut fields = vec![
             ("store", SdkValue::text(store)),
@@ -461,42 +396,35 @@ fn from_worker(
         ];
         fields.extend(more);
         let args = SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
-        let request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
-        crate::worker::call(endpoint, "store.file", request, &mut |_| {})
-    };
-    let object = remote::store_object(file).map_err(|why| refused("InvalidInput", why))?;
-    check(driver, &object, expected)?;
-    let staged = step("stage", vec![])?;
-    let local = paths::store_dir(&home, store).join("backup.staging");
-    let result = (|| {
-        progress(context, "send");
-        let mut out = std::fs::File::create(&local).map_err(failed)?;
-        let mut offset = 0u64;
-        loop {
-            let piece = step(
-                "read",
-                vec![
-                    ("offset", SdkValue::Int(offset as i64)),
-                    ("len", SdkValue::Int(CHUNK as i64)),
-                    ("staged", SdkValue::Bool(true)),
-                ],
-            )?;
-            let Some(SdkValue::Bytes(bytes)) = piece.get("bytes") else {
-                break;
-            };
-            std::io::Write::write_all(&mut out, bytes).map_err(failed)?;
-            offset += bytes.len() as u64;
-            if (bytes.len() as u64) < CHUNK {
-                break;
+        match &endpoint {
+            None => crate::store::files::run(&home, op, &args),
+            Some(endpoint) => {
+                let request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
+                crate::worker::call(endpoint, "store.file", request, &mut |_| {})
             }
         }
-        drop(out);
-        let (bytes, sha256) = pieces::sha256_file(&local, None).map_err(remote_error)?;
-        if Some(pieces::hex(&sha256).as_str()) != staged.get_text("sha256") {
-            return Err(refused(
-                "Failed",
-                "the staged copy is not the snapshot the worker made",
-            ));
+    };
+    let staged = step("stage", vec![])?;
+    // `native` stages beside the Store; a worker's copy comes here
+    let local = match &endpoint {
+        None => {
+            let mut name = paths::store_file(&home, store).into_os_string();
+            name.push(".backup");
+            std::path::PathBuf::from(name)
+        }
+        Some(_) => paths::store_dir(&home, store).join("backup.staging"),
+    };
+    let result = (|| {
+        if endpoint.is_some() {
+            progress(context, "send");
+            fetch_staged(&step, &local)?;
+            let (_, sha256) = pieces::sha256_file(&local, None).map_err(remote_error)?;
+            if Some(pieces::hex(&sha256).as_str()) != staged.get_text("sha256") {
+                return Err(refused(
+                    "Failed",
+                    "the staged copy is not the snapshot the worker made",
+                ));
+            }
         }
         let heads = staged.get_text("heads").and_then(pieces::parse_hex32);
         let mut metadata = Metadata::from([
@@ -504,31 +432,86 @@ fn from_worker(
                 remote::push::SQLITE_VERSION.to_owned(),
                 staged.get_text("sqlite").unwrap_or("").to_owned(),
             ),
-            (remote::push::BINDING.to_owned(), pieces::hex(binding)),
+            (
+                remote::push::BINDING.to_owned(),
+                pieces::hex(&identity.binding),
+            ),
+            (EXPORTED_FROM.to_owned(), format!("{home_id}/{machine}")),
         ]);
         if let Some(heads) = &heads {
             metadata.insert(remote::HEADS.to_owned(), pieces::hex(heads));
         }
         progress(context, "upload");
-        check(driver, &object, expected)?;
-        let moved = pieces::upload(driver, &object, &local, &metadata).map_err(remote_error)?;
-        Ok(remote::Pushed {
-            object: object.clone(),
-            bytes,
-            sha256,
-            pieces: moved.pieces,
-            heads,
-            cleanup: moved.cleanup,
-        })
+        check(driver.as_ref(), &object, expected, &home_id)?;
+        let moved =
+            pieces::upload(driver.as_ref(), &object, &local, &metadata).map_err(remote_error)?;
+        Ok((moved, heads))
     })();
-    let _ = std::fs::remove_file(&local);
+    if endpoint.is_some() {
+        let _ = std::fs::remove_file(&local);
+    }
     let _ = step("unstage", vec![]);
-    result
+    let (moved, heads) = result?;
+    let saved = link(&file, "create", moved.bytes, &moved.sha256, heads.as_ref());
+    save_link(&home, store, bucket, saved)?;
+    Ok(SdkValue::map([
+        ("store", SdkValue::text(store)),
+        ("bucket", SdkValue::text(bucket)),
+        ("file", SdkValue::text(&file)),
+        ("object", SdkValue::text(&object)),
+        ("bytes", SdkValue::Int(moved.bytes as i64)),
+        ("pieces", SdkValue::Int(moved.pieces as i64)),
+        ("sha256", hex(&moved.sha256)),
+        ("heads", heads.as_ref().map(hex).unwrap_or_default()),
+    ]))
 }
 
-/// The bucket holds what this home expects at `object`.
-fn check(driver: &dyn Driver, object: &str, expected: remote::Expected) -> Result<()> {
+/// One `store.file` step on the Store's machine: its name and arguments.
+type Step<'a> = dyn Fn(&str, Vec<(&str, SdkValue)>) -> Outcome + 'a;
+
+/// Copies the snapshot a worker staged to `local`, in pieces of [`CHUNK`].
+fn fetch_staged(step: &Step<'_>, local: &Path) -> Result<()> {
+    let mut out = std::fs::File::create(local).map_err(failed)?;
+    let mut offset = 0u64;
+    loop {
+        let piece = step(
+            "read",
+            vec![
+                ("offset", SdkValue::Int(offset as i64)),
+                ("len", SdkValue::Int(CHUNK as i64)),
+                ("staged", SdkValue::Bool(true)),
+            ],
+        )?;
+        let Some(SdkValue::Bytes(bytes)) = piece.get("bytes") else {
+            return Ok(());
+        };
+        std::io::Write::write_all(&mut out, bytes).map_err(failed)?;
+        offset += bytes.len() as u64;
+        if (bytes.len() as u64) < CHUNK {
+            return Ok(());
+        }
+    }
+}
+
+/// The bucket holds what this home expects at `object`, and no other home
+/// wrote it (`Exists` when its `layerfs-exported-from` names another home).
+fn check(
+    driver: &dyn Driver,
+    object: &str,
+    expected: remote::Expected,
+    home_id: &str,
+) -> Result<()> {
     let found = driver.stat(object).map_err(remote_error)?;
+    if let Some(from) = found.as_ref().and_then(|m| m.metadata.get(EXPORTED_FROM)) {
+        if from.split_once('/').map_or(from.as_str(), |(id, _)| id) != home_id {
+            return Err(refused(
+                "Exists",
+                format!(
+                    "the bucket's {object} was written by another home ({from}); back up to another file"
+                ),
+            ));
+        }
+    }
     let ok = match (expected, &found) {
         (remote::Expected::Any, _) => true,
         (remote::Expected::Absent, None) => true,

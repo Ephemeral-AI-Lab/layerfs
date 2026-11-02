@@ -346,3 +346,64 @@ fn concurrent_restores_under_a_new_name() {
         let _ = std::fs::remove_dir_all(dir);
     }
 }
+
+/// `layerfs-exported-from` (#533 review P1-14): a create names this home and
+/// the Store's machine on the object; another home's create to the same
+/// file is `Exists`, and nothing is uploaded. A link that records no sha256
+/// of its last copy expects the file absent, so it never overwrites one.
+#[test]
+fn foreign_copies_and_unrecorded_links() {
+    let Some((home, folder, url)) = backed_up("foreign") else {
+        return;
+    };
+    let id = home::ensure(&home).unwrap().id;
+    let other = tempdir("foreign-other");
+    home::open(&other).unwrap();
+    ok(&other, "store.create", &[("name", t("shop"))]);
+    ok(
+        &other,
+        "backup.connect",
+        &[
+            ("name", t("b1")),
+            ("url", t(&url)),
+            ("key", t("env:LAYERFS_REMOTE")),
+        ],
+    );
+    let refused = call(
+        &other,
+        "backup.create",
+        &[("store", t("shop")), ("bucket", t("b1"))],
+    )
+    .unwrap_err();
+    assert_eq!(refused.0, "Exists", "{refused:?}");
+    assert!(refused.1.contains(&format!("{id}/native")), "{refused:?}");
+    // the object is still this home's copy
+    assert_eq!(states(&home), vec![pair("shop", "current")]);
+    // another file is the other home's own
+    ok(
+        &other,
+        "backup.create",
+        &[
+            ("store", t("shop")),
+            ("bucket", t("b1")),
+            ("file", t("other-shop")),
+        ],
+    );
+
+    // a link without its last copy's sha256 does not overwrite the file
+    let path = paths::store_record(&home, "shop");
+    let record = read_record(&path).unwrap().unwrap();
+    let bare = SdkValue::map([("b1", SdkValue::map([("file", t("shop"))]))]);
+    write_record(&path, &home::with_field(record, "backups", bare)).unwrap();
+    let refused = call(
+        &home,
+        "backup.create",
+        &[("store", t("shop")), ("bucket", t("b1"))],
+    )
+    .unwrap_err();
+    assert_eq!(refused.0, "Conflict", "{refused:?}");
+
+    for dir in [home, folder, other] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
