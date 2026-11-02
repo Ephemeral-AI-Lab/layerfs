@@ -3,7 +3,8 @@
 > **Status:** Record of the owner decisions, gate answers and implementation
 > choices for the #535 implementation on branch `issue535-connect`.
 
-Spec: [README.md](README.md). Handoff prompt: [HANDOFF-PROMPT.md](HANDOFF-PROMPT.md).
+Spec: [README.md](README.md). Handoff prompts: [HANDOFF-PROMPT.md](HANDOFF-PROMPT.md)
+(phases 0–2b), [HANDOFF-2.md](HANDOFF-2.md) (from 2c, interleaved with #536).
 
 The owner settled D1–D10 in the design session of 2026-11-03 and approved
 the recommended answers to G1–G8 the same day. Each row below is settled;
@@ -31,7 +32,7 @@ none is to be re-confirmed.
 | G1 | Yes: supersede #533 O3, G13 and the "Step-12 deferral closed" PostgreSQL row. A PostgreSQL Sandbox runs on every machine where §7.3 marks the platform supported (no attach; G3). | owner, 2026-11-03 |
 | G2 | Yes, narrowly: supersede #533 "Step 5.2". One crate-private, sealed trait per extension point (`Adapter`, `BackendAdapter`), no default methods, reached through one exhaustive `match`. No public trait, registry, factory or plugin. | owner, 2026-11-03 |
 | G3 | No attach records or calls; every PostgreSQL Store is usable from every machine where §7.3 / `support.rs` allows it; `Adapter::reach` rewrites the URL per platform and the reach check (schema binding) runs inside `sandbox.create`'s own request; a per-machine URL is deferred, and a machine that cannot reach the server is refused naming the address it tried. (Replaces the earlier recommendation of `store.attach`/`store.detach` and a `machines` field.) | owner, 2026-11-03, revised |
-| G4 | Yes: Workspace calls reach a VM Sandbox's daemon directly (control keys in the home Sandbox record, port forwarded to host loopback). | owner, 2026-11-03 |
+| G4 | Yes: Workspace calls reach a VM Sandbox's daemon directly (control keys in the home Sandbox record, port forwarded to host loopback). The keys go to `sandbox/<name>/control.json` (#536 §5 layout 3). | owner, 2026-11-03 |
 | G5 | Defer: one request per worker connection stays; phase 7 is not run. | owner, 2026-11-03 |
 | G6 | Split and rename what is internal: shared plumbing to `src/local/`, the backend to `backend/host_process/`, `NativeMacosProvider` → `HostProcessProvider`, `Runtime::MacosNative` → `Runtime::HostProcess`, `Backend::Native` → `Backend::HostProcess`. Stored and displayed values stay `"native"`. The pre-2.0 Linux path goes to `host_process/legacy_linux.rs`. | owner, 2026-11-03 |
 | G7 | No: PostgreSQL Sandboxes on `lima`, `apple-container`, `microsandbox`, `firecracker` stay refused, naming the missing fact, until a live receipt records it. | owner, 2026-11-03 |
@@ -46,6 +47,14 @@ none is to be re-confirmed.
 | P3 | `machine.list` and `machine.get` give each machine `supports: { sqlite, postgresql_sandbox, reason }`, the platform row applied to it. Phase 3. | owner, 2026-11-03 |
 | P4 | Every `*.list`, `*.get` and `*.status` call, and `machine.platforms`, never starts a machine: they answer from records and live probes; a stopped machine reads `stopped`. Calls that need the worker still start it on demand. Checked in phase 4. | owner, 2026-11-03 |
 | P5 | A docker Sandbox with no image named loads the bundle's `sandbox-image.tar` into Docker once and uses its digest; `--image` still overrides. Phase 4. | owner, 2026-11-03 |
+
+## Interleaving with #536
+
+| # | Decision | Taken |
+| --- | --- | --- |
+| I1 | #535 and #536 are interleaved on branch `issue535-connect` in the order of [HANDOFF-2.md](HANDOFF-2.md) §5, so each piece is built once in its final place, with one combined terminal pass. Supersedes #536's "starts after #535's terminal pass" and #535's separate phase 8. | owner, 2026-11-03 |
+| I2 | R3 (`machine/index.rs` replacing the `sandbox_of` scan) is not built: #536 layout 3 (`sandbox/<name>/`, one read per Sandbox) supersedes it. | owner, 2026-11-03 |
+| I3 | #535 phase 4 (`place`, `deploy`, `machine.start`/`stop`, R1, R4–R6) is built inside `layerfs-control` (`common/place.rs`, `sandbox/deploy.rs`), not in `layerfs-api/src/place/`. | owner, 2026-11-03 |
 
 ## Supersessions recorded in #533
 
@@ -80,6 +89,7 @@ rules.
 | Platform folders (1.3) | `observe.rs`, `create.rs` (ssh `connect.rs`), `power.rs` per platform; `network.rs` only where existing code was about ports (docker); lima `template.rs`, firecracker `scripts.rs`, ssh `host_key.rs`. | No empty files; `network.rs` arrives with `reach` and `forward` (phases 5, 6). |
 | Store backup module paths (1.6) | `store-service`'s `remote::storage` alias is dropped: callers import `layerfs_store_backup::bucket::…` and `layerfs_store_backup::backup::…`; `push.rs` → `create.rs`, `pull.rs` → `restore.rs` with function names kept. `settings.rs` + `state.rs` → `link.rs` in its own refactor commit (1.6b). | Keeps the move commit a move; the merge is a separate refactor with its own LOC line. |
 | `local::os` (1.8) | `local/os/mod.rs` is declared `#[path] mod os_impl`, so `crate::local::os` stays the per-platform alias the moved code already uses. | Avoids touching every `os::` use in the moved files. |
+| `Handles` naming (2b) | The unified persistence type is the enum `Handles { Sqlite(SqliteHandles), Postgres(PostgresHandles) }`; the former struct `Handles` is `SqliteHandles`, which keeps `create`, `open` and `seal()`. 2b's doc sweep renamed `Handles::seal()` and the struct to `SqliteHandles` in root and engine AGENTS.md, the architecture docs, the #303 contracts and the handbooks, which matches the code. The spec copy from `layerfs-v2-merge` (§4, §6.1, §10 phase 2) says `Handles` where it means the unified type or the base's struct; the spec is not re-edited. | Current docs name the type that holds the method; the spec text is the owner's. |
 | `Sandbox::Native` (1.9) | Renamed `Sandbox::HostProcess` with the three renames G6 lists, and `layerfs-api` `host::runtime::Backend::Native` likewise. | The enums that name the backend name it alike; stored and displayed values stay `"native"`. |
 
 ## Corrections to commit messages
@@ -90,6 +100,16 @@ History is not rewritten; these rows correct numbers a commit message got wrong.
 | --- | --- | --- |
 | `990e43f166` (1.7) | `Production LOC: 132097 -> 132096 (delta -1)` | `132097 -> 132093 (delta -4)` |
 
+## Corrections to the 2b doc sweep
+
+2b's `Handles` → `SqliteHandles` sweep also rewrote 29 dated historical records
+(`core/docs/issues/{302,307,320,327,352}/…`, including evidence snapshots and
+withdrawn source under `307/checks/`, and the fs-bench-pro rollout ledger).
+Root AGENTS.md keeps historical evidence unchanged, and the old name was right
+when they were written, so step A restores those 29 files to their text before
+2b. Current contracts and guides (#303, architecture, handbooks, AGENTS.md,
+proposals) keep the sweep.
+
 ## Open items
 
 - 1.10 (delete the pre-2.0 Linux native path) not run; needs a shown 2.0 conversion of a pre-2.0 Linux native Sandbox.
@@ -99,3 +119,5 @@ History is not rewritten; these rows correct numbers a commit message got wrong.
 
 - Phase 0 done at `451916521e`.
 - Phase 1 done at `791d510b18`: moves 1.1 `aacdd17433`, 1.2 `4398b0fd41`, 1.3 `7035f0c71b`, 1.4 `77c59c524a`, 1.5 `1f40eb9e92`, 1.6 `0cada61acc` (+ 1.6b `236b7aceb2`), 1.7 `990e43f166`, 1.8 `0106ba8285`, 1.9 `791d510b18`; 1.10 not run.
+- Phase 2a done at `dffd241aee` (`DaemonStore`, `KernelRoute`, `LAYERFS_KERNEL` gone; `LFSD\x07`).
+- Phase 2b done at `c7e14c15a3` (persistence `StoreSelection`, `StoreFile`, one `Handles`; store-service fake path removed).

@@ -27,7 +27,7 @@ refused as `Integrity`. The daemon reports this as `Malformed`.
 
 ## New design
 
-`Session::add_binding_hints` (`schema.rs`) runs in `SqliteHandles::open` before
+`Session::add_binding_hints` (`schema.rs`) runs in `Handles::open` before
 validation, for writable opens only. It is one write job of one attempt.
 
 1. If the table exists, it does nothing.

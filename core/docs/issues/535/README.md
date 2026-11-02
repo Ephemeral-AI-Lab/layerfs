@@ -141,7 +141,7 @@ daemon re-parses it (`layerfs-daemon/src/application/filesystem.rs`).
 `ProviderCapabilities.mount_driver` exists and nothing reads it.
 
 **Stores.** `layerfs-persistence` selects with `BackendSelection` and keeps
-`PostgresHandles` beside `SqliteHandles` (whose `create`/`open` refuse non-sqlite).
+`PostgresHandles` beside `Handles` (whose `create`/`open` refuse non-sqlite).
 `layerfs-store-service` `bootstrap.rs` has `enum Writer {Sqlite, Postgres}`;
 `StoreService::open_postgres` builds a sqlite config and overwrites its
 backend (an unused path). `layerfs-bridge` `DaemonSetup` carries
@@ -273,7 +273,7 @@ engine      ──✗ connect
 ### 6.1 Store
 
 ```rust
-// layerfs-persistence: one selection, one SqliteHandles; file-only operations are a capability
+// layerfs-persistence: one selection, one Handles; file-only operations are a capability
 pub enum StoreSelection { Sqlite(SqliteSelection), Postgres(PostgresSelection) }
 pub trait StoreFile {
     fn snapshot(&self, dest: &Path, progress: &mut dyn FnMut(u64, u64)) -> StorageResult<SealedStore>;
@@ -601,7 +601,7 @@ engine and api AGENTS.md layer paragraphs and the PostgreSQL Sandbox wording.
 
 **Phase 2 (typed contracts).** bridge `DaemonStore`, `StoreAuthority`,
 `KernelRoute`; daemon matches them; `LAYERFS_KERNEL` deleted; persistence
-`StoreSelection`, `StoreFile`, one `SqliteHandles`; store-service fake path
+`StoreSelection`, `StoreFile`, one `Handles`; store-service fake path
 removed; api `StoreRef` replaces every kind string check and `identity_of`.
 
 **Phase 3 (polymorphism; G2).** `Profile` table and `Adapter`;
@@ -721,6 +721,9 @@ Behaviour commits add the affected crates' tests, and from phase 3 the
   repointed in phase 1.
 
 ## 13. Not in this issue
+
+> #535 and #536 are interleaved on one branch (owner, 2026-11-03); the order
+> and the one combined terminal pass are in [HANDOFF-2.md](HANDOFF-2.md).
 
 One daemon serving several Stores; Docker as a namespaces machine (D8);
 changing the stored and displayed backend value `"native"` (G6); a Local

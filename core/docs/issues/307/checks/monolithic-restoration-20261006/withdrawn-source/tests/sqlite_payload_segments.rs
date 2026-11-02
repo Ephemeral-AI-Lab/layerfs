@@ -1,7 +1,7 @@
 //! Immutable filesystem payloads through the ordinary public persistence port.
 mod support;
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{SqliteHandles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePackLayout};
+use layerfs_persistence::{Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePackLayout};
 use layerfs_storage::{
     location::{PackDomain, PackInfo},
     pack::{assemble, build_group, PackLane},
@@ -16,8 +16,8 @@ fn config() -> HistoryCatalogConfig {
         incarnation: 1,
     }
 }
-fn create(path: &Path) -> SqliteHandles {
-    SqliteHandles::create(
+fn create(path: &Path) -> Handles {
+    Handles::create(
         PersistenceConfig::sqlite(path).with_sqlite_pack_layout(SqlitePackLayout::PayloadSegments),
         StoragePolicy::frozen_default(),
         &config(),
@@ -78,7 +78,7 @@ fn one_publication_has_one_segment_and_reopens_exact_bodies() {
     assert_eq!(std::fs::read_dir(t.join("db.payload")).unwrap().count(), 1);
     drop(db);
     drop(h);
-    let h = SqliteHandles::open_read_only(
+    let h = Handles::open_read_only(
         PersistenceConfig::sqlite(&path),
         &config().binding_key,
         config().cursor_key,
@@ -213,7 +213,7 @@ fn replaced_directory_and_wrong_extent_are_refused_without_repair() {
     std::fs::create_dir(t.join("db.payload")).unwrap();
     assert!(h.storage.read_packs(&[1], &mut Vec::new()).is_err());
     drop(h);
-    assert!(SqliteHandles::open_read_only(
+    assert!(Handles::open_read_only(
         PersistenceConfig::sqlite(&path),
         &config().binding_key,
         config().cursor_key
@@ -221,7 +221,7 @@ fn replaced_directory_and_wrong_extent_are_refused_without_repair() {
     .is_err());
     std::fs::remove_dir(t.join("db.payload")).unwrap();
     std::fs::rename(t.join("original"), t.join("db.payload")).unwrap();
-    let h = SqliteHandles::open_writable(
+    let h = Handles::open_writable(
         PersistenceConfig::sqlite(&path),
         &config().binding_key,
         config().cursor_key,
@@ -304,7 +304,7 @@ fn reservations_canonical_storage_and_all_old_versions_keep_their_own_layout() {
         ] {
             let t = support::Temp::new("segments-versions");
             let path = t.join("db");
-            let h = SqliteHandles::create(
+            let h = Handles::create(
                 PersistenceConfig::sqlite(&path)
                     .with_sqlite_pack_layout(layout)
                     .with_sqlite_acquisition(acquisition),
@@ -324,7 +324,7 @@ fn reservations_canonical_storage_and_all_old_versions_keep_their_own_layout() {
             let root = object.id();
             drop(storage);
             drop(h);
-            let h = SqliteHandles::open_read_only(
+            let h = Handles::open_read_only(
                 PersistenceConfig::sqlite(&path)
                     .with_sqlite_pack_layout(SqlitePackLayout::PayloadSegments),
                 &config().binding_key,
@@ -397,7 +397,7 @@ fn concurrent_first_wins_publications_preserve_exact_lost_ids_and_custody() {
     let t = support::Temp::new("segments-conflict");
     let path = t.join("db");
     let left = create(&path);
-    let right = SqliteHandles::open_writable(
+    let right = Handles::open_writable(
         PersistenceConfig::sqlite(&path),
         &config().binding_key,
         config().cursor_key,
@@ -520,7 +520,7 @@ fn killed_live_owner_preserves_acknowledged_segment_catalogue_and_ids() {
     ack.unwrap();
     killed.unwrap();
     assert!(!exit.success());
-    let h = SqliteHandles::open_writable(
+    let h = Handles::open_writable(
         PersistenceConfig::sqlite(&path),
         &config().binding_key,
         config().cursor_key,

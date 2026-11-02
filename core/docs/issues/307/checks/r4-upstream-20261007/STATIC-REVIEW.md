@@ -3,7 +3,7 @@
 > Status: static review by native_commit_research; no independent build/test/sample.
 
 No blocker found in the Content cache/R4 composition or actual host/consumer proof.
-The real proof uses production Upstream and fresh operations with actual SqliteHandles/
+The real proof uses production Upstream and fresh operations with actual Handles/
 Project/Storage/History/Runtime/Sessions/Supervisor and initialized Overlay Owner.
 Native source removal precedes binding/access. The oracle is independent of the
 candidate, covers all13paths/seven regular-file names (six distinct regular inodes),

@@ -240,7 +240,7 @@ retired Workspace collection (87.719 s).
 
 Historical failures retained, with their assertions unchanged:
 
-- `test_phase7` expects the old `SqliteHandles::create` timer seam in the current
+- `test_phase7` expects the old `Handles::create` timer seam in the current
   Project example; that seam is absent in unchanged product source.
 - `test_phase7_history_vehicle` expects two old textual reference seams and an
   old verifier failure order/profile. All three checks fail on current source;

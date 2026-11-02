@@ -140,7 +140,7 @@ impossible or qualify native FUSE, Bash or live namespace Commit.
 | Command identity | O-24 selects one unprivileged Bash user per daemon, shared by its Workspaces and different from the daemon user. O-8's one-user-per-Workspace recommendation was not adopted. |
 | Root readiness | Bounded root bind; complete roots already have installed-Store proofs. R2 qualification is an explicit paid step using owned Overlay records; mount never walks the whole tree. Actual files above 4 GiB remain NOT_RUN under the original owner's pre-S8 waiver; no file-size cap is introduced or new waiver implied. |
 | Shared construction | Native Init and captured files use public Content entrypoints, emit FinalizedObject into Storage Save and use Persistence. Full captured namespace assembly is S10. Do not implement Commit by copying a native tree or invoking Init. |
-| Store completion | Save::finish leaves the shared Store open. SqliteHandles::seal is sole-owner host/offline finalization, never per-file/per-Commit daemon maintenance. |
+| Store completion | Save::finish leaves the shared Store open. Handles::seal is sole-owner host/offline finalization, never per-file/per-Commit daemon maintenance. |
 
 The macOS seal fix at `4156e9070` adds one safe unused-extent release after checked
 SQLite close. It restores neither per-pack preallocation nor the old allocation

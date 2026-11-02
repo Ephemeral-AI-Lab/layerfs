@@ -138,7 +138,7 @@ This replaces the earlier lesson "remove only the calling statement". Within thi
 #321 gave each Workspace its own overlay file and replaced the owner thread, queue, credits and completion tracking with one lock per Workspace. It moved 11 tables to memory and dropped `reclaim` (26 tables down to 12). What remains below either served the old shared database and single writer, or is state that ends with the daemon but still sits in SQLite. The overlay file is deleted at unmount and never outlives the daemon, so a row that only tracks something in flight can become journaled memory, as the open state did in Step A. Cheapest first:
 
 1. **`Route` and constant namespaces.**
-   - 38 overlay functions take `route: Route`. SqliteHandles (`OpenFile`, `BaseSource`, `LookupOwner`, `FileRead`, `Capture`, …) carry a route that is checked on every call. One `Overlay` holds exactly one Workspace, so these checks always pass. Drop the parameter, the checks and the helpers that took it only for that. Routing stays in the daemon, where the route picks the Workspace.
+   - 38 overlay functions take `route: Route`. Handles (`OpenFile`, `BaseSource`, `LookupOwner`, `FileRead`, `Capture`, …) carry a route that is checked on every call. One `Overlay` holds exactly one Workspace, so these checks always pass. Drop the parameter, the checks and the helpers that took it only for that. Routing stays in the daemon, where the route picks the Workspace.
    - Drop the remaining constant `ns`:
      - `workspace.ns AUTOINCREMENT`;
      - `maintenance::Item.ns`;

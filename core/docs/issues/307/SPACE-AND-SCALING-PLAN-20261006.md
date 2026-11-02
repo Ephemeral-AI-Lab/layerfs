@@ -29,7 +29,7 @@ objects, pack layout, Durable WAL/FULL/fullfsync and Disposable MEMORY/OFF remai
 Mode2's additional pointer-map pages are included in physical allocation.
 
 Each nonempty discard and release reclaims at most512 pages inside its existing
-short transaction. `SqliteHandles::reclaim_space` continues residual debt through
+short transaction. `Handles::reclaim_space` continues residual debt through
 acknowledged bounded jobs, releasing the writer between jobs. No whole-Store
 VACUUM, extra database, failed-job replay or guessed uncertain cleanup occurs.
 Mode0 maintenance is refused without migration. The public benchmark pays any

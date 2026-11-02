@@ -690,7 +690,7 @@ the one retained test failure and limits are in the
 A1–A3 and is not corrected by this commit.
 
 A1 is written as [the acquisition contract](A1-ACQUISITION-CONTRACT.md). It
-places the port in Storage and the SQL in Persistence, adds a third `SqliteHandles`
+places the port in Storage and the SQL in Persistence, adds a third `Handles`
 field, defines the three tables with the entry key `(operation, parent position,
 name)`, selects new schema versions 4–6 rather than changing 1–3, and keeps
 working-row cleanup before publication. Its section 9 holds two owner decisions
