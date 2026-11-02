@@ -281,7 +281,7 @@ pub fn refusal(error: MachineError) -> SdkRefusal {
 pub fn backend_name(kind: Platform) -> &'static str {
     use layerfs_machine::Backend;
     match kind.backend(HostOs::current()) {
-        Some(Backend::Native) => "native",
+        Some(Backend::HostProcess) => "native",
         Some(Backend::Namespaces) => "namespaces",
         Some(Backend::Docker) => "docker",
         None => "-",

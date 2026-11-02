@@ -44,7 +44,7 @@ pub(crate) fn start(
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
     // Inputs are read first, so a refused request leaves no creation intent.
     #[cfg(target_os = "linux")]
-    if backend == crate::host::runtime::Backend::Native {
+    if backend == crate::host::runtime::Backend::HostProcess {
         return Err(refused(
             "Unsupported",
             crate::host::runtime::NATIVE_ON_LINUX,
@@ -274,7 +274,7 @@ fn native_runtime(
     root: &str,
     _: crate::host::runtime::Backend,
 ) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
-    layerfs_sandbox::host_process::NativeMacosProvider::new(root).map(Runtime::MacosNative)
+    layerfs_sandbox::host_process::HostProcessProvider::new(root).map(Runtime::HostProcess)
 }
 
 #[cfg(target_os = "linux")]
@@ -283,9 +283,9 @@ fn native_runtime(
     backend: crate::host::runtime::Backend,
 ) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
     match backend {
-        crate::host::runtime::Backend::Native => Err(layerfs_sandbox::RuntimeError::Unsupported(
-            crate::host::runtime::NATIVE_ON_LINUX,
-        )),
+        crate::host::runtime::Backend::HostProcess => Err(
+            layerfs_sandbox::RuntimeError::Unsupported(crate::host::runtime::NATIVE_ON_LINUX),
+        ),
         crate::host::runtime::Backend::Namespaces => {
             layerfs_sandbox::namespaces::NamespaceProvider::new(root).map(Runtime::Namespaces)
         }
@@ -303,7 +303,7 @@ fn launch_options(
     args: &SdkValue,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(match backend {
-        crate::host::runtime::Backend::Native => {
+        crate::host::runtime::Backend::HostProcess => {
             return Err(refused(
                 "Unsupported",
                 crate::host::runtime::NATIVE_ON_LINUX,

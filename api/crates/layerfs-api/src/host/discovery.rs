@@ -415,7 +415,7 @@ pub(crate) fn save_sandbox(
             ]);
         }
         #[cfg(any(target_os = "linux", target_os = "macos"))]
-        Sandbox::Native(runtime) => {
+        Sandbox::HostProcess(runtime) => {
             let record = runtime
                 .local_record()
                 .ok_or_else(|| refused("Failed", "local Sandbox has no daemon process"))?;
@@ -755,7 +755,7 @@ impl Recorded {
                 port,
                 labels,
             } => host_process::Sandbox::reopen(directory, id, process, port, labels)
-                .map(|s| Box::new(Sandbox::Native(s))),
+                .map(|s| Box::new(Sandbox::HostProcess(s))),
             #[cfg(target_os = "linux")]
             Self::Namespaces(runtime, id, record) => runtime.reopen(id, &record).map(Box::new),
         }
@@ -777,7 +777,7 @@ impl Recorded {
                 process,
                 port,
                 labels,
-            } => Box::new(Sandbox::Native(host_process::Sandbox::stopped(
+            } => Box::new(Sandbox::HostProcess(host_process::Sandbox::stopped(
                 directory, id, process, port, labels,
             ))),
             #[cfg(target_os = "linux")]

@@ -38,7 +38,7 @@ pub(crate) const NAMESPACES: &str = "namespaces";
 /// plain native one, or the Linux namespace one.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Backend {
-    Native,
+    HostProcess,
     Namespaces,
 }
 
@@ -57,7 +57,7 @@ pub(crate) fn backend(deploy: &SdkValue) -> Result<Option<Backend>, SdkRefusal> 
     let sandbox = deploy.get_text("sandbox");
     let selected = match sandbox {
         None | Some("docker") => None,
-        Some(NATIVE) => Some(Backend::Native),
+        Some(NATIVE) => Some(Backend::HostProcess),
         Some(NAMESPACES) => Some(Backend::Namespaces),
         Some(other) => {
             return Err(refused(
@@ -71,8 +71,8 @@ pub(crate) fn backend(deploy: &SdkValue) -> Result<Option<Backend>, SdkRefusal> 
     };
     let selected = match (selected, deploy.get_text("sandboxBackend")) {
         (selected, None) => selected,
-        (Some(Backend::Native), Some(NATIVE)) => Some(Backend::Native),
-        (Some(Backend::Native | Backend::Namespaces), Some(NAMESPACES)) => {
+        (Some(Backend::HostProcess), Some(NATIVE)) => Some(Backend::HostProcess),
+        (Some(Backend::HostProcess | Backend::Namespaces), Some(NAMESPACES)) => {
             Some(Backend::Namespaces)
         }
         (_, Some(old)) if old != NATIVE && old != NAMESPACES => {
@@ -113,7 +113,7 @@ pub(crate) fn backend(deploy: &SdkValue) -> Result<Option<Backend>, SdkRefusal> 
 pub(crate) fn recorded(record: &SdkValue) -> Result<Option<Backend>, &str> {
     match record.get_text("runtime") {
         None => Ok(None),
-        Some(NATIVE) => Ok(Some(Backend::Native)),
+        Some(NATIVE) => Ok(Some(Backend::HostProcess)),
         Some(NAMESPACES) => Ok(Some(Backend::Namespaces)),
         Some(other) => Err(other),
     }
@@ -166,7 +166,7 @@ pub(crate) fn platform(args: &SdkValue, backend: Option<Backend>) -> Result<Stri
             format!(
                 "platform {named} does not run the deployment's Sandbox backend ({}) on this host",
                 backend.map_or("docker", |b| match b {
-                    Backend::Native => NATIVE,
+                    Backend::HostProcess => NATIVE,
                     Backend::Namespaces => NAMESPACES,
                 })
             ),
@@ -180,7 +180,7 @@ pub(crate) fn kind(runtime: &Sandbox) -> &'static str {
     match runtime {
         Sandbox::Docker(_) => "docker",
         #[cfg(any(target_os = "linux", target_os = "macos"))]
-        Sandbox::Native(_) => NATIVE,
+        Sandbox::HostProcess(_) => NATIVE,
         #[cfg(target_os = "linux")]
         Sandbox::Namespaces(_) => NAMESPACES,
     }

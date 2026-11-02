@@ -12,10 +12,10 @@ use std::path::Path;
 
 /// Native macOS processes with loopback NFS and the caller's identity.
 #[derive(Clone, Debug)]
-pub struct NativeMacosProvider {
+pub struct HostProcessProvider {
     local: Local,
 }
-impl NativeMacosProvider {
+impl HostProcessProvider {
     /// Selects `root`; nothing is launched.
     pub fn new(root: impl AsRef<Path>) -> Result<Self, RuntimeError> {
         Ok(Self {
@@ -93,7 +93,7 @@ impl NativeMacosProvider {
                     },
                     instance: failure
                         .sandbox
-                        .map(|sandbox| Box::new(crate::Sandbox::Native(sandbox))),
+                        .map(|sandbox| Box::new(crate::Sandbox::HostProcess(sandbox))),
                     cause: failure.cause,
                 })
             })

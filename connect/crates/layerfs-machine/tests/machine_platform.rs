@@ -29,7 +29,7 @@ fn every_kind_parses_back_from_its_name() {
 fn backends_follow_the_kind_and_host() {
     assert_eq!(
         Platform::Native.backend(HostOs::Macos),
-        Some(Backend::Native)
+        Some(Backend::HostProcess)
     );
     assert_eq!(
         Platform::Native.backend(HostOs::Linux),

@@ -106,7 +106,7 @@ impl Platform {
     pub fn backend(self, host: HostOs) -> Option<Backend> {
         match self {
             Self::Native => match host {
-                HostOs::Macos => Some(Backend::Native),
+                HostOs::Macos => Some(Backend::HostProcess),
                 HostOs::Linux => Some(Backend::Namespaces),
                 HostOs::Windows | HostOs::Other => None,
             },

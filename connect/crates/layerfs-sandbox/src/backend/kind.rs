@@ -5,7 +5,7 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Backend {
     /// Host processes with loopback NFS (macOS).
-    Native,
+    HostProcess,
     /// Linux namespaces and a cgroup.
     Namespaces,
     /// Docker containers.

@@ -1,6 +1,6 @@
 //! Native process runtime: each Sandbox is one daemon process on this kernel,
 //! started from a private directory, with no container, image or Engine.
-//! Only macOS starts native Sandboxes (`NativeMacosProvider`); on Linux this
+//! Only macOS starts native Sandboxes (`HostProcessProvider`); on Linux this
 //! module only reopens, stops and deletes a native Sandbox from a record
 //! written before 2.0 (item 1.10 would remove that build).
 //!
@@ -15,6 +15,6 @@ mod exec;
 #[cfg(target_os = "macos")]
 mod provider;
 #[cfg(target_os = "macos")]
-pub use provider::NativeMacosProvider;
+pub use provider::HostProcessProvider;
 pub(crate) mod sandbox;
 pub use sandbox::Sandbox;

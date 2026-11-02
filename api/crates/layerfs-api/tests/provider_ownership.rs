@@ -64,7 +64,7 @@ fn native_resource_paths_are_validated_before_launch() {
         duplex,
     };
     use layerfs_sandbox::{
-        host_process::NativeMacosProvider, CommandIdentity, LaunchRequest, ProviderLaunchOptions,
+        host_process::HostProcessProvider, CommandIdentity, LaunchRequest, ProviderLaunchOptions,
         Runtime,
     };
     use std::{
@@ -75,7 +75,7 @@ fn native_resource_paths_are_validated_before_launch() {
     let root = fixture.directory.join("runtime");
     fs::create_dir(&root).unwrap();
     fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).unwrap();
-    let provider = NativeMacosProvider::new(&root).unwrap();
+    let provider = HostProcessProvider::new(&root).unwrap();
     let paths = provider.paths("one").unwrap();
     let metadata = fs::metadata(&root).unwrap();
     let identity = CommandIdentity {
@@ -119,7 +119,7 @@ fn native_resource_paths_are_validated_before_launch() {
             },
         },
     };
-    let api = SandboxApi::with_runtime(Arc::new(Runtime::MacosNative(provider)));
+    let api = SandboxApi::with_runtime(Arc::new(Runtime::HostProcess(provider)));
     for field in ["overlay", "mounts", "store", "listen"] {
         let mut invalid = request.clone();
         match field {

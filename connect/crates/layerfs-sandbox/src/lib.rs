@@ -32,7 +32,7 @@ pub use backend::namespaces::{self, NamespaceProvider};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod local;
 #[cfg(target_os = "macos")]
-pub use backend::host_process::NativeMacosProvider;
+pub use backend::host_process::HostProcessProvider;
 #[cfg(unix)]
 pub use helper_spec::HelperSpec;
 #[cfg(unix)]

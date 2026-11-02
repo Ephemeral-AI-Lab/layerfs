@@ -7,7 +7,7 @@ use crate::backend::host_process;
 #[cfg(target_os = "linux")]
 use crate::backend::namespaces::{self, NamespaceProvider};
 #[cfg(target_os = "macos")]
-use crate::host_process::NativeMacosProvider;
+use crate::host_process::HostProcessProvider;
 use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
 use crate::{
     ExecExit, LaunchPhase, LaunchRequest, LocalRecord, ProviderCapabilities, SandboxInspection,
@@ -26,7 +26,7 @@ pub enum Runtime {
     /// A local daemon process serving loopback NFS as this user (macOS;
     /// Linux has no native runtime, #533 O27).
     #[cfg(target_os = "macos")]
-    MacosNative(NativeMacosProvider),
+    HostProcess(HostProcessProvider),
     /// A root daemon in its own mount, PID and IPC namespaces and cgroup,
     /// commands entering them as a nonroot identity (Linux).
     #[cfg(target_os = "linux")]
@@ -38,7 +38,7 @@ impl Runtime {
         match self {
             Self::Docker(provider) => Ok(provider.capabilities()),
             #[cfg(target_os = "macos")]
-            Self::MacosNative(provider) => Ok(provider.capabilities()),
+            Self::HostProcess(provider) => Ok(provider.capabilities()),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => Ok(provider.capabilities()),
         }
@@ -50,7 +50,7 @@ impl Runtime {
         match self {
             Self::Docker(_) => Ok(None),
             #[cfg(target_os = "macos")]
-            Self::MacosNative(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
+            Self::HostProcess(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider.paths(name).map(|paths| Some(paths.directory)),
         }
@@ -61,7 +61,7 @@ impl Runtime {
     pub fn native_paths(&self, name: &str) -> Result<crate::local::LocalPaths, RuntimeError> {
         match self {
             #[cfg(target_os = "macos")]
-            Self::MacosNative(provider) => provider.paths(name),
+            Self::HostProcess(provider) => provider.paths(name),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider.paths(name),
             Self::Docker(_) => Err(RuntimeError::Unsupported(
@@ -75,7 +75,7 @@ impl Runtime {
         match self {
             Self::Docker(provider) => provider.launch(request).map(Sandbox::Docker),
             #[cfg(target_os = "macos")]
-            Self::MacosNative(provider) => provider.launch(request).map(Sandbox::Native),
+            Self::HostProcess(provider) => provider.launch(request).map(Sandbox::HostProcess),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider
                 .launch(request)
@@ -92,7 +92,7 @@ impl Runtime {
         match self {
             Self::Docker(provider) => provider.reopen(id, record).map(Sandbox::Docker),
             #[cfg(target_os = "macos")]
-            Self::MacosNative(provider) => provider.reopen(id, record).map(Sandbox::Native),
+            Self::HostProcess(provider) => provider.reopen(id, record).map(Sandbox::HostProcess),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider
                 .reopen(id, record)
@@ -109,7 +109,9 @@ impl Runtime {
         match self {
             Self::Docker(provider) => provider.reopen_stopped(id, record).map(Sandbox::Docker),
             #[cfg(target_os = "macos")]
-            Self::MacosNative(provider) => provider.reopen_stopped(id, record).map(Sandbox::Native),
+            Self::HostProcess(provider) => provider
+                .reopen_stopped(id, record)
+                .map(Sandbox::HostProcess),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider
                 .reopen_stopped(id, record)
@@ -123,7 +125,7 @@ impl Runtime {
 pub enum Sandbox {
     Docker(docker::Sandbox),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    Native(host_process::Sandbox),
+    HostProcess(host_process::Sandbox),
     #[cfg(target_os = "linux")]
     Namespaces(Box<namespaces::Sandbox>),
 }
@@ -133,7 +135,7 @@ impl Sandbox {
         match self {
             Self::Docker(sandbox) => sandbox.identity(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Native(sandbox) => sandbox.identity(),
+            Self::HostProcess(sandbox) => sandbox.identity(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.identity(),
         }
@@ -143,7 +145,7 @@ impl Sandbox {
         match self {
             Self::Docker(sandbox) => sandbox.endpoint(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Native(sandbox) => sandbox.endpoint(),
+            Self::HostProcess(sandbox) => sandbox.endpoint(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.endpoint(),
         }
@@ -159,7 +161,7 @@ impl Sandbox {
         match self {
             Self::Docker(sandbox) => docker::run_command(sandbox, request, stdout, stderr),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Native(sandbox) => sandbox.run(request, stdout, stderr),
+            Self::HostProcess(sandbox) => sandbox.run(request, stdout, stderr),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.run(request, stdout, stderr),
         }
@@ -172,7 +174,7 @@ impl Sandbox {
             // Container teardown owns all descendants; no host process is adopted.
             Self::Docker(_) => Ok(()),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Native(sandbox) => sandbox.track(pid, start_time),
+            Self::HostProcess(sandbox) => sandbox.track(pid, start_time),
             // its cgroup owns every process the Sandbox started, whatever
             // session it left, so nothing needs naming
             #[cfg(target_os = "linux")]
@@ -184,7 +186,7 @@ impl Sandbox {
         match self {
             Self::Docker(sandbox) => sandbox.log_tail(lines, cap),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Native(sandbox) => sandbox.log_tail(lines, cap),
+            Self::HostProcess(sandbox) => sandbox.log_tail(lines, cap),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.log_tail(lines, cap),
         }
@@ -194,7 +196,7 @@ impl Sandbox {
         match self {
             Self::Docker(sandbox) => sandbox.inspect(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Native(sandbox) => {
+            Self::HostProcess(sandbox) => {
                 sandbox.reap();
                 Ok(SandboxInspection {
                     identity: sandbox.identity(),
@@ -222,7 +224,7 @@ impl Sandbox {
         match self {
             Self::Docker(sandbox) => sandbox.stop(timeout_seconds),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Native(sandbox) => sandbox.stop(timeout_seconds),
+            Self::HostProcess(sandbox) => sandbox.stop(timeout_seconds),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.stop(timeout_seconds),
         }
@@ -232,7 +234,7 @@ impl Sandbox {
         match self {
             Self::Docker(sandbox) => sandbox.delete(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Native(sandbox) => sandbox.delete(),
+            Self::HostProcess(sandbox) => sandbox.delete(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.delete(),
         }
@@ -244,7 +246,7 @@ impl Sandbox {
         match self {
             Self::Docker(_) => "/tmp".into(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Native(sandbox) => sandbox.tmp().display().to_string(),
+            Self::HostProcess(sandbox) => sandbox.tmp().display().to_string(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.tmp().display().to_string(),
         }
@@ -255,7 +257,7 @@ impl Sandbox {
         match self {
             Self::Docker(_) => None,
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Native(sandbox) => sandbox.local_record(),
+            Self::HostProcess(sandbox) => sandbox.local_record(),
             #[cfg(target_os = "linux")]
             Self::Namespaces(_) => None,
         }
@@ -266,7 +268,7 @@ impl Sandbox {
         match self {
             Self::Docker(sandbox) => Some(SandboxRecord::Docker(sandbox.request().clone().into())),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::Native(_) => self.local_record().map(SandboxRecord::Local),
+            Self::HostProcess(_) => self.local_record().map(SandboxRecord::Local),
             #[cfg(target_os = "linux")]
             Self::Namespaces(sandbox) => sandbox.record(),
         }

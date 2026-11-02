@@ -6,7 +6,7 @@
 //! with its output in a log file, and this binding keeps its process id. The
 //! Engine offers no per-exec cancel, so `cancel` signals the process group
 //! from a second command and waits (bounded) until it is gone. A local
-//! Sandbox (`layerfs_sandbox::Sandbox::Native`) runs the same commands as
+//! Sandbox (`layerfs_sandbox::Sandbox::HostProcess`) runs the same commands as
 //! processes of this kernel, so the same probes and signals apply.
 use crate::host::outcome::{refused, Outcome};
 use crate::host::output::Spool;
