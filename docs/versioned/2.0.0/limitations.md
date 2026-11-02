@@ -13,15 +13,17 @@ for this manual.
 
 - 2.0.0 is not tagged or released. No package is published to npm, PyPI or
   crates.io.
-- The terminal pass of the work order (step 19) ran on one Mac only:
-  the twelve cells on `native` passed, MinIO backups, PostgreSQL Init and
-  the three front ends compared passed; every VM kind, ssh, the `docker`
-  worker, R2, Linux and Windows are `NOT_RUN`. See
-  [TERMINAL-PASS.md](../../../core/docs/issues/533/TERMINAL-PASS.md).
-- The workspace's Cargo version is still `1.1.0`: `layerfs --version`
-  prints `layerfs 1.1.0`, and the bundle and daemon cache paths use
-  `<cache>/layerfs/bundle/1.1.0/`. The Node package and the Python wheel
-  say `2.0.0`.
+- The terminal pass of the work order (step 19) ran on one Mac only: the
+  twelve cells passed on `native` and (at `a487409fe5`) on the macOS
+  `docker` machine, as did MinIO backups, PostgreSQL Init and Sandboxes,
+  and the three front ends compared; every VM kind, ssh, R2, Linux and
+  Windows were `NOT_RUN`. Step 19 passes only when the twelve cells pass on
+  all seven machine kinds (owner direction, 2026-11-02). See
+  [TERMINAL-PASS.md](../../../core/docs/issues/533/TERMINAL-PASS.md) for
+  the latest pass.
+- The workspace's Cargo version is `2.0.0` (since `085376a7a8`), as are
+  the Node package and the Python wheel; the bundle and daemon cache paths
+  use `<cache>/layerfs/bundle/2.0.0/`.
 - Only the Disposable Store profile runs. Durable execution is `NOT_RUN —
   disabled by owner until explicit reauthorization`.
 - Every call is one attempt. There is no retry, busy handler or replay.
@@ -52,14 +54,26 @@ Also not built:
   tools).
 - **1.1.0's `local_folder` backup provider.** A 1.1.0 home's
   `local_folder` remote is kept only in `log/1.1.0/remotes`.
-- **A live output stream for `workspace exec`.** Output reaches `stdout`
-  and `stderr` functions, and `--stream`, after the command ends.
+- **A live output stream for `workspace exec`.** Output reaches the
+  `stdout` and `stderr` functions, `stream: true` and `--stream` after the
+  command ends. A stream over 1 MiB comes only as output events: the reply
+  has that stream `null` with its byte count (`stdout_bytes`,
+  `stderr_bytes`) and `streamed: true`, so a caller with no function, no
+  `stream` and no `--stream` does not get those bytes.
+- **Cancelling a call.** `layerfs.aio` stops calling a cancelled call's
+  functions, but the native call runs to its end on its thread; read the
+  state again after a cancel.
+- **`backup list` of a Store not on `native`.** Its heads are read on
+  `native` only, so its state is `unknown` with a `reason`; reading heads
+  through the machine's worker is not built.
 - **Background processes, operator and diagnostic calls, and the trace
   subscription** of 1.1.0's `@layerfs/backend` (O25, O26). Trace files
   under `trace/` are the feed.
 - **An MCP server** (O32). Folder scope is a client option instead.
-- **A by-id Commit lookup.** `commit.get` pages the Branch's Commits 1000
-  at a time until it finds the id or prefix.
+- **A by-id Commit lookup.** `commit.get` reads the Branch's Commits page
+  by page, following `next_page_pos` (a page holds what fits the reply
+  budget, about 47 Commits), until it finds the id or prefix; its cost grows
+  with the Branch's history.
 - **Moving a Sandbox's own state.** Daemon keys and mounts stay under the
   project's folder, as in 1.1.0; only the 2.0 record is under
   `machine/<machine>/sandbox/<name>/`.
@@ -84,7 +98,12 @@ step commits.
   table marks it in-process; the decisions log says it goes to its worker)
   and the Linux wheels (O20) are `NOT_RUN`.
 - **Windows** (O5). `native` on Windows holds only records; its sqlite
-  Stores and Init are meant to live in a WSL worker. Not run.
+  Stores and Init are meant to live in a WSL worker. Not run. The library
+  does not build for Windows yet: `home/`, `store/`, `worker/`, `start.rs`
+  and the Sandbox family use `std::os::unix` without a cfg gate (review
+  P1-28, paused for the owner; a Windows `cargo check` on this Mac stopped
+  earlier, at the `zstd-sys` and `blake3` build scripts, which need an MSVC
+  C toolchain).
 - **R2.** Backups were run against MinIO only; R2 is `NOT_RUN` (no
   credentials).
 - **PostgreSQL.** `store connect`, Init and Sandboxes on `native` and
@@ -96,7 +115,8 @@ step commits.
 - **Deleted tests.** `layerfs-node`'s four Linux test files (21 tests) were
   deleted in step 14. The behaviours they guarded (#463 discovery reclaim,
   #508 admission and connection wait) are not re-covered on the 2.0 entry
-  point.
+  point. Step 14 also deleted the four 1.1.0 packages' 63 test files
+  (listed in [HANDOFF.md](../../../core/docs/issues/533/HANDOFF.md)).
 
 ## Observed in the runs for this manual
 
@@ -106,16 +126,9 @@ On macOS arm64, with the debug build, in a private temporary home:
   written (`file.write` with a `Buffer` or `bytes`), but no 2.0 call reads
   them back as bytes.
 - `project init --progress` printed no progress lines for a small folder.
-- Two refusals tell the user to run `layerfs store import-env`. That
-  command does not exist; the command is `layerfs import-env`.
 
 ## Seen in the code, not tested
 
-- `sandbox.list` and `sandbox.get` accept `page_size` and `page_pos` but
-  answer every item.
-- The host's `workspace.exec` keeps a stream over 1 MiB out of the inline
-  result and spools it; the 2.0 table has no call that reads spooled
-  output.
 - `file.apply` changes name their paths `path`, `from_path` and
   `to_path` and their texts `old`, `new` and `content`. The Store's own
   names (`from`, `to`, `oldText`, `newText`, `bytes`) are refused
