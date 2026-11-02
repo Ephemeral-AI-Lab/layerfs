@@ -10,11 +10,11 @@ use crate::backend::namespaces::{self, NamespaceProvider};
 use crate::backend::{adapter, Backend};
 #[cfg(target_os = "macos")]
 use crate::host_process::HostProcessProvider;
-use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
 use crate::{
-    ExecExit, LaunchPhase, LaunchRequest, LocalRecord, ProviderCapabilities, SandboxInspection,
-    SandboxRecord,
+    Bind, ExecExit, LaunchPhase, LaunchRequest, LocalRecord, ProviderCapabilities,
+    SandboxInspection, SandboxRecord,
 };
+use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
 use std::{fmt, io::Write, net::SocketAddr, path::PathBuf};
 
 /// One deployment's runtime choice, kept for every Sandbox it starts.
@@ -87,6 +87,41 @@ impl Runtime {
             Self::Namespaces(provider) => provider
                 .launch(request)
                 .map(|sandbox| Sandbox::Namespaces(Box::new(sandbox))),
+        }
+    }
+
+    /// Starts one Sandbox once with exactly `binds` in its private root
+    /// (#535 §6.3: a sqlite Store's [`Bind::store`]; none for a PostgreSQL
+    /// Store). Only the namespaces backend binds: its options' `store` must
+    /// then be empty. Docker takes its Store as a volume and a host-process
+    /// daemon shares the host's files, so they refuse a bind before any
+    /// effect. [`Self::launch`] is the same with the namespaces options'
+    /// `store` as the one bind.
+    pub fn launch_with_binds(
+        &self,
+        request: LaunchRequest,
+        binds: Vec<Bind>,
+    ) -> Result<Sandbox, Box<LaunchFailure>> {
+        let unbound = |why| {
+            Box::new(LaunchFailure {
+                phase: LaunchPhase::Validate,
+                instance: None,
+                cause: RuntimeError::Unsupported(why),
+            })
+        };
+        match self {
+            Self::Docker(_) if !binds.is_empty() => Err(unbound(
+                "a docker Sandbox takes its Store as a volume, not a bind",
+            )),
+            #[cfg(target_os = "macos")]
+            Self::HostProcess(_) if !binds.is_empty() => Err(unbound(
+                "a host-process Sandbox shares the host's files and takes no bind",
+            )),
+            #[cfg(target_os = "linux")]
+            Self::Namespaces(provider) => provider
+                .launch_with_binds(request, binds)
+                .map(|sandbox| Sandbox::Namespaces(Box::new(sandbox))),
+            _ => self.launch(request),
         }
     }
 

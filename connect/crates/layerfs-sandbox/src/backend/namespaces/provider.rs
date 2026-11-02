@@ -12,7 +12,7 @@ use super::{
     sandbox::Sandbox,
 };
 use crate::local::{Local, LocalPaths};
-use crate::{ContainerId, RuntimeError, WireFailure};
+use crate::{Bind, ContainerId, RuntimeError, WireFailure};
 use crate::{LaunchFailure, LaunchPhase, LaunchRequest, ProviderLaunchOptions, SandboxRecord};
 use std::{
     env,
@@ -49,21 +49,51 @@ impl NamespaceProvider {
         self.local.clone().naming(name)?.paths()
     }
 
-    /// Starts one Sandbox once; a failed start keeps the acknowledged owner.
+    /// Starts one Sandbox once with the options' `store`, the exact sqlite
+    /// Store file, bound as its directory ([`Bind::store`]). Compatibility
+    /// entry: the same as [`Self::launch_with_binds`] with that one bind and
+    /// an empty `store`.
     pub fn launch(&self, request: LaunchRequest) -> Result<Sandbox, Box<LaunchFailure>> {
-        let fail = |cause| {
-            Box::new(LaunchFailure {
-                phase: LaunchPhase::Validate,
-                instance: None,
-                cause,
-            })
+        let binds = match &request.options {
+            ProviderLaunchOptions::Namespaces { store, .. } => {
+                vec![Bind::store(store).map_err(refused)?]
+            }
+            _ => Vec::new(),
         };
+        self.start(request, binds)
+    }
+
+    /// Starts one Sandbox once with exactly `binds` in its private root
+    /// (#535 §6.3): a sqlite Store's [`Bind::store`], or none for a
+    /// PostgreSQL Store. The options' `store` must be empty: the binds
+    /// replace it. A failed start keeps the acknowledged owner.
+    pub fn launch_with_binds(
+        &self,
+        request: LaunchRequest,
+        binds: Vec<Bind>,
+    ) -> Result<Sandbox, Box<LaunchFailure>> {
+        if let ProviderLaunchOptions::Namespaces { store, .. } = &request.options {
+            if !store.as_os_str().is_empty() {
+                return Err(refused(RuntimeError::Protocol(
+                    "namespaces launch with binds names no Store file",
+                )));
+            }
+        }
+        self.start(request, binds)
+    }
+
+    fn start(
+        &self,
+        request: LaunchRequest,
+        binds: Vec<Bind>,
+    ) -> Result<Sandbox, Box<LaunchFailure>> {
+        let fail = refused;
         let ProviderLaunchOptions::Namespaces {
             command_identity,
             environment,
-            store,
             image,
             archive,
+            ..
         } = request.options.clone()
         else {
             return Err(fail(RuntimeError::Unsupported(
@@ -75,7 +105,7 @@ impl NamespaceProvider {
         let options = Options {
             command_identity,
             environment,
-            store,
+            binds,
             image,
             archive,
         };
@@ -169,6 +199,15 @@ impl NamespaceProvider {
             .ok_or(RuntimeError::Protocol("namespaces Sandbox root"))?;
         rootfs::lookup(record.image(), &rootfs::cache(root))
     }
+}
+
+/// A launch refused before any effect.
+fn refused(cause: RuntimeError) -> Box<LaunchFailure> {
+    Box::new(LaunchFailure {
+        phase: LaunchPhase::Validate,
+        instance: None,
+        cause,
+    })
 }
 
 /// The helper a reopened Sandbox runs: the copy its create put in its own

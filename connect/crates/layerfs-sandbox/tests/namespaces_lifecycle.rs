@@ -18,7 +18,7 @@ mod support {
 }
 use layerfs_sandbox::{
     namespaces::{NamespaceProvider, Sandbox},
-    CommandIdentity, ExecRequest, Image, LaunchRequest, ProviderLaunchOptions, RuntimeError,
+    Bind, CommandIdentity, ExecRequest, Image, LaunchRequest, ProviderLaunchOptions, RuntimeError,
     SandboxRecord,
 };
 use std::{
@@ -670,6 +670,61 @@ fn a_request_is_refused_before_any_effect() {
     assert!(message.contains(other.hex()), "{message}");
     assert!(message.contains(hex(DIGEST)), "{message}");
     assert!(!fixture.directory("sandbox-5").exists());
+}
+
+/// #535 §6.3: binds replace the Store file. A PostgreSQL Store's Sandbox
+/// binds nothing (its Store's directory is not there); another bind is
+/// seen at its guest path with its mode; a launch with binds that also
+/// names a Store file is refused before any effect.
+#[test]
+fn binds_replace_the_store_file() {
+    if let Some(reason) = unavailable() {
+        eprintln!("SKIPPED namespaces binds: {reason}");
+        return;
+    }
+    let fixture = Fixture::new("binds");
+    let provider = fixture.provider().unwrap();
+    let unbound = |name: &str| {
+        let mut request = fixture.request(name);
+        if let ProviderLaunchOptions::Namespaces { store, .. } = &mut request.options {
+            *store = PathBuf::new();
+        }
+        request
+    };
+    // a launch with binds names no Store file
+    let failure = provider
+        .launch_with_binds(fixture.request("sandbox-0"), Vec::new())
+        .unwrap_err();
+    assert!(failure.instance.is_none(), "{:?}", failure.cause);
+    assert!(!fixture.directory("sandbox-0").exists());
+    // no bind: the Store's directory is not in the Sandbox
+    let mut sandbox = provider
+        .launch_with_binds(unbound("sandbox-1"), Vec::new())
+        .unwrap();
+    let store = fixture.store.to_str().unwrap();
+    let (code, _, _) = run(&sandbox, &["/bin/test", "-e", store], &[]);
+    assert_ne!(code, 0, "an unbound Store directory is visible");
+    sandbox.stop(5).unwrap();
+    sandbox.delete().unwrap();
+    // a read-only bind at another guest path
+    let bind = Bind {
+        host: fixture.store.clone(),
+        guest: PathBuf::from("/srv/reference"),
+        read_write: false,
+    };
+    let mut sandbox = provider
+        .launch_with_binds(unbound("sandbox-2"), vec![bind])
+        .unwrap();
+    let (code, out, _) = run(&sandbox, &["/bin/cat", "/srv/reference/sealed.sqlite"], &[]);
+    assert_eq!((code, out.as_str()), (0, "stub"));
+    let (code, _, _) = run(
+        &sandbox,
+        &["/bin/sh", "-c", "echo x > /srv/reference/written"],
+        &[],
+    );
+    assert_ne!(code, 0, "a read-only bind was written");
+    sandbox.stop(5).unwrap();
+    sandbox.delete().unwrap();
 }
 
 #[test]

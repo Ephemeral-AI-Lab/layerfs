@@ -1,5 +1,6 @@
 //! Exact ordinary runtime identities, independent process/output knowledge and
 //! failures, and the launch inputs and observations every backend shares.
+mod bind;
 mod capabilities;
 mod execution;
 mod failure;
@@ -8,6 +9,7 @@ mod image;
 mod options;
 mod request;
 mod transfer;
+pub use bind::Bind;
 pub use capabilities::{IsolationModel, MountDriver, ProviderCapabilities, SearchPathPolicy};
 pub use execution::{CommandIdentity, ExecInspection};
 #[cfg(unix)]

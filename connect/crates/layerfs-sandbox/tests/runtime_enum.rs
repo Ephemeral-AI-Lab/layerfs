@@ -63,3 +63,70 @@ fn each_backend_fixes_its_capabilities() {
     );
     assert!(namespaces.requires_image);
 }
+
+/// #535 §6.3: only the namespaces backend binds host directories; docker
+/// takes its Store as a volume and a host-process daemon shares the host's
+/// files, so a bind is refused before any effect (no Engine is dialled,
+/// nothing is made under the root). Without binds the launch is the plain
+/// one (here it fails later, at the missing Engine socket).
+#[test]
+fn a_bind_is_refused_where_the_backend_does_not_bind() {
+    use layerfs_sandbox::{Bind, LaunchPhase, LaunchRequest, ProviderLaunchOptions, RuntimeError};
+    let bind = Bind::store(std::path::Path::new("/srv/store/store.sqlite")).unwrap();
+    let request = |options| LaunchRequest {
+        name: "binds-1".into(),
+        daemon_executable: "/does-not-exist/layerfs-daemon".into(),
+        daemon_config: b"setup".to_vec(),
+        labels: Vec::new(),
+        startup_timeout: Duration::from_secs(1),
+        options,
+    };
+    let docker = Docker::new("/does-not-exist/docker.sock", Duration::from_secs(1)).unwrap();
+    let runtime = Runtime::Docker(DockerProvider::new(docker));
+    let docker_options = || ProviderLaunchOptions::Docker {
+        image: format!("sha256:{}", "a".repeat(64)),
+        store_volume: None,
+        port: 30421,
+        connect_host: None,
+    };
+    let failure = runtime
+        .launch_with_binds(request(docker_options()), vec![bind.clone()])
+        .unwrap_err();
+    assert_eq!(failure.phase, LaunchPhase::Validate);
+    assert!(failure.instance.is_none());
+    assert!(
+        matches!(failure.cause, RuntimeError::Unsupported(why) if why.contains("volume")),
+        "{:?}",
+        failure.cause
+    );
+    let plain = runtime
+        .launch_with_binds(request(docker_options()), Vec::new())
+        .unwrap_err();
+    assert!(
+        !matches!(plain.cause, RuntimeError::Unsupported(_)),
+        "{:?}",
+        plain.cause
+    );
+    #[cfg(target_os = "macos")]
+    {
+        let root = std::env::temp_dir().join(format!("lfs-binds-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let runtime =
+            Runtime::HostProcess(layerfs_sandbox::HostProcessProvider::new(&root).unwrap());
+        let options = ProviderLaunchOptions::Local {
+            command_identity: layerfs_sandbox::CommandIdentity { uid: 501, gid: 20 },
+            environment: Vec::new(),
+        };
+        let failure = runtime
+            .launch_with_binds(request(options), vec![bind])
+            .unwrap_err();
+        assert!(
+            matches!(failure.cause, RuntimeError::Unsupported(why) if why.contains("no bind")),
+            "{:?}",
+            failure.cause
+        );
+        assert!(failure.instance.is_none());
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+}
