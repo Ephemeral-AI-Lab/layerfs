@@ -127,9 +127,12 @@ pub(crate) fn fields(
         .zip(sizes)
     {
         match stream.finish().map_err(failed)? {
+            // output that is not UTF-8 stays bytes, never replaced
             Stream::Inline(bytes) => shown.push((
                 name,
-                SdkValue::Text(String::from_utf8_lossy(&bytes).into_owned()),
+                String::from_utf8(bytes)
+                    .map(SdkValue::Text)
+                    .unwrap_or_else(|error| SdkValue::Bytes(error.into_bytes())),
             )),
             Stream::Spooled(file) => {
                 spooled.streams.push((name, file, size));

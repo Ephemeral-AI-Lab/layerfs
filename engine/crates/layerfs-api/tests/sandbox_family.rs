@@ -169,6 +169,103 @@ fn named_sandboxes_on_native() {
     );
     assert_eq!(read.get_text("text"), Some("made\n"));
 
+    // #533 review P1-20: two Workspaces write one file; the second commit
+    // conflicts, and with `force` publishes over the moved head
+    let mut both = Vec::new();
+    for content in ["first", "second"] {
+        let mounted = ok(
+            &home,
+            "workspace.mount",
+            &[("sandbox", t("t1")), ("branch", t("dev"))],
+        );
+        let ws = text(&mounted, "ws");
+        let command = format!("echo {content} > SAME.md");
+        ok(
+            &home,
+            "workspace.exec",
+            &[("ws", t(&ws)), ("command", t(&command))],
+        );
+        both.push(ws);
+    }
+    ok(&home, "workspace.commit", &[("ws", t(&both[0]))]);
+    let forced = ok(
+        &home,
+        "workspace.commit",
+        &[("ws", t(&both[1])), ("force", SdkValue::Bool(true))],
+    );
+    assert_eq!(forced.get_text("kind"), Some("Committed"), "{forced:?}");
+    assert_eq!(forced.get("merged"), Some(&SdkValue::Null), "{forced:?}");
+    let same = ok(
+        &home,
+        "file.read",
+        &[
+            ("project", t("shop/api")),
+            ("branch", t("dev")),
+            ("path", t("/SAME.md")),
+        ],
+    );
+    assert_eq!(same.get_text("text"), Some("second\n"));
+
+    // #533 review P1-18: output over the 1 MiB inline window arrives as
+    // output events, in full; output that is not UTF-8 stays bytes
+    let mut events = Vec::new();
+    let big = calls::call(
+        Some(&home),
+        "workspace.exec",
+        SdkValue::map([
+            ("ws", t(&both[0])),
+            (
+                "command",
+                t("head -c 3000000 /dev/zero | tr '\\0' a; printf '\\377' >&2"),
+            ),
+        ]),
+        &mut |event| events.push(event),
+    )
+    .unwrap();
+    assert_eq!(big.get("stdout"), Some(&SdkValue::Null), "{big:?}");
+    assert_eq!(big.get_int("stdout_bytes"), Some(3_000_000), "{big:?}");
+    assert_eq!(big.get("streamed"), Some(&SdkValue::Bool(true)), "{big:?}");
+    assert_eq!(
+        big.get("stderr"),
+        Some(&SdkValue::Bytes(vec![0xff])),
+        "{big:?}"
+    );
+    let mut streamed = Vec::new();
+    for event in &events {
+        if event.get_text("stream") == Some("stdout") {
+            if let Some(SdkValue::Bytes(bytes)) = event.get("bytes") {
+                streamed.extend_from_slice(bytes);
+            }
+        }
+    }
+    assert_eq!(streamed.len(), 3_000_000);
+    assert!(streamed.iter().all(|b| *b == b'a'));
+
+    // #533 review P1-21 (O31): a Sandbox holding Workspaces closes only
+    // with `force`, which reports each one it could not drain as Unknown
+    let (code, _) = call(&home, "sandbox.close", &[("name", t("t1"))]).unwrap_err();
+    assert_eq!(code, "MountsActive");
+    let closed = ok(
+        &home,
+        "sandbox.close",
+        &[("name", t("t1")), ("force", SdkValue::Bool(true))],
+    );
+    let unknown = match closed.get("unknown") {
+        Some(SdkValue::List(paths)) => paths.len(),
+        other => panic!("{other:?} in {closed:?}"),
+    };
+    assert_eq!(unknown, 2, "{closed:?}");
+    assert!(!paths::sandbox_dir(&home, "native", "t1").exists());
+    ok(
+        &home,
+        "sandbox.create",
+        &[
+            ("project", t("shop/api")),
+            ("name", t("t1")),
+            ("machine", t("native")),
+        ],
+    );
+
     // a running Sandbox keeps its Store from moving
     assert_eq!(
         call(

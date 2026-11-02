@@ -487,12 +487,15 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
     ]))
 }
 
-/// `sandbox.close(sandbox)`: stops Sandbox `sandbox` now, under the
-/// project's guard and its own. Refused `NoSuchSandbox` when it is not
-/// running and `MountsActive` while a Workspace is mounted in it (a
-/// background process runs in one). Stop, then delete, each attempted once:
-/// a failed stop is not followed by a delete and keeps its cause; the
-/// records go after the delete.
+/// `sandbox.close(sandbox, { force })`: stops Sandbox `sandbox` now, under
+/// the project's guard and its own. Refused `NoSuchSandbox` when it is not
+/// running and, unless `force`, `MountsActive` while a Workspace is mounted
+/// in it (a background process runs in one). Forced (O31), it stops the
+/// Sandbox through its backend anyway and answers each Workspace it could
+/// not drain as `Unknown` (`unknown`: their paths): their uncommitted
+/// changes and processes end with the Sandbox. Stop, then delete, each
+/// attempted once: a failed stop is not followed by a delete and keeps its
+/// cause; the records go after the delete.
 pub(crate) fn close(args: &SdkValue) -> Outcome {
     let id = text(args, "sandbox")?.to_owned();
     let project = crate::host::discovery::project_dir(args)?;
@@ -517,7 +520,8 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
         .filter(|path| !recoverable.contains(path))
         .cloned()
         .collect::<Vec<_>>();
-    if !mounted.is_empty() {
+    let force = args.get_bool("force");
+    if !mounted.is_empty() && !force {
         return Err(SdkRefusal {
             code: "MountsActive".to_owned(),
             message: format!(
@@ -542,6 +546,10 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Closed")),
         ("sandbox", SdkValue::text(&id)),
+        (
+            "unknown",
+            SdkValue::List(mounted.into_iter().map(SdkValue::Text).collect()),
+        ),
     ]))
 }
 

@@ -168,7 +168,11 @@ pub(crate) fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) ->
                 .filter(|(_, _, r)| only.is_none() || r.get_text("project") == only)
                 .map(|(_, _, record)| record)
                 .collect();
-            Ok(SdkValue::map([("items", SdkValue::List(items))]))
+            let (items, next) = page(items, args);
+            Ok(SdkValue::map([
+                ("items", SdkValue::List(items)),
+                ("next_page_pos", next),
+            ]))
         }
         "get" => {
             let name = args.get_text("name").unwrap_or("");
@@ -180,14 +184,22 @@ pub(crate) fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) ->
                 "sandbox.list_workspaces",
                 vec![],
             )?;
-            Ok(home::with_field(
-                record,
-                "workspaces",
-                workspaces.get("workspaces").cloned().unwrap_or_default(),
-            ))
+            let all = match workspaces.get("workspaces") {
+                Some(SdkValue::List(items)) => items.clone(),
+                _ => Vec::new(),
+            };
+            let (items, next) = page(all, args);
+            let record = home::with_field(record, "workspaces", SdkValue::List(items));
+            Ok(home::with_field(record, "next_page_pos", next))
         }
         "close" => {
             let name = args.get_text("name").unwrap_or("");
+            let (machine, record) = sandbox_of(&home, name)?;
+            if record.get_text("id").is_none() {
+                if let Some(closed) = close_unstarted(&home, &machine, name)? {
+                    return Ok(closed);
+                }
+            }
             let (machine, record) = sandbox_of(&home, name)?;
             let force = matches!(args.get("force"), Some(SdkValue::Bool(true)));
             let closed = on_machine(
@@ -228,6 +240,15 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let name = args.get_text("name").unwrap_or("");
     let machine = args.get_text("machine").unwrap_or("");
     crate::names::name("sandbox", name).map_err(|why| refused("InvalidInput", why))?;
+    if matches!(name, "native" | "docker") {
+        return Err(refused(
+            "InvalidInput",
+            format!("a Sandbox is not named {name}: that names a built-in machine (H §7.6)"),
+        ));
+    }
+    // the Store's place, a move and the name are checked under the lock
+    // that claims the name, so a store.move cannot pass between them
+    let _lock = home::lock::take(&home)?;
     let target = route::target(&home, project)?;
     route::moving(&target.record, &target.store)?;
     if read_record(&paths::machine_record(&home, machine))?.is_none() {
@@ -248,23 +269,23 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             format!("Store {} is on machine {store_machine}; a Sandbox of {project} runs there (`store move` moves the Store)", target.store),
         ));
     }
-    // claim the name across the home
-    {
-        let _lock = home::lock::take(&home)?;
-        if all(&home)?.iter().any(|(_, n, _)| n == name) {
-            return Err(refused("Exists", format!("a Sandbox named {name} exists")));
-        }
-        write_record(
-            &paths::sandbox_dir(&home, machine, name).join("record.json"),
-            &SdkValue::map([
-                ("name", SdkValue::text(name)),
-                ("project", SdkValue::text(project)),
-                ("machine", SdkValue::text(machine)),
-                ("state", SdkValue::text("creating")),
-                ("created", SdkValue::Int(home::now_ms())),
-            ]),
-        )?;
+    // claim the name across the home; the creator's pid lets a close tell
+    // a create in flight from one whose process is gone
+    if all(&home)?.iter().any(|(_, n, _)| n == name) {
+        return Err(refused("Exists", format!("a Sandbox named {name} exists")));
     }
+    write_record(
+        &paths::sandbox_dir(&home, machine, name).join("record.json"),
+        &SdkValue::map([
+            ("name", SdkValue::text(name)),
+            ("project", SdkValue::text(project)),
+            ("machine", SdkValue::text(machine)),
+            ("state", SdkValue::text("creating")),
+            ("created", SdkValue::Int(home::now_ms())),
+            ("pid", SdkValue::Int(i64::from(std::process::id()))),
+        ]),
+    )?;
+    drop(_lock);
     let mut more = vec![];
     if let Some(image) = args.get_text("image") {
         more.push(("image", SdkValue::text(image)));
@@ -371,7 +392,8 @@ fn on_machine(
             if op == "backend.daemon.workspace.status" {
                 return crate::host::dispatch::backend(op.to_owned(), args);
             }
-            crate::host::dispatch::call(op, args)
+            let out = crate::host::dispatch::call(op, args)?;
+            drain(out, &mut |event| context.event(event))
         }
         Some(endpoint) => {
             // the guest runs the same call on its own native machine, with
@@ -413,7 +435,7 @@ fn on_machine(
 /// Runs a Sandbox host operation in a worker for its caller (`sandbox.host`):
 /// the Store's and project's records are written under the root first,
 /// with the Store on this machine's own `native`.
-pub(crate) fn in_worker(root: &Path, args: &SdkValue) -> Outcome {
+pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(SdkValue)) -> Outcome {
     let op = args
         .get_text("op")
         .ok_or_else(|| refused("InvalidInput", "operation name"))?;
@@ -443,12 +465,16 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue) -> Outcome {
         SdkValue::text("native"),
     );
     write_record(&paths::store_record(root, store), &record)?;
+    // the caller's record replaces one left by a project of the same name
+    // that was removed and made again (its `created` differs)
     let project_path = paths::project_record(root, store, project);
-    if read_record(&project_path)?.is_none() {
-        write_record(
-            &project_path,
-            &args.get("project_record").cloned().unwrap_or_default(),
-        )?;
+    let sent = args.get("project_record").cloned().unwrap_or_default();
+    let stale = match read_record(&project_path)? {
+        None => true,
+        Some(local) => sent.get("created").is_some() && local.get("created") != sent.get("created"),
+    };
+    if stale {
+        write_record(&project_path, &sent)?;
     }
     let more: Vec<(&str, SdkValue)> = match args.get("more") {
         Some(SdkValue::Map(fields)) => fields
@@ -468,7 +494,109 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue) -> Outcome {
     if op == "backend.daemon.workspace.status" {
         return crate::host::dispatch::backend(op.to_owned(), host);
     }
-    crate::host::dispatch::call(op, host)
+    drain(crate::host::dispatch::call(op, host)?, events)
+}
+
+/// An exec result whose output the host spooled (a stream over 1 MiB):
+/// each spooled stream goes to the caller as output events (`{ stream,
+/// bytes }`), one page at a time and in order, then the spool is closed.
+/// The reply keeps the stream null with its byte count and says
+/// `streamed`; the CLI's `--stream` and the front ends' sinks receive it.
+/// Any other result passes through.
+fn drain(out: SdkValue, emit: &mut dyn FnMut(SdkValue)) -> Outcome {
+    let Some(id) = out.get_text("output").map(str::to_owned) else {
+        return Ok(out);
+    };
+    let mut buffer = vec![0u8; crate::host::output::INLINE];
+    let sent = (|| {
+        for (stream, size) in [("stdout", "stdoutBytes"), ("stderr", "stderrBytes")] {
+            if !matches!(out.get(stream), Some(SdkValue::Null)) || out.get_int(size) == Some(0) {
+                continue;
+            }
+            let mut offset = 0i64;
+            loop {
+                let args = SdkValue::map([
+                    ("output", SdkValue::text(&id)),
+                    ("stream", SdkValue::text(stream)),
+                    ("offset", SdkValue::Int(offset)),
+                ]);
+                let read = crate::host::output::page(&args, &mut buffer)?;
+                let length = read.get_int("length").unwrap_or(0);
+                if length > 0 {
+                    emit(SdkValue::map([
+                        ("stream", SdkValue::text(stream)),
+                        ("bytes", SdkValue::Bytes(buffer[..length as usize].to_vec())),
+                    ]));
+                }
+                offset += length;
+                if read.get_bool("end") || length == 0 {
+                    break;
+                }
+            }
+        }
+        Ok::<(), SdkRefusal>(())
+    })();
+    crate::host::output::release(&SdkValue::map([("output", SdkValue::text(&id))]))?;
+    sent?;
+    let out = match out {
+        SdkValue::Map(fields) => {
+            SdkValue::Map(fields.into_iter().filter(|(n, _)| n != "output").collect())
+        }
+        other => other,
+    };
+    Ok(home::with_field(out, "streamed", SdkValue::Bool(true)))
+}
+
+/// One page of `items` (`page_size`, default 50, 1 to 1000; `page_pos`)
+/// and the next page's position, or null after the last.
+fn page(items: Vec<SdkValue>, args: &SdkValue) -> (Vec<SdkValue>, SdkValue) {
+    let size = args.get_int("page_size").unwrap_or(50).clamp(1, 1000) as usize;
+    let pos = args.get_int("page_pos").unwrap_or(0).max(0) as usize;
+    let total = items.len();
+    let page: Vec<SdkValue> = items.into_iter().skip(pos).take(size).collect();
+    let next = match pos + page.len() < total {
+        true => SdkValue::Int((pos + page.len()) as i64),
+        false => SdkValue::Null,
+    };
+    (page, next)
+}
+
+/// Closes Sandbox `name` whose record has no id: its create is in flight,
+/// its outcome was unknown, or its process ended before recording one.
+/// Refused `InUse` while the creating process lives; otherwise the record
+/// goes and the name is free. `None` when the record gained an id
+/// meanwhile, for the ordinary close.
+fn close_unstarted(home: &Path, machine: &str, name: &str) -> Result<Option<SdkValue>> {
+    let _lock = home::lock::take(home)?;
+    let dir = paths::sandbox_dir(home, machine, name);
+    let Some(record) = read_record(&dir.join("record.json"))? else {
+        return Err(refused("NoSuchSandbox", format!("no Sandbox named {name}")));
+    };
+    if record.get_text("id").is_some() {
+        return Ok(None);
+    }
+    let state = record.get_text("state").unwrap_or("creating").to_owned();
+    let pid = record.get_int("pid").unwrap_or(0);
+    if state == "creating" && pid > 0 && crate::store::lease::alive(pid as u32) {
+        return Err(refused(
+            "InUse",
+            format!("Sandbox {name} is being created by process {pid}"),
+        ));
+    }
+    std::fs::remove_dir_all(&dir).map_err(failed)?;
+    let mut fields = vec![
+        ("closed", SdkValue::text(name)),
+        ("was", SdkValue::text(&state)),
+    ];
+    if state == "unknown" {
+        fields.push((
+            "left",
+            SdkValue::text("its create's outcome was unknown: a Sandbox it may have started on its machine is not recorded here"),
+        ));
+    }
+    Ok(Some(SdkValue::Map(
+        fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
+    )))
 }
 
 /// `(sandbox, path)` of a Workspace written `<sandbox>:<path>`.
@@ -515,6 +643,10 @@ pub(crate) fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) 
         }
         "commit" => {
             more.push(("message", args.get("message").cloned().unwrap_or_default()));
+            // publish over a moved head instead of merging
+            if let Some(force) = args.get("force") {
+                more.push(("force", force.clone()));
+            }
             "workspace.commit"
         }
         "unmount" => {

@@ -106,7 +106,7 @@ fn answer(mut stream: TcpStream, secret: &str, root: &Path) -> bool {
     write_frame(&mut stream, &frame).is_ok()
 }
 
-fn run(op: &str, args: SdkValue, root: &Path, _events: &mut dyn FnMut(SdkValue)) -> Outcome {
+fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) -> Outcome {
     match op {
         "worker.ping" => Ok(SdkValue::map([
             ("kind", SdkValue::text("worker")),
@@ -141,7 +141,7 @@ fn run(op: &str, args: SdkValue, root: &Path, _events: &mut dyn FnMut(SdkValue))
             crate::store::files::run(root, &name, &args.get("args").cloned().unwrap_or_default())
         }
         // a Sandbox or Workspace operation on this machine's own native
-        "sandbox.host" => crate::family::sandboxes::in_worker(root, &args),
+        "sandbox.host" => crate::family::sandboxes::in_worker(root, &args, events),
         "host.call" | "host.backend" => {
             let name = args
                 .get_text("op")
