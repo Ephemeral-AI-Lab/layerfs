@@ -300,6 +300,13 @@ fn bytes<const N: usize>(value: &SdkValue, key: &str) -> Result<[u8; N]> {
     }
 }
 pub(crate) fn save_project(path: &Path, project: &Project) -> Result<()> {
+    // the record is read, changed and written whole under the lock of the
+    // home it is in: `<home>/store/<store>/project/<name>/`
+    let home = path
+        .ancestors()
+        .nth(4)
+        .filter(|_| path.parent().and_then(Path::file_name) == Some("project".as_ref()));
+    let _lock = home.map(crate::home::lock::take).transpose()?;
     let old = crate::home::read_record(&path.join("record.json"))?.unwrap_or_default();
     let mut record = SdkValue::map([
         (

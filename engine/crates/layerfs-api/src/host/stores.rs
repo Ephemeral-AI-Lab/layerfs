@@ -168,8 +168,9 @@ pub(crate) fn save_record(home: &Path, store: &str, identity: &Identity) -> Resu
         ]),
     }
     // the identity fields are this module's; the record's other fields
-    // (machine, backups) are kept
+    // (machine, backups) are kept, read and written under the home lock
     let path = record_path(home, store)?;
+    let _lock = crate::home::lock::take(home)?;
     let mut record = crate::home::read_record(&path)?.unwrap_or(SdkValue::Map(Vec::new()));
     for (name, value) in fields {
         record = crate::home::with_field(record, name, value);

@@ -175,10 +175,13 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let added = observed(context, &watch, || crate::host::stores::add_project(&call))?;
     // the project's record keeps when it was made
     let path = paths::project_record(&home, store, name);
-    if let Some(record) = read_record(&path)? {
-        let record =
-            crate::home::with_field(record, "created", SdkValue::Int(crate::home::now_ms()));
-        crate::home::write_record(&path, &record)?;
+    {
+        let _lock = crate::home::lock::take(&home)?;
+        if let Some(record) = read_record(&path)? {
+            let record =
+                crate::home::with_field(record, "created", SdkValue::Int(crate::home::now_ms()));
+            crate::home::write_record(&path, &record)?;
+        }
     }
     let mut out = summary(&home, store, name, &record);
     for field in ["layer", "root"] {

@@ -9,6 +9,9 @@ use std::fs;
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT: AtomicU64 = AtomicU64::new(0);
 
 /// `path` as a private folder, with its parents.
 pub fn private_dir(path: &Path) -> Result<(), SdkRefusal> {
@@ -42,7 +45,9 @@ pub fn write_record(path: &Path, value: &SdkValue) -> Result<(), SdkRefusal> {
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("record");
-    let temporary = parent.join(format!(".{name}.{}.tmp", std::process::id()));
+    // one name per write: threads of one process never share a temporary
+    let unique = NEXT.fetch_add(1, Ordering::Relaxed);
+    let temporary = parent.join(format!(".{name}.{}.{unique}.tmp", std::process::id()));
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create(true)

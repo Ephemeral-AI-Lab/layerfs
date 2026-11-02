@@ -20,11 +20,21 @@ pub const DEFAULT_MEMORY: i64 = 4 << 30;
 pub const DEFAULT_DISK: i64 = 20 << 30;
 
 /// `machine/native/` and `machine/docker/` exist from the first call and
-/// are never removed.
+/// are never removed. Read first; the home lock is taken only to write one.
 pub fn ensure_built_ins(home: &Path) -> Result<()> {
+    let missing = |name: &str| -> Result<bool> {
+        Ok(read_record(&paths::machine_record(home, name))?.is_none())
+    };
+    if !crate::names::BUILT_IN
+        .iter()
+        .any(|name| missing(name).unwrap_or(true))
+    {
+        return Ok(());
+    }
+    let _lock = home::lock::take(home)?;
     for name in crate::names::BUILT_IN {
         let path = paths::machine_record(home, name);
-        if read_record(&path)?.is_none() {
+        if missing(name)? {
             write_record(
                 &path,
                 &SdkValue::map([
