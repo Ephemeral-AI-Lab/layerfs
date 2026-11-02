@@ -152,11 +152,14 @@ impl Kind {
     /// What the worker does to its guest once idle
     /// (`LAYERFS_WORKER_POWEROFF`): nothing on an ssh host (not ours to
     /// stop), a reset in a Firecracker microVM (its VMM exits on a reset and
-    /// ignores an ACPI power-off), a power-off in every other VM.
+    /// ignores an ACPI power-off), SIGTERM to an apple-container's main
+    /// process (it has no init or `CAP_SYS_BOOT`), a power-off in every
+    /// other VM.
     pub fn guest_stop(self) -> &'static str {
         match self {
             Self::Ssh => "0",
             Self::Firecracker => "reboot",
+            Self::AppleContainer => "init",
             _ => "1",
         }
     }

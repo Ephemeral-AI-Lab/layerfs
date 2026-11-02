@@ -5,9 +5,11 @@
 //! root, the machine's data disk `/layerfs/data` (internal
 //! `LAYERFS_WORKER_ROOT` names another, for tests), until it has been idle
 //! for [`IDLE`] (O2), then exits; with `LAYERFS_WORKER_POWEROFF=1` (a VM
-//! guest) it then powers the guest off, and with `reboot` (a Firecracker
-//! microVM, whose VMM exits on a reset and ignores an ACPI power-off) it
-//! syncs and resets the guest.
+//! guest) it then powers the guest off (with `poweroff`, or `reboot(2)` in
+//! an image without it), with `reboot` (a Firecracker microVM, whose VMM
+//! exits on a reset and ignores an ACPI power-off) it syncs and resets the
+//! guest, and with `init` (an apple-container machine, whose main process is
+//! a shell that ends on SIGTERM) it signals that process.
 use layerfs_api::worker::{serve_until_idle, IDLE};
 use std::net::TcpListener;
 use std::path::PathBuf;
@@ -52,15 +54,24 @@ pub fn main() -> ExitCode {
         eprintln!("layerfs worker: {why}");
         return ExitCode::from(crate::run::REFUSED);
     }
-    let argv: &[&str] = match std::env::var("LAYERFS_WORKER_POWEROFF").as_deref() {
-        Ok("1") => &["poweroff"],
-        Ok("reboot") => &["sh", "-c", "sync; reboot -f"],
+    let how = std::env::var("LAYERFS_WORKER_POWEROFF").unwrap_or_default();
+    let argv: &[&str] = match how.as_str() {
+        "1" => &["poweroff"],
+        "reboot" => &["sh", "-c", "sync; reboot -f"],
+        // a container whose main process is a shell that ends on SIGTERM
+        "init" => &["sh", "-c", "sync; kill -TERM 1"],
         _ => &[],
     };
     if let Some((program, args)) = argv.split_first() {
         match std::process::Command::new(program).args(args).status() {
             Ok(status) if status.success() => {}
             Ok(status) => eprintln!("layerfs worker: {argv:?} exited {status}"),
+            // a guest image without `poweroff`: the system call itself
+            #[cfg(target_os = "linux")]
+            Err(why) if how == "1" && why.kind() == std::io::ErrorKind::NotFound => {
+                let why = layerfs_api::worker::power_off();
+                eprintln!("layerfs worker: no poweroff program, and reboot(2) failed: {why}");
+            }
             Err(why) => eprintln!("layerfs worker: {argv:?} failed: {why}"),
         }
     }

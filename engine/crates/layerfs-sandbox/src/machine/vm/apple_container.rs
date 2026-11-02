@@ -1,5 +1,6 @@
 //! `apple-container` (Apple's `container` CLI; Apple silicon, macOS only):
-//! the VM is one container whose main process sleeps, its data disk a named
+//! the VM is one container whose main process is a shell that sleeps and
+//! ends on SIGTERM (the idle worker's stop; [`MAIN`]), its data disk a named
 //! volume `<vm>-data` sized at create and mounted at `/layerfs/data`, and its
 //! worker port published as `127.0.0.1:<port>:7070`. No host folder is
 //! mounted. Facts verified against `container` 1.6.1 (#527): `inspect`
@@ -19,6 +20,10 @@ use crate::machine::{facts, tool, worker};
 
 const CLI: &str = "container";
 const DEFAULT_IMAGE: &str = "debian:trixie-slim";
+/// The container's main process. As PID 1 it ignores signals it has no
+/// handler for, and the container has no `CAP_SYS_BOOT`, so the trap is how
+/// an idle worker ends the container (`kill -TERM 1`).
+const MAIN: &str = "trap 'exit 0' TERM; sleep infinity & wait";
 /// FUSE, cgroups and loopback in the guest need these (#512).
 const CAPABILITIES: [&str; 6] = [
     "--cap-add",
@@ -130,7 +135,7 @@ pub(crate) fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErr
         "--label",
         "layerfs.role=machine",
     ]);
-    args.extend([image, "sleep", "infinity"]);
+    args.extend([image, "sh", "-c", MAIN]);
     let made = call(spec, CLI, &args, CREATE)?;
     if !made.ok() {
         if observe(spec)? != State::Missing {

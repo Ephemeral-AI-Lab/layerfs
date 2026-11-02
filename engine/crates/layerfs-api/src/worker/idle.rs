@@ -116,3 +116,16 @@ pub fn serve_until_idle(
         }
     }
 }
+
+/// Powers this Linux guest off with `reboot(2)`, after a sync: the idle
+/// stop of a guest without a `poweroff` program, such as a microsandbox
+/// microVM, whose libkrun VMM exits on it. Needs `CAP_SYS_BOOT` in the
+/// initial PID namespace; answers why it could not.
+#[cfg(target_os = "linux")]
+pub fn power_off() -> std::io::Error {
+    nix::unistd::sync();
+    match nix::sys::reboot::reboot(nix::sys::reboot::RebootMode::RB_POWER_OFF) {
+        Ok(never) => match never {},
+        Err(errno) => std::io::Error::from(errno),
+    }
+}

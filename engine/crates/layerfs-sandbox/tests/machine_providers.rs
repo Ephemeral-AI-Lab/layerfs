@@ -41,7 +41,8 @@ esac"#,
         line(&log, "container run"),
         "container run --detach --name lfs-dev --cpus 2 --memory 2048M --cap-add SYS_ADMIN \
          --cap-add SYS_RESOURCE --cap-add NET_ADMIN --mount type=volume,source=lfs-dev-data,target=/layerfs/data \
-         --publish 127.0.0.1:45678:7070 --label layerfs.role=machine debian:trixie-slim sleep infinity"
+         --publish 127.0.0.1:45678:7070 --label layerfs.role=machine debian:trixie-slim \
+         sh -c trap 'exit 0' TERM; sleep infinity & wait"
     );
     assert!(!log.contains("/layerfs/home"));
     // nothing exists under the name, so the volume this create made goes
