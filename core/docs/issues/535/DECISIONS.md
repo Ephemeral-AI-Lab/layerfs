@@ -28,14 +28,24 @@ none is to be re-confirmed.
 
 | Gate | Answer (the spec §3 recommended answer, approved) | Taken |
 | --- | --- | --- |
-| G1 | Yes: supersede #533 O3, G13 and the "Step-12 deferral closed" PostgreSQL row. A PostgreSQL Sandbox runs on every machine the Store is attached to, where §7.3 marks the platform supported. | owner, 2026-11-03 |
+| G1 | Yes: supersede #533 O3, G13 and the "Step-12 deferral closed" PostgreSQL row. A PostgreSQL Sandbox runs on every machine where §7.3 marks the platform supported (no attach; G3). | owner, 2026-11-03 |
 | G2 | Yes, narrowly: supersede #533 "Step 5.2". One crate-private, sealed trait per extension point (`Adapter`, `BackendAdapter`), no default methods, reached through one exhaustive `match`. No public trait, registry, factory or plugin. | owner, 2026-11-03 |
-| G3 | Explicit attachment: a PostgreSQL Store record has `machines: { <machine>: { url? } }`; `store.attach <store> <machine> [--url]` and `store.detach <store> <machine>`. | owner, 2026-11-03 |
+| G3 | No attach records or calls; every PostgreSQL Store is usable from every machine where §7.3 / `support.rs` allows it; `Adapter::reach` rewrites the URL per platform and the reach check (schema binding) runs inside `sandbox.create`'s own request; a per-machine URL is deferred, and a machine that cannot reach the server is refused naming the address it tried. (Replaces the earlier recommendation of `store.attach`/`store.detach` and a `machines` field.) | owner, 2026-11-03, revised |
 | G4 | Yes: Workspace calls reach a VM Sandbox's daemon directly (control keys in the home Sandbox record, port forwarded to host loopback). | owner, 2026-11-03 |
 | G5 | Defer: one request per worker connection stays; phase 7 is not run. | owner, 2026-11-03 |
 | G6 | Split and rename what is internal: shared plumbing to `src/local/`, the backend to `backend/host_process/`, `NativeMacosProvider` → `HostProcessProvider`, `Runtime::MacosNative` → `Runtime::HostProcess`, `Backend::Native` → `Backend::HostProcess`. Stored and displayed values stay `"native"`. The pre-2.0 Linux path goes to `host_process/legacy_linux.rs`. | owner, 2026-11-03 |
 | G7 | No: PostgreSQL Sandboxes on `lima`, `apple-container`, `microsandbox`, `firecracker` stay refused, naming the missing fact, until a live receipt records it. | owner, 2026-11-03 |
 | G8 | No: sqlite Stores on `docker` keep the Worker executor on every host; the `Kind::route` comment is corrected. | owner, 2026-11-03 |
+
+## SDK and CLI decisions (spec §9a)
+
+| # | Decision | Taken |
+| --- | --- | --- |
+| P1 | `machine.start <name>` starts a stopped machine and its worker and waits until ready; a running machine answers at once. `machine.stop <name>` stops the worker and, where there is one, the VM; disks stay; refused `InUse` while Sandboxes run on it, with `detail.related` listing them; built-in `native` answers at once. Phase 4. | owner, 2026-11-03 |
+| P2 | `machine.platforms` returns `{ host, platforms: [ { platform, how, backend, kernel, sqlite, postgresql: { store_calls, sandbox, reason }, ready, missing, version, options, description } ] }` (spec §9a), the same rows as `connect/SUPPORT.json`; it replaces `machine.list`'s `can_create`, removed in the same commit. Phase 3. | owner, 2026-11-03 |
+| P3 | `machine.list` and `machine.get` give each machine `supports: { sqlite, postgresql_sandbox, reason }`, the platform row applied to it. Phase 3. | owner, 2026-11-03 |
+| P4 | Every `*.list`, `*.get` and `*.status` call, and `machine.platforms`, never starts a machine: they answer from records and live probes; a stopped machine reads `stopped`. Calls that need the worker still start it on demand. Checked in phase 4. | owner, 2026-11-03 |
+| P5 | A docker Sandbox with no image named loads the bundle's `sandbox-image.tar` into Docker once and uses its digest; `--image` still overrides. Phase 4. | owner, 2026-11-03 |
 
 ## Supersessions recorded in #533
 

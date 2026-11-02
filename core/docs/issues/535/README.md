@@ -34,7 +34,7 @@ new platform is added, can be read from the folder tree.
   - `layerfs-store-backup`: *how* a Store is backed up to a bucket (sqlite
     today; PostgreSQL is refused with a reason).
 - **Every machine uses both Store kinds.** A machine holds any number of
-  sqlite Stores and any number of PostgreSQL attachments. A sqlite Store is
+  sqlite Stores, and every PostgreSQL Store is usable from it. A sqlite Store is
   still on exactly one machine (the one-kernel rule); PostgreSQL Store calls
   still run in the caller's process (#533 G2).
 - **Choices are typed and decided once.** Store kind, platform, Sandbox
@@ -89,9 +89,9 @@ needs are recorded.
 
 | Gate | Question | Recommended answer | Needed by |
 | --- | --- | --- | --- |
-| G1 | Supersede #533 O3, G13 and the "Step-12 deferral closed" row ("PostgreSQL Sandboxes: native and docker; VMs and ssh later"), and the AGENTS.md wording that follows from them? | **Yes.** A PostgreSQL Sandbox runs on every machine the Store is attached to, where §7.3 marks the platform supported. The daemon already opens PostgreSQL and Docker already runs without a Store volume; what remains is policy plus three mechanisms (namespaces binds, `reach`, credential hand-off; §7.4). | phase 5 |
+| G1 | Supersede #533 O3, G13 and the "Step-12 deferral closed" row ("PostgreSQL Sandboxes: native and docker; VMs and ssh later"), and the AGENTS.md wording that follows from them? | **Yes.** A PostgreSQL Sandbox runs on every machine where §7.3 marks the platform supported (no attach; G3). The daemon already opens PostgreSQL and Docker already runs without a Store volume; what remains is policy plus three mechanisms (namespaces binds, `reach`, credential hand-off; §7.4). | phase 5 |
 | G2 | Supersede #533 DECISIONS "Step 5.2" ("No trait: … one `match` per call")? | **Yes, narrowly:** one **crate-private, sealed** trait per extension point (`Adapter`, `BackendAdapter`), with no default methods, reached through **one exhaustive `match`**. No public trait, registry, factory or plugin. The step's reason ("every caller already knows the kind") still holds. | phase 3 |
-| G3 | How does a machine hold PostgreSQL connections? | **Explicit attachment:** a PostgreSQL Store record has `machines: { <machine>: { url? } }`; new calls `store.attach <store> <machine> [--url]` and `store.detach <store> <machine>`. The per-machine URL is needed because a VM or ssh host often sees the server at another address; attach checks reach once from inside the guest, so `sandbox.create` never meets a bad path; and it gives `machine.get` an inventory and `machine remove` a correct `InUse`. | phase 5 |
+| G3 | How does a machine hold PostgreSQL connections? | **Owner, 2026-11-03: every PostgreSQL Store is usable from every machine automatically**, with no attach records or calls (this replaces the earlier recommendation of `store.attach`/`store.detach`). `Adapter::reach` rewrites the URL per platform and `sandbox.create` checks reach inside its own request. A per-machine URL (a host that sees the server at another address) is deferred; such a machine is refused with the address it tried. | phase 5 |
 | G4 | May Workspace calls reach a VM Sandbox's daemon directly (its control keys in the home Sandbox record, its port forwarded to host loopback)? | **Yes.** Native and docker Sandboxes already keep these keys in the home (0600, same user); the loopback + secret rule is unchanged. | phase 6 |
 | G5 | May a worker connection carry several requests (today one per connection, `layerfs-cli/src/worker.rs` header)? | **Defer.** It changes the worker contract; revisit after R1 and R2 are measured. | phase 7 |
 | G6 | The Sandbox backend folder `native` is confused with the platform `native` (a Linux `native` platform uses `namespaces`), and it holds two things: the shared "daemon as a local process" plumbing that `namespaces` also uses, and the macOS host-process backend. What to do? | **Split, and rename what is internal.** Shared plumbing moves to `src/local/`; the backend becomes `backend/host_process/` (matching `IsolationModel::HostProcess`); `NativeMacosProvider` → `HostProcessProvider`, `Runtime::MacosNative` → `Runtime::HostProcess`, `Backend::Native` → `Backend::HostProcess`. **Stored and displayed values stay `"native"`** (Sandbox records `runtime`, `sandbox.get`, `SUPPORT.json`, `machine.platforms`, which add a `description`). Changing the public value is a later, separate decision. The pre-2.0 Linux reopen/stop/delete path goes to `host_process/legacy_linux.rs`, deleted in its own commit once the 2.0 conversion is confirmed to reclaim those Sandboxes. | phase 1 (1.8, 1.9) |
@@ -251,8 +251,8 @@ api/crates/layerfs-api/src/
 ├── machine/index.rs                     A  derived index: sandbox → machine, machine → stores
 ├── machine/platforms.rs                 A  machine.platforms
 ├── store/route.rs  family/{sandboxes,stores,backups,projects}.rs  M  plan() → executor.run(); StoreRef
-├── family/postgres.rs                   M  + store.attach, store.detach, postgres.check (worker op)
-└── calls/table.rs                       M  + machine.platforms, store.attach, store.detach; options from Profile
+├── family/postgres.rs                   M  reach check step used by sandbox.create (worker side)
+└── calls/table.rs                       M  + machine.platforms; options from Profile
 
 tools/check_product_boundary.py (+ test), production_loc.py, ci_tests.py, worktree_build.py   M
 .github/workflows/{ci,nightly}.yml       M
@@ -290,9 +290,8 @@ pub enum DaemonStore {
 // layerfs-api place/store_ref.rs: parsed once from store/<s>/record.json
 pub enum StoreRef {
     Sqlite   { name: String, machine: String },
-    Postgres { name: String, machines: BTreeMap<String, Attachment>, server: PgServer },
+    Postgres { name: String, server: PgServer },   // usable from every machine (G3)
 }
-pub struct Attachment { pub url: Option<String> }     // the URL as that machine sees it, no password
 impl StoreRef {
     fn from_record(name: &str, record: &SdkValue) -> Result<Self>;
     fn calls_run(&self) -> CallSite;         // Sqlite → its machine; Postgres → caller (G2 of #533)
@@ -430,8 +429,8 @@ where it differs (G6).
 lima → `host.lima.internal`; apple-container, microsandbox → their gateway
 alias; firecracker → `172.30.<n>.1` plus outbound NAT on the Lima host; ssh
 unchanged, loopback refused. A rewrite is refused when the URL asks for
-`sslmode=verify-full` (the certificate names the original host); attach
-with `--url` naming a host the machine can verify.
+`sslmode=verify-full` (the certificate names the original host); such a Store
+needs a URL whose host every machine can verify.
 
 ### 7.4 Enabling PostgreSQL on every machine
 
@@ -439,40 +438,28 @@ PostgreSQL Store calls already run in the caller's process on every OS and
 stay there. Enabling PostgreSQL is about **Sandboxes**: the daemon on a
 machine must reach the server and receive credentials safely.
 
-Store record (G3):
-
-```jsonc
-{ "kind": "postgresql", "url": "postgresql://app@db.internal:5432/main",  // no password
-  "password": "env:PGPASS", "schema": "layerfs", "synchronous_commit": "off",
-  "machines": {
-    "native": {},                                   // the caller's URL as is
-    "dev-lima": {},                                 // reach() rewrites loopback → host.lima.internal
-    "box": { "url": "postgresql://app@10.0.0.5:5432/main" }   // ssh host sees another address
-  } }
-```
-
-Calls:
+Every PostgreSQL Store is usable from every machine (G3): the Store record
+is unchanged (`url` without password, `password` reference, `schema`,
+`synchronous_commit`) and has no machine field. There are no attach records
+or calls.
 
 ```
-store.attach <store> <machine> [--url <url as the machine sees it>]
-  1. support(platform, host, Postgres)?        refusal names the missing fact (G7)
-  2. url' = override ?? record.url, then adapter.reach(url')
-  3. password resolved IN THE CALLER (env:/file:); full URL sent in ONE worker request
-  4. the worker runs `postgres.check` inside the guest: connect, read the schema
-     binding, compare with the record's binding (proves reach and the same Store)
-  5. record machines[<machine>] = { url override }   never the password
-store.detach <store> <machine>     InUse while a Sandbox of that Store runs there
 sandbox.create <project> <name> <machine>
-  usable_on(machine) = machine ∈ machines
-  DaemonStore::Postgres{ url: reach(override ?? url) + resolved password, schema, sync }
-  binds = []; executor.run (worker on VMs, ssh, docker; local on native)
+  1. support(platform, host, Postgres)?        refusal names the missing fact (G7)
+  2. url' = adapter.reach(record.url)           per-platform host alias; ssh refuses loopback
+  3. password resolved IN THE CALLER (env:/file:); full URL sent in ONE worker request
+  4. reach check, inside the same request, on the machine: connect, read the schema
+     binding, compare with the record's binding (proves reach and the same Store);
+     a failure refuses the create naming the address tried
+  5. DaemonStore::Postgres{ url: url' + password, schema, sync }; binds = []
+     executor.run (worker on VMs, ssh, docker; local on native)
 ```
 
 Per layer:
 
 | Layer | Change |
 | --- | --- |
-| api | `StoreRef::Postgres { machines }`. Remove the refusals (`family/sandboxes.rs:266-280`, `host/local.rs:53-59`) and the "never send to a worker" shortcut (`family/sandboxes.rs:367-372`). `stores_on` counts PostgreSQL. The worker's `sandbox.host` takes the already resolved `postgresql` value from the request, never resolves a password and never writes the URL into the guest's Store record. PostgreSQL Stores take `open/<pid>` leases like sqlite, so `store.disconnect` sees `InUse`. |
+| api | `StoreRef::Postgres` (no machine). Remove the refusals (`family/sandboxes.rs:266-280`, `host/local.rs:53-59`) and the "never send to a worker" shortcut (`family/sandboxes.rs:367-372`). `stores_on` counts PostgreSQL. The worker's `sandbox.host` takes the already resolved `postgresql` value from the request, never resolves a password and never writes the URL into the guest's Store record. PostgreSQL Stores take `open/<pid>` leases like sqlite, so `store.disconnect` sees `InUse`. |
 | bridge | `DaemonStore::Postgres` (phase 2); the URL stays out of `Debug`. |
 | sandbox | namespaces: `binds: Vec<Bind>`, empty for PostgreSQL (`helper_spec.rs`, `mounts.rs`; `check_store` only for a non-empty bind). docker: `ExtraHosts: host.docker.internal:host-gateway` on Linux. host_process: works today. |
 | machine | `Adapter::reach` per platform. firecracker: outbound NAT (masquerade for `172.30.0.0/16`) where the Lima host is created. ssh: refuse loopback URLs. |
@@ -487,13 +474,13 @@ dials the server, and the same as today's docker and native Sandboxes.
 
 Rollout: **5a** native Linux, docker on every host, ssh (native macOS
 already works); **5b** lima, apple-container, microsandbox, each after a
-receipt records its host alias and a passing `attach`; **5c** firecracker,
+receipt records its host alias and a passing reach check; **5c** firecracker,
 after NAT is added and a receipt shows a remote server and a host-loopback
 server both reachable. Each step flips rows in `support.rs`; `SUPPORT.json`
 and `machine.platforms` follow.
 
-Tests: `reach()` rewrites and refusals per platform; `attach` against a
-wrong schema is refused; one end-to-end run per enabled platform against a
+Tests: `reach()` rewrites and refusals per platform; a `sandbox.create`
+whose reach check meets a wrong schema is refused; one end-to-end run per enabled platform against a
 server reachable from that machine (create, mount, exec, Commit, then read
 the Commit back from the caller's process).
 
@@ -518,6 +505,60 @@ the Commit back from the caller's process).
 | a Store kind | persistence `backend/<k>/` + `StoreSelection` variant; bridge `DaemonStore` variant; api `StoreRef` variant + `caps()` |
 | a kernel route | `engine/crates/layerfs-<route>/` over `layerfs-mount-ports`; one `KernelRoute` variant; daemon `match` |
 | a bucket provider | `layerfs-store-backup/src/bucket/<p>/` |
+
+## 9a. SDK and CLI
+
+The CLI, the Node package (`api/node`) and the Python package (`api/python`)
+are generated from the call table; this issue only adds to them. After it:
+**9 families, 60 calls** (today's 57 plus `machine.platforms`,
+`machine.start` and `machine.stop`). Nothing is renamed or removed here;
+`store.move` → `store.push` + `store.pull` is #536.
+
+| | Call | Change |
+| --- | --- | --- |
+| ★ | `machine.platforms` | CLI `layerfs machine platforms`, SDK `layerfs.machine.platforms()`: the support matrix for this host and build (platform → backend, kernel route, sqlite and PostgreSQL support, what is missing); same content as `connect/SUPPORT.json` |
+| ★ | `machine.start` | CLI `layerfs machine start <name>`: starts a stopped machine and its worker and waits until ready (the `Adapter::start` path that calls today run on demand); a running machine answers at once. For UIs, which must not boot a VM because a list was opened |
+| ★ | `machine.stop` | CLI `layerfs machine stop <name>`: stops the worker and, where it has one, the VM; disks stay. Refused `InUse` while Sandboxes run on it (detail `related` lists them); built-in `native` answers at once |
+| ✎ | `machine.list`, `machine.get` | each machine adds `supports` (below) |
+| ✎ | `sandbox.create` | same arguments; a PostgreSQL project's Sandbox now runs on native Linux, docker on every host and ssh (5a), then the VM platforms (5b, 5c), with the reach check inside the call |
+| ✎ | `machine.create`, `machine.connect` | options are declared by each platform's profile; an option the platform does not take is refused; `layerfs help machine create` lists them per platform |
+| ✎ | refusals | the same codes; messages for unsupported platform and Store combinations come from `support.rs` and name the missing fact |
+| ✎ | `sandbox.create … docker` | works without `machine update docker --image` (phase 4): with no image named, the bundle's `sandbox-image.tar` is loaded into Docker once and its digest used; `--image` still overrides |
+| | Workspace calls, worker calls | same shapes; faster (no ping, R1; no worker hop on VMs, R2) |
+
+**Calls that never start a machine:** every `*.list`, `*.get` and
+`*.status` call, and `machine.platforms`. They answer from records and live
+probes only; a stopped machine reads as `stopped`. Calls that need the
+machine's worker (Store calls on a sqlite Store there, `sandbox.create`,
+push and pull) still start it on demand, as today, for programmatic callers.
+
+**`machine.platforms` result** (one entry per platform; the same rows as
+`connect/SUPPORT.json`, for this host and build):
+
+```jsonc
+{ "host": "macos", "platforms": [
+  { "platform": "lima", "how": "created",            // built_in | created | connected
+    "backend": "namespaces", "kernel": "fuse",
+    "sqlite": "worker",                              // in_process | worker | null
+    "postgresql": { "store_calls": "in_process", "sandbox": false,
+                    "reason": "lima host alias not verified (G7)" },
+    "ready": false, "missing": ["tool:limactl"], "version": null,
+    "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" },
+                 { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" },
+                 { "name": "nested", "kind": "bool" } ],
+    "description": "a Lima VM (vz); Sandboxes run in Linux namespaces" } ] }
+```
+
+It replaces `machine.list`'s `can_create` (removed in the same commit; the
+Connect port reads `machine.platforms`).
+
+**Per-machine `supports`** on `machine.list` and `machine.get`: the
+platform row applied to that machine, so a UI never guesses:
+`{ "sqlite": true, "postgresql_sandbox": false, "reason": "…" }`.
+
+Docs updated in the same commits as the behaviour:
+`docs/versioned/2.0.0/{calls,machines-and-stores,limitations}.md` and
+`.agents/skills/layerfs-js-sdk/references/methods/{machine,sandbox}.md`.
 
 ## 10. Work order
 
@@ -564,23 +605,27 @@ engine and api AGENTS.md layer paragraphs and the PostgreSQL Sandbox wording.
 removed; api `StoreRef` replaces every kind string check and `identity_of`.
 
 **Phase 3 (polymorphism; G2).** `Profile` table and `Adapter`;
-`BackendAdapter`; `support.rs`; `machine.platforms`; generated
+`BackendAdapter`; `support.rs`; `machine.platforms` (shape in §9a, replacing
+`can_create`) and per-machine `supports`; generated
 `connect/SUPPORT.json` with a test that compares it, and every refusal, to
 `support.rs`.
 
 **Phase 4 (one executor; G8).** `place/{plan,executor,deploy}.rs`; `*_here`
 copies deleted; a Sandbox always launches through its machine; docker keeps
 the Worker executor on every host and the `Kind::route` comment is
-corrected; R1, R3, R4, R5, R6.
+corrected; `machine.start` and `machine.stop` over `Adapter::start`/`stop`,
+and every list/get/status call checked not to start a machine; a docker Sandbox with no image named loads the bundle's
+`sandbox-image.tar` into Docker once and uses its digest (§9a); R1, R3, R4,
+R5, R6.
 
 **Phase 5 (PostgreSQL everywhere; G1, G3, G7; §7.4).**
 - **5a.** namespaces `binds`; `Adapter::reach` for native, docker and ssh;
-  docker `ExtraHosts host-gateway` on Linux; `store.attach`,
-  `store.detach`, `postgres.check`; PostgreSQL `machines` field and leases;
+  docker `ExtraHosts host-gateway` on Linux; the reach check inside
+  `sandbox.create`; PostgreSQL leases;
   the worker takes the resolved URL from the request; refusals removed for
   native Linux, docker and ssh; `verify-full` rewrite refusal.
 - **5b.** lima, apple-container, microsandbox: a live receipt under
-  `receipts/` records each host alias and a passing `attach`; then their
+  `receipts/` records each host alias and a passing reach check; then their
   `reach` and `support.rs` rows.
 - **5c.** firecracker: outbound NAT on the Lima host; a receipt with a
   remote server and a host-loopback server both reachable; then its row.
@@ -603,12 +648,12 @@ account, as in #533).
    `microsandbox`, `lima`, `firecracker`, `ssh`) and the Linux rows, as in
    #533 step 19; each VM platform's cells move the Store out of `native`
    and back.
-2. **PostgreSQL Sandboxes:** for every platform §7.3 enables, `store.attach`
-   passes and the 12 cells PASS with a PostgreSQL Store attached to that
-   machine (a server reachable from it; for VMs and ssh, both a remote
-   server and, where `reach` rewrites, a host-loopback server).
+2. **PostgreSQL Sandboxes:** for every platform §7.3 enables, the 12 cells
+   PASS with a PostgreSQL Store on that machine (a server reachable from it;
+   for VMs and ssh, both a remote server and, where `reach` rewrites, a
+   host-loopback server).
 3. **Many Stores per machine:** one VM machine and `native` each hold two
-   sqlite Stores and two PostgreSQL attachments; Sandboxes of all four run
+   sqlite Stores and use two PostgreSQL Stores; Sandboxes of all four run
    at once and Commit, and each Commit reads back from the caller.
 4. **Refusals:** every platform or Store combination §7.3 does not support
    is refused with the text `support.rs` gives, and `connect/SUPPORT.json`
@@ -623,6 +668,9 @@ account, as in #533).
 7. **Binding parity:** the same cell results from the `layerfs` binary,
    Node and Python on `native` and one VM platform.
 8. **Checks:** the full §11 set passes on the final commit.
+9. **Machine power:** on every VM platform and ssh, `machine.stop` then
+   `machine.list`/`machine.status`/`store.status` leave the machine stopped;
+   `machine.start` brings it back and the 12 cells pass after it.
 
 Phases 2 and 3 may run in parallel worktrees (Store code vs machine and
 sandbox code). Phase 5 needs phases 2 and 4.
@@ -663,8 +711,8 @@ Behaviour commits add the affected crates' tests, and from phase 3 the
   them out of `Debug`). A guest running a PostgreSQL Sandbox holds the
   password in that Sandbox's setup file until it closes (§7.4).
 - **TLS.** A host-alias rewrite breaks certificate host verification;
-  `reach` refuses it for `sslmode=verify-full` and the user attaches with
-  `--url`.
+  `reach` refuses it for `sslmode=verify-full`; the Store's URL must then
+  name a host every machine can verify (a per-machine URL is deferred, G3).
 - **Two names for one backend.** After G6 the Rust name is `host_process`
   and the stored value is `native`; `SUPPORT.json` and the crate docs show
   both until the public value is changed by a later decision.
@@ -678,3 +726,15 @@ One daemon serving several Stores; Docker as a namespaces machine (D8);
 changing the stored and displayed backend value `"native"` (G6); a Local
 executor for docker on Linux (G8); persistent worker connections (G5,
 phase 7 optional); a long-lived per-user process for the CLI.
+
+**Follow-up: [#536](https://github.com/Ephemeral-AI-Lab/layerfs/issues/536)**
+(`layerfs-control`, starts after this issue's terminal pass) moves all
+management into one library (`api/crates/layerfs-control`; Store calls into engine `store-service/methods/`), puts Sandboxes at `sandbox/<name>/`,
+unifies intents and locks, and replaces `store.move` with `store.push` (native → machine) and `store.pull` (machine → native). G3's
+owner answer (no attach records) is already applied here.
+
+**Follow-up: [#537](https://github.com/Ephemeral-AI-Lab/layerfs/issues/537)**
+(LayerFS Connect on the #535/#536 shape: Storage, Compute and projects;
+starts after #536) ports the UI. It relies on this issue's
+`machine.platforms`, `machine.start`/`machine.stop` and per-machine
+`supports` (§9a).

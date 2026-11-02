@@ -188,13 +188,12 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   as the macOS and Windows routes. Guests never read the home: the caller
   sends each worker call the settings it needs and writes every record.
   **Every machine uses both Store kinds (owner, 2026-11-03, #535 D9, G1,
-  G3):** a machine holds any number of sqlite Stores and any number of
-  PostgreSQL attachments (`store.attach <store> <machine>`). A sqlite Store
-  is on exactly one machine; a PostgreSQL Store's calls still run in the
-  caller's process, and its Sandboxes run on every machine it is attached
-  to where the support table (`layerfs-machine` `support.rs`,
-  `connect/SUPPORT.json`) marks the platform supported; elsewhere they are
-  refused with the table's reason. The password is resolved only in the
+  G3):** a machine holds any number of sqlite Stores, and every PostgreSQL
+  Store is usable from it. A sqlite Store is on exactly one machine; a
+  PostgreSQL Store's calls still run in the caller's process, and it is
+  usable from every machine where the support table (`layerfs-machine`
+  `support.rs`, `connect/SUPPORT.json`) marks the platform supported;
+  elsewhere it is refused with the table's reason. The password is resolved only in the
   caller and travels only in one worker request and the Sandbox's private
   daemon setup file. This supersedes #533 O3/G13 ("VMs and ssh later").
   See [#533](core/docs/issues/533/README.md), [#535](core/docs/issues/535/README.md)

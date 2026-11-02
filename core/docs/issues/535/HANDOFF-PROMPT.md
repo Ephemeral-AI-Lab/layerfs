@@ -138,11 +138,11 @@ sealed Linux bundle** (`tools/linux_bundle.py`):
 
 1. the 12 #516 cells (`api/node/test/verify/cells/cell.mjs`) PASS with a
    sqlite Store on all seven platforms and the Linux rows;
-2. for every platform §7.3 enables, `store.attach` passes and the 12 cells
-   PASS with a PostgreSQL Store attached there (remote server, and a
-   host-loopback server where `reach` rewrites);
+2. for every platform §7.3 enables, the 12 cells PASS with a PostgreSQL
+   Store used from that machine (remote server, and a host-loopback server
+   where `reach` rewrites);
 3. one VM machine and `native` each run Sandboxes of two sqlite Stores and
-   two PostgreSQL attachments at once, and every Commit reads back;
+   two PostgreSQL Stores at once, and every Commit reads back;
 4. every unsupported combination is refused with `support.rs`'s text, and
    `connect/SUPPORT.json` and `layerfs machine platforms` match every
    observed result;
@@ -151,6 +151,8 @@ sealed Linux bundle** (`tools/linux_bundle.py`):
    worker hop for `workspace.exec` on a VM Sandbox (R2);
 7. the binary, Node and Python agree on `native` and one VM platform;
 8. the §11 check set passes on that commit.
+9. `machine.stop` then every list/get/status call leaves a VM stopped;
+   `machine.start` brings it back and the cells pass after it.
 
 A NOT_RUN or an unexpected refusal fails the pass. Only Windows, Durable
 and R2 (no account) may be NOT_RUN, as the owner excused them for #533. A
