@@ -159,8 +159,15 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
         )
         .unwrap_err();
         assert_eq!(code, "Unsupported", "{message}");
-        assert!(message.contains("runs on native or docker"), "{message}");
-        assert!(message.contains("comes later (O3)"), "{message}");
+        // the support table's reason, word for word (#535 §7.3)
+        let kind = layerfs_machine::Platform::parse(platform).unwrap();
+        let reason = layerfs_machine::sandbox_allowed(
+            kind,
+            layerfs_machine::HostOs::current(),
+            layerfs_machine::StoreKind::Postgresql,
+        )
+        .unwrap_err();
+        assert!(message.ends_with(reason), "{message}");
     }
     let (code, message) = call(
         &home,
@@ -179,6 +186,84 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
         ok(&home, "sandbox.list", &[]).get("items"),
         Some(&SdkValue::List(Vec::new()))
     );
+    std::fs::remove_dir_all(&home).unwrap();
+}
+
+/// Every refusal `sandbox.create` gives for a platform and Store kind is
+/// the support table's reason (#535 §7.3, D10): one machine record per
+/// platform, a sqlite Store on each and one PostgreSQL Store, all records.
+#[test]
+fn every_platform_refusal_is_the_support_table_s() {
+    use layerfs_machine::{sandbox_allowed, HostOs, Platform, StoreKind};
+    let home = tempdir("support");
+    home::open(&home).unwrap();
+    ok(&home, "machine.list", &[]);
+    home::write_record(
+        &paths::store_record(&home, "pg"),
+        &SdkValue::map([
+            ("name", t("pg")),
+            ("kind", t("postgresql")),
+            ("url", t("postgres://u@127.0.0.1:1/db")),
+        ]),
+    )
+    .unwrap();
+    home::write_record(
+        &paths::project_record(&home, "pg", "app"),
+        &SdkValue::map([("name", t("app"))]),
+    )
+    .unwrap();
+    for platform in Platform::ALL {
+        let machine = match platform {
+            Platform::Native | Platform::Docker => platform.name().to_owned(),
+            _ => format!("m-{}", platform.name()),
+        };
+        if !platform.built_in() {
+            home::write_record(
+                &paths::machine_record(&home, &machine),
+                &SdkValue::map([("name", t(&machine)), ("platform", t(platform.name()))]),
+            )
+            .unwrap();
+        }
+        let store = format!("s-{}", platform.name());
+        home::write_record(
+            &paths::store_record(&home, &store),
+            &SdkValue::map([
+                ("name", t(&store)),
+                ("kind", t("sqlite")),
+                ("machine", t(&machine)),
+            ]),
+        )
+        .unwrap();
+        home::write_record(
+            &paths::project_record(&home, &store, "app"),
+            &SdkValue::map([("name", t("app"))]),
+        )
+        .unwrap();
+        for (kind, project) in [
+            (StoreKind::Sqlite, format!("{store}/app")),
+            (StoreKind::Postgresql, "pg/app".to_owned()),
+        ] {
+            // an allowed pair would start a real Sandbox; only refusals run
+            let Err(reason) = sandbox_allowed(platform, HostOs::current(), kind) else {
+                continue;
+            };
+            let (code, message) = call(
+                &home,
+                "sandbox.create",
+                &[
+                    ("project", t(&project)),
+                    ("name", t("t")),
+                    ("machine", t(&machine)),
+                ],
+            )
+            .unwrap_err();
+            assert_eq!(code, "Unsupported", "{message}");
+            assert!(
+                message.ends_with(reason),
+                "{platform:?} {kind:?}: {message}"
+            );
+        }
+    }
     std::fs::remove_dir_all(&home).unwrap();
 }
 

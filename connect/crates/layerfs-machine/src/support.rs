@@ -5,16 +5,9 @@
 //! by a test) and `machine.platforms` follow.
 use crate::options::OptSpec;
 use crate::platform::{ExecutorKind, HostOs, How, KernelRoute, Platform};
+pub use layerfs_bridge::StoreKind;
 use layerfs_sandbox::json::quoted;
 use layerfs_sandbox::Backend;
-
-/// A Store's kind, with the names of the bridge's `StoreKind` (the
-/// boundary guard does not let this crate depend on `layerfs-bridge`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum StoreKind {
-    Sqlite,
-    Postgresql,
-}
 
 /// Where a Store's calls run for a machine.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -167,16 +160,6 @@ impl SupportRow {
             sqlite: sqlite.is_ok(),
             postgresql_sandbox: self.postgresql.sandbox,
             reason: self.postgresql.reason,
-        }
-    }
-}
-
-impl StoreKind {
-    /// Its stable lowercase name.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Sqlite => "sqlite",
-            Self::Postgresql => "postgresql",
         }
     }
 }

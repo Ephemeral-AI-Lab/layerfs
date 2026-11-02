@@ -161,8 +161,9 @@ ALLOWED_DEPENDENCIES = {
     },
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
     "layerfs-sandbox": set(),
-    # The machine layer (#535 1.2): uses the Backend enum, shared types and json.
-    "layerfs-machine": {"layerfs-sandbox"},
+    # The machine layer (#535 1.2): uses the Backend enum, shared types and
+    # json; the bridge's KernelRoute and StoreKind name its support table (B).
+    "layerfs-machine": {"layerfs-sandbox", "layerfs-bridge"},
     # The 2.0 front ends (#533): thin layers over the library's call table.
     "layerfs-cli": {"layerfs-api", "layerfs-bridge"},
     "layerfs-python": {"layerfs-api", "layerfs-bridge"},

@@ -795,6 +795,7 @@ dependencies = [
 name = "layerfs-machine"
 version = "2.0.0"
 dependencies = [
+ "layerfs-bridge",
  "layerfs-sandbox",
  "nix",
 ]

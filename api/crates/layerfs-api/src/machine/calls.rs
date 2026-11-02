@@ -90,6 +90,7 @@ fn summary(home: &Path, name: &str, record: &SdkValue, live: Live) -> Result<Sdk
         ("name", SdkValue::text(name)),
         ("platform", SdkValue::text(kind.name())),
         ("backend", SdkValue::text(backend_name(kind))),
+        ("supports", super::platforms::supports(kind)),
         (
             "state",
             SdkValue::text(state.as_deref().unwrap_or(if kind.built_in() {
@@ -123,8 +124,8 @@ fn summary(home: &Path, name: &str, record: &SdkValue, live: Live) -> Result<Sdk
     ))
 }
 
-/// `machine.list()`: every machine with its live state, and the platforms
-/// that could be created here.
+/// `machine.list()`: every machine with its live state and what it
+/// supports; `machine.platforms` answers what could be created here.
 pub fn list(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
     let home = &context.home;
     let mut records = Vec::new();
@@ -138,33 +139,7 @@ pub fn list(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
     for ((name, record), state) in records.iter().zip(states) {
         machines.push(summary(home, name, record, state)?);
     }
-    let tools = record::tools(home)?;
-    let mut can = Vec::new();
-    for kind in [
-        Platform::AppleContainer,
-        Platform::Microsandbox,
-        Platform::Lima,
-        Platform::Firecracker,
-        Platform::Ssh,
-    ] {
-        let probe = adapters::probe(kind, &tools);
-        can.push(SdkValue::map([
-            ("platform", SdkValue::text(kind.name())),
-            ("ready", SdkValue::Bool(probe.ready)),
-            (
-                "missing",
-                SdkValue::List(probe.missing.into_iter().map(SdkValue::Text).collect()),
-            ),
-            (
-                "version",
-                probe.version.map(SdkValue::Text).unwrap_or_default(),
-            ),
-        ]));
-    }
-    Ok(SdkValue::map([
-        ("machines", SdkValue::List(machines)),
-        ("can_create", SdkValue::List(can)),
-    ]))
+    Ok(SdkValue::map([("machines", SdkValue::List(machines))]))
 }
 
 /// `machine.get(name)`: its record with its live state, Stores and Sandboxes.

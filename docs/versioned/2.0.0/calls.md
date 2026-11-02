@@ -8,7 +8,7 @@ and the command in `engine/crates/layerfs-cli/src/`. The shell parser, the
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 57 calls in nine families. `layerfs help` lists them, and
+There are 58 calls in nine families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written
@@ -70,7 +70,7 @@ Sandbox names (H §7.6).
 | size | bytes as a number, or text with `K`, `M` or `G` (`512M`, `8G`) | a word |
 | function | a callback (Node, Python only) | — |
 
-## The 57 calls
+## The 58 calls
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
@@ -231,11 +231,12 @@ A Workspace is `<sandbox>:<path>`, answered as `ws` by `mount`.
   connection.
 - Not run for this manual.
 
-### `machine` (8)
+### `machine` (9)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | — | — | every machine, and the platforms that could be created here |
+| `list` | — | — | every machine, with what it supports (`supports`) |
+| `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `connect/SUPPORT.json`) |
 | `get` | `name` | — | a machine's record |
 | `status` | `name` | — | a machine's live state, free disk and tool version |
 | `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image`, `nested`, `host` | creates a VM machine |
@@ -248,7 +249,10 @@ Run:
 
 ```console
 $ layerfs machine list
-{"machines":[{"name":"docker","platform":"docker","backend":"docker","state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","state":"ready",…,"stores":["shop"],"sandboxes":[]}],"can_create":[{"platform":"apple-container","ready":true,"missing":[],"version":"container CLI version 1.6.1 …"},{"platform":"microsandbox","ready":false,"missing":["tool:msb"],"version":null},{"platform":"lima","ready":true,…},{"platform":"firecracker","ready":true,…},{"platform":"ssh","ready":true,…}]}
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","state":"ready","cpus":null,"memory":null,"disk":null,"supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","state":"ready",…,"stores":["shop"],"sandboxes":[]}]}
+
+$ layerfs machine platforms
+{"host":"macos","platforms":[{"platform":"native","how":"built_in","backend":"native","kernel":"nfs","sqlite":"in_process","postgresql":{"store_calls":"in_process","sandbox":true,"reason":null},"ready":true,"missing":[],"version":null,"options":[],"description":"…"},…,{"platform":"lima","how":"created","backend":"namespaces","kernel":"fuse","sqlite":"worker","postgresql":{"store_calls":"in_process","sandbox":false,"reason":"lima host alias not verified (G7)"},"ready":true,"missing":[],"version":"limactl version 2.2.1","options":[{"name":"cpus","kind":"int"},…],"description":"…"},…]}
 
 $ layerfs machine status native
 {"name":"native","platform":"native","state":"running","free_disk":null,"tool_version":null,"down_reason":null,"stores":["shop"]}

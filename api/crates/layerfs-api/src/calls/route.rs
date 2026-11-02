@@ -37,6 +37,7 @@ pub fn run(call: &Call, context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         use crate::machine as m;
         return match call.call {
             "list" => m::list(context, args),
+            "platforms" => m::platforms(context, args),
             "get" => m::get(context, args),
             "status" => m::status(context, args),
             "create" => m::create(context, args),

@@ -260,13 +260,33 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     route::moving(&target.record, &target.store)?;
     // refused too while the machine is being removed
     #[cfg(feature = "machine")]
-    crate::machine::machine_of(&home, machine)?;
+    {
+        // where a Sandbox of this Store's kind may run is the support
+        // table's answer, word for word (#535 §7.3)
+        use layerfs_machine::{sandbox_allowed, HostOs};
+        let platform = crate::machine::platform_of(&crate::machine::machine_of(&home, machine)?)?;
+        sandbox_allowed(platform, HostOs::current(), target.store_ref.kind()).map_err(
+            |reason| {
+                refused(
+                    "Unsupported",
+                    format!(
+                        "a Sandbox of {} Store {} cannot run on machine {machine} ({}): {reason}",
+                        target.store_ref.kind().as_str(),
+                        target.store,
+                        platform.name()
+                    ),
+                )
+            },
+        )?;
+    }
     #[cfg(not(feature = "machine"))]
     if read_record(&paths::machine_record(&home, machine))?.is_none() {
         return Err(refused("NotFound", format!("no machine named {machine}")));
     }
     if let StoreRef::Postgres { .. } = target.store_ref {
-        // a PostgreSQL Store is on no machine; its daemon dials the server
+        // a PostgreSQL Store is on no machine; its daemon dials the server.
+        // A build without machines (the guest worker's) knows only these two.
+        #[cfg(not(feature = "machine"))]
         if !matches!(machine, "native" | "docker") {
             return Err(refused(
                 "Unsupported",

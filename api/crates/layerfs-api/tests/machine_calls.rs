@@ -53,12 +53,24 @@ fn machines_over_records() {
         .map(|m| m.get_text("name").unwrap())
         .collect();
     assert_eq!(names, ["docker", "native"]);
-    let SdkValue::List(can) = list.get("can_create").unwrap() else {
+    assert_eq!(list.get("can_create"), None);
+    for machine in machines {
+        let supports = machine.get("supports").unwrap();
+        assert!(supports.get("sqlite").is_some(), "{machine:?}");
+    }
+    // the support table for this host, each row with its live probe
+    let platforms = call(&home, "machine.platforms", &[]).unwrap();
+    let SdkValue::List(rows) = platforms.get("platforms").unwrap() else {
         panic!()
     };
-    assert!(can
-        .iter()
-        .all(|p| p.get("ready") == Some(&SdkValue::Bool(false))));
+    assert_eq!(rows.len(), 7);
+    for row in rows {
+        let created = row.get_text("how") != Some("built_in");
+        if created && row.get("backend") != Some(&SdkValue::Null) {
+            // no provider tool on PATH: a platform that needs one is not ready
+            assert_eq!(row.get("ready"), Some(&SdkValue::Bool(false)), "{row:?}");
+        }
+    }
 
     let native = call(&home, "machine.get", &[("name", t("native"))]).unwrap();
     assert_eq!(native.get_text("platform"), Some("native"));

@@ -63,7 +63,7 @@ ready.
 | a VM or ssh machine | sent to that machine's worker, which runs it on its own `native` |
 | `docker`, sqlite Store on `docker` | a container on the docker machine's image (`machine update docker --image`); on macOS the docker worker starts it beside itself, mounting only the Store's folder; on Linux this process starts it (root only) |
 | `native` or `docker`, PostgreSQL Store | from this process; the native daemon needs the `postgresql` build |
-| a VM or ssh machine, PostgreSQL Store | `Unsupported` ("comes later (O3)") |
+| a VM or ssh machine, PostgreSQL Store | `Unsupported` with the support table's reason (`machine.platforms`) |
 
 **Returns:** the Sandbox's record: `{ name, project, machine, state: "running",
 created, id, platform, runtime, image }`. `name` is what you pass to every other

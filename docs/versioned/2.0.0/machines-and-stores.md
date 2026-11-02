@@ -26,9 +26,13 @@ a copy of a sqlite Store in a bucket.
 
 - "Platform" is only a machine's kind. A caller never chooses how a
   Sandbox runs; the kind decides.
-- `machine list` answers every machine and, under `can_create`, each kind
-  that could be made here, with `ready`, `missing` (such as `tool:msb`) and
-  the tool's `version`. A VM or ssh machine's `state` is read live, as
+- `machine list` answers every machine, each with `supports` (`sqlite`,
+  `postgresql_sandbox` and the `reason` when not), its platform's row of the
+  support table. `machine platforms` answers each platform on this host:
+  backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox
+  runs here and why not, `ready`, `missing` (such as `tool:msb`), the tool's
+  `version` and the options `machine create` takes; the same rows as
+  `connect/SUPPORT.json`. Neither starts a machine. A VM or ssh machine's `state` is read live, as
   `machine status` reads it, for all of them at once within 10 s; it starts
   nothing and writes nothing. A machine whose probe fails or does not answer
   in time is `unknown`, with the reason in `error`; one being created or

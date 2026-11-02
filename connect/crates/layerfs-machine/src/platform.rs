@@ -4,6 +4,7 @@
 //! read from the profile.
 use crate::options::OptSpec;
 use crate::platforms::{apple_container, docker, firecracker, lima, microsandbox, native, ssh};
+pub use layerfs_bridge::KernelRoute;
 use layerfs_sandbox::Backend;
 use std::net::Ipv4Addr;
 
@@ -48,17 +49,6 @@ pub enum How {
     Connected,
 }
 
-/// The kernel filesystem route a platform's daemons serve, with the names
-/// of the bridge's `KernelRoute` (the boundary guard does not let this
-/// crate depend on `layerfs-bridge`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum KernelRoute {
-    /// A kernel FUSE mount.
-    Fuse,
-    /// A loopback NFS export.
-    Nfs,
-}
-
 /// The operating system of the host the caller runs on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostOs {
@@ -101,16 +91,6 @@ impl How {
             Self::BuiltIn => "built_in",
             Self::Created => "created",
             Self::Connected => "connected",
-        }
-    }
-}
-
-impl KernelRoute {
-    /// Its stable lowercase name.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Fuse => "fuse",
-            Self::Nfs => "nfs",
         }
     }
 }
