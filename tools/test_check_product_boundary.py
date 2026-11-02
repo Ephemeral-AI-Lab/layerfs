@@ -7,6 +7,7 @@ from check_product_boundary import (
     RETIRED_PACKAGES,
     crate_directories,
     dependency_violations,
+    layer_violations,
     production_files,
     test_path_violations,
     unsafe_violations,
@@ -122,15 +123,15 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\nmod init;"))
 
     def test_sandbox_active_edges_and_unsafe_boundary(self):
-        path = Path("engine/crates/layerfs-sandbox/src/docker_engine/http.rs")
+        path = Path("connect/crates/layerfs-sandbox/src/docker_engine/http.rs")
         self.assertTrue(unsafe_violations(path, "unsafe fn signal_pid() {}"))
-        self.assertFalse(unsafe_violations(Path("engine/crates/layerfs-sandbox/src/lib.rs"), "#![deny(unsafe_code)]"))
-        self.assertTrue(unsafe_violations(Path("engine/crates/layerfs-sandbox/src/lib.rs"), "#![forbid(unsafe_code)]"))
-        darwin = Path("engine/crates/layerfs-sandbox/src/backend/native/macos/darwin.rs")
+        self.assertFalse(unsafe_violations(Path("connect/crates/layerfs-sandbox/src/lib.rs"), "#![deny(unsafe_code)]"))
+        self.assertTrue(unsafe_violations(Path("connect/crates/layerfs-sandbox/src/lib.rs"), "#![forbid(unsafe_code)]"))
+        darwin = Path("connect/crates/layerfs-sandbox/src/backend/native/macos/darwin.rs")
         self.assertFalse(unsafe_violations(darwin, "fn f() { unsafe { libc::proc_listallpids(); } }"))
         self.assertTrue(
             unsafe_violations(
-                Path("engine/crates/layerfs-sandbox/src/backend/native/macos/mounts.rs"),
+                Path("connect/crates/layerfs-sandbox/src/backend/native/macos/mounts.rs"),
                 "fn f() { unsafe { call(); } }",
             )
         )
@@ -147,6 +148,25 @@ class ProductBoundaryTests(unittest.TestCase):
             dependency_violations(
                 '[package]\nname="layerfs-sandbox-legacy"\n[dependencies]\nlayerfs-api-core={path="../layerfs-api/core"}'
             )
+        )
+
+    def test_connect_layer_edges(self):
+        # core < engine < connect < api (#535): an engine crate reaching a
+        # connect crate is an upward edge, production or dev.
+        prefix = '[package]\nname="layerfs-daemon"\n[dependencies]\n'
+        findings = dependency_violations(prefix + 'layerfs-sandbox={path="../layerfs-sandbox"}')
+        self.assertTrue(any("upward" in message for _, message in findings), findings)
+        dev = '[package]\nname="layerfs-daemon"\n[dev-dependencies]\n'
+        findings = dependency_violations(dev + 'layerfs-sandbox={path="../layerfs-sandbox"}')
+        self.assertTrue(any("upward" in message for _, message in findings), findings)
+        self.assertTrue(
+            violations(Path("engine/crates/layerfs-daemon/src/commands.rs"), "use layerfs_sandbox::Sandbox;")
+        )
+        # A connect crate may depend on engine and core crates.
+        self.assertFalse(layer_violations("layerfs-sandbox", "layerfs-daemon", "dependencies"))
+        self.assertFalse(layer_violations("layerfs-sandbox", "layerfs-content", "dev-dependencies"))
+        self.assertTrue(
+            any("upward" in message for _, message in layer_violations("layerfs-sandbox", "layerfs-api", "dependencies"))
         )
 
     def test_bridge_control_reuses_domain_records_without_engine_edges(self):

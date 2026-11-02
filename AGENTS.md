@@ -471,14 +471,15 @@ Historical explanation is retained outside default implementation routing.
 All product layers follow the detailed
 [production source rules](engine/AGENTS.md#production-file-size-and-responsibility)
 and [checks and completion rules](engine/AGENTS.md#checks-and-completion).
-The root manifest builds four core crates, eleven engine crates and four API
-crates under `api/crates`: the library `layerfs-api`, the `layerfs` command
+The root manifest builds four core crates, ten engine crates, one connect
+crate under `connect/crates` (`layerfs-sandbox`; `layerfs-machine` and
+`layerfs-store-backup` follow in #535 phase 1) and four API crates under
+`api/crates`: the library `layerfs-api`, the `layerfs` command
 `layerfs-cli`, the Node binding `layerfs-node` and the PyO3 module
 `layerfs-python`. `api/` also holds the published JavaScript and Python
 packages. The connect layer (`connect/crates`, owner 2026-11-03, #535 D4)
-holds the crates that reach a machine or the network: `layerfs-machine`,
-`layerfs-sandbox` and `layerfs-store-backup`, moved there from `engine/crates`
-by #535 phase 1; see the [connect guide](connect/AGENTS.md). The dependency
+holds the crates that reach a machine or the network; see the
+[connect guide](connect/AGENTS.md). The dependency
 direction is `core < engine < connect < api`, including dev dependencies and
 test includes; nothing in engine depends on connect. Workstream names do not change this layering.
 After rebasing across #463, update each selected worktree's own target registration and prepare again

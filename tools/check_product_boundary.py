@@ -141,8 +141,8 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-python": {"layerfs-api", "layerfs-bridge"},
 }
 DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history"}
-LAYER_ORDER = ("core", "engine", "api")
-CORE, ENGINE, API = LAYER_ORDER
+LAYER_ORDER = ("core", "engine", "connect", "api")
+CORE, ENGINE, CONNECT, API = LAYER_ORDER
 LAYER = {
     "layerfs-content": CORE,
     "layerfs-history": CORE,
@@ -155,10 +155,14 @@ LAYER = {
     "layerfs-overlay": ENGINE,
     "layerfs-persistence": ENGINE,
     "layerfs-project": ENGINE,
-    "layerfs-sandbox": ENGINE,
     "layerfs-store-service": ENGINE,
     "layerfs-remote-storage": ENGINE,
     "layerfs-workspace": ENGINE,
+    # The connect layer (#535): machine/network reach. layerfs-sandbox moved
+    # in phase 1; layerfs-machine and layerfs-store-backup follow there.
+    "layerfs-sandbox": CONNECT,
+    "layerfs-machine": CONNECT,
+    "layerfs-store-backup": CONNECT,
     # The public surface under api/crates: the library and its 2.0 front ends
     # (#533), the `layerfs` binary, the Node binding and the PyO3 module.
     "layerfs-api": API,
@@ -176,7 +180,7 @@ def layer_violations(name, dependency, kind):
     return []
 
 
-CRATE_ROOTS = ("core/crates", "engine/crates", "api/crates", "api")
+CRATE_ROOTS = ("core/crates", "engine/crates", "connect/crates", "api/crates", "api")
 
 
 def crate_directories(root):

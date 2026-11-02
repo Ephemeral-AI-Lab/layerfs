@@ -45,6 +45,22 @@ class CounterTests(unittest.TestCase):
         shutil.move(self.root / "engine/crates/layerfs-api", self.root / "api/crates/layerfs-api")
         self.assertEqual(production_loc.scan(self.root), after)
 
+    def test_connect_crates_count_as_connect_in_every_layout(self):
+        import shutil
+
+        write(self.root, "engine/crates/layerfs-daemon/src/lib.rs", "pub fn value() {}\n")
+        write(self.root, "engine/crates/layerfs-sandbox/src/lib.rs", "pub fn value() {}\npub fn other() {}\n")
+        before = production_loc.scan(self.root)
+        # Classified by name: the pre-move tree counts layerfs-sandbox as connect.
+        self.assertEqual(before["scopes"]["connect"]["crates"], {"layerfs-sandbox": 2})
+        self.assertEqual(before["scopes"]["engine"]["crates"], {"layerfs-daemon": 1})
+        (self.root / "connect/crates").mkdir(parents=True)
+        shutil.move(self.root / "engine/crates/layerfs-sandbox", self.root / "connect/crates/layerfs-sandbox")
+        after = production_loc.scan(self.root)
+        self.assertEqual(before, after)
+        for name in ("layerfs-sandbox", "layerfs-machine", "layerfs-store-backup"):
+            self.assertEqual(production_loc.crate_layer(name), "connect")
+
     def test_library_and_front_ends_are_api_crates_and_nfs_is_engine(self):
         # #533 step 2: the NFS export; the library, binary, binding and PyO3 module.
         self.assertEqual(production_loc.crate_layer("layerfs-nfs"), "engine")

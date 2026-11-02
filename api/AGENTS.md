@@ -21,7 +21,8 @@ connect may depend on anything here. Layers are
 `layerfs-machine` only through its optional `machine` feature.
 
 SDK-facing daemon integration tests live in `crates/layerfs-api/tests`, with
-cheap includes of daemon and Sandbox fixtures from `engine/crates`. Build the
+cheap includes of daemon fixtures from `engine/crates` and Sandbox fixtures
+from `connect/crates`. Build the
 ordinary daemon binary before running tests that launch it.
 `LAYERFS_TEST_DAEMON` may select an explicit binary; otherwise the tests
 locate the sibling Cargo output. The owner keeps `layerfs-node` out of CI.

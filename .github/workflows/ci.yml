@@ -15,6 +15,7 @@ on:
     paths:
       - "core/**"
       - "engine/**"
+      - "connect/**"
       - "api/crates/**"
       - "!api/crates/layerfs-node/**"
       - "Cargo.*"
@@ -28,6 +29,7 @@ on:
     paths:
       - "core/**"
       - "engine/**"
+      - "connect/**"
       - "api/crates/**"
       - "!api/crates/layerfs-node/**"
       - "Cargo.*"

@@ -1,10 +1,12 @@
-# LayerFS workspace: core algorithms, engine composition and public API.
+# LayerFS workspace: core algorithms, engine composition, machine/network
+# connect crates and public API.
 
 [workspace]
 resolver = "2"
 members = [
     "core/crates/*",
     "engine/crates/*",
+    "connect/crates/*",
     "api/crates/*",
 ]
 exclude = [

@@ -14,7 +14,7 @@ layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 layerfs-project = { path = "../../../engine/crates/layerfs-project" }
-layerfs-sandbox = { path = "../../../engine/crates/layerfs-sandbox" }
+layerfs-sandbox = { path = "../../../connect/crates/layerfs-sandbox" }
 layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
 libc = "=0.2.189"
 nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal", "reboot"] }
