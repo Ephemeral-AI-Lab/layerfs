@@ -1,6 +1,8 @@
 //! Where a Sandbox's daemon, image and Store come from (#533 step 12): the
 //! settings the host Sandbox code reads as `deploy`, resolved on the side
-//! that runs the call. Moved from `sandboxes.rs` unchanged.
+//! that runs the call: this process from the home's records and the sealed
+//! bundle in the user cache (O16), or a machine's worker from its own
+//! bundle folder (a guest never reads the home, H §7.7).
 use crate::home::{paths, read_record};
 use crate::host::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -8,28 +10,50 @@ use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
+/// The Sandbox image archive (a docker-archive) a Linux bundle carries.
+pub(crate) const IMAGE_ARCHIVE: &str = "sandbox-image.tar";
+
+/// Where a guest holds a machine's own Sandbox image archive, copied in at
+/// start (`layerfs_sandbox::machine::IMAGE`).
+const GUEST_IMAGES: &str = "/layerfs/image";
+
+/// The sealed bundle's folder for `os` on this host's architecture (O16):
+/// `<cache>/layerfs/bundle/<version>/<os>-<arch>/`, the cache being
+/// `XDG_CACHE_HOME` or `~/.cache`; for Linux, `LAYERFS_BUNDLE` (internal)
+/// names another folder.
+pub(crate) fn bundle_dir(os: &str) -> Result<PathBuf> {
+    if os == "linux" {
+        if let Some(dir) = std::env::var_os("LAYERFS_BUNDLE").filter(|d| !d.is_empty()) {
+            return Ok(PathBuf::from(dir));
+        }
+    }
+    let cache = match std::env::var_os("XDG_CACHE_HOME").filter(|d| !d.is_empty()) {
+        Some(dir) => PathBuf::from(dir),
+        None => std::env::var_os("HOME")
+            .map(|home| PathBuf::from(home).join(".cache"))
+            .ok_or_else(|| {
+                refused(
+                    "InvalidInput",
+                    "HOME is unset, so the user cache is unknown",
+                )
+            })?,
+    };
+    Ok(cache
+        .join("layerfs")
+        .join("bundle")
+        .join(env!("CARGO_PKG_VERSION"))
+        .join(format!("{os}-{}", std::env::consts::ARCH)))
+}
+
 /// Where a `native` Sandbox's daemon executable is: the native machine
 /// record's `daemon` (`import-env` writes it from 1.1.0's `LAYERFS_DAEMON`),
-/// else the bundle's.
+/// else this host's bundle's.
 pub(super) fn daemon(home: &Path) -> Result<String> {
     let record = read_record(&paths::machine_record(home, "native"))?.unwrap_or_default();
     if let Some(path) = record.get_text("daemon") {
         return Ok(path.to_owned());
     }
-    let cache = std::env::var_os("HOME")
-        .map(|h| {
-            PathBuf::from(h)
-                .join(".cache/layerfs/bundle")
-                .join(env!("CARGO_PKG_VERSION"))
-        })
-        .ok_or_else(|| refused("InvalidInput", "HOME is unset, so the bundle is unknown"))?;
-    let path = cache
-        .join(format!(
-            "{}-{}",
-            std::env::consts::OS,
-            std::env::consts::ARCH
-        ))
-        .join("layerfs-daemon");
+    let path = bundle_dir(std::env::consts::OS)?.join("layerfs-daemon");
     if !path.is_file() {
         return Err(refused(
             "Unavailable",
@@ -168,4 +192,91 @@ pub(super) fn docker_in_worker(root: &Path, store: &str, settings: &SdkValue) ->
         SdkValue::text(daemon.display().to_string()),
     ));
     Ok(SdkValue::Map(fields))
+}
+
+/// The native machine's settings in this process: its daemon and, for a
+/// namespaces Sandbox (Linux), the Sandbox image archive and digest: the
+/// native record's `image_archive`, else the bundle's archive, and the
+/// call's `image`, else the record's (a digest the archive holds).
+pub(super) fn native_here(home: &Path, image: Option<&str>) -> Result<Vec<(String, SdkValue)>> {
+    let record = read_record(&paths::machine_record(home, "native"))?.unwrap_or_default();
+    let mut fields = vec![("daemon".to_owned(), SdkValue::text(daemon(home)?))];
+    if cfg!(target_os = "linux") {
+        let archive = match record.get_text("image_archive") {
+            Some(path) => PathBuf::from(path),
+            None => bundle_dir("linux")?.join(IMAGE_ARCHIVE),
+        };
+        fields.push((
+            "imageArchive".to_owned(),
+            SdkValue::text(archive.display().to_string()),
+        ));
+        if let Some(digest) = image.or(record.get_text("image")).filter(|i| is_digest(i)) {
+            fields.push(("image".to_owned(), SdkValue::text(digest)));
+        }
+    }
+    Ok(fields)
+}
+
+/// What a VM or ssh machine's worker needs for a namespaces Sandbox: the
+/// image digest (the call's, else the machine record's when it is one) and,
+/// when the record names its own archive file, the guest's copy of it.
+pub(super) fn guest_settings(home: &Path, machine: &str, image: Option<&str>) -> Result<SdkValue> {
+    let record = read_record(&paths::machine_record(home, machine))?.unwrap_or_default();
+    let mut fields = Vec::new();
+    let named = record.get_text("image");
+    if let Some(digest) = image.or(named).filter(|i| is_digest(i)) {
+        fields.push(("image".to_owned(), SdkValue::text(digest)));
+    }
+    let archive = record
+        .get_text("image_archive")
+        .or(named.filter(|i| i.starts_with('/')));
+    if let Some(file) = archive.and_then(|a| Path::new(a).file_name()?.to_str()) {
+        fields.push((
+            "image_archive".to_owned(),
+            SdkValue::text(format!("{GUEST_IMAGES}/{file}")),
+        ));
+    }
+    Ok(SdkValue::Map(fields))
+}
+
+/// Completes a namespaces Sandbox's settings in a worker: the daemon beside
+/// its own executable (the bundle's), the caller's digest, and the guest's
+/// copy of the machine's archive, else the bundle's own archive.
+pub(super) fn native_in_worker(settings: Option<&SdkValue>) -> Result<Vec<(String, SdkValue)>> {
+    let bundle = std::env::current_exe().map_err(failed)?;
+    let mut fields = vec![(
+        "daemon".to_owned(),
+        SdkValue::text(
+            bundle
+                .with_file_name("layerfs-daemon")
+                .display()
+                .to_string(),
+        ),
+    )];
+    let archive = settings
+        .and_then(|s| s.get_text("image_archive"))
+        .filter(|a| a.starts_with(GUEST_IMAGES))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| bundle.with_file_name(IMAGE_ARCHIVE));
+    fields.push((
+        "imageArchive".to_owned(),
+        SdkValue::text(archive.display().to_string()),
+    ));
+    if let Some(digest) = settings
+        .and_then(|s| s.get_text("image"))
+        .filter(|i| is_digest(i))
+    {
+        fields.push(("image".to_owned(), SdkValue::text(digest)));
+    }
+    Ok(fields)
+}
+
+/// Whether `image` is an image digest, `sha256:<64 hex>`.
+fn is_digest(image: &str) -> bool {
+    image.strip_prefix("sha256:").is_some_and(|hex| {
+        hex.len() == 64
+            && hex
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    })
 }

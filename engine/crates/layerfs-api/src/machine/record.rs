@@ -113,7 +113,13 @@ pub fn spec(home: &Path, home_id: &str, name: &str, record: &SdkValue) -> Result
         cpus: int(record, "cpus", DEFAULT_CPUS) as u32,
         memory: int(record, "memory", DEFAULT_MEMORY) as u64,
         disk: int(record, "disk", DEFAULT_DISK) as u64,
-        image: record.get_text("image_archive").map(PathBuf::from),
+        // the machine's own Sandbox image archive, copied in at start: the
+        // record's `image_archive`, or an `image` that names a file (an
+        // `image` digest is one the bundle's archive holds)
+        image: record
+            .get_text("image_archive")
+            .or(record.get_text("image").filter(|i| i.starts_with('/')))
+            .map(PathBuf::from),
         // the docker machine's worker container runs its Sandbox image, as
         // 1.1.0's macOS worker did
         os_image: record

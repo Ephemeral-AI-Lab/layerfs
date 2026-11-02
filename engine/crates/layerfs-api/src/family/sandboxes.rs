@@ -53,26 +53,33 @@ fn sandbox_of(home: &Path, name: &str) -> Result<(String, SdkValue)> {
         })
 }
 
+/// How a Sandbox runs, with the settings the side running the call resolved:
+/// a daemon process (`native` on macOS, namespaces on Linux) or a container.
+enum Deploy {
+    /// The daemon, and for namespaces the image archive and digest.
+    Native(Vec<(String, SdkValue)>),
+    /// The docker machine's settings ([`deploy::docker_settings`]).
+    Docker(SdkValue),
+}
+
 /// The host Sandbox operations' arguments for project `<store>/<project>`,
-/// plus `more`: on `native`, or in a container when `docker` gives the
-/// docker machine's settings ([`deploy::docker_settings`], completed by the side
-/// that runs the call).
+/// plus `more`, run as `how` says.
 fn host_args(
     home: &Path,
     (store, project, record): (&str, &str, &SdkValue),
-    docker: Option<SdkValue>,
+    how: Deploy,
     more: Vec<(&str, SdkValue)>,
 ) -> Result<SdkValue> {
     let prefix = SdkValue::text(format!("lfs-{}-", &home::open(home)?.id[..8]));
-    let in_container = docker.is_some();
-    let deploy = match docker {
-        Some(SdkValue::Map(mut settings)) => {
+    let in_container = matches!(how, Deploy::Docker(_));
+    let deploy = match how {
+        Deploy::Docker(SdkValue::Map(mut settings)) => {
             settings.push(("sandbox".to_owned(), SdkValue::text("docker")));
             settings.push(("containerPrefix".to_owned(), prefix));
             SdkValue::Map(settings)
         }
-        Some(_) => return Err(refused("InvalidInput", "docker settings are a map")),
-        None => {
+        Deploy::Docker(_) => return Err(refused("InvalidInput", "docker settings are a map")),
+        Deploy::Native(settings) => {
             let backend = if cfg!(target_os = "macos") {
                 "native"
             } else {
@@ -91,12 +98,16 @@ fn host_args(
                 std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o755))
                     .map_err(failed)?;
             }
-            SdkValue::map([
-                ("sandbox", SdkValue::text(backend)),
-                ("localDir", SdkValue::text(local.display().to_string())),
-                ("daemon", SdkValue::text(deploy::daemon(home)?)),
-                ("containerPrefix", prefix),
-            ])
+            let mut fields = vec![
+                ("sandbox".to_owned(), SdkValue::text(backend)),
+                (
+                    "localDir".to_owned(),
+                    SdkValue::text(local.display().to_string()),
+                ),
+                ("containerPrefix".to_owned(), prefix),
+            ];
+            fields.extend(settings);
+            SdkValue::Map(fields)
         }
     };
     let mut fields = vec![
@@ -310,16 +321,19 @@ fn on_machine(
     if let Some(id) = record.get_text("id") {
         more.push(("sandbox", SdkValue::text(id)));
     }
-    let image = record.get_text("image").filter(|_| op != "sandbox.create");
-    let image = more
+    // the call's image (sandbox.create) else the Sandbox's own travels in
+    // the deploy settings, never as a top-level argument
+    let called = more
         .iter()
-        .find(|(n, _)| *n == "image")
-        .and_then(|(_, v)| match v {
-            SdkValue::Text(text) => Some(text.as_str()),
-            _ => None,
-        })
-        .or(image)
-        .map(str::to_owned);
+        .position(|(n, _)| *n == "image")
+        .map(|i| more.remove(i).1);
+    let image = match called {
+        Some(SdkValue::Text(text)) => Some(text),
+        _ => record
+            .get_text("image")
+            .filter(|_| op != "sandbox.create")
+            .map(str::to_owned),
+    };
     let postgresql = target.record.get_text("kind") == Some("postgresql");
     let worker = if postgresql {
         None
@@ -338,12 +352,14 @@ fn on_machine(
     };
     match worker {
         None => {
+            let how = match docker {
+                Some(settings) => Deploy::Docker(deploy::docker_here(&home, settings)?),
+                None => Deploy::Native(deploy::native_here(&home, image.as_deref())?),
+            };
             let args = host_args(
                 &home,
                 (&target.store, &target.project, &target.record),
-                docker
-                    .map(|settings| deploy::docker_here(&home, settings))
-                    .transpose()?,
+                how,
                 more,
             )?;
             // the host code reads the project's Branches through its open Store
@@ -375,6 +391,11 @@ fn on_machine(
             ];
             if let Some(settings) = docker {
                 fields.push(("docker", settings));
+            } else {
+                fields.push((
+                    "native",
+                    deploy::guest_settings(&home, machine, image.as_deref())?,
+                ));
             }
             fields.push((
                 "more",
@@ -436,11 +457,13 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue) -> Outcome {
             .collect(),
         _ => Vec::new(),
     };
-    let docker = match args.get("docker") {
-        Some(settings @ SdkValue::Map(_)) => Some(deploy::docker_in_worker(root, store, settings)?),
-        _ => None,
+    let how = match args.get("docker") {
+        Some(settings @ SdkValue::Map(_)) => {
+            Deploy::Docker(deploy::docker_in_worker(root, store, settings)?)
+        }
+        _ => Deploy::Native(deploy::native_in_worker(args.get("native"))?),
     };
-    let host = host_args(root, (store, project, &record), docker, more)?;
+    let host = host_args(root, (store, project, &record), how, more)?;
     crate::store::open::hold(&host, None)?;
     if op == "backend.daemon.workspace.status" {
         return crate::host::dispatch::backend(op.to_owned(), host);
