@@ -77,8 +77,10 @@ host without its live fields (`ready`, `missing`, `version`):
   its `kind` (`int`, `size`, `text`, `bool`, `name`);
 - `description`: the platform and how its Sandboxes run.
 
-The table encodes what is allowed today; #535 phase 5 flips its
-PostgreSQL rows. `layerfs machine platforms` (the call `machine.platforms`)
+The table encodes what is allowed. #535 phase 5a enabled PostgreSQL
+Sandboxes on `native` (macOS and Linux), `docker` and `ssh`; `lima`,
+`apple-container`, `microsandbox` and `firecracker` stay refused with their
+G7 reasons until phases 5b and 5c flip them. `layerfs machine platforms` (the call `machine.platforms`)
 returns the same data for the running host.
 
 ## Adding things
