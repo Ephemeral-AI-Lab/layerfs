@@ -297,6 +297,11 @@ fn list(home: &Path, only: Option<&str>) -> Outcome {
 /// The Store's link to `bucket` after a transfer.
 fn save_link(home: &Path, store: &str, bucket: &str, link: SdkValue) -> Result<()> {
     let _lock = home::lock::take(home)?;
+    write_link(home, store, bucket, link)
+}
+
+/// [`save_link`] for a caller that holds the home lock.
+fn write_link(home: &Path, store: &str, bucket: &str, link: SdkValue) -> Result<()> {
     let path = paths::store_record(home, store);
     let record = read_record(&path)?
         .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
@@ -550,7 +555,10 @@ fn check(driver: &dyn Driver, object: &str, expected: remote::Expected) -> Resul
 /// `backup.restore(store, bucket, file?)`: the backup as a sqlite Store on
 /// `native`: a new Store when `store` does not exist, else it replaces an
 /// idle Store on `native` unchanged since its last backup or restore
-/// (`Conflict` otherwise).
+/// (`Conflict` otherwise; `InUse` while a process holds it or a Sandbox of
+/// its projects runs). The download, its checks and the read of its
+/// projects happen before the home lock; the lock covers the re-checks, the
+/// install and the record writes only.
 fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let store = args.get_text("store").unwrap_or("");
@@ -571,32 +579,9 @@ fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             })
         })
         .unwrap_or_else(|| store.to_owned());
-    let destination = paths::store_file(&home, store);
-    progress(context, "download");
-    let (bytes, sha256, heads) = match &existing {
-        None => {
-            let _lock = home::lock::take(&home)?;
-            home::private_dir(&paths::store_dir(&home, store))?;
-            let cursor = crate::host::registry::random()?;
-            let loaded = match remote::load(driver.as_ref(), &file, &destination, cursor) {
-                Ok(loaded) => loaded,
-                Err(failure) => {
-                    let _ = std::fs::remove_dir_all(paths::store_dir(&home, store));
-                    return Err(refused("Failed", failure.to_string()));
-                }
-            };
-            let record = SdkValue::map([
-                ("name", SdkValue::text(store)),
-                ("kind", SdkValue::text("sqlite")),
-                ("binding", SdkValue::Bytes(loaded.binding.clone())),
-                ("cursor", SdkValue::Bytes(cursor.to_vec())),
-                ("machine", SdkValue::text("native")),
-                ("profile", SdkValue::text("disposable")),
-                ("created", SdkValue::Int(home::now_ms())),
-            ]);
-            write_record(&paths::store_record(&home, store), &record)?;
-            (loaded.bytes, loaded.sha256, loaded.heads)
-        }
+    let mut _lease = None;
+    let identity = match &existing {
+        None => None,
         Some(record) => {
             if record.get_text("kind") == Some("postgresql") {
                 return Err(refused(
@@ -604,92 +589,240 @@ fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
                     format!("Store {store} is a PostgreSQL database"),
                 ));
             }
-            let machine = route::machine(record, store)?;
-            if machine != "native" {
-                return Err(refused("Unsupported", format!("Store {store} is on {machine}; a restore replaces a Store on native: move it there first")));
-            }
-            let _lock = home::lock::take(&home)?;
-            route::moving(record, store)?;
-            crate::store::open::close(&destination)?;
-            let holders = lease::holders(&home, store)?;
-            if !holders.is_empty() {
-                return Err(refused(
-                    "InUse",
-                    format!("Store {store} is open in process {holders:?}"),
-                ));
-            }
-            let linked = record
-                .get("backups")
-                .and_then(|b| b.get(bucket))
-                .and_then(link_heads);
-            let now = remote::heads(&destination).ok().map(|h| pieces::hex(&h));
-            if linked.is_none() || now != linked {
-                return Err(refused(
-                    "Conflict",
-                    format!("Store {store} changed since its last backup or restore through {bucket}; back it up first or restore under a new name"),
-                ));
-            }
             let identity = crate::host::stores::identity_of(record)?;
-            let pulled = remote::pull(
-                driver.as_ref(),
-                &file,
-                &destination,
-                &identity.binding,
-                identity.cursor_key,
-            )
-            .map_err(|failure| refused("Failed", failure.to_string()))?;
-            (pulled.bytes, pulled.sha256, pulled.heads)
+            // refused before the download too; checked again before the install
+            {
+                let _lock = home::lock::take(&home)?;
+                replaceable(&home, store, bucket, record)?;
+            }
+            _lease = Some(lease::hold(&home, store)?);
+            Some(identity)
         }
     };
-    save_link(
+    let cursor = match &identity {
+        Some(identity) => identity.cursor_key,
+        None => crate::host::registry::random()?,
+    };
+    progress(context, "download");
+    let staging = Staging::make(&home)?;
+    let staged = staging.0.join(remote::STORE_FILE);
+    let loaded = remote::load(driver.as_ref(), &file, &staged, cursor)
+        .map_err(|failure| refused("Failed", failure.to_string()))?;
+    let record = match (&existing, &identity) {
+        (Some(record), Some(identity)) => {
+            if loaded.binding != identity.binding {
+                return Err(refused(
+                    "Failed",
+                    format!(
+                        "the bucket's {file} has another binding ({}), not Store {store}'s",
+                        pieces::hex(&loaded.binding)
+                    ),
+                ));
+            }
+            record.clone()
+        }
+        _ => SdkValue::map([
+            ("name", SdkValue::text(store)),
+            ("kind", SdkValue::text("sqlite")),
+            ("binding", SdkValue::Bytes(loaded.binding.clone())),
+            ("cursor", SdkValue::Bytes(cursor.to_vec())),
+            ("machine", SdkValue::text("native")),
+            ("profile", SdkValue::text("disposable")),
+            ("created", SdkValue::Int(home::now_ms())),
+        ]),
+    };
+    let found = projects_in(&home, store, &record, &staged)?;
+    progress(context, "install");
+    let _lock = home::lock::take(&home)?;
+    let destination = paths::store_file(&home, store);
+    let now = read_record(&paths::store_record(&home, store))?;
+    match (&existing, now) {
+        (None, None) if !destination.exists() => {
+            home::private_dir(&paths::store_dir(&home, store))?;
+            // a link never replaces a Store that appeared meanwhile
+            std::fs::hard_link(&staged, &destination).map_err(failed)?;
+            write_record(&paths::store_record(&home, store), &record)?;
+        }
+        (None, _) => {
+            return Err(refused(
+                "Exists",
+                format!("a Store named {store} was made while this restore downloaded"),
+            ));
+        }
+        (Some(_), None) => {
+            return Err(refused(
+                "NotFound",
+                format!("Store {store} was removed while this restore downloaded"),
+            ));
+        }
+        (Some(_), Some(now)) => {
+            if now.get("binding") != record.get("binding") {
+                return Err(refused(
+                    "Conflict",
+                    format!("Store {store} was replaced while this restore downloaded"),
+                ));
+            }
+            replaceable(&home, store, bucket, &now)?;
+            std::fs::rename(&staged, &destination).map_err(failed)?;
+        }
+    }
+    write_link(
         &home,
         store,
         bucket,
-        link(&file, "restore", bytes, &sha256, heads.as_ref()),
+        link(
+            &file,
+            "restore",
+            loaded.bytes,
+            &loaded.sha256,
+            loaded.heads.as_ref(),
+        ),
     )?;
-    let projects = rebuild_projects(&home, store)?;
+    let projects = write_projects(&home, store, &found)?;
     Ok(SdkValue::map([
         ("store", SdkValue::text(store)),
         ("bucket", SdkValue::text(bucket)),
         ("file", SdkValue::text(&file)),
-        ("bytes", SdkValue::Int(bytes as i64)),
-        ("sha256", hex(&sha256)),
-        ("heads", heads.as_ref().map(hex).unwrap_or_default()),
+        ("bytes", SdkValue::Int(loaded.bytes as i64)),
+        ("sha256", hex(&loaded.sha256)),
+        ("heads", loaded.heads.as_ref().map(hex).unwrap_or_default()),
         ("projects", projects),
     ]))
 }
 
-/// The project records of a restored Store, rebuilt from the Store itself:
-/// one per project it holds; a record whose project it lacks is removed.
-fn rebuild_projects(home: &Path, store: &str) -> Result<SdkValue> {
-    let record = read_record(&paths::store_record(home, store))?
-        .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
+/// A restore's own download folder, `store/.restore-<random>/` (hidden from
+/// the Store names, and on the home's filesystem so the install is one
+/// rename); removed with whatever it still holds when the restore ends.
+struct Staging(std::path::PathBuf);
+
+impl Staging {
+    fn make(home: &Path) -> Result<Self> {
+        let random = crate::host::registry::random()?;
+        let dir = home
+            .join("store")
+            .join(format!(".restore-{}", pieces::hex(&random[..12])));
+        home::private_dir(&dir)?;
+        Ok(Self(dir))
+    }
+}
+
+impl Drop for Staging {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Refuses replacing Store `store` unless it is an idle sqlite Store on
+/// `native`, unchanged since its last backup or restore through `bucket`.
+/// Under the home lock.
+fn replaceable(home: &Path, store: &str, bucket: &str, record: &SdkValue) -> Result<()> {
+    let machine = route::machine(record, store)?;
+    if machine != "native" {
+        return Err(refused("Unsupported", format!("Store {store} is on {machine}; a restore replaces a Store on native: move it there first")));
+    }
+    route::moving(record, store)?;
+    let destination = paths::store_file(home, store);
+    // this process's own open copy closes first
+    crate::store::open::close(&destination)?;
+    let holders = lease::holders(home, store)?;
+    if !holders.is_empty() {
+        return Err(refused(
+            "InUse",
+            format!("Store {store} is open in process {holders:?}"),
+        ));
+    }
+    let sandboxes = sandboxes_of(home, store)?;
+    if !sandboxes.is_empty() {
+        return Err(refused(
+            "InUse",
+            format!(
+                "Store {store} has running Sandboxes: {}",
+                sandboxes.join(", ")
+            ),
+        ));
+    }
+    let linked = record
+        .get("backups")
+        .and_then(|b| b.get(bucket))
+        .and_then(link_heads);
+    let now = remote::heads(&destination).ok().map(|h| pieces::hex(&h));
+    if linked.is_none() || now != linked {
+        return Err(refused(
+            "Conflict",
+            format!("Store {store} changed since its last backup or restore through {bucket}; back it up first or restore under a new name"),
+        ));
+    }
+    // every opener (a daemon, a mounted Workspace, an SDK process) holds
+    // SQLite's sidecars while the Store is open
+    for suffix in ["-wal", "-shm"] {
+        let mut sidecar = destination.as_os_str().to_owned();
+        sidecar.push(suffix);
+        if std::path::Path::new(&sidecar).exists() {
+            return Err(refused(
+                "InUse",
+                format!("Store {store} is open (its {suffix} exists)"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The Sandboxes of any machine whose project is in Store `store`.
+fn sandboxes_of(home: &Path, store: &str) -> Result<Vec<String>> {
+    let mut found = Vec::new();
+    for machine in paths::names(&home.join("machine")).map_err(failed)? {
+        let dir = paths::machine_dir(home, &machine).join("sandbox");
+        for sandbox in paths::names(&dir).map_err(failed)? {
+            let record = read_record(&dir.join(&sandbox).join("record.json"))?;
+            let project = record
+                .as_ref()
+                .and_then(|r| r.get_text("project"))
+                .unwrap_or("");
+            if project.split_once('/').map(|(s, _)| s) == Some(store) {
+                found.push(sandbox);
+            }
+        }
+    }
+    Ok(found)
+}
+
+/// `(name, stack)` of each project the Store file `file` holds, read on a
+/// connection of this call's own that is closed before this returns.
+fn projects_in(
+    home: &Path,
+    store: &str,
+    record: &SdkValue,
+    file: &Path,
+) -> Result<Vec<(String, SdkValue)>> {
     let args = SdkValue::map([
         ("home", SdkValue::text(home.display().to_string())),
         ("store", SdkValue::text(store)),
-        ("store_record", record),
-        (
-            "storePath",
-            SdkValue::text(paths::store_file(home, store).display().to_string()),
-        ),
+        ("store_record", record.clone()),
+        ("storePath", SdkValue::text(file.display().to_string())),
     ]);
-    let listed = crate::host::stores::list_projects(&args)?;
-    let SdkValue::List(items) = listed else {
+    let SdkValue::List(items) = crate::host::stores::list_projects(&args)? else {
         return Err(refused("Failed", "the Store's project list is not a list"));
     };
+    Ok(items
+        .iter()
+        .filter_map(|item| {
+            let name = item.get_text("name")?.to_owned();
+            Some((name, item.get("stack").cloned().unwrap_or_default()))
+        })
+        .collect())
+}
+
+/// The project records of a restored Store, rebuilt from what it holds:
+/// one per project; a record whose project it lacks is removed. Under the
+/// home lock, after [`replaceable`] found no Sandbox of the Store.
+fn write_projects(home: &Path, store: &str, found: &[(String, SdkValue)]) -> Result<SdkValue> {
     let mut names = Vec::new();
-    for item in &items {
-        let Some(name) = item.get_text("name") else {
-            continue;
-        };
+    for (name, stack) in found {
         let path = paths::project_record(home, store, name);
         if read_record(&path)?.is_none() {
             write_record(
                 &path,
-                &SdkValue::map([
-                    ("name", SdkValue::text(name)),
-                    ("stack", item.get("stack").cloned().unwrap_or_default()),
-                ]),
+                &SdkValue::map([("name", SdkValue::text(name)), ("stack", stack.clone())]),
             )?;
         }
         names.push(SdkValue::text(name));

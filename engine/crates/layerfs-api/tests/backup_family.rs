@@ -252,3 +252,97 @@ fn backups_against_minio() {
         let _ = std::fs::remove_dir_all(dir);
     }
 }
+
+/// A home with Store `shop` (project `api`) backed up to bucket `b1` under a
+/// prefix of its own, or `None` when no MinIO is configured.
+fn backed_up(tag: &str) -> Option<(PathBuf, PathBuf, String)> {
+    let (Ok(endpoint), Ok(bucket)) = (
+        std::env::var("LAYERFS_REMOTE_ENDPOINT"),
+        std::env::var("LAYERFS_REMOTE_BUCKET"),
+    ) else {
+        eprintln!("NOT_RUN: LAYERFS_REMOTE_ENDPOINT / LAYERFS_REMOTE_BUCKET unset");
+        return None;
+    };
+    let home = tempdir(&format!("{tag}-home"));
+    home::open(&home).unwrap();
+    let folder = tempdir(&format!("{tag}-folder"));
+    std::fs::write(folder.join("README.md"), "backed up\n").unwrap();
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+    let url = format!("{endpoint}/{bucket}/lfs533-{tag}-{}", std::process::id());
+    ok(
+        &home,
+        "backup.connect",
+        &[
+            ("name", t("b1")),
+            ("url", t(&url)),
+            ("key", t("env:LAYERFS_REMOTE")),
+        ],
+    );
+    ok(
+        &home,
+        "backup.create",
+        &[("store", t("shop")), ("bucket", t("b1"))],
+    );
+    Some((home, folder, url))
+}
+
+/// Two restores under the same new name at once (#533 review P0-8): both
+/// download, the first to install wins and the other is `Exists`, re-checked
+/// under the home lock; neither overwrites the other or leaves its download.
+#[test]
+fn concurrent_restores_under_a_new_name() {
+    let Some((home, folder, _)) = backed_up("twice") else {
+        return;
+    };
+    let threads: Vec<_> = (0..2)
+        .map(|_| {
+            let home = home.clone();
+            std::thread::spawn(move || {
+                call(
+                    &home,
+                    "backup.restore",
+                    &[
+                        ("store", t("dup")),
+                        ("bucket", t("b1")),
+                        ("file", t("shop")),
+                    ],
+                )
+            })
+        })
+        .collect();
+    let mut outcomes: Vec<_> = threads.into_iter().map(|t| t.join().unwrap()).collect();
+    outcomes.sort_by_key(|o| o.is_err());
+    assert!(outcomes[0].is_ok(), "{outcomes:?}");
+    assert_eq!(
+        outcomes[1].as_ref().unwrap_err().0,
+        "Exists",
+        "{outcomes:?}"
+    );
+    let read = ok(
+        &home,
+        "file.read",
+        &[
+            ("project", t("dup/api")),
+            ("branch", t("main")),
+            ("path", t("/README.md")),
+        ],
+    );
+    assert_eq!(read.get_text("text"), Some("backed up\n"));
+    let hidden: Vec<_> = std::fs::read_dir(home.join("store"))
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().starts_with('.'))
+        .collect();
+    assert!(hidden.is_empty(), "{hidden:?}");
+    for dir in [home, folder] {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
