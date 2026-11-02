@@ -7,7 +7,7 @@
 use crate::host::outcome::Outcome;
 use crate::host::registry::lock;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_store_service::remote::storage::progress::{self, Cell, Sample, INTERVAL};
+use layerfs_store_backup::bucket::progress::{self, Cell, Sample, INTERVAL};
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock, Mutex};
 

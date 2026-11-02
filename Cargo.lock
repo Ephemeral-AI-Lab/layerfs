@@ -715,6 +715,7 @@ dependencies = [
  "layerfs-project",
  "layerfs-sandbox",
  "layerfs-storage",
+ "layerfs-store-backup",
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
@@ -874,14 +875,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "layerfs-remote-storage"
-version = "2.0.0"
-dependencies = [
- "native-tls",
- "sha2 0.11.0",
-]
-
-[[package]]
 name = "layerfs-sandbox"
 version = "2.0.0"
 dependencies = [
@@ -900,6 +893,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-store-backup"
+version = "2.0.0"
+dependencies = [
+ "layerfs-persistence",
+ "layerfs-storage",
+ "layerfs-store-service",
+ "native-tls",
+ "nix",
+ "sha2 0.11.0",
+]
+
+[[package]]
 name = "layerfs-store-service"
 version = "2.0.0"
 dependencies = [
@@ -908,7 +913,6 @@ dependencies = [
  "layerfs-history",
  "layerfs-overlay",
  "layerfs-persistence",
- "layerfs-remote-storage",
  "layerfs-storage",
  "layerfs-telemetry",
  "layerfs-workspace",

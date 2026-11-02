@@ -82,7 +82,7 @@ fn heads(path: &Path, key: Key) -> Result<Option<[u8; 32]>, SdkRefusal> {
         // a pull or clone of this Store runs: answer what was read before
         return Ok(remembered.map(|(_, digest)| digest));
     };
-    match layerfs_store_service::remote::heads(path) {
+    match layerfs_store_backup::backup::heads(path) {
         Ok(digest) => {
             lock(&HEADS)?.insert(path.to_owned(), (key, digest));
             Ok(Some(digest))

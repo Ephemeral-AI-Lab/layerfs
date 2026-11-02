@@ -19,7 +19,6 @@ pub mod kernel_guard;
 pub mod operator;
 pub mod overlay;
 pub mod read;
-pub mod remote;
 pub mod service;
 pub mod store;
 mod store_service;

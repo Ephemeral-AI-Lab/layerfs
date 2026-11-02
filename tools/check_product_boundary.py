@@ -33,7 +33,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-overlay",
     "layerfs-workspace",
     "layerfs-store-service",
-    "layerfs-remote-storage",
+    "layerfs-store-backup",
     "layerfs-fuse",
     "layerfs-nfs",
     "layerfs-daemon",
@@ -51,7 +51,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-overlay": "#![forbid(unsafe_code)]",
     "layerfs-workspace": "#![forbid(unsafe_code)]",
     "layerfs-store-service": "#![forbid(unsafe_code)]",
-    "layerfs-remote-storage": "#![forbid(unsafe_code)]",
+    "layerfs-store-backup": "#![forbid(unsafe_code)]",
     "layerfs-fuse": "#![forbid(unsafe_code)]",
     "layerfs-nfs": "#![forbid(unsafe_code)]",
     "layerfs-daemon": "#![forbid(unsafe_code)]",
@@ -94,7 +94,12 @@ ALLOWED_DEPENDENCIES = {
     "layerfs-workspace": {"layerfs-content", "layerfs-overlay", "layerfs-telemetry"},
     "layerfs-fuse": {"layerfs-content", "layerfs-overlay", "layerfs-workspace"},
     # Whole-file remote drivers; they know nothing about Stores.
-    "layerfs-remote-storage": set(),
+    "layerfs-store-backup": {
+        # bucket/ knows nothing about Stores; backup/ is the whole-Store copy.
+        "layerfs-store-service",
+        "layerfs-persistence",
+        "layerfs-storage",
+    },
     # The NFS export reuses the kernel ports and operations; never daemon.
     "layerfs-nfs": {"layerfs-content", "layerfs-overlay", "layerfs-workspace", "layerfs-fuse"},
     # The Store engine (#352 F-020): the SDK's Store calls in-process and the
@@ -108,7 +113,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-history",
         "layerfs-persistence",
         "layerfs-telemetry",
-        "layerfs-remote-storage",
+        "layerfs-store-backup",
     },
     # Concrete Store open/install belongs to application composition. The
     # provider-independent daemon store/ subtree has a narrower source boundary.
@@ -136,6 +141,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-sandbox",
         "layerfs-machine",
         "layerfs-store-service",
+        "layerfs-store-backup",
     },
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
     "layerfs-sandbox": set(),
@@ -161,7 +167,6 @@ LAYER = {
     "layerfs-persistence": ENGINE,
     "layerfs-project": ENGINE,
     "layerfs-store-service": ENGINE,
-    "layerfs-remote-storage": ENGINE,
     "layerfs-workspace": ENGINE,
     # The connect layer (#535): machine/network reach. layerfs-sandbox moved
     # in phase 1; layerfs-machine and layerfs-store-backup follow there.

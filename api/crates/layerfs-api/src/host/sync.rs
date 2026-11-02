@@ -30,13 +30,13 @@ use crate::host::stores::{self, Identity, Kind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::HistoryName;
-use layerfs_store_service::remote::storage::{
-    cloudflare_r2::R2Settings,
+use layerfs_store_backup::backup::{self as remote, state, Direction, Provider, Remotes, Transfer};
+use layerfs_store_backup::bucket::{
     minio::{self, MinioSettings, DEFAULT_PART_SIZE},
+    r2::R2Settings,
     s3_api::{S3Client, S3Config},
     CredentialRef, Credentials, Driver, RemoteError,
 };
-use layerfs_store_service::remote::{self, state, Direction, Provider, Remotes, Transfer};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -466,7 +466,7 @@ fn expected(args: &SdkValue, store: &str, remote: &str, file: &str) -> Result<re
 }
 
 fn push_code(failure: &remote::PushFailure, kind: Upload) -> &'static str {
-    use layerfs_store_service::remote::storage::RemoteError;
+    use layerfs_store_backup::bucket::RemoteError;
     match failure {
         remote::PushFailure::Invalid(_) => "InvalidInput",
         remote::PushFailure::Space { .. } => "Capacity",

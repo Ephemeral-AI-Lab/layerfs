@@ -14,7 +14,7 @@
 use super::paths;
 use super::records::{private_dir, write_record};
 use layerfs_bridge::control::SdkValue;
-use layerfs_store_service::remote::storage::pieces;
+use layerfs_store_backup::bucket::pieces;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

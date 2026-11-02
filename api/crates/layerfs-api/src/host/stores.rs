@@ -604,10 +604,9 @@ pub(crate) fn forget(args: &SdkValue) -> Outcome {
     let store = text(args, "store")?;
     let directory = store_dir(&home, store)?;
     // #509: the Store's link record goes with it; its remote file stays
-    let link = layerfs_store_service::remote::state::state_path(&home, store)
+    let link = layerfs_store_backup::backup::state::state_path(&home, store)
         .map_err(|cause| refused("InvalidInput", cause))?;
-    layerfs_store_service::remote::state::remove(&link)
-        .map_err(|cause| refused("Failed", cause))?;
+    layerfs_store_backup::backup::state::remove(&link).map_err(|cause| refused("Failed", cause))?;
     if !directory.exists() {
         return Ok(SdkValue::map([("removed", SdkValue::Bool(false))]));
     }

@@ -471,9 +471,9 @@ Historical explanation is retained outside default implementation routing.
 All product layers follow the detailed
 [production source rules](engine/AGENTS.md#production-file-size-and-responsibility)
 and [checks and completion rules](engine/AGENTS.md#checks-and-completion).
-The root manifest builds four core crates, ten engine crates, two connect
-crates under `connect/crates` (`layerfs-sandbox` and `layerfs-machine`;
-`layerfs-store-backup` follows in #535 phase 1) and four API crates under
+The root manifest builds four core crates, nine engine crates, three connect
+crates under `connect/crates` (`layerfs-sandbox`, `layerfs-machine` and
+`layerfs-store-backup`) and four API crates under
 `api/crates`: the library `layerfs-api`, the `layerfs` command
 `layerfs-cli`, the Node binding `layerfs-node` and the PyO3 module
 `layerfs-python`. `api/` also holds the published JavaScript and Python

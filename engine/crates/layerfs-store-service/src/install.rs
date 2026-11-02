@@ -207,12 +207,12 @@ pub fn install_local(
 /// installs its Store (there is no root daemon to match); the daemon's own
 /// check that it owns the Store file still holds.
 #[cfg(target_os = "macos")]
-pub(crate) fn installer_user() -> Result<(), String> {
+pub fn installer_user() -> Result<(), String> {
     Ok(())
 }
 /// Refuses an installer that is not the daemons' user.
 #[cfg(not(target_os = "macos"))]
-pub(crate) fn installer_user() -> Result<(), String> {
+pub fn installer_user() -> Result<(), String> {
     use std::os::unix::fs::MetadataExt;
     // the owner of /proc/self is this process's effective user
     let uid = fs::metadata("/proc/self")

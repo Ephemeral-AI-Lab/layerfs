@@ -174,6 +174,15 @@ class ProductBoundaryTests(unittest.TestCase):
         machine_up = '[package]\nname="layerfs-daemon"\n[dependencies]\n'
         findings = dependency_violations(machine_up + 'layerfs-machine={path="../layerfs-machine"}')
         self.assertTrue(any("upward" in message for _, message in findings), findings)
+        findings = dependency_violations(
+            '[package]\nname="layerfs-store-service"\n[dependencies]\nlayerfs-store-backup={path="../../../connect/crates/layerfs-store-backup"}'
+        )
+        self.assertTrue(any("upward" in message for _, message in findings), findings)
+        self.assertFalse(
+            dependency_violations(
+                '[package]\nname="layerfs-store-backup"\n[dependencies]\nlayerfs-store-service={path="../../../engine/crates/layerfs-store-service"}\nlayerfs-persistence={path="../../../engine/crates/layerfs-persistence"}\nlayerfs-storage={path="../../../core/crates/layerfs-storage"}'
+            )
+        )
         self.assertTrue(
             any("upward" in message for _, message in layer_violations("layerfs-sandbox", "layerfs-api", "dependencies"))
         )

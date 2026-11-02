@@ -9,7 +9,7 @@ product mental model or campaign-specific benchmark procedures.
 ## Scope and ownership
 
 - Engine owns Bridge, daemon, FUSE, NFS, Overlay, Persistence, Project,
-  remote storage, Sandbox, Store service and Workspace. Core owns content,
+  Persistence, Project, Store service and Workspace. Core owns content,
   history, storage and telemetry. The library `layerfs-api` and its front ends
   (`layerfs-cli`, `layerfs-node`, `layerfs-python`) are API crates under
   `api/crates`; see the [API guide](../api/AGENTS.md). No engine crate may
@@ -17,7 +17,7 @@ product mental model or campaign-specific benchmark procedures.
   code leave the engine for the [connect layer](../connect/AGENTS.md):
   `layerfs-sandbox`, the machine layer (`layerfs-machine`) and remote
   storage (renamed `layerfs-store-backup`, with `layerfs-store-service`'s
-  `remote/`) move to `connect/crates` in #535 phase 1. The engine keeps
+  `remote/`) moved to `connect/crates` in #535 phase 1. The engine keeps
   persistence (SQLite and PostgreSQL, D2), the daemon, the overlay,
   Workspaces and the kernel routes (FUSE and NFS as peers over
   `layerfs-mount-ports`, D3). No engine crate may depend on a connect crate.

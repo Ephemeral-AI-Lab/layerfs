@@ -9,8 +9,8 @@
 use crate::home::paths;
 use crate::host::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_store_service::remote::heads::heads;
-use layerfs_store_service::remote::storage::pieces;
+use layerfs_store_backup::backup::heads::heads;
+use layerfs_store_backup::bucket::pieces;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};

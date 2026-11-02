@@ -366,7 +366,6 @@ ENGINE_CRATES = {
     "layerfs-persistence",
     "layerfs-project",
     "layerfs-store-service",
-    "layerfs-remote-storage",
     "layerfs-workspace",
     # The NFS export was missing here and counted under core (#533 step 2).
     "layerfs-nfs",
@@ -374,7 +373,14 @@ ENGINE_CRATES = {
 # The connect layer (#535): the crates that reach a machine or the network.
 # Classified by name in every layout, so a pre-move tree counts them under
 # connect too and per-layer comparisons stay honest on both sides of a move.
-CONNECT_CRATES = {"layerfs-sandbox", "layerfs-machine", "layerfs-store-backup"}
+CONNECT_CRATES = {
+    "layerfs-sandbox",
+    "layerfs-machine",
+    "layerfs-store-backup",
+    # The name layerfs-store-backup had before move 1.6: a pre-move tree
+    # counts it under connect too.
+    "layerfs-remote-storage",
+}
 # The library and its 2.0 front ends (#533): the binary, Node and Python.
 API_CRATES = {"layerfs-api", "layerfs-cli", "layerfs-node", "layerfs-python"}
 # Crate folders directly under api/ before the regrouping, by folder name.

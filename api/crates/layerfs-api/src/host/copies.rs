@@ -8,8 +8,8 @@ use crate::host::registry::text;
 use crate::host::sync::driver;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
-use layerfs_store_service::remote::storage::RemoteError;
-use layerfs_store_service::remote::{self, Checked, Copy};
+use layerfs_store_backup::backup::{self as remote, Checked, Copy};
+use layerfs_store_backup::bucket::RemoteError;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The refusal of a failed remote request.

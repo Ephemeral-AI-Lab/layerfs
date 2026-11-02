@@ -11,12 +11,10 @@ use crate::host::outcome::{failed, refused, Outcome};
 use crate::store::files::CHUNK;
 use crate::store::{lease, route};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_store_service::remote::storage::cloudflare_r2::R2Settings;
-use layerfs_store_service::remote::storage::minio::{MinioSettings, DEFAULT_PART_SIZE};
-use layerfs_store_service::remote::storage::{
-    pieces, CredentialRef, Driver, Metadata, RemoteError,
-};
-use layerfs_store_service::remote::{self, Provider};
+use layerfs_store_backup::backup::{self as remote, Provider};
+use layerfs_store_backup::bucket::minio::{MinioSettings, DEFAULT_PART_SIZE};
+use layerfs_store_backup::bucket::r2::R2Settings;
+use layerfs_store_backup::bucket::{pieces, CredentialRef, Driver, Metadata, RemoteError};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -481,11 +479,11 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         let heads = staged.get_text("heads").and_then(pieces::parse_hex32);
         let mut metadata = Metadata::from([
             (
-                remote::push::SQLITE_VERSION.to_owned(),
+                remote::create::SQLITE_VERSION.to_owned(),
                 staged.get_text("sqlite").unwrap_or("").to_owned(),
             ),
             (
-                remote::push::BINDING.to_owned(),
+                remote::create::BINDING.to_owned(),
                 pieces::hex(&identity.binding),
             ),
             (EXPORTED_FROM.to_owned(), format!("{home_id}/{machine}")),
