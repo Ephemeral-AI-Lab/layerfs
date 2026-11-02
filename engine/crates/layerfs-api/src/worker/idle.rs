@@ -1,9 +1,12 @@
 //! The worker's idle stop (H §7.2, #533 step 13, O2): with no open Store, no
 //! Sandbox (live, or recorded by the host Sandbox code), no running
 //! Firecracker microVM it hosts, no call in flight and no call for [`IDLE`],
-//! the worker stops serving; its front end then exits, and in a VM guest powers it off. The
-//! host notices at its next call (the worker does not answer) and starts
-//! the machine again: a readiness wait, not a retry.
+//! the worker stops serving. A call is an authenticated request other than
+//! `worker.ping`: a connection, the secret alone, a ping, or a denied or
+//! malformed frame is a probe and does not restart the clock. Its front
+//! end then exits, and in a VM guest powers it off. The host notices at
+//! its next call (the worker does not answer) and starts the machine again:
+//! a readiness wait, not a retry.
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;

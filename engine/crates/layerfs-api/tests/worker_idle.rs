@@ -47,7 +47,9 @@ fn an_idle_worker_stops_and_a_busy_one_does_not() {
     assert!(worker::idle(&root, Duration::ZERO, 0));
     std::fs::remove_dir_all(root.join("firecracker")).unwrap();
 
-    // a worker answered recently is not idle for a minute
+    // a worker that answered a request recently is not idle for a minute
+    // (a request, even one refused for its arguments; a ping does not count,
+    // tests/worker_idle_probes.rs)
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let (r, started) = (root.clone(), Instant::now());
@@ -64,7 +66,8 @@ fn an_idle_worker_stops_and_a_busy_one_does_not() {
         address,
         secret: "s".to_owned(),
     };
-    worker::ping(&endpoint).unwrap();
+    let refused = worker::call(&endpoint, "store.call", SdkValue::Null, &mut |_| {});
+    assert_eq!(refused.unwrap_err().code, "InvalidInput");
     assert!(!worker::idle(&root, Duration::from_secs(60), 0));
     served.join().unwrap().unwrap();
     assert!(

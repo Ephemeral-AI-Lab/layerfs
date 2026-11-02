@@ -53,11 +53,13 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
     for stream in listener.incoming() {
         let stream = stream?;
         let (secret, root, served) = (secret.clone(), root.clone(), served.clone());
+        // only a request that does work restarts the idle clock (in
+        // `answer`); a connection, the secret alone, `worker.ping` or a denied
+        // or malformed frame does not, so probing a machine never keeps it up
         std::thread::spawn(move || {
             if answer(stream, &secret, &root) {
                 served.fetch_add(1, Ordering::Relaxed);
             }
-            super::server::touch();
         });
     }
     Ok(Served {
@@ -67,7 +69,8 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
 
 static LAST: AtomicU64 = AtomicU64::new(0);
 
-/// Marks this worker active now (the idle clock restarts).
+/// Marks this worker active now (the idle clock restarts): at the start and
+/// the end of a request that does work.
 pub(crate) fn touch() {
     LAST.store(crate::home::now_ms() as u64, Ordering::Relaxed);
 }
@@ -113,9 +116,12 @@ fn answer(mut stream: TcpStream, secret: &str, root: &Path) -> bool {
         _ => return false,
     };
     let _ = stream.set_read_timeout(None);
-    let _busy = super::idle::Busy::start();
+    let works = request.get_text("op") != Some("worker.ping");
+    let _busy = works.then(super::idle::Busy::start);
     let _home = crate::home::guest::sent(request.get_text("home_id"));
-    touch();
+    if works {
+        touch();
+    }
     let outcome = run(
         request.get_text("op").unwrap_or(""),
         request.get("args").cloned().unwrap_or_default(),
