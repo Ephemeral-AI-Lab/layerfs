@@ -1,8 +1,9 @@
 //! The Sandbox's root: the unpacked image (a read-only lower layer) with the
 //! Sandbox's own empty writable layer on top, so every command sees the image
 //! as `/` and everything it writes belongs to that Sandbox alone. The
-//! Sandbox's own directory and the Store's directory are bound at their own
-//! paths so every path keeps one meaning on both sides of the pivot, and a
+//! Sandbox's own directory is bound at its own path, and each of the spec's
+//! binds at its guest path (a sqlite Store's directory at its own), so every
+//! path keeps one meaning on both sides of the pivot, and a
 //! private `/proc`, `/dev` and `/tmp` are mounted over the image's own.
 //! Nothing the Sandbox mounts reaches the VM's mount tree: the init stage made
 //! this mount namespace private first.
@@ -51,9 +52,16 @@ pub(super) fn build(spec: &HelperSpec) -> Result<(), String> {
     )?;
     // the daemon's setup, overlay, Workspace mounts and `tmp`
     bind(&spec.sandbox, &inside(&spec.root, &spec.sandbox)?, false)?;
-    // the shared Store's directory: SQLite's WAL and the writers' directory
-    // lock see the same inode as every other opener on this kernel
-    bind(&spec.store, &inside(&spec.root, &spec.store)?, false)?;
+    // the spec's binds: a sqlite Store's directory, where SQLite's WAL and
+    // the writers' directory lock see the same inode as every other opener
+    // on this kernel; none for a PostgreSQL Store
+    for entry in &spec.binds {
+        bind(
+            &entry.host,
+            &inside(&spec.root, &entry.guest)?,
+            !entry.read_write,
+        )?;
+    }
     Ok(())
 }
 

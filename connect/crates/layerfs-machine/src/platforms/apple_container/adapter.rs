@@ -4,9 +4,11 @@ use crate::adapter::{refused, Adapter};
 use crate::error::MachineError;
 use crate::platform::HostOs;
 use crate::probe::{macos_missing, tool_version};
+use crate::reach::{dial, Loopback};
 use crate::setup::guest::Guest;
 use crate::setup::Status;
 use crate::spec::{Bundle, Running, Spec, Tools};
+use crate::support::APPLE_CONTAINER_ALIAS;
 
 pub(crate) struct AppleContainer;
 pub(crate) static ADAPTER: AppleContainer = AppleContainer;
@@ -39,5 +41,8 @@ impl Adapter for AppleContainer {
     }
     fn host_identity(&self, spec: &Spec) -> Result<String, MachineError> {
         Err(refused(spec, "has no ssh host"))
+    }
+    fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
+        dial(spec, url, Loopback::Refused(APPLE_CONTAINER_ALIAS))
     }
 }

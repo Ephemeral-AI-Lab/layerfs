@@ -61,6 +61,10 @@ pub struct Supports {
 const OTHER_HOST: &str = "LayerFS names no host other than macOS, Linux and Windows";
 const NO_BACKEND: &str = "no Sandbox backend on Windows (O5)";
 const NAMESPACES_BINDS: &str = "namespaces binds a Store file; enabled in #535 phase 5a";
+/// G7: no live receipt records these platforms' host aliases yet; `reach`
+/// refuses a loopback URL with the same text.
+pub(crate) const APPLE_CONTAINER_ALIAS: &str = "apple-container host alias not verified (G7)";
+pub(crate) const MICROSANDBOX_ALIAS: &str = "microsandbox host alias not verified (G7)";
 
 /// Why `platform` cannot be on `host`, or `None` where it can.
 fn host_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
@@ -90,8 +94,8 @@ fn postgresql_refusal(platform: Platform, host: HostOs) -> Option<&'static str> 
             "namespaces binds a Store file and ssh reach is not built; enabled in #535 phase 5a",
         ),
         (Platform::Lima, _) => Some("lima host alias not verified (G7)"),
-        (Platform::AppleContainer, _) => Some("apple-container host alias not verified (G7)"),
-        (Platform::Microsandbox, _) => Some("microsandbox host alias not verified (G7)"),
+        (Platform::AppleContainer, _) => Some(APPLE_CONTAINER_ALIAS),
+        (Platform::Microsandbox, _) => Some(MICROSANDBOX_ALIAS),
         (Platform::Firecracker, _) => Some("outbound NAT and host alias not verified (G7)"),
     }
 }

@@ -19,6 +19,7 @@ mod options;
 mod platform;
 pub(crate) mod platforms;
 mod probe;
+mod reach;
 mod setup;
 mod spec;
 mod support;
@@ -28,8 +29,8 @@ pub use options::{OptKind, OptSpec};
 pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Route};
 pub use probe::{native_missing, nested_missing, probe, Probe};
 pub use setup::{
-    connect, copy_in, copy_out, create, host_identity, remove, start, status, status_within, stop,
-    State, Status,
+    connect, copy_in, copy_out, create, host_identity, reach, remove, start, status, status_within,
+    stop, State, Status,
 };
 pub use spec::{
     parse_size, Bundle, Endpoint, Lasting, Running, Spec, SshSpec, Tools, BUNDLE, DATA, IMAGE,

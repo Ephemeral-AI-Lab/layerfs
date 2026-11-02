@@ -11,7 +11,7 @@ use super::{
 use crate::local::listener;
 use crate::local::{search::search_path, Local, LocalPhase, LocalProcess};
 use crate::HelperSpec;
-use crate::{CommandIdentity, Image, RuntimeError};
+use crate::{Bind, CommandIdentity, Image, RuntimeError};
 use nix::fcntl::OFlag;
 use std::{
     fs::{self, File, OpenOptions, Permissions},
@@ -29,8 +29,9 @@ use std::{
 pub(crate) struct Options {
     pub(crate) command_identity: CommandIdentity,
     pub(crate) environment: Vec<(String, String)>,
-    /// The exact Store file the daemon opens; its directory is bound in.
-    pub(crate) store: PathBuf,
+    /// The host directories bound into the Sandbox's private root (a
+    /// sqlite Store's directory; none for a PostgreSQL Store).
+    pub(crate) binds: Vec<Bind>,
     /// The image digest the Sandbox's root is an overlay of, and the
     /// docker-archive in the bundle that holds it.
     pub(crate) image: Image,
@@ -131,8 +132,9 @@ pub(crate) fn create(
 }
 
 /// Everything a start refuses before it makes anything: the request's own
-/// fields, this host's runtime prerequisites, the Store's directory against
-/// the private root's, the helper, and the image the bundle carries. Getting
+/// fields, this host's runtime prerequisites, each bind against the private
+/// root's (none for a PostgreSQL Store), the helper, and the image the
+/// bundle carries. Getting
 /// the image's root may unpack it, once per digest for the whole runtime root.
 fn start_request(
     local: &Local,
@@ -170,7 +172,9 @@ fn start_request(
         ));
     }
     check_environment(&options.environment)?;
-    check_store(&paths, &options.store)?;
+    for bind in &options.binds {
+        check_bind(&paths, bind)?;
+    }
     for path in [&paths.local.directory, &paths.root] {
         match fs::symlink_metadata(path) {
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
@@ -197,29 +201,33 @@ fn check_environment(environment: &[(String, String)]) -> Result<(), RuntimeErro
     Ok(())
 }
 
-/// The Store's directory is bound into every Sandbox, so it must not hold the
-/// runtime root (which would expose every Sandbox's directory to all of them)
-/// and must be a real directory that is not the filesystem root.
-fn check_store(paths: &Paths, store: &Path) -> Result<(), RuntimeError> {
-    let directory = (store.parent())
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .ok_or(RuntimeError::Protocol("namespaces Store file"))?;
-    let metadata = fs::metadata(directory)?;
+/// A bind's host directory (a sqlite Store's, bound into every Sandbox of
+/// it) must not hold the runtime root, which would expose every Sandbox's
+/// directory to all of them, and must be a real directory that is not the
+/// filesystem root. Its guest path must not be `/` or hold the Sandbox's
+/// own directory, which the private root binds first.
+fn check_bind(paths: &Paths, bind: &Bind) -> Result<(), RuntimeError> {
+    let plain = |path: &Path| {
+        path.is_absolute()
+            && path != Path::new("/")
+            && !(path.components()).any(|c| matches!(c, Component::ParentDir | Component::CurDir))
+    };
+    let metadata = fs::metadata(&bind.host)?;
     let root = paths
         .local
         .directory
         .parent()
         .ok_or(RuntimeError::Protocol("namespaces Sandbox root"))?;
-    if !store.is_absolute()
+    if !plain(&bind.host)
+        || !plain(&bind.guest)
         || !metadata.is_dir()
-        || directory == Path::new("/")
-        || (store.components()).any(|c| matches!(c, Component::ParentDir | Component::CurDir))
-        || root.starts_with(directory)
-        || paths.local.directory.starts_with(directory)
-        || paths.root.starts_with(directory)
+        || root.starts_with(&bind.host)
+        || paths.local.directory.starts_with(&bind.host)
+        || paths.root.starts_with(&bind.host)
+        || paths.local.directory.starts_with(&bind.guest)
     {
         return Err(RuntimeError::Protocol(
-            "namespaces Store directory (must not hold the runtime root)",
+            "namespaces bind directory (must not hold the runtime root)",
         ));
     }
     Ok(())
@@ -268,15 +276,13 @@ fn prepare(
     let spec = HelperSpec {
         root: paths.root.clone(),
         sandbox: paths.local.directory.clone(),
-        store: (options.store.parent())
-            .ok_or(RuntimeError::Protocol("namespaces Store directory"))?
-            .to_owned(),
         daemon: paths.bin.clone(),
         config: paths.local.config.clone(),
         cgroup: cgroup::path(id),
         lower: image.directory().to_owned(),
         upper: paths.upper.clone(),
         work: paths.work.clone(),
+        binds: options.binds.clone(),
     };
     private(&paths.spec)?.write_all(&spec.encode()?)?;
     Ok(private(&paths.local.log)?)

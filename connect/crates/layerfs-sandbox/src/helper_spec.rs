@@ -1,26 +1,34 @@
 //! The init stage's inputs: absolute paths only, one per line, in a 0600 file:
-//! what it mounts, the three directories of the Sandbox root's overlay (the
-//! unpacked image as its read-only lower layer, and the Sandbox's own upper
-//! and work directories), the daemon it starts, and the cgroup it joins.
+//! the three directories of the Sandbox root's overlay (the unpacked image as
+//! its read-only lower layer, and the Sandbox's own upper and work
+//! directories), the daemon it starts, the cgroup it joins, and the host
+//! directories it binds in (#535 §6.3: a sqlite Store's directory; none for
+//! a PostgreSQL Store).
 //!
 //! A format, not a platform behaviour: it is compiled wherever the crate is and
-//! tested without root; only the helper that reads it is Linux only.
+//! tested without root; only the helper that reads it is Linux only. It is
+//! not versioned: the launcher and the helper come from one bundle, and a
+//! spec of another field set (the former single `store=` line) is refused.
 //!
 //! The daemon's setup (its keys and every secret in it) is a separate file the
 //! helper never reads; this spec names only what the init stage mounts and
 //! runs, so it carries no secret. Values may contain `=` (the key ends at the
 //! first one); a path may not contain a control character, because the format
-//! is line based.
-use crate::RuntimeError;
+//! is line based. A bind is one `bind=<rw|ro>\t<host>\t<guest>` line, which a
+//! tab (refused in every path) separates.
+use crate::{Bind, RuntimeError};
 use std::{
     os::unix::ffi::OsStrExt,
     path::{Component, Path, PathBuf},
 };
 
-/// The fields, in the order they are written.
-const FIELDS: [&str; 9] = [
-    "root", "sandbox", "store", "daemon", "config", "cgroup", "lower", "upper", "work",
+/// The fields every spec has once, in the order they are written; `bind`
+/// lines follow them, any number.
+const FIELDS: [&str; 8] = [
+    "root", "sandbox", "daemon", "config", "cgroup", "lower", "upper", "work",
 ];
+/// The key of a bind line.
+const BIND: &str = "bind";
 
 /// One init stage's decoded inputs.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -31,9 +39,6 @@ pub struct HelperSpec {
     /// The Sandbox directory, bound at its own path inside the private root,
     /// so the daemon's setup, overlay and Workspace mounts keep one naming.
     pub sandbox: PathBuf,
-    /// The Store's directory, bound read-write: SQLite's WAL and the writers'
-    /// directory lock then see the same inode as every other opener.
-    pub store: PathBuf,
     /// The daemon executable inside the private root.
     pub daemon: PathBuf,
     /// The daemon's setup file, 0600.
@@ -46,11 +51,16 @@ pub struct HelperSpec {
     /// both inside its private directory, deleted with it.
     pub upper: PathBuf,
     pub work: PathBuf,
+    /// The host directories bound in, in order, after the Sandbox
+    /// directory: a sqlite Store's directory read-write at its own path
+    /// (SQLite's WAL and the writers' directory lock then see the same inode
+    /// as every other opener); none for a PostgreSQL Store.
+    pub binds: Vec<Bind>,
 }
 
 impl HelperSpec {
-    /// Encodes the six fields; refuses a path that is not absolute, has `.`
-    /// or `..` components, or holds a control character.
+    /// Encodes the fields and the binds; refuses a path that is not
+    /// absolute, has `.` or `..` components, or holds a control character.
     pub fn encode(&self) -> Result<Vec<u8>, RuntimeError> {
         let mut out = Vec::new();
         for (index, (field, path)) in self.fields().into_iter().enumerate() {
@@ -60,23 +70,38 @@ impl HelperSpec {
             }
             out.extend_from_slice(field.as_bytes());
             out.push(b'=');
-            let text = path.to_str().ok_or(RuntimeError::Protocol(PATH))?;
-            out.extend_from_slice(text.as_bytes());
+            out.extend_from_slice(text(path)?.as_bytes());
             out.push(b'\n');
+        }
+        for bind in &self.binds {
+            check(&bind.host)?;
+            check(&bind.guest)?;
+            let mode = if bind.read_write { "rw" } else { "ro" };
+            let line = format!(
+                "{BIND}={mode}\t{}\t{}\n",
+                text(&bind.host)?,
+                text(&bind.guest)?
+            );
+            out.extend_from_slice(line.as_bytes());
         }
         Ok(out)
     }
 
-    /// Decodes a spec written by [`Self::encode`]: exactly the six fields,
-    /// each once, in any order.
+    /// Decodes a spec written by [`Self::encode`]: exactly the eight fields,
+    /// each once, in any order, and any number of binds, kept in order.
     pub fn parse(bytes: &[u8]) -> Result<Self, RuntimeError> {
         if bytes.len() > MAX {
             return Err(RuntimeError::Protocol(PATH));
         }
         let text = std::str::from_utf8(bytes).map_err(|_| RuntimeError::Protocol(PATH))?;
-        let mut values: [Option<PathBuf>; 9] = Default::default();
+        let mut values: [Option<PathBuf>; 8] = Default::default();
+        let mut binds = Vec::new();
         for line in text.lines() {
             let (key, value) = line.split_once('=').ok_or(RuntimeError::Protocol(FIELD))?;
+            if key == BIND {
+                binds.push(parse_bind(value)?);
+                continue;
+            }
             let index = FIELDS
                 .iter()
                 .position(|name| *name == key)
@@ -92,13 +117,13 @@ impl HelperSpec {
         let spec = Self {
             root: take(0)?,
             sandbox: take(1)?,
-            store: take(2)?,
-            daemon: take(3)?,
-            config: take(4)?,
-            cgroup: take(5)?,
-            lower: take(6)?,
-            upper: take(7)?,
-            work: take(8)?,
+            daemon: take(2)?,
+            config: take(3)?,
+            cgroup: take(4)?,
+            lower: take(5)?,
+            upper: take(6)?,
+            work: take(7)?,
+            binds,
         };
         for path in [&spec.lower, &spec.upper, &spec.work] {
             check_overlay(path)?;
@@ -106,22 +131,51 @@ impl HelperSpec {
         Ok(spec)
     }
 
-    fn fields(&self) -> [(&'static str, &Path); 9] {
+    fn fields(&self) -> [(&'static str, &Path); 8] {
         [
             (FIELDS[0], &self.root),
             (FIELDS[1], &self.sandbox),
-            (FIELDS[2], &self.store),
-            (FIELDS[3], &self.daemon),
-            (FIELDS[4], &self.config),
-            (FIELDS[5], &self.cgroup),
-            (FIELDS[6], &self.lower),
-            (FIELDS[7], &self.upper),
-            (FIELDS[8], &self.work),
+            (FIELDS[2], &self.daemon),
+            (FIELDS[3], &self.config),
+            (FIELDS[4], &self.cgroup),
+            (FIELDS[5], &self.lower),
+            (FIELDS[6], &self.upper),
+            (FIELDS[7], &self.work),
         ]
     }
 }
 
-/// The largest spec accepted: six absolute paths, each well under a page.
+/// One `bind=` value: `rw` or `ro`, the host path and the guest path,
+/// separated by tabs.
+fn parse_bind(value: &str) -> Result<Bind, RuntimeError> {
+    let mut parts = value.split('\t');
+    let (Some(mode), Some(host), Some(guest), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return Err(RuntimeError::Protocol(FIELD));
+    };
+    let read_write = match mode {
+        "rw" => true,
+        "ro" => false,
+        _ => return Err(RuntimeError::Protocol(FIELD)),
+    };
+    let (host, guest) = (PathBuf::from(host), PathBuf::from(guest));
+    check(&host)?;
+    check(&guest)?;
+    Ok(Bind {
+        host,
+        guest,
+        read_write,
+    })
+}
+
+/// A path's text: UTF-8, else refused.
+fn text(path: &Path) -> Result<&str, RuntimeError> {
+    path.to_str().ok_or(RuntimeError::Protocol(PATH))
+}
+
+/// The largest spec accepted: the eight paths and the binds, each well
+/// under a page.
 const MAX: usize = 8192;
 
 /// Rejects a path the line format cannot carry or the init stage cannot
@@ -141,7 +195,7 @@ fn check(path: &Path) -> Result<(), RuntimeError> {
 }
 
 /// The three fields from here on are the Sandbox root's overlay.
-const LAYERS: usize = 6;
+const LAYERS: usize = 5;
 
 /// The three overlay paths travel in one mount option string, where `,`
 /// separates options and `:` would separate layers, so neither may appear.
@@ -155,5 +209,6 @@ fn check_overlay(path: &Path) -> Result<(), RuntimeError> {
 
 /// Path text is UTF-8, absolute and free of control characters.
 const PATH: &str = "helper spec path";
-/// A line that is not one known field, or a field given twice or not at all.
+/// A line that is not one known field or a well-formed bind, or a field
+/// given twice or not at all.
 const FIELD: &str = "helper spec field";

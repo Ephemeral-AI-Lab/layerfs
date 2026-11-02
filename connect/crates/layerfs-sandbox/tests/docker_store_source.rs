@@ -3,7 +3,8 @@
 //! volume, or a host folder, written as Docker's `-v` source. Each is sent
 //! at create and found again at inspection, through a bounded external Unix
 //! Engine peer; a malformed source is refused before any Engine request. A
-//! loopback PostgreSQL URL is renamed for a container under Docker Desktop.
+//! loopback PostgreSQL URL is renamed for a container under Docker Desktop,
+//! and a Linux Engine is given that name as its `host-gateway`.
 #[allow(dead_code)]
 mod support {
     pub mod engine;
@@ -136,6 +137,29 @@ fn a_host_folder_is_bind_mounted_with_no_volume_read() {
     }
 }
 
+/// #535 §7.4: a Linux Engine has no `host.docker.internal` of its own, so
+/// every Sandbox container gets it as the Engine's `host-gateway`; Docker
+/// Desktop already names it and gets nothing added.
+#[test]
+fn a_linux_engine_names_the_desktop_host_as_its_gateway() {
+    let mount = format!(
+        r#"{{"Type":"bind","Source":"{HOST}","Destination":"/layerfs-store","Mode":"","RW":true,"Propagation":"rprivate"}}"#
+    );
+    let (accepted, requests) = launch(HOST, false, &mount, "hosts");
+    assert!(accepted);
+    let create = String::from_utf8_lossy(&requests[0]);
+    let entry = r#""ExtraHosts":["host.docker.internal:host-gateway"],"Mounts":["#;
+    assert_eq!(
+        create.contains(entry),
+        cfg!(target_os = "linux"),
+        "{create}"
+    );
+    assert_eq!(
+        create.matches("ExtraHosts").count(),
+        usize::from(cfg!(target_os = "linux"))
+    );
+}
+
 #[test]
 fn a_malformed_source_is_refused_before_any_engine_request() {
     let (docker, peer) = Peer::new(Vec::new(), 8192);
@@ -161,6 +185,11 @@ fn a_loopback_postgresql_url_names_the_desktop_host() {
         "postgres://u@db.example.com:5432/db",
         "postgres://u@127.0.0.2/db",
         "not a url",
+        // a port that is not 1 to 5 digits (here a password's unescaped `/`
+        // cut the authority) is not read
+        "postgres://u:pw/x@localhost/db",
+        "postgres://u@localhost:/db",
+        "postgres://u@[::1]x/db",
     ] {
         assert_eq!(desktop_url(other), None, "{other}");
     }

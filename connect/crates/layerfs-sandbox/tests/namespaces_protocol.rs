@@ -2,9 +2,10 @@
 //! recorded facts a reopen reads, and the refusals that keep one runtime's
 //! records from another. Nothing here starts a process.
 use layerfs_sandbox::{
-    DockerRecord, HelperSpec, Image, LocalRecord, NamespaceRecord, SandboxRecord,
+    Bind, DockerRecord, HelperSpec, Image, LocalRecord, NamespaceRecord, RuntimeError,
+    SandboxRecord,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The image digest these records name.
 fn image() -> Image {
@@ -15,7 +16,6 @@ fn spec() -> HelperSpec {
     HelperSpec {
         root: PathBuf::from("/var/lib/layerfs/local/sandbox-1.root"),
         sandbox: PathBuf::from("/var/lib/layerfs/local/sandbox-1"),
-        store: PathBuf::from("/layerfs-store/project"),
         daemon: PathBuf::from("/var/lib/layerfs/local/sandbox-1/bin/layerfs-daemon"),
         config: PathBuf::from("/var/lib/layerfs/local/sandbox-1/config/daemon.setup"),
         cgroup: PathBuf::from("/sys/fs/cgroup/layerfs/0000000000000000000000000000000000000000000000000000000000000001"),
@@ -24,6 +24,7 @@ fn spec() -> HelperSpec {
         ),
         upper: PathBuf::from("/var/lib/layerfs/local/sandbox-1/overlay/upper"),
         work: PathBuf::from("/var/lib/layerfs/local/sandbox-1/overlay/work"),
+        binds: vec![Bind::store(Path::new("/layerfs-store/project/store.sqlite")).unwrap()],
     }
 }
 
@@ -32,18 +33,106 @@ fn the_init_spec_roundtrips() {
     let spec = spec();
     let encoded = spec.encode().unwrap();
     assert_eq!(HelperSpec::parse(&encoded).unwrap(), spec);
-    // one line per field, key first
+    // one line per field, key first, then one per bind
     let text = String::from_utf8(encoded).unwrap();
     assert_eq!(text.lines().count(), 9);
     assert!(text.starts_with("root=/var/lib/layerfs/local/sandbox-1.root\n"));
+    assert!(text.ends_with("\nbind=rw\t/layerfs-store/project\t/layerfs-store/project\n"));
+}
+
+/// #535 §6.3: a sqlite Store's Sandbox binds its Store's directory
+/// read-write at its own path; a PostgreSQL Store's binds nothing; other
+/// binds keep their mode, guest path and order.
+#[test]
+fn binds_roundtrip_in_order_and_may_be_none() {
+    let store = Bind::store(Path::new("/layerfs/data/stores/shop/store.sqlite")).unwrap();
+    assert_eq!(
+        store,
+        Bind {
+            host: PathBuf::from("/layerfs/data/stores/shop"),
+            guest: PathBuf::from("/layerfs/data/stores/shop"),
+            read_write: true,
+        }
+    );
+    let none = HelperSpec {
+        binds: Vec::new(),
+        ..spec()
+    };
+    let encoded = none.encode().unwrap();
+    assert!(!String::from_utf8_lossy(&encoded).contains("bind="));
+    assert_eq!(HelperSpec::parse(&encoded).unwrap(), none);
+    let several = HelperSpec {
+        binds: vec![
+            store,
+            Bind {
+                host: PathBuf::from("/srv/reference data"),
+                guest: PathBuf::from("/reference"),
+                read_write: false,
+            },
+        ],
+        ..spec()
+    };
+    let encoded = several.encode().unwrap();
+    assert!(
+        String::from_utf8_lossy(&encoded).contains("\nbind=ro\t/srv/reference data\t/reference\n")
+    );
+    assert_eq!(HelperSpec::parse(&encoded).unwrap(), several);
+}
+
+#[test]
+fn a_store_file_that_names_no_directory_is_refused() {
+    for bad in ["store.sqlite", "/store.sqlite/..", "./store.sqlite", "/"] {
+        assert!(
+            matches!(
+                Bind::store(Path::new(bad)),
+                Err(RuntimeError::Protocol("namespaces Store file"))
+            ),
+            "{bad}"
+        );
+    }
+}
+
+#[test]
+fn a_malformed_bind_or_the_former_store_line_is_refused() {
+    let text = String::from_utf8(
+        HelperSpec {
+            binds: Vec::new(),
+            ..spec()
+        }
+        .encode()
+        .unwrap(),
+    )
+    .unwrap();
+    for line in [
+        "bind=rw\t/a",
+        "bind=rw\t/a\t/b\t/c",
+        "bind=rx\t/a\t/b",
+        "bind=rw\trelative\t/b",
+        "bind=ro\t/a\t/b/../c",
+        "bind=rw /a /b",
+        // the format before binds: one Store directory
+        "store=/layerfs-store/project",
+    ] {
+        let spec = format!("{text}{line}\n");
+        assert!(HelperSpec::parse(spec.as_bytes()).is_err(), "{line}");
+    }
+    let guest = HelperSpec {
+        binds: vec![Bind {
+            host: PathBuf::from("/a"),
+            guest: PathBuf::from("b"),
+            read_write: true,
+        }],
+        ..spec()
+    };
+    assert!(guest.encode().is_err());
 }
 
 #[test]
 fn a_value_may_hold_an_equals_sign() {
     let mut spec = spec();
-    spec.store = PathBuf::from("/layerfs-store/a=b");
+    spec.binds[0].host = PathBuf::from("/layerfs-store/a=b");
     let encoded = spec.encode().unwrap();
-    assert_eq!(HelperSpec::parse(&encoded).unwrap().store, spec.store);
+    assert_eq!(HelperSpec::parse(&encoded).unwrap().binds, spec.binds);
 }
 
 #[test]

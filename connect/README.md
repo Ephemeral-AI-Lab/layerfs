@@ -23,16 +23,24 @@ Store is backed up. Layers are `core < engine < connect < api`; nothing in
   worker, and the options `machine create` or `machine connect` accept
   (`options.rs`). `Platform::profile()` is the one match.
 - `layerfs-machine/src/adapter.rs` is the sealed `Adapter` trait (probe,
-  guest, create/remove, start/stop, status, host identity) and the one
-  `adapter()` match the machine calls dispatch through.
+  guest, create/remove, start/stop, status, host identity, reach) and the
+  one `adapter()` match the machine calls dispatch through.
+- `layerfs-machine/src/reach.rs` is `reach` (the call `machine::reach`):
+  the PostgreSQL Store URL a Sandbox daemon on the machine dials. Each
+  adapter names how its machine reaches the caller's loopback: `native`
+  shares it; `docker` (`host.docker.internal`), `lima`
+  (`host.lima.internal`) and `firecracker` (`172.30.<n>.1`) rewrite a
+  loopback host to their alias; `ssh` refuses it, and `apple-container` and
+  `microsandbox` refuse it until their aliases are verified (G7). A rewrite
+  is refused for `sslmode=verify-full`; other hosts are used as given.
 - `layerfs-machine/src/support.rs` is the one support table:
   platform × host × Store kind → supported, or a refusal with its reason.
 - `layerfs-machine/src/platforms/<p>/`: `profile.rs` holds its `PROFILE`
   and `adapter.rs` its `ADAPTER` (the guard keeps both out of `mod.rs`);
   `observe.rs`, `create.rs` (create and remove), `power.rs` (start and
   stop); ssh has `connect.rs` (connect and disconnect) instead of
-  `create.rs`. `network.rs` holds docker's published port today; `reach`
-  and `forward` arrive there in #535 phases 5 and 6.
+  `create.rs`. `network.rs` holds docker's published port today; `forward`
+  arrives in #535 phase 6.
 - `layerfs-sandbox/src/backend/<b>/` is one Sandbox backend, with its
   `ADAPTER` (stored name, description, capabilities) in `adapter.rs`,
   reached through the sealed `BackendAdapter`'s one `adapter()` match in
