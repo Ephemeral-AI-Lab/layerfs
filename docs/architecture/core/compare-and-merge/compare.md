@@ -109,9 +109,14 @@ inodes asked for, inodes climbed, binding reads and object read demands.
 
 A difference whose `(m + 1) * (n + 1)` table exceeds `MAXIMUM_DIFF_CELLS`
 (2^20) keeps the common prefix and suffix and diffs the middle. If the
-middle is still too large, it is reported as one removed block followed by
-one added block. `MAXIMUM_TEXT_BYTES` (1 MiB) is the largest file compared
-or merged line by line.
+middle is still too large, its lines that occur once on each side are
+matched in order (the longest increasing run, #517), and each gap between
+them is diffed alone while the gaps' tables together stay within
+`MAXIMUM_DIFF_CELLS`. A gap past that, or a middle with no such line, is
+reported as one removed block followed by one added block: a merge then
+conflicts there, and blame gives those lines to the newer version.
+`MAXIMUM_TEXT_BYTES` (1 MiB) is the largest file compared or merged line
+by line.
 
 ## Change lists
 
