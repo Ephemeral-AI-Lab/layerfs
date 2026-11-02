@@ -340,11 +340,13 @@ fn remove(home: &Path, name: &str) -> Outcome {
             &with_field(record, "in_progress", at),
         )?;
     }
+    // a machine whose Stores open in this process keeps the file under the
+    // home: it goes with the Store's directory below
     let removed = settle(home, name).and_then(|lease| {
         drop(lease);
-        match machine.as_str() {
-            "native" => Ok(SdkValue::Null),
-            _ => step(home, &endpoint, "remove", of_store(name, vec![])),
+        match endpoint {
+            None => Ok(SdkValue::Null),
+            Some(_) => step(home, &endpoint, "remove", of_store(name, vec![])),
         }
     });
     if let Err(refusal) = removed {
