@@ -155,7 +155,7 @@ pub fn copy_in(
     destination: &str,
 ) -> Result<(), MachineError> {
     spec.validate()?;
-    guest_of(spec)?.copy_in(&spec.tools, dir, entry, destination)
+    guest_of(spec)?.copy_in(&spec.tools, dir, entry, None, destination)
 }
 
 /// Streams one guest file of a running machine to a new 0600 host file.

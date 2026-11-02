@@ -169,20 +169,25 @@ impl Guest {
         }
     }
 
-    /// Copies `entry` of the host folder `dir` (or all of it) into the guest
-    /// folder `destination` as one `tar` stream piped straight into the
-    /// guest; `COPYFILE_DISABLE` keeps macOS `tar` from adding `._` files.
+    /// Copies `entry` of the host folder `dir` (or all of it but its top
+    /// folder `skip`) into the guest folder `destination` as one `tar`
+    /// stream piped straight into the guest; `COPYFILE_DISABLE` keeps macOS
+    /// `tar` from adding `._` files.
     pub fn copy_in(
         &self,
         tools: &Tools,
         dir: &Path,
         entry: Option<&str>,
+        skip: Option<&str>,
         destination: &str,
     ) -> Result<(), MachineError> {
         let what = format!("copying {} into the guest's {destination}", dir.display());
         let mut pack = tool::command(&tool::find(tools, "tar")?, ["-C"]);
-        pack.arg(dir)
-            .args(["-cf", "-", entry.unwrap_or(".")])
+        pack.arg(dir);
+        if let Some(skip) = skip {
+            pack.arg(format!("--exclude=./{skip}"));
+        }
+        pack.args(["-cf", "-", entry.unwrap_or(".")])
             .env("COPYFILE_DISABLE", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

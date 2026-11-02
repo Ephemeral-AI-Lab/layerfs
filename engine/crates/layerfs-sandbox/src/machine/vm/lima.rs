@@ -13,7 +13,8 @@
 //! - `nested` adds `nestedVirtualization` (macOS 15+, M3 or newer): such a
 //!   machine hosts Firecracker machines, and the bundle's `firecracker/`
 //!   folder (binary, kernel, root filesystem, guest key), when it has one, is
-//!   copied to `/layerfs/data/firecracker`.
+//!   copied from the host straight to `/layerfs/data/firecracker` before the
+//!   worker starts. No guest's bundle copy carries that folder.
 //! - Commands go through ssh with Lima's own `ssh.config`, then `sudo -n`, so
 //!   the quoting is this crate's, not the CLI's.
 use super::shared::{call, checked, exists, mib, new_port, not_found, recorded_port, BOOT, CALL};
@@ -36,12 +37,6 @@ pub(crate) const FIRECRACKER_ROOT: &str = "/layerfs/data/firecracker";
 const ATTACH: &str = r#"d=/mnt/lima-$1
 test "$(findmnt -n -o FSTYPE "$d")" = ext4 || { echo "$d is not an ext4 mount" >&2; exit 1; }
 mkdir -p /layerfs/data && { mountpoint -q /layerfs/data || mount --bind "$d" /layerfs/data; }"#;
-
-/// A nested machine's Firecracker files, from the bundle copy, once per bundle hash.
-const FIRECRACKER_FILES: &str = r#"src=/layerfs/bundle/firecracker dst=$2
-[ -d "$src" ] || exit 0
-[ "$(cat "$dst/.sealed" 2>/dev/null)" = "$1" ] && exit 0
-mkdir -p "$dst" && cp -Rp --remove-destination "$src/." "$dst/" && echo "$1" > "$dst/.sealed""#;
 
 /// The Lima disk of a machine: a name whose `lima-` label fits 16 bytes.
 pub(crate) fn disk_name(vm_name: &str) -> String {
@@ -244,15 +239,10 @@ fn boot_and_bring_up(
         ATTACH,
         &[&disk_name(&spec.vm_name)],
     )?;
-    let endpoint = worker::bring_up(spec, &guest, bundle, port, None)?;
     if spec.nested {
-        guest.script(
-            &spec.tools,
-            "placing Firecracker's files",
-            FIRECRACKER_FILES,
-            &[&bundle.hash, FIRECRACKER_ROOT],
-        )?;
+        firecracker_files(spec, &guest, bundle)?;
     }
+    let endpoint = worker::bring_up(spec, &guest, bundle, port, None)?;
     Ok(Running {
         endpoint,
         lasting: Lasting {
@@ -260,6 +250,26 @@ fn boot_and_bring_up(
             ..spec.state
         },
     })
+}
+
+/// A nested machine's Firecracker files: the bundle's `firecracker/`
+/// folder, copied from the host straight to the data disk once per bundle
+/// hash. A bundle without it copies nothing; a microVM's create then names
+/// each missing file.
+fn firecracker_files(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<(), MachineError> {
+    let from = bundle.dir.join(worker::FIRECRACKER_DIR);
+    let marker = format!("{FIRECRACKER_ROOT}/.sealed");
+    if !from.is_dir()
+        || guest
+            .read_file(&spec.tools, &marker)?
+            .as_deref()
+            .map(str::trim)
+            == Some(bundle.hash.as_str())
+    {
+        return Ok(());
+    }
+    guest.copy_in(&spec.tools, &from, None, None, FIRECRACKER_ROOT)?;
+    guest.write_file(&spec.tools, &marker, &format!("{}\n", bundle.hash))
 }
 
 pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {

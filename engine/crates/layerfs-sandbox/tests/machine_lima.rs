@@ -129,6 +129,59 @@ fn nested_adds_nested_virtualization_or_names_what_the_mac_lacks() {
     );
 }
 
+/// A `limactl` whose instance runs once `create` made it.
+const LIMACTL_MADE: &str = r#"case "$1" in
+  list) [ -e "$SCRATCH/created" ] && printf 'Running\t%s\n' "$SCRATCH/lima-host"; exit 0 ;;
+  create) cat > "$SCRATCH/template.json"; touch "$SCRATCH/created"; exit 0 ;;
+  --version) echo "limactl version 9.9.9" ;;
+esac
+exit 0"#;
+
+#[test]
+fn only_a_nested_host_takes_the_bundle_s_firecracker_files() {
+    if HostOs::current() != HostOs::Macos || !nested_missing(HostOs::current()).is_empty() {
+        return;
+    }
+    let scratch = Scratch::new("lima-fc-files");
+    scratch.tool("limactl", LIMACTL_MADE);
+    // a guest that takes every stream and refuses to start the worker
+    scratch.tool(
+        "ssh",
+        r#"case "$*" in
+  *"tar -C"*) cat > /dev/null ;;
+  *max_user_namespaces*) echo 0 ;;
+  *"setsid nohup"*) exit 7 ;;
+esac
+exit 0"#,
+    );
+    scratch.tool("tar", "exit 0");
+    let bundle = scratch.bundle();
+    std::fs::create_dir_all(bundle.dir.join("firecracker")).unwrap();
+    std::fs::write(bundle.dir.join("firecracker/vmlinux"), b"").unwrap();
+    let mut spec = scratch.spec(Kind::Lima);
+    spec.nested = true;
+    machine::create(&spec, &bundle).unwrap_err();
+    let log = scratch.log();
+    let packs: Vec<&str> = log.lines().filter(|l| l.starts_with("tar ")).collect();
+    let dir = bundle.dir.display();
+    assert_eq!(
+        packs,
+        [
+            format!("tar -C {dir}/firecracker -cf - ."),
+            format!("tar -C {dir} --exclude=./firecracker -cf - ."),
+        ],
+        "{log}"
+    );
+    // the guest side of each stream, in order
+    let unpacks: Vec<&str> = log
+        .lines()
+        .filter(|l| l.starts_with("ssh ") && l.contains("tar -C"))
+        .collect();
+    assert_eq!(unpacks.len(), 2, "{log}");
+    assert!(unpacks[0].ends_with(" /layerfs/data/firecracker"), "{log}");
+    assert!(unpacks[1].ends_with(" /layerfs/bundle"), "{log}");
+}
+
 #[test]
 fn an_image_url_or_path_replaces_the_default_image() {
     if HostOs::current() != HostOs::Macos {

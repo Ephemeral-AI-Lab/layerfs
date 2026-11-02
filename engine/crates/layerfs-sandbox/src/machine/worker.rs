@@ -15,6 +15,10 @@ use std::time::{Duration, Instant};
 /// Hashing the bundle comes first in the worker, so its readiness takes a while.
 pub(crate) const READY: Duration = Duration::from_secs(60);
 
+/// The bundle folder of Firecracker's files: copied to a nested Lima host's
+/// data disk only, never into a guest's bundle copy.
+pub(crate) const FIRECRACKER_DIR: &str = "firecracker";
+
 /// The guest's folders on the data disk and, VM-wide, no user namespaces but
 /// LayerFS's own: `user.max_user_namespaces=0`, read back. `/proc/sys` is
 /// remounted read-write first where a guest mounts it read-only (Apple
@@ -71,7 +75,8 @@ pub(crate) fn install(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<(),
     let marker = format!("{BUNDLE}/.sealed");
     if guest.read_file(tools, &marker)?.as_deref().map(str::trim) != Some(bundle.hash.as_str()) {
         guest.script(tools, "clearing the old bundle", "rm -rf \"$1\"", &[BUNDLE])?;
-        guest.copy_in(tools, &bundle.dir, None, BUNDLE)?;
+        // a nested Lima host alone takes Firecracker's files ([`super::vm::lima`])
+        guest.copy_in(tools, &bundle.dir, None, Some(FIRECRACKER_DIR), BUNDLE)?;
         guest.write_file(tools, &marker, &format!("{}\n", bundle.hash))?;
     }
     if let Some(image) = &spec.image {
@@ -87,7 +92,7 @@ pub(crate) fn install(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<(),
             .read_file(tools, &format!("{target}.copied"))?
             .is_none()
         {
-            guest.copy_in(tools, dir, Some(file), IMAGE)?;
+            guest.copy_in(tools, dir, Some(file), None, IMAGE)?;
             guest.write_file(tools, &format!("{target}.copied"), "")?;
         }
     }
