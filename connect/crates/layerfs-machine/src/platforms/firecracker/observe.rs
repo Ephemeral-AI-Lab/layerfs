@@ -27,7 +27,7 @@ use crate::setup::{tool, worker};
 use crate::setup::{with_worker, State, Status};
 use crate::spec::Spec;
 
-pub(super) const ROOT: &str = lima::FIRECRACKER_ROOT;
+pub(super) const ROOT: &str = super::host::FIRECRACKER_ROOT;
 
 pub(super) fn host_of(spec: &Spec) -> Result<&Spec, MachineError> {
     spec.host.as_deref().ok_or_else(|| {

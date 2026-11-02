@@ -29,8 +29,6 @@ use crate::spec::Spec;
 use std::path::PathBuf;
 
 pub(super) const CLI: &str = "limactl";
-/// Where a nested machine keeps Firecracker's files and microVMs.
-pub(crate) const FIRECRACKER_ROOT: &str = "/layerfs/data/firecracker";
 
 /// The Lima disk of a machine: a name whose `lima-` label fits 16 bytes.
 pub(crate) fn disk_name(vm_name: &str) -> String {

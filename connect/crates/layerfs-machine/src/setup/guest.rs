@@ -3,6 +3,7 @@
 //! (a `tar` stream in, `cat` out), never buffered whole.
 use super::tool::{self, shell_escape, Output};
 use crate::error::{Code, MachineError};
+use crate::platforms::firecracker::FIRECRACKER_GUEST;
 use crate::spec::Tools;
 use std::fs::OpenOptions;
 use std::os::unix::fs::OpenOptionsExt;
@@ -34,11 +35,6 @@ pub(crate) enum Guest {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     Docker { socket: PathBuf, container: String },
 }
-
-/// The script in a Firecracker host that runs `$@` in one microVM as root.
-const FIRECRACKER_GUEST: &str = r#"d="$1/vms/$2"; key="$1/id_ed25519"; shift 2
-. "$d/vm.env"
-exec ssh -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 "root@$GUEST_IP" -- "$@""#;
 
 impl Guest {
     /// The host command that runs `argv` in the guest as root; `stdin` keeps

@@ -1,7 +1,7 @@
 //! `lima` power: see `mod.rs`.
-use super::observe::{disk_name, guest, observe, CLI, FIRECRACKER_ROOT};
+use super::observe::{disk_name, guest, observe, CLI};
 use crate::error::{Code, MachineError};
-use crate::setup::guest::Guest;
+use crate::platforms::firecracker::firecracker_files;
 use crate::setup::vm::{checked, not_found, recorded_port, BOOT};
 use crate::setup::worker;
 use crate::setup::State;
@@ -62,23 +62,3 @@ pub(super) fn boot_and_bring_up(
 const ATTACH: &str = r#"d=/mnt/lima-$1
 test "$(findmnt -n -o FSTYPE "$d")" = ext4 || { echo "$d is not an ext4 mount" >&2; exit 1; }
 mkdir -p /layerfs/data && { mountpoint -q /layerfs/data || mount --bind "$d" /layerfs/data; }"#;
-
-/// A nested machine's Firecracker files: the bundle's `firecracker/`
-/// folder, copied from the host straight to the data disk once per bundle
-/// hash. A bundle without it copies nothing; a microVM's create then names
-/// each missing file.
-fn firecracker_files(spec: &Spec, guest: &Guest, bundle: &Bundle) -> Result<(), MachineError> {
-    let from = bundle.dir.join(worker::FIRECRACKER_DIR);
-    let marker = format!("{FIRECRACKER_ROOT}/.sealed");
-    if !from.is_dir()
-        || guest
-            .read_file(&spec.tools, &marker)?
-            .as_deref()
-            .map(str::trim)
-            == Some(bundle.hash.as_str())
-    {
-        return Ok(());
-    }
-    guest.copy_in(&spec.tools, &from, None, None, FIRECRACKER_ROOT)?;
-    guest.write_file(&spec.tools, &marker, &format!("{}\n", bundle.hash))
-}

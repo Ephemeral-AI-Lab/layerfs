@@ -6,6 +6,7 @@ use super::guest::{Guest, EXEC};
 use super::tool;
 use crate::error::{Code, MachineError};
 use crate::facts;
+use crate::platforms::firecracker::FIRECRACKER_DIR;
 use crate::spec::{Bundle, Endpoint, Spec, BUNDLE, DATA, IMAGE, STATE, WORKER_PORT};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::path::Path;
@@ -14,10 +15,6 @@ use std::time::{Duration, Instant};
 
 /// Hashing the bundle comes first in the worker, so its readiness takes a while.
 pub(crate) const READY: Duration = Duration::from_secs(60);
-
-/// The bundle folder of Firecracker's files: copied to a nested Lima host's
-/// data disk only, never into a guest's bundle copy.
-pub(crate) const FIRECRACKER_DIR: &str = "firecracker";
 
 /// The guest's folders on the data disk and, VM-wide, no user namespaces but
 /// LayerFS's own: `user.max_user_namespaces=0`, read back. `/proc/sys` is
