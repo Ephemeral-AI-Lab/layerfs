@@ -166,7 +166,7 @@ fn old_home() -> PathBuf {
 fn a_1_1_0_home_converts_once() {
     let home = old_home();
     assert_eq!(home::detect(&home).unwrap(), Layout::Old);
-    let file = home::open(&home).unwrap();
+    let file = home::open_from(&home, &home.join("no-volumes")).unwrap();
     assert!(matches!(home::detect(&home).unwrap(), Layout::Current(_)));
 
     let shop = read_record(&paths::store_record(&home, "shop"))
@@ -250,6 +250,10 @@ fn a_1_1_0_home_converts_once() {
     assert_eq!(unknown, &SdkValue::List(vec![SdkValue::text("notes.txt")]));
     let notes = layerfs_api::calls::json::print(report.get("notes").unwrap());
     assert!(notes.contains("local_folder"), "{notes}");
+    assert!(
+        notes.contains("stays in Docker volume lfs-shop"),
+        "a Store file this host cannot read is reported: {notes}"
+    );
 
     // a second run changes nothing
     let before = snapshot(&home);
@@ -280,6 +284,159 @@ fn an_empty_home_is_created_and_the_lock_waits_rather_than_refusing() {
         "{waited:?}"
     );
     std::fs::remove_dir_all(home).unwrap();
+}
+
+fn t(text: &str) -> SdkValue {
+    SdkValue::text(text)
+}
+
+fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
+    let args = SdkValue::Map(
+        args.iter()
+            .map(|(n, v)| ((*n).to_owned(), v.clone()))
+            .collect(),
+    );
+    layerfs_api::calls::call(Some(home), name, args, &mut |_| {})
+        .unwrap_or_else(|r| panic!("{name}: {} {}", r.code, r.message))
+}
+
+/// A real Store made by this build, holding project `shop/api`, closed:
+/// its file and its Store and project records. It is made on `native`
+/// and moved to a worker machine, which leaves it closed under the
+/// worker's root.
+fn closed_store(scratch: &Path) -> (PathBuf, SdkValue, SdkValue) {
+    use std::os::unix::fs::PermissionsExt;
+    let home = scratch.join("made");
+    let root = scratch.join("guest");
+    let folder = scratch.join("folder");
+    for path in [&home, &root, &folder] {
+        dir(path);
+    }
+    home::open(&home).unwrap();
+    home::write_record(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+    )
+    .unwrap();
+    std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    let guest = root.clone();
+    std::thread::spawn(move || layerfs_api::worker::serve(listener, "k".to_owned(), guest));
+    home::write_record(
+        &paths::worker_record(&home, "box"),
+        &SdkValue::map([("address", t(&address)), ("secret", t("k"))]),
+    )
+    .unwrap();
+    std::fs::write(folder.join("README.md"), "hello\n").unwrap();
+    call(&home, "store.create", &[("name", t("shop"))]);
+    call(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/api")),
+            ("folder", t(&folder.display().to_string())),
+        ],
+    );
+    let store = read_record(&paths::store_record(&home, "shop"))
+        .unwrap()
+        .unwrap();
+    let project = read_record(&paths::project_record(&home, "shop", "api"))
+        .unwrap()
+        .unwrap();
+    call(
+        &home,
+        "store.move",
+        &[("name", t("shop")), ("machine", t("box"))],
+    );
+    (paths::store_file(&root, "shop"), store, project)
+}
+
+#[test]
+fn a_1_1_0_store_file_is_placed_and_opens() {
+    let scratch = tempdir();
+    let (file, store, project) = closed_store(&scratch);
+    // the 1.1.0 layout: the file in its Docker volume, the records in the home
+    let volumes = scratch.join("volumes");
+    let in_volume = volumes.join("lfs-shop/_data/global/store.sqlite");
+    dir(in_volume.parent().unwrap());
+    std::fs::rename(&file, &in_volume).unwrap();
+    let home = scratch.join("old");
+    dir(&home.join(".stores/shop/projects/api"));
+    record(
+        &home.join(".stores/shop/store.record"),
+        SdkValue::map([
+            ("binding", store.get("binding").unwrap().clone()),
+            ("cursor", store.get("cursor").unwrap().clone()),
+            ("kind", t("sqlite")),
+        ]),
+    );
+    record(
+        &home.join(".stores/shop/projects/api/project.record"),
+        SdkValue::map([
+            ("manifest", project.get("manifest").unwrap().clone()),
+            ("installed", project.get("installed").unwrap().clone()),
+        ]),
+    );
+    // a second Store whose 1.1.0 file was left with a write-ahead log
+    dir(&home.join(".stores/busy"));
+    record(
+        &home.join(".stores/busy/store.record"),
+        SdkValue::map([
+            ("binding", SdkValue::Bytes(vec![1; 16])),
+            ("cursor", SdkValue::Bytes(vec![2; 32])),
+            ("kind", t("sqlite")),
+        ]),
+    );
+    let busy = volumes.join("lfs-busy/_data/global/store.sqlite");
+    dir(busy.parent().unwrap());
+    std::fs::write(&busy, "main").unwrap();
+    std::fs::write(
+        volumes.join("lfs-busy/_data/global/store.sqlite-wal"),
+        "log",
+    )
+    .unwrap();
+    std::fs::write(
+        home.join("stores.json"),
+        r#"{"version":2,"stores":[{"name":"shop","kind":"sqlite","volume":"lfs-shop"},{"name":"busy","kind":"sqlite","volume":"lfs-busy"}]}"#,
+    )
+    .unwrap();
+
+    home::open_from(&home, &volumes).unwrap();
+    let shop = read_record(&paths::store_record(&home, "shop"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(shop.get_text("machine"), Some("native"));
+    assert!(paths::store_file(&home, "shop").is_file());
+    assert!(in_volume.is_file(), "the 1.1.0 file stays in its volume");
+    let busy_record = read_record(&paths::store_record(&home, "busy"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(busy_record.get_text("machine"), Some("docker"));
+    assert!(!paths::store_file(&home, "busy").exists());
+    assert_eq!(std::fs::read(&busy).unwrap(), b"main", "left as it was");
+    let report = read_record(&home.join("log/migration.json"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(report.get("placed"), Some(&SdkValue::List(vec![t("shop")])));
+    let notes = layerfs_api::calls::json::print(report.get("notes").unwrap());
+    assert!(notes.contains("write-ahead log"), "{notes}");
+
+    // Store calls open the migrated Store
+    let branches = call(&home, "branch.list", &[("project", t("shop/api"))]);
+    let printed = layerfs_api::calls::json::print(&branches);
+    assert!(printed.contains("\"main\""), "{printed}");
+    let read = call(
+        &home,
+        "file.read",
+        &[
+            ("project", t("shop/api")),
+            ("branch", t("main")),
+            ("path", t("/README.md")),
+        ],
+    );
+    assert_eq!(read.get_text("text"), Some("hello\n"), "{read:?}");
+    std::fs::remove_dir_all(scratch).unwrap();
 }
 
 #[test]

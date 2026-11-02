@@ -5,7 +5,9 @@
 //! `.stores/<s>/` (a Store's record and its projects), `<home>/<p>/` (a
 //! project with a Store of its own becomes Store `<p>` holding project
 //! `<p>`), `stores.json` and `stores.v1.json` (folded into each Store's
-//! record), `remote-state/<s>` (the Store's backup link), `remotes` (one
+//! record), the volume `.runtime/projects/<p>.json` names, each sqlite
+//! Store's file where this host can read it (`place.rs`),
+//! `remote-state/<s>` (the Store's backup link), `remotes` (one
 //! `backup/<bucket>/record.json` per remote), `.runtime/` (Init failures to
 //! `log/`) and `traces/` (to `trace/`). Sandbox folders stay inside their
 //! project's folder until step 12; machine folders come in step 6.
@@ -39,6 +41,12 @@ const OWNED: [&str; 7] = [
 /// The home ready for 2.0 calls: created when empty, converted once when it
 /// is a 1.1.0 home. Answers its `layerfs.json`.
 pub fn open(home: &Path) -> Result<HomeFile> {
+    open_from(home, Path::new(super::place::DOCKER_VOLUMES))
+}
+
+/// [`open`], with a 1.1.0 home's Docker volumes read from `volumes` (1.1.0's
+/// `volumes` setting; a rootless Docker keeps them elsewhere).
+pub fn open_from(home: &Path, volumes: &Path) -> Result<HomeFile> {
     match detect(home)? {
         Layout::Current(file) => Ok(file),
         Layout::Empty | Layout::Old => {
@@ -47,7 +55,7 @@ pub fn open(home: &Path) -> Result<HomeFile> {
                 Layout::Current(file) => Ok(file),
                 Layout::Empty => create(home),
                 Layout::Old => {
-                    let report = convert(home)?;
+                    let report = convert(home, volumes)?;
                     let file = create(home)?;
                     write_record(&paths::log_dir(home).join("migration.json"), &report)?;
                     Ok(file)
@@ -61,6 +69,7 @@ pub fn open(home: &Path) -> Result<HomeFile> {
 #[derive(Default)]
 struct Report {
     stores: Vec<String>,
+    placed: Vec<String>,
     projects: Vec<String>,
     buckets: Vec<String>,
     moved: Vec<String>,
@@ -76,6 +85,7 @@ impl Report {
             ("from", SdkValue::text("1.1.0")),
             ("at", SdkValue::Int(now_ms())),
             ("stores", list(self.stores)),
+            ("placed", list(self.placed)),
             ("projects", list(self.projects)),
             ("buckets", list(self.buckets)),
             ("moved_to_log", list(self.moved)),
@@ -85,7 +95,7 @@ impl Report {
     }
 }
 
-fn convert(home: &Path) -> Result<SdkValue> {
+fn convert(home: &Path, volumes: &Path) -> Result<SdkValue> {
     let mut report = Report::default();
     let old = paths::log_dir(home).join("1.1.0");
     // 1. Stores with records of their own, and their projects
@@ -105,6 +115,24 @@ fn convert(home: &Path) -> Result<SdkValue> {
     // 3. stores.json (and its version 1 copy) folded into the records
     for file in ["stores.json", "stores.v1.json"] {
         fold_registry(home, &home.join(file), &mut report)?;
+    }
+    // 3b. each sqlite Store's file, from its 1.1.0 Docker volume
+    for store in paths::names(&home.join("store")).map_err(failed)? {
+        let Some(record) = read_record(&paths::store_record(home, &store))? else {
+            continue;
+        };
+        if record.get_text("kind") == Some("postgresql") {
+            continue;
+        }
+        let was_native = record.get_text("machine") == Some("native");
+        let (record, note) = super::place::place(home, volumes, &store, record)?;
+        match note {
+            Some(note) => report.notes.push(note),
+            None if !was_native && record.get_text("machine") == Some("native") => {
+                report.placed.push(store)
+            }
+            None => {}
+        }
     }
     // 4. each Store's last transfer becomes its backup link
     for store in names_of_files(&home.join("remote-state"))? {
@@ -234,13 +262,22 @@ fn own_store(home: &Path, name: &str, dir: &Path, report: &mut Report) -> Result
                 ))
             }
         };
-        let record = sqlite_defaults(SdkValue::map([
+        let mut record = sqlite_defaults(SdkValue::map([
             ("name", SdkValue::text(name)),
             ("kind", SdkValue::text("sqlite")),
             ("binding", SdkValue::Bytes(manifest.binding.clone())),
             ("cursor", SdkValue::Bytes(manifest.cursor_key.to_vec())),
             ("locator", SdkValue::text(&manifest.locator)),
         ]));
+        // the 1.1.0 runtime's record of the project names its Store's volume
+        let runtime = home.join(".runtime/projects").join(format!("{name}.json"));
+        if let Ok(text) = fs::read_to_string(&runtime) {
+            let value = crate::calls::json::parse(&text)
+                .map_err(|e| refused("Failed", format!("{}: {}", runtime.display(), e.0)))?;
+            if let Some(volume) = value.get_text("volume") {
+                record = with_field(record, "volume", SdkValue::text(volume));
+            }
+        }
         write_record(&paths::store_record(home, name), &record)?;
         report.stores.push(name.to_owned());
     }
