@@ -13,9 +13,17 @@
 - **Steps:** 1–19 all have commits. **Step 19's pass condition is met at
   `6837bcfce2`:** the 12 #516 cells PASS on all seven machine kinds and on
   the two Linux rows (a Lima QEMU VM), 108 receipts. The pass found seven
-  defects, each fixed with a test (DECISIONS, "Terminal pass fixes"). Still
-  NOT_RUN in step 19: two Lima machines with two Stores each at once, the
-  VM kinds with Docker stopped, R2; Windows is paused for the owner (P1-28).
+  defects, each fixed with a test (DECISIONS, "Terminal pass fixes"). Step
+  19's other items also ran at `6837bcfce2` (two Lima machines with two
+  Stores each at once, an agent creating and removing a machine, the VM
+  kinds with Docker unavailable (simulated), MinIO, PostgreSQL, the
+  binary/Node/Python comparison, the idle stop); only R2 (no account),
+  Windows (paused for the owner, P1-28) and Durable (disabled) are NOT_RUN.
+  Showing the idle stop through `machine list` found three more defects,
+  fixed in `c89727281a`, `1f41e6bc4f` and `f43ec45fa0`. The last one is the
+  guest worker, so the bundle was resealed (`c8baa5a9…`); C01 passed on it
+  on every VM kind and ssh, and the idle demo ran there under polling.
+  **Final product commit: `f43ec45fa0`.**
 
 ## Commits and production LOC
 
@@ -126,13 +134,21 @@ rewritten; this table is the record.
 | `b10dbcac8c` | fix(533): a restarted guest ends only the bundle's worker, never itself | 131815 -> 131816 (delta +1) | same |
 | `4c740437cd` | fix(533): docker on Linux reaches its Stores through its worker container | 131816 -> 131767 (delta -49) | same |
 | `6837bcfce2` | test(533): the cell runner takes its product commit from LFS533_PRODUCT | 131767 -> 131767 (delta 0) | same |
+| `9834bce77e` | docs(533): step 19 passes, 12/12 on all seven machine kinds and on Linux | 131767 -> 131767 (delta 0) | same |
+| `c89727281a` | fix(533): machine list and get answer each VM machine's live state | 131767 -> 131825 (delta +58) | same |
+| `1f41e6bc4f` | fix(533): a machine's worker counts as up only when it answers its secret | 131825 -> 131850 (delta +25) | same |
+| `f43ec45fa0` | fix(533): only a request that does work restarts a worker's idle clock | 131850 -> 131852 (delta +2) | same |
+| (this commit) | docs(533): the other step-19 items, the fixes after the pass and O36 | 131852 -> 131852 (delta 0) | same |
 
-Total: 124168 -> 131767 (delta +7599) across the branch: 124168 -> 130548
+Total: 124168 -> 131852 (delta +7684) across the branch, final product
+commit `f43ec45fa0`. To `6837bcfce2` it was 124168 -> 131767 (delta +7599): 124168 -> 130548
 (delta +6380) to `b2ca5fceb5`, the commit the review read beside
 `707b534eb2`, then +1218 for the review fixes, then +1 for the terminal
 pass fixes (`005a30c93c` … `4c740437cd`: +50, then -49 when `docker` on
 Linux dropped its in-process adapter). Head recounted at `6837bcfce2` with
-`tools/production_loc.py` on `git archive HEAD`: 131767. The 1.1.0 JavaScript
+`tools/production_loc.py` on `git archive HEAD`: 131767. Then +85 for the
+three fixes after the pass (`c89727281a` +58, `1f41e6bc4f` +25,
+`f43ec45fa0` +2). The 1.1.0 JavaScript
 packages are retired in `b07cde28d5` (api 4879 -> 107); the 2.0 library,
 machine layer, command and bindings are added in `engine`. The counter does
 not count Python (`api/python`).
@@ -182,6 +198,13 @@ owner). Read especially:
   and connection wait) are **not re-covered** on the 2.0 entry point.
 - **Step 10c** (subagent `1c05545ce4`, picked as `d244cdb3af`): its JS test
   edits fell with the packages; no Rust test was deleted.
+- **After the pass** (`c89727281a`, `1f41e6bc4f`, `f43ec45fa0`): no test
+  deleted. Added `layerfs-api` `tests/machine_list_live.rs` (stand-in
+  `limactl` and workers: live state, a 10 s bound, `unknown` with an error,
+  nothing started) and `tests/worker_idle_probes.rs` (probes do not restart
+  the idle clock, a request does). `tests/worker_idle.rs` now keeps its
+  worker up with a refused `store.call` instead of a ping; its assertions
+  are unchanged.
 
 The 63 files under the four packages' `test/` folders that `b07cde28d5`
 deleted (`git show --stat --diff-filter=D b07cde28d5`; the commit message
@@ -263,17 +286,41 @@ gives only the count). They include the tests' fixtures and the
   backend on Linux, the Linux worker, the Store moving native → machine →
   native, machines started by the first call, and (at `0170995ce4`) the idle
   stop. The earlier entries for them here no longer apply.
-- Two Lima machines of different sizes with two Stores each, used at once;
-  the VM kinds with Docker stopped (Docker is shared with other sessions).
+- Docker really stopped: only simulated (no `docker` on `PATH`, a missing
+  socket), since Docker is shared with other sessions.
 - `remote_store` on Linux; Windows (O5, P1-28 paused).
 - Machine boot and Init of a large project against the cell limits: `fc1`
   was warmed by a move before its cells (declared setup).
 - R2 backups (no account here).
 - Release-build timings: the terminal pass used debug builds.
-- One worker serving several Stores, machine boot and worker start times,
-  the guest-to-host send speed (README §8).
+- Machine boot and worker start times and the guest-to-host send speed
+  as measurements (README §8). One worker serving several Stores at once
+  ran in the step-19 concurrent cells (two Stores per Lima machine), not
+  as a measurement.
 
 ## Known gaps found late
+
+- **Found in the second cleanup:** `machine remove` of a nested
+  Firecracker machine is refused `Unavailable` while its Lima host is
+  stopped (after an idle stop, for instance), and the host's own removal is
+  refused `InUse` while it hosts the microVM. No call starts a stopped
+  machine, so removing the pair needs `limactl start` of the host by hand
+  first (TERMINAL-PASS, "Cleanup"). Either removal should start the host,
+  or the host's removal should take its microVMs with it.
+- **Found on the new bundle:** a nested host's hand-set huge pages are lost
+  when it reboots (an idle stop counts), and a microVM without them could
+  not take a new bundle within 375 s; the stopped attempt left its microVM
+  running. Details and the 31.7 s rerun with huge pages are in DECISIONS
+  (gaps) and TERMINAL-PASS.
+
+- **O36 (default Sandbox image), not done for a release:** the runtime image
+  `layerfs-352-runtime:node24-https-apt-20261024` (`sha256:afa1ef9c…`) is
+  local only. Releasing it needs the image published under a registry name
+  pinned by digest, so the O16 bundle fetch (not built) can get it. The
+  owner's note that it lacks `poweroff` does not hold for this image: it has
+  `/usr/sbin/poweroff`. The guest image without it is `debian:trixie-slim`,
+  the apple-container and microsandbox machines' image, where the worker
+  falls back to `reboot(2)` (`0170995ce4`).
 
 Found before the review; those the review fixes closed say so (checked
 against the fix commits' messages and code at `4194d34001`).
@@ -334,17 +381,17 @@ against the fix commits' messages and code at `4194d34001`).
 ## Cache releases for the cleanup script
 
 All owner-released at handoff; none holds evidence (the receipts are
-committed). Refreshed after the seven-kind pass; the step-5 and pg subagent
+committed). Refreshed after the second round of cleanup; the step-5 and pg subagent
 worktrees and their targets listed before are already gone.
 
 | Resource | Size | Note |
 | --- | --- | --- |
-| `layerfs-issue533-v2/target` | 22 GB | this worktree's macOS target; keep warm only if 2.0 work continues |
+| `layerfs-issue533-v2/target` | 26 GB | this worktree's macOS target; keep warm only if 2.0 work continues |
 | Docker volumes `lfs-dev-layerfs-issue533-v2-5ff20ac6a0aa-target` and `-cargo` | 9.6 GB + 354 MB | this worktree's Linux target and Cargo home (launcher-owned), for the Linux daemon and bundle builds |
 | `~/.cache/layerfs-worktrees/layerfs-issue533-v2-5ff20ac6a0aa` | 1.5 GB | launcher state, receipts and two older sealed builds (`build-linux-0c84a1ae…`, `38f27b92…`), both superseded |
-| `~/.cache/layerfs/bundle/2.0.0/linux-aarch64` | 2.9 GB | the sealed bundle the seven-kind pass used (`4a77c75e…`, source `6837bcfce2`); its `firecracker/` folder is already removed. Keep it for further VM work; any later seal replaces it |
+| `~/.cache/layerfs/bundle/2.0.0/linux-aarch64` | 2.9 GB | the resealed bundle (`c8baa5a9…`, source `f43ec45fa0`) the C01 reruns and the idle demo used; it replaced the seven-kind pass's `4a77c75e…`. Its `firecracker/` folder is already removed. Keep it for further VM work; any later seal replaces it |
 | `$TMPDIR/lfs-sbx-{home,folder}-{51039,51054}` | small | leftovers of a failed step-12 run; their removal was refused by the auto-mode classifier, so they were left |
 | VMs, machines and containers of the pass | – | all removed (TERMINAL-PASS, "Cleanup") |
 
-`python3 tools/cleanup.py check` at handoff: 297.7 GB free (after the
-seven-kind pass and its cleanup); no cleanup needed.
+`python3 tools/cleanup.py check` at handoff: 290.5 GB free (after the
+other step-19 items, the reseal and the second cleanup); no cleanup needed.

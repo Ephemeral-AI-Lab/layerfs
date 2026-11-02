@@ -104,6 +104,7 @@ recommended answer.
 | G14 | O4 widened: old settings, and old Connect and dsh homes | removed, with `layerfs import-env` once | 17 |
 | G15 | O13 `fs` or `file`; O14 `workspace.status`; O15 package names; O19 Python style; O20 prebuilt targets; O29 `fs.diff` argument form | see H §13 | 14–16 |
 | G16 | O27: the Linux `native` backend (`native` on Linux uses namespaces in 2.0) | remove it | 5 |
+| O36 | Default Sandbox image (owner, 2026-11-02: "Keep runtime image") | `layerfs-352-runtime:node24-https-apt-20261024` (`sha256:afa1ef9c…`), sealed as `sandbox-image.tar`; publishing it is a release item (DECISIONS O36) | 19 |
 
 **Terminal pass condition (owner direction, 2026-11-02).** Step 19 passes
 only when the 12 #516 cells PASS on every one of the seven machine kinds:

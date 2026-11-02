@@ -75,6 +75,32 @@ S: [layerfs-sdk-cli.md](../../proposals/layerfs-sdk-cli.md).
 | O34 | `machine.status` reports state, free disk, the provider tool's version and why a machine is down; no change event. |
 | O35 | A lease `store/<name>/open/<pid>` whose process is not alive on this host is stale, removed under the home lock, and the removal is logged. |
 
+### O36: default Sandbox image (owner decision, 2026-11-02)
+
+The owner's decision, relayed by the parent session: "Keep runtime image".
+2.0's default Sandbox image is the current runtime image,
+`layerfs-352-runtime:node24-https-apt-20261024`, config digest
+`sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e`,
+the image every step-19 cell ran in.
+
+- Contents, checked at this decision: Debian 12 (bookworm), arm64; Node
+  v24.21.0; Rust and Cargo 1.85.1; the SQLite headers
+  (`/usr/include/sqlite3.h`); Chromium 156.0.8078.47 and Selenium 4.8.3
+  (Python). It also has `/usr/sbin/poweroff`.
+- Size: Docker reports 954.7 MB for the image; the sealed
+  `sandbox-image.tar` (a docker-archive with uncompressed layers, #527) is
+  2.75 GB.
+- `tools/linux_bundle.py seal` saves it into the bundle's
+  `sandbox-image.tar` (its `--image` default is the launcher registration's
+  `sandbox` image, which is this digest); the sealed bundle's `bundle.json`
+  records the archive's config digest as `image` (`1d91885d…`) and this
+  image as `saved_from` (`afa1ef9c…`).
+- Another image stays possible as before: `machine create --image` for a
+  VM machine, `machine update native|docker --image`, and a docker
+  Sandbox's own image digest.
+- Not done for a release (HANDOFF, open items): publishing the image under
+  a registry name pinned by digest, so the O16 fetch can get it.
+
 ## Consequences of the answers for the call count
 
 With O13, O14, O24 and O11 accepted, the surface is S's 54 calls with `fs`
@@ -302,7 +328,10 @@ Running the seven-kind pass found seven defects that no stand-in test
 reached. Each was fixed, given a test, and the affected cells were run again
 as new samples; the failed receipts are kept (TERMINAL-PASS, "Samples that
 failed"). None of these is an owner decision. The pass then ran 12/12 on all
-seven kinds and both Linux rows at `6837bcfce2`.
+seven kinds and both Linux rows at `6837bcfce2`. Running the other step-19
+items afterwards found two more, in `machine.list`/`status` only, which no
+cell step calls (the last two rows; the first is a delegated owner
+decision).
 
 | Topic | Choice | Where |
 | --- | --- | --- |
@@ -314,7 +343,27 @@ seven kinds and both Linux rows at `6837bcfce2`.
 | Ending an old worker | The guest's launch script (`LAUNCH`) and the ssh `END_WORKER` end only a process whose command line is exactly `<bundle>/layerfs worker` and which is not the script itself. Before, a pattern match also matched the launching shell when its pid was reused, so it killed itself (exit 143). | `b10dbcac8c` (`ac1` C01 restarting from stopped) |
 | `docker` on Linux | Routes to its worker container, as on macOS (`Kind::route`: only `native` is in process); `docker/linux.rs` is removed and `macos.rs` serves both. Before, a Store moved to `docker` on Linux stayed in the home's own file, so the next Store of that name was refused `Exists`. Resolves the correction to the H §7.7 row. Deleted test: `docker_on_linux_runs_in_process_and_starts_nothing`. | `4c740437cd` (Linux `docker` C01: "machine docker already holds a Store file named cells") |
 
+| `machine list` and `get` state | Delegated owner decision (recommended answer), relayed by the parent session after the pass showed `lb` idle-stopped but still listed "running": the list (and `get`) report the same live probe as `machine.status` for VM and ssh machines. All probes run at once within 10 s, start nothing, take no lock, and write nothing back. A failed or late probe is `unknown` with the reason in `error`. Built-ins and a machine being created or removed keep their record. Connect's Compute page reads `machine.list().machines[].state`. | `c89727281a` |
+| What counts as an up worker | Found while showing the above: an `ssh -L` (or Lima) forward accepts on the host with no worker behind it, so `status` and `list` called `ssh1` "running" after its worker idled out. `worker::answers` now needs the secret hello answered `{"ready":true}` (2 s) and sends no request. | `1f41e6bc4f` |
+| What restarts a worker's idle clock | Delegated owner decision (recommended answer): only an authenticated request that does work, which is any request but `worker.ping`. A connection, the secret alone, a ping, or a denied or malformed frame does not (this closes the rest of review P1-26). Before, every accepted connection restarted it, so polling `machine.list` would have kept every machine up. The guest worker changed, so the bundle was resealed at `f43ec45fa0`: hash `c8baa5a9b660a8ee816b544e6a57dad0ccb2177408d57b77afa73884f06fc6f9`, the same Sandbox image. | `f43ec45fa0` |
+
 Gaps seen in the pass and left open:
+- A microVM whose start fails after it booted keeps running with no worker,
+  so nothing idle-stops it, and its Lima host stays up behind it (the host's
+  worker sees a live `firecracker.pid`). Seen once (below); the pass stopped
+  that microVM by hand. `machine stop` would cover it (not built).
+- Without huge pages, copying a new bundle into a Firecracker microVM is
+  slow and fragile on a 4 GiB nested host. After `fch`'s idle-stop reboot
+  dropped its huge pages, the 2 GiB microVM ran on ordinary memory. Copying
+  the 2.75 GB Sandbox image took 375 s, and then the `.sealed` write failed
+  ("Connection timed out during banner exchange"; 46 MB free in the guest,
+  85 MB on the host). With 1,100 huge pages restored, the same cold start
+  and copy took 31.7 s. Nothing in the product sets huge pages (gap above);
+  a smaller image or a host sized for the microVM would also help.
+- Removing a nested Firecracker machine whose Lima host is stopped is
+  refused `Unavailable`, and the host's removal is refused `InUse` while it
+  hosts the microVM; with no call to start a machine, the second cleanup
+  started the host with `limactl` first (TERMINAL-PASS, "Cleanup").
 
 - A running machine keeps the worker and bundle it started with until it
   stops (idle stop or reboot); there is no `machine stop`. To load a rebuilt

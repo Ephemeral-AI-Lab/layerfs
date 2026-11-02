@@ -1,0 +1,15 @@
+$ cargo +1.85.1 test -p layerfs-api --features machine --test backup_family   # product 6837bcfce2, MinIO lfs533-minio2, 2026-11-02T03:42:17Z
+<cache>/layerfs-worktrees/layerfs-issue533-v2-5ff20ac6a0aa/builds/cargo-macos-d2f125d2d08a44e6bcfa424e8cd597ab
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.05s
+     Running tests/backup_family.rs (target/debug/deps/backup_family-cfab743c1944ca49)
+
+running 4 tests
+test concurrent_restores_under_a_new_name ... ok
+test foreign_copies_and_unrecorded_links ... ok
+test list_states_compare_the_store_and_the_copy ... ok
+test backups_against_minio ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+
+# Live, not NOT_RUN: afterwards the bucket held lfs533-88917/{from-box,shop}, lfs533-foreign-88917, lfs533-states-88917 and lfs533-twice-88917 (docker exec lfs533-minio2 ls -R /data/layerfs-test).

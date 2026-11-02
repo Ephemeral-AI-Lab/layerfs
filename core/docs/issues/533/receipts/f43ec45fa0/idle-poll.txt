@@ -1,0 +1,15 @@
+# Idle stop under polling, product f43ec45fa0, bundle c8baa5a9 (only requests that do work restart a worker's idle clock).
+# Last real use: ac1 12:11 (C01), msb1, la, ssh1 about 12:16 (C01), fc1 12:23 (C01); lb idle-stopped 12:15 and was not used again.
+# Every line: one machine list and one machine status per VM machine, about every 60 s, until none runs.
+12:23:51 list (0.64 s): ac1=stopped fc1=running fch=running la=running lb=stopped msb1=running ssh1=running | status: ac1=stopped la=running lb=stopped msb1=running ssh1=running fch=running fc1=running
+12:24:47 list (0.61 s): ac1=stopped fc1=running fch=running la=running lb=stopped msb1=running ssh1=running | status: ac1=stopped la=running lb=stopped msb1=running ssh1=running fch=running fc1=running
+12:25:44 list (0.56 s): ac1=stopped fc1=running fch=running la=running lb=stopped msb1=running ssh1=running | status: ac1=stopped la=running lb=stopped msb1=running ssh1=running fch=running fc1=running
+12:26:40 list (0.56 s): ac1=stopped fc1=running fch=running la=stopped lb=stopped msb1=stopped ssh1=running | status: ac1=stopped la=stopped lb=stopped msb1=stopped ssh1=running fch=running fc1=running
+12:27:36 list (0.51 s): ac1=stopped fc1=running fch=running la=stopped lb=stopped msb1=stopped ssh1=stopped | status: ac1=stopped la=stopped lb=stopped msb1=stopped ssh1=stopped fch=running fc1=running
+12:28:41 list (0.57 s): ac1=stopped fc1=running fch=running la=stopped lb=stopped msb1=stopped ssh1=stopped | status: ac1=stopped la=stopped lb=stopped msb1=stopped ssh1=stopped fch=running fc1=running
+12:29:38 list (0.57 s): ac1=stopped fc1=running fch=running la=stopped lb=stopped msb1=stopped ssh1=stopped | status: ac1=stopped la=stopped lb=stopped msb1=stopped ssh1=stopped fch=running fc1=running
+12:30:34 list (0.52 s): ac1=stopped fc1=running fch=running la=stopped lb=stopped msb1=stopped ssh1=stopped | status: ac1=stopped la=stopped lb=stopped msb1=stopped ssh1=stopped fch=running fc1=running
+12:31:31 list (0.53 s): ac1=stopped fc1=running fch=running la=stopped lb=stopped msb1=stopped ssh1=stopped | status: ac1=stopped la=stopped lb=stopped msb1=stopped ssh1=stopped fch=running fc1=running
+12:32:27 list (0.51 s): ac1=stopped fc1=running fch=running la=stopped lb=stopped msb1=stopped ssh1=stopped | status: ac1=stopped la=stopped lb=stopped msb1=stopped ssh1=stopped fch=running fc1=running
+12:33:40 list (0.47 s): ac1=stopped fc1=stopped fch=stopped la=stopped lb=stopped msb1=stopped ssh1=stopped | status: ac1=stopped la=stopped lb=stopped msb1=stopped ssh1=stopped fch=stopped fc1=stopped
+12:33:40 no VM or ssh machine running

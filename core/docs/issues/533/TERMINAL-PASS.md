@@ -3,8 +3,11 @@
 > **Status:** Dated checkpoint, 2026-11-02; not release evidence or a product
 > contract. Delegated by the owner (asleep); nothing is pushed or merged.
 > The current result is the [seven-kind pass at `6837bcfce2`](#seven-kind-pass-at-6837bcfce2-2026-11-02):
-> 12/12 on all seven kinds and on the two Linux rows. The earlier runs
-> follow it unchanged.
+> 12/12 on all seven kinds and on the two Linux rows, every other step-19
+> item PASS, and only R2, Windows and Durable NOT_RUN. The final product
+> commit is `f43ec45fa0` (three fixes outside the cell path, a resealed
+> bundle, C01 on every VM kind and the idle demo there). The earlier runs
+> follow unchanged.
 
 Run on branch `issue533-v2` at product commit `11551a8d4f` (the twelve-cell
 runner commit; the product source is `6775d06789`'s). Host: this Mac (arm64,
@@ -246,19 +249,116 @@ are the cell's `store.move` and `store.move.back` in seconds.
 | macos-ssh1-C11 | PASS | 11.5 | 224.8 | 1413.7 (UpToDate) | 14.3 | 0.1 / 0.1 | 4.7 |
 | macos-ssh1-C12 | PASS | 9.0 | 324.2 | 233.6 (Committed) | 6.1 | 0.1 / 0.1 | 4.7 |
 
+### The other step-19 items
+
+Owner direction (relayed 2026-11-02): run every other step-19 item at the
+final product commit, one sample each; only R2 (no account), Windows (O5)
+and Durable may stay NOT_RUN. Each ran once, in a second home made for it
+(machines created there, listed below), with the same binaries as the
+cells. HEAD was the docs commit `9834bce77e`; the product source is
+`6837bcfce2`'s (the runner checks that nothing under `engine`, `core/crates`
+or the Node package changed since). Receipts are in
+[`receipts/6837bcfce2/`](receipts/6837bcfce2/). Two rows ran later, at
+`f43ec45fa0`, after the fixes in the next section: the idle stop shown by
+`machine list`, and the Store moved to `docker` and back. Those fixes touch
+only `machine.list`/`get`/`status` and the worker's idle clock, which none
+of the other rows relies on.
+
+| Step-19 item | Verdict | Evidence |
+| --- | --- | --- |
+| Two Lima machines of different sizes, each with two Stores, used at once | **PASS** | `la` (2 CPUs, 4 GiB) and `lb` (4 CPUs, 6 GiB), each with a 30 GiB data disk (`limactl list` shows Lima's 100 GiB sparse OS disk). Four cells started together: C01 and C04 on `la`, C05 and C12 on `lb` (`concurrent-*`), each with its own Store (`c01`, `c04`, `c05`, `c12`) moved native → machine → native. All four Stores were on their machines at once for 5.8 s (11:38:04.95–11:38:10.75); the four cells finished in 7 s. Each verify printed `VERIFY OK`; each Commit has its own head (`12cb0fe3…`, `120c1b4a…`, `12ff9d34…`, `12b74174…`) and its own Sandbox (`lfs-185ba2c9-c01.p-1` …). Warm-up: one throwaway Store moved to each machine and back first. |
+| An agent creating and removing a machine | **PASS** | `agent-machine.txt`, through the `layerfs` command: `machine create ac2 apple-container` (10.6 s); Store `held` moved in; `machine get ac2` lists it; `machine remove ac2` refused `InUse` ("machine ac2 holds Stores [held] …", exit 125, nothing removed); one cell used it (`agent-ac2-C01`: Store `c01` in, exec, Commit, verify, back); `held` moved back and removed; `machine remove ac2` removed it (0.8 s); `container list -a` and `container volume list` empty. The first five lines' exit status was the logging pipe's, not the command's (marked in the receipt); the refusal's own exit, 125, is in the second `machine remove`. |
+| A Mac with Docker unavailable: the VM kinds still work | **PASS (simulated)** | Docker was not stopped (other sessions' containers run). One cell on each VM kind with no `docker` on `PATH` and `DOCKER_HOST=unix:///nonexistent/…` (the wrapper checks `docker` is absent first): `nodocker-ac2-C01`, `nodocker-la-C01`, `nodocker-ssh1-C01`, `nodocker-msb1-C01`, `nodocker-fc1-C01`, all PASS. `native` without Docker passed earlier (`receipts/11551a8d4f/macos-native-nodocker-C01`). |
+| Backup to and restore from MinIO, `backup list` | **PASS** | Throwaway MinIO `lfs533-minio2` (`minio_service.sh`): `minio-backup_family.txt`, `layerfs-api --features machine --test backup_family` 4/4 live (create, list states compared with the Store and the copy, restore, foreign copies and unrecorded links, `layerfs-exported-from`); the bucket held each test's objects afterwards, so none said NOT_RUN. `minio-remote-storage.txt`, `layerfs-remote-storage --test minio -- --include-ignored` 9/9. MinIO stopped and removed. |
+| Init on `native`, moves to `docker` and one VM, and back | **PASS** | VMs: every VM-kind cell above Inits on native and moves its Store native → machine → native (`store.move` / `store.move.back` in each receipt). `docker`: `receipts/f43ec45fa0/docker-round-trip.txt`, Init on native, `store move rt docker`, a read there, `store move rt native`, the same read (root `a8c4f009…`), same heads both ways. The docker cells move out only and remove their home. |
+| Linux host (`native`, `docker`) | **PASS** | The two Linux rows above, 12/12 each in a Lima QEMU VM. |
+| Backup to and restore from R2 | **NOT_RUN** | No R2 account or credentials on this host. |
+| Windows | **NOT_RUN** | Not considered (O5); P1-28 is paused for the owner. |
+| Durable Store profile | **NOT_RUN** | Disabled by owner until explicit reauthorization; every Store here was Disposable. |
+| Init into PostgreSQL, then `docker` and `native` Sandboxes on it | **PASS** | Throwaway `postgres:17-bookworm` (17.11) `lfs533-pg2`, one fresh database per run, a generated password (in no receipt or home). `pg-postgres_connect.txt` 1/1 (connect made the `layerfs` schema, 22 tables). `pg-sandbox_machines.txt` 3/3 live: a PostgreSQL Store's Sandboxes on `native` and `docker` each committing into the Store, and a sqlite Store's Sandbox on the docker machine. `cli-pg-native.txt` and `cli-pg-docker.txt`: connect, Init, a Sandbox, fork, mount, exec, Commit into PostgreSQL, read back (`added-lfs_native`, `added-lfs_docker`), close, no password in the home; the docker run's worker container and volume removed after. The macOS CLI and daemon for these were built with `postgresql` (a copy outside `target/debug`, so the cells' binaries stayed as they were); the sealed bundle's daemon already has it. |
+| The same calls from the binary, Node and Python, compared | **PASS** | `calls-node.txt`: `node --test api/node/test/calls.mjs api/node/test/shell.mjs` 5/5 (the Node addon built at this source). `calls-python.txt`: `test_calls.py -v` 7/7 with `LAYERFS_DAEMON` set, so the live exec test ran too (the module rebuilt at this source; a first run without the daemon skipped that one test and is not kept). |
+| Machines: none running while idle, shown by `machine list` | **PASS** at `f43ec45fa0` | Every VM and ssh machine stopped about 10 minutes after its last real use, while `machine list` and `machine status` polled about every minute; the list then read "stopped" (`receipts/f43ec45fa0/idle-poll.txt`, next section). Started by the first call: every VM kind's C01 at both commits. At `6837bcfce2` the list still answered recorded states, which is what the next section fixes. |
+
+Commands that the launcher refused before running anything: the first two
+`sandbox_machines` attempts asked for a 110 s test timeout; the launcher
+allows at most 100 s, so no test ran. The run above used 100 s.
+
+### After the pass: three fixes and a new bundle
+
+Showing the idle stop through `machine list` found three defects outside
+the cell path. Each was fixed with a test (DECISIONS, "Terminal pass
+fixes"); the first and third are delegated owner decisions.
+
+| Commit | Change | Production LOC |
+| --- | --- | --- |
+| `c89727281a` | `machine list`/`get` answer each VM and ssh machine's live state: the `machine status` probe, all at once within 10 s; it starts nothing, takes no lock and writes nothing back. A failed or late probe is `unknown`, with the reason in `error`. Before, they answered the record: `lb` idle-stopped at 11:48:23 and stayed "running" in the list. | 131767 -> 131825 (+58) |
+| `1f41e6bc4f` | A worker counts as up only when it answers its secret (`{"ready":true}`), with no request sent. Before, a bare TCP accept counted: `ssh1`'s `ssh -L` forward outlived its worker, so `ssh1` read "running". | 131825 -> 131850 (+25) |
+| `f43ec45fa0` | Only an authenticated request that does work (any but `worker.ping`) restarts a worker's idle clock. A connection, the secret alone, a ping, or a denied or malformed frame does not. Before, every probe postponed the idle stop. This is the guest worker, so the bundle was resealed. | 131850 -> 131852 (+2) |
+
+**New bundle** at `f43ec45fa0`: `tools/linux_bundle.py` daemon, worker,
+helper, seal; hash `c8baa5a9b660a8ee816b544e6a57dad0ccb2177408d57b77afa73884f06fc6f9`,
+the same Sandbox image (`1d91885d…`, saved from `afa1ef9c…`).
+`firecracker/` was moved aside during the seal and put back. The Node addon
+and the CLI were rebuilt at the same commit; the macOS daemon's sources did
+not change.
+
+**Why the 108 cells at `6837bcfce2` still hold.** The first two changes
+touch only `machine.list`, `machine.get` and `machine.status` on the host;
+no cell step calls them. The third changes only which connections restart a
+worker's idle clock. Every cell step reaches a worker as a real request,
+which restarts the clock as before. Neither the data path nor the Store,
+Sandbox or Workspace calls changed.
+
+**C01 on the new bundle**, one per VM kind and ssh, receipts in
+[`receipts/f43ec45fa0/`](receipts/f43ec45fa0/) (`newbundle-*-C01`). Each
+guest's `/layerfs/bundle/bundle.json` read `c8baa5a9…`.
+
+| Machine | Kind | C01 | Timed exec (ms) | `store.move` (s) |
+| --- | --- | --- | ---: | ---: |
+| `ac1` | `apple-container` | PASS | 480.3 | 0.1 (made on the new bundle just before) |
+| `msb1` | `microsandbox` | PASS | 565.4 | 26.8 (cold start and bundle copy) |
+| `la` | `lima` | PASS | 586.5 | 18.4 (cold start and bundle copy) |
+| `fc1` | `firecracker` | PASS | 704.3 | 31.7 (microVM boot and bundle copy, 2 MiB huge pages) |
+| `ssh1` | `ssh` | PASS | 540.4 | 21.3 (worker start and bundle copy) |
+
+The first attempt to start `fc1` on the new bundle failed
+(`fc1-warm-failed.txt`). This was a warm-up move, not a cell. `fch` had
+rebooted at its idle stop and lost its hand-set huge pages, so the 2 GiB
+microVM ran on ordinary memory. Copying the 2.75 GB image took 375 s, and
+then the `.sealed` write failed on an ssh banner timeout. The microVM kept
+running with no worker and held `fch` up. It was stopped by hand, 1,100
+huge pages were set again (the declared setup), and the cell's own cold
+start, copy included, then took 31.7 s. Both findings are open in
+DECISIONS.
+
+**Idle stop under polling** (`idle-poll.txt`): 11 rounds, from 12:23:51 to 12:33:40, each one
+`machine list` and one `machine status` per VM machine, about a minute
+apart. They did not keep anything up. `ac1` had already stopped (its C01
+ended 12:11); `la` and `msb1` stopped by 12:26:40, `ssh1`'s worker by
+12:27:36 (C01s about 12:16), and `fch` with `fc1` just after 12:32:27
+(`fc1`'s C01 ended 12:23). Each was listed "stopped" from the next round
+on; list and status always agreed. The last round lists every VM and ssh
+machine stopped. Each round's list took 0.47 to 0.64 s.
+
 ### Samples that failed, and earlier heads
 
 Failed samples are kept; none is replaced by a later PASS. Each led to a fix
-with its own test (DECISIONS, "Terminal pass fixes").
+with its own test (DECISIONS, "Terminal pass fixes"), except the
+stale-worker sample, which needed only a VM stop.
 
 | Receipt | Failure | Fixed by |
 | --- | --- | --- |
 | `receipts/2f5cc7f180/macos-lima1-C01` | `sandbox.create`: `/layerfs/data` not traversable by others | `005a30c93c` |
 | `receipts/005a30c93c/macos-lima1-C01-old-worker` | the same; the VM still ran the old worker (before the stop-to-reload step above) | stopping the VM |
 | `receipts/005a30c93c/macos-lima1-C01` | `/layerfs/data must be owned by this user and private` | `44db721d95` |
-| `receipts/164e1297cb/linux-native-C01-userns-allowed` | `native` refused: user namespaces not blocked | declared setup (`max_user_namespaces=0`) |
 | `receipts/164e1297cb/macos-ac1-C01` | `store.move`: starting the worker failed (exit 143); the launch script killed its own reused pid | `b10dbcac8c` |
 | `receipts/b10dbcac8c/linux-docker-C01` | `store.move`: "machine docker already holds a Store file named cells"; Linux `docker` ran in process | `4c740437cd` |
+
+**Negative check, not a failed cell:**
+`receipts/164e1297cb/linux-native-C01-userns-allowed` ran before
+`user.max_user_namespaces=0` was set, and `native` refused at
+`sandbox.create` with "user namespaces are not blocked", as #527 requires.
+That is the expected refusal; after the setting, Linux `native` ran 12/12.
 
 A microVM that would not boot after the host rebooted (its huge pages gone)
 was found by a warm-up move, not a cell; fixed by `164e1297cb`.
@@ -277,14 +377,11 @@ msb1, Linux native; lima1 C01–C06).
 ### What this pass does not show
 
 - Release-build timings: every number is from a debug build.
-- Other step-19 items, still NOT_RUN: two Lima machines of different sizes
-  holding two Stores each at once; the VM kinds with Docker stopped (Docker
-  is shared with other sessions); R2 backup (no account). A Store moved to
-  `docker` and back: the docker cells remove their home instead of moving
-  back. MinIO, PostgreSQL and `native` without Docker keep their earlier
-  verdicts in the Result table below.
-- Machines started by the first call and the idle stop are shown (above, and
-  live at `0170995ce4`); the machines' removal is in "Cleanup" below.
+- The other step-19 items are in the sections above; only R2, Windows and
+  Durable are NOT_RUN.
+- The full 12 cells on the resealed bundle (`f43ec45fa0`): one cell (C01)
+  per VM kind ran there; the 108 hold for the reasons given above.
+- Docker really stopped: simulated only (other sessions use it).
 - Windows: not considered (P1-28 paused for the owner).
 
 ### Cleanup
@@ -302,6 +399,28 @@ throwaway `lfs533-linux` (with its Docker image) and `lfs533-ssh`, and
 removal of the home, the bundle's `firecracker/` folder, the root key and
 the scratch copies. Lima's other VMs (`lfc-*`) were not touched.
 `python3 tools/cleanup.py check` afterwards: 297.7 GB free.
+
+Second round, after the other step-19 items and the idle demo, through
+`layerfs` in the second home: `machine remove la`, `lb`, `ac1`, `msb1`
+(with `~/.microsandbox/bin` on `PATH`), `machine disconnect ssh1`.
+`machine remove fc1` was refused `Unavailable` ("the lima machine fch is
+stopped") and `machine remove fch` was refused `InUse` (it hosts `fc1`):
+both had idle-stopped, removing a nested microVM needs its Lima host up,
+and no call starts a stopped machine. `limactl start` of fch by hand, then
+`machine remove fc1` and `fch` both succeeded. This is recorded as a gap
+(HANDOFF, Not verified), not changed after the final product commit.
+`ac2` had already been removed by the agent sequence. Afterwards the home
+held only `machine/native` and `machine/docker`, and Lima kept only its
+`lfc-*` VMs (untouched); `limactl delete -f lfs533-ssh`; `msb list`,
+`msb volume list`, `container list -a` and `container volume list` were
+empty; no `lfs-*` Docker container remained, and the only `lfs-` volumes
+are the launcher's target and Cargo home. MinIO (`lfs533-minio2`) was
+stopped and removed, PostgreSQL (`lfs533-pg2`) stopped (`--rm`), and the
+docker workers of the PostgreSQL and round-trip homes removed with their
+homes. The bundle's `firecracker/` folder, the second home, the throwaway
+ssh key, the PostgreSQL-feature binaries and the CLI copy were removed;
+the resealed bundle (`c8baa5a9…`) stays in the user cache.
+`python3 tools/cleanup.py check` afterwards: 290.5 GB free.
 
 ## Result (earlier runs, at `11551a8d4f` and `a487409fe5`)
 

@@ -1,0 +1,35 @@
+# sh pg2-docker.sh: a PostgreSQL Store's Sandbox on docker through the layerfs command (product 6837bcfce2; the docker worker and Sandbox daemon from the sealed bundle 4a77c75e…, built with postgresql), database lfs_docker, 2026-11-02T03:46:16Z
+$ layerfs machine update docker --image sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e
+{"name":"docker","platform":"docker","backend":"docker","state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"}
+exit 0
+$ layerfs store connect pg postgres://postgres@127.0.0.1:60659/lfs_docker --password env:LFSPW
+{"name":"pg","kind":"postgresql","schema":"layerfs","synchronous_commit":"off","projects":[]}
+exit 0
+$ layerfs project init pg/app <tmp>/pass2/lfs533-pgd-src.xS2Z
+{"project":"pg/app","store":"pg","name":"app","kind":"postgresql","machine":"native","created":1793591177204,"layer":"3250eb276c515c288298b626b3877d7f35f71dc608fa4ae0f33a95c938e3ce928d","root":"7c1e54c8f976fae93d60457ed5e0e37e0b044fe888165262e65e62ffc5702602"}
+exit 0
+$ layerfs sandbox create pg/app t docker
+{"name":"t","project":"pg/app","machine":"docker","state":"running","created":1793591177211,"pid":89820,"id":"1","platform":"docker","runtime":"docker","image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"}
+exit 0
+$ layerfs branch fork pg/app work main
+{"kind":"Forked","branch":"work","base":"3250eb276c515c288298b626b3877d7f35f71dc608fa4ae0f33a95c938e3ce928d","head":null}
+exit 0
+mount: {"kind":"Mounted","path":"/workspaces/1","workspace":"bbaf906bb8c3c66ec44e564dee70d2ebbdd26406e41f0ca0ae9eccb3fbee662f","namespace":1,"branch":"work","base":null,"base_layer":"3250eb276c515c288298b626b3877d7f35f71dc608fa4ae0f33a95c938e3ce928d","root":"7c1e54c8f976fae93d60457ed5e0e37e0b044fe888165262e65e62ffc5702602","sandbox":"1","container":"lfs-ac099f74-pg.app-1","image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e","platform":"docker","runtime":"docker","ws":"t:/workspaces/1"}
+ws=t:/workspaces/1
+$ layerfs workspace exec t:/workspaces/1 cat readme.txt; echo added-lfs_docker > new.txt --stream
+hello
+exit 0
+$ layerfs workspace commit t:/workspaces/1 -m from a docker Sandbox of a PostgreSQL Store
+{"kind":"Committed","head":"12e0de9950d7abb5b1297309757cd4f34a170a603c16aa868f55a716945fc16569","commit":{"id":"12e0de9950d7abb5b1297309757cd4f34a170a603c16aa868f55a716945fc16569","branch":null,"parent":null,"second_parent":null,"base":"3250eb276c515c288298b626b3877d7f35f71dc608fa4ae0f33a95c938e3ce928d","root":"1baae0b40e60ef20609149cea4ef79120a6987b75e0aa731ce506544e660ee1b","via":"exec","message":"from a docker Sandbox of a PostgreSQL Store","merged_from":null,"time":1793591180246,"logical":23,"new_canonical":537,"new_stored":351,"new_metadata":297,"displaced":null,"lww":[],"lww_truncated":false},"displaced_head":null,"merged":null,"lww":[],"lww_truncated":false}
+exit 0
+$ layerfs workspace unmount t:/workspaces/1
+{"kind":"Unmounted"}
+exit 0
+$ layerfs file read pg/app work /new.txt
+{"kind":"ok","snapshot":"work@e0de9950d7ab","root":"1baae0b40e60ef20609149cea4ef79120a6987b75e0aa731ce506544e660ee1b","path":"/new.txt","text":"added-lfs_docker\n","start_line":1,"end_line":1,"line_truncated":false,"truncated":false,"next_line":null,"size":17}
+exit 0
+$ layerfs sandbox close t
+{"kind":"Closed","sandbox":"1","unknown":[],"closed":"t"}
+exit 0
+no password in the home
+removing this home's docker worker lfs-ac099f74-docker and its data volume

@@ -1,0 +1,32 @@
+# An agent creates, uses and removes a machine through the layerfs command (product 6837bcfce2).
+$ layerfs machine create ac2 apple-container --cpus 2 --memory 4G --disk 20G   # 11:38:55
+{"name":"ac2","platform":"apple-container","backend":"namespaces","state":"running","cpus":2,"memory":4294967296,"disk":21474836480,"stores":[],"sandboxes":[]}
+(exit status not captured: the pipe's), 10.6 s
+$ layerfs store create held   # 11:39:05
+{"name":"held","kind":"sqlite","machine":"native","profile":"disposable","created":1793590745777,"sqlite":"3.53.2","projects":[]}
+(exit status not captured: the pipe's), 0.0 s
+$ layerfs store move held ac2   # 11:39:05
+{"store":"held","from":"native","to":"ac2","bytes":212992,"heads":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+(exit status not captured: the pipe's), 0.1 s
+$ layerfs machine get ac2   # 11:39:05
+{"name":"ac2","platform":"apple-container","backend":"namespaces","state":"running","cpus":2,"memory":4294967296,"disk":21474836480,"stores":["held"],"sandboxes":[]}
+(exit status not captured: the pipe's), 0.0 s
+$ layerfs machine remove ac2   # 11:39:05
+{"code":"InUse","message":"machine ac2 holds Stores [held], Sandboxes [] and hosts []","detail":null}
+(exit status not captured: the pipe's), 0.0 s
+# (agent-ac2-C01: one cell moved its Store c01 into ac2, ran its exec and Commit, and moved it back; nodocker-ac2-C01 the same with Docker unavailable.)
+$ layerfs machine remove ac2   # 11:41:12
+{"code":"InUse","message":"machine ac2 holds Stores [held], Sandboxes [] and hosts []","detail":null}
+exit 125, 0.0 s
+$ layerfs store move held native   # 11:41:12
+{"store":"held","from":"ac2","to":"native","bytes":212992,"heads":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+exit 0, 0.2 s
+$ layerfs store remove held   # 11:41:12
+{"removed":"held"}
+exit 0, 0.0 s
+$ layerfs machine remove ac2   # 11:41:12
+{"name":"ac2","removed":true}
+exit 0, 0.8 s
+$ layerfs machine list   # 11:41:13
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]},{"name":"fc1","platform":"firecracker","backend":"namespaces","state":"running","cpus":2,"memory":2147483648,"disk":10737418240,"stores":[],"sandboxes":[],"host":"fch"},{"name":"fch","platform":"lima","backend":"namespaces","state":"running","cpus":4,"memory":4294967296,"disk":32212254720,"stores":[],"sandboxes":[],"nested":true},{"name":"la","platform":"lima","backend":"namespaces","state":"running","cpus":2,"memory":4294967296,"disk":322122547
+exit 0, 0.2 s

@@ -49,7 +49,13 @@ layerfs machine create fc1 firecracker --host host1
 - Each VM machine has one VM named `lfs-<first 8 digits of the home
   id>-<name>`, one data disk mounted at `/layerfs/data` that holds many
   Stores, and one worker.
-- `image` is the image its Sandboxes run in.
+- `image` is the image its Sandboxes run in. The default Sandbox image (owner
+  decision O36) is LayerFS's runtime image
+  `layerfs-352-runtime:node24-https-apt-20261024` (config digest
+  `sha256:afa1ef9c…f38e`: Node 24, Rust 1.85.1, the SQLite headers,
+  Chromium and Selenium), sealed into the bundle as `sandbox-image.tar`.
+  `--image` (and `machine update native|docker --image`) chooses another.
+  The image is not published yet; a build places it with the bundle.
 - `nested` is for `lima` only: a VM able to host Firecracker machines.
   `firecracker` requires `host`, a `lima` machine made with `--nested`. The
   `lima` machine is `InUse` while it hosts any.
