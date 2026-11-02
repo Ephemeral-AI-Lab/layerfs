@@ -45,7 +45,7 @@ impl LocalProcess {
         }
     }
     /// Sends `signal` once, only after this exact process was observed alive.
-    pub(super) fn signal(self, signal: Signal) -> io::Result<()> {
+    pub(crate) fn signal(self, signal: Signal) -> io::Result<()> {
         if self.boot.is_none() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -78,7 +78,7 @@ impl Stat {
 }
 
 /// A process id as the kernel's signed type.
-pub(super) fn pid(id: u32) -> io::Result<Pid> {
+pub(crate) fn pid(id: u32) -> io::Result<Pid> {
     i32::try_from(id)
         .map(Pid::from_raw)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "process id width"))

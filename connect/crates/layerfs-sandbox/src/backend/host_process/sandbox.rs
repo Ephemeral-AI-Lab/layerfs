@@ -3,7 +3,7 @@
 //! reaps a daemon this process started that has already exited. A stop
 //! returns only once a daemon this process started is reaped, so it never
 //! stays a zombie of this process.
-use super::{groups, os, process::LocalProcess};
+use crate::local::{groups, os, process::LocalProcess};
 use crate::LocalRecord;
 use crate::{ContainerId, RuntimeError, WireFailure};
 use nix::sys::signal::Signal;
@@ -19,7 +19,7 @@ use std::{
 };
 
 /// The daemon's output file in a Sandbox directory, stdout and stderr together.
-pub(super) const LOG: &str = "daemon.log";
+pub(crate) const LOG: &str = "daemon.log";
 /// Pause between two looks at a stopping process.
 const PAUSE: Duration = Duration::from_millis(20);
 /// Wait for a killed process to be gone.
@@ -31,11 +31,11 @@ pub struct Sandbox {
     pub(super) id: ContainerId,
     pub(super) directory: PathBuf,
     pub(super) labels: Vec<(String, String)>,
-    pub(super) process: Option<LocalProcess>,
-    pub(super) port: u16,
+    pub(crate) process: Option<LocalProcess>,
+    pub(crate) port: u16,
     /// The daemon this process started, kept so its exit is reaped here and
     /// it does not stay a zombie of this process. `None` after a reopen.
-    pub(super) child: Mutex<Option<Child>>,
+    pub(crate) child: Mutex<Option<Child>>,
     pub(super) stop_attempted: bool,
     pub(super) stopped: bool,
     /// Its process groups were killed and found empty (by its stop).
@@ -46,7 +46,7 @@ pub struct Sandbox {
 
 impl Sandbox {
     /// A directory made by a start that has not spawned its daemon yet.
-    pub(super) fn unstarted(
+    pub(crate) fn unstarted(
         id: ContainerId,
         directory: PathBuf,
         labels: Vec<(String, String)>,

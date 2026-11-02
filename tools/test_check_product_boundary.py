@@ -127,11 +127,11 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertTrue(unsafe_violations(path, "unsafe fn signal_pid() {}"))
         self.assertFalse(unsafe_violations(Path("connect/crates/layerfs-sandbox/src/lib.rs"), "#![deny(unsafe_code)]"))
         self.assertTrue(unsafe_violations(Path("connect/crates/layerfs-sandbox/src/lib.rs"), "#![forbid(unsafe_code)]"))
-        darwin = Path("connect/crates/layerfs-sandbox/src/backend/native/macos/darwin.rs")
+        darwin = Path("connect/crates/layerfs-sandbox/src/local/os/macos/darwin.rs")
         self.assertFalse(unsafe_violations(darwin, "fn f() { unsafe { libc::proc_listallpids(); } }"))
         self.assertTrue(
             unsafe_violations(
-                Path("connect/crates/layerfs-sandbox/src/backend/native/macos/mounts.rs"),
+                Path("connect/crates/layerfs-sandbox/src/backend/os/macos/mounts.rs"),
                 "fn f() { unsafe { call(); } }",
             )
         )

@@ -8,8 +8,8 @@ use super::{
     rootfs::{self, ImageRoot},
     sandbox::Sandbox,
 };
-use crate::backend::native::listener;
-use crate::backend::native::{search::search_path, Local, LocalPhase, LocalProcess, KERNEL_ROUTE};
+use crate::local::listener;
+use crate::local::{search::search_path, Local, LocalPhase, LocalProcess, KERNEL_ROUTE};
 use crate::HelperSpec;
 use crate::{CommandIdentity, Image, RuntimeError};
 use nix::fcntl::OFlag;

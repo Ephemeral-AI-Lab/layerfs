@@ -1,7 +1,7 @@
 //! Linux process facts for the native runtime: state, process group and start
 //! time from `/proc/<pid>/stat`, this boot's identity from
 //! `/proc/sys/kernel/random/boot_id`, and every process from `/proc`.
-use crate::backend::native::process::Stat;
+use crate::local::process::Stat;
 use std::io;
 use std::sync::OnceLock;
 

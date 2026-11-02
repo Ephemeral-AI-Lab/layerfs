@@ -5,11 +5,7 @@
 //! A small shell script stands in for the daemon. One test: it changes this
 //! process's PATH, which no other test in this binary reads.
 #![cfg(target_os = "macos")]
-use layerfs_sandbox::{
-    docker::ExecRequest,
-    native::{Local, Sandbox},
-    CommandIdentity,
-};
+use layerfs_sandbox::{docker::ExecRequest, host_process::Sandbox, local::Local, CommandIdentity};
 use std::{
     fs,
     os::unix::fs::PermissionsExt,

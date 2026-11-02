@@ -77,7 +77,7 @@ pub(crate) fn require_fuse() -> Result<(), RuntimeError> {
 /// Sandbox is made rather than failing inside the Sandbox's mount.
 pub(crate) fn require_overlay_upper(root: &Path) -> Result<(), RuntimeError> {
     let resolved = fs::canonicalize(root)?;
-    match crate::backend::native::linux::mounts::filesystem(&resolved) {
+    match crate::local::os_impl::linux::mounts::filesystem(&resolved) {
         Ok(kind) if !UNSUITABLE.contains(&kind.as_str()) && !kind.starts_with("fuse") => Ok(()),
         // an unreadable mount table is no proof either way: the mount itself
         // then reports what is wrong, and nothing is invented here

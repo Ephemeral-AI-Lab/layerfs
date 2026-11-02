@@ -2,12 +2,12 @@
 //! choice, and [`Sandbox`] is the launched owner over it. There is no provider
 //! trait; each backend is a concrete type and dispatch is a `match` here.
 use crate::backend::docker::{self, DockerProvider};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use crate::backend::host_process;
 #[cfg(target_os = "linux")]
 use crate::backend::namespaces::{self, NamespaceProvider};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-use crate::backend::native;
 #[cfg(target_os = "macos")]
-use crate::backend::native::NativeMacosProvider;
+use crate::host_process::NativeMacosProvider;
 use crate::{ContainerId, ExecRequest, RuntimeError, WireFailure};
 use crate::{
     ExecExit, LaunchPhase, LaunchRequest, LocalRecord, ProviderCapabilities, SandboxInspection,
@@ -58,7 +58,7 @@ impl Runtime {
 
     /// The named native Sandbox's paths, for its daemon setup.
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    pub fn native_paths(&self, name: &str) -> Result<native::LocalPaths, RuntimeError> {
+    pub fn native_paths(&self, name: &str) -> Result<crate::local::LocalPaths, RuntimeError> {
         match self {
             #[cfg(target_os = "macos")]
             Self::MacosNative(provider) => provider.paths(name),
@@ -123,7 +123,7 @@ impl Runtime {
 pub enum Sandbox {
     Docker(docker::Sandbox),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    Native(native::Sandbox),
+    Native(host_process::Sandbox),
     #[cfg(target_os = "linux")]
     Namespaces(Box<namespaces::Sandbox>),
 }

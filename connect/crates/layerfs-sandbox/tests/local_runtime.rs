@@ -6,7 +6,8 @@
 #![cfg(target_os = "linux")]
 use layerfs_sandbox::{
     docker::ExecRequest,
-    native::{Local, LocalPhase, LocalProcess, Sandbox},
+    host_process::Sandbox,
+    local::{Local, LocalPhase, LocalProcess},
     CommandIdentity, RuntimeError,
 };
 use std::{

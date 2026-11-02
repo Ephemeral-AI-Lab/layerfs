@@ -1,12 +1,12 @@
 //! Ordinary runtime operations, separate from filesystem admission and data ownership.
 //!
-//! `backend/` holds one folder per Sandbox backend (`docker`, `native`,
+//! `backend/` holds one folder per Sandbox backend (`docker`, `host_process`,
 //! `namespaces`), named as `LAYERFS_SANDBOX` names them. `docker_engine/` is
 //! the Docker Engine HTTP client. `runtime.rs` is the one `match` over the
 //! backends; `types/` holds what they share; `json/` and `helper_spec.rs` are
 //! the shared formats. The kernels Sandboxes run on live in the
 //! `layerfs-machine` crate (host only).
-// unsafe only in backend/native/macos/darwin.rs: macOS process facts come
+// unsafe only in local/os/macos/darwin.rs: macOS process facts come
 // from proc_pidinfo, a system call (`ps` is setuid, which Seatbelt refuses)
 #![deny(unsafe_code)]
 #[cfg(unix)]
@@ -24,12 +24,15 @@ mod runtime;
 mod types;
 #[cfg(unix)]
 pub use backend::docker::{self, Docker, DockerProvider};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub use backend::host_process;
 #[cfg(target_os = "linux")]
 pub use backend::namespaces::{self, NamespaceProvider};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-pub use backend::native;
+pub mod local;
 #[cfg(target_os = "macos")]
-pub use backend::native::NativeMacosProvider;
+pub use backend::host_process::NativeMacosProvider;
 #[cfg(unix)]
 pub use helper_spec::HelperSpec;
 #[cfg(unix)]

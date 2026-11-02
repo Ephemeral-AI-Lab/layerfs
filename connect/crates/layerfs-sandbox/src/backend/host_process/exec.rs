@@ -4,8 +4,9 @@
 //! implicit timeout. Each command leads a process group of its own, named in
 //! the Sandbox until it is empty, so what it leaves running ends with the
 //! Sandbox.
-use super::{groups, process, process::LocalProcess, sandbox::Sandbox, search::search_path};
-use crate::backend::native::streams;
+use super::sandbox::Sandbox;
+use crate::local::streams;
+use crate::local::{groups, process, process::LocalProcess, search::search_path};
 use crate::{ExecExit, ExecRequest, RuntimeError, WireFailure};
 use nix::sys::signal::{killpg, Signal};
 use std::{

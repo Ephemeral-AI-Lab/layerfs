@@ -274,7 +274,7 @@ fn native_runtime(
     root: &str,
     _: crate::host::runtime::Backend,
 ) -> Result<Runtime, layerfs_sandbox::RuntimeError> {
-    layerfs_sandbox::native::NativeMacosProvider::new(root).map(Runtime::MacosNative)
+    layerfs_sandbox::host_process::NativeMacosProvider::new(root).map(Runtime::MacosNative)
 }
 
 #[cfg(target_os = "linux")]

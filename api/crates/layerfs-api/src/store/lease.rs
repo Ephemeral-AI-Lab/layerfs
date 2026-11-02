@@ -11,7 +11,7 @@
 use crate::home::{self, paths, read_record};
 use crate::host::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_sandbox::native::LocalProcess;
+use layerfs_sandbox::local::LocalProcess;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};

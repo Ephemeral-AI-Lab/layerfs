@@ -4,7 +4,7 @@
 //! identity (`sysctl`), the mount table (`mount`) and a forced unmount
 //! (`umount -f`). Each tool is one run with a fixed path and the C locale,
 //! read once; nothing is retried.
-use crate::backend::native::process::Stat;
+use crate::local::process::Stat;
 use nix::{
     fcntl::{fcntl, FcntlArg, OFlag},
     libc,

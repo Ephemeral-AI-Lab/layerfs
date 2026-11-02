@@ -1,7 +1,8 @@
 //! The macOS native runtime as a concrete backend; no alternate process engine.
 //! Linux has no native provider (#533 O27): its local Sandboxes run in
 //! namespaces.
-use super::{Local, LocalPhase, LocalProcess, Sandbox, KERNEL_ROUTE};
+use super::sandbox::Sandbox;
+use crate::local::{Local, LocalPhase, LocalProcess, KERNEL_ROUTE};
 use crate::{ContainerId, RuntimeError, WireFailure};
 use crate::{
     IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, LocalRecord, MountDriver,
@@ -21,7 +22,7 @@ impl NativeMacosProvider {
             local: Local::native(root)?,
         })
     }
-    pub fn paths(&self, name: &str) -> Result<super::LocalPaths, RuntimeError> {
+    pub fn paths(&self, name: &str) -> Result<crate::local::LocalPaths, RuntimeError> {
         self.local.clone().naming(name)?.paths()
     }
     pub fn capabilities(&self) -> ProviderCapabilities {

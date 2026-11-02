@@ -1,7 +1,7 @@
 //! Real native runtime lifecycle and partial launch custody through the Runtime enum.
 //! Native is macOS only (#533 O27).
 #![cfg(target_os = "macos")]
-use layerfs_sandbox::native::NativeMacosProvider as NativeProvider;
+use layerfs_sandbox::host_process::NativeMacosProvider as NativeProvider;
 use layerfs_sandbox::{
     CommandIdentity, DockerRecord, LaunchPhase, LaunchRequest, ProviderLaunchOptions, Runtime,
     SandboxRecord,

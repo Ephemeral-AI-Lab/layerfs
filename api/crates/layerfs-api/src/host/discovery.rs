@@ -14,7 +14,8 @@ use layerfs_bridge::{
 use layerfs_persistence::{SealedStore, SqlitePersistenceProfile};
 use layerfs_sandbox::docker::{Docker, DockerProvider, SandboxRequest};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_sandbox::native::{self, LocalProcess};
+use layerfs_sandbox::host_process;
+use layerfs_sandbox::local::LocalProcess;
 use layerfs_sandbox::{CommandIdentity, ContainerId, Sandbox, WireFailure};
 use layerfs_sandbox::{LocalRecord, SandboxRecord};
 use std::{
@@ -753,7 +754,7 @@ impl Recorded {
                 process,
                 port,
                 labels,
-            } => native::Sandbox::reopen(directory, id, process, port, labels)
+            } => host_process::Sandbox::reopen(directory, id, process, port, labels)
                 .map(|s| Box::new(Sandbox::Native(s))),
             #[cfg(target_os = "linux")]
             Self::Namespaces(runtime, id, record) => runtime.reopen(id, &record).map(Box::new),
@@ -776,7 +777,7 @@ impl Recorded {
                 process,
                 port,
                 labels,
-            } => Box::new(Sandbox::Native(native::Sandbox::stopped(
+            } => Box::new(Sandbox::Native(host_process::Sandbox::stopped(
                 directory, id, process, port, labels,
             ))),
             #[cfg(target_os = "linux")]

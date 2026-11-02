@@ -4,8 +4,8 @@
 //! the helper's own pipes; nothing of this process's environment but the
 //! search path reaches it, and no stdin is offered.
 use super::sandbox::Sandbox;
-use crate::backend::native::search::search_path;
-use crate::backend::native::streams;
+use crate::local::search::search_path;
+use crate::local::streams;
 use crate::ExecExit;
 use crate::{ExecRequest, RuntimeError, WireFailure};
 use std::{

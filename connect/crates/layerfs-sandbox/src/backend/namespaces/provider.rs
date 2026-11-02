@@ -11,7 +11,7 @@ use super::{
     rootfs,
     sandbox::Sandbox,
 };
-use crate::backend::native::{Local, LocalPaths};
+use crate::local::{Local, LocalPaths};
 use crate::{ContainerId, RuntimeError, WireFailure};
 use crate::{
     IsolationModel, LaunchFailure, LaunchPhase, LaunchRequest, MountDriver, ProviderCapabilities,
@@ -105,10 +105,10 @@ impl NamespaceProvider {
             } = *failure;
             Box::new(LaunchFailure {
                 phase: match phase {
-                    crate::backend::native::LocalPhase::Validate => LaunchPhase::Validate,
-                    crate::backend::native::LocalPhase::Create => LaunchPhase::Create,
-                    crate::backend::native::LocalPhase::Start => LaunchPhase::Start,
-                    crate::backend::native::LocalPhase::Listener => LaunchPhase::Listener,
+                    crate::local::LocalPhase::Validate => LaunchPhase::Validate,
+                    crate::local::LocalPhase::Create => LaunchPhase::Create,
+                    crate::local::LocalPhase::Start => LaunchPhase::Start,
+                    crate::local::LocalPhase::Listener => LaunchPhase::Listener,
                 },
                 instance: sandbox
                     .map(|sandbox| Box::new(crate::Sandbox::Namespaces(Box::new(sandbox)))),

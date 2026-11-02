@@ -27,7 +27,7 @@ pub(super) const GROUPS: &str = "groups";
 const PAUSE: Duration = Duration::from_millis(20);
 
 /// Names the group `leader` leads (its id is the group's), once.
-pub(super) fn name(directory: &Path, leader: LocalProcess) -> io::Result<()> {
+pub(crate) fn name(directory: &Path, leader: LocalProcess) -> io::Result<()> {
     let groups = directory.join(GROUPS);
     // a Sandbox started before groups were named has no directory yet
     match fs::DirBuilder::new().mode(0o700).create(&groups) {
@@ -46,7 +46,7 @@ pub(super) fn name(directory: &Path, leader: LocalProcess) -> io::Result<()> {
 
 /// Forgets the group `leader` led once no member of it is left. Called after
 /// the leader was reaped; a group that still has members stays named.
-pub(super) fn forget_if_empty(directory: &Path, leader: LocalProcess) -> io::Result<()> {
+pub(crate) fn forget_if_empty(directory: &Path, leader: LocalProcess) -> io::Result<()> {
     match nix::sys::signal::killpg(process::pid(leader.pid)?, None) {
         Err(nix::errno::Errno::ESRCH) => {}
         _ => return Ok(()),
@@ -61,7 +61,7 @@ pub(super) fn forget_if_empty(directory: &Path, leader: LocalProcess) -> io::Res
 /// `daemon` (its leader), once with KILL, as a container's end kills what
 /// ran in it, then waits up to `wait` for their members to be gone. Groups
 /// of another boot ended with it.
-pub(super) fn end(
+pub(crate) fn end(
     directory: &Path,
     daemon: Option<LocalProcess>,
     wait: Duration,
@@ -125,7 +125,7 @@ fn members(table: &[(u32, process::Stat)], leader: LocalProcess) -> Vec<u32> {
 
 /// Every process of this kernel now, with its stat. One that ends while
 /// being read is left out.
-fn processes() -> io::Result<Vec<(u32, process::Stat)>> {
+pub(crate) fn processes() -> io::Result<Vec<(u32, process::Stat)>> {
     os::processes()
 }
 
