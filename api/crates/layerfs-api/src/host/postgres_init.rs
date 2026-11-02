@@ -22,7 +22,6 @@ pub(crate) fn create_schema(args: &SdkValue, identity: &Identity) -> Result<bool
     {
         use crate::host::postgres::{schema, selection, setting, url};
         use layerfs_history::HistoryCatalogConfig;
-        use layerfs_persistence::PersistenceConfig;
         use layerfs_project::store::{CreateRequest, InitError, ProjectApi};
         use layerfs_storage::port::PersistenceError;
         let selection = selection(url(args)?, &schema(args)?, &setting(args)?);
@@ -101,7 +100,6 @@ fn run(
     {
         use crate::host::postgres::{schema, selection, setting, url};
         use layerfs_history::{BranchId, HistoryName, LayerStackId};
-        use layerfs_persistence::PersistenceConfig;
         use layerfs_project::store::{AddRequest, ProjectApi};
         let history = |text: &str| HistoryName::new(text).map_err(crate::host::outcome::failed);
         let stack = LayerStackId::from_authority(crate::host::project::sixteen(random()?));
