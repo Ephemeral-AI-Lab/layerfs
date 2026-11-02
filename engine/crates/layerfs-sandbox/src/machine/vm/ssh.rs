@@ -30,9 +30,10 @@ if [ "$root" != /layerfs/data ]; then
   mountpoint -q /layerfs/data || mount --bind "$root" /layerfs/data
 fi"#;
 
-/// Ends the worker, if its recorded pid is still a `layerfs` process.
+/// Ends the worker, if its recorded pid is still exactly the bundle's
+/// `layerfs worker` (pids are reused after a reboot).
 const END_WORKER: &str = r#"p=$(cat /layerfs/state/worker.pid 2>/dev/null) || exit 0
-if grep -q layerfs /proc/$p/cmdline 2>/dev/null; then kill "$p"; fi; exit 0"#;
+if [ "$p" != $$ ] && [ "$(tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null)" = "/layerfs/bundle/layerfs worker " ]; then kill "$p"; fi; exit 0"#;
 
 /// What connect wrote, never the data root; a bind mount of it is undone.
 const FORGET: &str = r#"rm -rf "$1" "$2"

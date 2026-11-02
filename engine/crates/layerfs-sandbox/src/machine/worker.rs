@@ -32,15 +32,17 @@ mount -o remount,rw /proc/sys 2>/dev/null || true
 echo 0 > /proc/sys/user/max_user_namespaces
 cat /proc/sys/user/max_user_namespaces"#;
 
-/// Step 3: ends a worker an earlier start left (by its pid, if that pid is
-/// still a `layerfs` process), then starts the bundle's `layerfs worker`
+/// Step 3: ends a worker an earlier start left (by its pid, if that pid's
+/// command line is still exactly the bundle's `layerfs worker`: a guest
+/// that restarted reuses pids, even this script's own), then starts it
 /// detached as root, its settings in its environment and its secret in a file.
 /// `LAYERFS_WORKER_POWEROFF=1` (a VM guest, not an ssh host) has an idle
 /// worker power its guest off when it stops (step 13).
 const LAUNCH: &str = r#"s=/layerfs/state
 if [ -f $s/worker.pid ]; then
   p=$(cat $s/worker.pid)
-  if grep -q layerfs /proc/$p/cmdline 2>/dev/null; then
+  # exactly the bundle's worker: a guest that restarted reuses its pids
+  if [ "$p" != $$ ] && [ "$(tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null)" = "$2/layerfs worker " ]; then
     kill "$p" 2>/dev/null; i=0
     while kill -0 "$p" 2>/dev/null && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done
   fi

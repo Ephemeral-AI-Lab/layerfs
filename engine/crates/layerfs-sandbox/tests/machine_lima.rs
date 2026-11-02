@@ -183,6 +183,44 @@ exit 0"#,
 }
 
 #[test]
+fn a_restarted_guest_ends_only_the_bundle_s_worker() {
+    // the terminal pass: after an idle stop, the old worker.pid named the
+    // launch script's own shell, whose text holds "layerfs", and it killed
+    // itself (exit 143)
+    if HostOs::current() != HostOs::Macos {
+        return;
+    }
+    let scratch = Scratch::new("lima-relaunch");
+    scratch.tool("limactl", LIMACTL_MADE);
+    scratch.tool(
+        "ssh",
+        r#"case "$*" in
+  *"tar -C"*) cat > /dev/null ;;
+  *max_user_namespaces*) echo 0 ;;
+  *"setsid nohup"*) exit 7 ;;
+esac
+exit 0"#,
+    );
+    scratch.tool("tar", "exit 0");
+    machine::create(&scratch.spec(Kind::Lima), &scratch.bundle()).unwrap_err();
+    let log = scratch.log();
+    let launch = log
+        .split("ssh ")
+        .find(|call| call.contains("setsid nohup"))
+        .unwrap_or_else(|| panic!("no launch in:\n{log}"));
+    assert!(!launch.contains("grep -q layerfs"), "{launch}");
+    // the stand-in logs through `echo`, which turns the script's \0 into a NUL
+    assert!(
+        launch.contains(r#"[ "$p" != $$ ] && [ "$(tr '"#),
+        "{launch}"
+    );
+    assert!(
+        launch.contains(r#"< /proc/$p/cmdline 2>/dev/null)" = "$2/layerfs worker " ]"#),
+        "{launch}"
+    );
+}
+
+#[test]
 fn an_image_url_or_path_replaces_the_default_image() {
     if HostOs::current() != HostOs::Macos {
         return;
