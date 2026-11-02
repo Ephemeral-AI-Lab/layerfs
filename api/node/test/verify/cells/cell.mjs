@@ -38,7 +38,9 @@ if (!CF[cell] || !machine || !receipt) {
 const now = () => performance.now();
 const round = (ms) => Math.round(ms * 1000) / 1000;
 const errorOf = (error) => ({ code: error?.code ?? null, message: String(error?.message ?? error).slice(0, 2000) });
-const head = (() => {
+// LFS533_PRODUCT names the product commit where there is no checkout (a
+// Linux VM running a copy of this package).
+const head = process.env.LFS533_PRODUCT ?? (() => {
   try {
     return execFileSync("git", ["rev-parse", "--short=10", "HEAD"], { encoding: "utf8" }).trim();
   } catch {
