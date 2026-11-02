@@ -187,7 +187,38 @@ pub(crate) fn free_disk(spec: &Spec, guest: &Guest) -> Option<u64> {
 
 /// Whether the host reaches a worker at `endpoint` now.
 pub(crate) fn answers(endpoint: Option<&super::spec::Endpoint>) -> bool {
-    endpoint.is_some_and(|e| TcpStream::connect_timeout(&e.address, Duration::from_secs(1)).is_ok())
+    endpoint.is_some_and(|e| hello(e).unwrap_or(false))
+}
+
+/// The worker protocol's first step only: the secret as one frame (a 4-byte
+/// big-endian length, then JSON), answered `{"ready":true}` within 2 s; the
+/// connection then closes with no request. A bare connection is not enough:
+/// an `ssh -L` or Lima port forward accepts on the host while no worker
+/// listens in the guest.
+fn hello(endpoint: &Endpoint) -> std::io::Result<bool> {
+    use std::io::{Read, Write};
+    let wait = Some(Duration::from_secs(2));
+    let mut stream = TcpStream::connect_timeout(&endpoint.address, Duration::from_secs(1))?;
+    stream.set_read_timeout(wait)?;
+    stream.set_write_timeout(wait)?;
+    let secret = endpoint.secret.replace('\\', "\\\\").replace('"', "\\\"");
+    let hello = format!("{{\"secret\":\"{secret}\"}}");
+    let mut frame = (hello.len() as u32).to_be_bytes().to_vec();
+    frame.extend_from_slice(hello.as_bytes());
+    stream.write_all(&frame)?;
+    let mut length = [0u8; 4];
+    stream.read_exact(&mut length)?;
+    let length = u32::from_be_bytes(length) as usize;
+    if length > 4096 {
+        return Ok(false);
+    }
+    let mut body = vec![0; length];
+    stream.read_exact(&mut body)?;
+    let text: String = String::from_utf8_lossy(&body)
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    Ok(text.contains("\"ready\":true"))
 }
 
 /// Steps 2 to 4 for a guest whose kernel runs and whose data disk is mounted.
