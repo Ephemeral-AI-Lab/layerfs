@@ -2,7 +2,8 @@
 //! schema in an empty database and records it as a Store, with the password
 //! a reference resolved per call; Init writes a project into it; Store
 //! calls then run on it; disconnect forgets it and keeps its data, and a
-//! second connect finds the project. Needs LAYERFS_TEST_PG_URL (a server
+//! second connect finds the project. The same database under a second name
+//! is `Exists`. Needs LAYERFS_TEST_PG_URL (a server
 //! URL without a password, to a database with no `layerfs` schema; the
 //! test leaves one behind) and LAYERFS_TEST_PG_PASSWORD; without them the
 //! test says so and passes.
@@ -109,6 +110,27 @@ fn connect_read_and_disconnect() {
         .0,
         "Exists"
     );
+    // the same database under a second name (#533 review P1-15): by its
+    // URL, and through another spelling of the host by the schema's binding
+    let alias = if url.contains("127.0.0.1") {
+        Some(url.replace("127.0.0.1", "localhost"))
+    } else if url.contains("localhost") {
+        Some(url.replace("localhost", "127.0.0.1"))
+    } else {
+        eprintln!("NOT_RUN: the alias case needs a URL host of 127.0.0.1 or localhost");
+        None
+    };
+    for second in std::iter::once(url.clone()).chain(alias) {
+        let refused = call(
+            &home,
+            "store.connect",
+            &[("name", t("pg-again")), ("url", t(&second)), password()],
+        )
+        .unwrap_err();
+        assert_eq!(refused.0, "Exists", "{second}: {refused:?}");
+        assert!(refused.1.contains("Store pg "), "{refused:?}");
+        assert!(!paths::store_dir(&home, "pg-again").exists());
+    }
 
     let read = ok(
         &home,
