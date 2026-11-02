@@ -9,10 +9,6 @@ use super::{
 use crate::{
     attributes::{declined, Identity},
     coherence::{attributes::published, pages, reply_order},
-    operations::{
-        write::time, Declined, KernelMutation, MutationInput, MutationRequest, Published,
-    },
-    ports::{Fence, RequestServices, ServiceError},
     RequestDisposition, RequestOwner,
 };
 use fuser::{
@@ -20,6 +16,12 @@ use fuser::{
     ReplyEntry, ReplyWrite,
 };
 use layerfs_content::filesystem::PathName;
+use layerfs_mount_ports::{
+    operations::{
+        write::time, Declined, KernelMutation, MutationInput, MutationRequest, Published,
+    },
+    ports::{Fence, RequestServices, ServiceError},
+};
 use layerfs_overlay::KernelMount;
 use layerfs_workspace::{Refusal, Time};
 use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, sync::Arc, time::SystemTime};

@@ -3,12 +3,11 @@ use super::accounting::{Accounting, Disposal, Opcode};
 use super::failure::{failed, KernelInput};
 use super::reply::ReadReply;
 use crate::{
-    attributes::Identity,
-    mount::Negotiation,
-    ports::{Fence, MountServices},
-    DispatchError, MountRequests, RequestFuture, RequestOwner,
+    attributes::Identity, mount::Negotiation, DispatchError, MountRequests, RequestFuture,
+    RequestOwner,
 };
 use fuser::{Errno, INodeNo};
+use layerfs_mount_ports::ports::{Fence, MountServices};
 use layerfs_workspace::KernelReadOperation;
 use std::{
     sync::{Arc, OnceLock},

@@ -17,7 +17,7 @@ from check_product_boundary import (
 
 class ProductBoundaryTests(unittest.TestCase):
     def test_native_fuse_owns_requests_without_reverse_daemon_dependency(self):
-        path = Path("engine/crates/layerfs-fuse/src/ports.rs")
+        path = Path("engine/crates/layerfs-mount-ports/src/ports.rs")
         for source in [
             "use layerfs_workspace::SourceView;",
             "use layerfs_overlay::NativeMount;",
@@ -31,7 +31,7 @@ class ProductBoundaryTests(unittest.TestCase):
         ]:
             self.assertTrue(violations(path, source))
         self.assertTrue(unsafe_violations(path, "unsafe fn syscall() {}"))
-        root = Path("engine/crates/layerfs-fuse/src/lib.rs")
+        root = Path("engine/crates/layerfs-mount-ports/src/lib.rs")
         self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]"))
         self.assertTrue(unsafe_violations(root, "mod mount;"))
         prefix = '[package]\nname="layerfs-fuse"\n[dependencies]\n'
@@ -174,6 +174,16 @@ class ProductBoundaryTests(unittest.TestCase):
         machine_up = '[package]\nname="layerfs-daemon"\n[dependencies]\n'
         findings = dependency_violations(machine_up + 'layerfs-machine={path="../layerfs-machine"}')
         self.assertTrue(any("upward" in message for _, message in findings), findings)
+        # NFS reaches FUSE's kernel ports through mount-ports, never fuse.
+        findings = dependency_violations(
+            '[package]\nname="layerfs-nfs"\n[dependencies]\nlayerfs-fuse={path="../layerfs-fuse"}'
+        )
+        self.assertTrue(findings, findings)
+        self.assertFalse(
+            dependency_violations(
+                '[package]\nname="layerfs-nfs"\n[dependencies]\nlayerfs-mount-ports={path="../layerfs-mount-ports"}'
+            )
+        )
         findings = dependency_violations(
             '[package]\nname="layerfs-store-service"\n[dependencies]\nlayerfs-store-backup={path="../../../connect/crates/layerfs-store-backup"}'
         )

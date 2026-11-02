@@ -20,7 +20,7 @@ use crate::{
     names,
 };
 use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
-use layerfs_fuse::operations::{
+use layerfs_mount_ports::operations::{
     create, link, remove, rename,
     write::{self, AttributeChange, Stamp},
     Declined, KernelMutation, MutationFailure, MutationInput, MutationRequest,

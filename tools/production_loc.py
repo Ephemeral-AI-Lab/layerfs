@@ -361,6 +361,7 @@ SCOPES = ("core", "engine", "connect", "reference", "api", "dsh")
 ENGINE_CRATES = {
     "layerfs-bridge",
     "layerfs-daemon",
+    "layerfs-mount-ports",
     "layerfs-fuse",
     "layerfs-overlay",
     "layerfs-persistence",

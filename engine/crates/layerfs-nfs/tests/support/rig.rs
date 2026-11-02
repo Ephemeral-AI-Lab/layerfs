@@ -163,7 +163,7 @@ impl Rig {
     pub fn export_services(
         &self,
         listener: TcpListener,
-        services: Arc<dyn layerfs_fuse::ports::MountServices>,
+        services: Arc<dyn layerfs_mount_ports::ports::MountServices>,
         uid: u32,
         gid: u32,
         read_only: bool,

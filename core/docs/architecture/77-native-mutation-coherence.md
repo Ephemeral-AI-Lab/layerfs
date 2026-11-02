@@ -60,7 +60,7 @@ publishing Overlay owner job:
    nothing reserved. Since R8b (2026-10-10) a create that leaves fewer local
    serials than the daemon's explicit low-water also makes one early
    reservation; see "Early serial refill" below.
-3. [`NativeMutation`](../../crates/layerfs-fuse/src/operations/mutation.rs) drives
+3. [`NativeMutation`](../../crates/layerfs-mount-ports/src/operations/mutation.rs) drives
    the plan. Rounds that need immutable base facts read them through the shared
    reader and publish nothing. The deciding round is
    [`NativeMutationJob`](../../crates/layerfs-workspace/src/operations/native_mutation.rs):
@@ -344,7 +344,7 @@ is still addressed by inode and is refused `ENOENT` once the inode has no name.
 ## Refusals that remain
 
 Decided before any engine custody
-([`unsupported`](../../crates/layerfs-fuse/src/operations/unsupported.rs)):
+([`unsupported`](../../crates/layerfs-mount-ports/src/operations/unsupported.rs)):
 
 | Request | Answer |
 | --- | --- |

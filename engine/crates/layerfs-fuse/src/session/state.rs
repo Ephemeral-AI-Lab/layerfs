@@ -1,11 +1,11 @@
 //! Exact per-connection custody: mount, receive loops, their owner and receipts.
 use crate::{
     mount::{AbortWrite, MountEntry, Negotiation},
-    ports::{FailedDemands, Fence},
     request::{Accounting, OpcodeWork},
     DispatchError, MountRequests, MountWork,
 };
 use fuser::{SessionMonitor, SessionOutcome, SessionPhase, SessionSnapshot};
+use layerfs_mount_ports::ports::{FailedDemands, Fence};
 use layerfs_overlay::KernelMount;
 use nix::errno::Errno;
 use std::{

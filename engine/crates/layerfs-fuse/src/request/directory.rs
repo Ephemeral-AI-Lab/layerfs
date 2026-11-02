@@ -4,14 +4,13 @@ use super::{
     failure::{failed, KernelInput},
     terminal, KernelFilesystem,
 };
-use crate::{
-    attributes::Identity,
-    operations::{DirectoryStep, DirectoryStream},
-    ports::{Fence, ServiceError},
-    RequestDisposition,
-};
+use crate::{attributes::Identity, RequestDisposition};
 use fuser::{Errno, FileHandle, FileType, INodeNo, ReplyDirectory, ReplyEmpty, Request};
 use layerfs_content::object::inode_leaf::InodeKind;
+use layerfs_mount_ports::{
+    operations::{DirectoryStep, DirectoryStream},
+    ports::{Fence, ServiceError},
+};
 use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt};
 
 impl KernelFilesystem {

@@ -9,8 +9,8 @@ mod reply;
 mod state;
 mod terminal;
 
-pub(crate) use crate::phase::charge;
-pub use crate::phase::{Phase, PHASES};
 pub use accounting::{Accounting, Disposal, Opcode, OpcodeWork, Timed, OPCODES};
 pub use failure::{KernelInput, RequestFailure};
+pub(crate) use layerfs_mount_ports::phase::charge;
+pub use layerfs_mount_ports::phase::{Phase, PHASES};
 pub use state::KernelFilesystem;

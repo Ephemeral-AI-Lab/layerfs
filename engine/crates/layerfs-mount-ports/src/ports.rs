@@ -101,11 +101,11 @@ impl Fence {
     pub fn terminal_replies(&self) -> u64 {
         self.0.terminal_replies.load(Ordering::Acquire)
     }
-    pub(crate) fn stop(&self) {
+    pub fn stop(&self) {
         self.0.stopped.store(true, Ordering::Release);
     }
     #[cfg(target_os = "linux")]
-    pub(crate) fn replied(&self) {
+    pub fn replied(&self) {
         self.0.terminal_replies.fetch_add(1, Ordering::AcqRel);
     }
 }

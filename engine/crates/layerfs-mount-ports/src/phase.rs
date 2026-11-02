@@ -69,18 +69,18 @@ thread_local! {
 
 /// Makes `phases` current on this thread; returns the previous ones.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-pub(crate) fn enter(phases: Arc<Phases>) -> Option<Arc<Phases>> {
+pub fn enter(phases: Arc<Phases>) -> Option<Arc<Phases>> {
     CURRENT.with(|current| current.borrow_mut().replace(phases))
 }
 /// Restores what [`enter`] returned.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-pub(crate) fn restore(previous: Option<Arc<Phases>>) {
+pub fn restore(previous: Option<Arc<Phases>>) {
     CURRENT.with(|current| *current.borrow_mut() = previous);
 }
 
 /// Charges the time since `started` to `phase` of the running callback's
 /// mount; nothing when no callback is running on this thread.
-pub(crate) fn charge(phase: Phase, started: Instant) {
+pub fn charge(phase: Phase, started: Instant) {
     let elapsed = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
     CURRENT.with(|current| {
         if let Some(phases) = current.borrow().as_ref() {

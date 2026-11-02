@@ -15,6 +15,7 @@ layerfs-overlay = { path = "../layerfs-overlay" }
 layerfs-store-service = { path = "../layerfs-store-service" }
 layerfs-workspace = { path = "../layerfs-workspace" }
 layerfs-fuse = { path = "../layerfs-fuse" }
+layerfs-mount-ports = { path = "../layerfs-mount-ports" }
 # NFS kernel serving: the native route's mount entry beside FUSE.
 layerfs-nfs = { path = "../layerfs-nfs" }
 layerfs-bridge = { path = "../layerfs-bridge" }

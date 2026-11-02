@@ -19,7 +19,7 @@ use crate::{
     kernel::Kernel,
 };
 use layerfs_content::{filesystem::attributes::PortableMetadata, object::inode_leaf::InodeKind};
-use layerfs_fuse::operations::write::Stamp;
+use layerfs_mount_ports::operations::write::Stamp;
 use layerfs_workspace::ViewStat;
 use std::{
     collections::HashMap,

@@ -1,7 +1,7 @@
 //! A mounted Workspace served as a loopback NFSv3 export.
 //!
 //! The platform-independent half of the native macOS route: the same
-//! [`MountServices`](layerfs_fuse::ports::MountServices) ports and kernel
+//! [`MountServices`](layerfs_mount_ports::ports::MountServices) ports and kernel
 //! operations the FUSE connection uses, answered over ONC RPC instead of
 //! `/dev/fuse`. A stateless NFS client holds no lookup references or open
 //! descriptors, so the export keeps them itself (see [`kernel`]).

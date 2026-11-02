@@ -3,11 +3,11 @@ use crate::{
     store::{BoundWorkspace, PortError, ReadAdmissionError, StoreOperation},
     OwnerError,
 };
-use layerfs_fuse::ports::{
+use layerfs_history::HistoryError;
+use layerfs_mount_ports::ports::{
     BaseDemandFailed, Fence, Fenced, MountServices, RequestServices, ServiceError, ServiceFuture,
     ServiceReply,
 };
-use layerfs_history::HistoryError;
 use layerfs_overlay::{KernelCookieOffer, KernelMount, Publication};
 use layerfs_workspace::{
     BaseView, CanonicalClient, JobOutcome, KernelDirectoryWindow, KernelInput,

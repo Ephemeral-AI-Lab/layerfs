@@ -34,6 +34,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-workspace",
     "layerfs-store-service",
     "layerfs-store-backup",
+    "layerfs-mount-ports",
     "layerfs-fuse",
     "layerfs-nfs",
     "layerfs-daemon",
@@ -52,6 +53,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-workspace": "#![forbid(unsafe_code)]",
     "layerfs-store-service": "#![forbid(unsafe_code)]",
     "layerfs-store-backup": "#![forbid(unsafe_code)]",
+    "layerfs-mount-ports": "#![forbid(unsafe_code)]",
     "layerfs-fuse": "#![forbid(unsafe_code)]",
     "layerfs-nfs": "#![forbid(unsafe_code)]",
     "layerfs-daemon": "#![forbid(unsafe_code)]",
@@ -92,7 +94,14 @@ ALLOWED_DEPENDENCIES = {
     },
     "layerfs-overlay": set(),
     "layerfs-workspace": {"layerfs-content", "layerfs-overlay", "layerfs-telemetry"},
-    "layerfs-fuse": {"layerfs-content", "layerfs-overlay", "layerfs-workspace"},
+    # The route-neutral kernel ports FUSE and NFS serve over.
+    "layerfs-mount-ports": {"layerfs-content", "layerfs-overlay", "layerfs-workspace"},
+    "layerfs-fuse": {
+        "layerfs-content",
+        "layerfs-overlay",
+        "layerfs-workspace",
+        "layerfs-mount-ports",
+    },
     # Whole-file remote drivers; they know nothing about Stores.
     "layerfs-store-backup": {
         # bucket/ knows nothing about Stores; backup/ is the whole-Store copy.
@@ -100,8 +109,14 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-persistence",
         "layerfs-storage",
     },
-    # The NFS export reuses the kernel ports and operations; never daemon.
-    "layerfs-nfs": {"layerfs-content", "layerfs-overlay", "layerfs-workspace", "layerfs-fuse"},
+    # The NFS export reuses the kernel ports and operations; peers over
+    # mount-ports, never fuse or daemon.
+    "layerfs-nfs": {
+        "layerfs-content",
+        "layerfs-overlay",
+        "layerfs-workspace",
+        "layerfs-mount-ports",
+    },
     # The Store engine (#352 F-020): the SDK's Store calls in-process and the
     # Store/overlay ports daemon Workspace Commits use; it opens the Store.
     "layerfs-store-service": {
@@ -121,7 +136,8 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-overlay",
         "layerfs-workspace",
         "layerfs-store-service",
-        "layerfs-fuse",
+        "layerfs-mount-ports",
+    "layerfs-fuse",
         "layerfs-nfs",
         "layerfs-bridge",
         "layerfs-content",
@@ -161,6 +177,7 @@ LAYER = {
     "layerfs-telemetry": CORE,
     "layerfs-bridge": ENGINE,
     "layerfs-daemon": ENGINE,
+    "layerfs-mount-ports": ENGINE,
     "layerfs-fuse": ENGINE,
     "layerfs-nfs": ENGINE,
     "layerfs-overlay": ENGINE,

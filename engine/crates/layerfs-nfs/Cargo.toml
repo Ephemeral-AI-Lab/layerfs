@@ -10,7 +10,7 @@ license.workspace = true
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-overlay = { path = "../layerfs-overlay" }
 layerfs-workspace = { path = "../layerfs-workspace" }
-layerfs-fuse = { path = "../layerfs-fuse" }
+layerfs-mount-ports = { path = "../layerfs-mount-ports" }
 
 [dev-dependencies]
 layerfs-bridge = { path = "../layerfs-bridge" }

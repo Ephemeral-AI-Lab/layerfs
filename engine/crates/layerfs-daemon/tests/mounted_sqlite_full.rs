@@ -16,11 +16,13 @@ use layerfs_daemon::{
 use layerfs_fuse::{
     attributes::Identity,
     mount::AbortWrite,
-    ports::{Fence, MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply},
     session::{Detach, KernelSession, SessionConfig},
     MountRequests,
 };
 use layerfs_history::WorkspaceId;
+use layerfs_mount_ports::ports::{
+    Fence, MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply,
+};
 use layerfs_overlay::{KernelCookieOffer, KernelMount, OverlayError, ProfileConfig, Publication};
 use layerfs_storage::ReservationBlocks;
 use layerfs_workspace::{

@@ -13,7 +13,7 @@ use crate::{
     nfs::{self, Policy},
     rpc::{self, Accept, Refused},
 };
-use layerfs_fuse::ports::MountServices;
+use layerfs_mount_ports::ports::MountServices;
 use layerfs_overlay::KernelMount;
 use std::{
     io,

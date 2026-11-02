@@ -41,7 +41,7 @@ use crate::{
     handle::{HandleError, Handles},
 };
 use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
-use layerfs_fuse::{
+use layerfs_mount_ports::{
     operations::{KernelData, KernelRead, MutationFailure, ReadDataInput, ReadFailure},
     ports::{Fence, MountServices, RequestServices, ServiceError},
 };
