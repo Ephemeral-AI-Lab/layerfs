@@ -1,16 +1,28 @@
 //! Folder scope (#521 P13, ported into the library by O32): a client option
-//! of every front end, `{ folder, branch? }`. Paths must be canonical and
-//! beneath `folder`; Branch names are relative to the `branch` namespace and
-//! composed as `<branch>.<name>`; history calls are refused. A scope guards
-//! calls; it is not filesystem isolation (a command can still `cd` anywhere
-//! in the mounted tree). Every refusal comes before dispatch.
-use crate::home::with_field;
+//! of every front end, `{ project, folder, branch? }`. It is bound to one
+//! project, as #521's scoped client was: every call it allows names that
+//! project, or a Sandbox of it. It allows only the calls it covers (an
+//! allow list): the `file` calls, `branch` list, get, fork, merge and
+//! publish, and the `workspace` calls; every other call is refused, history
+//! calls included. Paths must be canonical and beneath `folder`; Branch
+//! names are relative to the `branch` namespace and composed as
+//! `<branch>.<name>`. A scope guards calls; it is not filesystem isolation
+//! (a command can still `cd` anywhere in the mounted tree). Every refusal
+//! comes before dispatch.
+use crate::home::{paths, read_record, with_field};
 use crate::host::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use std::path::Path;
+
+/// The argument a scoped `branch.list` carries to its family: the Branch
+/// namespace, which only a scope sets (the table has no such argument).
+pub(crate) const NAMESPACE: &str = "namespace";
 
 /// A checked scope.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Scope {
+    /// The one project, `<store>/<project>`, the scope is bound to.
+    pub project: String,
     /// A canonical project-root absolute path.
     pub folder: String,
     /// A Branch namespace prefix, when given.
@@ -39,17 +51,32 @@ fn canonical(path: &str) -> bool {
 }
 
 impl Scope {
-    /// Checks `{ folder, branch? }`.
+    /// Checks `{ project, folder, branch? }`.
     pub fn parse(value: &SdkValue) -> Result<Self, SdkRefusal> {
         let SdkValue::Map(fields) = value else {
-            return Err(refused("InvalidInput", "scope must be { folder, branch? }"));
+            return Err(refused(
+                "InvalidInput",
+                "scope must be { project, folder, branch? }",
+            ));
         };
-        if let Some((name, _)) = fields.iter().find(|(n, _)| n != "folder" && n != "branch") {
+        if let Some((name, _)) = fields
+            .iter()
+            .find(|(n, _)| !matches!(n.as_str(), "project" | "folder" | "branch"))
+        {
             return Err(refused(
                 "InvalidInput",
                 format!("unknown scope option `{name}`"),
             ));
         }
+        let project = value
+            .get_text("project")
+            .filter(|p| crate::names::project(p).is_ok())
+            .ok_or_else(|| {
+                refused(
+                    "InvalidInput",
+                    "scope.project must name its project, <store>/<project>",
+                )
+            })?;
         let folder = value
             .get_text("folder")
             .filter(|f| canonical(f))
@@ -70,6 +97,7 @@ impl Scope {
             }
         };
         Ok(Self {
+            project: project.to_owned(),
             folder: folder.to_owned(),
             branch,
         })
@@ -112,9 +140,15 @@ impl Scope {
         let set = |args: &mut SdkValue, field: &str, value: String| {
             *args = with_field(std::mem::take(args), field, SdkValue::Text(value));
         };
+        // the project of every `file` and `branch` call is the scope's
+        let bound = |args: &SdkValue| match args.get_text("project") {
+            Some(project) if project == self.project => Ok(()),
+            _ => Err(out("project")),
+        };
         match (family, call) {
             ("commit", _) | ("branch", "diff") => return Err(out("history")),
             ("file", _) => {
+                bound(&args)?;
                 let paths: &[&str] = match call {
                     "cp" | "mv" => &["from_path", "to_path"],
                     "diff" => &["left_path", "right_path"],
@@ -154,21 +188,27 @@ impl Scope {
                 }
             }
             ("branch", "list") => {
+                bound(&args)?;
                 self.compose("main")?;
+                let namespace = self.branch.clone().unwrap_or_default();
+                set(&mut args, NAMESPACE, namespace);
             }
             ("branch", "fork") => {
+                bound(&args)?;
                 for field in ["name", "from_branch"] {
                     let given = args.get_text(field).unwrap_or("").to_owned();
                     set(&mut args, field, self.compose(&given)?);
                 }
             }
             ("branch", "merge") => {
+                bound(&args)?;
                 for field in ["name", "a", "b"] {
                     let given = args.get_text(field).unwrap_or("").to_owned();
                     set(&mut args, field, self.compose(&given)?);
                 }
             }
             ("branch", "get" | "publish") => {
+                bound(&args)?;
                 let given = args.get_text("branch").unwrap_or("").to_owned();
                 set(&mut args, "branch", self.compose(&given)?);
             }
@@ -184,25 +224,38 @@ impl Scope {
                 let folder = format!(".{}", self.folder).replace('\'', "'\\''");
                 set(&mut args, "command", format!("cd '{folder}' && {command}"));
             }
-            _ => {}
+            ("workspace", "commit" | "unmount" | "status") => {}
+            // every call the scope does not cover: Stores, machines,
+            // backups, projects, Sandboxes
+            _ => return Err(out(name)),
         }
         Ok(args)
     }
 
-    /// A scoped `branch.list` result: only Branches in the namespace, named
-    /// relative to it.
-    pub fn branches(&self, value: SdkValue) -> SdkValue {
-        let prefix = format!("{}.", self.branch.as_deref().unwrap_or(""));
-        let Some(SdkValue::List(items)) = value.get("items").cloned() else {
-            return value;
+    /// A `workspace` call's Sandbox must be one of the scope's project:
+    /// its record names that project. Checked in `home` before dispatch;
+    /// other calls pass.
+    pub fn owns(&self, home: &Path, name: &str, args: &SdkValue) -> Result<(), SdkRefusal> {
+        let sandbox = match name {
+            "workspace.mount" => args.get_text("sandbox").unwrap_or(""),
+            n if n.starts_with("workspace.") => args
+                .get_text("ws")
+                .and_then(|ws| ws.split_once(':'))
+                .map_or("", |(sandbox, _)| sandbox),
+            _ => return Ok(()),
         };
-        let kept = items
-            .into_iter()
-            .filter_map(|item| {
-                let name = item.get_text("name")?.strip_prefix(&prefix)?.to_owned();
-                Some(with_field(item, "name", SdkValue::Text(name)))
-            })
-            .collect();
-        with_field(value, "items", SdkValue::List(kept))
+        if crate::names::name("sandbox", sandbox).is_err() {
+            return Err(out("sandbox"));
+        }
+        let machines = paths::names(&home.join("machine")).unwrap_or_default();
+        for machine in machines {
+            let record = paths::sandbox_dir(home, &machine, sandbox).join("record.json");
+            if let Some(record) = read_record(&record)? {
+                if record.get_text("project") == Some(self.project.as_str()) {
+                    return Ok(());
+                }
+            }
+        }
+        Err(out("sandbox"))
     }
 }

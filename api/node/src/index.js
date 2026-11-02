@@ -6,7 +6,7 @@
 //   import layerfs from "layerfs";
 //   await layerfs.store.create("shop");
 //   await layerfs.project.init("shop/api", "/src/api", { on_progress: console.log });
-//   const lfs = layerfs.client({ home: "/data/lfs", scope: { folder: "/web", branch: "agent" } });
+//   const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/api", folder: "/web", branch: "agent" } });
 import { native } from "./native.js";
 import { encode, decode, isPlain } from "./values.js";
 import { LayerFSError } from "./errors.js";
@@ -72,7 +72,7 @@ function bind(client, spec) {
 }
 
 /** A client of `home` (default `LAYERFS_HOME`, else `~/.layerfs`), with an
- * optional folder scope `{ folder, branch? }`. */
+ * optional folder scope `{ project, folder, branch? }`. */
 export function client({ home, scope } = {}) {
   const made = { home, scope };
   for (const family of families) made[family] = {};

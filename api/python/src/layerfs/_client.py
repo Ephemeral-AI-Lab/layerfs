@@ -87,7 +87,7 @@ class Family:
 
 class Client:
     """A client of ``home`` (default ``LAYERFS_HOME``, else ``~/.layerfs``),
-    with an optional folder scope ``{"folder": ..., "branch": ...}``."""
+    with an optional folder scope ``{"project": ..., "folder": ..., "branch": ...}``."""
 
     def __init__(self, home=None, scope=None):
         self.home = str(home) if home is not None else None

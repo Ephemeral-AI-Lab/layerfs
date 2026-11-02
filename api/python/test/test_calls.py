@@ -129,9 +129,15 @@ class Calls(unittest.TestCase):
         # an optional positional as a keyword, and a folder scope
         first = lfs.commit.list("shop/api", "agent")["items"][-1]["id"]
         self.assertEqual(lfs.file.read("shop/api", "agent", "/README.md", commit=first)["text"], "hello python\n")
-        scoped = layerfs.client(home=home, scope={"folder": "/web"})
+        scoped = layerfs.client(home=home, scope={"project": "shop/api", "folder": "/web"})
         with self.assertRaisesRegex(layerfs.LayerFSError, "out of scope: path"):
             scoped.file.stat("shop/api", "main", "/README.md")
+        # a scope covers its project's files, Branches and Workspaces only
+        with self.assertRaisesRegex(layerfs.LayerFSError, "out of scope: store.remove"):
+            scoped.store.remove("shop")
+        with self.assertRaisesRegex(layerfs.LayerFSError, "out of scope: project"):
+            scoped.file.stat("shop/other", "main", "/web/a")
+        lfs.store.get("shop")
         shutil.rmtree(home)
         shutil.rmtree(folder)
 

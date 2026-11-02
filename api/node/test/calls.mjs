@@ -63,14 +63,17 @@ test("a Store, an Init with progress, files, Branches and a folder scope", async
   assert.equal(stat.size, 3);
 
   // scoped: paths beneath /web, Branch names under agent., no history
-  const scoped = client({ home, scope: { folder: "/web", branch: "agent" } });
+  const scoped = client({ home, scope: { project: "shop/api", folder: "/web", branch: "agent" } });
   const inside = await scoped.file.stat("shop/api", "main", "/web/a.bin");
   assert.equal(inside.size, 3);
   await assert.rejects(scoped.file.read("shop/api", "main", "/README.md"), /out of scope: path/);
   await assert.rejects(scoped.commit.list("shop/api", "main"), /out of scope: history/);
   const branches = await scoped.branch.list("shop/api");
   assert.deepEqual(branches.items.map((b) => b.name), ["main"]);
-  await assert.rejects(client({ home, scope: { folder: "web" } }).store.list(), /canonical/);
+  await assert.rejects(scoped.store.list(), /out of scope: store.list/);
+  await assert.rejects(scoped.file.stat("shop/other", "main", "/web/a.bin"), /out of scope: project/);
+  await assert.rejects(client({ home, scope: { folder: "/web" } }).store.list(), /scope.project/);
+  await assert.rejects(client({ home, scope: { project: "shop/api", folder: "web" } }).file.stat("shop/api", "main", "/web"), /canonical/);
   rmSync(home, { recursive: true, force: true });
   rmSync(folder, { recursive: true, force: true });
 });

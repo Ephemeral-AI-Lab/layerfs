@@ -90,10 +90,14 @@ pub fn call_scoped(
     // `machine/native/` and `machine/docker/` exist from the first call
     #[cfg(feature = "machine")]
     crate::machine::ensure_built_ins(&home)?;
+    if let Some(scope) = scope {
+        scope.owns(&home, name, &args)?;
+    }
     let mut context = Context { home, events };
     let value = route::run(spec, &mut context, &args)?;
+    // a scoped `branch.list` names its Branches relative to the namespace
+    // in the family (it pages through them there)
     let value = match scope {
-        Some(scope) if name == "branch.list" => scope.branches(value),
         Some(scope) if name == "branch.get" => {
             let prefix = format!("{}.", scope.branch.as_deref().unwrap_or(""));
             match value

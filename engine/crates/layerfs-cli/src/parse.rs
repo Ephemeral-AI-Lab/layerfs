@@ -20,7 +20,8 @@ pub struct Switches {
     /// `--stream` (`workspace exec`): the command's output and exit code
     /// passed through.
     pub stream: bool,
-    /// `--scope <folder>` and `--scope-branch <name>` (O32).
+    /// `--scope <folder>` with `--scope-project <store>/<project>` and
+    /// `--scope-branch <name>` (O32).
     pub scope: Option<SdkValue>,
 }
 
@@ -84,6 +85,7 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
     let mut from: Option<String> = None;
     let mut scope_folder: Option<String> = None;
     let mut scope_branch: Option<String> = None;
+    let mut scope_project: Option<String> = None;
     let mut i = 0;
     let mut only_positionals = false;
     while i < words.len() {
@@ -121,6 +123,7 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
             "--from" if call.args.iter().any(piped) => from = Some(take(&mut i)?),
             "--scope" => scope_folder = Some(take(&mut i)?),
             "--scope-branch" => scope_branch = Some(take(&mut i)?),
+            "--scope-project" => scope_project = Some(take(&mut i)?),
             "-m" => {
                 let text = take(&mut i)?;
                 option(call, "message", &text, &mut fields)?;
@@ -150,11 +153,17 @@ pub fn parse(call: &Call, words: &[String], stdin: &mut dyn Read) -> Result<Pars
             }
         }
     }
-    if scope_branch.is_some() && scope_folder.is_none() {
-        return Err(usage("--scope-branch needs --scope"));
+    if (scope_branch.is_some() || scope_project.is_some()) && scope_folder.is_none() {
+        return Err(usage("--scope-branch and --scope-project need --scope"));
     }
     if let Some(folder) = scope_folder {
-        let mut scope = vec![("folder".to_owned(), SdkValue::Text(folder))];
+        let Some(project) = scope_project else {
+            return Err(usage("--scope needs --scope-project <store>/<project>"));
+        };
+        let mut scope = vec![
+            ("project".to_owned(), SdkValue::Text(project)),
+            ("folder".to_owned(), SdkValue::Text(folder)),
+        ];
         if let Some(branch) = scope_branch {
             scope.push(("branch".to_owned(), SdkValue::Text(branch)));
         }

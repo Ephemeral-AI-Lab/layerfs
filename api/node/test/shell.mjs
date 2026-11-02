@@ -121,9 +121,16 @@ test("a live Store gives the same answers both ways", { skip: !existsSync(comman
   assert.equal((await lfs.file.read("shop/api", "agent", "/a.txt")).text, "piped\n");
   assert.equal((await lfs.file.stat("shop/api", "agent", "/b.bin")).size, 3);
   // a folder scope on the command line
-  const scoped = shell(home, ["file", "stat", "shop/api", "main", "/README.md", "--scope", "/web"]);
+  const scoped = shell(home, ["file", "stat", "shop/api", "main", "/README.md", "--scope", "/web", "--scope-project", "shop/api"]);
   assert.equal(scoped.status, 125);
   assert.match(scoped.refused.message, /out of scope: path/);
+  // a scope names its project; another call is out of scope
+  const usage = spawnSync(command, ["store", "list", "--scope", "/web"], { env: { ...process.env, LAYERFS_HOME: home }, timeout: 60_000 });
+  assert.equal(usage.status, 2);
+  assert.match(usage.stderr.toString(), /--scope-project/);
+  const store = shell(home, ["store", "remove", "shop", "--scope", "/web", "--scope-project", "shop/api"]);
+  assert.equal(store.status, 125);
+  assert.match(store.refused.message, /out of scope: store.remove/);
   rmSync(home, { recursive: true, force: true });
   rmSync(folder, { recursive: true, force: true });
 });

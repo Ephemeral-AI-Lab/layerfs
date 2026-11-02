@@ -1,6 +1,7 @@
 //! The `branch`, `commit` and `file` families (#533 step 7): Store calls on
 //! one project's Branches, Commits and files, each translated to the Store
 //! method that does it and run on the route its Store's records choose.
+use crate::calls::scope::NAMESPACE;
 use crate::calls::Context;
 use crate::host::outcome::{refused, Outcome};
 use crate::store::route::{store_call, target};
@@ -58,7 +59,10 @@ fn at(args: &SdkValue) -> Fields {
 /// Runs one call of the three families.
 pub(crate) fn run(context: &mut Context<'_>, family: &str, call: &str, args: &SdkValue) -> Outcome {
     match (family, call) {
-        ("branch", "list") => on_project(context, args, "project.list_branches", take(args, &PAGE)),
+        ("branch", "list") => match args.get_text(NAMESPACE) {
+            Some(namespace) => branches_in(context, args, namespace),
+            None => on_project(context, args, "project.list_branches", take(args, &PAGE)),
+        },
         ("branch", "get") => {
             let fields = take(args, &[("branch", "name")]);
             let page = on_project(context, args, "project.list_branches", fields)?;
@@ -172,6 +176,60 @@ fn commit_get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             }
         }
     }
+}
+
+/// A scoped `branch.list`: the Branches named `<namespace>.<name>`, named
+/// relative to the namespace, one page (`page_size`, `page_pos`) of them.
+/// The project's Branches are read page by page to the end, or until the
+/// page is full; only the requested page is kept.
+fn branches_in(context: &mut Context<'_>, args: &SdkValue, namespace: &str) -> Outcome {
+    let size = args.get_int("page_size").unwrap_or(50);
+    let skip = args.get_int("page_pos").unwrap_or(0);
+    if !(1..=1000).contains(&size) || skip < 0 {
+        return Err(refused(
+            "InvalidInput",
+            "page_size is in 1..=1000 and page_pos is not negative",
+        ));
+    }
+    let target = target(&context.home, text(args, "project"))?;
+    let prefix = format!("{namespace}.");
+    let (mut pos, mut seen, mut kept, mut more) = (0i64, 0i64, Vec::new(), false);
+    'pages: loop {
+        let fields = vec![
+            ("pageSize".to_owned(), SdkValue::Int(1000)),
+            ("pagePos".to_owned(), SdkValue::Int(pos)),
+        ];
+        let page = store_call(context, &target, "project.list_branches", fields)?;
+        let (items, next) = page_of(&page, pos)?;
+        for item in items {
+            let Some(name) = item.get_text("name").and_then(|n| n.strip_prefix(&prefix)) else {
+                continue;
+            };
+            let name = SdkValue::text(name);
+            if seen < skip {
+                seen += 1;
+            } else if kept.len() as i64 == size {
+                more = true;
+                break 'pages;
+            } else {
+                kept.push(crate::home::with_field(item, "name", name));
+            }
+        }
+        match next {
+            Some(next) => pos = next,
+            None => break,
+        }
+    }
+    let next = if more {
+        SdkValue::Int(skip + kept.len() as i64)
+    } else {
+        SdkValue::Null
+    };
+    Ok(SdkValue::map([
+        ("items", SdkValue::List(kept)),
+        ("hasMore", SdkValue::Bool(more)),
+        ("nextPagePos", next),
+    ]))
 }
 
 /// One `file` call.
