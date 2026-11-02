@@ -35,15 +35,16 @@ pub struct Served {
 
 /// Serves `listener` until it fails. `root` is the worker's own state root.
 pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::Result<Served> {
-    // the root holds Stores and records: private to the worker's user, as a
-    // home is (a machine's data disk mounts 0755)
+    // the root holds Stores and records: unlistable by others, as a home is
+    // (a machine's data disk mounts 0755), but passable (0711), since a
+    // namespaces Sandbox's commands run as another identity below it
     {
         use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
         std::fs::DirBuilder::new()
             .recursive(true)
-            .mode(0o700)
+            .mode(0o711)
             .create(&root)?;
-        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700))?;
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o711))?;
     }
     crate::home::guest::serve_root(&root);
     let secret = Arc::new(secret);

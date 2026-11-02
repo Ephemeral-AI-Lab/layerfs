@@ -22,6 +22,22 @@ pub fn private_dir(path: &Path) -> Result<(), SdkRefusal> {
         .map_err(|error| refused("Failed", format!("{}: {error}", path.display())))
 }
 
+/// Lets others pass through (o+x, never read) `dir` and each folder from
+/// `home` down to it: a namespaces Sandbox's commands run as another
+/// identity and must reach their Workspace below `dir`. The folders stay
+/// unlistable by others; folders above `home` are not changed.
+pub fn traversable(home: &Path, dir: &Path) -> Result<(), SdkRefusal> {
+    use std::os::unix::fs::PermissionsExt;
+    for folder in dir.ancestors().take_while(|f| f.starts_with(home)) {
+        let mode = fs::metadata(folder).map_err(failed)?.permissions().mode();
+        if mode & 0o001 == 0 {
+            fs::set_permissions(folder, fs::Permissions::from_mode((mode | 0o001) & 0o7777))
+                .map_err(failed)?;
+        }
+    }
+    Ok(())
+}
+
 /// The record at `path`, or `None` when there is no file.
 pub fn read_record(path: &Path) -> Result<Option<SdkValue>, SdkRefusal> {
     let text = match fs::read_to_string(path) {

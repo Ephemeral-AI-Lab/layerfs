@@ -98,6 +98,11 @@ fn host_args(
                 std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o755))
                     .map_err(failed)?;
             }
+            // namespaces commands run as another identity: the home's folders
+            // above the root must let them pass (a macOS native command does not)
+            if backend == "namespaces" {
+                home::traversable(home, &local)?;
+            }
             let mut fields = vec![
                 ("sandbox".to_owned(), SdkValue::text(backend)),
                 (

@@ -13,4 +13,6 @@ mod records;
 pub use import_env::import_env;
 pub use layout::{detect, ensure, HomeFile, Layout, LAYOUT_VERSION};
 pub use migrate::{note_failure, open, open_from};
-pub use records::{log_line, now_ms, private_dir, read_record, with_field, write_record};
+pub use records::{
+    log_line, now_ms, private_dir, read_record, traversable, with_field, write_record,
+};
