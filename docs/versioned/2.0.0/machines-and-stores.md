@@ -227,30 +227,57 @@ layerfs backup restore shop lab
   Store's name. The snapshot is taken on the Store's own machine; its bytes
   pass through the caller's process, so machines never hold bucket keys.
   The object is `<prefix>/<file>/store.sqlite` (the whole file, or a
-  manifest) plus pieces `store.sqlite.piece-NNNNNN`, with
-  `layerfs-exported-from` metadata. A bucket object that is not the copy
-  this home last moved is `Conflict`; nothing is uploaded.
+  manifest) plus pieces `store.sqlite.piece-NNNNNN`, with its sha256,
+  heads, binding and `layerfs-exported-from: <home id>/<machine>` as
+  metadata. An object there whose `layerfs-exported-from` names another
+  home is `Exists`; one that is not the copy this home last moved through
+  the Store's link is `Conflict`. A link that records no sha256 of its last
+  copy expects the file absent. Both checks run before the snapshot and
+  again before the upload; nothing is uploaded on a refusal.
 - **`backup restore <store> <bucket> [file]`.** It downloads the file,
   verifies it and installs it as the sqlite Store `store` on `native`: a new
   Store, or one that replaces an idle Store on `native`. Replacing a Store
   that changed since its last backup or restore through that bucket is
-  `Conflict`. A Store on another machine is `Unsupported` (move it to
+  `Conflict`. Replacing one that a process holds open, whose SQLite `-wal`
+  or `-shm` file exists, or one of whose projects has a running Sandbox is
+  `InUse`. A Store on another machine is `Unsupported` (move it to
   `native` first). The home's project records are rebuilt from the Store.
+  - The download, its verification and the read of its projects run before
+    the home lock, into a hidden staging folder under the home's `store/`
+    (removed when the call ends). The lock covers the re-checks, the install
+    (one rename, or a hard link for a new Store) and the record writes.
+  - Of two restores under the same new name, the first to install wins;
+    the other is `Exists` and changes nothing.
 - **`backup list [bucket]`.** Every Store file on the connected buckets,
-  checked live, each with a `state`:
+  checked live: one item per Store of this home linked to it (a file linked
+  by several Stores is listed once per Store), each with a `state`. A linked
+  copy compares both sides with the link's last transfer: the Store's heads
+  now against the link's heads, and the copy's sha256 from the listing
+  against the link's `last.sha256`.
 
   | State | Meaning |
   | --- | --- |
-  | `current` | linked to a Store of this home, which has not changed since |
-  | `store_changed` | linked, and the Store has changed since |
+  | `current` | linked; neither the Store nor the copy changed since |
+  | `store_changed` | linked; the Store changed, the copy did not |
+  | `bucket_changed` | linked; the copy changed (written by another Store or home), the Store did not |
+  | `both_changed` | linked; both changed |
+  | `unknown` | linked, but one side cannot be read here; `reason` says why |
   | `unlinked` | no Store of this home links it |
   | `missing` | linked, but gone from the bucket |
+
+  `unknown`'s `reason` names a Store on another machine (heads are read on
+  `native` only), a PostgreSQL Store, a link without heads or without a
+  sha256, or a copy whose sha256 the listing did not read (it stats a
+  bounded number of copies per listing).
 
 - **`backup disconnect <name>`** forgets the bucket and this home's links
   to it. Its objects stay. LayerFS never deletes a bucket object.
 - The step 11 commit records the flow against MinIO (create, the four
-  states, `Conflict`, restore as a new Store, a Store behind a worker). R2
-  was `NOT_RUN` (no credentials). Not run for this manual.
+  states it had then, `Conflict`, restore as a new Store, a Store behind a
+  worker). The review fixes add MinIO tests of the seven states
+  (`943363f5b0`), a foreign copy and an unrecorded link (`dfe87f9b68`) and
+  concurrent restores (`842b4058b9`). R2 was `NOT_RUN` (no credentials).
+  Not run for this manual.
 
 ## Secret references
 
