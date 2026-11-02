@@ -11,10 +11,18 @@
 //! where the platform allows it, and what they leave running ends with the
 //! Sandbox. One attempt per operation, as in the Docker runtime; nothing is
 //! retried.
+//!
+//! Its adapter (stored name `"native"`, capabilities) builds on every Unix
+//! host; the backend itself on macOS and Linux only.
+mod adapter;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod exec;
 #[cfg(target_os = "macos")]
 mod provider;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub(crate) mod sandbox;
+pub(crate) use adapter::ADAPTER;
 #[cfg(target_os = "macos")]
 pub use provider::HostProcessProvider;
-pub(crate) mod sandbox;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use sandbox::Sandbox;

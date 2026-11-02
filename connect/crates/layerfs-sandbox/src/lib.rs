@@ -2,8 +2,9 @@
 //!
 //! `backend/` holds one folder per Sandbox backend (`docker`, `host_process`,
 //! `namespaces`), named as `LAYERFS_SANDBOX` names them. `docker_engine/` is
-//! the Docker Engine HTTP client. `runtime.rs` is the one `match` over the
-//! backends; `types/` holds what they share; `json/` and `helper_spec.rs` are
+//! the Docker Engine HTTP client. `runtime.rs` matches over the backends'
+//! providers and Sandboxes; `backend/adapter.rs` is the one match for what is
+//! fixed per backend (G2); `types/` holds what they share; `json/` and `helper_spec.rs` are
 //! the shared formats. The kernels Sandboxes run on live in the
 //! `layerfs-machine` crate (host only).
 // unsafe only in local/os/macos/darwin.rs: macOS process facts come
