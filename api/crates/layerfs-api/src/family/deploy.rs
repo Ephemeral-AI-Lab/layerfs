@@ -14,7 +14,7 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 pub(crate) const IMAGE_ARCHIVE: &str = "sandbox-image.tar";
 
 /// Where a guest holds a machine's own Sandbox image archive, copied in at
-/// start (`layerfs_sandbox::machine::IMAGE`).
+/// start (`layerfs_machine::IMAGE`).
 const GUEST_IMAGES: &str = "/layerfs/image";
 
 /// The sealed bundle's folder for `os` on this host's architecture (O16):

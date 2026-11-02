@@ -2,7 +2,7 @@
 use super::Json;
 use crate::RuntimeError;
 use std::io::{Read, Write};
-pub(crate) struct Text {
+pub struct Text {
     bytes: [u8; 128],
     len: usize,
     pub overflow: bool,
@@ -146,7 +146,7 @@ impl<R: Read> Json<R> {
         Ok(n)
     }
 }
-pub(crate) fn quoted(out: &mut (impl Write + ?Sized), value: &str) -> std::io::Result<()> {
+pub fn quoted(out: &mut (impl Write + ?Sized), value: &str) -> std::io::Result<()> {
     out.write_all(b"\"")?;
     for c in value.chars() {
         match c {

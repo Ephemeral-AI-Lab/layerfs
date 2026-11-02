@@ -191,7 +191,7 @@ pub(crate) fn endpoint_now(
     }
     #[cfg(feature = "machine")]
     {
-        use layerfs_sandbox::machine::{HostOs, Kind, Route};
+        use layerfs_machine::{HostOs, Kind, Route};
         let record = read_record(&paths::machine_record(home, machine))?
             .ok_or_else(|| refused("NotFound", format!("no machine named {machine}")))?;
         let kind = record.get_text("platform").and_then(Kind::parse);

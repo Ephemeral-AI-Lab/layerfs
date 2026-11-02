@@ -5,7 +5,7 @@
 use crate::home::{self, paths, read_record, with_field, write_record};
 use crate::host::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_sandbox::machine::{
+use layerfs_machine::{
     Endpoint, HostOs, Kind, Lasting, MachineError, Running, Spec, SshSpec, Tools,
 };
 use std::path::{Path, PathBuf};
@@ -127,7 +127,7 @@ pub fn spec(home: &Path, home_id: &str, name: &str, record: &SdkValue) -> Result
             known_hosts: paths::machine_dir(home, name).join("known_hosts"),
             data_root: ssh
                 .get_text("root")
-                .unwrap_or(layerfs_sandbox::machine::DATA)
+                .unwrap_or(layerfs_machine::DATA)
                 .to_owned(),
         }),
         _ => None,
@@ -277,7 +277,7 @@ pub fn refusal(error: MachineError) -> SdkRefusal {
 
 /// The backend a machine's Sandboxes run on, on this host.
 pub fn backend_name(kind: Kind) -> &'static str {
-    use layerfs_sandbox::machine::Backend;
+    use layerfs_machine::Backend;
     match kind.backend(HostOs::current()) {
         Some(Backend::Native) => "native",
         Some(Backend::Namespaces) => "namespaces",

@@ -3,6 +3,8 @@
 //! namespaces and a cgroup. Callers reach them as `layerfs_sandbox::docker`,
 //! `::native` and `::namespaces`; this folder's name is not public.
 pub mod docker;
+mod kind;
+pub use kind::Backend;
 #[cfg(target_os = "linux")]
 pub mod namespaces;
 #[cfg(any(target_os = "linux", target_os = "macos"))]

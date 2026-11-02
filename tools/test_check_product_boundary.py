@@ -162,9 +162,18 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertTrue(
             violations(Path("engine/crates/layerfs-daemon/src/commands.rs"), "use layerfs_sandbox::Sandbox;")
         )
-        # A connect crate may depend on engine and core crates.
+        # A connect crate may depend on engine and core crates, and on
+        # connect siblings inside its allowlist.
         self.assertFalse(layer_violations("layerfs-sandbox", "layerfs-daemon", "dependencies"))
         self.assertFalse(layer_violations("layerfs-sandbox", "layerfs-content", "dev-dependencies"))
+        self.assertFalse(
+            dependency_violations(
+                '[package]\nname="layerfs-machine"\n[dependencies]\nlayerfs-sandbox={path="../layerfs-sandbox"}'
+            )
+        )
+        machine_up = '[package]\nname="layerfs-daemon"\n[dependencies]\n'
+        findings = dependency_violations(machine_up + 'layerfs-machine={path="../layerfs-machine"}')
+        self.assertTrue(any("upward" in message for _, message in findings), findings)
         self.assertTrue(
             any("upward" in message for _, message in layer_violations("layerfs-sandbox", "layerfs-api", "dependencies"))
         )

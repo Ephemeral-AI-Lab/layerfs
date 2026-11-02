@@ -9,7 +9,7 @@ use super::record::{self, machine_of, refusal, save_running};
 use crate::host::outcome::{failed, refused};
 use crate::worker::Endpoint;
 use layerfs_bridge::control::SdkRefusal;
-use layerfs_sandbox::machine::{self as adapters, HostOs, Kind, Route};
+use layerfs_machine::{self as adapters, HostOs, Kind, Route};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::time::{Duration, Instant};

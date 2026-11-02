@@ -12,7 +12,7 @@ use crate::calls::Context;
 use crate::home::{self, lock, paths, read_record, with_field, write_record};
 use crate::host::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_sandbox::machine::{self as adapters, Code, HostOs, Kind};
+use layerfs_machine::{self as adapters, Code, HostOs, Kind};
 use std::path::Path;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};

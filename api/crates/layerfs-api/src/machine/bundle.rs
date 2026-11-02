@@ -6,7 +6,7 @@
 //! it. `LAYERFS_BUNDLE` (internal) names another folder.
 use crate::host::outcome::refused;
 use layerfs_bridge::control::SdkRefusal;
-use layerfs_sandbox::machine::Bundle;
+use layerfs_machine::Bundle;
 
 /// The bundle of this build, or `Unsupported` naming where it is expected.
 pub fn bundle() -> Result<Bundle, SdkRefusal> {

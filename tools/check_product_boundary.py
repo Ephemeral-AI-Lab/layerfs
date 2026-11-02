@@ -40,6 +40,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-api",
     "layerfs-bridge",
     "layerfs-cli",
+    "layerfs-machine",
 )
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
@@ -58,6 +59,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-bridge": "#![forbid(unsafe_code)]",
     "layerfs-sandbox": "#![deny(unsafe_code)]",
     "layerfs-cli": "#![forbid(unsafe_code)]",
+    "layerfs-machine": "#![forbid(unsafe_code)]",
 }
 
 
@@ -132,10 +134,13 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-bridge",
         "layerfs-project",
         "layerfs-sandbox",
+        "layerfs-machine",
         "layerfs-store-service",
     },
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
     "layerfs-sandbox": set(),
+    # The machine layer (#535 1.2): uses the Backend enum, shared types and json.
+    "layerfs-machine": {"layerfs-sandbox"},
     # The 2.0 front ends (#533): thin layers over the library's call table.
     "layerfs-cli": {"layerfs-api", "layerfs-bridge"},
     "layerfs-python": {"layerfs-api", "layerfs-bridge"},
@@ -224,6 +229,7 @@ ENGINES_AND_CLUSTER2 = {
     "layerfs-daemon",
     "layerfs-bridge",
     "layerfs-sandbox",
+    "layerfs-machine",
     "layerfs-server",
     "layerfs-sdk",
     "layerfs-api",

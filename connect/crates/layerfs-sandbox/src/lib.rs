@@ -4,21 +4,21 @@
 //! `namespaces`), named as `LAYERFS_SANDBOX` names them. `docker_engine/` is
 //! the Docker Engine HTTP client. `runtime.rs` is the one `match` over the
 //! backends; `types/` holds what they share; `json/` and `helper_spec.rs` are
-//! the shared formats. `machine/` (feature `machine`, host only) makes and
-//! starts the kernels Sandboxes run on.
+//! the shared formats. The kernels Sandboxes run on live in the
+//! `layerfs-machine` crate (host only).
 // unsafe only in backend/native/macos/darwin.rs: macOS process facts come
 // from proc_pidinfo, a system call (`ps` is setuid, which Seatbelt refuses)
 #![deny(unsafe_code)]
 #[cfg(unix)]
 mod backend;
 #[cfg(unix)]
+pub use backend::Backend;
+#[cfg(unix)]
 mod docker_engine;
 #[cfg(unix)]
 mod helper_spec;
 #[cfg(unix)]
-mod json;
-#[cfg(all(unix, feature = "machine"))]
-pub mod machine;
+pub mod json;
 #[cfg(unix)]
 mod runtime;
 mod types;

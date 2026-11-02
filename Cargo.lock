@@ -709,6 +709,7 @@ dependencies = [
  "layerfs-daemon",
  "layerfs-fuse",
  "layerfs-history",
+ "layerfs-machine",
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
@@ -785,6 +786,14 @@ version = "2.0.0"
 dependencies = [
  "blake3",
  "layerfs-content",
+]
+
+[[package]]
+name = "layerfs-machine"
+version = "2.0.0"
+dependencies = [
+ "layerfs-sandbox",
+ "nix",
 ]
 
 [[package]]

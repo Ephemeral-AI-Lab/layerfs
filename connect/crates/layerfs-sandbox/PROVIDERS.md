@@ -54,24 +54,14 @@ is the namespace helper's line format; it is compiled and tested on every
 Unix platform, while only the helper that reads it is Linux only. `src/json/`
 streams the Engine's replies and the namespace backend's image manifests.
 
-## Machines (feature `machine`)
+## Machines
 
-`src/machine/` (#533 step 5, H §7.10.1) is the host-only layer above the
-backends, compiled only with the `machine` cargo feature; guest builds leave
-it off. A machine is which kernel Sandboxes run on; its kind (`native`,
-`docker`, `apple-container`, `microsandbox`, `lima`, `firecracker`, `ssh`)
-picks the backend and the route in one table, `machine/kind.rs`
-(`Kind::backend`, `Kind::route`, `Kind::worker_bind`). `machine::create`,
-`connect`, `start`, `stop`, `remove` and `status` match once on the kind and
-call its adapter (`machine/native.rs`, `machine/docker/`, `machine/vm/`),
-which makes and starts the kernel, copies the bundle in, starts
-`<bundle>/layerfs worker` as root behind a 0600 secret file, opens the
-forward, waits for readiness and returns the `Endpoint`. One VM per machine
-holds many Stores on one data disk at `/layerfs/data`; no guest mounts the
-host home. The layer knows nothing of the LayerFS home: callers pass every
-path and setting in `Spec`, `Bundle` and `Tools` and write every record.
-It uses the crate's shared types and `json`; `backend/` never uses it.
-Provider CLIs run once with a deadline; nothing is retried.
+The machine layer moved to its own crate in #535 phase 1:
+`connect/crates/layerfs-machine`. It is host only and depends on this crate
+for the `Backend` enum, the shared types and `json`. See that crate's
+`src/lib.rs` for the kind-to-backend table and the `create`, `connect`,
+`start`, `stop`, `remove` and `status` calls, and `connect/AGENTS.md` for
+the layer.
 
 ## Docker
 

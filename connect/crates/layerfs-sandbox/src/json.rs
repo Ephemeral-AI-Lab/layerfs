@@ -2,8 +2,8 @@
 mod strings;
 use crate::RuntimeError;
 use std::io::Read;
-pub(crate) use strings::quoted;
-pub(crate) struct Json<R> {
+pub use strings::{quoted, Text};
+pub struct Json<R> {
     input: R,
     peeked: Option<u8>,
 }
