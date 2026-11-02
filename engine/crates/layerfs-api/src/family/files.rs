@@ -4,7 +4,7 @@
 use crate::calls::Context;
 use crate::host::outcome::{refused, Outcome};
 use crate::store::route::{store_call, target};
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 
 type Fields = Vec<(String, SdkValue)>;
 
@@ -62,7 +62,7 @@ pub(crate) fn run(context: &mut Context<'_>, family: &str, call: &str, args: &Sd
         ("branch", "get") => {
             let fields = take(args, &[("branch", "name")]);
             let page = on_project(context, args, "project.list_branches", fields)?;
-            first(page, "Branch", text(args, "branch"))
+            first(page, "NoSuchBranch", "Branch", text(args, "branch"))
         }
         ("branch", "fork") => {
             let from = arg(args, "from_commit").or_else(|| arg(args, "from_branch"));
@@ -110,8 +110,9 @@ pub(crate) fn run(context: &mut Context<'_>, family: &str, call: &str, args: &Sd
     }
 }
 
-/// The one item of a list page whose `name` or `id` is `wanted`.
-fn first(page: SdkValue, what: &str, wanted: &str) -> Outcome {
+/// The one item of a list page whose `name` or `id` is `wanted`; else the
+/// refusal `code` (S §2.9 keeps 1.1.0's `NoSuch*` codes).
+fn first(page: SdkValue, code: &str, what: &str, wanted: &str) -> Outcome {
     let items = match page.get("items") {
         Some(SdkValue::List(items)) => items.clone(),
         _ => Vec::new(),
@@ -119,11 +120,29 @@ fn first(page: SdkValue, what: &str, wanted: &str) -> Outcome {
     items
         .into_iter()
         .find(|item| item.get_text("name") == Some(wanted) || item.get_text("id") == Some(wanted))
-        .ok_or_else(|| refused("NotFound", format!("no {what} {wanted}")))
+        .ok_or_else(|| refused(code, format!("no {what} {wanted}")))
+}
+
+/// The items of one list page and the position of the next page, `None`
+/// after the last. A next position that does not move on is `Failed`:
+/// the list cannot go on, and it is not asked again.
+fn page_of(page: &SdkValue, pos: i64) -> Result<(Vec<SdkValue>, Option<i64>), SdkRefusal> {
+    let items = match page.get("items") {
+        Some(SdkValue::List(items)) => items.clone(),
+        _ => Vec::new(),
+    };
+    match page.get("nextPagePos") {
+        Some(SdkValue::Int(next)) if *next > pos => Ok((items, Some(*next))),
+        Some(SdkValue::Int(_)) => Err(refused(
+            "Failed",
+            format!("a list made no progress at page position {pos}"),
+        )),
+        _ => Ok((items, None)),
+    }
 }
 
 /// `commit.get`: the Commit, found by paging the Branch's Commits newest
-/// first, one page of 1000 at a time.
+/// first, each page from where the last one ended, to the end.
 fn commit_get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let target = target(&context.home, text(args, "project"))?;
     let wanted = text(args, "commit");
@@ -135,24 +154,23 @@ fn commit_get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             ("pagePos".to_owned(), SdkValue::Int(pos)),
         ];
         let page = store_call(context, &target, "branch.list_commits", fields)?;
-        let items = match page.get("items") {
-            Some(SdkValue::List(items)) => items.clone(),
-            _ => Vec::new(),
-        };
-        let found = items.iter().find(|item| {
+        let (items, next) = page_of(&page, pos)?;
+        let found = items.into_iter().find(|item| {
             item.get_text("id")
                 .is_some_and(|id| id == wanted || (wanted.len() >= 8 && id.starts_with(wanted)))
         });
         if let Some(found) = found {
-            return Ok(found.clone());
+            return Ok(found);
         }
-        if items.len() < 1000 {
-            return Err(refused(
-                "NotFound",
-                format!("no Commit {wanted} on Branch {}", text(args, "branch")),
-            ));
+        match next {
+            Some(next) => pos = next,
+            None => {
+                return Err(refused(
+                    "NoSuchCommit",
+                    format!("no Commit {wanted} on Branch {}", text(args, "branch")),
+                ))
+            }
         }
-        pos += 1000;
     }
 }
 
@@ -285,7 +303,7 @@ fn renamed(name: &str) -> &str {
 }
 
 /// `file.apply`'s changes, from their snake_case fields to the Store's.
-fn changes(value: Option<&SdkValue>) -> Result<SdkValue, layerfs_bridge::control::SdkRefusal> {
+fn changes(value: Option<&SdkValue>) -> Result<SdkValue, SdkRefusal> {
     let Some(SdkValue::List(list)) = value else {
         return Err(refused(
             "InvalidInput",
