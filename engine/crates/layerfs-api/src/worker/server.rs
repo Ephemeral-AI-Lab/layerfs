@@ -15,6 +15,7 @@
 //! gets the caller's, and the root is never converted or written as a home.
 use super::client::HELLO_WAIT;
 use super::frame::{read_frame, read_frame_within, write_frame, MAX_HELLO};
+use super::idle::Gate;
 use crate::host::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::net::{TcpListener, TcpStream};
@@ -33,8 +34,28 @@ pub struct Served {
     pub requests: u64,
 }
 
+/// The operations that do work: only a request for one restarts the idle
+/// clock.
+const WORK: [&str; 5] = [
+    "store.call",
+    "store.file",
+    "sandbox.host",
+    "host.call",
+    "host.backend",
+];
+
 /// Serves `listener` until it fails. `root` is the worker's own state root.
 pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::Result<Served> {
+    serve_gated(listener, secret, root, Arc::new(Gate::default()))
+}
+
+/// [`serve`], admitting connections through `gate` (the idle stop's).
+pub(crate) fn serve_gated(
+    listener: TcpListener,
+    secret: String,
+    root: PathBuf,
+    gate: Arc<Gate>,
+) -> std::io::Result<Served> {
     // the root holds Stores and records: private, as a home is (a machine's
     // data disk mounts 0755), but passable by others (0701), since a
     // namespaces Sandbox's commands run as another identity below it
@@ -53,11 +74,13 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
     for stream in listener.incoming() {
         let stream = stream?;
         let (secret, root, served) = (secret.clone(), root.clone(), served.clone());
+        let gate = gate.clone();
         // only a request that does work restarts the idle clock (in
-        // `answer`); a connection, the secret alone, `worker.ping` or a denied
-        // or malformed frame does not, so probing a machine never keeps it up
+        // `answer`); a connection, the secret alone, `worker.ping`, an
+        // unknown operation or a denied or malformed frame does not, so
+        // probing a machine never keeps it up
         std::thread::spawn(move || {
-            if answer(stream, &secret, &root) {
+            if answer(stream, &secret, &root, &gate) {
                 served.fetch_add(1, Ordering::Relaxed);
             }
         });
@@ -71,8 +94,25 @@ static LAST: AtomicU64 = AtomicU64::new(0);
 
 /// Marks this worker active now (the idle clock restarts): at the start and
 /// the end of a request that does work.
-pub(crate) fn touch() {
+fn touch() {
     LAST.store(crate::home::now_ms() as u64, Ordering::Relaxed);
+}
+
+/// A request that does work: the idle clock restarts when it starts and
+/// when it ends.
+struct Work;
+
+impl Work {
+    fn start() -> Self {
+        touch();
+        Work
+    }
+}
+
+impl Drop for Work {
+    fn drop(&mut self) {
+        touch();
+    }
 }
 
 /// When this worker last answered, in ms since the epoch; 0 before any.
@@ -89,7 +129,7 @@ fn same(a: &str, b: &str) -> bool {
             == 0
 }
 
-fn answer(mut stream: TcpStream, secret: &str, root: &Path) -> bool {
+fn answer(mut stream: TcpStream, secret: &str, root: &Path, gate: &Gate) -> bool {
     let _ = stream.set_nodelay(true);
     // the secret first, from a small frame: nothing larger is read, and
     // nothing is waited for long, before it matches
@@ -105,6 +145,17 @@ fn answer(mut stream: TcpStream, secret: &str, root: &Path) -> bool {
         let _ = write_frame(&mut stream, &refusal_frame(denied));
         return false;
     }
+    // admitted under the stop decision's lock: from here the worker stays up
+    // until this connection closes, so a request it sends is read and
+    // answered; after the decision it is refused before its request
+    let Some(_open) = gate.admit() else {
+        let stopping = refused(
+            "Unavailable",
+            "the worker is stopping after its idle time; the request was not sent",
+        );
+        let _ = write_frame(&mut stream, &refusal_frame(stopping));
+        return false;
+    };
     let ready = SdkValue::map([("ready", SdkValue::Bool(true))]);
     if write_frame(&mut stream, &ready).is_err()
         || stream.set_read_timeout(Some(REQUEST_WAIT)).is_err()
@@ -116,12 +167,9 @@ fn answer(mut stream: TcpStream, secret: &str, root: &Path) -> bool {
         _ => return false,
     };
     let _ = stream.set_read_timeout(None);
-    let works = request.get_text("op") != Some("worker.ping");
-    let _busy = works.then(super::idle::Busy::start);
+    let works = request.get_text("op").is_some_and(|op| WORK.contains(&op));
+    let _work = works.then(Work::start);
     let _home = crate::home::guest::sent(request.get_text("home_id"));
-    if works {
-        touch();
-    }
     let outcome = run(
         request.get_text("op").unwrap_or(""),
         request.get("args").cloned().unwrap_or_default(),

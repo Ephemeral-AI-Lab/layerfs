@@ -1,14 +1,23 @@
 //! The worker's idle stop (H §7.2, #533 step 13, O2): with no open Store, no
 //! Sandbox (live, or recorded by the host Sandbox code), no running
-//! Firecracker microVM it hosts, no call in flight and no call for [`IDLE`],
-//! the worker stops serving. A call is an authenticated request other than
-//! `worker.ping`: a connection, the secret alone, a ping, or a denied or
-//! malformed frame is a probe and does not restart the clock. Its front
-//! end then exits, and in a VM guest powers it off. The host notices at
-//! its next call (the worker does not answer) and starts the machine again:
-//! a readiness wait, not a retry.
+//! Firecracker microVM it hosts, no connection open past its secret and no
+//! call for [`IDLE`], the worker stops serving. A call is an authenticated
+//! request for an operation that does work (`store.call`, `store.file`,
+//! `sandbox.host`, `host.call`, `host.backend`): a connection, the secret
+//! alone, a ping, an unknown operation, or a denied or malformed frame is a
+//! probe and does not restart the clock. Its front end then exits, and in a
+//! VM guest powers it off. The host notices at its next call (the worker
+//! does not answer) and starts the machine again: a readiness wait, not a
+//! retry.
+//!
+//! The stop decision and the admission of an authenticated connection take
+//! one lock ([`Gate`]): a connection admitted before the decision holds the
+//! worker up until it closes, so its request is read and answered; one
+//! that comes after is refused `Unavailable` before its request is sent. A
+//! probe closes at once, so it does not hold the worker up.
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 
 /// O2: a machine's idle time.
@@ -16,20 +25,42 @@ pub const IDLE: Duration = Duration::from_secs(600);
 
 static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
 
-/// One call being answered; dropping it ends the call.
+/// One connection open past its secret; dropping it closes it. It holds the
+/// worker up but does not restart the idle clock.
 pub(crate) struct Busy;
-
-impl Busy {
-    pub(crate) fn start() -> Self {
-        IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
-        Busy
-    }
-}
 
 impl Drop for Busy {
     fn drop(&mut self) {
         IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
-        super::server::touch();
+    }
+}
+
+/// One server's stop decision, taken under the same lock as each
+/// connection's admission.
+#[derive(Default)]
+pub(crate) struct Gate {
+    stopping: Mutex<bool>,
+}
+
+impl Gate {
+    /// Admits a connection whose secret matched, unless the worker has
+    /// decided to stop.
+    pub(crate) fn admit(&self) -> Option<Busy> {
+        let stopping = self.stopping.lock().unwrap_or_else(|e| e.into_inner());
+        (!*stopping).then(|| {
+            IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
+            Busy
+        })
+    }
+
+    /// Decides to stop when the worker at `root` is idle: no connection is
+    /// admitted after that.
+    fn stop_if_idle(&self, root: &Path, idle_for: Duration, started_ms: u64) -> bool {
+        let mut stopping = self.stopping.lock().unwrap_or_else(|e| e.into_inner());
+        if !*stopping && idle(root, idle_for, started_ms) {
+            *stopping = true;
+        }
+        *stopping
     }
 }
 
@@ -105,7 +136,10 @@ pub fn serve_until_idle(
 ) -> std::io::Result<()> {
     let started = crate::home::now_ms() as u64;
     let looked = root.clone();
-    let server = std::thread::spawn(move || super::server::serve(listener, secret, root));
+    let gate = std::sync::Arc::new(Gate::default());
+    let served = gate.clone();
+    let server =
+        std::thread::spawn(move || super::server::serve_gated(listener, secret, root, served));
     loop {
         std::thread::sleep(every);
         if server.is_finished() {
@@ -114,7 +148,7 @@ pub fn serve_until_idle(
                 Err(_) => Err(std::io::Error::other("the worker's server panicked")),
             };
         }
-        if idle(&looked, idle_for, started) {
+        if gate.stop_if_idle(&looked, idle_for, started) {
             return Ok(());
         }
     }

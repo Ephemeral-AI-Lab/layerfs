@@ -1,8 +1,10 @@
 //! Probing a worker never keeps it up (#533 step 19, delegated owner
 //! decision 2026-11-02; closes the rest of review P1-26): a bare
 //! connection, the secret alone (what `machine.status` and `machine.list`
-//! send), `worker.ping`, a wrong secret and a malformed frame do not restart
-//! its idle clock. A request that does work does. Its own test binary: the
+//! send), `worker.ping`, a wrong secret, a malformed frame, and an
+//! authenticated request that is not an operation doing work (`{}`, an
+//! unknown operation) do not restart its idle clock (final review, finding
+//! 3). A request that does work does. Its own test binary: the
 //! idle clock is one per process.
 use layerfs_api::worker;
 use layerfs_bridge::control::SdkValue;
@@ -43,6 +45,16 @@ fn probe(address: SocketAddr, endpoint: &worker::Endpoint) {
     }
     // a ping: authenticated, but a probe
     let _ = worker::ping(endpoint);
+    // an unknown operation, and an authenticated frame naming none
+    let _ = worker::call(endpoint, "worker.nothing", SdkValue::Null, &mut |_| {});
+    if let Ok(mut stream) = connect() {
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+        let _ = stream.write_all(&frame(r#"{"secret":"s"}"#));
+        let mut answer = [0u8; 64];
+        let _ = stream.read(&mut answer);
+        let _ = stream.write_all(&frame("{}"));
+        let _ = stream.read(&mut answer);
+    }
 }
 
 fn serve(root: &std::path::Path) -> (SocketAddr, std::thread::JoinHandle<std::io::Result<()>>) {
