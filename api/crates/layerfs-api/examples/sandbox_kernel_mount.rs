@@ -165,6 +165,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         source: directory.join("source"),
         store: PersistenceConfig::sqlite(directory.join("sealed.sqlite"))
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+
         locator: "/layerfs-store/global/store.sqlite".into(),
         policy: StoragePolicy::frozen_default(),
         catalog: HistoryCatalogConfig {

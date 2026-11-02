@@ -4,7 +4,7 @@ mod support;
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
 };
 use layerfs_storage::{
     port::acquisition::{
@@ -23,8 +23,8 @@ fn config(path: &std::path::Path, profile: SqlitePersistenceProfile) -> Persiste
         .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables)
 }
 
-fn create(path: &std::path::Path, profile: SqlitePersistenceProfile) -> Handles {
-    Handles::create(
+fn create(path: &std::path::Path, profile: SqlitePersistenceProfile) -> SqliteHandles {
+    SqliteHandles::create(
         config(path, profile),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
@@ -36,7 +36,7 @@ fn create(path: &std::path::Path, profile: SqlitePersistenceProfile) -> Handles 
     .unwrap()
 }
 
-fn begin(handles: &Handles) -> Owner {
+fn begin(handles: &SqliteHandles) -> Owner {
     handles
         .acquisition
         .begin(&Begin {
@@ -141,7 +141,7 @@ fn valid_empty_missing_released_and_foreign_owners_remain_distinct() {
         drop(handles);
         // Reopening grants no authority over the previous session's owner.
         let readonly =
-            Handles::open_read_only(config(&path, profile), BINDING_KEY, [91; 32]).unwrap();
+            SqliteHandles::open_read_only(config(&path, profile), BINDING_KEY, [91; 32]).unwrap();
         stale(&readonly.acquisition, next);
     }
 }

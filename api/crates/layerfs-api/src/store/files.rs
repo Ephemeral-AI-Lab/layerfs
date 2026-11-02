@@ -119,7 +119,17 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
             let sealed = crate::host::direct::with_service(&SdkValue::Map(fields), |service| {
                 service
                     .opened
-                    .snapshot_observed(&staged, &mut |_, _| {})
+                    .file()
+                    .ok_or_else(|| {
+                        refused(
+                            "Failed",
+                            format!(
+                                "snapshot: {}",
+                                layerfs_storage::port::PersistenceError::BackendUnavailable
+                            ),
+                        )
+                    })?
+                    .snapshot(&staged, &mut |_, _| {})
                     .map_err(|e| refused("Failed", format!("snapshot: {e}")))
             })?;
             let digest = digest(&staged)?;

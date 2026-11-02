@@ -8,7 +8,9 @@ use layerfs_content::{
     FinalizedObject, ObjectId, ObjectRole,
 };
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{thread_work, Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{
+    thread_work, PersistenceConfig, SqliteHandles, SqlitePersistenceProfile,
+};
 use layerfs_storage::{Storage, StoragePolicy};
 
 fn leaf(serial: u64) -> FinalizedObject {
@@ -37,7 +39,7 @@ fn leaf(serial: u64) -> FinalizedObject {
 #[test]
 fn each_thread_counts_only_its_own_sql_work() {
     let temp = support::Temp::new("thread-work");
-    let handles = Handles::create(
+    let handles = SqliteHandles::create(
         PersistenceConfig::sqlite(temp.join("store.sqlite"))
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         StoragePolicy::frozen_default(),

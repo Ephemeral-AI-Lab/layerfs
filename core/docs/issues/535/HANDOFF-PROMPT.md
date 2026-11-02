@@ -113,7 +113,7 @@ Follow spec §10 exactly; the phase boundaries are commit boundaries.
 | --- | --- | --- |
 | 0 | DECISIONS.md; #533 supersession rows (O21b, O3, G13, "Step-12 deferral closed", Step 5.2); `connect/AGENTS.md`, `connect/README.md`; AGENTS.md layer and PostgreSQL wording | D4, G1, G2 |
 | 1 | Moves 1.1–1.9 (and 1.10 only if confirmed), each its own commit | G6 |
-| 2 | Typed contracts: `DaemonStore`, `StoreAuthority`, `KernelRoute`; `StoreSelection`, `StoreFile`, one `Handles`; `StoreRef` | — |
+| 2 | Typed contracts: `DaemonStore`, `StoreAuthority`, `KernelRoute`; `StoreSelection`, `StoreFile`, one `SqliteHandles`; `StoreRef` | — |
 | 3 | `Profile`, `Adapter`, `BackendAdapter`, `support.rs`, `machine.platforms`, generated `connect/SUPPORT.json` + comparison test | G2 |
 | 4 | `place/{plan,executor,deploy}.rs`; `*_here` copies deleted; R1, R3–R6 | G8 |
 | 5a / 5b / 5c | PostgreSQL everywhere (spec §7.4); 5b and 5c only after their live receipts | G1, G3, G7 |

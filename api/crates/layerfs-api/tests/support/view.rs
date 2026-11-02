@@ -10,7 +10,7 @@ use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork};
 use layerfs_content::filesystem::{FilesystemRead, FilesystemRootId, LogicalPath, Resolved};
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::object::{AuthenticatedObjects, ObjectId};
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::Storage;
 use layerfs_telemetry::timer::Timing;
 use std::collections::BTreeMap;
@@ -39,7 +39,7 @@ impl Viewer {
     pub fn open(store: &Path, binding: &[u8], cursor: [u8; 32]) -> Self {
         let config = PersistenceConfig::sqlite(store)
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable);
-        let handles = Handles::open_read_only(config, binding, cursor).unwrap();
+        let handles = SqliteHandles::open_read_only(config, binding, cursor).unwrap();
         Self {
             storage: Storage::new(handles.storage).unwrap(),
         }

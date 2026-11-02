@@ -1,6 +1,6 @@
 //! External orchestration at a real public history provider, never product hooks.
 use layerfs_history::*;
-use layerfs_persistence::Handles;
+use layerfs_persistence::SqliteHandles;
 use std::{
     path::PathBuf,
     sync::{
@@ -14,7 +14,7 @@ pub enum Boundary {
     LostAcknowledgement,
 }
 pub struct ObservedHistory {
-    pub handles: Arc<Handles>,
+    pub handles: Arc<SqliteHandles>,
     pub database: PathBuf,
     pub boundary: Boundary,
     pub once: AtomicBool,

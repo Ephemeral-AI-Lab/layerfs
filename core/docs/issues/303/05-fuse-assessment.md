@@ -224,7 +224,7 @@ lose it.
 `ctime = mtime` is a deviation from POSIX: a `chmod` does not advance `ctime`
 past `mtime`. It is recorded as owner question O-9.
 
-## 6. Handles, open-unlinked files and enumeration
+## 6. SqliteHandles, open-unlinked files and enumeration
 
 [proposed design]
 

@@ -2,7 +2,7 @@
 mod support;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles};
 use layerfs_storage::{location::PackInfo, port::*, Storage, StoragePolicy};
 
 struct Plan(PackReadChoice);
@@ -14,7 +14,7 @@ impl PackReadPlan for Plan {
 #[test]
 fn sqlite_selected_ranges_scan_once_close_and_match_the_full_body() {
     let t = support::Temp::new("pack-selection");
-    let h = Handles::create(
+    let h = SqliteHandles::create(
         PersistenceConfig::sqlite(t.join("db")),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {

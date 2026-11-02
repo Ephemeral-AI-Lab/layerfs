@@ -1,6 +1,6 @@
 //! Concrete Store composition and mount-time reader opening.
 use crate::store::{Store, StoreReader};
-use layerfs_persistence::{Handles, PersistenceConfig, SqlWork, StorageProvider};
+use layerfs_persistence::{SqlWork, SqliteHandles, StorageProvider};
 use layerfs_storage::{
     port::PersistenceError, ReservationBlocks, Storage, StorageError, StorageResult,
 };
@@ -63,31 +63,16 @@ pub struct StoreDiagnostics {
     pub readers: Vec<SqlWork>,
 }
 impl OpenedStore {
-    /// One consistent copy of the live Store to the new file `destination`,
-    /// on its own read-only connection (#506); push uploads it. A
-    /// PostgreSQL Store has no file to copy: `BackendUnavailable`.
-    pub fn snapshot(
-        &self,
-        destination: &std::path::Path,
-    ) -> StorageResult<layerfs_persistence::SealedStore> {
-        self.snapshot_observed(destination, &mut |_, _| ())
-    }
-    /// [`Self::snapshot`], calling `progress(done, total)` with the bytes
-    /// written and a bound of the copy's size while it runs (#506 E4).
-    pub fn snapshot_observed(
-        &self,
-        destination: &std::path::Path,
-        progress: &mut dyn FnMut(u64, u64),
-    ) -> StorageResult<layerfs_persistence::SealedStore> {
+    /// The Store-file operations of a SQLite session (`None` for a
+    /// PostgreSQL Store, which has no file).
+    pub fn file(&self) -> Option<&dyn layerfs_persistence::StoreFile> {
         match &self.writer {
-            Writer::Sqlite(provider) => provider.snapshot_observed(destination, progress),
-            #[cfg(feature = "postgresql")]
-            Writer::Postgres(_) => {
-                let _ = progress;
-                Err(PersistenceError::BackendUnavailable)
+            Writer::Sqlite(provider) => {
+                Some(provider.as_ref() as &dyn layerfs_persistence::StoreFile)
             }
+            #[cfg(feature = "postgresql")]
+            Writer::Postgres(_) => None,
         }
-        .map_err(StorageError::from)
     }
     pub fn reader_indices(&self) -> Vec<usize> {
         let readers = self
@@ -140,7 +125,7 @@ impl OpenedStore {
 }
 
 pub fn open_store(
-    config: PersistenceConfig,
+    config: impl Into<layerfs_persistence::StoreSelection>,
     binding: &[u8],
     cursor_key: [u8; 32],
     workspace_capacity: usize,
@@ -160,7 +145,7 @@ pub fn open_store(
 /// One control reader opens at startup. Each Workspace reader opens once at bind,
 /// never in the middle of a request. Persistence verifies its 2 MiB page cache.
 pub fn open_store_observed(
-    config: PersistenceConfig,
+    config: impl Into<layerfs_persistence::StoreSelection>,
     binding: &[u8],
     cursor_key: [u8; 32],
     workspace_capacity: usize,
@@ -171,18 +156,24 @@ pub fn open_store_observed(
         return Err(StorageError::Integrity("empty Workspace reader capacity"));
     }
     reservations.validate()?;
-    #[cfg(feature = "postgresql")]
-    if let layerfs_persistence::BackendSelection::Postgres(selection) = &config.backend {
-        return open_postgres(
-            selection,
-            binding,
-            cursor_key,
-            workspace_capacity,
-            cache_bytes,
-            reservations,
-        );
-    }
-    let writer = Handles::open_writable(config.clone(), binding, cursor_key)?;
+    let config = match config.into() {
+        layerfs_persistence::StoreSelection::Sqlite(config) => config,
+        layerfs_persistence::StoreSelection::Postgres(selection) => {
+            let _ = &selection;
+            #[cfg(feature = "postgresql")]
+            return open_postgres(
+                &selection,
+                binding,
+                cursor_key,
+                workspace_capacity,
+                cache_bytes,
+                reservations,
+            );
+            #[cfg(not(feature = "postgresql"))]
+            return Err(PersistenceError::BackendUnavailable.into());
+        }
+    };
+    let writer = SqliteHandles::open_writable(config.clone(), binding, cursor_key)?;
     let sqlite_version = writer.profile().sqlite_version.clone();
     let observations = Arc::new(Mutex::new(ReaderObservations {
         live: BTreeMap::new(),
@@ -191,7 +182,7 @@ pub fn open_store_observed(
     let binding = binding.to_vec();
     let registry = observations.clone();
     let factory: crate::store::ReaderFactory = Arc::new(move |index| {
-        let opened = Handles::open_read_only(config.clone(), &binding, cursor_key)?;
+        let opened = SqliteHandles::open_read_only(config.clone(), &binding, cursor_key)?;
         let provider = Arc::downgrade(&opened.storage);
         let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history));
         registry

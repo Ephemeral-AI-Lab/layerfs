@@ -1,6 +1,6 @@
 //! External checked-close uncertainty proof through the ordinary immutable publication port.
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePackLayout};
+use layerfs_persistence::{SqliteHandles, PersistenceConfig, SqlitePackLayout};
 use layerfs_storage::{
     location::{PackDomain, PackInfo},
     pack::{assemble, build_group, PackLane},
@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cursor_key: [71; 32],
         incarnation: 1,
     };
-    let h = Handles::create(
+    let h = SqliteHandles::create(
         PersistenceConfig::sqlite(&path).with_sqlite_pack_layout(SqlitePackLayout::PayloadSegments),
         StoragePolicy::frozen_default(),
         &config,
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(work.segment_file_sync_calls, 1);
     assert_eq!(work.segment_write_bytes, batch.packs[0].info.length as u64);
     drop(h);
-    let h = Handles::open_writable(
+    let h = SqliteHandles::open_writable(
         PersistenceConfig::sqlite(&path),
         &config.binding_key,
         config.cursor_key,

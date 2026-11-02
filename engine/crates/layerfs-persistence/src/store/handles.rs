@@ -3,7 +3,7 @@ use crate::{AcquisitionProvider, ConnectionProfile, HistoryProvider, SqlWork, St
 use layerfs_storage::port::PersistenceError;
 use std::sync::Arc;
 /// Store composition with no service bootstrap or implicit authority creation.
-pub struct Handles {
+pub struct SqliteHandles {
     /// Bounded pack publication/read/allocation port.
     pub storage: Arc<StorageProvider>,
     /// History authority validated at explicit open.
@@ -12,7 +12,7 @@ pub struct Handles {
     /// refused unless the Store was created with the acquisition tables.
     pub acquisition: AcquisitionProvider,
 }
-impl Handles {
+impl SqliteHandles {
     /// Reclaims at most `pages` free SQLite pages in one short atomic job.
     ///
     /// New Stores with acquisition tables support this operation. Existing

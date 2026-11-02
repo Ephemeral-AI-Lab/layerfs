@@ -1,5 +1,5 @@
 //! Consuming host handoff of one closed Store file.
-use crate::{Handles, SqlitePersistenceProfile};
+use crate::{SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::port::PersistenceError;
 use std::{path::PathBuf, sync::Arc};
 
@@ -16,7 +16,7 @@ pub struct SealedStore {
     pub bytes: u64,
 }
 
-impl Handles {
+impl SqliteHandles {
     /// Consumes the sole session, checkpoints once, closes and verifies one file.
     /// macOS then releases unused allocation beyond the original file's logical
     /// end, without copying its contents or changing its identity or length.

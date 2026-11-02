@@ -10,7 +10,7 @@ use layerfs_history::records::{
 };
 use layerfs_history::{BranchId, HistoryCatalog, HistoryCatalogConfig};
 use layerfs_persistence::{
-    read_heads, Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePackLayout,
+    read_heads, PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePackLayout,
     SqlitePersistenceProfile,
 };
 use layerfs_storage::StoragePolicy;
@@ -56,7 +56,7 @@ fn commit(history: &dyn HistoryCatalog, branch: BranchId, tag: u8) {
 fn heads_follow_history_and_match_the_snapshot() {
     let temp = Temp::new("heads");
     let path = temp.join("store");
-    let handles = Handles::create(
+    let handles = SqliteHandles::create(
         config(path.clone()),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {

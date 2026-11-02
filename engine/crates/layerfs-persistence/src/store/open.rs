@@ -1,7 +1,7 @@
 //! Explicit creation/open, binding validation and read-only authority.
 use crate::{
-    backend::Session, AcquisitionProvider, BackendSelection, Handles, HistoryProvider,
-    PersistenceConfig, StorageProvider,
+    backend::Session, AcquisitionProvider, HistoryProvider, PersistenceConfig, SqliteHandles,
+    StorageProvider,
 };
 use layerfs_history::{CatalogId, HistoryCatalogConfig};
 use layerfs_storage::{port::PersistenceError, StoragePolicy};
@@ -10,16 +10,14 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-impl Handles {
+impl SqliteHandles {
     /// Creates a fresh combined Store, refusing existing files and unsupported engines.
     pub fn create(
         config: PersistenceConfig,
         policy: StoragePolicy,
         history: &HistoryCatalogConfig,
     ) -> Result<Self, PersistenceError> {
-        if config.backend != BackendSelection::Sqlite
-            || !cfg!(any(target_os = "macos", target_os = "linux"))
-        {
+        if !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(PersistenceError::BackendUnavailable);
         }
         let policy = policy
@@ -69,9 +67,7 @@ impl Handles {
         cursor_key: [u8; 32],
         writable: bool,
     ) -> Result<Self, PersistenceError> {
-        if config.backend != BackendSelection::Sqlite
-            || !cfg!(any(target_os = "macos", target_os = "linux"))
-        {
+        if !cfg!(any(target_os = "macos", target_os = "linux")) {
             return Err(PersistenceError::BackendUnavailable);
         }
         let directory = config.path.parent().map(Path::to_path_buf);

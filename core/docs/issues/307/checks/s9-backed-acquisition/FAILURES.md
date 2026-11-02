@@ -13,7 +13,7 @@
    not evidence for the committed source. The guard run that failed was made
    directly, without a receipt file; this entry is its record.
 2. **`10-linux-tests`: exit 101.** `tests/init_sqlite.rs:25` unwraps
-   `Handles::create`, which returns `BackendUnavailable` on Linux because the
+   `SqliteHandles::create`, which returns `BackendUnavailable` on Linux because the
    global Store is macOS-only. Init is never reached. The test file is unmodified
    and is not platform-gated; the defect predates this checkpoint and is not
    repaired here. Nine bodies in four earlier binaries passed in that run,

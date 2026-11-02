@@ -158,7 +158,7 @@ in the home, so the Windows device names are refused everywhere: `con`,
 `nul`, `aux`, `prn`, `com1` to `com9` and `lpt1` to `lpt9`. A reserved name
 is `InvalidInput`.
 
-### 2.4 Handles
+### 2.4 SqliteHandles
 
 A handle is the call's result object with its calls bound. `sandbox.create`
 and `sandbox.get` return `{ sandbox, project, machine, image }` with

@@ -9,13 +9,13 @@ use layerfs_content::{
     EditRecordApply, EditRecordChange, EditRecordExpected, EditRecordKey, IndexedEditBacking,
 };
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqlitePersistenceProfile, BUFFER_BYTES, RESIDENT_BYTES,
+    PersistenceConfig, SqliteHandles, SqlitePersistenceProfile, BUFFER_BYTES, RESIDENT_BYTES,
 };
 use layerfs_storage::port::PersistenceError;
 use support::*;
 
-fn writable(path: &std::path::Path) -> Handles {
-    Handles::open_writable(
+fn writable(path: &std::path::Path) -> SqliteHandles {
+    SqliteHandles::open_writable(
         PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         BINDING,
         [71; 32],

@@ -37,7 +37,7 @@ captures the overlay and publishes into the global Store.
 
 | Stage | Who | What happens |
 | --- | --- | --- |
-| Init | `project.init` (SDK, host) | Project Init writes a new Store under `home/<name>/`, publishes the first Branch, and seals it: `Handles::seal()` consumes the sole session, checkpoints, closes and verifies one file [impl] |
+| Init | `project.init` (SDK, host) | Project Init writes a new Store under `home/<name>/`, publishes the first Branch, and seals it: `SqliteHandles::seal()` consumes the sole session, checkpoints, closes and verifies one file [impl] |
 | Install | first Sandbox of the project | the sealed file is installed into the shared volume at `/layerfs-store/global/store.sqlite` [impl] |
 | Live | daemons, and the SDK process [decided, F-020] | every opener opens the same file directly, in WAL mode; Saves and Commits publish while it stays open; a live Store is never sealed per file or per Commit [impl] |
 | Snapshot (#352 replay) | tooling | a sealed copy of the file, stored as content-addressed blocks; restored or forked by copying [impl, replay tooling] |

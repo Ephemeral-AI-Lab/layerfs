@@ -2,7 +2,9 @@
 mod support;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePackLayout, SqlitePersistenceProfile};
+use layerfs_persistence::{
+    PersistenceConfig, SqliteHandles, SqlitePackLayout, SqlitePersistenceProfile,
+};
 use layerfs_storage::{
     location::{ObjectLocation, PackDomain, PackInfo},
     pack::{assemble, build_group, layout::PackLane},
@@ -17,8 +19,8 @@ fn config() -> HistoryCatalogConfig {
         incarnation: 1,
     }
 }
-fn create(path: &std::path::Path) -> Handles {
-    Handles::create(
+fn create(path: &std::path::Path) -> SqliteHandles {
+    SqliteHandles::create(
         PersistenceConfig::sqlite(path)
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
             .with_sqlite_pack_layout(SqlitePackLayout::GroupRows),
@@ -27,7 +29,7 @@ fn create(path: &std::path::Path) -> Handles {
     )
     .unwrap()
 }
-fn fixture(h: &Handles) -> Vec<FinalizedObject> {
+fn fixture(h: &SqliteHandles) -> Vec<FinalizedObject> {
     let mut random = 931823u64;
     let objects = (0..8)
         .map(|_| {
@@ -125,7 +127,7 @@ fn explicit_creation_reopens_declared_units_and_keeps_sparse_canonical_order() {
     drop(reader);
     drop(storage);
     drop(h);
-    let reopened = Handles::open_read_only(
+    let reopened = SqliteHandles::open_read_only(
         PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         &config().binding_key,
         config().cursor_key,

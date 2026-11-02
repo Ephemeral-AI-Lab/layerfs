@@ -52,7 +52,7 @@ use layerfs_daemon::{
     store::{ReaderFactory, ReleasedOwner, Store, StoreReader},
 };
 use layerfs_history::CommitOutcome;
-use layerfs_persistence::Handles;
+use layerfs_persistence::SqliteHandles;
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage};
 use model::Model;
 use mounted::{mount_entry, Harness, COMMAND};
@@ -301,7 +301,7 @@ fn gated(label: &str) -> (installed::Fixture, Arc<Store>, history_gate::Hold) {
         Model::host(source).1
     });
     let handles = Arc::new(
-        Handles::open_writable(
+        SqliteHandles::open_writable(
             fixture.config.clone(),
             installed::BINDING,
             installed::CURSOR,
@@ -312,9 +312,12 @@ fn gated(label: &str) -> (installed::Fixture, Arc<Store>, history_gate::Hold) {
     let (catalog, hold) = history_gate::gated(handles, Point::BeforeInstall, LIMIT);
     let reader_config = fixture.config.clone();
     let factory: ReaderFactory = Arc::new(move |_| {
-        let read =
-            Handles::open_read_only(reader_config.clone(), installed::BINDING, installed::CURSOR)
-                .unwrap();
+        let read = SqliteHandles::open_read_only(
+            reader_config.clone(),
+            installed::BINDING,
+            installed::CURSOR,
+        )
+        .unwrap();
         Ok(StoreReader::new(
             Storage::new(read.storage).unwrap(),
             Arc::new(read.history),

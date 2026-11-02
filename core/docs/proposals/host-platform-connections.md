@@ -706,7 +706,7 @@ layerfs project init pg-main/load ~/src/load
 
 **Init into an existing Store is a live add, not a seal.** It is today's
 `add` in `layerfs-project` `store/live.rs`: it opens the live Store
-writable (`Handles::open_writable`) and writes through the Store's own
+writable (`SqliteHandles::open_writable`) and writes through the Store's own
 writer. No sealed file is made and nothing is installed. Today only an Init
 that makes a Store of its own seals it and installs it (`install_local` in
 `install.rs`); Init no longer makes Stores. What crosses the Mac/VM boundary

@@ -2,7 +2,9 @@
 mod support;
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, HistoryError, ReserveRequest};
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePackLayout, SqlitePersistenceProfile};
+use layerfs_persistence::{
+    PersistenceConfig, SqliteHandles, SqlitePackLayout, SqlitePersistenceProfile,
+};
 use layerfs_storage::{
     port::{PackPersistence, PersistenceError, Reserve},
     Storage, StorageError, StoragePolicy,
@@ -25,11 +27,11 @@ fn authority() -> HistoryCatalogConfig {
 fn config(path: &Path) -> PersistenceConfig {
     PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
 }
-fn create(path: &Path) -> Handles {
-    Handles::create(config(path), StoragePolicy::frozen_default(), &authority()).unwrap()
+fn create(path: &Path) -> SqliteHandles {
+    SqliteHandles::create(config(path), StoragePolicy::frozen_default(), &authority()).unwrap()
 }
-fn open(path: &Path) -> Handles {
-    Handles::open_writable(
+fn open(path: &Path) -> SqliteHandles {
+    SqliteHandles::open_writable(
         config(path),
         &authority().binding_key,
         authority().cursor_key,
@@ -163,7 +165,7 @@ fn disposable_create_publish_seal_and_reopen_all_layouts() {
     ] {
         let temp = support::Temp::new("serverless-layout");
         let path = temp.join("store.sqlite");
-        let handles = Handles::create(
+        let handles = SqliteHandles::create(
             config(&path).with_sqlite_pack_layout(layout),
             StoragePolicy::frozen_default(),
             &authority(),
@@ -248,7 +250,7 @@ fn second_process_busy_has_no_effect_and_readers_keep_progressing() {
     );
     // A new independent read connection opens and completes while the other
     // process still holds an uncommitted mutation, before release is sent.
-    let reader = Handles::open_read_only(
+    let reader = SqliteHandles::open_read_only(
         config(&path),
         &authority().binding_key,
         authority().cursor_key,
@@ -307,7 +309,7 @@ fn non_wal_store_is_refused_without_conversion() {
     sql.pragma_update(None, "journal_mode", "DELETE").unwrap();
     drop(sql);
     assert!(matches!(
-        Handles::open_writable(
+        SqliteHandles::open_writable(
             config(&path),
             &authority().binding_key,
             authority().cursor_key

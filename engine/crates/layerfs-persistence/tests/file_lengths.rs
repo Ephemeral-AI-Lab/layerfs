@@ -3,15 +3,15 @@
 mod support;
 use layerfs_content::{construct_bytes, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{Storage, StorageError, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
 use support::Temp;
 
-fn handles(temp: &Temp) -> Handles {
+fn handles(temp: &Temp) -> SqliteHandles {
     let mut config = PersistenceConfig::sqlite(temp.join("store"));
     config.sqlite_profile = SqlitePersistenceProfile::Disposable;
-    Handles::create(
+    SqliteHandles::create(
         config,
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {

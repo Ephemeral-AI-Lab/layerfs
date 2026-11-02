@@ -459,7 +459,7 @@
     one blocking `flock` after its turn, with no sleep-poll and no retry.
     `WINDOW` and the `WAITERS` = 1,024 count (audit A11) are removed: each
     queued entry is a blocked thread. The named exits without the writer
-    are `Closed` (new `Handles::close`), `Cancelled` (a signal interrupts
+    are `Closed` (new `SqliteHandles::close`), `Cancelled` (a signal interrupts
     the kernel wait), `Integrity` (the thread already holds its own turn)
     and `Unknown` (poisoned queue). The serial refill now queues; its
     `EAGAIN` remains only for an exact SQLite `Busy` from a writer outside

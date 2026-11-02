@@ -1,6 +1,6 @@
 //! Frozen v2 matched component screen for publication accounting. No SDK/FUSE timing claim.
 use layerfs_history::*;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{Storage, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
 use std::{
@@ -57,7 +57,8 @@ fn main() {
     if args[1] == "verify" {
         let before = Instant::now();
         let handles =
-            Handles::open_read_only(config(path), b"issue327-counter-screen", [71; 32]).unwrap();
+            SqliteHandles::open_read_only(config(path), b"issue327-counter-screen", [71; 32])
+                .unwrap();
         let name = HistoryName::new("screen").unwrap();
         let stack = LayerStackId::from_authority([1; 16]);
         let branch = BranchId::named(stack, &name);
@@ -88,7 +89,7 @@ fn main() {
     let input = fixture(); // Fixed warm in-memory fixture, generated outside the operation timer in BOTH arms.
     let started = Instant::now();
     let policy = StoragePolicy::frozen_default();
-    let handles = Handles::create(config(path), policy, &authority()).unwrap();
+    let handles = SqliteHandles::create(config(path), policy, &authority()).unwrap();
     let root = layerfs_content::ObjectId::from_bytes(&[0; 32]).unwrap();
     let stack = LayerStackId::from_authority([1; 16]);
     let name = HistoryName::new("screen").unwrap();

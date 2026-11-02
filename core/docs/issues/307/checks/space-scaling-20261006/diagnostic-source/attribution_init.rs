@@ -3,7 +3,7 @@
 mod vfs;
 use layerfs_content::ObjectId;
 use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
-use layerfs_persistence::{Handles, PersistenceConfig, SqlWork, SqlitePersistenceProfile};
+use layerfs_persistence::{SqliteHandles, PersistenceConfig, SqlWork, SqlitePersistenceProfile};
 use layerfs_project::{init, InitRequest};
 use layerfs_storage::{Storage, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     vfs::initialize(std::env::var("LAYERFS_ATTRIBUTION_VFS").as_deref()==Ok("1"))?;
     let started=Instant::now();
     let io=vfs::span("bootstrap");
-    let handles=Arc::new(Handles::create(
+    let handles=Arc::new(SqliteHandles::create(
         PersistenceConfig::sqlite(&args[2]).with_sqlite_profile(SqlitePersistenceProfile::Durable),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {binding_key:b"layerfs-bench-pro".to_vec(),incarnation:1,cursor_key:[0x28;32]},
@@ -63,7 +63,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 /// Fixed public physical-operation classes, never an unbounded SQL trace.
 struct PackObserved {
-    handles: Arc<Handles>,
+    handles: Arc<SqliteHandles>,
     units: Mutex<BTreeMap<&'static str, Work>>,
 }
 impl PackObserved {

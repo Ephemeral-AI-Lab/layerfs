@@ -6,14 +6,13 @@ mod backend;
 mod storage;
 mod store;
 pub(crate) use store::config;
-pub(crate) use store::handles;
 mod history;
 #[cfg(feature = "postgresql")]
 pub use backend::postgresql::status::{
     status as postgresql_status, PostgresStatus, PostgresStatusError,
 };
 pub use backend::sqlite::acquisition::AcquisitionProvider;
-pub use backend::sqlite::heads::read_heads;
+pub use backend::sqlite::heads::{heads_digest, read_heads};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use backend::sqlite::lifecycle::headroom::STORE_HEADROOM_BYTES;
 pub use backend::sqlite::lifecycle::reclamation::{SpaceReclamation, RECLAMATION_PAGE_LIMIT};
@@ -24,19 +23,20 @@ pub use backend::sqlite::storage::merge_records::{
     MergeRecords, MergeRecordsWork, MergeScratch, BUFFER_BYTES, MERGE_LEASE, RESIDENT_BYTES,
 };
 pub use config::{
-    BackendSelection, PersistenceConfig, PostgresSelection, SqliteAcquisitionSchema,
-    SqlitePackLayout, SqlitePersistenceProfile, SynchronousCommit,
+    PersistenceConfig, PostgresSelection, SqliteAcquisitionSchema, SqlitePackLayout,
+    SqlitePersistenceProfile, SynchronousCommit,
 };
-pub use handles::Handles;
 pub use history::HistoryProvider;
 pub(crate) use storage::provider as storage_provider;
 pub(crate) use storage::publication;
 pub use storage_provider::StorageProvider;
+pub use store::handles::SqliteHandles;
 #[cfg(feature = "postgresql")]
 pub use store::postgresql::{
     PostgresAcquisition, PostgresHandles, PostgresLaneHold, PostgresStorage,
 };
 pub use store::seal::SealedStore;
+pub use store::selection::{Handles, StoreFile, StoreSelection};
 
 mod metadata;
 mod objects;

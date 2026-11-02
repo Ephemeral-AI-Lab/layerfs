@@ -15,7 +15,7 @@ API-core, Sandbox and FUSE remain excluded; mounted Exec/Commit is not claimed.
 Calls, initialized OwnerClient and public Workspace/Content ports. It verifies
 oriented peers, runtime/catalog/provider/Workspace, complete coherent BranchSnapshot,
 root serial, exact StoragePolicy and separately trusted actual
-`Handles::profile().persistence`. Filesystem profile never supplies durability.
+`SqliteHandles::profile().persistence`. Filesystem profile never supplies durability.
 Binding and Policy each have one original request; actual checked BaseView demand
 precedes one local Open. Only known Opened binds. Global initialization/acquisition
 belongs to the host; bind adds no whole-tree scan/copy/materialization or database.
@@ -50,8 +50,8 @@ The public regression reads both actual options and verifies duplex accounting.
 
 ## Actual host and independent Linux proof
 
-The host uses actual Handles, Project Init, Storage, History, Runtime, Sessions and
-Supervisor, captures persistence before consuming Handles and native metadata
+The host uses actual SqliteHandles, Project Init, Storage, History, Runtime, Sessions and
+Supervisor, captures persistence before consuming SqliteHandles and native metadata
 before import, then deletes source before binding/access. Production Linux Upstream
 uses saved-object calls through authenticated framing and one initialized Overlay
 Owner. There is no scripted host or legacy adapter in this proof.

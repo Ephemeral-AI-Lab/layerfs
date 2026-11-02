@@ -24,11 +24,11 @@ pub enum HandleError {
 }
 
 /// Encodes and checks the handles of one kernel mount.
-pub struct Handles {
+pub struct SqliteHandles {
     owner: u64,
     key: RandomState,
 }
-impl Handles {
+impl SqliteHandles {
     pub fn new(owner: u64) -> Self {
         Self {
             owner,

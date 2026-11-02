@@ -220,7 +220,7 @@ omitted inode dependencies and reconstructs an admitted complete root. This is
 local grammar/closure prerequisite evidence; authenticated adapters, contextual
 closure and authority remain open.
 
-The SDK is now an active host runtime slice over already-open Handles. Initialized
+The SDK is now an active host runtime slice over already-open SqliteHandles. Initialized
 independent Storage owners support scoped interleaved Saves and saved/pending
 demand, authority-bound local capabilities and retained one-attempt completions.
 Its old Server-based facade is preserved in excluded `layerfs-sdk-legacy` and

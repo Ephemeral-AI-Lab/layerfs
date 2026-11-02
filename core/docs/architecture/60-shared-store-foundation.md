@@ -20,7 +20,7 @@ of a sealed WAL file with no sidecars. Its independent verification copy provisi
 WAL ownership explicitly before opening the read-only reader. This is not a sealed
 read-only capability claim or permission to retry failed product operations.
 
-[`Handles`](../../crates/layerfs-persistence/src/store/handles.rs) opens one
+[`SqliteHandles`](../../crates/layerfs-persistence/src/store/handles.rs) opens one
 validated session on macOS or Linux. macOS links system SQLite; Linux enables
 `bundled` on the existing pinned rusqlite dependency. The database remains
 distinct from every daemon's local overlay.
@@ -58,7 +58,7 @@ Since #352 F-040 (fix record 038) the wait has no time limit and no count
 limit: queued correct work waits its turn and is never refused `Busy` or
 `Capacity` for waiting. Each queued ticket belongs to one blocked thread, so
 the queue is bounded by the threads the process runs. A waiter leaves without
-its turn only when the session is closed (`Handles::close`, typed `Closed`) or
+its turn only when the session is closed (`SqliteHandles::close`, typed `Closed`) or
 the queue's mutex is poisoned (`Unknown`); it removes its ticket and later
 callers remain runnable. SQL counters are unchanged by admission itself.
 
@@ -104,7 +104,7 @@ macOS seal is unchanged. Separate reader sessions take WAL snapshots without
 global writer admission. No caller retries a failed SQL operation.
 
 The old macOS allocation/extent-release owner, associated counters/result
-fields and public checkpoint API are removed. Host `Handles::seal` consumes
+fields and public checkpoint API are removed. Host `SqliteHandles::seal` consumes
 its handles, refuses retained provider ownership, takes the sole session,
 checkpoints TRUNCATE once, checks close, and verifies that no WAL/SHM/journal
 sidecars remain. It returns file path/bytes, provisioning profile and the

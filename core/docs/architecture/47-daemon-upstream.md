@@ -25,8 +25,8 @@ root, scope and filesystem-profile identity. Matching one root hash does not exc
 a different expected history context.
 
 PersistenceBootstrap is a separate trusted fact for that exact host/runtime/catalog/
-provider context. The host obtains its profile from `Handles::profile().persistence`
-before Runtime consumes Handles. Daemon uses the owning public
+provider context. The host obtains its profile from `SqliteHandles::profile().persistence`
+before Runtime consumes SqliteHandles. Daemon uses the owning public
 `layerfs_persistence::SqlitePersistenceProfile` type, preserving Durable/Disposable
 semantics without defining a second contract. `snapshot.profile` is the filesystem
 profile ObjectId and never supplies a durability/profile observation. This public

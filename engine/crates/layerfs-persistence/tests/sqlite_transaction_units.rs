@@ -2,10 +2,10 @@
 mod support;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles};
 use layerfs_storage::{Storage, StoragePolicy};
-fn create(path: &std::path::Path) -> Handles {
-    Handles::create(
+fn create(path: &std::path::Path) -> SqliteHandles {
+    SqliteHandles::create(
         PersistenceConfig::sqlite(path)
             .with_sqlite_profile(layerfs_persistence::SqlitePersistenceProfile::Disposable),
         StoragePolicy::frozen_default(),

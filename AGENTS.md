@@ -103,7 +103,7 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   [shared construction boundaries](engine/AGENTS.md#shared-construction-and-completion-boundaries)
   for implemented entrypoints and the remaining S10 namespace integration.
 - `Save::finish()` completes saved objects while the Store remains open;
-  History publication follows. `Handles::seal()` consumes the sole Store
+  History publication follows. `SqliteHandles::seal()` consumes the sole Store
   session for host/offline handoff, checkpoints and closes it. Its macOS unused
   extent cleanup belongs to that lifecycle. A live daemon keeps the shared
   Store open across Saves and Commits; it does not seal it per file or Commit.

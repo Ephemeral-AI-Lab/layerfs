@@ -248,7 +248,7 @@ pub fn commits(
     limit: u16,
 ) -> layerfs_history::PageResult<layerfs_history::CommitRecord> {
     use layerfs_history::HistoryCatalog;
-    let handles = layerfs_persistence::Handles::open_read_only(
+    let handles = layerfs_persistence::SqliteHandles::open_read_only(
         PersistenceConfig::sqlite(&manifest.locator)
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         &manifest.binding,

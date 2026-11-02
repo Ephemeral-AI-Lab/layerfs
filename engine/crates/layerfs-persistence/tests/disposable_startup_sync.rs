@@ -5,7 +5,8 @@
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePackLayout, SqlitePersistenceProfile,
+    PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePackLayout,
+    SqlitePersistenceProfile,
 };
 use layerfs_storage::{Storage, StoragePolicy};
 use rusqlite::ffi;
@@ -390,7 +391,7 @@ fn disposable_create_save_reopen_seal_never_calls_vfs_sync() {
                 .with_sqlite_pack_layout(layout)
                 .with_sqlite_acquisition(acquisition);
             let handles =
-                Handles::create(config.clone(), StoragePolicy::frozen_default(), &authority)
+                SqliteHandles::create(config.clone(), StoragePolicy::frozen_default(), &authority)
                     .unwrap();
             assert_eq!(
                 handles.profile().persistence,
@@ -418,7 +419,7 @@ fn disposable_create_save_reopen_seal_never_calls_vfs_sync() {
                 assert!(!PathBuf::from(format!("{}{suffix}", path.display())).exists());
             }
             let reopened =
-                Handles::open_writable(config, &authority.binding_key, authority.cursor_key)
+                SqliteHandles::open_writable(config, &authority.binding_key, authority.cursor_key)
                     .unwrap();
             observe(&format!("reopen-{layout:?}-{acquisition:?}"));
             let storage = Storage::new(reopened.storage.clone()).unwrap();

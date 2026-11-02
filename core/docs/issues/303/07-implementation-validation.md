@@ -92,7 +92,7 @@ No new core component depends on legacy source or revives `layerfs-server`.
   hosts. Confirm locked Linux content/bundled SQLite and host feature isolation.
   Reuse existing published dependencies, preserve ARM64 build inputs and report
   an unsupported capability; do not patch/fork or choose a fallback.
-- Host application composition embeds current Handles/Storage/HistoryCatalog
+- Host application composition embeds current SqliteHandles/Storage/HistoryCatalog
   and runtime-owned object/Save/history adapters. The default placement is
   `layerfs-api/sdk/src/runtime/`, embedding the current libraries rather than
   reviving a server/coordinator package. Global persistence is the supported
@@ -273,7 +273,7 @@ production; tests, docs, examples and tools do not.
 | `layerfs-fuse` | 1,447 | 1,500–2,200 | Adapter and mount custody plus owned deferred jobs, coherence/send ordering, cached mmap compatibility and request telemetry |
 | `layerfs-daemon` | 2,151 | 1,500–2,500 | Registry/incarnation routing, fair short overlay jobs, upstream service and ordinary Bash process/stream lifecycle; no host construction path |
 | `layerfs-bridge` | 6,834 | 4,500–5,500 | Keep authenticated native transport, typed history/control/outcomes; remove prepared-stream construction, add bounded object/Save contracts and multiplexing |
-| SDK host runtime adapters, inside `layerfs-api/sdk/src/runtime/` | Included in the old server scope, not a separate current subtotal | 1,200–2,000 | Compose current Handles/Storage/HistoryCatalog; own authenticated object/Save/history handlers, semantic admission and fair provider/session service; no new coordinator crate |
+| SDK host runtime adapters, inside `layerfs-api/sdk/src/runtime/` | Included in the old server scope, not a separate current subtotal | 1,200–2,000 | Compose current SqliteHandles/Storage/HistoryCatalog; own authenticated object/Save/history handlers, semantic admission and fair provider/session service; no new coordinator crate |
 | `layerfs-server` | 3,996 | 0 (target retirement) | No implementation restored here; required runtime adapter work is counted explicitly above |
 | `layerfs-sandbox` | 1,106 | 1,000–1,300 | Container/native attachment and teardown custody; no per-call content preparation |
 | API contracts + SDK forwarding, excluding the runtime row above | 796 | 800–1,000 | Five Workspace operations plus existing Project/Sandbox composition; ordinary Exec and exact typed outcomes |
@@ -383,7 +383,7 @@ core/
       core/tests/
       sdk/src/                               Project/Sandbox/Workspace forwarding
       sdk/src/runtime/                       embedded host composition, no server
-        owner.rs                             Handles/Storage/HistoryCatalog setup
+        owner.rs                             SqliteHandles/Storage/HistoryCatalog setup
         objects.rs, save.rs, history.rs       authenticated typed request handlers
         admission.rs                         fair provider jobs and resource shares
       sdk/tests/

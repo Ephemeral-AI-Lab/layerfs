@@ -27,7 +27,7 @@ pub(crate) fn create_schema(args: &SdkValue, identity: &Identity) -> Result<bool
         use layerfs_storage::port::PersistenceError;
         let selection = selection(url(args)?, &schema(args)?, &setting(args)?);
         let made = ProjectApi::new().create_postgresql_store(CreateRequest {
-            store: PersistenceConfig::postgresql(selection),
+            store: layerfs_persistence::StoreSelection::Postgres(selection),
             policy: layerfs_storage::StoragePolicy::frozen_default(),
             catalog: HistoryCatalogConfig {
                 binding_key: identity.binding.clone(),
@@ -108,7 +108,7 @@ fn run(
         let branch = BranchId::from_authority(crate::host::project::sixteen(random()?));
         let request = AddRequest {
             source: std::path::PathBuf::from(text(args, "path")?),
-            store: PersistenceConfig::postgresql(selection(
+            store: layerfs_persistence::StoreSelection::Postgres(selection(
                 url(args)?,
                 &schema(args)?,
                 &setting(args)?,

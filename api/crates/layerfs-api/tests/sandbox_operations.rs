@@ -399,6 +399,7 @@ impl ProjectFixture {
             source,
             store: PersistenceConfig::sqlite(directory.join("store.sqlite"))
                 .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+
             locator: "/layerfs-store/global/store.sqlite".into(),
             policy: layerfs_storage::StoragePolicy::frozen_default(),
             catalog: HistoryCatalogConfig {

@@ -7,7 +7,7 @@ use layerfs_content::{
     FinalizedObject, ObjectId, ObjectRole,
 };
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{Storage, StoragePolicy};
 
 fn leaf(serial: u64, value: u64) -> FinalizedObject {
@@ -36,7 +36,7 @@ fn leaf(serial: u64, value: u64) -> FinalizedObject {
 #[test]
 fn earlier_reserved_save_finishes_after_a_higher_block_was_published() {
     let temp = support::Temp::new("concurrent-pooled-saves");
-    let handles = Handles::create(
+    let handles = SqliteHandles::create(
         PersistenceConfig::sqlite(temp.join("store.sqlite"))
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         StoragePolicy::frozen_default(),

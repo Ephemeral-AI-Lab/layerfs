@@ -42,8 +42,8 @@ The control keeps its original labels/verdicts; it is not a new matched arm.
 
 ## Operation, timing and limits
 
-Public `Handles::create` → `layerfs_project::init` → bounded acquisition cleanup
-→ `Handles::seal`, through the existing `benchmark_init` example on macOS.
+Public `SqliteHandles::create` → `layerfs_project::init` → bounded acquisition cleanup
+→ `SqliteHandles::seal`, through the existing `benchmark_init` example on macOS.
 One Project Init call; four supported Init constructors with environment
 `LAYERFS_CONSTRUCTION_WORKERS=1`. No daemon, FUSE, SDK transport or install is
 part of this component operation. No product branch depends on this case ID.

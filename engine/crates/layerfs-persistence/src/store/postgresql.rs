@@ -124,7 +124,7 @@ impl PostgresHandles {
         })
     }
 
-    /// Refuses every queued and later call with `Closed`; see [`Handles::close`].
+    /// Refuses every queued and later call with `Closed`; see [`SqliteHandles::close`].
     pub fn close(&self) {
         self.storage.session.admission.close();
     }

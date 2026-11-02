@@ -202,7 +202,13 @@ pub fn push(
         progress::begin("snapshot", Some(live));
         let mut copied: Option<u64> = None;
         let sealed = opened
-            .snapshot_observed(&staged, &mut |done, total| {
+            .file()
+            .ok_or_else(|| {
+                PushFailure::Snapshot(
+                    layerfs_storage::port::PersistenceError::BackendUnavailable.to_string(),
+                )
+            })?
+            .snapshot(&staged, &mut |done, total| {
                 if copied.is_none() {
                     // the copy's own size replaces the live estimate
                     progress::begin("snapshot", Some(total));

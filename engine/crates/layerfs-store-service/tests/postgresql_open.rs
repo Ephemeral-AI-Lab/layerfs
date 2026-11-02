@@ -3,7 +3,7 @@
 #![cfg(feature = "postgresql")]
 use layerfs_history::records::StackInitialization;
 use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
-use layerfs_persistence::{PersistenceConfig, PostgresHandles, PostgresSelection};
+use layerfs_persistence::{PostgresHandles, PostgresSelection};
 use layerfs_storage::{ReservationBlocks, StoragePolicy};
 use layerfs_store_service::bootstrap::open_store_observed;
 
@@ -47,7 +47,7 @@ fn a_postgresql_store_opens_through_the_store_open_path() {
         .unwrap();
         drop(created);
         let opened = open_store_observed(
-            PersistenceConfig::postgresql(selection.clone()),
+            layerfs_persistence::StoreSelection::Postgres(selection.clone()),
             BINDING,
             CURSOR,
             4,
@@ -67,7 +67,7 @@ fn a_postgresql_store_opens_through_the_store_open_path() {
             stack
         );
         opened.store.producer().unwrap();
-        assert!(opened.snapshot(&dir.join("refused")).is_err());
+        assert!(opened.file().is_none());
         assert!(opened.diagnostics().unwrap().writer.transactions > 0);
         merge_records_past_resident(&opened.store);
     })

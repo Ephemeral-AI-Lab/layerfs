@@ -100,8 +100,10 @@ impl Application {
                 install: Some(m),
                 locator,
             } => Some((
-                PersistenceConfig::sqlite(locator)
-                    .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                layerfs_persistence::StoreSelection::Sqlite(
+                    PersistenceConfig::sqlite(locator)
+                        .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                ),
                 m.binding.as_slice(),
                 m.cursor_key,
             )),
@@ -111,15 +113,19 @@ impl Application {
                 synchronous_commit,
                 authority,
             } => Some((
-                postgres(url, schema, synchronous_commit),
+                layerfs_persistence::StoreSelection::Postgres(postgres(
+                    url,
+                    schema,
+                    synchronous_commit,
+                )),
                 authority.binding.as_slice(),
                 authority.cursor_key,
             )),
             layerfs_bridge::DaemonStore::Sqlite { install: None, .. } => None,
         };
         let existing = match selected {
-            Some((config, binding, cursor_key)) => match open_store_observed(
-                config,
+            Some((selection, binding, cursor_key)) => match open_store_observed(
+                selection,
                 binding,
                 cursor_key,
                 l.namespaces as usize,
@@ -292,9 +298,9 @@ impl Application {
     }
 }
 
-/// The PostgreSQL Store selected (#506). Its file path is unused: Store
-/// reads and writes go to the server.
-fn postgres(url: &str, schema: &str, synchronous_commit: &str) -> PersistenceConfig {
+/// The PostgreSQL Store selected (#506): Store reads and writes go to the
+/// server.
+fn postgres(url: &str, schema: &str, synchronous_commit: &str) -> PostgresSelection {
     let setting = match synchronous_commit {
         "local" => SynchronousCommit::Local,
         "remote_write" => SynchronousCommit::RemoteWrite,
@@ -302,8 +308,5 @@ fn postgres(url: &str, schema: &str, synchronous_commit: &str) -> PersistenceCon
         "remote_apply" => SynchronousCommit::RemoteApply,
         _ => SynchronousCommit::Off,
     };
-    PersistenceConfig::postgresql(
-        PostgresSelection::new(url.to_string(), schema.to_string())
-            .with_synchronous_commit(setting),
-    )
+    PostgresSelection::new(url.to_string(), schema.to_string()).with_synchronous_commit(setting)
 }

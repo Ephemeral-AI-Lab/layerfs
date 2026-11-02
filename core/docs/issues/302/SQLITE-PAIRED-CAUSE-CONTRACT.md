@@ -15,7 +15,7 @@ under examples/cause_support, not production source includes, new runtime
 adapters or a product alternative. Every copied source/adaptation is sealed.
 The baseline engine facade uses unmodified7edddbdb8 Store/StoreProvider/
 SaveOperation and nativeC5; the candidate facade uses actual shared SQLite
-Storage/Handles. Baseline product/manifest/dependencies stay clean/unchanged.
+Storage/SqliteHandles. Baseline product/manifest/dependencies stay clean/unchanged.
 The Service authorization/response envelope is omitted. The vehicle must prove
 root equality to both current production Init speed receipts, same canonical
 inventory and independent sampled readback. It never replaces those speed arms.

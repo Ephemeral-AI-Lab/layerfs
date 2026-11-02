@@ -114,10 +114,8 @@ impl StoreService {
         cursor_key: [u8; 32],
         template: &Path,
     ) -> Result<Self, OpenRefusal> {
-        let mut config = PersistenceConfig::sqlite(template);
-        config.backend = layerfs_persistence::BackendSelection::Postgres(selection.clone());
         let opened = open_store_observed(
-            config,
+            selection.clone(),
             binding,
             cursor_key,
             CALLS,

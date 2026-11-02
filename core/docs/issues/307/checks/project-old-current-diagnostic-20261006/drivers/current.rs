@@ -1,7 +1,7 @@
 //! Stage/count diagnostic through public Init; uncontrolled cache, no speed gate.
 use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    SqliteHandles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
 };
 use layerfs_project::{init, InitRequest};
 use layerfs_storage::{Storage, StoragePolicy};
@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("registered 15/30-second deadline required".into());
     }
     let start = Instant::now();
-    let handles = Handles::create(
+    let handles = SqliteHandles::create(
         PersistenceConfig::sqlite(&args[2])
             .with_sqlite_profile(selected)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),

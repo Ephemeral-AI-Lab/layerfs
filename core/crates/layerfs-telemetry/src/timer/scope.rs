@@ -30,7 +30,7 @@ pub struct Active;
 /// A [`Pending`] scope is created by
 /// [`child`](TimingScope::child) and started by [`run`](TimingScope::run). The
 /// [`Active`] handle is passed to the operation closure and is the only way to
-/// create further children or attach a completed report. Handles are neither
+/// create further children or attach a completed report. SqliteHandles are neither
 /// `Send` nor `Sync`, and their lifetimes tie them to the recording that
 /// created them.
 pub struct TimingScope<'a, S = Pending> {

@@ -38,7 +38,7 @@
 use crate::{
     attributes::{refusal, Identity, Status},
     block::wait,
-    handle::{HandleError, Handles},
+    handle::{HandleError, SqliteHandles},
 };
 use layerfs_content::{filesystem::PathName, object::inode_leaf::InodeKind};
 use layerfs_mount_ports::{
@@ -133,7 +133,7 @@ pub struct Kernel {
     fence: Fence,
     mount: KernelMount,
     identity: Identity,
-    handles: Handles,
+    handles: SqliteHandles,
     table: Mutex<Table>,
     requests: AtomicU64,
     /// Mutations whose failure keeps engine custody (possibly a publication
@@ -172,7 +172,7 @@ impl Kernel {
                 gid,
                 fsid: mount.owner_id(),
             },
-            handles: Handles::new(mount.owner_id()),
+            handles: SqliteHandles::new(mount.owner_id()),
             table: Mutex::default(),
             requests: AtomicU64::new(1),
             retained: Mutex::default(),
@@ -804,9 +804,9 @@ pub struct Released {
     pub names_detached: u64,
     /// References collected beyond the bound, over the export's life.
     pub collected: u64,
-    /// Handles of collected serials resolved again by their name.
+    /// SqliteHandles of collected serials resolved again by their name.
     pub resolved: u64,
-    /// Handles of collected serials whose name no longer reaches them.
+    /// SqliteHandles of collected serials whose name no longer reaches them.
     pub unresolved: u64,
 }
 fn oldest(entries: impl Iterator<Item = (u64, u64)>) -> Option<u64> {

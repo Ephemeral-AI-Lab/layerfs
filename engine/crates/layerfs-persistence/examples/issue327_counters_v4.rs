@@ -1,6 +1,6 @@
 //! Frozen v4 matched component screen for publication accounting. No SDK/FUSE timing claim.
 use layerfs_history::*;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{Storage, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
 use std::{
@@ -59,9 +59,11 @@ fn main() {
         let copy = path.with_extension("verify-copy.db");
         std::fs::copy(path, &copy).unwrap();
         let owner =
-            Handles::open_writable(config(&copy), b"issue327-counter-screen", [71; 32]).unwrap();
+            SqliteHandles::open_writable(config(&copy), b"issue327-counter-screen", [71; 32])
+                .unwrap();
         let handles =
-            Handles::open_read_only(config(&copy), b"issue327-counter-screen", [71; 32]).unwrap();
+            SqliteHandles::open_read_only(config(&copy), b"issue327-counter-screen", [71; 32])
+                .unwrap();
         let _owner = owner;
         let name = HistoryName::new("screen").unwrap();
         let stack = LayerStackId::from_authority([1; 16]);
@@ -93,7 +95,7 @@ fn main() {
     let input = fixture(); // Fixed warm in-memory fixture, generated outside the operation timer in BOTH arms.
     let started = Instant::now();
     let policy = StoragePolicy::frozen_default();
-    let handles = Handles::create(config(path), policy, &authority()).unwrap();
+    let handles = SqliteHandles::create(config(path), policy, &authority()).unwrap();
     let root = layerfs_content::ObjectId::from_bytes(&[0; 32]).unwrap();
     let stack = LayerStackId::from_authority([1; 16]);
     let name = HistoryName::new("screen").unwrap();

@@ -20,7 +20,7 @@ use layerfs_daemon::control::Service;
 use layerfs_daemon::store::{ReaderFactory, Store, StoreReader};
 use layerfs_history::records::*;
 use layerfs_history::*;
-use layerfs_persistence::Handles;
+use layerfs_persistence::SqliteHandles;
 use layerfs_storage::{ReservationBlocks, Storage};
 use layerfs_workspace::{Operation, Outcome, Position, Time};
 use std::sync::{Arc, Condvar, Mutex};
@@ -79,7 +79,7 @@ impl Gate {
 }
 
 struct Gated {
-    handles: Arc<Handles>,
+    handles: Arc<SqliteHandles>,
     gate: Arc<Gate>,
     holds: Arc<Mutex<Vec<(f64, u64)>>>,
 }
@@ -88,7 +88,7 @@ struct Gated {
 /// statements over it.
 struct Timed {
     _lane: PublishLane,
-    handles: Arc<Handles>,
+    handles: Arc<SqliteHandles>,
     start: Instant,
     statements: u64,
     holds: Arc<Mutex<Vec<(f64, u64)>>>,
@@ -168,10 +168,12 @@ fn fixture(label: &str) -> Fixture {
     sdk.fork(LANE);
     let config = sdk.host.config.clone();
     let handles = Arc::new(
-        Handles::open_writable(config.clone(), installed::BINDING, installed::CURSOR).unwrap(),
+        SqliteHandles::open_writable(config.clone(), installed::BINDING, installed::CURSOR)
+            .unwrap(),
     );
     let factory: ReaderFactory = Arc::new(move |_| {
-        let read = Handles::open_read_only(config.clone(), installed::BINDING, installed::CURSOR)?;
+        let read =
+            SqliteHandles::open_read_only(config.clone(), installed::BINDING, installed::CURSOR)?;
         Ok(StoreReader::new(
             Storage::new(read.storage)?,
             Arc::new(read.history),

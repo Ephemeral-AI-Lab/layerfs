@@ -18,8 +18,7 @@ use layerfs_history::{
     HistoryName, HistoryResult, LayerStackId, LayerStackRecord, Page,
 };
 use layerfs_persistence::{
-    BackendSelection, Handles, PersistenceConfig, SealedStore, SqliteAcquisitionSchema,
-    SqlitePersistenceProfile,
+    SealedStore, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile, StoreSelection,
 };
 use layerfs_storage::port::{acquisition::AcquisitionError, PersistenceError};
 use layerfs_storage::{Storage, StoragePolicy};
@@ -32,8 +31,8 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 pub struct CreateRequest {
     /// New Store file, explicit Disposable profile; must not exist. For
     /// [`super::ProjectApi::create_postgresql_store`], the PostgreSQL
-    /// selection ([`PersistenceConfig::postgresql`]) whose schema must not exist.
-    pub store: PersistenceConfig,
+    /// selection whose schema must not exist.
+    pub store: StoreSelection,
     /// Frozen content/storage policy every project of the Store shares.
     pub policy: StoragePolicy,
     /// The Store's catalog authority and cursor key.
@@ -46,8 +45,8 @@ pub struct AddRequest {
     /// Complete source directory, with no Git-ignore filtering.
     pub source: PathBuf,
     /// The live Store: a SQLite file with the explicit Disposable profile,
-    /// or a PostgreSQL schema ([`PersistenceConfig::postgresql`]).
-    pub store: PersistenceConfig,
+    /// or a PostgreSQL schema ([`StoreSelection::Postgres`]).
+    pub store: StoreSelection,
     /// The Store's binding key.
     pub binding: Vec<u8>,
     /// The Store's cursor key in this home.
@@ -96,10 +95,11 @@ impl std::fmt::Display for AddFailure {
 }
 impl std::error::Error for AddFailure {}
 
-fn disposable(store: &PersistenceConfig) -> Result<(), InitError> {
-    if store.backend == BackendSelection::Sqlite
-        && store.sqlite_profile != SqlitePersistenceProfile::Disposable
-    {
+fn disposable(store: &StoreSelection) -> Result<(), InitError> {
+    let StoreSelection::Sqlite(store) = store else {
+        return Err(InitError::Manifest("a Store file selection required"));
+    };
+    if store.sqlite_profile != SqlitePersistenceProfile::Disposable {
         return Err(InitError::Manifest(
             "explicit Disposable Store profile required",
         ));
@@ -109,14 +109,12 @@ fn disposable(store: &PersistenceConfig) -> Result<(), InitError> {
 
 /// Creates and seals one Store holding no project.
 pub(crate) fn create(request: CreateRequest) -> Result<SealedStore, InitError> {
-    if request.store.backend != BackendSelection::Sqlite {
-        return Err(InitError::Manifest("a Store file selection required"));
-    }
     disposable(&request.store)?;
-    let config = request
-        .store
-        .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables);
-    let handles = Handles::create(config, request.policy, &request.catalog)
+    let StoreSelection::Sqlite(config) = request.store else {
+        return Err(InitError::Manifest("a Store file selection required"));
+    };
+    let config = config.with_sqlite_acquisition(SqliteAcquisitionSchema::Tables);
+    let handles = SqliteHandles::create(config, request.policy, &request.catalog)
         .map_err(InitError::Persistence)?;
     handles.seal().map_err(InitError::Persistence)
 }

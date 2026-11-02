@@ -4,7 +4,7 @@ use layerfs_history::{
     LayerStackId,
 };
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
 };
 use layerfs_project::{init, InitRequest};
 use layerfs_storage::{Storage, StoragePolicy};
@@ -53,7 +53,7 @@ impl Fixture {
         let config = PersistenceConfig::sqlite(&sealed)
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables);
-        let handles = Handles::create(
+        let handles = SqliteHandles::create(
             config.clone(),
             policy,
             &HistoryCatalogConfig {

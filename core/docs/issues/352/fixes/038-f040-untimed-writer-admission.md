@@ -38,7 +38,7 @@
 
   | Exit | When | `BackendError` | Storage | History |
   | --- | --- | --- | --- | --- |
-  | Store closing | `Handles::close()` before the waiter's turn; wakes every waiter at once | `Closed` (new) | `Refused { status: "Closed" }` | `OwnershipUnavailable` |
+  | Store closing | `SqliteHandles::close()` before the waiter's turn; wakes every waiter at once | `Closed` (new) | `Refused { status: "Closed" }` | `OwnershipUnavailable` |
   | Cancelled | a signal interrupts the kernel `flock` wait (`EINTR`) | `Cancelled` (new) | `Refused { status: "Cancelled" }` | `OwnershipUnavailable` |
   | Self-entry | the thread already holds the turn outside a lane, so waiting would deadlock on itself | `Integrity` | `Malformed` | `Integrity` |
   | Poisoned queue | a holder panicked with the queue's mutex held | `Unknown` | `Uncertain` | `UnknownOutcome` |
@@ -72,7 +72,7 @@ admission counts (audit A12–A15), which this fix does not change.
   not FIFO. Each Session contributes at most one kernel waiter, and holds
   are single short transactions, so barging is possible but bounded per
   hold; no starvation guarantee is claimed.
-- No product path calls `Handles::close` yet: daemons and the SDK end a
+- No product path calls `SqliteHandles::close` yet: daemons and the SDK end a
   Store by process exit, which ends its waiters with it. `close` is the
   typed exit for an owner that closes a live Store.
 - In-process waiters have no per-request cancellation token; none exists in

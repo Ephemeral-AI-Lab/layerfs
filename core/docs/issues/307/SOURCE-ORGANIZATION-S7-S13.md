@@ -297,7 +297,7 @@ core/crates/layerfs-api/sdk/src/
 `client/` forwards application operations through supported public boundaries.
 `runtime/handlers/` binds authenticated typed requests to existing host libraries.
 History decisions stay in History/Persistence and Save mechanics stay in Storage.
-The runtime reuses initialized `Handles` and Storage owners rather than opening
+The runtime reuses initialized `SqliteHandles` and Storage owners rather than opening
 the global Store for each call.
 
 The host service has its own process/transport admission and delivery obligations.

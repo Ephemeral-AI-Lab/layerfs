@@ -26,7 +26,7 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertFalse(violations(path, source))
         for source in [
             "use layerfs_daemon::Pending;",
-            "use layerfs_persistence::Handles;",
+            "use layerfs_persistence::SqliteHandles;",
             "use layerfs_api::WorkspaceApi;",
         ]:
             self.assertTrue(violations(path, source))
@@ -64,14 +64,14 @@ class ProductBoundaryTests(unittest.TestCase):
         for source in ["use layerfs_storage::Storage;", "use layerfs_history::HistoryCatalog;"]:
             self.assertFalse(violations(path, source))
         for source in [
-            "use layerfs_persistence::Handles;",
+            "use layerfs_persistence::SqliteHandles;",
             "use layerfs_sdk::RemoteObjects;",
             "use rusqlite::Connection;",
             "use std::path::{Path, PathBuf};",
         ]:
             self.assertTrue(violations(path, source))
         bootstrap = Path("engine/crates/layerfs-daemon/src/bootstrap.rs")
-        self.assertFalse(violations(bootstrap, "use layerfs_persistence::Handles;"))
+        self.assertFalse(violations(bootstrap, "use layerfs_persistence::SqliteHandles;"))
 
     def test_persistence_seal_ffi_is_limited_to_the_authorized_module(self):
         base = Path("engine/crates/layerfs-persistence/src")
@@ -115,7 +115,7 @@ class ProductBoundaryTests(unittest.TestCase):
 
     def test_sdk_source_edges_and_unsafe_boundary(self):
         path = Path("api/crates/layerfs-api/src/project/init.rs")
-        self.assertFalse(violations(path, "use layerfs_persistence::Handles;"))
+        self.assertFalse(violations(path, "use layerfs_persistence::SqliteHandles;"))
         self.assertTrue(violations(path, "use layerfs_server::Server;"))
         self.assertTrue(unsafe_violations(path, "unsafe fn extend_lifetime() {}"))
         root = Path("api/crates/layerfs-api/src/lib.rs")

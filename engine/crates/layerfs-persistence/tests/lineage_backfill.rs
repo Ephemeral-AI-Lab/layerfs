@@ -7,7 +7,7 @@ use layerfs_history::records::{
     ForkRequest, ForkSource, StackInitialization,
 };
 use layerfs_history::{BranchId, HistoryCatalog, LayerId, NodeId};
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use support::*;
 
 const LINEAGE: &str = include_str!("../sql/sqlite/lineage.sql");
@@ -74,8 +74,8 @@ fn make_old(path: &std::path::Path) {
     .unwrap();
 }
 
-fn writable(path: &std::path::Path) -> Handles {
-    Handles::open_writable(
+fn writable(path: &std::path::Path) -> SqliteHandles {
+    SqliteHandles::open_writable(
         PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         BINDING,
         [71; 32],

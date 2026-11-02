@@ -6,7 +6,7 @@ use layerfs_content::{
     filesystem::{FilesystemRead, FilesystemRootId, LogicalPath},
 };
 use layerfs_history::{BranchId, HistoryCatalog, HistoryCatalogConfig, HistoryName, LayerStackId};
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::StoragePolicy;
 use layerfs_telemetry::timer::Timing;
 use std::{
@@ -75,7 +75,7 @@ fn init_seals_complete_root_and_first_branch_without_retained_handles() {
     }
     // The SDK owns no handle. A separate oracle opens once, writer first for
     // Apple SQLite's sidecar-free WAL contract; no provider fallback occurs.
-    let handles = Handles::open_writable(
+    let handles = SqliteHandles::open_writable(
         config,
         &project.manifest.binding,
         project.manifest.cursor_key,

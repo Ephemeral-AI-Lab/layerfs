@@ -291,7 +291,8 @@ pub(crate) fn make_empty(
         let sealed = ProjectApi::new()
             .create_store(CreateRequest {
                 store: PersistenceConfig::sqlite(&temporary)
-                    .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                    .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+                    .into(),
                 policy,
                 catalog: HistoryCatalogConfig {
                     binding_key: identity.binding.clone(),
@@ -454,7 +455,8 @@ pub(crate) fn add_project(args: &SdkValue) -> Outcome {
     let request = AddRequest {
         source,
         store: PersistenceConfig::sqlite(&store_file)
-            .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+            .into(),
         binding: identity.binding.clone(),
         cursor_key: identity.cursor_key,
         stack,

@@ -32,7 +32,7 @@ use layerfs_content::inode_leaf::InodeKind;
 use layerfs_content::merge::ConflictKind;
 use layerfs_content::object::ObjectId;
 use layerfs_history::CommitOutcome;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::Storage;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -116,7 +116,8 @@ fn view(fixture: &Fixture, branch: &str) -> BTreeMap<String, String> {
 fn branch_delta_applies(fixture: &Fixture, root: &str) -> u64 {
     let config = PersistenceConfig::sqlite(&fixture.host.config.path)
         .with_sqlite_profile(SqlitePersistenceProfile::Disposable);
-    let handles = Handles::open_read_only(config, installed::BINDING, installed::CURSOR).unwrap();
+    let handles =
+        SqliteHandles::open_read_only(config, installed::BINDING, installed::CURSOR).unwrap();
     let storage = Storage::new(handles.storage).unwrap();
     let reader = storage.reader().unwrap();
     let root = FilesystemRootId(ObjectId::from_bytes(&unhex(root)).unwrap());

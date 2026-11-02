@@ -4,7 +4,7 @@ mod support;
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
     RECLAMATION_PAGE_LIMIT,
 };
 use layerfs_storage::{
@@ -26,7 +26,7 @@ fn history() -> HistoryCatalogConfig {
         cursor_key: [82; 32],
     }
 }
-fn begin(handles: &Handles) -> Owner {
+fn begin(handles: &SqliteHandles) -> Owner {
     handles
         .acquisition
         .begin(&Begin {
@@ -59,7 +59,7 @@ fn file(position: u64, path_bytes: usize) -> NewEntry {
         }),
     }
 }
-fn populate(handles: &Handles, owner: Owner, count: u64, path_bytes: usize) {
+fn populate(handles: &SqliteHandles, owner: Owner, count: u64, path_bytes: usize) {
     for start in (1..=count).step_by(128) {
         let rows: Vec<_> = (start..=(start + 127).min(count))
             .map(|position| file(position, path_bytes))
@@ -80,7 +80,7 @@ fn bounded_reclamation_preserves_another_live_operation_and_survives_reopen() {
     for profile in DEVELOPMENT_PROFILES {
         let temp = Temp::new("bounded-reclamation");
         let path = temp.join("store.sqlite");
-        let handles = Handles::create(
+        let handles = SqliteHandles::create(
             config(&path, profile),
             StoragePolicy::frozen_default(),
             &history(),
@@ -126,13 +126,13 @@ fn bounded_reclamation_preserves_another_live_operation_and_survives_reopen() {
         handles.seal().unwrap();
         // A daemon opens its write handle before its read set. Apple SQLite
         // cannot initialize missing WAL sidecars from a read-only connection.
-        let writer = Handles::open_writable(
+        let writer = SqliteHandles::open_writable(
             config(&path, profile),
             &history().binding_key,
             history().cursor_key,
         )
         .unwrap();
-        let opened = Handles::open_read_only(
+        let opened = SqliteHandles::open_read_only(
             config(&path, profile),
             &history().binding_key,
             history().cursor_key,
@@ -157,7 +157,7 @@ fn old_non_reclaimable_stores_are_opened_without_implicit_conversion() {
     let temp = Temp::new("old-reclamation-mode");
     let path = temp.join("store.sqlite");
     let profile = SqlitePersistenceProfile::Disposable;
-    let handles = Handles::create(
+    let handles = SqliteHandles::create(
         config(&path, profile),
         StoragePolicy::frozen_default(),
         &history(),
@@ -171,7 +171,7 @@ fn old_non_reclaimable_stores_are_opened_without_implicit_conversion() {
         .execute_batch("PRAGMA auto_vacuum=NONE; VACUUM")
         .unwrap();
     drop(connection);
-    let handles = Handles::open_writable(
+    let handles = SqliteHandles::open_writable(
         config(&path, profile),
         &history().binding_key,
         history().cursor_key,
@@ -188,7 +188,7 @@ fn old_non_reclaimable_stores_are_opened_without_implicit_conversion() {
 fn path_windows_use_actual_lengths_without_exceeding_column_or_row_budgets() {
     let temp = Temp::new("path-windows");
     let path = temp.join("store.sqlite");
-    let handles = Handles::create(
+    let handles = SqliteHandles::create(
         config(&path, SqlitePersistenceProfile::Disposable),
         StoragePolicy::frozen_default(),
         &history(),

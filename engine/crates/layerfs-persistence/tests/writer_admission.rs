@@ -2,7 +2,7 @@
 mod support;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{location::PackInfo, port::*, Storage, StoragePolicy};
 #[cfg(target_os = "linux")]
 use std::{
@@ -23,12 +23,12 @@ fn authority() -> HistoryCatalogConfig {
 fn config(path: &Path) -> PersistenceConfig {
     PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
 }
-fn create(path: &Path) -> Handles {
-    Handles::create(config(path), StoragePolicy::frozen_default(), &authority()).unwrap()
+fn create(path: &Path) -> SqliteHandles {
+    SqliteHandles::create(config(path), StoragePolicy::frozen_default(), &authority()).unwrap()
 }
 #[cfg(target_os = "linux")]
-fn open(path: &Path) -> Handles {
-    Handles::open_writable(
+fn open(path: &Path) -> SqliteHandles {
+    SqliteHandles::open_writable(
         config(path),
         &authority().binding_key,
         authority().cursor_key,
@@ -302,7 +302,7 @@ const LONG_HOLD: Duration = Duration::from_millis(2500);
 
 /// Holds this Store's one connection turn through a public read until released.
 fn hold_turn(
-    handles: &Handles,
+    handles: &SqliteHandles,
 ) -> (
     std::thread::JoinHandle<Result<(), PersistenceError>>,
     mpsc::Sender<()>,

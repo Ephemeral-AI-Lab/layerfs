@@ -2,7 +2,9 @@
 mod support;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePackLayout, SqlitePersistenceProfile};
+use layerfs_persistence::{
+    PersistenceConfig, SqliteHandles, SqlitePackLayout, SqlitePersistenceProfile,
+};
 use layerfs_storage::{
     location::{ObjectLocation, PackDomain, PackInfo},
     pack::{assemble, build_group, layout::PackLane},
@@ -17,8 +19,8 @@ fn config() -> HistoryCatalogConfig {
         incarnation: 1,
     }
 }
-fn create(path: &std::path::Path, layout: SqlitePackLayout) -> Handles {
-    Handles::create(
+fn create(path: &std::path::Path, layout: SqlitePackLayout) -> SqliteHandles {
+    SqliteHandles::create(
         PersistenceConfig::sqlite(path)
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
             .with_sqlite_pack_layout(layout),
@@ -27,7 +29,7 @@ fn create(path: &std::path::Path, layout: SqlitePackLayout) -> Handles {
     )
     .unwrap()
 }
-fn fixture(h: &Handles) -> Vec<FinalizedObject> {
+fn fixture(h: &SqliteHandles) -> Vec<FinalizedObject> {
     let mut random = 931823u64;
     let objects = (0..8)
         .map(|_| {
@@ -96,7 +98,7 @@ fn declared_layouts_reopen_without_mutating_or_promoting_their_schema() {
         let objects = fixture(&h);
         drop(h);
         let before = std::fs::read(&path).unwrap();
-        let h = Handles::open_read_only(
+        let h = SqliteHandles::open_read_only(
             PersistenceConfig::sqlite(&path)
                 .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
                 .with_sqlite_pack_layout(SqlitePackLayout::GroupRowsIndexed),
@@ -174,7 +176,7 @@ fn missing_covering_index_is_refused_at_open_without_automatic_repair() {
     db.execute_batch("DROP INDEX pack_unit_mapping").unwrap();
     drop(db);
     let before = std::fs::read(&path).unwrap();
-    assert!(Handles::open_read_only(
+    assert!(SqliteHandles::open_read_only(
         PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         &config().binding_key,
         config().cursor_key

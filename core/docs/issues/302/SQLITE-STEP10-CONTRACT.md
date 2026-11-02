@@ -39,7 +39,7 @@ name and recording disabled. This is a direct C1/C2/C5 component comparison,
 not a relabeled SDK call or the old diagnostic timer. Current product does not
 restore Service/grants/protocol envelopes.
 
-The candidate uses Handles::create, Storage::new and project::init. The reference
+The candidate uses SqliteHandles::create, Storage::new and project::init. The reference
 creates both native Store/history and the Service in its child. No empty database
 schema work is moved into setup for either arm. Internal bootstrap/Init/commit/
 checkpoint/close spans are explanatory; they are not added to external wall.

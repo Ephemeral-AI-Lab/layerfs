@@ -325,7 +325,7 @@ See [captured-file construction](crates/layerfs-workspace/src/construction/captu
 
 Keep completion boundaries explicit: `Save::finish()` completes object storage;
 Init then initializes history, while Commit calls `commit_branch` against its
-expected head before local base installation. SDK Init subsequently calls `Handles::seal()` to
+expected head before local base installation. SDK Init subsequently calls `SqliteHandles::seal()` to
 checkpoint, close and hand off one Store file. The macOS allocation correction
 runs only at this sole-owner Store seal; it is not a Content/pack format change
 or live-daemon maintenance. Linux daemons keep their shared Store open. The

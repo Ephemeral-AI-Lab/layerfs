@@ -9,7 +9,7 @@ use layerfs_content::{
     FinalizedObject, ObjectId, ObjectRole,
 };
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{
     location::InodeValueRow,
     port::{PackPersistence, PersistenceError, Publication},
@@ -21,8 +21,8 @@ const BINDING: &[u8] = b"inode-values";
 fn config(path: &std::path::Path) -> PersistenceConfig {
     PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
 }
-fn create(path: &std::path::Path) -> Handles {
-    Handles::create(
+fn create(path: &std::path::Path) -> SqliteHandles {
+    SqliteHandles::create(
         config(path),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
@@ -52,7 +52,7 @@ fn rows(ordinals: impl IntoIterator<Item = u32>) -> Vec<InodeValueRow> {
         })
         .collect()
 }
-fn publish(handles: &Handles, rows: Vec<InodeValueRow>) -> Result<(), PersistenceError> {
+fn publish(handles: &SqliteHandles, rows: Vec<InodeValueRow>) -> Result<(), PersistenceError> {
     handles
         .storage
         .publish(&Publication {
@@ -248,8 +248,8 @@ fn a_store_of_the_value_group_format_is_refused_at_open() {
             .execute_batch(change)
             .unwrap();
         for opened in [
-            Handles::open_writable(config(&path), BINDING, [73; 32]).err(),
-            Handles::open_read_only(config(&path), BINDING, [73; 32]).err(),
+            SqliteHandles::open_writable(config(&path), BINDING, [73; 32]).err(),
+            SqliteHandles::open_read_only(config(&path), BINDING, [73; 32]).err(),
         ] {
             assert_eq!(opened, Some(PersistenceError::Malformed), "{change}");
         }
@@ -263,5 +263,5 @@ fn a_store_of_the_value_group_format_is_refused_at_open() {
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap();
     assert_eq!(version, 16);
-    Handles::open_writable(config(&path), BINDING, [73; 32]).unwrap();
+    SqliteHandles::open_writable(config(&path), BINDING, [73; 32]).unwrap();
 }

@@ -75,7 +75,7 @@ use layerfs_history::{
     CommitId, CommitOutcome, CommitRecord, HistoryCatalog, HistoryError, WorkspaceId,
 };
 use layerfs_overlay::{Capture, CapturedReader, OperationOwner};
-use layerfs_persistence::{Handles, SqlitePersistenceProfile};
+use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage, StorageError};
 use model::{assert_same, Flat, Model, FILE};
 use mounted::{mount_entry, until, Harness, COMMAND};
@@ -297,16 +297,20 @@ struct Fx {
 /// one Store.
 fn wrapped(
     fixture: &installed::Fixture,
-    ports: impl FnOnce(Handles) -> (Arc<dyn PackPersistence>, Arc<dyn HistoryCatalog>),
+    ports: impl FnOnce(SqliteHandles) -> (Arc<dyn PackPersistence>, Arc<dyn HistoryCatalog>),
 ) -> Arc<Store> {
     let config = || fixture.config.clone();
-    let (writer, history) =
-        ports(Handles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap());
+    let (writer, history) = ports(
+        SqliteHandles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap(),
+    );
     let reader_config = fixture.config.clone();
     let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
-        let read =
-            Handles::open_read_only(reader_config.clone(), installed::BINDING, installed::CURSOR)
-                .unwrap();
+        let read = SqliteHandles::open_read_only(
+            reader_config.clone(),
+            installed::BINDING,
+            installed::CURSOR,
+        )
+        .unwrap();
         Ok(StoreReader::new(
             Storage::new(read.storage).unwrap(),
             Arc::new(read.history),
@@ -362,7 +366,7 @@ impl Fx {
                 (writer, history)
             }),
             Staging::Publication => wrapped(&fixture, |handles| {
-                let Handles {
+                let SqliteHandles {
                     storage, history, ..
                 } = handles;
                 let writer = Arc::new(PublishBoundary {
@@ -1056,7 +1060,7 @@ impl Case {
         // bind of the Branch. A published candidate is the Branch root and
         // its tree is the captured frontier; otherwise the Branch is what
         // this Workspace bound.
-        let observer = Handles::open_read_only(
+        let observer = SqliteHandles::open_read_only(
             self.fx.fixture.config.clone(),
             installed::BINDING,
             installed::CURSOR,

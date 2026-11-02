@@ -10,7 +10,7 @@
 mod support;
 use layerfs_content::{ConstructionPolicy, ContentResult, FinalizedConsumer, FinalizedObject};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{location::SignatureRow, port::PackPersistence, Storage, StoragePolicy};
 
 /// More whole-file admissions than the ring's 8,192 slots.
@@ -54,7 +54,7 @@ fn whole_file(out: &mut Emitted, content: &[u8]) {
 fn a_wrapped_ring_reads_back_in_stamp_order_and_proposes_its_newest_entries() {
     let temp = support::Temp::new("signature-ring-order");
     let path = temp.join("store.sqlite");
-    let handles = Handles::create(
+    let handles = SqliteHandles::create(
         PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {

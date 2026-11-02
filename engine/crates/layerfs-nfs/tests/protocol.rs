@@ -1,6 +1,6 @@
 //! XDR, RPC record marking, call headers and file handles through the public API.
 use layerfs_nfs::{
-    handle::{HandleError, Handles, HANDLE_BYTES},
+    handle::{HandleError, SqliteHandles, HANDLE_BYTES},
     rpc::{parse_call, read_record, write_record, Refused, RECORD_LIMIT},
     xdr::{opaque_size, Reader, Writer},
 };
@@ -106,7 +106,7 @@ fn call_headers_carry_unix_credentials() {
 
 #[test]
 fn handles_are_stable_per_mount_and_stale_after_it() {
-    let handles = Handles::new(41);
+    let handles = SqliteHandles::new(41);
     let first = handles.encode(1234);
     assert_eq!(first.len(), HANDLE_BYTES);
     assert_eq!(
@@ -119,5 +119,8 @@ fn handles_are_stable_per_mount_and_stale_after_it() {
     forged[16] ^= 1;
     assert_eq!(handles.decode(&forged), Err(HandleError::Bad));
     assert_eq!(handles.decode(&first[..24]), Err(HandleError::Bad));
-    assert_eq!(Handles::new(42).decode(&first), Err(HandleError::Stale));
+    assert_eq!(
+        SqliteHandles::new(42).decode(&first),
+        Err(HandleError::Stale)
+    );
 }

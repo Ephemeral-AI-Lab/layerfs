@@ -5,7 +5,7 @@ mod vfs;
 use layerfs_content::ObjectId;
 use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqlWork, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    PersistenceConfig, SqlWork, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
 };
 use layerfs_project::{init, InitRequest};
 use layerfs_storage::{port::acquisition::*, Storage, StoragePolicy};
@@ -54,7 +54,7 @@ impl Work {
     }
 }
 struct Observed<'a> {
-    handles: &'a Handles,
+    handles: &'a SqliteHandles,
     // Fixed method-name set: at most 20 entries, independent of input size.
     units: Mutex<BTreeMap<&'static str, Work>>,
 }
@@ -125,7 +125,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let creation = Instant::now();
     let io = vfs::span("bootstrap");
-    let handles = Arc::new(Handles::create(
+    let handles = Arc::new(SqliteHandles::create(
         PersistenceConfig::sqlite(&args[2])
             .with_sqlite_profile(selected)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),
@@ -198,7 +198,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Fixed public physical-operation classes, never an unbounded SQL trace.
 struct PackObserved {
-    handles: Arc<Handles>,
+    handles: Arc<SqliteHandles>,
     units: Mutex<BTreeMap<&'static str, Work>>,
 }
 impl PackObserved {

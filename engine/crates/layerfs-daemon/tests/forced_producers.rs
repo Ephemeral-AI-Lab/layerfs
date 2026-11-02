@@ -76,7 +76,7 @@ use layerfs_daemon::{
 };
 use layerfs_history::{CommitOutcome, HistoryCatalog, HistoryError, WorkspaceId};
 use layerfs_overlay::CleanupState;
-use layerfs_persistence::Handles;
+use layerfs_persistence::SqliteHandles;
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage};
 use model::{assert_same, Flat, Model};
 use mounted::{mount_entry, Harness, COMMAND};
@@ -274,18 +274,18 @@ impl Fx {
     /// two read-only sessions, one Store.
     fn wrapped(
         label: &str,
-        history: impl FnOnce(Arc<Handles>, &Path) -> Arc<dyn HistoryCatalog>,
+        history: impl FnOnce(Arc<SqliteHandles>, &Path) -> Arc<dyn HistoryCatalog>,
     ) -> Self {
         let fixture = Self::fixture(label);
         let config = || fixture.config.clone();
         let handles = Arc::new(
-            Handles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap(),
+            SqliteHandles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap(),
         );
         let writer: Arc<dyn PackPersistence> = handles.storage.clone();
         let history = history(handles, &fixture.config.path);
         let reader_config = fixture.config.clone();
         let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
-            let read = Handles::open_read_only(
+            let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,
                 installed::CURSOR,
@@ -1012,7 +1012,7 @@ fn fp32_unknown_commit_custody_is_forced_only_when_relinquished_and_stays_unknow
     });
     // The receipt is not settled by a read: an independent session of the
     // Store sees the candidate published, and the receipt still says Unknown.
-    let observer = Handles::open_read_only(
+    let observer = SqliteHandles::open_read_only(
         fx.fixture.config.clone(),
         installed::BINDING,
         installed::CURSOR,

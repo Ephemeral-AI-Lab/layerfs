@@ -6,7 +6,7 @@ use layerfs_content::{
     read_all, FilesystemRead, LogicalPath, ObjectId,
 };
 use layerfs_history::{HistoryCatalog, LayerStackId};
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{Reader, Storage};
 use layerfs_telemetry::timer::Timing;
 use sha2::{Digest, Sha256};
@@ -170,7 +170,7 @@ fn verify_files(
         for _ in 0..VERIFY_WORKERS {
             let queue = &queue;
             workers.push(scope.spawn(move || -> Result<(u64, u64, u64), String> {
-                let handles=Handles::open_read_only(configs.clone(),b"layerfs-bench-pro",[0x28;32]).map_err(|e|e.to_string())?;
+                let handles=SqliteHandles::open_read_only(configs.clone(),b"layerfs-bench-pro",[0x28;32]).map_err(|e|e.to_string())?;
                 let storage=Storage::new(handles.storage.clone()).map_err(|e|e.to_string())?;
                 let provider = storage.reader().map_err(|e|e.to_string())?;
                 let mut attributes = AttributeReadWork::default();
@@ -258,8 +258,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = PersistenceConfig::sqlite(&args[1]).with_sqlite_profile(selected);
     // Provisioning order: a writable opener establishes missing WAL sidecars
     // before the independent read set. It performs no logical mutation.
-    let writer = Handles::open_writable(config.clone(), b"layerfs-bench-pro", cursor)?;
-    let handles = Handles::open_read_only(config.clone(), b"layerfs-bench-pro", cursor)?;
+    let writer = SqliteHandles::open_writable(config.clone(), b"layerfs-bench-pro", cursor)?;
+    let handles = SqliteHandles::open_read_only(config.clone(), b"layerfs-bench-pro", cursor)?;
     let history = &handles.history;
     let record = history
         .layer_stack(LayerStackId::from_authority(stack))?

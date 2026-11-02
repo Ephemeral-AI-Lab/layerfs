@@ -9,7 +9,7 @@
 use layerfs_content::{filesystem::root::FilesystemRootId, read_all, FilesystemRead, LogicalPath};
 use layerfs_history::{BranchId, HistoryCatalog, HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{
-    PersistenceConfig, PostgresHandles, PostgresSelection, SqlitePersistenceProfile,
+    PersistenceConfig, PostgresHandles, PostgresSelection, SqlitePersistenceProfile, StoreSelection,
 };
 use layerfs_project::store::{
     projects, AddRequest, AddedProject, CreateRequest, InitError, ProjectApi,
@@ -73,7 +73,7 @@ fn source(root: &Path) -> PathBuf {
     source
 }
 
-fn add(store: PersistenceConfig, source: &Path, name: &str) -> Result<AddedProject, InitError> {
+fn add(store: StoreSelection, source: &Path, name: &str) -> Result<AddedProject, InitError> {
     let request = AddRequest {
         source: source.to_path_buf(),
         store,
@@ -127,7 +127,10 @@ fn a_folder_inits_into_postgresql_with_the_root_sqlite_gives() {
 
     let file = scratch.path.join("store.sqlite");
     let sqlite = || {
-        PersistenceConfig::sqlite(&file).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
+        StoreSelection::Sqlite(
+            PersistenceConfig::sqlite(&file)
+                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        )
     };
     api.create_store(CreateRequest {
         store: sqlite(),
@@ -138,7 +141,7 @@ fn a_folder_inits_into_postgresql_with_the_root_sqlite_gives() {
     let on_sqlite = add(sqlite(), &source, "app").unwrap();
 
     let selection = PostgresSelection::new(&url, &scratch.schema);
-    let postgresql = || PersistenceConfig::postgresql(selection.clone());
+    let postgresql = || StoreSelection::Postgres(selection.clone());
     // No schema yet: an add is refused before anything is scanned.
     assert!(matches!(
         add(postgresql(), &source, "app"),

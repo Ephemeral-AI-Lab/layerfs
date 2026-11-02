@@ -179,7 +179,7 @@ the Stores (`AGENTS.md`, dsh Live on Windows).
 
 `sealed.sqlite` is the Store as Project Init builds it: Init scans the source
 folder into a new Store in `<home>/<project>/sealed.sqlite`, publishes the
-first commit, then seals it (`Handles::seal()`: finish the save, fold the
+first commit, then seals it (`SqliteHandles::seal()`: finish the save, fold the
 write-ahead log into the main file, close it). The result is one closed,
 self-contained file. Init then copies it into the project's volume as
 `global/store.sqlite` (`install_local`), the live Store every later commit

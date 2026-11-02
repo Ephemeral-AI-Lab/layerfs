@@ -6,7 +6,7 @@
 //! expires and records that it did; the test's `Hold` releases it when
 //! dropped, on every path including a panic.
 use layerfs_history::*;
-use layerfs_persistence::Handles;
+use layerfs_persistence::SqliteHandles;
 use std::{
     sync::{Arc, Condvar, Mutex, MutexGuard},
     time::{Duration, Instant},
@@ -60,7 +60,7 @@ impl Shared {
 }
 /// The real catalog with one gated publication.
 pub struct GatedHistory {
-    pub handles: Arc<Handles>,
+    pub handles: Arc<SqliteHandles>,
     point: Point,
     shared: Arc<Shared>,
 }
@@ -68,7 +68,7 @@ pub struct GatedHistory {
 pub struct Hold(Arc<Shared>);
 /// Wraps `handles`' catalog. `limit` bounds how long the Commit thread stays
 /// held if nothing releases it.
-pub fn gated(handles: Arc<Handles>, point: Point, limit: Duration) -> (GatedHistory, Hold) {
+pub fn gated(handles: Arc<SqliteHandles>, point: Point, limit: Duration) -> (GatedHistory, Hold) {
     let shared = Arc::new(Shared {
         state: Mutex::new(State {
             armed: true,

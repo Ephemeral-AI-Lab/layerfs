@@ -882,7 +882,7 @@ fn reuse() {
         panic!("manifest");
     };
     let manifest = StoreManifest::decode(manifest).unwrap();
-    let handles = layerfs_persistence::Handles::open_read_only(
+    let handles = layerfs_persistence::SqliteHandles::open_read_only(
         PersistenceConfig::sqlite(std::env::var_os("LFS354_STORE").unwrap())
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         &manifest.binding,

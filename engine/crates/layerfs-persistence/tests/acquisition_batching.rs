@@ -4,7 +4,7 @@ mod support;
 use layerfs_content::{inode_leaf::InodeKind, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
 };
 use layerfs_storage::{port::acquisition::*, StoragePolicy};
 use support::Temp;
@@ -20,8 +20,8 @@ fn meta(mode: u32) -> layerfs_content::filesystem::attributes::PortableMetadata 
 fn object(label: &[u8]) -> ObjectId {
     ObjectId::for_bytes(label)
 }
-fn create(temp: &Temp, profile: SqlitePersistenceProfile) -> Handles {
-    Handles::create(
+fn create(temp: &Temp, profile: SqlitePersistenceProfile) -> SqliteHandles {
+    SqliteHandles::create(
         PersistenceConfig::sqlite(temp.join("store.sqlite"))
             .with_sqlite_profile(profile)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),
@@ -34,7 +34,7 @@ fn create(temp: &Temp, profile: SqlitePersistenceProfile) -> Handles {
     )
     .unwrap()
 }
-fn begin(handles: &Handles) -> Owner {
+fn begin(handles: &SqliteHandles) -> Owner {
     handles
         .acquisition
         .begin(&Begin {

@@ -26,7 +26,7 @@ and a correlated execution profile on the product SQLite build.
 | Fact | Source | Consequence |
 | --- | --- | --- |
 | `init(&Storage, &dyn HistoryCatalog, InitRequest, timer)`; `Storage` wraps `Arc<dyn PackPersistence>` | [init.rs](../../../crates/layerfs-project/src/import/init.rs), [persistence port](../../../crates/layerfs-storage/src/port/persistence.rs) | Neither input exposes mutable operation state. A capability must be added explicitly. |
-| `Handles { storage, history }` share one `Arc<Session>`: one connection behind a mutex taken with `try_lock` | [handles.rs](../../../crates/layerfs-persistence/src/store/handles.rs), [transaction.rs](../../../crates/layerfs-persistence/src/backend/sqlite/transaction.rs) | A third handle over the same Session needs no new database or connection. Cross-thread overlap is the existing one-attempt `Busy`, never a wait. |
+| `SqliteHandles { storage, history }` share one `Arc<Session>`: one connection behind a mutex taken with `try_lock` | [handles.rs](../../../crates/layerfs-persistence/src/store/handles.rs), [transaction.rs](../../../crates/layerfs-persistence/src/backend/sqlite/transaction.rs) | A third handle over the same Session needs no new database or connection. Cross-thread overlap is the existing one-attempt `Busy`, never a wait. |
 | `Session::run(writable, body)` is one `BEGIN [IMMEDIATE]`/`COMMIT` attempt; an uncertain outcome quarantines the Session | same | Every acquisition unit is one short transaction. Nothing spans construction, a Save or host I/O. |
 | Open validates `application_id`, `user_version` in {1,2,3}, the exact table set, and `history_meta.schema_source`/`schema_definition` against the compiled scripts | [schema.rs](../../../crates/layerfs-persistence/src/backend/sqlite/schema.rs) | Adding tables to an existing version breaks every existing Store. Compatibility needs new versions (section 6). |
 | `temp_store=2` (MEMORY) is part of the checked profile | [profile.rs](../../../crates/layerfs-persistence/src/backend/sqlite/profile.rs) | TEMP tables are resident. Working rows are ordinary tables in the main database. |
@@ -39,7 +39,7 @@ and a correlated execution profile on the product SQLite build.
 ```text
 layerfs-project ──uses──▶ layerfs-storage::port::acquisition   (trait + typed rows, no SQL)
 layerfs-persistence ──implements──▶ the same port              (SQL, Session, statements)
-host application ──composes──▶ Handles { storage, history, acquisition }
+host application ──composes──▶ SqliteHandles { storage, history, acquisition }
 ```
 
 - **Port home:** `layerfs-storage/src/port/acquisition/`, beside the pack port.
@@ -47,14 +47,14 @@ host application ──composes──▶ Handles { storage, history, acquisition
   an immutable-object contract that remote and test providers implement, and
   mutable operation state does not belong in it.
 - **Provider:** `layerfs-persistence` adds `AcquisitionProvider { session }` and
-  a third public field `Handles::acquisition`. It is constructed by the same
+  a third public field `SqliteHandles::acquisition`. It is constructed by the same
   explicit `create`/`open_writable` that builds the other two handles. There is
   no per-Init open, attach or schema statement.
 - **Caller:** `InitRequest` gains `acquisition: &dyn Acquisition`. In A3 this
   **replaces** `scratch_parent`; until then both shapes do not coexist in one
   release of the type. This is an explicit public-contract change of
   `InitRequest`. `init`'s signature, `Initialized`, canonical formats and the
-  Store policy are unchanged. A host that already holds `Handles` passes
+  Store policy are unchanged. A host that already holds `SqliteHandles` passes
   `&handles.acquisition`; no caller creates a Store per operation.
 - **Dependency edges:** none added. Project → Storage and Persistence → Storage
   exist. Project → Persistence, Project → rusqlite and Persistence → Project

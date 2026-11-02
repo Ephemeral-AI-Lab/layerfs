@@ -1072,7 +1072,7 @@ plus the index pages it touched: an estimated 100–300 MiB, against a Store of
 **How:**
 1. **Quiesce** at the end of consolidation, when nothing is mounted anyway. Long-
    lived Sandboxes may stay, empty.
-2. **Seal.** `Handles::seal()` checkpoints the WAL into the main file and closes
+2. **Seal.** `SqliteHandles::seal()` checkpoints the WAL into the main file and closes
    the Store. The WAL is kept small during the range by SQLite's automatic
    checkpoints, so the seal is short.
 3. **Copy the new blocks.** Read the file in blocks (4 KiB pages grouped into

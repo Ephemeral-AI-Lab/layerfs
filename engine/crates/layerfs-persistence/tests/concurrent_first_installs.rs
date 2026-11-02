@@ -5,7 +5,7 @@
 mod support;
 use layerfs_content::{AdvisoryPredecessors, FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{Storage, StoragePolicy};
 use std::{path::Path, sync::mpsc, time::Duration};
 
@@ -86,9 +86,9 @@ fn writer(contents: &[Vec<Vec<u8>>], b: bool) -> Vec<FinalizedObject> {
 fn two_writers_saving_the_same_new_content_both_complete() {
     let temp = support::Temp::new("f036-concurrent-installs");
     let path = temp.join("store.sqlite");
-    let first =
-        Handles::create(config(&path), StoragePolicy::frozen_default(), &authority()).unwrap();
-    let second = Handles::open_writable(
+    let first = SqliteHandles::create(config(&path), StoragePolicy::frozen_default(), &authority())
+        .unwrap();
+    let second = SqliteHandles::open_writable(
         config(&path),
         &authority().binding_key,
         authority().cursor_key,

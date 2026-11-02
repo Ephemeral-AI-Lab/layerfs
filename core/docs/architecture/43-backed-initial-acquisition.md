@@ -21,7 +21,7 @@ policy, order, serials and the published root are unchanged.
 
 ## Backing and placement
 
-The host passes the Store's own provider (`Handles::acquisition`) or any other
+The host passes the Store's own provider (`SqliteHandles::acquisition`) or any other
 implementation of the port. The provider requires a Store created with the
 acquisition tables; a Store without them answers every unit with
 `BackendUnavailable`, which Init returns as
