@@ -36,11 +36,15 @@ pub fn call(
         )
     })?;
     let _ = stream.set_nodelay(true);
-    let request = SdkValue::map([
+    let mut request = SdkValue::map([
         ("secret", SdkValue::text(&endpoint.secret)),
         ("op", SdkValue::text(op)),
         ("args", args),
     ]);
+    // the caller's home id: the worker's root has none of its own (O33)
+    if let Some(id) = crate::home::guest::current_id() {
+        request = crate::home::with_field(request, "home_id", SdkValue::Text(id));
+    }
     write_frame(&mut stream, &request).map_err(|error| {
         refused(
             "Unknown",

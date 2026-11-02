@@ -1,6 +1,7 @@
 //! The home, the control center (H §7.8): `layerfs.json`, `layerfs.lock`,
 //! `machine/`, `store/`, `backup/`, `trace/` and `log/`. Only host
 //! processes read or write it; guests never see it (§7.7).
+pub(crate) mod guest;
 mod import_env;
 mod layout;
 pub mod lock;

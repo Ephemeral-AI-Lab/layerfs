@@ -39,7 +39,8 @@ const OWNED: [&str; 7] = [
 ];
 
 /// The home ready for 2.0 calls: created when empty, converted once when it
-/// is a 1.1.0 home. Answers its `layerfs.json`.
+/// is a 1.1.0 home. Answers its `layerfs.json`. A worker's root is not a
+/// home: it answers the id its caller sent, and nothing is written.
 pub fn open(home: &Path) -> Result<HomeFile> {
     open_from(home, Path::new(super::place::DOCKER_VOLUMES))
 }
@@ -47,6 +48,15 @@ pub fn open(home: &Path) -> Result<HomeFile> {
 /// [`open`], with a 1.1.0 home's Docker volumes read from `volumes` (1.1.0's
 /// `volumes` setting; a rootless Docker keeps them elsewhere).
 pub fn open_from(home: &Path, volumes: &Path) -> Result<HomeFile> {
+    if super::guest::is_root(home) {
+        return super::guest::file(home);
+    }
+    let file = ready(home, volumes)?;
+    super::guest::opened(&file.id);
+    Ok(file)
+}
+
+fn ready(home: &Path, volumes: &Path) -> Result<HomeFile> {
     match detect(home)? {
         Layout::Current(file) => Ok(file),
         Layout::Empty | Layout::Old => {

@@ -6,6 +6,10 @@
 //! (the machine's data disk), never a path the caller sends. A wrong secret
 //! is refused before anything runs. Answers are `{ value }` or
 //! `{ refused }`, after any `{ event }` frames.
+//!
+//! A request may carry `home_id`, the caller's home id: the root is not a
+//! home and has no id of its own (O33), so host code that asks for one
+//! gets the caller's, and the root is never converted or written as a home.
 use super::frame::{read_frame, write_frame};
 use crate::host::outcome::{refused, Outcome};
 use layerfs_bridge::control::SdkValue;
@@ -33,6 +37,7 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
             .create(&root)?;
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700))?;
     }
+    crate::home::guest::serve_root(&root);
     let secret = Arc::new(secret);
     let root = Arc::new(root);
     let served = Arc::new(AtomicU64::new(0));
@@ -79,6 +84,7 @@ fn answer(mut stream: TcpStream, secret: &str, root: &Path) -> bool {
         _ => return false,
     };
     let _busy = super::idle::Busy::start();
+    let _home = crate::home::guest::sent(request.get_text("home_id"));
     let outcome = if !same(request.get_text("secret").unwrap_or(""), secret) {
         Err(refused("Denied", "the worker's secret does not match"))
     } else {
