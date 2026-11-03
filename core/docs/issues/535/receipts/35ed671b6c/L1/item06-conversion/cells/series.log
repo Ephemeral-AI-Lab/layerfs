@@ -1,0 +1,74 @@
+2026-11-03T09:09:25Z start native sqlite C01
+C01 native sqlite PASS  timed exec 1617.265 ms
+2026-11-03T09:09:31Z end native sqlite C01 rc=0
+2026-11-03T09:09:31Z start native sqlite C02
+C02 native sqlite PASS  timed exec 6884.639 ms
+2026-11-03T09:09:48Z end native sqlite C02 rc=0
+2026-11-03T09:09:48Z start native sqlite C03
+C03 native sqlite PASS  timed exec 3108.072 ms
+2026-11-03T09:09:55Z end native sqlite C03 rc=0
+2026-11-03T09:09:55Z start native sqlite C04
+C04 native sqlite PASS  timed exec 4263.495 ms
+2026-11-03T09:10:05Z end native sqlite C04 rc=0
+2026-11-03T09:10:05Z start native sqlite C05
+C05 native sqlite PASS  timed exec 4638.584 ms
+2026-11-03T09:10:16Z end native sqlite C05 rc=0
+2026-11-03T09:10:16Z start native sqlite C06
+C06 native sqlite PASS  timed exec 1779.088 ms
+2026-11-03T09:10:28Z end native sqlite C06 rc=0
+2026-11-03T09:10:28Z start native sqlite C07
+C07 native sqlite PASS  timed exec 3533.898 ms
+2026-11-03T09:10:52Z end native sqlite C07 rc=0
+2026-11-03T09:10:52Z start native sqlite C08
+C08 native sqlite PASS  timed exec 1784.611 ms
+2026-11-03T09:11:05Z end native sqlite C08 rc=0
+2026-11-03T09:11:05Z start native sqlite C09
+C09 native sqlite PASS  timed exec 86.133 ms
+2026-11-03T09:11:16Z end native sqlite C09 rc=0
+2026-11-03T09:11:16Z start native sqlite C10
+C10 native sqlite PASS  timed exec 1848.804 ms
+2026-11-03T09:11:33Z end native sqlite C10 rc=0
+2026-11-03T09:11:33Z start native sqlite C11
+C11 native sqlite PASS  timed exec 708.204 ms
+2026-11-03T09:11:46Z end native sqlite C11 rc=0
+2026-11-03T09:11:46Z start native sqlite C12
+C12 native sqlite PASS  timed exec 786.793 ms
+2026-11-03T09:11:49Z end native sqlite C12 rc=0
+SERIES DONE native sqlite
+2026-11-03T09:11:49Z start docker sqlite C01
+C01 docker sqlite PASS  timed exec 685.648 ms
+2026-11-03T09:11:55Z end docker sqlite C01 rc=0
+2026-11-03T09:11:55Z start docker sqlite C02
+C02 docker sqlite PASS  timed exec 1393.075 ms
+2026-11-03T09:12:03Z end docker sqlite C02 rc=0
+2026-11-03T09:12:03Z start docker sqlite C03
+C03 docker sqlite PASS  timed exec 1145.477 ms
+2026-11-03T09:12:09Z end docker sqlite C03 rc=0
+2026-11-03T09:12:09Z start docker sqlite C04
+C04 docker sqlite PASS  timed exec 1090.064 ms
+2026-11-03T09:12:15Z end docker sqlite C04 rc=0
+2026-11-03T09:12:15Z start docker sqlite C05
+C05 docker sqlite PASS  timed exec 1086.073 ms
+2026-11-03T09:12:22Z end docker sqlite C05 rc=0
+2026-11-03T09:12:22Z start docker sqlite C06
+C06 docker sqlite PASS  timed exec 1112.127 ms
+2026-11-03T09:12:33Z end docker sqlite C06 rc=0
+2026-11-03T09:12:33Z start docker sqlite C07
+C07 docker sqlite PASS  timed exec 2249.283 ms
+2026-11-03T09:12:52Z end docker sqlite C07 rc=0
+2026-11-03T09:12:52Z start docker sqlite C08
+C08 docker sqlite PASS  timed exec 1109.973 ms
+2026-11-03T09:13:03Z end docker sqlite C08 rc=0
+2026-11-03T09:13:03Z start docker sqlite C09
+C09 docker sqlite PASS  timed exec 151.296 ms
+2026-11-03T09:13:14Z end docker sqlite C09 rc=0
+2026-11-03T09:13:14Z start docker sqlite C10
+C10 docker sqlite PASS  timed exec 1213.326 ms
+2026-11-03T09:13:27Z end docker sqlite C10 rc=0
+2026-11-03T09:13:27Z start docker sqlite C11
+C11 docker sqlite PASS  timed exec 303.494 ms
+2026-11-03T09:13:39Z end docker sqlite C11 rc=0
+2026-11-03T09:13:39Z start docker sqlite C12
+C12 docker sqlite PASS  timed exec 437.887 ms
+2026-11-03T09:13:44Z end docker sqlite C12 rc=0
+SERIES DONE docker sqlite

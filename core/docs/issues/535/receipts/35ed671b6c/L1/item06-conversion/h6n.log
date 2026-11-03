@@ -1,0 +1,48 @@
+# H6N: a 2.0 home with a native Sandbox left running (the 2.0 CLI run in its own session, so the Sandbox's process outlives this command; in H6R the native Sandbox sr6 had ended before the upgrade — its 2.0 close answered was_gone — so H6R's refusal named only sdr7). Daemon link: <scratch>/daemon-link2 -> the 2.0 daemon.
+$ [2.0] import-env
+{"written":[{"setting":"LAYERFS_DAEMON","what":"/tmp/lfs535l1-h6n.Oa2s/machine/native/record.json daemon"}],"kept":[],"commands":[],"ignored":[]}
+
+$ [2.0] layerfs store create r8
+{"name":"r8","kind":"sqlite","machine":"native","profile":"disposable","created":1793696804988,"sqlite":"3.53.2","projects":[]}
+ (exit )
+$ [2.0] layerfs project init r8/p <scratch>/data12
+{"project":"r8/p","store":"r8","name":"p","kind":"sqlite","machine":"native","created":1793696805656,"layer":"32a32911391bb1af832e13efc90aec342492fc8d3d988edb478e22d7612f1d8576","root":"ca5d2b35b0d5b195163294a8e5a4e4685ac454a9bffcd7598fa4f2bb5ece35b8"}
+ (exit )
+$ [2.0] layerfs branch fork r8/p lane main
+{"kind":"Forked","branch":"lane","base":"32a32911391bb1af832e13efc90aec342492fc8d3d988edb478e22d7612f1d8576","head":null}
+ (exit )
+$ [2.0] layerfs sandbox create r8/p sr8 native
+{"name":"sr8","project":"r8/p","machine":"native","state":"running","created":1793696805715,"pid":44892,"id":"1","platform":"mac","runtime":"native","image":"local"}
+ (exit )
+(exit codes above are blank: PIPESTATUS inside the setsid wrapper; each answer is shown)
+-- in a later command: pid 44892 alive? 
+daemon-link2 -> the 35ed daemon (in-place upgrade)
+layout: {"layout":2,"id":"0232cea0aea42662d7f7d64e4a78b224"}
+$ [35ed] layerfs store list
+{"code":"InUse","message":"/tmp/lfs535l1-h6n.Oa2s has layout 2; this build converts it to layout 3 once nothing in it is live: sandbox sr8 runs on machine native; close it with the build that started it (`layerfs sandbox close sr8`)","detail":{"related":[{"kind":"sandbox","name":"sr8","why":"runs on machine native; close it with the build that started it (`layerfs sandbox close sr8`)"}]}}
+ (exit )
+$ [35ed] layerfs doctor --text
+1 error(s), 1 warning(s)
+error    sandbox sr8: sandbox sr8 runs on machine native: it refuses this home's conversion to layout 3
+         fix: close it with the build that started it (`layerfs sandbox close sr8`)
+warning  home /tmp/lfs535l1-h6n.Oa2s: this home has layout 2; it is converted to layout 3 once nothing in it is live
+         fix: end what refuses the conversion; the next call converts the home
+ (exit )
+layout: {"layout":2,"id":"0232cea0aea42662d7f7d64e4a78b224"}
+$ [2.0] layerfs sandbox close sr8
+{"kind":"Closed","sandbox":"1","unknown":[],"closed":"sr8"}
+ (exit 0)
+$ [35ed] layerfs sandbox list
+{"items":[],"next_page_pos":null}
+ (exit )
+layout: {"layout":3,"id":"0232cea0aea42662d7f7d64e4a78b224"}
+--- log/migration-2.json
+{"from":2,"at":1793696816160,"sandboxes":[],"reclaimed":[],"versioned":4,"removed":["/tmp/lfs535l1-h6n.Oa2s/machine/native/sandbox","/tmp/lfs535l1-h6n.Oa2s/store/r8/project/p/sandboxes","/tmp/lfs535l1-h6n.Oa2s/machine/native/sandbox-root -> /tmp/lfs535l1-h6n.Oa2s/machine/native/run"],"notes":[]}
+
+$ [35ed] layerfs file list r8/p lane /
+{"kind":"ok","snapshot":"lane@a32911391bb1","root":"ca5d2b35b0d5b195163294a8e5a4e4685ac454a9bffcd7598fa4f2bb5ece35b8","path":"/","items":[{"name":"a.txt","path":"/a.txt","type":"file","inode":2},{"name":"r1","path":"/r1","type":"file","inode":3},{"name":"r2","path":"/r2","type":"file","inode":4},{"name":"r3","path":"/r3","type":"file","inode":5}],"has_more":false,"next_page_pos":null}
+ (exit )
+$ [35ed] layerfs doctor --text
+ok: nothing to report
+ (exit )
+(note: the blank '(exit )' values in this file are the lane's zsh helper reading bash's PIPESTATUS; each answer is shown in full above it)

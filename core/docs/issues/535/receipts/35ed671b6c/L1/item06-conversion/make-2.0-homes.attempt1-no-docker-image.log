@@ -1,0 +1,185 @@
+== home /tmp/lfs535l1-h6.3Q1P
+$ [2.0] import-env
+{"written":[{"setting":"LAYERFS_DAEMON","what":"/tmp/lfs535l1-h6.3Q1P/machine/native/record.json daemon"}],"kept":[],"commands":[],"ignored":[]}
+
+== home /tmp/lfs535l1-h6r.YVEv
+$ [2.0] import-env
+{"written":[{"setting":"LAYERFS_DAEMON","what":"/tmp/lfs535l1-h6r.YVEv/machine/native/record.json daemon"}],"kept":[],"commands":[],"ignored":[]}
+
+== H6 native part
+$ [2.0] layerfs store create n6
+{"name":"n6","kind":"sqlite","machine":"native","profile":"disposable","created":1793696603191,"sqlite":"3.53.2","projects":[]}
+ (exit 0)
+$ [2.0] layerfs project init n6/p <scratch>/data12
+{"project":"n6/p","store":"n6","name":"p","kind":"sqlite","machine":"native","created":1793696603845,"layer":"3293cb30feeac4f317d0e84d89d8d43ffb851cc8e3bd66a784d9844f5c29d14a65","root":"4291cc0ed324b9e08847827589e754f5ce3d616c3f9ee1b973c2585938a3a233"}
+ (exit 0)
+$ [2.0] layerfs branch fork n6/p lane main
+{"kind":"Forked","branch":"lane","base":"3293cb30feeac4f317d0e84d89d8d43ffb851cc8e3bd66a784d9844f5c29d14a65","head":null}
+ (exit 0)
+$ [2.0] layerfs sandbox create n6/p sn6 native
+{"name":"sn6","project":"n6/p","machine":"native","state":"running","created":1793696603883,"pid":42498,"id":"1","platform":"mac","runtime":"native","image":"local"}
+ (exit 0)
+$ [2.0] layerfs workspace mount sn6 lane
+{"kind":"Mounted","path":"/tmp/lfs535l1-h6.3Q1P/machine/native/sandbox-root/lfs-2f3f2250-n6.p-1/workspaces/1","workspace":"1e17f23b35e6fbfbd4a21f52fd15e392f9259728fafa83655132b69af8de4e6d","namespace":1,"branch":"lane","base":null,"base_layer":"3293cb30feeac4f317d0e84d89d8d43ffb851cc8e3bd66a784d9844f5c29d14a65","root":"4291cc0ed324b9e08847827589e754f5ce3d616c3f9ee1b973c2585938a3a233","sandbox":"1","container":"lfs-2f3f2250-n6.p-1","image":"local","platform":"mac","runtime":"native","ws":"sn6:/tmp/lfs535l1-h6.3Q1P/machine/native/sandbox-root/lfs-2f3f2250-n6.p-1/workspaces/1"}
+
+$ [2.0] layerfs workspace exec sn6:/tmp/lfs535l1-h6.3Q1P/machine/native/sandbox-root/lfs-2f3f2250-n6.p-1/workspaces/1 echo two-oh-native > v20.txt --message 2.0 write
+{"kind":"exit:0","exit_code":0,"stdout":"","stderr":"","message":"2.0 write","truncated":false}
+ (exit 0)
+$ [2.0] layerfs workspace commit sn6:/tmp/lfs535l1-h6.3Q1P/machine/native/sandbox-root/lfs-2f3f2250-n6.p-1/workspaces/1 --message 2.0 commit
+{"kind":"Committed","head":"1223bd2ad08b877d3f0a70ebf9d697d3ccd3865a4664625b12c5b0673ac371bb87","commit":{"id":"1223bd2ad08b877d3f0a70ebf9d697d3ccd3865a4664625b12c5b0673ac371bb87","branch":null,"parent":null,"second_parent":null,"base":"3293cb30feeac4f317d0e84d89d8d43ffb851cc8e3bd66a784d9844f5c29d14a65","root":"8012a8e04e67557acb32ef28ddb85ab63e60fd9824c5359c524d158428252381","via":"exec","message":"2.0 commit","merged_from":null,"time":1793696606706,"logical":12582932,"new_canonical":808,"new_stored":376,"new_metadata":325,"displaced":null,"lww":[],"lww_truncated":false},"displaced_head":null,"merged":null,"lww":[],"lww_truncated":false}
+ (exit 0)
+$ [2.0] layerfs workspace unmount sn6:/tmp/lfs535l1-h6.3Q1P/machine/native/sandbox-root/lfs-2f3f2250-n6.p-1/workspaces/1
+{"kind":"Unmounted"}
+ (exit 0)
+$ [2.0] layerfs file read n6/p lane /v20.txt
+{"kind":"ok","snapshot":"lane@23bd2ad08b87","root":"8012a8e04e67557acb32ef28ddb85ab63e60fd9824c5359c524d158428252381","path":"/v20.txt","text":"two-oh-native\n","start_line":1,"end_line":1,"line_truncated":false,"truncated":false,"next_line":null,"size":14}
+ (exit 0)
+$ [2.0] layerfs sandbox close sn6
+{"kind":"Closed","sandbox":"1","unknown":[],"closed":"sn6"}
+ (exit 0)
+== H6 docker part
+$ [2.0] layerfs store create d6
+{"name":"d6","kind":"sqlite","machine":"native","profile":"disposable","created":1793696606864,"sqlite":"3.53.2","projects":[]}
+ (exit 0)
+$ [2.0] layerfs project init d6/p <scratch>/data12
+{"project":"d6/p","store":"d6","name":"p","kind":"sqlite","machine":"native","created":1793696607731,"layer":"3263a359247a993c364620f42b3463f38f507a9b98870bba4da4891a03949775c2","root":"d072409c20c733b69f7d50be02b16721ae203be90544e316417b6d68b35777fe"}
+ (exit 0)
+$ [2.0] layerfs branch fork d6/p lane main
+{"kind":"Forked","branch":"lane","base":"3263a359247a993c364620f42b3463f38f507a9b98870bba4da4891a03949775c2","head":null}
+ (exit 0)
+$ [2.0] layerfs store move d6 docker
+{"code":"InvalidInput","message":"store move, check: the docker machine's worker container needs an image","detail":{"missing":[],"vm_exists":false,"phase":"check"}}
+ (exit 125)
+$ [2.0] layerfs sandbox create d6/p sd6 docker
+{"code":"Unsupported","message":"Store d6 is on machine native; a Sandbox of d6/p runs there (`store move` moves the Store)","detail":null}
+ (exit 125)
+$ [2.0] layerfs workspace mount sd6 lane
+{"code":"NoSuchSandbox","message":"no Sandbox named sd6; `sandbox.create(project, name, machine)` starts one","detail":null}
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys;d=json.load(sys.stdin);print(d.get('ws') or (sys.argv[1]+':'+d['path']))
+                                                                                 ~^^^^^^^^
+KeyError: 'path'
+no ws
+$ [2.0] layerfs sandbox close sd6
+{"code":"NoSuchSandbox","message":"no Sandbox named sd6; `sandbox.create(project, name, machine)` starts one","detail":null}
+ (exit 125)
+$ [2.0] layerfs sandbox list
+{"items":[],"next_page_pos":null}
+ (exit 0)
+$ [2.0] layerfs store list
+{"items":[{"name":"d6","kind":"sqlite","machine":"native","profile":"disposable","created":1793696606864,"sqlite":"3.53.2","in_progress":null,"projects":["p"]},{"name":"n6","kind":"sqlite","machine":"native","profile":"disposable","created":1793696603191,"sqlite":"3.53.2","projects":["p"]}]}
+ (exit 0)
+== H6R: one native and one docker Sandbox left running
+$ [2.0] layerfs store create r6
+{"name":"r6","kind":"sqlite","machine":"native","profile":"disposable","created":1793696607922,"sqlite":"3.53.2","projects":[]}
+ (exit 0)
+$ [2.0] layerfs project init r6/p <scratch>/data12
+{"project":"r6/p","store":"r6","name":"p","kind":"sqlite","machine":"native","created":1793696608695,"layer":"32e2ef2afc879fe75032185d6e71ee0320d559534a0c5f07bbdb57d57170d38fbf","root":"922b424ad322f3d34689b7f6788a3bd3a52c6b428789d723a05efee567d31709"}
+ (exit 0)
+$ [2.0] layerfs branch fork r6/p lane main
+{"kind":"Forked","branch":"lane","base":"32e2ef2afc879fe75032185d6e71ee0320d559534a0c5f07bbdb57d57170d38fbf","head":null}
+ (exit 0)
+$ [2.0] layerfs sandbox create r6/p sr6 native
+{"name":"sr6","project":"r6/p","machine":"native","state":"running","created":1793696608722,"pid":42857,"id":"1","platform":"mac","runtime":"native","image":"local"}
+ (exit 0)
+$ [2.0] layerfs store create dr6
+{"name":"dr6","kind":"sqlite","machine":"native","profile":"disposable","created":1793696608783,"sqlite":"3.53.2","projects":[]}
+ (exit 0)
+$ [2.0] layerfs project init dr6/p <scratch>/data12
+{"project":"dr6/p","store":"dr6","name":"p","kind":"sqlite","machine":"native","created":1793696609419,"layer":"3291007a26f98cd386912082d761b43556cfdfdb541278400fbbc07276735218b0","root":"1661289f02c2de3f0089b1ec8c6287b199df7e1489cb74ac2f335d097fdf8d68"}
+ (exit 0)
+$ [2.0] layerfs branch fork dr6/p lane main
+{"kind":"Forked","branch":"lane","base":"3291007a26f98cd386912082d761b43556cfdfdb541278400fbbc07276735218b0","head":null}
+ (exit 0)
+$ [2.0] layerfs store move dr6 docker
+{"code":"InvalidInput","message":"store move, check: the docker machine's worker container needs an image","detail":{"missing":[],"vm_exists":false,"phase":"check"}}
+ (exit 125)
+$ [2.0] layerfs sandbox create dr6/p sdr6 docker
+{"code":"Unsupported","message":"Store dr6 is on machine native; a Sandbox of dr6/p runs there (`store move` moves the Store)","detail":null}
+ (exit 125)
+$ [2.0] layerfs sandbox list
+{"items":[{"name":"sr6","project":"r6/p","machine":"native","state":"running","created":1793696608722,"pid":42857,"id":"1","platform":"mac","runtime":"native","image":"local"}],"next_page_pos":null}
+ (exit 0)
+== layout of /tmp/lfs535l1-h6.3Q1P
+{"layout":2,"id":"2f3f2250234385ef564cf2d25ed8ff99"}
+
+.
+./layerfs.json
+./layerfs.lock
+./log
+./log/import-env.jsonl
+./log/leases.jsonl
+./machine
+./machine/docker
+./machine/docker/record.json
+./machine/docker/start.lock
+./machine/native
+./machine/native/record.json
+./machine/native/sandbox
+./machine/native/sandbox-root
+./store
+./store/d6
+./store/d6/open
+./store/d6/project
+./store/d6/project/p
+./store/d6/record.json
+./store/d6/store.sqlite
+./store/d6/store.sqlite-shm
+./store/d6/store.sqlite-wal
+./store/n6
+./store/n6/open
+./store/n6/open/42493
+./store/n6/open/42498
+./store/n6/open/42712
+./store/n6/open/42724
+./store/n6/open/42728
+./store/n6/open/42734
+./store/n6/open/42740
+./store/n6/open/42743
+./store/n6/project
+./store/n6/project/p
+./store/n6/record.json
+./store/n6/store.sqlite
+./store/n6/store.sqlite-shm
+./store/n6/store.sqlite-wal
+== layout of /tmp/lfs535l1-h6r.YVEv
+{"layout":2,"id":"52c7944abcebcc60eae6755396ae7013"}
+
+.
+./layerfs.json
+./layerfs.lock
+./log
+./log/import-env.jsonl
+./log/leases.jsonl
+./machine
+./machine/docker
+./machine/docker/record.json
+./machine/docker/start.lock
+./machine/native
+./machine/native/record.json
+./machine/native/sandbox
+./machine/native/sandbox-root
+./machine/native/sandbox-root/lfs-52c7944a-r6.p-1
+./machine/native/sandbox/sr6
+./store
+./store/dr6
+./store/dr6/open
+./store/dr6/project
+./store/dr6/project/p
+./store/dr6/record.json
+./store/dr6/store.sqlite
+./store/dr6/store.sqlite-shm
+./store/dr6/store.sqlite-wal
+./store/r6
+./store/r6/open
+./store/r6/open/42853
+./store/r6/open/42857
+./store/r6/project
+./store/r6/project/p
+./store/r6/record.json
+./store/r6/store.sqlite
+./store/r6/store.sqlite-shm
+./store/r6/store.sqlite-wal
+MAKE-DONE

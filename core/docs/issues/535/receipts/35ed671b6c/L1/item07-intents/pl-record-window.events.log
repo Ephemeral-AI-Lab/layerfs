@@ -1,0 +1,11 @@
+1793696318.036290 begin pull pl-record-window - point=record-window pid=38203
+1793696318.037536 progress {"phase": "check", "done": null, "total": null}
+1793696318.045795 progress {"phase": "snapshot", "done": null, "total": null}
+1793696318.215120 progress {"phase": "send", "done": 0, "total": 12939264}
+1793696321.601676 progress {"phase": "send", "done": 8388608, "total": 12939264}
+1793696323.468969 progress {"phase": "send", "done": 12939264, "total": 12939264}
+1793696323.469539 progress {"phase": "verify", "done": null, "total": null}
+1793696323.625457 progress {"phase": "install", "done": null, "total": null}
+1793696323.626306 progress {"phase": "record", "done": null, "total": null}
+1793696323.626943 SIGKILL record-window: record op.phase=record
+1793696323.627062 SIGKILL record-window: record op.phase=record

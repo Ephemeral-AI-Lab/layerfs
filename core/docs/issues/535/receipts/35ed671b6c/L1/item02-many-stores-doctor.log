@@ -1,0 +1,23 @@
+# item 2 home after many_stores.mjs (Node process exited): doctor
+$ layerfs doctor --text
+0 error(s), 4 warning(s)
+warning  store p1: Store p1 holds a stale lease of process 29811, which ended
+         fix: nothing reads it; delete `store/p1/open/29811` by hand, or the next `layerfs store push`, `store pull` or `store remove` of p1 removes it
+warning  store p2: Store p2 holds a stale lease of process 29811, which ended
+         fix: nothing reads it; delete `store/p2/open/29811` by hand, or the next `layerfs store push`, `store pull` or `store remove` of p2 removes it
+warning  store s1: Store s1 holds a stale lease of process 29811, which ended
+         fix: nothing reads it; delete `store/s1/open/29811` by hand, or the next `layerfs store push`, `store pull` or `store remove` of s1 removes it
+warning  store s2: Store s2 holds a stale lease of process 29811, which ended
+         fix: nothing reads it; delete `store/s2/open/29811` by hand, or the next `layerfs store push`, `store pull` or `store remove` of s2 removes it
+$ ls store/*/open
+/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-ms.YSq6/store/p1/open:
+29811
+
+/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-ms.YSq6/store/p2/open:
+29811
+
+/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-ms.YSq6/store/s1/open:
+29811
+
+/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-ms.YSq6/store/s2/open:
+29811
