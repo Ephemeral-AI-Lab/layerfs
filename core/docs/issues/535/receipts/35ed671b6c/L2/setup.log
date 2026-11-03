@@ -1,0 +1,35 @@
+$ layerfs machine platforms --text
+# at 2026-11-03T08:49:58Z load1 5.98
+host  macos
+
+PLATFORM         HOW        BACKEND     KERNEL  SQLITE      READY  VERSION                                                        DESCRIPTION
+native           built_in   native      nfs     in_process  true   -                                                              this host; Sandboxes run as this user's processes, served over loopback NFS
+docker           built_in   docker      fuse    worker      true   29.5.2                                                         Docker's kernel (Docker Desktop's VM, or the Linux host); Sandboxes run in Docker containers
+apple-container  created    namespaces  fuse    worker      true   container CLI version 1.6.1 (build: release, commit: unspeci)  an Apple container VM (Apple silicon); Sandboxes run in Linux namespaces and a cgroup
+microsandbox     created    namespaces  fuse    worker      true   msb 0.7.11                                                     a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup
+lima             created    namespaces  fuse    worker      true   limactl version 2.2.1                                          a Lima VM (vz); Sandboxes run in Linux namespaces and a cgroup
+firecracker      created    namespaces  fuse    worker      true   limactl version 2.2.1                                          a Firecracker microVM in a nested lima machine; Sandboxes run in Linux namespaces and a cgroup
+ssh              connected  namespaces  fuse    worker      true   OpenSSH_10.2p1, LibreSSL 3.3.6                                 a Linux host over ssh, connected and never created; Sandboxes run in Linux namespaces and a cgroup
+exit 0  wall_ms 319
+
+$ layerfs machine create lfs535l2a apple-container
+# at 2026-11-03T08:49:59Z load1 5.98
+{"name":"lfs535l2a","platform":"apple-container","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":2,"memory":4294967296,"disk":21474836480,"stores":[],"sandboxes":[]}
+exit 0  wall_ms 10047
+
+$ layerfs machine create lfs535l2m microsandbox
+# at 2026-11-03T08:50:09Z load1 6.22
+{"name":"lfs535l2m","platform":"microsandbox","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":2,"memory":4294967296,"disk":21474836480,"stores":[],"sandboxes":[]}
+exit 0  wall_ms 28890
+
+$ layerfs machine connect lfs535l2s 127.0.0.1 --port --identity <scratch>/sshkey --known-hosts <scratch>/known_hosts
+# at 2026-11-03T09:02:25Z load1 10.22
+layerfs: machine.connect: `port` must be a whole number
+exit 2  wall_ms 39
+
+# the connect above had an empty --port (a lane script defect: ssh read the rest of the script's stdin); connected again with the port
+$ layerfs machine connect lfs535l2s 127.0.0.1 --port 63927 --identity <scratch>/sshkey --known-hosts <scratch>/known_hosts
+# at 2026-11-03T09:02:51Z load1 8.49
+{"name":"lfs535l2s","platform":"ssh","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"ssh":{"host":"127.0.0.1","user":"root","port":63927,"identity":"<scratch>/sshkey","known_hosts":"<scratch>/known_hosts","root":"/layerfs/data","host_id":"SHA256:MC0/RpfoMImU4egXpdT+K4egyzxuHCbAAb618xwsOh0"}}
+exit 0  wall_ms 22165
+
