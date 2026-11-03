@@ -386,7 +386,14 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     if op == "backend.daemon.workspace.status" {
         return crate::sandbox::dispatch::backend(op.to_owned(), host);
     }
-    drain(crate::sandbox::dispatch::call(op, host)?, events)
+    let name = host.get_text("sandbox").unwrap_or("").to_owned();
+    let out = drain(crate::sandbox::dispatch::call(op, host)?, events)?;
+    // the caller reaches the new Sandbox's daemon directly where its
+    // machine forwards the port (#535 G4): the answer carries its keys
+    match op {
+        "sandbox.create" => crate::sandbox::direct::with_keys(root, &name, out),
+        _ => Ok(out),
+    }
 }
 
 /// An exec result whose output the host spooled (a stream over 1 MiB):

@@ -7,7 +7,10 @@
 //! Linux; what reopens it is in the same folder. On any other machine the
 //! same call runs in that machine's worker, which keeps the Sandbox's thin
 //! record, keys and Workspaces in `sandbox/<name>/` under its own root
-//! (§6); this home keeps the name, the project and the machine. A Sandbox on `docker` is a
+//! (§6); this home keeps the name, the project and the machine. Where the
+//! home reaches that Sandbox's daemon (`ssh`, `lima` and `docker`, #535 G4,
+//! `direct.rs`) it keeps its keys and Workspace records too, and its
+//! Workspace calls but exec run here. A Sandbox on `docker` is a
 //! container whose image comes from the docker machine's record and travels
 //! with the call (H §7.6, §7.7); a sqlite Store's is started by the docker
 //! machine's worker on every host (G8). Where a call runs is

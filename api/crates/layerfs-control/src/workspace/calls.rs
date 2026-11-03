@@ -1,9 +1,12 @@
-//! The `workspace` family: each call goes to its Sandbox's machine.
+//! The `workspace` family: each call goes to its Sandbox's machine, or,
+//! for a Sandbox whose daemon this host reaches (#535 G4), straight to its
+//! daemon; an exec always runs through the Sandbox's runtime, in its machine.
 use crate::common::context::Context;
 use crate::common::home;
 use crate::common::names::{WorkspaceAt, WorkspaceName, WorkspaceRef};
 use crate::common::outcome::{refused, Outcome};
 use crate::machine::worker::Unreached;
+use crate::sandbox::direct;
 use crate::sandbox::family::sandbox_of;
 use crate::sandbox::route::{on_machine, reach};
 use layerfs_bridge::control::SdkValue;
@@ -27,7 +30,12 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
         if let Some(named) = &named {
             more.push(("name", SdkValue::text(named.as_str())));
         }
-        let mounted = on_machine(context, &record, "workspace.mount", more)?;
+        // a Sandbox whose daemon this host reaches is mounted from here
+        // (#535 G4); every other through its machine
+        let mounted = match direct::forwarded(&record) {
+            true => direct::call(context, &record, "workspace.mount", more)?,
+            false => on_machine(context, &record, "workspace.mount", more)?,
+        };
         let path = mounted.get_text("path").unwrap_or("").to_owned();
         let ws = WorkspaceRef {
             sandbox: name.to_owned(),
@@ -48,6 +56,17 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
     }
     // a path, or a name the Sandbox's side resolves to its path
     let mut more = vec![("path", SdkValue::text(ws.at.as_str()))];
+    let forwarded = direct::forwarded(&record);
+    // an exec runs through the Sandbox's runtime, in its machine, even when
+    // this host reaches its daemon: its directory is checked here, where
+    // its Workspace records are (#535 G4)
+    if forwarded && call == "exec" {
+        let directory = direct::exec_directory(&home, &record, ws.at.as_str())?;
+        more = vec![
+            ("path", SdkValue::text(&directory)),
+            ("directory", SdkValue::Text(directory)),
+        ];
+    }
     let op = match call {
         "exec" => {
             more.push(("command", args.get("command").cloned().unwrap_or_default()));
@@ -75,6 +94,7 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
     };
     // a status starts no machine (P4)
     let out = match call {
+        _ if forwarded && call != "exec" => direct::call(context, &record, op, more),
         "status" => {
             reach(context, &record, op, more, false).unwrap_or_else(|Unreached(why)| Err(why))
         }

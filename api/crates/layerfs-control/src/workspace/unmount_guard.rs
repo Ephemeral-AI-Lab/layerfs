@@ -139,7 +139,13 @@ fn inspect(path: &std::path::Path) -> Result<Option<SdkValue>, SdkRefusal> {
 /// The entries of the Sandbox's `workspace/` folder; none before its first
 /// Workspace.
 fn unmounts(state: &SandboxState) -> Result<Vec<std::io::Result<std::fs::DirEntry>>, SdkRefusal> {
-    match std::fs::read_dir(state.directory.join("workspace")) {
+    unmounts_in(&state.directory)
+}
+/// [`unmounts`] of Sandbox folder `directory`.
+fn unmounts_in(
+    directory: &std::path::Path,
+) -> Result<Vec<std::io::Result<std::fs::DirEntry>>, SdkRefusal> {
+    match std::fs::read_dir(directory.join("workspace")) {
         Ok(entries) => Ok(entries.collect()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(error) => Err(failed(error)),
@@ -163,7 +169,22 @@ pub(crate) fn find(state: &SandboxState, path: &str) -> Result<Option<SdkValue>,
     if let Some(token) = known {
         return inspect(&record(state, token));
     }
-    for entry in unmounts(state)? {
+    find_in(&state.directory, path)
+}
+/// [`check`] in Sandbox folder `directory`, with no live Sandbox: a caller
+/// that sends the Workspace's command to its machine (#535 G4).
+pub(crate) fn check_in(directory: &std::path::Path, path: &str) -> Result<(), SdkRefusal> {
+    if let Some(value) = find_in(directory, path)? {
+        if value.get_text("state") == Some("Unmounted") {
+            return Err(refused("NotMounted", "Workspace already unmounted"));
+        }
+        return result(&value).map(drop);
+    }
+    Ok(())
+}
+/// [`find`] by scanning Sandbox folder `directory`'s unmount records.
+fn find_in(directory: &std::path::Path, path: &str) -> Result<Option<SdkValue>, SdkRefusal> {
+    for entry in unmounts_in(directory)? {
         let entry = entry.map_err(failed)?;
         if entry.path().extension().is_some_and(|ext| ext == "unmount") {
             if let Some(value) = observed(&entry.path())? {

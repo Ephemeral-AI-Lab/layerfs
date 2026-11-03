@@ -217,6 +217,26 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
 - Every machine other than `native` is reached through its worker, `docker`
   on Linux included (its sqlite Stores live in a Docker volume). Checked in
   the terminal pass on a Linux VM.
+- Workspace calls skip the worker where the caller reaches the Sandbox's
+  daemon (#535 G4). On `ssh` and `lima`, `sandbox.create` (through the
+  worker) answers the daemon's port and keys, and the caller forwards the
+  port to its own loopback (`ssh -L`). On `docker` the Sandbox publishes
+  the port on the host's loopback and the caller dials it as it is. The
+  keys go to the home's `sandbox/<name>/control.json` (0600), the forward
+  to its record. `workspace.mount`, `commit`, `unmount`, `status` and
+  `sandbox.get`'s Workspace list then go from the caller straight to the
+  daemon; the Workspace records are in the home's `sandbox/<name>/`. A
+  Branch lookup (mount) or head read (status) on a sqlite Store still goes
+  to the worker as a Store call. `workspace.exec` still goes through the
+  worker: the command runs through the Sandbox's runtime in the machine,
+  and the caller sends the directory its record names. `sandbox.create`
+  and `sandbox.close` go through the worker; a close ends the forward.
+  `apple-container`, `microsandbox` and `firecracker` forward nothing:
+  every call goes through the worker. A forward that failed at create
+  leaves the Sandbox on the worker route (`forward_failed` in the answer).
+  On a stopped machine these calls are `Unavailable`, naming `machine
+  start`; a forward that has ended is `Unavailable` too, naming `machine
+  start` and `sandbox close`.
 
 ## Stores
 

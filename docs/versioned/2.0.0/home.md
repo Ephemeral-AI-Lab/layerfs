@@ -40,9 +40,9 @@ hold a password or a bucket key. They are not settings; see
   machine/native/run/          native Sandboxes' local directories, and their image cache
   sandbox/<name>/
     record.json                v, name, project, machine, backend, route, ..., op?
-    control.json               the Sandbox daemon's keys (0600; native only)
+    control.json               the Sandbox daemon's keys (0600; native, and machines reached directly)
     lock                       the Sandbox lock: its record and Workspace record changes
-    serve.lock                 held by the call that runs the Sandbox (native only)
+    serve.lock                 held by the call that runs the Sandbox (native, and machines reached directly)
     workspace/<id>.json        one per mounted Workspace: v, id, name?, branch, path, created
   store/<name>/
     record.json                kind, machine, profile, backup links
@@ -105,8 +105,15 @@ hold a password or a bucket key. They are not settings; see
   held across a machine or daemon call; the call that runs a native
   Sandbox takes turns on `serve.lock`, a different file. On `native` the side
   that runs the Sandbox adds what reopens its runtime (`daemon`) to the
-  same file, and its daemon keys to `control.json`. `runtime_id` and
-  `daemon` are never shown. The Sandbox's `id` is its name.
+  same file, and its daemon keys to `control.json`. A Sandbox on `ssh`,
+  `lima` or `docker` whose daemon the caller reaches directly (#535 G4)
+  has its keys in `control.json` too, and a `daemon` of `{ forward:
+  { address, machine, pid?, pid_start?, pid_boot? }, name, runtime,
+  platform, image }`: the host loopback address the caller dials and, on
+  `ssh` and `lima`, the `ssh -L` that carries it, named by id, start time
+  and boot. Its Workspace records are then in the home's `workspace/`,
+  not the machine's. `runtime_id` and `daemon` are never shown. The
+  Sandbox's `id` is its name.
 - **`machine/native/run/`** holds each native Sandbox's local directory
   (`<prefix><name>`) and the image cache the namespaces backend unpacks
   once (`images/`). A Sandbox's directory is created by its create and

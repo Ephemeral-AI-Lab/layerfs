@@ -1,6 +1,7 @@
 //! `sandbox.create`: the name claimed under the home lock with the create's
 //! `op` intent (#536 §7.1), the Sandbox started on its machine, and its
 //! result recorded with the intent dropped in one write.
+use super::direct;
 use super::record::{self, SandboxRecord};
 use crate::common::context::Context;
 use crate::common::home::{self, paths};
@@ -92,15 +93,26 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         more.push(("image", SdkValue::text(image)));
     }
     let started = on_machine(context, &record, "sandbox.create", more);
+    // a worker's Sandbox whose daemon this host reaches directly (#535 G4):
+    // its forward opens before the locks are taken
+    let opened = (started.as_ref().ok()).map(|value| direct::open(&home, &record, value));
     let _lock = home::lock::take(&home)?;
     let sandbox = record::lock(&home, name)?;
     // read again: on `native` the Sandbox's own side added to the record
     let record = SandboxRecord::read(&home, name)?.unwrap_or(record);
     match started {
         Ok(value) => {
-            let record = record.started(&value);
+            let mut record = record.started(&value);
+            if let Some(opened) = &opened {
+                record = direct::save(&home, record, opened)?;
+            }
             record.write(&home)?;
-            Ok(record.to_sdk(View::Full))
+            let shown = record.to_sdk(View::Full);
+            // its Workspace calls go through the worker: say why
+            Ok(match opened.and_then(|opened| opened.failed) {
+                Some(why) => home::with_field(shown, "forward_failed", SdkValue::Text(why)),
+                None => shown,
+            })
         }
         // its outcome is not known: the intent stays, uncertain, until
         // `sandbox.close` clears it

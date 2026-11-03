@@ -17,7 +17,7 @@ use crate::sandbox::registry::{lock, random, sandbox, sandbox_live, text, Mount}
 use crate::sandbox::serve::{operation, WORKSPACES};
 use crate::Unmounted;
 use layerfs_bridge::control::{CommitControl, SdkRefusal, SdkValue};
-use layerfs_history::WorkspaceId;
+use layerfs_history::{BranchId, CommitId, WorkspaceId};
 
 /// A mount's `NoSuchSandbox`: `refusal` (its detail kept) with the next
 /// step in its message, which agents read.
@@ -36,6 +36,17 @@ fn no_sandbox(mut refusal: SdkRefusal) -> SdkRefusal {
 /// `Capacity` (full), each naming the calls to make instead. Only the Sandbox's own
 /// guard is taken; its record and count are checked under it.
 pub(crate) fn mount(args: &SdkValue) -> Outcome {
+    mount_with(args, &mut |branch| {
+        crate::store::service::branch_id(args, branch)
+    })
+}
+
+/// [`mount`], its Branch's id found by `branch_of` (in this process, or
+/// for a Sandbox reached directly through the Store's own route, #535 G4).
+pub(crate) fn mount_with(
+    args: &SdkValue,
+    branch_of: &mut dyn FnMut(&str) -> Result<BranchId, SdkRefusal>,
+) -> Outcome {
     let branch = text(args, "branch")?;
     let sandbox = match args.get_text("sandbox") {
         Some(id) if !id.is_empty() => id,
@@ -84,8 +95,8 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
         ));
     }
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
-    // The Branch is found by name in this process; the daemon binds its id.
-    let branch_id = crate::store::service::branch_id(args, branch)?;
+    // The Branch is found by name; the daemon binds its id.
+    let branch_id = branch_of(branch)?;
     let mounted = {
         let mut control = crate::common::trace::control(&state.controls)?;
         workspace(&mut control).mount(id, branch_id)
@@ -95,10 +106,12 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("sandbox".to_owned(), SdkValue::text(state.id.as_str())));
         fields.push(("container".to_owned(), SdkValue::text(state.name.as_str())));
-        fields.push((
-            "image".to_owned(),
-            SdkValue::text(crate::sandbox::runtime::image(&state.runtime)),
-        ));
+        // a forwarded Sandbox's runtime is its machine's: its record says
+        let image = match &state.runtime {
+            Some(runtime) => crate::sandbox::runtime::image(runtime),
+            None => saved.get_text("image").unwrap_or_default().to_owned(),
+        };
+        fields.push(("image".to_owned(), SdkValue::text(image)));
         // what its record names (#529)
         fields.push(("platform".to_owned(), platform_of(&saved)));
         fields.push((
@@ -178,17 +191,28 @@ fn platform_of(record: &SdkValue) -> SdkValue {
 /// Store, and the Branch head from one newest-first History read in this
 /// process.
 pub(crate) fn status(args: &SdkValue) -> Outcome {
+    status_with(args, &mut |branch, _| {
+        crate::store::service::head(args, branch).ok()
+    })
+}
+
+/// Reads a Branch's head (Branch id and name), or `None` when it could not.
+pub(crate) type HeadOf<'a> = dyn FnMut(BranchId, Option<&str>) -> Option<Option<CommitId>> + 'a;
+
+/// [`status`], the Branch's head read by `head_of` (given the Branch's id
+/// and name), or `None` when it could not be read.
+pub(crate) fn status_with(args: &SdkValue, head_of: &mut HeadOf<'_>) -> Outcome {
     let state = sandbox(args)?;
     let token = state.token(text(args, "path")?)?;
     let mut control = crate::common::trace::control(&state.controls)?;
     let status = workspace(&mut control).status(token).map_err(operation)?;
     drop(control);
-    let head = crate::store::service::head(args, status.binding.branch.id).ok();
+    let branch = lock(&state.mounts)?
+        .get(text(args, "path")?)
+        .map(|mount| mount.branch.clone());
+    let head = head_of(status.binding.branch.id, branch.as_deref());
     let mut value = values::status(&status, head);
     if let SdkValue::Map(fields) = &mut value {
-        let branch = lock(&state.mounts)?
-            .get(text(args, "path")?)
-            .map(|mount| mount.branch.clone());
         fields.push(("branch".to_owned(), SdkValue::opt_text(branch)));
     }
     Ok(value)

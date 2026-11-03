@@ -78,7 +78,8 @@ pub(crate) fn user() -> (u32, u32) {
     )
 }
 /// The folder of the Sandbox a call names (`sandbox`, its name):
-/// `<root>/sandbox/<name>/`, in the home on `native` and under a worker's
+/// `<root>/sandbox/<name>/`, in the home on `native` and for a Sandbox
+/// whose daemon the home reaches directly (#535 G4), and under a worker's
 /// root on every other machine.
 pub(crate) fn sandbox_dir(args: &SdkValue) -> Result<PathBuf> {
     let name = crate::common::names::SandboxName::parse(registry::text(args, "sandbox")?)?;
@@ -360,15 +361,13 @@ pub(crate) fn save_sandbox(
     // the platform the call named, checked by `create` before any effect (#529)
     let platform =
         crate::sandbox::runtime::platform(args, crate::sandbox::runtime::backend(deploy)?)?;
+    let runtime = state.runtime()?;
     let mut fields = vec![
         ("platform", SdkValue::text(platform)),
         ("name", SdkValue::text(&state.name)),
-        (
-            "container",
-            SdkValue::text(state.runtime.identity().to_string()),
-        ),
+        ("container", SdkValue::text(runtime.identity().to_string())),
     ];
-    match state.runtime.as_ref() {
+    match runtime {
         Sandbox::Docker(runtime) => {
             let record = runtime.request();
             fields.extend([
@@ -411,7 +410,7 @@ pub(crate) fn save_sandbox(
         &SdkValue::map([
             (
                 "endpoint",
-                SdkValue::opt_text(state.runtime.endpoint().ok().map(|e| e.to_string())),
+                SdkValue::opt_text(runtime.endpoint().ok().map(|e| e.to_string())),
             ),
             ("secret", SdkValue::Bytes(secret.to_vec())),
             ("peer", SdkValue::Bytes(peer.to_vec())),
@@ -431,13 +430,10 @@ pub(crate) fn save_sandbox(
         ),
         (
             "backend",
-            SdkValue::text(crate::sandbox::runtime::kind(&state.runtime)),
+            SdkValue::text(crate::sandbox::runtime::kind(runtime)),
         ),
-        ("route", SdkValue::text(route(&state.runtime))),
-        (
-            "runtime_id",
-            SdkValue::text(state.runtime.identity().to_string()),
-        ),
+        ("route", SdkValue::text(route(runtime))),
+        ("runtime_id", SdkValue::text(runtime.identity().to_string())),
         ("daemon", daemon),
     ] {
         record = crate::common::home::with_field(record, field, value);
@@ -505,8 +501,49 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     let keys = read_record(&directory.join("control.json"))?
         .ok_or_else(|| refused("NoSuchSandbox", format!("Sandbox {id} has no daemon keys")))?;
     let project = registry::text(args, "project")?;
-    let container = registry::text(&value, "container")?;
-    let recorded = recorded(args, id, &value)?;
+    // a Sandbox in a machine whose daemon's port is forwarded here (#535
+    // G4): only its forward is checked; its runtime is the machine's
+    let (runtime, endpoint, host) = match crate::sandbox::direct::forward_of(&value) {
+        Some(address) => {
+            crate::sandbox::direct::check(&home(args)?, id, &value)?;
+            (None, address, None)
+        }
+        None => {
+            let (runtime, host) = observed(args, id, &value)?;
+            let endpoint = runtime.endpoint().map_err(failed)?;
+            (Some(runtime), endpoint, host)
+        }
+    };
+    let dial = crate::daemon::pool::Dial {
+        endpoint,
+        host,
+        secret: bytes(&keys, "secret")?,
+        peer: bytes(&keys, "peer")?,
+        instance: bytes(&keys, "instance")?,
+    };
+    let forwarded = runtime.is_none();
+    let control = dial.open_waiting().map_err(|refusal| match forwarded {
+        true => crate::sandbox::direct::unanswered(id, &value, refusal),
+        false => refusal,
+    })?;
+    let state = Arc::new(SandboxState {
+        id: id.to_owned(),
+        project: project.to_owned(),
+        name: value.get_text("name").unwrap_or_default().to_owned(),
+        directory,
+        runtime,
+        identity: recorded_identity(&value),
+        controls: crate::daemon::pool::Controls::new(control, dial),
+        mounts: Default::default(),
+    });
+    refresh(&state)?;
+    Ok(state)
+}
+/// The runtime a Sandbox record's `daemon` names, observed running once,
+/// and the host this process dials its daemon at.
+fn observed(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(Box<Sandbox>, Option<String>)> {
+    let container = registry::text(value, "container")?;
+    let recorded = recorded(args, id, value)?;
     // a local daemon listens on this kernel's loopback; no other host reaches it
     let host = match recorded {
         Recorded::Docker(..) => crate::daemon::pool::daemon_host(args),
@@ -522,26 +559,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
             failed(failure)
         }
     })?;
-    let dial = crate::daemon::pool::Dial {
-        endpoint: runtime.endpoint().map_err(failed)?,
-        host,
-        secret: bytes(&keys, "secret")?,
-        peer: bytes(&keys, "peer")?,
-        instance: bytes(&keys, "instance")?,
-    };
-    let control = dial.open_waiting()?;
-    let state = Arc::new(SandboxState {
-        id: id.to_owned(),
-        project: project.to_owned(),
-        name: value.get_text("name").unwrap_or_default().to_owned(),
-        directory,
-        runtime,
-        identity: recorded_identity(&value),
-        controls: crate::daemon::pool::Controls::new(control, dial),
-        mounts: Default::default(),
-    });
-    refresh(&state)?;
-    Ok(state)
+    Ok((runtime, host))
 }
 /// The command identity a Sandbox record names: a native Sandbox's is the
 /// user who started it (`uid`, `gid`); every other runs as 501:20.

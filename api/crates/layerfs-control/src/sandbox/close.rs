@@ -6,6 +6,7 @@
 //! `Busy`; a gone owner's uncertain intent does not: `sandbox.close` is the
 //! call that clears it.
 use super::create::remove_folder;
+use super::direct;
 use super::family::sandbox_of;
 use super::record::{self, SandboxRecord};
 use crate::common::context::Context;
@@ -43,12 +44,26 @@ pub(super) fn close(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         record.write(&home)?;
         record
     };
-    let closed = on_machine(
-        context,
-        &record,
-        "sandbox.close",
-        vec![("force", SdkValue::Bool(force))],
-    );
+    let mut more = vec![("force", SdkValue::Bool(force))];
+    // a Sandbox reached directly keeps its Workspace records here: its
+    // worker is told which it holds (#535 G4)
+    if direct::forwarded(&record) {
+        match direct::held(&home, &record) {
+            Ok(held) => more.push((
+                "held",
+                SdkValue::List(held.into_iter().map(SdkValue::Text).collect()),
+            )),
+            Err(refusal) => {
+                let _lock = home::lock::take(&home)?;
+                let _sandbox = record::lock(&home, name)?;
+                if let Some(now) = SandboxRecord::read(&home, name)? {
+                    now.without_op().write(&home)?;
+                }
+                return Err(refusal);
+            }
+        }
+    }
+    let closed = on_machine(context, &record, "sandbox.close", more);
     let _lock = home::lock::take(&home)?;
     // on `native` the Sandbox's own side removed the folder already
     let dir = record.dir(&home);
@@ -58,11 +73,13 @@ pub(super) fn close(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     };
     match closed {
         Ok(value) => {
+            direct::release(&home, &record);
             remove_folder(&dir)?;
             Ok(home::with_field(value, "closed", SdkValue::text(name)))
         }
         // a Sandbox already gone loses its record too
         Err(refusal) if refusal.code == "NoSuchSandbox" => {
+            direct::release(&home, &record);
             remove_folder(&dir)?;
             Ok(SdkValue::map([
                 ("closed", SdkValue::text(name)),

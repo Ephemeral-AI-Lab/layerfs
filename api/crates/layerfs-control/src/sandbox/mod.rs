@@ -2,6 +2,7 @@
 mod close;
 mod create;
 pub(crate) mod deploy;
+pub(crate) mod direct;
 #[doc(hidden)]
 pub mod dispatch;
 pub(crate) mod exec;

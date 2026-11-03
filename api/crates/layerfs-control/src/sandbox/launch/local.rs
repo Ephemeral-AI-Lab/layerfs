@@ -211,7 +211,7 @@ fn start_named(
         project: name.to_owned(),
         name: sandbox_name,
         directory: directory.to_owned(),
-        runtime: sandbox,
+        runtime: Some(sandbox),
         identity,
         controls: crate::daemon::pool::Controls::new(control, dial),
         mounts: Default::default(),
@@ -236,7 +236,7 @@ fn start_named(
         return Err(abandon(
             id,
             format!("local sandbox records: {}", refusal.message),
-            Some(runtime),
+            runtime,
         ));
     }
     let state = Arc::new(state);

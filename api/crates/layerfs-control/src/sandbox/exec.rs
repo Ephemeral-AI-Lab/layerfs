@@ -20,13 +20,14 @@ fn run(
     arguments: Vec<String>,
     spool: bool,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
+    let runtime = state.runtime()?;
     crate::sandbox::runtime::run(
-        &state.runtime,
+        runtime,
         state.identity,
         arguments,
         vec![format!(
             "HOME={}",
-            crate::sandbox::runtime::scratch(&state.runtime)
+            crate::sandbox::runtime::scratch(runtime)
         )],
         directory,
         spool,
@@ -40,12 +41,18 @@ fn run(
 /// inline window (1 MiB), or any non-empty stream with `spool`, is null
 /// here and spooled; the result then also names its `output`, read with
 /// `workspace.exec_output` and closed with `sandbox.exec_release`, and the
-/// `stdoutBytes` and `stderrBytes` sizes.
+/// `stdoutBytes` and `stderrBytes` sizes. A `directory` from a caller that
+/// keeps the Workspace's record (#535 G4) is the one the command runs in.
 pub(crate) fn exec(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;
     let path = text(args, "path")?;
     let command = text(args, "command")?;
-    let directory = state.directory(path)?;
+    // a caller that reaches the Sandbox's daemon directly keeps its
+    // Workspace records and sends the directory it checked there (#535 G4)
+    let directory = match args.get_text("directory") {
+        Some(directory) => directory.to_owned(),
+        None => state.directory(path)?,
+    };
     let (code, stdout, stderr) = run(
         &state,
         &directory,
