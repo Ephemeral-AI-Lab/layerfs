@@ -34,10 +34,10 @@ for this manual.
 | --- | --- |
 | A Sandbox on a platform and Store kind the support table refuses (`layerfs machine platforms`, `connect/SUPPORT.json`): for PostgreSQL, `lima`, `apple-container`, `microsandbox` and `firecracker` until a live receipt (G7); docker on Windows | the table's reason, word for word, such as "lima host alias not verified (G7)" |
 | On Linux, a `docker` Sandbox of a sqlite Store by a caller that is not root | the daemon (root in its container) must own the bind-mounted Store folder; run as root, or keep the Store on `native` |
-| A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store move` moves the Store |
+| A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store pull` and `store push` move the Store |
 | `project remove` from a PostgreSQL Store | "removing a project from a PostgreSQL Store is not built" |
-| `project init` into a sqlite Store that is not on `native` | move it to `native`, Init, then move it back |
-| `backup restore` over a Store that is not on `native` | move it to `native` first |
+| `project init` into a sqlite Store that is not on `native` | `store pull` it to `native`, Init, then `store push` it back |
+| `backup restore` over a Store that is not on `native` | `store pull` it to `native` first |
 | Resizing a VM with `machine update` | "not built yet; nothing was changed" (`InUse` first if Sandboxes run on it) |
 | Creating or connecting a machine without the sealed Linux bundle | names the expected folder in `detail.missing` (`bundle:<folder>`); fetching the bundle into the cache is not built, a build places it |
 | A machine kind whose tool is missing | `detail.missing`, such as `tool:msb` |
@@ -87,7 +87,7 @@ step commits.
 - **VM kinds and ssh.** No real `apple-container`, `microsandbox`, `lima`,
   `firecracker` or ssh machine was created or connected; their adapters
   were tested with provider tests only. On macOS the `docker` machine's
-  worker did run (a private test bundle, `LAYERFS_BUNDLE`): `store move` to
+  worker did run (a private test bundle, `LAYERFS_BUNDLE`): `store move` (now `store push`) to
   `docker`, its Sandboxes and the twelve cells passed; see the terminal pass.
 - **Machine boot and worker start.** `machine start` and `machine stop`
   (#535 P1) and a worker call refused `Unavailable` on a stopped machine

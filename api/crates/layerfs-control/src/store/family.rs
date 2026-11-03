@@ -1,25 +1,26 @@
 //! The sqlite half of the `store` family (#533 step 8, H §7.3): list, get,
-//! status, create, remove and move. `move` and `remove` read leases under
+//! status, create, remove, push and pull. A push, a pull and a remove read leases under
 //! the home lock and the Store's lock (#536 §8), refuse `InUse` and write
 //! the record's `op` (#536 §7.1), which refuses every later lease and
 //! operation; then, past the locks, they close this process's own open copy
 //! and find the Store idle once more before any step. The locks are held
 //! only for those checks and record writes: never across a machine start, a
-//! Store step or Store I/O. A move runs its phases once each (check,
+//! Store step or Store I/O. A push or pull runs its phases once each (check,
 //! snapshot, send, verify, install, record, retire), each written to `op`
 //! as it starts; a failure names its phase and keeps whatever exists. An
 //! uncertain step (`Unknown`, or any failure of the record phase, after
 //! both copies exist) keeps both copies, leaves `op` marked uncertain and
 //! is logged to `log/uncertain.jsonl`; nothing is cleaned up on a guess.
-//! A phase a crash would leave unknown (a move's record, a remove's
+//! A phase a crash would leave unknown (a push's or pull's record, a remove's
 //! remove) is written uncertain before it starts. This file
 //! dispatches and holds the steps the calls share; each call is in its own
-//! file (`list`, `status`, `create`, `remove`, `transfer/phases` for move).
+//! file (`list`, `status`, `create`, `remove`, `transfer/phases` for push
+//! and pull).
 use super::create::create;
 use super::list::list;
 use super::remove::remove;
 use super::status::status;
-use super::transfer::phases::move_store;
+use super::transfer::phases::{pull, push};
 use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::{self, paths};
@@ -62,10 +63,8 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
         "status" => status(&home, name),
         "create" => create(&home, name),
         "remove" => remove(&home, name),
-        "move" => {
-            let to = args.get_text("machine").unwrap_or("");
-            move_store(context, name, to)
-        }
+        "push" => push(context, name, args.get_text("machine").unwrap_or("")),
+        "pull" => pull(context, name),
         _ => Err(refused("InvalidInput", format!("no call store.{call}"))),
     }
 }
@@ -105,7 +104,7 @@ fn idle(home: &Path, name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Starts a move or remove: under the home lock (the Sandbox check) and
+/// Starts a push, pull or remove: under the home lock (the Sandbox check) and
 /// the Store's lock, re-reads the record, lets `check` refuse it or answer
 /// what the call needs, finds the Store idle and writes `op` into the
 /// record, which refuses every later lease. Answers `check`'s answer.
@@ -165,7 +164,7 @@ pub(super) fn advance(home: &Path, name: &str, op: &mut Op, phase: &str) -> Resu
     replace_op(home, name, op.id(), Some(op))
 }
 
-/// Ends a move or remove that failed at `phase` after writing `op`: a
+/// Ends a push, pull or remove that failed at `phase` after writing `op`: a
 /// certain failure drops it (or puts back `previous`, the unresolved intent
 /// a remove would have cleared); an uncertain one keeps it, marked
 /// uncertain, and is logged to `log/uncertain.jsonl`.

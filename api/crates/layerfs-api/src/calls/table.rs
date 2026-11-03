@@ -1,5 +1,5 @@
 //! The one table of calls (S §3, with the answers to O11, O13, O14 and O24):
-//! nine families, 60 calls. The shell parser, the help, the Node and Python
+//! nine families, 61 calls. The shell parser, the help, the Node and Python
 //! front ends' functions and argument checking all come from this table.
 //!
 //! Positionals go from the outside in: owner, Branch, path or new name,
@@ -565,7 +565,7 @@ pub static CALLS: &[Call] = &[
         ],
         "resize a VM, or set a built-in machine's image and Docker socket",
     ),
-    // store (8)
+    // store (9, H1: push and pull replace move)
     call(
         "store",
         "list",
@@ -597,10 +597,17 @@ pub static CALLS: &[Call] = &[
     ),
     call(
         "store",
-        "move",
+        "push",
         &[a("name", Name), a("machine", Name)],
         &[PROGRESS],
-        "move a sqlite Store to another machine",
+        "send a sqlite Store from native to a machine",
+    ),
+    call(
+        "store",
+        "pull",
+        &[a("name", Name)],
+        &[PROGRESS],
+        "bring a sqlite Store from its machine to native",
     ),
     call(
         "store",

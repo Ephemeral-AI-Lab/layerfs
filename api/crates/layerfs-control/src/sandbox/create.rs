@@ -25,7 +25,7 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ));
     }
     // the Store's place, a move and the name are checked under the lock
-    // that claims the name, so a store.move cannot pass between them
+    // that claims the name, so a store.push or pull cannot pass between them
     let _lock = home::lock::take(&home)?;
     let target = resolve::target(&home, project)?;
     target.record.unblocked()?;
@@ -61,7 +61,7 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         if store_machine != machine {
             return Err(refused(
                 "Unsupported",
-                format!("Store {} is on machine {store_machine}; a Sandbox of {project} runs there (`store move` moves the Store)", target.store),
+                format!("Store {} is on machine {store_machine}; a Sandbox of {project} runs there (`store pull` and `store push` move the Store)", target.store),
             ));
         }
     }

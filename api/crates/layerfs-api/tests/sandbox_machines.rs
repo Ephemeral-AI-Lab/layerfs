@@ -12,7 +12,7 @@
 //!   digest) and LAYERFS_BUNDLE (a sealed Linux bundle whose daemon has
 //!   `postgresql`). macOS reaches a loopback server from the container as
 //!   `host.docker.internal`.
-//! - a sqlite Store moved to the docker machine and its Sandbox, through the
+//! - a sqlite Store pushed to the docker machine and its Sandbox, through the
 //!   docker worker on macOS: LAYERFS_TEST_IMAGE and LAYERFS_BUNDLE. The test
 //!   removes its worker container and data volume.
 //!
@@ -404,7 +404,7 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
     );
     let moved = ok(
         &home,
-        "store.move",
+        "store.push",
         &[("name", t("shop")), ("machine", t("docker"))],
     );
     assert_eq!(moved.get_text("to"), Some("docker"), "{moved:?}");

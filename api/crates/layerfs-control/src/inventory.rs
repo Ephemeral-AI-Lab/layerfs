@@ -15,6 +15,9 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
+/// The machine that is this host.
+const NATIVE: &str = "native";
+
 /// The folder names under `dir`, sorted; none when it is absent.
 fn names(dir: &Path) -> Result<Vec<String>> {
     paths::names(dir).map_err(failed)
@@ -167,8 +170,60 @@ pub fn can_change_machine(home: &Path, name: &str) -> Result<()> {
     ))
 }
 
-/// `store.move`, `store.remove` and `backup.restore`: refused `InUse`
-/// while a Sandbox of one of Store `store`'s projects runs.
+/// `store.push`: refused `InvalidInput` unless `record` is a sqlite Store
+/// on `native` and `to` another machine; `NotFound` for an unknown `to`.
+/// Its in-use half (leases, Sandbox records) runs under the Store's lock.
+pub fn can_push(home: &Path, record: &StoreRecord, to: &str) -> Result<()> {
+    let name = record.name();
+    let on = sqlite_machine(record)?;
+    if on != NATIVE {
+        return Err(refused(
+            "InvalidInput",
+            format!("Store {name} is on machine {on}; `layerfs store pull {name}` brings it to {NATIVE} first"),
+        ));
+    }
+    if to == NATIVE {
+        return Err(refused(
+            "InvalidInput",
+            format!("Store {name} is already on {NATIVE}"),
+        ));
+    }
+    if MachineRecord::read(home, to)?.is_none() {
+        return Err(refused("NotFound", format!("no machine named {to}")));
+    }
+    Ok(())
+}
+
+/// `store.pull`: refused `InvalidInput` unless `record` is a sqlite Store
+/// on a machine other than `native`; answers that machine. Its in-use half
+/// runs under the Store's lock, as `store.push`'s.
+pub fn can_pull(record: &StoreRecord) -> Result<String> {
+    let on = sqlite_machine(record)?;
+    if on == NATIVE {
+        return Err(refused(
+            "InvalidInput",
+            format!("Store {} is already on {NATIVE}", record.name()),
+        ));
+    }
+    Ok(on)
+}
+
+/// The machine of sqlite Store `record`; a PostgreSQL Store never moves.
+fn sqlite_machine(record: &StoreRecord) -> Result<String> {
+    if let StoreRef::Postgres { .. } = record.store_ref()? {
+        return Err(refused(
+            "InvalidInput",
+            format!(
+                "Store {} is a PostgreSQL database; it does not move",
+                record.name()
+            ),
+        ));
+    }
+    record.machine()
+}
+
+/// `store.push`, `store.pull`, `store.remove` and `backup.restore`: refused
+/// `InUse` while a Sandbox of one of Store `store`'s projects runs.
 pub fn can_retire_store(home: &Path, store: &str) -> Result<()> {
     let sandboxes = sandboxes_of_store(home, store)?;
     if sandboxes.is_empty() {

@@ -98,7 +98,7 @@ impl StoreRef {
                 "Unavailable",
                 format!(
                     "Store {name} came from a 1.1.0 home and its machine is not known; \
-                     run `layerfs import-env` or `layerfs store move {name} <machine>`"
+                     run `layerfs import-env`"
                 ),
             )),
             Self::Postgres { name, .. } => Err(refused(
@@ -269,7 +269,7 @@ impl StoreRecord {
 
     /// Refuses a new operation, a lease or a Store call while the record's
     /// `op` holds the Store: `Busy` while its process lives (this process
-    /// included: a move's own steps take no lease and make no Store call,
+    /// included: a push's or pull's own steps take no lease and make no Store call,
     /// so nothing else in its process may either), `Unresolved` once a gone
     /// process left its outcome unknown. A gone process's certain failure
     /// holds nothing.

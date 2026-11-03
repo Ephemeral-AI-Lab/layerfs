@@ -194,7 +194,7 @@ fn backups_against_minio() {
     .unwrap();
     ok(
         &home,
-        "store.move",
+        "store.push",
         &[("name", t("shop")), ("machine", t("box"))],
     );
     ok(

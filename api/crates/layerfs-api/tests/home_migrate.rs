@@ -347,7 +347,7 @@ fn closed_store(scratch: &Path) -> (PathBuf, SdkValue, SdkValue) {
         .unwrap();
     call(
         &home,
-        "store.move",
+        "store.push",
         &[("name", t("shop")), ("machine", t("box"))],
     );
     (paths::store_file(&root, "shop"), store, project)

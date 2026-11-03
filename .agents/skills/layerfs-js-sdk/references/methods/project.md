@@ -54,7 +54,7 @@ A tiny folder sent no progress update in the live run.
 
 Where Init can run depends on the Store: a sqlite Store must be on `native`
 (Init reads the host folder in your process); a PostgreSQL Store is written
-directly. For a sqlite Store on another machine, move it to `native` first.
+directly. For a sqlite Store on another machine, `store.pull` it to `native` first.
 
 **Refusals**
 
@@ -63,7 +63,7 @@ directly. For a sqlite Store on another machine, move it to `native` first.
 | `NotFound` | No Store of that name (message: ``store create <name>` makes one``) | Create the Store, or check the name |
 | `Exists` | The Store already holds that project | Don't init again; the project is ready |
 | `InvalidInput` | A bad name, a relative path or a bare project name | Fix the call |
-| `Unsupported` | The sqlite Store is on another machine (from source; S says `InvalidInput`) | `store move <store> native`, Init, then move it back |
+| `Unsupported` | The sqlite Store is on another machine (from source; S says `InvalidInput`) | `store pull <store>`, Init, then `store push <store> <machine>` |
 | `Failed`, `Unknown` | Init failed or its outcome is uncertain | Stop and report; read `project.list` and `log/init-failures.jsonl` in the home before acting |
 
 **Start from a small skeleton** (shell), with a `.gitignore` and the

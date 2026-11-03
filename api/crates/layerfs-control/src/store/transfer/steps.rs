@@ -1,5 +1,5 @@
 //! A sqlite Store's file on the machine that holds it (H §7.3): the steps a
-//! `store move` and a `store remove` take on each side. They run in the
+//! `store push`, a `store pull` and a `store remove` take on each side. They run in the
 //! caller's process for `native` (under the home) and in a machine's worker
 //! for every other machine (under the worker's root). Paths come from the
 //! root and the Store's name only, never from the caller. The steps that
@@ -160,7 +160,7 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
             handle.take(len).read_to_end(&mut bytes).map_err(failed)?;
             Ok(SdkValue::map([("bytes", SdkValue::Bytes(bytes))]))
         }
-        // send: the mover's own staging file, written in order; offset 0
+        // send: the transfer's own staging file, written in order; offset 0
         // starts it again
         "write" => {
             let offset = int(args, "offset")?;

@@ -84,9 +84,9 @@ hold a password or a bucket key. They are not settings; see
 - **`store/<name>/open/<pid>`** is a lease. Every process that uses a sqlite
   Store holds one: the process that opens it, or, for a Store behind a
   worker, the host process that sends it calls; a PostgreSQL Store's
-  in-process calls hold one too. `store move` and `store remove` read the
+  in-process calls hold one too. `store push`, `store pull` and `store remove` read the
   leases under the Store's lock and refuse `InUse` while one is held. A
-  lease is taken under the Store's lock, and refused `Busy` while a move or
+  lease is taken under the Store's lock, and refused `Busy` while a push, pull or
   remove of the Store runs (`Unresolved` after one whose outcome is not
   known). It records its process's start time and boot: a lease whose
   process is no longer alive on this host, or whose id now names another
@@ -229,8 +229,8 @@ home lock, to layout 2 and then on to layout 3 (above):
   cannot read (Docker Desktop's VM on macOS and Windows), is not placed:
   the Store keeps its `volume` and the report says where the file is.
 - A sqlite Store whose machine 1.1.0 did not record has `machine: null`.
-  Calls on it are refused `Unavailable` until `layerfs import-env` or
-  `store move` names its machine.
+  Calls on it are refused `Unavailable` until `layerfs import-env`
+  names its machine.
 - 1.1.0 Sandbox folders inside a project's folder are layout 2's numbered
   state: the layout 3 conversion probes their runtimes as above.
 

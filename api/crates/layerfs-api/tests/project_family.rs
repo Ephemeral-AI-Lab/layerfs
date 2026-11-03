@@ -1,6 +1,6 @@
 //! Projects and Init (#533 step 9), end to end on this host: a Store made on
 //! native, a folder Inited into it as a live add, file and Branch calls on
-//! it, the Store moved to a worker machine and read there, then the project
+//! it, the Store pushed to a worker machine and read there, then the project
 //! removed.
 use layerfs_api::calls;
 use layerfs_api::home::{self, paths, write_record};
@@ -174,12 +174,12 @@ fn init_files_branches_move_and_remove() {
     assert!(layerfs_api::calls::json::print(&branches).contains("\"fix\""));
     ok(&home, "branch.get", &[p(), ("branch", t("fix"))]);
 
-    // the Store's open service is closed before a move: a lease of this
+    // the Store's open service is closed before a push: a lease of this
     // process would not block it, but the open file must be closed first
     std::thread::sleep(std::time::Duration::from_millis(10));
     ok(
         &home,
-        "store.move",
+        "store.push",
         &[("name", t("shop")), ("machine", t("box"))],
     );
     let read = ok(

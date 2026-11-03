@@ -145,7 +145,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             "Unsupported",
             format!(
                 "Store {store} is on machine {machine}; Init runs on native: \
-                 `store move {store} native`, Init, then move it back"
+                 `store pull {store}`, Init, then `store push {store} {machine}`"
             ),
         ));
     }

@@ -118,7 +118,7 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
 - A remove takes the machine's `start.lock` first, then, under the home
   lock, writes its `op` (`machine.remove`; `machine.disconnect` for ssh)
   into the record. The VM is deleted outside the home lock. While that
-  process lives, every call that would start the machine, move a Store to
+  process lives, every call that would start the machine, push a Store to
   it, create a Sandbox on it, update or remove it is `Busy`; `machine get`
   and `machine status` answer `removing`. A refused delete puts the record
   back as it was; one whose outcome is unknown keeps the `op` marked
@@ -150,8 +150,9 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   after it was sent is `Unknown`; it is not resent.
 - The calls that need the machine's worker: Store calls on a sqlite Store
   there, `project remove`, `sandbox create`, the Workspace calls that change
-  something, `store move`, `store remove` and `backup create`. `store move`
-  and `store remove` check both machines before they mark the Store.
+  something, `store push`, `store pull`, `store remove` and `backup create`.
+  `store push`, `store pull` and `store remove` check their machines before
+  they mark the Store.
 - `machine start <name>` starts a stopped machine and its worker, waits
   until it is ready and records `worker.json`; a running machine answers at
   once. `machine stop <name>` stops the worker and, where there is one, the
@@ -192,7 +193,7 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   connection lost after the request was sent is `Unknown`. One attempt;
   nothing is resent.
 - A worker holds a Store's lease for as long as it keeps the Store open,
-  and closes its own open copy before a move, retire or remove reads or
+  and closes its own open copy before a push, pull, retire or remove reads or
   deletes the file.
 - One process can use Stores on several machines at once.
 - A Sandbox on `docker` is a container on the docker machine's image. On
@@ -214,7 +215,8 @@ sqlite Store is Disposable (WAL, `synchronous=OFF`); its record says so.
 
 ```console
 $ layerfs store create shop          # run
-$ layerfs store move shop dev --progress   # not run
+$ layerfs store push shop dev --progress   # not run
+$ layerfs store pull shop --progress       # not run
 ```
 
 - `store create` makes an empty sqlite Store on `native`, at
@@ -222,18 +224,27 @@ $ layerfs store move shop dev --progress   # not run
   `profile`, `created` and `sqlite` (the SQLite version); `store get` and
   `store list` add `projects` and never show the Store's keys; each
   `store list` item also ends with the `state` `store status` shows.
-- `store move <name> <machine>` moves the file to another machine. It runs
-  its phases once each: check, snapshot, send, verify, install, record and
-  retire. The bytes pass through the calling process in pieces, so a move
-  between two machines other than `native` is one call (O12).
+- `store push <name> <machine>` sends the file from `native` to a machine;
+  `store pull <name>` brings it from its machine back to `native` (#536
+  H1). Both run the same phases once each: check, snapshot, send, verify,
+  install, record and retire; only the sides swap. The bytes pass through
+  the calling process in pieces. Between two machines, pull, then push:
+  each half is its own call.
+  - A push is `InvalidInput` unless the Store is on `native` (the message
+    names `store pull`), and for `native` as the target; a pull is
+    `InvalidInput` when the Store is already on `native`. Both are
+    `InvalidInput` for a postgresql Store; a push to an unknown machine is
+    `NotFound`. A stopped machine is `Unavailable`, naming `layerfs machine
+    start <m>` (#535 D11).
   - It is `InUse` while any process holds the Store or a Sandbox of one of
-    its projects runs.
-  - While a move or remove runs, the Store's record holds one `op` (#536
-    §7.1): its id, `name` (`store.move`, `store.remove`), `phase`,
-    `args`, owner process and `uncertain`. Every other operation, lease and
+    its projects is recorded.
+  - While a push, pull or remove runs, the Store's record holds one `op`
+    (#536 §7.1): its id, `name` (`store.push`, `store.pull`,
+    `store.remove`), `phase`, `args` (`from`, `to`), owner process and
+    `uncertain`. Every other operation, lease and
     Store call on the Store is `Busy` while that process lives, from the
-    mover's own process too: the lease is taken, and the record re-read,
-    under the Store's lock, `store/<name>/lock`. The mover writes `op`
+    caller's own process too: the lease is taken, and the record re-read,
+    under the Store's lock, `store/<name>/lock`. The caller writes `op`
     under the home lock and the Store's lock, closes its own open copy,
     then re-checks the leases (another thread's included) and Sandboxes
     under both locks again before the snapshot, and writes each phase into
@@ -244,21 +255,22 @@ $ layerfs store move shop dev --progress   # not run
     any failure of the record phase, after both copies exist) keeps both
     copies, keeps `op` with `uncertain: true` and is logged to
     `log/uncertain.jsonl`. The record phase is written uncertain before it
-    starts, so a move that dies there is uncertain too; the record write
-    that puts the Store on its new machine drops `op`.
+    starts, so a call that dies there is uncertain too; the record write
+    that puts the Store on its new machine drops `op` and records
+    `last_transfer` (`call`, `from`, `to`, `at`, `bytes`, `sha256`,
+    `heads`).
   - Once that process is gone, an uncertain `op` makes every later
     operation, lease and Store call on the Store `Unresolved`, naming
     `layerfs store status <name>` and `layerfs store remove <name>`; a
     certain one holds nothing.
-  - It is `Exists` when the target already holds a Store file of that name,
-    and `InvalidInput` for the Store's own machine or a postgresql Store.
+  - It is `Exists` when the target already holds a Store file of that name.
   - A failure names its phase in the message and in `detail.phase`, and
     keeps whatever exists.
   - While it runs, `store status` shows `state: "busy"` and `op`.
 - `store remove` deletes a sqlite Store wherever it is, with every project
   in it. Its backups stay in their buckets. It is `InUse` while the Store is
   held and `Busy` while a live process runs an operation on it. A Store
-  whose machine is unknown is `Unavailable` (as for a move). A stopped
+  whose machine is unknown is `Unavailable` (as for a push or pull). A stopped
   machine is refused `Unavailable`, naming `machine start`, before the
   home lock is taken; a Store whose machine changed meanwhile is
   `Conflict`. It is the call that clears an unresolved `op`: a gone
@@ -276,7 +288,7 @@ $ layerfs store move shop dev --progress   # not run
   process id was reused by another process is stale. A lease written
   without them is matched by id alone.
 - Init writes only into a sqlite Store on `native`. To add a project to a
-  Store on another machine, move it to `native`, Init, and move it back.
+  Store on another machine, pull it to `native`, Init, and push it back.
 - A Sandbox of a sqlite project runs only on the Store's machine.
 
 ### PostgreSQL Stores
@@ -374,8 +386,8 @@ layerfs backup restore shop lab
   that changed since its last backup or restore through that bucket is
   `Conflict`. Replacing one that a process holds open, whose SQLite `-wal`
   or `-shm` file exists, or one of whose projects has a running Sandbox is
-  `InUse`. A Store on another machine is `Unsupported` (move it to
-  `native` first). The home's project records are rebuilt from the Store.
+  `InUse`. A Store on another machine is `Unsupported` (`store pull` it
+  to `native` first). The home's project records are rebuilt from the Store.
   - The download, its verification and the read of its projects run before
     the home lock, into a hidden staging folder under the home's `store/`
     (removed when the call ends). The lock covers the re-checks, the install
