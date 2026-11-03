@@ -54,24 +54,45 @@ pub(crate) fn watched(
     outcome.map_err(|_| refused("Failed", "the Init thread panicked"))?
 }
 
-/// `project.init` in a worker (H11), `{ home (its root), store, storePath,
-/// name, path, timeoutMs, store_record }`: the add under the worker's own
-/// lease on the Store file under its root, its counts sent as `{ progress }`
-/// events. The caller writes the home's project record.
+/// `project.init` in a worker (H11, H11a), `{ home (its root), store,
+/// storePath, name, staged, timeoutMs, store_record }`: the add of the
+/// folder copy `staged` the caller sent ([`super::staged`]) under the
+/// worker's own lease on the Store file under its root, its counts sent as
+/// `{ progress }` events. The copy is removed when the add ends, whatever
+/// its outcome. The caller writes the home's project record.
 pub(crate) fn in_worker(args: &SdkValue, events: &mut dyn FnMut(SdkValue)) -> Outcome {
     let root = crate::sandbox::files::home(args)?;
     let store = text(args, "store")?;
     crate::common::names::StoreName::parse(store)?;
     let name = text(args, "name")?;
-    let _lease = crate::common::home::lease::hold_locked(&root, store)?;
-    let watch = SdkValue::map([
-        ("store", SdkValue::text(store)),
-        ("project", SdkValue::text(name)),
-    ]);
-    let mut report = |counts: SdkValue| events(SdkValue::map([("progress", counts)]));
-    watched(&mut report, &watch, || {
-        crate::store::identity::add_project(args)
-    })
+    let staged = super::staged::folder(&root, super::staged::id(args)?);
+    if !staged.is_dir() {
+        return Err(refused(
+            "NotFound",
+            format!("no folder copy at {}", staged.display()),
+        ));
+    }
+    let args = crate::common::home::with_field(
+        args.clone(),
+        "path",
+        SdkValue::text(staged.display().to_string()),
+    );
+    let mut add = || {
+        let _lease = crate::common::home::lease::hold_locked(&root, store)?;
+        let watch = SdkValue::map([
+            ("store", SdkValue::text(store)),
+            ("project", SdkValue::text(name)),
+        ]);
+        let mut report = |counts: SdkValue| events(SdkValue::map([("progress", counts)]));
+        watched(&mut report, &watch, || {
+            crate::store::identity::add_project(&args)
+        })
+    };
+    let added = add();
+    if let Err(why) = super::staged::remove(&staged) {
+        eprintln!("layerfs worker: left {}: {}", staged.display(), why.message);
+    }
+    added
 }
 
 /// How far the project's running Init has come

@@ -6,9 +6,10 @@
 //! secret and closes, before it reads anything larger. A caller of another
 //! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
-//! `store.call`, `store.file`, `sandbox.host` and `project.remove` run one
-//! operation on this machine, with `home` set to the worker's own root (the
-//! machine's data disk), never a path the caller sends. Answers are
+//! `store.call`, `store.file`, `sandbox.host`, `project.stage`,
+//! `project.init` and `project.remove` run one operation on this machine,
+//! with `home` set to the worker's own root (the machine's data disk),
+//! never a path the caller sends. Answers are
 //! `{ value }` or `{ refused }`, after any `{ event }` frames.
 //!
 //! A request may carry `home_id`, the caller's home id: the root is not a
@@ -179,8 +180,11 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         // drops one project from the Store under this worker's root (2.0):
         // `{ store, project, store_record }`
         "project.remove" => crate::store::identity::remove_project(&with_home(args, root)),
-        // adds a folder on this machine as a new project of a Store under
-        // this worker's root (#536 H11)
+        // writes or discards one part of a caller's folder copy under this
+        // worker's root (#536 H11a)
+        "project.stage" => crate::project::staged::run(root, &args),
+        // adds a folder copy the caller sent as a new project of a Store
+        // under this worker's root (#536 H11, H11a)
         "project.init" => crate::project::init::in_worker(&with_home(args, root), events),
         _ => Err(refused(
             "InvalidInput",

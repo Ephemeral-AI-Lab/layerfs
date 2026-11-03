@@ -119,7 +119,7 @@ fn held_now(home: &Path, name: &str) -> Result<()> {
 
 /// The headroom a target keeps beyond the Store's bytes: at least 1 GiB,
 /// and a tenth of the Store when that is more.
-const HEADROOM: u64 = 1 << 30;
+pub(crate) const HEADROOM: u64 = 1 << 30;
 
 /// Both machines' executors, once each answers: the target holds no Store
 /// file named `name` and has the Store's bytes (with its write-ahead log)

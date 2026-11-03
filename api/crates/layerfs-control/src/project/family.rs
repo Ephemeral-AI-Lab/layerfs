@@ -3,8 +3,9 @@
 //! live add through the Store's writer (it does not seal), where the
 //! Store's calls run: in the caller's process for a sqlite Store on
 //! `native` or a PostgreSQL Store, in the machine's worker for a sqlite
-//! Store on any other machine (#536 H11), which reads the folder on that
-//! machine. Records in the home list projects; `remove` drops one
+//! Store on any other machine (#536 H11). The folder is always on the
+//! caller's host: for a worker this process copies it to the machine
+//! first (H11a). Records in the home list projects; `remove` drops one
 //! project's history from its Store.
 use crate::common::context::Context;
 use crate::common::home::lease;
@@ -145,6 +146,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         let call = InitCall {
             store,
             name,
+            machine: store_ref.machine()?,
             folder,
             timeout,
         };
@@ -193,26 +195,32 @@ fn observed(
 struct InitCall<'a> {
     store: &'a str,
     name: &'a str,
+    machine: &'a str,
     folder: &'a str,
     timeout: i64,
 }
 
-/// `project.init` into a sqlite Store on another machine (H11): the
-/// machine's worker adds the folder it finds at `folder` on that machine,
-/// under its own lease, and sends its progress; this process holds the
-/// Store's lease meanwhile, as for any call it sends there, then records
-/// the project in the home. One attempt: a lost answer is `Unknown`, and
-/// the home gains no record (`project list` does not show a project whose
-/// outcome is not known; the Store may hold it).
+/// `project.init` into a sqlite Store on another machine (H11, H11a): this
+/// process walks the folder on its own host (refusing what Init would
+/// before the machine is reached), checks the machine has room for a copy,
+/// copies it to the machine's worker ([`crate::project::send`]), and the
+/// worker adds the copy under its own lease, sends its progress and
+/// removes the copy. This process holds the Store's lease meanwhile, as for
+/// any call it sends there, then records the project in the home. One
+/// attempt per request: a lost answer is `Unknown`, and the home gains no
+/// record (`project list` does not show a project whose outcome is not
+/// known; the Store may hold it).
 fn init_on_worker(
     context: &mut Context<'_>,
     mut worker: crate::common::place::Worker,
     call: InitCall<'_>,
 ) -> Outcome {
+    use crate::project::send;
     let home = context.home.clone();
     let InitCall {
         store,
         name,
+        machine,
         folder,
         timeout,
     } = call;
@@ -222,18 +230,38 @@ fn init_on_worker(
             format!("Store {store} already has a project named {name}"),
         ));
     }
+    crate::store::family::progress(context, "check", None);
+    let total = send::measure(Path::new(folder), name)?;
+    let copy = send::Copy {
+        store,
+        name,
+        machine,
+        folder: Path::new(folder),
+        id: send::new_id()?,
+    };
+    send::room(&mut worker, &copy, total)?;
     // the lease is taken under the Store's lock with the record read there
     let (lease, record) = lease::claim(&home, store)?;
+    send::send(context, &mut worker, &copy, total)?;
     let request = SdkValue::map([
         ("store", SdkValue::text(store)),
         ("name", SdkValue::text(name)),
-        ("path", SdkValue::text(folder)),
+        ("staged", SdkValue::text(&copy.id)),
         ("timeoutMs", SdkValue::Int(timeout)),
         ("store_record", record.to_record().clone()),
     ]);
     let added = worker.call("project.init", request, &mut |event| context.event(event));
     drop(lease);
-    let added = added?;
+    let added = added.map_err(|mut refusal| {
+        if refusal.code == "Unknown" {
+            let left = send::left(machine, &copy.id);
+            refusal.message = format!(
+                "{}; the worker removes its copy {left} when its Init ends",
+                refusal.message
+            );
+        }
+        refusal
+    })?;
     let stack = added.get("stack").cloned().unwrap_or_default();
     {
         let _lock = crate::common::home::lock::take(&home)?;
