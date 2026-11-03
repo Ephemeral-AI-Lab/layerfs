@@ -1,0 +1,136 @@
+## k-claim-native: hit create claim: record op.phase=claim; phases seen []
+   record: machine=native op={"name": "sandbox.create", "phase": "claim", "uncertain": false} state-fields={}
+   home: ['./sandbox/k-claim-native/.record.json.45966.1.tmp', './sandbox/k-claim-native/record.json']
+   worker: []
+   native daemon procs: 0; containers: []
+   doctor: [('warning', 'sandbox k-claim-native still records sandbox.create (op-0ef4fb257ac26c17, phase claim), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on sandbox k-claim-native replaces it')]
+   reads changed files: False
+## k-start-native: hit create start: record op.phase=start; phases seen []
+   record: machine=native op={"name": "sandbox.create", "phase": "start", "uncertain": false} state-fields={}
+   home: ['./sandbox/k-start-native/record.json']
+   worker: []
+   native daemon procs: 0; containers: []
+   doctor: [('warning', 'sandbox k-start-native still records sandbox.create (op-7008273bb04241dc, phase start), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on sandbox k-start-native replaces it')]
+   reads changed files: False
+## k-claim-docker: hit create claim: record op.phase=claim; phases seen []
+   record: machine=docker op={"name": "sandbox.create", "phase": "claim", "uncertain": false} state-fields={}
+   home: ['./sandbox/k-claim-docker/.record.json.46143.1.tmp', './sandbox/k-claim-docker/record.json']
+   worker: []
+   native daemon procs: 0; containers: []
+   doctor: [('warning', 'sandbox k-claim-docker still records sandbox.create (op-fa49ebb405e9c35e, phase claim), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on sandbox k-claim-docker replaces it')]
+   reads changed files: False
+## k-start-docker: hit create start: record op.phase=start; phases seen []
+   record: machine=docker op={"name": "sandbox.create", "phase": "start", "uncertain": false} state-fields={}
+   home: ['./sandbox/k-start-docker/record.json']
+   worker: []
+   native daemon procs: 0; containers: []
+   doctor: [('warning', 'sandbox k-start-docker still records sandbox.create (op-bb949ac36a15363d, phase start), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on sandbox k-start-docker replaces it')]
+   reads changed files: False
+## pl-check: hit at progress check; phases seen ['check']
+   record: machine=docker op=None state-fields={}
+   home: []
+   worker: ['./store/pl-check/store.sqlite']
+   doctor: []
+   reads changed files: False
+## pl-snapshot: hit at progress snapshot; phases seen ['check', 'snapshot']
+   record: machine=docker op={"name": "store.pull", "phase": "check", "uncertain": false} state-fields={}
+   home: ['./store/pl-snapshot/open/42583']
+   worker: ['./store/pl-snapshot/store.sqlite']
+   doctor: [('warning', 'store pl-snapshot still records store.pull (op-017b802f0c5f4a9b, phase check), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on store pl-snapshot replaces it')]
+   reads changed files: True
+## pl-send: hit at progress send; phases seen ['check', 'snapshot', 'send']
+   record: machine=docker op={"name": "store.pull", "phase": "snapshot", "uncertain": false} state-fields={}
+   home: ['./store/pl-send/open/42735']
+   worker: ['./store/pl-send/store.sqlite']
+   doctor: [('warning', 'store pl-send still records store.pull (op-2c3fdba73317d499, phase snapshot), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on store pl-send replaces it')]
+   reads changed files: True
+## pl-send-mid: hit at send-mid; phases seen ['check', 'snapshot', 'send']
+   record: machine=docker op={"name": "store.pull", "phase": "send", "uncertain": false} state-fields={}
+   home: ['./store/pl-send-mid/open/43107', './store/pl-send-mid/store.sqlite.incoming']
+   worker: ['./store/pl-send-mid/store.sqlite']
+   doctor: [('warning', 'store pl-send-mid still records store.pull (op-a29561c5154af64b, phase send), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on store pl-send-mid replaces it'), ('warning', '/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/k1/hdock.bkzk/store/pl-send-mid/store.', '`layerfs store pull pl-send-mid` replaces it, or delete /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/')]
+   reads changed files: True
+## pl-verify: hit at progress verify; phases seen ['check', 'snapshot', 'send', 'verify']
+   record: machine=docker op={"name": "store.pull", "phase": "send", "uncertain": false} state-fields={}
+   home: ['./store/pl-verify/open/43468', './store/pl-verify/store.sqlite.incoming']
+   worker: ['./store/pl-verify/store.sqlite']
+   doctor: [('warning', 'store pl-verify still records store.pull (op-80813c3cf58bcbca, phase send), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on store pl-verify replaces it'), ('warning', '/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/k1/hdock.bkzk/store/pl-verify/store.sq', '`layerfs store pull pl-verify` replaces it, or delete /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27')]
+   reads changed files: True
+## pl-install: hit at progress install; phases seen ['check', 'snapshot', 'send', 'verify', 'install']
+   record: machine=docker op={"name": "store.pull", "phase": "verify", "uncertain": false} state-fields={}
+   home: ['./store/pl-install/open/43961', './store/pl-install/store.sqlite.incoming']
+   worker: ['./store/pl-install/store.sqlite']
+   doctor: [('warning', 'store pl-install still records store.pull (op-877387ff7ecc4c3b, phase verify), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on store pl-install replaces it'), ('warning', '/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/k1/hdock.bkzk/store/pl-install/store.s', '`layerfs store pull pl-install` replaces it, or delete /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/2')]
+   reads changed files: True
+## pl-record: hit at progress record; phases seen ['check', 'snapshot', 'send', 'verify', 'install', 'record']
+   record: machine=docker op={"name": "store.pull", "phase": "install", "uncertain": false} state-fields={}
+   home: ['./store/pl-record/open/44597', './store/pl-record/store.sqlite']
+   worker: ['./store/pl-record/store.sqlite']
+   doctor: [('warning', 'store pl-record still records store.pull (op-690d8eb1997321de, phase install), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on store pl-record replaces it')]
+   reads changed files: True
+## pl-record-window: hit record-window: record op.phase=record; phases seen ['check', 'snapshot', 'send', 'verify', 'install', 'record']
+   record: machine=docker op={"name": "store.pull", "phase": "record", "uncertain": true} state-fields={}
+   home: ['./store/pl-record-window/open/44841', './store/pl-record-window/store.sqlite']
+   worker: ['./store/pl-record-window/store.sqlite']
+   doctor: [('error', 'store pl-record-window has an unresolved store.pull (op-8dba39549a6dbca2, phase record): its outcome is not known', '`layerfs store status pl-record-window` shows it; `layerfs store remove pl-record-window` clears it')]
+   reads changed files: True
+## pl-retire: hit at progress retire; phases seen ['check', 'snapshot', 'send', 'verify', 'install', 'record', 'retire']
+   record: machine=native op=None state-fields={}
+   home: ['./store/pl-retire/open/45526', './store/pl-retire/store.sqlite']
+   worker: ['./store/pl-retire/store.sqlite']
+   doctor: []
+   reads changed files: True
+## pu-check: hit at progress check; phases seen ['check']
+   record: machine=native op=None state-fields={}
+   home: ['./store/pu-check/store.sqlite']
+   worker: []
+   doctor: []
+   reads changed files: False
+## pu-snapshot: hit at progress snapshot; phases seen ['check', 'snapshot']
+   record: machine=native op={"name": "store.push", "phase": "check", "uncertain": false} state-fields={}
+   home: ['./store/pu-snapshot/open/41012', './store/pu-snapshot/store.sqlite']
+   worker: []
+   doctor: [('warning', 'store pu-snapshot still records store.push (op-fe5cc499e3d0c802, phase check), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on store pu-snapshot replaces it')]
+   reads changed files: True
+## pu-send: hit at progress send; phases seen ['check', 'snapshot', 'send']
+   record: machine=native op={"name": "store.push", "phase": "snapshot", "uncertain": false} state-fields={}
+   home: ['./store/pu-send/open/41071', './store/pu-send/store.sqlite']
+   worker: []
+   doctor: [('warning', 'store pu-send still records store.push (op-602354c9f3eeb0a1, phase snapshot), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on store pu-send replaces it')]
+   reads changed files: True
+## pu-send-mid: hit at send-mid; phases seen ['check', 'snapshot', 'send']
+   record: machine=native op={"name": "store.push", "phase": "send", "uncertain": false} state-fields={}
+   home: ['./store/pu-send-mid/open/41121', './store/pu-send-mid/store.sqlite']
+   worker: ['./store/pu-send-mid/store.sqlite.incoming']
+   doctor: [('warning', 'store pu-send-mid still records store.push (op-23ff0493373e4ea5, phase send), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on store pu-send-mid replaces it')]
+   reads changed files: True
+## pu-verify: hit at progress verify; phases seen ['check', 'snapshot', 'send', 'verify']
+   record: machine=native op={"name": "store.push", "phase": "send", "uncertain": false} state-fields={}
+   home: ['./store/pu-verify/open/41215', './store/pu-verify/store.sqlite']
+   worker: ['./store/pu-verify/store.sqlite.incoming']
+   doctor: [('warning', 'store pu-verify still records store.push (op-13e8dbfa9e7f9638, phase send), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on store pu-verify replaces it')]
+   reads changed files: True
+## pu-install: hit at progress install; phases seen ['check', 'snapshot', 'send', 'verify', 'install']
+   record: machine=native op={"name": "store.push", "phase": "verify", "uncertain": false} state-fields={}
+   home: ['./store/pu-install/open/41351', './store/pu-install/store.sqlite']
+   worker: ['./store/pu-install/store.sqlite.incoming']
+   doctor: [('warning', 'store pu-install still records store.push (op-d5887f8adf0accc5, phase verify), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on store pu-install replaces it')]
+   reads changed files: True
+## pu-record: hit at progress record; phases seen ['check', 'snapshot', 'send', 'verify', 'install', 'record']
+   record: machine=native op={"name": "store.push", "phase": "install", "uncertain": false} state-fields={}
+   home: ['./store/pu-record/open/41450', './store/pu-record/store.sqlite']
+   worker: ['./store/pu-record/store.sqlite']
+   doctor: [('warning', 'store pu-record still records store.push (op-deccd2c5e2e95e73, phase install), whose process ended after a certain outcome; it holds nothing', 'nothing to do: the next operation on store pu-record replaces it')]
+   reads changed files: True
+## pu-record-window: hit record-window: record op.phase=record; phases seen ['check', 'snapshot', 'send', 'verify', 'install', 'record']
+   record: machine=native op={"name": "store.push", "phase": "record", "uncertain": true} state-fields={}
+   home: ['./store/pu-record-window/open/41924', './store/pu-record-window/store.sqlite']
+   worker: ['./store/pu-record-window/store.sqlite']
+   doctor: [('error', 'store pu-record-window has an unresolved store.push (op-1270b5b9678eea3f, phase record): its outcome is not known', '`layerfs store status pu-record-window` shows it; `layerfs store remove pu-record-window` clears it')]
+   reads changed files: True
+## pu-retire: hit at progress retire; phases seen ['check', 'snapshot', 'send', 'verify', 'install', 'record', 'retire']
+   record: machine=docker op=None state-fields={}
+   home: ['./store/pu-retire/open/42110', './store/pu-retire/store.sqlite']
+   worker: ['./store/pu-retire/store.sqlite']
+   doctor: []
+   reads changed files: True

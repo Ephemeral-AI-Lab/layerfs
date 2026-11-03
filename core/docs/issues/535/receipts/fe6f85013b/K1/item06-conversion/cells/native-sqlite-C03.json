@@ -1,0 +1,188 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C03",
+  "machine": "native",
+  "product": "fe6f85013b",
+  "startedAt": "2026-11-03T07:54:18.331Z",
+  "load1": 4.8740234375,
+  "body": {
+    "sha256": "520773ceacd8c44d633ffd1a40727ceb5d990d63a23259f28af8dd4b96fa204d"
+  },
+  "ok": true,
+  "cause": null,
+  "phases": {
+    "warmup": {
+      "mountMs": 30.803,
+      "exec": {
+        "wallMs": 3288.636,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793692458559232000 1793692461828339000\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 3269.107
+      },
+      "unmountMs": 20.143
+    },
+    "timed": {
+      "mountMs": 29.389,
+      "workspace": {
+        "kind": "Mounted",
+        "path": "/tmp/lfs535k1-h6.eVTN/machine/native/run/lfs-72f0a70c-c03/workspaces/2",
+        "workspace": "db879df6696d39271e119f773d75c80a94c27eaf17df19793f48e048d5470c67",
+        "namespace": 2,
+        "branch": "lane",
+        "base": null,
+        "base_layer": "320460d137e379590d12c3f13e7c4e4ec597bf1d75bb3d6cd9ab86b0b70faf1cf8",
+        "root": "7970273706fae54d04eeaad51141fadba93b938e0a5e54a7163cd65f132c1ab7",
+        "sandbox": "c03",
+        "container": "lfs-72f0a70c-c03",
+        "image": "local",
+        "platform": "mac",
+        "runtime": "native",
+        "name": null,
+        "ws": "c03:/tmp/lfs535k1-h6.eVTN/machine/native/run/lfs-72f0a70c-c03/workspaces/2"
+      },
+      "exec": {
+        "wallMs": 3381.771,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793692461894040000 1793692465259823000\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 3365.783
+      },
+      "commitMs": 116.675,
+      "commit": {
+        "kind": "UpToDate",
+        "head": null,
+        "root": "7970273706fae54d04eeaad51141fadba93b938e0a5e54a7163cd65f132c1ab7",
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "unmountMs": 29.031
+    },
+    "verify": {
+      "exitCode": 0,
+      "stdout": "VERIFY OK\n",
+      "stderr": ""
+    }
+  },
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 10.857,
+      "ok": true
+    },
+    {
+      "name": "store.create",
+      "ms": 9.845,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 106.921,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 7.883,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 41.106,
+      "ok": true
+    },
+    {
+      "name": "warmup.mount",
+      "ms": 30.797,
+      "ok": true
+    },
+    {
+      "name": "warmup.exec",
+      "ms": 3288.627,
+      "ok": true
+    },
+    {
+      "name": "warmup.unmount",
+      "ms": 20.139,
+      "ok": true
+    },
+    {
+      "name": "timed.mount",
+      "ms": 29.383,
+      "ok": true
+    },
+    {
+      "name": "timed.exec",
+      "ms": 3381.761,
+      "ok": true
+    },
+    {
+      "name": "timed.commit",
+      "ms": 116.668,
+      "ok": true
+    },
+    {
+      "name": "timed.unmount",
+      "ms": 29.024,
+      "ok": true
+    },
+    {
+      "name": "verify.mount",
+      "ms": 27.749,
+      "ok": true
+    },
+    {
+      "name": "verify.identity",
+      "ms": 47.134,
+      "ok": true
+    },
+    {
+      "name": "verify.exec",
+      "ms": 19.262,
+      "ok": true
+    },
+    {
+      "name": "verify.unmount",
+      "ms": 26.326,
+      "ok": true
+    },
+    {
+      "name": "sandbox.close",
+      "ms": 64.004,
+      "ok": true
+    },
+    {
+      "name": "store.remove",
+      "ms": 4.105,
+      "ok": true
+    }
+  ],
+  "store": {
+    "kind": "sqlite"
+  },
+  "sandbox": {
+    "name": "c03",
+    "project": "c03/p",
+    "machine": "native",
+    "created": 1793692458470,
+    "backend": "native",
+    "route": "nfs",
+    "id": "c03",
+    "platform": "mac",
+    "runtime": "native",
+    "image": "local",
+    "state": "running"
+  },
+  "where": {
+    "kernel": "Darwin 25.4.0",
+    "machine": "arm64",
+    "cpus": "14",
+    "memKiB": null,
+    "memBytes": "38654705664",
+    "cpuMax": null,
+    "id": "501:20"
+  },
+  "endedAt": "2026-11-03T07:54:25.597Z"
+}

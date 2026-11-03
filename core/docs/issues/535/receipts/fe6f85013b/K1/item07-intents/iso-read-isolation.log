@@ -1,0 +1,43 @@
+# which read changes the home: Store iso, push SIGKILLed at progress snapshot (leaves op + lease)
+1793691527.602154 SIGKILL at progress snapshot
+46733
+$ layerfs doctor
+{"ok":false,"findings":[{"severity":"warning","entity":{"kind":"store","name":"iso"},"message":"store iso still records store.push (op-926826be9d98fe89, phase check), whose process ended after a certain outcome; it holds nothing","fix":"nothing to do: the next operation on store iso replaces it"},{"severity":"warning","entity":{"kind":"store","name":"iso"},"message":"Store iso holds a stale lease of process 46733, which ended","fix":"`layerfs store status iso` removes it"},{"severity":"warning","entity":{"kind":"store","name":"pl-install"},"message":"store pl-install still records store.pull (
+=> no file changed
+$ layerfs store get iso
+layerfs: no help for `store get iso`; `layerfs help` lists the families
+
+=> no file changed
+$ layerfs store list
+layerfs: no help for `store list`; `layerfs help` lists the families
+
+=> no file changed
+$ layerfs sandbox list
+layerfs: no help for `sandbox list`; `layerfs help` lists the families
+
+=> no file changed
+$ layerfs store status iso
+layerfs: no help for `store status iso`; `layerfs help` lists the families
+
+=> no file changed
+# (rerun of the four calls above, a shell quoting fault passed each as one word)
+$ layerfs store get iso
+{"name":"iso","kind":"sqlite","machine":"native","profile":"disposable","created":1793691526238,"sqlite":"3.53.2","op":{"id":"op-926826be9d98fe89","name":"store.push","phase":"check","started":1793691527590,"uncertain":false},"projects":["p"]}
+
+=> no file changed
+$ layerfs store list
+{"items":[{"name":"cr","kind":"sqlite","machine":"native","profile":"disposable","created":1793691454109,"sqlite":"3.53.2","projects":["p"],"state":"idle"},{"name":"crd","kind":"sqlite","machine":"docker","profile":"disposable","created":1793691455168,"sqlite":"3.53.2","last_transfer":{"call":"store.push","from":"native","to":"docker","at":1793691466824,"bytes":24489984,"sha256":"3ff294813873439adca1612df8a719cee47e4fab4e8e0ffc3b272d18ae9daa4e","heads":"128554beb6e15bd4de43a585776937dce87d5afaa4
+=> CHANGED:
+4c4
+< 997243d2e783136a2eff6aaa3df2bcd6b0e99278c8d38545030c00a7031e3132  ./log/leases.jsonl
+---
+> 44ba14ec506c93ab7d0f33b9534c9baadb9ce9da4c8e840e2c3f01324894f456  ./log/leases.jsonl
+29d28
+< fa2d6fdbe36cdefce13568467ee5a97a7e02250a6aa8db96fb6136d11212a725  ./store/iso/open/46733
+$ layerfs sandbox list
+{"items":[{"name":"k-claim-docker","project":"crd/p","machine":"docker","created":1793691477849,"state":"gone","op":{"id":"op-fa49ebb405e9c35e","name":"sandbox.create","phase":"claim","started":1793691477846,"uncertain":false}},{"name":"k-claim-native","project":"cr/p","machine":"native","created":1793691466871,"state":"gone","op":{"id":"op-0ef4fb257ac26c17","name":"sandbox.create","phase":"claim","started":1793691466868,"uncertain":false}},{"name":"k-start-docker","project":"crd/p","machine":"d
+=> no file changed
+$ layerfs store status iso
+{"name":"iso","kind":"sqlite","state":"idle","holders":[],"op":{"id":"op-926826be9d98fe89","name":"store.push","phase":"check","started":1793691527590,"uncertain":false},"down_reason":null,"machine":"native","file":{"exists":true,"free":184625172480,"bytes":24477696,"wal_bytes":0}}
+
+=> no file changed

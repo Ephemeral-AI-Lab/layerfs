@@ -1,0 +1,194 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C03",
+  "machine": "docker",
+  "product": "fe6f85013b",
+  "startedAt": "2026-11-03T07:24:12.139Z",
+  "load1": 15.6171875,
+  "body": {
+    "sha256": "520773ceacd8c44d633ffd1a40727ceb5d990d63a23259f28af8dd4b96fa204d"
+  },
+  "ok": true,
+  "cause": null,
+  "phases": {
+    "warmup": {
+      "mountMs": 168.886,
+      "exec": {
+        "wallMs": 1853.793,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793690657110344504 1793690658906555172\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 1796.210668
+      },
+      "unmountMs": 7.783
+    },
+    "timed": {
+      "mountMs": 169.836,
+      "workspace": {
+        "kind": "Mounted",
+        "path": "/workspaces/2",
+        "workspace": "aaedbf939ab8100cebc4ec91bdbbd8ce0f2e13cc823cddbb9bbe5bbafcc53a66",
+        "namespace": 2,
+        "branch": "lane",
+        "base": null,
+        "base_layer": "3227231efbcef797c5c099ee5bc46d0b8b7827620d21e75201efb735e4eebc669a",
+        "root": "d504c56592fee4fdf3662ac136f99a219148b73fa814f62824773499f642a5fa",
+        "sandbox": "c03",
+        "container": "lfs-a58aa71d-c03",
+        "image": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+        "platform": "docker",
+        "runtime": "docker",
+        "name": null,
+        "ws": "c03:/workspaces/2"
+      },
+      "exec": {
+        "wallMs": 2024.104,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793690659127625297 1793690661108535714\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 1980.910417
+      },
+      "commitMs": 130.832,
+      "commit": {
+        "kind": "UpToDate",
+        "head": null,
+        "root": "d504c56592fee4fdf3662ac136f99a219148b73fa814f62824773499f642a5fa",
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "unmountMs": 8.419
+    },
+    "verify": {
+      "exitCode": 0,
+      "stdout": "VERIFY OK\n",
+      "stderr": ""
+    }
+  },
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 14.565,
+      "ok": true
+    },
+    {
+      "name": "store.connect",
+      "ms": 263.273,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 205.397,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 132.417,
+      "ok": true
+    },
+    {
+      "name": "machine.update",
+      "ms": 1.15,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 4130.745,
+      "ok": true
+    },
+    {
+      "name": "warmup.mount",
+      "ms": 168.882,
+      "ok": true
+    },
+    {
+      "name": "warmup.exec",
+      "ms": 1853.788,
+      "ok": true
+    },
+    {
+      "name": "warmup.unmount",
+      "ms": 7.778,
+      "ok": true
+    },
+    {
+      "name": "timed.mount",
+      "ms": 169.827,
+      "ok": true
+    },
+    {
+      "name": "timed.exec",
+      "ms": 2024.1,
+      "ok": true
+    },
+    {
+      "name": "timed.commit",
+      "ms": 130.826,
+      "ok": true
+    },
+    {
+      "name": "timed.unmount",
+      "ms": 8.414,
+      "ok": true
+    },
+    {
+      "name": "verify.mount",
+      "ms": 171.44,
+      "ok": true
+    },
+    {
+      "name": "verify.identity",
+      "ms": 64.902,
+      "ok": true
+    },
+    {
+      "name": "verify.exec",
+      "ms": 48.337,
+      "ok": true
+    },
+    {
+      "name": "verify.unmount",
+      "ms": 7.024,
+      "ok": true
+    },
+    {
+      "name": "sandbox.close",
+      "ms": 371.984,
+      "ok": true
+    },
+    {
+      "name": "store.disconnect",
+      "ms": 1.553,
+      "ok": true
+    }
+  ],
+  "store": {
+    "kind": "postgresql",
+    "host": "127.0.0.1"
+  },
+  "sandbox": {
+    "name": "c03",
+    "project": "c03/p",
+    "machine": "docker",
+    "created": 1793690652760,
+    "id": "c03",
+    "platform": "docker",
+    "runtime": "docker",
+    "image": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+    "backend": "docker",
+    "route": "fuse",
+    "state": "running"
+  },
+  "where": {
+    "kernel": "Linux 6.12.76-linuxkit",
+    "machine": "aarch64",
+    "cpus": "8",
+    "memKiB": "8126948",
+    "memBytes": null,
+    "cpuMax": "max 100000",
+    "id": "501:20"
+  },
+  "endedAt": "2026-11-03T07:24:21.921Z"
+}
