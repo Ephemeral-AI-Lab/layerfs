@@ -1,0 +1,23 @@
+diff --git a/connect/crates/layerfs-machine/src/support.rs b/connect/crates/layerfs-machine/src/support.rs
+index 2677445c15..61f26abf2f 100644
+--- a/connect/crates/layerfs-machine/src/support.rs
++++ b/connect/crates/layerfs-machine/src/support.rs
+@@ -90,10 +90,14 @@ fn postgresql_refusal(platform: Platform, host: HostOs) -> Option<&'static str>
+         (Platform::Native, HostOs::Macos | HostOs::Linux)
+         | (Platform::Docker | Platform::Ssh, _) => None,
+         (Platform::Native, _) => Some(NO_BACKEND),
+-        (Platform::Lima, _) => Some("lima host alias not verified (G7)"),
+-        (Platform::AppleContainer, _) => Some("apple-container gateway route not verified (G7)"),
+-        (Platform::Microsandbox, _) => Some("microsandbox host route not verified (G7)"),
+-        (Platform::Firecracker, _) => Some("firecracker NAT route not verified (G7)"),
++        // LOCAL LIFT for the #535 G7 live check (lfs535); never committed
++        (
++            Platform::Lima
++            | Platform::AppleContainer
++            | Platform::Microsandbox
++            | Platform::Firecracker,
++            _,
++        ) => None,
+     }
+ }
+ 

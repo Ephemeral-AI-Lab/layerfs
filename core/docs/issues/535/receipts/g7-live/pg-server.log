@@ -1,0 +1,379 @@
+The files belonging to this database system will be owned by user "postgres".
+This user must also own the server process.
+
+The database cluster will be initialized with locale "en_US.utf8".
+The default database encoding has accordingly been set to "UTF8".
+The default text search configuration will be set to "english".
+
+Data page checksums are disabled.
+
+fixing permissions on existing directory /var/lib/postgresql/data ... ok
+creating subdirectories ... ok
+selecting dynamic shared memory implementation ... posix
+selecting default "max_connections" ... 100
+selecting default "shared_buffers" ... 128MB
+selecting default time zone ... Etc/UTC
+creating configuration files ... ok
+running bootstrap script ... ok
+performing post-bootstrap initialization ... ok
+syncing data to disk ... ok
+
+
+Success. You can now start the database server using:
+
+    pg_ctl -D /var/lib/postgresql/data -l logfile start
+
+initdb: warning: enabling "trust" authentication for local connections
+initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+waiting for server to start....2026-11-03 06:22:45.746 UTC [48] LOG:  starting PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+2026-11-03 06:22:45.747 UTC [48] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-11-03 06:22:45.749 UTC [51] LOG:  database system was shut down at 2026-11-03 06:22:45 UTC
+2026-11-03 06:22:45.751 UTC [48] LOG:  database system is ready to accept connections
+ done
+server started
+2026-11-03 06:22:45.860 UTC [57] LOG:  connection received: host=[local]
+2026-11-03 06:22:45.860 UTC [57] LOG:  connection authenticated: user="postgres" method=trust (/var/lib/postgresql/data/pg_hba.conf:117)
+2026-11-03 06:22:45.860 UTC [57] LOG:  connection authorized: user=postgres database=postgres application_name=psql
+2026-11-03 06:22:45.881 UTC [59] LOG:  connection received: host=[local]
+2026-11-03 06:22:45.882 UTC [59] LOG:  connection authenticated: user="postgres" method=trust (/var/lib/postgresql/data/pg_hba.conf:117)
+2026-11-03 06:22:45.882 UTC [59] LOG:  connection authorized: user=postgres database=postgres application_name=psql
+CREATE DATABASE
+
+
+/usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+
+waiting for server to shut down....2026-11-03 06:22:45.904 UTC [48] LOG:  received fast shutdown request
+2026-11-03 06:22:45.905 UTC [48] LOG:  aborting any active transactions
+2026-11-03 06:22:45.906 UTC [48] LOG:  background worker "logical replication launcher" (PID 54) exited with exit code 1
+2026-11-03 06:22:45.906 UTC [49] LOG:  shutting down
+2026-11-03 06:22:45.907 UTC [49] LOG:  checkpoint starting: shutdown immediate
+2026-11-03 06:22:45.936 UTC [49] LOG:  checkpoint complete: wrote 921 buffers (5.6%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.008 s, sync=0.020 s, total=0.030 s; sync files=301, longest=0.009 s, average=0.001 s; distance=4238 kB, estimate=4238 kB; lsn=0/190A998, redo lsn=0/190A998
+2026-11-03 06:22:45.939 UTC [48] LOG:  database system is shut down
+ done
+server stopped
+
+PostgreSQL init process complete; ready for start up.
+
+2026-11-03 06:22:46.021 UTC [1] LOG:  starting PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+2026-11-03 06:22:46.022 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2026-11-03 06:22:46.022 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2026-11-03 06:22:46.023 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-11-03 06:22:46.027 UTC [64] LOG:  database system was shut down at 2026-11-03 06:22:45 UTC
+2026-11-03 06:22:46.029 UTC [1] LOG:  database system is ready to accept connections
+2026-11-03 06:24:45.351 UTC [71] LOG:  connection received: host=192.168.65.1 port=31208
+2026-11-03 06:24:45.395 UTC [71] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:24:45.395 UTC [71] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:24:45.452 UTC [72] LOG:  connection received: host=192.168.65.1 port=23725
+2026-11-03 06:24:45.493 UTC [72] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:24:45.493 UTC [72] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:24:45.505 UTC [73] LOG:  connection received: host=192.168.65.1 port=35119
+2026-11-03 06:24:45.547 UTC [73] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:24:45.547 UTC [73] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:24:45.688 UTC [74] LOG:  connection received: host=192.168.65.1 port=22104
+2026-11-03 06:24:45.732 UTC [74] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:24:45.732 UTC [74] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:24:46.003 UTC [75] LOG:  connection received: host=192.168.65.1 port=41008
+2026-11-03 06:24:46.047 UTC [75] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:24:46.047 UTC [75] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:24:46.064 UTC [76] LOG:  connection received: host=192.168.65.1 port=41169
+2026-11-03 06:24:46.106 UTC [76] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:24:46.106 UTC [76] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:24:46.258 UTC [78] LOG:  connection received: host=192.168.65.1 port=47931
+2026-11-03 06:24:46.301 UTC [78] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:24:46.301 UTC [78] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:24:46.320 UTC [79] LOG:  connection received: host=192.168.65.1 port=30931
+2026-11-03 06:24:46.362 UTC [79] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:24:46.362 UTC [79] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:24:46.529 UTC [80] LOG:  connection received: host=192.168.65.1 port=27272
+2026-11-03 06:24:46.573 UTC [80] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:24:46.573 UTC [80] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:24:46.593 UTC [81] LOG:  connection received: host=192.168.65.1 port=27413
+2026-11-03 06:24:46.636 UTC [81] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:24:46.636 UTC [81] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:27:25.859 UTC [89] LOG:  connection received: host=192.168.65.1 port=22821
+2026-11-03 06:27:25.903 UTC [89] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:27:25.903 UTC [89] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:27:25.950 UTC [90] LOG:  connection received: host=192.168.65.1 port=21575
+2026-11-03 06:27:25.994 UTC [90] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:27:25.994 UTC [90] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:27:26.050 UTC [91] LOG:  connection received: host=192.168.65.1 port=39408
+2026-11-03 06:27:26.093 UTC [91] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:27:26.093 UTC [91] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:27:46.112 UTC [62] LOG:  checkpoint starting: time
+2026-11-03 06:28:17.204 UTC [62] LOG:  checkpoint complete: wrote 297 buffers (1.8%); 0 WAL file(s) added, 0 removed, 0 recycled; write=31.073 s, sync=0.014 s, total=31.092 s; sync files=170, longest=0.002 s, average=0.001 s; distance=1517 kB, estimate=1517 kB; lsn=0/1A85F38, redo lsn=0/1A85EA8
+2026-11-03 06:29:30.922 UTC [99] LOG:  connection received: host=192.168.65.1 port=27439
+2026-11-03 06:29:30.984 UTC [99] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:29:30.984 UTC [99] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:29:31.008 UTC [100] LOG:  connection received: host=192.168.65.1 port=19046
+2026-11-03 06:29:31.052 UTC [100] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:29:31.052 UTC [100] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:29:31.079 UTC [101] LOG:  connection received: host=192.168.65.1 port=22518
+2026-11-03 06:29:31.120 UTC [101] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:29:31.120 UTC [101] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:29:35.002 UTC [102] LOG:  connection received: host=192.168.65.1 port=18080
+2026-11-03 06:29:35.046 UTC [102] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:29:35.046 UTC [102] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:29:35.118 UTC [103] LOG:  connection received: host=192.168.65.1 port=28175
+2026-11-03 06:29:35.161 UTC [103] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:29:35.161 UTC [103] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:29:42.911 UTC [104] LOG:  connection received: host=192.168.65.1 port=48093
+2026-11-03 06:29:42.954 UTC [104] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:29:42.955 UTC [104] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:29:49.427 UTC [106] LOG:  connection received: host=192.168.65.1 port=38442
+2026-11-03 06:29:49.500 UTC [106] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:29:49.500 UTC [106] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:29:49.818 UTC [107] LOG:  connection received: host=192.168.65.1 port=60586
+2026-11-03 06:29:49.863 UTC [107] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:29:49.863 UTC [107] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:29:49.892 UTC [108] LOG:  connection received: host=192.168.65.1 port=54996
+2026-11-03 06:29:49.934 UTC [108] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:29:49.935 UTC [108] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:30:04.931 UTC [115] LOG:  connection received: host=[local]
+2026-11-03 06:30:04.932 UTC [115] LOG:  connection authenticated: user="postgres" method=trust (/var/lib/postgresql/data/pg_hba.conf:117)
+2026-11-03 06:30:04.932 UTC [115] LOG:  connection authorized: user=postgres database=postgres application_name=psql
+2026-11-03 06:30:05.059 UTC [116] LOG:  connection received: host=172.17.0.1 port=64396
+2026-11-03 06:30:05.101 UTC [116] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:05.101 UTC [116] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:30:05.161 UTC [117] LOG:  connection received: host=172.17.0.1 port=64404
+2026-11-03 06:30:05.203 UTC [117] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:05.203 UTC [117] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:30:05.216 UTC [118] LOG:  connection received: host=172.17.0.1 port=64420
+2026-11-03 06:30:05.258 UTC [118] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:05.258 UTC [118] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:30:05.394 UTC [119] LOG:  connection received: host=172.17.0.1 port=64434
+2026-11-03 06:30:05.437 UTC [119] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:05.437 UTC [119] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:30:47.510 UTC [123] LOG:  connection received: host=192.168.65.1 port=57115
+2026-11-03 06:30:47.553 UTC [123] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:47.553 UTC [123] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:30:47.600 UTC [124] LOG:  connection received: host=192.168.65.1 port=50480
+2026-11-03 06:30:47.643 UTC [124] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:47.643 UTC [124] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:30:47.693 UTC [125] LOG:  connection received: host=192.168.65.1 port=48893
+2026-11-03 06:30:47.736 UTC [125] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:47.736 UTC [125] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:30:47.872 UTC [126] LOG:  connection received: host=192.168.65.1 port=28943
+2026-11-03 06:30:47.916 UTC [126] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:47.916 UTC [126] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:30:47.985 UTC [127] LOG:  connection received: host=192.168.65.1 port=54566
+2026-11-03 06:30:48.029 UTC [127] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:48.029 UTC [127] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:30:54.965 UTC [129] LOG:  connection received: host=192.168.65.1 port=21157
+2026-11-03 06:30:55.009 UTC [129] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:55.009 UTC [129] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:30:55.035 UTC [130] LOG:  connection received: host=192.168.65.1 port=54990
+2026-11-03 06:30:55.077 UTC [130] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:55.077 UTC [130] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:30:55.158 UTC [131] LOG:  connection received: host=192.168.65.1 port=34424
+2026-11-03 06:30:55.202 UTC [131] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:55.202 UTC [131] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:30:55.579 UTC [132] LOG:  connection received: host=192.168.65.1 port=34489
+2026-11-03 06:30:55.621 UTC [132] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:55.621 UTC [132] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:30:55.885 UTC [133] LOG:  connection received: host=192.168.65.1 port=32955
+2026-11-03 06:30:55.928 UTC [133] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:55.928 UTC [133] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:30:55.945 UTC [134] LOG:  connection received: host=192.168.65.1 port=45004
+2026-11-03 06:30:55.987 UTC [134] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:30:55.987 UTC [134] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:31:02.481 UTC [135] LOG:  connection received: host=172.17.0.1 port=57368
+2026-11-03 06:31:02.526 UTC [135] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:02.526 UTC [135] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:02.575 UTC [136] LOG:  connection received: host=172.17.0.1 port=57380
+2026-11-03 06:31:02.618 UTC [136] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:02.618 UTC [136] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:02.672 UTC [137] LOG:  connection received: host=172.17.0.1 port=57394
+2026-11-03 06:31:02.716 UTC [137] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:02.716 UTC [137] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:02.854 UTC [138] LOG:  connection received: host=172.17.0.1 port=57406
+2026-11-03 06:31:02.898 UTC [138] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:02.898 UTC [138] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:02.973 UTC [139] LOG:  connection received: host=172.17.0.1 port=57422
+2026-11-03 06:31:03.017 UTC [139] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:03.017 UTC [139] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:03.889 UTC [140] LOG:  connection received: host=172.17.0.1 port=57432
+2026-11-03 06:31:03.933 UTC [140] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:03.933 UTC [140] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:03.956 UTC [141] LOG:  connection received: host=172.17.0.1 port=57438
+2026-11-03 06:31:03.999 UTC [141] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:03.999 UTC [141] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:04.161 UTC [142] LOG:  connection received: host=172.17.0.1 port=57444
+2026-11-03 06:31:04.205 UTC [142] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:04.205 UTC [142] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:04.224 UTC [143] LOG:  connection received: host=172.17.0.1 port=57458
+2026-11-03 06:31:04.267 UTC [143] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:04.267 UTC [143] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:04.344 UTC [144] LOG:  connection received: host=172.17.0.1 port=57472
+2026-11-03 06:31:04.387 UTC [144] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:04.387 UTC [144] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:04.766 UTC [145] LOG:  connection received: host=172.17.0.1 port=57484
+2026-11-03 06:31:04.808 UTC [145] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:04.808 UTC [145] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:05.071 UTC [146] LOG:  connection received: host=172.17.0.1 port=57500
+2026-11-03 06:31:05.114 UTC [146] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:05.114 UTC [146] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:05.134 UTC [147] LOG:  connection received: host=172.17.0.1 port=57510
+2026-11-03 06:31:05.177 UTC [147] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:05.177 UTC [147] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:31:37.787 UTC [151] LOG:  connection received: host=192.168.65.1 port=59965
+2026-11-03 06:31:37.831 UTC [151] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:37.831 UTC [151] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:31:37.905 UTC [152] LOG:  connection received: host=192.168.65.1 port=60035
+2026-11-03 06:31:37.948 UTC [152] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:37.948 UTC [152] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:31:38.034 UTC [153] LOG:  connection received: host=192.168.65.1 port=27092
+2026-11-03 06:31:38.076 UTC [153] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:38.076 UTC [153] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:31:44.036 UTC [154] LOG:  connection received: host=192.168.65.1 port=45763
+2026-11-03 06:31:44.093 UTC [154] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:44.093 UTC [154] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:31:44.186 UTC [155] LOG:  connection received: host=192.168.65.1 port=17354
+2026-11-03 06:31:44.241 UTC [155] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:44.241 UTC [155] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:31:51.037 UTC [156] LOG:  connection received: host=192.168.65.1 port=51703
+2026-11-03 06:31:51.142 UTC [156] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:51.142 UTC [156] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:31:52.307 UTC [158] LOG:  connection received: host=192.168.65.1 port=45267
+2026-11-03 06:31:52.368 UTC [158] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:52.368 UTC [158] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:31:52.952 UTC [159] LOG:  connection received: host=192.168.65.1 port=45127
+2026-11-03 06:31:53.002 UTC [159] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:53.002 UTC [159] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:31:53.023 UTC [160] LOG:  connection received: host=192.168.65.1 port=49172
+2026-11-03 06:31:53.065 UTC [160] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:31:53.065 UTC [160] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:32:00.651 UTC [161] LOG:  connection received: host=192.168.65.1 port=54481
+2026-11-03 06:32:00.696 UTC [161] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:00.696 UTC [161] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:32:00.931 UTC [162] LOG:  connection received: host=192.168.65.1 port=30582
+2026-11-03 06:32:00.973 UTC [162] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:00.973 UTC [162] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:32:01.093 UTC [163] LOG:  connection received: host=192.168.65.1 port=26430
+2026-11-03 06:32:01.136 UTC [163] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:01.136 UTC [163] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:32:16.724 UTC [165] LOG:  connection received: host=192.168.65.1 port=34702
+2026-11-03 06:32:16.769 UTC [165] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:16.769 UTC [165] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:32:16.799 UTC [166] LOG:  connection received: host=192.168.65.1 port=61281
+2026-11-03 06:32:16.842 UTC [166] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:16.842 UTC [166] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:32:17.054 UTC [167] LOG:  connection received: host=192.168.65.1 port=35320
+2026-11-03 06:32:17.096 UTC [167] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:17.096 UTC [167] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:32:17.523 UTC [168] LOG:  connection received: host=192.168.65.1 port=19944
+2026-11-03 06:32:17.565 UTC [168] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:17.565 UTC [168] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:32:17.822 UTC [169] LOG:  connection received: host=192.168.65.1 port=55284
+2026-11-03 06:32:17.867 UTC [169] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:17.867 UTC [169] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:32:17.888 UTC [170] LOG:  connection received: host=192.168.65.1 port=46260
+2026-11-03 06:32:17.930 UTC [170] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:17.930 UTC [170] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:32:24.553 UTC [172] LOG:  connection received: host=172.17.0.1 port=63862
+2026-11-03 06:32:24.596 UTC [172] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:24.597 UTC [172] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:32:24.670 UTC [173] LOG:  connection received: host=172.17.0.1 port=63872
+2026-11-03 06:32:24.712 UTC [173] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:24.712 UTC [173] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:32:24.790 UTC [174] LOG:  connection received: host=172.17.0.1 port=63886
+2026-11-03 06:32:24.834 UTC [174] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:24.834 UTC [174] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:32:25.080 UTC [175] LOG:  connection received: host=172.17.0.1 port=63892
+2026-11-03 06:32:25.125 UTC [175] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:25.125 UTC [175] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:32:25.244 UTC [176] LOG:  connection received: host=172.17.0.1 port=63900
+2026-11-03 06:32:25.288 UTC [176] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:25.288 UTC [176] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:32:25.480 UTC [177] LOG:  connection received: host=172.17.0.1 port=63902
+2026-11-03 06:32:25.524 UTC [177] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:25.524 UTC [177] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:32:25.544 UTC [178] LOG:  connection received: host=172.17.0.1 port=63916
+2026-11-03 06:32:25.588 UTC [178] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:25.588 UTC [178] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:32:25.794 UTC [179] LOG:  connection received: host=172.17.0.1 port=63928
+2026-11-03 06:32:25.837 UTC [179] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:25.837 UTC [179] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:32:26.281 UTC [180] LOG:  connection received: host=172.17.0.1 port=58532
+2026-11-03 06:32:26.323 UTC [180] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:26.323 UTC [180] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:32:26.579 UTC [181] LOG:  connection received: host=172.17.0.1 port=58548
+2026-11-03 06:32:26.624 UTC [181] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:26.624 UTC [181] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:32:26.643 UTC [182] LOG:  connection received: host=172.17.0.1 port=58554
+2026-11-03 06:32:26.686 UTC [182] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:32:26.686 UTC [182] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:32:46.518 UTC [62] LOG:  checkpoint starting: time
+2026-11-03 06:34:41.383 UTC [62] LOG:  checkpoint complete: wrote 1109 buffers (6.8%); 1 WAL file(s) added, 0 removed, 0 recycled; write=114.784 s, sync=0.029 s, total=114.865 s; sync files=432, longest=0.002 s, average=0.001 s; distance=5086 kB, estimate=5086 kB; lsn=0/1F7D868, redo lsn=0/1F7D7D8
+2026-11-03 06:35:18.704 UTC [194] LOG:  connection received: host=192.168.65.1 port=54156
+2026-11-03 06:35:18.749 UTC [194] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:18.749 UTC [194] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:35:18.773 UTC [195] LOG:  connection received: host=192.168.65.1 port=23936
+2026-11-03 06:35:18.816 UTC [195] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:18.816 UTC [195] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:35:19.087 UTC [196] LOG:  connection received: host=192.168.65.1 port=38667
+2026-11-03 06:35:19.142 UTC [196] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:19.142 UTC [196] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:35:19.217 UTC [197] LOG:  connection received: host=192.168.65.1 port=46969
+2026-11-03 06:35:19.269 UTC [197] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:19.269 UTC [197] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:35:19.342 UTC [198] LOG:  connection received: host=192.168.65.1 port=59286
+2026-11-03 06:35:19.393 UTC [198] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:19.393 UTC [198] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:35:32.668 UTC [200] LOG:  connection received: host=192.168.65.1 port=50948
+2026-11-03 06:35:32.720 UTC [200] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:32.720 UTC [200] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:35:32.804 UTC [201] LOG:  connection received: host=192.168.65.1 port=31787
+2026-11-03 06:35:32.855 UTC [201] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:32.855 UTC [201] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:35:40.636 UTC [203] LOG:  connection received: host=192.168.65.1 port=59154
+2026-11-03 06:35:40.686 UTC [203] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:40.686 UTC [203] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:35:41.386 UTC [204] LOG:  connection received: host=192.168.65.1 port=55529
+2026-11-03 06:35:41.436 UTC [204] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:41.436 UTC [204] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:35:41.752 UTC [205] LOG:  connection received: host=192.168.65.1 port=21402
+2026-11-03 06:35:41.799 UTC [205] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:41.799 UTC [205] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:35:41.826 UTC [206] LOG:  connection received: host=192.168.65.1 port=64709
+2026-11-03 06:35:41.868 UTC [206] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:41.868 UTC [206] LOG:  connection authorized: user=postgres database=lfs535
+2026-11-03 06:35:48.640 UTC [207] LOG:  connection received: host=172.17.0.1 port=55074
+2026-11-03 06:35:48.691 UTC [207] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:48.691 UTC [207] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:35:48.748 UTC [208] LOG:  connection received: host=172.17.0.1 port=55082
+2026-11-03 06:35:48.800 UTC [208] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:48.800 UTC [208] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:35:48.864 UTC [209] LOG:  connection received: host=172.17.0.1 port=55088
+2026-11-03 06:35:48.915 UTC [209] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:48.915 UTC [209] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:35:49.394 UTC [210] LOG:  connection received: host=172.17.0.1 port=55104
+2026-11-03 06:35:49.446 UTC [210] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:49.446 UTC [210] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:35:49.550 UTC [211] LOG:  connection received: host=172.17.0.1 port=55116
+2026-11-03 06:35:49.603 UTC [211] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:49.603 UTC [211] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:35:49.794 UTC [212] LOG:  connection received: host=172.17.0.1 port=55118
+2026-11-03 06:35:49.838 UTC [212] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:49.838 UTC [212] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:35:49.862 UTC [213] LOG:  connection received: host=172.17.0.1 port=55130
+2026-11-03 06:35:49.905 UTC [213] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:49.905 UTC [213] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:35:50.121 UTC [214] LOG:  connection received: host=172.17.0.1 port=55132
+2026-11-03 06:35:50.172 UTC [214] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:50.172 UTC [214] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:35:50.745 UTC [215] LOG:  connection received: host=172.17.0.1 port=55136
+2026-11-03 06:35:50.797 UTC [215] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:50.797 UTC [215] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:35:51.110 UTC [216] LOG:  connection received: host=172.17.0.1 port=55150
+2026-11-03 06:35:51.153 UTC [216] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:51.153 UTC [216] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:35:51.175 UTC [217] LOG:  connection received: host=172.17.0.1 port=55156
+2026-11-03 06:35:51.217 UTC [217] LOG:  connection authenticated: identity="postgres" method=scram-sha-256 (/var/lib/postgresql/data/pg_hba.conf:128)
+2026-11-03 06:35:51.217 UTC [217] LOG:  connection authorized: user=postgres database=lfs535lo
+2026-11-03 06:36:17.299 UTC [220] LOG:  connection received: host=192.168.65.1 port=16748
+2026-11-03 06:36:17.365 UTC [221] LOG:  connection received: host=172.17.0.1 port=63648
+2026-11-03 06:36:26.244 UTC [223] LOG:  connection received: host=192.168.65.1 port=52310
+2026-11-03 06:36:26.512 UTC [224] LOG:  connection received: host=172.17.0.1 port=62038
+2026-11-03 06:37:31.688 UTC [229] LOG:  connection received: host=192.168.65.1 port=65234
+2026-11-03 06:37:37.713 UTC [231] LOG:  connection received: host=192.168.65.1 port=49878
+2026-11-03 06:37:37.796 UTC [232] LOG:  connection received: host=172.17.0.1 port=60678

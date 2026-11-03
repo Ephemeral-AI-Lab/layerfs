@@ -1,0 +1,46 @@
+$ layerfs machine create lfs535a apple-container
+# at 2026-11-03T06:29:16Z load1 5.14
+{"name":"lfs535a","platform":"apple-container","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":2,"memory":4294967296,"disk":21474836480,"stores":[],"sandboxes":[]}
+exit 0  wall_ms 9596
+
+$ layerfs sandbox create pg/app sa lfs535a
+# at 2026-11-03T06:29:30Z load1 5.22
+{"name":"sa","project":"pg/app","machine":"lfs535a","created":1793687370867,"id":"sa","platform":"linux","runtime":"namespaces","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","backend":"namespaces","route":"fuse","state":"running"}
+exit 0  wall_ms 4381
+
+$ layerfs workspace mount sa wa
+# at 2026-11-03T06:29:42Z load1 4.96
+{"kind":"Mounted","path":"/layerfs/data/machine/native/run/lfs-1dfaa5f6-sa/workspaces/1","workspace":"e0528c1930bb77b224e65687ac2534e76a1a8ce7f28125a6f8c7fb0813d3604c","namespace":1,"branch":"wa","base":null,"base_layer":"32bd92d8521bf9531a7db56a616f23614abf1a3702d7d7c596cd005e4b6942445d","root":"555a700b19b1e4ecbb8f89bcb847d0c6e53dffbf08800c01b89fbcc982b58dd7","sandbox":"sa","container":"lfs-1dfaa5f6-sa","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","platform":"linux","runtime":"namespaces","name":null,"ws":"sa:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sa/workspaces/1"}
+exit 0  wall_ms 276
+
+$ layerfs workspace exec sa:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sa/workspaces/1 cat\ readme.txt\;\ cat\ sub/deeper/leaf.txt\;\ readlink\ link-to-list\;\ echo\ \"written\ in\ apple-container\ lfs535a\"\ \>\ from-ac.txt\;\ ls\ -la --message lfs535\ apple-container\ exec
+# at 2026-11-03T06:29:48Z load1 4.88
+{"kind":"exit:0","exit_code":0,"stdout":"hello from the mac\ndeep\nsub/list.txt\ntotal 6\ndrwx------ 3  501 dialout    0 Nov  3 06:29 .\ndrwxr-xr-x 3 root root    4096 Nov  3 06:29 ..\n-rw-r--r-- 1  501 dialout   35 Nov  3 06:29 from-ac.txt\nlrwxrwxrwx 1  501 dialout   12 Nov  3 06:24 link-to-list -> sub/list.txt\n-rw-r--r-- 1  501 dialout   19 Nov  3 06:24 readme.txt\ndrwxr-xr-x 3  501 dialout    0 Nov  3 06:24 sub\n","stderr":"","message":"lfs535 apple-container exec","truncated":false}
+exit 0  wall_ms 174
+
+$ layerfs workspace commit sa:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sa/workspaces/1 --message lfs535\ commit\ from\ apple-container
+# at 2026-11-03T06:29:49Z load1 4.88
+{"kind":"Committed","head":"12be250034426e7bd992e0c25647958db814d881956d3fac121e34fc826c7fba70","commit":{"id":"12be250034426e7bd992e0c25647958db814d881956d3fac121e34fc826c7fba70","branch":null,"parent":null,"second_parent":null,"base":"32bd92d8521bf9531a7db56a616f23614abf1a3702d7d7c596cd005e4b6942445d","root":"cac98bbe33094ae3f607918d27a648e1add199cbd0d9402aa33e7d730b5a61d2","via":"exec","message":"lfs535 commit from apple-container","merged_from":null,"time":1793687389419,"logical":65,"new_canonical":999,"new_stored":454,"new_metadata":382,"displaced":null,"lww":[],"lww_truncated":false},"displaced_head":null,"merged":null,"lww":[],"lww_truncated":false}
+exit 0  wall_ms 320
+
+$ layerfs workspace unmount sa:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sa/workspaces/1
+# at 2026-11-03T06:29:49Z load1 5.45
+{"kind":"Unmounted"}
+exit 0  wall_ms 80
+
+$ layerfs file read pg/app wa /from-ac.txt
+# at 2026-11-03T06:29:49Z load1 5.45
+{"kind":"ok","snapshot":"wa@be250034426e","root":"cac98bbe33094ae3f607918d27a648e1add199cbd0d9402aa33e7d730b5a61d2","path":"/from-ac.txt","text":"written in apple-container lfs535a\n","start_line":1,"end_line":1,"line_truncated":false,"truncated":false,"next_line":null,"size":35}
+exit 0  wall_ms 252
+
+$ layerfs sandbox close sa
+# at 2026-11-03T06:29:57Z load1 5.26
+{"kind":"Closed","sandbox":"sa","unknown":[],"closed":"sa"}
+exit 0  wall_ms 287
+
+# --- loopback-only Store pglo (127.0.0.1:55536, server published on 127.0.0.1 only) ---
+$ layerfs sandbox create pglo/app sa2 lfs535a
+# at 2026-11-03T06:30:05Z load1 4.83
+{"code":"Unavailable","message":"the worker's machine cannot reach PostgreSQL Store pglo's server at 192.168.64.1: reading schema layerfs: pack persistence: Refused { status: \"Closed\" }","detail":null}
+exit 125  wall_ms 77
+
