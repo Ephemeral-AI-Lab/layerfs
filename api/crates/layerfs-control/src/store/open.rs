@@ -37,7 +37,7 @@ fn store_path(args: &SdkValue) -> Result<PathBuf, SdkRefusal> {
 /// as long as the Store stays open. The Store stays open while it runs.
 pub(crate) fn run(op: &str, args: SdkValue, lease: Option<Lease>) -> Outcome {
     let running = Running(enter(&args, lease, 1)?);
-    let outcome = direct::call(op, args, false);
+    let outcome = direct::call(op, args);
     drop(running);
     outcome
 }

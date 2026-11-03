@@ -1,18 +1,18 @@
-//! Bounded original Engine/control peers qualify SDK close custody and ordinary exec routing.
+//! Bounded original Engine/control peers qualify Sandbox creation on an
+//! existing project's Store (`SandboxApi::create_provider_file`). The close
+//! and exec cases went with the test-only facade (#536 step 2).
 #![cfg(unix)]
 #[allow(dead_code)]
 #[path = "../../../../connect/crates/layerfs-sandbox/tests/support/engine.rs"]
 mod engine;
-use engine::{fixed, frame, upgrade, Peer};
+use engine::{fixed, frame, Peer};
 use layerfs_bridge::{
     control::{Answer, Call, DaemonPhase, DaemonStatus, Reply, Request},
     daemon_setup::{DaemonLimits, DaemonSetup},
     duplex,
 };
 use layerfs_bridge::{DaemonStore, KernelRoute};
-use layerfs_control::{
-    ProviderCreate, ProviderSandbox, SandboxApi, SandboxCause, SandboxPhase, WorkspaceApi,
-};
+use layerfs_control::{ProviderCreate, ProviderSandbox, SandboxApi, SandboxPhase};
 use layerfs_sandbox::docker::DockerProvider;
 use layerfs_sandbox::Runtime;
 use layerfs_sandbox::{LaunchRequest, ProviderLaunchOptions};
@@ -68,11 +68,8 @@ struct Fixture {
     binary: PathBuf,
 }
 impl Fixture {
-    fn new(tail: Vec<Vec<u8>>) -> Self {
-        Self::new_for(None, tail)
-    }
-    fn new_for(project: Option<&layerfs_control::SealedProject>, tail: Vec<Vec<u8>>) -> Self {
-        let existing = project.is_some();
+    fn new_for(project: &layerfs_control::SealedProject, tail: Vec<Vec<u8>>) -> Self {
+        let existing = true;
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         listener.set_nonblocking(true).unwrap();
@@ -142,14 +139,12 @@ impl Fixture {
         ));
         fs::write(&binary, b"original executable input").unwrap();
         let mut deployment_setup = setup([32; 32], duplex::public_key(&[31; 32]).unwrap());
-        if let Some(project) = project {
-            let mut manifest = project.manifest.clone();
-            manifest.daemon_sqlite = Some("3.51.0".into());
-            deployment_setup.store = DaemonStore::Sqlite {
-                locator: manifest.locator.clone(),
-                install: Some(manifest),
-            };
-        }
+        let mut manifest = project.manifest.clone();
+        manifest.daemon_sqlite = Some("3.51.0".into());
+        deployment_setup.store = DaemonStore::Sqlite {
+            locator: manifest.locator.clone(),
+            install: Some(manifest),
+        };
         let request = ProviderCreate {
             launch: LaunchRequest {
                 name: "sdk-operations".into(),
@@ -177,10 +172,12 @@ impl Fixture {
             daemon: Some(daemon),
             binary,
         };
-        fixture.owner = Some(match project {
-            Some(project) => fixture.api.create(request, project).unwrap(),
-            None => layerfs_control::internal::start(&fixture.api, request).unwrap(),
-        });
+        fixture.owner = Some(
+            fixture
+                .api
+                .create_provider_file(request, &project.store, &project.manifest)
+                .unwrap(),
+        );
         fixture
     }
     fn calls(mut self) -> Vec<Vec<u8>> {
@@ -197,187 +194,6 @@ impl Drop for Fixture {
         let _ = fs::remove_file(&self.binary);
     }
 }
-#[test]
-fn close_stops_then_deletes_the_original_owner_without_deleting_its_borrowed_volume() {
-    let mut fixture = Fixture::new(vec![fixed(204, b""), fixed(204, b"")]);
-    fixture.api.close(fixture.owner.take().unwrap()).unwrap();
-    let calls = fixture.calls();
-    assert_eq!(calls.len(), 8);
-    assert!(calls[6].starts_with(format!("POST /v1.54/containers/{CID}/stop?t=1 ").as_bytes()));
-    assert!(calls[7]
-        .starts_with(format!("DELETE /v1.54/containers/{CID}?force=false&v=false ").as_bytes()));
-    assert!(!calls
-        .iter()
-        .any(|call| call.starts_with(b"DELETE /v1.54/volumes/")));
-}
-#[test]
-fn failed_stop_preserves_original_owner_channel_inputs_and_attempt_without_delete() {
-    let mut fixture = Fixture::new(vec![fixed(409, b"original stop refusal")]);
-    let mut owner = fixture.owner.take().unwrap();
-    let work = layerfs_control::internal::control(&mut owner).channel_work();
-    let handshake = owner.handshake;
-    let failure = fixture.api.close(owner).unwrap_err();
-    assert_eq!(failure.phase, SandboxPhase::Stop);
-    let runtime = failure.runtime.as_ref().unwrap();
-    assert_eq!(runtime.identity().to_string(), CID);
-    let SandboxCause::Runtime(cause) = &failure.cause else {
-        panic!("original runtime failure")
-    };
-    assert_eq!(cause.requested_container, Some(runtime.identity()));
-    assert!(cause.attempted);
-    assert_eq!(failure.control.as_ref().unwrap().channel_work(), work);
-    assert_eq!(failure.handshake, handshake);
-    assert_eq!(failure.request.controller_private, [31; 32]);
-    assert!(failure.installed.is_none());
-    assert_eq!(fixture.calls().len(), 7);
-}
-#[test]
-fn failed_delete_retains_acknowledged_stop_and_exact_delete_failure() {
-    let mut fixture = Fixture::new(vec![
-        fixed(204, b""),
-        fixed(409, b"original delete refusal"),
-    ]);
-    let failure = fixture
-        .api
-        .close(fixture.owner.take().unwrap())
-        .unwrap_err();
-    assert_eq!(failure.phase, SandboxPhase::Delete);
-    let runtime = failure.runtime.as_ref().unwrap();
-    assert_eq!(runtime.identity().to_string(), CID);
-    let SandboxCause::Runtime(cause) = &failure.cause else {
-        panic!("original runtime failure")
-    };
-    assert_eq!(cause.requested_container, Some(runtime.identity()));
-    assert!(cause.attempted);
-    assert!(failure.control.is_some());
-    assert_eq!(fixture.calls().len(), 8);
-}
-
-fn mounted() -> layerfs_control::MountedWorkspace {
-    use layerfs_bridge::control::{MountReceipt, ReadyMount, WorkspaceToken};
-    use layerfs_content::ObjectId;
-    use layerfs_history::{
-        BranchId, BranchRecord, BranchSnapshot, HistoryName, LayerId, LayerStackId, WorkspaceId,
-    };
-    let token = WorkspaceToken {
-        workspace: WorkspaceId::from_authority([4; 32]).unwrap(),
-        namespace: 7,
-    };
-    let root = ObjectId::for_bytes(b"SDK exec mount fixture");
-    layerfs_control::MountedWorkspace {
-        bound: layerfs_control::BoundWorkspace {
-            token,
-            binding: BranchSnapshot {
-                branch: BranchRecord {
-                    forked_from: None,
-                    id: BranchId::from_authority([1; 16]),
-                    stack: LayerStackId::from_authority([2; 16]),
-                    name: HistoryName::new("main").unwrap(),
-                    base_layer: LayerId::from_bytes([0x32; 33]).unwrap(),
-                    head_commit: None,
-                },
-                head_root: None,
-                base_root: root,
-                effective_root: root,
-                scope: ObjectId::for_bytes(b"SDK scope"),
-                profile: layerfs_content::filesystem::profile_id(),
-            },
-        },
-        ready: ReadyMount {
-            token,
-            directory: "/workspaces/selected-mount".into(),
-            receipt: MountReceipt {
-                mount: 0x0102,
-                root: 7,
-                mount_id: 911,
-                device_major: 0,
-                device_minor: 64,
-                abi_major: 7,
-                abi_minor: 41,
-                offered: u64::MAX - 1,
-                selected: (1 << 22) | 1,
-                max_write: 131072,
-                max_readahead: 65536,
-                max_background: 12,
-                congestion_threshold: 9,
-                page_size: 4096,
-                loops: 2,
-                abort_bound: true,
-            },
-        },
-    }
-}
-#[test]
-fn workspace_exec_returns_original_runtime_owner_at_the_mount_with_no_daemon_registration() {
-    const EID: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
-    let mut fixture = Fixture::new(vec![
-        fixed(201, format!("{{\"Id\":\"{EID}\"}}").as_bytes()),
-        upgrade(&frame(1, b"")),
-        fixed(
-            200,
-            format!(
-                "{{\"ID\":\"{EID}\",\"ContainerID\":\"{CID}\",\"Running\":false,\"ExitCode\":0,\"Pid\":42}}"
-            )
-            .as_bytes(),
-        ),
-        fixed(204, b""),
-        fixed(204, b""),
-    ]);
-    let before = layerfs_control::internal::control(fixture.owner.as_mut().unwrap()).channel_work();
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    let exit = WorkspaceApi::exec(
-        fixture.owner.as_ref().unwrap(),
-        &mounted(),
-        vec!["/bin/pwd".into()],
-        vec!["SDK_TEST=1".into()],
-        &mut stdout,
-        &mut stderr,
-    )
-    .unwrap();
-    assert_eq!(exit.code, 0);
-    assert_eq!(exit.pid, Some(42));
-    assert_eq!(
-        layerfs_control::internal::control(fixture.owner.as_mut().unwrap()).channel_work(),
-        before
-    );
-    fixture.api.close(fixture.owner.take().unwrap()).unwrap();
-    let calls = fixture.calls();
-    assert_eq!(calls.len(), 11);
-    let request = std::str::from_utf8(&calls[6]).unwrap();
-    assert!(request.starts_with(&format!("POST /v1.54/containers/{CID}/exec ")));
-    assert!(request.contains(r#""WorkingDir":"/workspaces/selected-mount""#));
-    assert!(request.contains(r#""User":"501:20""#));
-    assert!(calls[7].starts_with(format!("POST /v1.54/exec/{EID}/start ").as_bytes()));
-    assert!(calls[8].starts_with(format!("GET /v1.54/exec/{EID}/json ").as_bytes()));
-}
-#[test]
-fn workspace_exec_failure_keeps_exact_original_request_and_container() {
-    let mut fixture = Fixture::new(vec![
-        fixed(409, b"original exec refusal"),
-        fixed(204, b""),
-        fixed(204, b""),
-    ]);
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    let failure = WorkspaceApi::exec(
-        fixture.owner.as_ref().unwrap(),
-        &mounted(),
-        vec!["/bin/pwd".into()],
-        vec![],
-        &mut stdout,
-        &mut stderr,
-    )
-    .unwrap_err();
-    assert_eq!(
-        failure.requested_container,
-        Some(layerfs_sandbox::ContainerId::parse(CID).unwrap())
-    );
-    assert!(failure.attempted);
-    fixture.api.close(fixture.owner.take().unwrap()).unwrap();
-    assert_eq!(fixture.calls().len(), 9);
-}
-
 struct ProjectFixture {
     directory: PathBuf,
     project: layerfs_control::SealedProject,
@@ -430,21 +246,15 @@ impl Drop for ProjectFixture {
 #[test]
 fn create_matching_existing_project_keeps_one_original_hello_and_does_not_reinstall() {
     let project = ProjectFixture::new();
-    let mut fixture = Fixture::new_for(
-        Some(&project.project),
-        vec![fixed(204, b""), fixed(204, b"")],
-    );
-    let owner = fixture.owner.as_mut().unwrap();
+    let mut fixture = Fixture::new_for(&project.project, vec![fixed(204, b""), fixed(204, b"")]);
+    let owner = fixture.owner.take().unwrap();
     assert_eq!(owner.startup.phase, DaemonPhase::ControlReady);
     assert!(owner.installed.is_none());
-    assert_eq!(
-        layerfs_control::internal::control(owner)
-            .channel_work()
-            .0
-            .records,
-        1
-    );
-    fixture.api.close(fixture.owner.take().unwrap()).unwrap();
+    let (mut runtime, control, _) = layerfs_control::internal::split_provider(owner);
+    assert_eq!(control.channel_work().0.records, 1);
+    // stop once, then delete once, as the removed `SandboxApi::close` did
+    runtime.stop(1).unwrap();
+    runtime.delete().unwrap();
     assert_eq!(fixture.calls().len(), 8);
 }
 #[test]
@@ -459,7 +269,7 @@ fn create_mismatched_existing_project_refuses_before_any_deployment_or_control_e
         locator: manifest.locator.clone(),
         install: Some(manifest),
     };
-    let result = api.create(
+    let result = api.create_provider_file(
         ProviderCreate {
             launch: LaunchRequest {
                 name: "mismatched-sandbox".into(),
@@ -478,7 +288,8 @@ fn create_mismatched_existing_project_refuses_before_any_deployment_or_control_e
             controller_private: [31; 32],
             daemon_peer: duplex::public_key(&[32; 32]).unwrap(),
         },
-        &project.project,
+        &project.project.store,
+        &project.project.manifest,
     );
     let Err(failure) = result else {
         panic!("mismatched Project must refuse before effects")

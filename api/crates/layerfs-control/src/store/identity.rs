@@ -179,20 +179,6 @@ pub(crate) fn save_record(home: &Path, store: &str, identity: &Identity) -> Resu
     crate::common::home::write_record(&path, &record)
 }
 
-/// Makes `<home>/.stores/<store>/` (owner-only), refusing a Store name
-/// already in use: a record, or a project of that name with its own Store.
-pub(crate) fn claim(home: &Path, store: &str) -> Result<PathBuf> {
-    let directory = store_dir(home, store)?;
-    if record_path(home, store)?.exists() {
-        return Err(refused(
-            "Exists",
-            format!("a LayerFS Store named {store} exists"),
-        ));
-    }
-    crate::common::home::private_dir(&directory)?;
-    Ok(directory)
-}
-
 /// The Store file a call names (`storePath`).
 pub(crate) fn store_path(args: &SdkValue) -> Result<PathBuf> {
     match args.get_text("storePath") {
@@ -222,49 +208,6 @@ pub(crate) fn sqlite_only(identity: &Identity, what: &str) -> Result<()> {
             format!("{what} needs a SQLite Store; this one is a PostgreSQL schema"),
         )),
     }
-}
-
-/// `runtime.store.create { home, store, storePath, policy? }`: a new empty
-/// SQLite Store at `storePath` (its volume's `global/store.sqlite`), with
-/// the acquisition tables projects are added through. Created beside its
-/// place and renamed in, owner-only, as an installed Store is.
-pub(crate) fn create(args: &SdkValue) -> Outcome {
-    let home = discovery::home(args)?;
-    let store = text(args, "store")?;
-    let destination = store_path(args)?;
-    let policy = crate::project::init::policy(args)?;
-    let global = destination
-        .parent()
-        .ok_or_else(|| refused("InvalidInput", "storePath has no directory"))?;
-    layerfs_store_service::kernel_guard::check(global)
-        .map_err(|reason| refused("Unsupported", reason.0))?;
-    let directory = claim(&home, store)?;
-    let _guard = discovery::guard(&directory)?;
-    let identity = Identity {
-        kind: Kind::Sqlite,
-        binding: random()?.to_vec(),
-        cursor_key: random()?,
-    };
-    let made = make_empty(global, &destination, &identity, policy);
-    let sealed = match made {
-        Ok(sealed) => sealed,
-        Err(refusal) => {
-            // nothing was published: this call's own directory goes
-            let _ = std::fs::remove_dir_all(&directory);
-            return Err(refusal);
-        }
-    };
-    save_record(&home, store, &identity)?;
-    Ok(SdkValue::map([
-        ("kind", SdkValue::text("Created")),
-        ("store", SdkValue::text(store)),
-        (
-            "storePath",
-            SdkValue::text(destination.display().to_string()),
-        ),
-        ("bytes", SdkValue::Int(sealed.bytes as i64)),
-        ("sqlite", SdkValue::text(sealed.sqlite_version)),
-    ]))
 }
 
 /// Creates and seals the empty Store at `<destination>.creating`, then
@@ -315,7 +258,7 @@ pub(crate) fn make_empty(
     result
 }
 
-/// `runtime.store.list_projects { home, store, storePath, postgresql? }`:
+/// The projects of `{ home, store, storePath, postgresql? }`:
 /// `[{ name, stack, headLayer }]` by name, read from the Store itself.
 pub(crate) fn list_projects(args: &SdkValue) -> Outcome {
     crate::store::service::with_service(args, |service| {
@@ -414,7 +357,7 @@ pub(crate) fn init_key(args: &SdkValue, name: &str) -> String {
     }
 }
 
-/// `runtime.store.add_project { home, store, storePath, name, path, timeoutMs }`:
+/// `project.init`'s add into a sqlite Store, `{ home, store, storePath, name, path, timeoutMs }`:
 /// Inits the folder `path` as the new project `name` of the live SQLite
 /// Store, through its admission and writer lane, then records its entry.
 /// A Store policy is the Store's own, so `policy` is refused here.
@@ -549,7 +492,8 @@ pub(crate) fn add_failure(
     refusal
 }
 
-/// `runtime.store.remove_project { home, store, storePath, project }`:
+/// `project.remove`'s work on the Store's machine (here, or in its worker
+/// as the worker op `project.remove`), `{ home, store, storePath, project }`:
 /// drops the project's stack (its Layers, Branches and Commits) from the
 /// Store in one write, then its entry from the home. The other projects
 /// stay. The entry of the project a Store was made by (its own Init) holds
@@ -597,24 +541,6 @@ pub(crate) fn remove_project(args: &SdkValue) -> Outcome {
         ("stack", SdkValue::text(hex(&stack.to_bytes()))),
         ("packsKept", SdkValue::Bool(true)),
     ]))
-}
-
-/// `runtime.store.forget { home, store }`: removes a Store's records and
-/// project entries from the home, after its caller removed the Store itself
-/// (its volume) or no longer wants a PostgreSQL Store listed.
-pub(crate) fn forget(args: &SdkValue) -> Outcome {
-    let home = discovery::home(args)?;
-    let store = text(args, "store")?;
-    let directory = store_dir(&home, store)?;
-    // #509: the Store's link record goes with it; its remote file stays
-    let link = layerfs_store_backup::backup::link::state_path(&home, store)
-        .map_err(|cause| refused("InvalidInput", cause))?;
-    layerfs_store_backup::backup::link::remove(&link).map_err(|cause| refused("Failed", cause))?;
-    if !directory.exists() {
-        return Ok(SdkValue::map([("removed", SdkValue::Bool(false))]));
-    }
-    std::fs::remove_dir_all(&directory).map_err(failed)?;
-    Ok(SdkValue::map([("removed", SdkValue::Bool(true))]))
 }
 
 /// The open service of a PostgreSQL Store, from the call's
