@@ -74,12 +74,13 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     }
     let op = Op::begin("sandbox.create", "claim", SdkValue::Null)?;
     home::private_dir(&dir)?;
-    let record = {
-        let _sandbox = record::lock(&home, name)?;
-        let record = SandboxRecord::creating(name, project, machine, &op);
-        record.write(&home)?;
-        record
-    };
+    let record = SandboxRecord::creating(name, project, machine, &op);
+    let claimed = record::lock(&home, name).and_then(|_sandbox| record.write(&home));
+    if let Err(refusal) = claimed {
+        // the folder this call made holds no record: the name stays free
+        remove_folder(&dir)?;
+        return Err(refusal);
+    }
     drop(_lock);
     let op = op.at("start");
     {
