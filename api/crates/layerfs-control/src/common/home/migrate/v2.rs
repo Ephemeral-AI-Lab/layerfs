@@ -214,8 +214,13 @@ fn survey(home: &Path) -> Result<Plan> {
             }
         }
     }
+    // a 2.0 record names its remover by process id alone: that is all
+    // there is to check
     for machine in names(&home.join("machine"))? {
-        if let Some(pid) = MachineRecord::read(home, &machine)?.and_then(|r| r.removing()) {
+        let record = MachineRecord::read(home, &machine)?;
+        let removing = record.and_then(|r| r.field("removing").cloned());
+        if let Some(removing) = removing.filter(lease::recorded_alive) {
+            let pid = removing.get_int("pid").unwrap_or(0);
             plan.live(
                 "machine",
                 &machine,

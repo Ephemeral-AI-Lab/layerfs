@@ -1,11 +1,12 @@
 //! `machine.connect`: an ssh host.
 use super::bundle::bundle;
 use super::create::{finish, new_name};
-use super::record::MachineRecord;
+use super::record::{MachineRecord, CONNECT};
 use super::spec::{self as record, refusal, update as update_record};
 use super::status::home_id;
 use crate::common::context::Context;
 use crate::common::home::{self, lock, paths};
+use crate::common::op::Op;
 use crate::common::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::SdkValue;
 use layerfs_machine::{self as adapters, Platform};
@@ -50,16 +51,18 @@ pub fn connect(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             SdkValue::text(args.get_text("root").unwrap_or(adapters::DATA)),
         ),
     ]);
+    // the claimed record holds the connect's `op` until it is recorded
+    let op = Op::begin(CONNECT, "identify", SdkValue::Null)?;
     let record = MachineRecord::from_record(
         &name,
         SdkValue::map([
             ("name", SdkValue::text(&name)),
             ("platform", SdkValue::text("ssh")),
             ("ssh", ssh),
-            ("state", SdkValue::text("creating")),
             ("created", SdkValue::Int(home::now_ms())),
         ]),
-    );
+    )
+    .with_op(&op);
     let spec = {
         let _lock = lock::take(&home)?;
         new_name(&home, &name)?;
@@ -88,6 +91,7 @@ pub fn connect(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             return Err(refusal(error));
         }
     };
+    let op = op.at("connect");
     {
         let _lock = lock::take(&home)?;
         for other in paths::names(&home.join("machine")).map_err(failed)? {
@@ -101,7 +105,7 @@ pub fn connect(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
                 ));
             }
         }
-        update_record(&home, &name, |r| r.with_host_id(&identity))?;
+        update_record(&home, &name, |r| r.with_host_id(&identity).with_op(&op))?;
     }
-    finish(&home, &name, adapters::connect(&spec, &bundle))
+    finish(&home, &name, op, adapters::connect(&spec, &bundle))
 }

@@ -1,16 +1,27 @@
 //! A machine's record, `machine/<name>/record.json` (#536 §9.2): its
 //! platform, size, images, ssh host, lasting guest state, the state a
-//! create, stop or remove left, and the built-in machines' settings. Read
+//! create, start or stop left, the `op` of a create, connect, remove or
+//! disconnect in flight (#536 §7.1), and the built-in machines' settings. Read
 //! once and kept whole, so `machine.get` and `machine.list` show what they
 //! showed before. Built without the `machine` feature too (the guest
 //! worker reads its own `native` and `docker` records); the platform and
 //! the summary need the adapters.
 use crate::common::home::{self, paths, read_record, with_field, write_entity};
+use crate::common::op::{self, Op, Standing};
 use crate::common::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
+
+/// The intents a machine's record holds (#536 §7.1).
+pub const CREATE: &str = "machine.create";
+/// An ssh machine's connect.
+pub const CONNECT: &str = "machine.connect";
+/// A VM machine's remove.
+pub const REMOVE: &str = "machine.remove";
+/// An ssh machine's disconnect.
+pub const DISCONNECT: &str = "machine.disconnect";
 
 /// One machine's record as read (fields kept whole and in order).
 #[derive(Clone, Debug)]
@@ -93,15 +104,71 @@ impl MachineRecord {
         self.fields.get_text("platform")
     }
 
-    /// The state a create, connect, start, stop or remove recorded.
+    /// The state a create, connect, start or stop recorded (`running`,
+    /// `stopped`, `failed`).
     pub fn recorded_state(&self) -> Option<&str> {
         self.fields.get_text("state")
     }
 
-    /// Whether a create or a remove of the machine is in flight: a list
-    /// shows its recorded state and probes nothing.
+    /// The intent of a create, connect, remove or disconnect, if the record
+    /// holds one.
+    pub fn op(&self) -> Option<Op> {
+        Op::of(&self.fields)
+    }
+
+    /// The record holding intent `op`.
+    pub fn with_op(self, op: &Op) -> Self {
+        self.with(op::FIELD, op.to_record().clone())
+    }
+
+    /// The record with no intent.
+    pub fn without_op(self) -> Self {
+        let fields = match self.fields {
+            SdkValue::Map(fields) => fields.into_iter().filter(|(n, _)| n != op::FIELD),
+            other => return Self::from_record(&self.name, other),
+        };
+        Self::from_record(&self.name, SdkValue::Map(fields.collect()))
+    }
+
+    /// Whether a create, connect, remove or disconnect holds the machine:
+    /// its intent's owner lives, or is gone with the outcome unknown. A list
+    /// shows its state and probes nothing.
     pub fn in_flight(&self) -> bool {
-        self.recorded_state() == Some("creating") || self.removing().is_some()
+        self.op().is_some_and(|op| op.standing() != Standing::Stale)
+    }
+
+    /// Refuses a new operation on the machine while an intent holds it:
+    /// `Busy` while its owner lives, `Unresolved` once a gone owner left
+    /// it uncertain, naming `machine status <name>` and the call that
+    /// clears it (`machine remove`, or `machine disconnect` for ssh).
+    pub fn not_held(&self) -> Result<()> {
+        self.op().map_or(Ok(()), |op| self.blocked_by(&op))
+    }
+
+    /// Refuses only while a live process holds the machine (`Busy`): what
+    /// a remove or disconnect, which clears an unresolved intent, checks.
+    pub fn not_running(&self) -> Result<()> {
+        match self.op() {
+            Some(op) if op.standing() == Standing::Running => self.blocked_by(&op),
+            _ => Ok(()),
+        }
+    }
+
+    fn blocked_by(&self, op: &Op) -> Result<()> {
+        op.blocks(
+            &format!("machine {}", self.name),
+            &format!("machine status {}", self.name),
+            &format!("{} {}", self.clearing_call(), self.name),
+        )
+    }
+
+    /// The call that clears an unresolved intent: `machine disconnect` for
+    /// an ssh machine, else `machine remove`.
+    pub fn clearing_call(&self) -> &'static str {
+        match self.platform_name() {
+            Some("ssh") => "machine disconnect",
+            _ => "machine remove",
+        }
     }
 
     /// The Sandbox image the record names (a digest, or a file).
@@ -144,18 +211,6 @@ impl MachineRecord {
         let ssh = self.ssh().cloned().unwrap_or_default();
         let ssh = with_field(ssh, "host_id", SdkValue::text(identity));
         self.with("ssh", ssh)
-    }
-
-    /// The live process removing the machine, from its record's `removing`.
-    pub fn removing(&self) -> Option<i64> {
-        let pid = self.fields.get("removing")?.get_int("pid")?;
-        crate::common::home::lease::alive(u32::try_from(pid).ok()?).then_some(pid)
-    }
-
-    /// The record marked as being removed by this process.
-    pub fn marked_removing(self) -> Self {
-        let pid = SdkValue::Int(i64::from(std::process::id()));
-        self.with("removing", SdkValue::map([("pid", pid)]))
     }
 
     /// The record with `state` and the `error` that left it there.
@@ -203,15 +258,30 @@ impl MachineRecord {
             .ok_or_else(|| refused("Failed", "a machine record names no known platform"))
     }
 
-    /// The machine's state (#536 §7.2): its live probe's answer (`live`),
-    /// else the state its record holds, else `ready` for a built-in
-    /// machine and `stopped` for any other. F3's `op` adds `removing` and
-    /// `unresolved`.
+    /// The machine's state (#536 §7.2), from its record, `op`, `error` and
+    /// live probe: `creating` or `removing` while a live process creates
+    /// (connects) or removes (disconnects) it, `unresolved` once a gone one
+    /// left that outcome unknown; else its live probe's answer (`live`:
+    /// `running`, `stopped`, `failed`, `missing`, or `unknown` when the
+    /// probe could not answer), else the state its record holds (`failed`
+    /// with its `error` after a create that kept its VM), else `ready` for
+    /// a built-in machine and `stopped` for any other. A gone owner's
+    /// certain intent changes nothing.
     pub fn state<'a>(&'a self, live: Option<&'a str>) -> Result<&'a str> {
         let fallback = match self.platform()?.built_in() {
             true => "ready",
             false => "stopped",
         };
+        if let Some(op) = self.op() {
+            match op.standing() {
+                Standing::Unresolved => return Ok("unresolved"),
+                Standing::Running if op.name() == REMOVE || op.name() == DISCONNECT => {
+                    return Ok("removing")
+                }
+                Standing::Running => return Ok("creating"),
+                Standing::Stale => {}
+            }
+        }
         Ok(live.or(self.recorded_state()).unwrap_or(fallback))
     }
 
