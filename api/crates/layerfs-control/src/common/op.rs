@@ -134,26 +134,54 @@ impl Op {
         }
     }
 
-    /// Refuses a new operation on `entity` (`Store app`, `machine dev`, …)
-    /// while this intent holds it: `Busy` while its owner lives,
-    /// `Unresolved` once a gone owner left it uncertain, naming `show` (the
-    /// call that shows it) and `clear` (the call that clears it).
-    pub fn blocks(&self, entity: &str, show: &str, clear: &str) -> Result<(), SdkRefusal> {
+    /// Refuses a new operation on entity `kind` `entity` (`store`,
+    /// `machine` or `sandbox`) while this intent holds it: `Busy` while its
+    /// owner lives, `Unresolved` once a gone owner left it uncertain, naming
+    /// `show` (the call that shows it, such as `store status`) and `clear`
+    /// (the call that clears it). The refusal's `detail` is `{entity: {kind,
+    /// name}, phase, op}` (#536 §10).
+    pub fn blocks(
+        &self,
+        kind: &str,
+        entity: &str,
+        show: &str,
+        clear: &str,
+    ) -> Result<(), SdkRefusal> {
         let (name, id, phase, pid) = (self.name(), self.id(), self.phase(), self.pid());
-        match self.standing() {
-            Standing::Stale => Ok(()),
-            Standing::Running => Err(refused(
+        let shown = match kind {
+            "store" => "Store",
+            "sandbox" => "Sandbox",
+            other => other,
+        };
+        let mut refusal = match self.standing() {
+            Standing::Stale => return Ok(()),
+            Standing::Running => refused(
                 "Busy",
-                format!("{entity} is busy: {name} ({id}, phase {phase}) runs in process {pid}"),
-            )),
-            Standing::Unresolved => Err(refused(
+                format!(
+                    "{shown} {entity} is busy: {name} ({id}, phase {phase}) runs in process {pid}"
+                ),
+            ),
+            Standing::Unresolved => refused(
                 "Unresolved",
                 format!(
-                    "{entity} has an unresolved {name} ({id}, phase {phase}): its outcome is \
-                     not known; see `layerfs {show}`, then clear it with `layerfs {clear}`"
+                    "{shown} {entity} has an unresolved {name} ({id}, phase {phase}): its outcome \
+                     is not known; see `layerfs {show} {entity}`, then clear it with `layerfs \
+                     {clear} {entity}`"
                 ),
-            )),
-        }
+            ),
+        };
+        refusal.detail = SdkValue::map([
+            (
+                "entity",
+                SdkValue::map([
+                    ("kind", SdkValue::text(kind)),
+                    ("name", SdkValue::text(entity)),
+                ]),
+            ),
+            ("phase", SdkValue::text(phase)),
+            ("op", SdkValue::text(id)),
+        ]);
+        Err(refusal)
     }
 
     /// The intent as `machine.status`, `store.status` and `sandbox.get`

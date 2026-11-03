@@ -156,9 +156,10 @@ impl MachineRecord {
 
     fn blocked_by(&self, op: &Op) -> Result<()> {
         op.blocks(
-            &format!("machine {}", self.name),
-            &format!("machine status {}", self.name),
-            &format!("{} {}", self.clearing_call(), self.name),
+            "machine",
+            &self.name,
+            "machine status",
+            self.clearing_call(),
         )
     }
 

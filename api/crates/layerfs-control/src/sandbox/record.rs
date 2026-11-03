@@ -109,11 +109,7 @@ impl SandboxRecord {
     pub(crate) fn free(&self) -> Result<()> {
         match self.op() {
             None => Ok(()),
-            Some(op) => op.blocks(
-                &format!("Sandbox {}", self.name),
-                &format!("sandbox get {}", self.name),
-                &format!("sandbox close {}", self.name),
-            ),
+            Some(op) => op.blocks("sandbox", &self.name, "sandbox get", "sandbox close"),
         }
     }
 

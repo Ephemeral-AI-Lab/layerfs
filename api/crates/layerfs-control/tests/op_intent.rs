@@ -29,7 +29,7 @@ fn a_live_owner_is_busy_and_a_gone_one_blocks_only_when_uncertain() {
     );
     assert!(mine.mine());
     assert_eq!(mine.standing(), Standing::Running);
-    let busy = mine.blocks("Store app", "store status app", "store remove app");
+    let busy = mine.blocks("store", "app", "store status", "store remove");
     assert_eq!(busy.unwrap_err().code, "Busy");
     let moved = mine.clone().at("delete");
     assert_eq!((moved.phase(), moved.id()), ("delete", mine.id()));
@@ -37,15 +37,21 @@ fn a_live_owner_is_busy_and_a_gone_one_blocks_only_when_uncertain() {
     let stale = Op::of(&gone(false)).unwrap();
     assert_eq!(stale.standing(), Standing::Stale);
     stale
-        .blocks("Store app", "store status app", "store remove app")
+        .blocks("store", "app", "store status", "store remove")
         .unwrap();
 
     let unresolved = Op::of(&gone(true)).unwrap();
     assert_eq!(unresolved.standing(), Standing::Unresolved);
     let refusal = unresolved
-        .blocks("Store app", "store status app", "store remove app")
+        .blocks("store", "app", "store status", "store remove")
         .unwrap_err();
     assert_eq!(refusal.code, "Unresolved");
+    // the detail names the entity, the phase and the intent (#536 §10)
+    let entity = refusal.detail.get("entity").unwrap();
+    assert_eq!(entity.get_text("kind"), Some("store"));
+    assert_eq!(entity.get_text("name"), Some("app"));
+    assert_eq!(refusal.detail.get_text("phase"), Some("delete"));
+    assert_eq!(refusal.detail.get_text("op"), Some("op-00000000000000aa"));
     assert!(
         refusal.message.contains("`layerfs store status app`"),
         "{}",

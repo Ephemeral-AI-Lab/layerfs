@@ -276,11 +276,7 @@ impl StoreRecord {
     pub(crate) fn unblocked(&self) -> Result<()> {
         match self.op() {
             None => Ok(()),
-            Some(op) => op.blocks(
-                &format!("Store {}", self.name),
-                &format!("store status {}", self.name),
-                &format!("store remove {}", self.name),
-            ),
+            Some(op) => op.blocks("store", &self.name, "store status", "store remove"),
         }
     }
 
