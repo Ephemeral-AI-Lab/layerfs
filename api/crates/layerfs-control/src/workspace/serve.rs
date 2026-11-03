@@ -6,7 +6,10 @@
 //! daemon. Nothing is retried: a refused or failed step is the call's answer.
 //! A Sandbox whose daemon ended itself when idle is refused `NoSuchSandbox`
 //! by a mount and reclaimed by its `sandbox.close`. Each Workspace is
-//! recorded in its Sandbox's folder, `workspace/<id>.json`.
+//! recorded in its Sandbox's folder, `workspace/<id>.json`, with the name
+//! its mount gave it, if any (unique in the Sandbox; the other calls take
+//! it in place of the path, [`by_name`]).
+use crate::common::names::WorkspaceName;
 use crate::common::outcome::{failed, Outcome};
 use crate::daemon::values;
 use crate::internal::workspace;
@@ -25,11 +28,12 @@ fn no_sandbox(mut refusal: SdkRefusal) -> SdkRefusal {
     refusal
 }
 
-/// `workspace.mount(sandbox, branch)`: a new Workspace of `branch` in
-/// Sandbox `sandbox`, which must be running and hold fewer than
-/// [`WORKSPACES`]; its `sandbox`, `path`, `image`, `platform` and `runtime`. Refused
-/// `NoSuchSandbox` (no such Sandbox, or it closed itself) and `Capacity`
-/// (full), each naming the calls to make instead. Only the Sandbox's own
+/// `workspace.mount(sandbox, branch, { name })`: a new Workspace of
+/// `branch` in Sandbox `sandbox`, which must be running and hold fewer than
+/// [`WORKSPACES`]; its `sandbox`, `path`, `name`, `image`, `platform` and
+/// `runtime`. Refused `NoSuchSandbox` (no such Sandbox, or it closed
+/// itself), `Exists` (a Workspace of that name is mounted there) and
+/// `Capacity` (full), each naming the calls to make instead. Only the Sandbox's own
 /// guard is taken; its record and count are checked under it.
 pub(crate) fn mount(args: &SdkValue) -> Outcome {
     let branch = text(args, "branch")?;
@@ -52,6 +56,13 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
     if crate::sandbox::files::started(&directory)?.is_none() {
         return Err(missing());
     }
+    let name = match args.get_text("name") {
+        Some(text) => Some(WorkspaceName::parse(text)?),
+        None => None,
+    };
+    // a name in use is refused before the daemon is reached
+    let recorded = crate::sandbox::files::workspaces(&directory)?;
+    free(sandbox, &recorded, name.as_ref())?;
     let state = sandbox_live(args).map_err(|refusal| match refusal.code.as_str() {
         "NoSuchSandbox" => no_sandbox(refusal),
         _ => refusal,
@@ -62,6 +73,8 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
         return Err(missing());
     };
     let workspaces = crate::sandbox::files::workspaces(&directory)?;
+    // checked again under the guard, where it holds
+    free(sandbox, &workspaces, name.as_ref())?;
     if workspaces.len() >= WORKSPACES as usize {
         return Err(crate::common::outcome::refused(
             "Capacity",
@@ -93,7 +106,12 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
             SdkValue::text(crate::sandbox::runtime::runtime_name(&saved)),
         ));
     }
-    crate::sandbox::files::save_workspace(&state, &mounted, branch, None)?;
+    if let SdkValue::Map(fields) = &mut value {
+        let shown = name.as_ref().map(|name| name.to_string());
+        fields.push(("name".to_owned(), SdkValue::opt_text(shown)));
+    }
+    let name = name.as_ref().map(WorkspaceName::as_str);
+    crate::sandbox::files::save_workspace(&state, &mounted, branch, name)?;
     lock(&state.mounts)?.insert(
         mounted.ready.directory.clone(),
         Mount {
@@ -102,6 +120,52 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
         },
     );
     Ok(value)
+}
+
+/// Refused `Exists` when one of Sandbox `sandbox`'s Workspace records
+/// carries `name` (#536 C3).
+fn free(
+    sandbox: &str,
+    records: &[(std::path::PathBuf, SdkValue)],
+    name: Option<&WorkspaceName>,
+) -> Result<(), SdkRefusal> {
+    let Some(name) = name else {
+        return Ok(());
+    };
+    if (records.iter()).any(|(_, record)| record.get_text("name") == Some(name.as_str())) {
+        return Err(crate::common::outcome::refused(
+            "Exists",
+            format!("Sandbox {sandbox} already has a Workspace named {name}: pick another name, or unmount `{sandbox}:{name}` first"),
+        ));
+    }
+    Ok(())
+}
+
+/// `args` with a Workspace named by its name (`path` not absolute: the
+/// `<sandbox>:<name>` form, #536 C3) given its path instead: the path of
+/// the Workspace record in the Sandbox's folder that carries the name.
+/// Refused `NotMounted` when none does.
+pub(crate) fn by_name(args: SdkValue) -> Result<SdkValue, SdkRefusal> {
+    let Some(name) = args.get_text("path").filter(|path| !path.starts_with('/')) else {
+        return Ok(args);
+    };
+    let name = WorkspaceName::parse(name)?;
+    let directory = crate::sandbox::files::sandbox_dir(&args)?;
+    let found = (crate::sandbox::files::workspaces(&directory)?.into_iter())
+        .find(|(_, record)| record.get_text("name") == Some(name.as_str()));
+    let Some((_, record)) = found else {
+        let sandbox = args.get_text("sandbox").unwrap_or("");
+        return Err(crate::common::outcome::refused(
+            "NotMounted",
+            format!("{sandbox}:{name} is not mounted"),
+        ));
+    };
+    let path = text(&record, "path")?.to_owned();
+    Ok(crate::common::home::with_field(
+        args,
+        "path",
+        SdkValue::Text(path),
+    ))
 }
 
 /// A record's `platform` (#529), or null for a record from before it, which

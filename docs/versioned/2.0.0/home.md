@@ -42,7 +42,7 @@ hold a password or a bucket key. They are not settings; see
     record.json                v, name, project, machine, state, backend, route, ...
     control.json               the Sandbox daemon's keys (0600; native only)
     lock                       held by the call that runs the Sandbox (native only)
-    workspace/<id>.json        one per mounted Workspace: v, id, branch, path, created
+    workspace/<id>.json        one per mounted Workspace: v, id, name?, branch, path, created
   store/<name>/
     record.json                kind, machine, profile, backup links
     store.sqlite               a sqlite Store's file while it is on native

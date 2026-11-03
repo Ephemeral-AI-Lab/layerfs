@@ -194,7 +194,9 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   archive is `Unsupported`, naming it (#535 P5).
 - `list` and `get` page: `list` its Sandboxes, `get` the Sandbox's
   `workspaces` (`page_size` 1 to 1000, default 50; `page_pos`), with
-  `next_page_pos`, `null` after the last page.
+  `next_page_pos`, `null` after the last page. Each Workspace carries `ws`
+  (`<sandbox>:<name>` when named, else `<sandbox>:<path>`), `name` (or
+  `null`) and `path`, beside the daemon's fields.
 - `list` and `get` start no machine (#535 P4). `get` on a Sandbox whose
   machine is down answers its record with `workspaces: []` and
   `down_reason`, the reason its worker was not reached.
@@ -216,16 +218,23 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 
 ### `workspace` (5)
 
-A Workspace is `<sandbox>:<path>`, answered as `ws` by `mount`.
+A Workspace is `<sandbox>:<path>`, or `<sandbox>:<name>` when its mount
+named it, answered as `ws` by `mount`. Every `workspace` call takes either
+form.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `mount` | `sandbox`, `branch` | — | mounts a Branch in a Sandbox |
+| `mount` | `sandbox`, `branch` | `name` | mounts a Branch in a Sandbox |
 | `exec` | `ws`, `command` | `message`, `stream`, `stdout`, `stderr` | runs one bash command in a Workspace |
 | `commit` | `ws` | `message`, `force` | commits a Workspace's changes to its Branch |
 | `unmount` | `ws` | `discard`, `force` | ends a Workspace |
 | `status` | `ws` | — | a Workspace's changes since its base (O14) |
 
+- `mount` with `name` names the Workspace (a name, as for Sandboxes);
+  `ws` is then `<sandbox>:<name>`. A name is unique within its Sandbox: one
+  in use is `Exists`. It is free again once that Workspace is unmounted.
+  `mount` answers `name` (or `null`) beside `path`. A name no mounted
+  Workspace carries is `NotMounted`.
 - `exec` answers `kind` (`exit:<code>`), `exit_code`, `stdout`, `stderr`,
   `message` and `truncated`. A command that exits non-zero is still exit 0
   for the shell unless `--stream` is given. Inline output that is not UTF-8

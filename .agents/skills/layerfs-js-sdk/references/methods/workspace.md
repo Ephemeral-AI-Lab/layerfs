@@ -8,7 +8,7 @@
 > Sandbox was run (`NoSuchSandbox`).
 
 ```js
-workspace.mount(sandbox, branch)
+workspace.mount(sandbox, branch, { name })
 workspace.exec(ws, command, { message, stream, stdout, stderr })
 workspace.commit(ws, { message, force })
 workspace.unmount(ws, { discard, force })
@@ -21,10 +21,11 @@ at the Commit. For one small read or edit, [`file.*`](file.md) is cheaper.
 
 ## Shared rules
 
-- A Workspace is named `<sandbox>:<path>`, such as `tests:/workspaces/1`:
-  the `ws` field of `mount`'s result. Pass that string to every other call. It
-  works from any later process with the same `LAYERFS_HOME`. Never build one
-  yourself and never use one after its unmount.
+- A Workspace is named `<sandbox>:<path>`, such as `tests:/workspaces/1`,
+  or `<sandbox>:<name>`, such as `tests:build`, when its mount gave it a
+  `name`: the `ws` field of `mount`'s result. Pass that string to every other
+  call; every call takes either form. It works from any later process with
+  the same `LAYERFS_HOME`. Never use one after its unmount.
 - **Each mount is a new Workspace**, even on the same Branch, with its own
   uncommitted changes. Mounting doesn't copy or scan the tree.
 - **A Workspace per Bash call is the default:** mount, exec, commit, unmount.
@@ -55,27 +56,31 @@ layerfs workspace unmount "$ws"
 
 ## `workspace.mount`
 
-`workspace.mount(sandbox, branch)`
+`workspace.mount(sandbox, branch, { name })`
 
 Mounts the Branch's head as it is now, in the Sandbox named `sandbox`. It never
-starts a Sandbox.
+starts a Sandbox. `name` (optional, #536 C3) names the Workspace: 1–63
+lowercase letters, digits, `_ . -`, unique within the Sandbox while it is
+mounted; `ws` is then `<sandbox>:<name>`.
 
 **Returns** (from source):
 
 | Field | Meaning |
 | --- | --- |
-| `ws` | `<sandbox>:<path>`: pass this on |
+| `ws` | `<sandbox>:<name>` when named, else `<sandbox>:<path>`: pass this on |
+| `name` | Its name, or `null` |
 | `kind` | `"Mounted"` |
 | `path` | The mount path inside the Sandbox |
 | `branch`, `base`, `base_layer`, `root` | The Branch, the Commit it shows, the `main` Layer under it, its root id |
 | `workspace`, `namespace` | Daemon ids |
-| `sandbox`, `container` | The host's internal Sandbox id and container (or daemon folder) name, **not** the Sandbox's name |
+| `sandbox`, `container` | The Sandbox's id (its name, as its machine knows it) and its container (or daemon folder) name |
 | `image`, `platform`, `runtime` | What the Sandbox runs on |
 
 | Code | Meaning | Do |
 | --- | --- | --- |
 | `NoSuchSandbox` | No Sandbox of that name, or it closed itself | `sandbox.create` (after `sandbox.close(name)` for one that closed itself; see [sandbox](sandbox.md#idle-close)) |
 | `NoSuchBranch` | No such Branch, or `main` | Fork first |
+| `Exists` | A Workspace of that `name` is mounted in the Sandbox | Pick another name, or use (or unmount) that one |
 | `Capacity` | The Sandbox holds 16 Workspaces. (Its message still names 1.1.0's `sandbox.list_workspaces`; use `sandbox.get`) | Create another Sandbox, or unmount Workspaces you're done with |
 | `Failed` | The mount failed in the daemon | Stop and report |
 

@@ -25,7 +25,7 @@ pub(super) fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     );
     let (all, down) = match listed {
         Ok(workspaces) => match workspaces?.get("workspaces") {
-            Some(SdkValue::List(items)) => (items.clone(), None),
+            Some(SdkValue::List(items)) => (items.iter().map(|i| with_ws(name, i)).collect(), None),
             _ => (Vec::new(), None),
         },
         Err(Unreached(why)) => (Vec::new(), Some(why.message)),
@@ -37,4 +37,19 @@ pub(super) fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         record = home::with_field(record, "down_reason", SdkValue::Text(why));
     }
     Ok(home::with_field(record, "next_page_pos", next))
+}
+
+/// Workspace `item` of Sandbox `sandbox` with its `ws` (#536 C3):
+/// `<sandbox>:<name>` when it has a name, else `<sandbox>:<path>`; and its
+/// `name` and `path` (null and the daemon's `directory` from a worker that
+/// does not give them).
+fn with_ws(sandbox: &str, item: &SdkValue) -> SdkValue {
+    let path = (item.get_text("path"))
+        .or_else(|| item.get_text("directory"))
+        .unwrap_or("");
+    let name = item.get_text("name").filter(|name| !name.is_empty());
+    let ws = format!("{sandbox}:{}", name.unwrap_or(path));
+    let item = home::with_field(item.clone(), "path", SdkValue::text(path));
+    let item = home::with_field(item, "name", SdkValue::opt_text(name.map(str::to_owned)));
+    home::with_field(item, "ws", SdkValue::Text(ws))
 }

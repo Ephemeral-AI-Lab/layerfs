@@ -27,6 +27,8 @@ await layerfs.store.create("shop");
 await layerfs.project.init("shop/api", "/src/api", { on_progress: console.log });
 await layerfs.branch.fork("shop/api", "agent", "main");
 await layerfs.file.write("shop/api", "agent", "/README.md", "hello\n");
+// a named Workspace: ws is "tests:build" (#536 C3)
+const { ws } = await layerfs.workspace.mount("tests", "agent", { name: "build" });
 
 const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", folder: "/web", branch: "agent" } });
 ```

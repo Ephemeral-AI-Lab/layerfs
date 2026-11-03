@@ -99,11 +99,12 @@ only; it does not ask the daemons whether they still run.
 
 The Sandbox's record plus `workspaces`, one page of the daemon's list of
 mounted Workspaces, and `next_page_pos` (`page_size`, `page_pos` as for
-`list`). From source, each entry has `workspace`, `namespace`, `branch`,
-`base`, `base_layer`, `root`, `activity`, `mounted`, `directory` (its path,
-the part after `:` in `ws`), `head_moved_since_mount`, `dirty`
-(`{ inodes, entries }` or `null`), `pending_merge` and `revision`. Not
-checked live.
+`list`). From source, each entry has `ws` (`<sandbox>:<name>` when its mount
+named it, else `<sandbox>:<path>`: pass it to the `workspace` calls), `name`
+(or `null`), `path`, and the daemon's `workspace`, `namespace`, `branch`,
+`base`, `base_layer`, `root`, `activity`, `mounted`, `directory` (the same
+path), `head_moved_since_mount`, `dirty` (`{ inodes, entries }` or `null`),
+`pending_merge` and `revision`. Not checked live.
 
 `sandbox.list` and `sandbox.get` never start a machine (#535 P4). When the
 Sandbox's machine is down, `get` answers its record with `workspaces: []` and
@@ -155,11 +156,11 @@ nothing uncommitted and that no agent is keeping on purpose (a build Workspace,
 one running a dev server). Field names are from source:
 
 ```js
-const keep = new Set([/* "<sandbox>:<path>" Workspaces agents said they keep */]);
+const keep = new Set([/* the `ws` of Workspaces agents said they keep */]);
 for (const sb of (await layerfs.sandbox.list("shop/api")).items) {
   const got = await layerfs.sandbox.get(sb.name);
   for (const w of got.workspaces ?? []) {
-    const ws = `${sb.name}:${w.directory}`;
+    const ws = w.ws;
     if (w.activity === "Idle" && w.dirty === null && !w.pending_merge && !keep.has(ws)) {
       await layerfs.workspace.unmount(ws);   // no discard: a Dirty one stays for its owner
     }

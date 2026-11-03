@@ -21,30 +21,59 @@ pub fn call(op: &str, args: SdkValue) -> Outcome {
         }
     }
     match op {
-        "sandbox.list_workspaces" => listed(daemon_backend(op, args)?),
+        "sandbox.list_workspaces" => {
+            let directory = crate::sandbox::files::sandbox_dir(&args)?;
+            listed(daemon_backend(op, args)?, &directory)
+        }
         "sandbox.create" => crate::sandbox::serve::create(&args),
         "sandbox.close" => crate::sandbox::serve::close(&args),
         "workspace.mount" => workspace::mount(&args),
-        "workspace.commit" => workspace::commit(&args),
-        "workspace.unmount" => workspace::unmount(&args),
-        "workspace.exec" => exec::exec(&args),
+        "workspace.commit" => workspace::commit(&workspace::by_name(args)?),
+        "workspace.unmount" => workspace::unmount(&workspace::by_name(args)?),
+        "workspace.exec" => exec::exec(&workspace::by_name(args)?),
         _ => Err(refused("UnknownMethod", format!("no operation {op}"))),
     }
 }
 
 /// `sandbox.list_workspaces`: the daemon's read model without its history
 /// half, `{ kind, version, workspaces }`; the SDK pages and shapes them.
-fn listed(answer: SdkValue) -> Outcome {
+/// Each Workspace gains its `path` (the daemon's `directory`) and the
+/// `name` its record in Sandbox folder `directory` gives it, or null.
+fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {
     let SdkValue::Map(fields) = answer else {
         return Err(refused(
             "Failed",
             "the daemon's Workspace list is not a record",
         ));
     };
+    let records = crate::sandbox::files::workspaces(directory)?;
+    let name_at = |path: Option<&str>| {
+        let found = records
+            .iter()
+            .find(|(_, r)| path.is_some() && r.get_text("path") == path);
+        SdkValue::opt_text(
+            found
+                .and_then(|(_, r)| r.get_text("name"))
+                .map(str::to_owned),
+        )
+    };
+    let named = |item: SdkValue| {
+        let path = item.get("directory").cloned().unwrap_or_default();
+        let name = name_at(item.get_text("directory"));
+        let item = crate::common::home::with_field(item, "path", path);
+        crate::common::home::with_field(item, "name", name)
+    };
     Ok(SdkValue::Map(
         fields
             .into_iter()
             .filter(|(name, _)| matches!(name.as_str(), "kind" | "version" | "workspaces"))
+            .map(|(field, value)| match (field.as_str(), value) {
+                ("workspaces", SdkValue::List(items)) => (
+                    field,
+                    SdkValue::List(items.into_iter().map(named).collect()),
+                ),
+                (_, value) => (field, value),
+            })
             .collect(),
     ))
 }
@@ -83,7 +112,7 @@ fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
 /// Runs the Workspace status read once.
 pub fn backend(op: String, args: SdkValue) -> Outcome {
     match op.as_str() {
-        "backend.daemon.workspace.status" => workspace::status(&args),
+        "backend.daemon.workspace.status" => workspace::status(&workspace::by_name(args)?),
         _ => Err(refused(
             "UnknownMethod",
             format!("no backend operation {op}"),

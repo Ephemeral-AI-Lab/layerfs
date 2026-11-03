@@ -1,4 +1,5 @@
-//! Names of machines, Stores, buckets, projects and Sandboxes (S §2.3): 1 to
+//! Names of machines, Stores, buckets, projects, Sandboxes and Workspaces
+//! (S §2.3, #536 C3): 1 to
 //! 63 lowercase letters, digits, `_`, `.` and `-`, starting and ending with a
 //! letter or digit, never a Windows device name (each name is a folder in
 //! the home). A project is always `<store>/<project>`. Each kind of name
@@ -104,6 +105,8 @@ checked! {
     SandboxName = "sandbox";
     /// A connected bucket's name (`backup/<name>/`).
     BucketName = "bucket";
+    /// A Workspace's name, unique within its Sandbox (#536 C3).
+    WorkspaceName = "workspace";
 }
 
 /// A project as every call names it, `<store>/<project>`.
@@ -137,37 +140,64 @@ impl std::fmt::Display for ProjectRef {
     }
 }
 
-/// A Workspace as the `workspace` calls name it, `<sandbox>:<path>`: its
-/// Sandbox and the Workspace's absolute path there.
+/// A Workspace as the `workspace` calls name it: `<sandbox>:<path>` (its
+/// absolute path in that Sandbox) or `<sandbox>:<name>` (the name its
+/// mount gave it, #536 C3).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorkspaceRef {
     /// The Sandbox it is mounted in.
     pub sandbox: String,
-    /// Its path in that Sandbox.
-    pub path: String,
+    /// Its path or its name there.
+    pub at: WorkspaceAt,
+}
+
+/// Where a [`WorkspaceRef`] points in its Sandbox.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WorkspaceAt {
+    /// Its absolute path.
+    Path(String),
+    /// Its name.
+    Name(WorkspaceName),
+}
+
+impl WorkspaceAt {
+    /// The path or the name as text: what the Sandbox's side resolves.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Path(path) => path,
+            Self::Name(name) => name,
+        }
+    }
 }
 
 impl WorkspaceRef {
-    /// `text` as `<sandbox>:<path>`; the Sandbox's name is checked where
-    /// the Sandbox is looked up, as before.
+    /// `text` as `<sandbox>:<path>` or `<sandbox>:<name>` (the name
+    /// checked); the Sandbox's name is checked where the Sandbox is looked
+    /// up, as before.
     pub fn parse(text: &str) -> Result<Self, SdkRefusal> {
-        text.split_once(':')
-            .filter(|(s, p)| !s.is_empty() && p.starts_with('/'))
-            .map(|(sandbox, path)| Self {
-                sandbox: sandbox.to_owned(),
-                path: path.to_owned(),
-            })
-            .ok_or_else(|| {
-                refused(
-                    "InvalidInput",
-                    format!("a Workspace is <sandbox>:<path>, not {text:?}"),
-                )
-            })
+        let wrong = || {
+            refused(
+                "InvalidInput",
+                format!("a Workspace is <sandbox>:<path> or <sandbox>:<name>, not {text:?}"),
+            )
+        };
+        let (sandbox, rest) = text
+            .split_once(':')
+            .filter(|(s, p)| !s.is_empty() && !p.is_empty())
+            .ok_or_else(wrong)?;
+        let at = match rest.starts_with('/') {
+            true => WorkspaceAt::Path(rest.to_owned()),
+            false => WorkspaceAt::Name(WorkspaceName::parse(rest)?),
+        };
+        Ok(Self {
+            sandbox: sandbox.to_owned(),
+            at,
+        })
     }
 }
 
 impl std::fmt::Display for WorkspaceRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.sandbox, self.path)
+        write!(f, "{}:{}", self.sandbox, self.at.as_str())
     }
 }
