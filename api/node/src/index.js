@@ -104,7 +104,17 @@ export function client({ home, scope } = {}) {
   return Object.freeze(made);
 }
 
+/** `layerfs doctor`: what is wrong in `home` (default `LAYERFS_HOME`, else
+ * `~/.layerfs`), changing nothing and starting no machine. Resolves to
+ * `{ ok, findings: [{ severity, entity: { kind, name }, message, fix }] }`;
+ * `ok` is false when a finding is an error. Outside the call table. */
+export async function doctor({ home } = {}) {
+  const answer = decode(await native.doctor(home ?? null));
+  if (answer.refused) throw new LayerFSError(answer.refused.code, answer.refused.message, answer.refused.detail);
+  return answer.value;
+}
+
 const fallback = client();
 export const { project, branch, commit, file, sandbox, workspace, machine, store, backup } = fallback;
 export { LayerFSError };
-export default { ...fallback, client, table, families, LayerFSError };
+export default { ...fallback, client, doctor, table, families, LayerFSError };

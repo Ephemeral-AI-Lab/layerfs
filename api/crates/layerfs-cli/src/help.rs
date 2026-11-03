@@ -58,6 +58,7 @@ pub fn print(topic: &[&str]) -> ExitCode {
                 println!("  {family:<10} {}", calls.join(", "));
             }
             println!();
+            println!("  doctor     report what is wrong in the home, changing nothing [--text]");
             println!("  import-env write this environment's 1.1.0 settings as records, once");
             println!("  worker     serve this machine's worker (inside a machine)");
             println!("  help       this help; `layerfs help <family> [<call>]` for more");

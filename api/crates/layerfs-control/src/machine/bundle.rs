@@ -11,12 +11,7 @@ use layerfs_machine::Bundle;
 /// The bundle of this build, or `Unsupported` naming where it is expected.
 pub fn bundle() -> Result<Bundle, SdkRefusal> {
     let dir = crate::sandbox::deploy::bundle_dir("linux")?;
-    let manifest = crate::common::home::read_record(&dir.join("bundle.json"))?;
-    let hash = manifest
-        .as_ref()
-        .and_then(|m| m.get_text("hash"))
-        .map(str::to_owned)
-        .ok_or_else(|| {
+    let hash = super::worker::sealed_hash(&dir)?.ok_or_else(|| {
             let mut refusal = refused(
                 "Unsupported",
                 format!(

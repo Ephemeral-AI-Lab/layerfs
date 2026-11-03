@@ -116,10 +116,11 @@ fn a_ping_whose_answer_never_comes_times_out_unknown() {
     std::thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
         let _ = read_frame_within(&mut stream, MAX_HELLO);
-        let _ = write_frame(
-            &mut stream,
-            &SdkValue::map([("ready", SdkValue::Bool(true))]),
-        );
+        let ready = worker::Hello {
+            protocol: Some(worker::PROTOCOL),
+            bundle: None,
+        };
+        let _ = write_frame(&mut stream, &ready.to_frame());
         let _ = worker::read_frame(&mut stream);
         std::thread::sleep(worker::PING_WAIT + Duration::from_secs(5));
     });

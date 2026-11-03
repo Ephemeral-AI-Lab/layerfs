@@ -10,6 +10,7 @@ pub use daemon::internal;
 pub mod backup;
 pub mod common;
 pub mod daemon;
+pub mod doctor;
 #[doc(hidden)]
 pub mod inventory;
 #[doc(hidden)]

@@ -300,6 +300,12 @@ and examples.
 | [store](references/methods/store.md) | `list`, `get`, `status`, `create`, `connect`, `push`, `pull`, `remove`, `disconnect` |
 | [backup](references/methods/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore` |
 
+One top-level function is outside the families: `doctor({ home })` (shell
+`layerfs doctor [--text]`) reports what is wrong in the home as `{ ok,
+findings: [{ severity, entity: { kind, name }, message, fix }] }`, each
+finding naming the call that fixes it. It changes nothing and starts no
+machine.
+
 `machine`, `store` and `backup` set up where things live; an agent working on a
 project rarely needs them. Reading state and tracing are the
 [`layerfs-sdk-observe`](../layerfs-sdk-observe/SKILL.md) skill.

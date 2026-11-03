@@ -83,7 +83,7 @@ fn names(dir: &Path) -> Result<Vec<String>> {
 /// Converts layout 2 home `home` (`file`) to layout 3, or refuses `InUse`
 /// naming everything live. The caller holds the home lock.
 pub(super) fn convert(home: &Path, file: &HomeFile) -> Result<HomeFile> {
-    let plan = survey(home)?;
+    let plan = survey(home, lease::holders)?;
     if !plan.live.is_empty() {
         return Err(in_use(home, &plan.live));
     }
@@ -152,9 +152,17 @@ fn remove(path: &Path) -> Result<()> {
     }
 }
 
+/// What refuses the conversion of layout 2 home `home` now, read only
+/// (`layerfs doctor`): `(kind, name, what ends it)` for each live thing.
+/// Stale leases stay (the conversion removes them); no lock is taken.
+pub(crate) fn blockers(home: &Path) -> Result<Vec<(&'static str, String, String)>> {
+    let live = |home: &Path, store: &str| lease::read_holders(home, store).map(|(live, _)| live);
+    Ok(survey(home, live)?.live)
+}
+
 /// Reads every layout 2 Sandbox record and probes the runtimes this home
-/// runs; reads the leases and intents.
-fn survey(home: &Path) -> Result<Plan> {
+/// runs; reads the leases (`holders`) and intents.
+fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Result<Plan> {
     let mut plan = Plan::default();
     let mut numbered = numbered(home, &mut plan)?;
     for machine in names(&home.join("machine"))? {
@@ -206,7 +214,7 @@ fn survey(home: &Path) -> Result<Plan> {
         }
     }
     for store in names(&home.join("store"))? {
-        for pid in lease::holders(home, &store)? {
+        for pid in holders(home, &store)? {
             plan.live(
                 "lease",
                 &store,

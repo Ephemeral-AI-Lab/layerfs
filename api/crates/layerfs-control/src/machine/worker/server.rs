@@ -2,8 +2,9 @@
 //!
 //! A connection starts with a small frame `{ secret }`: the worker reads at
 //! most [`MAX_HELLO`] bytes, waiting at most [`HELLO_WAIT`], and answers
-//! `{ ready: true }`, or refuses a wrong secret and closes, before it reads
-//! anything larger. Then a request `{ op, args }`, read with at most
+//! `{ ready: true, protocol, bundle }` ([`Hello`]), or refuses a wrong
+//! secret and closes, before it reads anything larger. A caller of another
+//! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
 //! `store.call`, `store.file`, `sandbox.host` and `project.remove` run one
 //! operation on this machine, with `home` set to the worker's own root (the
@@ -15,6 +16,7 @@
 //! gets the caller's, and the root is never converted or written as a home.
 use super::client::HELLO_WAIT;
 use super::frame::{read_frame, read_frame_within, write_frame, MAX_HELLO};
+use super::hello::Hello;
 use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::net::{TcpListener, TcpStream};
@@ -51,12 +53,15 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
     crate::common::home::guest::retire_layout_2(&root);
     let secret = Arc::new(secret);
     let root = Arc::new(root);
+    // what it answers every secret with, read once
+    let ready = Arc::new(Hello::own().to_frame());
     let served = Arc::new(AtomicU64::new(0));
     for stream in listener.incoming() {
         let stream = stream?;
         let (secret, root, served) = (secret.clone(), root.clone(), served.clone());
+        let ready = ready.clone();
         std::thread::spawn(move || {
-            if answer(stream, &secret, &root) {
+            if answer(stream, &secret, &ready, &root) {
                 served.fetch_add(1, Ordering::Relaxed);
             }
         });
@@ -75,7 +80,7 @@ fn same(a: &str, b: &str) -> bool {
             == 0
 }
 
-fn answer(mut stream: TcpStream, secret: &str, root: &Path) -> bool {
+fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) -> bool {
     let _ = stream.set_nodelay(true);
     // the secret first, from a small frame: nothing larger is read, and
     // nothing is waited for long, before it matches
@@ -91,8 +96,7 @@ fn answer(mut stream: TcpStream, secret: &str, root: &Path) -> bool {
         let _ = write_frame(&mut stream, &refusal_frame(denied));
         return false;
     }
-    let ready = SdkValue::map([("ready", SdkValue::Bool(true))]);
-    if write_frame(&mut stream, &ready).is_err()
+    if write_frame(&mut stream, ready).is_err()
         || stream.set_read_timeout(Some(REQUEST_WAIT)).is_err()
     {
         return false;

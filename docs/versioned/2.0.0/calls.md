@@ -375,6 +375,38 @@ not tell. Not run for this manual (from source and tests).
 
 See [backups](machines-and-stores.md#backups). Not run for this manual.
 
+## `layerfs doctor`
+
+A top-level command beside `import-env`, outside the call table (#536 H7);
+Node and Python have it as `layerfs.doctor()` ([SDK](sdk.md)). It reports
+what is wrong in the home and changes nothing: it takes no lock, writes no
+record, removes no stale lease and starts no machine.
+
+```bash
+layerfs doctor            # {"ok":false,"findings":[{"severity":"error","entity":{"kind":"store","name":"app"},"message":"…","fix":"…"}]}
+layerfs doctor --text     # a count line, then each finding and its fix
+```
+
+- `ok` is false when any finding is an `error`; a `warning` is left over or
+  out of date and refuses nothing. Each finding's `fix` names the call (or
+  the by-hand step, where no call can) that fixes it.
+- It checks: records that do not parse, or whose `"v"` is not 1; folder
+  modes other than 0700 (0701 where a namespaces Sandbox passes through) and
+  record modes other than 0600; broken references (a Sandbox whose Store,
+  project or machine is gone, a Store on a machine with no record, a project
+  in a Store folder with no record, a Firecracker machine whose Lima host is
+  gone); an `op` a gone process left uncertain (an error naming the call
+  that clears it) or certain (a warning); stale Store leases; what refuses
+  a layout 2 home's conversion; a partial `store.sqlite.incoming` on
+  `native`; and each running machine's worker build (its hello alone, no
+  request; another build is a warning naming `machine stop` then `machine
+  start`, a worker that does not answer one naming `machine start`).
+- Not checked: partial copies and leftover layout 2 folders on other
+  machines (no worker operation reports them).
+- Exit 0 once the report is made, whatever it finds; 2 for any argument
+  but `--text`; 125 when the home cannot be named (`LAYERFS_HOME` not
+  absolute).
+
 ## Results
 
 - **stdout** carries the call's result as one line of JSON.

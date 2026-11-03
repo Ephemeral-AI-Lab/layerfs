@@ -192,6 +192,19 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   is `Unavailable`; in both cases the request was not sent. Only a
   connection lost after the request was sent is `Unknown`. One attempt;
   nothing is resent.
+- The worker's answer to the secret (its hello) says which build it is:
+  `{ ready: true, protocol, bundle }`, the worker protocol it speaks (2)
+  and the hash of the sealed bundle it runs from (`bundle.json` beside its
+  `layerfs`). The caller compares both with its own protocol and the bundle
+  it deploys before it sends anything. A worker of another protocol or
+  bundle, or an older worker whose hello names no protocol, is refused
+  `Unavailable` (`detail.worker` and `detail.expected` give both sides),
+  naming the fix: "replace its worker with this build's: `layerfs machine
+  stop <m>`, then `layerfs machine start <m>`" (a start copies this build's
+  bundle in). `machine start` alone does not replace a running worker,
+  whatever its build. A worker run from no sealed bundle (a development
+  build) is checked by protocol alone. [`layerfs doctor`](calls.md#layerfs-doctor)
+  reports a running worker of another build as a warning.
 - A worker holds a Store's lease for as long as it keeps the Store open,
   and closes its own open copy before a push, pull, retire or remove reads or
   deletes the file.

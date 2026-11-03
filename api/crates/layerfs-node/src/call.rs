@@ -6,7 +6,7 @@ use napi::threadsafe_function::{
 };
 use napi::{Env, JsFunction, Status, Task};
 use napi_derive::napi;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The call table as JSON text.
 #[napi]
@@ -44,6 +44,34 @@ pub fn call(
         scope,
         events,
     }))
+}
+
+/// `layerfs doctor` (report-only, outside the call table) on `home` (else
+/// the library's default). Resolves to JSON text `{ value }` or
+/// `{ refused }`; it may dial running workers, so it runs off the
+/// JavaScript thread.
+#[napi]
+pub fn doctor(home: Option<String>) -> AsyncTask<Doctor> {
+    AsyncTask::new(Doctor { home })
+}
+
+/// One doctor report, run off the JavaScript thread.
+pub struct Doctor {
+    home: Option<String>,
+}
+
+impl Task for Doctor {
+    type Output = String;
+    type JsValue = String;
+
+    fn compute(&mut self) -> napi::Result<String> {
+        let home = calls::home(self.home.as_deref().map(Path::new));
+        Ok(layerfs_api::doctor_json(home))
+    }
+
+    fn resolve(&mut self, _env: Env, answer: String) -> napi::Result<String> {
+        Ok(answer)
+    }
 }
 
 /// One call, run off the JavaScript thread.

@@ -165,13 +165,13 @@ fn lease_alive(pid: u32, text: &str) -> bool {
     alive_as(pid, start, boot)
 }
 
-/// The processes holding Store `store`, other than this one; stale leases
-/// are removed and logged (O35). The caller holds the Store's lock.
-pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
+/// Store `store`'s leases other than this process's: each holder's id,
+/// its lease file and whether it is alive. Read only.
+fn leases(home: &Path, store: &str) -> Result<Vec<(u32, PathBuf, bool)>, SdkRefusal> {
     let dir = paths::lease_dir(home, store);
-    let mut live = Vec::new();
+    let mut found = Vec::new();
     let entries = match std::fs::read_dir(&dir) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(live),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(found),
         Err(e) => return Err(failed(e)),
         Ok(entries) => entries,
     };
@@ -193,21 +193,46 @@ pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
             Err(e) => return Err(failed(e)),
         };
-        if lease_alive(pid, &text) {
+        found.push((pid, entry.path(), lease_alive(pid, &text)));
+    }
+    found.sort_unstable();
+    Ok(found)
+}
+
+/// The processes holding Store `store`, other than this one; stale leases
+/// are removed and logged (O35). The caller holds the Store's lock.
+pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
+    let mut live = Vec::new();
+    for (pid, path, alive) in leases(home, store)? {
+        if alive {
             live.push(pid);
+            continue;
+        }
+        std::fs::remove_file(path).map_err(failed)?;
+        home::log_line(
+            home,
+            "leases.jsonl",
+            &SdkValue::map([
+                ("at", SdkValue::Int(home::now_ms())),
+                ("store", SdkValue::text(store)),
+                ("removed_stale_lease_of", SdkValue::Int(i64::from(pid))),
+            ]),
+        )?;
+    }
+    Ok(live)
+}
+
+/// Read only (`layerfs doctor`, a layout 2 home's survey): the live and the
+/// stale holders of Store `store` other than this process; nothing is
+/// removed and no lock is taken.
+pub(crate) fn read_holders(home: &Path, store: &str) -> Result<(Vec<u32>, Vec<u32>), SdkRefusal> {
+    let (mut live, mut stale) = (Vec::new(), Vec::new());
+    for (pid, _, alive) in leases(home, store)? {
+        if alive {
+            live.push(pid)
         } else {
-            std::fs::remove_file(entry.path()).map_err(failed)?;
-            home::log_line(
-                home,
-                "leases.jsonl",
-                &SdkValue::map([
-                    ("at", SdkValue::Int(home::now_ms())),
-                    ("store", SdkValue::text(store)),
-                    ("removed_stale_lease_of", SdkValue::Int(i64::from(pid))),
-                ]),
-            )?;
+            stale.push(pid)
         }
     }
-    live.sort_unstable();
-    Ok(live)
+    Ok((live, stale))
 }
