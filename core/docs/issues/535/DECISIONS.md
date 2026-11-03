@@ -99,6 +99,12 @@ rules.
 | `reach` facts (G) | apple-container and microsandbox: no gateway alias is documented in the code or tools, so a loopback URL is refused with the G7 reason (not guessed). firecracker: `172.30.<n>.1` from `spec.state.network`, refused when no network is recorded. Only `localhost`, `127.0.0.1`, `::1` count as loopback. Off native, a URL with `host=`/`hostaddr=` query, a host list or an empty host (Unix socket) is refused. | §7.3 rules; no guessed alias (G7). |
 | Helper spec (G) | Not versioned; now eight fixed `key=path` lines then `bind=<rw|ro>\t<host>\t<guest>` lines. Old and new helpers refuse each other's specs (fail closed). | Same-bundle wire format; a mixed bundle fails visibly. |
 | Compatibility wrappers (G) | `Runtime::launch`/`NamespaceProvider::launch` map `ProviderLaunchOptions::Namespaces.store` to one `Bind::store`; `docker::desktop_url` delegates to `PostgresUrl`. The api switches to `launch_with_binds` and `layerfs_machine::reach` in step G and the wrappers are then deleted. | Lane G could not edit `api/` while lane C moved it. |
+| Executor (E) | `common/place.rs` `Executor {Local, Worker}`, `Start {OnDemand, Never}`; `Daemon` waits for step H. `Worker::ready()` (a readiness wait) is used only by `store.move`/`store.remove`, which must start their machine before marking the Store. | §6.4; no unused variant. |
+| R1 boundary (E) | `Unreached` covers every failure up to and including the worker's answer to the secret (connect, hello, closed, `Denied`, a stopping worker's `Unavailable`); only that, on an OnDemand caller's first call, starts the machine, then the same framed request is sent once. | One attempt: nothing that may have reached the worker is resent. |
+| No-start reads (E) | Before E, `sandbox.get` (via `list_workspaces`) and `workspace.status` started a machine. Now `sandbox.get` on a down machine answers `workspaces: []` and `down_reason`; `workspace.status` is refused `Unavailable` naming `machine start`. | P4. |
+| `machine.stop` race (E) | `InUse` is checked under the home lock, but a `sandbox.create` claiming its name after the check can race the stop; there is no `stopping` marker. | Step F's `op` intent on the machine record closes it. |
+| Deploy wire (E) | `sandbox.host` carries one `deploy` choice resolved by `sandbox/deploy.rs` `resolve(Side::Home | Side::Worker, ..)`; the old `docker`/`native` fields are gone, so caller and worker must come from one bundle. PostgreSQL Sandboxes still launch from the caller until step G. | G8, §10 phase 4. |
+| Docker default image (E) | `machine/image.rs` loads `<bundle>/sandbox-image.tar` once with `layerfs_machine::load_image` (one attempt, 300 s), records `loaded_image {id, bundle}` on the docker machine and uses it for Sandboxes and the worker container; a new bundle hash loads again; missing file → `Unsupported` naming it. | P5. |
 | `StoreRef` (2c) | `api/crates/layerfs-api/src/store/store_ref.rs`, not `place/store_ref.rs`; `kind_of` returns the bridge's `StoreKind`. PostgreSQL `schema`/`synchronous_commit` stay optional in `PgServer` and are required (`store_ref::required`) only where `identity_of` required them. | #536 step C moves `store/` into `layerfs-control` `store/` (I3); a fixture without schema (`sandbox_machines`) showed stricter parsing would change routing. |
 | `Sandbox::Native` (1.9) | Renamed `Sandbox::HostProcess` with the three renames G6 lists, and `layerfs-api` `host::runtime::Backend::Native` likewise. | The enums that name the backend name it alike; stored and displayed values stay `"native"`. |
 
@@ -123,6 +129,9 @@ proposals) keep the sweep.
 
 ## Open items
 
+- Step E live checks outstanding: R1 against real stopped/idle workers; `machine.start`/`stop` on lima, apple-container, microsandbox, firecracker, ssh, docker; a real `docker load` (classic and containerd image stores); the new deploy wire with a sealed bundle.
+- `backup.restore` and `backup.list` still parse each Store record twice (R4 leftover).
+
 - Step G api side: switch to `launch_with_binds` (sqlite `[Bind::store]`, PostgreSQL `[]`) and `layerfs_machine::reach`; delete the `store`-field mapping and `desktop_url`; merge `issue535-G-flip`; remove the `host/local.rs` namespaces backstop and the "never send to a worker" shortcut; `sandbox_machines` then expects ssh PostgreSQL allowed.
 - `ProviderCapabilities` has no `binds` capability yet (§6.3 lists one).
 - Unverified live: `host-gateway` from the Linux worker inside Docker Desktop; a server bound only to 127.0.0.1 is not reachable through the bridge gateway on a Linux host.
@@ -140,3 +149,4 @@ proposals) keep the sweep.
 - Phase 2c done at `86d4ec0652` (api `StoreRef`; no `get_text("kind")` left in `layerfs-api`). **Phase 2 done at `86d4ec0652`.**
 - Step B done at `53c326e0bc`: lane B (subagent, branch `issue535-B-support`) `56f6831a0e`, `1082648ca7`, `0a71736fd0`, `633e53f8b1`, merged `1b74839960`; api side `53c326e0bc` (lead). **Phase 3 done.**
 - G-connect (5a, connect side) merged at `ba00cddfea`: lane G (subagent, branch `issue535-G-reach`) `23786fbd52`, `87bd0bfaff`, `2f35e9d6cb`, `510fd6400c`; `04fd094d02` held on `issue535-G-flip`.
+- Step E (phase 4 in `layerfs-control`) done at `30842a0560`: lane E (subagent, branch `issue535-E-place`) `9eed8f696e`, `e8d330116e`, `5fd14480df`, `c6f3dc96d9`, `9de6d4c77d`, `ae4d9de019`, `aed6ad02a8`. R3 not built (I2). **Phase 4 done** (live checks open).
