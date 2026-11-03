@@ -230,7 +230,8 @@ fn init_into_a_worker_s_store_copies_the_caller_s_folder() {
     assert_eq!(again.0, "Exists", "{}", again.1);
 
     open_up(&folder);
-    for dir in [home, root, folder, odd] {
+    let (missing, plain) = (missing.parent().unwrap(), plain.parent().unwrap());
+    for dir in [&home, &root, &folder, &odd, missing, plain] {
         let _ = std::fs::remove_dir_all(dir);
     }
 }
