@@ -2,11 +2,12 @@
 //! phase at a time (check, snapshot, send, verify, install, record, retire).
 use crate::common::context::Context;
 use crate::common::home::{self, with_field};
+use crate::common::op::{self, Op};
 use crate::common::outcome::{refused, Outcome};
 use crate::common::place::{self, Executor};
 use crate::machine::record::MachineRecord;
-use crate::store::family::{ended, idle, in_progress, of_store, progress, record_of, settle, step};
-use crate::store::record::StoreRef;
+use crate::store::family::{advance, begin, ended, of_store, progress, record_of, settle, step};
+use crate::store::record::{self, StoreRef};
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 
@@ -18,15 +19,16 @@ pub(crate) fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Out
     crate::common::names::MachineName::parse(to)?;
     // check: names, the target machine, the Store idle
     progress(context, "check", 0, 0);
-    let from = {
-        let _lock = home::lock::take(&home)?;
-        let record = record_of(&home, name)?;
+    let args = SdkValue::map([("to", SdkValue::text(to))]);
+    let mut op = Op::begin("store.move", "check", args)?;
+    let from = begin(&home, name, &op, |record| {
         if let StoreRef::Postgres { .. } = record.store_ref()? {
             return Err(refused(
                 "InvalidInput",
                 format!("Store {name} is a PostgreSQL database; it does not move"),
             ));
         }
+        record.unblocked()?;
         if MachineRecord::read(&home, to)?.is_none() {
             return Err(refused("NotFound", format!("no machine named {to}")));
         }
@@ -37,21 +39,18 @@ pub(crate) fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Out
                 format!("Store {name} is already on {to}"),
             ));
         }
-        idle(&home, name, &record)?;
-        let at = in_progress(
-            "move",
-            vec![("from", SdkValue::text(&from)), ("to", SdkValue::text(to))],
-        );
-        record.with("in_progress", at).write(&home)?;
-        from
-    };
-    let result =
-        at("check", settle(&home, name)).and_then(|_lease| phases(context, name, &from, to));
+        Ok(from)
+    })?;
+    let result = at("check", settle(&home, name))
+        .and_then(|_lease| phases(context, &mut op, name, &from, to));
     if let Err((phase, refusal)) = &result {
         // past install both copies exist: a record phase that failed (its
-        // lock wait expired, say) leaves the outcome open
+        // lock wait expired, say) leaves the outcome open; past record the
+        // Store is on `to` and `op` is gone
         let uncertain = refusal.code == "Unknown" || *phase == "record";
-        ended(&home, "store.move", name, phase, refusal, uncertain);
+        if *phase != "retire" {
+            ended(&home, name, &op, phase, refusal, uncertain, None);
+        }
     }
     result.map_err(|(phase, mut refusal)| {
         refusal.message = format!("store move, {phase}: {}", refusal.message);
@@ -66,7 +65,20 @@ fn at<T>(phase: &'static str, result: Result<T>) -> Phased<T> {
     result.map_err(|refusal| (phase, refusal))
 }
 
-fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased<SdkValue> {
+/// Enters `phase`: shown as progress and written to the record's `op`.
+fn enter(context: &mut Context<'_>, op: &mut Op, name: &str, phase: &'static str) -> Phased<()> {
+    progress(context, phase, 0, 0);
+    let home = context.home.clone();
+    at(phase, advance(&home, name, op, phase))
+}
+
+fn phases(
+    context: &mut Context<'_>,
+    op: &mut Op,
+    name: &str,
+    from: &str,
+    to: &str,
+) -> Phased<SdkValue> {
     let home = context.home.clone();
     let mut source = at("check", place::on_machine(&home, from))?;
     let mut target = at("check", place::on_machine(&home, to))?;
@@ -88,8 +100,7 @@ fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased
             ),
         ));
     }
-    // snapshot
-    progress(context, "snapshot", 0, 0);
+    enter(context, op, name, "snapshot")?;
     let snapshot = at(
         "snapshot",
         step(&home, &mut source, "snapshot", of_store(name, vec![])),
@@ -97,6 +108,7 @@ fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased
     let total = snapshot.get_int("bytes").unwrap_or(0) as u64;
     // send, in pieces through this process
     let mut offset = 0u64;
+    enter(context, op, name, "send")?;
     progress(context, "send", 0, total);
     loop {
         let piece = at(
@@ -144,7 +156,7 @@ fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased
         }
     }
     // verify, install
-    progress(context, "verify", 0, 0);
+    enter(context, op, name, "verify")?;
     let digest: Vec<(&str, SdkValue)> = ["bytes", "sha256", "heads"]
         .into_iter()
         .map(|field| (field, snapshot.get(field).cloned().unwrap_or_default()))
@@ -153,13 +165,16 @@ fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased
         "verify",
         step(&home, &mut target, "verify", of_store(name, digest)),
     )?;
-    progress(context, "install", 0, 0);
+    enter(context, op, name, "install")?;
     at(
         "install",
         step(&home, &mut target, "install", of_store(name, vec![])),
     )?;
-    // record: the Store is on `to` from here on
-    progress(context, "record", 0, 0);
+    // record: the Store is on `to` from here on, and `op` goes in the same
+    // write; a crash before it leaves both copies, so the phase is written
+    // uncertain first
+    *op = op.clone().as_uncertain();
+    enter(context, op, name, "record")?;
     let last = SdkValue::map([
         ("from", SdkValue::text(from)),
         ("to", SdkValue::text(to)),
@@ -174,10 +189,10 @@ fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased
     at(
         "record",
         (|| {
-            let _lock = home::lock::take(&home)?;
+            let _store = record::lock(&home, name)?;
             let record = record_of(&home, name)?.with("machine", SdkValue::text(to));
             let record = record.with("last_move", last.clone());
-            record.with("in_progress", SdkValue::Null).write(&home)
+            record.without(op::FIELD).write(&home)
         })(),
     )?;
     // retire the source's copy

@@ -12,6 +12,7 @@
 //! 1. write: each Sandbox record from `machine/<m>/sandbox/<name>/` to
 //!    `sandbox/<name>/record.json` (`gone` when its runtime had ended,
 //!    which is reclaimed: a stopped container or local daemon deleted once),
+//!    each Store record without an ended move's or remove's `in_progress`,
 //!    and `"v": 1` into every machine, Store, project and bucket record;
 //! 2. `log/layout-3.pending`, then `layerfs.json` at layout 3 (the flip);
 //! 3. delete the layout 2 paths (`machine/*/sandbox/`,
@@ -58,6 +59,8 @@ enum Found {
 struct Plan {
     live: Vec<(&'static str, String, String)>,
     sandboxes: Vec<(String, SdkValue)>,
+    /// Store records without layout 2's ended `in_progress`.
+    stores: Vec<(String, SdkValue)>,
     ended: Vec<Numbered>,
     notes: Vec<String>,
 }
@@ -89,6 +92,9 @@ pub(super) fn convert(home: &Path, file: &HomeFile) -> Result<HomeFile> {
     for ended in &plan.ended {
         reclaim(ended)?;
         reclaimed.push(SdkValue::text(format!("{}#{}", ended.project, ended.id)));
+    }
+    for (name, record) in &plan.stores {
+        write_entity(&paths::store_record(home, name), record)?;
     }
     let versioned = version_records(home)?;
     let marker = paths::log_dir(home).join(PENDING);
@@ -202,15 +208,28 @@ fn survey(home: &Path) -> Result<Plan> {
                 format!("is held open by process {pid}; end that process"),
             );
         }
-        let progress = StoreRecord::read(home, &store)?.and_then(|r| r.in_progress().cloned());
-        if let Some(progress @ SdkValue::Map(_)) = progress {
-            if lease::recorded_alive(&progress) {
+        // layout 2's `in_progress`: a live one refuses; a gone one did not
+        // hold the Store in 2.0 and goes (layout 3 holds `op` instead)
+        let Some(record) = StoreRecord::read(home, &store)? else {
+            continue;
+        };
+        match record.field("in_progress") {
+            None => {}
+            Some(progress @ SdkValue::Map(_)) if lease::recorded_alive(progress) => {
                 let pid = progress.get_int("pid").unwrap_or(0);
                 plan.live(
                     "store",
                     &store,
                     format!("is being moved or removed by process {pid}; let it finish"),
                 );
+            }
+            Some(progress) => {
+                if let SdkValue::Map(_) = progress {
+                    let pid = progress.get_int("pid").unwrap_or(0);
+                    plan.notes.push(format!("Store {store}: dropped the record of a move or remove by process {pid}, which ended; an uncertain outcome is in log/uncertain.jsonl"));
+                }
+                let record = record.without("in_progress");
+                plan.stores.push((store, record.to_record().clone()));
             }
         }
     }

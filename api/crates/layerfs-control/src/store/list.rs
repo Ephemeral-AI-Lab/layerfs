@@ -1,28 +1,27 @@
 //! `store.list` (#536 §10b): every Store with its state.
 use super::family::{of_store, public, step};
-use crate::common::home;
 use crate::common::home::lease;
 use crate::common::outcome::{Outcome, View};
 use crate::common::place;
-use crate::store::record::StoreRef;
+use crate::store::record::{self, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// `store.list`: every Store with its state, derived as `store.status`
-/// derives it (#536 §10b), starting nothing: the lease holders, read under
-/// the home lock once, and for a sqlite Store whether its machine answers
+/// derives it (#536 §10b), starting nothing: the lease holders, each read
+/// under its Store's lock, and for a sqlite Store whether its machine answers
 /// a `stat` of its file. A machine that did not answer once is down for
 /// its other Stores too, without dialing it again; a Store whose kind or
 /// machine its record does not tell is `down`.
 pub(super) fn list(home: &Path) -> Outcome {
     let records = crate::inventory::stores(home)?;
-    let holders = {
-        let _lock = home::lock::take(home)?;
-        let held = records.iter().map(|r| lease::holders(home, r.name()));
-        held.collect::<Result<Vec<_>>>()?
-    };
+    let holders = records.iter().map(|r| {
+        let _store = record::lock(home, r.name())?;
+        lease::holders(home, r.name())
+    });
+    let holders = holders.collect::<Result<Vec<_>>>()?;
     let mut unanswered = std::collections::BTreeSet::new();
     let mut items = Vec::new();
     for (record, holders) in records.iter().zip(holders) {

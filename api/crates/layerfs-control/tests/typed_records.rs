@@ -26,10 +26,12 @@ fn a_store_shows_its_record_without_secrets_then_its_projects() {
         value(
             r#"{"v":1,"binding":"b","name":"old","cursor":"c","kind":"sqlite","machine":"box",
                "profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},
-               "in_progress":null,"last_move":{"from":"native","to":"box"}}"#,
+               "op":{"id":"op-1","name":"store.move","phase":"send","args":{"to":"box"},
+                     "owner":{"pid":0},"started":3,"updated":4,"uncertain":true},
+               "last_move":{"from":"native","to":"box"}}"#,
         ),
     );
-    let want = r#"{"name":"shop","kind":"sqlite","machine":"box","profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},"in_progress":null,"last_move":{"from":"native","to":"box"},"projects":["api","web"]}"#;
+    let want = r#"{"name":"shop","kind":"sqlite","machine":"box","profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},"op":{"id":"op-1","name":"store.move","phase":"send","started":3,"uncertain":true},"last_move":{"from":"native","to":"box"},"projects":["api","web"]}"#;
     for view in [View::Full, View::List] {
         let shown = record.to_sdk(view, &projects(&["api", "web"])).unwrap();
         assert_eq!(print(&shown), want);
@@ -228,33 +230,36 @@ mod machines {
 }
 
 #[test]
-fn a_store_state_is_moving_down_idle_or_in_use() {
-    let idle = StoreRecord::from_record("s", value(r#"{"kind":"sqlite","in_progress":null}"#));
+fn a_store_state_is_busy_unresolved_down_idle_or_in_use() {
+    use layerfs_control::common::op::Op;
+    let idle = StoreRecord::from_record("s", value(r#"{"kind":"sqlite"}"#));
     assert_eq!(idle.state(false, &[]), StoreState::Idle);
     assert_eq!(idle.state(false, &[42]), StoreState::InUse);
     assert_eq!(idle.state(true, &[42]), StoreState::Down);
-    // a live move (this process) wins over everything; a dead one is ignored
-    let me = std::process::id();
-    let moving = StoreRecord::from_record(
-        "s",
-        value(&format!(r#"{{"in_progress":{{"op":"move","pid":{me}}}}}"#)),
-    );
-    assert_eq!(moving.state(true, &[42]), StoreState::Moving);
-    let dead = StoreRecord::from_record(
-        "s",
-        value(r#"{"in_progress":{"op":"move","pid":2147483647}}"#),
-    );
-    assert_eq!(dead.state(false, &[]), StoreState::Idle);
+    // a live operation (this process) wins over everything; a gone one's
+    // uncertain outcome is unresolved, its certain one is ignored
+    let live = Op::begin("store.move", "send", SdkValue::Null).unwrap();
+    let with = |op: SdkValue| StoreRecord::from_record("s", SdkValue::map([("op", op)]));
+    let busy = with(live.to_record().clone());
+    assert_eq!(busy.state(true, &[42]), StoreState::Busy);
+    let gone = |uncertain: bool| {
+        value(&format!(
+            r#"{{"id":"op-2","name":"store.remove","phase":"remove","owner":{{"pid":0}},"uncertain":{uncertain}}}"#
+        ))
+    };
+    assert_eq!(with(gone(true)).state(false, &[]), StoreState::Unresolved);
+    assert_eq!(with(gone(false)).state(false, &[]), StoreState::Idle);
     let names: Vec<_> = [
-        StoreState::Moving,
-        StoreState::Down,
         StoreState::Idle,
         StoreState::InUse,
+        StoreState::Busy,
+        StoreState::Down,
+        StoreState::Unresolved,
     ]
     .iter()
     .map(|s| s.as_str())
     .collect();
-    assert_eq!(names, ["moving", "down", "idle", "in_use"]);
+    assert_eq!(names, ["idle", "in_use", "busy", "down", "unresolved"]);
 }
 
 #[test]

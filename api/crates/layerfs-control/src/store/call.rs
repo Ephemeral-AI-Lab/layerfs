@@ -23,13 +23,13 @@ pub(crate) fn store_call(
     args: Vec<(String, SdkValue)>,
 ) -> Outcome {
     let home = context.home.clone();
-    target.record.moving()?;
+    target.record.unblocked()?;
     if let StoreRef::Postgres { .. } = target.store_ref {
         let fields = with_target(args, target, &target.record);
         return postgresql(&home, target, op, fields);
     }
-    // the lease is taken under the home lock with the record read there: a
-    // move or remove that started since `target` was read refuses it
+    // the lease is taken under the Store's lock with the record read there:
+    // a move or remove that started since `target` was read refuses it
     let (lease, record) = lease::claim(&home, &target.store)?;
     let mut fields = with_target(args, target, &record);
     // the record read under the lock, parsed once (R4)

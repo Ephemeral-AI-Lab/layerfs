@@ -1,20 +1,20 @@
-//! `store.status`: who holds a Store, whether a move runs, its size where it lives.
+//! `store.status`: who holds a Store, the operation on it, its size where it lives.
 use super::family::{fields_map, of_store, record_of, step};
-use crate::common::home;
 use crate::common::home::lease;
 use crate::common::outcome::Outcome;
 use crate::common::place;
+use crate::store::record;
 use crate::store::record::StoreRef;
 use layerfs_bridge::control::SdkValue;
 use std::path::Path;
 
-/// `store.status`: who holds it, whether a move is running, its size. It
-/// starts no machine: a Store whose machine is not running is `down`, with
-/// the reason (O34).
+/// `store.status`: who holds it, the operation its record holds (`op`, as
+/// H6 shows it), its size. It starts no machine: a Store whose machine is
+/// not running is `down`, with the reason (O34).
 pub(super) fn status(home: &Path, name: &str) -> Outcome {
     let record = record_of(home, name)?;
     let holders = {
-        let _lock = home::lock::take(home)?;
+        let _store = record::lock(home, name)?;
         lease::holders(home, name)?
     };
     let mut down = None;
@@ -48,10 +48,7 @@ pub(super) fn status(home: &Path, name: &str) -> Outcome {
                     .collect(),
             ),
         ),
-        (
-            "in_progress",
-            record.in_progress().cloned().unwrap_or_default(),
-        ),
+        ("op", record.op().map(|op| op.to_sdk()).unwrap_or_default()),
         ("down_reason", down.map(SdkValue::Text).unwrap_or_default()),
     ];
     fields.extend(more);

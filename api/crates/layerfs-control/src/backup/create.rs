@@ -52,7 +52,7 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             format!("Store {store} is a PostgreSQL database; back it up with PostgreSQL's tools"),
         ));
     }
-    record.moving()?;
+    record.unblocked()?;
     let driver = bucket_record.driver()?;
     let expected = expected(&record, bucket, &file);
     let machine = store_ref.machine()?.to_owned();

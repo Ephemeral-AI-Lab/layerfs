@@ -379,6 +379,14 @@ fn a_layout_2_home_with_anything_live_is_refused_and_left() {
     let leases = paths::lease_dir(&home, "shop");
     dir_at(&leases);
     std::fs::write(leases.join(holder.pid().to_string()), b"1\n").unwrap();
+    // layout 2's record of a move by a live process
+    let store = paths::store_record(&home, "shop");
+    let moving = SdkValue::map([
+        ("op", t("move")),
+        ("pid", SdkValue::Int(i64::from(holder.pid()))),
+    ]);
+    let record = home::with_field(read_record(&store).unwrap().unwrap(), "in_progress", moving);
+    write_record(&store, &record).unwrap();
 
     let mut before = Vec::new();
     files(&home, &mut before);
@@ -392,6 +400,7 @@ fn a_layout_2_home_with_anything_live_is_refused_and_left() {
         "sandbox nat",
         "intent shop/app",
         "lease shop",
+        "store shop",
     ] {
         assert!(message.contains(named), "{named} not in {message}");
     }
@@ -403,7 +412,10 @@ fn a_layout_2_home_with_anything_live_is_refused_and_left() {
         .iter()
         .map(|r| r.get_text("kind").unwrap())
         .collect();
-    assert_eq!(kinds, ["intent", "sandbox", "sandbox", "sandbox", "lease"]);
+    assert_eq!(
+        kinds,
+        ["intent", "sandbox", "sandbox", "sandbox", "lease", "store"]
+    );
     let mut after = Vec::new();
     files(&home, &mut after);
     after.sort();
@@ -431,6 +443,10 @@ fn a_layout_2_home_with_anything_live_is_refused_and_left() {
     assert!(matches!(home::detect(&home).unwrap(), Layout::Current(_)));
     let listed = call(&home, "sandbox.list", &[]);
     assert_eq!(item(&listed, "nat").get_text("state"), Some("gone"));
+    // the ended move's `in_progress` is not carried into layout 3
+    let record = read_record(&store).unwrap().unwrap();
+    assert_eq!(record.get("in_progress"), None, "{record:?}");
+    assert_eq!(record.get("op"), None, "{record:?}");
     only_layout_3(&home);
     std::fs::remove_dir_all(&home).unwrap();
 }
