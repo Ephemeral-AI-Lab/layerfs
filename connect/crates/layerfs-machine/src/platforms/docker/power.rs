@@ -52,38 +52,61 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
     let volume = format!("{}-data:{DATA}", spec.vm_name);
     let socket = format!("{VM_DOCKER}:{VM_DOCKER}");
     let bundle_label = format!("layerfs.bundle={}", bundle.hash);
-    let publish = format!("127.0.0.1::{WORKER_PORT}");
-    let listen = format!("LAYERFS_WORKER_LISTEN=0.0.0.0:{WORKER_PORT}");
     let secret_file = format!("LAYERFS_WORKER_SECRET={STATE}/secret");
     let tmpfs = format!("{STATE}:mode=0700");
+    // On a Linux Engine the worker shares the host's network: it listens on
+    // a host loopback port and dials its Sandboxes' loopback-published
+    // daemon ports as published (`LAYERFS_WORKER_HOST_NETWORK`; the
+    // bridge gateway `host.docker.internal` names does not reach a port
+    // published on 127.0.0.1, terminal pass lane K3). Docker Desktop's
+    // worker publishes its port and dials `host.docker.internal`.
+    let host_network = cfg!(target_os = "linux");
+    let port = if host_network { tool::free_port()? } else { 0 };
+    let listen = match host_network {
+        true => format!("LAYERFS_WORKER_LISTEN=127.0.0.1:{port}"),
+        false => format!("LAYERFS_WORKER_LISTEN=0.0.0.0:{WORKER_PORT}"),
+    };
+    let publish = format!("127.0.0.1::{WORKER_PORT}");
     #[rustfmt::skip]
-    let args = [
+    let mut args = vec![
         "run", "-d", "--pull", "never", "--name", &spec.vm_name, "--init",
-        "--label", ROLE, "--label", &bundle_label, "-p", &publish,
-        "-v", &socket, "-v", &volume, "-v", &bundle_mount, "--tmpfs", &tmpfs,
-        "-e", &listen, "-e", &secret_file, "--entrypoint", "sh", image, "-c", ENTRY,
+        "--label", ROLE, "--label", &bundle_label,
     ];
-    let mut args = args.to_vec();
-    if cfg!(target_os = "linux") {
+    if host_network {
         // a Linux Engine has no `host.docker.internal` of its own: the name
         // `reach` gives a loopback PostgreSQL server (#535 §7.4) resolves to
         // the bridge's gateway, the host, for the worker's Store calls and
         // its Sandboxes' reach check
-        args.splice(7..7, ["--add-host", "host.docker.internal:host-gateway"]);
+        #[rustfmt::skip]
+        args.extend([
+            "--network", "host", "--add-host", "host.docker.internal:host-gateway",
+            "-e", "LAYERFS_WORKER_HOST_NETWORK=1",
+        ]);
+    } else {
+        args.extend(["-p", &publish]);
     }
+    #[rustfmt::skip]
+    args.extend([
+        "-v", &socket, "-v", &volume, "-v", &bundle_mount, "--tmpfs", &tmpfs,
+        "-e", &listen, "-e", &secret_file, "--entrypoint", "sh", image, "-c", ENTRY,
+    ]);
     run(spec, &args, "starting the worker container")?.answer("starting the worker container")?;
-    let ports = run(
-        spec,
-        &["port", &spec.vm_name, &format!("{WORKER_PORT}/tcp")],
-        "docker port",
-    )?
-    .answer("docker port")?;
-    let port = published_port(&ports).ok_or_else(|| {
-        MachineError::new(
-            Code::Failed,
-            format!("the worker {} publishes no port ({ports})", spec.vm_name),
-        )
-    })?;
+    let port = if host_network {
+        port
+    } else {
+        let ports = run(
+            spec,
+            &["port", &spec.vm_name, &format!("{WORKER_PORT}/tcp")],
+            "docker port",
+        )?
+        .answer("docker port")?;
+        published_port(&ports).ok_or_else(|| {
+            MachineError::new(
+                Code::Failed,
+                format!("the worker {} publishes no port ({ports})", spec.vm_name),
+            )
+        })?
+    };
     let guest = guest(spec)?;
     let secret = tool::secret()?;
     guest.write_file(&spec.tools, &format!("{STATE}/secret"), &secret)?;

@@ -164,10 +164,15 @@ fn docker(side: &Side<'_>, store: &str, choice: &SdkValue) -> Result<SdkValue> {
             .and_then(|record| record.docker().map(str::to_owned))
             .unwrap_or_else(|| "/var/run/docker.sock".to_owned()),
         Side::Worker(_) => {
-            fields.push((
-                "daemonHost",
-                SdkValue::text(layerfs_sandbox::docker::DESKTOP_HOST),
-            ));
+            // a worker on the Engine host's network (a Linux Engine) dials
+            // the published loopback port as it is; Docker Desktop's dials
+            // its host by name
+            if std::env::var("LAYERFS_WORKER_HOST_NETWORK").as_deref() != Ok("1") {
+                fields.push((
+                    "daemonHost",
+                    SdkValue::text(layerfs_sandbox::docker::DESKTOP_HOST),
+                ));
+            }
             "/var/run/docker.sock".to_owned()
         }
     };

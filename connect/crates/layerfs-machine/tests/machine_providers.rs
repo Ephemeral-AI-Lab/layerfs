@@ -315,22 +315,32 @@ esac"#,
     for part in [
         "-d --pull never --name lfs-dev --init",
         "--label layerfs.role=machine-worker --label layerfs.bundle=0123abcd",
-        "-p 127.0.0.1::7070",
         "-v /var/run/docker.sock:/var/run/docker.sock",
         "-v lfs-dev-data:/layerfs/data",
         &format!("-v {}:/layerfs/bundle:ro", bundle.dir.display()),
         "--tmpfs /layerfs/state:mode=0700",
-        "-e LAYERFS_WORKER_LISTEN=0.0.0.0:7070 -e LAYERFS_WORKER_SECRET=/layerfs/state/secret",
+        "-e LAYERFS_WORKER_SECRET=/layerfs/state/secret",
         "--entrypoint sh debian:trixie-slim -c",
     ] {
         assert!(run.contains(part), "{part} not in {run}");
     }
-    // a Linux Engine is given the name `reach` uses (#535 §7.4)
-    assert_eq!(
-        run.contains("--init --add-host host.docker.internal:host-gateway --label"),
-        cfg!(target_os = "linux"),
-        "{run}"
-    );
+    if cfg!(target_os = "linux") {
+        // a Linux Engine's worker shares the host's network, listens on a
+        // host loopback port and is given the name `reach` uses (#535 §7.4)
+        assert!(
+            run.contains("--network host --add-host host.docker.internal:host-gateway -e LAYERFS_WORKER_HOST_NETWORK=1"),
+            "{run}"
+        );
+        assert!(run.contains("-e LAYERFS_WORKER_LISTEN=127.0.0.1:"), "{run}");
+        assert!(!run.contains(" -p "), "{run}");
+    } else {
+        assert!(run.contains("-p 127.0.0.1::7070"), "{run}");
+        assert!(
+            run.contains("-e LAYERFS_WORKER_LISTEN=0.0.0.0:7070"),
+            "{run}"
+        );
+        assert!(!run.contains("--network host"), "{run}");
+    }
     assert_eq!(
         run.matches(" -v ").count(),
         3,
