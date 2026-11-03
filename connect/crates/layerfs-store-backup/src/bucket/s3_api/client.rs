@@ -154,6 +154,8 @@ pub(crate) fn metadata_headers(metadata: &Metadata) -> BTreeMap<String, String> 
         .collect()
 }
 
+impl crate::bucket::driver::sealed::Sealed for S3Client {}
+
 impl Driver for S3Client {
     fn limits(&self) -> Limits {
         self.config.limits
