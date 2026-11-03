@@ -75,5 +75,6 @@ started:
 | `update(name, …)` | Sets `native`/`docker`'s image, Docker socket (`docker`) and WSL distribution (`wsl`) | `InUse` while Sandboxes run on it; `wsl` only on a Windows host; resizing a VM (`cpus`, `memory`) is `Unsupported`, not built |
 
 `native` and `docker` are never created, removed or disconnected. A Sandbox
-on the `docker` machine runs in a container on its image (see
+on the `docker` machine runs in a container on its image; with none named,
+the bundle's Sandbox image is loaded into Docker once and used (#535 P5; see
 [sandbox](sandbox.md)).

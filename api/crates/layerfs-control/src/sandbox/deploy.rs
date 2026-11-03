@@ -10,6 +10,7 @@
 //! guest never reads the home, H §7.7).
 use crate::common::home::{paths, read_record};
 use crate::common::outcome::{failed, refused};
+use crate::common::place::Start;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
@@ -70,8 +71,9 @@ pub(crate) fn bundle_dir(os: &str) -> Result<PathBuf> {
 
 /// What machine `machine`'s record chooses for a Sandbox of a Store
 /// (`postgresql` or sqlite), read by the caller: `backend` (`docker` or
-/// `local`), the image (the call's `image`, else the record's; required on
-/// `docker`), and for `local` the machine's own image archive (`image_archive`,
+/// `local`), the image (the call's `image`, else the record's; on `docker`
+/// with neither, the bundle's image loaded once, P5), and for `local` the
+/// machine's own image archive (`image_archive`,
 /// or an `image` that names a file); for a sqlite Store on `docker`, the
 /// docker worker's data volume.
 pub(super) fn choose(
@@ -79,19 +81,22 @@ pub(super) fn choose(
     machine: &str,
     image: Option<&str>,
     postgresql: bool,
+    start: Start,
 ) -> Result<SdkValue> {
     let record = read_record(&paths::machine_record(home, machine))?.unwrap_or_default();
     let named = image.or(record.get_text("image"));
     let mut fields = Vec::new();
     if machine == "docker" {
-        let image = named.ok_or_else(|| {
-            refused(
-                "InvalidInput",
-                "the docker machine names no Sandbox image; `layerfs machine update docker --image sha256:<digest>`",
-            )
-        })?;
+        // a call that starts nothing loads no image either (P4)
+        let image = match (named, start) {
+            (Some(image), _) => Some(image.to_owned()),
+            (None, Start::OnDemand) => Some(docker_default(home)?),
+            (None, Start::Never) => None,
+        };
         fields.push(("backend", SdkValue::text("docker")));
-        fields.push(("image", SdkValue::text(image)));
+        if let Some(image) = image {
+            fields.push(("image", SdkValue::Text(image)));
+        }
         if !postgresql {
             let volume = format!("{}-data", docker_vm(home, &record)?);
             fields.push(("data_volume", SdkValue::Text(volume)));
@@ -142,10 +147,10 @@ pub(super) fn resolve(side: &Side<'_>, store: &str, choice: &SdkValue) -> Result
 /// only a PostgreSQL Store's docker Sandbox: a sqlite Store's goes through
 /// the docker machine's worker on every host (G8).
 fn docker(side: &Side<'_>, store: &str, choice: &SdkValue) -> Result<SdkValue> {
-    let image = choice
-        .get_text("image")
-        .ok_or_else(|| refused("InvalidInput", "a docker Sandbox's image"))?;
-    let mut fields = vec![("image", SdkValue::text(image))];
+    let mut fields = Vec::new();
+    if let Some(image) = choice.get_text("image") {
+        fields.push(("image", SdkValue::text(image)));
+    }
     let volume = choice.get_text("data_volume");
     let socket = match side {
         Side::Home(_) if volume.is_some() => {
@@ -257,6 +262,21 @@ fn docker_vm(_: &Path, _: &SdkValue) -> Result<String> {
     Err(refused(
         "Unsupported",
         "a docker machine's worker is reached from a host build",
+    ))
+}
+
+/// The docker machine's image when none is named: the bundle's Sandbox
+/// image, loaded into Docker once (P5).
+#[cfg(feature = "machine")]
+fn docker_default(home: &Path) -> Result<String> {
+    crate::machine::docker_default(home)
+}
+
+#[cfg(not(feature = "machine"))]
+fn docker_default(_: &Path) -> Result<String> {
+    Err(refused(
+        "InvalidInput",
+        "the docker machine names no Sandbox image; `layerfs machine update docker --image sha256:<digest>`",
     ))
 }
 

@@ -111,6 +111,18 @@ pub fn status_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineEr
     super::tool::within(deadline, || status(spec))
 }
 
+/// Loads the docker-archive `archive` into the `docker` machine's Engine
+/// and answers the image id Docker reports (#535 P5): what `machine start`
+/// and `sandbox create` use on `docker` when no image is named. Refused for
+/// any other platform.
+pub fn load_image(spec: &Spec, archive: &Path) -> Result<String, MachineError> {
+    spec.validate()?;
+    if spec.kind != crate::platform::Platform::Docker {
+        return Err(refused(spec, "loads no Docker image"));
+    }
+    crate::platforms::docker::load_image(spec, archive)
+}
+
 /// The identity of an ssh machine's host: its host key's fingerprint, else
 /// its `/etc/machine-id`. A second machine on the same host is the caller's
 /// `Exists`.

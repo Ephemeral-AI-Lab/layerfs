@@ -183,6 +183,12 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   running `store move` and the name are checked under one home lock.
 - A sqlite project's Sandbox runs on the machine that holds its Store;
   another machine is `Unsupported`, naming the Store's machine.
+- On `docker`, the image is `image`, else the one `machine update docker
+  --image` recorded, else the sealed bundle's `sandbox-image.tar`, loaded
+  into Docker once and recorded on the docker machine as `loaded_image`
+  (`{id, bundle}`; another bundle's image is loaded again). The docker
+  worker's own container runs the same default. A bundle without the
+  archive is `Unsupported`, naming it (#535 P5).
 - `list` and `get` page: `list` its Sandboxes, `get` the Sandbox's
   `workspaces` (`page_size` 1 to 1000, default 50; `page_pos`), with
   `next_page_pos`, `null` after the last page.

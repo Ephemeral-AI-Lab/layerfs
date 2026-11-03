@@ -15,6 +15,8 @@ mod endpoint;
 #[cfg(feature = "machine")]
 mod get;
 #[cfg(feature = "machine")]
+mod image;
+#[cfg(feature = "machine")]
 mod list;
 #[cfg(feature = "machine")]
 mod platforms;
@@ -40,6 +42,8 @@ pub use create::create;
 pub use endpoint::{running, start_after};
 #[cfg(feature = "machine")]
 pub use get::get;
+#[cfg(feature = "machine")]
+pub(crate) use image::docker_default;
 #[cfg(feature = "machine")]
 pub use list::list;
 #[cfg(feature = "machine")]

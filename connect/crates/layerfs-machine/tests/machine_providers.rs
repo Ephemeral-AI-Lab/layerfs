@@ -346,3 +346,36 @@ fn docker_leaves_a_foreign_container_alone() {
     assert_eq!(error.code, Code::Exists);
     assert_eq!(scratch.log().lines().count(), 1);
 }
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn docker_loads_the_bundle_image_once_and_answers_its_id() {
+    let scratch = Scratch::new("docker-load");
+    let id = format!("sha256:{}", "ab".repeat(32));
+    scratch.tool(
+        "docker",
+        &format!(
+            r#"case "$3" in
+  load) [ -f "$5" ] && echo "Loaded image ID: {}" ;;
+esac"#,
+            id.to_uppercase().replace("SHA256", "sha256")
+        ),
+    );
+    let archive = scratch.path("sandbox-image.tar");
+    std::fs::write(&archive, b"").unwrap();
+    let spec = scratch.spec(Platform::Docker);
+    assert_eq!(machine::load_image(&spec, &archive).unwrap(), id);
+    assert_eq!(
+        scratch.log().trim(),
+        format!(
+            "docker -H unix:///var/run/docker.sock load -i {}",
+            archive.display()
+        )
+    );
+    // an answer with no image id is Failed
+    let error = machine::load_image(&spec, &scratch.path("absent.tar")).unwrap_err();
+    assert_eq!(error.code, Code::Failed, "{error}");
+    // only the docker machine loads images
+    let error = machine::load_image(&scratch.spec(Platform::Lima), &archive).unwrap_err();
+    assert_eq!(error.code, Code::InvalidInput, "{error}");
+}

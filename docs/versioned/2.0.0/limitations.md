@@ -95,6 +95,11 @@ step commits.
   starts its machine only after a dial that sent nothing (R1), were tested
   with stand-in tools and workers only; no VM, ssh host or Docker worker
   was started or stopped by them.
+- **The docker default image** (#535 P5). Loading the bundle's
+  `sandbox-image.tar` with `docker load` and running the worker container
+  and Sandboxes on the id it reports was tested with a stand-in `docker`
+  only; a real Engine (Docker Desktop's classic or containerd image store)
+  was not used.
 - **One worker serving several Stores** and the guest-to-host send speed.
 - **Linux.** No Linux host was used. Linux namespaces Sandboxes, Init into
   `docker` on Linux, the Linux route of the `docker` machine (its worker,

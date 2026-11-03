@@ -30,3 +30,7 @@ pub(crate) fn stop(spec: &Spec) -> Result<(), MachineError> {
 pub(crate) fn status(spec: &Spec) -> Result<Status, MachineError> {
     Err(unsupported(spec))
 }
+
+pub(crate) fn load_image(spec: &Spec, _archive: &std::path::Path) -> Result<String, MachineError> {
+    Err(unsupported(spec))
+}

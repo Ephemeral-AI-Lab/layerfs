@@ -79,8 +79,13 @@ fn host_first(home: &Path, record: &SdkValue) -> Result<(), SdkRefusal> {
 /// start lock.
 fn start(home: &Path, name: &str, record: &SdkValue) -> Result<Option<Endpoint>, SdkRefusal> {
     let id = crate::common::home::open(home)?.id;
-    let spec = record::spec(home, &id, name, record)?;
+    let mut spec = record::spec(home, &id, name, record)?;
     let bundle = super::bundle::bundle()?;
+    // the docker worker's container runs the bundle's image when the
+    // machine names none (P5)
+    if spec.kind == Platform::Docker && spec.os_image.is_none() {
+        spec.os_image = Some(super::image::docker_default(home)?);
+    }
     match adapters::start(&spec, &bundle).map_err(refusal)? {
         None => Ok(None),
         Some(running) => {

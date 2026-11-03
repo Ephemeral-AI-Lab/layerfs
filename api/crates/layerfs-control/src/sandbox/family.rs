@@ -431,7 +431,7 @@ fn host_op(
     };
     // what the machine's record chooses; the side that runs the call
     // resolves the rest
-    let choice = deploy::choose(&home, machine, image.as_deref(), postgresql)?;
+    let choice = deploy::choose(&home, machine, image.as_deref(), postgresql, start)?;
     match executor {
         Executor::Local => {
             let how = deploy::resolve(&Side::Home(&home), &target.store, &choice)?;

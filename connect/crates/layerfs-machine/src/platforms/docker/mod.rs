@@ -16,9 +16,9 @@ mod unix;
 mod windows;
 pub(crate) use adapter::ADAPTER;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-pub(crate) use power::{start, stop};
+pub(crate) use power::{load_image, start, stop};
 pub(crate) use profile::PROFILE;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) use unix::{guest, status};
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-pub(crate) use windows::{guest, start, status, stop};
+pub(crate) use windows::{guest, load_image, start, status, stop};
