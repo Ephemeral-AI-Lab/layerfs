@@ -30,10 +30,10 @@ pub(crate) struct Mount {
     pub(crate) branch: String,
 }
 
-/// One background process started in a Workspace.
+/// One background process an earlier bundle started in a Workspace (its
+/// `process-<id>.record`), probed before an unmount.
 pub(crate) struct Process {
     pub(crate) path: String,
-    pub(crate) command: String,
     pub(crate) pid: u32,
     pub(crate) stopped: bool,
     pub(crate) start: String,

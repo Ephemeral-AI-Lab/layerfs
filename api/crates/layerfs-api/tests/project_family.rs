@@ -199,3 +199,47 @@ fn init_files_branches_move_and_remove() {
     let _ = std::fs::remove_dir_all(root);
     let _ = std::fs::remove_dir_all(folder);
 }
+
+/// The host's private-home check (moved from layerfs-control's
+/// local_root_modes, whose route `runtime.store.create` is gone, #536 step
+/// 2): Init into a Store refuses a home others may read or write, and
+/// accepts one others may only pass through (o+x).
+#[test]
+fn a_private_home_may_be_passable_and_nothing_more() {
+    use std::os::unix::fs::PermissionsExt;
+    let set = |path: &Path, mode: u32| {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap()
+    };
+    let home = tempdir("private");
+    set(&home, 0o700);
+    home::open(&home).unwrap();
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    let folder = tempdir("private-folder");
+    std::fs::write(folder.join("README.md"), "hello\n").unwrap();
+    let init = |name: &str| {
+        call(
+            &home,
+            "project.init",
+            &[
+                ("project", t(&format!("shop/{name}"))),
+                ("folder", t(&folder.display().to_string())),
+            ],
+        )
+    };
+    for (name, open) in [("a", 0o750), ("b", 0o711), ("c", 0o705), ("d", 0o702)] {
+        set(&home, open);
+        let (code, message) = init(name).unwrap_err();
+        assert_eq!(code, "Unauthorized", "{open:o}: {message}");
+        assert!(
+            message.contains("must be owned by this user and private"),
+            "{message}"
+        );
+    }
+    for (name, passable) in [("e", 0o700), ("f", 0o701)] {
+        set(&home, passable);
+        init(name).unwrap_or_else(|e| panic!("{passable:o}: {e:?}"));
+    }
+    set(&home, 0o700);
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(folder);
+}

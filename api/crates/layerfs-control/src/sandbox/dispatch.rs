@@ -1,15 +1,13 @@
-//! The two disjoint host method tables (#428), moved from layerfs-node's
-//! dispatch.rs (#533 step 2): the public table (`call`: project, branch, fs,
-//! sandbox, workspace) and the backend table (`backend`: `backend.store.*`,
-//! `backend.daemon.*` and the runtime's `runtime.*` reads and actions).
+//! The host Sandbox operations `sandbox::family` runs on the Sandbox's
+//! machine, here or in its worker (`sandbox.host`): the Sandbox and
+//! Workspace operations (`call`) and the Workspace status read (`backend`).
+//! The 1.1 `runtime.*` and `backend.*` tables are gone (#536 step 2).
 use crate::common::outcome::{self, refused, Outcome};
-use crate::project::init as project;
-use crate::sandbox::{exec, output, registry};
-use crate::store::service as direct;
+use crate::sandbox::{exec, registry};
 use crate::workspace::serve as workspace;
 use layerfs_bridge::control::SdkValue;
 
-/// Runs one public SDK operation once.
+/// Runs one Sandbox or Workspace operation once.
 pub fn call(op: &str, args: SdkValue) -> Outcome {
     if let Some(value) = args.get("message") {
         if !matches!(value, SdkValue::Null) {
@@ -23,26 +21,13 @@ pub fn call(op: &str, args: SdkValue) -> Outcome {
         }
     }
     match op {
-        "project.init" => project::init(&args),
-        "project.list_sandboxes" => workspace::sandboxes(&args),
         "sandbox.list_workspaces" => listed(daemon_backend(op, args)?),
         "sandbox.create" => crate::sandbox::serve::create(&args),
         "sandbox.close" => crate::sandbox::serve::close(&args),
         "workspace.mount" => workspace::mount(&args),
         "workspace.commit" => workspace::commit(&args),
         "workspace.unmount" => workspace::unmount(&args),
-        "workspace.exec" if args.get_bool("background") => Err(refused(
-            "InvalidInput",
-            "background launch is backend.daemon.process.start",
-        )),
         "workspace.exec" => exec::exec(&args),
-        "workspace.exec_release" => output::release(&args),
-        _ if op.starts_with("backend.") || op.starts_with("runtime.") => Err(refused(
-            "UnknownMethod",
-            "backend and runtime methods require backendCall",
-        )),
-        // Store calls run in this process; there is no other route.
-        _ if op.contains('.') => direct::call(op, args, false),
         _ => Err(refused("UnknownMethod", format!("no operation {op}"))),
     }
 }
@@ -95,50 +80,10 @@ fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
     })
 }
 
-/// Runs one backend or runtime operation once on its separate table.
+/// Runs the Workspace status read once.
 pub fn backend(op: String, args: SdkValue) -> Outcome {
     match op.as_str() {
         "backend.daemon.workspace.status" => workspace::status(&args),
-        "backend.daemon.process.start" => exec::exec(&args),
-        "backend.daemon.process.list" => exec::processes(&args),
-        "backend.daemon.process.cancel" => exec::cancel(&args),
-        "runtime.project.get_init" => crate::project::init::progress(&args),
-        // #506 Store-first: Stores, their projects, remotes and transfers
-        "runtime.store.create" => crate::store::identity::create(&args),
-        "runtime.store.list_projects" => crate::store::identity::list_projects(&args),
-        "runtime.store.add_project" => crate::store::identity::add_project(&args),
-        "runtime.store.remove_project" => crate::store::identity::remove_project(&args),
-        "runtime.store.forget" => crate::store::identity::forget(&args),
-        "runtime.store.push" => crate::host::sync::push(&args),
-        "runtime.store.publish" => crate::host::sync::publish(&args),
-        "runtime.store.send" => crate::host::sync::send(&args),
-        "runtime.store.pull" => crate::host::sync::pull(&args),
-        "runtime.store.load" => crate::host::sync::load_store(&args),
-        "runtime.store.unlink" => crate::host::sync::unlink(&args),
-        "runtime.store.get_link" => crate::host::sync::last(&args),
-        // #506 E1-E9: local sizes and heads, copy checks, listing,
-        // providers, PostgreSQL status and live job progress
-        "runtime.store.stat" => crate::host::local_stores::stat_stores(&args),
-        "runtime.store.check" => crate::host::copies::check(&args),
-        "runtime.remote.list_stores" => crate::host::copies::list_stores(&args),
-        "runtime.remote.providers" => crate::host::copies::providers(&args),
-        "runtime.postgresql.status" => crate::store::postgres::status(&args),
-        "runtime.sync.progress" => crate::host::progress::get(&args),
-        "runtime.remote.list" => crate::host::sync::list(&args),
-        "runtime.remote.add" => crate::host::sync::add(&args),
-        "runtime.remote.remove" => crate::host::sync::remove(&args),
-        "runtime.sandbox.reclaim" => workspace::reclaim(&args),
-        "runtime.sandbox.records" => workspace::all_records(&args),
-        "backend.daemon.sandbox.get_log" => crate::sandbox::serve::get_log(&args),
-        "backend.store.project.get_history"
-        | "backend.store.project.get_storage"
-        | "backend.store.project.list_overwritten"
-        | "backend.store.branch.list_commit_storage"
-        | "backend.store.fs.get_storage"
-        | "backend.store.fs.list_revisions" => direct::call(&op, args, true),
-        "backend.daemon.workspace.get_storage" | "backend.daemon.workspace.list_changes" => {
-            daemon_backend(&op, args)
-        }
         _ => Err(refused(
             "UnknownMethod",
             format!("no backend operation {op}"),

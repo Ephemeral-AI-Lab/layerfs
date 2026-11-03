@@ -183,7 +183,7 @@ pub(crate) fn sandbox_store(
     }))
 }
 
-/// `runtime.postgresql.status { home, url, schemas }`: one connection, made
+/// A PostgreSQL server's status, `{ home, url, schemas }`: one connection, made
 /// once: `{ reachable: true, serverVersion, latencyMs, latencyUs, schemas: {
 /// name: bytes | null } }` (null for a schema the server lacks), or, when
 /// the server is not reached or refuses the login, `{ reachable: false,

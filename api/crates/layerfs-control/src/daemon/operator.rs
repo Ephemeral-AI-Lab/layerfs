@@ -2,15 +2,11 @@
 use crate::{internal::Control, SdkError, SdkResult};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 
-/// Calls one daemon backend method: its Workspaces and the read model that
-/// lists them. Backend Store calls run in the caller's process.
+/// Calls the daemon's read model that lists its Workspaces
+/// (`sandbox.list_workspaces`), the one daemon backend method the host
+/// Sandbox code sends; any other is refused before it is sent.
 pub fn call(control: &mut Control, method: &str, args: SdkValue) -> SdkResult {
-    if !matches!(
-        method,
-        "sandbox.list_workspaces"
-            | "backend.daemon.workspace.get_storage"
-            | "backend.daemon.workspace.list_changes"
-    ) {
+    if method != "sandbox.list_workspaces" {
         return Err(SdkError::Refused(SdkRefusal {
             code: "UnknownMethod".into(),
             message: format!("no daemon backend method {method}"),

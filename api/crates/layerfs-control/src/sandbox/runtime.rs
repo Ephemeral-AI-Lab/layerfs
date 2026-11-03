@@ -252,17 +252,6 @@ pub(crate) fn scratch(runtime: &Sandbox) -> String {
     runtime.scratch_directory()
 }
 
-/// Names a background process a command started in a session of its own
-/// (`pid`, started at `start`), so it ends with a native Sandbox as it ends
-/// with a container. A container's teardown already owns its descendants.
-pub(crate) fn track(runtime: &Sandbox, pid: u32, start: &str) -> Result<(), SdkRefusal> {
-    if matches!(runtime, Sandbox::Docker(_)) {
-        return Ok(());
-    }
-    let start = start.parse::<u64>().map_err(failed)?;
-    runtime.track(pid, start).map_err(failed)
-}
-
 /// One command to its end: exit code, stdout, stderr. `spool` sends every
 /// non-empty stream to its file instead of keeping it inline.
 pub(crate) fn run(

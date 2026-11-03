@@ -507,19 +507,6 @@ pub(crate) fn gone(id: &str, container: &str, stopped: bool) -> SdkRefusal {
         ]),
     }
 }
-/// The container of a refusal from [`gone`], and whether the Engine still has it stopped.
-pub(crate) fn gone_container(refusal: &SdkRefusal) -> Option<(&str, bool)> {
-    match refusal.detail.get("containerGone") {
-        Some(SdkValue::Bool(true)) if refusal.code == "NoSuchSandbox" => Some((
-            refusal.detail.get_text("container")?,
-            matches!(
-                refusal.detail.get("containerStopped"),
-                Some(SdkValue::Bool(true))
-            ),
-        )),
-        _ => None,
-    }
-}
 /// The labels a Sandbox record keeps; a record written before #373 has none.
 fn labels(value: &SdkValue) -> Result<Vec<(String, String)>> {
     match value.get("labels") {
@@ -684,19 +671,6 @@ fn recorded_process(value: &SdkValue) -> Result<LocalProcess> {
             .map_err(failed)?,
         boot,
     })
-}
-/// Whether the process a native or namespaces record names still runs (id,
-/// start time, boot), from this kernel alone: no deployment is consulted.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub(crate) fn local_running(value: &SdkValue) -> Result<bool> {
-    Ok(recorded_process(value)?.alive())
-}
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-pub(crate) fn local_running(_: &SdkValue) -> Result<bool> {
-    Err(refused(
-        "Unsupported",
-        "a local process is read on Linux or macOS",
-    ))
 }
 /// A namespaces record is used only where its directory checks put that
 /// Sandbox ([`local_record_of`]), by any deployment (#529: the record
@@ -923,7 +897,6 @@ pub(crate) fn refresh_except(state: &SandboxState, retained: &[String]) -> Resul
                 registry::text(&v, "id")?.to_owned(),
                 Process {
                     path: registry::text(&v, "path")?.to_owned(),
-                    command: registry::text(&v, "command")?.to_owned(),
                     pid: v
                         .get_int("pid")
                         .ok_or_else(|| refused("InvalidInput", "pid"))?
@@ -975,19 +948,6 @@ pub(crate) fn save_workspace(
                 SdkValue::Bytes(mount.bound.token.workspace.to_bytes().to_vec()),
             ),
             ("namespace", SdkValue::Int(mount.bound.token.namespace)),
-        ]),
-    )
-}
-pub(crate) fn save_process(state: &SandboxState, id: &str, p: &Process) -> Result<()> {
-    save(
-        &state.directory.join(format!("process-{id}.record")),
-        SdkValue::map([
-            ("id", SdkValue::text(id)),
-            ("path", SdkValue::text(&p.path)),
-            ("command", SdkValue::text(&p.command)),
-            ("pid", SdkValue::Int(p.pid as i64)),
-            ("start", SdkValue::text(&p.start)),
-            ("stopped", SdkValue::Bool(p.stopped)),
         ]),
     )
 }

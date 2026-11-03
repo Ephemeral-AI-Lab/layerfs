@@ -1,5 +1,5 @@
-//! Store calls in this process (#352 F-020): the only route for fs, branch,
-//! project and backend Store calls.
+//! Store calls in this process (#352 F-020): the only route for fs, branch
+//! and project Store calls.
 //!
 //! One `StoreService` per Store path per process, opened by the first client
 //! that names the path and closed when the last one releases it. It is a live
@@ -147,13 +147,8 @@ pub(crate) fn with_service<T>(
     Ok(value)
 }
 
-/// Whether this process holds the Store at `path` open.
-pub(crate) fn holds(path: &Path) -> Result<bool, SdkRefusal> {
-    Ok(lock(&STORES)?.contains_key(path))
-}
-
-/// Runs one Store call (`backend` for the backend table) in this process.
-pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
+/// Runs one Store call in this process.
+pub(crate) fn call(method: &str, args: SdkValue) -> Outcome {
     let service = service(&args)?;
     let args = match args {
         SdkValue::Map(fields) => SdkValue::Map(
@@ -180,13 +175,7 @@ pub(crate) fn call(method: &str, args: SdkValue, backend: bool) -> Outcome {
         method: method.to_owned(),
         args,
     };
-    let run = || {
-        if backend {
-            layerfs_store_service::operator::dispatch(&service, &call)
-        } else {
-            layerfs_store_service::methods::call(&service, &call)
-        }
-    };
+    let run = || layerfs_store_service::methods::call(&service, &call);
     if !crate::common::trace::traced() {
         return run();
     }

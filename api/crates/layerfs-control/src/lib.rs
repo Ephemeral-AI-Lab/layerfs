@@ -11,11 +11,7 @@ pub mod backup;
 pub mod common;
 pub mod daemon;
 #[doc(hidden)]
-pub mod host;
-#[doc(hidden)]
 pub mod machine;
-#[doc(hidden)]
-pub mod operator;
 pub mod project;
 pub mod sandbox;
 pub mod store;

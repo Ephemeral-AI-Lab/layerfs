@@ -5,8 +5,7 @@
 //! `{ sandbox, path }`; status, Commit and unmount go to its Sandbox's
 //! daemon. Nothing is retried: a refused or failed step is the call's answer.
 //! A Sandbox whose daemon ended itself when idle is refused `NoSuchSandbox`
-//! by a mount and reclaimed by the next `sandbox.create` or
-//! `runtime.sandbox.reclaim`.
+//! by a mount and reclaimed by the next `sandbox.create`.
 use crate::common::outcome::{failed, Outcome};
 use crate::daemon::values;
 use crate::internal::workspace;
@@ -170,8 +169,8 @@ type Entry = (String, std::path::PathBuf, Result<SdkValue, SdkRefusal>);
 /// failing its directory checks), which is kept in place and fails nothing.
 /// Every Docker, native and namespaces record counts, whatever backend the
 /// caller's deployment selects (#529: the record decides). A record of the
-/// former `local` runtime is nobody's and is left out silently;
-/// `runtime.sandbox.records` lists it. The deployment's Sandbox and
+/// former `local` runtime is nobody's and is left out silently. The
+/// deployment's Sandbox and
 /// `localDir` settings are still checked, so a malformed one is refused here
 /// as everywhere.
 type Readable = Vec<(String, std::path::PathBuf, SdkValue, Found)>;
@@ -243,200 +242,6 @@ pub(crate) fn reclaim_gone(args: &SdkValue) -> Result<Vec<SdkValue>, SdkRefusal>
 /// the agent reads as the platform its runtime and home imply.
 fn platform_of(record: &SdkValue) -> SdkValue {
     SdkValue::opt_text(record.get_text("platform").map(str::to_owned))
-}
-
-/// `project.list_sandboxes()`: the project's running Sandboxes of every
-/// platform, lowest number first: `{ sandbox, name, image, platform,
-/// runtime, workspaces }`, where `workspaces` counts its Workspace records,
-/// and `skipped`, the records refused when read and left out (#529 finding
-/// 6). It reads records and inspects each container or daemon once; it
-/// starts nothing and changes nothing. A Sandbox found gone or stopped (an
-/// idle-closed one) is left out and its records kept: `sandbox.create` and
-/// `runtime.sandbox.reclaim` remove them.
-pub(crate) fn sandboxes(args: &SdkValue) -> Outcome {
-    let mut items = Vec::new();
-    let (readable, skipped) = records(args)?;
-    for (id, directory, value, found) in readable {
-        if !matches!(found, Found::Running) {
-            continue;
-        }
-        items.push(SdkValue::map([
-            ("sandbox", SdkValue::text(&id)),
-            (
-                "name",
-                SdkValue::text(value.get_text("name").unwrap_or_default()),
-            ),
-            (
-                "image",
-                SdkValue::text(value.get_text("image").unwrap_or_default()),
-            ),
-            ("platform", platform_of(&value)),
-            (
-                "runtime",
-                SdkValue::text(crate::sandbox::runtime::runtime_name(&value)),
-            ),
-            ("workspaces", SdkValue::Int(recorded(&directory)? as i64)),
-        ]));
-    }
-    Ok(SdkValue::map([
-        ("kind", SdkValue::text("ok")),
-        ("items", SdkValue::List(items)),
-        ("skipped", SdkValue::List(skipped)),
-    ]))
-}
-
-/// `runtime.sandbox.records()`: every recorded Sandbox of the project, of
-/// every backend, lowest number first: `{ sandbox, name, runtime, platform,
-/// image, state, workspaces }` (`platform` null in a record from before
-/// #529). `runtime` is `docker`, `native`, `namespaces` (or `local`, the
-/// former runtime's; null in a damaged record); `state` is `running`,
-/// `stopped`, `gone` (a Docker container no longer there), `refused` (the
-/// record cannot be read for this call, #529 finding 6: damaged, or failing
-/// its directory checks; with `refusal: { code, message }`) or `unknown`
-/// (with `message`). The deployment's backend is not consulted (#527 step
-/// 12): a Docker record's container is inspected once at its own Engine, a
-/// native or namespaces record's process is read from this kernel by id,
-/// start time and boot, and a `local` record is never read. Nothing is
-/// reopened, dialed, started or changed.
-pub(crate) fn all_records(args: &SdkValue) -> Outcome {
-    let mut items = Vec::new();
-    for (id, directory, value) in recorded_all(args)? {
-        let value = match value {
-            Ok(value) => value,
-            Err(refusal) => {
-                let item = record_item(
-                    &id,
-                    &directory,
-                    &SdkValue::Null,
-                    None,
-                    State::Refused(refusal),
-                );
-                items.push(item?);
-                continue;
-            }
-        };
-        let unknown = |refusal: SdkRefusal| State::Unknown(refusal.message);
-        let (runtime, state) = match crate::sandbox::runtime::recorded(&value) {
-            // a record of the former local runtime is never read
-            Err(other) => (
-                Some(other),
-                State::Unknown("a record of the former local runtime is never used".into()),
-            ),
-            Ok(kind) => match crate::sandbox::files::recorded(args, &id, &value) {
-                // a host that cannot run it (Unsupported) is no fault of the
-                // record: its process is read as below
-                Err(refusal) if refusal.code != "Unsupported" => (
-                    value.get_text("runtime").or(Some("docker")),
-                    State::Refused(refusal),
-                ),
-                _ if kind.is_none() => (
-                    Some("docker"),
-                    match observed(args, &id, &value, &directory) {
-                        Ok(Found::Running) => State::Is("running"),
-                        Ok(Found::Ended(_, true)) => State::Is("stopped"),
-                        Ok(Found::Ended(_, false)) => State::Is("gone"),
-                        Ok(Found::Refused(refusal)) => State::Refused(refusal),
-                        Err(refusal) => unknown(refusal),
-                    },
-                ),
-                _ => (
-                    value.get_text("runtime"),
-                    match crate::sandbox::files::local_running(&value) {
-                        Ok(true) => State::Is("running"),
-                        Ok(false) => State::Is("stopped"),
-                        Err(refusal) => unknown(refusal),
-                    },
-                ),
-            },
-        };
-        items.push(record_item(&id, &directory, &value, runtime, state)?);
-    }
-    Ok(SdkValue::map([
-        ("kind", SdkValue::text("ok")),
-        ("items", SdkValue::List(items)),
-    ]))
-}
-
-/// A `runtime.sandbox.records` item's state: what its Sandbox was found to
-/// be, its record refused when read, or not known (with why).
-enum State {
-    Is(&'static str),
-    Refused(SdkRefusal),
-    Unknown(String),
-}
-
-/// One `runtime.sandbox.records` item.
-fn record_item(
-    id: &str,
-    directory: &Path,
-    value: &SdkValue,
-    runtime: Option<&str>,
-    state: State,
-) -> Result<SdkValue, SdkRefusal> {
-    let mut fields = vec![
-        ("sandbox", SdkValue::text(id)),
-        (
-            "name",
-            SdkValue::text(value.get_text("name").unwrap_or_default()),
-        ),
-        ("runtime", SdkValue::opt_text(runtime.map(str::to_owned))),
-        ("platform", platform_of(value)),
-        (
-            "image",
-            SdkValue::text(value.get_text("image").unwrap_or_default()),
-        ),
-        ("workspaces", SdkValue::Int(recorded(directory)? as i64)),
-    ];
-    match state {
-        State::Is(state) => fields.push(("state", SdkValue::text(state))),
-        State::Refused(refusal) => fields.extend([
-            ("state", SdkValue::text("refused")),
-            (
-                "refusal",
-                SdkValue::map([
-                    ("code", SdkValue::text(&refusal.code)),
-                    ("message", SdkValue::text(&refusal.message)),
-                ]),
-            ),
-        ]),
-        State::Unknown(message) => fields.extend([
-            ("state", SdkValue::text("unknown")),
-            ("message", SdkValue::text(message)),
-        ]),
-    }
-    Ok(SdkValue::Map(
-        (fields.into_iter())
-            .map(|(name, value)| (name.to_owned(), value))
-            .collect(),
-    ))
-}
-
-/// `runtime.sandbox.reclaim()`: removes the records of the project's
-/// Sandboxes whose containers are gone or stopped (and a stopped one's
-/// container), each under the project's guard, so their numbers are free
-/// again: `{ kind, reclaimed, skipped }`. A record refused when read is
-/// left in place and named in `skipped` (#529 finding 6); one started again
-/// under its number meanwhile is left alone. Each step is attempted once.
-pub(crate) fn reclaim(args: &SdkValue) -> Outcome {
-    let mut reclaimed = Vec::new();
-    let (readable, skipped) = records(args)?;
-    for (id, _, _, found) in readable {
-        let Found::Ended(container, stopped) = found else {
-            continue;
-        };
-        let _placing = crate::sandbox::files::guard(&crate::sandbox::files::project_dir(args)?)?;
-        match crate::sandbox::serve::reclaim(args, &id, &container, stopped) {
-            Ok(_) => reclaimed.push(SdkValue::text(&id)),
-            // started again under the number meanwhile, or already reclaimed
-            Err(refusal) if matches!(refusal.code.as_str(), "Busy" | "NoSuchSandbox") => {}
-            Err(refusal) => return Err(refusal),
-        }
-    }
-    Ok(SdkValue::map([
-        ("kind", SdkValue::text("ok")),
-        ("reclaimed", SdkValue::List(reclaimed)),
-        ("skipped", SdkValue::List(skipped)),
-    ]))
 }
 
 /// `backend.daemon.workspace.status(ws)`: the daemon's Status, which reads no

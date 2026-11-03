@@ -3,7 +3,7 @@
 //! volume. A Sandbox starts only when an agent asks for one ([`create`],
 //! #428; there is no placement since 2026-10-23: a mount names its
 //! Sandbox). Its records go when it is found gone ([`reclaim`], by the next
-//! `create` or `runtime.sandbox.reclaim`) or when an agent closes it
+//! `create`) or when an agent closes it
 //! ([`close`]).
 //!
 //! A start that failed before anything reached the Store volume removes the
@@ -45,7 +45,7 @@ pub(crate) fn operation(failure: Box<OperationFailure>) -> SdkRefusal {
 
 /// A Sandbox's daemon ends itself after this many seconds with no Workspace
 /// and no call (#373 idle close; owner answer, 2026-10-21: 2 minutes). Its
-/// container then stops, and the next `sandbox.create` or `runtime.sandbox.reclaim` reclaims it.
+/// container then stops, and the next `sandbox.create` reclaims it.
 const IDLE_EXIT_S: u32 = 120;
 
 /// Workspaces one Sandbox holds at once; a mount into a full one is refused
@@ -567,52 +567,6 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
         ),
     ]))
 }
-
-/// `backend.daemon.sandbox.get_log({ sandbox, lines })`: the last `lines`
-/// lines (1..=2000) of Sandbox `sandbox`'s daemon log, at most
-/// [`GET_LOG_BYTES`], read once through the Engine (a local Sandbox's from
-/// its log file): `{ sandbox, container,
-/// text, bytes }`. A stopped container's log is readable until its records
-/// are reclaimed. Refused `NoSuchSandbox` with no record or no container.
-/// Read-only: it starts, stops and reclaims nothing.
-pub(crate) fn get_log(args: &SdkValue) -> Outcome {
-    let id = text(args, "sandbox")?.to_owned();
-    let lines = match args.get("lines") {
-        Some(SdkValue::Int(n)) if (1..=2000).contains(n) => *n as u16,
-        _ => return Err(refused("InvalidInput", "lines is a count from 1 to 2000")),
-    };
-    let directory = crate::sandbox::files::sandbox_dir(args, &id)?;
-    let record = directory.join("sandbox.record");
-    let missing = || refused("NoSuchSandbox", format!("the project has no Sandbox {id}"));
-    if !record.exists() {
-        return Err(missing());
-    }
-    let value = {
-        let _guard = crate::sandbox::files::guard(&directory)?;
-        if !record.exists() {
-            return Err(missing());
-        }
-        crate::sandbox::files::load(&record)?
-    };
-    let container = text(&value, "container")?.to_owned();
-    let sandbox = crate::sandbox::files::recorded(args, &id, &value)?.stopped();
-    let bytes = match sandbox.log_tail(lines, GET_LOG_BYTES) {
-        Ok(bytes) => bytes,
-        Err(failure) if failure.container_gone() => {
-            return Err(crate::sandbox::files::gone(&id, &container, false))
-        }
-        Err(failure) => return Err(failed(failure)),
-    };
-    Ok(SdkValue::map([
-        ("sandbox", SdkValue::text(&id)),
-        ("container", SdkValue::text(&container)),
-        ("text", SdkValue::text(String::from_utf8_lossy(&bytes))),
-        ("bytes", SdkValue::Int(bytes.len() as i64)),
-    ]))
-}
-
-/// What one `get_log` keeps: the final bytes of the tail.
-const GET_LOG_BYTES: usize = 64 * 1024;
 
 /// Seconds a closing Sandbox's daemon has to exit before the Engine kills it.
 const STOP_S: u16 = 5;

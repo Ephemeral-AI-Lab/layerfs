@@ -12,15 +12,11 @@
 pub mod calls;
 pub use layerfs_control::common::{home, names};
 #[doc(hidden)]
-pub use layerfs_control::host;
-#[doc(hidden)]
 pub use layerfs_control::internal;
 #[cfg(feature = "machine")]
 #[doc(hidden)]
 pub use layerfs_control::machine;
 pub use layerfs_control::machine::worker;
-#[doc(hidden)]
-pub use layerfs_control::operator;
 pub use layerfs_control::{
     call, projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitCounters, InitCounts,
     InitError, InitFailure, InitRequest, InitStep, InstallError, InstallFailure, InstallWork,
