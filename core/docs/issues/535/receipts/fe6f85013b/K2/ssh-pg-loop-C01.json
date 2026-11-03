@@ -1,0 +1,51 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C01",
+  "machine": "lfs535k2s",
+  "product": "fe6f85013b",
+  "startedAt": "2026-11-03T07:35:21.215Z",
+  "load1": 7.38330078125,
+  "body": {
+    "sha256": "418f8a9d6b71111a34e41a8f4d0a5ba6b1869b684f2d84d72432e65edb8e29b5"
+  },
+  "ok": false,
+  "cause": "sandbox.create: Unsupported the ssh machine lfs535k2s cannot reach the PostgreSQL Store's server: an ssh machine cannot reach the caller's loopback",
+  "phases": {},
+  "steps": [
+    {
+      "name": "store.connect",
+      "ms": 248.456,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 213.314,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 127.684,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 3.101,
+      "ok": false,
+      "error": {
+        "code": "Unsupported",
+        "message": "the ssh machine lfs535k2s cannot reach the PostgreSQL Store's server: an ssh machine cannot reach the caller's loopback"
+      }
+    },
+    {
+      "name": "store.disconnect",
+      "ms": 1.492,
+      "ok": true
+    }
+  ],
+  "store": {
+    "kind": "postgresql",
+    "host": "127.0.0.1"
+  },
+  "failedStep": "sandbox.create",
+  "endedAt": "2026-11-03T07:35:21.812Z"
+}

@@ -38,7 +38,7 @@ remains R2–R5; optional admin is deferred and R1 is verified.
  macOS host                                Docker Linux VM (one kernel)
  --------------------------------          ---------------------------------------
  Project Init (native, unchanged)          named volume, mounted in daemons only
-   Handles::create -> import -> seal         store.sqlite  (+ -wal, -shm while open)
+   SqliteHandles::create -> import -> seal         store.sqlite  (+ -wal, -shm while open)
    one sealed file                                ^          ^          ^
  install: copy the file once  ----------->        |          |          |
                                              daemon A   daemon B   daemon C
@@ -79,7 +79,7 @@ directly; no wire form of any of them remains.
 
 | Operation | API | Obligation |
 | --- | --- | --- |
-| Open | `Handles::open_writable(config, binding, cursor_key)` | Once per daemon, before readiness. Verifies the file; never converts or migrates it |
+| Open | `SqliteHandles::open_writable(config, binding, cursor_key)` | Once per daemon, before readiness. Verifies the file; never converts or migrates it |
 | Storage | `Storage::new(handles.storage.clone())`, `policy()`, `capacities()` | Store-derived policy; no per-call open |
 | Base objects | `Storage::reader()`, `Reader::read_objects(ids)` | Authenticated canonical bytes in demand order |
 | File length | `Reader::file_lengths(ids)` | No payload read |
@@ -226,7 +226,7 @@ Not available to a daemon:
 `layerfs-daemon/src/store/` replaces `upstream/`.
 
 ```text
- store/open.rs    one Handles + Storage + HistoryProvider at startup
+ store/open.rs    one SqliteHandles + Storage + HistoryProvider at startup
  store/ports.rs   AuthenticatedObjects, FileLengths, InodeSerials over the Store
  store/bind.rs    mount: Branch snapshot, root checks, base view, Workspace bind
  store/commit.rs  original capture, Save scope/finish, stage-and-publish, known install
@@ -292,7 +292,7 @@ explicit cancellation do not travel over daemon filesystem controls.
 
 | Step | Where | What |
 | --- | --- | --- |
-| Init | Host, unchanged | `Handles::create`, native import, first Branch |
+| Init | Host, unchanged | `SqliteHandles::create`, native import, first Branch |
 | Seal | Host | Checkpoint TRUNCATE with no reader, drop the handle, verify no `-wal`, `-shm` or `-journal` sidecar remains. Returns one file and a manifest: provider kind, Store locator, profile, both SQLite versions, binding key, cursor key, layer stack, Branch, root |
 | Install | Daemon subcommand, driven by the host | Write to a new temporary name in the volume, then rename. An existing Store is refused |
 

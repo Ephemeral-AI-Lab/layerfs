@@ -32,9 +32,9 @@ every caller.
 Said plainly, so nobody looks for it:
 
 - **Call timing and phase trees.** 1.1.0's trace line writer lived in
-  `@layerfs/agent` and was deleted with it. No 2.0 code reads `LAYERFS_TRACE`;
-  a traced `layerfs file read` wrote nothing (checked). See
-  [tracing](references/tracing.md).
+  `@layerfs/agent` and was deleted with it. In 2.0 `LAYERFS_TRACE` records
+  only connections to a machine's worker (one line each, #535); calls on
+  `native` write nothing. See [tracing](references/tracing.md).
 - **Store totals:** canonical, stored, metadata, dedupe and compression ratios
   (`backend.store.project.get_storage`). `store.status` gives only the file and
   WAL sizes.
@@ -65,8 +65,8 @@ For an agent run you want to analyse afterwards:
 3. After the run, page `commit.list` for every Branch and save the pages: each
    Commit record carries its message, time, `via` and storage counters. Join by
    Commit id.
-4. Before the run's Sandboxes close (120 s after their last Workspace), copy
-   each `native` Sandbox's `daemon.log` if you need it
+4. Before you close the run's Sandboxes (`sandbox.close` deletes the folder),
+   copy each `native` Sandbox's `daemon.log` if you need it
    ([daemon logs](references/daemon-logs.md)).
 5. Ask the agent to put its step label in every Commit message (`step 12:
    npm test (exit 1)`); with no trace, the messages are the step record.

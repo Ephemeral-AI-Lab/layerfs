@@ -1,5 +1,5 @@
 //! The one table of calls (S §3, with the answers to O11, O13, O14 and O24):
-//! nine families, 57 calls. The shell parser, the help, the Node and Python
+//! nine families, 61 calls. The shell parser, the help, the Node and Python
 //! front ends' functions and argument checking all come from this table.
 //!
 //! Positionals go from the outside in: owner, Branch, path or new name,
@@ -402,9 +402,9 @@ pub static CALLS: &[Call] = &[
     call(
         "sandbox",
         "create",
-        &[a("project", Project), a("name", Name), a("machine", Name)],
+        &[a("project", Project), a("name", Name), opt("machine", Name)],
         &[opt("image", Text)],
-        "start a named Sandbox of a project on a machine",
+        "start a named Sandbox of a project on a machine (default: its sqlite Store's, or native)",
     ),
     call(
         "sandbox",
@@ -432,7 +432,7 @@ pub static CALLS: &[Call] = &[
         "workspace",
         "mount",
         &[a("sandbox", Name), a("branch", Name)],
-        &[],
+        &[opt("name", Name)],
         "mount a Branch in a Sandbox",
     ),
     call(
@@ -468,13 +468,20 @@ pub static CALLS: &[Call] = &[
         &[],
         "a Workspace's changes since its base",
     ),
-    // machine (8, O11: update)
+    // machine (11, O11: update; #535: platforms, start, stop)
     call(
         "machine",
         "list",
         &[],
         &[],
-        "every machine, and the platforms that could be created here",
+        "every machine, with what it supports",
+    ),
+    call(
+        "machine",
+        "platforms",
+        &[],
+        &[],
+        "the platforms this host and build support, and what each is missing",
     ),
     call(
         "machine",
@@ -489,6 +496,20 @@ pub static CALLS: &[Call] = &[
         &[a("name", Name)],
         &[],
         "a machine's live state, free disk and tool version",
+    ),
+    call(
+        "machine",
+        "start",
+        &[a("name", Name)],
+        &[],
+        "start a stopped machine and its worker; a running one answers at once",
+    ),
+    call(
+        "machine",
+        "stop",
+        &[a("name", Name)],
+        &[],
+        "stop a machine's worker and VM; its disks stay",
     ),
     call(
         "machine",
@@ -544,7 +565,7 @@ pub static CALLS: &[Call] = &[
         ],
         "resize a VM, or set a built-in machine's image and Docker socket",
     ),
-    // store (8)
+    // store (9, H1: push and pull replace move)
     call(
         "store",
         "list",
@@ -576,10 +597,17 @@ pub static CALLS: &[Call] = &[
     ),
     call(
         "store",
-        "move",
+        "push",
         &[a("name", Name), a("machine", Name)],
         &[PROGRESS],
-        "move a sqlite Store to another machine",
+        "send a sqlite Store from native to a machine",
+    ),
+    call(
+        "store",
+        "pull",
+        &[a("name", Name)],
+        &[PROGRESS],
+        "bring a sqlite Store from its machine to native",
     ),
     call(
         "store",

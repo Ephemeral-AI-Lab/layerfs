@@ -1,0 +1,22 @@
+$ layerfs store list
+# at 2026-11-03T09:26:38Z load1 6.27
+{"items":[]}
+exit 0  wall_ms 73
+
+$ layerfs machine remove lfs535r2a
+# at 2026-11-03T09:26:38Z load1 6.27
+{"name":"lfs535r2a","removed":true}
+exit 0  wall_ms 1131
+
+$ layerfs machine remove lfs535r2m
+# at 2026-11-03T09:26:40Z load1 6.27
+{"name":"lfs535r2m","removed":true}
+exit 0  wall_ms 435
+
+# after machine remove: container list -a / container volume list / msb list / msb volume list (lfs535r2 lines)
+0
+0
+No sandboxes found.
+0
+0
+# 2026-11-03T09:26:53Z removed the shared home, lock folder and scratch env (rm -rf <scratch>/r2)

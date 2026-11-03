@@ -1,0 +1,40 @@
+$ layerfs machine remove lfs535k3f
+# at 2026-11-03T07:45:40Z load1 5.46
+{"name":"lfs535k3f","removed":true}
+exit 0  wall_ms 10480
+
+$ layerfs machine remove lfs535k3h
+# at 2026-11-03T07:45:51Z load1 6.62
+{"name":"lfs535k3h","removed":true}
+exit 0  wall_ms 250
+
+$ layerfs machine remove lfs535k3l
+# at 2026-11-03T07:45:51Z load1 6.62
+{"name":"lfs535k3l","removed":true}
+exit 0  wall_ms 1365
+
+$ layerfs machine list
+# at 2026-11-03T07:45:53Z load1 6.62
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}]}
+exit 0  wall_ms 38
+
+$ limactl list; limactl disk list (after machine remove)
+NAME         STATUS     SSH                VMTYPE    ARCH       CPUS    MEMORY    DISK     DIR
+lfc-linux    Stopped    127.0.0.1:60023    vz        aarch64    4       6GiB      40GiB    ~/.lima/lfc-linux
+lfc-ssh      Stopped    127.0.0.1:60022    vz        aarch64    4       4GiB      30GiB    ~/.lima/lfc-ssh
+lfc-vzkvm    Stopped    127.0.0.1:62810    vz        aarch64    4       4GiB      30GiB    ~/.lima/lfc-vzkvm
+lfs535k3x    Running    127.0.0.1:60536    vz        aarch64    4       4GiB      40GiB    ~/.lima/lfs535k3x
+NAME            SIZE     FORMAT    DIR                                         IN-USE-BY
+lfcssh-store    40GiB    raw       /Users/yifanxu/.lima/_disks/lfcssh-store    
+
+$ limactl delete -f lfs535k3x
+time="2026-11-03T15:46:09+08:00" level=info msg="Removing `/Users/yifanxu/.lima/lfs535k3x/vz.pid`"
+time="2026-11-03T15:46:09+08:00" level=info msg="Deleted `lfs535k3x` (`/Users/yifanxu/.lima/lfs535k3x`)"
+$ docker rm -fv lfs535k3-pg
+lfs535k3-pg
+$ rm -rf <home> (no password in it: grep found none)
+ls: <home>: No such file or directory
+$ limactl list; docker ps -a --filter name=lfs535k3
+0
+       0
+

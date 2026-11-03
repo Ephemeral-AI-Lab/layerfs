@@ -2,13 +2,15 @@
 use super::{accounting::Accounting, terminal};
 use crate::{
     attributes::{refusal, Identity},
-    operations::{KernelData, KernelRead, ReadDataInput},
-    ports::{Fence, RequestServices},
     RequestDisposition,
 };
 use fuser::{
     Errno, FileAttr, FileHandle, FileType, FopenFlags, Generation, INodeNo, ReplyAttr, ReplyData,
     ReplyEntry, ReplyOpen,
+};
+use layerfs_mount_ports::{
+    operations::{KernelData, KernelRead, ReadDataInput},
+    ports::{Fence, RequestServices},
 };
 use layerfs_overlay::KernelMount;
 use layerfs_workspace::{KernelReadOperation, Refusal};

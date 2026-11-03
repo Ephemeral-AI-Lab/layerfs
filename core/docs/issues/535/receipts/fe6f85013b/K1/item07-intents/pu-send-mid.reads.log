@@ -1,0 +1,12 @@
+$ layerfs store status pu-send-mid
+{"name":"pu-send-mid","kind":"sqlite","state":"idle","holders":[],"op":{"id":"op-23ff0493373e4ea5","name":"store.push","phase":"send","started":1793691170707,"uncertain":false},"down_reason":null,"machine":"native","file":{"exists":true,"free":202137227264,"bytes":24481792,"wal_bytes":0}}
+(exit 0)
+$ layerfs store get pu-send-mid
+{"name":"pu-send-mid","kind":"sqlite","machine":"native","profile":"disposable","created":1793691169591,"sqlite":"3.53.2","op":{"id":"op-23ff0493373e4ea5","name":"store.push","phase":"send","started":1793691170707,"uncertain":false},"projects":["p"]}
+(exit 0)
+$ layerfs store list
+{"items":[{"name":"pu-check","kind":"sqlite","machine":"native","profile":"disposable","created":1793691163314,"sqlite":"3.53.2","projects":["p"],"state":"idle"},{"name":"pu-send","kind":"sqlite","machine":"native","profile":"disposable","created":1793691167307,"sqlite":"3.53.2","op":{"id":"op-602354c9f3eeb0a1","name":"store.push","phase":"snapshot","started":1793691168411,"uncertain":false},"projects":["p"],"state":"idle"},{"name":"pu-send-mid","kind":"sqlite","machine":"native","profile":"disposable","created":1793691169591,"sqlite":"3.53.2","op":{"id":"op-23ff0493373e4ea5","name":"store.push","phase":"send","started":1793691170707,"uncertain":false},"projects":["p"],"state":"idle"},{"name":"pu-snapshot","kind":"sqlite","machine":"native","profile":"disposable","created":1793691165298,"sqlite":"3.53.2","op":{"id":"op-fe5cc499e3d0c802","name":"store.push","phase":"check","started":1793691166407,"uncertain":false},"projects":["p"],"state":"idle"}]}
+(exit 0)
+$ layerfs doctor
+{"ok":true,"findings":[{"severity":"warning","entity":{"kind":"store","name":"pu-send"},"message":"store pu-send still records store.push (op-602354c9f3eeb0a1, phase snapshot), whose process ended after a certain outcome; it holds nothing","fix":"nothing to do: the next operation on store pu-send replaces it"},{"severity":"warning","entity":{"kind":"store","name":"pu-send-mid"},"message":"store pu-send-mid still records store.push (op-23ff0493373e4ea5, phase send), whose process ended after a certain outcome; it holds nothing","fix":"nothing to do: the next operation on store pu-send-mid replaces it"},{"severity":"warning","entity":{"kind":"store","name":"pu-snapshot"},"message":"store pu-snapshot still records store.push (op-fe5cc499e3d0c802, phase check), whose process ended after a certain outcome; it holds nothing","fix":"nothing to do: the next operation on store pu-snapshot replaces it"}]}
+(exit 0)

@@ -1,7 +1,7 @@
 //! Stable kernel identities and checked projection of portable attributes.
-use crate::operations::Declined;
 use fuser::{Errno, FileAttr, FileType, INodeNo};
 use layerfs_content::object::inode_leaf::InodeKind;
+use layerfs_mount_ports::operations::Declined;
 use layerfs_workspace::{Refusal, ViewStat};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 

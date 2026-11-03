@@ -11,7 +11,8 @@ use layerfs_history::records::{
 };
 use layerfs_history::{BranchId, HistoryCatalog, HistoryCatalogConfig, HistoryError, NodeId, Page};
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePackLayout, SqlitePersistenceProfile,
+    PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePackLayout,
+    SqlitePersistenceProfile,
 };
 use layerfs_storage::StoragePolicy;
 use support::{branch_id, name, root, stack, Temp};
@@ -150,7 +151,7 @@ fn removes_one_project(
 #[test]
 fn removing_one_project_leaves_the_other_whole_on_sqlite() {
     let temp = Temp::new("layerstack-removal");
-    let created = Handles::create(
+    let created = SqliteHandles::create(
         sqlite(temp.join("store")),
         StoragePolicy::frozen_default(),
         &catalog(),

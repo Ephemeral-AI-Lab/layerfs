@@ -1,6 +1,6 @@
 //! Count/cause through public persistence ports; never a performance gate.
 use layerfs_content::ObjectId;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{location::PackInfo, pack::layout, port::*};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
@@ -84,7 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect::<Result<Vec<_>, _>>()?;
     drop(query);
     drop(db);
-    let h = Handles::open_read_only(
+    let h = SqliteHandles::open_read_only(
         PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         b"layerfs/issue286/retained-history/v3",
         [0x28; 32],

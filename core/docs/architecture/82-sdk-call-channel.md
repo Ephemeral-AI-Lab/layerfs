@@ -254,8 +254,10 @@ places each mount in the project's numbered Sandboxes under the project's
 placement lock (the lowest-numbered running one of the mount's image,
 `deploy.image` or the mount's `{ image }`, with fewer than 16 Workspaces, else
 the next number on that image; one project's Sandboxes may run different
-images, and the mount result and `operator.sandbox.list` give each `image`), and a Sandbox's daemon ends itself after
-two idle minutes; the next mount or `operator.sandbox.list` reclaims it.
+images, and the mount result and `operator.sandbox.list` give each `image`), and a Sandbox's daemon ended itself after
+two idle minutes; the next mount or `operator.sandbox.list` reclaimed it
+(that idle close is removed by #535 D11: a Sandbox now runs until it is
+closed).
 There is no service Sandbox and no `operator.sandbox.service`; Import starts
 no Sandbox. Operator `process.start(ws, command)`, project-wide
 `process.list()` and `process.cancel(id)` replace the per-Sandbox forms, and

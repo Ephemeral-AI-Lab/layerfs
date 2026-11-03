@@ -3,7 +3,7 @@
 //! rewritten, and hints are recorded from then on.
 mod support;
 use layerfs_history::{records::BindingHint, HistoryCatalog};
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use support::*;
 
 const HISTORY: &str = include_str!("../sql/sqlite/history.sql");
@@ -58,8 +58,10 @@ fn make_old(path: &std::path::Path) {
     .unwrap();
 }
 
-fn writable(path: &std::path::Path) -> Result<Handles, layerfs_storage::port::PersistenceError> {
-    Handles::open_writable(
+fn writable(
+    path: &std::path::Path,
+) -> Result<SqliteHandles, layerfs_storage::port::PersistenceError> {
+    SqliteHandles::open_writable(
         PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         BINDING,
         [71; 32],

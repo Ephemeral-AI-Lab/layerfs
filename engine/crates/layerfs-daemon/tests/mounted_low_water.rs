@@ -45,7 +45,7 @@ use held_writer::HeldWriter;
 use layerfs_bridge::control::{Reply, WorkspaceToken};
 use layerfs_daemon::store::{PortError, Store, StoreReader};
 use layerfs_history::{HistoryCatalog, HistoryError};
-use layerfs_persistence::{Handles, SqlitePersistenceProfile};
+use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage};
 use layerfs_workspace::{WorkspaceError, SERIAL_REFILL};
 use model::Model;
@@ -74,7 +74,7 @@ const LOW: u64 = SERIAL_REFILL - 1;
 /// Copied from `mounted_failure_scope.rs`.
 mod counted {
     use layerfs_history::*;
-    use layerfs_persistence::Handles;
+    use layerfs_persistence::SqliteHandles;
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone)]
@@ -92,7 +92,7 @@ mod counted {
         }
     }
     pub struct CountedHistory {
-        pub handles: Arc<Handles>,
+        pub handles: Arc<SqliteHandles>,
         pub attempts: Mutex<Vec<Attempt>>,
     }
     macro_rules! forward {
@@ -236,7 +236,7 @@ struct Fx {
     fixture: installed::Fixture,
     store: Arc<Store>,
     harness: Harness,
-    writer: Arc<Handles>,
+    writer: Arc<SqliteHandles>,
     history: Arc<CountedHistory>,
 }
 impl Fx {
@@ -261,7 +261,7 @@ impl Fx {
         );
         let config = || fixture.config.clone();
         let writer = Arc::new(
-            Handles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap(),
+            SqliteHandles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap(),
         );
         let history = Arc::new(CountedHistory {
             handles: writer.clone(),
@@ -269,7 +269,7 @@ impl Fx {
         });
         let reader_config = fixture.config.clone();
         let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
-            let read = Handles::open_read_only(
+            let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,
                 installed::CURSOR,

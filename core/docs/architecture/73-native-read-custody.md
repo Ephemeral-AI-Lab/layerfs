@@ -145,7 +145,7 @@ The result is a
 [`NativeWindow`](../../crates/layerfs-workspace/src/operations/native_data.rs):
 the base root, the local window if a local row exists, and the resident base
 value and length otherwise. After the job the request holds nothing in the
-owner. [`NativeData::read`](../../crates/layerfs-fuse/src/operations/read.rs)
+owner. [`NativeData::read`](../../crates/layerfs-mount-ports/src/operations/read.rs)
 then replies in one of three ways:
 
 | Window | Hand-off | Store reader | Bytes |

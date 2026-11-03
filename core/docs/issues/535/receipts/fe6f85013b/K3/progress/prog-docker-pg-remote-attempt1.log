@@ -1,0 +1,37 @@
+start C01 07:36:54
+C01 docker postgresql FAIL sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker` timed exec - ms
+exit 1
+start C02 07:36:55
+C02 docker postgresql FAIL sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker` timed exec - ms
+exit 1
+start C03 07:36:55
+C03 docker postgresql FAIL sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker` timed exec - ms
+exit 1
+start C04 07:36:56
+C04 docker postgresql FAIL sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker` timed exec - ms
+exit 1
+start C05 07:36:57
+C05 docker postgresql FAIL sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker` timed exec - ms
+exit 1
+start C06 07:36:58
+C06 docker postgresql FAIL sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker` timed exec - ms
+exit 1
+start C07 07:36:58
+C07 docker postgresql FAIL sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker` timed exec - ms
+exit 1
+start C08 07:36:59
+C08 docker postgresql FAIL sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker` timed exec - ms
+exit 1
+start C09 07:37:00
+C09 docker postgresql FAIL sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker` timed exec - ms
+exit 1
+start C10 07:37:00
+C10 docker postgresql FAIL sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker` timed exec - ms
+exit 1
+start C11 07:37:01
+C11 docker postgresql FAIL sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker` timed exec - ms
+exit 1
+start C12 07:37:02
+C12 docker postgresql FAIL sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker` timed exec - ms
+exit 1
+DONE docker pg-remote 07:37:03

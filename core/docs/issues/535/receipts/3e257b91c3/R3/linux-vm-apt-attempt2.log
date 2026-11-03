@@ -1,0 +1,16 @@
+2026-11-03T09:25:03Z
+Reading package lists...
+E: Could not get lock /var/lib/apt/lists/lock. It is held by process 1753 (apt-get)
+E: Unable to lock directory /var/lib/apt/lists/
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Package docker.io is not available, but is referred to by another package.
+This may mean that the package is missing, has been obsoleted, or
+is only available from another source
+
+E: Package 'docker.io' has no installation candidate
+apt-exit 100
+sh: 1: docker: not found
+2026-11-03T09:25:04Z
+exit 0

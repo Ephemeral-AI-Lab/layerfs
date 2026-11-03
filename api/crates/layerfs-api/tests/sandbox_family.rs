@@ -67,7 +67,9 @@ fn named_sandboxes_on_native() {
     );
     write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        // microsandbox runs on macOS and Linux hosts, so the support table
+        // passes this machine on either
+        &SdkValue::map([("name", t("box")), ("platform", t("microsandbox"))]),
     )
     .unwrap();
 
@@ -118,6 +120,12 @@ fn named_sandboxes_on_native() {
         ],
     );
     assert_eq!(made.get_text("state"), Some("running"));
+    // its success dropped the create's intent in the same write (#536 §7.1)
+    assert!(made.get("op").is_none(), "{made:?}");
+    let record = home::read_record(&paths::sandbox_record(&home, "t1"))
+        .unwrap()
+        .unwrap();
+    assert!(record.get("op").is_none(), "{record:?}");
     let taken = call(
         &home,
         "sandbox.create",
@@ -255,7 +263,7 @@ fn named_sandboxes_on_native() {
         other => panic!("{other:?} in {closed:?}"),
     };
     assert_eq!(unknown, 2, "{closed:?}");
-    assert!(!paths::sandbox_dir(&home, "native", "t1").exists());
+    assert!(!paths::sandbox_dir(&home, "t1").exists());
     ok(
         &home,
         "sandbox.create",
@@ -266,11 +274,11 @@ fn named_sandboxes_on_native() {
         ],
     );
 
-    // a running Sandbox keeps its Store from moving
+    // a Sandbox record keeps its Store from being pushed
     assert_eq!(
         call(
             &home,
-            "store.move",
+            "store.push",
             &[("name", t("shop")), ("machine", t("box"))]
         )
         .unwrap_err()
@@ -278,7 +286,7 @@ fn named_sandboxes_on_native() {
         "InUse"
     );
     ok(&home, "sandbox.close", &[("name", t("t1"))]);
-    assert!(!paths::sandbox_dir(&home, "native", "t1").exists());
+    assert!(!paths::sandbox_dir(&home, "t1").exists());
     let _ = std::fs::remove_dir_all(home);
     let _ = std::fs::remove_dir_all(folder);
 }

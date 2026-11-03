@@ -24,7 +24,7 @@ Commit, merge, and publish to `main`.
   Stores: a sqlite Store is one file on one machine, a postgresql Store is a
   database. Backups of sqlite Stores go to r2 or MinIO buckets. See
   [machines, Stores and backups](machines-and-stores.md).
-- **One call table.** 57 calls in nine families: `project`, `branch`,
+- **One call table.** 61 calls in nine families: `project`, `branch`,
   `commit`, `file`, `sandbox`, `workspace`, `machine`, `store` and `backup`.
   The `layerfs` command, the Node package and the Python package are thin
   front ends over one Rust library and take the same arguments. See
@@ -41,11 +41,11 @@ Commit, merge, and publish to `main`.
    Python.
 2. [The home](home.md): the layout of `LAYERFS_HOME`, the one-time
    conversion of a 1.1.0 home, and `layerfs import-env`.
-3. [The calls](calls.md): all 57 calls with their positionals and options,
+3. [The calls](calls.md): all 61 calls with their positionals and options,
    results, errors and exit codes, and the shell switches.
 4. [Machines, Stores and backups](machines-and-stores.md): machine kinds,
-   start on demand and idle stop, sqlite and postgresql Stores, moves and
-   backups.
+   manual start and stop, sqlite and postgresql Stores, push and
+   pull, and backups.
 5. [Node and Python](sdk.md): the `layerfs` packages, clients, options,
    errors, progress and folder scope.
 6. [Limitations](limitations.md): what is not built, not verified or refused
@@ -56,7 +56,7 @@ Commit, merge, and publish to `main`.
 The code wins over every document below where they differ.
 
 - [The call table](../../../engine/crates/layerfs-api/src/calls/table.rs):
-  the 57 calls, their arguments and options.
+  the 61 calls, their arguments and options.
 - [The #533 work order](../../../core/docs/issues/533/README.md) and
   [its decisions log](../../../core/docs/issues/533/DECISIONS.md): owner
   decisions and the implementation choices taken on this branch.

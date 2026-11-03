@@ -1,0 +1,46 @@
+== H6 (2.0 home; Sandboxes sn6 on native and sd6 on docker were closed with the 2.0 CLI)
+layout before: {"layout":2,"id":"72f0a70c7318e0bed8b6e75f62ee2154"}
+$ [fe6f] layerfs store list
+{"items":[{"name":"d6","kind":"sqlite","machine":"docker","profile":"disposable","created":1793692307490,"sqlite":"3.53.2","last_move":{"from":"native","to":"docker","at":1793692313399,"bytes":12345344,"sha256":"006a444b25157a2b052d7b07793e3bf26adeeda5f911d71b6aab876c5c1e7caf","heads":"a2e77530e6b072f5a1a3d298698044816e41b4b708d7d9b591a20c29353f4a5b"},"projects":["p"],"state":"down"},{"name":"n6","kind":"sqlite","machine":"native","profile":"disposable","created":1793692234808,"sqlite":"3.53.2","projects":["p"],"state":"idle"}]}
+ (exit 0)
+layout now: {"layout":3,"id":"72f0a70c7318e0bed8b6e75f62ee2154"}
+{"from":2,"at":1793692369891,"sandboxes":[],"reclaimed":[],"versioned":5,"removed":["/tmp/lfs535k1-h6.eVTN/machine/docker/sandbox","/tmp/lfs535k1-h6.eVTN/machine/native/sandbox","/tmp/lfs535k1-h6.eVTN/store/n6/project/p/sandboxes","/tmp/lfs535k1-h6.eVTN/machine/native/sandbox-root -> /tmp/lfs535k1-h6.eVTN/machine/native/run"],"notes":[]}
+
+$ [fe6f] layerfs sandbox list
+{"items":[],"next_page_pos":null}
+ (exit 0)
+$ [fe6f] layerfs machine list
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":null,"memory":null,"disk":null,"stores":["d6"],"sandboxes":[],"image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"},{"name":"native","platform":"native","backend":"native","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":["n6"],"sandboxes":[]}]}
+ (exit 0)
+$ [fe6f] layerfs doctor --text
+0 error(s), 1 warning(s)
+warning  machine docker: machine docker's worker is of another build (protocol none, bundle none; this build: protocol 2, bundle none); calls to it are refused
+         fix: `layerfs machine stop docker`, then `layerfs machine start docker`
+ (exit 0)
+$ [fe6f] layerfs file read n6/p lane /v20.txt
+{"kind":"ok","snapshot":"lane@6362643f092f","root":"977e36744d783d806ee91f5fe0d6dab4e0eb7d5ca2cfb5e159c9a66efa363ac3","path":"/v20.txt","text":"two-oh\n","start_line":1,"end_line":1,"line_truncated":false,"truncated":false,"next_line":null,"size":7}
+ (exit 0)
+$ [fe6f] layerfs store status d6
+{"name":"d6","kind":"sqlite","state":"down","holders":[],"op":null,"down_reason":"machine docker: the worker at 127.0.0.1:54196 is of another build (protocol none, bundle none; this build: protocol 2, bundle none); nothing was sent; replace its worker with this build's: `layerfs machine stop docker`, then `layerfs machine start docker`","machine":"docker","file":{"unavailable":"machine docker: the worker at 127.0.0.1:54196 is of another build (protocol none, bundle none; this build: protocol 2, bundle none); nothing was sent; replace its worker with this build's: `layerfs machine stop docker`, then `layerfs machine start docker`"}}
+ (exit 0)
+$ [fe6f] layerfs file read d6/p lane /v20d.txt
+{"code":"Unavailable","message":"machine docker: the worker at 127.0.0.1:54196 is of another build (protocol none, bundle none; this build: protocol 2, bundle none); nothing was sent; replace its worker with this build's: `layerfs machine stop docker`, then `layerfs machine start docker`","detail":{"worker":{"protocol":null,"bundle":null},"expected":{"protocol":2,"bundle":null}}}
+ (exit 125)
+-- the docker worker still runs the 2.0 bundle: stop and start it (#536 I worker hello row)
+$ [fe6f] layerfs machine stop docker
+{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":null,"memory":null,"disk":null,"stores":["d6"],"sandboxes":[],"image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"}
+ (exit 0)
+$ [fe6f] layerfs machine start docker
+{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":null,"memory":null,"disk":null,"stores":["d6"],"sandboxes":[],"image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"}
+ (exit 0)
+$ [fe6f] layerfs store status d6
+{"name":"d6","kind":"sqlite","state":"idle","holders":[],"op":null,"down_reason":null,"machine":"docker","file":{"exists":true,"free":134191005696,"bytes":12345344,"wal_bytes":78312}}
+ (exit 0)
+$ [fe6f] layerfs file read d6/p lane /v20d.txt
+{"kind":"ok","snapshot":"lane@5f290499f1b6","root":"86188692f146dbea4880289bdcb15ee3c3b902919a56c1e4e0576aeece522921","path":"/v20d.txt","text":"two-oh-docker\n","start_line":1,"end_line":1,"line_truncated":false,"truncated":false,"next_line":null,"size":14}
+ (exit 0)
+$ [fe6f] layerfs doctor --text
+0 error(s), 1 warning(s)
+warning  store n6: Store n6 holds a stale lease of process 56301, which ended
+         fix: `layerfs store status n6` removes it
+ (exit 0)

@@ -4,7 +4,7 @@
 use layerfs_content::{ObjectId, ObjectRole};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, ReserveRequest};
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqlitePersistenceProfile, STORE_HEADROOM_BYTES,
+    PersistenceConfig, SqliteHandles, SqlitePersistenceProfile, STORE_HEADROOM_BYTES,
 };
 use layerfs_storage::{
     location::{ObjectLocation, PackDomain, PackInfo},
@@ -69,7 +69,7 @@ fn a_pack_batch_is_refused_while_the_margin_is_still_free() {
         "refusing to fill a non-test filesystem of {size} bytes"
     );
     let path = root.join("headroom-store.sqlite");
-    let h = Handles::create(
+    let h = SqliteHandles::create(
         PersistenceConfig::sqlite(&path).with_sqlite_profile(SqlitePersistenceProfile::Disposable),
         StoragePolicy::frozen_default(),
         &config(),

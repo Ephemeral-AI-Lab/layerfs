@@ -55,7 +55,8 @@ $ layerfs project list
 - `store create` makes an empty sqlite Store on the `native` machine.
 - `project init` imports the folder `./src` as project `api` of Store
   `shop`. Init never creates a Store. In this run the small folder printed
-  no progress lines.
+  no progress lines; the current build prints `check`, `install` and
+  `record` as `{"progress": {"phase", "done", "total"}}` lines on stderr.
 - A project is always written `<store>/<project>`.
 
 ## 3. Branches and files (shell)

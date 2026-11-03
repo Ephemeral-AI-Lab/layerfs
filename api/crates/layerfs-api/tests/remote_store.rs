@@ -7,23 +7,25 @@
 //!
 //! `folder_round_trip` runs anywhere Store installs run (Linux, as the
 //! daemons' user). `minio_round_trip` is ignored by default: start a MinIO
-//! with `engine/crates/layerfs-remote-storage/tests/minio_service.sh`, set
+//! with `engine/crates/layerfs-store-backup/tests/minio_service.sh`, set
 //! its `LAYERFS_REMOTE_*`, then run it with `--ignored`.
 #![cfg(target_os = "linux")]
-#[path = "support/installed_store.rs"]
+#[path = "../../../../engine/crates/layerfs-store-service/tests/support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;
-#[path = "support/sdk.rs"]
+#[path = "../../../../engine/crates/layerfs-store-service/tests/support/sdk.rs"]
 #[allow(dead_code)]
 mod support;
 
 use layerfs_bridge::control::SdkValue;
 use layerfs_history::BranchId;
 use layerfs_persistence::{PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile};
-use layerfs_store_service::remote::state::{self, Direction, Transfer};
-use layerfs_store_service::remote::storage::minio::MinioSettings;
-use layerfs_store_service::remote::storage::pieces;
-use layerfs_store_service::remote::{self, store_object, Expected, Provider, PushFailure, Remotes};
+use layerfs_store_backup::backup::link::{self as state, Direction, Transfer};
+use layerfs_store_backup::backup::{
+    self as remote, store_object, Expected, Provider, PushFailure, Remotes,
+};
+use layerfs_store_backup::bucket::minio::MinioSettings;
+use layerfs_store_backup::bucket::pieces;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -322,7 +324,7 @@ fn folder_round_trip() {
 }
 
 #[test]
-#[ignore = "needs MinIO: layerfs-remote-storage/tests/minio_service.sh"]
+#[ignore = "needs MinIO: layerfs-store-backup/tests/minio_service.sh"]
 fn minio_round_trip() {
     let mut settings = minio_from_env().expect("LAYERFS_REMOTE_* of a running MinIO");
     settings.prefix = format!("tests/remote-store-{}", std::process::id());
@@ -356,13 +358,13 @@ fn minio_from_env() -> Option<MinioSettings> {
         bucket: read("BUCKET")?,
         prefix: read("PREFIX").unwrap_or_default(),
         region: read("REGION").unwrap_or_else(|| "us-east-1".to_owned()),
-        credentials: layerfs_store_service::remote::storage::credentials::CredentialRef::parse(
-            &read("layerfs_store_service::remote::storage::credentials::CredentialRef")
+        credentials: layerfs_store_backup::bucket::credentials::CredentialRef::parse(
+            &read("layerfs_store_backup::bucket::credentials::CredentialRef")
                 .unwrap_or_else(|| "env:LAYERFS_REMOTE".to_owned()),
         )
         .ok()?,
         part_size: read("PART_SIZE")
             .and_then(|t| t.parse().ok())
-            .unwrap_or(layerfs_store_service::remote::storage::minio::DEFAULT_PART_SIZE),
+            .unwrap_or(layerfs_store_backup::bucket::minio::DEFAULT_PART_SIZE),
     })
 }

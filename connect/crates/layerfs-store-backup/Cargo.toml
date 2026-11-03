@@ -1,0 +1,28 @@
+[package]
+name = "layerfs-store-backup"
+description = "Bucket drivers that know nothing about Stores, under bucket/ (upload, ranged download, stat and delete, pieces plus a sha256 manifest, each request attempted once), and whole-Store backup to a bucket under backup/."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+default = ["local_folder", "minio"]
+# A folder on the local filesystem, for tests.
+local_folder = []
+# The shared S3 API client: one-attempt SigV4 over HTTP/1.1, multipart.
+s3_api = []
+# https:// endpoints (Cloudflare R2, MinIO behind TLS), checked against the
+# system's roots. Off by default; the sealed Linux build the worker runs
+# turns it on.
+tls = ["s3_api", "dep:native-tls"]
+# The MinIO provider over the S3 API.
+minio = ["s3_api"]
+
+[dependencies]
+sha2 = "=0.11.0"
+layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
+layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
+layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
+nix = { version = "=0.31.3", default-features = false, features = ["fs"] }
+native-tls = { version = "=0.2.18", optional = true }

@@ -19,7 +19,7 @@ use crate::{
     kernel::Kernel,
     xdr::{Garbage, Reader, Writer},
 };
-use layerfs_fuse::operations::write::Stamp;
+use layerfs_mount_ports::operations::write::Stamp;
 use layerfs_workspace::{Time, ViewStat};
 
 const FHSIZE: usize = 64;

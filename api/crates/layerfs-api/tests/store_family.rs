@@ -1,6 +1,7 @@
-//! sqlite Stores (#533 step 8): create on native, list/get/status, a move to
-//! a machine behind a worker and back with history heads equal, and the
-//! InUse refusals of move and remove.
+//! sqlite Stores (#533 step 8, #536 §7.3): create on native, list/get/status,
+//! a push to a machine behind a worker and a pull back with history heads
+//! equal, the refusals of push and pull, and the InUse refusals of push and
+//! remove.
 use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
@@ -83,6 +84,8 @@ fn create_list_get_and_status() {
         panic!()
     };
     assert_eq!(items.len(), 1);
+    // each item carries the state `store.status` shows (#536 §10b)
+    assert_eq!(items[0].get_text("state"), Some("idle"), "{items:?}");
     assert_eq!(
         call(&home, "store.get", &[("name", t("nope"))])
             .unwrap_err()
@@ -101,18 +104,28 @@ fn create_list_get_and_status() {
 }
 
 #[test]
-fn a_store_moves_to_a_worker_machine_and_back_with_equal_heads() {
+fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
     let (home, root) = home_with_box();
     call(&home, "store.create", &[("name", t("shop"))]).unwrap();
     let bytes = std::fs::read(paths::store_file(&home, "shop")).unwrap();
 
     let mut phases = Vec::new();
+    let mut sent = Vec::new();
     let args = SdkValue::map([("name", t("shop")), ("machine", t("box"))]);
-    let moved = calls::call(Some(&home), "store.move", args, &mut |event| {
-        if let Some(phase) = event.get("progress").and_then(|p| p.get_text("phase")) {
-            if phases.last().map(String::as_str) != Some(phase) {
-                phases.push(phase.to_owned());
-            }
+    let moved = calls::call(Some(&home), "store.push", args, &mut |event| {
+        let progress = event.get("progress").unwrap();
+        let phase = progress.get_text("phase").unwrap();
+        if phases.last().map(String::as_str) != Some(phase) {
+            phases.push(phase.to_owned());
+        }
+        // bytes while sending, null in every other phase (#536 §10b)
+        let (done, total) = (progress.get("done"), progress.get("total"));
+        match phase {
+            "send" => sent.push((done.cloned(), total.cloned())),
+            _ => assert_eq!(
+                (done, total),
+                (Some(&SdkValue::Null), Some(&SdkValue::Null))
+            ),
         }
     })
     .unwrap();
@@ -120,6 +133,12 @@ fn a_store_moves_to_a_worker_machine_and_back_with_equal_heads() {
         phases,
         ["check", "snapshot", "send", "verify", "install", "record", "retire"]
     );
+    let all = SdkValue::Int(bytes.len() as i64);
+    assert_eq!(
+        sent.first(),
+        Some(&(Some(SdkValue::Int(0)), Some(all.clone())))
+    );
+    assert_eq!(sent.last(), Some(&(Some(all.clone()), Some(all))));
     let heads = moved.get("heads").cloned().unwrap();
     assert!(
         !paths::store_file(&home, "shop").exists(),
@@ -133,22 +152,34 @@ fn a_store_moves_to_a_worker_machine_and_back_with_equal_heads() {
         .unwrap()
         .unwrap();
     assert_eq!(record.get_text("machine"), Some("box"));
-    assert_eq!(record.get("in_progress"), Some(&SdkValue::Null));
-
-    // a second move to the same machine is refused before any effect
-    let again = call(
-        &home,
-        "store.move",
-        &[("name", t("shop")), ("machine", t("box"))],
+    assert_eq!(record.get("op"), None, "a finished push drops `op`");
+    assert_eq!(
+        record
+            .get("last_transfer")
+            .and_then(|last| last.get("retired")),
+        Some(&SdkValue::Bool(true))
     );
-    assert_eq!(again.unwrap_err().0, "InvalidInput");
+    // its machine's worker answers: the list finds it idle there
+    let listed = call(&home, "store.list", &[]).unwrap();
+    let Some(SdkValue::List(items)) = listed.get("items") else {
+        panic!("{listed:?}")
+    };
+    assert_eq!(items[0].get_text("machine"), Some("box"));
+    assert_eq!(items[0].get_text("state"), Some("idle"), "{items:?}");
 
-    let back = call(
+    // a second push is refused before any effect: the Store is not on native
+    let (code, message) = call(
         &home,
-        "store.move",
-        &[("name", t("shop")), ("machine", t("native"))],
+        "store.push",
+        &[("name", t("shop")), ("machine", t("box"))],
     )
-    .unwrap();
+    .unwrap_err();
+    assert_eq!(code, "InvalidInput", "{message}");
+    assert!(message.contains("store pull shop"), "{message}");
+
+    let back = call(&home, "store.pull", &[("name", t("shop"))]).unwrap();
+    assert_eq!(back.get_text("from"), Some("box"));
+    assert_eq!(back.get_text("to"), Some("native"));
     assert_eq!(back.get("heads"), Some(&heads));
     assert_eq!(
         std::fs::read(paths::store_file(&home, "shop")).unwrap(),
@@ -160,7 +191,7 @@ fn a_store_moves_to_a_worker_machine_and_back_with_equal_heads() {
 }
 
 #[test]
-fn move_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
+fn push_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
     let (home, root) = home_with_box();
     call(&home, "store.create", &[("name", t("shop"))]).unwrap();
     // process 1 is always alive: its lease holds the Store
@@ -169,7 +200,7 @@ fn move_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
     std::fs::write(&lease, "1\n").unwrap();
     let moved = call(
         &home,
-        "store.move",
+        "store.push",
         &[("name", t("shop")), ("machine", t("box"))],
     );
     assert_eq!(moved.unwrap_err().0, "InUse");
@@ -181,6 +212,11 @@ fn move_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
     );
     let status = call(&home, "store.status", &[("name", t("shop"))]).unwrap();
     assert_eq!(status.get_text("state"), Some("in_use"));
+    let listed = call(&home, "store.list", &[]).unwrap();
+    assert!(
+        calls::json::print(&listed).contains(r#""state":"in_use""#),
+        "{listed:?}"
+    );
     std::fs::remove_file(&lease).unwrap();
 
     // a failed phase keeps what exists: the target already has a file
@@ -188,7 +224,7 @@ fn move_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
     std::fs::write(paths::store_file(&root, "shop"), b"x").unwrap();
     let (code, message) = call(
         &home,
-        "store.move",
+        "store.push",
         &[("name", t("shop")), ("machine", t("box"))],
     )
     .unwrap_err();

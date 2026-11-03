@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 57 calls in nine
+//! The call table and its dispatcher (#533 step 2): 61 calls in nine
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::calls::{self, json, keys, size, Kind, CALLS, FAMILIES};
@@ -51,8 +51,8 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_nine_families_and_57_calls() {
-    assert_eq!(CALLS.len(), 57);
+fn the_table_has_nine_families_and_61_calls() {
+    assert_eq!(CALLS.len(), 61);
     for family in FAMILIES {
         assert!(CALLS.iter().any(|c| c.family == family), "{family}");
     }
@@ -60,7 +60,7 @@ fn the_table_has_nine_families_and_57_calls() {
     let mut names: Vec<_> = CALLS.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 57, "call names are unique");
+    assert_eq!(names.len(), 61, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in CALLS {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -72,7 +72,7 @@ fn the_table_has_nine_families_and_57_calls() {
         .iter()
         .map(|f| CALLS.iter().filter(|c| c.family == *f).count())
         .collect();
-    assert_eq!(counts, [4, 6, 3, 14, 4, 5, 8, 8, 5]);
+    assert_eq!(counts, [4, 6, 3, 14, 4, 5, 11, 9, 5]);
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn unknown_calls_and_arguments_are_refused_before_any_effect() {
     .starts_with("InvalidInput: project.get: unknown argument `bogus`"));
     // a function option never crosses into the library
     assert!(code(
-        "store.move",
+        "store.push",
         map(&[
             ("name", t("s")),
             ("machine", t("m")),
@@ -192,11 +192,15 @@ fn file_family() {
 
 #[test]
 fn sandbox_family() {
-    assert!(code(
+    assert!(
+        code("sandbox.create", map(&[("project", t("shop/api"))])).contains("`name` is required")
+    );
+    // `machine` is optional (#536 §10): the create reaches the library
+    let reached = code(
         "sandbox.create",
-        map(&[("project", t("shop/api")), ("name", t("tests"))])
-    )
-    .contains("`machine` is required"));
+        map(&[("project", t("shop/api")), ("name", t("tests"))]),
+    );
+    assert!(!reached.contains("`machine`"), "{reached}");
     let reached = code(
         "sandbox.close",
         map(&[("name", t("tests")), ("force", SdkValue::Bool(true))]),
@@ -212,6 +216,12 @@ fn workspace_family() {
     );
     let reached = code("workspace.status", map(&[("ws", t("tests:/workspaces/1"))]));
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
+    // a Workspace by its name (#536 C3)
+    let reached = code("workspace.status", map(&[("ws", t("tests:dev"))]));
+    assert!(!reached.starts_with("InvalidInput"), "{reached}");
+    let mount = calls::find("workspace.mount").unwrap();
+    let options: Vec<_> = mount.options.iter().map(|o| (o.name, o.kind)).collect();
+    assert_eq!(options, [("name", Kind::Name)]);
 }
 
 #[test]
@@ -231,7 +241,7 @@ fn machine_family() {
 
 #[test]
 fn store_family() {
-    assert!(code("store.move", map(&[("name", t("shop"))])).contains("`machine` is required"));
+    assert!(code("store.push", map(&[("name", t("shop"))])).contains("`machine` is required"));
     let reached = code("store.list", SdkValue::Null);
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
 }

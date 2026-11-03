@@ -4,13 +4,13 @@
 //! copy (it is migrated in place) and `LAYERFS_353_BINDING` to the Store's
 //! binding key in hex. Schema 22: monolithic packs with acquisition tables.
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
 };
 use std::time::Instant;
 
 fn open(path: &str, binding: &[u8]) -> f64 {
     let start = Instant::now();
-    let handles = Handles::open_writable(
+    let handles = SqliteHandles::open_writable(
         PersistenceConfig::sqlite(path)
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),

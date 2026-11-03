@@ -20,7 +20,7 @@ use layerfs_content::object::inode_leaf::{InodeKind, InodeMetadata, InodeValue};
 use layerfs_content::{ContentResult, FinalizedConsumer, FinalizedObject, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
     RECLAMATION_PAGE_LIMIT,
 };
 use layerfs_storage::{Save, Storage, StoragePolicy, WriteOutcome};
@@ -114,8 +114,8 @@ fn expected(versions: &[u64]) -> Vec<Option<InodeValue>> {
         .collect()
 }
 
-fn create(temp: &support::Temp) -> Handles {
-    Handles::create(
+fn create(temp: &support::Temp) -> SqliteHandles {
+    SqliteHandles::create(
         PersistenceConfig::sqlite(temp.join("store.sqlite"))
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),

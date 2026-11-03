@@ -106,7 +106,7 @@ pub fn genesis(stack: LayerStackId, root: ObjectId) -> LayerId {
 pub mod sqlite {
     use layerfs_history::{HistoryCatalogConfig, HistoryError, HistoryResult};
     use layerfs_persistence::{
-        Handles, HistoryProvider, PersistenceConfig, SqlitePersistenceProfile,
+        HistoryProvider, PersistenceConfig, SqliteHandles, SqlitePersistenceProfile,
     };
     use layerfs_storage::StoragePolicy;
     pub type SqliteCatalog = HistoryProvider;
@@ -114,7 +114,7 @@ pub mod sqlite {
         path: &std::path::Path,
         config: &HistoryCatalogConfig,
     ) -> HistoryResult<SqliteCatalog> {
-        Handles::create(
+        SqliteHandles::create(
             PersistenceConfig::sqlite(path)
                 .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
             StoragePolicy::frozen_default(),
@@ -128,7 +128,7 @@ pub mod sqlite {
         binding: &[u8],
         cursor: [u8; 32],
     ) -> HistoryResult<SqliteCatalog> {
-        Handles::open_read_only(
+        SqliteHandles::open_read_only(
             PersistenceConfig::sqlite(path)
                 .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
             binding,

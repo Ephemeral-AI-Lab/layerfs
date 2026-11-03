@@ -2,7 +2,7 @@
 mod support;
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, ReserveRequest};
-use layerfs_persistence::{Handles, PersistenceConfig};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles};
 use layerfs_storage::{Storage, StoragePolicy};
 use std::io::{BufRead, Write};
 fn config() -> HistoryCatalogConfig {
@@ -25,7 +25,7 @@ fn crash_child() {
     let Some(path) = std::env::var_os("LAYERFS_RECOVERY_CHILD_PATH") else {
         return;
     };
-    let h = Handles::create(
+    let h = SqliteHandles::create(
         PersistenceConfig::sqlite(path),
         StoragePolicy::frozen_default(),
         &config(),
@@ -74,7 +74,7 @@ fn sigkill_preserves_acknowledged_body_locator_and_reservation() {
     }
     child.kill().unwrap();
     assert!(!child.wait().unwrap().success());
-    let h = Handles::open_writable(
+    let h = SqliteHandles::open_writable(
         PersistenceConfig::sqlite(&path),
         &config().binding_key,
         [71; 32],

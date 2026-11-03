@@ -1,6 +1,6 @@
 [package]
 name = "layerfs-api"
-description = "The SDK's public surface behind the JavaScript SDK, one function per method: project Init and Branches, fs and branch Store methods over layerfs-store-service, and Sandbox control"
+description = "The SDK's public surface: the call table and its one dispatcher over layerfs-control, whose public paths it re-exports for the front ends"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,39 +8,33 @@ license.workspace = true
 
 [dependencies]
 layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
+# The management library every call runs in (#536).
+layerfs-control = { path = "../layerfs-control" }
+
+[features]
+# PostgreSQL Stores (#506, #533): open, attach, create and Init.
+# Off by default; the sealed Linux build the worker runs turns it on.
+postgresql = ["layerfs-control/postgresql"]
+# https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
+# sealed Linux build the worker runs turns it on.
+tls = ["layerfs-control/tls"]
+# The machine calls (2.0, #533): host builds only. The guest worker is built
+# without it, so no machine adapter runs inside a machine.
+machine = ["layerfs-control/machine"]
+
+[dev-dependencies]
+nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
+# store-service's SDK support (remote_store) binds private Workspaces.
+layerfs-overlay = { path = "../../../engine/crates/layerfs-overlay" }
+layerfs-workspace = { path = "../../../engine/crates/layerfs-workspace" }
+# The tests drive these crates directly beside the call surface.
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
 layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 layerfs-project = { path = "../../../engine/crates/layerfs-project" }
-layerfs-sandbox = { path = "../../../engine/crates/layerfs-sandbox" }
+layerfs-sandbox = { path = "../../../connect/crates/layerfs-sandbox" }
+layerfs-machine = { path = "../../../connect/crates/layerfs-machine" }
 layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
-libc = "=0.2.189"
-nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal", "reboot"] }
-
-[features]
-# PostgreSQL Stores (#506, #533): open, attach, create and Init.
-# Off by default; the sealed Linux build the worker runs turns it on.
-postgresql = [
-    "layerfs-persistence/postgresql",
-    "layerfs-project/postgresql",
-    "layerfs-store-service/postgresql",
-]
-# https:// remotes: Cloudflare R2, MinIO behind TLS. Off by default; the
-# sealed Linux build the worker runs turns it on.
-tls = ["layerfs-store-service/tls"]
-# The machine calls (2.0, #533): host builds only. The guest worker is built
-# without it, so no machine adapter runs inside a machine.
-machine = ["layerfs-sandbox/machine"]
-
-[dev-dependencies]
-nix = { version = "=0.31.3", features = ["fs", "user", "process"] }
-layerfs-daemon = { path = "../../../engine/crates/layerfs-daemon" }
-layerfs-fuse = { path = "../../../engine/crates/layerfs-fuse" }
-# #364: the write-cost harness times BLAKE3 over the bytes it writes.
-blake3 = { version = "=1.8.5", default-features = false }
-# The Store method tests bind private Workspaces and count the Store's rows.
-layerfs-overlay = { path = "../../../engine/crates/layerfs-overlay" }
-layerfs-workspace = { path = "../../../engine/crates/layerfs-workspace" }
-rusqlite = { version = "=0.40.2", features = ["cache", "limits", "blob"] }
+layerfs-store-backup = { path = "../../../connect/crates/layerfs-store-backup" }

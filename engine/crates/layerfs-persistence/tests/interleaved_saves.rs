@@ -4,7 +4,7 @@ mod support;
 
 use layerfs_content::{construct_bytes, read_range};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{Storage, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
 use support::Temp;
@@ -14,7 +14,7 @@ fn scoped_registry_interleaves_pending_reads_finish_abort_and_slot_reuse() {
     let temp = Temp::new("interleaved-saves");
     let mut config = PersistenceConfig::sqlite(temp.join("store"));
     config.sqlite_profile = SqlitePersistenceProfile::Disposable;
-    let handles = Handles::create(
+    let handles = SqliteHandles::create(
         config,
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {

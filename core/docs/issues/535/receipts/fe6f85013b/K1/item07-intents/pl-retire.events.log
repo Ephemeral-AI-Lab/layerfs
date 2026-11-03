@@ -1,0 +1,12 @@
+1793691438.383675 begin pull pl-retire - point=retire pid=45526
+1793691438.384232 progress {"phase": "check", "done": null, "total": null}
+1793691438.390646 progress {"phase": "snapshot", "done": null, "total": null}
+1793691438.698635 progress {"phase": "send", "done": 0, "total": 24473600}
+1793691442.074106 progress {"phase": "send", "done": 8388608, "total": 24473600}
+1793691445.488977 progress {"phase": "send", "done": 16777216, "total": 24473600}
+1793691448.633817 progress {"phase": "send", "done": 24473600, "total": 24473600}
+1793691448.634302 progress {"phase": "verify", "done": null, "total": null}
+1793691448.927772 progress {"phase": "install", "done": null, "total": null}
+1793691448.928565 progress {"phase": "record", "done": null, "total": null}
+1793691448.929296 progress {"phase": "retire", "done": null, "total": null}
+1793691448.929347 SIGKILL at progress retire

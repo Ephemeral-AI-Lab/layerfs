@@ -1,0 +1,4 @@
+== PG startup host.lima.internal:55432 -> R........SCRAM-SHA-256.. (rc=0)
+== PG startup host.lima.internal:55433 -> R........SCRAM-SHA-256.. (rc=0)
+== PG startup 192.168.5.2:55432 -> R........SCRAM-SHA-256.. (rc=0)
+== PG startup 127.0.0.1:55432 -> bash: connect: Connection refused.bash: line 1: /dev/tcp/127.0.0.1/55432: Connection refused. (rc=1)

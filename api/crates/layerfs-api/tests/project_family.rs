@@ -1,6 +1,6 @@
 //! Projects and Init (#533 step 9), end to end on this host: a Store made on
 //! native, a folder Inited into it as a live add, file and Branch calls on
-//! it, the Store moved to a worker machine and read there, then the project
+//! it, the Store pushed to a worker machine and read there, then the project
 //! removed.
 use layerfs_api::calls;
 use layerfs_api::home::{self, paths, write_record};
@@ -87,15 +87,29 @@ fn init_files_branches_move_and_remove() {
     );
     assert_eq!(refused.unwrap_err().0, "NotFound");
     ok(&home, "store.create", &[("name", t("shop"))]);
-    let mut events = 0;
+    let mut events = Vec::new();
     let args = SdkValue::map([
         ("project", t("shop/api")),
         ("folder", t(&folder.display().to_string())),
     ]);
-    let made = calls::call(Some(&home), "project.init", args, &mut |_| events += 1)
+    let made = calls::call(Some(&home), "project.init", args, &mut |e| events.push(e))
         .unwrap_or_else(|e| panic!("init: {} {}", e.code, e.message));
     assert_eq!(made.get_text("project"), Some("shop/api"));
     assert_eq!(made.get_text("machine"), Some("native"));
+    // in process on native, progress is a push's (#536 §10b): no `send`,
+    // null counts, nothing but `phase`, `done` and `total`
+    let expected: Vec<SdkValue> = ["check", "install", "record"]
+        .iter()
+        .map(|phase| {
+            let progress = SdkValue::map([
+                ("phase", t(phase)),
+                ("done", SdkValue::Null),
+                ("total", SdkValue::Null),
+            ]);
+            SdkValue::map([("progress", progress)])
+        })
+        .collect();
+    assert_eq!(events, expected);
 
     let list = ok(&home, "project.list", &[]);
     let SdkValue::List(items) = list.get("items").unwrap() else {
@@ -174,12 +188,12 @@ fn init_files_branches_move_and_remove() {
     assert!(layerfs_api::calls::json::print(&branches).contains("\"fix\""));
     ok(&home, "branch.get", &[p(), ("branch", t("fix"))]);
 
-    // the Store's open service is closed before a move: a lease of this
+    // the Store's open service is closed before a push: a lease of this
     // process would not block it, but the open file must be closed first
     std::thread::sleep(std::time::Duration::from_millis(10));
     ok(
         &home,
-        "store.move",
+        "store.push",
         &[("name", t("shop")), ("machine", t("box"))],
     );
     let read = ok(
@@ -197,5 +211,49 @@ fn init_files_branches_move_and_remove() {
 
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(folder);
+}
+
+/// The host's private-home check (moved from layerfs-control's
+/// local_root_modes, whose route `runtime.store.create` is gone, #536 step
+/// 2): Init into a Store refuses a home others may read or write, and
+/// accepts one others may only pass through (o+x).
+#[test]
+fn a_private_home_may_be_passable_and_nothing_more() {
+    use std::os::unix::fs::PermissionsExt;
+    let set = |path: &Path, mode: u32| {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap()
+    };
+    let home = tempdir("private");
+    set(&home, 0o700);
+    home::open(&home).unwrap();
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    let folder = tempdir("private-folder");
+    std::fs::write(folder.join("README.md"), "hello\n").unwrap();
+    let init = |name: &str| {
+        call(
+            &home,
+            "project.init",
+            &[
+                ("project", t(&format!("shop/{name}"))),
+                ("folder", t(&folder.display().to_string())),
+            ],
+        )
+    };
+    for (name, open) in [("a", 0o750), ("b", 0o711), ("c", 0o705), ("d", 0o702)] {
+        set(&home, open);
+        let (code, message) = init(name).unwrap_err();
+        assert_eq!(code, "Unauthorized", "{open:o}: {message}");
+        assert!(
+            message.contains("must be owned by this user and private"),
+            "{message}"
+        );
+    }
+    for (name, passable) in [("e", 0o700), ("f", 0o701)] {
+        set(&home, passable);
+        init(name).unwrap_or_else(|e| panic!("{passable:o}: {e:?}"));
+    }
+    set(&home, 0o700);
+    std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }

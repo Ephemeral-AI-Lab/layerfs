@@ -5,12 +5,9 @@ use crate::{
     Owner,
 };
 use layerfs_bridge::daemon_setup::DaemonSetup;
+use layerfs_bridge::KernelRoute;
 use std::{path::Path, sync::Arc};
 
-/// Selects the kernel route: `nfs` serves every mount over loopback NFSv3
-/// (the native route); `fuse`, or unset, is FUSE. The Sandbox provider that
-/// starts the daemon chooses it; [`check_route`] asserts the value.
-pub const KERNEL_ROUTE: &str = "LAYERFS_KERNEL";
 /// Optional helper command lines (`{port}`, `{dir}` replaced) overriding the
 /// host client's defaults for the NFS route.
 pub const NFS_MOUNT: &str = "LAYERFS_NFS_MOUNT";
@@ -18,29 +15,28 @@ pub const NFS_UNMOUNT: &str = "LAYERFS_NFS_UNMOUNT";
 pub const NFS_FORCE: &str = "LAYERFS_NFS_FORCE";
 pub const NFS_FLUSH: &str = "LAYERFS_NFS_FLUSH";
 
-/// Whether this daemon serves its mounts over NFS.
-/// macOS has no other route: there it is always NFS.
-pub(super) fn nfs_route() -> bool {
-    cfg!(target_os = "macos") || std::env::var(KERNEL_ROUTE).is_ok_and(|route| route == "nfs")
+/// Whether this daemon serves its mounts over NFS. The setup chooses the
+/// route; macOS has no other route: there `check_route` accepts only NFS.
+pub(super) fn nfs_route(setup: &DaemonSetup) -> bool {
+    cfg!(target_os = "macos") || setup.route == KernelRoute::Nfs
 }
 
 /// The provider's route choice, asserted before anything is served: `fuse`
-/// or `nfs` (or unset, FUSE), and only `nfs` on macOS. A daemon started with
-/// any other value refuses to start rather than serve another route.
-pub(super) fn check_route() -> std::io::Result<()> {
-    match std::env::var(KERNEL_ROUTE).as_deref() {
-        Err(std::env::VarError::NotPresent) | Ok("nfs") => Ok(()),
-        Ok("fuse") if !cfg!(target_os = "macos") => Ok(()),
-        _ => Err(std::io::Error::new(
+/// or `nfs`, and only `nfs` on macOS.
+pub(super) fn check_route(route: KernelRoute) -> std::io::Result<()> {
+    match route {
+        KernelRoute::Nfs => Ok(()),
+        KernelRoute::Fuse if !cfg!(target_os = "macos") => Ok(()),
+        KernelRoute::Fuse => Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "LAYERFS_KERNEL must be fuse or nfs (only nfs on macOS)",
+            "kernel route fuse is not served on macOS; only nfs",
         )),
     }
 }
 /// NFS serving for the native route, from the protected setup and the
 /// declared helper overrides. Nothing is mounted until an explicit Attach.
 pub(super) fn assemble_export(setup: &DaemonSetup) -> std::io::Result<Option<Arc<ExportServing>>> {
-    if !nfs_route() {
+    if !nfs_route(setup) {
         return Ok(None);
     }
     let mounts = Path::new(&setup.mounts);
@@ -136,7 +132,7 @@ mod linux {
         setup: &DaemonSetup,
     ) -> io::Result<Option<Arc<KernelServing>>> {
         // The NFS route opens no FUSE device.
-        if super::nfs_route() {
+        if super::nfs_route(setup) {
             return Ok(None);
         }
         let mounts = Path::new(&setup.mounts);

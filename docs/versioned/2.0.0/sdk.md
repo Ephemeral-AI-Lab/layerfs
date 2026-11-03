@@ -27,6 +27,8 @@ await layerfs.store.create("shop");
 await layerfs.project.init("shop/api", "/src/api", { on_progress: console.log });
 await layerfs.branch.fork("shop/api", "agent", "main");
 await layerfs.file.write("shop/api", "agent", "/README.md", "hello\n");
+// a named Workspace: ws is "tests:build" (#536 C3)
+const { ws } = await layerfs.workspace.mount("tests", "agent", { name: "build" });
 
 const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", folder: "/web", branch: "agent" } });
 ```
@@ -48,6 +50,10 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", fo
 - A refusal throws `LayerFSError` with `code`, `message` and `detail`.
 - `table` is the call table, `[{ family, call, args, options, help }]`;
   `families` lists the nine families.
+- `layerfs.doctor({ home })` (also a named export) is
+  [`layerfs doctor`](calls.md#layerfs-doctor), outside the table: it
+  resolves to `{ ok, findings: [{ severity, entity: { kind, name }, message,
+  fix }] }` and changes nothing; `home` defaults as above.
 - The native addon is looked for beside the package (`layerfs.node`), at a
   worktree build bundle's root, then beside its crate
   (`engine/crates/layerfs-node/layerfs.node`). Build it with
@@ -87,6 +93,9 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
   `.detail`.
 - `layerfs.TABLE` is the call table and `layerfs.FAMILIES` the nine
   families.
+- `layerfs.doctor(home=None)` is [`layerfs doctor`](calls.md#layerfs-doctor),
+  outside the table: a dict `{"ok", "findings"}` as in Node, changing
+  nothing.
 - Build: `cd api/python && maturin build --locked` (maturin 1.9.6 or a
   later 1.x, as `pyproject.toml` requires since `2793ee114c`). Only a macOS
   arm64 wheel was built on this branch; the Linux x64 and arm64 glibc
@@ -108,12 +117,12 @@ asyncio.run(main())
 
 | Option | Calls | Called with |
 | --- | --- | --- |
-| `on_progress` | `project.init`, `store.move`, `backup.create`, `backup.restore` | each progress update (an object or dict) |
+| `on_progress` | `project.init`, `store.push`, `store.pull`, `backup.create`, `backup.restore` | each progress update (an object or dict) |
 | `stdout`, `stderr` | `workspace.exec` | the command's output, piece by piece: a string when the piece is UTF-8, else a `Buffer` (Node) or `bytes` (Python) |
 
 There is one progress stream and no job registry (O22). Another process
-cannot watch a call it did not start; `store status` shows a move in
-progress. `workspace.exec` sends its output after the command ends; there
+cannot watch a call it did not start; `store status` shows a push or
+pull in progress. `workspace.exec` sends its output after the command ends; there
 is no live output stream yet. A stream over 1 MiB comes only through these
 functions (one 1 MiB piece at a time) or `stream: true`; the result then
 has that stream `null`, its byte count and `streamed: true`.
@@ -134,6 +143,11 @@ The package does not decide. The home's records do: a call on a sqlite
 Store on `native` or on a PostgreSQL Store runs in the calling process; a
 call on a Store on another machine goes to that machine's worker. See
 [routes](machines-and-stores.md#routes).
+
+The first call of this build on a layout 2 home converts it to layout 3,
+or is refused `InUse` while a Sandbox, lease or Store move in it is live; the
+refusal's `detail.related` names each (`{kind, name, why}`). See
+[the home](home.md#a-layout-2-home).
 
 ## Checks on this branch
 

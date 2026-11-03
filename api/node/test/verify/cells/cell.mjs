@@ -12,14 +12,20 @@
 // LFS533_DAEMON names the daemon for the `native` machine; it reaches the
 // home's record through `layerfs import-env` (the repository's debug
 // `layerfs`, or LFS533_LAYERFS), as a 1.1.0 environment would. On any other
-// machine the Store moves there after Init; for `docker`, LFS533_IMAGE is
+// machine the Store is pushed there after Init; for `docker`, LFS533_IMAGE is
 // the Sandbox image (`machine update docker --image`), and a docker worker
 // this home started (`lfs-<home id>-docker`) is removed with its data
 // volume at the end.
 // LFS533_HOME names an existing home that already holds <machine> (a VM is
 // made once per kind, not per cell): the cell's own Store `c<nn>` is made
-// there, moved native -> <machine> and, after the cells, back to native, then
+// there, pushed native -> <machine> and, after the cells, pulled back to native, then
 // removed; the home stays.
+// LFS535_PG_URL makes the cell's Store a PostgreSQL Store (#535 phase 8
+// item 2): `store connect` of that URL ("{cell}" becomes the cell's
+// lower-case name, e.g. a database per cell; no password in it) with
+// LFS535_PG_PASSWORD as its password reference (`env:NAME`); the Store is
+// never pushed or pulled, and the cell disconnects it at the end (its data
+// stays in the server).
 // One cell per command; nothing else runs a cell at the same time, so the
 // 1.1.0 host-wide lock is not ported. The receipt holds every step's time,
 // the 1-minute load and the verdict.
@@ -71,7 +77,9 @@ const empty = mkdtempSync(join(tmpdir(), "lfs533-src-"));
 const lfs = client({ home });
 const storeName = shared ? `c${cell.slice(1)}` : "cells";
 const project = `${storeName}/p`;
-let moved = false;
+let pushed = false;
+const pgUrl = process.env.LFS535_PG_URL?.replaceAll("{cell}", cell.toLowerCase());
+out.store = pgUrl ? { kind: "postgresql", host: new URL(pgUrl).hostname } : { kind: "sqlite" };
 const name = `c${cell.slice(1)}`;
 let sandbox = null;
 const mounted = new Set();
@@ -98,15 +106,20 @@ try {
         encoding: "utf8",
       }));
   }
-  await step("store.create", () => lfs.store.create(storeName));
+  if (pgUrl) {
+    const password = process.env.LFS535_PG_PASSWORD;
+    await step("store.connect", () => lfs.store.connect(storeName, pgUrl, password ? { password } : {}));
+  } else {
+    await step("store.create", () => lfs.store.create(storeName));
+  }
   await step("project.init", () => lfs.project.init(project, empty));
   await step("branch.fork", () => lfs.branch.fork(project, "lane", "main"));
   if (machine === "docker" && process.env.LFS533_IMAGE) {
     await step("machine.update", () => lfs.machine.update("docker", { image: process.env.LFS533_IMAGE }));
   }
-  if (machine !== "native") {
-    await step("store.move", () => lfs.store.move(storeName, machine));
-    moved = true;
+  if (machine !== "native" && !pgUrl) {
+    await step("store.push", () => lfs.store.push(storeName, machine));
+    pushed = true;
   }
   out.sandbox = (await step("sandbox.create", () => lfs.sandbox.create(project, name, machine))).value;
   sandbox = name;
@@ -163,9 +176,12 @@ try {
     );
   }
   if (sandbox) await step("sandbox.close", () => lfs.sandbox.close(sandbox)).catch((error) => { out.closeError = error.message; });
-  if (shared) {
+  if (pgUrl) {
+    // its data stays in the server; the home forgets it
+    await step("store.disconnect", () => lfs.store.disconnect(storeName)).catch((error) => { out.removeError = error.message; });
+  } else if (shared) {
     // the Store comes back to native, then goes; the home and its machine stay
-    if (moved) await step("store.move.back", () => lfs.store.move(storeName, "native")).catch((error) => { out.moveBackError = error.message; });
+    if (pushed) await step("store.pull", () => lfs.store.pull(storeName)).catch((error) => { out.pullError = error.message; });
     await step("store.remove", () => lfs.store.remove(storeName)).catch((error) => { out.removeError = error.message; });
   }
   if (machine === "docker" && !shared) {
@@ -184,10 +200,10 @@ try {
   if (!shared) rmSync(home, { recursive: true, force: true });
   rmSync(empty, { recursive: true, force: true });
 }
-if (out.moveBackError || out.removeError) {
+if (out.pullError || out.removeError) {
   out.ok = false;
-  out.cause = [out.cause, out.moveBackError, out.removeError].filter(Boolean).join("; ");
+  out.cause = [out.cause, out.pullError, out.removeError].filter(Boolean).join("; ");
   writeFileSync(receipt, JSON.stringify(out, null, 2) + "\n");
 }
-console.log(`${cell} ${machine} ${out.ok ? "PASS" : "FAIL"} ${out.cause ?? ""} timed exec ${out.phases.timed?.exec?.wallMs ?? "-"} ms`);
+console.log(`${cell} ${machine} ${out.store.kind} ${out.ok ? "PASS" : "FAIL"} ${out.cause ?? ""} timed exec ${out.phases.timed?.exec?.wallMs ?? "-"} ms`);
 process.exit(out.ok ? 0 : 1);

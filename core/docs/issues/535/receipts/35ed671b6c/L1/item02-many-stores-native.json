@@ -1,0 +1,639 @@
+{
+  "format": "l1-many-stores/1",
+  "home": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-ms.YSq6",
+  "startedAt": "2026-11-03T08:56:23.935Z",
+  "load1": 12.35205078125,
+  "steps": [
+    {
+      "name": "s1.store.create",
+      "start": 15.4,
+      "end": 28.2,
+      "ok": true
+    },
+    {
+      "name": "s1.project.init",
+      "start": 28.2,
+      "end": 46.6,
+      "ok": true
+    },
+    {
+      "name": "s1.branch.fork",
+      "start": 46.6,
+      "end": 55.2,
+      "ok": true
+    },
+    {
+      "name": "s2.store.create",
+      "start": 55.2,
+      "end": 66.4,
+      "ok": true
+    },
+    {
+      "name": "s2.project.init",
+      "start": 66.4,
+      "end": 82.9,
+      "ok": true
+    },
+    {
+      "name": "s2.branch.fork",
+      "start": 82.9,
+      "end": 91.7,
+      "ok": true
+    },
+    {
+      "name": "p1.store.connect",
+      "start": 91.7,
+      "end": 343.5,
+      "ok": true
+    },
+    {
+      "name": "p1.project.init",
+      "start": 343.6,
+      "end": 463,
+      "ok": true
+    },
+    {
+      "name": "p1.branch.fork",
+      "start": 463,
+      "end": 599.7,
+      "ok": true
+    },
+    {
+      "name": "p2.store.connect",
+      "start": 599.7,
+      "end": 828,
+      "ok": true
+    },
+    {
+      "name": "p2.project.init",
+      "start": 828,
+      "end": 959.2,
+      "ok": true
+    },
+    {
+      "name": "p2.branch.fork",
+      "start": 959.3,
+      "end": 1146,
+      "ok": true
+    },
+    {
+      "name": "store.list",
+      "start": 1146,
+      "end": 1147.3,
+      "ok": true
+    },
+    {
+      "name": "s2.sandbox.create",
+      "start": 1147.5,
+      "end": 1252,
+      "ok": true
+    },
+    {
+      "name": "s1.sandbox.create",
+      "start": 1147.5,
+      "end": 1258.1,
+      "ok": true
+    },
+    {
+      "name": "s1.workspace.mount",
+      "start": 1258.1,
+      "end": 1309.9,
+      "ok": true
+    },
+    {
+      "name": "s2.workspace.mount",
+      "start": 1252,
+      "end": 1320.2,
+      "ok": true
+    },
+    {
+      "name": "s1.workspace.exec",
+      "start": 1309.9,
+      "end": 1344.7,
+      "ok": true
+    },
+    {
+      "name": "s2.workspace.exec",
+      "start": 1320.3,
+      "end": 1344.9,
+      "ok": true
+    },
+    {
+      "name": "p2.sandbox.create",
+      "start": 1147.5,
+      "end": 1460.6,
+      "ok": true
+    },
+    {
+      "name": "p1.sandbox.create",
+      "start": 1147.5,
+      "end": 1463,
+      "ok": true
+    },
+    {
+      "name": "s2.workspace.commit",
+      "start": 1344.9,
+      "end": 1477.4,
+      "ok": true
+    },
+    {
+      "name": "s2.workspace.unmount",
+      "start": 1477.4,
+      "end": 1506.3,
+      "ok": true
+    },
+    {
+      "name": "s2.file.read",
+      "start": 1506.3,
+      "end": 1512.3,
+      "ok": true
+    },
+    {
+      "name": "s1.workspace.commit",
+      "start": 1344.7,
+      "end": 1542,
+      "ok": true
+    },
+    {
+      "name": "s1.workspace.unmount",
+      "start": 1542,
+      "end": 1564.2,
+      "ok": true
+    },
+    {
+      "name": "s1.file.read",
+      "start": 1564.2,
+      "end": 1567.9,
+      "ok": true
+    },
+    {
+      "name": "p2.workspace.mount",
+      "start": 1460.6,
+      "end": 1610.8,
+      "ok": true
+    },
+    {
+      "name": "p1.workspace.mount",
+      "start": 1463,
+      "end": 1612.1,
+      "ok": true
+    },
+    {
+      "name": "p2.workspace.exec",
+      "start": 1610.8,
+      "end": 1630,
+      "ok": true
+    },
+    {
+      "name": "p1.workspace.exec",
+      "start": 1612.1,
+      "end": 1638.5,
+      "ok": true
+    },
+    {
+      "name": "p2.workspace.commit",
+      "start": 1630,
+      "end": 1876,
+      "ok": true
+    },
+    {
+      "name": "p2.workspace.unmount",
+      "start": 1876,
+      "end": 1896.2,
+      "ok": true
+    },
+    {
+      "name": "p2.file.read",
+      "start": 1896.2,
+      "end": 1920.4,
+      "ok": true
+    },
+    {
+      "name": "p1.workspace.commit",
+      "start": 1638.5,
+      "end": 1941.3,
+      "ok": true
+    },
+    {
+      "name": "p1.workspace.unmount",
+      "start": 1941.3,
+      "end": 1962.1,
+      "ok": true
+    },
+    {
+      "name": "p1.file.read",
+      "start": 1962.1,
+      "end": 1979.7,
+      "ok": true
+    },
+    {
+      "name": "sandbox.list",
+      "start": 1979.9,
+      "end": 1980.8,
+      "ok": true
+    },
+    {
+      "name": "sb-s2.sandbox.close",
+      "start": 1980.9,
+      "end": 2035.4,
+      "ok": true
+    },
+    {
+      "name": "sb-s1.sandbox.close",
+      "start": 2035.4,
+      "end": 2093.2,
+      "ok": true
+    },
+    {
+      "name": "sb-p2.sandbox.close",
+      "start": 2093.2,
+      "end": 2142.9,
+      "ok": true
+    },
+    {
+      "name": "sb-p1.sandbox.close",
+      "start": 2142.9,
+      "end": 2203.9,
+      "ok": true
+    }
+  ],
+  "stores": {
+    "s2": {
+      "kind": "sqlite",
+      "sandbox": {
+        "name": "sb-s2",
+        "project": "s2/p",
+        "machine": "native",
+        "created": 1793696185086,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sb-s2",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      },
+      "exitCode": 0,
+      "commit": {
+        "kind": "Committed",
+        "head": "128ce10508fd83c35b42b27857a274d96082e17a2a758cee42c4dfe9750a26fd14",
+        "commit": {
+          "id": "128ce10508fd83c35b42b27857a274d96082e17a2a758cee42c4dfe9750a26fd14",
+          "branch": null,
+          "parent": null,
+          "second_parent": null,
+          "base": "322b9e452269a35b464e0145960ca5b724b71c658b1e7ab4f8ada26464881aee49",
+          "root": "c7d0021ded5e6304b6dab2fcadc91224610c16007a5dbed81e8beb35aeea8317",
+          "via": "exec",
+          "message": "k1 s2",
+          "merged_from": null,
+          "time": 1793696185410,
+          "logical": 31,
+          "new_canonical": 449,
+          "new_stored": 353,
+          "new_metadata": 285,
+          "displaced": null,
+          "lww": [],
+          "lww_truncated": false
+        },
+        "displaced_head": null,
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "token": "s2-1793696185256-b0852b57226af",
+      "read": {
+        "kind": "ok",
+        "snapshot": "lane@8ce10508fd83",
+        "root": "c7d0021ded5e6304b6dab2fcadc91224610c16007a5dbed81e8beb35aeea8317",
+        "path": "/k1.txt",
+        "text": "s2-1793696185256-b0852b57226af\n",
+        "start_line": 1,
+        "end_line": 1,
+        "line_truncated": false,
+        "truncated": false,
+        "next_line": null,
+        "size": 31
+      },
+      "matches": true
+    },
+    "s1": {
+      "kind": "sqlite",
+      "sandbox": {
+        "name": "sb-s1",
+        "project": "s1/p",
+        "machine": "native",
+        "created": 1793696185085,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sb-s1",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      },
+      "exitCode": 0,
+      "commit": {
+        "kind": "Committed",
+        "head": "1226ac5e7bf4a15d1cfba35565cad53a2f5f2a1b6cbaebe1c186b721fbfcda2542",
+        "commit": {
+          "id": "1226ac5e7bf4a15d1cfba35565cad53a2f5f2a1b6cbaebe1c186b721fbfcda2542",
+          "branch": null,
+          "parent": null,
+          "second_parent": null,
+          "base": "325434e5b08a51adfbcd936cb6bdcd196daf0098e9cc05e782e102d0f08bc9f232",
+          "root": "84c23da35bc43a0d46b2cad130a65bb9872d93aa2aad539fb8ffdf0d891247c0",
+          "via": "exec",
+          "message": "k1 s1",
+          "merged_from": null,
+          "time": 1793696185475,
+          "logical": 30,
+          "new_canonical": 448,
+          "new_stored": 352,
+          "new_metadata": 285,
+          "displaced": null,
+          "lww": [],
+          "lww_truncated": false
+        },
+        "displaced_head": null,
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "token": "s1-1793696185246-e6c578b125f9",
+      "read": {
+        "kind": "ok",
+        "snapshot": "lane@26ac5e7bf4a1",
+        "root": "84c23da35bc43a0d46b2cad130a65bb9872d93aa2aad539fb8ffdf0d891247c0",
+        "path": "/k1.txt",
+        "text": "s1-1793696185246-e6c578b125f9\n",
+        "start_line": 1,
+        "end_line": 1,
+        "line_truncated": false,
+        "truncated": false,
+        "next_line": null,
+        "size": 30
+      },
+      "matches": true
+    },
+    "p2": {
+      "kind": "postgresql",
+      "sandbox": {
+        "name": "sb-p2",
+        "project": "p2/p",
+        "machine": "native",
+        "created": 1793696185088,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sb-p2",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      },
+      "exitCode": 0,
+      "commit": {
+        "kind": "Committed",
+        "head": "12deb276fe4b0ddf3ba96d4c9ab02f9cd11caca39eaa6b655637682eaeb3bc31fe",
+        "commit": {
+          "id": "12deb276fe4b0ddf3ba96d4c9ab02f9cd11caca39eaa6b655637682eaeb3bc31fe",
+          "branch": null,
+          "parent": null,
+          "second_parent": null,
+          "base": "32154dd035e3adf8cc9e4c850abc1a0d32986796f150c557c67024f8e8d80d3c86",
+          "root": "c47cf044c7a07e5565a9bc07807740bfbe2887665bee1347c1f48901877c30fb",
+          "via": "exec",
+          "message": "k1 p2",
+          "merged_from": null,
+          "time": 1793696185800,
+          "logical": 32,
+          "new_canonical": 450,
+          "new_stored": 354,
+          "new_metadata": 285,
+          "displaced": null,
+          "lww": [],
+          "lww_truncated": false
+        },
+        "displaced_head": null,
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "token": "p2-1793696185547-2945eefe0b2c28",
+      "read": {
+        "kind": "ok",
+        "snapshot": "lane@deb276fe4b0d",
+        "root": "c47cf044c7a07e5565a9bc07807740bfbe2887665bee1347c1f48901877c30fb",
+        "path": "/k1.txt",
+        "text": "p2-1793696185547-2945eefe0b2c28\n",
+        "start_line": 1,
+        "end_line": 1,
+        "line_truncated": false,
+        "truncated": false,
+        "next_line": null,
+        "size": 32
+      },
+      "matches": true
+    },
+    "p1": {
+      "kind": "postgresql",
+      "sandbox": {
+        "name": "sb-p1",
+        "project": "p1/p",
+        "machine": "native",
+        "created": 1793696185087,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sb-p1",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      },
+      "exitCode": 0,
+      "commit": {
+        "kind": "Committed",
+        "head": "127054ae35a9676309bd1a59576adce38fd0b9acae295f1a6e296e492e041ed8cb",
+        "commit": {
+          "id": "127054ae35a9676309bd1a59576adce38fd0b9acae295f1a6e296e492e041ed8cb",
+          "branch": null,
+          "parent": null,
+          "second_parent": null,
+          "base": "326a5c4abb5b8fa20db5f7ef78c3db9dec4d21d04639bbdb964f5e60f0d5927275",
+          "root": "5df7ed4b796615a0b8ec0674a4ccfaef7bcb29c1affc37b0f33c65dd9f3e7349",
+          "via": "exec",
+          "message": "k1 p1",
+          "merged_from": null,
+          "time": 1793696185868,
+          "logical": 32,
+          "new_canonical": 450,
+          "new_stored": 354,
+          "new_metadata": 285,
+          "displaced": null,
+          "lww": [],
+          "lww_truncated": false
+        },
+        "displaced_head": null,
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "token": "p1-1793696185548-0664c73f489cf8",
+      "read": {
+        "kind": "ok",
+        "snapshot": "lane@7054ae35a967",
+        "root": "5df7ed4b796615a0b8ec0674a4ccfaef7bcb29c1affc37b0f33c65dd9f3e7349",
+        "path": "/k1.txt",
+        "text": "p1-1793696185548-0664c73f489cf8\n",
+        "start_line": 1,
+        "end_line": 1,
+        "line_truncated": false,
+        "truncated": false,
+        "next_line": null,
+        "size": 32
+      },
+      "matches": true
+    }
+  },
+  "ok": true,
+  "storeList": {
+    "items": [
+      {
+        "name": "p1",
+        "kind": "postgresql",
+        "url": "postgres://postgres@127.0.0.1:55551/m1",
+        "schema": "layerfs",
+        "synchronous_commit": "off",
+        "created": 1793696184028,
+        "password": "env:LAYERFS_PG_L1",
+        "projects": [
+          "p"
+        ],
+        "state": "idle"
+      },
+      {
+        "name": "p2",
+        "kind": "postgresql",
+        "url": "postgres://postgres@127.0.0.1:55551/m2",
+        "schema": "layerfs",
+        "synchronous_commit": "off",
+        "created": 1793696184536,
+        "password": "env:LAYERFS_PG_L1",
+        "projects": [
+          "p"
+        ],
+        "state": "idle"
+      },
+      {
+        "name": "s1",
+        "kind": "sqlite",
+        "machine": "native",
+        "profile": "disposable",
+        "created": 1793696183964,
+        "sqlite": "3.53.2",
+        "projects": [
+          "p"
+        ],
+        "state": "idle"
+      },
+      {
+        "name": "s2",
+        "kind": "sqlite",
+        "machine": "native",
+        "profile": "disposable",
+        "created": 1793696184002,
+        "sqlite": "3.53.2",
+        "projects": [
+          "p"
+        ],
+        "state": "idle"
+      }
+    ]
+  },
+  "overlap": {
+    "createStarts": [
+      1147.5,
+      1147.5,
+      1147.5,
+      1147.5
+    ],
+    "createEnds": [
+      1252,
+      1258.1,
+      1460.6,
+      1463
+    ],
+    "commitStarts": [
+      1344.9,
+      1344.7,
+      1630,
+      1638.5
+    ],
+    "commitEnds": [
+      1477.4,
+      1542,
+      1876,
+      1941.3
+    ],
+    "allCreatedBefore": 1463
+  },
+  "sandboxList": {
+    "items": [
+      {
+        "name": "sb-p1",
+        "project": "p1/p",
+        "machine": "native",
+        "created": 1793696185087,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sb-p1",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      },
+      {
+        "name": "sb-p2",
+        "project": "p2/p",
+        "machine": "native",
+        "created": 1793696185088,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sb-p2",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      },
+      {
+        "name": "sb-s1",
+        "project": "s1/p",
+        "machine": "native",
+        "created": 1793696185085,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sb-s1",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      },
+      {
+        "name": "sb-s2",
+        "project": "s2/p",
+        "machine": "native",
+        "created": 1793696185086,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sb-s2",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      }
+    ],
+    "next_page_pos": null
+  },
+  "cause": null,
+  "endedAt": "2026-11-03T08:56:26.140Z"
+}

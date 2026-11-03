@@ -3,7 +3,7 @@
 use layerfs_content::ObjectId;
 use layerfs_history::{HistoryCatalogConfig, HistoryName, LayerStackId};
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqlWork, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    PersistenceConfig, SqlWork, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
 };
 use layerfs_project::{init, InitRequest};
 use layerfs_storage::{port::acquisition::*, Storage, StoragePolicy};
@@ -52,7 +52,7 @@ impl Work {
     }
 }
 struct Observed<'a> {
-    handles: &'a Handles,
+    handles: &'a SqliteHandles,
     // Fixed method-name set: at most 20 entries, independent of input size.
     units: Mutex<BTreeMap<&'static str, Work>>,
 }
@@ -118,7 +118,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "disposable" => SqlitePersistenceProfile::Disposable,
         _ => return Err("explicit profile required".into()),
     };
-    let handles = Handles::create(
+    let handles = SqliteHandles::create(
         PersistenceConfig::sqlite(&args[2])
             .with_sqlite_profile(selected)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),

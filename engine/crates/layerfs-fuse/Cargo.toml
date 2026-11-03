@@ -10,6 +10,7 @@ license.workspace = true
 layerfs-overlay = { path = "../layerfs-overlay" }
 layerfs-workspace = { path = "../layerfs-workspace" }
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
+layerfs-mount-ports = { path = "../layerfs-mount-ports" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 fuser = { version = "=0.18.0", default-features = false }

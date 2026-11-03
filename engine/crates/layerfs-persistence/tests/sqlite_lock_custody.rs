@@ -4,7 +4,7 @@
 mod support;
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{port::*, Storage, StoragePolicy};
 use std::{
     io::{BufRead, BufReader, Write},
@@ -115,9 +115,9 @@ fn check(drop_peer: bool) {
         incarnation: 1,
     };
     let first =
-        Handles::create(config(&path), StoragePolicy::frozen_default(), &authority).unwrap();
+        SqliteHandles::create(config(&path), StoragePolicy::frozen_default(), &authority).unwrap();
     let mut second = Some(
-        Handles::open_writable(config(&path), &authority.binding_key, authority.cursor_key)
+        SqliteHandles::open_writable(config(&path), &authority.binding_key, authority.cursor_key)
             .unwrap(),
     );
     // Each successful cooperative transaction acquires and releases its own

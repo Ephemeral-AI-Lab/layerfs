@@ -68,12 +68,12 @@ Every permitted new Store explicitly selects Disposable/WAL/synchronous=OFF.
 Init publishes its original initial Layer and Branch, seals the sole Store, and
 returns a closed file and the actual original acknowledgements.
 
-[Fork](../../api/crates/layerfs-api/src/branch/fork.rs) preserves the original
+[Fork](../../engine/crates/layerfs-store-service/src/methods/branch/fork.rs) preserves the original
 explicit ForkRequest and its Layer or Commit source. It does not invent a latest
 head lookup or a hidden refresh. The history trunk is a LayerStack, not a Branch;
 the first working Branch is named main today.
 
-[Branches](../../api/crates/layerfs-api/src/project/list_branches.rs) reads one page of a
+[Branches](../../engine/crates/layerfs-store-service/src/methods/project.rs) reads one page of a
 selected stack in name order, with id, name, base Layer and head Commit. It uses
 one authorized additive Bridge request (tag 14), one reply (tag 17) and one daemon
 dispatch arm to the existing HistoryCatalog::branches port. The existing control
@@ -81,7 +81,7 @@ window is 32 records. The existing authenticated History cursor covers further
 pages; the caller advances it explicitly. The SDK checks stack identity, result
 size, ordered names and continuation shape without a second request.
 
-[Commits](../../api/crates/layerfs-api/src/branch/list_commits.rs) renames the public
+[Commits](../../engine/crates/layerfs-store-service/src/methods/branch/list_commits.rs) renames the public
 history method. It sends the unchanged History request and returns one anchored,
 bounded ancestry page, newest first. Cursor authentication, captured-head scope,
 publication semantics and original control bytes are unchanged.

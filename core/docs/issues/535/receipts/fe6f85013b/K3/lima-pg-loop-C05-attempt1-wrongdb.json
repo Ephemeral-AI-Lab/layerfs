@@ -1,0 +1,41 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C05",
+  "machine": "lfs535k3l",
+  "product": "fe6f85013b",
+  "startedAt": "2026-11-03T07:25:41.763Z",
+  "load1": 16.115234375,
+  "body": {
+    "sha256": "4306a767d8d5316887f0543abef12d01676bbdfdaff121fd039e56cad5742c8d"
+  },
+  "ok": false,
+  "cause": "store.connect: Failed making the PostgreSQL Store: Persistence(Refused { status: \"Closed\" }); store.disconnect: NotFound no Store named c05",
+  "phases": {},
+  "steps": [
+    {
+      "name": "store.connect",
+      "ms": 52.137,
+      "ok": false,
+      "error": {
+        "code": "Failed",
+        "message": "making the PostgreSQL Store: Persistence(Refused { status: \"Closed\" })"
+      }
+    },
+    {
+      "name": "store.disconnect",
+      "ms": 0.445,
+      "ok": false,
+      "error": {
+        "code": "NotFound",
+        "message": "no Store named c05"
+      }
+    }
+  ],
+  "store": {
+    "kind": "postgresql",
+    "host": "127.0.0.1"
+  },
+  "failedStep": "store.connect",
+  "removeError": "store.disconnect: NotFound no Store named c05",
+  "endedAt": "2026-11-03T07:25:41.819Z"
+}

@@ -16,7 +16,7 @@ use layerfs_history::records::{
 use layerfs_history::LayerStackRecord;
 use layerfs_history::{BranchId, HistoryCatalog, HistoryCatalogConfig};
 use layerfs_persistence::{
-    Handles, PersistenceConfig, PostgresHandles, PostgresSelection, SqliteAcquisitionSchema,
+    PersistenceConfig, PostgresHandles, PostgresSelection, SqliteAcquisitionSchema, SqliteHandles,
     SqlitePackLayout, SqlitePersistenceProfile, SynchronousCommit,
 };
 use layerfs_storage::{port::PackPersistence, Storage, StoragePolicy};
@@ -191,7 +191,7 @@ fn one_project_has_identical_ids_on_sqlite_and_postgresql() {
         return;
     };
     let temp = Temp::new("postgresql-ids");
-    let created = Handles::create(
+    let created = SqliteHandles::create(
         sqlite(temp.join("store")),
         StoragePolicy::frozen_default(),
         &catalog(),
@@ -368,7 +368,7 @@ fn hints_and_digests_in_arrays_read_back_as_on_sqlite() {
         return;
     };
     let temp = Temp::new("postgresql-arrays");
-    let created = Handles::create(
+    let created = SqliteHandles::create(
         sqlite(temp.join("store")),
         StoragePolicy::frozen_default(),
         &catalog(),

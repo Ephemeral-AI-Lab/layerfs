@@ -574,14 +574,15 @@ fn later_mutation_survives_capture_publication_and_known_install() {
 fn observed_store(
     f: &support::Fixture,
     boundary: history_boundary::Boundary,
-) -> (Arc<Store>, Arc<layerfs_persistence::Handles>) {
-    use layerfs_persistence::Handles;
+) -> (Arc<Store>, Arc<layerfs_persistence::SqliteHandles>) {
+    use layerfs_persistence::SqliteHandles;
     let handles = Arc::new(
-        Handles::open_writable(f.config.clone(), support::BINDING, support::CURSOR).unwrap(),
+        SqliteHandles::open_writable(f.config.clone(), support::BINDING, support::CURSOR).unwrap(),
     );
     let config = f.config.clone();
     let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
-        let read = Handles::open_read_only(config.clone(), support::BINDING, support::CURSOR)?;
+        let read =
+            SqliteHandles::open_read_only(config.clone(), support::BINDING, support::CURSOR)?;
         Ok(layerfs_daemon::store::StoreReader::new(
             layerfs_storage::Storage::new(read.storage)?,
             Arc::new(read.history),
@@ -696,7 +697,7 @@ fn unknown_history_acknowledgement_retains_original_intent_and_capture() {
             .error,
         CommitError::InFlight
     ));
-    let observer = layerfs_persistence::Handles::open_read_only(
+    let observer = layerfs_persistence::SqliteHandles::open_read_only(
         f.config.clone(),
         support::BINDING,
         support::CURSOR,

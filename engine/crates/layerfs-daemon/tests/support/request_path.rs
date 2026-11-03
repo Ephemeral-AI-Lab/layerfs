@@ -16,7 +16,7 @@ use layerfs_daemon::{
     bootstrap::open_store,
     store::{BindRequest, BoundWorkspace, Store}, KernelReply, Owner, OwnerClient, OwnerConfig, Response, ServiceClass,
 };
-use layerfs_fuse::{
+use layerfs_mount_ports::{
     operations::{
         create::{create, mkdir},
         remove::unlink,

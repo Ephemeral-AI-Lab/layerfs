@@ -55,10 +55,12 @@ impl Connector {
     pub(crate) fn connect(&self) -> Result<Client, BackendError> {
         self.config
             .connect(self.tls.clone())
-            .map_err(|e| match rows::error(&e) {
-                // No connection exists, so no work can have started.
-                BackendError::Unknown => BackendError::Closed,
-                other => other,
+            .map_err(|e| match (rows::error(&e), e.code()) {
+                // No session exists, so no work can have started: the
+                // server refused it with an error, or no connection was made.
+                (BackendError::Unknown, Some(_)) => BackendError::Rejected,
+                (BackendError::Unknown, None) => BackendError::Closed,
+                (other, _) => other,
             })
     }
 }

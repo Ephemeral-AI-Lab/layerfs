@@ -16,7 +16,7 @@ dependency. Logical bridge service, history adapters, five Workspace operations
 and complete S9 exits remain unfinished.
 
 Runtime (`core/crates/layerfs-api/sdk/src/runtime/owner.rs` at local Git `52e1f2e18`) receives already-open
-`Handles`, initializes one demand Storage plus configured independent Save Storage
+`SqliteHandles`, initializes one demand Storage plus configured independent Save Storage
 handles once, and owns application authority. It neither creates/reopens the
 provider per call nor starts another named service. The current owning provider
 is macOS; Linux compilation does not establish that provider's availability there.

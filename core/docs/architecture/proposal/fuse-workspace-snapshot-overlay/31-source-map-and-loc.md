@@ -142,7 +142,7 @@ under the kernel parent lock. No persistent layout changed. See [40](40-mounted-
 
 `filesystem/mkdir.rs` owns one native namespace creation and its checked atomic
 publication. `namespace_view.rs` shares local/captured/canonical lookup and ordered
-directory merging. Handles retain a base/overlay view and pin the existing immutable
+directory merging. SqliteHandles retain a base/overlay view and pin the existing immutable
 Node locator; this relies on the current mkdir-only namespace mutation scope.
 
 `overlay/directories.rs` encodes directory origins, portable attributes and entry

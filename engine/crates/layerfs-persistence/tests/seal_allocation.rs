@@ -2,7 +2,9 @@
 #![cfg(target_os = "macos")]
 use layerfs_content::{FinalizedObject, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePackLayout, SqlitePersistenceProfile};
+use layerfs_persistence::{
+    PersistenceConfig, SqliteHandles, SqlitePackLayout, SqlitePersistenceProfile,
+};
 use layerfs_storage::{port::PersistenceError, Storage, StoragePolicy};
 use nix::fcntl::{fcntl, FcntlArg};
 use std::{
@@ -28,7 +30,7 @@ impl Fixture {
     }
     fn store(&self, layout: SqlitePackLayout) -> (PathBuf, FinalizedObject) {
         let path = self.0.join("store.sqlite");
-        let handles = Handles::create(
+        let handles = SqliteHandles::create(
             config(&path).with_sqlite_pack_layout(layout),
             StoragePolicy::frozen_default(),
             &authority(),
@@ -68,8 +70,8 @@ fn authority() -> HistoryCatalogConfig {
 fn config(path: &Path) -> PersistenceConfig {
     PersistenceConfig::sqlite(path).with_sqlite_profile(SqlitePersistenceProfile::Disposable)
 }
-fn open(path: &Path) -> Handles {
-    Handles::open_writable(
+fn open(path: &Path) -> SqliteHandles {
+    SqliteHandles::open_writable(
         config(path),
         &authority().binding_key,
         authority().cursor_key,
@@ -170,7 +172,7 @@ fn readonly_seal_does_not_release_extents() {
     let (path, _) = fixture.store(SqlitePackLayout::GroupRowsIndexed);
     let before = preallocate(&path);
     let writer = open(&path);
-    let reader = Handles::open_read_only(
+    let reader = SqliteHandles::open_read_only(
         config(&path),
         &authority().binding_key,
         authority().cursor_key,

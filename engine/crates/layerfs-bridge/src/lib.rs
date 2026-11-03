@@ -21,6 +21,11 @@ mod sdk_merge_values;
 pub mod sdk_values;
 
 pub mod daemon_setup;
+
+pub use store::{DaemonStore, StoreAuthority};
+pub use support::{KernelRoute, StoreKind};
 mod daemon_types;
 mod daemon_wire;
 pub mod initial_record;
+pub mod store;
+pub mod support;

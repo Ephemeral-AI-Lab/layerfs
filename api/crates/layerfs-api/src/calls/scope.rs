@@ -9,14 +9,11 @@
 //! `<branch>.<name>`. A scope guards calls; it is not filesystem isolation
 //! (a command can still `cd` anywhere in the mounted tree). Every refusal
 //! comes before dispatch.
-use crate::home::{paths, read_record, with_field};
-use crate::host::outcome::refused;
+use crate::home::with_field;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_control::common::outcome::refused;
+use layerfs_control::store::calls::NAMESPACE;
 use std::path::Path;
-
-/// The argument a scoped `branch.list` carries to its family: the Branch
-/// namespace, which only a scope sets (the table has no such argument).
-pub(crate) const NAMESPACE: &str = "namespace";
 
 /// A checked scope.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -247,15 +244,10 @@ impl Scope {
         if crate::names::name("sandbox", sandbox).is_err() {
             return Err(out("sandbox"));
         }
-        let machines = paths::names(&home.join("machine")).unwrap_or_default();
-        for machine in machines {
-            let record = paths::sandbox_dir(home, &machine, sandbox).join("record.json");
-            if let Some(record) = read_record(&record)? {
-                if record.get_text("project") == Some(self.project.as_str()) {
-                    return Ok(());
-                }
-            }
+        // one read of the Sandbox's record (layout 3, #536 §5)
+        match layerfs_control::inventory::sandbox(home, sandbox)? {
+            Some(record) if record.project() == Some(self.project.as_str()) => Ok(()),
+            _ => Err(out("sandbox")),
         }
-        Err(out("sandbox"))
     }
 }

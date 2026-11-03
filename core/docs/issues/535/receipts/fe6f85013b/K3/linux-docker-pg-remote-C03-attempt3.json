@@ -1,0 +1,56 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C03",
+  "machine": "docker",
+  "product": "fe6f85013b",
+  "startedAt": "2026-11-03T07:44:43.113Z",
+  "load1": 0.12,
+  "body": {
+    "sha256": "520773ceacd8c44d633ffd1a40727ceb5d990d63a23259f28af8dd4b96fa204d"
+  },
+  "ok": false,
+  "cause": "sandbox.create: Failed sandbox create stopped at Connect: Io(Os { code: 111, kind: ConnectionRefused, message: \"Connection refused\" }); its daemon's last log lines:\nLAYERFS_DAEMON_LISTEN 0.0.0.0:30421",
+  "phases": {},
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 4.148,
+      "ok": true
+    },
+    {
+      "name": "store.connect",
+      "ms": 267.199,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 205.974,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 156.333,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 965.279,
+      "ok": false,
+      "error": {
+        "code": "Failed",
+        "message": "sandbox create stopped at Connect: Io(Os { code: 111, kind: ConnectionRefused, message: \"Connection refused\" }); its daemon's last log lines:\nLAYERFS_DAEMON_LISTEN 0.0.0.0:30421"
+      }
+    },
+    {
+      "name": "store.disconnect",
+      "ms": 1.343,
+      "ok": true
+    }
+  ],
+  "store": {
+    "kind": "postgresql",
+    "host": "192.168.2.123"
+  },
+  "failedStep": "sandbox.create",
+  "endedAt": "2026-11-03T07:44:44.717Z"
+}

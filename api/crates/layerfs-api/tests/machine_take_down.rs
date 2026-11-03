@@ -1,8 +1,9 @@
 //! Removing a machine, and changing one with Sandboxes on it (#533 review
 //! P1-9, P1-23, P2-32), through records only: no VM is made. A remove waits
-//! for the machine's start lock, marks the record `removing` so nothing
-//! starts or uses the machine meanwhile, and puts the record back when the
-//! delete is refused; `machine update` is refused while Sandboxes run.
+//! for the machine's start lock, records its `op` so nothing starts or uses
+//! the machine meanwhile (`Busy`; `Unresolved` once a gone owner left its
+//! outcome unknown), and puts the record back when the delete is refused;
+//! `machine update` is refused while Sandboxes run.
 #![cfg(feature = "machine")]
 #![allow(deprecated)] // nix's flock, as the product uses it
 use layerfs_api::calls;
@@ -56,7 +57,7 @@ fn a_running_sandbox_keeps_its_machine_s_settings() {
     home::open(&home).unwrap();
     call(&home, "machine.list", &[]).unwrap();
     write_record(
-        &paths::sandbox_dir(&home, "docker", "s1").join("record.json"),
+        &paths::sandbox_record(&home, "s1"),
         &SdkValue::map([
             ("name", t("s1")),
             ("project", t("shop/app")),
@@ -73,7 +74,7 @@ fn a_running_sandbox_keeps_its_machine_s_settings() {
     .unwrap_err();
     assert_eq!(code, "InUse", "{message}");
     assert!(message.contains("s1"), "{message}");
-    std::fs::remove_dir_all(paths::sandbox_dir(&home, "docker", "s1")).unwrap();
+    std::fs::remove_dir_all(paths::sandbox_dir(&home, "s1")).unwrap();
     call(
         &home,
         "machine.update",
@@ -83,34 +84,134 @@ fn a_running_sandbox_keeps_its_machine_s_settings() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
+/// An `op` intent of `name` owned by process `pid` (no start or boot
+/// recorded: its liveness is the process id's).
+fn op(name: &str, pid: i64, uncertain: bool) -> SdkValue {
+    SdkValue::map([
+        ("id", t("op-00000000000000ab")),
+        ("name", t(name)),
+        ("phase", t("delete")),
+        ("args", SdkValue::Null),
+        ("owner", SdkValue::map([("pid", SdkValue::Int(pid))])),
+        ("started", SdkValue::Int(1)),
+        ("updated", SdkValue::Int(2)),
+        ("uncertain", SdkValue::Bool(uncertain)),
+    ])
+}
+
 #[test]
 fn a_machine_being_removed_is_used_by_no_call() {
     let home = tempdir("removing");
     home::open(&home).unwrap();
-    let busy = SdkValue::map([("pid", SdkValue::Int(i64::from(std::process::id())))]);
-    lima(&home, "dev", &[("removing", busy)]);
+    let me = i64::from(std::process::id());
+    lima(&home, "dev", &[("op", op("machine.remove", me, false))]);
     for (name, args) in [
         ("machine.remove", vec![("name", t("dev"))]),
         (
             "machine.update",
             vec![("name", t("dev")), ("image", t("/x.tar"))],
         ),
+        ("machine.start", vec![("name", t("dev"))]),
     ] {
         let (code, message) = call(&home, name, &args).unwrap_err();
-        assert_eq!(code, "InUse", "{name}: {message}");
-        assert!(message.contains("being removed"), "{message}");
+        assert_eq!(code, "Busy", "{name}: {message}");
+        assert!(message.contains("machine.remove"), "{message}");
     }
     let refused = layerfs_api::machine::running(&home, "dev").unwrap_err();
-    assert_eq!(refused.code, "InUse", "{}", refused.message);
-    // a remover that is gone holds nothing
-    let gone = SdkValue::map([("pid", SdkValue::Int(dead_pid()))]);
-    lima(&home, "dev", &[("removing", gone)]);
+    assert_eq!(refused.code, "Busy", "{}", refused.message);
+    // a read answers, probing nothing
+    let got = call(&home, "machine.get", &[("name", t("dev"))]).unwrap();
+    assert_eq!(got.get_text("state"), Some("removing"), "{got:?}");
+    let status = call(&home, "machine.status", &[("name", t("dev"))]).unwrap();
+    assert_eq!(status.get_text("state"), Some("removing"), "{status:?}");
+    let shown = status.get("op").expect("status shows the op");
+    assert_eq!(shown.get_text("name"), Some("machine.remove"));
+    assert!(shown.get("owner").is_none(), "{shown:?}");
+    // a remover that is gone after a certain outcome holds nothing
+    lima(
+        &home,
+        "dev",
+        &[("op", op("machine.remove", dead_pid(), false))],
+    );
     call(
         &home,
         "machine.update",
         &[("name", t("dev")), ("image", t("/x.tar"))],
     )
     .unwrap();
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_gone_owner_s_unknown_outcome_is_unresolved_until_removed() {
+    let home = tempdir("unresolved");
+    home::open(&home).unwrap();
+    let lost = op("machine.create", dead_pid(), true);
+    lima(
+        &home,
+        "dev",
+        &[("op", lost), ("error", t("lost the reply"))],
+    );
+    let (code, message) = call(
+        &home,
+        "machine.update",
+        &[("name", t("dev")), ("image", t("/x.tar"))],
+    )
+    .unwrap_err();
+    assert_eq!(code, "Unresolved", "{message}");
+    assert!(
+        message.contains("`layerfs machine status dev`"),
+        "{message}"
+    );
+    assert!(
+        message.contains("`layerfs machine remove dev`"),
+        "{message}"
+    );
+    let status = call(&home, "machine.status", &[("name", t("dev"))]).unwrap();
+    assert_eq!(status.get_text("state"), Some("unresolved"), "{status:?}");
+    let shown = status.get("op").expect("status shows the op");
+    assert_eq!(shown.get_text("name"), Some("machine.create"));
+    assert_eq!(shown.get("uncertain"), Some(&SdkValue::Bool(true)));
+    let got = call(&home, "machine.get", &[("name", t("dev"))]).unwrap();
+    assert_eq!(got.get_text("state"), Some("unresolved"), "{got:?}");
+    assert_eq!(got.get_text("error"), Some("lost the reply"), "{got:?}");
+    // an ssh machine's is cleared by a disconnect
+    let ssh = SdkValue::map([("host", t("h")), ("host_id", t("k"))]);
+    write_record(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("ssh")),
+            ("ssh", ssh),
+            ("op", op("machine.connect", dead_pid(), true)),
+        ]),
+    )
+    .unwrap();
+    let refused = layerfs_api::machine::running(&home, "box").unwrap_err();
+    assert_eq!(refused.code, "Unresolved", "{}", refused.message);
+    assert!(
+        refused.message.contains("`layerfs machine disconnect box`"),
+        "{}",
+        refused.message
+    );
+    // the remove that clears it is not refused for it: it deletes, or its
+    // delete is refused and the record stays as it was
+    match call(&home, "machine.remove", &[("name", t("dev"))]) {
+        Err((code, message)) => {
+            assert!(
+                !["Unresolved", "Busy"].contains(&code.as_str()),
+                "{code}: {message}"
+            );
+            let record = read_record(&paths::machine_record(&home, "dev"))
+                .unwrap()
+                .expect("the record stays");
+            assert_eq!(
+                record.get("op").and_then(|o| o.get_text("name")),
+                Some("machine.create")
+            );
+        }
+        Ok(_) => assert!(!paths::machine_dir(&home, "dev").exists()),
+    }
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -145,7 +246,7 @@ fn a_remove_waits_for_the_start_lock_and_restores_a_refused_record() {
             let record = read_record(&paths::machine_record(&home, "dev"))
                 .unwrap()
                 .expect("the record stays");
-            assert!(record.get("removing").is_none(), "{code}: {message}");
+            assert!(record.get("op").is_none(), "{code}: {message}");
         }
         // a host where the delete found no VM to delete
         Ok(_) => assert!(!paths::machine_dir(&home, "dev").exists()),

@@ -20,7 +20,7 @@ an engine through two traits (`Mechanics`, `HistoryStatements`). History
 statements are named; the shipped SQLite texts are portable and run on
 PostgreSQL unchanged except `hint_insert_binding` and `statistics_totals`.
 
-- **Snapshot.** `Handles::snapshot` (and `StorageProvider::snapshot`) copies a
+- **Snapshot.** `SqliteHandles::snapshot` (and `StorageProvider::snapshot`) copies a
   live SQLite Store to a new file with the online backup API in one step, on
   its own read-only connection: one consistent state, closed, no sidecar.
   Remote push uploads it.
@@ -77,7 +77,7 @@ inode values in pooled packs behind `metadata_value_group`. Existing incompatibl
 Stores are refused, without migration or automatic adoption. Files and
 directories remain canonical objects, without persistent SQL mirrors.
 
-`Handles::create`, `open_writable` and `open_read_only` require explicit
+`SqliteHandles::create`, `open_writable` and `open_read_only` require explicit
 application authority. The handles share a connection/session, while each C2
 publication and C5 operation has a separate bounded transaction. Published pack
 bodies, descriptors, first-wins locators, inode value rows, signatures and
@@ -97,7 +97,7 @@ are not directly observed by the adapter. Settings establish requested SQLite
 behaviour, not a power-loss claim about hardware.
 
 SQL/VM/binding/transaction/body work is observed at actual execution boundaries.
-Statement/commit/transaction wall spans overlap. Explicit `Handles::checkpoint`
+Statement/commit/transaction wall spans overlap. Explicit `SqliteHandles::checkpoint`
 returns Busy/pending frame information and must remain in the calling
 application's lifecycle accounting. Close/checkpoint work cannot be moved out
 of a benchmark to improve its number. Unknown outcomes quarantine the shared

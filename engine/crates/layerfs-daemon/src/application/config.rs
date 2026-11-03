@@ -10,7 +10,7 @@ use std::{
 
 pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
     secure_process()?;
-    super::filesystem::check_route()?;
+
     let mut file = OpenOptions::new()
         .read(true)
         .custom_flags((OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC).bits())
@@ -30,10 +30,11 @@ pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
         return Err(invalid("private config record size"));
     }
     let config = DaemonSetup::decode(&bytes).map_err(|_| invalid("private config fields"))?;
+    super::filesystem::check_route(config.route)?;
     // The NFS route opens no FUSE device and the native route runs its
     // commands as the daemon's own user, unconfined (no isolation); every
     // other route keeps the two identities apart.
-    if config.command_uid == uid && !super::filesystem::nfs_route() {
+    if config.command_uid == uid && !super::filesystem::nfs_route(&config) {
         return Err(invalid("command and daemon identities must differ"));
     }
     // One early reservation restores any value below the refill window; a
@@ -41,14 +42,18 @@ pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
     if config.limits.serial_low_water >= layerfs_workspace::SERIAL_REFILL {
         return Err(invalid("serial low-water must be below the refill window"));
     }
-    let store = Path::new(&config.store);
     let overlay = Path::new(&config.overlay);
     let mounts = Path::new(&config.mounts);
-    if store == overlay
-        || store.starts_with(mounts)
-        || overlay.starts_with(mounts)
-        || path.starts_with(mounts)
-    {
+    if let layerfs_bridge::DaemonStore::Sqlite { locator, .. } = &config.store {
+        let store = Path::new(locator);
+        if store == overlay
+            || store.starts_with(mounts)
+            || overlay.starts_with(mounts)
+            || path.starts_with(mounts)
+        {
+            return Err(invalid("separate protected backing and mount paths"));
+        }
+    } else if overlay.starts_with(mounts) || path.starts_with(mounts) {
         return Err(invalid("separate protected backing and mount paths"));
     }
     private_directory(
@@ -56,14 +61,16 @@ pub(super) fn read(path: &Path) -> io::Result<DaemonSetup> {
         true,
     )?;
     // a PostgreSQL Store (#506) has no file or volume here
-    if config.postgresql.is_some() {
-        return Ok(config);
-    }
+    let (locator, install) = match &config.store {
+        layerfs_bridge::DaemonStore::Postgres { .. } => return Ok(config),
+        layerfs_bridge::DaemonStore::Sqlite { locator, install } => (locator, install),
+    };
+    let store = Path::new(locator);
     private_directory(
         store.parent().ok_or_else(|| invalid("Store parent"))?,
-        config.existing_store.is_none(),
+        install.is_none(),
     )?;
-    if let Some(manifest) = &config.existing_store {
+    if let Some(manifest) = install {
         if manifest.daemon_sqlite.is_none() {
             return Err(invalid("existing installation metadata"));
         }

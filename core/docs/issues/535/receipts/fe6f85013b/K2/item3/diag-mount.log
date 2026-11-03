@@ -1,0 +1,20 @@
++0ms d3 store.connect OK {"name":"d3","kind":"postgresql","schema":"layerfs","synchronous_commit":"off","projects":[]}
++222ms d3 project.init OK {"project":"d3/p","store":"d3","name":"p","kind":"postgresql","machine":"native","created":1793691123237,"layer":"325a826604c4c1f3ef67b0d07f7f4e38ea98be0fe627a7265fadb70a7b9e512c91","root":"82bd513a06
++447ms d3 branch.fork lane OK {"kind":"Forked","branch":"lane","base":"325a826604c4c1f3ef67b0d07f7f4e38ea98be0fe627a7265fadb70a7b9e512c91","head":null}
++579ms d4 store.connect OK {"name":"d4","kind":"postgresql","schema":"layerfs","synchronous_commit":"off","projects":[]}
++780ms d4 project.init OK {"project":"d4/p","store":"d4","name":"p","kind":"postgresql","machine":"native","created":1793691123786,"layer":"329cf9d161fbc3174af9e3ee6f46231005105a24669b4feab5ecb7197331e7b70f","root":"f18ceb5f44
++984ms d4 branch.fork lane OK {"kind":"Forked","branch":"lane","base":"329cf9d161fbc3174af9e3ee6f46231005105a24669b4feab5ecb7197331e7b70f","head":null}
++1360ms d3 sandbox.create (sequential) OK {"name":"d3","project":"d3/p","machine":"lfs535k2m","created":1793691124173,"id":"d3","platform":"linux","runtime":"namespaces","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73a
++2291ms d4 sandbox.create (sequential) OK {"name":"d4","project":"d4/p","machine":"lfs535k2m","created":1793691125095,"id":"d4","platform":"linux","runtime":"namespaces","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73a
++3108ms d3 mount lane (sequential) OK {"kind":"Mounted","path":"/layerfs/data/machine/native/run/lfs-b2c5c8a0-d3/workspaces/1","workspace":"1b7703e75a6cc893f379f6409e71b8d2a135ea8f188c690100a7bcc8dfefca7f","namespace":1,"branch":"lane","b
++3348ms d3 unmount OK {"kind":"Unmounted"}
++3360ms d4 mount lane (sequential) OK {"kind":"Mounted","path":"/layerfs/data/machine/native/run/lfs-b2c5c8a0-d4/workspaces/1","workspace":"a962f600ab8267991ab890230fe4822c1a5a9d8770fa3b160c57f5bbd7474c1f","namespace":1,"branch":"lane","b
++3533ms d4 unmount OK {"kind":"Unmounted"}
++3537ms d3 mount lane (concurrent) OK {"kind":"Mounted","path":"/layerfs/data/machine/native/run/lfs-b2c5c8a0-d3/workspaces/2","workspace":"728dce531c49852e7efb7dc1c120b4bec71a4826b3347ed7014fe1146628ea6a","namespace":2,"branch":"lane","b
++3538ms d4 mount lane (concurrent) OK {"kind":"Mounted","path":"/layerfs/data/machine/native/run/lfs-b2c5c8a0-d4/workspaces/2","workspace":"ec56c4c35ea2b9c21f4020edf39318894ed106c64a45fd8f800ff010b00af872","namespace":2,"branch":"lane","b
++3703ms d3 unmount OK {"kind":"Unmounted"}
++3707ms d4 unmount OK {"kind":"Unmounted"}
++3711ms d3 sandbox.close OK {"kind":"Closed","sandbox":"d3","unknown":[],"closed":"d3"}
++4252ms d4 sandbox.close OK {"kind":"Closed","sandbox":"d4","unknown":[],"closed":"d4"}
++4304ms d3 store.disconnect OK {"disconnected":"d3"}
++4306ms d4 store.disconnect OK {"disconnected":"d4"}

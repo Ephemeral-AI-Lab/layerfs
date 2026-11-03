@@ -7,6 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+sha2 = "=0.11.0"
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-history = { path = "../../../core/crates/layerfs-history", default-features = false }
 layerfs-content = { path = "../../../core/crates/layerfs-content" }

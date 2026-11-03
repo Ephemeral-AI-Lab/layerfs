@@ -9,11 +9,24 @@ product mental model or campaign-specific benchmark procedures.
 ## Scope and ownership
 
 - Engine owns Bridge, daemon, FUSE, NFS, Overlay, Persistence, Project,
-  remote storage, Sandbox, Store service and Workspace. Core owns content,
+  Persistence, Project, Store service and Workspace. Core owns content,
   history, storage and telemetry. The library `layerfs-api` and its front ends
   (`layerfs-cli`, `layerfs-node`, `layerfs-python`) are API crates under
   `api/crates`; see the [API guide](../api/AGENTS.md). No engine crate may
-  depend on them.
+  depend on them. Since #535 (owner, 2026-11-03, D1, D4) Sandbox and network
+  code leave the engine for the [connect layer](../connect/AGENTS.md):
+  `layerfs-sandbox`, the machine layer (`layerfs-machine`) and remote
+  storage (renamed `layerfs-store-backup`, with `layerfs-store-service`'s
+  `remote/`) moved to `connect/crates` in #535 phase 1. The engine keeps
+  persistence (SQLite and PostgreSQL, D2), the daemon, the overlay,
+  Workspaces and the kernel routes (FUSE and NFS as peers over
+  `layerfs-mount-ports`, D3). No engine crate may depend on a connect crate.
+- `layerfs-store-service` owns the SDK Store calls in `src/methods/` (#536
+  H3): the method table (`methods::call`), its argument reader and one file
+  per `file.*`/`branch.*` call. `read`, `write` and `history` know no SDK
+  method names; `methods/` is the facade over them. Their tests live in
+  store-service's `tests/` (`concurrent_commits`, `lane_merge` and
+  `merge_report`, which need a daemon, in `layerfs-daemon`'s).
 - Project Store Init and install belong to `layerfs-project::store`; `layerfs-api`
   retains its public re-exports. Its SDK-facing daemon integration tests
   include daemon and Sandbox test fixtures from this layer.
@@ -318,7 +331,7 @@ See [captured-file construction](crates/layerfs-workspace/src/construction/captu
 
 Keep completion boundaries explicit: `Save::finish()` completes object storage;
 Init then initializes history, while Commit calls `commit_branch` against its
-expected head before local base installation. SDK Init subsequently calls `Handles::seal()` to
+expected head before local base installation. SDK Init subsequently calls `SqliteHandles::seal()` to
 checkpoint, close and hand off one Store file. The macOS allocation correction
 runs only at this sole-owner Store seal; it is not a Content/pack format change
 or live-daemon maintenance. Linux daemons keep their shared Store open. The

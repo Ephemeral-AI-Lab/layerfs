@@ -18,7 +18,7 @@ use crate::{
     xdr::{opaque_size, Writer},
 };
 use layerfs_content::object::inode_leaf::InodeKind;
-use layerfs_fuse::operations::{DirectoryFailure, DirectoryStep, DirectoryStream};
+use layerfs_mount_ports::operations::{DirectoryFailure, DirectoryStep, DirectoryStream};
 
 /// One enumeration request.
 pub struct Listing {

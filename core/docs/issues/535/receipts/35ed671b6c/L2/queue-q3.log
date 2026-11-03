@@ -1,0 +1,79 @@
+START ssh sqlite C01 09:03:36
+C01 lfs535l2s sqlite PASS  timed exec 626.244 ms
+END ssh sqlite C01 rc=0 09:03:45
+START ssh sqlite C02 09:03:45
+C02 lfs535l2s sqlite PASS  timed exec 1275.985 ms
+END ssh sqlite C02 rc=0 09:03:51
+START ssh sqlite C03 09:03:51
+C03 lfs535l2s sqlite PASS  timed exec 1117.391 ms
+END ssh sqlite C03 rc=0 09:03:54
+START ssh sqlite C04 09:03:54
+C04 lfs535l2s sqlite PASS  timed exec 1024.192 ms
+END ssh sqlite C04 rc=0 09:03:59
+START ssh sqlite C05 09:03:59
+C05 lfs535l2s sqlite PASS  timed exec 1111.981 ms
+END ssh sqlite C05 rc=0 09:04:03
+START ssh sqlite C06 09:04:03
+C06 lfs535l2s sqlite PASS  timed exec 1080.253 ms
+END ssh sqlite C06 rc=0 09:04:13
+START ssh sqlite C07 09:04:13
+C07 lfs535l2s sqlite PASS  timed exec 2688.995 ms
+END ssh sqlite C07 rc=0 09:04:32
+START ssh sqlite C08 09:04:32
+C08 lfs535l2s sqlite PASS  timed exec 1052.066 ms
+END ssh sqlite C08 rc=0 09:04:42
+START ssh sqlite C09 09:04:42
+C09 lfs535l2s sqlite PASS  timed exec 107.525 ms
+END ssh sqlite C09 rc=0 09:04:50
+START ssh sqlite C10 09:04:50
+C10 lfs535l2s sqlite PASS  timed exec 1252.707 ms
+END ssh sqlite C10 rc=0 09:05:02
+START ssh sqlite C11 09:05:02
+C11 lfs535l2s sqlite PASS  timed exec 283.126 ms
+END ssh sqlite C11 rc=0 09:05:13
+START ssh sqlite C12 09:05:13
+C12 lfs535l2s sqlite PASS  timed exec 574.243 ms
+END ssh sqlite C12 rc=0 09:05:17
+QUEUE DONE ssh sqlite
+START ssh pg-remote C01 09:05:17
+C01 lfs535l2s postgresql PASS  timed exec 984.809 ms
+END ssh pg-remote C01 rc=0 09:05:26
+START ssh pg-remote C02 09:05:26
+C02 lfs535l2s postgresql PASS  timed exec 2629.216 ms
+END ssh pg-remote C02 rc=0 09:05:39
+START ssh pg-remote C03 09:05:39
+C03 lfs535l2s postgresql PASS  timed exec 1386.052 ms
+END ssh pg-remote C03 rc=0 09:05:46
+START ssh pg-remote C04 09:05:46
+C04 lfs535l2s postgresql PASS  timed exec 993.751 ms
+END ssh pg-remote C04 rc=0 09:05:52
+START ssh pg-remote C05 09:05:52
+C05 lfs535l2s postgresql PASS  timed exec 941.864 ms
+END ssh pg-remote C05 rc=0 09:05:58
+START ssh pg-remote C06 09:05:58
+C06 lfs535l2s postgresql PASS  timed exec 1080.766 ms
+END ssh pg-remote C06 rc=0 09:06:08
+START ssh pg-remote C07 09:06:08
+C07 lfs535l2s postgresql PASS  timed exec 2255.77 ms
+END ssh pg-remote C07 rc=0 09:06:27
+START ssh pg-remote C08 09:06:27
+C08 lfs535l2s postgresql PASS  timed exec 1086.726 ms
+END ssh pg-remote C08 rc=0 09:06:38
+START ssh pg-remote C09 09:06:38
+C09 lfs535l2s postgresql PASS  timed exec 135.368 ms
+END ssh pg-remote C09 rc=0 09:06:49
+START ssh pg-remote C10 09:06:49
+C10 lfs535l2s postgresql PASS  timed exec 1186.387 ms
+END ssh pg-remote C10 rc=0 09:07:02
+START ssh pg-remote C11 09:07:02
+C11 lfs535l2s postgresql PASS  timed exec 197.389 ms
+END ssh pg-remote C11 rc=0 09:07:14
+START ssh pg-remote C12 09:07:14
+C12 lfs535l2s postgresql PASS  timed exec 354.552 ms
+END ssh pg-remote C12 rc=0 09:07:18
+QUEUE DONE ssh pg-remote
+START ssh pg-loop C01 09:07:18
+C01 lfs535l2s postgresql FAIL sandbox.create: Unsupported the ssh machine lfs535l2s cannot reach the PostgreSQL Store's server: an ssh machine cannot reach the caller's loopback timed exec - ms
+END ssh pg-loop C01 rc=1 09:07:19
+QUEUE DONE ssh pg-loop
+Q3 ALL DONE

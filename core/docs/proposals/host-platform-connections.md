@@ -504,6 +504,14 @@ layerfs machine create fc1 firecracker --host fc-host --cpus 2 --memory 2G --dis
 
 ### 7.2 Machine lifecycle and workers
 
+> **Superseded in part (#535 D11, owner 2026-11-02).** The lifecycle is
+> manual: `machine start` and `machine stop` are its only entry points. A
+> worker never exits or powers off its guest when idle, and a call that
+> needs a stopped machine is refused `Unavailable`, naming `layerfs machine
+> start <name>`, instead of starting it. The Store connection reaper (a
+> Store closed after a quiet minute) stays. The text below is the proposal
+> as written.
+
 A worker is a long-running process on a machine whose kernel the caller
 can't open a sqlite Store on: `docker` on macOS and Windows, every VM and
 every ssh host. It runs the real SDK, opens that machine's Stores and is
@@ -706,7 +714,7 @@ layerfs project init pg-main/load ~/src/load
 
 **Init into an existing Store is a live add, not a seal.** It is today's
 `add` in `layerfs-project` `store/live.rs`: it opens the live Store
-writable (`Handles::open_writable`) and writes through the Store's own
+writable (`SqliteHandles::open_writable`) and writes through the Store's own
 writer. No sealed file is made and nothing is installed. Today only an Init
 that makes a Store of its own seals it and installs it (`install_local` in
 `install.rs`); Init no longer makes Stores. What crosses the Mac/VM boundary

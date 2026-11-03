@@ -181,7 +181,6 @@ impl Application {
                     }
                 }
                 InitialRecord::Control(call) => {
-                    let _call = self.begin_call();
                     // Write bodies a call declares follow its record; no call
                     // here reads them, so they are dropped before the answer.
                     let bodies = super::bodies::Bodies::of(&call.request, &mut connection.receive);

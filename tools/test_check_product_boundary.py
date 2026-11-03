@@ -7,6 +7,7 @@ from check_product_boundary import (
     RETIRED_PACKAGES,
     crate_directories,
     dependency_violations,
+    layer_violations,
     production_files,
     test_path_violations,
     unsafe_violations,
@@ -16,7 +17,7 @@ from check_product_boundary import (
 
 class ProductBoundaryTests(unittest.TestCase):
     def test_native_fuse_owns_requests_without_reverse_daemon_dependency(self):
-        path = Path("engine/crates/layerfs-fuse/src/ports.rs")
+        path = Path("engine/crates/layerfs-mount-ports/src/ports.rs")
         for source in [
             "use layerfs_workspace::SourceView;",
             "use layerfs_overlay::NativeMount;",
@@ -25,12 +26,12 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertFalse(violations(path, source))
         for source in [
             "use layerfs_daemon::Pending;",
-            "use layerfs_persistence::Handles;",
+            "use layerfs_persistence::SqliteHandles;",
             "use layerfs_api::WorkspaceApi;",
         ]:
             self.assertTrue(violations(path, source))
         self.assertTrue(unsafe_violations(path, "unsafe fn syscall() {}"))
-        root = Path("engine/crates/layerfs-fuse/src/lib.rs")
+        root = Path("engine/crates/layerfs-mount-ports/src/lib.rs")
         self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]"))
         self.assertTrue(unsafe_violations(root, "mod mount;"))
         prefix = '[package]\nname="layerfs-fuse"\n[dependencies]\n'
@@ -63,14 +64,14 @@ class ProductBoundaryTests(unittest.TestCase):
         for source in ["use layerfs_storage::Storage;", "use layerfs_history::HistoryCatalog;"]:
             self.assertFalse(violations(path, source))
         for source in [
-            "use layerfs_persistence::Handles;",
+            "use layerfs_persistence::SqliteHandles;",
             "use layerfs_sdk::RemoteObjects;",
             "use rusqlite::Connection;",
             "use std::path::{Path, PathBuf};",
         ]:
             self.assertTrue(violations(path, source))
         bootstrap = Path("engine/crates/layerfs-daemon/src/bootstrap.rs")
-        self.assertFalse(violations(bootstrap, "use layerfs_persistence::Handles;"))
+        self.assertFalse(violations(bootstrap, "use layerfs_persistence::SqliteHandles;"))
 
     def test_persistence_seal_ffi_is_limited_to_the_authorized_module(self):
         base = Path("engine/crates/layerfs-persistence/src")
@@ -94,6 +95,42 @@ class ProductBoundaryTests(unittest.TestCase):
             findings = violations(Path("core/crates") / relative, "pub use std::io::Read;")
             self.assertTrue(any("retired host-mediated" in message for _, message in findings), relative)
 
+    def test_536_moved_paths_cannot_return(self):
+        for relative in (
+            "api/crates/layerfs-api/src/host/sync.rs",
+            "api/crates/layerfs-api/src/family/stores.rs",
+            "api/crates/layerfs-api/src/fs/read.rs",
+            "api/crates/layerfs-control/src/host/sync.rs",
+            "api/crates/layerfs-control/src/operator/mod.rs",
+            "engine/crates/layerfs-store-service/src/remote/push.rs",
+        ):
+            findings = violations(Path(relative), "pub use std::io::Read;")
+            self.assertTrue(any("retired by #536" in message for _, message in findings), relative)
+        clean = violations(Path("api/crates/layerfs-api/src/calls/table.rs"), "pub use std::io::Read;")
+        self.assertFalse(any("retired by #536" in message for _, message in clean))
+
+    def test_d11_idle_stop_and_on_demand_start_cannot_return(self):
+        for relative in (
+            "api/crates/layerfs-control/src/machine/worker/idle.rs",
+            "engine/crates/layerfs-daemon/src/application/idle.rs",
+        ):
+            findings = violations(Path(relative), "pub use std::io::Read;")
+            self.assertTrue(any("#535 D11" in message for _, message in findings), relative)
+        for source in (
+            "pub fn serve_until_idle() {}",
+            "const IDLE_EXIT_S: u32 = 120;",
+            "let x = limits.idle_exit_s;",
+            "Start::OnDemand",
+            'std::env::var("LAYERFS_WORKER_POWEROFF")',
+            "fn guest_stop(self) {}",
+        ):
+            findings = violations(Path("api/crates/layerfs-control/src/common/place.rs"), source)
+            self.assertTrue(any("#535 D11" in message for _, message in findings), source)
+        # the Store connection reaper is not lifecycle
+        reaper = "pub const IDLE: Duration = Duration::from_secs(60); fn close_idle() {}"
+        clean = violations(Path("api/crates/layerfs-control/src/store/open.rs"), reaper)
+        self.assertFalse(any("#535 D11" in message for _, message in clean))
+
     def test_retired_packages_cannot_return(self):
         self.assertEqual(
             RETIRED_PACKAGES,
@@ -113,8 +150,8 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertTrue(dependency_violations(f'[package]\nname="{name}"\n'), name)
 
     def test_sdk_source_edges_and_unsafe_boundary(self):
-        path = Path("api/crates/layerfs-api/src/project/init.rs")
-        self.assertFalse(violations(path, "use layerfs_persistence::Handles;"))
+        path = Path("api/crates/layerfs-control/src/project/init.rs")
+        self.assertFalse(violations(path, "use layerfs_persistence::SqliteHandles;"))
         self.assertTrue(violations(path, "use layerfs_server::Server;"))
         self.assertTrue(unsafe_violations(path, "unsafe fn extend_lifetime() {}"))
         root = Path("api/crates/layerfs-api/src/lib.rs")
@@ -122,15 +159,15 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\nmod init;"))
 
     def test_sandbox_active_edges_and_unsafe_boundary(self):
-        path = Path("engine/crates/layerfs-sandbox/src/docker_engine/http.rs")
+        path = Path("connect/crates/layerfs-sandbox/src/docker_engine/http.rs")
         self.assertTrue(unsafe_violations(path, "unsafe fn signal_pid() {}"))
-        self.assertFalse(unsafe_violations(Path("engine/crates/layerfs-sandbox/src/lib.rs"), "#![deny(unsafe_code)]"))
-        self.assertTrue(unsafe_violations(Path("engine/crates/layerfs-sandbox/src/lib.rs"), "#![forbid(unsafe_code)]"))
-        darwin = Path("engine/crates/layerfs-sandbox/src/backend/native/macos/darwin.rs")
+        self.assertFalse(unsafe_violations(Path("connect/crates/layerfs-sandbox/src/lib.rs"), "#![deny(unsafe_code)]"))
+        self.assertTrue(unsafe_violations(Path("connect/crates/layerfs-sandbox/src/lib.rs"), "#![forbid(unsafe_code)]"))
+        darwin = Path("connect/crates/layerfs-sandbox/src/local/os/macos/darwin.rs")
         self.assertFalse(unsafe_violations(darwin, "fn f() { unsafe { libc::proc_listallpids(); } }"))
         self.assertTrue(
             unsafe_violations(
-                Path("engine/crates/layerfs-sandbox/src/backend/native/macos/mounts.rs"),
+                Path("connect/crates/layerfs-sandbox/src/backend/os/macos/mounts.rs"),
                 "fn f() { unsafe { call(); } }",
             )
         )
@@ -149,6 +186,53 @@ class ProductBoundaryTests(unittest.TestCase):
             )
         )
 
+    def test_connect_layer_edges(self):
+        # core < engine < connect < api (#535): an engine crate reaching a
+        # connect crate is an upward edge, production or dev.
+        prefix = '[package]\nname="layerfs-daemon"\n[dependencies]\n'
+        findings = dependency_violations(prefix + 'layerfs-sandbox={path="../layerfs-sandbox"}')
+        self.assertTrue(any("upward" in message for _, message in findings), findings)
+        dev = '[package]\nname="layerfs-daemon"\n[dev-dependencies]\n'
+        findings = dependency_violations(dev + 'layerfs-sandbox={path="../layerfs-sandbox"}')
+        self.assertTrue(any("upward" in message for _, message in findings), findings)
+        self.assertTrue(
+            violations(Path("engine/crates/layerfs-daemon/src/commands.rs"), "use layerfs_sandbox::Sandbox;")
+        )
+        # A connect crate may depend on engine and core crates, and on
+        # connect siblings inside its allowlist.
+        self.assertFalse(layer_violations("layerfs-sandbox", "layerfs-daemon", "dependencies"))
+        self.assertFalse(layer_violations("layerfs-sandbox", "layerfs-content", "dev-dependencies"))
+        self.assertFalse(
+            dependency_violations(
+                '[package]\nname="layerfs-machine"\n[dependencies]\nlayerfs-sandbox={path="../layerfs-sandbox"}'
+            )
+        )
+        machine_up = '[package]\nname="layerfs-daemon"\n[dependencies]\n'
+        findings = dependency_violations(machine_up + 'layerfs-machine={path="../layerfs-machine"}')
+        self.assertTrue(any("upward" in message for _, message in findings), findings)
+        # NFS reaches FUSE's kernel ports through mount-ports, never fuse.
+        findings = dependency_violations(
+            '[package]\nname="layerfs-nfs"\n[dependencies]\nlayerfs-fuse={path="../layerfs-fuse"}'
+        )
+        self.assertTrue(findings, findings)
+        self.assertFalse(
+            dependency_violations(
+                '[package]\nname="layerfs-nfs"\n[dependencies]\nlayerfs-mount-ports={path="../layerfs-mount-ports"}'
+            )
+        )
+        findings = dependency_violations(
+            '[package]\nname="layerfs-store-service"\n[dependencies]\nlayerfs-store-backup={path="../../../connect/crates/layerfs-store-backup"}'
+        )
+        self.assertTrue(any("upward" in message for _, message in findings), findings)
+        self.assertFalse(
+            dependency_violations(
+                '[package]\nname="layerfs-store-backup"\n[dependencies]\nlayerfs-store-service={path="../../../engine/crates/layerfs-store-service"}\nlayerfs-persistence={path="../../../engine/crates/layerfs-persistence"}\nlayerfs-storage={path="../../../core/crates/layerfs-storage"}'
+            )
+        )
+        self.assertTrue(
+            any("upward" in message for _, message in layer_violations("layerfs-sandbox", "layerfs-api", "dependencies"))
+        )
+
     def test_bridge_control_reuses_domain_records_without_engine_edges(self):
         prefix = '[package]\nname="layerfs-bridge"\n[dependencies]\n'
         for dependency in ("layerfs-content", "layerfs-history"):
@@ -157,11 +241,25 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertTrue(dependency_violations(prefix + f'{dependency}={{path="../{dependency}"}}'))
 
     def test_sdk_dependency_edges(self):
+        # #536: the call surface reaches records, machines and Stores only
+        # through the management library, which holds the old api edges.
         prefix = '[package]\nname="layerfs-api"\n[dependencies]\n'
-        self.assertFalse(dependency_violations(prefix + 'layerfs-persistence={path="../../layerfs-persistence"}'))
-        self.assertTrue(dependency_violations(prefix + 'layerfs-server={path="../../layerfs-server"}'))
-        self.assertFalse(dependency_violations(prefix + 'layerfs-project={path="../../layerfs-project"}'))
-        self.assertTrue(dependency_violations(prefix + 'layerfs-workspace={path="../../layerfs-workspace"}'))
+        self.assertFalse(dependency_violations(prefix + 'layerfs-control={path="../layerfs-control"}'))
+        self.assertFalse(dependency_violations(prefix + 'layerfs-bridge={path="../../layerfs-bridge"}'))
+        self.assertTrue(dependency_violations(prefix + 'layerfs-persistence={path="../../layerfs-persistence"}'))
+        self.assertTrue(dependency_violations(prefix + 'layerfs-project={path="../../layerfs-project"}'))
+        self.assertTrue(violations(Path("api/crates/layerfs-api/src/calls/route.rs"), "use layerfs_project::Init;"))
+        self.assertFalse(violations(Path("api/crates/layerfs-api/src/calls/route.rs"), "use layerfs_control::family;"))
+        control = '[package]\nname="layerfs-control"\n[dependencies]\n'
+        self.assertFalse(dependency_violations(control + 'layerfs-persistence={path="../../layerfs-persistence"}'))
+        self.assertTrue(dependency_violations(control + 'layerfs-server={path="../../layerfs-server"}'))
+        self.assertFalse(dependency_violations(control + 'layerfs-project={path="../../layerfs-project"}'))
+        self.assertTrue(dependency_violations(control + 'layerfs-workspace={path="../../layerfs-workspace"}'))
+        self.assertTrue(dependency_violations(control + 'layerfs-api={path="../layerfs-api"}'))
+        self.assertTrue(unsafe_violations(Path("api/crates/layerfs-control/src/lib.rs"), "pub mod home;"))
+        self.assertFalse(
+            unsafe_violations(Path("api/crates/layerfs-control/src/lib.rs"), "#![forbid(unsafe_code)]\npub mod home;")
+        )
 
     def test_daemon_direct_store_and_control_edges_without_host_runtime(self):
         prefix = '[package]\nname="layerfs-daemon"\n[dependencies]\n'
@@ -189,7 +287,7 @@ class ProductBoundaryTests(unittest.TestCase):
             self.assertFalse(dependency_violations(prefix + f'{dependency}={{path="../{dependency}"}}'))
         for dependency in ("layerfs-daemon", "layerfs-api", "layerfs-fuse", "layerfs-sandbox"):
             self.assertTrue(dependency_violations(prefix + f'{dependency}={{path="../{dependency}"}}'))
-        for package in ("layerfs-api", "layerfs-daemon"):
+        for package in ("layerfs-control", "layerfs-daemon"):
             source = f'[package]\nname="{package}"\n[dependencies]\nlayerfs-store-service={{path="../layerfs-store-service"}}\n'
             self.assertFalse(dependency_violations(source))
         self.assertTrue(
@@ -499,9 +597,10 @@ class LayerBoundaryTests(unittest.TestCase):
                     "layerfs-storage",
                     "layerfs-daemon",
                     "layerfs-api",
+                    "layerfs-store-service",
                 )
             }
-            content, storage, daemon, api = packages
+            content, storage, daemon, api, store_service = packages
             cases = (
                 (content / "tests/read.rs", storage / "tests/helper.rs", False),
                 (content / "tests/read.rs", api / "tests/helper.rs", True),
@@ -511,6 +610,8 @@ class LayerBoundaryTests(unittest.TestCase):
                 (daemon / "tests/lane_merge.rs", api / "tests/support/sdk.rs", True),
                 (daemon / "tests/other.rs", api / "tests/support/sdk.rs", True),
                 (daemon / "tests/merge_report.rs", api / "tests/other.rs", True),
+                (daemon / "tests/lane_merge.rs", store_service / "tests/support/sdk.rs", False),
+                (api / "tests/remote_store.rs", store_service / "tests/support/sdk.rs", False),
             )
             for path, target, upward in cases:
                 source = f'#[path = "{os.path.relpath(target, path.parent)}"]\nmod helper;'

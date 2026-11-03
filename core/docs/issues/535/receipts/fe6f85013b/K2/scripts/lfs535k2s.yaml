@@ -1,0 +1,34 @@
+base: template:ubuntu-24.04
+vmType: vz
+cpus: 2
+memory: 4GiB
+disk: 20GiB
+mounts: []
+containerd:
+  system: false
+  user: false
+ssh:
+  loadDotSSHPubKeys: false
+portForwards:
+- guestIP: 0.0.0.0
+  guestIPMustBeZero: true
+  guestPortRange: [1, 65535]
+  proto: any
+  ignore: true
+- guestIP: 127.0.0.1
+  guestPortRange: [1, 65535]
+  proto: any
+  ignore: true
+provision:
+- mode: system
+  script: |
+    #!/bin/bash
+    set -eu
+    install -d -m 700 -o root -g root /root/.ssh
+    printf '%s\n' 'ssh-ed25519 <generated throwaway ed25519 public key> lfs535k2' > /root/.ssh/authorized_keys
+    chmod 600 /root/.ssh/authorized_keys
+    printf 'PermitRootLogin prohibit-password\nPasswordAuthentication no\nAllowTcpForwarding yes\n' > /etc/ssh/sshd_config.d/90-lfs535k2.conf
+    systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+    printf 'ssh_deletekeys: false\n' > /etc/cloud/cloud.cfg.d/99-lfs535k2-keep-host-keys.cfg
+    printf 'user.max_user_namespaces = 0\n' > /etc/sysctl.d/90-lfs535k2.conf
+    sysctl -q -p /etc/sysctl.d/90-lfs535k2.conf

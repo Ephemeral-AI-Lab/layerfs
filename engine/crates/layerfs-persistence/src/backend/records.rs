@@ -110,6 +110,10 @@ pub(crate) enum BackendError {
     Busy,
     /// The Store was closed while the call waited for, or before, its turn.
     Closed,
+    /// The server answered a new connection with an error (no such
+    /// database, failed authentication): no session, so nothing ran.
+    #[cfg_attr(not(feature = "postgresql"), allow(dead_code))]
+    Rejected,
     /// A signal interrupted the cross-process writer wait (Linux only).
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Cancelled,
@@ -135,7 +139,9 @@ impl From<BackendError> for layerfs_history::HistoryError {
         match e {
             BackendError::Busy => Self::Busy,
             // The writer was never obtained; nothing was attempted.
-            BackendError::Closed | BackendError::Cancelled => Self::OwnershipUnavailable,
+            BackendError::Closed | BackendError::Rejected | BackendError::Cancelled => {
+                Self::OwnershipUnavailable
+            }
             BackendError::ReadOnly => Self::ContinuityUnavailable,
             BackendError::Capacity => Self::Capacity("persistence"),
             BackendError::Integrity => Self::Integrity("persistence"),

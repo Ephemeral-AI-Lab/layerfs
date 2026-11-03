@@ -374,7 +374,7 @@ pub fn recognized(
     offset: u64,
     data: &[u8],
 ) -> layerfs_workspace::WriteData {
-    use layerfs_fuse::ports::Fence;
+    use layerfs_mount_ports::ports::Fence;
     use std::{
         sync::mpsc,
         task::{Context, Poll, Wake, Waker},

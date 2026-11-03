@@ -158,7 +158,7 @@ The global Store provider comes from
 [`layerfs-persistence`](../../engine/crates/layerfs-persistence/src/store/open.rs).
 The host application selects
 [`PersistenceConfig`](../../engine/crates/layerfs-persistence/src/store/config.rs) and
-creates or opens `Handles`. Those handles supply storage and history providers
+creates or opens `SqliteHandles`. Those handles supply storage and history providers
 over one combined host database.
 
 | Component | Responsibility |

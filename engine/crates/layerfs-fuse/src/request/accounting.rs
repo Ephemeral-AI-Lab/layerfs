@@ -1,5 +1,5 @@
 //! Per-mount opcode and disposal counts; one frame can carry several units.
-use crate::phase::{Phases, PHASES};
+use layerfs_mount_ports::phase::{Phases, PHASES};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -193,7 +193,7 @@ impl Drop for Timed {
     fn drop(&mut self) {
         let elapsed = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
         self.accounting.nanos[self.opcode as usize].fetch_add(elapsed, Ordering::Relaxed);
-        crate::phase::restore(self.previous.take());
+        layerfs_mount_ports::phase::restore(self.previous.take());
     }
 }
 impl Accounting {
@@ -202,7 +202,7 @@ impl Accounting {
     }
     /// Times one callback of `opcode` until the returned guard drops.
     pub fn timed(self: &Arc<Self>, opcode: Opcode) -> Timed {
-        let previous = crate::phase::enter(self.phases.clone());
+        let previous = layerfs_mount_ports::phase::enter(self.phases.clone());
         Timed {
             accounting: self.clone(),
             opcode,

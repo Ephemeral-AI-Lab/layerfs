@@ -23,10 +23,21 @@ Imports the host folder `folder` as a new project into the Store named before
 the `/`. Init never creates a Store: make one first with `store.create`.
 Everything in the folder is imported, including `.git` and ignored files.
 
+The folder is always on the caller's host. When the Store is a sqlite Store on
+another machine, the folder is copied to that machine and Init runs there on
+the copy, which is deleted afterwards: the machine needs free room for the copy
+while Init runs, and progress reports `{ phase: "send", done, total }` in
+bytes while the folder is copied.
+
+Progress is `{ phase, done, total }` on every route (#536 §10b, from source
+and tests): `check`, then `send` (another machine only; `done`/`total` in
+bytes), `install` (Init adds the folder) and `record`; `done` and `total`
+are null outside `send`.
+
 | Arg | Meaning |
 | --- | --- |
 | `project` | `<store>/<project>`; names are 1–63 lowercase letters, digits, `_ . -`, starting and ending alphanumeric |
-| `folder` | An absolute host folder path |
+| `folder` | An absolute folder path on the caller's host |
 | `timeout` | Milliseconds Init may take; default 300000 |
 | `on_progress` | A function called with each progress update (shell: `--progress`, JSON lines on stderr) |
 
@@ -50,11 +61,15 @@ layerfs project init shop/api /work/api --progress
 `layer` is `main`'s first Layer. The new project has one line, `main`, and no
 Branch: fork one before you change anything. (S, the spec, describes the result
 as `{ project, branch: "main", commit }`; the build returns the record above.)
-A tiny folder sent no progress update in the live run.
+A tiny folder sent no progress update in the live run (an older build;
+the current one reports `check`, `install`, `record`).
 
-Where Init can run depends on the Store: a sqlite Store must be on `native`
-(Init reads the host folder in your process); a PostgreSQL Store is written
-directly. For a sqlite Store on another machine, move it to `native` first.
+Where Init runs depends on the Store: into a sqlite Store on `native` or a
+PostgreSQL Store it runs in your process and reads the folder on this host.
+Into a sqlite Store on another machine it runs in that machine's worker
+(#536 H11), which reads `folder` **on that machine** (a path in the VM or
+on the ssh host, not on this host); the machine must be running
+(`machine.start(name)` first).
 
 **Refusals**
 
@@ -63,7 +78,7 @@ directly. For a sqlite Store on another machine, move it to `native` first.
 | `NotFound` | No Store of that name (message: ``store create <name>` makes one``) | Create the Store, or check the name |
 | `Exists` | The Store already holds that project | Don't init again; the project is ready |
 | `InvalidInput` | A bad name, a relative path or a bare project name | Fix the call |
-| `Unsupported` | The sqlite Store is on another machine (from source; S says `InvalidInput`) | `store move <store> native`, Init, then move it back |
+| `Unavailable` | The Store's machine is stopped (message names `layerfs machine start <name>`) | Start the machine, then Init |
 | `Failed`, `Unknown` | Init failed or its outcome is uncertain | Stop and report; read `project.list` and `log/init-failures.jsonl` in the home before acting |
 
 **Start from a small skeleton** (shell), with a `.gitignore` and the
@@ -116,8 +131,10 @@ it; there is no undo. The live result:
 
 `packs_kept: true`: the project's records are gone, but its stored content
 stays in the Store file. Removing a project from a PostgreSQL Store is
-`Unsupported` in this build. To delete a whole Store with every project in it,
-use `store.remove`.
+`Unsupported` in this build. While a Sandbox of the project is recorded it is
+refused `InUse`; `detail.related` lists each as `{ kind: "sandbox", name }`
+(close them first). To delete a whole Store with every project in it, use
+`store.remove`.
 
 An agent working on a project never needs `remove`; it is for whoever owns the
 home.

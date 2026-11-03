@@ -2,7 +2,7 @@
 mod support;
 use layerfs_content::{FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, ReserveRequest};
-use layerfs_persistence::{BackendSelection, Handles, PersistenceConfig};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles};
 use layerfs_storage::{
     location::{ObjectLocation, PackDomain, PackInfo, SignatureRow},
     pack::{assemble, build_group, PackLane},
@@ -18,8 +18,8 @@ fn config() -> HistoryCatalogConfig {
         incarnation: 7,
     }
 }
-fn create(path: &std::path::Path) -> Handles {
-    Handles::create(
+fn create(path: &std::path::Path) -> SqliteHandles {
+    SqliteHandles::create(
         PersistenceConfig::sqlite(path),
         StoragePolicy::frozen_default(),
         &config(),
@@ -59,13 +59,9 @@ fn unit(pack_id: i64, objects: usize) -> Publication {
 fn wal_full_settings_and_unavailable_engine_are_explicit() {
     let t = Temp::new("durable-profile");
     let path = t.join("db");
-    let mut c = PersistenceConfig::sqlite(&path);
-    c.backend = BackendSelection::Postgres(layerfs_persistence::PostgresSelection::new(
-        "host=localhost",
-        "store",
-    ));
+    let c = PersistenceConfig::sqlite(&path);
     assert_eq!(
-        Handles::create(c, StoragePolicy::frozen_default(), &config()).err(),
+        SqliteHandles::create(c, StoragePolicy::frozen_default(), &config()).err(),
         Some(PersistenceError::BackendUnavailable)
     );
     assert!(!path.exists());
@@ -207,7 +203,7 @@ fn readonly_refusal_and_external_writer_busy_do_not_retry() {
     let t = Temp::new("authority-busy");
     let path = t.join("db");
     let h = create(&path);
-    let reader = Handles::open_read_only(
+    let reader = SqliteHandles::open_read_only(
         PersistenceConfig::sqlite(&path),
         &config().binding_key,
         [71; 32],
@@ -279,7 +275,7 @@ fn canonical_save_read_reuse_and_persisted_reservations_survive_reopen() {
     drop(reader);
     drop(storage);
     drop(h);
-    let h = Handles::open_writable(
+    let h = SqliteHandles::open_writable(
         PersistenceConfig::sqlite(&path),
         &config().binding_key,
         [71; 32],
@@ -302,7 +298,7 @@ fn writable_open_does_not_migrate_an_unrelated_database_journal() {
     let sql = rusqlite::Connection::open(&path).unwrap();
     sql.execute_batch("CREATE TABLE marker(value TEXT); INSERT INTO marker VALUES('untouched');")
         .unwrap();
-    assert!(Handles::open_writable(
+    assert!(SqliteHandles::open_writable(
         PersistenceConfig::sqlite(&path),
         &config().binding_key,
         [71; 32]
@@ -529,7 +525,8 @@ fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
         let t = Temp::new("explicit-profile");
         let path = t.join("db");
         let cfg = PersistenceConfig::sqlite(&path).with_sqlite_profile(selected);
-        let h = Handles::create(cfg.clone(), StoragePolicy::frozen_default(), &config()).unwrap();
+        let h =
+            SqliteHandles::create(cfg.clone(), StoragePolicy::frozen_default(), &config()).unwrap();
         let profile = h.profile();
         assert_eq!(profile.persistence, selected);
         assert_eq!(profile.journal_mode, "wal");
@@ -565,7 +562,7 @@ fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
         assert!(!t.join("db-shm").exists());
         // Both profiles use WAL; mixed-profile provisioning cannot be detected.
         let reopened =
-            Handles::open_writable(cfg.clone(), b"durable-publication", [71; 32]).unwrap();
+            SqliteHandles::open_writable(cfg.clone(), b"durable-publication", [71; 32]).unwrap();
         let read = Storage::new(reopened.storage.clone()).unwrap();
         assert_eq!(
             read.reader().unwrap().read_objects(&[object.id()]).unwrap(),
@@ -573,7 +570,8 @@ fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
         );
         drop(read);
         drop(reopened);
-        let readonly = Handles::open_read_only(cfg, b"durable-publication", [71; 32]).unwrap();
+        let readonly =
+            SqliteHandles::open_read_only(cfg, b"durable-publication", [71; 32]).unwrap();
         assert_eq!(readonly.profile().persistence, selected);
         let before = readonly.diagnostics().unwrap();
         assert!(readonly
@@ -595,7 +593,7 @@ fn explicit_profiles_keep_atomic_publication_and_matching_reopen_contracts() {
 fn multi_page_publication_preserves_first_wins_loss_order_and_late_failure_atomicity() {
     for profile in DEVELOPMENT_PROFILES {
         let temp = Temp::new("publication-subpages");
-        let h = Handles::create(
+        let h = SqliteHandles::create(
             PersistenceConfig::sqlite(temp.join("db")).with_sqlite_profile(profile),
             StoragePolicy::frozen_default(),
             &config(),

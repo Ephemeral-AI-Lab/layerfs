@@ -6,7 +6,7 @@ mod support;
 use layerfs_content::{inode_leaf::InodeKind, FinalizedObject, ObjectId, ObjectRole};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
 };
 use layerfs_storage::{
     location::{ObjectLocation, PackDomain, PackInfo},
@@ -36,7 +36,7 @@ fn history() -> HistoryCatalogConfig {
 }
 
 /// Eight objects in published pack 1, one group each.
-fn publish(h: &Handles) -> Vec<FinalizedObject> {
+fn publish(h: &SqliteHandles) -> Vec<FinalizedObject> {
     let mut random = 7177u64;
     let objects: Vec<_> = (0..8)
         .map(|_| {
@@ -94,7 +94,7 @@ fn publish(h: &Handles) -> Vec<FinalizedObject> {
 }
 
 /// Free pages: acquisition rows written and then discarded.
-fn free_pages(h: &Handles) {
+fn free_pages(h: &SqliteHandles) {
     let owner = h
         .acquisition
         .begin(&Begin {
@@ -142,7 +142,7 @@ fn immutable_reads_are_unchanged_while_free_pages_are_reclaimed() {
     let temp = support::Temp::new("immutable-reads-reclaim");
     let path = temp.join("store.sqlite");
     let writer =
-        Handles::create(config(&path), StoragePolicy::frozen_default(), &history()).unwrap();
+        SqliteHandles::create(config(&path), StoragePolicy::frozen_default(), &history()).unwrap();
     assert_eq!(writer.profile().auto_vacuum, 2, "a reclaimable Store");
     let objects = publish(&writer);
     free_pages(&writer);
@@ -150,7 +150,7 @@ fn immutable_reads_are_unchanged_while_free_pages_are_reclaimed() {
     let canonical: Vec<_> = objects.iter().map(|o| o.canonical().to_vec()).collect();
 
     let reader =
-        Handles::open_read_only(config(&path), &history().binding_key, history().cursor_key)
+        SqliteHandles::open_read_only(config(&path), &history().binding_key, history().cursor_key)
             .unwrap();
     let mut located = Vec::new();
     reader.storage.locate(&ids, &mut located).unwrap();

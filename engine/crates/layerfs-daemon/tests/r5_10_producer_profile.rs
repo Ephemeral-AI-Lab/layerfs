@@ -4,7 +4,7 @@
 //! synchronous=OFF (row R5-10).
 //!
 //! The Store is composed from the same public pieces `open_store` composes,
-//! so that the writable `Handles` stay in the test's hands: `open_store`
+//! so that the writable `SqliteHandles` stay in the test's hands: `open_store`
 //! keeps its writer private. Two things are observed that the product's own
 //! receipt cannot show alone:
 //!
@@ -19,7 +19,7 @@
 //!   (#352 F-025 fix 4). So only the open Store's first Commit opens one;
 //!   never more than one.
 //! - The profile is read from the writable session itself
-//!   (`Handles::profile()`), not from a separate observer session. It is the
+//!   (`SqliteHandles::profile()`), not from a separate observer session. It is the
 //!   read-back that session made when it opened.
 //!
 //! `LAYERFS_CONSTRUCTION_WORKERS` is not read by any file under
@@ -51,7 +51,7 @@ use layerfs_bridge::control::{Activity, Reply, Request, WorkspaceToken};
 use layerfs_content::ObjectId;
 use layerfs_daemon::store::{Store, StoreReader};
 use layerfs_history::{CommitOutcome, CommitRecord, HistoryCatalog, WorkspaceId};
-use layerfs_persistence::{Handles, SqlitePersistenceProfile};
+use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::{
     location::{InodeValueRow, LocatedObject, SignatureRow},
     port::{
@@ -268,8 +268,9 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
     let database = fixture.config.path.clone();
 
     // The one writable session of the Store, kept by the test.
-    let handles =
-        Arc::new(Handles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap());
+    let handles = Arc::new(
+        SqliteHandles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap(),
+    );
     // Its own read-back: what this session read from itself when it opened.
     let profile = handles.profile().clone();
     assert_eq!(profile.persistence, SqlitePersistenceProfile::Disposable);
@@ -277,7 +278,7 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
     assert_eq!(profile.synchronous, 0, "synchronous=OFF");
     assert_eq!(profile.fullfsync, 0);
     println!(
-        "{name} WRITER_PROFILE session=writable(Handles::open_writable) selected={:?} readback(persistence={:?} identity={} journal_mode={} synchronous={} fullfsync={} mmap_size={} busy_timeout={} sqlite={}) durable=NOT_RUN",
+        "{name} WRITER_PROFILE session=writable(SqliteHandles::open_writable) selected={:?} readback(persistence={:?} identity={} journal_mode={} synchronous={} fullfsync={} mmap_size={} busy_timeout={} sqlite={}) durable=NOT_RUN",
         fixture.config.sqlite_profile,
         profile.persistence,
         profile.identity,
@@ -302,9 +303,12 @@ fn r5_10_each_mounted_commit_has_one_producer_on_the_one_open_disposable_writer_
     let history: Arc<dyn HistoryCatalog> = Arc::new(catalog);
     let reader_config = fixture.config.clone();
     let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
-        let read =
-            Handles::open_read_only(reader_config.clone(), installed::BINDING, installed::CURSOR)
-                .unwrap();
+        let read = SqliteHandles::open_read_only(
+            reader_config.clone(),
+            installed::BINDING,
+            installed::CURSOR,
+        )
+        .unwrap();
         Ok(StoreReader::new(
             Storage::new(read.storage).unwrap(),
             Arc::new(read.history),

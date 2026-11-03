@@ -118,13 +118,13 @@ fn kernel_create_reservations_are_windows_not_per_file() {
 #[test]
 fn serial_writer_hold_has_a_real_inclusive_upper_observation() {
     use layerfs_history::{HistoryCatalog, ReserveRequest};
-    use layerfs_persistence::{Handles, SqlitePersistenceProfile};
+    use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile};
     let rig = Rig::new("issue319-writer-upper");
     assert_eq!(
         rig.fixture.config.sqlite_profile,
         SqlitePersistenceProfile::Disposable
     );
-    let handles = Handles::open_writable(
+    let handles = SqliteHandles::open_writable(
         rig.fixture.config.clone(),
         installed::BINDING,
         installed::CURSOR,

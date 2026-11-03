@@ -1,0 +1,292 @@
+{
+  "format": "lfs535-k2-item3/1",
+  "machine": "lfs535k2m",
+  "product": "fe6f85013b",
+  "startedAt": "2026-11-03T07:29:00.061Z",
+  "load1": 8.63037109375,
+  "ok": false,
+  "steps": [
+    {
+      "name": "i3s1.store.create",
+      "startedAt": "2026-11-03T07:29:00.063Z",
+      "ms": 15.252,
+      "ok": true
+    },
+    {
+      "name": "i3s1.project.init",
+      "startedAt": "2026-11-03T07:29:00.079Z",
+      "ms": 110.282,
+      "ok": true
+    },
+    {
+      "name": "i3s1.store.push",
+      "startedAt": "2026-11-03T07:29:00.189Z",
+      "ms": 96.248,
+      "ok": true
+    },
+    {
+      "name": "i3s2.store.create",
+      "startedAt": "2026-11-03T07:29:00.285Z",
+      "ms": 12.12,
+      "ok": true
+    },
+    {
+      "name": "i3s2.project.init",
+      "startedAt": "2026-11-03T07:29:00.297Z",
+      "ms": 107.109,
+      "ok": true
+    },
+    {
+      "name": "i3s2.store.push",
+      "startedAt": "2026-11-03T07:29:00.404Z",
+      "ms": 102.462,
+      "ok": true
+    },
+    {
+      "name": "i3p1.store.connect",
+      "startedAt": "2026-11-03T07:29:00.507Z",
+      "ms": 367.783,
+      "ok": true
+    },
+    {
+      "name": "i3p1.project.init",
+      "startedAt": "2026-11-03T07:29:00.875Z",
+      "ms": 203.727,
+      "ok": true
+    },
+    {
+      "name": "i3p2.store.connect",
+      "startedAt": "2026-11-03T07:29:01.079Z",
+      "ms": 483.228,
+      "ok": true
+    },
+    {
+      "name": "i3p2.project.init",
+      "startedAt": "2026-11-03T07:29:01.562Z",
+      "ms": 303.8,
+      "ok": true
+    },
+    {
+      "name": "machine.get",
+      "startedAt": "2026-11-03T07:29:01.866Z",
+      "ms": 164.037,
+      "ok": true
+    },
+    {
+      "name": "i3s2.sandbox.create",
+      "startedAt": "2026-11-03T07:29:02.030Z",
+      "ms": 534.59,
+      "ok": true
+    },
+    {
+      "name": "i3s1.sandbox.create",
+      "startedAt": "2026-11-03T07:29:02.030Z",
+      "ms": 543.271,
+      "ok": true
+    },
+    {
+      "name": "i3p2.sandbox.create",
+      "startedAt": "2026-11-03T07:29:02.030Z",
+      "ms": 2092.04,
+      "ok": true
+    },
+    {
+      "name": "i3p1.sandbox.create",
+      "startedAt": "2026-11-03T07:29:02.030Z",
+      "ms": 2113.184,
+      "ok": true
+    },
+    {
+      "name": "i3s1.mount",
+      "startedAt": "2026-11-03T07:29:04.143Z",
+      "ms": 6.425,
+      "ok": false,
+      "error": {
+        "code": "NoSuchBranch",
+        "message": "Branch main does not exist"
+      }
+    },
+    {
+      "name": "i3s2.mount",
+      "startedAt": "2026-11-03T07:29:04.144Z",
+      "ms": 6.553,
+      "ok": false,
+      "error": {
+        "code": "NoSuchBranch",
+        "message": "Branch main does not exist"
+      }
+    },
+    {
+      "name": "i3p2.mount",
+      "startedAt": "2026-11-03T07:29:04.144Z",
+      "ms": 14.992,
+      "ok": false,
+      "error": {
+        "code": "NoSuchBranch",
+        "message": "Branch main does not exist"
+      }
+    },
+    {
+      "name": "i3p1.mount",
+      "startedAt": "2026-11-03T07:29:04.144Z",
+      "ms": 15.606,
+      "ok": false,
+      "error": {
+        "code": "NoSuchBranch",
+        "message": "Branch main does not exist"
+      }
+    },
+    {
+      "name": "i3s2.sandbox.close",
+      "startedAt": "2026-11-03T07:29:04.150Z",
+      "ms": 1030.808,
+      "ok": true
+    },
+    {
+      "name": "i3s1.sandbox.close",
+      "startedAt": "2026-11-03T07:29:05.181Z",
+      "ms": 40.745,
+      "ok": true
+    },
+    {
+      "name": "i3p2.sandbox.close",
+      "startedAt": "2026-11-03T07:29:05.221Z",
+      "ms": 61.457,
+      "ok": true
+    },
+    {
+      "name": "i3p1.sandbox.close",
+      "startedAt": "2026-11-03T07:29:05.283Z",
+      "ms": 43.201,
+      "ok": true
+    },
+    {
+      "name": "i3s1.store.pull",
+      "startedAt": "2026-11-03T07:29:05.326Z",
+      "ms": 114.388,
+      "ok": true
+    },
+    {
+      "name": "i3s2.store.pull",
+      "startedAt": "2026-11-03T07:29:05.441Z",
+      "ms": 115.893,
+      "ok": true
+    },
+    {
+      "name": "i3s1.store.remove",
+      "startedAt": "2026-11-03T07:29:05.556Z",
+      "ms": 4.174,
+      "ok": true
+    },
+    {
+      "name": "i3s2.store.remove",
+      "startedAt": "2026-11-03T07:29:05.561Z",
+      "ms": 4.363,
+      "ok": true
+    },
+    {
+      "name": "i3p1.store.disconnect",
+      "startedAt": "2026-11-03T07:29:05.565Z",
+      "ms": 1.681,
+      "ok": true
+    },
+    {
+      "name": "i3p2.store.disconnect",
+      "startedAt": "2026-11-03T07:29:05.567Z",
+      "ms": 1.563,
+      "ok": true
+    }
+  ],
+  "stores": {
+    "i3s1": {
+      "kind": "sqlite",
+      "host": null,
+      "sandbox": {
+        "name": "i3s1",
+        "project": "i3s1/p",
+        "machine": "lfs535k2m",
+        "created": 1793690942031,
+        "id": "i3s1",
+        "platform": "linux",
+        "runtime": "namespaces",
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "backend": "namespaces",
+        "route": "fuse",
+        "state": "running"
+      }
+    },
+    "i3s2": {
+      "kind": "sqlite",
+      "host": null,
+      "sandbox": {
+        "name": "i3s2",
+        "project": "i3s2/p",
+        "machine": "lfs535k2m",
+        "created": 1793690942033,
+        "id": "i3s2",
+        "platform": "linux",
+        "runtime": "namespaces",
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "backend": "namespaces",
+        "route": "fuse",
+        "state": "running"
+      }
+    },
+    "i3p1": {
+      "kind": "postgresql",
+      "host": "127.0.0.1",
+      "sandbox": {
+        "name": "i3p1",
+        "project": "i3p1/p",
+        "machine": "lfs535k2m",
+        "created": 1793690942036,
+        "id": "i3p1",
+        "platform": "linux",
+        "runtime": "namespaces",
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "backend": "namespaces",
+        "route": "fuse",
+        "state": "running"
+      }
+    },
+    "i3p2": {
+      "kind": "postgresql",
+      "host": "127.0.0.1",
+      "sandbox": {
+        "name": "i3p2",
+        "project": "i3p2/p",
+        "machine": "lfs535k2m",
+        "created": 1793690942034,
+        "id": "i3p2",
+        "platform": "linux",
+        "runtime": "namespaces",
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "backend": "namespaces",
+        "route": "fuse",
+        "state": "running"
+      }
+    }
+  },
+  "machineBefore": {
+    "name": "lfs535k2m",
+    "platform": "microsandbox",
+    "backend": "namespaces",
+    "supports": {
+      "sqlite": true,
+      "postgresql_sandbox": true,
+      "reason": null
+    },
+    "state": "running",
+    "cpus": 2,
+    "memory": 4294967296,
+    "disk": 21474836480,
+    "stores": [
+      "i3s1",
+      "i3s2",
+      "pwm"
+    ],
+    "sandboxes": []
+  },
+  "cause": "Branch main does not exist",
+  "endedAt": "2026-11-03T07:29:05.569Z"
+}

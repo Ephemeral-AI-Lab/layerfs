@@ -3,9 +3,6 @@
 
 pub mod coherence;
 mod dispatch;
-pub mod operations;
-pub mod phase;
-pub mod ports;
 
 #[cfg(target_os = "linux")]
 pub mod attributes;

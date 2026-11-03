@@ -1,0 +1,82 @@
+# Repro: a PostgreSQL Store name reused with a new database, one CLI process per call (lane K2)
+# DB i3pg9 then i3pg10; the second time the Branch is lane2
+$ layerfs store connect e1 postgres://postgres@127.0.0.1:55542/i3pg9 --password env:LFSPW
+# at 2026-11-03T07:33:26Z load1 9.73
+{"name":"e1","kind":"postgresql","schema":"layerfs","synchronous_commit":"off","projects":[]}
+exit 0  wall_ms 260
+
+$ layerfs project init e1/p <scratch>/src.txcr
+# at 2026-11-03T07:33:26Z load1 9.73
+{"project":"e1/p","store":"e1","name":"p","kind":"postgresql","machine":"native","created":1793691207203,"layer":"327d5cca134e6a7e2dab9dee0e849e048cf72dc69923fa5c717a0c69616e2d6003","root":"3ce1162c3648a842d1842731290373bc58ae374688ab53d1d74411f97d411005"}
+exit 0  wall_ms 256
+
+$ layerfs branch fork e1/p lane main
+# at 2026-11-03T07:33:27Z load1 9.73
+{"kind":"Forked","branch":"lane","base":"327d5cca134e6a7e2dab9dee0e849e048cf72dc69923fa5c717a0c69616e2d6003","head":null}
+exit 0  wall_ms 171
+
+$ layerfs sandbox create e1/p e1 lfs535k2m
+# at 2026-11-03T07:33:27Z load1 9.73
+{"name":"e1","project":"e1/p","machine":"lfs535k2m","created":1793691207569,"id":"e1","platform":"linux","runtime":"namespaces","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","backend":"namespaces","route":"fuse","state":"running"}
+exit 0  wall_ms 804
+
+$ layerfs workspace mount e1 lane
+# at 2026-11-03T07:33:28Z load1 9.73
+{"kind":"Mounted","path":"/layerfs/data/machine/native/run/lfs-b2c5c8a0-e1/workspaces/1","workspace":"9fb335cba76d9f61eb2950a4ab5f1ca249570e4915898d656a7b0ffa42e2f452","namespace":1,"branch":"lane","base":null,"base_layer":"327d5cca134e6a7e2dab9dee0e849e048cf72dc69923fa5c717a0c69616e2d6003","root":"3ce1162c3648a842d1842731290373bc58ae374688ab53d1d74411f97d411005","sandbox":"e1","container":"lfs-b2c5c8a0-e1","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","platform":"linux","runtime":"namespaces","name":null,"ws":"e1:/layerfs/data/machine/native/run/lfs-b2c5c8a0-e1/workspaces/1"}
+exit 0  wall_ms 228
+
+$ layerfs workspace unmount e1:/layerfs/data/machine/native/run/lfs-b2c5c8a0-e1/workspaces/1 --discard
+# at 2026-11-03T07:33:28Z load1 9.73
+{"kind":"Unmounted"}
+exit 0  wall_ms 41
+
+$ layerfs sandbox close e1
+# at 2026-11-03T07:33:28Z load1 9.73
+{"kind":"Closed","sandbox":"e1","unknown":[],"closed":"e1"}
+exit 0  wall_ms 220
+
+$ layerfs store disconnect e1
+# at 2026-11-03T07:33:29Z load1 9.73
+{"disconnected":"e1"}
+exit 0  wall_ms 49
+
+$ layerfs store connect e1 postgres://postgres@127.0.0.1:55542/i3pg10 --password env:LFSPW
+# at 2026-11-03T07:33:29Z load1 9.73
+{"name":"e1","kind":"postgresql","schema":"layerfs","synchronous_commit":"off","projects":[]}
+exit 0  wall_ms 261
+
+$ layerfs project init e1/p <scratch>/src.txcr
+# at 2026-11-03T07:33:29Z load1 9.73
+{"project":"e1/p","store":"e1","name":"p","kind":"postgresql","machine":"native","created":1793691209855,"layer":"32c49c0023882870c68c0484b1462174702140c04ef840f8653b4206dc7e7191d9","root":"2262f238d2e5090fcc63a91c59d0562eea988224438f3fa9b9dea4812d37192a"}
+exit 0  wall_ms 248
+
+$ layerfs branch fork e1/p lane2 main
+# at 2026-11-03T07:33:29Z load1 9.73
+{"kind":"Forked","branch":"lane2","base":"32c49c0023882870c68c0484b1462174702140c04ef840f8653b4206dc7e7191d9","head":null}
+exit 0  wall_ms 193
+
+$ layerfs sandbox create e1/p e1 lfs535k2m
+# at 2026-11-03T07:33:30Z load1 9.73
+{"name":"e1","project":"e1/p","machine":"lfs535k2m","created":1793691210246,"id":"e1","platform":"linux","runtime":"namespaces","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","backend":"namespaces","route":"fuse","state":"running"}
+exit 0  wall_ms 547
+
+$ layerfs workspace mount e1 lane2
+# at 2026-11-03T07:33:30Z load1 9.27
+{"code":"NoSuchBranch","message":"Branch lane2 does not exist","detail":null}
+exit 125  wall_ms 41
+
+$ layerfs workspace mount e1 lane
+# at 2026-11-03T07:33:30Z load1 9.27
+{"code":"Failed","message":"MountFailure { bound: None, failure: OperationFailure { request: Mount { workspace: WorkspaceId(51d7cda845efa137dba9432d751cce907216811ed78ed55cf6de79cf7c417229), branch: BranchId(110a4bd49039baabbd91c872483e822e8a) }, cause: Remote(ControlRefusal { code: Missing, phase: \"bind Snapshot\", moved: None, published: None, detail: \"Branch 110a4bd49039baabbd91c872483e822e8a missing\" }) } }","detail":null}
+exit 125  wall_ms 156
+
+$ layerfs sandbox close e1 --force
+# at 2026-11-03T07:33:31Z load1 9.27
+{"kind":"Closed","sandbox":"e1","unknown":[],"closed":"e1"}
+exit 0  wall_ms 272
+
+$ layerfs store disconnect e1
+# at 2026-11-03T07:33:31Z load1 9.27
+{"disconnected":"e1"}
+exit 0  wall_ms 38
+

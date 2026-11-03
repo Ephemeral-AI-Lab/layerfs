@@ -1,0 +1,21 @@
+[package]
+name = "layerfs-machine"
+description = "Machines (host only): the kernels Sandboxes run on, one adapter per platform; makes, starts and stops them and runs the worker setup. Knows nothing of the LayerFS home."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
+layerfs-sandbox = { path = "../layerfs-sandbox" }
+nix = { version = "=0.31.3", features = [
+    "poll",
+    "socket",
+    "fs",
+    "signal",
+    "mount",
+    "user",
+    "sched",
+    "process",
+] }

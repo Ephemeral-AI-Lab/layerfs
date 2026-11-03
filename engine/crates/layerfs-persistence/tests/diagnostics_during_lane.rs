@@ -5,7 +5,7 @@
 mod support;
 
 use layerfs_history::{HistoryCatalog, HistoryCatalogConfig};
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::StoragePolicy;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -19,7 +19,7 @@ fn counters_are_read_while_the_lane_is_held() {
     let temp = Temp::new("diagnostics-during-lane");
     let mut config = PersistenceConfig::sqlite(temp.join("store"));
     config.sqlite_profile = SqlitePersistenceProfile::Disposable;
-    let handles = Handles::create(
+    let handles = SqliteHandles::create(
         config,
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {

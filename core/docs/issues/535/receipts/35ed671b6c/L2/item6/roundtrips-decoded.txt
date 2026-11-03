@@ -1,0 +1,13 @@
+r1-file-read: guest listeners ['0.0.0.0:7070']
+  new socket: 192.168.64.16:7070 <- 192.168.64.1:63460 TIME_WAIT
+r1-file-stat: guest listeners ['0.0.0.0:7070']
+  new socket: 192.168.64.16:7070 <- 192.168.64.1:63469 TIME_WAIT
+r1-branch-list: guest listeners ['0.0.0.0:7070']
+  new socket: 192.168.64.16:7070 <- 192.168.64.1:63475 TIME_WAIT
+r1-native-file-read: guest listeners ['0.0.0.0:7070']
+fix-mount-main: guest listeners ['0.0.0.0:7070', '127.0.0.1:42681']
+  new socket: 192.168.64.16:7070 <- 192.168.64.1:63486 TIME_WAIT
+r2-exec: guest listeners ['0.0.0.0:7070', '127.0.0.1:42681']
+  new socket: 192.168.64.16:7070 <- 192.168.64.1:63493 TIME_WAIT
+r2-exec-2: guest listeners ['0.0.0.0:7070', '127.0.0.1:42681']
+  new socket: 192.168.64.16:7070 <- 192.168.64.1:63499 TIME_WAIT

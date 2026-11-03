@@ -8,7 +8,7 @@ use layerfs_content::{
     filesystem::{FilesystemRead, FilesystemRootId, LogicalPath},
 };
 use layerfs_history::{BranchId, HistoryCatalog, HistoryCatalogConfig, HistoryName, LayerStackId};
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::StoragePolicy;
 use layerfs_telemetry::timer::Timing;
 use std::{
@@ -49,7 +49,7 @@ fn add(
 ) -> Result<layerfs_api::AddedProject, InitError> {
     let request = AddRequest {
         source,
-        store: store(path),
+        store: store(path).into(),
         binding: BINDING.to_vec(),
         cursor_key: CURSOR,
         stack: LayerStackId::from_authority([seed; 16]),
@@ -67,7 +67,7 @@ fn add(
 }
 
 /// The text of `path` on the Branch `name` of project `project`.
-fn read(handles: &Handles, project: &str, file: &str) -> Vec<u8> {
+fn read(handles: &SqliteHandles, project: &str, file: &str) -> Vec<u8> {
     let stack = handles
         .history
         .layer_stack_named(&HistoryName::new(project).unwrap())
@@ -110,7 +110,7 @@ fn an_empty_store_holds_two_projects_and_refuses_a_taken_name() {
     let path = directory.join("store.sqlite");
     let sealed = ProjectApi::new()
         .create_store(CreateRequest {
-            store: store(&path),
+            store: store(&path).into(),
             policy: StoragePolicy::frozen_default(),
             catalog: catalog(),
         })
@@ -126,7 +126,7 @@ fn an_empty_store_holds_two_projects_and_refuses_a_taken_name() {
     let taken = add(&path, source(&directory, "again", b"x"), "shop", 30);
     assert!(matches!(taken, Err(InitError::Exists)), "{taken:?}");
 
-    let handles = Handles::open_writable(store(&path), BINDING, CURSOR).unwrap();
+    let handles = SqliteHandles::open_writable(store(&path), BINDING, CURSOR).unwrap();
     let names: Vec<_> = projects(&handles.history)
         .unwrap()
         .into_iter()
@@ -172,7 +172,7 @@ fn a_store_made_by_init_takes_a_second_project() {
         40,
     )
     .unwrap();
-    let handles = Handles::open_writable(store(&path), BINDING, CURSOR).unwrap();
+    let handles = SqliteHandles::open_writable(store(&path), BINDING, CURSOR).unwrap();
     let names: Vec<_> = projects(&handles.history)
         .unwrap()
         .into_iter()
@@ -190,7 +190,7 @@ fn a_store_without_acquisition_tables_is_refused_before_any_scan() {
     let directory = directory("absent");
     let path = directory.join("store.sqlite");
     // created without the acquisition tables (schema 16): no project can be added
-    Handles::create(store(&path), StoragePolicy::frozen_default(), &catalog())
+    SqliteHandles::create(store(&path), StoragePolicy::frozen_default(), &catalog())
         .unwrap()
         .seal()
         .unwrap();
@@ -199,7 +199,7 @@ fn a_store_without_acquisition_tables_is_refused_before_any_scan() {
         matches!(refused, Err(InitError::NoAcquisition)),
         "{refused:?}"
     );
-    let handles = Handles::open_writable(store(&path), BINDING, CURSOR).unwrap();
+    let handles = SqliteHandles::open_writable(store(&path), BINDING, CURSOR).unwrap();
     assert!(projects(&handles.history).unwrap().is_empty());
     drop(handles);
     fs::remove_dir_all(&directory).unwrap();

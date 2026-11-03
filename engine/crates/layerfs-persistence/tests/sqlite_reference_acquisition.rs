@@ -5,10 +5,10 @@ use layerfs_content::{
     FinalizedObject, ObjectRole,
 };
 use layerfs_history::HistoryCatalogConfig;
-use layerfs_persistence::{Handles, PersistenceConfig};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles};
 use layerfs_storage::{Storage, StorageError, StoragePolicy};
-fn create(path: &std::path::Path) -> Handles {
-    Handles::create(
+fn create(path: &std::path::Path) -> SqliteHandles {
+    SqliteHandles::create(
         PersistenceConfig::sqlite(path),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {

@@ -1,0 +1,232 @@
+$ layerfs store create trc3
+# at 2026-11-03T07:37:17Z load1 5.64
+{"name":"trc3","kind":"sqlite","machine":"native","profile":"disposable","created":1793691437073,"sqlite":"3.53.2","projects":[]}
+exit 0  wall_ms 44
+
+$ layerfs project init trc3/p <scratch>/trcsrc.uaW8
+# at 2026-11-03T07:37:17Z load1 5.64
+{"project":"trc3/p","store":"trc3","name":"p","kind":"sqlite","machine":"native","created":1793691437291,"layer":"32ce4f4b250687edb7f03b0a2d42f5cbd6addea6fb302242c0b9025eee29d3ddf7","root":"98d6087163179a756d16d91972ddfaed768906950eb4aa39e88b92038fc455dd"}
+exit 0  wall_ms 145
+
+$ layerfs store push trc3 lfs535k2a
+# at 2026-11-03T07:37:17Z load1 5.64
+{"store":"trc3","from":"native","to":"lfs535k2a","bytes":212992,"heads":"35655d4addf844bc39d13249e5bc9338f3151c129dd96c67b04253cae0347ee7"}
+exit 0  wall_ms 123
+
+$ layerfs branch fork trc3/p lane main
+# at 2026-11-03T07:37:17Z load1 5.64
+{"kind":"Forked","branch":"lane","base":"32ce4f4b250687edb7f03b0a2d42f5cbd6addea6fb302242c0b9025eee29d3ddf7","head":null}
+exit 0  wall_ms 58
+
+$ layerfs file read trc3/p main /hello.txt
+# at 2026-11-03T07:37:17Z load1 5.64
+{"kind":"ok","snapshot":"main@ce4f4b250687","root":"98d6087163179a756d16d91972ddfaed768906950eb4aa39e88b92038fc455dd","path":"/hello.txt","text":"hello from the mac\n","start_line":1,"end_line":1,"line_truncated":false,"truncated":false,"next_line":null,"size":19}
+exit 0  wall_ms 49
+
+## r1-file-read
+### guest sockets before
+Tcp: 1 200 120000 -1 259 705 0 0 0 41666 33971 0 0 0 0
+00000000:1B9E 00000000:0000 0A
+0E40A8C0:1B9E 0140A8C0:CA7A 06
+0E40A8C0:1B9E 0140A8C0:CB4B 06
+0E40A8C0:1B9E 0140A8C0:CB4F 06
+0E40A8C0:1B9E 0140A8C0:CAFB 06
+0E40A8C0:1B9E 0140A8C0:CB51 06
+0E40A8C0:1B9E 0140A8C0:CB55 06
+0E40A8C0:1B9E 0140A8C0:CB53 06
+0E40A8C0:1B9E 0140A8C0:CA7D 06
+0E40A8C0:1B9E 0140A8C0:CB4D 06
+$ layerfs file read trc3/p main /hello.txt
+# at 2026-11-03T07:37:17Z load1 5.64
+{"kind":"ok","snapshot":"main@ce4f4b250687","root":"98d6087163179a756d16d91972ddfaed768906950eb4aa39e88b92038fc455dd","path":"/hello.txt","text":"hello from the mac\n","start_line":1,"end_line":1,"line_truncated":false,"truncated":false,"next_line":null,"size":19}
+exit 0  wall_ms 44
+
+### guest sockets after
+Tcp: 1 200 120000 -1 259 706 0 0 0 41674 33977 0 0 0 0
+00000000:1B9E 00000000:0000 0A
+0E40A8C0:1B9E 0140A8C0:CA7A 06
+0E40A8C0:1B9E 0140A8C0:CB4B 06
+0E40A8C0:1B9E 0140A8C0:CB4F 06
+0E40A8C0:1B9E 0140A8C0:CB58 06
+0E40A8C0:1B9E 0140A8C0:CAFB 06
+0E40A8C0:1B9E 0140A8C0:CB51 06
+0E40A8C0:1B9E 0140A8C0:CB55 06
+0E40A8C0:1B9E 0140A8C0:CB53 06
+0E40A8C0:1B9E 0140A8C0:CA7D 06
+0E40A8C0:1B9E 0140A8C0:CB4D 06
+### counters ActiveOpens/PassiveOpens before 259/705 after 259/706: dActive 0 dPassive 1 inbound-from-outside 1
+### LAYERFS_TRACE file trace-r1-file-read.jsonl: not created
+
+## r1-file-stat
+### guest sockets before
+Tcp: 1 200 120000 -1 259 706 0 0 0 41674 33977 0 0 0 0
+00000000:1B9E 00000000:0000 0A
+0E40A8C0:1B9E 0140A8C0:CA7A 06
+0E40A8C0:1B9E 0140A8C0:CB4B 06
+0E40A8C0:1B9E 0140A8C0:CB4F 06
+0E40A8C0:1B9E 0140A8C0:CB58 06
+0E40A8C0:1B9E 0140A8C0:CAFB 06
+0E40A8C0:1B9E 0140A8C0:CB51 06
+0E40A8C0:1B9E 0140A8C0:CB55 06
+0E40A8C0:1B9E 0140A8C0:CB53 06
+0E40A8C0:1B9E 0140A8C0:CA7D 06
+0E40A8C0:1B9E 0140A8C0:CB4D 06
+$ layerfs file stat trc3/p main /hello.txt
+# at 2026-11-03T07:37:18Z load1 5.64
+{"kind":"ok","snapshot":"main@ce4f4b250687","root":"98d6087163179a756d16d91972ddfaed768906950eb4aa39e88b92038fc455dd","path":"/hello.txt","type":"file","inode":2,"size":19,"mode":420}
+exit 0  wall_ms 51
+
+### guest sockets after
+Tcp: 1 200 120000 -1 259 707 0 0 0 41682 33983 0 0 0 0
+00000000:1B9E 00000000:0000 0A
+0E40A8C0:1B9E 0140A8C0:CA7A 06
+0E40A8C0:1B9E 0140A8C0:CB4B 06
+0E40A8C0:1B9E 0140A8C0:CB4F 06
+0E40A8C0:1B9E 0140A8C0:CB5E 06
+0E40A8C0:1B9E 0140A8C0:CB58 06
+0E40A8C0:1B9E 0140A8C0:CAFB 06
+0E40A8C0:1B9E 0140A8C0:CB51 06
+0E40A8C0:1B9E 0140A8C0:CB55 06
+0E40A8C0:1B9E 0140A8C0:CB53 06
+0E40A8C0:1B9E 0140A8C0:CA7D 06
+0E40A8C0:1B9E 0140A8C0:CB4D 06
+### counters ActiveOpens/PassiveOpens before 259/706 after 259/707: dActive 0 dPassive 1 inbound-from-outside 1
+### LAYERFS_TRACE file trace-r1-file-stat.jsonl: not created
+
+$ layerfs sandbox create trc3/p trc3 lfs535k2a
+# at 2026-11-03T07:37:18Z load1 5.64
+{"name":"trc3","project":"trc3/p","machine":"lfs535k2a","created":1793691438751,"id":"trc3","platform":"linux","runtime":"namespaces","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","backend":"namespaces","route":"fuse","state":"running"}
+exit 0  wall_ms 223
+
+$ layerfs workspace mount trc3 lane
+# at 2026-11-03T07:37:19Z load1 5.64
+{"kind":"Mounted","path":"/layerfs/data/machine/native/run/lfs-b2c5c8a0-trc3/workspaces/1","workspace":"d4ae0f5427f29082f96a7a16b87e71e58b58b26c25901376d0790c7f5fe2b326","namespace":1,"branch":"lane","base":null,"base_layer":"32ce4f4b250687edb7f03b0a2d42f5cbd6addea6fb302242c0b9025eee29d3ddf7","root":"98d6087163179a756d16d91972ddfaed768906950eb4aa39e88b92038fc455dd","sandbox":"trc3","container":"lfs-b2c5c8a0-trc3","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","platform":"linux","runtime":"namespaces","name":null,"ws":"trc3:/layerfs/data/machine/native/run/lfs-b2c5c8a0-trc3/workspaces/1"}
+exit 0  wall_ms 47
+
+$ layerfs workspace exec trc3:/layerfs/data/machine/native/run/lfs-b2c5c8a0-trc3/workspaces/1 echo\ warm
+# at 2026-11-03T07:37:19Z load1 5.64
+{"kind":"exit:0","exit_code":0,"stdout":"warm\n","stderr":"","message":null,"truncated":false}
+exit 0  wall_ms 50
+
+## r2-exec
+### guest sockets before
+Tcp: 1 200 120000 -1 260 711 0 0 2 41735 34033 0 0 0 0
+0100007F:A63D 00000000:0000 0A
+00000000:1B9E 00000000:0000 0A
+0E40A8C0:1B9E 0140A8C0:CA7A 06
+0E40A8C0:1B9E 0140A8C0:CB4B 06
+0E40A8C0:1B9E 0140A8C0:CB4F 06
+0E40A8C0:1B9E 0140A8C0:CB5E 06
+0E40A8C0:1B9E 0140A8C0:CB63 06
+0E40A8C0:1B9E 0140A8C0:CB58 06
+0100007F:DAFA 0100007F:A63D 01
+0E40A8C0:1B9E 0140A8C0:CAFB 06
+0E40A8C0:1B9E 0140A8C0:CB51 06
+0E40A8C0:1B9E 0140A8C0:CB55 06
+0100007F:A63D 0100007F:DAFA 01
+0E40A8C0:1B9E 0140A8C0:CB61 06
+0E40A8C0:1B9E 0140A8C0:CB65 06
+0E40A8C0:1B9E 0140A8C0:CB53 06
+0E40A8C0:1B9E 0140A8C0:CA7D 06
+0E40A8C0:1B9E 0140A8C0:CB4D 06
+$ layerfs workspace exec trc3:/layerfs/data/machine/native/run/lfs-b2c5c8a0-trc3/workspaces/1 echo\ exec\ on\ the\ VM\;\ uname\ -n
+# at 2026-11-03T07:37:19Z load1 5.64
+{"kind":"exit:0","exit_code":0,"stdout":"exec on the VM\nlfs-b2c5c8a0-lfs535k2a\n","stderr":"","message":null,"truncated":false}
+exit 0  wall_ms 59
+
+### guest sockets after
+Tcp: 1 200 120000 -1 260 712 0 0 2 41742 34040 0 0 0 0
+0100007F:A63D 00000000:0000 0A
+00000000:1B9E 00000000:0000 0A
+0E40A8C0:1B9E 0140A8C0:CA7A 06
+0E40A8C0:1B9E 0140A8C0:CB4B 06
+0E40A8C0:1B9E 0140A8C0:CB4F 06
+0E40A8C0:1B9E 0140A8C0:CB5E 06
+0E40A8C0:1B9E 0140A8C0:CB63 06
+0E40A8C0:1B9E 0140A8C0:CB58 06
+0100007F:DAFA 0100007F:A63D 01
+0E40A8C0:1B9E 0140A8C0:CAFB 06
+0E40A8C0:1B9E 0140A8C0:CB51 06
+0E40A8C0:1B9E 0140A8C0:CB55 06
+0E40A8C0:1B9E 0140A8C0:CB67 06
+0100007F:A63D 0100007F:DAFA 01
+0E40A8C0:1B9E 0140A8C0:CB61 06
+0E40A8C0:1B9E 0140A8C0:CB65 06
+0E40A8C0:1B9E 0140A8C0:CB53 06
+0E40A8C0:1B9E 0140A8C0:CA7D 06
+0E40A8C0:1B9E 0140A8C0:CB4D 06
+### counters ActiveOpens/PassiveOpens before 260/711 after 260/712: dActive 0 dPassive 1 inbound-from-outside 1
+### LAYERFS_TRACE file trace-r2-exec.jsonl: not created
+
+## r2-exec-2
+### guest sockets before
+Tcp: 1 200 120000 -1 260 712 0 0 2 41742 34040 0 0 0 0
+0100007F:A63D 00000000:0000 0A
+00000000:1B9E 00000000:0000 0A
+0E40A8C0:1B9E 0140A8C0:CA7A 06
+0E40A8C0:1B9E 0140A8C0:CB4B 06
+0E40A8C0:1B9E 0140A8C0:CB4F 06
+0E40A8C0:1B9E 0140A8C0:CB5E 06
+0E40A8C0:1B9E 0140A8C0:CB63 06
+0E40A8C0:1B9E 0140A8C0:CB58 06
+0100007F:DAFA 0100007F:A63D 01
+0E40A8C0:1B9E 0140A8C0:CAFB 06
+0E40A8C0:1B9E 0140A8C0:CB51 06
+0E40A8C0:1B9E 0140A8C0:CB55 06
+0E40A8C0:1B9E 0140A8C0:CB67 06
+0100007F:A63D 0100007F:DAFA 01
+0E40A8C0:1B9E 0140A8C0:CB61 06
+0E40A8C0:1B9E 0140A8C0:CB65 06
+0E40A8C0:1B9E 0140A8C0:CB53 06
+0E40A8C0:1B9E 0140A8C0:CA7D 06
+0E40A8C0:1B9E 0140A8C0:CB4D 06
+$ layerfs workspace exec trc3:/layerfs/data/machine/native/run/lfs-b2c5c8a0-trc3/workspaces/1 echo\ again
+# at 2026-11-03T07:37:19Z load1 5.64
+{"kind":"exit:0","exit_code":0,"stdout":"again\n","stderr":"","message":null,"truncated":false}
+exit 0  wall_ms 59
+
+### guest sockets after
+Tcp: 1 200 120000 -1 260 713 0 0 2 41750 34047 0 0 0 0
+0100007F:A63D 00000000:0000 0A
+00000000:1B9E 00000000:0000 0A
+0E40A8C0:1B9E 0140A8C0:CA7A 06
+0E40A8C0:1B9E 0140A8C0:CB69 06
+0E40A8C0:1B9E 0140A8C0:CB4B 06
+0E40A8C0:1B9E 0140A8C0:CB4F 06
+0E40A8C0:1B9E 0140A8C0:CB5E 06
+0E40A8C0:1B9E 0140A8C0:CB63 06
+0E40A8C0:1B9E 0140A8C0:CB58 06
+0100007F:DAFA 0100007F:A63D 01
+0E40A8C0:1B9E 0140A8C0:CAFB 06
+0E40A8C0:1B9E 0140A8C0:CB51 06
+0E40A8C0:1B9E 0140A8C0:CB55 06
+0E40A8C0:1B9E 0140A8C0:CB67 06
+0100007F:A63D 0100007F:DAFA 01
+0E40A8C0:1B9E 0140A8C0:CB61 06
+0E40A8C0:1B9E 0140A8C0:CB65 06
+0E40A8C0:1B9E 0140A8C0:CB53 06
+0E40A8C0:1B9E 0140A8C0:CA7D 06
+0E40A8C0:1B9E 0140A8C0:CB4D 06
+### counters ActiveOpens/PassiveOpens before 260/712 after 260/713: dActive 0 dPassive 1 inbound-from-outside 1
+### LAYERFS_TRACE file trace-r2-exec-2.jsonl: not created
+
+$ layerfs workspace unmount trc3:/layerfs/data/machine/native/run/lfs-b2c5c8a0-trc3/workspaces/1 --discard
+# at 2026-11-03T07:37:20Z load1 5.64
+{"kind":"Unmounted"}
+exit 0  wall_ms 44
+
+$ layerfs sandbox close trc3
+# at 2026-11-03T07:37:20Z load1 5.64
+{"kind":"Closed","sandbox":"trc3","unknown":[],"closed":"trc3"}
+exit 0  wall_ms 157
+
+$ layerfs store pull trc3
+# at 2026-11-03T07:37:20Z load1 5.64
+{"store":"trc3","from":"lfs535k2a","to":"native","bytes":212992,"heads":"eb1d94739963b9afe052d35ba44caf5d1c41b2528d24d270e0665fce0e00c241"}
+exit 0  wall_ms 95
+
+$ layerfs store remove trc3
+# at 2026-11-03T07:37:20Z load1 5.64
+{"removed":"trc3"}
+exit 0  wall_ms 38
+

@@ -1,0 +1,52 @@
+# H6R = /tmp/lfs535k1-h6r.qooQ after conversion
+{"layout":3,"id":"3b57211a4c678d444aee9f6112c49ef8"}
+
+.
+./layerfs.json
+./layerfs.lock
+./log
+./log/import-env.jsonl
+./log/leases.jsonl
+./log/migration-2.json
+./log/migration-failures.jsonl
+./machine
+./machine/docker
+./machine/docker/record.json
+./machine/docker/start.lock
+./machine/docker/worker.json
+./machine/native
+./machine/native/record.json
+./machine/native/run
+./store
+./store/dr6
+./store/dr6/lock
+./store/dr6/open
+./store/dr6/project
+./store/dr6/project/p
+./store/dr6/project/p/ownership.lock
+./store/dr6/project/p/record.json
+./store/dr6/record.json
+./store/r6
+./store/r6/lock
+./store/r6/open
+./store/r6/project
+./store/r6/project/p
+./store/r6/project/p/ownership.lock
+./store/r6/project/p/record.json
+./store/r6/record.json
+./store/r6/store.sqlite
+./store/r6/store.sqlite-shm
+./store/r6/store.sqlite-wal
+-- docker worker lfs-3b57211a-docker /layerfs/data
+.
+./store
+./store/dr6
+./store/dr6/project
+./store/dr6/project/p
+./store/dr6/project/p/ownership.lock
+./store/dr6/project/p/record.json
+./store/dr6/project/p/sandboxes
+./store/dr6/record.json
+./store/dr6/store.sqlite
+-- containers
+lfs-3b57211a-docker afa1ef9c2729 Up About a minute

@@ -7,7 +7,6 @@ use layerfs_bridge::{
     provision::StoreManifest,
 };
 use layerfs_storage::ReservationBlocks;
-use std::path::Path;
 
 impl Application {
     pub(super) fn install(
@@ -73,7 +72,10 @@ impl Application {
         };
         let result = crate::install::receive_install_manifest(
             connection,
-            Path::new(&self.setup.store),
+            std::path::Path::new(match &self.setup.store {
+                layerfs_bridge::DaemonStore::Sqlite { locator, .. } => locator.as_str(),
+                layerfs_bridge::DaemonStore::Postgres { .. } => "",
+            }),
             settings,
             manifest,
         );

@@ -1,0 +1,11 @@
+# Final home H6 (converted 2.0 home) after the 24 cells, 2026-11-03T07:58:49Z
+$ layerfs doctor --text
+ok: nothing to report
+$ layerfs store list
+{"items":[{"name":"d6","kind":"sqlite","machine":"docker","profile":"disposable","created":1793692307490,"sqlite":"3.53.2","last_move":{"from":"native","to":"docker","at":1793692313399,"bytes":12345344,"sha256":"006a444b25157a2b052d7b07793e3bf26adeeda5f911d71b6aab876c5c1e7caf","heads":"a2e77530e6b072f5a1a3d298698044816e41b4b708d7d9b591a20c29353f4a5b"},"projects":["p"],"state":"idle"},{"name":"n6","kind":"sqlite","machine":"native","profile":"disposable","created":1793692234808,"sqlite":"3.53.2","projects":["p"],"state":"idle"}]}
+
+-- Sandbox records outside sandbox/<name>/ (json with backend/runtime_id/route):
+-- store/*/project/*/sandboxes on native:
+-- same in the docker worker root:
+-- the stale leases doctor names are left by exited CLI/Node processes; the documented fix (store status) then doctor:
+ok: nothing to report

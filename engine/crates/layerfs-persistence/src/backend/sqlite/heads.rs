@@ -15,6 +15,7 @@
 use super::session::rows;
 use layerfs_storage::port::PersistenceError;
 use rusqlite::{Connection, OpenFlags};
+use sha2::Digest;
 use std::path::Path;
 
 fn hex(bytes: &[u8]) -> String {
@@ -74,4 +75,16 @@ pub fn read_heads(path: &Path) -> Result<Vec<String>, PersistenceError> {
         .map_err(|(_, error)| PersistenceError::from(rows::error(error)))?;
     lines.sort();
     Ok(lines)
+}
+
+/// The heads digest of the Store file at `path`: the sha256 of the sorted
+/// heads lines, each terminated by one `\n`. This is exactly the digest
+/// store-backup attaches to a pushed copy.
+pub fn heads_digest(path: &Path) -> Result<[u8; 32], PersistenceError> {
+    let mut text = String::new();
+    for line in read_heads(path)? {
+        text.push_str(&line);
+        text.push('\n');
+    }
+    Ok(sha2::Sha256::digest(text.as_bytes()).into())
 }

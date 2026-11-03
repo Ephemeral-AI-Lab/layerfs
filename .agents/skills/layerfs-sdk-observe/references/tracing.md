@@ -1,22 +1,41 @@
 # Call trace
 
 > **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
-> `layerfs-sdk-observe` skill. **In this 2.0 build no trace is written.**
-> Checked on 2026-11-02: no code under `engine/`, `api/` or `core/crates`
-> reads `LAYERFS_TRACE`, and `LAYERFS_TRACE=<file> layerfs file read …` left
-> no file. The line format below is 1.1.0's (#333), kept for reading old
-> traces and as the target the settings are reserved for.
+> `layerfs-sdk-observe` skill. **In this 2.0 build the only trace is the
+> worker-connection line** (#535 phase 8 item 6): with `LAYERFS_TRACE=<file>`,
+> each connection the caller opens to a machine's worker appends one line.
+> Calls that run in the caller's process (`native`, any PostgreSQL Store call)
+> write nothing. The call-line format further down is 1.1.0's (#333), kept for
+> reading old traces and as the target the settings are reserved for.
+
+## The worker-connection line
+
+```json
+{"at":1793000000000,"event":"worker.connection","op":"file.read","worker":"127.0.0.1:52011","sent":true,"ms":14}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `at` | milliseconds since the Unix epoch, written when the connection ended |
+| `op` | the request it carried; `hello` for a connection that only read the worker's hello |
+| `worker` | the worker's loopback address on the caller's host |
+| `sent` | whether the request went out (`false`: the worker was not reached or was of another build, and nothing was sent) |
+| `ms` | the connection's whole time: connect, secret, request, events and answer |
+
+One worker-routed call is one line (R1). Written by
+`api/crates/layerfs-control/src/common/trace.rs` `connection`; a line that
+cannot be written changes no outcome.
 
 ## Where it stands
 
 | Piece | 1.1.0 | 2.0 build |
 | --- | --- | --- |
-| Settings `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | read by `@layerfs/agent` (`api/agent/sdk/src/trace.js` at tag `v1.1.0`) | kept as the only settings besides `LAYERFS_HOME` (S §2.5), but **read by nothing** |
-| The trace line writer | in that JavaScript file | deleted with `@layerfs/agent` (#533 step 14); no Rust replacement yet |
+| Settings `LAYERFS_TRACE`, `LAYERFS_TRACE_STEP`, `LAYERFS_TRACE_START` | read by `@layerfs/agent` (`api/agent/sdk/src/trace.js` at tag `v1.1.0`) | kept as the only settings besides `LAYERFS_HOME` (S §2.5); only `LAYERFS_TRACE` is read, for the worker-connection line |
+| The trace line writer | in that JavaScript file | deleted with `@layerfs/agent` (#533 step 14); no per-call Rust replacement yet |
 | In-process collector | `host/trace.rs` in the Node binding | `api/crates/layerfs-api/src/host/trace.rs`: takes a 64-hex scope from an `observe` argument, traces the call's daemon control exchanges under it and collects up to 64 telemetry values. **No front end calls it** (`take_scope` and `run` have no callers) |
 | The home's `trace/` folder | `traces/` | reserved (`paths::trace_dir`; a 1.1.0 `traces/` folder is renamed to it); O26 makes trace files there the event feed. Nothing writes it yet |
 
-So, today: turning tracing on costs nothing and records nothing. Use Commit
+So, today: turning tracing on records worker connections only. Use Commit
 records and messages instead ([storage metrics](storage-metrics.md#one-row-per-step)),
 and report timing as not collected.
 

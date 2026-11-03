@@ -8,7 +8,7 @@ use layerfs_history::HistoryCatalog;
 use layerfs_history::HistoryCatalogConfig;
 #[cfg(target_os = "macos")]
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
 };
 use layerfs_storage::port::acquisition::Acquisition;
 use layerfs_storage::Storage;
@@ -207,7 +207,7 @@ fn host_import_keeps_ignored_git_dependencies_outputs_and_exact_link_targets() {
 fn real_host_profiles_acquire_and_reuse_the_exact_complete_root() {
     for profile in DEVELOPMENT_PROFILES {
         let fixture = Fixture::new(0);
-        let handles = Handles::create(
+        let handles = SqliteHandles::create(
             PersistenceConfig::sqlite(fixture.path.join("store.sqlite"))
                 .with_sqlite_profile(profile)
                 .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),

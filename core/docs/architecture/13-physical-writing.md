@@ -554,7 +554,7 @@ New acquisition-table Stores select incremental auto-vacuum before schema creati
 retained mode0 Stores still open without conversion. Canonical objects and pack
 layouts are unchanged. Pointer-map pages are included in allocation. Each normal
 nonempty discard/release pays at most512 free-page removals inside its existing
-atomic unit. `Handles::reclaim_space` exposes one bounded job for residual debt;
+atomic unit. `SqliteHandles::reclaim_space` exposes one bounded job for residual debt;
 it refuses unsupported mode0 without migration and preserves one-attempt outcomes.
 WAL/FULL/fullfsync and MEMORY/OFF retain their scoped guarantees. Checkpoint alone
 still does not compact internal SQLite free pages. Completion measurements pay

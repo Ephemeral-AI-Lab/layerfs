@@ -173,6 +173,22 @@ fn list_and_get_answer_the_live_state() {
         "the list waited {took:?}"
     );
     assert_eq!(listed(&list, "native").get_text("state"), Some("ready"));
+    // the built-in docker is probed as `machine.status` probes it (#535
+    // D11: its worker starts and stops by hand), never a fixed `ready`
+    let docker = listed(&list, "docker");
+    match calls::call(
+        Some(&home),
+        "machine.status",
+        SdkValue::map([("name", SdkValue::text("docker"))]),
+        &mut |_| {},
+    ) {
+        Ok(status) => assert_eq!(
+            docker.get_text("state"),
+            status.get_text("state"),
+            "{docker:?}"
+        ),
+        Err(_) => assert_eq!(docker.get_text("state"), Some("unknown"), "{docker:?}"),
+    }
     assert_eq!(listed(&list, "fwd").get_text("state"), Some("stopped"));
     assert_eq!(listed(&list, "up").get_text("state"), Some("running"));
     assert_eq!(fwd.join().unwrap(), None);

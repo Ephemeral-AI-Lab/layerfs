@@ -5,39 +5,13 @@
 //! A call runs once. Its arguments are checked against the table before any
 //! effect, then its family's function runs with a [`Context`]: the home and
 //! the call's one event stream (O22), which carries `workspace.exec`'s
-//! output and the progress of `project.init`, `store.move`, `backup.create`
+//! output and the progress of `project.init`, `store.push`, `store.pull`, `backup.create`
 //! and `backup.restore`. Result keys are snake_case in every front end.
 use super::{check, route, table};
-use crate::host::outcome::{refused, Outcome};
 use layerfs_bridge::control::SdkValue;
+pub use layerfs_control::common::context::Context;
+use layerfs_control::common::outcome::{refused, Outcome};
 use std::path::{Path, PathBuf};
-
-/// What one running call can reach: its home and its event stream.
-pub struct Context<'a> {
-    /// The home every record lives in.
-    pub home: PathBuf,
-    events: &'a mut dyn FnMut(SdkValue),
-}
-
-impl Context<'_> {
-    /// Sends one progress update, `{ progress: value }`.
-    pub fn progress(&mut self, value: SdkValue) {
-        (self.events)(SdkValue::map([("progress", value)]));
-    }
-
-    /// Passes on one event a worker sent, as it came.
-    pub fn event(&mut self, event: SdkValue) {
-        (self.events)(event);
-    }
-
-    /// Sends one piece of a command's output, `{ stream, bytes }`.
-    pub fn output(&mut self, stream: &str, bytes: &[u8]) {
-        (self.events)(SdkValue::map([
-            ("stream", SdkValue::text(stream)),
-            ("bytes", SdkValue::Bytes(bytes.to_vec())),
-        ]));
-    }
-}
 
 /// The home a call uses: `explicit` when given, else `LAYERFS_HOME`, else
 /// `~/.layerfs` (O28). It must be an absolute path.
@@ -86,14 +60,19 @@ pub fn call_scoped(
         args = scope.apply(name, args)?;
     }
     let home = home(home_path)?;
-    crate::home::open(&home).inspect_err(|refusal| crate::home::note_failure(&home, refusal))?;
-    // `machine/native/` and `machine/docker/` exist from the first call
+    let id = crate::home::open(&home)
+        .inspect_err(|refusal| crate::home::note_failure(&home, refusal))?
+        .id;
+    // `machine/native/` and `machine/docker/` exist from the first call;
+    // checked once per process for each home (R6)
     #[cfg(feature = "machine")]
-    crate::machine::ensure_built_ins(&home)?;
+    crate::machine::ensure_built_ins(&home, &id)?;
+    #[cfg(not(feature = "machine"))]
+    let _ = id;
     if let Some(scope) = scope {
         scope.owns(&home, name, &args)?;
     }
-    let mut context = Context { home, events };
+    let mut context = Context::new(home, events);
     let value = route::run(spec, &mut context, &args)?;
     // a scoped `branch.list` names its Branches relative to the namespace
     // in the family (it pages through them there)

@@ -1,7 +1,7 @@
 //! Reference collection (A3, plan A): an export configured with a small
 //! reference bound walks a tree far larger than the bound, repeatedly, and
 //! keeps both its own holdings and the engine's kernel entries bounded.
-//! Handles of collected serials keep working (resolved again by their name);
+//! SqliteHandles of collected serials keep working (resolved again by their name);
 //! a handle whose name now reaches another inode is stale; the product
 //! Commit afterwards holds exactly what the client made.
 #[allow(dead_code)]

@@ -6,7 +6,8 @@ use layerfs_history::{
     HistoryError, HistoryName, InitStatistics, LayerStackId,
 };
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SealedStore, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    PersistenceConfig, SealedStore, SqliteAcquisitionSchema, SqliteHandles,
+    SqlitePersistenceProfile,
 };
 use layerfs_project::{InitCounters, InitStep, Initialized, ProjectError};
 use layerfs_storage::{port::PersistenceError, Storage, StorageError, StoragePolicy};
@@ -121,7 +122,7 @@ pub(crate) fn initialize(
             .store
             .clone()
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables);
-        let handles = Handles::create(config, request.policy, &request.catalog)
+        let handles = SqliteHandles::create(config, request.policy, &request.catalog)
             .map_err(InitError::Persistence)?;
         let storage = Storage::new(handles.storage.clone()).map_err(InitError::Storage)?;
         let imported = layerfs_project::init_observed(
@@ -257,7 +258,8 @@ impl ProjectApi {
         &self,
         request: super::live::CreateRequest,
     ) -> Result<(), InitError> {
-        super::live_open::create_postgresql(&request.store, request.policy, &request.catalog)
+        let selection: layerfs_persistence::StoreSelection = request.store.clone();
+        super::live_open::create_postgresql(&selection, request.policy, &request.catalog)
     }
     /// Imports a folder as a new project of the live Store (#506), through
     /// its admission and writer lane; the Store is neither sealed nor

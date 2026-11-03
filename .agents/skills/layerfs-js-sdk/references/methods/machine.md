@@ -9,8 +9,11 @@
 
 ```js
 machine.list()
+machine.platforms()
 machine.get(name)
 machine.status(name)
+machine.start(name)
+machine.stop(name)
 machine.create(name, platform, { cpus, memory, disk, image, nested, host })
 machine.connect(name, host, { user, port, identity, known_hosts, root })
 machine.remove(name)
@@ -21,8 +24,10 @@ machine.update(name, { cpus, memory, image, docker, wsl })
 A machine is one kernel where Sandboxes run. Two are built in and always
 recorded: `native` (the host itself) and `docker`. VMs (`apple-container`,
 `microsandbox`, `lima`, `firecracker`) are created; an ssh host is connected.
-A machine starts on the first call that needs it; its worker stops it when
-idle (10 minutes, O2) and it keeps its disk.
+A machine runs only between `machine.start(name)` and `machine.stop(name)`
+(#535 D11): nothing starts it on demand and nothing stops it when unused. A
+call that needs a stopped machine is refused `Unavailable`, its message
+naming `layerfs machine start <name>`; call `machine.start(name)` first.
 
 ## Reads
 
@@ -32,15 +37,20 @@ layerfs machine list --text
 
 ```
 NAME    PLATFORM  BACKEND  STATE  CPUS  MEMORY  DISK
-docker  docker    docker   ready  -     -       -
-native  native    native   ready  -     -       -
-
-PLATFORM         READY  VERSION
-apple-container  true   container CLI version 1.6.1 (…)
-microsandbox     false  -
-lima             true   limactl version 2.2.1
-…
+docker  docker    docker   stopped  -     -       -
+native  native    native   ready    -     -       -
 ```
+
+`native` is always `ready`. Every other machine, the built-in `docker`
+included, shows its live state as `machine status` reads it (`running`,
+`stopped`, …): its worker is started and stopped by hand (`machine start`).
+
+Each machine also carries `supports` (`sqlite`, `postgresql_sandbox`,
+`reason`). `machine.platforms()` (`layerfs machine platforms`) answers each
+platform on this host: backend, kernel route, where Store calls run, whether
+a PostgreSQL Sandbox runs and why not, `ready`, `missing`, `version` and the
+options `machine.create` takes (the rows of `connect/SUPPORT.json`). Neither
+call starts a machine.
 
 `machine.get(name)` is the record:
 
@@ -55,18 +65,34 @@ started:
 {"name":"native","platform":"native","state":"running","free_disk":null,"tool_version":null,"down_reason":null,"stores":["shop"]}
 ```
 
+While a create, connect, remove or disconnect holds the machine, its record
+holds that call's `op`. `get` and `status` then probe nothing: `state` is
+`creating` or `removing` while that process lives, and `unresolved` once it
+is gone with the outcome unknown. `status` also answers
+`op: { id, name, phase, started, uncertain }` (`name` is `machine.create`,
+`machine.connect`, `machine.remove` or `machine.disconnect`).
+
 `NotFound` for a name that isn't recorded.
 
 ## Changes (not run here)
 
 | Call | What it does | Notes |
 | --- | --- | --- |
+| `start(name)` | Starts a stopped machine and its worker and waits until ready | A running machine and `native` answer at once. Returns the machine as `get` does. `Busy` while another call holds the machine (its `op`) |
+| `stop(name)` | Stops the worker and, where there is one, the VM; disks stay | `InUse` while Sandboxes run on it; `detail.related` lists them as `{ kind: "sandbox", name }`. `native` answers at once. Later calls that need the machine are refused `Unavailable` until `start` |
 | `create(name, platform, …)` | Makes and starts a VM | `Unsupported` when the platform's tool is missing; `InvalidInput` for `native`, `docker` or `ssh`. `memory`, `disk`: bytes or text with `K`, `M`, `G`. `nested` is for `lima` only; `host` (required for `firecracker`) names a nested `lima` machine |
 | `connect(name, host, …)` | Records an existing Linux host over ssh | `user` defaults to `root`, `port` to 22, `root` to `/layerfs/data`; the host key must already be known. `Unavailable` or `Denied` records nothing; a second machine for the same host is `Exists` |
-| `remove(name)` | Deletes a VM and its disk | `InUse` while it holds Stores, Sandboxes or Firecracker machines. While it runs, the record is marked `removing` and every call that would start, update, remove or use the machine is `InUse` |
-| `disconnect(name)` | Forgets an ssh machine; its data root stays | `InUse` as above |
+| `remove(name)` | Deletes a VM and its disk | `InUse` while it holds Stores, Sandboxes or Firecracker machines. While it runs, the record holds its `op` and every call that would start, update, remove or use the machine is `Busy` |
+| `disconnect(name)` | Forgets an ssh machine; its data root stays | `InUse` and `Busy` as above |
 | `update(name, …)` | Sets `native`/`docker`'s image, Docker socket (`docker`) and WSL distribution (`wsl`) | `InUse` while Sandboxes run on it; `wsl` only on a Windows host; resizing a VM (`cpus`, `memory`) is `Unsupported`, not built |
 
+An `Unknown` outcome of a create, connect, remove or disconnect keeps its
+`op`, marked `uncertain`, with the `error`. Once that process is gone,
+every other call on the machine is `Unresolved`, naming
+`layerfs machine status <name>` and the call that clears it:
+`machine.remove(name)`, or `machine.disconnect(name)` for ssh.
+
 `native` and `docker` are never created, removed or disconnected. A Sandbox
-on the `docker` machine runs in a container on its image (see
+on the `docker` machine runs in a container on its image; with none named,
+the bundle's Sandbox image is loaded into Docker once and used (#535 P5; see
 [sandbox](sandbox.md)).

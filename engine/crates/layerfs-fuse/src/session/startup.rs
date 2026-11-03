@@ -3,11 +3,9 @@ use super::state::{
     AttachFailure, AttachPhase, AttachRemainder, DetachAttempt, KernelSession, SessionConfig,
     RECEIVE_LOOPS,
 };
-use crate::{
-    attributes::Identity, mount::syscalls, ports::MountServices, request::KernelFilesystem,
-    MountRequests,
-};
+use crate::{attributes::Identity, mount::syscalls, request::KernelFilesystem, MountRequests};
 use fuser::{Config, Session, SessionACL, SessionMonitor, SessionPhase};
+use layerfs_mount_ports::ports::MountServices;
 use std::{fs, io, sync::Arc, thread, time::Duration};
 
 impl KernelSession {

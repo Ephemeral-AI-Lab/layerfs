@@ -1,15 +1,5 @@
 //! Explicit backend and local database selection.
 use std::path::PathBuf;
-/// Explicit persistence engine; no error-driven fallback.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum BackendSelection {
-    /// Embedded local SQLite.
-    Sqlite,
-    /// A PostgreSQL Store (#506), opened through `PostgresHandles` when the
-    /// `postgresql` feature is built; `Handles` refuses this selection with
-    /// `BackendUnavailable`.
-    Postgres(PostgresSelection),
-}
 /// PostgreSQL `synchronous_commit` for every write transaction, applied with
 /// `SET LOCAL`. `Off` is the default (owner, 2026-10-29).
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -131,8 +121,6 @@ impl SqliteAcquisitionSchema {
 /// One complete Store database path and engine selection.
 #[derive(Clone, Debug)]
 pub struct PersistenceConfig {
-    /// Backend requested by the application.
-    pub backend: BackendSelection,
     /// Host-local SQLite file; never a network endpoint.
     pub path: PathBuf,
     /// Explicit SQLite profile; never selected by failure or environment.
@@ -146,20 +134,8 @@ impl PersistenceConfig {
     /// Selects the embedded durable profile at an explicit path.
     pub fn sqlite(path: impl Into<PathBuf>) -> Self {
         Self {
-            backend: BackendSelection::Sqlite,
             path: path.into(),
             sqlite_profile: SqlitePersistenceProfile::Durable,
-            sqlite_pack_layout: SqlitePackLayout::Monolithic,
-            sqlite_acquisition: SqliteAcquisitionSchema::Absent,
-        }
-    }
-    /// Selects the PostgreSQL Store `selection` (#506). The SQLite fields
-    /// are unused: no path, the Disposable profile, no layout or tables.
-    pub fn postgresql(selection: PostgresSelection) -> Self {
-        Self {
-            backend: BackendSelection::Postgres(selection),
-            path: PathBuf::new(),
-            sqlite_profile: SqlitePersistenceProfile::Disposable,
             sqlite_pack_layout: SqlitePackLayout::Monolithic,
             sqlite_acquisition: SqliteAcquisitionSchema::Absent,
         }

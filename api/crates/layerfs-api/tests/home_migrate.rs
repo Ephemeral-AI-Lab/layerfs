@@ -1,11 +1,11 @@
-//! The one conversion of a 1.1.0 home into the 2.0 layout (#533 step 4): a
-//! 1.1.0 home with every kind of record converts, and a second run changes
-//! nothing.
+//! The one conversion of a 1.1.0 home into the 2.0 layout (#533 step 4),
+//! then on into layout 3 (#536 §5): a 1.1.0 home with every kind of record
+//! converts, and a second run changes nothing.
 use layerfs_api::home::{self, paths, read_record, Layout};
 use layerfs_bridge::control::{Answer, Reply, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
-use layerfs_store_service::remote::storage::{minio::MinioSettings, CredentialRef};
-use layerfs_store_service::remote::{state, Direction, Provider, Remotes, Transfer};
+use layerfs_store_backup::backup::{link as state, Direction, Provider, Remotes, Transfer};
+use layerfs_store_backup::bucket::{minio::MinioSettings, CredentialRef};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
@@ -207,11 +207,12 @@ fn a_1_1_0_home_converts_once() {
     );
     assert!(paths::project_record(&home, "solo", "solo").is_file());
     assert!(
-        paths::project_dir(&home, "solo", "solo")
-            .join("sandboxes/1")
-            .is_dir(),
-        "Sandboxes move in step 12"
+        !paths::project_dir(&home, "solo", "solo")
+            .join("sandboxes")
+            .exists(),
+        "layout 3 keeps no numbered Sandbox folder (#536 §5)"
     );
+    assert_eq!(file.layout, home::LAYOUT_VERSION);
     assert!(!home.join("solo").exists());
 
     let bucket = read_record(&paths::bucket_record(&home, "minio1"))
@@ -346,7 +347,7 @@ fn closed_store(scratch: &Path) -> (PathBuf, SdkValue, SdkValue) {
         .unwrap();
     call(
         &home,
-        "store.move",
+        "store.push",
         &[("name", t("shop")), ("machine", t("box"))],
     );
     (paths::store_file(&root, "shop"), store, project)

@@ -16,13 +16,12 @@
 //! owner job's failure, an uncertain outcome, a failed reply-ticket step. A
 //! job already submitted is never ended here: its request receives the
 //! original result first.
-use crate::{
-    coherence::reply_order,
+use crate::{coherence::reply_order, RequestDisposition};
+use fuser::Errno;
+use layerfs_mount_ports::{
     operations::{DirectoryFailure, MutationFailure, ReadFailure},
     ports::Fence,
-    RequestDisposition,
 };
-use fuser::Errno;
 
 /// The kernel's own abort releases the blocked caller; this errno only ends
 /// the request's reply ownership.

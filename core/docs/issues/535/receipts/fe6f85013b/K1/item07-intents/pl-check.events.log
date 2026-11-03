@@ -1,0 +1,3 @@
+1793691261.791904 begin pull pl-check - point=check pid=42472
+1793691261.810290 progress {"phase": "check", "done": null, "total": null}
+1793691261.810381 SIGKILL at progress check

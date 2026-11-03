@@ -21,7 +21,7 @@ Project's import is its one consumer and has no other acquisition algorithm
   typed rows contain no SQL, table name, cursor or connection. It is separate
   from `PackPersistence`, which stays an immutable-object contract.
 - **Provider:** `layerfs_persistence::AcquisitionProvider`, the third field of
-  `Handles`, over the one `Session` the storage and history handles share. No
+  `SqliteHandles`, over the one `Session` the storage and history handles share. No
   unit opens, attaches or creates anything.
 - **Dependency edges:** unchanged. Persistence → Storage already existed.
 
@@ -152,7 +152,7 @@ tamper refusal, acquisition order, identity sharing, wide-directory placement
 through name windows, charges equal to the engine's own sums, budgeted cleanup
 to zero, owner fencing and abandoned operations. The tree case runs under both
 the Durable and the Disposable profile; the others under Disposable only.
-`Handles::explain_acquisition` returns the product build's plan of every shipped
+`SqliteHandles::explain_acquisition` returns the product build's plan of every shipped
 statement. The original 25-statement point/window plans and the revised root
 window plans are retained at their own source identities. Stored-state reads
 and updates use the operation-prefixed primary keys or directory index. Root
@@ -298,7 +298,7 @@ New acquisition-table Stores select incremental auto-vacuum before schema creati
 retained mode0 Stores still open without conversion. Canonical objects and pack
 layouts are unchanged. Pointer-map pages are included in allocation. Each normal
 nonempty discard/release pays at most512 free-page removals inside its existing
-atomic unit. `Handles::reclaim_space` exposes one bounded job for residual debt;
+atomic unit. `SqliteHandles::reclaim_space` exposes one bounded job for residual debt;
 it refuses unsupported mode0 without migration and preserves one-attempt outcomes.
 WAL/FULL/fullfsync and MEMORY/OFF retain their scoped guarantees. Checkpoint alone
 still does not compact internal SQLite free pages. Completion measurements pay

@@ -160,31 +160,31 @@ prove that it represents the file, filesystem, or authority the caller intends.
 ### 3.1 Create or open the Store
 
 Use `PersistenceConfig::sqlite(path)` and choose profile/layout explicitly before
-creation/open. The default is Durable and Monolithic. `Handles::create` refuses
+creation/open. The default is Durable and Monolithic. `SqliteHandles::create` refuses
 an existing file; use `open_writable` or `open_read_only` for an existing Store.
 
 | API | Arguments / result | Important requirement |
 | --- | --- | --- |
-| `Handles::create` | `PersistenceConfig`, `StoragePolicy`, `&HistoryCatalogConfig` → `Result<Handles, PersistenceError>` | Fresh shared WAL Store; valid policy and authority config |
-| `Handles::open_writable` | config, binding bytes, cursor key `[u8;32]` → handles | Existing supported Store; matching authority and selected profile |
-| `Handles::open_read_only` | Same open arguments | Mutations explicitly refused |
+| `SqliteHandles::create` | `PersistenceConfig`, `StoragePolicy`, `&HistoryCatalogConfig` → `Result<SqliteHandles, PersistenceError>` | Fresh shared WAL Store; valid policy and authority config |
+| `SqliteHandles::open_writable` | config, binding bytes, cursor key `[u8;32]` → handles | Existing supported Store; matching authority and selected profile |
+| `SqliteHandles::open_read_only` | Same open arguments | Mutations explicitly refused |
 | `Storage::new` | `Arc<dyn PackPersistence>` → `StorageResult<Storage>` | Reads and validates persisted policy |
 | `Storage::begin_save` | `&self` → `StorageResult<Save<'_>>` | One producer owner for a Save |
 | `Storage::reader` | `&self` → `StorageResult<Reader<'_>>` | Operation-owned authenticated read caches |
-| `Handles::seal` | consumes `Handles` → `Result<SealedStore, PersistenceError>` | Sole host provisioning owner; checkpoint once, checked close, no sidecars, release unused macOS extents; retained providers refuse |
+| `SqliteHandles::seal` | consumes `SqliteHandles` → `Result<SealedStore, PersistenceError>` | Sole host provisioning owner; checkpoint once, checked close, no sidecars, release unused macOS extents; retained providers refuse |
 
 The application supplies a stable binding key, nonzero valid catalog incarnation,
 and nonzero secret cursor key through `HistoryCatalogConfig`. Retain authority
 material outside the catalog; do not log secrets or fabricate identities from
-process IDs/time. `Handles.storage` is an `Arc<StorageProvider>`;
-`Handles.history` implements `HistoryCatalog`.
+process IDs/time. `SqliteHandles.storage` is an `Arc<StorageProvider>`;
+`SqliteHandles.history` implements `HistoryCatalog`.
 
 Composition below is a recipe, not a complete executable: `config`, `policy`,
 and `authority` are checked application inputs, and caller error conversion is
 omitted.
 
 ```rust
-let handles = Handles::create(config, policy, &authority)?;
+let handles = SqliteHandles::create(config, policy, &authority)?;
 let storage = Storage::new(handles.storage.clone())?;
 let construction = storage.policy().construction();
 let capacities = construction.capacities();
@@ -430,7 +430,7 @@ Source: [history requests/outcomes](../../core/crates/layerfs-history/src/contra
 
 `InitRequest` supplies `source`, an `acquisition` backing
 (`&dyn layerfs_storage::port::acquisition::Acquisition`, normally the Store's
-`Handles::acquisition`), explicit stack ID and name, `scope_seed`, and a fixed
+`SqliteHandles::acquisition`), explicit stack ID and name, `scope_seed`, and a fixed
 `Instant` deadline. The Store must have been created with
 `with_sqlite_acquisition(SqliteAcquisitionSchema::Tables)` (schema versions 4–6);
 on a version 1–3 Store Init is a typed `BackendUnavailable` refusal, and there is
@@ -690,7 +690,7 @@ outcomes still quarantine the session. Separate WAL reader connections can read
 while another process holds the write lock.
 
 The macOS allocation/extent-release owner and public checkpoint API are retired.
-Host `Handles::seal()` consumes sole ownership, checkpoints TRUNCATE once, checks
+Host `SqliteHandles::seal()` consumes sole ownership, checkpoints TRUNCATE once, checks
 connection close, then verifies absence of `-wal`, `-shm` and `-journal`. The
 owner-approved macOS file-control wrapper disables and verifies persistent WAL
 before checkpoint; no sidecar is manually deleted. A retained provider refuses

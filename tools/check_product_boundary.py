@@ -18,13 +18,13 @@ UNSAFE = re.compile(r"\bunsafe\b")
 # Crates whose `unsafe` surface is bounded. layerfs-storage keeps one audited
 # FFI module (encoding/codec.rs); Persistence has the owner-authorized macOS
 # seal file-control module; Sandbox reads macOS process facts through
-# proc_pidinfo in backend/native/macos/darwin.rs. Their siblings stay unsafe-free. The
+# proc_pidinfo in local/os/macos/darwin.rs. Their siblings stay unsafe-free. The
 # comment in a lint name (`unsafe_code`) is not the bare word, so attr lines
 # never trip the scan once comments are stripped.
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
     "layerfs-persistence": "src/backend/sqlite/lifecycle/file_control.rs",
-    "layerfs-sandbox": "src/backend/native/macos/darwin.rs",
+    "layerfs-sandbox": "src/local/os/macos/darwin.rs",
 }
 UNSAFE_FREE_CRATES = (
     "layerfs-content",
@@ -33,13 +33,16 @@ UNSAFE_FREE_CRATES = (
     "layerfs-overlay",
     "layerfs-workspace",
     "layerfs-store-service",
-    "layerfs-remote-storage",
+    "layerfs-store-backup",
+    "layerfs-mount-ports",
     "layerfs-fuse",
     "layerfs-nfs",
     "layerfs-daemon",
     "layerfs-api",
+    "layerfs-control",
     "layerfs-bridge",
     "layerfs-cli",
+    "layerfs-machine",
 )
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
@@ -50,14 +53,17 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-overlay": "#![forbid(unsafe_code)]",
     "layerfs-workspace": "#![forbid(unsafe_code)]",
     "layerfs-store-service": "#![forbid(unsafe_code)]",
-    "layerfs-remote-storage": "#![forbid(unsafe_code)]",
+    "layerfs-store-backup": "#![forbid(unsafe_code)]",
+    "layerfs-mount-ports": "#![forbid(unsafe_code)]",
     "layerfs-fuse": "#![forbid(unsafe_code)]",
     "layerfs-nfs": "#![forbid(unsafe_code)]",
     "layerfs-daemon": "#![forbid(unsafe_code)]",
     "layerfs-api": "#![forbid(unsafe_code)]",
+    "layerfs-control": "#![forbid(unsafe_code)]",
     "layerfs-bridge": "#![forbid(unsafe_code)]",
     "layerfs-sandbox": "#![deny(unsafe_code)]",
     "layerfs-cli": "#![forbid(unsafe_code)]",
+    "layerfs-machine": "#![forbid(unsafe_code)]",
 }
 
 
@@ -90,11 +96,29 @@ ALLOWED_DEPENDENCIES = {
     },
     "layerfs-overlay": set(),
     "layerfs-workspace": {"layerfs-content", "layerfs-overlay", "layerfs-telemetry"},
-    "layerfs-fuse": {"layerfs-content", "layerfs-overlay", "layerfs-workspace"},
+    # The route-neutral kernel ports FUSE and NFS serve over.
+    "layerfs-mount-ports": {"layerfs-content", "layerfs-overlay", "layerfs-workspace"},
+    "layerfs-fuse": {
+        "layerfs-content",
+        "layerfs-overlay",
+        "layerfs-workspace",
+        "layerfs-mount-ports",
+    },
     # Whole-file remote drivers; they know nothing about Stores.
-    "layerfs-remote-storage": set(),
-    # The NFS export reuses the kernel ports and operations; never daemon.
-    "layerfs-nfs": {"layerfs-content", "layerfs-overlay", "layerfs-workspace", "layerfs-fuse"},
+    "layerfs-store-backup": {
+        # bucket/ knows nothing about Stores; backup/ is the whole-Store copy.
+        "layerfs-store-service",
+        "layerfs-persistence",
+        "layerfs-storage",
+    },
+    # The NFS export reuses the kernel ports and operations; peers over
+    # mount-ports, never fuse or daemon.
+    "layerfs-nfs": {
+        "layerfs-content",
+        "layerfs-overlay",
+        "layerfs-workspace",
+        "layerfs-mount-ports",
+    },
     # The Store engine (#352 F-020): the SDK's Store calls in-process and the
     # Store/overlay ports daemon Workspace Commits use; it opens the Store.
     "layerfs-store-service": {
@@ -106,7 +130,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-history",
         "layerfs-persistence",
         "layerfs-telemetry",
-        "layerfs-remote-storage",
+        "layerfs-store-backup",
     },
     # Concrete Store open/install belongs to application composition. The
     # provider-independent daemon store/ subtree has a narrower source boundary.
@@ -114,7 +138,8 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-overlay",
         "layerfs-workspace",
         "layerfs-store-service",
-        "layerfs-fuse",
+        "layerfs-mount-ports",
+    "layerfs-fuse",
         "layerfs-nfs",
         "layerfs-bridge",
         "layerfs-content",
@@ -123,7 +148,11 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-persistence",
         "layerfs-telemetry",
     },
-    "layerfs-api": {
+    # The SDK call surface (#536): the call table over the management library.
+    "layerfs-api": {"layerfs-control", "layerfs-bridge"},
+    # The management library (#536): home records, machines and workers,
+    # Stores, projects, Sandboxes, Workspaces and backups.
+    "layerfs-control": {
         "layerfs-content",
         "layerfs-storage",
         "layerfs-history",
@@ -132,17 +161,22 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-bridge",
         "layerfs-project",
         "layerfs-sandbox",
+        "layerfs-machine",
         "layerfs-store-service",
+        "layerfs-store-backup",
     },
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
     "layerfs-sandbox": set(),
+    # The machine layer (#535 1.2): uses the Backend enum, shared types and
+    # json; the bridge's KernelRoute and StoreKind name its support table (B).
+    "layerfs-machine": {"layerfs-sandbox", "layerfs-bridge"},
     # The 2.0 front ends (#533): thin layers over the library's call table.
     "layerfs-cli": {"layerfs-api", "layerfs-bridge"},
     "layerfs-python": {"layerfs-api", "layerfs-bridge"},
 }
 DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history"}
-LAYER_ORDER = ("core", "engine", "api")
-CORE, ENGINE, API = LAYER_ORDER
+LAYER_ORDER = ("core", "engine", "connect", "api")
+CORE, ENGINE, CONNECT, API = LAYER_ORDER
 LAYER = {
     "layerfs-content": CORE,
     "layerfs-history": CORE,
@@ -150,18 +184,24 @@ LAYER = {
     "layerfs-telemetry": CORE,
     "layerfs-bridge": ENGINE,
     "layerfs-daemon": ENGINE,
+    "layerfs-mount-ports": ENGINE,
     "layerfs-fuse": ENGINE,
     "layerfs-nfs": ENGINE,
     "layerfs-overlay": ENGINE,
     "layerfs-persistence": ENGINE,
     "layerfs-project": ENGINE,
-    "layerfs-sandbox": ENGINE,
     "layerfs-store-service": ENGINE,
-    "layerfs-remote-storage": ENGINE,
     "layerfs-workspace": ENGINE,
-    # The public surface under api/crates: the library and its 2.0 front ends
-    # (#533), the `layerfs` binary, the Node binding and the PyO3 module.
+    # The connect layer (#535): machine/network reach. layerfs-sandbox moved
+    # in phase 1; layerfs-machine and layerfs-store-backup follow there.
+    "layerfs-sandbox": CONNECT,
+    "layerfs-machine": CONNECT,
+    "layerfs-store-backup": CONNECT,
+    # The public surface under api/crates: the call surface, the management
+    # library under it (#536) and the 2.0 front ends (#533), the `layerfs`
+    # binary, the Node binding and the PyO3 module.
     "layerfs-api": API,
+    "layerfs-control": API,
     "layerfs-cli": API,
     "layerfs-node": API,
     "layerfs-python": API,
@@ -176,7 +216,7 @@ def layer_violations(name, dependency, kind):
     return []
 
 
-CRATE_ROOTS = ("core/crates", "engine/crates", "api/crates", "api")
+CRATE_ROOTS = ("core/crates", "engine/crates", "connect/crates", "api/crates", "api")
 
 
 def crate_directories(root):
@@ -220,10 +260,12 @@ ENGINES_AND_CLUSTER2 = {
     "layerfs-daemon",
     "layerfs-bridge",
     "layerfs-sandbox",
+    "layerfs-machine",
     "layerfs-server",
     "layerfs-sdk",
     "layerfs-api",
     "layerfs-api-core",
+    "layerfs-control",
 }
 
 
@@ -283,6 +325,24 @@ def dependency_violations(source):
     return found
 
 
+# #535 D11 (owner, 2026-11-03): machine lifecycle is manual. No worker or VM
+# idle stop, Sandbox daemon idle close or on-demand machine start returns;
+# `machine.start` and `machine.stop` are the only lifecycle entry points.
+# The Store connection reaper (store/open.rs) is not lifecycle and stays.
+LIFECYCLE = "retired by #535 D11: machine lifecycle is manual (no idle stop, idle close or on-demand start)"
+LIFECYCLE_NAMES = re.compile(
+    r"\b(?:serve_until_idle|stop_if_idle|watch_idle|idle_exit_s|IDLE_EXIT_S|guest_stop|"
+    r"power_off|start_after|OnDemand)\b|LAYERFS_WORKER_POWEROFF|LAYERFS_DAEMON_IDLE_EXIT"
+)
+
+
+def lifecycle_violations(path, source):
+    """Refuse an idle.rs or an idle-stop/on-demand-start name in product source."""
+    if path.name == "idle.rs":
+        return [(1, LIFECYCLE)]
+    return [(source.count("\n", 0, match.start()) + 1, LIFECYCLE) for match in LIFECYCLE_NAMES.finditer(source)]
+
+
 def component_violations(path, source):
     """Reject forbidden crate references in domain code and first-party imports."""
     name = crate_name(path)
@@ -296,9 +356,24 @@ def component_violations(path, source):
     }
     if any(part in path.as_posix() for part in retired.get(name, ())):
         return [(1, "retired host-mediated transport path; use direct Store or native control")]
+    # #536: management moved into layerfs-control by entity; the call surface
+    # keeps calls/ and lib.rs, and the 1.1 host/operator paths were deleted.
+    moved = {
+        "layerfs-api": tuple(
+            f"/src/{part}/"
+            for part in (
+                "host", "family", "home", "store", "worker", "fs", "branch",
+                "machine", "sandbox", "base", "operator", "project",
+            )
+        ),
+        "layerfs-control": ("/src/host/", "/src/operator/"),
+        "layerfs-store-service": ("/src/remote/",),
+    }
+    if any(part in path.as_posix() for part in moved.get(name, ())):
+        return [(1, "retired by #536: management lives in layerfs-control by entity")]
+    found = lifecycle_violations(path, source)
     if name not in ALLOWED_DEPENDENCIES:
-        return []
-    found = []
+        return found
     if name == "layerfs-daemon" and "/src/store/" in path.as_posix():
         concrete = r"\b(?:layerfs_persistence|layerfs_api|layerfs_bridge|rusqlite|sqlite)\s*::|\b(?:Path|PathBuf)\b"
         for match in re.finditer(concrete, source):

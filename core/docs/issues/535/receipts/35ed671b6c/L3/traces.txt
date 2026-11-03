@@ -1,0 +1,72 @@
+firecracker-pg-loop-C01: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-loop-C02: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-loop-C03: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-loop-C04: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-loop-C05: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-loop-C06: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-loop-C07: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-loop-C08: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-loop-C09: 17 lines, malformed 0, ops {'sandbox.host': 17}
+firecracker-pg-loop-C10: 17 lines, malformed 0, ops {'sandbox.host': 17}
+firecracker-pg-loop-C11: 17 lines, malformed 0, ops {'sandbox.host': 17}
+firecracker-pg-loop-C12: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-remote-C01: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-remote-C02: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-remote-C03: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-remote-C04: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-remote-C05: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-remote-C06: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-remote-C07: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-remote-C08: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-pg-remote-C09: 17 lines, malformed 0, ops {'sandbox.host': 17}
+firecracker-pg-remote-C10: 17 lines, malformed 0, ops {'sandbox.host': 17}
+firecracker-pg-remote-C11: 17 lines, malformed 0, ops {'sandbox.host': 17}
+firecracker-pg-remote-C12: 13 lines, malformed 0, ops {'sandbox.host': 13}
+firecracker-sqlite-C01: 21 lines, malformed 0, ops {'sandbox.host': 13, 'store.file': 8}
+firecracker-sqlite-C02: 21 lines, malformed 0, ops {'sandbox.host': 13, 'store.file': 8}
+firecracker-sqlite-C03: 21 lines, malformed 0, ops {'sandbox.host': 13, 'store.file': 8}
+firecracker-sqlite-C04: 21 lines, malformed 0, ops {'sandbox.host': 13, 'store.file': 8}
+firecracker-sqlite-C05: 21 lines, malformed 0, ops {'sandbox.host': 13, 'store.file': 8}
+firecracker-sqlite-C06: 21 lines, malformed 0, ops {'sandbox.host': 13, 'store.file': 8}
+firecracker-sqlite-C07: 21 lines, malformed 0, ops {'sandbox.host': 13, 'store.file': 8}
+firecracker-sqlite-C08: 21 lines, malformed 0, ops {'sandbox.host': 13, 'store.file': 8}
+firecracker-sqlite-C09: 25 lines, malformed 0, ops {'sandbox.host': 17, 'store.file': 8}
+firecracker-sqlite-C10: 25 lines, malformed 0, ops {'sandbox.host': 17, 'store.file': 8}
+firecracker-sqlite-C11: 25 lines, malformed 0, ops {'sandbox.host': 17, 'store.file': 8}
+firecracker-sqlite-C12: 21 lines, malformed 0, ops {'sandbox.host': 13, 'store.file': 8}
+lima-pg-loop-C01: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-loop-C02: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-loop-C03: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-loop-C04: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-loop-C05: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-loop-C06: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-loop-C07: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-loop-C08: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-loop-C09: 7 lines, malformed 0, ops {'sandbox.host': 7}
+lima-pg-loop-C10: 7 lines, malformed 0, ops {'sandbox.host': 7}
+lima-pg-loop-C11: 7 lines, malformed 0, ops {'sandbox.host': 7}
+lima-pg-loop-C12: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-remote-C01: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-remote-C02: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-remote-C03: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-remote-C04: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-remote-C05: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-remote-C06: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-remote-C07: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-remote-C08: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-pg-remote-C09: 7 lines, malformed 0, ops {'sandbox.host': 7}
+lima-pg-remote-C10: 7 lines, malformed 0, ops {'sandbox.host': 7}
+lima-pg-remote-C11: 7 lines, malformed 0, ops {'sandbox.host': 7}
+lima-pg-remote-C12: 6 lines, malformed 0, ops {'sandbox.host': 6}
+lima-sqlite-C01: 17 lines, malformed 0, ops {'sandbox.host': 6, 'store.call': 3, 'store.file': 8}
+lima-sqlite-C02: 17 lines, malformed 0, ops {'sandbox.host': 6, 'store.call': 3, 'store.file': 8}
+lima-sqlite-C03: 17 lines, malformed 0, ops {'sandbox.host': 6, 'store.call': 3, 'store.file': 8}
+lima-sqlite-C04: 17 lines, malformed 0, ops {'sandbox.host': 6, 'store.call': 3, 'store.file': 8}
+lima-sqlite-C05: 17 lines, malformed 0, ops {'sandbox.host': 6, 'store.call': 3, 'store.file': 8}
+lima-sqlite-C06: 17 lines, malformed 0, ops {'sandbox.host': 6, 'store.call': 3, 'store.file': 8}
+lima-sqlite-C07: 17 lines, malformed 0, ops {'sandbox.host': 6, 'store.call': 3, 'store.file': 8}
+lima-sqlite-C08: 17 lines, malformed 0, ops {'sandbox.host': 6, 'store.call': 3, 'store.file': 8}
+lima-sqlite-C09: 19 lines, malformed 0, ops {'sandbox.host': 7, 'store.call': 4, 'store.file': 8}
+lima-sqlite-C10: 19 lines, malformed 0, ops {'sandbox.host': 7, 'store.call': 4, 'store.file': 8}
+lima-sqlite-C11: 19 lines, malformed 0, ops {'sandbox.host': 7, 'store.call': 4, 'store.file': 8}
+lima-sqlite-C12: 17 lines, malformed 0, ops {'sandbox.host': 6, 'store.call': 3, 'store.file': 8}

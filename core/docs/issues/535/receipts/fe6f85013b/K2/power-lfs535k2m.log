@@ -1,0 +1,68 @@
+$ layerfs store create pwm
+# at 2026-11-03T07:22:15Z load1 11.14
+{"name":"pwm","kind":"sqlite","machine":"native","profile":"disposable","created":1793690535905,"sqlite":"3.53.2","projects":[]}
+exit 0  wall_ms 42
+
+$ layerfs store push pwm lfs535k2m
+# at 2026-11-03T07:22:16Z load1 11.14
+{"store":"pwm","from":"native","to":"lfs535k2m","bytes":212992,"heads":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+exit 0  wall_ms 96
+
+$ layerfs machine stop lfs535k2m
+# at 2026-11-03T07:22:16Z load1 11.14
+{"name":"lfs535k2m","platform":"microsandbox","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":2,"memory":4294967296,"disk":21474836480,"stores":["pwm"],"sandboxes":[]}
+exit 0  wall_ms 302
+
+$ layerfs machine list
+# at 2026-11-03T07:22:16Z load1 11.14
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]},{"name":"lfs535k2a","platform":"apple-container","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":2,"memory":4294967296,"disk":21474836480,"stores":["pwa"],"sandboxes":[]},{"name":"lfs535k2m","platform":"microsandbox","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":2,"memory":4294967296,"disk":21474836480,"stores":["pwm"],"sandboxes":[]},{"name":"lfs535k2s","platform":"ssh","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"ssh":{"host":"127.0.0.1","user":"root","port":60520,"identity":"<scratch>/sshkey","known_hosts":"<scratch>/known_hosts","root":"/layerfs/data","host_id":"SHA256:obr/OV/QUXdqIU0CSlcGbjIqLUJuhzccH1X0Uk6oGV0"}},{"name":"native","platform":"native","backend":"native","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}]}
+exit 0  wall_ms 202
+
+$ layerfs machine status lfs535k2m
+# at 2026-11-03T07:22:16Z load1 11.14
+{"name":"lfs535k2m","platform":"microsandbox","state":"stopped","free_disk":null,"tool_version":"msb 0.7.11","down_reason":"the machine is stopped","stores":["pwm"]}
+exit 0  wall_ms 79
+
+$ layerfs store status pwm
+# at 2026-11-03T07:22:17Z load1 11.14
+{"name":"pwm","kind":"sqlite","state":"down","holders":[],"op":null,"down_reason":"machine lfs535k2m is not running; start it with `layerfs machine start lfs535k2m`","machine":"lfs535k2m","file":{"unavailable":"machine lfs535k2m is not running; start it with `layerfs machine start lfs535k2m`"}}
+exit 0  wall_ms 36
+
+$ layerfs store get pwm
+# at 2026-11-03T07:22:17Z load1 11.14
+{"name":"pwm","kind":"sqlite","machine":"lfs535k2m","profile":"disposable","created":1793690535905,"sqlite":"3.53.2","last_transfer":{"call":"store.push","from":"native","to":"lfs535k2m","at":1793690536121,"bytes":212992,"sha256":"f3576adbcf90fb89a79dc0631f6da0f84143def29a3ec05d8ac10324167a3042","heads":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},"projects":[]}
+exit 0  wall_ms 35
+
+$ layerfs machine list
+# at 2026-11-03T07:22:17Z load1 11.14
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]},{"name":"lfs535k2a","platform":"apple-container","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":2,"memory":4294967296,"disk":21474836480,"stores":["pwa"],"sandboxes":[]},{"name":"lfs535k2m","platform":"microsandbox","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":2,"memory":4294967296,"disk":21474836480,"stores":["pwm"],"sandboxes":[]},{"name":"lfs535k2s","platform":"ssh","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"ssh":{"host":"127.0.0.1","user":"root","port":60520,"identity":"<scratch>/sshkey","known_hosts":"<scratch>/known_hosts","root":"/layerfs/data","host_id":"SHA256:obr/OV/QUXdqIU0CSlcGbjIqLUJuhzccH1X0Uk6oGV0"}},{"name":"native","platform":"native","backend":"native","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}]}
+exit 0  wall_ms 196
+
+$ layerfs machine status lfs535k2m
+# at 2026-11-03T07:22:17Z load1 11.14
+{"name":"lfs535k2m","platform":"microsandbox","state":"stopped","free_disk":null,"tool_version":"msb 0.7.11","down_reason":"the machine is stopped","stores":["pwm"]}
+exit 0  wall_ms 84
+
+# external check (after the second list) at 07:22:18
+NAME                      IMAGE                 STATUS     CREATED
+lfs-b2c5c8a0-lfs535k2m    debian:trixie-slim    stopped    2026-11-03 15:20:54
+
+$ layerfs machine start lfs535k2m
+# at 2026-11-03T07:22:18Z load1 11.14
+{"name":"lfs535k2m","platform":"microsandbox","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":2,"memory":4294967296,"disk":21474836480,"stores":["pwm"],"sandboxes":[]}
+exit 0  wall_ms 1002
+
+# external check (after start) at 07:22:19
+NAME                      IMAGE                 STATUS     CREATED
+lfs-b2c5c8a0-lfs535k2m    debian:trixie-slim    running    2026-11-03 15:20:54
+
+$ layerfs machine status lfs535k2m
+# at 2026-11-03T07:22:19Z load1 11.14
+{"name":"lfs535k2m","platform":"microsandbox","state":"running","free_disk":21042147328,"tool_version":"msb 0.7.11","down_reason":null,"stores":["pwm"]}
+exit 0  wall_ms 154
+
+$ layerfs store status pwm
+# at 2026-11-03T07:22:19Z load1 11.14
+{"name":"pwm","kind":"sqlite","state":"idle","holders":[],"op":null,"down_reason":null,"machine":"lfs535k2m","file":{"exists":true,"free":21042147328,"bytes":212992,"wal_bytes":0}}
+exit 0  wall_ms 44
+

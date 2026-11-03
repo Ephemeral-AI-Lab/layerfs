@@ -1,0 +1,113 @@
+{
+  "format": "lfs535-l2-fixes2/1",
+  "machine": "lfs535l2a",
+  "product": "35ed671b6c",
+  "startedAt": "2026-11-03T08:59:53.043Z",
+  "load1": 10.08251953125,
+  "checks": {
+    "mount-main-refused": {
+      "verdict": "PASS",
+      "answer": {
+        "code": "InvalidInput",
+        "message": "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it with `branch.fork(project, name, \"main\")` and mount that",
+        "detail": null
+      },
+      "sideBranchMount": "mounted"
+    },
+    "project-remove-inuse-related": {
+      "verdict": "PASS",
+      "answer": {
+        "code": "InUse",
+        "message": "Sandbox fxwsb of fxw/p is running",
+        "detail": {
+          "related": [
+            {
+              "kind": "sandbox",
+              "name": "fxwsb"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "steps": [
+    {
+      "name": "fxw.store.create",
+      "ms": 24,
+      "ok": true
+    },
+    {
+      "name": "fxw.project.init (native)",
+      "ms": 32,
+      "ok": true
+    },
+    {
+      "name": "fxw.branch.fork",
+      "ms": 14,
+      "ok": true
+    },
+    {
+      "name": "fxw.store.push",
+      "ms": 172,
+      "ok": true
+    },
+    {
+      "name": "fxw.sandbox.create",
+      "ms": 449,
+      "ok": true
+    },
+    {
+      "name": "fxwsb.workspace.mount main",
+      "ms": 9,
+      "ok": false,
+      "error": {
+        "code": "InvalidInput",
+        "message": "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it with `branch.fork(project, name, \"main\")` and mount that",
+        "detail": null
+      }
+    },
+    {
+      "name": "fxwsb.workspace.mount lane",
+      "ms": 41,
+      "ok": true
+    },
+    {
+      "name": "fxwsb.workspace.unmount lane",
+      "ms": 12,
+      "ok": true
+    },
+    {
+      "name": "fxw/p project.remove (Sandbox recorded)",
+      "ms": 2,
+      "ok": false,
+      "error": {
+        "code": "InUse",
+        "message": "Sandbox fxwsb of fxw/p is running",
+        "detail": {
+          "related": [
+            {
+              "kind": "sandbox",
+              "name": "fxwsb"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "cleanup sandbox.close fxwsb",
+      "ms": 249,
+      "ok": true
+    },
+    {
+      "name": "cleanup store.pull fxw",
+      "ms": 190,
+      "ok": true
+    },
+    {
+      "name": "cleanup store.remove fxw",
+      "ms": 7,
+      "ok": true
+    }
+  ],
+  "endedAt": "2026-11-03T08:59:54.253Z"
+}

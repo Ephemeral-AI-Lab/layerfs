@@ -66,7 +66,7 @@ jobs:
         run: |
           targets="$(python3 -B tools/ci_tests.py mount-targets)"
           # shellcheck disable=SC2086 # one --test flag per word
-          cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-daemon -p layerfs-api \
+          cargo +1.85.1 test --manifest-path Cargo.toml --locked -p layerfs-daemon -p layerfs-control \
             $targets --no-run --message-format json > "$RUNNER_TEMP/build.json"
           python3 -B tools/ci_tests.py executables < "$RUNNER_TEMP/build.json" > "$RUNNER_TEMP/mount.tsv"
           test -s "$RUNNER_TEMP/mount.tsv"

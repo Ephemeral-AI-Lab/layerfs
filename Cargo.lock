@@ -703,23 +703,21 @@ dependencies = [
 name = "layerfs-api"
 version = "2.0.0"
 dependencies = [
- "blake3",
  "layerfs-bridge",
  "layerfs-content",
- "layerfs-daemon",
- "layerfs-fuse",
+ "layerfs-control",
  "layerfs-history",
+ "layerfs-machine",
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
  "layerfs-sandbox",
  "layerfs-storage",
+ "layerfs-store-backup",
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
- "libc",
  "nix",
- "rusqlite",
 ]
 
 [[package]]
@@ -748,6 +746,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-control"
+version = "2.0.0"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-content",
+ "layerfs-daemon",
+ "layerfs-fuse",
+ "layerfs-history",
+ "layerfs-machine",
+ "layerfs-overlay",
+ "layerfs-persistence",
+ "layerfs-project",
+ "layerfs-sandbox",
+ "layerfs-storage",
+ "layerfs-store-backup",
+ "layerfs-store-service",
+ "layerfs-telemetry",
+ "layerfs-workspace",
+ "libc",
+ "nix",
+]
+
+[[package]]
 name = "layerfs-daemon"
 version = "2.0.0"
 dependencies = [
@@ -756,6 +777,7 @@ dependencies = [
  "layerfs-content",
  "layerfs-fuse",
  "layerfs-history",
+ "layerfs-mount-ports",
  "layerfs-nfs",
  "layerfs-overlay",
  "layerfs-persistence",
@@ -773,6 +795,7 @@ version = "2.0.0"
 dependencies = [
  "fuser",
  "layerfs-content",
+ "layerfs-mount-ports",
  "layerfs-overlay",
  "layerfs-workspace",
  "libc",
@@ -788,14 +811,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-machine"
+version = "2.0.0"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-sandbox",
+ "nix",
+]
+
+[[package]]
+name = "layerfs-mount-ports"
+version = "2.0.0"
+dependencies = [
+ "layerfs-content",
+ "layerfs-overlay",
+ "layerfs-workspace",
+]
+
+[[package]]
 name = "layerfs-nfs"
 version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
  "layerfs-content",
  "layerfs-daemon",
- "layerfs-fuse",
  "layerfs-history",
+ "layerfs-mount-ports",
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
@@ -838,6 +879,7 @@ dependencies = [
  "postgres",
  "postgres-native-tls",
  "rusqlite",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -865,14 +907,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "layerfs-remote-storage"
-version = "2.0.0"
-dependencies = [
- "native-tls",
- "sha2 0.11.0",
-]
-
-[[package]]
 name = "layerfs-sandbox"
 version = "2.0.0"
 dependencies = [
@@ -891,20 +925,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-store-backup"
+version = "2.0.0"
+dependencies = [
+ "layerfs-persistence",
+ "layerfs-storage",
+ "layerfs-store-service",
+ "native-tls",
+ "nix",
+ "sha2 0.11.0",
+]
+
+[[package]]
 name = "layerfs-store-service"
 version = "2.0.0"
 dependencies = [
+ "blake3",
  "layerfs-bridge",
  "layerfs-content",
  "layerfs-history",
  "layerfs-overlay",
  "layerfs-persistence",
- "layerfs-remote-storage",
+ "layerfs-project",
  "layerfs-storage",
  "layerfs-telemetry",
  "layerfs-workspace",
  "nix",
  "postgres",
+ "rusqlite",
 ]
 
 [[package]]

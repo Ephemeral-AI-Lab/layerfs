@@ -9,7 +9,7 @@ use layerfs_daemon::{
     Owner, OwnerConfig,
 };
 use layerfs_history::*;
-use layerfs_persistence::{Handles, StorageProvider};
+use layerfs_persistence::{SqliteHandles, StorageProvider};
 use layerfs_storage::{ReservationBlocks, Storage, StorageError};
 use std::{
     sync::{
@@ -145,7 +145,7 @@ enum Fault {
     Panic,
 }
 struct FaultHistory {
-    handles: Arc<Handles>,
+    handles: Arc<SqliteHandles>,
     fault: Option<Fault>,
     calls: Arc<AtomicUsize>,
 }
@@ -190,14 +190,14 @@ impl HistoryCatalog for FaultHistory {
 type Connections = Arc<Mutex<Vec<Weak<StorageProvider>>>>;
 fn fault_store(f: &support::Fixture, fault: Fault) -> (Arc<Store>, Arc<AtomicUsize>, Connections) {
     let writer =
-        Handles::open_writable(f.config.clone(), support::BINDING, support::CURSOR).unwrap();
+        SqliteHandles::open_writable(f.config.clone(), support::BINDING, support::CURSOR).unwrap();
     let config = f.config.clone();
     let calls = Arc::new(AtomicUsize::new(0));
     let weak = Arc::new(Mutex::new(Vec::new()));
     let seen = weak.clone();
     let demands = calls.clone();
     let factory: ReaderFactory = Arc::new(move |index| {
-        let read = Arc::new(Handles::open_read_only(
+        let read = Arc::new(SqliteHandles::open_read_only(
             config.clone(),
             support::BINDING,
             support::CURSOR,
@@ -283,7 +283,7 @@ fn a_poisoned_reader_is_retained_with_one_original_cause_at_shutdown() {
 fn shutdown_racing_a_bind_closes_the_acquired_reader_without_reopening() {
     let f = support::Fixture::new(1, "reader-stop-race");
     let writer =
-        Handles::open_writable(f.config.clone(), support::BINDING, support::CURSOR).unwrap();
+        SqliteHandles::open_writable(f.config.clone(), support::BINDING, support::CURSOR).unwrap();
     let config = f.config.clone();
     let (entered, started) = mpsc::channel();
     let (release, parked) = mpsc::channel();
@@ -291,7 +291,8 @@ fn shutdown_racing_a_bind_closes_the_acquired_reader_without_reopening() {
     let weak = Arc::new(Mutex::new(Vec::new()));
     let seen = weak.clone();
     let factory: ReaderFactory = Arc::new(move |index| {
-        let read = Handles::open_read_only(config.clone(), support::BINDING, support::CURSOR)?;
+        let read =
+            SqliteHandles::open_read_only(config.clone(), support::BINDING, support::CURSOR)?;
         seen.lock().unwrap().push(Arc::downgrade(&read.storage));
         let reader = StoreReader::new(Storage::new(read.storage)?, Arc::new(read.history));
         if index > 0 {

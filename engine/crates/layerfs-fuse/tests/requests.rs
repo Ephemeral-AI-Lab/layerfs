@@ -68,7 +68,7 @@ impl Drop for Release {
 struct Wait {
     event: Arc<Event>,
     entered: Option<mpsc::SyncSender<std::thread::ThreadId>>,
-    fence: Option<layerfs_fuse::ports::Fence>,
+    fence: Option<layerfs_mount_ports::ports::Fence>,
 }
 impl Future for Wait {
     type Output = RequestDisposition;

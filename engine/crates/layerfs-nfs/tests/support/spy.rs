@@ -7,7 +7,7 @@
 //! counted as a violation). It can also refuse serial reservations, as a
 //! contended allocator does.
 use super::client::Wire;
-use layerfs_fuse::ports::{
+use layerfs_mount_ports::ports::{
     MountServices, RequestServices, ServiceError, ServiceFuture, ServiceReply,
 };
 use layerfs_overlay::{KernelCookieOffer, KernelMount, Publication};
@@ -47,7 +47,7 @@ pub struct Spy {
 impl MountServices for Spy {
     fn request(
         &self,
-        fence: &layerfs_fuse::ports::Fence,
+        fence: &layerfs_mount_ports::ports::Fence,
     ) -> Result<Arc<dyn RequestServices>, ServiceError> {
         Ok(Arc::new(Request {
             inner: self.inner.request(fence)?,

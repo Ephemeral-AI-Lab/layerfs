@@ -1,0 +1,25 @@
+START cli C01 09:01:09 load1 16.79
+C01 lfs535l2a cli PASS  timed exec 2221.107 ms
+END cli C01 rc=0 09:01:22
+START cli C05 09:01:22 load1 15.65
+C05 lfs535l2a cli PASS  timed exec 3554.121 ms
+END cli C05 rc=0 09:01:33
+START cli C09 09:01:33 load1 14.98
+C09 lfs535l2a cli PASS  timed exec 173.449 ms
+END cli C09 rc=0 09:01:47
+START cli C12 09:01:47 load1 13.70
+C12 lfs535l2a cli PASS  timed exec 493.47 ms
+END cli C12 rc=0 09:01:50
+START python C01 09:01:50 load1 13.70
+C01 lfs535l2a python PASS  timed exec 1167.754 ms
+END python C01 rc=0 09:01:56
+START python C05 09:01:56 load1 13.08
+C05 lfs535l2a python PASS  timed exec 1549.381 ms
+END python C05 rc=0 09:02:02
+START python C09 09:02:02 load1 11.91
+C09 lfs535l2a python PASS  timed exec 157.423 ms
+END python C09 rc=0 09:02:12
+START python C12 09:02:12 load1 11.08
+C12 lfs535l2a python PASS  timed exec 438.565 ms
+END python C12 rc=0 09:02:15
+PARITY DONE

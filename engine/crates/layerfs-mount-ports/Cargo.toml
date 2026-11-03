@@ -1,0 +1,12 @@
+[package]
+name = "layerfs-mount-ports"
+description = "The route-neutral kernel ports, operations and phase timing that FUSE and NFS both serve, over Workspace semantics; no kernel protocol."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-content = { path = "../../../core/crates/layerfs-content" }
+layerfs-overlay = { path = "../layerfs-overlay" }
+layerfs-workspace = { path = "../layerfs-workspace" }

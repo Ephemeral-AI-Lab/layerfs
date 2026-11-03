@@ -58,7 +58,7 @@ mod rig;
 use layerfs_bridge::control::{MountWork, WorkspaceToken};
 use layerfs_content::ObjectId;
 use layerfs_daemon::store::{PortError, Store, StoreReader};
-use layerfs_persistence::{Handles, SqlitePersistenceProfile, StorageProvider};
+use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile, StorageProvider};
 use layerfs_storage::{
     location::PackInfo,
     port::{PackPersistence, PackReadChoice, PackReadPlan, PersistenceError},
@@ -171,12 +171,12 @@ impl Fx {
         );
         let config = || fixture.config.clone();
         let writer =
-            Handles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap();
+            SqliteHandles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap();
         let readers = Arc::new(Mutex::new(Vec::new()));
         let reader_config = fixture.config.clone();
         let observed_readers = readers.clone();
         let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
-            let read = Handles::open_read_only(
+            let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,
                 installed::CURSOR,

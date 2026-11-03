@@ -1,0 +1,193 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C03",
+  "machine": "lfs535k2a",
+  "product": "fe6f85013b",
+  "startedAt": "2026-11-03T07:23:55.670Z",
+  "load1": 16.04541015625,
+  "body": {
+    "sha256": "520773ceacd8c44d633ffd1a40727ceb5d990d63a23259f28af8dd4b96fa204d"
+  },
+  "ok": true,
+  "cause": null,
+  "phases": {
+    "warmup": {
+      "mountMs": 14.025,
+      "exec": {
+        "wallMs": 1708.084,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793690636035429633 1793690637725114843\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 1689.68521
+      },
+      "unmountMs": 10.884
+    },
+    "timed": {
+      "mountMs": 22.242,
+      "workspace": {
+        "kind": "Mounted",
+        "path": "/layerfs/data/machine/native/run/lfs-b2c5c8a0-c03/workspaces/2",
+        "workspace": "229c1bc83183e0f5b96962ed7f757c7f4af483bbc1b6cc6a15ebe42db02b0c24",
+        "namespace": 2,
+        "branch": "lane",
+        "base": null,
+        "base_layer": "32e22e27249b43bd9e99b6700103c7faaf3cc3a2f883bd412b89f2c64c68ea63a2",
+        "root": "a0e7340cc90ed326b90821f1fbbf19c25b54c239db98af5cd4431c4d3e397c5f",
+        "sandbox": "c03",
+        "container": "lfs-b2c5c8a0-c03",
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "platform": "linux",
+        "runtime": "namespaces",
+        "name": null,
+        "ws": "c03:/layerfs/data/machine/native/run/lfs-b2c5c8a0-c03/workspaces/2"
+      },
+      "exec": {
+        "wallMs": 1877.81,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793690637788445259 1793690639637275052\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 1848.829793
+      },
+      "commitMs": 28.48,
+      "commit": {
+        "kind": "UpToDate",
+        "head": null,
+        "root": "a0e7340cc90ed326b90821f1fbbf19c25b54c239db98af5cd4431c4d3e397c5f",
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "unmountMs": 10.919
+    },
+    "verify": {
+      "exitCode": 0,
+      "stdout": "VERIFY OK\n",
+      "stderr": ""
+    }
+  },
+  "steps": [
+    {
+      "name": "store.create",
+      "ms": 11.34,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 105.107,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 9.625,
+      "ok": true
+    },
+    {
+      "name": "store.push",
+      "ms": 93.794,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 115.493,
+      "ok": true
+    },
+    {
+      "name": "warmup.mount",
+      "ms": 14.021,
+      "ok": true
+    },
+    {
+      "name": "warmup.exec",
+      "ms": 1708.078,
+      "ok": true
+    },
+    {
+      "name": "warmup.unmount",
+      "ms": 10.878,
+      "ok": true
+    },
+    {
+      "name": "timed.mount",
+      "ms": 22.237,
+      "ok": true
+    },
+    {
+      "name": "timed.exec",
+      "ms": 1877.804,
+      "ok": true
+    },
+    {
+      "name": "timed.commit",
+      "ms": 28.437,
+      "ok": true
+    },
+    {
+      "name": "timed.unmount",
+      "ms": 10.913,
+      "ok": true
+    },
+    {
+      "name": "verify.mount",
+      "ms": 29.354,
+      "ok": true
+    },
+    {
+      "name": "verify.identity",
+      "ms": 29.003,
+      "ok": true
+    },
+    {
+      "name": "verify.exec",
+      "ms": 9.718,
+      "ok": true
+    },
+    {
+      "name": "verify.unmount",
+      "ms": 14.45,
+      "ok": true
+    },
+    {
+      "name": "sandbox.close",
+      "ms": 104.16,
+      "ok": true
+    },
+    {
+      "name": "store.pull",
+      "ms": 98.061,
+      "ok": true
+    },
+    {
+      "name": "store.remove",
+      "ms": 2.765,
+      "ok": true
+    }
+  ],
+  "store": {
+    "kind": "sqlite"
+  },
+  "sandbox": {
+    "name": "c03",
+    "project": "c03/p",
+    "machine": "lfs535k2a",
+    "created": 1793690635901,
+    "id": "c03",
+    "platform": "linux",
+    "runtime": "namespaces",
+    "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+    "backend": "namespaces",
+    "route": "fuse",
+    "state": "running"
+  },
+  "where": {
+    "kernel": "Linux 6.18.35",
+    "machine": "aarch64",
+    "cpus": "3",
+    "memKiB": "4144916",
+    "memBytes": null,
+    "cpuMax": null,
+    "id": "501:20"
+  },
+  "endedAt": "2026-11-03T07:23:59.977Z"
+}

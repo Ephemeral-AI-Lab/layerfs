@@ -12,7 +12,7 @@ use layerfs_history::{
 use layerfs_nfs::{ExportConfig, Released, Server};
 use layerfs_overlay::{KernelMount, ProfileConfig};
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePersistenceProfile,
+    PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePersistenceProfile,
 };
 use layerfs_project::{init, InitRequest};
 use layerfs_storage::{Storage, StoragePolicy};
@@ -51,7 +51,7 @@ impl Rig {
         let config = PersistenceConfig::sqlite(&sealed)
             .with_sqlite_profile(SqlitePersistenceProfile::Disposable)
             .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables);
-        let handles = Handles::create(
+        let handles = SqliteHandles::create(
             config.clone(),
             StoragePolicy::frozen_default(),
             &HistoryCatalogConfig {
@@ -163,7 +163,7 @@ impl Rig {
     pub fn export_services(
         &self,
         listener: TcpListener,
-        services: Arc<dyn layerfs_fuse::ports::MountServices>,
+        services: Arc<dyn layerfs_mount_ports::ports::MountServices>,
         uid: u32,
         gid: u32,
         read_only: bool,

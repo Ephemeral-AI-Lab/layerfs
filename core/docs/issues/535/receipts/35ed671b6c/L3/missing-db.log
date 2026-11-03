@@ -1,0 +1,12 @@
+$ layerfs store connect nodb postgres://postgres@127.0.0.1:55553/nosuchdb --password env:LFSPW
+# at 2026-11-03T09:00:43Z load1 13.67
+{"code":"Unavailable","message":"the server refused the session: the database does not exist, or the user or password is wrong","detail":null}
+exit 125  wall_ms 181
+
+$ layerfs store list
+# at 2026-11-03T09:00:44Z load1 13.67
+{"items":[]}
+exit 0  wall_ms 75
+
+2026-11-03 09:00:44.103 UTC [319] LOG:  connection authorized: user=postgres database=nosuchdb
+2026-11-03 09:00:44.104 UTC [319] FATAL:  database "nosuchdb" does not exist

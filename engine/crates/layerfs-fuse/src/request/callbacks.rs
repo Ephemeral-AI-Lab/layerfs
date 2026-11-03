@@ -6,14 +6,7 @@ use super::{
     reply::ReadReply,
     state::KernelFilesystem,
 };
-use crate::{
-    operations::{
-        create, flush, link, remove, rename, unsupported,
-        write::{self, AttributeChange, Stamp},
-        Declined, MutationInput,
-    },
-    RequestDisposition,
-};
+use crate::RequestDisposition;
 use fuser::{
     AccessFlags, BsdFileFlags, CopyFileRangeFlags, Errno, FileHandle, Filesystem, INodeNo,
     IoctlFlags, KernelConfig, LockOwner, OpenAccMode, OpenFlags, PollEvents, PollFlags,
@@ -22,6 +15,11 @@ use fuser::{
     ReplyPoll, ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow, WriteFlags,
 };
 use layerfs_content::filesystem::PathName;
+use layerfs_mount_ports::operations::{
+    create, flush, link, remove, rename, unsupported,
+    write::{self, AttributeChange, Stamp},
+    Declined, MutationInput,
+};
 use layerfs_workspace::KernelReadOperation;
 use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, path::Path, time::SystemTime};
 
@@ -206,7 +204,7 @@ impl Filesystem for KernelFilesystem {
                         serial.map_err(|error| io::Error::from_raw_os_error(error.code()))?;
                     let services = services.request(&fence)?;
                     drop(services.close_file(mount, serial, handle.0).await?);
-                    Ok::<_, crate::ports::ServiceError>(())
+                    Ok::<_, layerfs_mount_ports::ports::ServiceError>(())
                 }
                 .await;
                 match outcome {

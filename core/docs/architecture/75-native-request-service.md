@@ -112,7 +112,7 @@ input charges and slot counts do not substitute for the native memory proof.
 
 ## Real service boundaries
 
-[Fuse ports](../../crates/layerfs-fuse/src/ports.rs) contain no daemon commands,
+[Fuse ports](../../engine/crates/layerfs-mount-ports/src/ports.rs) contain no daemon commands,
 registry or application settings. Each request obtains a fresh StoreOperation
 failure scope over the same bound Workspace/cache. The
 [daemon adapter](../../crates/layerfs-daemon/src/service/filesystem_port.rs) awaits
@@ -152,7 +152,7 @@ the request's base demand and not in the mount's failed-demand slots.
 
 Forced teardown needs one thing the normal path does not: a request parked
 before an attempt must end without waiting for a resource that may never free.
-Each lane owns a [`Fence`](../../crates/layerfs-fuse/src/ports.rs): a stop flag
+Each lane owns a [`Fence`](../../engine/crates/layerfs-mount-ports/src/ports.rs): a stop flag
 and a count of terminal replies, shared by the lane, its requests and their
 service ports. Nothing sets it on the normal path, so the gates below never
 refuse there. A lane already released yields a fence that reads stopped.
@@ -238,7 +238,7 @@ and ends `Complete`. It is not retained and nothing is fenced. No second demand
 is made on its behalf and nothing is retried.
 
 The classification is a typed marker, never an error's text.
-[`BaseDemandFailed`](../../crates/layerfs-fuse/src/ports.rs) carries the
+[`BaseDemandFailed`](../../engine/crates/layerfs-mount-ports/src/ports.rs) carries the
 original cause and has one constructor, `Fence::failed_demand`, which the
 [daemon adapter](../../crates/layerfs-daemon/src/service/filesystem_port.rs)
 alone calls, for the Store read path only:
@@ -305,7 +305,7 @@ rows, not there.
 
 ## Native semantic and reply flow
 
-[NativeRead](../../crates/layerfs-fuse/src/operations/lookup.rs) acquires the exact
+[NativeRead](../../engine/crates/layerfs-mount-ports/src/operations/lookup.rs) acquires the exact
 native source and drives Workspace's existing NativeReadPlan. SQL performs each
 bounded local decision; a Needs result releases its original Completion before
 waiting for an immutable reader. Supply uses the admitted view, disposes it, then
@@ -364,7 +364,7 @@ GETATTR classifies file/directory handles
 through one indexed union in an atomic source acquisition, without failed-kind
 fallback. Closed, foreign or mismatched handles cannot acquire a new source.
 
-The [directory consumer](../../crates/layerfs-fuse/src/operations/directory.rs)
+The [directory consumer](../../engine/crates/layerfs-mount-ports/src/operations/directory.rs)
 holds nothing in the engine (R7 update, 2026-10-09;
 [directory handles](74-native-directory-custody.md)). `DirectoryStream::prepare`
 makes the request's first reading visit and owns its window as plain values.

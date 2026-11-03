@@ -13,8 +13,7 @@ use layerfs_bridge::{
 };
 use layerfs_overlay::ProfileConfig;
 use layerfs_persistence::{
-    BackendSelection, PersistenceConfig, PostgresSelection, SqlitePersistenceProfile,
-    SynchronousCommit,
+    PersistenceConfig, PostgresSelection, SqlitePersistenceProfile, SynchronousCommit,
 };
 use layerfs_storage::ReservationBlocks;
 use std::{
@@ -37,8 +36,6 @@ pub(super) struct Startup {
 pub(super) struct State {
     pub startup: Startup,
     pub slots: Vec<Slot>,
-    /// Control calls begun and not yet answered.
-    pub in_flight: usize,
 }
 /// One real daemon application; Store/Overlay are initialized once and reused.
 pub struct Application {
@@ -96,23 +93,37 @@ impl Application {
                 })
             }
         };
-        let selected = match (&setup.existing_store, &setup.postgresql) {
-            (Some(m), _) => Some((
-                PersistenceConfig::sqlite(&setup.store)
-                    .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+        let selected = match &setup.store {
+            layerfs_bridge::DaemonStore::Sqlite {
+                install: Some(m),
+                locator,
+            } => Some((
+                layerfs_persistence::StoreSelection::Sqlite(
+                    PersistenceConfig::sqlite(locator)
+                        .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+                ),
                 m.binding.as_slice(),
                 m.cursor_key,
             )),
-            (None, Some(p)) => Some((
-                postgres(&setup.store, p),
-                p.binding.as_slice(),
-                p.cursor_key,
+            layerfs_bridge::DaemonStore::Postgres {
+                url,
+                schema,
+                synchronous_commit,
+                authority,
+            } => Some((
+                layerfs_persistence::StoreSelection::Postgres(postgres(
+                    url,
+                    schema,
+                    synchronous_commit,
+                )),
+                authority.binding.as_slice(),
+                authority.cursor_key,
             )),
-            (None, None) => None,
+            layerfs_bridge::DaemonStore::Sqlite { install: None, .. } => None,
         };
         let existing = match selected {
-            Some((config, binding, cursor_key)) => match open_store_observed(
-                config,
+            Some((selection, binding, cursor_key)) => match open_store_observed(
+                selection,
                 binding,
                 cursor_key,
                 l.namespaces as usize,
@@ -120,7 +131,7 @@ impl Application {
                 ReservationBlocks::default(),
             ) {
                 Ok(mut opened) => {
-                    if setup.postgresql.is_some() {
+                    if matches!(setup.store, layerfs_bridge::DaemonStore::Postgres { .. }) {
                         // the status carries one printable word: `postgresql/17.6`
                         opened.sqlite_version = opened
                             .sqlite_version
@@ -191,7 +202,6 @@ impl Application {
                     install_failure: None,
                 },
                 slots: (0..count).map(|_| Slot::Vacant).collect(),
-                in_flight: 0,
             }),
             changed: Condvar::new(),
             workers: Mutex::new((0..count).map(|_| None).collect()),
@@ -285,19 +295,15 @@ impl Application {
     }
 }
 
-/// The PostgreSQL Store `p` selects (#506). `store` is only the config's
-/// unused file path: Store reads and writes go to the server.
-fn postgres(store: &str, p: &layerfs_bridge::daemon_setup::DaemonPostgres) -> PersistenceConfig {
-    let setting = match p.synchronous_commit.as_str() {
+/// The PostgreSQL Store selected (#506): Store reads and writes go to the
+/// server.
+fn postgres(url: &str, schema: &str, synchronous_commit: &str) -> PostgresSelection {
+    let setting = match synchronous_commit {
         "local" => SynchronousCommit::Local,
         "remote_write" => SynchronousCommit::RemoteWrite,
         "on" => SynchronousCommit::On,
         "remote_apply" => SynchronousCommit::RemoteApply,
         _ => SynchronousCommit::Off,
     };
-    let mut config = PersistenceConfig::sqlite(store);
-    config.backend = BackendSelection::Postgres(
-        PostgresSelection::new(p.url.clone(), p.schema.clone()).with_synchronous_commit(setting),
-    );
-    config
+    PostgresSelection::new(url.to_string(), schema.to_string()).with_synchronous_commit(setting)
 }

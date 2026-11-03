@@ -38,7 +38,7 @@ use layerfs_bridge::control::{Reply, WorkspaceToken};
 use layerfs_content::ObjectId;
 use layerfs_daemon::store::{Store, StoreReader};
 use layerfs_history::HistoryCatalog;
-use layerfs_persistence::{Handles, SqlitePersistenceProfile, StorageProvider};
+use layerfs_persistence::{SqliteHandles, SqlitePersistenceProfile, StorageProvider};
 use layerfs_storage::{
     location::PackInfo,
     port::{PackPersistence, PackReadChoice, PackReadPlan, PersistenceError},
@@ -66,7 +66,7 @@ const WAIT: Duration = Duration::from_secs(8);
 /// The real catalog, with every serial reservation and its answer recorded.
 mod counted {
     use layerfs_history::*;
-    use layerfs_persistence::Handles;
+    use layerfs_persistence::SqliteHandles;
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone)]
@@ -84,7 +84,7 @@ mod counted {
         }
     }
     pub struct CountedHistory {
-        pub handles: Arc<Handles>,
+        pub handles: Arc<SqliteHandles>,
         pub attempts: Mutex<Vec<Attempt>>,
     }
     macro_rules! forward {
@@ -243,7 +243,7 @@ struct Fx {
     fixture: installed::Fixture,
     store: Arc<Store>,
     harness: Harness,
-    writer: Arc<Handles>,
+    writer: Arc<SqliteHandles>,
     history: Arc<CountedHistory>,
     readers: Arc<Mutex<Vec<Arc<StorageProvider>>>>,
 }
@@ -262,7 +262,7 @@ impl Fx {
         );
         let config = || fixture.config.clone();
         let writer = Arc::new(
-            Handles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap(),
+            SqliteHandles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap(),
         );
         let history = Arc::new(CountedHistory {
             handles: writer.clone(),
@@ -272,7 +272,7 @@ impl Fx {
         let reader_config = fixture.config.clone();
         let observed_readers = readers.clone();
         let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
-            let read = Handles::open_read_only(
+            let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,
                 installed::CURSOR,

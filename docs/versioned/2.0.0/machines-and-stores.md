@@ -17,7 +17,7 @@ a copy of a sqlite Store in a bucket.
 | Kind | How many | Made by | Sandboxes run as | Tool |
 | --- | --- | --- | --- | --- |
 | `native` | one, built in | — | macOS: host processes with a loopback NFS mount. Linux: namespaces (needs root). Windows: none; `native` holds only records (O5) | — |
-| `docker` | one, built in | — | Docker containers on the image `machine update docker --image` records; see Routes | `docker` |
+| `docker` | one, built in | — | Docker containers on the image `machine update docker --image` records, else the bundle's Sandbox image, loaded into Docker once (#535 P5); see Routes | `docker` |
 | `apple-container` | many | `machine create` | namespaces inside the VM | `container` |
 | `microsandbox` | many | `machine create` | namespaces inside the VM | `msb` |
 | `lima` | many | `machine create` | namespaces inside the VM | `limactl` |
@@ -26,13 +26,22 @@ a copy of a sqlite Store in a bucket.
 
 - "Platform" is only a machine's kind. A caller never chooses how a
   Sandbox runs; the kind decides.
-- `machine list` answers every machine and, under `can_create`, each kind
-  that could be made here, with `ready`, `missing` (such as `tool:msb`) and
-  the tool's `version`. A VM or ssh machine's `state` is read live, as
+- `machine list` answers every machine, each with `supports` (`sqlite`,
+  `postgresql_sandbox` and the `reason` when not), its platform's row of the
+  support table, and its live `state` as `machine status` reads it
+  (`native` is always `ready`; the built-in `docker` shows `stopped` until
+  `machine start docker`). `machine platforms` answers each platform on this host:
+  backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox
+  runs here and why not, `ready`, `missing` (such as `tool:msb`), the tool's
+  `version` and the options `machine create` takes; the same rows as
+  `connect/SUPPORT.json`. Neither starts a machine. A VM or ssh machine's `state` is read live, as
   `machine status` reads it, for all of them at once within 10 s; it starts
   nothing and writes nothing. A machine whose probe fails or does not answer
-  in time is `unknown`, with the reason in `error`; one being created or
-  removed keeps its recorded state. `machine get` answers the same state.
+  in time is `unknown`, with the reason in `error`. A machine that an
+  operation holds (its record's `op`, below) is not probed: it is
+  `creating` or `removing` while that process lives, and `unresolved` once
+  it is gone with the outcome unknown. `machine get` answers the same
+  state.
 - `native` and `docker` are never created, removed or disconnected.
 
 ### Creating a VM machine
@@ -67,9 +76,18 @@ layerfs machine create fc1 firecracker --host host1
   `<cache>` is `XDG_CACHE_HOME`, else `~/.cache`. Without it the create is
   `Unsupported` with `detail.missing` = `bundle:<folder>`. Fetching the
   bundle is not built; a build places it.
+- From the claim until the outcome is recorded, the record holds the
+  create's `op` (`machine.create`; `machine.connect` for ssh): its id,
+  phase and process (process id, start time and boot). While that process
+  lives, every other call on the machine is `Busy`.
 - A create that fails before the VM exists removes what it made. Once the
   VM exists, a failure keeps it with state `failed` and its `error`.
-  `Unknown` keeps everything and is logged.
+  `Unknown` keeps everything, its `op` marked `uncertain` with the
+  `error`, and is logged to `log/uncertain.jsonl`. Once that process is
+  gone, every call on the machine but `machine status`, `machine get`,
+  `machine list` and the remove is `Unresolved`, naming
+  `layerfs machine status <name>` and `layerfs machine remove <name>`
+  (`machine disconnect` for ssh).
 - The home lock is held only to claim the name and to record the outcome,
   never while the VM boots. A create also holds the machine's `start.lock`
   (taken before the home lock), so an on-demand start cannot overwrite the
@@ -97,44 +115,71 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
 ### Removing and updating
 
 - `machine remove` (VMs) and `machine disconnect` (ssh) are `InUse` while
-  the machine holds Stores, Sandboxes or hosted Firecracker machines. Each
-  is `InvalidInput` on the other kind.
+  the machine holds Stores, Sandboxes or hosted Firecracker machines;
+  `detail.related` names each as `{kind: "store" | "sandbox" | "machine",
+  name}`. Each is `InvalidInput` on the other kind.
 - A remove takes the machine's `start.lock` first, then, under the home
-  lock, marks the record `removing` with its process id. The VM is deleted
-  outside the home lock. While that process lives, every call that would
-  start the machine, move a Store to it, create a Sandbox on it, update or
-  remove it is `InUse`. A refused delete puts the record back as it was;
-  one whose outcome is unknown records `state: "unknown"` and the error. A
-  remover that is gone holds nothing.
+  lock, writes its `op` (`machine.remove`; `machine.disconnect` for ssh)
+  into the record. The VM is deleted outside the home lock. While that
+  process lives, every call that would start the machine, push a Store to
+  it, create a Sandbox on it, update or remove it is `Busy`; `machine get`
+  and `machine status` answer `removing`. A refused delete puts the record
+  back as it was; one whose outcome is unknown keeps the `op` marked
+  `uncertain` with the `error`, and is logged, as for a create. A remover
+  that is gone after a known outcome holds nothing.
+- A remove or disconnect is refused only while another process's `op`
+  lives: it is the call that clears an `unresolved` machine.
 - `machine update native` and `machine update docker` set `image` and
   `docker` (the Docker socket); `wsl` is a Windows host's setting. Any
   update is `InUse` while Sandboxes run on the machine, naming them.
 - Resizing a VM with `machine update` is `Unsupported` ("not built yet");
   nothing is changed.
 
-### Start on demand and idle stop
+### Starting and stopping (manual, #535 D11)
 
-- A machine starts on the first call that needs it. The caller finds the
-  worker gone, starts the machine and its worker, waits until it is ready
-  and records `worker.json`. That wait is a readiness wait, not a retry;
-  the call is then sent once.
-- Two processes that need the same stopped machine take turns on its
-  `start.lock`, which `machine create` and `machine remove` also take. The
-  second waits up to 600 s, then is refused `Unavailable`. The lock is
-  always taken before the home lock, and the start re-reads the record once
-  it holds it.
-- A `firecracker` machine's first call starts its `lima` host the same way
-  (its `start.lock`, readiness wait and `worker.json`) before the microVM.
-- The worker stops after 10 minutes (O2) with no open Store, no Sandbox, no
-  call in flight and no call. It counts the Sandboxes it runs and every one
-  recorded under `/layerfs/data/store/<s>/project/<p>/sandboxes/`, and on a
-  `lima` host each live Firecracker microVM; an unreadable entry counts as
-  in use. In a VM guest it then powers the guest off; a Firecracker microVM
-  resets instead (`sync; reboot -f`), since its VMM ignores a power-off. On
-  an ssh host only the worker stops.
+- A machine runs only between `machine start <name>` and `machine stop
+  <name>`. Nothing starts or stops one by itself: no call starts a stopped
+  machine, and a running machine, its worker and its Sandboxes stay up
+  however long they are unused. A Store is still closed after a quiet
+  minute (the worker's and the caller's Store connection reaper); that
+  closes a file, not a machine.
+- A call that needs a stopped machine is refused `Unavailable`, naming the
+  start command: "machine <m> is not running; start it with `layerfs
+  machine start <m>`". It dials the worker `worker.json` records once, with
+  no ping first (#535 R1); when that dial sent nothing (the connection, the
+  secret or its answer failed), the call is refused the same way ("machine
+  <m>'s worker did not answer (…); start it with `layerfs machine start
+  <m>`") and nothing is started or resent. A call whose answer is lost
+  after it was sent is `Unknown`; it is not resent.
+- The calls that need the machine's worker: Store calls on a sqlite Store
+  there, `project remove`, `sandbox create`, the Workspace calls that change
+  something, `store push`, `store pull`, `store remove` and `backup create`.
+  `store push`, `store pull` and `store remove` check their machines before
+  they mark the Store.
+- `machine start <name>` starts a stopped machine and its worker, waits
+  until it is ready and records `worker.json`; a running machine answers at
+  once. `machine stop <name>` stops the worker and, where there is one, the
+  VM (`docker`: its worker container; `ssh`: the worker and its forward);
+  disks and Stores stay. It is `InUse` while Sandboxes run on the machine
+  (`detail.related` names them). `native` answers both at once (#535 P1).
+- No list, get or status call starts a machine (#535 P4): every `*.list`,
+  `*.get` and `*.status` call and `machine platforms` answer from records
+  and live probes, and a stopped machine reads as `stopped` (`store status`:
+  `down`; `sandbox get`: no Workspaces and `down_reason`; `workspace
+  status`: `Unavailable`).
+- Two `machine start` calls on the same machine take turns on its
+  `start.lock`, which `machine create`, `machine stop` and `machine remove`
+  also take. The second waits up to 600 s, then is refused `Unavailable`.
+  The lock is always taken before the home lock, and the start re-reads the
+  record once it holds it.
+- `machine start` on a `firecracker` machine starts its `lima` host the
+  same way (its `start.lock`, readiness wait and `worker.json`) before the
+  microVM, within that one call.
 - `machine status` answers `state`, `free_disk`, `tool_version` and
-  `down_reason` (O34). A stopped VM answers without being started. There is
-  no change event; callers poll.
+  `down_reason` (O34). A stopped VM answers without being started. While a
+  record holds an `op`, it also answers `op` (`id`, `name`, `phase`,
+  `started`, `uncertain`), probes nothing and answers the state above; it
+  never clears the `op`. There is no change event; callers poll.
 
 ### Routes
 
@@ -150,18 +195,51 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   is `Unavailable`; in both cases the request was not sent. Only a
   connection lost after the request was sent is `Unknown`. One attempt;
   nothing is resent.
+- The worker's answer to the secret (its hello) says which build it is:
+  `{ ready: true, protocol, bundle }`, the worker protocol it speaks (2)
+  and the hash of the sealed bundle it runs from (`bundle.json` beside its
+  `layerfs`). The caller compares both with its own protocol and the bundle
+  it deploys before it sends anything. A worker of another protocol or
+  bundle, or an older worker whose hello names no protocol, is refused
+  `Unavailable` (`detail.worker` and `detail.expected` give both sides),
+  naming the fix: "replace its worker with this build's: `layerfs machine
+  stop <m>`, then `layerfs machine start <m>`" (a start copies this build's
+  bundle in). `machine start` alone does not replace a running worker,
+  whatever its build. A worker run from no sealed bundle (a development
+  build) is checked by protocol alone. [`layerfs doctor`](calls.md#layerfs-doctor)
+  reports a running worker of another build as a warning.
 - A worker holds a Store's lease for as long as it keeps the Store open,
-  and closes its own open copy before a move, retire or remove reads or
+  and closes its own open copy before a push, pull, retire or remove reads or
   deletes the file.
 - One process can use Stores on several machines at once.
 - A Sandbox on `docker` is a container on the docker machine's image. On
   macOS and Linux the docker worker (a container on that image) starts it
   beside itself, mounting only its Store's folder of the worker's data
-  volume. A PostgreSQL Store's Sandbox on `native` or `docker` is started by
-  the caller.
+  volume. A PostgreSQL Store's Sandbox starts the same way as a sqlite
+  Store's on that machine; it binds no Store file.
 - Every machine other than `native` is reached through its worker, `docker`
   on Linux included (its sqlite Stores live in a Docker volume). Checked in
   the terminal pass on a Linux VM.
+- Workspace calls skip the worker where the caller reaches the Sandbox's
+  daemon (#535 G4). On `ssh` and `lima`, `sandbox.create` (through the
+  worker) answers the daemon's port and keys, and the caller forwards the
+  port to its own loopback (`ssh -L`). On `docker` the Sandbox publishes
+  the port on the host's loopback and the caller dials it as it is. The
+  keys go to the home's `sandbox/<name>/control.json` (0600), the forward
+  to its record. `workspace.mount`, `commit`, `unmount`, `status` and
+  `sandbox.get`'s Workspace list then go from the caller straight to the
+  daemon; the Workspace records are in the home's `sandbox/<name>/`. A
+  Branch lookup (mount) or head read (status) on a sqlite Store still goes
+  to the worker as a Store call. `workspace.exec` still goes through the
+  worker: the command runs through the Sandbox's runtime in the machine,
+  and the caller sends the directory its record names. `sandbox.create`
+  and `sandbox.close` go through the worker; a close ends the forward.
+  `apple-container`, `microsandbox` and `firecracker` forward nothing:
+  every call goes through the worker. A forward that failed at create
+  leaves the Sandbox on the worker route (`forward_failed` in the answer).
+  On a stopped machine these calls are `Unavailable`, naming `machine
+  start`; a forward that has ended is `Unavailable` too, naming `machine
+  start` and `sandbox close`.
 
 ## Stores
 
@@ -173,50 +251,110 @@ sqlite Store is Disposable (WAL, `synchronous=OFF`); its record says so.
 
 ```console
 $ layerfs store create shop          # run
-$ layerfs store move shop dev --progress   # not run
+$ layerfs store push shop dev --progress   # not run
+$ layerfs store pull shop --progress       # not run
 ```
 
 - `store create` makes an empty sqlite Store on `native`, at
   `store/<name>/store.sqlite`. Its record has `name`, `kind`, `machine`,
   `profile`, `created` and `sqlite` (the SQLite version); `store get` and
-  `store list` add `projects` and never show the Store's keys.
-- `store move <name> <machine>` moves the file to another machine. It runs
-  its phases once each: check, snapshot, send, verify, install, record and
-  retire. The bytes pass through the calling process in pieces, so a move
-  between two machines other than `native` is one call (O12).
-  - It is `InUse` while any process holds the Store, a Sandbox of one of
-    its projects runs, or another live process moves it.
-  - A Store call made while a move or remove runs is `InUse`, from the
-    mover's own process too: the lease is taken, and the record re-read,
-    under the home lock. The mover writes `in_progress` under the lock,
-    closes its own open copy, then re-checks the leases (another thread's
-    included) and Sandboxes under the lock again before the snapshot.
-  - The home lock covers only the checks and record writes, never a machine
-    start, a Store step or the close of an open Store. A move whose record
-    phase fails (its lock wait expired, say) keeps `in_progress` with both
-    copies and logs the uncertain outcome.
-  - It is `Exists` when the target already holds a Store file of that name,
-    and `InvalidInput` for the Store's own machine or a postgresql Store.
+  `store list` add `projects` and never show the Store's keys; each
+  `store list` item also ends with the `state` `store status` shows.
+- `store push <name> <machine>` sends the file from `native` to a machine;
+  `store pull <name>` brings it from its machine back to `native` (#536
+  H1). Both run the same phases once each: check, snapshot, send, verify,
+  install, record and retire; only the sides swap. The bytes pass through
+  the calling process in pieces. Between two machines, pull, then push:
+  each half is its own call. Retire deletes the source's copy: on `native`
+  the file with its `-wal`, `-shm` and any partial copy (the folder keeps
+  the home's records); on another machine the Store's whole folder under
+  its worker's root, with the project entries the worker kept there (a
+  symlink in it is removed, never followed).
+  - A push is `InvalidInput` unless the Store is on `native` (the message
+    names `store pull`), and for `native` as the target; a pull is
+    `InvalidInput` when the Store is already on `native`. Both are
+    `InvalidInput` for a postgresql Store; a push to an unknown machine is
+    `NotFound`. A stopped machine is `Unavailable`, naming `layerfs machine
+    start <m>` (#535 D11).
+  - Its check runs before it marks the Store: both machines answer, the
+    target holds no Store file of that name (`Exists`), and the target has
+    the Store's bytes (with its write-ahead log) plus a headroom of 1 GiB,
+    or a tenth of the Store when that is more, free. Too little is
+    `Capacity`, naming the bytes needed and free (`detail.needed`,
+    `detail.free`). A push measures the machine's free disk in its worker,
+    a pull on this host.
+  - It is `InUse` while any other process holds the Store or a Sandbox of
+    one of its projects is recorded; `detail.related` names each as
+    `{kind: "lease", name: <pid>}` or `{kind: "sandbox", name}`.
+  - While a push, pull or remove runs, the Store's record holds one `op`
+    (#536 §7.1): its id, `name` (`store.push`, `store.pull`,
+    `store.remove`), `phase`, `args` (`from`, `to`), owner process and
+    `uncertain`. Every other operation, lease and
+    Store call on the Store is `Busy` while that process lives, from the
+    caller's own process too: the lease is taken, and the record re-read,
+    under the Store's lock, `store/<name>/lock`. The caller writes `op`
+    under the home lock and the Store's lock, closes its own open copy,
+    then re-checks the leases (another thread's included) and Sandboxes
+    under both locks again before the snapshot, and writes each phase into
+    `op` as it starts.
+  - The locks cover only the checks and record writes, never a machine
+    start, a Store step or the close of an open Store.
+  - A certain failure drops `op`. An uncertain one (an `Unknown` step, or
+    any failure of the record phase, after both copies exist) keeps both
+    copies, keeps `op` with `uncertain: true` and is logged to
+    `log/uncertain.jsonl`. The install phase is written uncertain before
+    it starts, so a call that dies during install or record (the target
+    may hold a copy the record does not name) is uncertain too. The record
+    write that puts the Store on its new machine records `last_transfer`
+    (`call`, `from`, `to`, `at`, `bytes`, `sha256`, `heads`, `retired:
+    false`) and keeps `op`, certain, at phase retire while the source's
+    copy is deleted; then `op` goes and `retired` becomes `true`. A retire
+    that fails or whose process ends leaves the Store in use on its new
+    machine and the old copy, which the doctor reports and the next push
+    or pull deletes first.
+  - Once that process is gone, an uncertain `op` makes every later
+    operation, lease and Store call on the Store `Unresolved`, naming
+    `layerfs store status <name>` and the call that clears it: a new
+    `layerfs store push <name> <machine>` (with the machine the push named)
+    or `layerfs store pull <name>`. A new push or pull first deletes the
+    copy left on whichever of the two machines the record does not name (on
+    `native` its file and any partial copy; on another machine the Store's
+    folder under its worker's root), then runs as usual. `store remove`
+    clears it too, but deletes only the copy on the record's machine. A
+    certain `op` holds nothing.
   - A failure names its phase in the message and in `detail.phase`, and
     keeps whatever exists.
-  - An `Unknown` step keeps both copies, leaves the record's `in_progress`
-    set and is logged to `log/uncertain.jsonl`.
-  - While it runs, `store status` shows `state: "moving"` and
-    `in_progress`.
+  - While it runs, `store status` shows `state: "busy"` and `op`.
 - `store remove` deletes a sqlite Store wherever it is, with every project
   in it. Its backups stay in their buckets. It is `InUse` while the Store is
-  held. A Store whose machine is unknown is `Unavailable` (as for a move).
-  A stopped machine is started (or the call refused) before the home lock is
-  taken; a Store whose machine changed meanwhile is `Conflict`. A certain
-  failure clears `in_progress`.
+  held (`detail.related` as for a push) and `Busy` while a live process runs an operation on it. A Store
+  whose machine is unknown is `Unavailable` (as for a push or pull). A stopped
+  machine is refused `Unavailable`, naming `machine start`, before the
+  home lock is taken; a Store whose machine changed meanwhile is
+  `Conflict`. It is the call that clears an unresolved `op`: a gone
+  process's intent does not refuse it. Its remove phase is written
+  uncertain before it starts. A certain failure drops its `op`, putting
+  back the unresolved one it would have cleared.
 - `store status` starts no machine. A Store whose machine is not running,
   or whose recorded worker does not answer, has `state: "down"` with
   `down_reason`, and `file.unavailable` (O34).
-- A lease records its process's start time and boot, so a lease or move
-  whose process id was reused by another process is stale. A lease written
+- A Store's `state` is `idle`, `in_use` (another live process holds its
+  lease), `busy` (a live `op`), `down` or `unresolved` (a gone process's
+  uncertain `op`). `store status`, `store get` and each `store list` item
+  show `op` as `{id, name, phase, started, uncertain}`.
+- A lease or `op` records its process's start time and boot, so one whose
+  process id was reused by another process is stale. A lease written
   without them is matched by id alone.
-- Init writes only into a sqlite Store on `native`. To add a project to a
-  Store on another machine, move it to `native`, Init, and move it back.
+- Init into a sqlite Store on another machine reads the folder on the
+  caller's host and copies it, in pieces of at most 8 MiB, into
+  `incoming/init-<id>` under that machine's worker root; the worker runs
+  Init on the copy under the Store's lease there and deletes the copy
+  when Init ends (#536 H11, H11a). The machine needs the copy's bytes plus
+  `max(1 GiB, 10%)` free first. The caller holds its lease meanwhile and
+  records the project when the worker answers. A failure while copying
+  deletes the copy; a lost answer is `Unknown`, names the copy that may
+  remain, and records nothing in the home. Not run on a real VM or ssh
+  host.
 - A Sandbox of a sqlite project runs only on the Store's machine.
 
 ### PostgreSQL Stores
@@ -251,16 +389,41 @@ layerfs project init pg-main/load ./load
   schema has another name is opened and one with several is refused. The
   connect code names only the schema `layerfs`.
 - `store status` adds a `server` field from one connection.
-- `store disconnect` forgets the Store; its data stays on the server. It is
-  `InUse` while the Store is held.
-- `project init` into a PostgreSQL Store runs in the caller's process.
+- A process that makes calls on a PostgreSQL Store holds its lease while
+  it keeps the Store open, as for a sqlite Store. `store disconnect`
+  forgets the Store; its data stays on the server. It is `InUse` while
+  another process holds the Store or a Sandbox of it is recorded;
+  `detail.related` names each as `{kind: "lease", name: <pid>}` or
+  `{kind: "sandbox", name}`, as for a push.
+- `project init` into a PostgreSQL Store runs in the caller's process,
+  under the Store's lease.
 - PostgreSQL needs a build with the `postgresql` feature; without it these
   calls are `Unsupported`.
-- A PostgreSQL Store's Sandboxes run on `native` (macOS, a daemon built
-  with `postgresql`) or `docker`, started from the caller's process, which
-  resolves the password and hands the URL to the daemon. Under Docker
-  Desktop a loopback URL reaches the container's daemon as
-  `host.docker.internal`. On a VM or ssh host they come later (O3).
+- A PostgreSQL Store's Sandboxes run on every machine: `native` (macOS
+  and Linux), `docker`, ssh, `lima`, `apple-container`, `microsandbox` and
+  `firecracker` (the daemon and the worker are built with `postgresql`),
+  started where the machine starts Sandboxes. The caller
+  resolves the password and rewrites a loopback host for the machine
+  (`docker`: `host.docker.internal`, given to the containers on a Linux
+  Engine as its `host-gateway`; ssh refuses a loopback URL); the URL
+  travels only in that one request. `sandbox create` first checks, from
+  the machine, that the server answers with the Store's schema binding.
+  The server always runs off the machine (on this host or elsewhere);
+  nothing installs PostgreSQL in a machine (D12). The VM platforms'
+  rewrites, each proven by a live run (#535 `receipts/g7-live/`):
+  - `lima`: `192.168.5.2` (the guest's `host.lima.internal`; the address,
+    because the Sandbox's own root has no hosts entry for the name), which
+    reaches a server on this host's loopback.
+  - `apple-container`: the container network's gateway, read from
+    `container inspect` (192.168.64.1 by default). The server must listen
+    on that bridge (`0.0.0.0`, as Docker Desktop publishes a port), not on
+    127.0.0.1 alone, and admit connections from it.
+  - `microsandbox`: `host.microsandbox.internal`. Machines are created
+    with `--net public,private,host`, so the guest reaches every port on
+    this host and servers on private addresses, as lima and docker guests
+    do; a machine created before this needs re-creating.
+  - `firecracker`: `192.168.5.2`, the Lima host's own host address; the
+    Lima host forwards and masquerades its microVMs' traffic.
 - Not built: `project remove` from a PostgreSQL Store, and backups of
   PostgreSQL Stores (back it up with PostgreSQL's own tools).
 - The step 10a and 10b commits record `store connect` and Init into a
@@ -306,8 +469,8 @@ layerfs backup restore shop lab
   that changed since its last backup or restore through that bucket is
   `Conflict`. Replacing one that a process holds open, whose SQLite `-wal`
   or `-shm` file exists, or one of whose projects has a running Sandbox is
-  `InUse`. A Store on another machine is `Unsupported` (move it to
-  `native` first). The home's project records are rebuilt from the Store.
+  `InUse`. A Store on another machine is `Unsupported` (`store pull` it
+  to `native` first). The home's project records are rebuilt from the Store.
   - The download, its verification and the read of its projects run before
     the home lock, into a hidden staging folder under the home's `store/`
     (removed when the call ends). The lock covers the re-checks, the install

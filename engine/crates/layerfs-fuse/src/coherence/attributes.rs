@@ -1,5 +1,5 @@
 //! One attribute set per kernel inode, always taken from published state.
-use crate::operations::Published;
+use layerfs_mount_ports::operations::Published;
 use layerfs_workspace::ViewStat;
 use std::{error::Error, fmt};
 

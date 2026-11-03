@@ -2,13 +2,13 @@
 //! SQLite file, or with the `postgresql` feature a PostgreSQL schema. Built
 //! without that feature, a PostgreSQL selection is `BackendUnavailable`.
 use crate::store::InitError;
-use layerfs_persistence::{BackendSelection, Handles, HistoryProvider, PersistenceConfig};
+use layerfs_persistence::{HistoryProvider, SqliteHandles, StoreSelection};
 use layerfs_storage::port::{acquisition::Acquisition, PackPersistence};
 use std::sync::Arc;
 
 /// One writable session on the live Store.
 pub(crate) enum Opened {
-    Sqlite(Handles),
+    Sqlite(SqliteHandles),
     #[cfg(feature = "postgresql")]
     Postgres(layerfs_persistence::PostgresHandles),
 }
@@ -16,21 +16,21 @@ pub(crate) enum Opened {
 impl Opened {
     /// Opens the Store `store` selects, validated against its authority.
     pub(crate) fn writable(
-        store: &PersistenceConfig,
+        selection: &StoreSelection,
         binding: &[u8],
         cursor_key: [u8; 32],
     ) -> Result<Self, InitError> {
-        let opened = match &store.backend {
-            BackendSelection::Sqlite => {
-                Handles::open_writable(store.clone(), binding, cursor_key).map(Self::Sqlite)
+        let opened = match selection {
+            StoreSelection::Sqlite(config) => {
+                SqliteHandles::open_writable(config.clone(), binding, cursor_key).map(Self::Sqlite)
             }
             #[cfg(feature = "postgresql")]
-            BackendSelection::Postgres(selection) => {
+            StoreSelection::Postgres(selection) => {
                 layerfs_persistence::PostgresHandles::open_writable(selection, binding, cursor_key)
                     .map(Self::Postgres)
             }
             #[cfg(not(feature = "postgresql"))]
-            BackendSelection::Postgres(_) => {
+            StoreSelection::Postgres(_) => {
                 Err(layerfs_storage::port::PersistenceError::BackendUnavailable)
             }
         };
@@ -70,7 +70,7 @@ impl Opened {
         }
     }
 
-    /// Refuses every later call of this session; see [`Handles::close`].
+    /// Refuses every later call of this session; see [`SqliteHandles::close`].
     pub(crate) fn close(&self) {
         match self {
             Self::Sqlite(handles) => handles.close(),
@@ -83,11 +83,11 @@ impl Opened {
 /// Creates the new PostgreSQL schema `store` selects, holding no project,
 /// with the acquisition tables projects are added through.
 pub(crate) fn create_postgresql(
-    store: &PersistenceConfig,
+    selection: &StoreSelection,
     policy: layerfs_storage::StoragePolicy,
     catalog: &layerfs_history::HistoryCatalogConfig,
 ) -> Result<(), InitError> {
-    let BackendSelection::Postgres(selection) = &store.backend else {
+    let StoreSelection::Postgres(selection) = selection else {
         return Err(InitError::Manifest("a PostgreSQL Store selection required"));
     };
     #[cfg(feature = "postgresql")]

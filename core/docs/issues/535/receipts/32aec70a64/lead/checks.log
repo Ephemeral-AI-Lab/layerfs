@@ -1,0 +1,13 @@
+== cargo +1.85.1 test --locked --offline --all-targets --no-run
+   rc=0 1s
+== cargo +1.85.1 clippy --locked --offline --all-targets -- -D warnings
+   rc=0 1s
+== cargo +1.85.1 fmt --check
+   rc=0 4s
+== python3 -B tools/check_product_boundary.py
+   rc=0 2s
+== python3 -B tools/check_fuser_integrity.py
+   rc=0 0s
+== python3 -B -m unittest discover -s tools -p test_*.py
+   rc=0 17s
+ALL rc=0

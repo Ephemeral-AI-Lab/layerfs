@@ -32,13 +32,11 @@ for this manual.
 
 | What | Refusal |
 | --- | --- |
-| A PostgreSQL Store's Sandbox on a VM or an ssh host (O3) | "runs on native or docker; on VMs and ssh hosts it comes later (O3)" |
-| A PostgreSQL Store's Sandbox on Linux `native` (namespaces) | "a namespaces Sandbox binds a Store file" |
+| A Sandbox on a platform and Store kind the support table refuses (`layerfs machine platforms`, `connect/SUPPORT.json`): docker on Windows | the table's reason, word for word, such as "docker through WSL2 is not designed yet" |
 | On Linux, a `docker` Sandbox of a sqlite Store by a caller that is not root | the daemon (root in its container) must own the bind-mounted Store folder; run as root, or keep the Store on `native` |
-| A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store move` moves the Store |
+| A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store pull` and `store push` move the Store |
 | `project remove` from a PostgreSQL Store | "removing a project from a PostgreSQL Store is not built" |
-| `project init` into a sqlite Store that is not on `native` | move it to `native`, Init, then move it back |
-| `backup restore` over a Store that is not on `native` | move it to `native` first |
+| `backup restore` over a Store that is not on `native` | `store pull` it to `native` first |
 | Resizing a VM with `machine update` | "not built yet; nothing was changed" (`InUse` first if Sandboxes run on it) |
 | Creating or connecting a machine without the sealed Linux bundle | names the expected folder in `detail.missing` (`bundle:<folder>`); fetching the bundle into the cache is not built, a build places it |
 | A machine kind whose tool is missing | `detail.missing`, such as `tool:msb` |
@@ -88,15 +86,22 @@ step commits.
 - **VM kinds and ssh.** No real `apple-container`, `microsandbox`, `lima`,
   `firecracker` or ssh machine was created or connected; their adapters
   were tested with provider tests only. On macOS the `docker` machine's
-  worker did run (a private test bundle, `LAYERFS_BUNDLE`): `store move` to
+  worker did run (a private test bundle, `LAYERFS_BUNDLE`): `store move` (now `store push`) to
   `docker`, its Sandboxes and the twelve cells passed; see the terminal pass.
-- **Machine boot, worker start and idle stop.** A guest powering off after
-  10 idle minutes and the next call starting it again were not run.
+- **Machine boot and worker start.** `machine start` and `machine stop`
+  (#535 P1) and a worker call refused `Unavailable` on a stopped machine
+  (D11, R1) were tested with stand-in tools and workers only; no VM, ssh
+  host or Docker worker was started or stopped by them. There is no idle
+  stop and no start on demand (D11).
+- **The docker default image** (#535 P5). Loading the bundle's
+  `sandbox-image.tar` with `docker load` and running the worker container
+  and Sandboxes on the id it reports was tested with a stand-in `docker`
+  only; a real Engine (Docker Desktop's classic or containerd image store)
+  was not used.
 - **One worker serving several Stores** and the guest-to-host send speed.
 - **Linux.** No Linux host was used. Linux namespaces Sandboxes, Init into
-  `docker` on Linux, the Linux route of the `docker` machine (the route
-  table marks it in-process; the decisions log says it goes to its worker)
-  and the Linux wheels (O20) are `NOT_RUN`.
+  `docker` on Linux, the Linux route of the `docker` machine (its worker,
+  as on macOS: #535 G8) and the Linux wheels (O20) are `NOT_RUN`.
 - **Windows** (O5). `native` on Windows holds only records; its sqlite
   Stores and Init are meant to live in a WSL worker. Not run. The library
   does not build for Windows yet: `home/`, `store/`, `worker/`, `start.rs`
@@ -125,7 +130,8 @@ On macOS arm64, with the debug build, in a private temporary home:
 - `file.read` of a 3-byte binary file is refused `Binary`. Bytes can be
   written (`file.write` with a `Buffer` or `bytes`), but no 2.0 call reads
   them back as bytes.
-- `project init --progress` printed no progress lines for a small folder.
+- `project init --progress` printed no progress lines for a small folder
+  (a later build reports its phases on every route; not rerun).
 
 ## Seen in the code, not tested
 

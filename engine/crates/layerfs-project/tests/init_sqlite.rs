@@ -6,7 +6,7 @@ mod support;
 use layerfs_history::HistoryCatalogConfig;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 use layerfs_persistence::SqliteAcquisitionSchema;
-use layerfs_persistence::{Handles, PersistenceConfig, SqlitePersistenceProfile};
+use layerfs_persistence::{PersistenceConfig, SqliteHandles, SqlitePersistenceProfile};
 use layerfs_storage::StoragePolicy;
 use support::*;
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
@@ -16,7 +16,7 @@ fn an_unsupported_platform_refuses_the_store_before_any_file_exists() {
     for selected in DEVELOPMENT_PROFILES {
         let fixture = Fixture::new(0);
         let store = fixture.path.join("store.sqlite");
-        let refused = Handles::create(
+        let refused = SqliteHandles::create(
             PersistenceConfig::sqlite(&store).with_sqlite_profile(selected),
             StoragePolicy::frozen_default(),
             &HistoryCatalogConfig {
@@ -38,7 +38,7 @@ fn selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle() {
     for selected in DEVELOPMENT_PROFILES {
         for count in [100, 1000] {
             let fixture = Fixture::new(count);
-            let h = Handles::create(
+            let h = SqliteHandles::create(
                 PersistenceConfig::sqlite(fixture.path.join("store.sqlite"))
                     .with_sqlite_profile(selected)
                     .with_sqlite_acquisition(SqliteAcquisitionSchema::Tables),
@@ -79,7 +79,7 @@ fn selected_profiles_init_100_and_1000_pass_the_full_namespace_oracle() {
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 fn attempt(
     fixture: &Fixture,
-    handles: &Handles,
+    handles: &SqliteHandles,
 ) -> Result<layerfs_project::Initialized, layerfs_project::ProjectError> {
     use layerfs_history::{HistoryName, LayerStackId};
     use layerfs_project::{init, InitRequest};
@@ -104,8 +104,8 @@ fn attempt(
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-fn create(store: &std::path::Path, acquisition: SqliteAcquisitionSchema) -> Handles {
-    Handles::create(
+fn create(store: &std::path::Path, acquisition: SqliteAcquisitionSchema) -> SqliteHandles {
+    SqliteHandles::create(
         PersistenceConfig::sqlite(store).with_sqlite_acquisition(acquisition),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {

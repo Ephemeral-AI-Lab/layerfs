@@ -1,0 +1,37 @@
+2026-11-03T08:52:51Z start docker pg-loop C01
+C01 docker postgresql PASS  timed exec 795.842 ms
+2026-11-03T08:53:01Z end docker pg-loop C01 rc=0
+2026-11-03T08:53:01Z start docker pg-loop C02
+C02 docker postgresql PASS  timed exec 1561.985 ms
+2026-11-03T08:53:12Z end docker pg-loop C02 rc=0
+2026-11-03T08:53:12Z start docker pg-loop C03
+C03 docker postgresql PASS  timed exec 1228.186 ms
+2026-11-03T08:53:18Z end docker pg-loop C03 rc=0
+2026-11-03T08:53:18Z start docker pg-loop C04
+C04 docker postgresql PASS  timed exec 1131.441 ms
+2026-11-03T08:53:27Z end docker pg-loop C04 rc=0
+2026-11-03T08:53:27Z start docker pg-loop C05
+C05 docker postgresql PASS  timed exec 1257.481 ms
+2026-11-03T08:53:35Z end docker pg-loop C05 rc=0
+2026-11-03T08:53:35Z start docker pg-loop C06
+C06 docker postgresql PASS  timed exec 1412.828 ms
+2026-11-03T08:53:51Z end docker pg-loop C06 rc=0
+2026-11-03T08:53:51Z start docker pg-loop C07
+C07 docker postgresql PASS  timed exec 3147.406 ms
+2026-11-03T08:54:16Z end docker pg-loop C07 rc=0
+2026-11-03T08:54:16Z start docker pg-loop C08
+C08 docker postgresql PASS  timed exec 1161.313 ms
+2026-11-03T08:54:29Z end docker pg-loop C08 rc=0
+2026-11-03T08:54:29Z start docker pg-loop C09
+C09 docker postgresql PASS  timed exec 155.24 ms
+2026-11-03T08:54:40Z end docker pg-loop C09 rc=0
+2026-11-03T08:54:40Z start docker pg-loop C10
+C10 docker postgresql PASS  timed exec 1238.466 ms
+2026-11-03T08:54:55Z end docker pg-loop C10 rc=0
+2026-11-03T08:54:55Z start docker pg-loop C11
+C11 docker postgresql PASS  timed exec 265.328 ms
+2026-11-03T08:55:08Z end docker pg-loop C11 rc=0
+2026-11-03T08:55:08Z start docker pg-loop C12
+C12 docker postgresql PASS  timed exec 436.852 ms
+2026-11-03T08:55:14Z end docker pg-loop C12 rc=0
+SERIES DONE docker pg-loop

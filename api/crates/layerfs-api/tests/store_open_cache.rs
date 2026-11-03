@@ -1,9 +1,9 @@
 //! The Stores a process keeps open (#533 review, group store): a worker's
 //! open copy holds a lease under its root and is closed by the steps that
-//! read, replace or delete the file, so a Store moves back at once after a
+//! read, replace or delete the file, so a Store is pulled back at once after a
 //! write and a Store that returns is never served from a stale handle; and
 //! (Linux, where a writer waits on its Store directory's lock) a call that
-//! is running keeps its Store open against a move or remove.
+//! is running keeps its Store open against a push or remove.
 use layerfs_api::calls;
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::SdkValue;
@@ -119,16 +119,20 @@ fn read(home: &Path) -> String {
     }
 }
 
+/// `store.pull` to native, else `store.push` to `machine`.
 fn to(home: &Path, machine: &str) -> Result<SdkValue, (String, String)> {
-    call(
-        home,
-        "store.move",
-        &[("name", t("shop")), ("machine", t(machine))],
-    )
+    match machine {
+        "native" => call(home, "store.pull", &[("name", t("shop"))]),
+        _ => call(
+            home,
+            "store.push",
+            &[("name", t("shop")), ("machine", t(machine))],
+        ),
+    }
 }
 
 #[test]
-fn a_worker_closes_its_open_copy_so_a_store_moves_back_at_once_and_returns_fresh() {
+fn a_worker_closes_its_open_copy_so_a_store_is_pulled_at_once_and_returns_fresh() {
     let (home, root, folder) = home_with_project();
     to(&home, "box").unwrap();
     // a write in the worker leaves the Store open there, under its lease
@@ -157,7 +161,7 @@ fn a_worker_closes_its_open_copy_so_a_store_moves_back_at_once_and_returns_fresh
 /// here keeps one call running for as long as this test wants.
 #[cfg(target_os = "linux")]
 #[test]
-fn a_running_call_keeps_its_store_open_against_a_move_or_remove() {
+fn a_running_call_keeps_its_store_open_against_a_push_or_remove() {
     use nix::fcntl::{Flock, FlockArg};
     use std::time::Duration;
     let (home, root, folder) = home_with_project();
@@ -178,7 +182,7 @@ fn a_running_call_keeps_its_store_open_against_a_move_or_remove() {
     for (name, args) in [
         ("store.remove", vec![("name", t("shop"))]),
         (
-            "store.move",
+            "store.push",
             vec![("name", t("shop")), ("machine", t("box"))],
         ),
     ] {

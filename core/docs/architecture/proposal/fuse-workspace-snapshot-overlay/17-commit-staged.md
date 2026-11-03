@@ -119,7 +119,7 @@ current. Reads retain the selected overlay/base throughout; lookup rejects a
 changed revision/epoch before cache publication. Edits reject a changed baseline
 before construction and changed root/revision/generation before publication.
 Directory requests retain one canonical base for both listing and child attrs.
-Handles retain their inode identities across reconciliation.
+SqliteHandles retain their inode identities across reconciliation.
 
 An independent source review found no concrete mixed-version/cache-publication
 issue in these paths. It did not dynamically qualify all reader/capture schedules

@@ -1,0 +1,3836 @@
+{
+  "format": "l1-contract-10b/1",
+  "home": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva",
+  "startedAt": "2026-11-03T09:07:27Z",
+  "calls": [
+    {
+      "call": "machine.start",
+      "args": [
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696847.78,
+      "ok": true,
+      "value": {
+        "name": "docker",
+        "platform": "docker",
+        "backend": "docker",
+        "supports": {
+          "sqlite": true,
+          "postgresql_sandbox": true,
+          "reason": null
+        },
+        "state": "running",
+        "cpus": null,
+        "memory": null,
+        "disk": null,
+        "stores": [],
+        "sandboxes": []
+      }
+    },
+    {
+      "call": "store.create",
+      "args": [
+        "a"
+      ],
+      "opts": {},
+      "at": 1793696876.626,
+      "ok": true,
+      "value": {
+        "name": "a",
+        "kind": "sqlite",
+        "machine": "native",
+        "profile": "disposable",
+        "created": 1793696876650,
+        "sqlite": "3.53.2",
+        "projects": []
+      }
+    },
+    {
+      "call": "project.init",
+      "args": [
+        "a/p",
+        "/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/L1/data12"
+      ],
+      "opts": {},
+      "at": 1793696876.651,
+      "ok": true,
+      "value": {
+        "project": "a/p",
+        "store": "a",
+        "name": "p",
+        "kind": "sqlite",
+        "machine": "native",
+        "created": 1793696877227,
+        "layer": "327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376",
+        "root": "3e6cd64c908e178e5e8e7c92cafc5703e9c0304a98a88083a66136fda14be777"
+      }
+    },
+    {
+      "call": "branch.fork",
+      "args": [
+        "a/p",
+        "lane",
+        "main"
+      ],
+      "opts": {},
+      "at": 1793696877.23,
+      "ok": true,
+      "value": {
+        "kind": "Forked",
+        "branch": "lane",
+        "base": "327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376",
+        "head": null
+      }
+    },
+    {
+      "call": "store.create",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793696877.243,
+      "ok": true,
+      "value": {
+        "name": "b",
+        "kind": "sqlite",
+        "machine": "native",
+        "profile": "disposable",
+        "created": 1793696877250,
+        "sqlite": "3.53.2",
+        "projects": []
+      }
+    },
+    {
+      "call": "project.init",
+      "args": [
+        "b/p",
+        "/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/L1/data12"
+      ],
+      "opts": {},
+      "at": 1793696877.251,
+      "ok": true,
+      "value": {
+        "project": "b/p",
+        "store": "b",
+        "name": "p",
+        "kind": "sqlite",
+        "machine": "native",
+        "created": 1793696877808,
+        "layer": "32983cb582ad0990dea7d52d5c93d092c0e40f62cab84d1063e548577e30bb72ec",
+        "root": "322686d8793fef9cc00cc5c270c7edd76f0f18545972262a7e49ce79b2eef574"
+      }
+    },
+    {
+      "call": "branch.fork",
+      "args": [
+        "b/p",
+        "lane",
+        "main"
+      ],
+      "opts": {},
+      "at": 1793696877.809,
+      "ok": true,
+      "value": {
+        "kind": "Forked",
+        "branch": "lane",
+        "base": "32983cb582ad0990dea7d52d5c93d092c0e40f62cab84d1063e548577e30bb72ec",
+        "head": null
+      }
+    },
+    {
+      "call": "store.push",
+      "args": [
+        "b",
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696877.817,
+      "ok": true,
+      "value": {
+        "store": "b",
+        "from": "native",
+        "to": "docker",
+        "bytes": 12935168,
+        "heads": "7497dbf69eaffd7a319bc7c766cd379d7c54e02068e82965eb873e0b2d28779a"
+      }
+    },
+    {
+      "call": "store.pull",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793696883.453,
+      "ok": true,
+      "value": {
+        "store": "b",
+        "from": "docker",
+        "to": "native",
+        "bytes": 12935168,
+        "heads": "7497dbf69eaffd7a319bc7c766cd379d7c54e02068e82965eb873e0b2d28779a"
+      }
+    },
+    {
+      "call": "store.push",
+      "args": [
+        "b",
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696889.108,
+      "ok": true,
+      "value": {
+        "store": "b",
+        "from": "native",
+        "to": "docker",
+        "bytes": 12935168,
+        "heads": "7497dbf69eaffd7a319bc7c766cd379d7c54e02068e82965eb873e0b2d28779a"
+      }
+    },
+    {
+      "call": "project.init",
+      "args": [
+        "b/q",
+        "/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/L1/data12"
+      ],
+      "opts": {},
+      "at": 1793696894.728,
+      "ok": true,
+      "value": {
+        "project": "b/q",
+        "store": "b",
+        "name": "q",
+        "kind": "sqlite",
+        "machine": "docker",
+        "created": 1793696900185,
+        "layer": "3226c044874a7c203dbc212e27dc9bafac6fb5cfc7f263c95d63f861cad5431ad7",
+        "root": "fa675a0966fe634654653adc564508ef721f2da4a991b2a0de2053227165db29"
+      }
+    },
+    {
+      "call": "store.create",
+      "args": [
+        "c"
+      ],
+      "opts": {},
+      "at": 1793696900.186,
+      "ok": true,
+      "value": {
+        "name": "c",
+        "kind": "sqlite",
+        "machine": "native",
+        "profile": "disposable",
+        "created": 1793696900192,
+        "sqlite": "3.53.2",
+        "projects": []
+      }
+    },
+    {
+      "call": "project.init",
+      "args": [
+        "c/p",
+        "/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/L1/data12"
+      ],
+      "opts": {},
+      "at": 1793696900.193,
+      "ok": true,
+      "value": {
+        "project": "c/p",
+        "store": "c",
+        "name": "p",
+        "kind": "sqlite",
+        "machine": "native",
+        "created": 1793696900745,
+        "layer": "32cc78e331482c6997216bd65215c0caf942ed4360717e1a5a17daaa7818a77876",
+        "root": "c888ea7fc3b2b1923ea5c55e9743ff3396d1177067761c3843ab172900dae7d1"
+      }
+    },
+    {
+      "call": "store.connect",
+      "args": [
+        "g",
+        "postgres://postgres@127.0.0.1:55551/k10g2"
+      ],
+      "opts": {
+        "password": "env:LAYERFS_PG_L1"
+      },
+      "at": 1793696900.746,
+      "ok": true,
+      "value": {
+        "name": "g",
+        "kind": "postgresql",
+        "schema": "layerfs",
+        "synchronous_commit": "off",
+        "projects": []
+      }
+    },
+    {
+      "call": "project.init",
+      "args": [
+        "g/p",
+        "/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/L1/data12"
+      ],
+      "opts": {},
+      "at": 1793696900.978,
+      "ok": true,
+      "value": {
+        "project": "g/p",
+        "store": "g",
+        "name": "p",
+        "kind": "postgresql",
+        "machine": "native",
+        "created": 1793696901703,
+        "layer": "320c73002fb287a317a6dc9611c65671a9fa40c4650e8e73feb5d57b5d6410a38d",
+        "root": "c38ee36e7edf14571054f2593fe77b50188e941de1941c38fe934fd491eb52a7"
+      }
+    },
+    {
+      "call": "branch.fork",
+      "args": [
+        "g/p",
+        "lane",
+        "main"
+      ],
+      "opts": {},
+      "at": 1793696901.704,
+      "ok": true,
+      "value": {
+        "kind": "Forked",
+        "branch": "lane",
+        "base": "320c73002fb287a317a6dc9611c65671a9fa40c4650e8e73feb5d57b5d6410a38d",
+        "head": null
+      }
+    },
+    {
+      "call": "sandbox.create",
+      "args": [
+        "a/p",
+        "sa",
+        "native"
+      ],
+      "opts": {},
+      "at": 1793696901.836,
+      "ok": true,
+      "value": {
+        "name": "sa",
+        "project": "a/p",
+        "machine": "native",
+        "created": 1793696901837,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sa",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      }
+    },
+    {
+      "call": "sandbox.create",
+      "args": [
+        "b/p",
+        "sb",
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696901.908,
+      "ok": true,
+      "value": {
+        "name": "sb",
+        "project": "b/p",
+        "machine": "docker",
+        "created": 1793696901908,
+        "id": "sb",
+        "platform": "docker",
+        "runtime": "docker",
+        "image": "sha256:50e8f040592a52a0e9385b7a683c8ab455d391be50733a0dbf65edf9faeb0540",
+        "backend": "docker",
+        "route": "fuse",
+        "state": "running"
+      }
+    },
+    {
+      "call": "sandbox.create",
+      "args": [
+        "g/p",
+        "sg",
+        "native"
+      ],
+      "opts": {},
+      "at": 1793696904.382,
+      "ok": true,
+      "value": {
+        "name": "sg",
+        "project": "g/p",
+        "machine": "native",
+        "created": 1793696904382,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sg",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      }
+    },
+    {
+      "call": "machine.list",
+      "args": [],
+      "opts": {},
+      "at": 1793696904.576,
+      "ok": true,
+      "value": {
+        "machines": [
+          {
+            "name": "docker",
+            "platform": "docker",
+            "backend": "docker",
+            "supports": {
+              "sqlite": true,
+              "postgresql_sandbox": true,
+              "reason": null
+            },
+            "state": "running",
+            "cpus": null,
+            "memory": null,
+            "disk": null,
+            "stores": [
+              "b"
+            ],
+            "sandboxes": [
+              "sb"
+            ]
+          },
+          {
+            "name": "native",
+            "platform": "native",
+            "backend": "native",
+            "supports": {
+              "sqlite": true,
+              "postgresql_sandbox": true,
+              "reason": null
+            },
+            "state": "ready",
+            "cpus": null,
+            "memory": null,
+            "disk": null,
+            "stores": [
+              "a",
+              "c"
+            ],
+            "sandboxes": [
+              "sa",
+              "sg"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "call": "store.list",
+      "args": [],
+      "opts": {},
+      "at": 1793696904.831,
+      "ok": true,
+      "value": {
+        "items": [
+          {
+            "name": "a",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696876650,
+            "sqlite": "3.53.2",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "b",
+            "kind": "sqlite",
+            "machine": "docker",
+            "profile": "disposable",
+            "created": 1793696877250,
+            "sqlite": "3.53.2",
+            "last_transfer": {
+              "call": "store.push",
+              "from": "native",
+              "to": "docker",
+              "at": 1793696894726,
+              "bytes": 12935168,
+              "sha256": "0e6c160e83a46539920ea6e842659d9aa889f10da9f3f9b3cbfc6a3c41001ef4",
+              "heads": "7497dbf69eaffd7a319bc7c766cd379d7c54e02068e82965eb873e0b2d28779a",
+              "retired": true
+            },
+            "projects": [
+              "p",
+              "q"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "c",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696900192,
+            "sqlite": "3.53.2",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "g",
+            "kind": "postgresql",
+            "url": "postgres://postgres@127.0.0.1:55551/k10g2",
+            "schema": "layerfs",
+            "synchronous_commit": "off",
+            "created": 1793696900750,
+            "password": "env:LAYERFS_PG_L1",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          }
+        ]
+      }
+    },
+    {
+      "call": "sandbox.list",
+      "args": [],
+      "opts": {},
+      "at": 1793696904.837,
+      "ok": true,
+      "value": {
+        "items": [
+          {
+            "name": "sa",
+            "project": "a/p",
+            "machine": "native",
+            "created": 1793696901837,
+            "backend": "native",
+            "route": "nfs",
+            "id": "sa",
+            "platform": "mac",
+            "runtime": "native",
+            "image": "local",
+            "state": "running"
+          },
+          {
+            "name": "sb",
+            "project": "b/p",
+            "machine": "docker",
+            "created": 1793696901908,
+            "id": "sb",
+            "platform": "docker",
+            "runtime": "docker",
+            "image": "sha256:50e8f040592a52a0e9385b7a683c8ab455d391be50733a0dbf65edf9faeb0540",
+            "backend": "docker",
+            "route": "fuse",
+            "state": "running"
+          },
+          {
+            "name": "sg",
+            "project": "g/p",
+            "machine": "native",
+            "created": 1793696904382,
+            "backend": "native",
+            "route": "nfs",
+            "id": "sg",
+            "platform": "mac",
+            "runtime": "native",
+            "image": "local",
+            "state": "running"
+          }
+        ],
+        "next_page_pos": null
+      }
+    },
+    {
+      "call": "workspace.mount",
+      "args": [
+        "sa",
+        "lane"
+      ],
+      "opts": {
+        "name": "w1"
+      },
+      "at": 1793696904.837,
+      "ok": true,
+      "value": {
+        "kind": "Mounted",
+        "path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/1",
+        "workspace": "413356269217e3097ab8de2e53cebc3c7ce008804fd04b95b5e3861ebebd615a",
+        "namespace": 1,
+        "branch": "lane",
+        "base": null,
+        "base_layer": "327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376",
+        "root": "3e6cd64c908e178e5e8e7c92cafc5703e9c0304a98a88083a66136fda14be777",
+        "sandbox": "sa",
+        "container": "lfs-f41276f4-sa",
+        "image": "local",
+        "platform": "mac",
+        "runtime": "native",
+        "name": "w1",
+        "ws": "sa:w1"
+      }
+    },
+    {
+      "call": "workspace.mount",
+      "args": [
+        "sa",
+        "lane"
+      ],
+      "opts": {},
+      "at": 1793696904.879,
+      "ok": true,
+      "value": {
+        "kind": "Mounted",
+        "path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/2",
+        "workspace": "224fe4e5e4453b7490bf27e442def91b92a83193acf9e490299d341fe3ce0b7d",
+        "namespace": 2,
+        "branch": "lane",
+        "base": null,
+        "base_layer": "327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376",
+        "root": "3e6cd64c908e178e5e8e7c92cafc5703e9c0304a98a88083a66136fda14be777",
+        "sandbox": "sa",
+        "container": "lfs-f41276f4-sa",
+        "image": "local",
+        "platform": "mac",
+        "runtime": "native",
+        "name": null,
+        "ws": "sa:/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/2"
+      }
+    },
+    {
+      "call": "sandbox.get",
+      "args": [
+        "sa"
+      ],
+      "opts": {},
+      "at": 1793696904.903,
+      "ok": true,
+      "value": {
+        "name": "sa",
+        "project": "a/p",
+        "machine": "native",
+        "created": 1793696901837,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sa",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running",
+        "workspaces": [
+          {
+            "workspace": "224fe4e5e4453b7490bf27e442def91b92a83193acf9e490299d341fe3ce0b7d",
+            "namespace": 2,
+            "branch": "lane",
+            "base": null,
+            "base_layer": "327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376",
+            "root": "3e6cd64c908e178e5e8e7c92cafc5703e9c0304a98a88083a66136fda14be777",
+            "activity": "idle",
+            "mounted": true,
+            "directory": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/2",
+            "head_moved_since_mount": false,
+            "dirty": {
+              "inodes": 0,
+              "entries": 0
+            },
+            "pending_merge": false,
+            "revision": 0,
+            "path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/2",
+            "name": null,
+            "ws": "sa:/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/2"
+          },
+          {
+            "workspace": "413356269217e3097ab8de2e53cebc3c7ce008804fd04b95b5e3861ebebd615a",
+            "namespace": 1,
+            "branch": "lane",
+            "base": null,
+            "base_layer": "327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376",
+            "root": "3e6cd64c908e178e5e8e7c92cafc5703e9c0304a98a88083a66136fda14be777",
+            "activity": "idle",
+            "mounted": true,
+            "directory": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/1",
+            "head_moved_since_mount": false,
+            "dirty": {
+              "inodes": 0,
+              "entries": 0
+            },
+            "pending_merge": false,
+            "revision": 0,
+            "path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/1",
+            "name": "w1",
+            "ws": "sa:w1"
+          }
+        ],
+        "next_page_pos": null
+      }
+    },
+    {
+      "call": "workspace.exec",
+      "args": [
+        "sa:w1",
+        "echo n > n.txt"
+      ],
+      "opts": {
+        "message": "k1 name form"
+      },
+      "at": 1793696904.907,
+      "ok": true,
+      "value": {
+        "kind": "exit:0",
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "message": "k1 name form",
+        "truncated": false
+      }
+    },
+    {
+      "call": "workspace.exec",
+      "args": [
+        "sa:/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/1",
+        "cat n.txt"
+      ],
+      "opts": {
+        "message": "k1 path form"
+      },
+      "at": 1793696904.919,
+      "ok": true,
+      "value": {
+        "kind": "exit:0",
+        "exit_code": 0,
+        "stdout": "n\n",
+        "stderr": "",
+        "message": "k1 path form",
+        "truncated": false
+      }
+    },
+    {
+      "call": "workspace.status",
+      "args": [
+        "sa:w1"
+      ],
+      "opts": {},
+      "at": 1793696904.929,
+      "ok": true,
+      "value": {
+        "kind": "ok",
+        "base": null,
+        "base_layer": "327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376",
+        "branch_head": null,
+        "head_moved_since_mount": false,
+        "activity": "Idle",
+        "overlay": {
+          "inodes": 2,
+          "entries": 1,
+          "pending_merge": false
+        },
+        "branch": "lane"
+      }
+    },
+    {
+      "call": "workspace.status",
+      "args": [
+        "sa:/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/1"
+      ],
+      "opts": {},
+      "at": 1793696904.93,
+      "ok": true,
+      "value": {
+        "kind": "ok",
+        "base": null,
+        "base_layer": "327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376",
+        "branch_head": null,
+        "head_moved_since_mount": false,
+        "activity": "Idle",
+        "overlay": {
+          "inodes": 2,
+          "entries": 1,
+          "pending_merge": false
+        },
+        "branch": "lane"
+      }
+    },
+    {
+      "call": "workspace.commit",
+      "args": [
+        "sa:w1"
+      ],
+      "opts": {
+        "message": "k1 commit by name"
+      },
+      "at": 1793696904.931,
+      "ok": true,
+      "value": {
+        "kind": "Committed",
+        "head": "12e02d50e9e6145e4c49235739e7e0c861f0c3e8eb26937d86562444bf7b84465f",
+        "commit": {
+          "id": "12e02d50e9e6145e4c49235739e7e0c861f0c3e8eb26937d86562444bf7b84465f",
+          "branch": null,
+          "parent": null,
+          "second_parent": null,
+          "base": "327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376",
+          "root": "b6e8110251c3192846deaf533db43f1532e304429653a8db67d115fde3476fc4",
+          "via": "exec",
+          "message": "k1 commit by name",
+          "merged_from": null,
+          "time": 1793696905028,
+          "logical": 12582920,
+          "new_canonical": 794,
+          "new_stored": 364,
+          "new_metadata": 325,
+          "displaced": null,
+          "lww": [],
+          "lww_truncated": false
+        },
+        "displaced_head": null,
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      }
+    },
+    {
+      "call": "workspace.unmount",
+      "args": [
+        "sa:/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/1"
+      ],
+      "opts": {},
+      "at": 1793696905.031,
+      "ok": true,
+      "value": {
+        "kind": "Unmounted"
+      }
+    },
+    {
+      "call": "workspace.exec",
+      "args": [
+        "sa:/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/2",
+        "true"
+      ],
+      "opts": {
+        "message": "k1 path ws"
+      },
+      "at": 1793696905.047,
+      "ok": true,
+      "value": {
+        "kind": "exit:0",
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": "",
+        "message": "k1 path ws",
+        "truncated": false
+      }
+    },
+    {
+      "call": "workspace.unmount",
+      "args": [
+        "sa:/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/2"
+      ],
+      "opts": {
+        "discard": true
+      },
+      "at": 1793696905.057,
+      "ok": true,
+      "value": {
+        "kind": "Unmounted"
+      }
+    },
+    {
+      "call": "store.push",
+      "args": [
+        "a",
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696905.074,
+      "ok": false,
+      "code": "InUse",
+      "message": "store push, check: Store a has running Sandboxes: sa",
+      "detail": {
+        "related": [
+          {
+            "kind": "sandbox",
+            "name": "sa"
+          }
+        ],
+        "phase": "check"
+      }
+    },
+    {
+      "call": "store.remove",
+      "args": [
+        "a"
+      ],
+      "opts": {},
+      "at": 1793696905.075,
+      "ok": false,
+      "code": "InUse",
+      "message": "Store a has running Sandboxes: sa",
+      "detail": {
+        "related": [
+          {
+            "kind": "sandbox",
+            "name": "sa"
+          }
+        ]
+      }
+    },
+    {
+      "call": "project.remove",
+      "args": [
+        "a/p"
+      ],
+      "opts": {},
+      "at": 1793696905.076,
+      "ok": false,
+      "code": "InUse",
+      "message": "Sandbox sa of a/p is running",
+      "detail": {
+        "related": [
+          {
+            "kind": "sandbox",
+            "name": "sa"
+          }
+        ]
+      }
+    },
+    {
+      "call": "store.pull",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793696905.076,
+      "ok": false,
+      "code": "InUse",
+      "message": "store pull, check: Store b has running Sandboxes: sb",
+      "detail": {
+        "related": [
+          {
+            "kind": "sandbox",
+            "name": "sb"
+          }
+        ],
+        "phase": "check"
+      }
+    },
+    {
+      "call": "machine.stop",
+      "args": [
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696905.076,
+      "ok": false,
+      "code": "InUse",
+      "message": "machine docker runs Sandboxes [sb]; close them first",
+      "detail": {
+        "related": [
+          {
+            "kind": "sandbox",
+            "name": "sb"
+          }
+        ]
+      }
+    },
+    {
+      "call": "machine.remove",
+      "args": [
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696905.077,
+      "ok": false,
+      "code": "InvalidInput",
+      "message": "docker is built in and never removed",
+      "detail": null
+    },
+    {
+      "call": "store.disconnect",
+      "args": [
+        "g"
+      ],
+      "opts": {},
+      "at": 1793696905.077,
+      "ok": false,
+      "code": "InUse",
+      "message": "Store g has running Sandboxes: sg",
+      "detail": {
+        "related": [
+          {
+            "kind": "sandbox",
+            "name": "sg"
+          }
+        ]
+      }
+    },
+    {
+      "call": "backup.connect",
+      "args": [
+        "l1b",
+        "http://127.0.0.1:59551/l1bucket/backups2"
+      ],
+      "opts": {},
+      "at": 1793696905.077,
+      "ok": true,
+      "value": {
+        "name": "l1b",
+        "provider": "minio",
+        "endpoint": "http://127.0.0.1:59551",
+        "bucket": "l1bucket",
+        "prefix": "backups2",
+        "region": "us-east-1",
+        "key": "env:LAYERFS_BUCKET_L1B",
+        "part_size": 67108864
+      }
+    },
+    {
+      "call": "store.create",
+      "args": [
+        "k"
+      ],
+      "opts": {},
+      "at": 1793696905.082,
+      "ok": true,
+      "value": {
+        "name": "k",
+        "kind": "sqlite",
+        "machine": "native",
+        "profile": "disposable",
+        "created": 1793696905089,
+        "sqlite": "3.53.2",
+        "projects": []
+      }
+    },
+    {
+      "call": "project.init",
+      "args": [
+        "k/p",
+        "/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/L1/data12"
+      ],
+      "opts": {},
+      "at": 1793696905.09,
+      "ok": true,
+      "value": {
+        "project": "k/p",
+        "store": "k",
+        "name": "p",
+        "kind": "sqlite",
+        "machine": "native",
+        "created": 1793696905645,
+        "layer": "3271c1b645c684f1212977a302d7b1a0994f3dc9f0d8fb832cd39e2b4e2b4c4e46",
+        "root": "0d1b31bcbb24adc4cefd9dcdc8cfc1139e299b54985902337bf51653f32348f2"
+      }
+    },
+    {
+      "call": "branch.fork",
+      "args": [
+        "k/p",
+        "lane",
+        "main"
+      ],
+      "opts": {},
+      "at": 1793696905.646,
+      "ok": true,
+      "value": {
+        "kind": "Forked",
+        "branch": "lane",
+        "base": "3271c1b645c684f1212977a302d7b1a0994f3dc9f0d8fb832cd39e2b4e2b4c4e46",
+        "head": null
+      }
+    },
+    {
+      "call": "backup.create",
+      "args": [
+        "k",
+        "l1b"
+      ],
+      "opts": {},
+      "at": 1793696905.653,
+      "ok": true,
+      "value": {
+        "store": "k",
+        "bucket": "l1b",
+        "file": "k",
+        "object": "k/store.sqlite",
+        "bytes": 12935168,
+        "pieces": 0,
+        "sha256": "794f305cc399332c5742cbbc94a1c2adab6f5834831d2998a07f2260c5815795",
+        "heads": "84a7dd06d0448ff819455ab04fc59ac12547b2f8a86fa214c9091c121a283657"
+      }
+    },
+    {
+      "call": "sandbox.create",
+      "args": [
+        "k/p",
+        "sk",
+        "native"
+      ],
+      "opts": {},
+      "at": 1793696906.266,
+      "ok": true,
+      "value": {
+        "name": "sk",
+        "project": "k/p",
+        "machine": "native",
+        "created": 1793696906267,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sk",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      }
+    },
+    {
+      "call": "backup.restore",
+      "args": [
+        "k",
+        "l1b"
+      ],
+      "opts": {},
+      "at": 1793696906.306,
+      "ok": false,
+      "code": "InUse",
+      "message": "Store k has running Sandboxes: sk",
+      "detail": {
+        "related": [
+          {
+            "kind": "sandbox",
+            "name": "sk"
+          }
+        ]
+      }
+    },
+    {
+      "call": "sandbox.close",
+      "args": [
+        "sk"
+      ],
+      "opts": {},
+      "at": 1793696906.307,
+      "ok": true,
+      "value": {
+        "kind": "Closed",
+        "sandbox": "sk",
+        "unknown": [],
+        "closed": "sk"
+      }
+    },
+    {
+      "call": "store.remove",
+      "args": [
+        "g"
+      ],
+      "opts": {},
+      "at": 1793696906.365,
+      "ok": false,
+      "code": "InvalidInput",
+      "message": "Store g is a PostgreSQL database; `store disconnect` forgets it and keeps its data",
+      "detail": null
+    },
+    {
+      "call": "sandbox.create",
+      "args": [
+        "a/p",
+        "sx",
+        "native"
+      ],
+      "opts": {},
+      "at": 1793696906.366,
+      "ok": true,
+      "value": {
+        "name": "sx",
+        "project": "a/p",
+        "machine": "native",
+        "created": 1793696906366,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sx",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      }
+    },
+    {
+      "call": "sandbox.get",
+      "args": [
+        "sx"
+      ],
+      "opts": {},
+      "at": 1793696907.441,
+      "ok": true,
+      "value": {
+        "name": "sx",
+        "project": "a/p",
+        "machine": "native",
+        "created": 1793696906366,
+        "backend": "native",
+        "route": "nfs",
+        "id": "sx",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "gone",
+        "workspaces": [],
+        "next_page_pos": null
+      }
+    },
+    {
+      "call": "store.push",
+      "args": [
+        "a",
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696907.442,
+      "ok": false,
+      "code": "InUse",
+      "message": "store push, check: Store a has running Sandboxes: sa, sx",
+      "detail": {
+        "related": [
+          {
+            "kind": "sandbox",
+            "name": "sa"
+          },
+          {
+            "kind": "sandbox",
+            "name": "sx"
+          }
+        ],
+        "phase": "check"
+      }
+    },
+    {
+      "call": "sandbox.close",
+      "args": [
+        "sx"
+      ],
+      "opts": {},
+      "at": 1793696907.442,
+      "ok": true,
+      "value": {
+        "closed": "sx",
+        "was_gone": true
+      }
+    },
+    {
+      "call": "sandbox.close",
+      "args": [
+        "sa"
+      ],
+      "opts": {},
+      "at": 1793696907.456,
+      "ok": true,
+      "value": {
+        "kind": "Closed",
+        "sandbox": "sa",
+        "unknown": [],
+        "closed": "sa"
+      }
+    },
+    {
+      "call": "sandbox.close",
+      "args": [
+        "sg"
+      ],
+      "opts": {},
+      "at": 1793696907.51,
+      "ok": true,
+      "value": {
+        "kind": "Closed",
+        "sandbox": "sg",
+        "unknown": [],
+        "closed": "sg"
+      }
+    },
+    {
+      "call": "sandbox.close",
+      "args": [
+        "sb"
+      ],
+      "opts": {},
+      "at": 1793696907.556,
+      "ok": true,
+      "value": {
+        "kind": "Closed",
+        "sandbox": "sb",
+        "unknown": [],
+        "closed": "sb"
+      }
+    },
+    {
+      "call": "store.status",
+      "args": [
+        "a"
+      ],
+      "opts": {},
+      "at": 1793696907.902,
+      "ok": true,
+      "value": {
+        "name": "a",
+        "kind": "sqlite",
+        "state": "in_use",
+        "holders": [
+          45848
+        ],
+        "op": null,
+        "down_reason": null,
+        "machine": "native",
+        "file": {
+          "exists": true,
+          "free": 178628632576,
+          "bytes": 12935168,
+          "wal_bytes": 98912
+        }
+      }
+    },
+    {
+      "call": "store.list",
+      "args": [],
+      "opts": {},
+      "at": 1793696907.903,
+      "ok": true,
+      "value": {
+        "items": [
+          {
+            "name": "a",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696876650,
+            "sqlite": "3.53.2",
+            "projects": [
+              "p"
+            ],
+            "state": "in_use"
+          },
+          {
+            "name": "b",
+            "kind": "sqlite",
+            "machine": "docker",
+            "profile": "disposable",
+            "created": 1793696877250,
+            "sqlite": "3.53.2",
+            "last_transfer": {
+              "call": "store.push",
+              "from": "native",
+              "to": "docker",
+              "at": 1793696894726,
+              "bytes": 12935168,
+              "sha256": "0e6c160e83a46539920ea6e842659d9aa889f10da9f3f9b3cbfc6a3c41001ef4",
+              "heads": "7497dbf69eaffd7a319bc7c766cd379d7c54e02068e82965eb873e0b2d28779a",
+              "retired": true
+            },
+            "projects": [
+              "p",
+              "q"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "c",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696900192,
+            "sqlite": "3.53.2",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "g",
+            "kind": "postgresql",
+            "url": "postgres://postgres@127.0.0.1:55551/k10g2",
+            "schema": "layerfs",
+            "synchronous_commit": "off",
+            "created": 1793696900750,
+            "password": "env:LAYERFS_PG_L1",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "k",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696905089,
+            "sqlite": "3.53.2",
+            "backups": {
+              "l1b": {
+                "file": "k",
+                "heads": "84a7dd06d0448ff819455ab04fc59ac12547b2f8a86fa214c9091c121a283657",
+                "last": {
+                  "op": "create",
+                  "at": 1793696906265,
+                  "bytes": 12935168,
+                  "sha256": "794f305cc399332c5742cbbc94a1c2adab6f5834831d2998a07f2260c5815795"
+                }
+              }
+            },
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          }
+        ]
+      }
+    },
+    {
+      "call": "store.get",
+      "args": [
+        "a"
+      ],
+      "opts": {},
+      "at": 1793696907.908,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "project.list",
+      "args": [
+        "a"
+      ],
+      "opts": {},
+      "at": 1793696907.908,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "project.get",
+      "args": [
+        "a/p"
+      ],
+      "opts": {},
+      "at": 1793696907.908,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "file.list",
+      "args": [
+        "a/p",
+        "lane",
+        "/"
+      ],
+      "opts": {},
+      "at": 1793696907.909,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "branch.list",
+      "args": [
+        "a/p"
+      ],
+      "opts": {},
+      "at": 1793696907.911,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "sandbox.create",
+      "args": [
+        "a/p",
+        "su",
+        "native"
+      ],
+      "opts": {},
+      "at": 1793696907.912,
+      "ok": true,
+      "value": {
+        "name": "su",
+        "project": "a/p",
+        "machine": "native",
+        "created": 1793696907912,
+        "backend": "native",
+        "route": "nfs",
+        "id": "su",
+        "platform": "mac",
+        "runtime": "native",
+        "image": "local",
+        "state": "running"
+      }
+    },
+    {
+      "call": "sandbox.close",
+      "args": [
+        "su"
+      ],
+      "opts": {},
+      "at": 1793696907.947,
+      "ok": true,
+      "value": {
+        "kind": "Closed",
+        "sandbox": "su",
+        "unknown": [],
+        "closed": "su"
+      }
+    },
+    {
+      "call": "store.push",
+      "args": [
+        "a",
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696907.996,
+      "ok": false,
+      "code": "InUse",
+      "message": "store push, check: Store a is open in process [45848]",
+      "detail": {
+        "related": [
+          {
+            "kind": "lease",
+            "name": "45848"
+          }
+        ],
+        "phase": "check"
+      }
+    },
+    {
+      "call": "store.remove",
+      "args": [
+        "a"
+      ],
+      "opts": {},
+      "at": 1793696907.996,
+      "ok": false,
+      "code": "InUse",
+      "message": "Store a is open in process [45848]",
+      "detail": {
+        "related": [
+          {
+            "kind": "lease",
+            "name": "45848"
+          }
+        ]
+      }
+    },
+    {
+      "call": "store.disconnect",
+      "args": [
+        "g"
+      ],
+      "opts": {},
+      "at": 1793696928.144,
+      "ok": false,
+      "code": "InUse",
+      "message": "Store g is open in process [45958]",
+      "detail": {
+        "related": [
+          {
+            "kind": "lease",
+            "name": "45958"
+          }
+        ]
+      }
+    },
+    {
+      "call": "backup.restore",
+      "args": [
+        "k",
+        "l1b"
+      ],
+      "opts": {},
+      "at": 1793696940.265,
+      "ok": false,
+      "code": "InUse",
+      "message": "Store k is open in process [46016]",
+      "detail": {
+        "related": [
+          {
+            "kind": "lease",
+            "name": "46016"
+          }
+        ]
+      }
+    },
+    {
+      "call": "store.status",
+      "args": [
+        "c"
+      ],
+      "opts": {},
+      "at": 1793696952.459,
+      "ok": true,
+      "value": {
+        "name": "c",
+        "kind": "sqlite",
+        "state": "busy",
+        "holders": [
+          46077
+        ],
+        "op": {
+          "id": "op-65fcfe6f88875140",
+          "name": "store.push",
+          "phase": "snapshot",
+          "started": 1793696952295,
+          "uncertain": false
+        },
+        "down_reason": null,
+        "machine": "native",
+        "file": {
+          "exists": true,
+          "free": 177707024384,
+          "bytes": 12935168,
+          "wal_bytes": 0
+        }
+      }
+    },
+    {
+      "call": "store.list",
+      "args": [],
+      "opts": {},
+      "at": 1793696952.46,
+      "ok": true,
+      "value": {
+        "items": [
+          {
+            "name": "a",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696876650,
+            "sqlite": "3.53.2",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "b",
+            "kind": "sqlite",
+            "machine": "docker",
+            "profile": "disposable",
+            "created": 1793696877250,
+            "sqlite": "3.53.2",
+            "last_transfer": {
+              "call": "store.push",
+              "from": "native",
+              "to": "docker",
+              "at": 1793696894726,
+              "bytes": 12935168,
+              "sha256": "0e6c160e83a46539920ea6e842659d9aa889f10da9f3f9b3cbfc6a3c41001ef4",
+              "heads": "7497dbf69eaffd7a319bc7c766cd379d7c54e02068e82965eb873e0b2d28779a",
+              "retired": true
+            },
+            "projects": [
+              "p",
+              "q"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "c",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696900192,
+            "sqlite": "3.53.2",
+            "op": {
+              "id": "op-65fcfe6f88875140",
+              "name": "store.push",
+              "phase": "snapshot",
+              "started": 1793696952295,
+              "uncertain": false
+            },
+            "projects": [
+              "p"
+            ],
+            "state": "busy"
+          },
+          {
+            "name": "g",
+            "kind": "postgresql",
+            "url": "postgres://postgres@127.0.0.1:55551/k10g2",
+            "schema": "layerfs",
+            "synchronous_commit": "off",
+            "created": 1793696900750,
+            "password": "env:LAYERFS_PG_L1",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "k",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696905089,
+            "sqlite": "3.53.2",
+            "backups": {
+              "l1b": {
+                "file": "k",
+                "heads": "84a7dd06d0448ff819455ab04fc59ac12547b2f8a86fa214c9091c121a283657",
+                "last": {
+                  "op": "create",
+                  "at": 1793696906265,
+                  "bytes": 12935168,
+                  "sha256": "794f305cc399332c5742cbbc94a1c2adab6f5834831d2998a07f2260c5815795"
+                }
+              }
+            },
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          }
+        ]
+      }
+    },
+    {
+      "call": "store.get",
+      "args": [
+        "c"
+      ],
+      "opts": {},
+      "at": 1793696952.465,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "project.list",
+      "args": [
+        "c"
+      ],
+      "opts": {},
+      "at": 1793696952.465,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "project.get",
+      "args": [
+        "c/p"
+      ],
+      "opts": {},
+      "at": 1793696952.465,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "file.list",
+      "args": [
+        "c/p",
+        "main",
+        "/"
+      ],
+      "opts": {},
+      "at": 1793696952.465,
+      "ok": false,
+      "code": "Busy",
+      "message": "Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077",
+      "detail": {
+        "entity": {
+          "kind": "store",
+          "name": "c"
+        },
+        "phase": "snapshot",
+        "op": "op-65fcfe6f88875140"
+      }
+    },
+    {
+      "call": "sandbox.create",
+      "args": [
+        "c/p",
+        "sbusy",
+        "native"
+      ],
+      "opts": {},
+      "at": 1793696952.466,
+      "ok": false,
+      "code": "Busy",
+      "message": "Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077",
+      "detail": {
+        "entity": {
+          "kind": "store",
+          "name": "c"
+        },
+        "phase": "snapshot",
+        "op": "op-65fcfe6f88875140"
+      }
+    },
+    {
+      "call": "project.init",
+      "args": [
+        "c/q",
+        "/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/L1/data12"
+      ],
+      "opts": {},
+      "at": 1793696952.466,
+      "ok": false,
+      "code": "Busy",
+      "message": "Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077",
+      "detail": {
+        "entity": {
+          "kind": "store",
+          "name": "c"
+        },
+        "phase": "snapshot",
+        "op": "op-65fcfe6f88875140"
+      }
+    },
+    {
+      "call": "project.remove",
+      "args": [
+        "c/p"
+      ],
+      "opts": {},
+      "at": 1793696952.466,
+      "ok": false,
+      "code": "Busy",
+      "message": "Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077",
+      "detail": {
+        "entity": {
+          "kind": "store",
+          "name": "c"
+        },
+        "phase": "snapshot",
+        "op": "op-65fcfe6f88875140"
+      }
+    },
+    {
+      "call": "store.push",
+      "args": [
+        "c",
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696952.466,
+      "ok": false,
+      "code": "Busy",
+      "message": "store push, check: Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077",
+      "detail": {
+        "entity": {
+          "kind": "store",
+          "name": "c"
+        },
+        "phase": "check",
+        "op": "op-65fcfe6f88875140"
+      }
+    },
+    {
+      "call": "store.pull",
+      "args": [
+        "c"
+      ],
+      "opts": {},
+      "at": 1793696952.466,
+      "ok": false,
+      "code": "Busy",
+      "message": "store pull, check: Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077",
+      "detail": {
+        "entity": {
+          "kind": "store",
+          "name": "c"
+        },
+        "phase": "check",
+        "op": "op-65fcfe6f88875140"
+      }
+    },
+    {
+      "call": "store.remove",
+      "args": [
+        "c"
+      ],
+      "opts": {},
+      "at": 1793696952.466,
+      "ok": false,
+      "code": "Busy",
+      "message": "Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077",
+      "detail": {
+        "entity": {
+          "kind": "store",
+          "name": "c"
+        },
+        "phase": "snapshot",
+        "op": "op-65fcfe6f88875140"
+      }
+    },
+    {
+      "call": "machine.stop",
+      "args": [
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696971.954,
+      "ok": true,
+      "value": {
+        "name": "docker",
+        "platform": "docker",
+        "backend": "docker",
+        "supports": {
+          "sqlite": true,
+          "postgresql_sandbox": true,
+          "reason": null
+        },
+        "state": "stopped",
+        "cpus": null,
+        "memory": null,
+        "disk": null,
+        "stores": [
+          "b",
+          "c"
+        ],
+        "sandboxes": []
+      }
+    },
+    {
+      "call": "machine.list",
+      "args": [],
+      "opts": {},
+      "at": 1793696972.334,
+      "ok": true,
+      "value": {
+        "machines": [
+          {
+            "name": "docker",
+            "platform": "docker",
+            "backend": "docker",
+            "supports": {
+              "sqlite": true,
+              "postgresql_sandbox": true,
+              "reason": null
+            },
+            "state": "stopped",
+            "cpus": null,
+            "memory": null,
+            "disk": null,
+            "stores": [
+              "b",
+              "c"
+            ],
+            "sandboxes": []
+          },
+          {
+            "name": "native",
+            "platform": "native",
+            "backend": "native",
+            "supports": {
+              "sqlite": true,
+              "postgresql_sandbox": true,
+              "reason": null
+            },
+            "state": "ready",
+            "cpus": null,
+            "memory": null,
+            "disk": null,
+            "stores": [
+              "a",
+              "k"
+            ],
+            "sandboxes": []
+          }
+        ]
+      }
+    },
+    {
+      "call": "machine.get",
+      "args": [
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696972.383,
+      "ok": true,
+      "value": {
+        "name": "docker",
+        "platform": "docker",
+        "backend": "docker",
+        "supports": {
+          "sqlite": true,
+          "postgresql_sandbox": true,
+          "reason": null
+        },
+        "state": "stopped",
+        "cpus": null,
+        "memory": null,
+        "disk": null,
+        "stores": [
+          "b",
+          "c"
+        ],
+        "sandboxes": []
+      }
+    },
+    {
+      "call": "machine.status",
+      "args": [
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696972.439,
+      "ok": true,
+      "value": {
+        "name": "docker",
+        "platform": "docker",
+        "state": "stopped",
+        "free_disk": null,
+        "tool_version": "29.5.2",
+        "down_reason": "the machine is stopped",
+        "stores": [
+          "b",
+          "c"
+        ]
+      }
+    },
+    {
+      "call": "machine.platforms",
+      "args": [],
+      "opts": {},
+      "at": 1793696972.493,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "store.list",
+      "args": [],
+      "opts": {},
+      "at": 1793696972.7,
+      "ok": true,
+      "value": {
+        "items": [
+          {
+            "name": "a",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696876650,
+            "sqlite": "3.53.2",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "b",
+            "kind": "sqlite",
+            "machine": "docker",
+            "profile": "disposable",
+            "created": 1793696877250,
+            "sqlite": "3.53.2",
+            "last_transfer": {
+              "call": "store.push",
+              "from": "native",
+              "to": "docker",
+              "at": 1793696894726,
+              "bytes": 12935168,
+              "sha256": "0e6c160e83a46539920ea6e842659d9aa889f10da9f3f9b3cbfc6a3c41001ef4",
+              "heads": "7497dbf69eaffd7a319bc7c766cd379d7c54e02068e82965eb873e0b2d28779a",
+              "retired": true
+            },
+            "projects": [
+              "p",
+              "q"
+            ],
+            "state": "down"
+          },
+          {
+            "name": "c",
+            "kind": "sqlite",
+            "machine": "docker",
+            "profile": "disposable",
+            "created": 1793696900192,
+            "sqlite": "3.53.2",
+            "last_transfer": {
+              "call": "store.push",
+              "from": "native",
+              "to": "docker",
+              "at": 1793696971945,
+              "bytes": 12935168,
+              "sha256": "778ea0b9a4b879a10e27dad7a16791b04de7cf15e1ebd579f65c68723f814fb5",
+              "heads": "668592034dcce73f865d56ce2db5a6b1f827353a97abe8bab1281bfee2d9c830",
+              "retired": true
+            },
+            "projects": [
+              "p"
+            ],
+            "state": "down"
+          },
+          {
+            "name": "g",
+            "kind": "postgresql",
+            "url": "postgres://postgres@127.0.0.1:55551/k10g2",
+            "schema": "layerfs",
+            "synchronous_commit": "off",
+            "created": 1793696900750,
+            "password": "env:LAYERFS_PG_L1",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "k",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696905089,
+            "sqlite": "3.53.2",
+            "backups": {
+              "l1b": {
+                "file": "k",
+                "heads": "84a7dd06d0448ff819455ab04fc59ac12547b2f8a86fa214c9091c121a283657",
+                "last": {
+                  "op": "create",
+                  "at": 1793696906265,
+                  "bytes": 12935168,
+                  "sha256": "794f305cc399332c5742cbbc94a1c2adab6f5834831d2998a07f2260c5815795"
+                }
+              }
+            },
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          }
+        ]
+      }
+    },
+    {
+      "call": "store.get",
+      "args": [
+        "a"
+      ],
+      "opts": {},
+      "at": 1793696972.701,
+      "ok": true,
+      "value": {
+        "name": "a",
+        "kind": "sqlite",
+        "machine": "native",
+        "profile": "disposable",
+        "created": 1793696876650,
+        "sqlite": "3.53.2",
+        "projects": [
+          "p"
+        ]
+      }
+    },
+    {
+      "call": "store.status",
+      "args": [
+        "a"
+      ],
+      "opts": {},
+      "at": 1793696972.701,
+      "ok": true,
+      "value": {
+        "name": "a",
+        "kind": "sqlite",
+        "state": "idle",
+        "holders": [],
+        "op": null,
+        "down_reason": null,
+        "machine": "native",
+        "file": {
+          "exists": true,
+          "free": 177389637632,
+          "bytes": 12935168,
+          "wal_bytes": 0
+        }
+      }
+    },
+    {
+      "call": "store.get",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793696972.701,
+      "ok": true,
+      "value": {
+        "name": "b",
+        "kind": "sqlite",
+        "machine": "docker",
+        "profile": "disposable",
+        "created": 1793696877250,
+        "sqlite": "3.53.2",
+        "last_transfer": {
+          "call": "store.push",
+          "from": "native",
+          "to": "docker",
+          "at": 1793696894726,
+          "bytes": 12935168,
+          "sha256": "0e6c160e83a46539920ea6e842659d9aa889f10da9f3f9b3cbfc6a3c41001ef4",
+          "heads": "7497dbf69eaffd7a319bc7c766cd379d7c54e02068e82965eb873e0b2d28779a",
+          "retired": true
+        },
+        "projects": [
+          "p",
+          "q"
+        ]
+      }
+    },
+    {
+      "call": "store.status",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793696972.701,
+      "ok": true,
+      "value": {
+        "name": "b",
+        "kind": "sqlite",
+        "state": "down",
+        "holders": [],
+        "op": null,
+        "down_reason": "machine docker is not running; start it with `layerfs machine start docker`",
+        "machine": "docker",
+        "file": {
+          "unavailable": "machine docker is not running; start it with `layerfs machine start docker`"
+        }
+      }
+    },
+    {
+      "call": "project.list",
+      "args": [],
+      "opts": {},
+      "at": 1793696972.701,
+      "ok": true,
+      "value": {
+        "items": [
+          {
+            "project": "a/p",
+            "store": "a",
+            "name": "p",
+            "kind": "sqlite",
+            "machine": "native",
+            "created": 1793696877227
+          },
+          {
+            "project": "b/p",
+            "store": "b",
+            "name": "p",
+            "kind": "sqlite",
+            "machine": "docker",
+            "created": 1793696877808
+          },
+          {
+            "project": "b/q",
+            "store": "b",
+            "name": "q",
+            "kind": "sqlite",
+            "machine": "docker",
+            "created": 1793696900185
+          },
+          {
+            "project": "c/p",
+            "store": "c",
+            "name": "p",
+            "kind": "sqlite",
+            "machine": "docker",
+            "created": 1793696900745
+          },
+          {
+            "project": "g/p",
+            "store": "g",
+            "name": "p",
+            "kind": "postgresql",
+            "machine": "native",
+            "created": 1793696901703
+          },
+          {
+            "project": "k/p",
+            "store": "k",
+            "name": "p",
+            "kind": "sqlite",
+            "machine": "native",
+            "created": 1793696905645
+          }
+        ],
+        "next_page_pos": null
+      }
+    },
+    {
+      "call": "project.get",
+      "args": [
+        "b/p"
+      ],
+      "opts": {},
+      "at": 1793696972.702,
+      "ok": true,
+      "value": {
+        "project": "b/p",
+        "store": "b",
+        "name": "p",
+        "kind": "sqlite",
+        "machine": "docker",
+        "created": 1793696877808
+      }
+    },
+    {
+      "call": "sandbox.list",
+      "args": [],
+      "opts": {},
+      "at": 1793696972.703,
+      "ok": true,
+      "value": {
+        "items": [],
+        "next_page_pos": null
+      }
+    },
+    {
+      "call": "store.status",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793696972.731,
+      "ok": true,
+      "value": {
+        "name": "b",
+        "kind": "sqlite",
+        "state": "down",
+        "holders": [],
+        "op": null,
+        "down_reason": "machine docker is not running; start it with `layerfs machine start docker`",
+        "machine": "docker",
+        "file": {
+          "unavailable": "machine docker is not running; start it with `layerfs machine start docker`"
+        }
+      }
+    },
+    {
+      "call": "store.list",
+      "args": [],
+      "opts": {},
+      "at": 1793696972.731,
+      "ok": true,
+      "value": {
+        "items": [
+          {
+            "name": "a",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696876650,
+            "sqlite": "3.53.2",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "b",
+            "kind": "sqlite",
+            "machine": "docker",
+            "profile": "disposable",
+            "created": 1793696877250,
+            "sqlite": "3.53.2",
+            "last_transfer": {
+              "call": "store.push",
+              "from": "native",
+              "to": "docker",
+              "at": 1793696894726,
+              "bytes": 12935168,
+              "sha256": "0e6c160e83a46539920ea6e842659d9aa889f10da9f3f9b3cbfc6a3c41001ef4",
+              "heads": "7497dbf69eaffd7a319bc7c766cd379d7c54e02068e82965eb873e0b2d28779a",
+              "retired": true
+            },
+            "projects": [
+              "p",
+              "q"
+            ],
+            "state": "down"
+          },
+          {
+            "name": "c",
+            "kind": "sqlite",
+            "machine": "docker",
+            "profile": "disposable",
+            "created": 1793696900192,
+            "sqlite": "3.53.2",
+            "last_transfer": {
+              "call": "store.push",
+              "from": "native",
+              "to": "docker",
+              "at": 1793696971945,
+              "bytes": 12935168,
+              "sha256": "778ea0b9a4b879a10e27dad7a16791b04de7cf15e1ebd579f65c68723f814fb5",
+              "heads": "668592034dcce73f865d56ce2db5a6b1f827353a97abe8bab1281bfee2d9c830",
+              "retired": true
+            },
+            "projects": [
+              "p"
+            ],
+            "state": "down"
+          },
+          {
+            "name": "g",
+            "kind": "postgresql",
+            "url": "postgres://postgres@127.0.0.1:55551/k10g2",
+            "schema": "layerfs",
+            "synchronous_commit": "off",
+            "created": 1793696900750,
+            "password": "env:LAYERFS_PG_L1",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "k",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696905089,
+            "sqlite": "3.53.2",
+            "backups": {
+              "l1b": {
+                "file": "k",
+                "heads": "84a7dd06d0448ff819455ab04fc59ac12547b2f8a86fa214c9091c121a283657",
+                "last": {
+                  "op": "create",
+                  "at": 1793696906265,
+                  "bytes": 12935168,
+                  "sha256": "794f305cc399332c5742cbbc94a1c2adab6f5834831d2998a07f2260c5815795"
+                }
+              }
+            },
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          }
+        ]
+      }
+    },
+    {
+      "call": "store.get",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793696972.732,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "project.list",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793696972.732,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "project.get",
+      "args": [
+        "b/p"
+      ],
+      "opts": {},
+      "at": 1793696972.732,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "file.list",
+      "args": [
+        "b/p",
+        "lane",
+        "/"
+      ],
+      "opts": {},
+      "at": 1793696972.733,
+      "ok": false,
+      "code": "Unavailable",
+      "message": "machine docker is not running; start it with `layerfs machine start docker`",
+      "detail": null
+    },
+    {
+      "call": "branch.list",
+      "args": [
+        "b/p"
+      ],
+      "opts": {},
+      "at": 1793696972.733,
+      "ok": false,
+      "code": "Unavailable",
+      "message": "machine docker is not running; start it with `layerfs machine start docker`",
+      "detail": null
+    },
+    {
+      "call": "sandbox.create",
+      "args": [
+        "b/p",
+        "sdown",
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696972.734,
+      "ok": false,
+      "code": "Unavailable",
+      "message": "machine docker is not running; start it with `layerfs machine start docker`",
+      "detail": null
+    },
+    {
+      "call": "project.init",
+      "args": [
+        "b/r",
+        "/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/L1/data12"
+      ],
+      "opts": {},
+      "at": 1793696972.736,
+      "ok": false,
+      "code": "Unavailable",
+      "message": "machine docker is not running; start it with `layerfs machine start docker`",
+      "detail": null
+    },
+    {
+      "call": "project.remove",
+      "args": [
+        "b/q"
+      ],
+      "opts": {},
+      "at": 1793696972.736,
+      "ok": false,
+      "code": "Unavailable",
+      "message": "machine docker is not running; start it with `layerfs machine start docker`",
+      "detail": null
+    },
+    {
+      "call": "store.pull",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793696972.737,
+      "ok": false,
+      "code": "Unavailable",
+      "message": "store pull, check: machine docker is not running; start it with `layerfs machine start docker`",
+      "detail": {
+        "phase": "check"
+      }
+    },
+    {
+      "call": "store.remove",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793696972.737,
+      "ok": false,
+      "code": "Unavailable",
+      "message": "machine docker is not running; start it with `layerfs machine start docker`",
+      "detail": null
+    },
+    {
+      "call": "machine.start",
+      "args": [
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696972.764,
+      "ok": true,
+      "value": {
+        "name": "docker",
+        "platform": "docker",
+        "backend": "docker",
+        "supports": {
+          "sqlite": true,
+          "postgresql_sandbox": true,
+          "reason": null
+        },
+        "state": "running",
+        "cpus": null,
+        "memory": null,
+        "disk": null,
+        "stores": [
+          "b",
+          "c"
+        ],
+        "sandboxes": []
+      }
+    },
+    {
+      "call": "store.get",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793696973.281,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "file.list",
+      "args": [
+        "b/p",
+        "lane",
+        "/"
+      ],
+      "opts": {},
+      "at": 1793696973.281,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "sandbox.create",
+      "args": [
+        "b/p",
+        "sidle",
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696973.306,
+      "ok": true,
+      "value": {
+        "name": "sidle",
+        "project": "b/p",
+        "machine": "docker",
+        "created": 1793696973306,
+        "id": "sidle",
+        "platform": "docker",
+        "runtime": "docker",
+        "image": "sha256:50e8f040592a52a0e9385b7a683c8ab455d391be50733a0dbf65edf9faeb0540",
+        "backend": "docker",
+        "route": "fuse",
+        "state": "running"
+      }
+    },
+    {
+      "call": "sandbox.close",
+      "args": [
+        "sidle"
+      ],
+      "opts": {},
+      "at": 1793696975.653,
+      "ok": true,
+      "value": {
+        "kind": "Closed",
+        "sandbox": "sidle",
+        "unknown": [],
+        "closed": "sidle"
+      }
+    },
+    {
+      "call": "store.pull",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793696975.893,
+      "ok": true,
+      "value": {
+        "store": "b",
+        "from": "docker",
+        "to": "native",
+        "bytes": 12935168,
+        "heads": "e766917458a2f5d965bde9609a079521053564687f82be20e5fed7c399dc5ad7"
+      }
+    },
+    {
+      "call": "store.pull",
+      "args": [
+        "c"
+      ],
+      "opts": {},
+      "at": 1793696981.479,
+      "ok": true,
+      "value": {
+        "store": "c",
+        "from": "docker",
+        "to": "native",
+        "bytes": 12935168,
+        "heads": "668592034dcce73f865d56ce2db5a6b1f827353a97abe8bab1281bfee2d9c830"
+      }
+    },
+    {
+      "cli": [
+        "store",
+        "create",
+        "u"
+      ],
+      "exit": 0,
+      "stdout": "{\"name\":\"u\",\"kind\":\"sqlite\",\"machine\":\"native\",\"profile\":\"disposable\",\"created\":1793696987064,\"sqlite\":\"3.53.2\",\"projects\":[]}\n",
+      "stderr": ""
+    },
+    {
+      "cli": [
+        "project",
+        "init",
+        "u/p",
+        "/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/L1/data12"
+      ],
+      "exit": 0,
+      "stdout": "{\"project\":\"u/p\",\"store\":\"u\",\"name\":\"p\",\"kind\":\"sqlite\",\"machine\":\"native\",\"created\":1793696987647,\"layer\":\"32c078c6f0ebc2840bab1891aa3cb6047b4bfd141b94e8c15005e7988d126c3ec2\",\"root\":\"f955bf7e78e32499049a81ded71471ac5269d5cf3aacf510d8dbcaa1e50289c9\"}\n",
+      "stderr": ""
+    },
+    {
+      "call": "store.status",
+      "args": [
+        "u"
+      ],
+      "opts": {},
+      "at": 1793696993.32,
+      "ok": true,
+      "value": {
+        "name": "u",
+        "kind": "sqlite",
+        "state": "unresolved",
+        "holders": [],
+        "op": {
+          "id": "op-ed6e746627f97751",
+          "name": "store.push",
+          "phase": "record",
+          "started": 1793696987689,
+          "uncertain": true
+        },
+        "down_reason": null,
+        "machine": "native",
+        "file": {
+          "exists": true,
+          "free": 177022160896,
+          "bytes": 12935168,
+          "wal_bytes": 0
+        }
+      }
+    },
+    {
+      "call": "store.list",
+      "args": [],
+      "opts": {},
+      "at": 1793696993.32,
+      "ok": true,
+      "value": {
+        "items": [
+          {
+            "name": "a",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696876650,
+            "sqlite": "3.53.2",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "b",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696877250,
+            "sqlite": "3.53.2",
+            "last_transfer": {
+              "call": "store.pull",
+              "from": "docker",
+              "to": "native",
+              "at": 1793696981472,
+              "bytes": 12935168,
+              "sha256": "bb14b38801305174ff8076fedc06646a7103c9d506bf2d5f3c1380475907ba87",
+              "heads": "e766917458a2f5d965bde9609a079521053564687f82be20e5fed7c399dc5ad7",
+              "retired": true
+            },
+            "projects": [
+              "p",
+              "q"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "c",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696900192,
+            "sqlite": "3.53.2",
+            "last_transfer": {
+              "call": "store.pull",
+              "from": "docker",
+              "to": "native",
+              "at": 1793696987036,
+              "bytes": 12935168,
+              "sha256": "778ea0b9a4b879a10e27dad7a16791b04de7cf15e1ebd579f65c68723f814fb5",
+              "heads": "668592034dcce73f865d56ce2db5a6b1f827353a97abe8bab1281bfee2d9c830",
+              "retired": true
+            },
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "g",
+            "kind": "postgresql",
+            "url": "postgres://postgres@127.0.0.1:55551/k10g2",
+            "schema": "layerfs",
+            "synchronous_commit": "off",
+            "created": 1793696900750,
+            "password": "env:LAYERFS_PG_L1",
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "k",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696905089,
+            "sqlite": "3.53.2",
+            "backups": {
+              "l1b": {
+                "file": "k",
+                "heads": "84a7dd06d0448ff819455ab04fc59ac12547b2f8a86fa214c9091c121a283657",
+                "last": {
+                  "op": "create",
+                  "at": 1793696906265,
+                  "bytes": 12935168,
+                  "sha256": "794f305cc399332c5742cbbc94a1c2adab6f5834831d2998a07f2260c5815795"
+                }
+              }
+            },
+            "projects": [
+              "p"
+            ],
+            "state": "idle"
+          },
+          {
+            "name": "u",
+            "kind": "sqlite",
+            "machine": "native",
+            "profile": "disposable",
+            "created": 1793696987064,
+            "sqlite": "3.53.2",
+            "op": {
+              "id": "op-ed6e746627f97751",
+              "name": "store.push",
+              "phase": "record",
+              "started": 1793696987689,
+              "uncertain": true
+            },
+            "projects": [
+              "p"
+            ],
+            "state": "unresolved"
+          }
+        ]
+      }
+    },
+    {
+      "call": "store.get",
+      "args": [
+        "u"
+      ],
+      "opts": {},
+      "at": 1793696993.322,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "project.list",
+      "args": [
+        "u"
+      ],
+      "opts": {},
+      "at": 1793696993.322,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "project.get",
+      "args": [
+        "u/p"
+      ],
+      "opts": {},
+      "at": 1793696993.322,
+      "ok": true,
+      "value": "(omitted)"
+    },
+    {
+      "call": "file.list",
+      "args": [
+        "u/p",
+        "main",
+        "/"
+      ],
+      "opts": {},
+      "at": 1793696993.322,
+      "ok": false,
+      "code": "Unresolved",
+      "message": "Store u has an unresolved store.push (op-ed6e746627f97751, phase record): its outcome is not known; see `layerfs store status u`, then clear it with `layerfs store push u docker`",
+      "detail": {
+        "entity": {
+          "kind": "store",
+          "name": "u"
+        },
+        "phase": "record",
+        "op": "op-ed6e746627f97751"
+      }
+    },
+    {
+      "call": "branch.list",
+      "args": [
+        "u/p"
+      ],
+      "opts": {},
+      "at": 1793696993.322,
+      "ok": false,
+      "code": "Unresolved",
+      "message": "Store u has an unresolved store.push (op-ed6e746627f97751, phase record): its outcome is not known; see `layerfs store status u`, then clear it with `layerfs store push u docker`",
+      "detail": {
+        "entity": {
+          "kind": "store",
+          "name": "u"
+        },
+        "phase": "record",
+        "op": "op-ed6e746627f97751"
+      }
+    },
+    {
+      "call": "sandbox.create",
+      "args": [
+        "u/p",
+        "sun",
+        "native"
+      ],
+      "opts": {},
+      "at": 1793696993.323,
+      "ok": false,
+      "code": "Unresolved",
+      "message": "Store u has an unresolved store.push (op-ed6e746627f97751, phase record): its outcome is not known; see `layerfs store status u`, then clear it with `layerfs store push u docker`",
+      "detail": {
+        "entity": {
+          "kind": "store",
+          "name": "u"
+        },
+        "phase": "record",
+        "op": "op-ed6e746627f97751"
+      }
+    },
+    {
+      "call": "project.init",
+      "args": [
+        "u/q",
+        "/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/L1/data12"
+      ],
+      "opts": {},
+      "at": 1793696993.323,
+      "ok": false,
+      "code": "Unresolved",
+      "message": "Store u has an unresolved store.push (op-ed6e746627f97751, phase record): its outcome is not known; see `layerfs store status u`, then clear it with `layerfs store push u docker`",
+      "detail": {
+        "entity": {
+          "kind": "store",
+          "name": "u"
+        },
+        "phase": "record",
+        "op": "op-ed6e746627f97751"
+      }
+    },
+    {
+      "call": "project.remove",
+      "args": [
+        "u/p"
+      ],
+      "opts": {},
+      "at": 1793696993.323,
+      "ok": false,
+      "code": "Unresolved",
+      "message": "Store u has an unresolved store.push (op-ed6e746627f97751, phase record): its outcome is not known; see `layerfs store status u`, then clear it with `layerfs store push u docker`",
+      "detail": {
+        "entity": {
+          "kind": "store",
+          "name": "u"
+        },
+        "phase": "record",
+        "op": "op-ed6e746627f97751"
+      }
+    },
+    {
+      "call": "store.push",
+      "args": [
+        "u",
+        "docker"
+      ],
+      "opts": {},
+      "at": 1793696993.326,
+      "ok": true,
+      "value": {
+        "store": "u",
+        "from": "native",
+        "to": "docker",
+        "bytes": 12935168,
+        "heads": "6cc778b2cdbd13461ed3b2dd378c5835b838c0c4532bd65936e282851b5defe2"
+      }
+    },
+    {
+      "call": "store.status",
+      "args": [
+        "u"
+      ],
+      "opts": {},
+      "at": 1793696998.949,
+      "ok": true,
+      "value": {
+        "name": "u",
+        "kind": "sqlite",
+        "state": "idle",
+        "holders": [],
+        "op": null,
+        "down_reason": null,
+        "machine": "docker",
+        "file": {
+          "exists": true,
+          "free": 132698275840,
+          "bytes": 12935168,
+          "wal_bytes": 0
+        }
+      }
+    },
+    {
+      "call": "store.pull",
+      "args": [
+        "u"
+      ],
+      "opts": {},
+      "at": 1793696998.95,
+      "ok": true,
+      "value": {
+        "store": "u",
+        "from": "docker",
+        "to": "native",
+        "bytes": 12935168,
+        "heads": "6cc778b2cdbd13461ed3b2dd378c5835b838c0c4532bd65936e282851b5defe2"
+      }
+    },
+    {
+      "call": "store.disconnect",
+      "args": [
+        "g"
+      ],
+      "opts": {},
+      "at": 1793697004.508,
+      "ok": true,
+      "value": {
+        "disconnected": "g"
+      }
+    },
+    {
+      "call": "store.remove",
+      "args": [
+        "a"
+      ],
+      "opts": {},
+      "at": 1793697004.51,
+      "ok": true,
+      "value": {
+        "removed": "a"
+      }
+    },
+    {
+      "call": "store.remove",
+      "args": [
+        "b"
+      ],
+      "opts": {},
+      "at": 1793697004.512,
+      "ok": true,
+      "value": {
+        "removed": "b"
+      }
+    },
+    {
+      "call": "store.remove",
+      "args": [
+        "c"
+      ],
+      "opts": {},
+      "at": 1793697004.515,
+      "ok": true,
+      "value": {
+        "removed": "c"
+      }
+    },
+    {
+      "call": "store.remove",
+      "args": [
+        "k"
+      ],
+      "opts": {},
+      "at": 1793697004.517,
+      "ok": true,
+      "value": {
+        "removed": "k"
+      }
+    },
+    {
+      "call": "store.remove",
+      "args": [
+        "u"
+      ],
+      "opts": {},
+      "at": 1793697004.521,
+      "ok": true,
+      "value": {
+        "removed": "u"
+      }
+    },
+    {
+      "call": "backup.disconnect",
+      "args": [
+        "l1b"
+      ],
+      "opts": {},
+      "at": 1793697004.523,
+      "ok": true,
+      "value": {
+        "disconnected": "l1b",
+        "unlinked": []
+      }
+    }
+  ],
+  "checks": [
+    {
+      "check": "after store.pull b the worker keeps no folder for b (retire removes the whole folder)",
+      "pass": true,
+      "why": "NO-FOLDER"
+    },
+    {
+      "check": "progress store.push b: {progress:{phase,done,total}}, bytes in send, null elsewhere",
+      "pass": true,
+      "why": "phases ['check', 'snapshot', 'send', 'verify', 'install', 'record', 'retire'], send events 3, last {'phase': 'send', 'done': 12935168, 'total': 12935168}"
+    },
+    {
+      "check": "progress store.pull b: {progress:{phase,done,total}}, bytes in send, null elsewhere",
+      "pass": true,
+      "why": "phases ['check', 'snapshot', 'send', 'verify', 'install', 'record', 'retire'], send events 3, last {'phase': 'send', 'done': 12935168, 'total': 12935168}"
+    },
+    {
+      "check": "progress project.init a (native sqlite): events are {phase, done, total} only, phases in order check,[send],install,record",
+      "pass": true,
+      "why": "3 events, phases ['check', 'install', 'record'], first [{'phase': 'check', 'done': None, 'total': None}]"
+    },
+    {
+      "check": "progress project.init a (native sqlite): done/total null outside send",
+      "pass": true,
+      "why": "[{'phase': 'check', 'done': None, 'total': None}, {'phase': 'install', 'done': None, 'total': None}]"
+    },
+    {
+      "check": "progress project.init a (native sqlite): no send phase (Init in the caller's process)",
+      "pass": true,
+      "why": "send events []"
+    },
+    {
+      "check": "progress project.init b/q (sqlite on docker): events are {phase, done, total} only, phases in order check,[send],install,record",
+      "pass": true,
+      "why": "6 events, phases ['check', 'send', 'install', 'record'], first [{'phase': 'check', 'done': None, 'total': None}]"
+    },
+    {
+      "check": "progress project.init b/q (sqlite on docker): done/total null outside send",
+      "pass": true,
+      "why": "[{'phase': 'check', 'done': None, 'total': None}, {'phase': 'install', 'done': None, 'total': None}]"
+    },
+    {
+      "check": "progress project.init b/q (sqlite on docker): byte counts during send (Init through the worker)",
+      "pass": true,
+      "why": "send events [{'phase': 'send', 'done': 0, 'total': 12582918}, {'phase': 'send', 'done': 8388547, 'total': 12582918}] .. [{'phase': 'send', 'done': 12582918, 'total': 12582918}]"
+    },
+    {
+      "check": "progress project.init g (postgresql): events are {phase, done, total} only, phases in order check,[send],install,record",
+      "pass": true,
+      "why": "3 events, phases ['check', 'install', 'record'], first [{'phase': 'check', 'done': None, 'total': None}]"
+    },
+    {
+      "check": "progress project.init g (postgresql): done/total null outside send",
+      "pass": true,
+      "why": "[{'phase': 'check', 'done': None, 'total': None}, {'phase': 'install', 'done': None, 'total': None}]"
+    },
+    {
+      "check": "progress project.init g (postgresql): no send phase (Init in the caller's process)",
+      "pass": true,
+      "why": "send events []"
+    },
+    {
+      "check": "machine.list items carry state (and supports)",
+      "pass": true,
+      "why": "[[\"docker\", \"running\"], [\"native\", \"ready\"]]"
+    },
+    {
+      "check": "store.list items carry state",
+      "pass": true,
+      "why": "[[\"a\", \"idle\", null], [\"b\", \"idle\", null], [\"c\", \"idle\", null], [\"g\", \"idle\", null]]"
+    },
+    {
+      "check": "sandbox.list items carry state",
+      "pass": true,
+      "why": "[[\"sa\", \"running\", null], [\"sb\", \"running\", null], [\"sg\", \"running\", null]]"
+    },
+    {
+      "check": "sandbox.get workspaces[] carry ws, name, path",
+      "pass": true,
+      "why": "[{\"workspace\": \"224fe4e5e4453b7490bf27e442def91b92a83193acf9e490299d341fe3ce0b7d\", \"namespace\": 2, \"branch\": \"lane\", \"base\": null, \"base_layer\": \"327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376\", \"root\": \"3e6cd64c908e178e5e8e7c92cafc5703e9c0304a98a88083a66136fda14be777\", \"activity\": \"idle\", \"mounted\": true, \"directory\": \"/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/2\", \"head_moved_since_mount\": false, \"dirty\": {\"inodes\": 0, \"entries\": 0}, \"pending_merge\": false, \"revision\": 0, \"path\": \"/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/2\", \"name\": null, \"ws\": \"sa:/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/nat"
+    },
+    {
+      "check": "named Workspace's ws is <sandbox>:<name>",
+      "pass": true,
+      "why": "[{\"workspace\": \"413356269217e3097ab8de2e53cebc3c7ce008804fd04b95b5e3861ebebd615a\", \"namespace\": 1, \"branch\": \"lane\", \"base\": null, \"base_layer\": \"327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376\", \"root\": \"3e6cd64c908e178e5e8e7c92cafc5703e9c0304a98a88083a66136fda14be777\", \"activity\": \"idle\", \"mounted\": true, \"directory\": \"/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/1\", \"head_moved_since_mount\": false, \"dirty\": {\"inodes\": 0, \"entries\": 0}, \"pending_merge\": false, \"revision\": 0, \"path\": \"/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/1\", \"name\": \"w1\", \"ws\": \"sa:w1\"}]"
+    },
+    {
+      "check": "unnamed Workspace's ws is <sandbox>:<path>",
+      "pass": true,
+      "why": "[{\"workspace\": \"224fe4e5e4453b7490bf27e442def91b92a83193acf9e490299d341fe3ce0b7d\", \"namespace\": 2, \"branch\": \"lane\", \"base\": null, \"base_layer\": \"327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376\", \"root\": \"3e6cd64c908e178e5e8e7c92cafc5703e9c0304a98a88083a66136fda14be777\", \"activity\": \"idle\", \"mounted\": true, \"directory\": \"/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/2\", \"head_moved_since_mount\": false, \"dirty\": {\"inodes\": 0, \"entries\": 0}, \"pending_merge\": false, \"revision\": 0, \"path\": \"/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/2\", \"name\": null, \"ws\": \"sa:/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs535l1-h10b.IJva/machine/native/run/lfs-f41276f4-sa/workspaces/2\"}]"
+    },
+    {
+      "check": "workspace.exec/status accept <sandbox>:<name> and <sandbox>:<path> of the same Workspace",
+      "pass": true,
+      "why": "path-form read n\n"
+    },
+    {
+      "check": "workspace.commit by name, unmount by path, exec/unmount on an unnamed ws",
+      "pass": true,
+      "why": ""
+    },
+    {
+      "check": "store.push refused InUse while a Sandbox record exists, related names it",
+      "pass": true,
+      "why": "{'related': [{'kind': 'sandbox', 'name': 'sa'}], 'phase': 'check'}"
+    },
+    {
+      "check": "store.remove refused InUse, related names the Sandbox",
+      "pass": true,
+      "why": "{'related': [{'kind': 'sandbox', 'name': 'sa'}]}"
+    },
+    {
+      "check": "project.remove refused InUse, related names the Sandbox",
+      "pass": true,
+      "why": "InUse {'related': [{'kind': 'sandbox', 'name': 'sa'}]}"
+    },
+    {
+      "check": "store.pull refused InUse while a Sandbox record exists, related names it",
+      "pass": true,
+      "why": "{'related': [{'kind': 'sandbox', 'name': 'sb'}], 'phase': 'check'}"
+    },
+    {
+      "check": "machine.stop refused InUse while a Sandbox runs, related names it",
+      "pass": true,
+      "why": "InUse {'related': [{'kind': 'sandbox', 'name': 'sb'}]}"
+    },
+    {
+      "check": "machine.remove docker (built-in): refusal recorded",
+      "pass": true,
+      "why": "InvalidInput docker is built in and never removed related=None"
+    },
+    {
+      "check": "store.disconnect refused InUse while a Sandbox of the PostgreSQL Store exists, related names it",
+      "pass": true,
+      "why": "InUse Store g has running Sandboxes: sg {'related': [{'kind': 'sandbox', 'name': 'sg'}]}"
+    },
+    {
+      "check": "backup.restore refused InUse while a Sandbox of the Store runs, related names it",
+      "pass": true,
+      "why": "InUse Store k has running Sandboxes: sk {'related': [{'kind': 'sandbox', 'name': 'sk'}]}"
+    },
+    {
+      "check": "store.remove on a PostgreSQL Store refused InvalidInput naming store.disconnect",
+      "pass": true,
+      "why": "InvalidInput Store g is a PostgreSQL database; `store disconnect` forgets it and keeps its data"
+    },
+    {
+      "check": "a Sandbox whose process was killed (record left)",
+      "pass": true,
+      "why": "sandbox.get sx state=gone, killed pids ['45833']"
+    },
+    {
+      "check": "store.push refused InUse while that record exists, related names it",
+      "pass": true,
+      "why": "{'related': [{'kind': 'sandbox', 'name': 'sa'}, {'kind': 'sandbox', 'name': 'sx'}], 'phase': 'check'}"
+    },
+    {
+      "check": "in_use: store.status state in_use",
+      "pass": true,
+      "why": "state=in_use"
+    },
+    {
+      "check": "in_use: store.list item state in_use",
+      "pass": true,
+      "why": ""
+    },
+    {
+      "check": "in_use: store.get answers",
+      "pass": true,
+      "why": "{'name': 'a', 'kind': 'sqlite', 'machine': 'native', 'profile': 'disposable', 'created': 1793696876650, 'sqlite': '3.53.2', 'projects': ['p']}"
+    },
+    {
+      "check": "in_use: project.list answers",
+      "pass": true,
+      "why": "{'items': [{'project': 'a/p', 'store': 'a', 'name': 'p', 'kind': 'sqlite', 'machine': 'native', 'created': 1793696877227}], 'next_page_pos': None}"
+    },
+    {
+      "check": "in_use: project.get answers",
+      "pass": true,
+      "why": "{'project': 'a/p', 'store': 'a', 'name': 'p', 'kind': 'sqlite', 'machine': 'native', 'created': 1793696877227}"
+    },
+    {
+      "check": "in_use: file.list answers",
+      "pass": true,
+      "why": "{'kind': 'ok', 'snapshot': 'lane@e02d50e9e614', 'root': 'b6e8110251c3192846deaf533db43f1532e304429653a8db67d115fde3476fc4', 'path': '/', 'items': [{'name': 'a.txt', 'path': '/a.txt', 'type': 'file', 'inode': 2}, {'name': 'n.txt', 'path': '/n.txt', 'type': 'file', 'inode': 6}, {'name': 'r1', 'path': '/r1', 'type': 'file', 'inode': 3}, {'name': 'r2', 'path': '/r2', 'type': 'file', 'inode': 4}, {'name': 'r3', 'path': '/r3', 'type': 'file', 'inode': 5}], 'has_more': False, 'next_page_pos': None}"
+    },
+    {
+      "check": "in_use: branch.list answers",
+      "pass": true,
+      "why": "{'items': [{'name': 'lane', 'id': '111c12f104056c82ebfd36f30fbfb975fd', 'base': '327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376', 'head': '12e02d50e9e6145e4c49235739e7e0c861f0c3e8eb26937d86562444bf7b84465f', 'forked_from': '327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376'}, {'name': 'main', 'id': None, 'base': '327ac9e58ccf005ff7d2db8f1bfe371cd720914e4dfc5b2ad1ed019652513ae376', 'head': None}], 'has_more': False, 'next_page_pos': None}"
+    },
+    {
+      "check": "in_use: sandbox.create allowed",
+      "pass": true,
+      "why": "{'name': 'su', 'project': 'a/p', 'machine': 'native', 'created': 1793696907912, 'backend': 'native', 'route': 'nfs', 'id': 'su', 'platform': 'mac', 'runtime': 'native', 'image': 'local', 'state': 'running'}"
+    },
+    {
+      "check": "in_use: store.push refused InUse, related names the lease holder",
+      "pass": true,
+      "why": "{'related': [{'kind': 'lease', 'name': '45848'}], 'phase': 'check'}"
+    },
+    {
+      "check": "in_use: store.remove refused InUse, related names the lease holder",
+      "pass": true,
+      "why": "{'related': [{'kind': 'lease', 'name': '45848'}]}"
+    },
+    {
+      "check": "store.disconnect refused InUse while another process holds the PostgreSQL Store's lease, related names it",
+      "pass": true,
+      "why": "InUse {'related': [{'kind': 'lease', 'name': '45958'}]}"
+    },
+    {
+      "check": "backup.restore refused InUse while another process holds the Store's lease, related names it",
+      "pass": true,
+      "why": "InUse Store k is open in process [46016] {'related': [{'kind': 'lease', 'name': '46016'}]}"
+    },
+    {
+      "check": "busy: the pauser reached send (marker written)",
+      "pass": true,
+      "why": ""
+    },
+    {
+      "check": "busy: store.status state busy with op",
+      "pass": true,
+      "why": "state=busy op={'id': 'op-65fcfe6f88875140', 'name': 'store.push', 'phase': 'snapshot', 'started': 1793696952295, 'uncertain': False}"
+    },
+    {
+      "check": "busy: store.list item carries state busy and op",
+      "pass": true,
+      "why": "[{\"name\": \"c\", \"kind\": \"sqlite\", \"machine\": \"native\", \"profile\": \"disposable\", \"created\": 1793696900192, \"sqlite\": \"3.53.2\", \"op\": {\"id\": \"op-65fcfe6f88875140\", \"name\": \"store.push\", \"phase\": \"snapshot\", \"started\": 1793696952295, \"uncertain\": false}, \"projects\": [\"p\"], \"state\": \"busy\"}]"
+    },
+    {
+      "check": "busy: store.get answers",
+      "pass": true,
+      "why": "{'name': 'c', 'kind': 'sqlite', 'machine': 'native', 'profile': 'disposable', 'created': 1793696900192, 'sqlite': '3.53.2', 'op': {'id': 'op-65fcfe6f88875140', 'name': 'store.push', 'phase': 'snapshot', 'started': 1793696952295, 'uncertain': False}, 'projects': ['p']}"
+    },
+    {
+      "check": "busy: project.list answers",
+      "pass": true,
+      "why": "{'items': [{'project': 'c/p', 'store': 'c', 'name': 'p', 'kind': 'sqlite', 'machine': 'native', 'created': 1793696900745}], 'next_page_pos': None}"
+    },
+    {
+      "check": "busy: project.get answers",
+      "pass": true,
+      "why": "{'project': 'c/p', 'store': 'c', 'name': 'p', 'kind': 'sqlite', 'machine': 'native', 'created': 1793696900745}"
+    },
+    {
+      "check": "busy: file.list answers (from the source before record) [recorded spec difference: 2.0.0 docs say Busy]",
+      "pass": false,
+      "why": "Busy Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077"
+    },
+    {
+      "check": "busy: sandbox.create refused Busy naming the op",
+      "pass": true,
+      "why": "Busy Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077"
+    },
+    {
+      "check": "busy: project.init refused Busy naming the op",
+      "pass": true,
+      "why": "Busy Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077"
+    },
+    {
+      "check": "busy: project.remove refused Busy naming the op",
+      "pass": true,
+      "why": "Busy Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077"
+    },
+    {
+      "check": "busy: store.push refused Busy naming the op",
+      "pass": true,
+      "why": "Busy store push, check: Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077"
+    },
+    {
+      "check": "busy: store.pull refused Busy naming the op",
+      "pass": true,
+      "why": "Busy store pull, check: Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077"
+    },
+    {
+      "check": "busy: store.remove refused Busy naming the op",
+      "pass": true,
+      "why": "Busy Store c is busy: store.push (op-65fcfe6f88875140, phase snapshot) runs in process 46077"
+    },
+    {
+      "check": "busy: the paused push then completed",
+      "pass": true,
+      "why": "{\"store\": \"c\", \"from\": \"native\", \"to\": \"docker\", \"bytes\": 12935168, \"heads\": \"668592034dcce73f865d56ce2db5a6b1f827353a97abe8bab1281bfee2d9c830\"}"
+    },
+    {
+      "check": "machine.stop docker stops its worker",
+      "pass": true,
+      "why": "false"
+    },
+    {
+      "check": "stopped: machine.list answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "stopped: machine.get answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "stopped: machine.status answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "stopped: machine.platforms answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "stopped: store.list answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "stopped: store.get answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "stopped: store.status answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "stopped: store.get answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "stopped: store.status answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "stopped: project.list answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "stopped: project.get answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "stopped: sandbox.list answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "after every list/get/status call, machine.platforms and doctor the docker worker is still stopped",
+      "pass": true,
+      "why": "false"
+    },
+    {
+      "check": "down: store.status state down with down_reason",
+      "pass": true,
+      "why": "state=down reason=machine docker is not running; start it with `layerfs machine start docker`"
+    },
+    {
+      "check": "down: store.list item state down",
+      "pass": true,
+      "why": ""
+    },
+    {
+      "check": "down: store.get answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "down: project.list answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "down: project.get answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "down: file.list refused Unavailable naming `layerfs machine start` (D11)",
+      "pass": true,
+      "why": "Unavailable machine docker is not running; start it with `layerfs machine start docker`"
+    },
+    {
+      "check": "down: branch.list refused Unavailable naming `layerfs machine start` (D11)",
+      "pass": true,
+      "why": "Unavailable machine docker is not running; start it with `layerfs machine start docker`"
+    },
+    {
+      "check": "down: sandbox.create refused Unavailable naming `layerfs machine start` (D11)",
+      "pass": true,
+      "why": "Unavailable machine docker is not running; start it with `layerfs machine start docker`"
+    },
+    {
+      "check": "down: project.init refused Unavailable naming `layerfs machine start` (D11)",
+      "pass": true,
+      "why": "Unavailable machine docker is not running; start it with `layerfs machine start docker`"
+    },
+    {
+      "check": "down: project.remove refused Unavailable naming `layerfs machine start` (D11)",
+      "pass": true,
+      "why": "Unavailable machine docker is not running; start it with `layerfs machine start docker`"
+    },
+    {
+      "check": "down: store.pull refused Unavailable naming `layerfs machine start` (D11)",
+      "pass": true,
+      "why": "Unavailable store pull, check: machine docker is not running; start it with `layerfs machine start docker`"
+    },
+    {
+      "check": "down: store.remove refused Unavailable naming `layerfs machine start` (D11)",
+      "pass": true,
+      "why": "Unavailable machine docker is not running; start it with `layerfs machine start docker`"
+    },
+    {
+      "check": "down: none of those calls started the docker worker",
+      "pass": true,
+      "why": "false"
+    },
+    {
+      "check": "idle (after machine.start): store.get answers",
+      "pass": true,
+      "why": ""
+    },
+    {
+      "check": "idle (after machine.start): file.list answers",
+      "pass": true,
+      "why": ""
+    },
+    {
+      "check": "idle: sandbox.create allowed",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "idle: store.pull allowed",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "idle: store.pull (the paused push's Store) allowed",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "unresolved: store.status state unresolved with op (uncertain)",
+      "pass": true,
+      "why": "state=unresolved op={'id': 'op-ed6e746627f97751', 'name': 'store.push', 'phase': 'record', 'started': 1793696987689, 'uncertain': True}"
+    },
+    {
+      "check": "unresolved: store.list item state unresolved with op",
+      "pass": true,
+      "why": "[{\"name\": \"u\", \"kind\": \"sqlite\", \"machine\": \"native\", \"profile\": \"disposable\", \"created\": 1793696987064, \"sqlite\": \"3.53.2\", \"op\": {\"id\": \"op-ed6e746627f97751\", \"name\": \"store.push\", \"phase\": \"record\", \"started\": 1793696987689, \"uncertain\": true}, \"projects\": [\"p\"], \"state\": \"unresolved\"}]"
+    },
+    {
+      "check": "unresolved: store.get answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "unresolved: project.list answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "unresolved: project.get answers",
+      "pass": true,
+      "why": " "
+    },
+    {
+      "check": "unresolved: file.list answers where the placement is [recorded spec difference: 2.0.0 docs say Unresolved]",
+      "pass": false,
+      "why": "Unresolved Store u has an unresolved store.push (op-ed6e746627f97751, phase record): its outcome is not known; see `layerfs store status u`, then clear it with `layerfs store push u docker`"
+    },
+    {
+      "check": "unresolved: branch.list answers where the placement is [recorded spec difference: 2.0.0 docs say Unresolved]",
+      "pass": false,
+      "why": "Unresolved Store u has an unresolved store.push (op-ed6e746627f97751, phase record): its outcome is not known; see `layerfs store status u`, then clear it with `layerfs store push u docker`"
+    },
+    {
+      "check": "unresolved: sandbox.create refused Unresolved naming store status and the push that clears it",
+      "pass": true,
+      "why": "Unresolved Store u has an unresolved store.push (op-ed6e746627f97751, phase record): its outcome is not known; see `layerfs store status u`, then clear it with `layerfs store push u docker`"
+    },
+    {
+      "check": "unresolved: project.init refused Unresolved naming store status and the push that clears it",
+      "pass": true,
+      "why": "Unresolved Store u has an unresolved store.push (op-ed6e746627f97751, phase record): its outcome is not known; see `layerfs store status u`, then clear it with `layerfs store push u docker`"
+    },
+    {
+      "check": "unresolved: project.remove refused Unresolved naming store status and the push that clears it",
+      "pass": true,
+      "why": "Unresolved Store u has an unresolved store.push (op-ed6e746627f97751, phase record): its outcome is not known; see `layerfs store status u`, then clear it with `layerfs store push u docker`"
+    },
+    {
+      "check": "unresolved: doctor reports an error naming the push that clears it",
+      "pass": true,
+      "why": "[{\"severity\": \"error\", \"entity\": {\"kind\": \"store\", \"name\": \"u\"}, \"message\": \"store u has an unresolved store.push (op-ed6e746627f97751, phase record): its outcome is not known\", \"fix\": \"`layerfs store status u` shows it; `layerfs store push u docker` clears it\"}, {\"severity\": \"warning\", \"entity\": {\"kind\": \"store\", \"name\": \"u\"}, \"message\": \"Store u holds a stale lease of process 48442, which ended\""
+    },
+    {
+      "check": "unresolved: a new store.push clears it and runs (Store on docker)",
+      "pass": true,
+      "why": "{'store': 'u', 'from': 'native', 'to': 'docker', 'bytes': 12935168, 'heads': '6cc778b2cdbd13461ed3b2dd378c5835b838c0c4532bd65936e282851b5defe2'} "
+    },
+    {
+      "check": "unresolved: afterwards store.status idle on docker, no op",
+      "pass": true,
+      "why": "{'name': 'u', 'kind': 'sqlite', 'state': 'idle', 'holders': [], 'op': None, 'down_reason': None, 'machine': 'docker', 'file': {'exists': True, 'free': 132698275840, 'bytes': 12935168, 'wal_bytes': 0}}"
+    },
+    {
+      "check": "unresolved: afterwards native keeps no store.sqlite for u",
+      "pass": true,
+      "why": "['record.json', 'lock', 'project', 'open']"
+    },
+    {
+      "check": "unresolved: then store.pull u answers",
+      "pass": true,
+      "why": "{'store': 'u', 'from': 'docker', 'to': 'native', 'bytes': 12935168, 'heads': '6cc778b2cdbd13461ed3b2dd378c5835b838c0c4532bd65936e282851b5defe2'} "
+    }
+  ],
+  "events": {
+    "project.init a (native sqlite)": [
+      {
+        "phase": "check",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "install",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "record",
+        "done": null,
+        "total": null
+      }
+    ],
+    "store.push b": [
+      {
+        "phase": "check",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "snapshot",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "send",
+        "done": 0,
+        "total": 12935168
+      },
+      {
+        "phase": "send",
+        "done": 8388608,
+        "total": 12935168
+      },
+      {
+        "phase": "send",
+        "done": 12935168,
+        "total": 12935168
+      },
+      {
+        "phase": "verify",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "install",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "record",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "retire",
+        "done": null,
+        "total": null
+      }
+    ],
+    "store.pull b": [
+      {
+        "phase": "check",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "snapshot",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "send",
+        "done": 0,
+        "total": 12935168
+      },
+      {
+        "phase": "send",
+        "done": 8388608,
+        "total": 12935168
+      },
+      {
+        "phase": "send",
+        "done": 12935168,
+        "total": 12935168
+      },
+      {
+        "phase": "verify",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "install",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "record",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "retire",
+        "done": null,
+        "total": null
+      }
+    ],
+    "project.init b/q (sqlite on docker)": [
+      {
+        "phase": "check",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "send",
+        "done": 0,
+        "total": 12582918
+      },
+      {
+        "phase": "send",
+        "done": 8388547,
+        "total": 12582918
+      },
+      {
+        "phase": "send",
+        "done": 12582918,
+        "total": 12582918
+      },
+      {
+        "phase": "install",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "record",
+        "done": null,
+        "total": null
+      }
+    ],
+    "project.init g (postgresql)": [
+      {
+        "phase": "check",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "install",
+        "done": null,
+        "total": null
+      },
+      {
+        "phase": "record",
+        "done": null,
+        "total": null
+      }
+    ]
+  },
+  "sx_pids": [
+    "45833"
+  ],
+  "pauser": "{\"store\": \"c\", \"from\": \"native\", \"to\": \"docker\", \"bytes\": 12935168, \"heads\": \"668592034dcce73f865d56ce2db5a6b1f827353a97abe8bab1281bfee2d9c830\"}",
+  "pauser_events": "{\"phase\": \"check\", \"done\": null, \"total\": null}\n{\"phase\": \"snapshot\", \"done\": null, \"total\": null}\n{\"phase\": \"send\", \"done\": 0, \"total\": 12935168}\n{\"phase\": \"send\", \"done\": 8388608, \"total\": 12935168}\n{\"phase\": \"send\", \"done\": 12935168, \"total\": 12935168}\n{\"phase\": \"verify\", \"done\": null, \"total\": null}\n{\"phase\": \"install\", \"done\": null, \"total\": null}\n{\"phase\": \"record\", \"done\": null, \"total\": null}\n{\"phase\": \"retire\", \"done\": null, \"total\": null}\n",
+  "doctor_while_stopped": {
+    "ok": true,
+    "findings": [
+      {
+        "severity": "warning",
+        "entity": {
+          "kind": "store",
+          "name": "a"
+        },
+        "message": "Store a holds a stale lease of process 45848, which ended",
+        "fix": "nothing reads it; delete `store/a/open/45848` by hand, or the next `layerfs store push`, `store pull` or `store remove` of a removes it"
+      },
+      {
+        "severity": "warning",
+        "entity": {
+          "kind": "store",
+          "name": "g"
+        },
+        "message": "Store g holds a stale lease of process 45958, which ended",
+        "fix": "nothing reads it; delete `store/g/open/45958` by hand, or the next `layerfs store push`, `store pull` or `store remove` of g removes it"
+      },
+      {
+        "severity": "warning",
+        "entity": {
+          "kind": "store",
+          "name": "k"
+        },
+        "message": "Store k holds a stale lease of process 46016, which ended",
+        "fix": "nothing reads it; delete `store/k/open/46016` by hand, or the next `layerfs store push`, `store pull` or `store remove` of k removes it"
+      }
+    ]
+  },
+  "unresolved_kill": {
+    "exit": -9,
+    "events": "1793696987.686210 begin push u docker point=record-window pid=48442\n1793696987.686822 progress {\"phase\": \"check\", \"done\": null, \"total\": null}\n1793696987.692886 progress {\"phase\": \"snapshot\", \"done\": null, \"total\": null}\n1793696987.847962 progress {\"phase\": \"send\", \"done\": 0, \"total\": 12935168}\n1793696991.271825 progress {\"phase\": \"send\", \"done\": 8388608, \"total\": 12935168}\n1793696993.150227 progress {\"phase\": \"send\", \"done\": 12935168, \"total\": 12935168}\n1793696993.150678 progress {\"phase\": \"verify\", \"done\": null, \"total\": null}\n1793696993.314094 progress {\"phase\": \"install\", \"done\": null, \"total\": null}\n1793696993.316621 progress {\"phase\": \"record\", \"done\": null, \"total\": null}\n1793696993.317315 SIGKILL record-window: record op.phase=record\n"
+  },
+  "doctor_end": {
+    "ok": true,
+    "findings": []
+  },
+  "endedAt": "2026-11-03T09:10:04Z",
+  "passed": 101,
+  "failed": 3
+}

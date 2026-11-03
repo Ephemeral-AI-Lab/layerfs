@@ -1,0 +1,86 @@
+# L1 item 3 (#535 phase 8 item 4, macOS part): layerfs machine platforms vs connect/SUPPORT.json macOS rows
+command: LAYERFS_HOME=<fresh home> LAYERFS_BUNDLE=<sealed bundle> <k-macos>/bin/layerfs machine platforms  (output: item03-machine-platforms.json); PATH included ~/.microsandbox/bin
+host: macos
+platform sets equal: True ['native', 'docker', 'apple-container', 'microsandbox', 'lima', 'firecracker', 'ssh']
+order equal: True
+  native: live-only ['missing', 'ready', 'version'] ready=True missing=[] version=None
+  docker: live-only ['missing', 'ready', 'version'] ready=True missing=[] version='29.5.2'
+  apple-container: live-only ['missing', 'ready', 'version'] ready=True missing=[] version='container CLI version 1.6.1 (build: release, commit: unspeci)'
+  microsandbox: live-only ['missing', 'ready', 'version'] ready=True missing=[] version='msb 0.7.11'
+  lima: live-only ['missing', 'ready', 'version'] ready=True missing=[] version='limactl version 2.2.1'
+  firecracker: live-only ['missing', 'ready', 'version'] ready=True missing=[] version='limactl version 2.2.1'
+  ssh: live-only ['missing', 'ready', 'version'] ready=True missing=[] version='OpenSSH_10.2p1, LibreSSL 3.3.6'
+every SUPPORT.json field equal in the live answer: True []
+
+## observed results on native and docker vs their rows
+  native row: backend=native kernel=nfs sqlite=in_process postgresql={'store_calls': 'in_process', 'sandbox': True, 'reason': None}
+  docker row: backend=docker kernel=fuse sqlite=worker postgresql={'store_calls': 'in_process', 'sandbox': True, 'reason': None}
+  docker-pg-loop-C01.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-loop-C02.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-loop-C03.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-loop-C04.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-loop-C05.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-loop-C06.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-loop-C07.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-loop-C08.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-loop-C09.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-loop-C10.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-loop-C11.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-loop-C12.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-remote-C01.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-remote-C02.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-remote-C03.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-remote-C04.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-remote-C05.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-remote-C06.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-remote-C07.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-remote-C08.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-remote-C09.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-remote-C10.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-remote-C11.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-pg-remote-C12.json: backend=docker route=fuse store=postgresql pushed=False ok=True -> MATCH
+  docker-sqlite-C01.json: backend=docker route=fuse store=sqlite pushed=True ok=True -> MATCH
+  docker-sqlite-C02.json: backend=docker route=fuse store=sqlite pushed=True ok=True -> MATCH
+  docker-sqlite-C03.json: backend=docker route=fuse store=sqlite pushed=True ok=True -> MATCH
+  docker-sqlite-C04.json: backend=docker route=fuse store=sqlite pushed=True ok=True -> MATCH
+  docker-sqlite-C05.json: backend=docker route=fuse store=sqlite pushed=True ok=True -> MATCH
+  docker-sqlite-C06.json: backend=docker route=fuse store=sqlite pushed=True ok=True -> MATCH
+  docker-sqlite-C07.json: backend=docker route=fuse store=sqlite pushed=True ok=True -> MATCH
+  docker-sqlite-C08.json: backend=docker route=fuse store=sqlite pushed=True ok=True -> MATCH
+  docker-sqlite-C09.json: backend=docker route=fuse store=sqlite pushed=True ok=True -> MATCH
+  docker-sqlite-C10.json: backend=docker route=fuse store=sqlite pushed=True ok=True -> MATCH
+  docker-sqlite-C11.json: backend=docker route=fuse store=sqlite pushed=True ok=True -> MATCH
+  docker-sqlite-C12.json: backend=docker route=fuse store=sqlite pushed=True ok=True -> MATCH
+  native-pg-loop-C01.json: backend=native route=nfs store=postgresql pushed=False ok=True -> MATCH
+  native-pg-loop-C02.json: backend=native route=nfs store=postgresql pushed=False ok=True -> MATCH
+  native-pg-loop-C03.json: backend=native route=nfs store=postgresql pushed=False ok=True -> MATCH
+  native-pg-loop-C04.json: backend=native route=nfs store=postgresql pushed=False ok=True -> MATCH
+  native-pg-loop-C05.json: backend=native route=nfs store=postgresql pushed=False ok=True -> MATCH
+  native-pg-loop-C06.json: backend=native route=nfs store=postgresql pushed=False ok=True -> MATCH
+  native-pg-loop-C07.json: backend=native route=nfs store=postgresql pushed=False ok=True -> MATCH
+  native-pg-loop-C08.json: backend=native route=nfs store=postgresql pushed=False ok=True -> MATCH
+  native-pg-loop-C09.json: backend=native route=nfs store=postgresql pushed=False ok=True -> MATCH
+  native-pg-loop-C10.json: backend=native route=nfs store=postgresql pushed=False ok=True -> MATCH
+  native-pg-loop-C11.json: backend=native route=nfs store=postgresql pushed=False ok=True -> MATCH
+  native-pg-loop-C12.json: backend=native route=nfs store=postgresql pushed=False ok=True -> MATCH
+  native-sqlite-C01.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  native-sqlite-C02.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  native-sqlite-C03.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  native-sqlite-C04.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  native-sqlite-C05.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  native-sqlite-C06.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  native-sqlite-C07.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  native-sqlite-C08.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  native-sqlite-C09.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  native-sqlite-C10.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  native-sqlite-C11.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  native-sqlite-C12.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  parity-native-cli-C01.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  parity-native-cli-C05.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  parity-native-cli-C09.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  parity-native-cli-C12.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  parity-native-python-C01.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  parity-native-python-C05.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  parity-native-python-C09.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+  parity-native-python-C12.json: backend=native route=nfs store=sqlite pushed=False ok=True -> MATCH
+ALL RECEIPTS MATCH THEIR ROWS: True

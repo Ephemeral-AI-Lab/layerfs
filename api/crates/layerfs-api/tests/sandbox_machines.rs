@@ -12,7 +12,7 @@
 //!   digest) and LAYERFS_BUNDLE (a sealed Linux bundle whose daemon has
 //!   `postgresql`). macOS reaches a loopback server from the container as
 //!   `host.docker.internal`.
-//! - a sqlite Store moved to the docker machine and its Sandbox, through the
+//! - a sqlite Store pushed to the docker machine and its Sandbox, through the
 //!   docker worker on macOS: LAYERFS_TEST_IMAGE and LAYERFS_BUNDLE. The test
 //!   removes its worker container and data volume.
 //!
@@ -142,26 +142,58 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
         )
         .unwrap();
     }
-    for (name, platform) in [("dev", "lima"), ("box", "ssh")] {
-        home::write_record(
-            &paths::machine_record(&home, name),
-            &SdkValue::map([("name", t(name)), ("platform", t(platform))]),
-        )
-        .unwrap();
-        let (code, message) = call(
+    home::write_record(
+        &paths::machine_record(&home, "dev"),
+        &SdkValue::map([("name", t("dev")), ("platform", t("lima"))]),
+    )
+    .unwrap();
+    home::write_record(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("ssh")),
+            ("ssh", SdkValue::map([("host", t("box.invalid"))])),
+        ]),
+    )
+    .unwrap();
+    let create = |machine: &str| {
+        call(
             &home,
             "sandbox.create",
             &[
                 ("project", t("pg/app")),
                 ("name", t("t")),
-                ("machine", t(name)),
+                ("machine", t(machine)),
             ],
         )
-        .unwrap_err();
-        assert_eq!(code, "Unsupported", "{message}");
-        assert!(message.contains("runs on native or docker"), "{message}");
-        assert!(message.contains("comes later (O3)"), "{message}");
+        .unwrap_err()
+    };
+    // lima runs PostgreSQL Sandboxes on macOS (G7 live receipt): its
+    // stopped machine is refused naming its start; elsewhere the support
+    // table's reason, word for word (#535 §7.3)
+    let (code, message) = create("dev");
+    match layerfs_machine::sandbox_allowed(
+        layerfs_machine::Platform::Lima,
+        layerfs_machine::HostOs::current(),
+        layerfs_machine::StoreKind::Postgresql,
+    ) {
+        Ok(()) => {
+            assert_eq!(code, "Unavailable", "{message}");
+            assert!(message.contains("layerfs machine start dev"), "{message}");
+        }
+        Err(reason) => {
+            assert_eq!(code, "Unsupported", "{message}");
+            assert!(message.ends_with(reason), "{message}");
+        }
     }
+    // ssh runs PostgreSQL Sandboxes (5a), but cannot dial the caller's
+    // loopback: `reach` refuses before any machine is started (#535 §7.4)
+    let (code, message) = create("box");
+    assert_eq!(code, "Unsupported", "{message}");
+    assert!(
+        message.ends_with("an ssh machine cannot reach the caller's loopback"),
+        "{message}"
+    );
     let (code, message) = call(
         &home,
         "sandbox.create",
@@ -179,6 +211,84 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
         ok(&home, "sandbox.list", &[]).get("items"),
         Some(&SdkValue::List(Vec::new()))
     );
+    std::fs::remove_dir_all(&home).unwrap();
+}
+
+/// Every refusal `sandbox.create` gives for a platform and Store kind is
+/// the support table's reason (#535 §7.3, D10): one machine record per
+/// platform, a sqlite Store on each and one PostgreSQL Store, all records.
+#[test]
+fn every_platform_refusal_is_the_support_table_s() {
+    use layerfs_machine::{sandbox_allowed, HostOs, Platform, StoreKind};
+    let home = tempdir("support");
+    home::open(&home).unwrap();
+    ok(&home, "machine.list", &[]);
+    home::write_record(
+        &paths::store_record(&home, "pg"),
+        &SdkValue::map([
+            ("name", t("pg")),
+            ("kind", t("postgresql")),
+            ("url", t("postgres://u@127.0.0.1:1/db")),
+        ]),
+    )
+    .unwrap();
+    home::write_record(
+        &paths::project_record(&home, "pg", "app"),
+        &SdkValue::map([("name", t("app"))]),
+    )
+    .unwrap();
+    for platform in Platform::ALL {
+        let machine = match platform {
+            Platform::Native | Platform::Docker => platform.name().to_owned(),
+            _ => format!("m-{}", platform.name()),
+        };
+        if !platform.built_in() {
+            home::write_record(
+                &paths::machine_record(&home, &machine),
+                &SdkValue::map([("name", t(&machine)), ("platform", t(platform.name()))]),
+            )
+            .unwrap();
+        }
+        let store = format!("s-{}", platform.name());
+        home::write_record(
+            &paths::store_record(&home, &store),
+            &SdkValue::map([
+                ("name", t(&store)),
+                ("kind", t("sqlite")),
+                ("machine", t(&machine)),
+            ]),
+        )
+        .unwrap();
+        home::write_record(
+            &paths::project_record(&home, &store, "app"),
+            &SdkValue::map([("name", t("app"))]),
+        )
+        .unwrap();
+        for (kind, project) in [
+            (StoreKind::Sqlite, format!("{store}/app")),
+            (StoreKind::Postgresql, "pg/app".to_owned()),
+        ] {
+            // an allowed pair would start a real Sandbox; only refusals run
+            let Err(reason) = sandbox_allowed(platform, HostOs::current(), kind) else {
+                continue;
+            };
+            let (code, message) = call(
+                &home,
+                "sandbox.create",
+                &[
+                    ("project", t(&project)),
+                    ("name", t("t")),
+                    ("machine", t(&machine)),
+                ],
+            )
+            .unwrap_err();
+            assert_eq!(code, "Unsupported", "{message}");
+            assert!(
+                message.ends_with(reason),
+                "{platform:?} {kind:?}: {message}"
+            );
+        }
+    }
     std::fs::remove_dir_all(&home).unwrap();
 }
 
@@ -302,7 +412,7 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
     );
     let moved = ok(
         &home,
-        "store.move",
+        "store.push",
         &[("name", t("shop")), ("machine", t("docker"))],
     );
     assert_eq!(moved.get_text("to"), Some("docker"), "{moved:?}");
@@ -334,4 +444,89 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
     if let Err(panic) = outcome {
         std::panic::resume_unwind(panic);
     }
+}
+
+/// With no machine named, `sandbox.create` runs where the Store's calls
+/// run (#536 §10): a sqlite Store's machine (here a stopped microsandbox machine,
+/// so the create is refused naming its start), and `native` for a
+/// PostgreSQL Store (refused here by the reach check, which runs there).
+#[test]
+fn a_sandbox_with_no_machine_runs_on_its_store_s() {
+    let home = tempdir("default");
+    home::open(&home).unwrap();
+    home::write_record(
+        &paths::machine_record(&home, "box"),
+        // microsandbox runs on macOS and Linux hosts, so the support table
+        // passes this machine on either
+        &SdkValue::map([("name", t("box")), ("platform", t("microsandbox"))]),
+    )
+    .unwrap();
+    home::write_record(
+        &paths::store_record(&home, "shop"),
+        &SdkValue::map([
+            ("name", t("shop")),
+            ("kind", t("sqlite")),
+            ("machine", t("box")),
+        ]),
+    )
+    .unwrap();
+    home::write_record(
+        &paths::project_record(&home, "shop", "api"),
+        &SdkValue::map([("name", t("api"))]),
+    )
+    .unwrap();
+    let (code, message) = call(
+        &home,
+        "sandbox.create",
+        &[("project", t("shop/api")), ("name", t("t1"))],
+    )
+    .unwrap_err();
+    assert_eq!(code, "Unavailable", "{message}");
+    assert!(message.contains("layerfs machine start box"), "{message}");
+    assert!(
+        !paths::sandbox_dir(&home, "t1").exists(),
+        "a refused create leaves no claim"
+    );
+
+    home::write_record(
+        &paths::store_record(&home, "pg"),
+        &SdkValue::map([
+            ("name", t("pg")),
+            ("kind", t("postgresql")),
+            ("url", t("postgres://u@127.0.0.1:1/db")),
+        ]),
+    )
+    .unwrap();
+    home::write_record(
+        &paths::project_record(&home, "pg", "app"),
+        &SdkValue::map([("name", t("app"))]),
+    )
+    .unwrap();
+    let refused = call(
+        &home,
+        "sandbox.create",
+        &[("project", t("pg/app")), ("name", t("t2"))],
+    )
+    .unwrap_err();
+    assert_ne!(refused.0, "NotFound", "{refused:?}");
+    assert!(!refused.1.contains("machine start"), "{refused:?}");
+    // the reach check names the machine; a build without the PostgreSQL
+    // engine says so instead of "cannot reach", and a server that takes
+    // no connection is said to, not shown as an engine status
+    let (code, message) = refused;
+    if cfg!(feature = "postgresql") {
+        assert_eq!(code, "Unavailable", "{message}");
+        assert!(
+            message.starts_with("machine native cannot reach PostgreSQL Store pg's server at 127.0.0.1: no connection to the server was made"),
+            "{message}"
+        );
+    } else {
+        assert_eq!(code, "Unsupported", "{message}");
+        assert!(
+            message.starts_with("machine native cannot check PostgreSQL Store pg's server:"),
+            "{message}"
+        );
+    }
+    assert!(!message.contains("Closed"), "{message}");
+    let _ = std::fs::remove_dir_all(home);
 }

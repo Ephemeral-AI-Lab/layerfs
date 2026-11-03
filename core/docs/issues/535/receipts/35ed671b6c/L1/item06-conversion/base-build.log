@@ -1,0 +1,40 @@
+# The 2.0 base build (58b8d1742b), throwaway worktree /Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue535-l1base (detached at 58b8d1742bc3aae72e149ea9f4639c83afd1f863)
+registration: python3 tools/worktree.py register --worktree <l1base> --owner issue535-L1 --build-image sha256:378b799e... --runtime-image sha256:afa1ef9c... --sandbox-image sha256:afa1ef9c... -> layerfs-issue535-l1base-860c8face50e
+attempt 1 (logs/base-build.attempt1-seed-refused.raw): prepare --dependency-seed <kit cargo-home-macos> refused (a Virtualization.framework process, PID 40057, holds an open file under that registry), so the offline builds failed; the failed steps left a registry folder in the new cargo home and four exited containers holding the new Linux volumes (removed by this lane: they were this registration's).
+attempt 2: prepare macos --dependency-seed <issue533-v2 cargo-home-macos> (closed); prepare linux --dependency-seed <this registration's cargo-home-macos> (the issue533-v2 seed was refused the same way after a bind); then base-build.sh (its two prepare lines were refused 'destination exists', harmless):
+macOS: cargo +1.85.1 build --locked --offline -j 4 -p layerfs-cli --features postgresql --bin layerfs; ... -p layerfs-daemon --bin layerfs-daemon
+c71698dee1d4fb5245d6c5b6e41da90a2c04dd930c8cfa172872cfb4716b4d41  /Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue535-l1base/target/debug/layerfs
+d04f9150dc1442165db3c4d375f00430c3835d114de362387ebae3e8ddd40d45  /Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue535-l1base/target/debug/layerfs-daemon
+Linux bundle: python3 tools/linux_bundle.py {daemon,worker,helper,seal} --resources <reg> --timeout 300 --dest <reg>/bundle (never the shared ~/.cache/layerfs/bundle)
+08:56:45 bundle daemon
+daemon: built in 43.5 s (<reg>/builds/bundle-daemon-3ffea883856d47c3bc43d67336b6f9b0)
+STEP-EXIT daemon 0
+08:57:30 bundle worker
+worker: built in 20.2 s (<reg>/builds/bundle-worker-07c321eb6b7a47a3aba64bfc7cf4a253)
+STEP-EXIT worker 0
+08:57:51 bundle helper
+helper: built in 5.0 s (<reg>/builds/bundle-helper-8e22d362ff204375919a2a84065c26ca)
+STEP-EXIT helper 0
+08:57:56 seal
+sealed <reg>/bundle/2.0.0/linux-aarch64 (hash 216b8aa61446ce957c360ec8a94a2d8556073345796b65a4a11e9be3c696bc7b)
+SEAL-EXIT 0
+{
+  "hash": "216b8aa61446ce957c360ec8a94a2d8556073345796b65a4a11e9be3c696bc7b",
+  "version": "2.0.0",
+  "platform": "linux-aarch64",
+  "profile": "debug",
+  "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+  "saved_from": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+  "source": {
+    "head": "58b8d1742bc3aae72e149ea9f4639c83afd1f863",
+    "sha256": "93ccefae64a19b1ccd98a19c4975cd8e08eb942e3ae215503903d01cd698e2a9"
+  },
+  "toolchain": "1.85.1",
+  "files": {
+    "layerfs": "136fb86c8a6c609204d3d712c2b175e9ec78c03d3c79a54b5740189d309de50b",
+    "layerfs-daemon": "3e2cf8d903a5a94008aa13f574869925394b7bcc432098fcd20b875a63fc5aad",
+    "layerfs-sandbox-helper": "3027aaab2928fe2aa1c696f7bc89e07484f9699dc746f8d0a9ea32a532abe851",
+    "sandbox-image.tar": "eb9b313b36113c9b6a73d67e04a08557ccc677f439cea02a05f9bec81cc0d129"
+  },
+  "at": "2026-11-03T08:58:19.321792+00:00"
+}

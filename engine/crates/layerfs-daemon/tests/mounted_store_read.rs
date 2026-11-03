@@ -51,7 +51,7 @@ use layerfs_daemon::{
     OwnerClient,
 };
 use layerfs_overlay::{CleanupState, KernelMount, KernelMountState, StoredCounts};
-use layerfs_persistence::Handles;
+use layerfs_persistence::SqliteHandles;
 use layerfs_storage::{port::PackPersistence, ReservationBlocks, Storage};
 use mounted::{mount_entry, Harness, COMMAND};
 use std::{
@@ -362,12 +362,12 @@ impl Staged {
         });
         let config = || fixture.config.clone();
         let writer =
-            Handles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap();
+            SqliteHandles::open_writable(config(), installed::BINDING, installed::CURSOR).unwrap();
         let gate = Gate::new();
         let reader_config = fixture.config.clone();
         let reader_gate = gate.clone();
         let factory: layerfs_daemon::store::ReaderFactory = Arc::new(move |_| {
-            let read = Handles::open_read_only(
+            let read = SqliteHandles::open_read_only(
                 reader_config.clone(),
                 installed::BINDING,
                 installed::CURSOR,

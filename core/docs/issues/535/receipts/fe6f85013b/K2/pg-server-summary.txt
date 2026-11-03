@@ -1,0 +1,14 @@
+# lfs535k2-pg (postgres:17-bookworm, 0.0.0.0:55542, log_connections=on): summary before removal, 2026-11-03T07:39:08Z
+authorized connections per database prefix:
+ 195 ac
+ 194 arc
+ 127 i3pg
+ 195 mc
+  72 mrc
+  10 postgres
+   6 sc
+ 194 src
+peer addresses:
+  61 connection received: host=
+ 934 connection received: host=192.168.65.1
+ERROR/FATAL lines:

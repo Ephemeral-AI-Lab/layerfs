@@ -424,3 +424,19 @@ verified scope, and Windows stays NOT_RUN in the terminal pass.
   - a Windows host or CI runner with MSVC to build, check and run them,
     then the O5 rows (Windows home, `native` records with sqlite Stores and
     Init in the WSL worker, Sandboxes on `docker`) run there.
+
+## Superseded by #535 (owner, 2026-11-03)
+
+The owner's design session of 2026-11-03 for
+[#535](../535/README.md) superseded the rows below. They keep their text
+above as the 2.0 record; these rows govern from #535 on. See the
+[#535 decisions log](../535/DECISIONS.md).
+
+| #533 row | Superseded by | Now |
+| --- | --- | --- |
+| O21b ("the crates stay in `engine/crates/` for 2.0"), and G5's O21b half | #535 D4 | A top layer `connect/` holds `layerfs-machine`, `layerfs-sandbox` and `layerfs-store-backup`; layers are `core < engine < connect < api`. O21b's reason (the guard and LOC counter scan only `core/crates` and `engine/crates`) stopped holding once `api/crates` existed. |
+| O3 and G13 ("PostgreSQL Sandboxes: `native` and `docker`; VMs and ssh later") | #535 G1, D9 | A PostgreSQL Store is usable from every machine where #535 §7.3 marks the platform supported, with no attach records or calls (#535 G3, revised); the other platforms refuse with the missing fact (#535 G7). |
+| "Step-12 deferral closed", row "PostgreSQL Sandboxes" (namespaces and VMs/ssh refused) | #535 G1 | As O3 above. The rest of that section stands. |
+| Replaced recommendations, "Step 5.2" ("No trait: … one `match` per call") | #535 G2 | One crate-private, sealed trait per extension point (`Adapter` for platforms, `BackendAdapter` for Sandbox backends), with no default methods, reached through one exhaustive `match`. No public trait, registry, factory or plugin. The row's reason (every caller knows the kind from its record) still holds. |
+| O2 ("Machine idle time is 10 minutes") | #535 D11 | No idle stop: a machine runs from `machine start` to `machine stop`. A call on a stopped machine is refused `Unavailable`, naming `layerfs machine start <name>`. |
+| Review fixes P0-5 (the worker counts Sandboxes before idling off), P0-6's idle microVM reset, P0-7's start of a stopped machine before the home lock, and the "`start.lock` on create and remove" row's on-demand start | #535 D11 | The idle stop they guarded is removed and nothing starts a machine on demand; `store remove` and `store move` refuse a stopped machine. `start.lock` stays, taken by `machine start`, `stop`, `create` and `remove`. |

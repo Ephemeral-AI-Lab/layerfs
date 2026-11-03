@@ -5,7 +5,8 @@ mod support;
 use layerfs_content::{construct_bytes, read_range, ObjectId};
 use layerfs_history::HistoryCatalogConfig;
 use layerfs_persistence::{
-    Handles, PersistenceConfig, SqliteAcquisitionSchema, SqlitePackLayout, SqlitePersistenceProfile,
+    PersistenceConfig, SqliteAcquisitionSchema, SqliteHandles, SqlitePackLayout,
+    SqlitePersistenceProfile,
 };
 use layerfs_storage::{Storage, StoragePolicy};
 use layerfs_telemetry::timer::Timing;
@@ -58,7 +59,7 @@ fn read(storage: &Storage, id: ObjectId, len: u64) -> Vec<u8> {
 #[test]
 fn live_store_snapshot_opens_with_exactly_the_saved_state() {
     let temp = Temp::new("snapshot");
-    let handles = Handles::create(
+    let handles = SqliteHandles::create(
         config(temp.join("store")),
         StoragePolicy::frozen_default(),
         &HistoryCatalogConfig {
@@ -115,7 +116,7 @@ fn live_store_snapshot_opens_with_exactly_the_saved_state() {
     assert_eq!(pragma("freelist_count"), 0);
     drop(raw);
 
-    let copy = Handles::open_writable(config(temp.join("copy")), BINDING, CURSOR).unwrap();
+    let copy = SqliteHandles::open_writable(config(temp.join("copy")), BINDING, CURSOR).unwrap();
     let copied = Storage::new(copy.storage.clone()).unwrap();
     assert_eq!(read(&copied, kept, before.len() as u64), before);
     assert!(copied.reader().unwrap().read_objects(&[later]).is_err());

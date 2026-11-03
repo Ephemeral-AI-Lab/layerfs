@@ -4,8 +4,8 @@
 //! answer is always text: `{ value }` or `{ refused: { code, message,
 //! detail } }`. Nothing is retried here.
 use super::{call_scoped, json, Scope};
-use crate::host::outcome::{refused, Outcome};
 use layerfs_bridge::control::SdkValue;
+use layerfs_control::common::outcome::{refused, Outcome};
 use std::path::Path;
 
 fn run(
