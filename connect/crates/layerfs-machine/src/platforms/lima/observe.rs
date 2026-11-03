@@ -26,7 +26,7 @@ use crate::setup::vm::{call, checked, CALL};
 use crate::setup::{tool, worker};
 use crate::setup::{with_worker, State, Status};
 use crate::spec::Spec;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub(super) const CLI: &str = "limactl";
 
@@ -78,6 +78,18 @@ pub(crate) fn guest(spec: &Spec) -> Result<Guest, MachineError> {
             format!("the lima machine {} is {}", spec.name, state.as_str()),
         )),
     }
+}
+
+/// The ssh options and destination of a detached forward through a running
+/// Lima instance (`setup/forward.rs`): Lima's own `ssh.config`, without its
+/// shared connection, so the forward is its own ssh process.
+pub(crate) fn tunnel(dir: &Path, vm: &str) -> (Vec<String>, String) {
+    #[rustfmt::skip]
+    let options: Vec<String> = [
+        "-F", &dir.join("ssh.config").display().to_string(),
+        "-o", "ControlMaster=no", "-o", "ControlPath=none",
+    ].map(String::from).to_vec();
+    (options, format!("lima-{vm}"))
 }
 
 /// What a lima machine needs on this host before anything is made.
