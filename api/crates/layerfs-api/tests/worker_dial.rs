@@ -126,7 +126,8 @@ fn worker(meet: Meet) -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
                 );
                 continue;
             }
-            send(&mut stream, br#"{"ready":true}"#);
+            // this build's hello: its protocol, no sealed bundle
+            send(&mut stream, br#"{"ready":true,"protocol":2,"bundle":null}"#);
             let request = frame(&mut stream).unwrap_or_default();
             seen.lock()
                 .unwrap()

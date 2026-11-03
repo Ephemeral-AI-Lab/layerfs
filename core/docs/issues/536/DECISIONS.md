@@ -102,6 +102,10 @@ Rows added when the code contradicts a spec fact. The code wins; the step is adj
 | Store state is per process (I) | `store.list`/`get` `state` counts other processes' leases, so a process that keeps a Store open sees `idle` where another sees `in_use`. Node `shell.mjs`'s parity test asserts both and compares the rest. | Leases name the holder; its own does not block it. |
 | Worker hello (I, `0b4b7223dc`) | `PROTOCOL = 2` (the unversioned hello is 1); the worker answers `{ready, protocol, bundle}` (`bundle`: the hash in the `bundle.json` beside its executable, null without one). A mismatch, or the old hello, is refused `Unavailable` with `detail {worker, expected}` before any request, naming `layerfs machine stop <m>` then `layerfs machine start <m>` (start installs the current bundle on lima, ssh and docker). A worker with no bundle is checked by protocol alone; one with a bundle while the caller has none is a mismatch. `machine start`'s probe uses the hello only, so it never redeploys over a running worker of another build. | §9 worker ops; one attempt, no fallback. |
 | `layerfs doctor` (I, `ad2c9cf351`, `23145ced3e`) | `doctor/` in layerfs-control; CLI `layerfs doctor [--text]` (exit 0 once a report is made, whatever it finds; 2 bad argument; 125 no home); Node and Python `doctor()`. No lock, no write (not even lock files or stale-lease removal: `lease::leases()` is the read-only half of `holders()`), no machine started; running machines are dialled for their hello only. Modes are errors; a stale `op` is a warning; unparsable records, a wrong `v` or a Store on an unrecorded machine are fixed by hand; built-in `native` and `docker` exist without records; a `.incoming` names `store pull` (Store off native) or delete by hand (on native). | H7. |
+| `secrets.rs` (I, `1bc38f0b1e`, `3d818c634e`) | `common/secrets.rs` holds the PostgreSQL password references (moved from `store/connect.rs`), the one `worker.json` reader (`worker_secret`, used by `common/place.rs` and `machine/spec.rs`, which each parsed it) and the daemon keys' `control.json` read/write and key decoding (`sandbox/files.rs`, `sandbox/direct.rs`). Bucket credential references (`backup/record.rs` `env:LAYERFS_BUCKET_*`) stay with the bucket record. | §9.2. |
+| Optional `machine` (I, `7d965141d0`) | `sandbox.create`'s third positional is optional: a sqlite Store's machine, or `native` for a PostgreSQL Store. | §10. |
+| Refusal detail (I, `104bcc2899`) | `Busy` and `Unresolved` carry `detail {entity: {kind, name}, phase, op}`; `InUse` from push, pull, remove, stop and retire carries `related` (I-push). Other refusals keep `detail: null` unless they had one. | §10 "when known". |
+| H2 typed API (not built) | Control's entity functions still take `(Context, &SdkValue)` and answer `Outcome`; #536 H2's `<entity>::<op>(&Home, Request, &mut Events) -> Result<Record, Refusal>` with typed Requests and a typed `Refusal`/`Event` is not built. The wire shapes it would keep are already the ones the calls answer. | Not in HANDOFF-2's step list; a refactor of every call. Open for the owner. |
 | `layerfs_api::call` (C1) | Kept as a re-export of `layerfs_store_service::methods::call`; `layerfs_api::fs` and `::branch` are no longer public (nothing used them). | Front ends, examples and remaining tests keep their path. |
 
 ## Open items
@@ -109,6 +113,8 @@ Rows added when the code contradicts a spec fact. The code wins; the step is adj
 - `common/place.rs` (Store-call routing) and `common/home/place.rs` (1.1.0 file placing) share a name; rename when `migrate/` is split.
 - `sandbox/files.rs` is 953 physical lines after step D, near the 999 ceiling.
 - Doctor does not check `.incoming` files or layout 2 leftovers on other machines (no read-only worker op reports them); the real hello across a VM or docker is not exercised.
+- `sandbox.create` has no free-disk check (§11 item 7 names one but no headroom); its Workspace limit (16) is the mount's `Capacity`.
+- #536 H2's typed Request/Refusal/Event API is not built (see the H2 row).
 - Push/pull `send` is still one worker request per 8 MiB chunk through the caller, as move was; §7.3's "ONE worker connection, streamed frames (#535 R8)" is not built.
 - `PROVIDERS.md` stays in `layerfs-api` and describes the facade now in control `sandbox/launch/`.
 
@@ -116,6 +122,7 @@ Rows added when the code contradicts a spec fact. The code wins; the step is adj
 
 | Commit | Message says | Correct |
 | --- | --- | --- |
+| `3d818c634e` (secrets: worker.json and daemon keys) | "Production LOC: 135113 -> 135105 (delta -8)" | `135113 -> 135125 (delta +12)`, measured on the parent and the committed tree; the message's line was written before the count was read |
 | `aa1a992fcd` (H11 Init through a worker) | "project/family.rs +47, project/init.rs +20" | project/family.rs +33, project/init.rs +36 (measured per file with `tools/production_loc.py --files`); the other files and the total +68 are right |
 | `41a2a00525` (F1 merge) | "typed records +545, moves' imports/declarations +167" | behaviour commits +450 (F1a 77, F1d 170, F1e 137, F1f 61, F1g 5), moves +167 (F1b 6, F1c 7, F1h 154); total +617 is right |
 
