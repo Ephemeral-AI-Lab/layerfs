@@ -18,7 +18,7 @@ pub fn run(call: &Call, context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         return layerfs_control::sandbox::family::sandbox(context, call.call, args);
     }
     if call.family == "workspace" {
-        return layerfs_control::sandbox::family::workspace(context, call.call, args);
+        return layerfs_control::workspace::calls::workspace(context, call.call, args);
     }
     if call.family == "backup" {
         return layerfs_control::backup::family::run(context, call.call, args);

@@ -1,7 +1,7 @@
 //! `machine.status` and the home id the machine specs use.
 use super::spec::{self as record, machine_of, refusal};
 use crate::common::context::Context;
-use crate::common::home::{self};
+use crate::common::home;
 use crate::common::outcome::Outcome;
 use crate::inventory::stores_on;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
