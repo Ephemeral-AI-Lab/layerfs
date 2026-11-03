@@ -20,3 +20,11 @@ fixed in `32aec70a64` (`inventory::can_remove_machine` refused with
 The Sandbox and hosted-machine entries are covered by the `inventory` test.
 Removed after: the machine (`machine remove`; `msb list` shows none), the
 Store and the scratch home. Log: `check.log` (commands, answers, wall times).
+
+## Checks at `32aec70a64`
+
+The #535 §11 check set (`checks.log`: `ALL rc=0`) and the packages the fix
+touches, each under a 120 s limit (`sweep.log`): layerfs-control with
+`machine` 75, without 71; layerfs-api with `machine` 100, without 81; 0
+failed. The other packages are unchanged since `3e257b91c3`
+(`receipts/3e257b91c3/lead/`).

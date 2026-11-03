@@ -1,0 +1,4 @@
+layerfs-control [machine] rc=0 44s; passed 75 failed 0
+layerfs-control [-] rc=0 40s; passed 71 failed 0
+layerfs-api [machine] rc=0 65s; passed 100 failed 0
+layerfs-api [-] rc=0 46s; passed 81 failed 0
