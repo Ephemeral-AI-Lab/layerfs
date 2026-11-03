@@ -1,7 +1,6 @@
 //! The Store connection reaper stays under #535 D11 (manual machine
 //! lifecycle): it frees an open Store this process no longer uses. No real
 //! waiting: the reaper's own pass is run with a chosen idle period.
-use layerfs_api::calls;
 use layerfs_api::home::{self};
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::common::home::lease;
@@ -23,7 +22,8 @@ fn ok(home: &Path, name: &str, args: &[(&str, &str)]) -> SdkValue {
             .map(|(n, v)| ((*n).to_owned(), SdkValue::text(*v)))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).unwrap_or_else(|r| panic!("{name}: {r:?}"))
+    layerfs_api::call(Some(home), name, args, &mut |_| {})
+        .unwrap_or_else(|r| panic!("{name}: {r:?}"))
 }
 
 #[test]

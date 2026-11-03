@@ -3,7 +3,6 @@
 //! built-in record (here shown by one deleted meanwhile staying absent),
 //! and a home made again at the same path, with a new id, gets them again.
 #![cfg(feature = "machine")]
-use layerfs_api::calls;
 use layerfs_api::home::paths;
 use layerfs_bridge::control::SdkValue;
 
@@ -12,7 +11,7 @@ fn built_ins_are_checked_once_per_home() {
     let home = std::env::temp_dir().join(format!("lfs-builtins-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     let list = |home: &std::path::Path| {
-        calls::call(Some(home), "machine.list", SdkValue::Null, &mut |_| {}).unwrap()
+        layerfs_api::call(Some(home), "machine.list", SdkValue::Null, &mut |_| {}).unwrap()
     };
     list(&home);
     let docker = paths::machine_record(&home, "docker");

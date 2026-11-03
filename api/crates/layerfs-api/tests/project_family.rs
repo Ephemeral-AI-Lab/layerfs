@@ -2,7 +2,6 @@
 //! native, a folder Inited into it as a live add, file and Branch calls on
 //! it, the Store pushed to a worker machine and read there, then the project
 //! removed.
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
@@ -31,7 +30,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -92,7 +91,7 @@ fn init_files_branches_move_and_remove() {
         ("project", t("shop/api")),
         ("folder", t(&folder.display().to_string())),
     ]);
-    let made = calls::call(Some(&home), "project.init", args, &mut |e| events.push(e))
+    let made = layerfs_api::call(Some(&home), "project.init", args, &mut |e| events.push(e))
         .unwrap_or_else(|e| panic!("init: {} {}", e.code, e.message));
     assert_eq!(made.get_text("project"), Some("shop/api"));
     assert_eq!(made.get_text("machine"), Some("native"));
@@ -164,7 +163,7 @@ fn init_files_branches_move_and_remove() {
         ],
     );
     assert!(
-        layerfs_api::calls::json::print(&diff).contains("NEW.md"),
+        layerfs_api::json::print(&diff).contains("NEW.md"),
         "{diff:?}"
     );
     ok(
@@ -185,7 +184,7 @@ fn init_files_branches_move_and_remove() {
     );
     assert_eq!(content(&read), "newer\n");
     let branches = ok(&home, "branch.list", &[p()]);
-    assert!(layerfs_api::calls::json::print(&branches).contains("\"fix\""));
+    assert!(layerfs_api::json::print(&branches).contains("\"fix\""));
     ok(&home, "branch.get", &[p(), ("branch", t("fix"))]);
 
     // the Store's open service is closed before a push: a lease of this

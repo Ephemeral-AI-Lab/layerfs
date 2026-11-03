@@ -4,7 +4,6 @@
 //! write and a Store that returns is never served from a stale handle; and
 //! (Linux, where a writer waits on its Store directory's lock) a call that
 //! is running keeps its Store open against a push or remove.
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
@@ -34,7 +33,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {

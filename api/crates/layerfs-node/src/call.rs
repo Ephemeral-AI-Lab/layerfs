@@ -1,5 +1,4 @@
 //! The binding's two functions and the task that runs one call.
-use layerfs_api::calls;
 use napi::bindgen_prelude::AsyncTask;
 use napi::threadsafe_function::{
     ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
@@ -11,7 +10,7 @@ use std::path::{Path, PathBuf};
 /// The call table as JSON text.
 #[napi]
 pub fn table() -> String {
-    calls::table_json()
+    layerfs_api::table_json()
 }
 
 /// Runs the call `name` once with JSON `args`, in `home` (else the
@@ -65,7 +64,7 @@ impl Task for Doctor {
     type JsValue = String;
 
     fn compute(&mut self) -> napi::Result<String> {
-        let home = calls::home(self.home.as_deref().map(Path::new));
+        let home = layerfs_api::home(self.home.as_deref().map(Path::new));
         Ok(layerfs_api::doctor_json(home))
     }
 
@@ -99,7 +98,7 @@ impl Task for Call {
                 }
             }
         };
-        let answer = calls::call_json(
+        let answer = layerfs_api::call_json(
             self.home.as_deref(),
             self.scope.as_deref(),
             &self.name,

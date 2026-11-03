@@ -7,7 +7,6 @@
 //! container) and a bundle folder of empty stand-ins; no Docker is used.
 //! One test, because it sets the process's environment.
 #![cfg(feature = "machine")]
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::os::unix::fs::PermissionsExt;
@@ -36,7 +35,7 @@ fn create(home: &Path, name: &str, image: Option<&str>) -> SdkRefusal {
     if let Some(image) = image {
         fields.push(("image".to_owned(), t(image)));
     }
-    calls::call(
+    layerfs_api::call(
         Some(home),
         "sandbox.create",
         SdkValue::Map(fields),
@@ -46,7 +45,7 @@ fn create(home: &Path, name: &str, image: Option<&str>) -> SdkRefusal {
 }
 
 fn start(home: &Path) -> SdkRefusal {
-    calls::call(
+    layerfs_api::call(
         Some(home),
         "machine.start",
         SdkValue::map([("name", t("docker"))]),

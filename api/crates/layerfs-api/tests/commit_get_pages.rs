@@ -1,7 +1,6 @@
 //! `commit.get` pages a Branch's Commits to the end, past the reply budget
 //! of one page; `branch.get` and `commit.get` keep 1.1.0's `NoSuch*` codes
 //! (S §2.9). #533 review, group calls.
-use layerfs_api::calls;
 use layerfs_api::home;
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
@@ -34,7 +33,7 @@ fn map(args: &[(&str, SdkValue)]) -> SdkValue {
 }
 
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, (String, String)> {
-    calls::call(Some(home), name, map(args), &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, map(args), &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {

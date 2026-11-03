@@ -1,29 +1,139 @@
-//! The SDK's public surface: the call table and its one dispatcher
-//! (`calls`), over the management library `layerfs-control`, whose public
-//! paths it re-exports for the front ends: project provisioning (`project`)
-//! and Sandbox Workspace control (`sandbox`). The `fs`, `branch` and
-//! `project.list_branches` methods (file reads and one-Commit writes, Branch
-//! history and listing) are the Store engine's SDK facade
-//! (layerfs-store-service `methods/`), run in the caller's process, the only
-//! route for Store calls (#352 F-020); [`call`] is their method table.
+//! The SDK's public surface: the call table, one file per call under its
+//! family (`<family>/<call>.rs`: the call's entry and the function that runs
+//! it), each family's calls listed in its `mod.rs`. Every call runs in the management
+//! library `layerfs-control`, which also holds the call machinery (argument
+//! checks, folder scope, the one dispatcher); its public paths are
+//! re-exported here for the front ends. The `branch`, `commit` and `file`
+//! calls reach the Store engine's SDK facade (layerfs-store-service
+//! `methods/`) in the caller's process, the only route for Store calls
+//! (#352 F-020).
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-pub mod calls;
+mod backup;
+mod branch;
+mod commit;
+mod file;
+mod machine;
+mod project;
+mod sandbox;
+mod store;
+mod workspace;
+
+use layerfs_bridge::control::SdkValue;
+use layerfs_control::calls as machinery;
+use layerfs_control::common::outcome::Outcome;
+use std::path::Path;
+
+pub use layerfs_control::calls::{
+    home, json, keys, size, Arg, Call, CallRef, Calls, Context, Families, Family, Kind, Run, Scope,
+};
 pub use layerfs_control::common::{home, names};
 /// `layerfs doctor` (#536 H7): report-only, outside the call table.
 pub use layerfs_control::doctor::{doctor, doctor_json};
 #[cfg(feature = "machine")]
 #[doc(hidden)]
-pub use layerfs_control::machine;
+pub use layerfs_control::machine::running;
 pub use layerfs_control::machine::worker;
+pub use layerfs_control::store::close_idle;
 pub use layerfs_control::{
-    call, projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitCounters, InitCounts,
-    InitError, InitFailure, InitRequest, InitStep, InstallError, InstallFailure, InstallWork,
-    Installed, OperationCause, OperationFailure, ProjectApi, ProjectError, SdkError, SdkResult,
-    SealedProject, SourceRefusal,
+    daemon, projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitCounters,
+    InitCounts, InitError, InitFailure, InitRequest, InitStep, InstallError, InstallFailure,
+    InstallWork, Installed, OperationCause, OperationFailure, ProjectApi, ProjectError, SdkError,
+    SdkResult, SealedProject, SourceRefusal,
 };
-pub use layerfs_control::{daemon, project, sandbox, store};
 pub use layerfs_control::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
+
+/// The nine families, in the order help lists them: 61 calls, the same
+/// from the `layerfs` binary, Node and Python.
+pub fn families() -> Families {
+    &[
+        Family {
+            name: "project",
+            list: project::calls,
+        },
+        Family {
+            name: "branch",
+            list: branch::calls,
+        },
+        Family {
+            name: "commit",
+            list: commit::calls,
+        },
+        Family {
+            name: "file",
+            list: file::calls,
+        },
+        Family {
+            name: "sandbox",
+            list: sandbox::calls,
+        },
+        Family {
+            name: "workspace",
+            list: workspace::calls,
+        },
+        Family {
+            name: "machine",
+            list: machine::calls,
+        },
+        Family {
+            name: "store",
+            list: store::calls,
+        },
+        Family {
+            name: "backup",
+            list: backup::calls,
+        },
+    ]
+}
+
+/// Every call, in table order.
+pub fn calls() -> Vec<CallRef> {
+    machinery::table::calls(families()).collect()
+}
+
+/// The call named `family.call`.
+pub fn find(name: &str) -> Option<CallRef> {
+    machinery::find(families(), name)
+}
+
+/// The whole table as JSON text, for front ends that build their functions
+/// from it.
+pub fn table_json() -> String {
+    machinery::table_json(families())
+}
+
+/// Runs the call `name` (`family.call`) once with named `args`; see
+/// `layerfs_control::calls::call`.
+pub fn call(
+    home: Option<&Path>,
+    name: &str,
+    args: SdkValue,
+    events: &mut dyn FnMut(SdkValue),
+) -> Outcome {
+    machinery::call(families(), home, name, args, events)
+}
+
+/// [`call`] for a client with a folder scope (O32).
+pub fn call_scoped(
+    home: Option<&Path>,
+    scope: Option<&Scope>,
+    name: &str,
+    args: SdkValue,
+    events: &mut dyn FnMut(SdkValue),
+) -> Outcome {
+    machinery::call_scoped(families(), home, scope, name, args, events)
+}
+
+/// [`call`] with JSON text on both sides, for the Node and Python bindings.
+pub fn call_json(
+    home: Option<&Path>,
+    scope: Option<&str>,
+    name: &str,
+    args: &str,
+    events: &mut dyn FnMut(String),
+) -> String {
+    machinery::call_json(families(), home, scope, name, args, events)
+}

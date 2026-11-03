@@ -1,13 +1,15 @@
 //! The management library under the SDK call surface (`layerfs-api`): the
 //! home and its records, machines and their workers, Stores, projects,
-//! Sandboxes and their Workspaces, and backups (#536). `layerfs-api` keeps
-//! the call table and its dispatcher and runs each call here.
+//! Sandboxes and their Workspaces, and backups (#536), and the call
+//! machinery (`calls`). `layerfs-api` holds the call table's entries, one
+//! file per call, and runs each call here.
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
 #[doc(hidden)]
 pub use daemon::internal;
 pub mod backup;
+pub mod calls;
 pub mod common;
 pub mod daemon;
 pub mod doctor;

@@ -17,7 +17,6 @@
 //! through a real forward (`sandbox_direct_live.rs` dials a host daemon).
 //! One test, because it sets the process's PATH.
 #![cfg(all(unix, feature = "machine"))]
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_api::worker::{read_frame, write_frame};
 use layerfs_bridge::control::SdkValue;
@@ -45,7 +44,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 /// What the stand-in worker was sent: each Sandbox operation's name and
@@ -270,7 +269,7 @@ fn workspace_calls_reach_a_forwarded_sandbox_s_daemon_directly() {
         ],
     )
     .unwrap();
-    let shown = calls::json::print(&made);
+    let shown = layerfs_api::json::print(&made);
     assert!(
         !shown.contains("secret") && !shown.contains("forward"),
         "{shown}"

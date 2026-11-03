@@ -3,7 +3,6 @@
 //! a Store behind a worker, and disconnect keeping the objects. Needs the
 //! LAYERFS_REMOTE_* variables tests/minio_service.sh of layerfs-store-backup
 //! prints; without them the test says NOT_RUN and passes.
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
@@ -28,7 +27,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {

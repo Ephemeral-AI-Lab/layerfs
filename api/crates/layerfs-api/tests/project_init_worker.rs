@@ -3,7 +3,6 @@
 //! machine's worker, which adds the copy and removes it; the caller
 //! records the project. The folder here is under the caller's temp
 //! directory, outside the worker's root.
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_api::worker::{self, Endpoint};
 use layerfs_bridge::control::SdkValue;
@@ -28,7 +27,7 @@ fn call(
     args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
 ) -> Result<SdkValue, (String, String)> {
-    calls::call(Some(home), name, args, events).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, events).map_err(|r| (r.code, r.message))
 }
 
 fn init_args(project: &str, folder: &Path) -> SdkValue {

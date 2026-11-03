@@ -1,7 +1,6 @@
 //! A Store's kind is decided once from its record (#535 §6.1, step 2c): a
 //! record without `kind` is a sqlite Store, and a kind LayerFS never writes
 //! is refused rather than read as sqlite.
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::path::{Path, PathBuf};
@@ -21,7 +20,8 @@ fn tempdir() -> PathBuf {
 
 fn status(home: &Path, name: &str) -> Result<SdkValue, (String, String)> {
     let args = SdkValue::map([("name", SdkValue::text(name))]);
-    calls::call(Some(home), "store.status", args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), "store.status", args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 #[test]

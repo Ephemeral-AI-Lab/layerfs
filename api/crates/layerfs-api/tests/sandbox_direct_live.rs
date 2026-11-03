@@ -11,7 +11,6 @@
 //! a guest runtime (exec stays on the worker; `sandbox_direct.rs`).
 //! Needs the macOS daemon at LAYERFS_DAEMON; without it, NOT_RUN.
 #![cfg(all(target_os = "macos", feature = "machine"))]
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_api::worker::{read_frame, write_frame};
 use layerfs_bridge::control::SdkValue;
@@ -34,7 +33,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -104,7 +103,9 @@ fn refusing_worker() -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
             )
             .unwrap();
             let request = read_frame(&mut stream).ok().flatten().unwrap_or_default();
-            seen.lock().unwrap().push(calls::json::print(&request));
+            seen.lock()
+                .unwrap()
+                .push(layerfs_api::json::print(&request));
             let refused = SdkValue::map([(
                 "refused",
                 SdkValue::map([
@@ -229,7 +230,7 @@ fn a_forwarded_sandbox_s_workspace_calls_dial_its_daemon_from_here() {
             "{committed:?}"
         );
         let got = ok(&home, "sandbox.get", &[("name", t("t1"))]);
-        assert!(calls::json::print(&got).contains("t1:one"), "{got:?}");
+        assert!(layerfs_api::json::print(&got).contains("t1:one"), "{got:?}");
         ok(&home, "workspace.unmount", &[("ws", t("t1:one"))]);
         let read = ok(
             &home,

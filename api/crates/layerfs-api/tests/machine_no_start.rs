@@ -8,7 +8,6 @@
 //! `worker.json`. The same holds with a stale `worker.json` that nothing
 //! answers. One test, because it sets the process's environment.
 #![cfg(feature = "machine")]
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
@@ -38,7 +37,7 @@ fn t(s: &str) -> SdkValue {
 
 fn call(home: &Path, name: &str, args: &[(&str, &str)]) -> Result<SdkValue, (String, String)> {
     let args = SdkValue::Map(args.iter().map(|(n, v)| ((*n).to_owned(), t(v))).collect());
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 /// A home with stopped Lima machine `dev` holding sqlite Store `shop`

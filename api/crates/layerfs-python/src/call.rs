@@ -1,13 +1,12 @@
 //! `table()`, `call(name, args, home=None, scope=None, on_event=None)` and
 //! `doctor(home=None)`.
-use layerfs_api::calls;
 use pyo3::prelude::*;
 use std::path::{Path, PathBuf};
 
 /// The call table as JSON text.
 #[pyfunction]
 pub fn table() -> String {
-    calls::table_json()
+    layerfs_api::table_json()
 }
 
 /// Runs the call `name` once with JSON `args`, in `home` (else the
@@ -36,7 +35,7 @@ pub fn call(
                 });
             }
         };
-        calls::call_json(home.as_deref(), scope.as_deref(), &name, &args, &mut send)
+        layerfs_api::call_json(home.as_deref(), scope.as_deref(), &name, &args, &mut send)
     })
 }
 
@@ -46,5 +45,5 @@ pub fn call(
 #[pyfunction]
 #[pyo3(signature = (home=None))]
 pub fn doctor(py: Python<'_>, home: Option<String>) -> String {
-    py.detach(move || layerfs_api::doctor_json(calls::home(home.as_deref().map(Path::new))))
+    py.detach(move || layerfs_api::doctor_json(layerfs_api::home(home.as_deref().map(Path::new))))
 }

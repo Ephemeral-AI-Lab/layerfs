@@ -2,7 +2,6 @@
 //! a push to a machine behind a worker and a pull back with history heads
 //! equal, the refusals of push and pull, and the InUse refusals of push and
 //! remove.
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
@@ -34,7 +33,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 /// A home with machines `native` and `box`; `box` is a worker in this test
@@ -112,7 +111,7 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
     let mut phases = Vec::new();
     let mut sent = Vec::new();
     let args = SdkValue::map([("name", t("shop")), ("machine", t("box"))]);
-    let moved = calls::call(Some(&home), "store.push", args, &mut |event| {
+    let moved = layerfs_api::call(Some(&home), "store.push", args, &mut |event| {
         let progress = event.get("progress").unwrap();
         let phase = progress.get_text("phase").unwrap();
         if phases.last().map(String::as_str) != Some(phase) {
@@ -214,7 +213,7 @@ fn push_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
     assert_eq!(status.get_text("state"), Some("in_use"));
     let listed = call(&home, "store.list", &[]).unwrap();
     assert!(
-        calls::json::print(&listed).contains(r#""state":"in_use""#),
+        layerfs_api::json::print(&listed).contains(r#""state":"in_use""#),
         "{listed:?}"
     );
     std::fs::remove_file(&lease).unwrap();

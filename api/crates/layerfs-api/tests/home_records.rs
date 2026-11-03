@@ -2,7 +2,6 @@
 //! P1-11): each write has its own temporary file, the home lock is taken
 //! again at once by the thread that holds it, and concurrent first calls
 //! on a fresh home all succeed.
-use layerfs_api::calls;
 use layerfs_api::home::{self, lock, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::path::{Path, PathBuf};
@@ -106,7 +105,7 @@ fn first_calls_on_a_fresh_home_from_several_threads() {
                         SdkValue::map([("name", SdkValue::text(format!("s{n}")))]),
                     )
                 };
-                calls::call(Some(&home), name, args, &mut |_| {})
+                layerfs_api::call(Some(&home), name, args, &mut |_| {})
                     .map(|_| ())
                     .map_err(|r| format!("{name}: {} {}", r.code, r.message))
             })

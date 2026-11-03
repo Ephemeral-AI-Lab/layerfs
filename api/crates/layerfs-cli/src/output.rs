@@ -1,7 +1,7 @@
 //! What a call prints (S §2.6): the result as one line of JSON on stdout,
 //! or with `--text` a readable form; a refusal as JSON on stderr, exit 125.
 use crate::run::REFUSED;
-use layerfs_api::calls::json;
+use layerfs_api::json;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::io::Write;
 use std::process::ExitCode;

@@ -5,7 +5,6 @@
 //! leave, and its owner is then made gone. The calls that clear what is left
 //! are the ones the refusals and the doctor name. A worker served in this
 //! process stands in for the machine.
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
@@ -38,7 +37,7 @@ fn map(args: &[(&str, SdkValue)]) -> SdkValue {
 }
 
 fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, (String, String)> {
-    calls::call(Some(home), name, map(args), &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, map(args), &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 fn call_ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -88,7 +87,7 @@ fn record(home: &Path) -> SdkValue {
 /// the stop left it, its owner then made gone (another start time).
 fn stopped_at(home: &Path, name: &str, args: &[(&str, SdkValue)], phase: &str) -> SdkValue {
     let stopped = std::panic::catch_unwind(AssertUnwindSafe(|| {
-        calls::call(Some(home), name, map(args), &mut |event| {
+        layerfs_api::call(Some(home), name, map(args), &mut |event| {
             let progress = event.get("progress").unwrap();
             if progress.get_text("phase") == Some(phase) {
                 panic!("stopped at {phase}");

@@ -8,7 +8,6 @@
 //! `worker.json` and answers the machine as `machine.get` does. One test,
 //! because it sets the process's environment.
 #![cfg(feature = "machine")]
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::io::{Read, Write};
@@ -42,7 +41,7 @@ fn t(s: &str) -> SdkValue {
 
 fn call(home: &Path, name: &str, machine: &str) -> Result<SdkValue, SdkRefusal> {
     let args = SdkValue::map([("name", t(machine))]);
-    calls::call(Some(home), name, args, &mut |_| {})
+    layerfs_api::call(Some(home), name, args, &mut |_| {})
 }
 
 fn frame(stream: &mut TcpStream) -> Option<Vec<u8>> {

@@ -5,7 +5,6 @@
 //! was sent is `Unknown`. Stand-in workers here; no `start.lock` is ever
 //! taken. One test, because it sets the process's environment.
 #![cfg(feature = "machine")]
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::io::{Read, Write};
@@ -68,7 +67,7 @@ fn read(home: &Path) -> Result<SdkValue, (String, String)> {
         ("branch", t("main")),
         ("path", t("/a")),
     ]);
-    calls::call(Some(home), "file.read", args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), "file.read", args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 fn started(home: &Path) -> bool {

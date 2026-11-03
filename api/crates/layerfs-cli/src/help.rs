@@ -1,5 +1,5 @@
 //! `layerfs help [family [call]]`, from the call table.
-use layerfs_api::calls::{Arg, Call, Kind, CALLS, FAMILIES};
+use layerfs_api::{Arg, Call, Kind};
 use std::process::ExitCode;
 
 fn shell(name: &str) -> String {
@@ -50,13 +50,9 @@ pub fn print(topic: &[&str]) -> ExitCode {
             print!("{}", crate::banner::banner());
             println!("layerfs <family> <call> <arguments> [--options] [--text]");
             println!();
-            for family in FAMILIES {
-                let calls: Vec<&str> = CALLS
-                    .iter()
-                    .filter(|c| c.family == family)
-                    .map(|c| c.call)
-                    .collect();
-                println!("  {family:<10} {}", calls.join(", "));
+            for family in layerfs_api::families() {
+                let calls: Vec<&str> = family.calls().iter().map(|c| c.call).collect();
+                println!("  {:<10} {}", family.name, calls.join(", "));
             }
             println!();
             println!("  doctor     report what is wrong in the home, changing nothing [--text]");
@@ -67,22 +63,27 @@ pub fn print(topic: &[&str]) -> ExitCode {
             println!("The home is LAYERFS_HOME, else ~/.layerfs. Exit 0: done; 2: wrong command line; 125: refused.");
             ExitCode::SUCCESS
         }
-        [family] if FAMILIES.contains(family) => {
-            for call in CALLS.iter().filter(|c| c.family == *family) {
+        [family] if layerfs_api::families().iter().any(|f| f.name == *family) => {
+            for call in layerfs_api::calls()
+                .into_iter()
+                .filter(|c| c.family == *family)
+            {
                 println!("{}\n    {}", usage(call), call.help);
             }
             ExitCode::SUCCESS
         }
-        [family, name] => match CALLS
-            .iter()
-            .find(|c| c.family == *family && c.call == *name)
-        {
-            Some(call) => {
-                println!("{}\n    {}", usage(call), call.help);
-                ExitCode::SUCCESS
+        [family, name] => {
+            match layerfs_api::calls()
+                .into_iter()
+                .find(|c| c.family == *family && c.call == *name)
+            {
+                Some(call) => {
+                    println!("{}\n    {}", usage(call), call.help);
+                    ExitCode::SUCCESS
+                }
+                None => unknown(topic),
             }
-            None => unknown(topic),
-        },
+        }
         _ => unknown(topic),
     }
 }

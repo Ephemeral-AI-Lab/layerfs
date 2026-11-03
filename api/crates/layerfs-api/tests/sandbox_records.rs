@@ -5,7 +5,6 @@
 //! it, a gone owner's certain intent is ignored, `sandbox.get` shows the
 //! intent, `sandbox.list` pages, and a worker replaces a project record
 //! left by a removed project of the same name.
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, versioned, write_record};
 use layerfs_api::worker;
 use layerfs_bridge::control::SdkValue;
@@ -31,7 +30,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 /// A Sandbox record as `sandbox.create` leaves it, without an id: with

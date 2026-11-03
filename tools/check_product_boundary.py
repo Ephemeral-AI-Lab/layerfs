@@ -356,15 +356,14 @@ def component_violations(path, source):
     }
     if any(part in path.as_posix() for part in retired.get(name, ())):
         return [(1, "retired host-mediated transport path; use direct Store or native control")]
-    # #536: management moved into layerfs-control by entity; the call surface
-    # keeps calls/ and lib.rs, and the 1.1 host/operator paths were deleted.
+    # #536: management moved into layerfs-control by entity, and the 1.1
+    # host/operator paths were deleted. Owner D15 (2026-11-04): the call
+    # surface is lib.rs plus one folder per call family, one file per call;
+    # its call machinery (calls/) lives in layerfs-control.
     moved = {
         "layerfs-api": tuple(
             f"/src/{part}/"
-            for part in (
-                "host", "family", "home", "store", "worker", "fs", "branch",
-                "machine", "sandbox", "base", "operator", "project",
-            )
+            for part in ("host", "family", "home", "worker", "fs", "base", "operator", "calls")
         ),
         "layerfs-control": ("/src/host/", "/src/operator/"),
         "layerfs-store-service": ("/src/remote/",),

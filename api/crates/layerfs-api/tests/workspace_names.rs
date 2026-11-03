@@ -4,7 +4,6 @@
 //! against a Sandbox folder whose records stand in for a running Sandbox:
 //! no daemon runs, so a call that gets past the name reaches the Sandbox
 //! and is refused there (`NoSuchSandbox`: no daemon keys).
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
@@ -28,7 +27,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 /// A home with Sandbox `one` of `shop/app` recorded as started on

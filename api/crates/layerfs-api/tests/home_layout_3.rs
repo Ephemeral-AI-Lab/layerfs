@@ -1,7 +1,6 @@
 //! The conversion of a layout 2 home (2.0) into layout 3 (#536 §5, H10):
 //! one with closed Sandboxes converts and answers every call as before; one
 //! with anything live is refused `InUse`, naming each, and left as it was.
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record, Layout, LAYOUT_VERSION};
 use layerfs_bridge::control::{Answer, Reply, SdkValue};
 use layerfs_sandbox::local::LocalProcess;
@@ -35,7 +34,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| {
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| {
         SdkValue::map([
             ("code", t(&r.code)),
             ("message", t(&r.message)),

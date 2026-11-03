@@ -1,7 +1,7 @@
 //! One command line, start to exit code.
 use crate::parse::{parse, Usage};
 use crate::{help, output, worker};
-use layerfs_api::calls::{self, Scope};
+use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
 use std::io::Write;
 use std::process::ExitCode;
@@ -32,9 +32,9 @@ pub fn main(words: Vec<String>) -> ExitCode {
             if words[2..].iter().any(|w| w == "-h" || w == "--help") {
                 return help::print(&[family, name]);
             }
-            match calls::find(&format!("{family}.{name}")) {
+            match layerfs_api::find(&format!("{family}.{name}")) {
                 Some(call) => one(call, &words[2..]),
-                None if calls::FAMILIES.contains(&family) => wrong(format!(
+                None if layerfs_api::families().iter().any(|f| f.name == family) => wrong(format!(
                     "no call `{family} {name}`; `layerfs help {family}` lists them"
                 )),
                 None => wrong(format!("no command `{family}`; `layerfs help` lists them")),
@@ -46,7 +46,8 @@ pub fn main(words: Vec<String>) -> ExitCode {
 /// `layerfs import-env`: this environment's 1.1.0 settings as records, once.
 fn import_env() -> ExitCode {
     let env: Vec<(String, String)> = std::env::vars().collect();
-    let outcome = calls::home(None).and_then(|home| layerfs_api::home::import_env(&home, &env));
+    let outcome =
+        layerfs_api::home(None).and_then(|home| layerfs_api::home::import_env(&home, &env));
     match outcome {
         Ok(value) => output::result(&value, false),
         Err(refusal) => output::refusal(&refusal),
@@ -61,7 +62,7 @@ fn doctor(words: &[String]) -> ExitCode {
         [flag] if flag == "--text" => true,
         _ => return wrong("`layerfs doctor` takes only `--text`".to_owned()),
     };
-    match calls::home(None).and_then(|home| layerfs_api::doctor(&home)) {
+    match layerfs_api::home(None).and_then(|home| layerfs_api::doctor(&home)) {
         Ok(report) if text => output::findings(&report),
         Ok(report) => output::result(&report, false),
         Err(refusal) => output::refusal(&refusal),
@@ -74,7 +75,7 @@ fn wrong(message: String) -> ExitCode {
 }
 
 /// One call of the table, made once.
-fn one(call: &calls::Call, words: &[String]) -> ExitCode {
+fn one(call: &layerfs_api::Call, words: &[String]) -> ExitCode {
     let parsed = match parse(call, words, &mut std::io::stdin()) {
         Ok(parsed) => parsed,
         Err(Usage(message)) => return wrong(message),
@@ -88,7 +89,7 @@ fn one(call: &calls::Call, words: &[String]) -> ExitCode {
     let mut send = |event: SdkValue| {
         if progress && event.get("progress").is_some() {
             let mut err = std::io::stderr().lock();
-            let _ = writeln!(err, "{}", calls::json::print(&event));
+            let _ = writeln!(err, "{}", layerfs_api::json::print(&event));
         } else if stream {
             let bytes = match event.get("bytes") {
                 Some(SdkValue::Bytes(bytes)) => bytes.as_slice(),
@@ -102,11 +103,12 @@ fn one(call: &calls::Call, words: &[String]) -> ExitCode {
             };
         }
     };
-    let outcome = calls::call_scoped(None, scope.as_ref(), &call.name(), parsed.args, &mut send);
+    let outcome =
+        layerfs_api::call_scoped(None, scope.as_ref(), &call.name(), parsed.args, &mut send);
     // the Stores this one call opened close before the process ends, so a
     // sqlite Store leaves no write-ahead log behind (lane K2: a later
     // `store push` refused it)
-    layerfs_api::store::close_idle(std::time::Duration::ZERO);
+    layerfs_api::close_idle(std::time::Duration::ZERO);
     match outcome {
         Err(refusal) => output::refusal(&refusal),
         Ok(value) if stream => {

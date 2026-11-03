@@ -2,7 +2,6 @@
 //! a Store with a running Sandbox is `InUse` before any request is sent,
 //! and the Sandbox's project records stay. The bucket record names a port
 //! nothing listens on, so a request would fail as `Failed` or `Unknown`.
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
@@ -29,7 +28,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {

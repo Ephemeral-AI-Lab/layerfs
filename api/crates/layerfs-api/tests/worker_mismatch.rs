@@ -53,8 +53,7 @@ fn a_store_call_to_an_old_worker_names_stop_then_start_and_sends_nothing() {
         ("branch", t("main")),
         ("path", t("/a")),
     ]);
-    let refusal =
-        layerfs_api::calls::call(Some(&home), "file.read", args, &mut |_| {}).unwrap_err();
+    let refusal = layerfs_api::call(Some(&home), "file.read", args, &mut |_| {}).unwrap_err();
     assert_eq!(refusal.code, "Unavailable", "{refusal:?}");
     let message = &refusal.message;
     assert!(message.contains("`layerfs machine stop box`"), "{message}");

@@ -5,7 +5,6 @@
 //! nothing listens, so a request would fail with another code. A
 //! PostgreSQL Store's calls take its lease (#536 §8), so `store.disconnect`
 //! refuses `InUse` while another process holds it.
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
@@ -21,7 +20,8 @@ fn tempdir(tag: &str) -> PathBuf {
 
 fn connect(home: &Path, name: &str, url: &str) -> Result<SdkValue, (String, String)> {
     let args = SdkValue::map([("name", SdkValue::text(name)), ("url", SdkValue::text(url))]);
-    calls::call(Some(home), "store.connect", args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), "store.connect", args, &mut |_| {})
+        .map_err(|r| (r.code, r.message))
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn disconnect_refuses_a_postgresql_store_another_process_holds() {
     std::fs::write(&lease, "1\n").unwrap();
     let args = SdkValue::map([("name", SdkValue::text("pg"))]);
     let disconnect = |home: &Path| {
-        calls::call(Some(home), "store.disconnect", args.clone(), &mut |_| {})
+        layerfs_api::call(Some(home), "store.disconnect", args.clone(), &mut |_| {})
             .map_err(|r| (r.code, r.message))
     };
     let (code, message) = disconnect(&home).unwrap_err();
@@ -142,7 +142,7 @@ fn a_postgresql_store_call_holds_the_stores_lease() {
                 ("branch", SdkValue::text("main")),
                 ("path", SdkValue::text("/a")),
             ]);
-            calls::call(Some(&home), "file.read", args, &mut |_| {}).map_err(|r| r.code)
+            layerfs_api::call(Some(&home), "file.read", args, &mut |_| {}).map_err(|r| r.code)
         })
     };
     let (stream, _) = listener.accept().unwrap();

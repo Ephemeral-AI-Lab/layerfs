@@ -2,7 +2,6 @@
 //! name unique across the home, the wrong-machine refusal, mount, exec,
 //! status, commit, unmount and close. The live half needs the macOS (or
 //! Linux, as root) daemon at LAYERFS_DAEMON; without it, it says NOT_RUN.
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
@@ -26,7 +25,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
@@ -137,7 +136,7 @@ fn named_sandboxes_on_native() {
     );
     assert_eq!(taken.unwrap_err().0, "Exists");
     let listed = ok(&home, "sandbox.list", &[]);
-    assert!(calls::json::print(&listed).contains("\"t1\""));
+    assert!(layerfs_api::json::print(&listed).contains("\"t1\""));
 
     let mounted = ok(
         &home,
@@ -164,7 +163,7 @@ fn named_sandboxes_on_native() {
         &[("ws", t(&ws)), ("message", t("from a sandbox"))],
     );
     let got = ok(&home, "sandbox.get", &[("name", t("t1"))]);
-    assert!(calls::json::print(&got).contains(&ws[3..]), "{got:?}");
+    assert!(layerfs_api::json::print(&got).contains(&ws[3..]), "{got:?}");
     ok(&home, "workspace.unmount", &[("ws", t(&ws))]);
     let read = ok(
         &home,
@@ -217,7 +216,7 @@ fn named_sandboxes_on_native() {
     // #533 review P1-18: output over the 1 MiB inline window arrives as
     // output events, in full; output that is not UTF-8 stays bytes
     let mut events = Vec::new();
-    let big = calls::call(
+    let big = layerfs_api::call(
         Some(&home),
         "workspace.exec",
         SdkValue::map([

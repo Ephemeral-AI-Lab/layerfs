@@ -1,7 +1,7 @@
 //! The call table and its dispatcher (#533 step 2): 61 calls in nine
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
-use layerfs_api::calls::{self, json, keys, size, Kind, CALLS, FAMILIES};
+use layerfs_api::{families, json, keys, size, Call, Kind};
 use layerfs_bridge::control::SdkValue;
 use std::path::Path;
 
@@ -22,7 +22,7 @@ fn t(s: &str) -> SdkValue {
 fn run(name: &str, args: SdkValue) -> (Result<SdkValue, (String, String)>, Vec<SdkValue>) {
     let home = tempdir();
     let mut events = Vec::new();
-    let outcome = calls::call(Some(&home), name, args, &mut |event| events.push(event));
+    let outcome = layerfs_api::call(Some(&home), name, args, &mut |event| events.push(event));
     let _ = std::fs::remove_dir_all(&home);
     (outcome.map_err(|r| (r.code, r.message)), events)
 }
@@ -52,26 +52,29 @@ fn code(name: &str, args: SdkValue) -> String {
 
 #[test]
 fn the_table_has_nine_families_and_61_calls() {
-    assert_eq!(CALLS.len(), 61);
-    for family in FAMILIES {
-        assert!(CALLS.iter().any(|c| c.family == family), "{family}");
+    let all: Vec<&Call> = layerfs_api::calls();
+    assert_eq!(all.len(), 61);
+    // each family holds only its own calls, and has at least one
+    for family in families() {
+        assert!(!family.calls().is_empty(), "{}", family.name);
+        assert!(
+            family.calls().iter().all(|c| c.family == family.name),
+            "{}",
+            family.name
+        );
     }
-    assert!(CALLS.iter().all(|c| FAMILIES.contains(&c.family)));
-    let mut names: Vec<_> = CALLS.iter().map(|c| c.name()).collect();
+    let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
     assert_eq!(names.len(), 61, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
-    for c in CALLS {
+    for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
         if let Some(i) = first_optional {
             assert!(c.args[i..].iter().all(|a| a.optional), "{}", c.name());
         }
     }
-    let counts: Vec<usize> = FAMILIES
-        .iter()
-        .map(|f| CALLS.iter().filter(|c| c.family == *f).count())
-        .collect();
+    let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
     assert_eq!(counts, [4, 6, 3, 14, 4, 5, 11, 9, 5]);
 }
 
@@ -219,7 +222,7 @@ fn workspace_family() {
     // a Workspace by its name (#536 C3)
     let reached = code("workspace.status", map(&[("ws", t("tests:dev"))]));
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
-    let mount = calls::find("workspace.mount").unwrap();
+    let mount = layerfs_api::find("workspace.mount").unwrap();
     let options: Vec<_> = mount.options.iter().map(|o| (o.name, o.kind)).collect();
     assert_eq!(options, [("name", Kind::Name)]);
 }
@@ -314,12 +317,12 @@ fn sizes_and_keys() {
     assert_eq!(keys::snake_name("/src/README.md"), "/src/README.md");
     assert_eq!(keys::snake_name("Makefile"), "Makefile");
     assert_eq!(keys::camel_name("start_line"), "startLine");
-    assert!(CALLS
-        .iter()
+    assert!(layerfs_api::calls()
+        .into_iter()
         .flat_map(|c| c.args.iter().chain(c.options))
         .all(|a| a.name == a.name.to_lowercase()));
-    assert!(CALLS
-        .iter()
+    assert!(layerfs_api::calls()
+        .into_iter()
         .flat_map(|c| c.options)
         .any(|a| a.kind == Kind::Function));
 }
@@ -327,7 +330,7 @@ fn sizes_and_keys() {
 #[test]
 fn an_explicit_home_must_be_absolute() {
     let mut events = Vec::new();
-    let refused = calls::call(
+    let refused = layerfs_api::call(
         Some(Path::new("relative")),
         "machine.list",
         SdkValue::Null,
@@ -335,4 +338,33 @@ fn an_explicit_home_must_be_absolute() {
     )
     .unwrap_err();
     assert_eq!(refused.code, "InvalidInput");
+}
+
+#[test]
+fn the_source_is_one_file_per_call_under_its_family() {
+    // src/ holds lib.rs and one folder per family; each folder holds its
+    // mod.rs and one <call>.rs per call, nothing else
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let names = |dir: &std::path::Path| -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        names
+    };
+    let mut expected: Vec<String> = families().iter().map(|f| f.name.to_owned()).collect();
+    expected.push("lib.rs".to_owned());
+    expected.sort();
+    assert_eq!(names(&src), expected);
+    for family in families() {
+        let mut files: Vec<String> = family
+            .calls()
+            .iter()
+            .map(|c| format!("{}.rs", c.call))
+            .collect();
+        files.push("mod.rs".to_owned());
+        files.sort();
+        assert_eq!(names(&src.join(family.name)), files, "{}", family.name);
+    }
 }

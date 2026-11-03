@@ -5,7 +5,6 @@
 //! the Linux bundle names `linux-<arch>` and the tool that places it. One
 //! test, because it sets the process's environment.
 #![cfg(feature = "machine")]
-use layerfs_api::calls;
 use layerfs_api::home;
 use layerfs_bridge::control::SdkValue;
 use std::path::{Path, PathBuf};
@@ -29,7 +28,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 #[test]

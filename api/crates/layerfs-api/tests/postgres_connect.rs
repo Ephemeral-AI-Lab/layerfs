@@ -8,7 +8,6 @@
 //! test leaves one behind) and LAYERFS_TEST_PG_PASSWORD; without them the
 //! test says so and passes.
 #![cfg(feature = "postgresql")]
-use layerfs_api::calls;
 use layerfs_api::home::{self, paths};
 use layerfs_bridge::control::SdkValue;
 use std::path::{Path, PathBuf};
@@ -32,7 +31,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {

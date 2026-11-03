@@ -3,7 +3,7 @@
 //! builds its nine families from; [`call`], exactly the library's one call,
 //! made once with the interpreter released; and [`call::doctor`], the
 //! top-level `layerfs.doctor()`. Arguments, results and events cross as
-//! JSON text (`calls::call_json`).
+//! JSON text (`layerfs_api::call_json`).
 #![forbid(unsafe_code)]
 
 mod call;

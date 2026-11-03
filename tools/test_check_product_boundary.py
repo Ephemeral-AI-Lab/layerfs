@@ -100,13 +100,14 @@ class ProductBoundaryTests(unittest.TestCase):
             "api/crates/layerfs-api/src/host/sync.rs",
             "api/crates/layerfs-api/src/family/stores.rs",
             "api/crates/layerfs-api/src/fs/read.rs",
+            "api/crates/layerfs-api/src/calls/table.rs",
             "api/crates/layerfs-control/src/host/sync.rs",
             "api/crates/layerfs-control/src/operator/mod.rs",
             "engine/crates/layerfs-store-service/src/remote/push.rs",
         ):
             findings = violations(Path(relative), "pub use std::io::Read;")
             self.assertTrue(any("retired by #536" in message for _, message in findings), relative)
-        clean = violations(Path("api/crates/layerfs-api/src/calls/table.rs"), "pub use std::io::Read;")
+        clean = violations(Path("api/crates/layerfs-api/src/store/push.rs"), "pub use std::io::Read;")
         self.assertFalse(any("retired by #536" in message for _, message in clean))
 
     def test_d11_idle_stop_and_on_demand_start_cannot_return(self):
@@ -248,8 +249,8 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(dependency_violations(prefix + 'layerfs-bridge={path="../../layerfs-bridge"}'))
         self.assertTrue(dependency_violations(prefix + 'layerfs-persistence={path="../../layerfs-persistence"}'))
         self.assertTrue(dependency_violations(prefix + 'layerfs-project={path="../../layerfs-project"}'))
-        self.assertTrue(violations(Path("api/crates/layerfs-api/src/calls/route.rs"), "use layerfs_project::Init;"))
-        self.assertFalse(violations(Path("api/crates/layerfs-api/src/calls/route.rs"), "use layerfs_control::family;"))
+        self.assertTrue(violations(Path("api/crates/layerfs-api/src/store/push.rs"), "use layerfs_project::Init;"))
+        self.assertFalse(violations(Path("api/crates/layerfs-api/src/store/push.rs"), "use layerfs_control::family;"))
         control = '[package]\nname="layerfs-control"\n[dependencies]\n'
         self.assertFalse(dependency_violations(control + 'layerfs-persistence={path="../../layerfs-persistence"}'))
         self.assertTrue(dependency_violations(control + 'layerfs-server={path="../../layerfs-server"}'))

@@ -7,7 +7,6 @@
 //! a machine under the home lock; push and pull refuse the wrong side and
 //! a stopped machine, naming `machine start`. All from records: no Store is opened, so
 //! these run on any host.
-use layerfs_api::calls;
 use layerfs_api::home::lease;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
@@ -39,7 +38,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 fn machine(home: &Path, name: &str, platform: &str) {
@@ -347,7 +346,7 @@ fn refusal(
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).unwrap_err()
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).unwrap_err()
 }
 
 fn related(kind: &str, name: &str) -> SdkValue {

@@ -2,7 +2,6 @@
 //! appear on the first call, names are checked before any effect, and a
 //! create that cannot start leaves no record. Real VMs run in step 19.
 #![cfg(feature = "machine")]
-use layerfs_api::calls;
 use layerfs_api::home::{paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::path::{Path, PathBuf};
@@ -33,7 +32,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
+    layerfs_api::call(Some(home), name, args, &mut |_| {}).map_err(|r| (r.code, r.message))
 }
 
 #[test]

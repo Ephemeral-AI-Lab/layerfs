@@ -3,7 +3,7 @@
 //! JSON positional (`file write`'s content, `file apply`'s changes) is read
 //! from stdin, or from `--from <file>`; a text option `--x` also takes
 //! `--x-from <file>`. Anything wrong here is exit 2, before any call.
-use layerfs_api::calls::{json, Arg, Call, Kind};
+use layerfs_api::{json, Arg, Call, Kind};
 use layerfs_bridge::control::SdkValue;
 use std::io::Read;
 

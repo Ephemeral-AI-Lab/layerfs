@@ -2,8 +2,8 @@
 //! its project allows only the calls it covers; `commit.get` pages to the
 //! end; `branch.get` and `commit.get` keep 1.1.0's `NoSuch*` codes; a
 //! scoped `branch.list` filters every page, not the first.
-use layerfs_api::calls::{self, Scope};
 use layerfs_api::home::{self, paths, write_record};
+use layerfs_api::Scope;
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -40,7 +40,7 @@ fn call(
     name: &str,
     args: &[(&str, SdkValue)],
 ) -> Result<SdkValue, (String, String)> {
-    calls::call_scoped(Some(home), scope, name, map(args), &mut |_| {})
+    layerfs_api::call_scoped(Some(home), scope, name, map(args), &mut |_| {})
         .map_err(|r| (r.code, r.message))
 }
 
@@ -130,7 +130,7 @@ fn a_scope_refuses_every_call_it_does_not_cover() {
         ("sandbox.list", &[]),
     ];
     for (name, args) in uncovered {
-        let spec = calls::find(name).unwrap();
+        let spec = layerfs_api::find(name).unwrap();
         // fill the call's required arguments so the table's check passes
         let mut given: Vec<(&str, SdkValue)> = args.to_vec();
         for arg in spec.args.iter().filter(|a| !a.optional) {

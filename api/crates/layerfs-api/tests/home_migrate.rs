@@ -249,7 +249,7 @@ fn a_1_1_0_home_converts_once() {
         .unwrap();
     let unknown = report.get("unknown").unwrap();
     assert_eq!(unknown, &SdkValue::List(vec![SdkValue::text("notes.txt")]));
-    let notes = layerfs_api::calls::json::print(report.get("notes").unwrap());
+    let notes = layerfs_api::json::print(report.get("notes").unwrap());
     assert!(notes.contains("local_folder"), "{notes}");
     assert!(
         notes.contains("stays in Docker volume lfs-shop"),
@@ -297,7 +297,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    layerfs_api::calls::call(Some(home), name, args, &mut |_| {})
+    layerfs_api::call(Some(home), name, args, &mut |_| {})
         .unwrap_or_else(|r| panic!("{name}: {} {}", r.code, r.message))
 }
 
@@ -420,12 +420,12 @@ fn a_1_1_0_store_file_is_placed_and_opens() {
         .unwrap()
         .unwrap();
     assert_eq!(report.get("placed"), Some(&SdkValue::List(vec![t("shop")])));
-    let notes = layerfs_api::calls::json::print(report.get("notes").unwrap());
+    let notes = layerfs_api::json::print(report.get("notes").unwrap());
     assert!(notes.contains("write-ahead log"), "{notes}");
 
     // Store calls open the migrated Store
     let branches = call(&home, "branch.list", &[("project", t("shop/api"))]);
-    let printed = layerfs_api::calls::json::print(&branches);
+    let printed = layerfs_api::json::print(&branches);
     assert!(printed.contains("\"main\""), "{printed}");
     let read = call(
         &home,
@@ -483,7 +483,7 @@ fn a_1_1_0_environment_becomes_records_once() {
     .map(|(n, v)| ((*n).to_owned(), (*v).to_owned()))
     .collect();
     let report = home::import_env(&home, &env).unwrap();
-    let printed = layerfs_api::calls::json::print(&report);
+    let printed = layerfs_api::json::print(&report);
     let read = |path: PathBuf| read_record(&path).unwrap().unwrap();
 
     let native = read(paths::machine_record(&home, "native"));
@@ -518,9 +518,8 @@ fn a_1_1_0_environment_becomes_records_once() {
     assert!(printed.contains("LAYERFS_STORE_POSTGRESQL"), "{printed}");
 
     // with no setting at all, the home answers from its records
-    let listed =
-        layerfs_api::calls::call(Some(&home), "store.list", SdkValue::Null, &mut |_| {}).unwrap();
-    let listed = layerfs_api::calls::json::print(&listed);
+    let listed = layerfs_api::call(Some(&home), "store.list", SdkValue::Null, &mut |_| {}).unwrap();
+    let listed = layerfs_api::json::print(&listed);
     assert!(
         listed.contains("\"solo\"") && listed.contains("\"docker\""),
         "{listed}"
@@ -533,6 +532,6 @@ fn a_1_1_0_environment_becomes_records_once() {
         read(paths::machine_record(&home, "native")).get_text("daemon"),
         Some("/opt/layerfs/layerfs-daemon")
     );
-    assert!(layerfs_api::calls::json::print(&again).contains("\"kept\":[{"));
+    assert!(layerfs_api::json::print(&again).contains("\"kept\":[{"));
     std::fs::remove_dir_all(home).unwrap();
 }

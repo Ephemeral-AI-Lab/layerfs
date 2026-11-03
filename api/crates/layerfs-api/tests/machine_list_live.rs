@@ -13,7 +13,6 @@
 //! counts a `Denied` reply, or an accept that never answers (its 2 s
 //! limit), as no worker (finding 6).
 #![cfg(feature = "machine")]
-use layerfs_api::calls;
 use layerfs_api::home::{paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::io::{Read, Write};
@@ -54,7 +53,7 @@ fn call(home: &Path, name: &str, args: &[(&str, &str)]) -> SdkValue {
             .map(|(n, v)| ((*n).to_owned(), SdkValue::text(*v)))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {})
+    layerfs_api::call(Some(home), name, args, &mut |_| {})
         .unwrap_or_else(|r| panic!("{name}: {} {}", r.code, r.message))
 }
 
@@ -176,7 +175,7 @@ fn list_and_get_answer_the_live_state() {
     // the built-in docker is probed as `machine.status` probes it (#535
     // D11: its worker starts and stops by hand), never a fixed `ready`
     let docker = listed(&list, "docker");
-    match calls::call(
+    match layerfs_api::call(
         Some(&home),
         "machine.status",
         SdkValue::map([("name", SdkValue::text("docker"))]),

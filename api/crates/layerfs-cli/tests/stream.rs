@@ -2,7 +2,6 @@
 //! command's output passes through and the command exits with the
 //! command's own code; 125 stays for refusals. The live half needs the
 //! native daemon at LAYERFS_DAEMON; without it, it says NOT_RUN.
-use layerfs_api::calls;
 use layerfs_api::home;
 use layerfs_bridge::control::SdkValue;
 use std::os::unix::fs::PermissionsExt;
@@ -29,7 +28,7 @@ fn ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
             .map(|(n, v)| ((*n).to_owned(), v.clone()))
             .collect(),
     );
-    calls::call(Some(home), name, args, &mut |_| {})
+    layerfs_api::call(Some(home), name, args, &mut |_| {})
         .unwrap_or_else(|r| panic!("{name}: {} {}", r.code, r.message))
 }
 
