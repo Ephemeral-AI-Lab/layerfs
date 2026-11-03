@@ -8,6 +8,7 @@ machine=$1; store=$2; log=$3; shift 3
 for c in "$@"; do
   echo "$(date -u +%FT%TZ) start $machine $store $c" >> "$log"
   perl -e 'alarm 115; exec @ARGV' node "$K/node/test/verify/cells/cell.mjs" "$c" "$machine" "$R/$machine-$store-$c.json" >> "$log" 2>&1
-  echo "$(date -u +%FT%TZ) end $machine $store $c rc=$?" >> "$log"
+  rc=$?  # (until this fix the logged rc was the date substitution's, always 0; receipts carry the verdict)
+  echo "$(date -u +%FT%TZ) end $machine $store $c rc=$rc" >> "$log"
 done
 echo "SERIES DONE $machine $store" >> "$log"

@@ -1,0 +1,17 @@
+2026-11-03T07:53:02Z start docker sqlite C01
+C01 docker sqlite FAIL store.create: Exists a Store named c01 exists; store.remove: InUse Store c01 is open in process [56383] timed exec - ms
+2026-11-03T07:53:02Z end docker sqlite C01 rc=0
+2026-11-03T07:53:02Z start docker sqlite C02
+C02 docker sqlite PASS  timed exec 1269.256 ms
+2026-11-03T07:53:10Z end docker sqlite C02 rc=0
+2026-11-03T07:53:10Z start docker sqlite C03
+C03 docker sqlite FAIL store.create: Exists a Store named c03 exists; store.remove: InUse Store c03 is open in process [56492]; Store c03 has running Sandboxes: c03 timed exec - ms
+2026-11-03T07:53:10Z end docker sqlite C03 rc=0
+2026-11-03T07:53:10Z start docker sqlite C04
+C04 docker sqlite PASS  timed exec 1041.469 ms
+2026-11-03T07:53:17Z end docker sqlite C04 rc=0
+2026-11-03T07:53:17Z start docker sqlite C05
+C05 docker sqlite PASS  timed exec 1147.57 ms
+2026-11-03T07:53:23Z end docker sqlite C05 rc=0
+2026-11-03T07:53:23Z start docker sqlite C06
+C06 docker sqlite PASS  timed exec 1116.291 ms
