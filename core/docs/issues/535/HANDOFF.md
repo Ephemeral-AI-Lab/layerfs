@@ -307,24 +307,25 @@ Removed:
   only the mount points); their logs were saved and they were removed with
   `docker rm`, keeping their volumes for the tool's volume pass.
 
-Still present (blocked, about 81 GB): Docker Desktop's virtual machine
-(`com.apple.Virtualization.VirtualMachine`, PID 40057, up 2 days) holds
-3,501 stale read handles from its file sharing into these folders, so the
-tool refuses them as open:
+Then blocked: Docker Desktop's virtual machine (PID 40057, up 2 days) held
+3,501 stale read handles from its file sharing into the remaining folders.
+After the owner restarted Docker Desktop (2026-11-04) the new VM held none,
+and two more passes removed:
 
-- worktree `layerfs-issue535-verify` (branch `issue535-R3`, merged, clean;
-  `target/debug` about 69 GB),
-- worktree `layerfs-issue535-C1` (branch `issue535-R2`, merged, clean; about
-  0.7 GB of target left),
-- registrations `layerfs-issue535-kit-6d8fa8af9006` (0.4 GB) and
-  `layerfs-issue535-verify-417967c19d8d` (5.5 GB),
-- `layerfs-issue535-connect-7500a2864564/builds/k2-bundle` (3.3 GB, the
-  superseded final-run bundle).
+- the verify and C1 build targets (`target/`),
+- worktree `layerfs-issue535-verify` (branch `issue535-R3`, merged, clean),
+- registrations `layerfs-issue535-kit-6d8fa8af9006` and
+  `layerfs-issue535-verify-417967c19d8d`,
+- `layerfs-issue535-connect-7500a2864564/builds/k2-bundle` (the superseded
+  final-run bundle).
 
-They become removable with the same scopes after Docker Desktop restarts.
-Restarting it was not done, because other owners' containers run there
-(`layerfs-postgres`, `layerfs-minio`, `layerfs-worker`, `lfc-worker`,
-`mocktest-worker`).
+The tool measured 10.4 GB freed across those two passes; host free space
+was 366 GB at the end (`du` had reported about 81 GB for these folders;
+much of it was blocks already freed or shared). Left: worktree
+`layerfs-issue535-C1` (branch `issue535-R2`, merged, clean, 220 MB with no
+target), which the tool refuses while the owner's Typora has its
+`api/crates/layerfs-api/PROVIDERS.md` open; it goes with the same scope
+once that window closes.
 
 Kept on purpose:
 

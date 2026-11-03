@@ -1,15 +1,15 @@
 # Handoff prompt: integrate #535 + #536, then LayerFS Connect (#537)
 
-> **Status:** Handoff prompt, 2026-11-03. Give this file to the integration
-> agent as its assignment. It follows [HANDOFF.md](HANDOFF.md) (#535 + #536
+> **Status:** Handoff prompt, 2026-11-03, refreshed 2026-11-04. Give this
+> file to the integration agent as its assignment. It follows [HANDOFF.md](HANDOFF.md) (#535 + #536
 > finished, terminal pass PASS). It is not a product contract.
 
 ## Your assignment
 
 Do these in order:
 
-1. Check that `layerfs_v2_0_0` holds the finished #535 + #536 work. The lead
-   merged and pushed it (Step A); you only verify it.
+1. Check that `layerfs_v2_0_0` holds the finished #535 + #536 work and the
+   D15 layout. The lead merged and pushed both (Step A); you only verify.
 2. Build the LayerFS outputs Connect needs from the merged commit.
 3. Back up Connect's LayerFS home before the new code converts it.
 4. Carry out [#537](../537/README.md) in LayerFS Connect, the work order for
@@ -22,13 +22,16 @@ independent. Stop and ask only at the points marked **Owner decision**.
 
 ## State at hand-over
 
-- **Branch:** `issue535-connect` (local only), in the worktree
-  `~/Ephemeral-AI-Lab/layerfs-issue535-connect`.
-  - Final product commit: `32aec70a64`, production LOC 136,044.
-  - The commits after it are docs and receipts.
-  - The lead merged the branch into `layerfs_v2_0_0` on 2026-11-03, on top of
-    two remote commits (`2ec16ad784` CLI banner, `bb53a84a7b` npm publish
-    setting), and pushed it to `origin` (owner's instruction).
+- **`origin/layerfs_v2_0_0` is `5d13a1f62f`** (pushed 2026-11-04, owner's
+  instruction). It holds:
+  - #535 + #536: branch `issue535-connect`, final product commit
+    `32aec70a64`, merged as `fb72ba1ef6` on top of two remote commits
+    (`2ec16ad784` CLI banner, `bb53a84a7b` npm publish setting);
+  - owner D15 (`48b06c0f76`, `5d13a1f62f`): `layerfs-api/src` is `lib.rs`
+    plus one folder per call family, one file per call; the call machinery is
+    `layerfs-control/src/calls/`. Calls, arguments and results are unchanged:
+    the table JSON the Node package reads is byte-identical.
+  - Production LOC at `5d13a1f62f`: 136,932.
 - **Read first:** [HANDOFF.md](HANDOFF.md) (open items, commit table),
   [TERMINAL-PASS.md](TERMINAL-PASS.md), [535 DECISIONS](DECISIONS.md),
   [536 DECISIONS](../536/DECISIONS.md) and [#537](../537/README.md).
@@ -54,11 +57,10 @@ independent. Stop and ask only at the points marked **Owner decision**.
   - `k3-bundle/2.0.0/linux-aarch64` is the sealed bundle `185b0240…`, with the
     Firecracker kit in `firecracker/`. The kit's original folder is deleted,
     so `k3-bundle` holds the only copy.
-- **Lane worktrees still on disk:** `layerfs-issue535-verify` and
-  `layerfs-issue535-C1`, with their registrations and `k2-bundle`.
-  - They wait for a Docker Desktop restart, and the lead session removes them
-    afterwards.
-  - Don't touch them.
+- **Other checkouts:** `~/Ephemeral-AI-Lab/layerfs-issue535-connect` (now on
+  branch `issue-api-pure`, merged), `layerfs-issue535-C1` and
+  `layerfs-issue535-connect-tools` belong to other work. Don't build in them
+  or touch them.
 
 ## Rules (binding)
 
@@ -99,16 +101,20 @@ independent. Stop and ask only at the points marked **Owner decision**.
 ## Step A: verify `layerfs_v2_0_0` (already merged and pushed)
 
 1. `git fetch origin`, then check that `origin/layerfs_v2_0_0` equals the
-   local `layerfs_v2_0_0` in `layerfs-v2-merge` and contains
-   `issue535-connect` (`git merge-base --is-ancestor`).
+   local `layerfs_v2_0_0` in `layerfs-v2-merge` and contains both
+   `issue535-connect` and `issue-api-pure` (`git merge-base --is-ancestor`).
 2. If either check fails, stop and report; don't merge or push yourself.
-3. Don't delete `issue535-connect` or the lane branches.
+3. Don't delete `issue535-connect`, `issue-api-pure` or the lane branches.
 
 ## Step B: LayerFS builds for Connect
 
-Build in `layerfs-v2-merge` with its registration's Cargo home
-(`cargo +1.85.1 --locked --offline`, `-j 6`), from the merged commit, and
-record the commit and SHA-256 of every output.
+Build in `layerfs-v2-merge` (`cargo +1.85.1 --locked --offline`, `-j 6`),
+from the merged commit, and record the commit and SHA-256 of every output.
+Use `CARGO_HOME=~/.cache/layerfs-worktrees/layerfs-issue535-connect-7500a2864564/cargo-home-macos`:
+the v2-merge registration's own Cargo home lacks crates the merged lockfile
+needs offline (`libproc`), and the connect one built this code. Don't go
+online to fill a Cargo home; if a build cannot resolve offline, stop and
+report.
 
 - **macOS:** `layerfs-cli`, `layerfs-node`, `layerfs-python` and
   `layerfs-daemon`, each with its `postgresql` feature, the same set the
@@ -225,7 +231,7 @@ Leave `layerfs-issue533-v2` in place.
 
 Done means:
 
-- `layerfs_v2_0_0` is verified to hold `issue535-connect`;
+- `layerfs_v2_0_0` is verified to hold `issue535-connect` and `issue-api-pure`;
 - the builds are recorded;
 - `home-2` is backed up and converted;
 - the #537 steps are committed on Connect `main`;
