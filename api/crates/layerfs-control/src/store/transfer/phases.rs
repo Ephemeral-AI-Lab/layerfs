@@ -82,6 +82,8 @@ fn run(
     let record = at("check", record_of(&home, name))?;
     at("check", record.unblocked())?;
     let (from, to) = at("check", sides(&home, &record, target))?;
+    // what holds the Store is refused before any machine is reached
+    at("check", held_now(&home, name))?;
     let (mut source, mut target_side) = at("check", reach(&home, name, &from, &to))?;
     let args = SdkValue::map([("from", SdkValue::text(&from)), ("to", SdkValue::text(&to))]);
     let op = at("check", Op::begin(call, "check", args))?;
@@ -105,6 +107,14 @@ fn run(
         (&from, &mut source),
         (&to, &mut target_side),
     )
+}
+
+/// Refuses `InUse` while leases or Sandbox records hold Store `name`,
+/// read under the Store's lock (stale leases are dropped there). The
+/// check is repeated where `op` is written.
+fn held_now(home: &Path, name: &str) -> Result<()> {
+    let _store = crate::store::record::lock(home, name)?;
+    crate::inventory::store_idle(home, name)
 }
 
 /// The headroom a target keeps beyond the Store's bytes: at least 1 GiB,
