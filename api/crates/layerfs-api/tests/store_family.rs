@@ -152,7 +152,13 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
         .unwrap()
         .unwrap();
     assert_eq!(record.get_text("machine"), Some("box"));
-    assert_eq!(record.get("op"), None, "the record phase drops `op`");
+    assert_eq!(record.get("op"), None, "a finished push drops `op`");
+    assert_eq!(
+        record
+            .get("last_transfer")
+            .and_then(|last| last.get("retired")),
+        Some(&SdkValue::Bool(true))
+    );
     // its machine's worker answers: the list finds it idle there
     let listed = call(&home, "store.list", &[]).unwrap();
     let Some(SdkValue::List(items)) = listed.get("items") else {

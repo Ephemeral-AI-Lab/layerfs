@@ -1,18 +1,20 @@
-//! What an ended push or pull left (#536 §7.1, H4–H6): a copy of the Store
-//! on the machine its record does not name. A gone process's uncertain
-//! push or pull (it ended between install and record, or a step's answer
-//! was lost) may have put the Store's copy on its target while the record
-//! still names its source. The next `store push` or `store pull`, the call
-//! such an intent's refusal names, deletes that copy before anything else,
-//! under an intent of its own with the same call and sides, so a crash
-//! meanwhile leaves the same copy to the call after it. The copy the record
-//! names is never touched, and nothing is deleted while another operation
-//! holds the Store.
+//! What an ended push or pull left (#536 §7.1, §7.3, H4–H6): a copy of
+//! the Store on the machine its record does not name. A gone process's
+//! uncertain push or pull (it ended during install or record, or a step's
+//! answer was lost) may have put the Store's copy on its target while the
+//! record still names its source; a push or pull whose retire did not
+//! finish (it failed, or its process ended) leaves the source's copy, and
+//! its `last_transfer` says `retired: false`. The next `store push` or
+//! `store pull`, the call an unresolved intent's refusal and the doctor
+//! name, deletes that copy before anything else, under an intent of its
+//! own with the same call and sides, so a crash meanwhile leaves the same
+//! copy to the call after it. The copy the record names is never touched,
+//! and nothing is deleted while another operation holds the Store.
 use crate::common::op::{Op, Standing};
 use crate::common::outcome::refused;
 use crate::common::place::{self, Executor};
-use crate::store::family::{begin, ended, of_store, record_of, replace_op, step};
-use crate::store::record::StoreRecord;
+use crate::store::family::{begin, ended, of_store, record_of, step};
+use crate::store::record::{self, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -31,27 +33,44 @@ pub(crate) struct Leftover {
     pub on: String,
 }
 
-/// The copy `record` says an ended push or pull may have left: a gone
-/// process's uncertain `store.push` or `store.pull` intent leaves one on
-/// whichever of its two machines the record does not name.
+/// The copy `record` says an ended push or pull may have left, on
+/// whichever of its two machines the record does not name: a gone
+/// process's `store.push` or `store.pull` intent that is uncertain or
+/// whose record write was made, else a `last_transfer` not yet retired.
+/// None while another operation runs, or for a gone process's unresolved
+/// intent of another call (its own clearing call clears it).
 pub(crate) fn leftover(record: &StoreRecord) -> Option<Leftover> {
     let machine = record.machine().ok()?;
-    let op = record.op()?;
-    if !matches!(op.name(), "store.push" | "store.pull") || op.standing() != Standing::Unresolved {
+    let op = record.op();
+    let transfer = |op: &Op| matches!(op.name(), "store.push" | "store.pull");
+    match op.as_ref().map(|op| (op.standing(), transfer(op))) {
+        Some((Standing::Running, _)) | Some((Standing::Unresolved, false)) => return None,
+        _ => {}
+    }
+    if let Some(op) = op.filter(transfer) {
+        let side = |field| op.args().get_text(field).map(str::to_owned);
+        let (from, to) = (side("from")?, side("to")?);
+        let on = match machine {
+            _ if machine == to => Some(from.clone()),
+            _ if machine == from && op.uncertain() => Some(to.clone()),
+            _ => None,
+        };
+        if let Some(on) = on {
+            let call = op.name().to_owned();
+            return Some(Leftover { call, from, to, on });
+        }
+    }
+    let last = record.field("last_transfer")?;
+    if last.get("retired") != Some(&SdkValue::Bool(false)) {
         return None;
     }
-    let side = |field| op.args().get_text(field).map(str::to_owned);
-    let (from, to) = (side("from")?, side("to")?);
-    let on = match machine {
-        _ if machine == from => to.clone(),
-        _ if machine == to => from.clone(),
-        _ => return None,
-    };
-    Some(Leftover {
-        call: op.name().to_owned(),
+    let side = |field| last.get_text(field).map(str::to_owned);
+    let (call, from, to) = (side("call")?, side("from")?, side("to")?);
+    (machine == to).then(|| Leftover {
+        call,
+        on: from.clone(),
         from,
         to,
-        on,
     })
 }
 
@@ -97,5 +116,22 @@ pub(super) fn resolve(home: &Path, name: &str) -> Result<()> {
         ended(home, name, &op, "retire", &refusal, false, held.as_ref());
         return Err(refusal);
     }
-    replace_op(home, name, op.id(), None)
+    retired(home, name, op.id())
+}
+
+/// Under the Store's lock: drops `op` while it is still the operation `id`,
+/// and marks a `last_transfer` not yet retired as retired.
+pub(super) fn retired(home: &Path, name: &str, id: &str) -> Result<()> {
+    let _store = record::lock(home, name)?;
+    let mut now = record_of(home, name)?;
+    if now.op().is_some_and(|held| held.id() == id) {
+        now = now.without(crate::common::op::FIELD);
+    }
+    if let Some(last) = now.field("last_transfer").cloned() {
+        if last.get("retired") == Some(&SdkValue::Bool(false)) {
+            let last = crate::common::home::with_field(last, "retired", SdkValue::Bool(true));
+            now = now.with("last_transfer", last);
+        }
+    }
+    now.write(home)
 }

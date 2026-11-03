@@ -229,3 +229,81 @@ fn a_pull_stopped_between_install_and_record_is_cleared_by_a_new_pull() {
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
 }
+
+/// The record's `last_transfer.retired`.
+fn retired(home: &Path) -> Option<SdkValue> {
+    record(home)
+        .get("last_transfer")
+        .and_then(|last| last.get("retired"))
+        .cloned()
+}
+
+#[test]
+fn a_transfer_stopped_at_retire_leaves_a_usable_store_and_the_next_one_deletes_the_old_copy() {
+    let (home, root) = home_with_shop();
+    let bytes = std::fs::read(paths::store_file(&home, "shop")).unwrap();
+    let push = [("name", t("shop")), ("machine", t("box"))];
+    let pull = [("name", t("shop"))];
+
+    // a push stopped at retire: the record names `box`, native keeps its
+    // copy, and the record says it is not retired
+    let op = stopped_at(&home, "store.push", &push, "retire");
+    assert_eq!(op.get_text("phase"), Some("retire"));
+    assert_eq!(op.get("uncertain"), Some(&SdkValue::Bool(false)));
+    assert_eq!(record(&home).get_text("machine"), Some("box"));
+    assert_eq!(retired(&home), Some(SdkValue::Bool(false)));
+    assert!(paths::store_file(&home, "shop").exists());
+    assert!(paths::store_file(&root, "shop").exists());
+    // the Store is in use on `box` as usual: the intent holds nothing
+    let status = call_ok(&home, "store.status", &[("name", t("shop"))]);
+    assert_eq!(status.get_text("state"), Some("idle"), "{status:?}");
+    let found = doctor_on_shop(&home);
+    assert!(
+        found
+            .iter()
+            .any(|(severity, message, fix)| severity == "warning"
+                && message.contains("did not retire the copy on native")
+                && fix == "the next `layerfs store pull shop` deletes it first"),
+        "{found:?}"
+    );
+    // the next pull deletes native's old copy first, then pulls
+    call_ok(&home, "store.pull", &pull);
+    let now = record(&home);
+    assert_eq!(now.get_text("machine"), Some("native"));
+    assert_eq!(now.get("op"), None);
+    assert_eq!(retired(&home), Some(SdkValue::Bool(true)));
+    assert_eq!(
+        std::fs::read(paths::store_file(&home, "shop")).unwrap(),
+        bytes
+    );
+    assert!(!paths::store_file(&root, "shop").exists());
+    assert!(
+        doctor_on_shop(&home).is_empty(),
+        "{:?}",
+        doctor_on_shop(&home)
+    );
+
+    // a pull stopped at retire: `box` keeps its copy; the next push deletes it
+    call_ok(&home, "store.push", &push);
+    stopped_at(&home, "store.pull", &pull, "retire");
+    assert_eq!(record(&home).get_text("machine"), Some("native"));
+    assert!(paths::store_file(&root, "shop").exists());
+    let found = doctor_on_shop(&home);
+    assert!(
+        found
+            .iter()
+            .any(|(_, message, fix)| message.contains("the copy on box")
+                && fix == "the next `layerfs store push shop <machine>` deletes it first"),
+        "{found:?}"
+    );
+    call_ok(&home, "store.push", &push);
+    assert_eq!(record(&home).get_text("machine"), Some("box"));
+    assert_eq!(retired(&home), Some(SdkValue::Bool(true)));
+    assert_eq!(
+        std::fs::read(paths::store_file(&root, "shop")).unwrap(),
+        bytes
+    );
+    assert!(!paths::store_file(&home, "shop").exists());
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+}

@@ -12,6 +12,7 @@ use crate::common::place::{self, Executor};
 use crate::inventory;
 use crate::store::family::{advance, begin, ended, of_store, progress, record_of, settle, step};
 use crate::store::record::{self, StoreRecord};
+use crate::store::transfer::resolve::retired;
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -52,12 +53,10 @@ fn transfer(context: &mut Context<'_>, name: &str, target: Option<&str>) -> Outc
     if let (Err((phase, refusal)), Some(op)) = (&result, &written) {
         // past install both copies exist: a record phase that failed (its
         // lock wait expired, say) leaves the outcome open; a certain install
-        // failure put nothing in place; past record the Store is on `to`
-        // and `op` is gone
-        let uncertain = refusal.code == "Unknown" || *phase == "record";
-        if *phase != "retire" {
-            ended(&home, name, op, phase, refusal, uncertain, None);
-        }
+        // failure put nothing in place; past record the Store is on `to`,
+        // and a retire that did not finish leaves `last_transfer` saying so
+        let uncertain = *phase != "retire" && (refusal.code == "Unknown" || *phase == "record");
+        ended(&home, name, op, phase, refusal, uncertain, None);
     }
     let verb = call.replace('.', " ");
     result.map_err(|(phase, mut refusal)| {
@@ -269,8 +268,10 @@ fn phases(
         "install",
         step(&home, target, "install", of_store(name, vec![])),
     )?;
-    // record: the Store is on `to` from here on, and `op` goes in the same
-    // write
+    // record: the Store is on `to` from here on. The same write records
+    // that the source's copy is not yet retired and keeps `op`, certain, at
+    // retire while it is: a retire that does not finish leaves a Store in
+    // use on `to` and a copy the next push or pull deletes first
     enter(context, op, name, "record", None)?;
     let last = SdkValue::map([
         ("call", SdkValue::text(op.name())),
@@ -283,14 +284,17 @@ fn phases(
             snapshot.get("sha256").cloned().unwrap_or_default(),
         ),
         ("heads", snapshot.get("heads").cloned().unwrap_or_default()),
+        ("retired", SdkValue::Bool(false)),
     ]);
+    *op = op.clone().at("retire");
+    let retiring = with_field(op.to_record().clone(), "uncertain", SdkValue::Bool(false));
     at(
         "record",
         (|| {
             let _store = record::lock(&home, name)?;
             let record = record_of(&home, name)?.with("machine", SdkValue::text(to));
             let record = record.with("last_transfer", last.clone());
-            record.without(op::FIELD).write(&home)
+            record.with(op::FIELD, retiring.clone()).write(&home)
         })(),
     )?;
     // retire the source's copy
@@ -299,6 +303,7 @@ fn phases(
         "retire",
         step(&home, source, "retire", of_store(name, vec![])),
     )?;
+    at("retire", retired(&home, name, op.id()))?;
     Ok(SdkValue::map([
         ("store", SdkValue::text(name)),
         ("from", SdkValue::text(from)),

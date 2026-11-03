@@ -1,13 +1,14 @@
 //! The checks on what the scan read: broken references (a Sandbox whose
 //! Store, project or machine is gone, a Store on a machine with no record,
 //! a Firecracker machine whose host is gone), dead and uncertain `op`
-//! intents, stale Store leases (read, never removed) and a partial Store
-//! copy (`store.sqlite.incoming`) an interrupted transfer left on `native`.
+//! intents, stale Store leases (read, never removed), a partial Store
+//! copy (`store.sqlite.incoming`) an interrupted transfer left on `native`
+//! and a copy a push or pull did not retire (from the record).
 use super::report::Findings;
 use super::scan::Scanned;
 use crate::common::home::{lease, paths};
 use crate::common::op::{Op, Standing};
-use crate::store::record::{Placement, StoreRef};
+use crate::store::record::{Placement, StoreRecord, StoreRef};
 use layerfs_bridge::control::SdkRefusal;
 use std::path::Path;
 
@@ -55,8 +56,13 @@ pub(super) fn check(
                     );
                 }
                 // a transfer running now owns its partial copy
-                if op.is_none_or(|op| op.standing() != Standing::Running) {
+                let standing = op.as_ref().map(Op::standing);
+                if standing != Some(Standing::Running) {
                     incoming(home, name, machine == "native", findings);
+                }
+                // an unresolved intent's own finding names its clearing call
+                if standing != Some(Standing::Unresolved) {
+                    leftover(store, machine, findings);
                 }
             }
             Ok(StoreRef::Sqlite {
@@ -176,6 +182,29 @@ fn intent(entity: (&str, &str), op: &Op, show: &str, clear: &str, findings: &mut
             format!("nothing to do: the next operation on {kind} {name} replaces it"),
         ),
     }
+}
+
+/// A copy a push or pull did not retire (its retire failed, or its
+/// process ended there): the record names the Store's new machine, and the
+/// next push or pull deletes the old copy first. Read from the record:
+/// another machine's files are not.
+fn leftover(store: &StoreRecord, machine: &str, findings: &mut Findings) {
+    let Some(left) = crate::store::transfer::resolve::leftover(store) else {
+        return;
+    };
+    let name = store.name();
+    let next = match machine {
+        "native" => format!("store push {name} <machine>"),
+        _ => format!("store pull {name}"),
+    };
+    findings.warning(
+        ("store", name),
+        format!(
+            "Store {name}'s {} from {} to {} did not retire the copy on {}; the record names {machine}, and nothing reads that copy",
+            left.call, left.from, left.to, left.on
+        ),
+        format!("the next `layerfs {next}` deletes it first"),
+    );
 }
 
 /// A partial copy an interrupted pull to `native` left

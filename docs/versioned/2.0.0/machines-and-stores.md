@@ -297,16 +297,20 @@ $ layerfs store pull shop --progress       # not run
     copies, keeps `op` with `uncertain: true` and is logged to
     `log/uncertain.jsonl`. The install phase is written uncertain before
     it starts, so a call that dies during install or record (the target
-    may hold a copy the record does not name) is uncertain too; the record
-    write that puts the Store on its new machine drops `op` and records
-    `last_transfer` (`call`, `from`, `to`, `at`, `bytes`, `sha256`,
-    `heads`).
+    may hold a copy the record does not name) is uncertain too. The record
+    write that puts the Store on its new machine records `last_transfer`
+    (`call`, `from`, `to`, `at`, `bytes`, `sha256`, `heads`, `retired:
+    false`) and keeps `op`, certain, at phase retire while the source's
+    copy is deleted; then `op` goes and `retired` becomes `true`. A retire
+    that fails or whose process ends leaves the Store in use on its new
+    machine and the old copy, which the doctor reports and the next push
+    or pull deletes first.
   - Once that process is gone, an uncertain `op` makes every later
     operation, lease and Store call on the Store `Unresolved`, naming
     `layerfs store status <name>` and the call that clears it: a new
     `layerfs store push <name> <machine>` (with the machine the push named)
     or `layerfs store pull <name>`. A new push or pull first deletes the
-    copy on whichever of the two machines the record does not name (on
+    copy left on whichever of the two machines the record does not name (on
     `native` its file and any partial copy; on another machine the Store's
     folder under its worker's root), then runs as usual. `store remove`
     clears it too, but deletes only the copy on the record's machine. A
