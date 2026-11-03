@@ -118,10 +118,15 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
 
 ### Start on demand and idle stop
 
-- A machine starts on the first call that needs it. The caller finds the
-  worker gone, starts the machine and its worker, waits until it is ready
-  and records `worker.json`. That wait is a readiness wait, not a retry;
-  the call is then sent once.
+- A machine starts on the first call that needs it. The call dials the
+  worker `worker.json` records, once, with no ping first (#535 R1). Only
+  when nothing was sent (the connection, the secret or its answer failed)
+  does the caller start the machine and its worker, wait until it is
+  ready, record `worker.json` and send the call once. That wait is a
+  readiness wait, not a retry: the first attempt never reached a worker. A
+  call whose answer is lost after it was sent is `Unknown`; it starts
+  nothing and is not resent. `store move` and `store remove` make their
+  machines ready before they mark the Store.
 - Two processes that need the same stopped machine take turns on its
   `start.lock`, which `machine create` and `machine remove` also take. The
   second waits up to 600 s, then is refused `Unavailable`. The lock is

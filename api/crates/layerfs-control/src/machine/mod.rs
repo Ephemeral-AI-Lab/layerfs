@@ -35,7 +35,7 @@ pub use connect::connect;
 #[cfg(feature = "machine")]
 pub use create::create;
 #[cfg(feature = "machine")]
-pub use endpoint::running;
+pub use endpoint::{running, start_after};
 #[cfg(feature = "machine")]
 pub use get::get;
 #[cfg(feature = "machine")]

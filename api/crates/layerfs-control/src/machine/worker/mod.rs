@@ -15,7 +15,7 @@ mod frame;
 mod idle;
 mod server;
 
-pub use client::{call, ping, Endpoint, HELLO_WAIT, PING_WAIT};
+pub use client::{call, ping, request, send, Endpoint, Unreached, HELLO_WAIT, PING_WAIT};
 pub use frame::{frame_bytes, read_frame, read_frame_within, write_frame, MAX_FRAME, MAX_HELLO};
 #[cfg(target_os = "linux")]
 pub use idle::power_off;

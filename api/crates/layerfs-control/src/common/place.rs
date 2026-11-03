@@ -8,7 +8,7 @@
 //! with direct Workspace calls (#535 phase 6).
 use crate::common::home::{paths, read_record};
 use crate::common::outcome::{refused, Outcome};
-use crate::machine::worker::Endpoint;
+use crate::machine::worker::{self, Endpoint, Unreached};
 use crate::store::record::StoreRef;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
@@ -34,8 +34,8 @@ pub(crate) enum Start {
 }
 
 /// One machine's worker. [`plan`] reads no worker record and dials
-/// nothing: the first call reaches the worker, and later calls of the same
-/// operation (a move's steps) reuse what it reached.
+/// nothing: the first call dials the worker its records name, and later
+/// calls of the same operation (a move's steps) use the worker it reached.
 pub(crate) struct Worker {
     home: PathBuf,
     machine: String,
@@ -76,30 +76,54 @@ impl Worker {
     /// started now, before the home lock, not by its first step. This is a
     /// readiness wait, not a call.
     pub(crate) fn ready(&mut self) -> Result<()> {
-        self.endpoint().map(drop)
+        if self.endpoint.is_none() {
+            self.endpoint = Some(match self.start {
+                Start::OnDemand => started(&self.home, &self.machine)?,
+                Start::Never => recorded(&self.home, &self.machine)?,
+            });
+        }
+        Ok(())
     }
 
     /// Runs worker operation `op` once with `request`; its events go to
-    /// `events`. Nothing is resent (`machine::worker::call`).
+    /// `events`. No ping comes first (#535 R1): the call dials the worker
+    /// once. Only when nothing was sent ([`Unreached`]: the connection, the
+    /// secret or its answer failed) on this operation's first call does a
+    /// [`Start::OnDemand`] caller start the machine and send the call once,
+    /// to the worker that start recorded. That is not a retry: the first
+    /// attempt never reached a worker. A failure after the request went out
+    /// is the call's outcome (`Unknown` when its answer was lost), never
+    /// resent.
     pub(crate) fn call(
         &mut self,
         op: &str,
         request: SdkValue,
         events: &mut dyn FnMut(SdkValue),
     ) -> Outcome {
-        let endpoint = self.endpoint()?;
-        crate::machine::worker::call(endpoint, op, request, events)
-    }
-
-    fn endpoint(&mut self) -> Result<&Endpoint> {
-        let endpoint = match self.endpoint.take() {
-            Some(endpoint) => endpoint,
-            None => match self.start {
-                Start::OnDemand => started(&self.home, &self.machine)?,
-                Start::Never => recorded(&self.home, &self.machine)?,
-            },
+        let request = worker::request(op, request)?;
+        let send = |endpoint: &Endpoint, events: &mut dyn FnMut(SdkValue)| {
+            worker::send(endpoint, op, &request, events, None)
         };
-        Ok(self.endpoint.insert(endpoint))
+        if let Some(endpoint) = &self.endpoint {
+            return send(endpoint, events).unwrap_or_else(|Unreached(refusal)| Err(refusal));
+        }
+        let tried = recorded(&self.home, &self.machine);
+        let not_sent = match &tried {
+            Ok(endpoint) => match send(endpoint, events) {
+                Ok(outcome) => {
+                    self.endpoint = tried.ok();
+                    return outcome;
+                }
+                Err(Unreached(refusal)) => refusal,
+            },
+            Err(refusal) => refusal.clone(),
+        };
+        if self.start == Start::Never {
+            return Err(not_sent);
+        }
+        let endpoint = started_after(&self.home, &self.machine, tried.ok().as_ref())?;
+        let endpoint = self.endpoint.insert(endpoint);
+        send(endpoint, events).unwrap_or_else(|Unreached(refusal)| Err(refusal))
     }
 }
 
@@ -145,6 +169,23 @@ fn started(home: &Path, machine: &str) -> Result<Endpoint> {
 #[cfg(not(feature = "machine"))]
 fn started(home: &Path, machine: &str) -> Result<Endpoint> {
     recorded(home, machine)
+}
+
+/// The worker of `machine` once started, after a call to `tried` (its
+/// recorded worker, if any) sent nothing.
+#[cfg(feature = "machine")]
+fn started_after(home: &Path, machine: &str, tried: Option<&Endpoint>) -> Result<Endpoint> {
+    crate::machine::start_after(home, machine, tried)
+}
+
+/// Without the machine adapters nothing is started: the call that sent
+/// nothing is refused.
+#[cfg(not(feature = "machine"))]
+fn started_after(_: &Path, machine: &str, _: Option<&Endpoint>) -> Result<Endpoint> {
+    Err(refused(
+        "Unavailable",
+        format!("machine {machine} is not running"),
+    ))
 }
 
 /// The worker `machine`'s `worker.json` records, starting nothing; refused
