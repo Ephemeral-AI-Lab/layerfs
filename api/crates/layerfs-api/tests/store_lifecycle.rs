@@ -241,22 +241,3 @@ fn remove_reaches_a_stopped_machine_before_it_takes_the_home_lock() {
     assert!(paths::store_record(&home, "shop").is_file());
     std::fs::remove_dir_all(home).unwrap();
 }
-
-/// `docker` on Linux opens its Stores in this process, from the home: a
-/// remove deletes the Store's directory once and answers success.
-#[cfg(all(target_os = "linux", feature = "machine"))]
-#[test]
-fn remove_of_a_store_on_an_in_process_machine_deletes_it_once() {
-    let (home, root) = home_with_shop();
-    machine(&home, "docker", "docker");
-    let path = paths::store_record(&home, "shop");
-    write_record(
-        &path,
-        &home::with_field(record(&home), "machine", t("docker")),
-    )
-    .unwrap();
-    call(&home, "store.remove", &[("name", t("shop"))]).unwrap();
-    assert!(!paths::store_dir(&home, "shop").exists());
-    std::fs::remove_dir_all(home).unwrap();
-    let _ = std::fs::remove_dir_all(root);
-}

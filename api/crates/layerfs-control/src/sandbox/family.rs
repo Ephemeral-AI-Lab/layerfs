@@ -7,12 +7,14 @@
 //! Linux. On any other machine the same call runs in that machine's worker,
 //! which keeps the Sandbox's records under its own root; this home keeps
 //! the name, the project and the machine. A Sandbox on `docker` is a
-//! container whose image and settings come from the docker machine's record
-//! and travel with the call (H §7.6, §7.7): from this process where the
-//! docker machine's Stores open here (Linux, and every PostgreSQL Store),
-//! else from its worker. A PostgreSQL Store's Sandboxes run on `native` or
-//! `docker` from this process, which resolves the password (O3).
-use super::deploy;
+//! container whose image comes from the docker machine's record and travels
+//! with the call (H §7.6, §7.7); a sqlite Store's is started by the docker
+//! machine's worker on every host (G8). Where a call runs is
+//! `place::plan`'s answer; the deploy settings are chosen here and resolved
+//! where it runs (`deploy`). A PostgreSQL Store's Sandboxes run on `native`
+//! or `docker` from this process, which resolves the password (O3), until
+//! the worker takes the resolved URL (#535 phase 5a).
+use super::deploy::{self, Deploy, Side};
 use crate::common::context::Context;
 use crate::common::home::{self, paths, read_record, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
@@ -54,15 +56,6 @@ fn sandbox_of(home: &Path, name: &str) -> Result<(String, SdkValue)> {
                 ),
             )
         })
-}
-
-/// How a Sandbox runs, with the settings the side running the call resolved:
-/// a daemon process (`native` on macOS, namespaces on Linux) or a container.
-enum Deploy {
-    /// The daemon, and for namespaces the image archive and digest.
-    Native(Vec<(String, SdkValue)>),
-    /// The docker machine's settings ([`deploy::docker_settings`]).
-    Docker(SdkValue),
 }
 
 /// The host Sandbox operations' arguments for project `<store>/<project>`,
@@ -436,22 +429,12 @@ fn host_op(
         true => Executor::Local,
         false => place::on_machine(&home, machine, start)?,
     };
-    let docker = match machine {
-        "docker" => Some(deploy::docker_settings(
-            &home,
-            &target.store,
-            image.as_deref(),
-            postgresql,
-            matches!(executor, Executor::Worker(_)),
-        )?),
-        _ => None,
-    };
+    // what the machine's record chooses; the side that runs the call
+    // resolves the rest
+    let choice = deploy::choose(&home, machine, image.as_deref(), postgresql)?;
     match executor {
         Executor::Local => {
-            let how = match docker {
-                Some(settings) => Deploy::Docker(deploy::docker_here(&home, settings)?),
-                None => Deploy::Native(deploy::native_here(&home, image.as_deref())?),
-            };
+            let how = deploy::resolve(&Side::Home(&home), &target.store, &choice)?;
             let args = host_args(
                 &home,
                 (&target.store, &target.project, &target.record),
@@ -487,14 +470,7 @@ fn host_op(
                 ("store_record", target.record.clone()),
                 ("project_record", project_record),
             ];
-            if let Some(settings) = docker {
-                fields.push(("docker", settings));
-            } else {
-                fields.push((
-                    "native",
-                    deploy::guest_settings(&home, machine, image.as_deref())?,
-                ));
-            }
+            fields.push(("deploy", choice));
             fields.push((
                 "more",
                 SdkValue::Map(more.into_iter().map(|(n, v)| (n.to_owned(), v)).collect()),
@@ -567,12 +543,8 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
             .collect(),
         _ => Vec::new(),
     };
-    let how = match args.get("docker") {
-        Some(settings @ SdkValue::Map(_)) => {
-            Deploy::Docker(deploy::docker_in_worker(root, store, settings)?)
-        }
-        _ => Deploy::Native(deploy::native_in_worker(args.get("native"))?),
-    };
+    let choice = args.get("deploy").cloned().unwrap_or_default();
+    let how = deploy::resolve(&Side::Worker(root), store, &choice)?;
     let kind = StoreRef::from_record(store, &record)?.kind();
     let host = host_args(root, (store, project, &record), kind, how, more)?;
     crate::store::open::hold(&host, None)?;

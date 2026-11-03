@@ -97,9 +97,8 @@ step commits.
   was started or stopped by them.
 - **One worker serving several Stores** and the guest-to-host send speed.
 - **Linux.** No Linux host was used. Linux namespaces Sandboxes, Init into
-  `docker` on Linux, the Linux route of the `docker` machine (the route
-  table marks it in-process; the decisions log says it goes to its worker)
-  and the Linux wheels (O20) are `NOT_RUN`.
+  `docker` on Linux, the Linux route of the `docker` machine (its worker,
+  as on macOS: #535 G8) and the Linux wheels (O20) are `NOT_RUN`.
 - **Windows** (O5). `native` on Windows holds only records; its sqlite
   Stores and Init are meant to live in a WSL worker. Not run. The library
   does not build for Windows yet: `home/`, `store/`, `worker/`, `start.rs`

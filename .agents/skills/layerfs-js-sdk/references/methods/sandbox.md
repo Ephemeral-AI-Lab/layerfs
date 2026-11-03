@@ -61,7 +61,7 @@ ready.
 | `native` on macOS | host processes, Workspaces over loopback NFS. Needs the daemon: the native machine record's `daemon`, else `~/.cache/layerfs/bundle/<version>/<os>-<arch>/layerfs-daemon` (`Unavailable` when missing) |
 | `native` on Linux | Linux namespaces |
 | a VM or ssh machine | sent to that machine's worker, which runs it on its own `native` |
-| `docker`, sqlite Store on `docker` | a container on the docker machine's image (`machine update docker --image`); on macOS the docker worker starts it beside itself, mounting only the Store's folder; on Linux this process starts it (root only) |
+| `docker`, sqlite Store on `docker` | a container on the docker machine's image (`machine update docker --image`); on macOS and Linux the docker worker starts it beside itself, mounting only the Store's folder (G8) |
 | `native` or `docker`, PostgreSQL Store | from this process; the native daemon needs the `postgresql` build |
 | a VM or ssh machine, PostgreSQL Store | `Unsupported` with the support table's reason (`machine.platforms`) |
 
