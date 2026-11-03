@@ -12,7 +12,6 @@ pub(crate) const PROFILE: Profile = Profile {
     kernel: fuse,
     executor: worker,
     worker_bind: Ipv4Addr::UNSPECIFIED,
-    guest_stop: "reboot",
     options: &[CPUS, MEMORY, DISK, IMAGE, opt("host", OptKind::Name)],
     description: "a Firecracker microVM in a nested lima machine",
 };

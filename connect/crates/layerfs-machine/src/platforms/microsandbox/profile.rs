@@ -12,7 +12,6 @@ pub(crate) const PROFILE: Profile = Profile {
     kernel: fuse,
     executor: worker,
     worker_bind: Ipv4Addr::UNSPECIFIED,
-    guest_stop: "1",
     options: &[CPUS, MEMORY, DISK, IMAGE],
     description: "a microsandbox microVM (libkrun)",
 };

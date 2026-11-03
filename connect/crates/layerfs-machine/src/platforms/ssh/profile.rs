@@ -12,7 +12,6 @@ pub(crate) const PROFILE: Profile = Profile {
     kernel: fuse,
     executor: worker,
     worker_bind: Ipv4Addr::LOCALHOST,
-    guest_stop: "0",
     options: &[
         opt("user", OptKind::Text),
         opt("port", OptKind::Int),

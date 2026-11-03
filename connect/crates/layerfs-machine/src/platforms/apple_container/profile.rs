@@ -12,7 +12,6 @@ pub(crate) const PROFILE: Profile = Profile {
     kernel: fuse,
     executor: worker,
     worker_bind: Ipv4Addr::UNSPECIFIED,
-    guest_stop: "init",
     options: &[CPUS, MEMORY, DISK, IMAGE],
     description: "an Apple container VM (Apple silicon)",
 };

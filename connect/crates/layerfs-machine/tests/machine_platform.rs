@@ -112,18 +112,6 @@ fn built_in_created_and_tools() {
 }
 
 #[test]
-fn an_idle_worker_resets_a_microvm_and_powers_other_vms_off() {
-    // #533 review P0-6: a Firecracker VMM ignores an ACPI power-off
-    assert_eq!(Platform::Firecracker.guest_stop(), "reboot");
-    assert_eq!(Platform::Ssh.guest_stop(), "0");
-    // the terminal pass: a container has no init and no CAP_SYS_BOOT
-    assert_eq!(Platform::AppleContainer.guest_stop(), "init");
-    for kind in [Platform::Lima, Platform::Microsandbox] {
-        assert_eq!(kind.guest_stop(), "1", "{kind:?}");
-    }
-}
-
-#[test]
 fn the_current_host_is_named() {
     let expected = if cfg!(target_os = "linux") {
         HostOs::Linux

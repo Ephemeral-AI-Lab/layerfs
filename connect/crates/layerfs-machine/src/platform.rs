@@ -76,8 +76,6 @@ pub struct Profile {
     pub executor: fn(HostOs) -> ExecutorKind,
     /// The guest address the worker binds.
     pub worker_bind: Ipv4Addr,
-    /// `LAYERFS_WORKER_POWEROFF`: what the worker does to its guest once idle.
-    pub guest_stop: &'static str,
     /// The options `machine create` or `machine connect` takes.
     pub options: &'static [OptSpec],
     /// One line: what a machine of this platform is.
@@ -225,15 +223,5 @@ impl Platform {
     /// container port). The worker's secret guards it either way.
     pub fn worker_bind(self) -> Ipv4Addr {
         self.profile().worker_bind
-    }
-
-    /// What the worker does to its guest once idle
-    /// (`LAYERFS_WORKER_POWEROFF`): nothing on an ssh host (not ours to
-    /// stop), a reset in a Firecracker microVM (its VMM exits on a reset and
-    /// ignores an ACPI power-off), SIGTERM to an apple-container's main
-    /// process (it has no init or `CAP_SYS_BOOT`), a power-off in every
-    /// other VM.
-    pub fn guest_stop(self) -> &'static str {
-        self.profile().guest_stop
     }
 }

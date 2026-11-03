@@ -134,8 +134,3 @@ pub(crate) fn close(path: &std::path::Path) -> Result<bool, SdkRefusal> {
         None => Ok(false),
     }
 }
-
-/// How many Stores this process holds open.
-pub(crate) fn count() -> usize {
-    OPEN.lock().unwrap_or_else(|e| e.into_inner()).len()
-}

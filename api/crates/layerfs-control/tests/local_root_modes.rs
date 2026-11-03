@@ -11,7 +11,6 @@ use layerfs_control::machine::worker;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 fn tempdir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("lfs-lrm-{tag}-{}", std::process::id()));
@@ -61,15 +60,7 @@ fn a_worker_s_root_is_passable_and_private() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let served = root.clone();
-    std::thread::spawn(move || {
-        worker::serve_until_idle(
-            listener,
-            "s".to_owned(),
-            served,
-            Duration::from_secs(30),
-            Duration::from_millis(200),
-        )
-    });
+    std::thread::spawn(move || worker::serve(listener, "s".to_owned(), served));
     let endpoint = worker::Endpoint {
         address,
         secret: "s".to_owned(),

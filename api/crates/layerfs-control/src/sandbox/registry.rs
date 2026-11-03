@@ -50,11 +50,6 @@ pub(crate) static INITS: LazyLock<Mutex<BTreeMap<String, Arc<crate::InitCounters
 pub(crate) static SANDBOXES: LazyLock<Mutex<BTreeMap<std::path::PathBuf, Arc<SandboxState>>>> =
     LazyLock::new(Default::default);
 
-/// How many Sandboxes this process runs now.
-pub(crate) fn live_sandboxes() -> usize {
-    SANDBOXES.lock().map_or(1, |sandboxes| sandboxes.len())
-}
-
 /// A lock, refused when a holder panicked.
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, SdkRefusal> {
     mutex

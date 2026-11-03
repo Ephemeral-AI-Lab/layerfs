@@ -12,7 +12,6 @@ pub(crate) const PROFILE: Profile = Profile {
     kernel,
     executor,
     worker_bind: Ipv4Addr::UNSPECIFIED,
-    guest_stop: "1",
     options: &[],
     description: "this host",
 };

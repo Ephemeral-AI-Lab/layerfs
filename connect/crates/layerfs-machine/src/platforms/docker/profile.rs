@@ -12,7 +12,6 @@ pub(crate) const PROFILE: Profile = Profile {
     kernel: fuse,
     executor: worker,
     worker_bind: Ipv4Addr::UNSPECIFIED,
-    guest_stop: "1",
     options: &[],
     description: "Docker's kernel (Docker Desktop's VM, or the Linux host)",
 };
