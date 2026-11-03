@@ -111,7 +111,7 @@ pub(crate) fn launch(
     guest.write_file(tools, &format!("{STATE}/secret"), &secret)?;
     let listen = format!("{bind}:{WORKER_PORT}");
     guest.script(tools, "starting the worker", LAUNCH, &[&listen, BUNDLE])?;
-    ready(spec, guest, address)?;
+    ready(spec, guest, WORKER_PORT, address)?;
     Ok(Endpoint {
         address,
         secret,
@@ -119,10 +119,16 @@ pub(crate) fn launch(
     })
 }
 
-/// The readiness wait (not a retry): until the worker listens in the guest
-/// and the host's loopback `address` accepts a connection, at most
-/// [`READY`]. A worker that ends meanwhile is reported with its log's end.
-pub(crate) fn ready(spec: &Spec, guest: &Guest, address: SocketAddr) -> Result<(), MachineError> {
+/// The readiness wait (not a retry): until the worker listens on
+/// `guest_port` in the guest and the host's loopback `address` accepts a
+/// connection, at most [`READY`]. A worker that ends meanwhile is reported
+/// with its log's end.
+pub(crate) fn ready(
+    spec: &Spec,
+    guest: &Guest,
+    guest_port: u16,
+    address: SocketAddr,
+) -> Result<(), MachineError> {
     let deadline = Instant::now() + READY;
     let mut guest_ready = false;
     loop {
@@ -138,7 +144,7 @@ pub(crate) fn ready(spec: &Spec, guest: &Guest, address: SocketAddr) -> Result<(
                     ),
                 ));
             }
-            guest_ready = out.ok() && facts::listening(&out.stdout, WORKER_PORT);
+            guest_ready = out.ok() && facts::listening(&out.stdout, guest_port);
         }
         if guest_ready && TcpStream::connect_timeout(&address, Duration::from_secs(1)).is_ok() {
             return Ok(());

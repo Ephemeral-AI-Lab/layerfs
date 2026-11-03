@@ -111,7 +111,9 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
     let secret = tool::secret()?;
     guest.write_file(&spec.tools, &format!("{STATE}/secret"), &secret)?;
     let address = worker::loopback(port);
-    worker::ready(spec, &guest, address)?;
+    // a host-network worker listens on the host port it was given
+    let guest_port = if host_network { port } else { WORKER_PORT };
+    worker::ready(spec, &guest, guest_port, address)?;
     Ok(Running {
         endpoint: crate::spec::Endpoint {
             address,
