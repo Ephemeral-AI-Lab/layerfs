@@ -262,20 +262,79 @@ fn only_layout_3(home: &Path) {
     }
 }
 
+/// An uncertain `sandbox.create` intent owned by no process, as layout 3
+/// records a create whose outcome was not known.
+fn unresolved() -> SdkValue {
+    SdkValue::map([
+        ("id", t("op-00000000000000aa")),
+        ("name", t("sandbox.create")),
+        ("phase", t("start")),
+        ("args", SdkValue::Null),
+        ("owner", SdkValue::map([("pid", SdkValue::Int(0))])),
+        ("started", SdkValue::Int(1)),
+        ("updated", SdkValue::Int(1)),
+        ("uncertain", SdkValue::Bool(true)),
+    ])
+}
+
+/// `answers` with each `op`'s `id` and `started` left out: a conversion
+/// mints the intent it writes.
+fn settled(answers: &[Result<SdkValue, SdkValue>]) -> Vec<Result<SdkValue, SdkValue>> {
+    fn strip(value: &SdkValue) -> SdkValue {
+        match value {
+            SdkValue::List(items) => SdkValue::List(items.iter().map(strip).collect()),
+            SdkValue::Map(fields) => SdkValue::Map(
+                (fields.iter())
+                    .map(|(name, field)| match (name.as_str(), field) {
+                        ("op", SdkValue::Map(op)) => (
+                            name.clone(),
+                            SdkValue::Map(
+                                (op.iter())
+                                    .filter(|(n, _)| n != "id" && n != "started")
+                                    .cloned()
+                                    .collect(),
+                            ),
+                        ),
+                        _ => (name.clone(), strip(field)),
+                    })
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
+    }
+    answers
+        .iter()
+        .map(|a| a.as_ref().map(strip).map_err(strip))
+        .collect()
+}
+
 #[test]
 fn a_closed_layout_2_home_converts_and_answers_as_before() {
-    let closed = sandbox(
-        "old",
-        "native",
-        &[("state", t("creating")), ("pid", SdkValue::Int(dead_pid()))],
-    );
-    let unknown = sandbox("lost", "dev", &[("state", t("unknown"))]);
+    // layout 3: a create whose process ended holds nothing (`gone`); one
+    // whose outcome was not known holds an uncertain intent (`unresolved`)
+    let closed = sandbox("old", "native", &[]);
+    let unknown = sandbox("lost", "dev", &[("op", unresolved())]);
     let home = home_with("same", &[("old", closed), ("lost", unknown)]);
-    // (`sandbox.get` of a native Sandbox asks its daemon, which no bundle
-    // provides here: its refusal is compared too)
-    let before = answers(&home, &["old", "lost"]);
-    assert!(before[..5].iter().all(Result::is_ok), "{before:?}");
+    let before = settled(&answers(&home, &["old", "lost"]));
+    assert!(before.iter().all(Result::is_ok), "{before:?}");
+    assert_eq!(item(&before[4], "old").get_text("state"), Some("gone"));
+    assert_eq!(
+        item(&before[4], "lost").get_text("state"),
+        Some("unresolved")
+    );
     downgrade(&home);
+    // as 2.0 kept them: `creating` with a creator's pid, and `unknown`
+    for (name, machine, fields) in [
+        (
+            "old",
+            "native",
+            vec![("state", t("creating")), ("pid", SdkValue::Int(dead_pid()))],
+        ),
+        ("lost", "dev", vec![("state", t("unknown"))]),
+    ] {
+        let path = paths::machine_dir(&home, machine).join(format!("sandbox/{name}/record.json"));
+        write_record(&path, &sandbox(name, machine, &fields)).unwrap();
+    }
     // an ended numbered Sandbox and the record that names it
     let daemon = Live::new();
     let process = LocalProcess::observe(daemon.pid()).unwrap();
@@ -288,7 +347,7 @@ fn a_closed_layout_2_home_converts_and_answers_as_before() {
     assert!(matches!(home::detect(&home).unwrap(), Layout::Previous(_)));
 
     // the first call converts it; the ended Sandbox now reads `gone`
-    let after = answers(&home, &["old", "lost"]);
+    let after = settled(&answers(&home, &["old", "lost"]));
     let gone = item(&after[4], "nat");
     assert_eq!(gone.get_text("state"), Some("gone"));
     assert_eq!(gone.get("id"), Some(&SdkValue::Null));
@@ -329,6 +388,16 @@ fn a_closed_layout_2_home_converts_and_answers_as_before() {
         let value = read_record(&record).unwrap().unwrap();
         assert_eq!(value.get_int("v"), Some(1), "{}", record.display());
     }
+    // no 2.0 intent field reaches layout 3
+    for name in ["old", "lost", "nat"] {
+        let value = read_record(&paths::sandbox_record(&home, name))
+            .unwrap()
+            .unwrap();
+        assert!(
+            value.get("state").is_none() && value.get("pid").is_none(),
+            "{value:?}"
+        );
+    }
     let run = paths::run_root(&home);
     assert_eq!(std::fs::read(run.join("images/x")).unwrap(), b"image");
     assert!(
@@ -344,7 +413,7 @@ fn a_closed_layout_2_home_converts_and_answers_as_before() {
     let closed = call(&home, "sandbox.close", &[("name", t("nat"))]).unwrap();
     assert_eq!(closed.get_text("was"), Some("gone"));
     home::open(&home).unwrap();
-    let again = answers(&home, &["old", "lost"]);
+    let again = settled(&answers(&home, &["old", "lost"]));
     assert_eq!(again[..4], after[..4]);
     assert_eq!(listed(&again[4]), listed(&after[4]));
     assert_eq!(again[5..], after[5..]);

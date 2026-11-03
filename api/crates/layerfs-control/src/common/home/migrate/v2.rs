@@ -10,9 +10,11 @@
 //! pass:
 //!
 //! 1. write: each Sandbox record from `machine/<m>/sandbox/<name>/` to
-//!    `sandbox/<name>/record.json` (`gone` when its runtime had ended,
-//!    which is reclaimed: a stopped container or local daemon deleted once),
-//!    and `"v": 1` into every machine, Store, project and bucket record;
+//!    `sandbox/<name>/record.json` in layout 3's form, with no `state` or
+//!    `pid` (no id, so `gone`, when its runtime had ended, which is
+//!    reclaimed: a stopped container or local daemon deleted once; an
+//!    uncertain `op` for a create whose outcome was unknown), and `"v": 1`
+//!    into every machine, Store, project and bucket record;
 //! 2. `log/layout-3.pending`, then `layerfs.json` at layout 3 (the flip);
 //! 3. delete the layout 2 paths (`machine/*/sandbox/`,
 //!    `store/*/project/*/sandboxes/`), rename `machine/native/sandbox-root/`
@@ -23,7 +25,8 @@
 //! write is idempotent); after it, the next open finds the marker and
 //! finishes step 3 ([`finish`]).
 use crate::common::home::layout::{write, HomeFile, LAYOUT_VERSION};
-use crate::common::home::{lease, paths, read_record, write_entity, write_record};
+use crate::common::home::{lease, paths, read_record, with_field, write_entity, write_record};
+use crate::common::op::{self, Op};
 use crate::common::outcome::{failed, refused};
 use crate::machine::record::MachineRecord;
 use crate::sandbox::record::SandboxRecord;
@@ -153,13 +156,13 @@ fn survey(home: &Path) -> Result<Plan> {
             };
             let record = SandboxRecord::from_record(&name, value.clone());
             let Some(id) = record.id() else {
-                match record.creator() {
+                match creator(&value) {
                     Some(pid) => plan.live(
                         "sandbox",
                         &name,
                         format!("is being created by process {pid}; let it finish"),
                     ),
-                    None => plan.sandboxes.push((name, value)),
+                    None => plan.sandboxes.push((name, layout_3(value)?)),
                 }
                 continue;
             };
@@ -175,11 +178,10 @@ fn survey(home: &Path) -> Result<Plan> {
             match probe(home, &entry) {
                 Found::Running => plan.live("sandbox", &name, format!("runs on machine {machine}; close it with the build that started it (`layerfs sandbox close {name}`)")),
                 Found::Unknown(why) => plan.live("sandbox", &name, format!("cannot be checked ({why}); close it with the build that started it (`layerfs sandbox close {name}`)")),
+                // no id: layout 3 derives `gone`
                 Found::Ended => {
-                    let mut gone = SandboxRecord::from_record(&name, value);
-                    gone = gone.with("state", SdkValue::text("gone"));
-                    gone = gone.with("id", SdkValue::Null);
-                    plan.sandboxes.push((name, gone.to_record().clone()));
+                    let gone = SandboxRecord::from_record(&name, value).with("id", SdkValue::Null);
+                    plan.sandboxes.push((name, layout_3(gone.to_record().clone())?));
                     plan.ended.push(entry);
                 }
             }
@@ -224,6 +226,36 @@ fn survey(home: &Path) -> Result<Plan> {
         }
     }
     Ok(plan)
+}
+
+/// The live process a layout 2 Sandbox record names as creating it: a 2.0
+/// record says `state: "creating"` and its creator's `pid`, and nothing
+/// more, so this is the one check that reads a process by id alone.
+fn creator(value: &SdkValue) -> Option<i64> {
+    let pid = value.get_int("pid").filter(|pid| *pid > 0)?;
+    let named = SdkValue::map([("pid", SdkValue::Int(pid))]);
+    (value.get_text("state") == Some("creating") && lease::recorded_alive(&named)).then_some(pid)
+}
+
+/// Layout 2 Sandbox record `value` in layout 3's form: no stored `state`
+/// and no creator `pid`. One whose create's outcome was unknown (2.0's
+/// `state: "unknown"`) holds an uncertain `sandbox.create` intent owned by
+/// no process (pid 0), which `sandbox.close` clears; one whose creator is
+/// gone holds none, and layout 3 derives `gone` from its missing id.
+fn layout_3(value: SdkValue) -> Result<SdkValue> {
+    let unknown = value.get_text("state") == Some("unknown");
+    let SdkValue::Map(mut fields) = value else {
+        return Ok(value);
+    };
+    fields.retain(|(name, _)| name != "state" && name != "pid");
+    let record = SdkValue::Map(fields);
+    if !unknown {
+        return Ok(record);
+    }
+    let op = Op::begin("sandbox.create", "start", SdkValue::Null)?.as_uncertain();
+    let nobody = SdkValue::map([("pid", SdkValue::Int(0))]);
+    let op = with_field(op.to_record().clone(), "owner", nobody);
+    Ok(with_field(record, op::FIELD, op))
 }
 
 /// Every layout 2 numbered Sandbox in this home

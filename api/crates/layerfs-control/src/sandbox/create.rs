@@ -1,7 +1,10 @@
-//! `sandbox.create`: the name claimed under the home lock, the Sandbox started on its machine.
-use super::record::SandboxRecord;
+//! `sandbox.create`: the name claimed under the home lock with the create's
+//! `op` intent (#536 §7.1), the Sandbox started on its machine, and its
+//! result recorded with the intent dropped in one write.
+use super::record::{self, SandboxRecord};
 use crate::common::context::Context;
 use crate::common::home::{self, paths};
+use crate::common::op::Op;
 use crate::common::outcome::{refused, Outcome, View};
 use crate::sandbox::route::on_machine;
 use crate::store::record::StoreRef;
@@ -62,21 +65,34 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             ));
         }
     }
-    // claim the name across the home (one folder per name); the creator's
-    // pid lets a close tell a create in flight from one whose process is gone
-    if paths::sandbox_dir(&home, name).exists() {
+    // claim the name across the home (one folder per name) with the
+    // create's intent: while its process lives, every other operation on
+    // the Sandbox is refused `Busy`
+    let dir = paths::sandbox_dir(&home, name);
+    if dir.exists() {
         return Err(refused("Exists", format!("a Sandbox named {name} exists")));
     }
-    SandboxRecord::creating(name, project, machine).write(&home)?;
+    let op = Op::begin("sandbox.create", "claim", SdkValue::Null)?;
+    home::private_dir(&dir)?;
+    let record = {
+        let _sandbox = record::lock(&home, name)?;
+        let record = SandboxRecord::creating(name, project, machine, &op);
+        record.write(&home)?;
+        record
+    };
     drop(_lock);
+    let op = op.at("start");
+    {
+        let _sandbox = record::lock(&home, name)?;
+        record.clone().with_op(&op).write(&home)?;
+    }
     let mut more = vec![];
     if let Some(image) = args.get_text("image") {
         more.push(("image", SdkValue::text(image)));
     }
-    let record = SandboxRecord::read(&home, name)?
-        .unwrap_or_else(|| SandboxRecord::from_record(name, SdkValue::Null));
     let started = on_machine(context, &record, "sandbox.create", more);
     let _lock = home::lock::take(&home)?;
+    let sandbox = record::lock(&home, name)?;
     // read again: on `native` the Sandbox's own side added to the record
     let record = SandboxRecord::read(&home, name)?.unwrap_or(record);
     match started {
@@ -85,12 +101,17 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             record.write(&home)?;
             Ok(record.to_sdk(View::Full))
         }
+        // its outcome is not known: the intent stays, uncertain, until
+        // `sandbox.close` clears it
         Err(refusal) if refusal.code == "Unknown" => {
-            record.unknown().write(&home)?;
+            let op = op.as_uncertain();
+            record.with_op(&op).write(&home)?;
+            op.log_uncertain(&home, "sandbox", name, &refusal.message);
             Err(refusal)
         }
         Err(refusal) => {
             remove_folder(&record.dir(&home))?;
+            drop(sandbox);
             Err(refusal)
         }
     }
