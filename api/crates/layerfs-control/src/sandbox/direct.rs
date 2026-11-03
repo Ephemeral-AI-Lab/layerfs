@@ -16,7 +16,7 @@
 //! worker as before.
 use super::record::SandboxRecord;
 use crate::common::context::Context;
-use crate::common::home::{self, lease, paths, read_record, write_record};
+use crate::common::home::{self, lease, paths};
 use crate::common::outcome::{refused, Outcome};
 use crate::machine::worker::Unreached;
 use crate::sandbox::registry::{self, SandboxState, SANDBOXES};
@@ -119,7 +119,7 @@ pub(crate) fn unanswered(id: &str, daemon: &SdkValue, refusal: SdkRefusal) -> Sd
 /// `root`, with the daemon's endpoint in the machine and its control keys
 /// (`control`), which only the caller reads.
 pub(crate) fn with_keys(root: &Path, name: &str, out: SdkValue) -> Outcome {
-    let keys = read_record(&paths::sandbox_dir(root, name).join("control.json"))?
+    let keys = crate::common::secrets::daemon_keys(&paths::sandbox_dir(root, name))?
         .ok_or_else(|| refused("Failed", format!("Sandbox {name} has no daemon keys")))?;
     Ok(home::with_field(out, "control", keys))
 }
@@ -215,7 +215,7 @@ pub(crate) fn save(home: &Path, record: SandboxRecord, opened: &Opened) -> Resul
     let (Some(keys), Some(daemon)) = (&opened.keys, &opened.daemon) else {
         return Ok(record);
     };
-    if let Err(refusal) = write_record(&record.dir(home).join("control.json"), keys) {
+    if let Err(refusal) = crate::common::secrets::save_daemon_keys(&record.dir(home), keys) {
         end(home, record.machine(), daemon);
         return Err(refusal);
     }

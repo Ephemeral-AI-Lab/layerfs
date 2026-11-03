@@ -3,7 +3,7 @@
 //! `<root>/sandbox/<name>/` holds its record (`record.json`, with what
 //! reopens it under `daemon`), its daemon keys (`control.json`) and one
 //! record per Workspace (`workspace/<id>.json`). No mutation replay.
-use crate::common::home::{paths, read_record, write_entity, write_record};
+use crate::common::home::{paths, read_record, write_entity};
 use crate::common::outcome::{failed, refused};
 use crate::sandbox::recorded::{gone, recorded, Recorded};
 use crate::sandbox::registry::{self, Mount, Project, SandboxState};
@@ -261,12 +261,6 @@ pub(crate) fn load(path: &Path) -> Result<SdkValue> {
         _ => Err(refused("InvalidInput", "discovery record kind")),
     }
 }
-fn bytes<const N: usize>(value: &SdkValue, key: &str) -> Result<[u8; N]> {
-    match value.get(key) {
-        Some(SdkValue::Bytes(bytes)) => bytes.as_slice().try_into().map_err(failed),
-        _ => Err(refused("InvalidInput", format!("discovery {key}"))),
-    }
-}
 pub(crate) fn save_project(path: &Path, project: &Project) -> Result<()> {
     // the record is read, changed and written whole under the lock of the
     // home it is in: `<home>/store/<store>/project/<name>/`
@@ -405,8 +399,8 @@ pub(crate) fn save_sandbox(
             .collect(),
     );
     // the keys first: a record with `daemon` is a started Sandbox
-    write_record(
-        &directory.join("control.json"),
+    crate::common::secrets::save_daemon_keys(
+        directory,
         &SdkValue::map([
             (
                 "endpoint",
@@ -498,7 +492,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
         ));
     };
     private(&directory, true)?;
-    let keys = read_record(&directory.join("control.json"))?
+    let keys = crate::common::secrets::daemon_keys(&directory)?
         .ok_or_else(|| refused("NoSuchSandbox", format!("Sandbox {id} has no daemon keys")))?;
     let project = registry::text(args, "project")?;
     // a Sandbox in a machine whose daemon's port is forwarded here (#535
@@ -517,9 +511,9 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     let dial = crate::daemon::pool::Dial {
         endpoint,
         host,
-        secret: bytes(&keys, "secret")?,
-        peer: bytes(&keys, "peer")?,
-        instance: bytes(&keys, "instance")?,
+        secret: crate::common::secrets::key(&keys, "secret")?,
+        peer: crate::common::secrets::key(&keys, "peer")?,
+        instance: crate::common::secrets::key(&keys, "instance")?,
     };
     let forwarded = runtime.is_none();
     let control = dial.open_waiting().map_err(|refusal| match forwarded {

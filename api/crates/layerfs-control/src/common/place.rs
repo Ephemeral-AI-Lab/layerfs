@@ -6,7 +6,6 @@
 //! else in that machine's worker, `docker` on every host included (G8).
 //! A Sandbox's daemon reached directly (G4) is not an executor here: its
 //! Workspace calls take that route in `sandbox/direct.rs`.
-use crate::common::home::{paths, read_record};
 use crate::common::outcome::{refused, Outcome};
 use crate::machine::worker::{self, Endpoint, Unreached};
 use crate::store::record::StoreRef;
@@ -156,7 +155,7 @@ fn local(_: &Path, machine: &str) -> Result<bool> {
 /// `Unavailable` when it records none. A recorded worker that is gone
 /// fails when called.
 fn recorded(home: &Path, machine: &str) -> Result<Endpoint> {
-    let Some(value) = read_record(&paths::worker_record(home, machine))? else {
+    let Some(worker) = crate::common::secrets::worker_secret(home, machine)? else {
         return Err(refused(
             "Unavailable",
             format!(
@@ -164,17 +163,8 @@ fn recorded(home: &Path, machine: &str) -> Result<Endpoint> {
             ),
         ));
     };
-    let address = value
-        .get_text("address")
-        .and_then(|a| a.parse().ok())
-        .ok_or_else(|| {
-            refused(
-                "Failed",
-                format!("machine {machine}'s worker.json has no address"),
-            )
-        })?;
     Ok(Endpoint {
-        address,
-        secret: value.get_text("secret").unwrap_or("").to_owned(),
+        address: worker.address,
+        secret: worker.secret,
     })
 }

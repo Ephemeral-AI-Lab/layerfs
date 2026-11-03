@@ -3,7 +3,7 @@
 //! live forward; 0600, while the worker runs). Nothing in the adapters
 //! reads the home.
 use super::record::MachineRecord;
-use crate::common::home::{self, paths, read_record, write_record};
+use crate::common::home::{self, paths, write_record};
 use crate::common::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_machine::{
@@ -164,22 +164,11 @@ pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> 
 
 /// The endpoint in `worker.json`, if the machine has one.
 pub fn worker(home: &Path, name: &str) -> Result<Option<Endpoint>> {
-    let Some(value) = read_record(&paths::worker_record(home, name))? else {
-        return Ok(None);
-    };
-    let address = value
-        .get_text("address")
-        .and_then(|a| a.parse().ok())
-        .ok_or_else(|| {
-            refused(
-                "Failed",
-                format!("machine {name}'s worker.json has no address"),
-            )
-        })?;
-    Ok(Some(Endpoint {
-        address,
-        secret: value.get_text("secret").unwrap_or("").to_owned(),
-        forward_pid: value.get_int("forward_pid").map(|p| p as u32),
+    let worker = crate::common::secrets::worker_secret(home, name)?;
+    Ok(worker.map(|worker| Endpoint {
+        address: worker.address,
+        secret: worker.secret,
+        forward_pid: worker.forward_pid,
     }))
 }
 
