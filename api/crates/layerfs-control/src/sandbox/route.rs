@@ -98,41 +98,70 @@ fn host_args(
 /// caller, with a loopback host rewritten to the machine's alias or refused
 /// (`layerfs_machine::reach`). It travels only in the one request that runs
 /// the call and is never written to a record.
-fn reached(home: &Path, machine: &str, record: &StoreRecord) -> Result<SdkValue> {
+/// With it, what a failed reach check tells a user to check on that
+/// machine's platform, if anything.
+fn reached(
+    home: &Path,
+    machine: &str,
+    record: &StoreRecord,
+) -> Result<(SdkValue, Option<&'static str>)> {
     let url = crate::common::secrets::url(record)?;
     // a build without machines (the guest's) runs its own Sandboxes on the
     // machine it is, which shares its loopback
     #[cfg(feature = "machine")]
-    let url = {
+    let (url, hint) = {
         let id = home::open(home)?.id;
         let spec =
             crate::machine::machine_spec(home, &id, &crate::machine::machine_of(home, machine)?)?;
-        layerfs_machine::reach(&spec, &url).map_err(crate::machine::machine_refusal)?
+        let hint = (spec.kind == layerfs_machine::Platform::AppleContainer).then_some(
+            "an apple-container machine reaches a server on this host only when it listens on the container network's bridge (0.0.0.0, as Docker Desktop publishes a port), not on 127.0.0.1 alone",
+        );
+        let url = layerfs_machine::reach(&spec, &url).map_err(crate::machine::machine_refusal)?;
+        (url, hint)
     };
     #[cfg(not(feature = "machine"))]
-    let _ = (home, machine);
-    Ok(crate::store::connect::selection_at(record, url))
+    let hint = {
+        let _ = (home, machine);
+        None
+    };
+    Ok((crate::store::connect::selection_at(record, url), hint))
 }
 
 /// The reach check of a PostgreSQL Sandbox's create (#535 §7.4 step 4), on
 /// the side that launches it: one connection to the server it will dial
 /// reads the LayerFS schema's binding, which must be the Store record's.
 /// It proves the server is reached and is the same Store; a failure names
-/// the host it tried, never the URL.
-fn reach_check(who: &str, store: &StoreRecord, postgresql: &SdkValue) -> Result<()> {
+/// the machine and the host it tried, never the URL, and adds `hint`. A
+/// build without the PostgreSQL engine says so, not that it cannot reach.
+fn reach_check(
+    who: &str,
+    store: &StoreRecord,
+    postgresql: &SdkValue,
+    hint: Option<&str>,
+) -> Result<()> {
     let url = postgresql.get_text("url").unwrap_or("");
     let host = layerfs_sandbox::PostgresUrl::parse(url)
         .map(|url| url.host().to_owned())
         .unwrap_or_default();
     let probe = SdkValue::map([("postgresql", postgresql.clone())]);
     let binding = crate::store::postgres::read_binding(&probe).map_err(|refusal| {
+        let name = store.name();
+        let message = match (refusal.code.as_str(), hint) {
+            ("Unsupported", _) => {
+                return refused(
+                    "Unsupported",
+                    format!(
+                        "{who} cannot check PostgreSQL Store {name}'s server: {}",
+                        refusal.message
+                    ),
+                )
+            }
+            (_, Some(hint)) => format!("{}; {hint}", refusal.message),
+            (_, None) => refusal.message,
+        };
         refused(
             "Unavailable",
-            format!(
-                "{who} cannot reach PostgreSQL Store {}'s server at {host}: {}",
-                store.name(),
-                refusal.message
-            ),
+            format!("{who} cannot reach PostgreSQL Store {name}'s server at {host}: {message}"),
         )
     })?;
     if store.binding() != Some(binding.as_slice()) {
@@ -216,9 +245,12 @@ fn host_op(
             .map(str::to_owned),
     };
     let kind = target.store_ref.kind();
-    let postgresql = match kind {
-        StoreKind::Postgresql => Some(reached(&home, machine, &target.record)?),
-        StoreKind::Sqlite => None,
+    let (postgresql, hint) = match kind {
+        StoreKind::Postgresql => {
+            let (value, hint) = reached(&home, machine, &target.record)?;
+            (Some(value), hint)
+        }
+        StoreKind::Sqlite => (None, None),
     };
     // a Sandbox's host operations run where its machine runs them, for
     // either Store kind (#535 §7.4)
@@ -235,7 +267,12 @@ fn host_op(
     match executor {
         Executor::Local => {
             if let (Some(postgresql), "sandbox.create") = (&postgresql, op) {
-                reach_check(&format!("machine {machine}"), &target.record, postgresql)?;
+                reach_check(
+                    &format!("machine {machine}"),
+                    &target.record,
+                    postgresql,
+                    hint,
+                )?;
             }
             let how = deploy::resolve(&Side::Home(&home), &target.store, &choice)?;
             let args = host_args(
@@ -271,6 +308,11 @@ fn host_op(
             fields.push(("deploy", choice));
             if let Some(postgresql) = postgresql {
                 fields.push(("postgresql", postgresql));
+                // what the worker's reach check names and suggests
+                fields.push(("machine", SdkValue::text(machine)));
+                if let Some(hint) = hint {
+                    fields.push(("reach_hint", SdkValue::text(hint)));
+                }
             }
             fields.push((
                 "more",
@@ -373,7 +415,11 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
         StoreKind::Sqlite => None,
     };
     if let (Some(postgresql), "sandbox.create") = (&postgresql, op) {
-        reach_check("the worker's machine", &record, postgresql)?;
+        let who = match args.get_text("machine") {
+            Some(machine) => format!("machine {machine}"),
+            None => "the worker's machine".to_owned(),
+        };
+        reach_check(&who, &record, postgresql, args.get_text("reach_hint"))?;
     }
     let host = host_args(
         root,

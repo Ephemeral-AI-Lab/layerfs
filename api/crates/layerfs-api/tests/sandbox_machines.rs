@@ -510,5 +510,23 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
     .unwrap_err();
     assert_ne!(refused.0, "NotFound", "{refused:?}");
     assert!(!refused.1.contains("machine start"), "{refused:?}");
+    // the reach check names the machine; a build without the PostgreSQL
+    // engine says so instead of "cannot reach", and a server that takes
+    // no connection is said to, not shown as an engine status
+    let (code, message) = refused;
+    if cfg!(feature = "postgresql") {
+        assert_eq!(code, "Unavailable", "{message}");
+        assert!(
+            message.starts_with("machine native cannot reach PostgreSQL Store pg's server at 127.0.0.1: no connection to the server was made"),
+            "{message}"
+        );
+    } else {
+        assert_eq!(code, "Unsupported", "{message}");
+        assert!(
+            message.starts_with("machine native cannot check PostgreSQL Store pg's server:"),
+            "{message}"
+        );
+    }
+    assert!(!message.contains("Closed"), "{message}");
     let _ = std::fs::remove_dir_all(home);
 }

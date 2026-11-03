@@ -122,8 +122,17 @@ pub(crate) fn read_binding(args: &SdkValue) -> Result<Vec<u8>, SdkRefusal> {
 fn binding(url: &str, schema: &str, sync: &str) -> Result<Vec<u8>, SdkRefusal> {
     #[cfg(feature = "postgresql")]
     {
-        layerfs_persistence::PostgresHandles::binding(&selection(url, schema, sync))
-            .map_err(|error| refused("Failed", format!("reading schema {schema}: {error}")))
+        use layerfs_storage::port::PersistenceError;
+        (layerfs_persistence::PostgresHandles::binding(&selection(url, schema, sync))).map_err(
+            |error| match error {
+                // the driver made no connection: refused, no answer, or closed
+                PersistenceError::Refused { status, .. } if status == "Closed" => refused(
+                    "Unavailable",
+                    "no connection to the server was made (it refused the connection, did not answer, or closed it)",
+                ),
+                error => refused("Failed", format!("reading schema {schema}: {error}")),
+            },
+        )
     }
     #[cfg(not(feature = "postgresql"))]
     {
