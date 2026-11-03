@@ -9,9 +9,12 @@ use crate::setup::guest::Guest;
 use crate::setup::Status;
 use crate::spec::{Bundle, Forward, Running, Spec, Tools};
 
-/// The name a lima guest reaches the host's loopback by (#535 §7.3; not yet
-/// verified live, G7: `support.rs` refuses its PostgreSQL Sandboxes).
-const HOST_ALIAS: &str = "host.lima.internal";
+/// The address a lima guest reaches the host's loopback at (#535 §7.3): the
+/// gateway of Lima's default user-mode network, which the guest's
+/// `/etc/hosts` names `host.lima.internal`. The address, not the name: a
+/// Sandbox daemon runs in the Sandbox image's root, which has no such
+/// hosts entry (G7 live receipt, `receipts/g7-live/`).
+const HOST_ALIAS: &str = "192.168.5.2";
 
 pub(crate) struct Lima;
 pub(crate) static ADAPTER: Lima = Lima;

@@ -391,8 +391,9 @@ layerfs project init pg-main/load ./load
   nothing installs PostgreSQL in a machine (D12). The VM platforms have
   their rewrites, and each stays refused until a live run proves it
   (`layerfs machine platforms` says why):
-  - `lima`: `host.lima.internal`, which reaches a server on this host's
-    loopback.
+  - `lima`: `192.168.5.2` (the guest's `host.lima.internal`; the address,
+    because the Sandbox's own root has no hosts entry for the name), which
+    reaches a server on this host's loopback.
   - `apple-container`: the container network's gateway, read from
     `container inspect` (192.168.64.1 by default). The server must listen
     on that bridge (`0.0.0.0`, as Docker Desktop publishes a port), not on

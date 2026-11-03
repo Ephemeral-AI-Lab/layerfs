@@ -66,7 +66,7 @@ fn each_platform_rewrites_or_refuses_a_loopback_host() {
         let alias = match kind {
             Platform::Native => Some("unchanged"),
             Platform::Docker => Some("host.docker.internal"),
-            Platform::Lima => Some("host.lima.internal"),
+            Platform::Lima => Some("192.168.5.2"),
             Platform::AppleContainer => Some("192.168.64.1"),
             Platform::Microsandbox => Some("host.microsandbox.internal"),
             Platform::Firecracker => Some("192.168.5.2"),

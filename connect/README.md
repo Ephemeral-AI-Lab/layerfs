@@ -29,7 +29,8 @@ Store is backed up. Layers are `core < engine < connect < api`; nothing in
   the PostgreSQL Store URL a Sandbox daemon on the machine dials. Each
   adapter names how its machine reaches the caller's loopback: `native`
   shares it; `docker` (`host.docker.internal`) and `lima`
-  (`host.lima.internal`) rewrite a loopback host to their alias, and so do
+  (`192.168.5.2`, the address of `host.lima.internal`) rewrite a loopback
+  host to their alias, and so do
   `apple-container` (its network's gateway from `container inspect`),
   `microsandbox` (`host.microsandbox.internal`; machines get
   `--net public,host`) and `firecracker` (`192.168.5.2`, through the Lima

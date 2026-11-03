@@ -395,7 +395,7 @@ fn loopback(spec: &Spec) -> Loopback {
     match spec.kind {
         Platform::Native => Loopback::Shared,
         Platform::Docker => Loopback::Alias("host.docker.internal".into()),
-        Platform::Lima => Loopback::Alias("host.lima.internal".into()),
+        Platform::Lima => Loopback::Alias("192.168.5.2".into()),
         // the Lima host's own host address, through its masquerade
         Platform::Firecracker => Loopback::Alias("192.168.5.2".into()),
         // the gateway the stand-in `container inspect` reports (`reach_specs`)
