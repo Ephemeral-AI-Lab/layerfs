@@ -37,7 +37,10 @@ pub(crate) struct SandboxState {
     pub(crate) name: String,
     /// Its folder, `<root>/sandbox/<id>/`.
     pub(crate) directory: std::path::PathBuf,
-    pub(crate) runtime: Box<layerfs_sandbox::Sandbox>,
+    /// Its runtime, observed where it runs; `None` for a Sandbox this
+    /// process reaches only through its daemon's forwarded port (#535 G4),
+    /// whose runtime is in its machine.
+    pub(crate) runtime: Option<Box<layerfs_sandbox::Sandbox>>,
     pub(crate) identity: CommandIdentity,
     pub(crate) controls: crate::daemon::pool::Controls,
     pub(crate) mounts: Mutex<BTreeMap<String, Mount>>,
@@ -91,12 +94,15 @@ pub(crate) fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefu
     let Some(state) = lock(&SANDBOXES)?.get(&directory).cloned() else {
         return sandbox(args);
     };
-    if let Err(failure) = state.runtime.endpoint() {
+    let Some(runtime) = &state.runtime else {
+        return Ok(state);
+    };
+    if let Err(failure) = runtime.endpoint() {
         lock(&SANDBOXES)?.remove(&directory);
         return Err(if failure.container_gone() || failure.container_stopped() {
             crate::sandbox::recorded::gone(
                 &state.id,
-                &state.runtime.identity().to_string(),
+                &runtime.identity().to_string(),
                 failure.container_stopped(),
             )
         } else {
@@ -107,6 +113,20 @@ pub(crate) fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefu
 }
 
 impl SandboxState {
+    /// Its runtime; a forwarded Sandbox's is its machine's, which this
+    /// process does not run (its commands go through the worker).
+    pub(crate) fn runtime(&self) -> Result<&layerfs_sandbox::Sandbox, SdkRefusal> {
+        self.runtime.as_deref().ok_or_else(|| {
+            refused(
+                "Failed",
+                format!(
+                    "Sandbox {}'s runtime is in its machine; this process reaches only its daemon",
+                    self.id
+                ),
+            )
+        })
+    }
+
     /// The token of the Workspace mounted at `path`.
     pub(crate) fn token(&self, path: &str) -> Result<WorkspaceToken, SdkRefusal> {
         self.mounted(path, |mount| mount.workspace.bound.token)

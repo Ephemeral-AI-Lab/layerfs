@@ -296,7 +296,7 @@ fn start_claimed(
         project: name.to_owned(),
         name: container_name,
         directory: directory.to_owned(),
-        runtime,
+        runtime: Some(runtime),
         identity,
         controls: crate::daemon::pool::Controls::new(control, dial),
         mounts: Default::default(),
@@ -457,26 +457,24 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
             return Err(refusal);
         }
     };
+    let runtime = state.runtime()?;
     Ok(SdkValue::map([
         ("sandbox", SdkValue::text(&state.id)),
         ("name", SdkValue::text(&state.name)),
         (
             "image",
-            SdkValue::text(crate::sandbox::runtime::image(&state.runtime)),
+            SdkValue::text(crate::sandbox::runtime::image(runtime)),
         ),
         ("platform", SdkValue::text(platform)),
         (
             "runtime",
-            SdkValue::text(crate::sandbox::runtime::kind(&state.runtime)),
+            SdkValue::text(crate::sandbox::runtime::kind(runtime)),
         ),
         (
             "route",
-            SdkValue::text(crate::sandbox::files::route(&state.runtime)),
+            SdkValue::text(crate::sandbox::files::route(runtime)),
         ),
-        (
-            "runtime_id",
-            SdkValue::text(state.runtime.identity().to_string()),
-        ),
+        ("runtime_id", SdkValue::text(runtime.identity().to_string())),
     ]))
 }
 

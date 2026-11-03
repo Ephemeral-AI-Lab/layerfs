@@ -20,13 +20,14 @@ fn run(
     arguments: Vec<String>,
     spool: bool,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
+    let runtime = state.runtime()?;
     crate::sandbox::runtime::run(
-        &state.runtime,
+        runtime,
         state.identity,
         arguments,
         vec![format!(
             "HOME={}",
-            crate::sandbox::runtime::scratch(&state.runtime)
+            crate::sandbox::runtime::scratch(runtime)
         )],
         directory,
         spool,
