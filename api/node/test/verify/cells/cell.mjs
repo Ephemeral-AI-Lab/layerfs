@@ -20,6 +20,12 @@
 // made once per kind, not per cell): the cell's own Store `c<nn>` is made
 // there, pushed native -> <machine> and, after the cells, pulled back to native, then
 // removed; the home stays.
+// LFS535_PG_URL makes the cell's Store a PostgreSQL Store (#535 phase 8
+// item 2): `store connect` of that URL ("{cell}" becomes the cell's
+// lower-case name, e.g. a database per cell; no password in it) with
+// LFS535_PG_PASSWORD as its password reference (`env:NAME`); the Store is
+// never pushed or pulled, and the cell disconnects it at the end (its data
+// stays in the server).
 // One cell per command; nothing else runs a cell at the same time, so the
 // 1.1.0 host-wide lock is not ported. The receipt holds every step's time,
 // the 1-minute load and the verdict.
@@ -72,6 +78,8 @@ const lfs = client({ home });
 const storeName = shared ? `c${cell.slice(1)}` : "cells";
 const project = `${storeName}/p`;
 let pushed = false;
+const pgUrl = process.env.LFS535_PG_URL?.replaceAll("{cell}", cell.toLowerCase());
+out.store = pgUrl ? { kind: "postgresql", host: new URL(pgUrl).hostname } : { kind: "sqlite" };
 const name = `c${cell.slice(1)}`;
 let sandbox = null;
 const mounted = new Set();
@@ -98,13 +106,18 @@ try {
         encoding: "utf8",
       }));
   }
-  await step("store.create", () => lfs.store.create(storeName));
+  if (pgUrl) {
+    const password = process.env.LFS535_PG_PASSWORD;
+    await step("store.connect", () => lfs.store.connect(storeName, pgUrl, password ? { password } : {}));
+  } else {
+    await step("store.create", () => lfs.store.create(storeName));
+  }
   await step("project.init", () => lfs.project.init(project, empty));
   await step("branch.fork", () => lfs.branch.fork(project, "lane", "main"));
   if (machine === "docker" && process.env.LFS533_IMAGE) {
     await step("machine.update", () => lfs.machine.update("docker", { image: process.env.LFS533_IMAGE }));
   }
-  if (machine !== "native") {
+  if (machine !== "native" && !pgUrl) {
     await step("store.push", () => lfs.store.push(storeName, machine));
     pushed = true;
   }
@@ -163,7 +176,10 @@ try {
     );
   }
   if (sandbox) await step("sandbox.close", () => lfs.sandbox.close(sandbox)).catch((error) => { out.closeError = error.message; });
-  if (shared) {
+  if (pgUrl) {
+    // its data stays in the server; the home forgets it
+    await step("store.disconnect", () => lfs.store.disconnect(storeName)).catch((error) => { out.removeError = error.message; });
+  } else if (shared) {
     // the Store comes back to native, then goes; the home and its machine stay
     if (pushed) await step("store.pull", () => lfs.store.pull(storeName)).catch((error) => { out.pullError = error.message; });
     await step("store.remove", () => lfs.store.remove(storeName)).catch((error) => { out.removeError = error.message; });
@@ -184,10 +200,10 @@ try {
   if (!shared) rmSync(home, { recursive: true, force: true });
   rmSync(empty, { recursive: true, force: true });
 }
-if (out.moveBackError || out.removeError) {
+if (out.pullError || out.removeError) {
   out.ok = false;
-  out.cause = [out.cause, out.moveBackError, out.removeError].filter(Boolean).join("; ");
+  out.cause = [out.cause, out.pullError, out.removeError].filter(Boolean).join("; ");
   writeFileSync(receipt, JSON.stringify(out, null, 2) + "\n");
 }
-console.log(`${cell} ${machine} ${out.ok ? "PASS" : "FAIL"} ${out.cause ?? ""} timed exec ${out.phases.timed?.exec?.wallMs ?? "-"} ms`);
+console.log(`${cell} ${machine} ${out.store.kind} ${out.ok ? "PASS" : "FAIL"} ${out.cause ?? ""} timed exec ${out.phases.timed?.exec?.wallMs ?? "-"} ms`);
 process.exit(out.ok ? 0 : 1);
