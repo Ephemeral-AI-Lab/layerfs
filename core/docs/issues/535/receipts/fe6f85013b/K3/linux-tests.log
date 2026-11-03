@@ -1,0 +1,63 @@
+$ python3 tools/worktree.py cargo --resources <resources.json> --platform linux --timeout 100 -- test -p layerfs-api --features machine --test sandbox_family named_sandboxes_on_native -- --exact 
+# at 2026-11-03T07:25:49Z load1 15.31
+exit 1 wall_s 1
+
+$ python3 tools/worktree.py cargo --resources <resources.json> --platform linux --timeout 100 -- test -p layerfs-api --features machine --test sandbox_machines a_sandbox_with_no_machine_runs_on_its_store_s -- --exact 
+# at 2026-11-03T07:25:50Z load1 15.31
+exit 1 wall_s 1
+
+# NOTE: the two invocations above never ran a test: the driver loop ran in zsh, which does not word-split `set -- $t`,
+# so cargo got `--test "<target> <name>"` and refused it at compile ("no test target named ...", exit 101). Harness fault; rerun below with lt.sh.
+
+$ python3 tools/worktree.py cargo --resources <resources.json> --platform linux --timeout 100 -- test -p layerfs-api --features machine --test sandbox_family -- --exact named_sandboxes_on_native
+# at 2026-11-03T07:26:28Z load1 12.99
+Worktree operation refused: Command exited 101; inspect /Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-verify-417967c19d8d/builds/cargo-linux-06398d835f4745b5a647ad0506385788/output.log
+exit 1 wall_s 3
+
+$ python3 tools/worktree.py cargo --resources <resources.json> --platform linux --timeout 100 -- test -p layerfs-api --features machine --test sandbox_machines -- --exact a_sandbox_with_no_machine_runs_on_its_store_s
+# at 2026-11-03T07:26:31Z load1 13.15
+exit 0 wall_s 1
+
+# launcher output of the sandbox_family run above (cargo-linux-06398d835f47):
+
+---- named_sandboxes_on_native stdout ----
+
+thread 'named_sandboxes_on_native' panicked at api/crates/layerfs-api/tests/sandbox_family.rs:33:47:
+project.init: ("Unsupported", "filesystem 0x794c7630 at /tmp/lfs-sbx-home-16/store does not carry SQLite locks between kernels; direct Store access needs ext4, xfs or btrfs")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    named_sandboxes_on_native
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+error: test failed, to rerun pass `-p layerfs-api --test sandbox_family`
+# launcher output of the sandbox_machines run above (cargo-linux-b809f1016b5e):
+
+running 1 test
+test a_sandbox_with_no_machine_runs_on_its_store_s ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.01s
+
+
+# DIAGNOSIS sandbox_family: the launcher container's /tmp is overlayfs (magic 0x794c7630); the direct Store refuses it by design
+# (needs ext4/xfs/btrfs). Environment, not product. Rerun both tests as the verify lane did: the prebuilt test executable in a fresh
+# container (build image sha256:378b799e...) with a fresh ext4-backed Docker volume at /tmp (runexe.sh, copied as lt-exe.sh), timeout 115.
+
+$ lt-exe.sh plain api/crates/layerfs-api debug/deps/sandbox_family-4dd864ead58ddd48 -- --exact named_sandboxes_on_native
+# at 2026-11-03T07:27:15Z load1 12.17
+running 1 test
+test named_sandboxes_on_native ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+### rc=0 wall=0s
+
+$ lt-exe.sh plain api/crates/layerfs-api debug/deps/sandbox_machines-b5901eb49a07b046 -- --exact a_sandbox_with_no_machine_runs_on_its_store_s
+# at 2026-11-03T07:27:16Z load1 12.24
+running 1 test
+test a_sandbox_with_no_machine_runs_on_its_store_s ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+### rc=0 wall=1s
+
+# (one more driver attempt between the note above and the two runs above failed in zsh argument splitting before any container started; nothing ran)
+# VERDICT item 5: both tests PASS on Linux (aarch64, Docker Desktop kernel, ext4 /tmp), each well under 120 s.

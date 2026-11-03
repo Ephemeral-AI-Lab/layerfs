@@ -1,0 +1,73 @@
+$ layerfs store create pw
+# at 2026-11-03T07:22:19Z load1 11.14
+{"name":"pw","kind":"sqlite","machine":"native","profile":"disposable","created":1793690539953,"sqlite":"3.53.2","projects":[]}
+exit 0  wall_ms 47
+
+$ layerfs store push pw lfs535k3l
+# at 2026-11-03T07:22:20Z load1 11.14
+{"store":"pw","from":"native","to":"lfs535k3l","bytes":212992,"heads":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+exit 0  wall_ms 106
+
+$ layerfs store status pw
+# at 2026-11-03T07:22:20Z load1 11.14
+{"name":"pw","kind":"sqlite","state":"idle","holders":[],"op":null,"down_reason":null,"machine":"lfs535k3l","file":{"exists":true,"free":19864686592,"bytes":212992,"wal_bytes":0}}
+exit 0  wall_ms 42
+
+$ layerfs machine stop lfs535k3l
+# at 2026-11-03T07:22:20Z load1 11.14
+{"name":"lfs535k3l","platform":"lima","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":2,"memory":4294967296,"disk":21474836480,"stores":["pw"],"sandboxes":[]}
+exit 0  wall_ms 1774
+
+$ layerfs machine list
+# at 2026-11-03T07:22:22Z load1 11.69
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]},{"name":"lfs535k3l","platform":"lima","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":2,"memory":4294967296,"disk":21474836480,"stores":["pw"],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}]}
+exit 0  wall_ms 131
+
+$ layerfs machine status lfs535k3l
+# at 2026-11-03T07:22:22Z load1 11.69
+{"name":"lfs535k3l","platform":"lima","state":"stopped","free_disk":null,"tool_version":"limactl version 2.2.1","down_reason":"the machine is stopped","stores":["pw"]}
+exit 0  wall_ms 109
+
+$ layerfs store status pw
+# at 2026-11-03T07:22:22Z load1 11.69
+{"name":"pw","kind":"sqlite","state":"down","holders":[],"op":null,"down_reason":"machine lfs535k3l is not running; start it with `layerfs machine start lfs535k3l`","machine":"lfs535k3l","file":{"unavailable":"machine lfs535k3l is not running; start it with `layerfs machine start lfs535k3l`"}}
+exit 0  wall_ms 36
+
+$ layerfs machine list
+# at 2026-11-03T07:22:22Z load1 11.69
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]},{"name":"lfs535k3l","platform":"lima","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":2,"memory":4294967296,"disk":21474836480,"stores":["pw"],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}]}
+exit 0  wall_ms 128
+
+$ limactl list (independent check)
+NAME                      STATUS     SSH                VMTYPE    ARCH       CPUS    MEMORY    DISK      DIR
+lfs-ee8a22db-lfs535k3l    Stopped    127.0.0.1:60962    vz        aarch64    2       4GiB      100GiB    ~/.lima/lfs-ee8a22db-lfs535k3l
+
+$ layerfs machine start lfs535k3l
+# at 2026-11-03T07:22:30Z load1 10.65
+{"name":"lfs535k3l","platform":"lima","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":2,"memory":4294967296,"disk":21474836480,"stores":["pw"],"sandboxes":[]}
+exit 0  wall_ms 11852
+
+$ layerfs machine status lfs535k3l
+# at 2026-11-03T07:22:42Z load1 11.88
+{"name":"lfs535k3l","platform":"lima","state":"running","free_disk":19864686592,"tool_version":"limactl version 2.2.1","down_reason":null,"stores":["pw"]}
+exit 0  wall_ms 157
+
+$ layerfs store status pw
+# at 2026-11-03T07:22:42Z load1 11.88
+{"name":"pw","kind":"sqlite","state":"idle","holders":[],"op":null,"down_reason":null,"machine":"lfs535k3l","file":{"exists":true,"free":19864686592,"bytes":212992,"wal_bytes":0}}
+exit 0  wall_ms 39
+
+$ layerfs store pull pw
+# at 2026-11-03T07:22:43Z load1 11.88
+{"store":"pw","from":"lfs535k3l","to":"native","bytes":212992,"heads":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+exit 0  wall_ms 101
+
+$ layerfs store remove pw
+# at 2026-11-03T07:22:43Z load1 11.88
+{"removed":"pw"}
+exit 0  wall_ms 39
+
+$ limactl list (independent check)
+NAME                      STATUS     SSH                VMTYPE    ARCH       CPUS    MEMORY    DISK      DIR
+lfs-ee8a22db-lfs535k3l    Running    127.0.0.1:61359    vz        aarch64    2       4GiB      100GiB    ~/.lima/lfs-ee8a22db-lfs535k3l
+

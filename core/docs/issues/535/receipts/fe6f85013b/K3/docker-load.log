@@ -1,0 +1,11 @@
+Loaded image ID: sha256:1499b86412fa5c7474cf28832aca519531ba0f08dc79f5e1f7e441da9ab7a0a7
+docker: 'docker image inspect' requires at least 1 argument
+
+Usage:  docker image inspect [OPTIONS] IMAGE [IMAGE...]
+
+See 'docker image inspect --help' for more information
+exit 0
+sha256:1499b86412fa5c7474cf28832aca519531ba0f08dc79f5e1f7e441da9ab7a0a7 arm64 2747688232
+IMAGE        ID             DISK USAGE   CONTENT SIZE   EXTRA
+<untagged>   1499b86412fa       5.58GB         2.75GB        
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES

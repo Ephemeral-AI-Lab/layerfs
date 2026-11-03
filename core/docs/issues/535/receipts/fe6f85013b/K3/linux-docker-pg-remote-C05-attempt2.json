@@ -1,0 +1,46 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C05",
+  "machine": "docker",
+  "product": "fe6f85013b",
+  "startedAt": "2026-11-03T07:42:27.402Z",
+  "load1": 0.31,
+  "body": {
+    "sha256": "4306a767d8d5316887f0543abef12d01676bbdfdaff121fd039e56cad5742c8d"
+  },
+  "ok": false,
+  "cause": "project.init: Exists Store c05 already has a project named p",
+  "phases": {},
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 3.181,
+      "ok": true
+    },
+    {
+      "name": "store.connect",
+      "ms": 281.906,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 0.815,
+      "ok": false,
+      "error": {
+        "code": "Exists",
+        "message": "Store c05 already has a project named p"
+      }
+    },
+    {
+      "name": "store.disconnect",
+      "ms": 0.385,
+      "ok": true
+    }
+  ],
+  "store": {
+    "kind": "postgresql",
+    "host": "192.168.2.123"
+  },
+  "failedStep": "project.init",
+  "endedAt": "2026-11-03T07:42:27.692Z"
+}
