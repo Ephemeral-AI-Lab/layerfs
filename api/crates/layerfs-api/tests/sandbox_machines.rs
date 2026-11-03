@@ -439,7 +439,7 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
 }
 
 /// With no machine named, `sandbox.create` runs where the Store's calls
-/// run (#536 §10): a sqlite Store's machine (here a stopped lima machine,
+/// run (#536 §10): a sqlite Store's machine (here a stopped microsandbox machine,
 /// so the create is refused naming its start), and `native` for a
 /// PostgreSQL Store (refused here by the reach check, which runs there).
 #[test]
@@ -448,7 +448,9 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
     home::open(&home).unwrap();
     home::write_record(
         &paths::machine_record(&home, "box"),
-        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+        // microsandbox runs on macOS and Linux hosts, so the support table
+        // passes this machine on either
+        &SdkValue::map([("name", t("box")), ("platform", t("microsandbox"))]),
     )
     .unwrap();
     home::write_record(
