@@ -127,6 +127,12 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   call whose answer is lost after it was sent is `Unknown`; it starts
   nothing and is not resent. `store move` and `store remove` make their
   machines ready before they mark the Store.
+- `machine start <name>` starts a stopped machine and its worker and waits
+  until it is ready; a running machine answers at once. `machine stop
+  <name>` stops the worker and, where there is one, the VM (`docker`: its
+  worker container; `ssh`: the worker and its forward); disks and Stores
+  stay. It is `InUse` while Sandboxes run on the machine (`detail.related`
+  names them). `native` answers both at once (#535 P1).
 - No list, get or status call starts a machine (#535 P4): every `*.list`,
   `*.get` and `*.status` call and `machine platforms` answer from records
   and live probes, and a stopped machine reads as `stopped` (`store status`:

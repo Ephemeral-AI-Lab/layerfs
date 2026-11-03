@@ -12,6 +12,8 @@ machine.list()
 machine.platforms()
 machine.get(name)
 machine.status(name)
+machine.start(name)
+machine.stop(name)
 machine.create(name, platform, { cpus, memory, disk, image, nested, host })
 machine.connect(name, host, { user, port, identity, known_hosts, root })
 machine.remove(name)
@@ -23,7 +25,8 @@ A machine is one kernel where Sandboxes run. Two are built in and always
 recorded: `native` (the host itself) and `docker`. VMs (`apple-container`,
 `microsandbox`, `lima`, `firecracker`) are created; an ssh host is connected.
 A machine starts on the first call that needs it; its worker stops it when
-idle (10 minutes, O2) and it keeps its disk.
+idle (10 minutes, O2) and it keeps its disk. No list, get or status call
+starts one (#535 P4): a UI calls `machine.start(name)` first.
 
 ## Reads
 
@@ -63,6 +66,8 @@ started:
 
 | Call | What it does | Notes |
 | --- | --- | --- |
+| `start(name)` | Starts a stopped machine and its worker and waits until ready | A running machine and `native` answer at once. Returns the machine as `get` does. `InUse` while the machine is being removed |
+| `stop(name)` | Stops the worker and, where there is one, the VM; disks stay | `InUse` while Sandboxes run on it; `detail.related` lists them as `{ kind: "sandbox", name }`. `native` answers at once. The next call that needs the machine starts it again |
 | `create(name, platform, …)` | Makes and starts a VM | `Unsupported` when the platform's tool is missing; `InvalidInput` for `native`, `docker` or `ssh`. `memory`, `disk`: bytes or text with `K`, `M`, `G`. `nested` is for `lima` only; `host` (required for `firecracker`) names a nested `lima` machine |
 | `connect(name, host, …)` | Records an existing Linux host over ssh | `user` defaults to `root`, `port` to 22, `root` to `/layerfs/data`; the host key must already be known. `Unavailable` or `Denied` records nothing; a second machine for the same host is `Exists` |
 | `remove(name)` | Deletes a VM and its disk | `InUse` while it holds Stores, Sandboxes or Firecracker machines. While it runs, the record is marked `removing` and every call that would start, update, remove or use the machine is `InUse` |

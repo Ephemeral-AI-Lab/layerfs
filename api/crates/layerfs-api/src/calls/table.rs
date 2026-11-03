@@ -1,5 +1,5 @@
 //! The one table of calls (S §3, with the answers to O11, O13, O14 and O24):
-//! nine families, 58 calls. The shell parser, the help, the Node and Python
+//! nine families, 60 calls. The shell parser, the help, the Node and Python
 //! front ends' functions and argument checking all come from this table.
 //!
 //! Positionals go from the outside in: owner, Branch, path or new name,
@@ -468,7 +468,7 @@ pub static CALLS: &[Call] = &[
         &[],
         "a Workspace's changes since its base",
     ),
-    // machine (9, O11: update; #535: platforms)
+    // machine (11, O11: update; #535: platforms, start, stop)
     call(
         "machine",
         "list",
@@ -496,6 +496,20 @@ pub static CALLS: &[Call] = &[
         &[a("name", Name)],
         &[],
         "a machine's live state, free disk and tool version",
+    ),
+    call(
+        "machine",
+        "start",
+        &[a("name", Name)],
+        &[],
+        "start a stopped machine and its worker; a running one answers at once",
+    ),
+    call(
+        "machine",
+        "stop",
+        &[a("name", Name)],
+        &[],
+        "stop a machine's worker and VM; its disks stay",
     ),
     call(
         "machine",

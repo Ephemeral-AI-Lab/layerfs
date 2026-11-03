@@ -91,6 +91,10 @@ step commits.
   `docker`, its Sandboxes and the twelve cells passed; see the terminal pass.
 - **Machine boot, worker start and idle stop.** A guest powering off after
   10 idle minutes and the next call starting it again were not run.
+  `machine start` and `machine stop` (#535 P1), and a worker call that
+  starts its machine only after a dial that sent nothing (R1), were tested
+  with stand-in tools and workers only; no VM, ssh host or Docker worker
+  was started or stopped by them.
 - **One worker serving several Stores** and the guest-to-host send speed.
 - **Linux.** No Linux host was used. Linux namespaces Sandboxes, Init into
   `docker` on Linux, the Linux route of the `docker` machine (the route

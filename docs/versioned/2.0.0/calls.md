@@ -8,7 +8,7 @@ and the command in `engine/crates/layerfs-cli/src/`. The shell parser, the
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 58 calls in nine families. `layerfs help` lists them, and
+There are 60 calls in nine families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written
@@ -70,7 +70,7 @@ Sandbox names (H §7.6).
 | size | bytes as a number, or text with `K`, `M` or `G` (`512M`, `8G`) | a word |
 | function | a callback (Node, Python only) | — |
 
-## The 58 calls
+## The 60 calls
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
@@ -237,7 +237,7 @@ A Workspace is `<sandbox>:<path>`, answered as `ws` by `mount`.
   and `unmount` start a stopped machine, as Store calls do.
 - Not run for this manual.
 
-### `machine` (9)
+### `machine` (11)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -245,6 +245,8 @@ A Workspace is `<sandbox>:<path>`, answered as `ws` by `mount`.
 | `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `connect/SUPPORT.json`) |
 | `get` | `name` | — | a machine's record |
 | `status` | `name` | — | a machine's live state, free disk and tool version |
+| `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
+| `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
 | `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image`, `nested`, `host` | creates a VM machine |
 | `connect` | `name`, `host` | `user`, `port`, `identity`, `known_hosts`, `root` | connects an ssh host as a machine |
 | `remove` | `name` | — | deletes a VM machine and its disk |
@@ -263,6 +265,15 @@ $ layerfs machine platforms
 $ layerfs machine status native
 {"name":"native","platform":"native","state":"running","free_disk":null,"tool_version":null,"down_reason":null,"stores":["shop"]}
 ```
+
+- `start` and `stop` answer the machine's summary as `get` does. `start`
+  is for UIs, which start a machine before using it: no list, get or
+  status call starts one (#535 P4). `stop` is refused `InUse` while
+  Sandboxes are recorded on the machine (or on a Firecracker machine it
+  hosts); `detail.related` lists them as `{kind: "sandbox", name}`. It
+  runs under the machine's `start.lock`, so no on-demand start runs
+  meanwhile, and removes `worker.json`; the next call that needs the
+  machine starts it again.
 
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals.
