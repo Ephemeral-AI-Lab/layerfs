@@ -327,11 +327,16 @@ $ layerfs store pull shop --progress       # not run
 - A lease or `op` records its process's start time and boot, so one whose
   process id was reused by another process is stale. A lease written
   without them is matched by id alone.
-- Init into a sqlite Store on another machine runs in that machine's
-  worker, which reads the folder on its own machine and holds the Store's
-  lease there; the caller holds its lease meanwhile and records the
-  project when the worker answers (#536 H11). A lost answer is `Unknown`
-  and records nothing in the home. Not run on a real VM or ssh host.
+- Init into a sqlite Store on another machine reads the folder on the
+  caller's host and copies it, in pieces of at most 8 MiB, into
+  `incoming/init-<id>` under that machine's worker root; the worker runs
+  Init on the copy under the Store's lease there and deletes the copy
+  when Init ends (#536 H11, H11a). The machine needs the copy's bytes plus
+  `max(1 GiB, 10%)` free first. The caller holds its lease meanwhile and
+  records the project when the worker answers. A failure while copying
+  deletes the copy; a lost answer is `Unknown`, names the copy that may
+  remain, and records nothing in the home. Not run on a real VM or ssh
+  host.
 - A Sandbox of a sqlite project runs only on the Store's machine.
 
 ### PostgreSQL Stores

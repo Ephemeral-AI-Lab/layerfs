@@ -78,17 +78,22 @@ Sandbox names (H §7.6).
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `init` | `project`, `folder` | `timeout` (ms, default 1 hour), `on_progress` | imports a host folder as a new project into an existing Store |
+| `init` | `project`, `folder` | `timeout` (ms, default 1 hour), `on_progress` | imports a folder on the caller's host as a new project into an existing Store |
 | `list` | `[store]` | `page_size`, `page_pos` | every project in the home, or one Store's |
 | `get` | `project` | — | a project's record: its Store, kind and machine |
 | `remove` | `project` | — | removes one project from its Store |
 
-- `init` never creates a Store; a missing one is `NotFound`. Into a sqlite
-  Store on `native` or a PostgreSQL Store it runs in the caller's process
-  and reads `folder` on this host; into a sqlite Store on another machine
-  it runs in that machine's worker and reads `folder` on that machine
-  (#536 H11), which must be running. Run: answers `project`, `store`, `name`,
-  `kind`, `machine`, `created`, `layer` and `root`.
+- `init` never creates a Store; a missing one is `NotFound`. `folder` is
+  always on the caller's host. Into a sqlite Store on `native` or a
+  PostgreSQL Store, Init runs in the caller's process. Into a sqlite Store
+  on another machine (which must be running), the caller copies the folder
+  to that machine's worker, which runs Init on the copy and then deletes it
+  (#536 H11, H11a): the machine needs free room for the copy while Init
+  runs (`Capacity` otherwise), and progress shows phase `send` with bytes
+  sent before Init's own counts. A missing folder, or one with a socket,
+  FIFO or device file, is refused before anything is sent. Run: answers
+  `project`, `store`, `name`, `kind`, `machine`, `created`, `layer` and
+  `root`.
 - `remove` is refused while a Sandbox of the project runs, and is
   `Unsupported` for a PostgreSQL Store.
 
