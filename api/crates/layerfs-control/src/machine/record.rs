@@ -44,7 +44,7 @@ impl MachineRecord {
         Ok(read_record(&paths::machine_record(home, name))?.map(|v| Self::from_record(name, v)))
     }
 
-    /// Machine `name`'s record as it is, being removed or not; a bad name
+    /// Machine `name`'s record as it is, whatever `op` it holds; a bad name
     /// is `InvalidInput`, none `NotFound`.
     pub fn of(home: &Path, name: &str) -> Result<Self> {
         crate::common::names::MachineName::parse(name)?;
