@@ -2,3 +2,4 @@
 //! Store's links.
 #[doc(hidden)]
 pub mod family;
+pub(crate) mod record;

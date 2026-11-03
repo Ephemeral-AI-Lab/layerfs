@@ -5,6 +5,7 @@
 //! bytes go through the caller's process: machines never hold bucket keys.
 //! Objects are `<prefix>/<file>/store.sqlite` (whole or a manifest) plus its
 //! pieces. LayerFS never deletes a bucket object.
+use super::record::{bucket_record, driver, remote_error};
 use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::{self, paths, read_record, with_field, write_record};
@@ -14,10 +15,8 @@ use crate::store::record::{kind_of, StoreKind, StoreRef};
 use crate::store::resolve;
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_store_backup::backup::{self as remote, Provider};
-use layerfs_store_backup::bucket::minio::{MinioSettings, DEFAULT_PART_SIZE};
-use layerfs_store_backup::bucket::r2::R2Settings;
-use layerfs_store_backup::bucket::{pieces, CredentialRef, Driver, Metadata, RemoteError};
+use layerfs_store_backup::backup as remote;
+use layerfs_store_backup::bucket::{pieces, Driver, Metadata};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -26,110 +25,6 @@ fn bucket_of(home: &Path, name: &str) -> Result<SdkValue> {
     crate::common::names::BucketName::parse(name)?;
     read_record(&paths::bucket_record(home, name))?
         .ok_or_else(|| refused("NotFound", format!("no bucket named {name}")))
-}
-
-fn remote_error(error: RemoteError) -> SdkRefusal {
-    match error {
-        RemoteError::Uncertain(why) => refused("Unknown", why),
-        RemoteError::Invalid(why) => refused("InvalidInput", why),
-        other => refused("Failed", other.to_string()),
-    }
-}
-
-/// The driver of a bucket record. Resolves its key now; sends nothing.
-fn driver(record: &SdkValue) -> Result<Box<dyn Driver>> {
-    let text = |name: &str| record.get_text(name).unwrap_or("").to_owned();
-    let credentials = CredentialRef::parse(&text("key")).map_err(remote_error)?;
-    let part_size = record
-        .get_int("part_size")
-        .map(|n| n as u64)
-        .unwrap_or(DEFAULT_PART_SIZE);
-    let provider = match record.get_text("provider") {
-        Some("minio") => Provider::Minio(MinioSettings {
-            endpoint: text("endpoint"),
-            bucket: text("bucket"),
-            prefix: text("prefix"),
-            region: record.get_text("region").unwrap_or("us-east-1").to_owned(),
-            credentials,
-            part_size,
-        }),
-        Some("r2") => Provider::R2(R2Settings {
-            account: text("account"),
-            jurisdiction: text("jurisdiction"),
-            bucket: text("bucket"),
-            prefix: text("prefix"),
-            credentials,
-            part_size,
-        }),
-        _ => return Err(refused("Failed", "a bucket record names no known provider")),
-    };
-    provider.driver().map_err(remote_error)
-}
-
-/// `(bucket, prefix)` of a URL's path.
-fn bucket_path(path: &str) -> Result<(String, String)> {
-    let path = path.trim_matches('/');
-    let (bucket, prefix) = path.split_once('/').unwrap_or((path, ""));
-    if bucket.is_empty() {
-        return Err(refused("InvalidInput", "the URL names no bucket"));
-    }
-    Ok((bucket.to_owned(), prefix.trim_end_matches('/').to_owned()))
-}
-
-/// A bucket record from `url`: `http(s)://host:port/<bucket>/<prefix>` for
-/// MinIO, `r2://<account>/<bucket>/<prefix>[?jurisdiction=eu|fedramp]` for r2.
-fn bucket_record(name: &str, url: &str, args: &SdkValue) -> Result<SdkValue> {
-    let key = args.get_text("key").map(str::to_owned).unwrap_or_else(|| {
-        format!(
-            "env:LAYERFS_BUCKET_{}",
-            name.to_uppercase().replace(['-', '.'], "_")
-        )
-    });
-    CredentialRef::parse(&key).map_err(remote_error)?;
-    let part_size = SdkValue::Int(
-        args.get_int("part_size")
-            .unwrap_or(DEFAULT_PART_SIZE as i64),
-    );
-    if let Some(rest) = url.strip_prefix("r2://") {
-        let (rest, query) = rest.split_once('?').unwrap_or((rest, ""));
-        let (account, path) = rest.split_once('/').unwrap_or((rest, ""));
-        let (bucket, prefix) = bucket_path(path)?;
-        let jurisdiction = query.strip_prefix("jurisdiction=").unwrap_or("");
-        return Ok(SdkValue::map([
-            ("name", SdkValue::text(name)),
-            ("provider", SdkValue::text("r2")),
-            ("account", SdkValue::text(account)),
-            ("jurisdiction", SdkValue::text(jurisdiction)),
-            ("bucket", SdkValue::text(bucket)),
-            ("prefix", SdkValue::text(prefix)),
-            ("region", SdkValue::text("auto")),
-            ("key", SdkValue::text(key)),
-            ("part_size", part_size),
-        ]));
-    }
-    let scheme = if url.starts_with("http://") {
-        "http://"
-    } else if url.starts_with("https://") {
-        "https://"
-    } else {
-        return Err(refused("InvalidInput", "a bucket URL is r2://<account>/<bucket>/<prefix> or http(s)://<host>/<bucket>/<prefix>"));
-    };
-    let after = &url[scheme.len()..];
-    let (host, path) = after.split_once('/').unwrap_or((after, ""));
-    let (bucket, prefix) = bucket_path(path)?;
-    Ok(SdkValue::map([
-        ("name", SdkValue::text(name)),
-        ("provider", SdkValue::text("minio")),
-        ("endpoint", SdkValue::text(format!("{scheme}{host}"))),
-        ("bucket", SdkValue::text(bucket)),
-        ("prefix", SdkValue::text(prefix)),
-        (
-            "region",
-            SdkValue::text(args.get_text("region").unwrap_or("us-east-1")),
-        ),
-        ("key", SdkValue::text(key)),
-        ("part_size", part_size),
-    ]))
 }
 
 /// Runs one `backup` call.
