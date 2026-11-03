@@ -550,7 +550,7 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
         });
     }
     let value = crate::sandbox::files::load(&record)?;
-    let mut owner = crate::sandbox::files::recorded(args, &id, &value)?
+    let mut owner = crate::sandbox::recorded::recorded(args, &id, &value)?
         .reopen()
         .map_err(failed)?;
     owner.stop(STOP_S).map_err(failed)?;
@@ -596,7 +596,7 @@ pub(crate) fn reclaim(args: &SdkValue, id: &str, container: &str, stopped: bool)
         ));
     }
     if stopped {
-        match crate::sandbox::files::recorded(args, id, &value)?
+        match crate::sandbox::recorded::recorded(args, id, &value)?
             .stopped()
             .delete()
         {

@@ -15,6 +15,7 @@ mod list;
 pub mod output;
 #[doc(hidden)]
 pub mod record;
+pub(crate) mod recorded;
 pub(crate) mod registry;
 pub(crate) mod route;
 pub(crate) mod runtime;

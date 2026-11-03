@@ -142,7 +142,7 @@ fn observed(
     let observed = match cached {
         Some(state) => state.runtime.endpoint().map(drop),
         // a container, or with the local runtime a daemon process
-        None => match crate::sandbox::files::recorded(args, id, record) {
+        None => match crate::sandbox::recorded::recorded(args, id, record) {
             Ok(recorded) => recorded.reopen().map(drop),
             Err(refusal) => return Ok(Found::Refused(refusal)),
         },

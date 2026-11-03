@@ -110,7 +110,7 @@ pub(crate) fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefu
     if let Err(failure) = state.runtime.endpoint() {
         lock(&SANDBOXES)?.remove(&directory);
         return Err(if failure.container_gone() || failure.container_stopped() {
-            crate::sandbox::files::gone(
+            crate::sandbox::recorded::gone(
                 &state.id,
                 &state.runtime.identity().to_string(),
                 failure.container_stopped(),
