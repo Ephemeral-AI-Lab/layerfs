@@ -1,0 +1,61 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C06",
+  "machine": "docker",
+  "product": "35ed671b6c",
+  "startedAt": "2026-11-03T09:09:04.252Z",
+  "load1": 1.29,
+  "body": {
+    "sha256": "68c36eedeb7daf07516db93ca0ac0263bf3859d42549f7d490b1f074475ffc9d"
+  },
+  "ok": false,
+  "cause": "sandbox.create: Unavailable machine docker is not running; start it with `layerfs machine start docker`",
+  "phases": {},
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 4.334,
+      "ok": true
+    },
+    {
+      "name": "store.connect",
+      "ms": 291.7,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 140.083,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 133.238,
+      "ok": true
+    },
+    {
+      "name": "machine.update",
+      "ms": 0.832,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 1.143,
+      "ok": false,
+      "error": {
+        "code": "Unavailable",
+        "message": "machine docker is not running; start it with `layerfs machine start docker`"
+      }
+    },
+    {
+      "name": "store.disconnect",
+      "ms": 1.207,
+      "ok": true
+    }
+  ],
+  "store": {
+    "kind": "postgresql",
+    "host": "192.168.2.123"
+  },
+  "failedStep": "sandbox.create",
+  "endedAt": "2026-11-03T09:09:04.827Z"
+}

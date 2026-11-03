@@ -1,0 +1,10 @@
+$ layerfs machine create lfs535l3l lima --memory 4G --cpus 2
+# at 2026-11-03T08:50:56Z load1 11.15
+{"name":"lfs535l3l","platform":"lima","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":2,"memory":4294967296,"disk":21474836480,"stores":[],"sandboxes":[]}
+exit 0  wall_ms 31890
+
+$ layerfs machine stop lfs535l3l
+# at 2026-11-03T09:03:48Z load1 7.99
+{"name":"lfs535l3l","platform":"lima","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":2,"memory":4294967296,"disk":21474836480,"stores":[],"sandboxes":[]}
+exit 0  wall_ms 1774
+

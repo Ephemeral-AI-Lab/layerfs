@@ -1,0 +1,13 @@
+observed host: linux
+platform sets equal: True ['apple-container', 'docker', 'firecracker', 'lima', 'microsandbox', 'native', 'ssh']
+native ready= True missing= [] version= None
+docker ready= False missing= ['tool:docker'] version= None
+apple-container ready= False missing= ['host:macos', 'tool:container'] version= None
+microsandbox ready= False missing= ['tool:msb'] version= None
+lima ready= False missing= ['host:macos', 'tool:limactl'] version= None
+firecracker ready= False missing= ['host:macos', 'tool:limactl'] version= None
+ssh ready= True missing= [] version= OpenSSH_9.6p1 Ubuntu-3ubuntu13.19, OpenSSL 3.0.13 30 Jan 2024
+static-field differences: 0
+create lima Unsupported 'lima runs on macOS hosts only' table: ['lima runs on macOS hosts only'] equal: True
+create apple-container Unsupported 'apple-container runs on macOS hosts only' table: ['apple-container runs on macOS hosts only'] equal: True
+create firecracker Unsupported 'firecracker runs on macOS hosts only, in a nested lima machine' table: ['firecracker runs on macOS hosts only, in a nested lima machine'] equal: True

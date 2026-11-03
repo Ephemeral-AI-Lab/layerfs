@@ -1,0 +1,37 @@
+start C01 09:10:27
+C01 lfs535l3f postgresql PASS  timed exec 937.745 ms
+exit 0
+start C02 09:10:36
+C02 lfs535l3f postgresql PASS  timed exec 1567.638 ms
+exit 0
+start C03 09:10:45
+C03 lfs535l3f postgresql PASS  timed exec 1719.284 ms
+exit 0
+start C04 09:10:50
+C04 lfs535l3f postgresql PASS  timed exec 1450.419 ms
+exit 0
+start C05 09:10:57
+C05 lfs535l3f postgresql PASS  timed exec 1308.624 ms
+exit 0
+start C06 09:11:04
+C06 lfs535l3f postgresql PASS  timed exec 1311.645 ms
+exit 0
+start C07 09:11:15
+C07 lfs535l3f postgresql PASS  timed exec 2503.196 ms
+exit 0
+start C08 09:11:36
+C08 lfs535l3f postgresql PASS  timed exec 1208.619 ms
+exit 0
+start C09 09:11:47
+C09 lfs535l3f postgresql PASS  timed exec 183.988 ms
+exit 0
+start C10 09:11:58
+C10 lfs535l3f postgresql PASS  timed exec 1713.215 ms
+exit 0
+start C11 09:12:13
+C11 lfs535l3f postgresql PASS  timed exec 322.689 ms
+exit 0
+start C12 09:12:26
+C12 lfs535l3f postgresql PASS  timed exec 539.126 ms
+exit 0
+DONE firecracker pg-remote 09:12:30

@@ -1,0 +1,37 @@
+start C01 09:00:46
+C01 lfs535l3l postgresql PASS  timed exec 2083.538 ms
+exit 0
+start C02 09:01:06
+C02 lfs535l3l postgresql PASS  timed exec 4768.729 ms
+exit 0
+start C03 09:01:31
+C03 lfs535l3l postgresql PASS  timed exec 2620.561 ms
+exit 0
+start C04 09:01:41
+C04 lfs535l3l postgresql PASS  timed exec 1371.679 ms
+exit 0
+start C05 09:01:51
+C05 lfs535l3l postgresql PASS  timed exec 1609.868 ms
+exit 0
+start C06 09:02:00
+C06 lfs535l3l postgresql PASS  timed exec 1528.319 ms
+exit 0
+start C07 09:02:15
+C07 lfs535l3l postgresql PASS  timed exec 2396.341 ms
+exit 0
+start C08 09:02:35
+C08 lfs535l3l postgresql PASS  timed exec 1180.234 ms
+exit 0
+start C09 09:02:47
+C09 lfs535l3l postgresql PASS  timed exec 260.024 ms
+exit 0
+start C10 09:03:03
+C10 lfs535l3l postgresql PASS  timed exec 1180.404 ms
+exit 0
+start C11 09:03:20
+C11 lfs535l3l postgresql PASS  timed exec 206.827 ms
+exit 0
+start C12 09:03:32
+C12 lfs535l3l postgresql PASS  timed exec 315.348 ms
+exit 0
+DONE lima pg-remote 09:03:36

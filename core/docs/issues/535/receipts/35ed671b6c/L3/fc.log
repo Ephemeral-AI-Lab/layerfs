@@ -1,0 +1,22 @@
+$ layerfs machine create lfs535l3h lima --nested --cpus 4 --memory 4G
+# at 2026-11-03T09:03:50Z load1 7.99
+{"name":"lfs535l3h","platform":"lima","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":4,"memory":4294967296,"disk":21474836480,"stores":[],"sandboxes":[],"nested":true}
+exit 0  wall_ms 34415
+
+$ limactl shell lfs-66cf6bc0-lfs535l3h -- sudo sh -c 'echo 1100 > /proc/sys/vm/nr_hugepages; grep -i huge /proc/meminfo; ls -la /dev/kvm'  (manual, as #533; nothing in the product sets huge pages)
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+FileHugePages:         0 kB
+HugePages_Total:    1100
+HugePages_Free:     1100
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:         2252800 kB
+crw-rw---- 1 root kvm 10, 232 Nov  3 17:03 /dev/kvm
+
+$ layerfs machine create lfs535l3f firecracker --host lfs535l3h --memory 2G
+# at 2026-11-03T09:04:51Z load1 9.04
+{"name":"lfs535l3f","platform":"firecracker","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":2,"memory":2147483648,"disk":21474836480,"stores":[],"sandboxes":[],"host":"lfs535l3h"}
+exit 0  wall_ms 50384
+
