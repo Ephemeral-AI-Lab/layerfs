@@ -262,7 +262,11 @@ $ layerfs store pull shop --progress       # not run
   H1). Both run the same phases once each: check, snapshot, send, verify,
   install, record and retire; only the sides swap. The bytes pass through
   the calling process in pieces. Between two machines, pull, then push:
-  each half is its own call.
+  each half is its own call. Retire deletes the source's copy: on `native`
+  the file with its `-wal`, `-shm` and any partial copy (the folder keeps
+  the home's records); on another machine the Store's whole folder under
+  its worker's root, with the project entries the worker kept there (a
+  symlink in it is removed, never followed).
   - A push is `InvalidInput` unless the Store is on `native` (the message
     names `store pull`), and for `native` as the target; a pull is
     `InvalidInput` when the Store is already on `native`. Both are

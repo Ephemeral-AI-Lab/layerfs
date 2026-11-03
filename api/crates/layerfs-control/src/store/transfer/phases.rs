@@ -297,11 +297,17 @@ fn phases(
             record.with(op::FIELD, retiring.clone()).write(&home)
         })(),
     )?;
-    // retire the source's copy
+    // retire the source's copy: `native`'s file (its folder holds the
+    // home's records), or the Store's whole folder under a worker's root,
+    // with the project entries a worker keeps there
     progress(context, "retire", None);
+    let retire = match source {
+        Executor::Local => "retire",
+        Executor::Worker(_) => "remove",
+    };
     at(
         "retire",
-        step(&home, source, "retire", of_store(name, vec![])),
+        step(&home, source, retire, of_store(name, vec![])),
     )?;
     at("retire", retired(&home, name, op.id()))?;
     Ok(SdkValue::map([

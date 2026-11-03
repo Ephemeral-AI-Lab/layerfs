@@ -307,3 +307,45 @@ fn a_transfer_stopped_at_retire_leaves_a_usable_store_and_the_next_one_deletes_t
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
 }
+
+#[test]
+fn a_pull_leaves_no_store_folder_on_the_worker_and_follows_no_symlink_out_of_it() {
+    let (home, root) = home_with_shop();
+    call_ok(
+        &home,
+        "store.push",
+        &[("name", t("shop")), ("machine", t("box"))],
+    );
+    // what a worker keeps beside the file: records and a project's entry,
+    // and a symlink out of the folder
+    let folder = paths::store_dir(&root, "shop");
+    assert!(folder.join("store.sqlite").exists());
+    write_record(
+        &paths::project_record(&root, "shop", "api"),
+        &SdkValue::map([("name", t("api"))]),
+    )
+    .unwrap();
+    let outside = tempdir("outside");
+    std::fs::write(outside.join("keep"), b"kept").unwrap();
+    std::os::unix::fs::symlink(&outside, folder.join("link")).unwrap();
+
+    call_ok(&home, "store.pull", &[("name", t("shop"))]);
+    assert!(
+        std::fs::symlink_metadata(&folder).is_err(),
+        "the worker keeps nothing of the Store"
+    );
+    assert_eq!(std::fs::read(outside.join("keep")).unwrap(), b"kept");
+    // the home's records stay with the Store on native
+    assert!(paths::store_record(&home, "shop").exists());
+    assert!(paths::project_record(&home, "shop", "api").exists());
+    // a push finds the worker's root clean
+    call_ok(
+        &home,
+        "store.push",
+        &[("name", t("shop")), ("machine", t("box"))],
+    );
+    assert!(!paths::project_record(&root, "shop", "api").exists());
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(outside);
+}
