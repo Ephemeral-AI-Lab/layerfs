@@ -29,11 +29,12 @@ Store is backed up. Layers are `core < engine < connect < api`; nothing in
   the PostgreSQL Store URL a Sandbox daemon on the machine dials. Each
   adapter names how its machine reaches the caller's loopback: `native`
   shares it; `docker` (`host.docker.internal`) and `lima`
-  (`host.lima.internal`) rewrite a loopback host to their alias; `ssh`
-  refuses it, and so do `apple-container` (no host alias), `microsandbox`
-  (host traffic needs `--net host`, which LayerFS does not set) and
-  `firecracker` (no outbound NAT; its tap address is the nested Lima host),
-  per the G7 receipt in `core/docs/issues/535/receipts/g7-reach/`. A
+  (`host.lima.internal`) rewrite a loopback host to their alias, and so do
+  `apple-container` (its network's gateway from `container inspect`),
+  `microsandbox` (`host.microsandbox.internal`; machines get
+  `--net public,host`) and `firecracker` (`192.168.5.2`, through the Lima
+  host's masquerade); `ssh` refuses it. Facts: the G7 receipt in
+  `core/docs/issues/535/receipts/g7-reach/`. A
   rewrite is refused for `sslmode=verify-full`; other hosts are used as
   given.
 - `machine::forward` (#535 G4, phase 6) is the host loopback address at

@@ -9,12 +9,16 @@ use crate::setup::forward::refuse;
 use crate::setup::guest::Guest;
 use crate::setup::Status;
 use crate::spec::{Bundle, Forward, Running, Spec, Tools};
-use crate::support::MICROSANDBOX_ALIAS;
 
 /// Why a Sandbox daemon's port is not forwarded: `msb create -p`
 /// (`create.rs`) is the only way msb publishes a port, so the worker's is
 /// the only one, and a later port needs a mechanism LayerFS does not have.
 const FORWARD: &str = "msb publishes a port only when the machine's sandbox is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker";
+
+/// The host as a microsandbox guest names it (its /30 gateway, which
+/// differs per sandbox). It reaches the host because `create.rs` allows
+/// host egress (G7 receipt).
+const HOST_ALIAS: &str = "host.microsandbox.internal";
 
 pub(crate) struct Microsandbox;
 pub(crate) static ADAPTER: Microsandbox = Microsandbox;
@@ -45,7 +49,7 @@ impl Adapter for Microsandbox {
         Err(refused(spec, "has no ssh host"))
     }
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
-        dial(spec, url, Loopback::Refused(MICROSANDBOX_ALIAS))
+        dial(spec, url, Loopback::Alias(HOST_ALIAS))
     }
     fn forward(&self, spec: &Spec, _guest_port: u16) -> Result<Forward, MachineError> {
         Err(refuse(spec, Code::Unsupported, FORWARD))

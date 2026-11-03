@@ -9,7 +9,6 @@ use crate::setup::forward::refuse;
 use crate::setup::guest::Guest;
 use crate::setup::Status;
 use crate::spec::{Bundle, Forward, Running, Spec, Tools};
-use crate::support::FIRECRACKER_REACH;
 
 /// Why a Sandbox daemon's port is not forwarded: a daemon listens on the
 /// microVM's loopback (`layerfs-sandbox`'s local listener takes only a
@@ -18,6 +17,11 @@ use crate::support::FIRECRACKER_REACH;
 /// worker listens (`worker_bind` 0.0.0.0). Reaching the microVM's loopback
 /// needs a second hop LayerFS does not have.
 const FORWARD: &str = "its Sandbox daemons listen on the microVM's loopback, which a forward through the Lima host cannot reach (it reaches only the microVM's tap address); its Workspace calls go through the worker";
+
+/// The Lima host's own host address (`host.lima.internal`, the gateway
+/// of Lima's default user-mode network), which a microVM reaches through
+/// the Lima host's masquerade; Lima maps it to this host's loopback.
+const LIMA_HOST: &str = "192.168.5.2";
 
 pub(crate) struct Firecracker;
 pub(crate) static ADAPTER: Firecracker = Firecracker;
@@ -50,11 +54,12 @@ impl Adapter for Firecracker {
         Err(refused(spec, "has no ssh host"))
     }
     /// The guest's tap address, `172.30.<n>.1` (`scripts.rs`), is the nested
-    /// Lima host, not the caller's host, and the Lima host has no outbound
-    /// NAT, so a loopback URL is refused (G7 receipt). A server elsewhere is
-    /// dialled as given.
+    /// Lima host, not the caller's host. The Lima host masquerades the
+    /// microVMs' traffic (`BOOT_VM`), so a loopback URL becomes the Lima
+    /// host's own host address, [`LIMA_HOST`] (G7 receipt). A server
+    /// elsewhere is dialled as given.
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
-        dial(spec, url, Loopback::Refused(FIRECRACKER_REACH))
+        dial(spec, url, Loopback::Alias(LIMA_HOST))
     }
     fn forward(&self, spec: &Spec, _guest_port: u16) -> Result<Forward, MachineError> {
         Err(refuse(spec, Code::Unsupported, FORWARD))

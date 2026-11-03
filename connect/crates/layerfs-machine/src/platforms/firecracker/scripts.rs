@@ -3,7 +3,7 @@
 /// One line per missing thing, so the refusal can name each.
 pub(super) const CHECK: &str = r#"test -c /dev/kvm || echo "/dev/kvm"
 for f in bin/firecracker vmlinux rootfs.ext4 id_ed25519; do test -f "$1/$f" || echo "$1/$f"; done
-for t in mkfs.ext4 ip flock ssh truncate; do command -v $t >/dev/null || echo "tool:$t"; done
+for t in mkfs.ext4 ip iptables flock ssh truncate sysctl; do command -v $t >/dev/null || echo "tool:$t"; done
 true"#;
 
 /// The data disk, made once; exit 17 when one is already there.
@@ -39,7 +39,10 @@ EOF
 echo "$n""#;
 
 /// Boots the microVM (unless it runs), waits for its sshd (a readiness wait,
-/// at most 60 s), and mounts its data disk at `/layerfs/data`. Its memory
+/// at most 60 s), and mounts its data disk at `/layerfs/data`. The Lima
+/// host forwards and masquerades the microVMs' traffic leaving
+/// 172.30.0.0/16, so a microVM reaches the caller's loopback through Lima
+/// (`192.168.5.2`) and the internet (G7). Its memory
 /// uses 2 MiB huge pages when the host has enough free at this boot, else
 /// none: a host's huge pages do not outlive its reboot.
 pub(super) const BOOT_VM: &str = r#"set -eu
@@ -54,6 +57,9 @@ if ! { [ -f "$d/firecracker.pid" ] && kill -0 "$(cat "$d/firecracker.pid")" 2>/d
   ip link show "$TAP" >/dev/null 2>&1 || ip tuntap add dev "$TAP" mode tap
   ip addr replace "$HOST_IP/30" dev "$TAP"
   ip link set "$TAP" up
+  sysctl -qw net.ipv4.ip_forward=1
+  nat="POSTROUTING -s 172.30.0.0/16 ! -d 172.30.0.0/16 -j MASQUERADE"
+  iptables -t nat -C $nat 2>/dev/null || iptables -t nat -A $nat
   setsid nohup "$root/bin/firecracker" --no-api --config-file "$d/config.json" > "$d/firecracker.log" 2>&1 < /dev/null &
   echo $! > "$d/firecracker.pid"
 fi

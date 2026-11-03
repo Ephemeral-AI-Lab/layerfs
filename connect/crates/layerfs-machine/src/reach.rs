@@ -16,6 +16,9 @@ pub(crate) enum Loopback<'a> {
     Shared,
     /// The daemon reaches it under this host name or address.
     Alias(&'a str),
+    /// The daemon reaches it under an address read from the machine, only
+    /// when a URL names the caller's loopback.
+    Lookup(&'a dyn Fn() -> Result<String, MachineError>),
     /// It cannot; why.
     Refused(&'a str),
 }
@@ -23,11 +26,9 @@ pub(crate) enum Loopback<'a> {
 /// The URL `spec`'s daemon dials for `url`, given how its machine reaches
 /// the caller's loopback.
 pub(crate) fn dial(spec: &Spec, url: &str, loopback: Loopback<'_>) -> Result<String, MachineError> {
-    let alias = match loopback {
-        Loopback::Shared => return Ok(url.to_owned()),
-        Loopback::Alias(alias) => Ok(alias),
-        Loopback::Refused(why) => Err(why),
-    };
+    if let Loopback::Shared = loopback {
+        return Ok(url.to_owned());
+    }
     // a host list (`h1:5432,h2:5433`) reads as one host holding a `,`
     let parsed = PostgresUrl::parse(url).filter(|p| !p.host().contains(','));
     let parsed = parsed.ok_or_else(|| {
@@ -54,7 +55,9 @@ pub(crate) fn dial(spec: &Spec, url: &str, loopback: Loopback<'_>) -> Result<Str
     if !parsed.loopback() {
         return Ok(url.to_owned());
     }
-    let alias = alias.map_err(|why| refuse(spec, Code::Unsupported, why))?;
+    if let Loopback::Refused(why) = loopback {
+        return Err(refuse(spec, Code::Unsupported, why));
+    }
     if parsed.query("sslmode").any(|mode| mode == "verify-full") {
         return Err(refuse(
             spec,
@@ -62,7 +65,12 @@ pub(crate) fn dial(spec: &Spec, url: &str, loopback: Loopback<'_>) -> Result<Str
             "its URL asks for sslmode=verify-full and names the caller's loopback, which this machine reaches under another name the server's certificate does not name; give the Store a URL whose host every machine can verify",
         ));
     }
-    Ok(parsed.with_host(alias))
+    let alias = match loopback {
+        Loopback::Alias(alias) => alias.to_owned(),
+        Loopback::Lookup(read) => read()?,
+        Loopback::Shared | Loopback::Refused(_) => unreachable!("answered above"),
+    };
+    Ok(parsed.with_host(&alias))
 }
 
 fn refuse(spec: &Spec, code: Code, why: &str) -> MachineError {

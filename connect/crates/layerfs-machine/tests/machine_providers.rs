@@ -97,7 +97,7 @@ esac"#,
     assert_eq!(
         line(&log, "msb create"),
         "msb create --name lfs-dev --cpus 2 --memory 2048M --mount-named \
-         lfs-dev-data:/layerfs/data:kind=disk,size=10240M -p 127.0.0.1:45678:7070 \
+         lfs-dev-data:/layerfs/data:kind=disk,size=10240M -p 127.0.0.1:45678:7070 --net public,host \
          --label layerfs.role=machine debian:trixie-slim"
     );
     assert!(log.contains("msb start lfs-dev"));

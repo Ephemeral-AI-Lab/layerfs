@@ -70,15 +70,15 @@ fn postgresql_sandboxes_run_where_phase_5a_enables_them() {
     );
     assert_eq!(
         allowed(Platform::AppleContainer, HostOs::Macos),
-        Err("an apple-container guest has no host alias and cannot reach the host's loopback (G7)")
+        Err("apple-container gateway route not verified (G7)")
     );
     assert_eq!(
         allowed(Platform::Microsandbox, HostOs::Linux),
-        Err("a microsandbox guest reaches the host only with --net host, which LayerFS does not set (G7)")
+        Err("microsandbox host route not verified (G7)")
     );
     assert_eq!(
         allowed(Platform::Firecracker, HostOs::Macos),
-        Err("a firecracker guest has no outbound NAT and its tap address is the nested lima host, not this host (G7)")
+        Err("firecracker NAT route not verified (G7)")
     );
     assert_eq!(
         allowed(Platform::Lima, HostOs::Linux),

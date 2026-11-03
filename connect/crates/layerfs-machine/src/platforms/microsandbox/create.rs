@@ -37,10 +37,14 @@ pub(crate) fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErr
     let mount = format!("{volume}:{DATA}:kind=disk,size={}", mib(spec.disk));
     let publish = format!("127.0.0.1:{port}:{WORKER_PORT}");
     let image = spec.os_image.as_deref().unwrap_or(DEFAULT_IMAGE);
+    // `--net public,host` lets the guest reach the host (a PostgreSQL Store's
+    // server on its loopback, G7) as well as the internet; msb denies the host
+    // by default and cannot allow it after create
     #[rustfmt::skip]
     let args = [
         "create", "--name", &spec.vm_name, "--cpus", &cpus, "--memory", &memory,
-        "--mount-named", &mount, "-p", &publish, "--label", "layerfs.role=machine", image,
+        "--mount-named", &mount, "-p", &publish, "--net", "public,host",
+        "--label", "layerfs.role=machine", image,
     ];
     let made = call(spec, CLI, &args, CREATE)?;
     if !made.ok() {

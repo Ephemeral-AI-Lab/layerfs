@@ -382,8 +382,22 @@ layerfs project init pg-main/load ./load
   Engine as its `host-gateway`; ssh refuses a loopback URL); the URL
   travels only in that one request. `sandbox create` first checks, from
   the machine, that the server answers with the Store's schema binding.
-  `lima`, `apple-container`, `microsandbox` and `firecracker` stay refused
-  until their G7 facts allow it (`layerfs machine platforms` says why).
+  The server always runs off the machine (on this host or elsewhere);
+  nothing installs PostgreSQL in a machine (D12). The VM platforms have
+  their rewrites, and each stays refused until a live run proves it
+  (`layerfs machine platforms` says why):
+  - `lima`: `host.lima.internal`, which reaches a server on this host's
+    loopback.
+  - `apple-container`: the container network's gateway, read from
+    `container inspect` (192.168.64.1 by default). The server must listen
+    on that bridge (`0.0.0.0`, as Docker Desktop publishes a port), not on
+    127.0.0.1 alone, and admit connections from it.
+  - `microsandbox`: `host.microsandbox.internal`. Machines are created
+    with `--net public,host`, so the guest reaches every port on this
+    host, as lima and docker guests do; a machine created before this
+    needs re-creating.
+  - `firecracker`: `192.168.5.2`, the Lima host's own host address; the
+    Lima host forwards and masquerades its microVMs' traffic.
 - Not built: `project remove` from a PostgreSQL Store, and backups of
   PostgreSQL Stores (back it up with PostgreSQL's own tools).
 - The step 10a and 10b commits record `store connect` and Init into a

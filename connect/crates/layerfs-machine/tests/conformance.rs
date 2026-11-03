@@ -396,9 +396,11 @@ fn loopback(spec: &Spec) -> Loopback {
         Platform::Native => Loopback::Shared,
         Platform::Docker => Loopback::Alias("host.docker.internal".into()),
         Platform::Lima => Loopback::Alias("host.lima.internal".into()),
-        Platform::Firecracker => Loopback::Refused("a firecracker guest has no outbound NAT and its tap address is the nested lima host, not this host (G7)"),
-        Platform::AppleContainer => Loopback::Refused("an apple-container guest has no host alias and cannot reach the host's loopback (G7)"),
-        Platform::Microsandbox => Loopback::Refused("a microsandbox guest reaches the host only with --net host, which LayerFS does not set (G7)"),
+        // the Lima host's own host address, through its masquerade
+        Platform::Firecracker => Loopback::Alias("192.168.5.2".into()),
+        // the gateway the stand-in `container inspect` reports (`reach_specs`)
+        Platform::AppleContainer => Loopback::Alias("192.168.64.1".into()),
+        Platform::Microsandbox => Loopback::Alias("host.microsandbox.internal".into()),
         Platform::Ssh => Loopback::Refused("an ssh machine cannot reach the caller's loopback"),
     }
 }
@@ -438,6 +440,12 @@ fn refused(platform: Platform, outcome: Result<String, MachineError>) -> (Code, 
 /// Each platform's spec for `reach` with and without a recorded network
 /// number (none reads it since the G7 receipt; both are kept).
 fn reach_specs(scratch: &Scratch, platform: Platform) -> Vec<Spec> {
+    if platform == Platform::AppleContainer {
+        scratch.tool(
+            "container",
+            r#"echo '[{"status":{"state":"running","networks":[{"ipv4Gateway":"192.168.64.1"}]}}]'"#,
+        );
+    }
     let mut with_network = valid_spec(scratch, platform);
     with_network.state.network = Some(7);
     let mut without = with_network.clone();

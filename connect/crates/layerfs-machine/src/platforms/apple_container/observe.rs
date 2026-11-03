@@ -66,6 +66,28 @@ pub(crate) fn observe(spec: &Spec) -> Result<State, MachineError> {
     })
 }
 
+/// Where the container reaches its host: its network's gateway,
+/// `status.networks[0].ipv4Gateway` in `container inspect` (192.168.64.1
+/// on vmnet's default network; G7 receipt), read while it runs. The guest
+/// has no host alias. A host server is reached there only when it listens
+/// on that bridge (0.0.0.0, as Docker Desktop publishes a port), not on
+/// 127.0.0.1 alone.
+pub(crate) fn gateway(spec: &Spec) -> Result<String, MachineError> {
+    let out = call(spec, CLI, &["inspect", &spec.vm_name], CALL)?;
+    let read = facts::json_string(&out.stdout, &["status", "networks", "ipv4Gateway"]);
+    let address = (out.ok().then(|| read.ok().flatten()).flatten())
+        .filter(|text| text.parse::<std::net::Ipv4Addr>().is_ok());
+    address.ok_or_else(|| {
+        MachineError::new(
+            Code::Unavailable,
+            format!(
+                "the apple-container machine {} reports no network gateway, so it cannot reach this host's loopback; it must be running",
+                spec.name
+            ),
+        )
+    })
+}
+
 pub(crate) fn guest(spec: &Spec) -> Guest {
     Guest::AppleContainer {
         vm: spec.vm_name.clone(),

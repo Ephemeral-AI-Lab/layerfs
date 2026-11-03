@@ -1,4 +1,5 @@
 //! `apple-container`'s adapter.
+use super::observe::gateway;
 use super::{create, guest, remove, start, status, stop};
 use crate::adapter::{refused, Adapter};
 use crate::error::{Code, MachineError};
@@ -9,7 +10,6 @@ use crate::setup::forward::refuse;
 use crate::setup::guest::Guest;
 use crate::setup::Status;
 use crate::spec::{Bundle, Forward, Running, Spec, Tools};
-use crate::support::APPLE_CONTAINER_ALIAS;
 
 /// Why a Sandbox daemon's port is not forwarded: `container run --publish`
 /// (`create.rs`) is the only way the CLI publishes a port, so the worker's
@@ -48,8 +48,9 @@ impl Adapter for AppleContainer {
     fn host_identity(&self, spec: &Spec) -> Result<String, MachineError> {
         Err(refused(spec, "has no ssh host"))
     }
+    /// A loopback URL becomes the container network's gateway (G7 receipt).
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
-        dial(spec, url, Loopback::Refused(APPLE_CONTAINER_ALIAS))
+        dial(spec, url, Loopback::Lookup(&|| gateway(spec)))
     }
     fn forward(&self, spec: &Spec, _guest_port: u16) -> Result<Forward, MachineError> {
         Err(refuse(spec, Code::Unsupported, FORWARD))

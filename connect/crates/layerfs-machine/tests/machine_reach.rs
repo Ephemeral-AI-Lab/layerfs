@@ -2,7 +2,8 @@
 //! each platform dials. A loopback host becomes the platform's host alias or
 //! is refused naming what is missing; a rewrite is refused for
 //! `sslmode=verify-full`; every other host is dialled as given. No message
-//! holds the URL's password. Nothing runs: no stand-in tool is called.
+//! holds the URL's password. Only apple-container's stand-in `container`
+//! runs, and only for a loopback URL (it reads the network's gateway).
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
@@ -11,9 +12,16 @@ use standin::Scratch;
 
 const SECRET: &str = "s3cr3t-pw";
 
+/// `container inspect` of a running container on vmnet's default network,
+/// as `container` 1.6.1 prints it (G7 receipt `ac-inspect.json`, cut).
+const RUNNING: &str = r#"echo '[{"status":{"state":"running","networks":[{"network":"default","ipv4Address":"192.168.64.10/24","ipv4Gateway":"192.168.64.1"}]}}]'"#;
+
 /// `kind`'s spec as `standin` makes it; a firecracker one gets its nested
 /// lima host and, when given, its network number.
 fn spec(scratch: &Scratch, kind: Platform, network: Option<u8>) -> Spec {
+    if kind == Platform::AppleContainer {
+        scratch.tool("container", RUNNING);
+    }
     let mut spec = scratch.spec(kind);
     if kind == Platform::Firecracker {
         let mut host = scratch.spec(Platform::Lima);
@@ -59,10 +67,10 @@ fn each_platform_rewrites_or_refuses_a_loopback_host() {
             Platform::Native => Some("unchanged"),
             Platform::Docker => Some("host.docker.internal"),
             Platform::Lima => Some("host.lima.internal"),
-            Platform::AppleContainer
-            | Platform::Microsandbox
-            | Platform::Firecracker
-            | Platform::Ssh => None,
+            Platform::AppleContainer => Some("192.168.64.1"),
+            Platform::Microsandbox => Some("host.microsandbox.internal"),
+            Platform::Firecracker => Some("192.168.5.2"),
+            Platform::Ssh => None,
         };
         for (i, url) in loopback_urls().iter().enumerate() {
             let outcome = machine::reach(&spec, url);
@@ -72,12 +80,7 @@ fn each_platform_rewrites_or_refuses_a_loopback_host() {
                 None => {
                     let (code, message) = refused(outcome);
                     assert_eq!(code, Code::Unsupported);
-                    let why = match kind {
-                        Platform::Ssh => "an ssh machine cannot reach the caller's loopback",
-                        Platform::AppleContainer => "an apple-container guest has no host alias and cannot reach the host's loopback (G7)",
-                        Platform::Firecracker => "a firecracker guest has no outbound NAT and its tap address is the nested lima host, not this host (G7)",
-                        _ => "a microsandbox guest reaches the host only with --net host, which LayerFS does not set (G7)",
-                    };
+                    let why = "an ssh machine cannot reach the caller's loopback";
                     assert_eq!(
                         message,
                         format!(
@@ -92,17 +95,44 @@ fn each_platform_rewrites_or_refuses_a_loopback_host() {
 }
 
 #[test]
-fn a_firecracker_machine_refuses_loopback_with_or_without_its_network_number() {
+fn firecracker_reaches_loopback_through_its_lima_host() {
     let scratch = Scratch::new("reach-firecracker");
     for network in [None, Some(7)] {
         let spec = spec(&scratch, Platform::Firecracker, network);
-        let (code, message) = refused(machine::reach(&spec, &loopback_urls()[0]));
-        assert_eq!(code, Code::Unsupported);
-        assert!(message.ends_with("a firecracker guest has no outbound NAT and its tap address is the nested lima host, not this host (G7)"), "{message}");
+        let outcome = machine::reach(&spec, &loopback_urls()[0]);
+        assert_eq!(outcome, Ok(rewritten("192.168.5.2")[0].clone()));
         // a server elsewhere is dialled as given
         let remote = format!("postgres://lfs:{SECRET}@db.example.com:5432/layerfs");
         assert_eq!(machine::reach(&spec, &remote), Ok(remote.clone()));
     }
+}
+
+#[test]
+fn apple_container_reads_its_gateway_only_for_a_loopback_url() {
+    let scratch = Scratch::new("reach-apple");
+    let spec = spec(&scratch, Platform::AppleContainer, None);
+    let remote = format!("postgres://lfs:{SECRET}@db.example.com:5432/layerfs");
+    assert_eq!(machine::reach(&spec, &remote), Ok(remote.clone()));
+    assert_eq!(scratch.log(), "", "a remote URL reads nothing");
+    let outcome = machine::reach(&spec, &loopback_urls()[1]);
+    assert_eq!(outcome, Ok(rewritten("192.168.64.1")[1].clone()));
+    assert_eq!(scratch.log(), "container inspect lfs-dev\n");
+    // a stopped container reports no network: refused, naming why
+    scratch.tool(
+        "container",
+        r#"echo '[{"status":{"state":"stopped","networks":[]}}]'"#,
+    );
+    let (code, message) = refused(machine::reach(&spec, &loopback_urls()[0]));
+    assert_eq!(code, Code::Unavailable);
+    assert!(message.contains("reports no network gateway"), "{message}");
+    assert!(message.contains("must be running"), "{message}");
+    // an answer that is not an IPv4 address is not put in the URL
+    scratch.tool(
+        "container",
+        r#"echo '[{"status":{"networks":[{"ipv4Gateway":"evil/x@y"}]}}]'"#,
+    );
+    let (code, _) = refused(machine::reach(&spec, &loopback_urls()[0]));
+    assert_eq!(code, Code::Unavailable);
 }
 
 #[test]
