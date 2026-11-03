@@ -210,14 +210,9 @@ impl Control {
             }
         }
     }
-    /// Installs one sealed Project through this same control owner without resetting correlation.
-    /// Failed attempted installation retains its original failure and makes this owner terminal.
-    pub(crate) fn install_project(
-        &mut self,
-        project: &crate::SealedProject,
-    ) -> Result<crate::Installed, Box<crate::InstallFailure>> {
-        self.install_file(&project.store, &project.manifest)
-    }
+    /// Installs one sealed Store file through this same control owner without resetting
+    /// correlation. Failed attempted installation retains its original failure and makes this
+    /// owner terminal.
     pub(crate) fn install_file(
         &mut self,
         store: &layerfs_persistence::SealedStore,

@@ -2,7 +2,7 @@
 pub use super::channel::{Control, ControlCause, ControlFailure, ControlPhase};
 use crate::{BoundWorkspace, OperationFailure, WorkspaceApi};
 use layerfs_bridge::{
-    control::{CleanupObservation, ForcedOutcome, ReadyMount, WorkspaceStatus, WorkspaceToken},
+    control::{CleanupObservation, ReadyMount, WorkspaceStatus, WorkspaceToken},
     duplex::Connection,
 };
 use layerfs_history::{BranchId, WorkspaceId};
@@ -66,14 +66,6 @@ impl InternalWorkspaceApi<'_> {
     ) -> Result<CleanupObservation, Box<OperationFailure>> {
         self.0.cleanup(token)
     }
-    /// Original explicit unknown-relinquishment policy for forced custody proofs.
-    pub fn force_unmount(
-        &mut self,
-        token: WorkspaceToken,
-        relinquish_unknown: bool,
-    ) -> Result<ForcedOutcome, Box<OperationFailure>> {
-        self.0.force_unmount(token, relinquish_unknown)
-    }
 }
 /// Sends this channel's later ordinary requests as SDK-traced observations
 /// under `scope` (`None` ends it); results are unchanged.
@@ -83,13 +75,6 @@ pub fn trace(control: &mut Control, scope: Option<[u8; 32]>) {
 /// Takes the telemetry of the traced replies received since the last take.
 pub fn take_telemetry(control: &mut Control) -> Vec<layerfs_bridge::control::SdkValue> {
     control.take_telemetry()
-}
-/// Original install on an existing control owner, without a correlation reset.
-pub fn install_project(
-    control: &mut Control,
-    project: &crate::SealedProject,
-) -> Result<crate::Installed, Box<crate::InstallFailure>> {
-    control.install_project(project)
 }
 /// Transfers the original terminal connection only for its fence proof.
 pub fn into_connection(control: Control) -> Connection {
