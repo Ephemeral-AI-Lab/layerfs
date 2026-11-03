@@ -103,6 +103,10 @@ fn one(call: &calls::Call, words: &[String]) -> ExitCode {
         }
     };
     let outcome = calls::call_scoped(None, scope.as_ref(), &call.name(), parsed.args, &mut send);
+    // the Stores this one call opened close before the process ends, so a
+    // sqlite Store leaves no write-ahead log behind (lane K2: a later
+    // `store push` refused it)
+    layerfs_api::store::close_idle(std::time::Duration::ZERO);
     match outcome {
         Err(refusal) => output::refusal(&refusal),
         Ok(value) if stream => {
