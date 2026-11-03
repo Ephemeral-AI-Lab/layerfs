@@ -8,7 +8,7 @@ use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::{paths, read_record};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::common::place;
+use crate::common::place::{self, Executor, Start};
 use crate::store::record::{kind_of, StoreRef};
 use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -157,8 +157,9 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if let StoreRef::Postgres { .. } = store_ref {
         return init_postgresql(context, store, name, folder, timeout, &record);
     }
-    let machine = store_ref.machine()?.to_owned();
-    if machine != "native" {
+    // Init runs where the Store's calls run in this process
+    if let Executor::Worker(worker) = place::plan(&home, &store_ref, Start::Never)? {
+        let machine = worker.machine();
         return Err(refused(
             "Unsupported",
             format!(
@@ -303,29 +304,24 @@ fn remove(context: &mut Context<'_>, project: &str) -> Outcome {
         ("project", SdkValue::text(&target.project)),
         ("store_record", target.record.clone()),
     ];
-    let removed = if let StoreRef::Postgres { .. } = target.store_ref {
+    if let StoreRef::Postgres { .. } = target.store_ref {
         return Err(refused(
             "Unsupported",
             "removing a project from a PostgreSQL Store is not built",
         ));
-    } else {
-        let machine = target.store_ref.machine()?.to_owned();
-        match place::endpoint(&home, &machine)? {
-            None => {
-                let _lease = lease::hold(&home, &target.store)?;
-                crate::store::identity::remove_project(&host_args(&home, &target.store, args))?
-            }
-            Some(endpoint) => {
-                let _lease = lease::hold(&home, &target.store)?;
-                let mut fields = vec![("store".to_owned(), SdkValue::text(&target.store))];
-                fields.extend(args.into_iter().map(|(n, v)| (n.to_owned(), v)));
-                crate::machine::worker::call(
-                    &endpoint,
-                    "project.remove",
-                    SdkValue::Map(fields),
-                    &mut |e| context.event(e),
-                )?
-            }
+    }
+    let removed = match place::plan(&home, &target.store_ref, Start::OnDemand)? {
+        Executor::Local => {
+            let _lease = lease::hold(&home, &target.store)?;
+            crate::store::identity::remove_project(&host_args(&home, &target.store, args))?
+        }
+        Executor::Worker(mut worker) => {
+            let _lease = lease::hold(&home, &target.store)?;
+            let mut fields = vec![("store".to_owned(), SdkValue::text(&target.store))];
+            fields.extend(args.into_iter().map(|(n, v)| (n.to_owned(), v)));
+            worker.call("project.remove", SdkValue::Map(fields), &mut |e| {
+                context.event(e)
+            })?
         }
     };
     let entry = paths::project_dir(&home, &target.store, &target.project);

@@ -16,8 +16,8 @@ use super::deploy;
 use crate::common::context::Context;
 use crate::common::home::{self, paths, read_record, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::common::place;
-use crate::store::record::{kind_of, StoreKind, StoreRef};
+use crate::common::place::{self, Executor, Start};
+use crate::store::record::{StoreKind, StoreRef};
 use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
@@ -69,6 +69,7 @@ enum Deploy {
 fn host_args(
     home: &Path,
     (store, project, record): (&str, &str, &SdkValue),
+    kind: StoreKind,
     how: Deploy,
     more: Vec<(&str, SdkValue)>,
 ) -> Result<SdkValue> {
@@ -117,7 +118,6 @@ fn host_args(
             SdkValue::Map(fields)
         }
     };
-    let kind = kind_of(record)?;
     let mut fields = vec![
         ("home", SdkValue::text(home.display().to_string())),
         ("store", SdkValue::text(store)),
@@ -388,10 +388,11 @@ fn on_machine(
             .map(str::to_owned),
     };
     let postgresql = target.store_ref.kind() == StoreKind::Postgresql;
-    let worker = if postgresql {
-        None
-    } else {
-        place::endpoint(&home, machine)?
+    // a PostgreSQL Store's Sandboxes run from this process, which resolves
+    // the password (O3)
+    let executor = match postgresql {
+        true => Executor::Local,
+        false => place::on_machine(&home, machine, Start::OnDemand)?,
     };
     let docker = match machine {
         "docker" => Some(deploy::docker_settings(
@@ -399,12 +400,12 @@ fn on_machine(
             &target.store,
             image.as_deref(),
             postgresql,
-            worker.is_some(),
+            matches!(executor, Executor::Worker(_)),
         )?),
         _ => None,
     };
-    match worker {
-        None => {
+    match executor {
+        Executor::Local => {
             let how = match docker {
                 Some(settings) => Deploy::Docker(deploy::docker_here(&home, settings)?),
                 None => Deploy::Native(deploy::native_here(&home, image.as_deref())?),
@@ -412,6 +413,7 @@ fn on_machine(
             let args = host_args(
                 &home,
                 (&target.store, &target.project, &target.record),
+                target.store_ref.kind(),
                 how,
                 more,
             )?;
@@ -427,7 +429,7 @@ fn on_machine(
             let out = crate::sandbox::dispatch::call(op, args)?;
             drain(out, &mut |event| context.event(event))
         }
-        Some(endpoint) => {
+        Executor::Worker(mut worker) => {
             // the guest runs the same call on its own native machine, with
             // the records it needs sent along
             let project_record = read_record(&paths::project_record(
@@ -457,9 +459,7 @@ fn on_machine(
             ));
             let request =
                 SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
-            crate::machine::worker::call(&endpoint, "sandbox.host", request, &mut |event| {
-                context.event(event)
-            })
+            worker.call("sandbox.host", request, &mut |event| context.event(event))
         }
     }
 }
@@ -521,7 +521,8 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
         }
         _ => Deploy::Native(deploy::native_in_worker(args.get("native"))?),
     };
-    let host = host_args(root, (store, project, &record), how, more)?;
+    let kind = StoreRef::from_record(store, &record)?.kind();
+    let host = host_args(root, (store, project, &record), kind, how, more)?;
     crate::store::open::hold(&host, None)?;
     if op == "backend.daemon.workspace.status" {
         return crate::sandbox::dispatch::backend(op.to_owned(), host);

@@ -132,7 +132,13 @@ pub(crate) fn identity(args: &SdkValue) -> Result<Identity> {
 /// The identity a Store record holds.
 pub(crate) fn identity_of(value: &SdkValue) -> Result<Identity> {
     let name = value.get_text("name").unwrap_or("");
-    let kind = match StoreRef::from_record(name, value)? {
+    identity_in(StoreRef::from_record(name, value)?, value)
+}
+
+/// The identity Store record `value` holds, its [`StoreRef`] already parsed
+/// from it (R4).
+pub(crate) fn identity_in(store: StoreRef, value: &SdkValue) -> Result<Identity> {
+    let kind = match store {
         StoreRef::Sqlite { .. } => Kind::Sqlite,
         StoreRef::Postgres { server, .. } => Kind::Postgresql {
             schema: required(server.schema, "schema")?,

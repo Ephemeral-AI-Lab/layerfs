@@ -8,10 +8,10 @@ use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::paths;
 use crate::common::outcome::Outcome;
-use crate::common::place::endpoint;
+use crate::common::place::{plan, Executor, Start};
 use crate::store::open;
 use crate::store::record::StoreRef;
-use crate::store::resolve::{machine, moving, Target};
+use crate::store::resolve::{moving, Target};
 use layerfs_bridge::control::SdkValue;
 use std::path::Path;
 
@@ -32,9 +32,10 @@ pub(crate) fn store_call(
     // move or remove that started since `target` was read refuses it
     let (lease, record) = lease::claim(&home, &target.store)?;
     let mut fields = with_target(args, target, &record);
-    let machine = machine(&record, &target.store)?;
-    match endpoint(&home, &machine)? {
-        None => {
+    // the record read under the lock, parsed once (R4)
+    let store = StoreRef::from_record(&target.store, &record)?;
+    match plan(&home, &store, Start::OnDemand)? {
+        Executor::Local => {
             let file = paths::store_file(&home, &target.store);
             fields.push((
                 "storePath".to_owned(),
@@ -42,14 +43,12 @@ pub(crate) fn store_call(
             ));
             open::run(op, SdkValue::Map(fields), Some(lease))
         }
-        Some(endpoint) => {
+        Executor::Worker(mut worker) => {
             // the host process holds the lease while it sends the call
             let _lease = lease;
             let request =
                 SdkValue::map([("op", SdkValue::text(op)), ("args", SdkValue::Map(fields))]);
-            crate::machine::worker::call(&endpoint, "store.call", request, &mut |event| {
-                context.event(event)
-            })
+            worker.call("store.call", request, &mut |event| context.event(event))
         }
     }
 }
