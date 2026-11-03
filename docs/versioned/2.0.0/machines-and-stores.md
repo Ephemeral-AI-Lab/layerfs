@@ -17,7 +17,7 @@ a copy of a sqlite Store in a bucket.
 | Kind | How many | Made by | Sandboxes run as | Tool |
 | --- | --- | --- | --- | --- |
 | `native` | one, built in | — | macOS: host processes with a loopback NFS mount. Linux: namespaces (needs root). Windows: none; `native` holds only records (O5) | — |
-| `docker` | one, built in | — | Docker containers on the image `machine update docker --image` records; see Routes | `docker` |
+| `docker` | one, built in | — | Docker containers on the image `machine update docker --image` records, else the bundle's Sandbox image, loaded into Docker once (#535 P5); see Routes | `docker` |
 | `apple-container` | many | `machine create` | namespaces inside the VM | `container` |
 | `microsandbox` | many | `machine create` | namespaces inside the VM | `msb` |
 | `lima` | many | `machine create` | namespaces inside the VM | `limactl` |
@@ -118,10 +118,29 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
 
 ### Start on demand and idle stop
 
-- A machine starts on the first call that needs it. The caller finds the
-  worker gone, starts the machine and its worker, waits until it is ready
-  and records `worker.json`. That wait is a readiness wait, not a retry;
-  the call is then sent once.
+- A machine starts on the first call that needs it. The call dials the
+  worker `worker.json` records, once, with no ping first (#535 R1). Only
+  when nothing was sent (the connection, the secret or its answer failed)
+  does the caller start the machine and its worker, wait until it is
+  ready, record `worker.json` and send the call once. That wait is a
+  readiness wait, not a retry: the first attempt never reached a worker. A
+  call whose answer is lost after it was sent is `Unknown`; it starts
+  nothing and is not resent. `store move` and `store remove` make their
+  machines ready before they mark the Store.
+- `machine start <name>` starts a stopped machine and its worker and waits
+  until it is ready; a running machine answers at once. `machine stop
+  <name>` stops the worker and, where there is one, the VM (`docker`: its
+  worker container; `ssh`: the worker and its forward); disks and Stores
+  stay. It is `InUse` while Sandboxes run on the machine (`detail.related`
+  names them). `native` answers both at once (#535 P1).
+- No list, get or status call starts a machine (#535 P4): every `*.list`,
+  `*.get` and `*.status` call and `machine platforms` answer from records
+  and live probes, and a stopped machine reads as `stopped` (`store status`:
+  `down`; `sandbox get`: no Workspaces and `down_reason`; `workspace
+  status`: `Unavailable`). Calls that need the worker start it on demand:
+  Store calls on a sqlite Store there, `project remove`, `sandbox create`,
+  the Workspace calls that change something, `store move`, `store remove`
+  and `backup create`.
 - Two processes that need the same stopped machine take turns on its
   `start.lock`, which `machine create` and `machine remove` also take. The
   second waits up to 600 s, then is refused `Unavailable`. The lock is

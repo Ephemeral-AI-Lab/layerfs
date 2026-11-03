@@ -91,11 +91,19 @@ step commits.
   `docker`, its Sandboxes and the twelve cells passed; see the terminal pass.
 - **Machine boot, worker start and idle stop.** A guest powering off after
   10 idle minutes and the next call starting it again were not run.
+  `machine start` and `machine stop` (#535 P1), and a worker call that
+  starts its machine only after a dial that sent nothing (R1), were tested
+  with stand-in tools and workers only; no VM, ssh host or Docker worker
+  was started or stopped by them.
+- **The docker default image** (#535 P5). Loading the bundle's
+  `sandbox-image.tar` with `docker load` and running the worker container
+  and Sandboxes on the id it reports was tested with a stand-in `docker`
+  only; a real Engine (Docker Desktop's classic or containerd image store)
+  was not used.
 - **One worker serving several Stores** and the guest-to-host send speed.
 - **Linux.** No Linux host was used. Linux namespaces Sandboxes, Init into
-  `docker` on Linux, the Linux route of the `docker` machine (the route
-  table marks it in-process; the decisions log says it goes to its worker)
-  and the Linux wheels (O20) are `NOT_RUN`.
+  `docker` on Linux, the Linux route of the `docker` machine (its worker,
+  as on macOS: #535 G8) and the Linux wheels (O20) are `NOT_RUN`.
 - **Windows** (O5). `native` on Windows holds only records; its sqlite
   Stores and Init are meant to live in a WSL worker. Not run. The library
   does not build for Windows yet: `home/`, `store/`, `worker/`, `start.rs`

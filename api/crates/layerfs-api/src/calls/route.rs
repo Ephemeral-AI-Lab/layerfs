@@ -40,6 +40,8 @@ pub fn run(call: &Call, context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             "platforms" => m::platforms(context, args),
             "get" => m::get(context, args),
             "status" => m::status(context, args),
+            "start" => m::start(context, args),
+            "stop" => m::stop(context, args),
             "create" => m::create(context, args),
             "connect" => m::connect(context, args),
             "remove" => m::remove(context, args),

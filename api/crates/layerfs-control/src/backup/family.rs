@@ -9,8 +9,8 @@ use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::{self, paths, read_record, with_field, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::common::place;
-use crate::store::record::{kind_of, StoreKind};
+use crate::common::place::{self, Executor, Start};
+use crate::store::record::{kind_of, StoreKind, StoreRef};
 use crate::store::resolve;
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -426,7 +426,9 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let bucket_record = bucket_of(&home, bucket)?;
     let record = read_record(&paths::store_record(&home, store))?
         .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
-    if kind_of(&record)? == StoreKind::Postgresql {
+    // the record parsed once (R4)
+    let store_ref = StoreRef::from_record(store, &record)?;
+    if let StoreRef::Postgres { .. } = store_ref {
         return Err(refused(
             "InvalidInput",
             format!("Store {store} is a PostgreSQL database; back it up with PostgreSQL's tools"),
@@ -435,11 +437,13 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     resolve::moving(&record, store)?;
     let driver = driver(&bucket_record)?;
     let expected = expected(&record, bucket, &file);
-    let identity = crate::store::identity::identity_of(&record)?;
-    let machine = resolve::machine(&record, store)?;
+    let machine = store_ref.machine()?.to_owned();
+    let executor = place::plan(&home, &store_ref, Start::OnDemand)?;
+    let identity = crate::store::identity::identity_in(store_ref, &record)?;
     let home_id = home::ensure(&home)?.id;
     let object = remote::store_object(&file).map_err(|why| refused("InvalidInput", why))?;
-    let endpoint = place::endpoint(&home, &machine)?;
+    let local_steps = matches!(executor, Executor::Local);
+    let executor = std::cell::RefCell::new(executor);
     let _lease = lease::hold(&home, store)?;
     check(driver.as_ref(), &object, expected, &home_id)?;
     progress(context, "snapshot");
@@ -450,26 +454,26 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ];
         fields.extend(more);
         let args = SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
-        match &endpoint {
-            None => crate::store::transfer::steps::run(&home, op, &args),
-            Some(endpoint) => {
+        match &mut *executor.borrow_mut() {
+            Executor::Local => crate::store::transfer::steps::run(&home, op, &args),
+            Executor::Worker(worker) => {
                 let request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
-                crate::machine::worker::call(endpoint, "store.file", request, &mut |_| {})
+                worker.call("store.file", request, &mut |_| {})
             }
         }
     };
     let staged = step("stage", vec![])?;
     // `native` stages beside the Store; a worker's copy comes here
-    let local = match &endpoint {
-        None => {
+    let local = match local_steps {
+        true => {
             let mut name = paths::store_file(&home, store).into_os_string();
             name.push(".backup");
             std::path::PathBuf::from(name)
         }
-        Some(_) => paths::store_dir(&home, store).join("backup.staging"),
+        false => paths::store_dir(&home, store).join("backup.staging"),
     };
     let result = (|| {
-        if endpoint.is_some() {
+        if !local_steps {
             progress(context, "send");
             fetch_staged(&step, &local)?;
             let (_, sha256) = pieces::sha256_file(&local, None).map_err(remote_error)?;
@@ -501,7 +505,7 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             pieces::upload(driver.as_ref(), &object, &local, &metadata).map_err(remote_error)?;
         Ok((moved, heads))
     })();
-    if endpoint.is_some() {
+    if !local_steps {
         let _ = std::fs::remove_file(&local);
     }
     let _ = step("unstage", vec![]);

@@ -9,7 +9,9 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_machine::{
     Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, SshSpec, Tools,
 };
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
@@ -20,9 +22,33 @@ pub const DEFAULT_MEMORY: i64 = 4 << 30;
 /// 20 GiB.
 pub const DEFAULT_DISK: i64 = 20 << 30;
 
+/// The homes, by path and id, whose built-in machines this process has
+/// found or written (#535 R6).
+static ENSURED: Mutex<BTreeSet<(PathBuf, String)>> = Mutex::new(BTreeSet::new());
+
 /// `machine/native/` and `machine/docker/` exist from the first call and
-/// are never removed. Read first; the home lock is taken only to write one.
-pub fn ensure_built_ins(home: &Path) -> Result<()> {
+/// are never removed. Checked once per process for each home, by its path
+/// and its id `id` (a home made again at the same path is checked again),
+/// not on every call (#535 R6). Read first; the home lock is taken only to
+/// write one.
+pub fn ensure_built_ins(home: &Path, id: &str) -> Result<()> {
+    let key = (home.to_owned(), id.to_owned());
+    if ENSURED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains(&key)
+    {
+        return Ok(());
+    }
+    write_built_ins(home)?;
+    ENSURED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(key);
+    Ok(())
+}
+
+fn write_built_ins(home: &Path) -> Result<()> {
     let missing = |name: &str| -> Result<bool> {
         Ok(read_record(&paths::machine_record(home, name))?.is_none())
     };

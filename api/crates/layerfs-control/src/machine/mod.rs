@@ -15,9 +15,13 @@ mod endpoint;
 #[cfg(feature = "machine")]
 mod get;
 #[cfg(feature = "machine")]
+mod image;
+#[cfg(feature = "machine")]
 mod list;
 #[cfg(feature = "machine")]
 mod platforms;
+#[cfg(feature = "machine")]
+mod power;
 #[cfg(feature = "machine")]
 mod record;
 #[cfg(feature = "machine")]
@@ -35,13 +39,17 @@ pub use connect::connect;
 #[cfg(feature = "machine")]
 pub use create::create;
 #[cfg(feature = "machine")]
-pub use endpoint::running;
+pub use endpoint::{running, start_after};
 #[cfg(feature = "machine")]
 pub use get::get;
+#[cfg(feature = "machine")]
+pub(crate) use image::docker_default;
 #[cfg(feature = "machine")]
 pub use list::list;
 #[cfg(feature = "machine")]
 pub use platforms::platforms;
+#[cfg(feature = "machine")]
+pub use power::{start, stop};
 #[cfg(feature = "machine")]
 pub use record::{ensure_built_ins, kind_of as platform_of, machine_of, vm_name};
 #[cfg(feature = "machine")]

@@ -7,17 +7,20 @@
 //! Linux. On any other machine the same call runs in that machine's worker,
 //! which keeps the Sandbox's records under its own root; this home keeps
 //! the name, the project and the machine. A Sandbox on `docker` is a
-//! container whose image and settings come from the docker machine's record
-//! and travel with the call (H §7.6, §7.7): from this process where the
-//! docker machine's Stores open here (Linux, and every PostgreSQL Store),
-//! else from its worker. A PostgreSQL Store's Sandboxes run on `native` or
-//! `docker` from this process, which resolves the password (O3).
-use super::deploy;
+//! container whose image comes from the docker machine's record and travels
+//! with the call (H §7.6, §7.7); a sqlite Store's is started by the docker
+//! machine's worker on every host (G8). Where a call runs is
+//! `place::plan`'s answer; the deploy settings are chosen here and resolved
+//! where it runs (`deploy`). A PostgreSQL Store's Sandboxes run on `native`
+//! or `docker` from this process, which resolves the password (O3), until
+//! the worker takes the resolved URL (#535 phase 5a).
+use super::deploy::{self, Deploy, Side};
 use crate::common::context::Context;
 use crate::common::home::{self, paths, read_record, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::common::place;
-use crate::store::record::{kind_of, StoreKind, StoreRef};
+use crate::common::place::{self, Executor, Start};
+use crate::machine::worker::Unreached;
+use crate::store::record::{StoreKind, StoreRef};
 use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
@@ -55,20 +58,12 @@ fn sandbox_of(home: &Path, name: &str) -> Result<(String, SdkValue)> {
         })
 }
 
-/// How a Sandbox runs, with the settings the side running the call resolved:
-/// a daemon process (`native` on macOS, namespaces on Linux) or a container.
-enum Deploy {
-    /// The daemon, and for namespaces the image archive and digest.
-    Native(Vec<(String, SdkValue)>),
-    /// The docker machine's settings ([`deploy::docker_settings`]).
-    Docker(SdkValue),
-}
-
 /// The host Sandbox operations' arguments for project `<store>/<project>`,
 /// plus `more`, run as `how` says.
 fn host_args(
     home: &Path,
     (store, project, record): (&str, &str, &SdkValue),
+    kind: StoreKind,
     how: Deploy,
     more: Vec<(&str, SdkValue)>,
 ) -> Result<SdkValue> {
@@ -117,7 +112,6 @@ fn host_args(
             SdkValue::Map(fields)
         }
     };
-    let kind = kind_of(record)?;
     let mut fields = vec![
         ("home", SdkValue::text(home.display().to_string())),
         ("store", SdkValue::text(store)),
@@ -185,19 +179,28 @@ pub fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcom
         "get" => {
             let name = args.get_text("name").unwrap_or("");
             let (machine, record) = sandbox_of(&home, name)?;
-            let workspaces = on_machine(
+            // a get starts no machine (P4): a machine that is down answers
+            // the record with no Workspaces and why
+            let listed = reach(
                 context,
                 &machine,
                 &record,
                 "sandbox.list_workspaces",
                 vec![],
-            )?;
-            let all = match workspaces.get("workspaces") {
-                Some(SdkValue::List(items)) => items.clone(),
-                _ => Vec::new(),
+                Start::Never,
+            );
+            let (all, down) = match listed {
+                Ok(workspaces) => match workspaces?.get("workspaces") {
+                    Some(SdkValue::List(items)) => (items.clone(), None),
+                    _ => (Vec::new(), None),
+                },
+                Err(Unreached(why)) => (Vec::new(), Some(why.message)),
             };
             let (items, next) = page(all, args);
-            let record = home::with_field(record, "workspaces", SdkValue::List(items));
+            let mut record = home::with_field(record, "workspaces", SdkValue::List(items));
+            if let Some(why) = down {
+                record = home::with_field(record, "down_reason", SdkValue::Text(why));
+            }
             Ok(home::with_field(record, "next_page_pos", next))
         }
         "close" => {
@@ -359,13 +362,45 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     }
 }
 
-/// Runs host Sandbox operation `op` for Sandbox `record` on `machine`.
+/// Runs host Sandbox operation `op` for Sandbox `record` on `machine`,
+/// starting the machine when it is down.
 fn on_machine(
     context: &mut Context<'_>,
     machine: &str,
     record: &SdkValue,
     op: &str,
     more: Vec<(&str, SdkValue)>,
+) -> Outcome {
+    reach(context, machine, record, op, more, Start::OnDemand)
+        .unwrap_or_else(|Unreached(refusal)| Err(refusal))
+}
+
+/// [`on_machine`], with `start` saying whether a machine that is down is
+/// started; [`Unreached`] when it was not and nothing was sent.
+fn reach(
+    context: &mut Context<'_>,
+    machine: &str,
+    record: &SdkValue,
+    op: &str,
+    more: Vec<(&str, SdkValue)>,
+    start: Start,
+) -> std::result::Result<Outcome, Unreached> {
+    let mut unreached = None;
+    let outcome = host_op(context, (machine, record, op), more, start, &mut unreached);
+    match unreached {
+        Some(unreached) => Err(unreached),
+        None => Ok(outcome),
+    }
+}
+
+/// [`reach`]'s operation; a request that was not sent leaves its
+/// [`Unreached`] in `unreached`.
+fn host_op(
+    context: &mut Context<'_>,
+    (machine, record, op): (&str, &SdkValue, &str),
+    more: Vec<(&str, SdkValue)>,
+    start: Start,
+    unreached: &mut Option<Unreached>,
 ) -> Outcome {
     let home = context.home.clone();
     let project = record.get_text("project").unwrap_or("");
@@ -388,30 +423,22 @@ fn on_machine(
             .map(str::to_owned),
     };
     let postgresql = target.store_ref.kind() == StoreKind::Postgresql;
-    let worker = if postgresql {
-        None
-    } else {
-        place::endpoint(&home, machine)?
+    // a PostgreSQL Store's Sandboxes run from this process, which resolves
+    // the password (O3)
+    let executor = match postgresql {
+        true => Executor::Local,
+        false => place::on_machine(&home, machine, start)?,
     };
-    let docker = match machine {
-        "docker" => Some(deploy::docker_settings(
-            &home,
-            &target.store,
-            image.as_deref(),
-            postgresql,
-            worker.is_some(),
-        )?),
-        _ => None,
-    };
-    match worker {
-        None => {
-            let how = match docker {
-                Some(settings) => Deploy::Docker(deploy::docker_here(&home, settings)?),
-                None => Deploy::Native(deploy::native_here(&home, image.as_deref())?),
-            };
+    // what the machine's record chooses; the side that runs the call
+    // resolves the rest
+    let choice = deploy::choose(&home, machine, image.as_deref(), postgresql, start)?;
+    match executor {
+        Executor::Local => {
+            let how = deploy::resolve(&Side::Home(&home), &target.store, &choice)?;
             let args = host_args(
                 &home,
                 (&target.store, &target.project, &target.record),
+                target.store_ref.kind(),
                 how,
                 more,
             )?;
@@ -427,7 +454,7 @@ fn on_machine(
             let out = crate::sandbox::dispatch::call(op, args)?;
             drain(out, &mut |event| context.event(event))
         }
-        Some(endpoint) => {
+        Executor::Worker(mut worker) => {
             // the guest runs the same call on its own native machine, with
             // the records it needs sent along
             let project_record = read_record(&paths::project_record(
@@ -443,23 +470,20 @@ fn on_machine(
                 ("store_record", target.record.clone()),
                 ("project_record", project_record),
             ];
-            if let Some(settings) = docker {
-                fields.push(("docker", settings));
-            } else {
-                fields.push((
-                    "native",
-                    deploy::guest_settings(&home, machine, image.as_deref())?,
-                ));
-            }
+            fields.push(("deploy", choice));
             fields.push((
                 "more",
                 SdkValue::Map(more.into_iter().map(|(n, v)| (n.to_owned(), v)).collect()),
             ));
             let request =
                 SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
-            crate::machine::worker::call(&endpoint, "sandbox.host", request, &mut |event| {
-                context.event(event)
-            })
+            match worker.attempt("sandbox.host", request, &mut |event| context.event(event)) {
+                Ok(outcome) => outcome,
+                Err(Unreached(refusal)) => {
+                    *unreached = Some(Unreached(refusal.clone()));
+                    Err(refusal)
+                }
+            }
         }
     }
 }
@@ -496,7 +520,11 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
         "machine",
         SdkValue::text("native"),
     );
-    write_record(&paths::store_record(root, store), &record)?;
+    // written only when it changed (#535 R5): most calls send the same one
+    let path = paths::store_record(root, store);
+    if read_record(&path)?.as_ref() != Some(&record) {
+        write_record(&path, &record)?;
+    }
     // the caller's record replaces one left by a project of the same name
     // that was removed and made again (its `created` differs)
     let project_path = paths::project_record(root, store, project);
@@ -515,13 +543,10 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
             .collect(),
         _ => Vec::new(),
     };
-    let how = match args.get("docker") {
-        Some(settings @ SdkValue::Map(_)) => {
-            Deploy::Docker(deploy::docker_in_worker(root, store, settings)?)
-        }
-        _ => Deploy::Native(deploy::native_in_worker(args.get("native"))?),
-    };
-    let host = host_args(root, (store, project, &record), how, more)?;
+    let choice = args.get("deploy").cloned().unwrap_or_default();
+    let how = deploy::resolve(&Side::Worker(root), store, &choice)?;
+    let kind = StoreRef::from_record(store, &record)?.kind();
+    let host = host_args(root, (store, project, &record), kind, how, more)?;
     crate::store::open::hold(&host, None)?;
     if op == "backend.daemon.workspace.status" {
         return crate::sandbox::dispatch::backend(op.to_owned(), host);
@@ -692,7 +717,21 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
         "status" => "backend.daemon.workspace.status",
         _ => return Err(refused("InvalidInput", format!("no call workspace.{call}"))),
     };
-    let out = on_machine(context, &machine, &record, op, more)?;
+    // a status starts no machine (P4)
+    let out = match call {
+        "status" => reach(context, &machine, &record, op, more, Start::Never).unwrap_or_else(
+            |Unreached(why)| {
+                Err(refused(
+                    "Unavailable",
+                    format!(
+                        "{}; workspace.status starts no machine (`machine start {machine}` starts it)",
+                        why.message
+                    ),
+                ))
+            },
+        ),
+        _ => on_machine(context, &machine, &record, op, more),
+    }?;
     if call == "exec" {
         // the command's output as events too, for front ends that stream
         for stream in ["stdout", "stderr"] {

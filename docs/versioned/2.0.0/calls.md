@@ -8,7 +8,7 @@ and the command in `engine/crates/layerfs-cli/src/`. The shell parser, the
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 58 calls in nine families. `layerfs help` lists them, and
+There are 60 calls in nine families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written
@@ -70,7 +70,7 @@ Sandbox names (H §7.6).
 | size | bytes as a number, or text with `K`, `M` or `G` (`512M`, `8G`) | a word |
 | function | a callback (Node, Python only) | — |
 
-## The 58 calls
+## The 60 calls
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
@@ -183,9 +183,18 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   running `store move` and the name are checked under one home lock.
 - A sqlite project's Sandbox runs on the machine that holds its Store;
   another machine is `Unsupported`, naming the Store's machine.
+- On `docker`, the image is `image`, else the one `machine update docker
+  --image` recorded, else the sealed bundle's `sandbox-image.tar`, loaded
+  into Docker once and recorded on the docker machine as `loaded_image`
+  (`{id, bundle}`; another bundle's image is loaded again). The docker
+  worker's own container runs the same default. A bundle without the
+  archive is `Unsupported`, naming it (#535 P5).
 - `list` and `get` page: `list` its Sandboxes, `get` the Sandbox's
   `workspaces` (`page_size` 1 to 1000, default 50; `page_pos`), with
   `next_page_pos`, `null` after the last page.
+- `list` and `get` start no machine (#535 P4). `get` on a Sandbox whose
+  machine is down answers its record with `workspaces: []` and
+  `down_reason`, the reason its worker was not reached.
 - `close` without `force` is `MountsActive` while a Workspace is mounted.
   With `force` (O31) it stops the Sandbox through its backend anyway and
   answers `{kind: "Closed", sandbox, unknown}`: `unknown` lists the
@@ -229,9 +238,12 @@ A Workspace is `<sandbox>:<path>`, answered as `ws` by `mount`.
   publishes over a moved head instead.
 - `unmount` with `discard` drops uncommitted changes; `force` aborts its
   connection.
+- `status` starts no machine (#535 P4): on a Sandbox whose machine is down
+  it is `Unavailable`, naming `machine start`. `mount`, `exec`, `commit`
+  and `unmount` start a stopped machine, as Store calls do.
 - Not run for this manual.
 
-### `machine` (9)
+### `machine` (11)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -239,6 +251,8 @@ A Workspace is `<sandbox>:<path>`, answered as `ws` by `mount`.
 | `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `connect/SUPPORT.json`) |
 | `get` | `name` | — | a machine's record |
 | `status` | `name` | — | a machine's live state, free disk and tool version |
+| `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
+| `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
 | `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image`, `nested`, `host` | creates a VM machine |
 | `connect` | `name`, `host` | `user`, `port`, `identity`, `known_hosts`, `root` | connects an ssh host as a machine |
 | `remove` | `name` | — | deletes a VM machine and its disk |
@@ -257,6 +271,15 @@ $ layerfs machine platforms
 $ layerfs machine status native
 {"name":"native","platform":"native","state":"running","free_disk":null,"tool_version":null,"down_reason":null,"stores":["shop"]}
 ```
+
+- `start` and `stop` answer the machine's summary as `get` does. `start`
+  is for UIs, which start a machine before using it: no list, get or
+  status call starts one (#535 P4). `stop` is refused `InUse` while
+  Sandboxes are recorded on the machine (or on a Firecracker machine it
+  hosts); `detail.related` lists them as `{kind: "sandbox", name}`. It
+  runs under the machine's `start.lock`, so no on-demand start runs
+  meanwhile, and removes `worker.json`; the next call that needs the
+  machine starts it again.
 
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals.

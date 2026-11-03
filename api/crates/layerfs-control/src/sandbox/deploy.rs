@@ -1,10 +1,16 @@
-//! Where a Sandbox's daemon, image and Store come from (#533 step 12): the
-//! settings the host Sandbox code reads as `deploy`, resolved on the side
-//! that runs the call: this process from the home's records and the sealed
-//! bundle in the user cache (O16), or a machine's worker from its own
-//! bundle folder (a guest never reads the home, H §7.7).
+//! Where a Sandbox's daemon, image and Store come from (#533 step 12, #535
+//! phase 4): the settings the host Sandbox code reads as `deploy`. The
+//! caller reads what the machine's record chooses ([`choose`]: the backend,
+//! the image, the machine's own image archive, the docker worker's data
+//! volume) and sends that to the side that runs the call, which resolves
+//! everything that depends on where it runs, once ([`resolve`]): its daemon,
+//! its Engine socket, where its image archive and the Store's folder are.
+//! This process resolves from the home's records and the sealed bundle in
+//! the user cache (O16); a machine's worker from its own bundle folder (a
+//! guest never reads the home, H §7.7).
 use crate::common::home::{paths, read_record};
 use crate::common::outcome::{failed, refused};
+use crate::common::place::Start;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
@@ -16,6 +22,24 @@ pub(crate) const IMAGE_ARCHIVE: &str = "sandbox-image.tar";
 /// Where a guest holds a machine's own Sandbox image archive, copied in at
 /// start (`layerfs_machine::IMAGE`).
 const GUEST_IMAGES: &str = "/layerfs/image";
+
+/// How a Sandbox runs, with the settings the side running the call resolved:
+/// a daemon process (`native` on macOS, namespaces on Linux) or a container.
+pub(super) enum Deploy {
+    /// The daemon, and for namespaces the image archive and digest.
+    Native(Vec<(String, SdkValue)>),
+    /// The container's image, Engine socket, daemon and Store volume.
+    Docker(SdkValue),
+}
+
+/// The side that runs a Sandbox call.
+pub(super) enum Side<'a> {
+    /// This process, with the home at the path and its records.
+    Home(&'a Path),
+    /// A machine's worker, with its root at the path and its bundle beside
+    /// its own executable.
+    Worker(&'a Path),
+}
 
 /// The sealed bundle's folder for `os` on this host's architecture (O16):
 /// `<cache>/layerfs/bundle/<version>/<os>-<arch>/`, the cache being
@@ -45,13 +69,149 @@ pub(crate) fn bundle_dir(os: &str) -> Result<PathBuf> {
         .join(format!("{os}-{}", std::env::consts::ARCH)))
 }
 
-/// Where a `native` Sandbox's daemon executable is: the native machine
-/// record's `daemon` (`import-env` writes it from 1.1.0's `LAYERFS_DAEMON`),
-/// else this host's bundle's.
-pub(super) fn daemon(home: &Path) -> Result<String> {
-    let record = read_record(&paths::machine_record(home, "native"))?.unwrap_or_default();
+/// What machine `machine`'s record chooses for a Sandbox of a Store
+/// (`postgresql` or sqlite), read by the caller: `backend` (`docker` or
+/// `local`), the image (the call's `image`, else the record's; on `docker`
+/// with neither, the bundle's image loaded once, P5), and for `local` the
+/// machine's own image archive (`image_archive`,
+/// or an `image` that names a file); for a sqlite Store on `docker`, the
+/// docker worker's data volume.
+pub(super) fn choose(
+    home: &Path,
+    machine: &str,
+    image: Option<&str>,
+    postgresql: bool,
+    start: Start,
+) -> Result<SdkValue> {
+    let record = read_record(&paths::machine_record(home, machine))?.unwrap_or_default();
+    let named = image.or(record.get_text("image"));
+    let mut fields = Vec::new();
+    if machine == "docker" {
+        // a call that starts nothing loads no image either (P4)
+        let image = match (named, start) {
+            (Some(image), _) => Some(image.to_owned()),
+            (None, Start::OnDemand) => Some(docker_default(home)?),
+            (None, Start::Never) => None,
+        };
+        fields.push(("backend", SdkValue::text("docker")));
+        if let Some(image) = image {
+            fields.push(("image", SdkValue::Text(image)));
+        }
+        if !postgresql {
+            let volume = format!("{}-data", docker_vm(home, &record)?);
+            fields.push(("data_volume", SdkValue::Text(volume)));
+        }
+    } else {
+        fields.push(("backend", SdkValue::text("local")));
+        if let Some(digest) = named.filter(|i| is_digest(i)) {
+            fields.push(("image", SdkValue::text(digest)));
+        }
+        let archive = record
+            .get_text("image_archive")
+            .or(record.get_text("image").filter(|i| i.starts_with('/')));
+        if let Some(archive) = archive {
+            fields.push(("archive", SdkValue::text(archive)));
+        }
+    }
+    Ok(SdkValue::Map(
+        fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
+    ))
+}
+
+/// The deploy settings for `choice` ([`choose`]) on `side`, for a Sandbox
+/// of Store `store`.
+pub(super) fn resolve(side: &Side<'_>, store: &str, choice: &SdkValue) -> Result<Deploy> {
+    if choice.get_text("backend") == Some("docker") {
+        return docker(side, store, choice).map(Deploy::Docker);
+    }
+    let mut fields = vec![("daemon".to_owned(), SdkValue::Text(daemon(side, "native")?))];
+    // a namespaces Sandbox (Linux): its image archive and digest
+    if cfg!(target_os = "linux") {
+        let archive = archive(side, choice.get_text("archive"))?;
+        fields.push((
+            "imageArchive".to_owned(),
+            SdkValue::text(archive.display().to_string()),
+        ));
+        if let Some(digest) = choice.get_text("image").filter(|i| is_digest(i)) {
+            fields.push(("image".to_owned(), SdkValue::text(digest)));
+        }
+    }
+    Ok(Deploy::Native(fields))
+}
+
+/// A docker Sandbox's settings on `side`: its image, the Engine socket and
+/// the Linux daemon it uploads, and for a sqlite Store the Store's folder of
+/// the worker's data volume. A worker makes that folder the container root
+/// user's alone first, as the daemon requires, and dials the Sandbox's
+/// loopback-published port as 1.1.0's macOS worker did. This process runs
+/// only a PostgreSQL Store's docker Sandbox: a sqlite Store's goes through
+/// the docker machine's worker on every host (G8).
+fn docker(side: &Side<'_>, store: &str, choice: &SdkValue) -> Result<SdkValue> {
+    let mut fields = Vec::new();
+    if let Some(image) = choice.get_text("image") {
+        fields.push(("image", SdkValue::text(image)));
+    }
+    let volume = choice.get_text("data_volume");
+    let socket = match side {
+        Side::Home(_) if volume.is_some() => {
+            return Err(refused(
+                "Unsupported",
+                "a docker Sandbox of a sqlite Store runs through the docker machine's worker",
+            ))
+        }
+        Side::Home(home) => read_record(&paths::machine_record(home, "docker"))?
+            .and_then(|record| record.get_text("docker").map(str::to_owned))
+            .unwrap_or_else(|| "/var/run/docker.sock".to_owned()),
+        Side::Worker(_) => {
+            fields.push((
+                "daemonHost",
+                SdkValue::text(layerfs_sandbox::docker::DESKTOP_HOST),
+            ));
+            "/var/run/docker.sock".to_owned()
+        }
+    };
+    if let (Some(volume), Side::Worker(root)) = (volume, side) {
+        private_store(root, store)?;
+        fields.push(("volume", SdkValue::Text(format!("{volume}/store/{store}"))));
+    }
+    fields.push(("docker", SdkValue::Text(socket)));
+    fields.push(("daemon", SdkValue::Text(daemon(side, "docker")?)));
+    Ok(SdkValue::Map(
+        fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
+    ))
+}
+
+/// Makes Store `store`'s folder and file under the worker's root the
+/// container root user's alone (0700, 0600), as a docker Sandbox's daemon
+/// requires of them.
+fn private_store(root: &Path, store: &str) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let folder = paths::store_dir(root, store);
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o700)).map_err(failed)?;
+    let file = paths::store_file(root, store);
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).map_err(failed)
+}
+
+/// The daemon a Sandbox on `machine` (`native` or `docker`) runs, on `side`:
+/// in a worker, the one beside its own executable (the bundle's); here, the
+/// machine record's `daemon` (`import-env` writes native's from 1.1.0's
+/// `LAYERFS_DAEMON`), else for `native` this host's bundle's, and for
+/// `docker` (a Linux daemon) native's on Linux, else the sealed Linux
+/// bundle's.
+fn daemon(side: &Side<'_>, machine: &str) -> Result<String> {
+    let home = match side {
+        Side::Worker(_) => return Ok(beside_self("layerfs-daemon")?.display().to_string()),
+        Side::Home(home) => home,
+    };
+    let record = read_record(&paths::machine_record(home, machine))?.unwrap_or_default();
     if let Some(path) = record.get_text("daemon") {
         return Ok(path.to_owned());
+    }
+    if machine == "docker" && !cfg!(target_os = "linux") {
+        return bundle_daemon();
+    }
+    if machine == "docker" {
+        return daemon(side, "native");
     }
     let path = bundle_dir(std::env::consts::OS)?.join("layerfs-daemon");
     if !path.is_file() {
@@ -66,50 +226,31 @@ pub(super) fn daemon(home: &Path) -> Result<String> {
     Ok(path.display().to_string())
 }
 
-/// The docker machine's settings for a Sandbox of `store`: the image (the
-/// call's, else the record's), where its Store folder comes from, and for a
-/// worker the host it dials. The side that runs the call adds its own
-/// Docker socket and Linux daemon ([`docker_here`], [`docker_in_worker`]).
-pub(super) fn docker_settings(
-    home: &Path,
-    store: &str,
-    image: Option<&str>,
-    postgresql: bool,
-    worker: bool,
-) -> Result<SdkValue> {
-    let record = read_record(&paths::machine_record(home, "docker"))?.unwrap_or_default();
-    let image = image.or(record.get_text("image")).ok_or_else(|| {
-        refused(
-            "InvalidInput",
-            "the docker machine names no Sandbox image; `layerfs machine update docker --image sha256:<digest>`",
-        )
-    })?;
-    let mut fields = vec![("image", SdkValue::text(image))];
-    if !postgresql {
-        let source = if worker {
-            // the worker's data volume, the Store's folder in it
-            format!("{}-data/store/{store}", docker_vm(home, &record)?)
-        } else {
-            paths::store_dir(home, store).display().to_string()
-        };
-        fields.push(("volume", SdkValue::text(source)));
-    }
-    if worker {
-        // the worker dials a Sandbox container's loopback-published port as
-        // 1.1.0's macOS worker did
-        fields.push((
-            "daemonHost",
-            SdkValue::text(layerfs_sandbox::docker::DESKTOP_HOST),
-        ));
-    }
-    Ok(SdkValue::Map(
-        fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
-    ))
+/// The namespaces image archive on `side`: the machine's own archive
+/// (`chosen`; in a guest, its copy under [`GUEST_IMAGES`]), else the
+/// bundle's.
+fn archive(side: &Side<'_>, chosen: Option<&str>) -> Result<PathBuf> {
+    Ok(match (side, chosen) {
+        (Side::Home(_), Some(path)) => PathBuf::from(path),
+        (Side::Home(_), None) => bundle_dir("linux")?.join(IMAGE_ARCHIVE),
+        (Side::Worker(_), Some(path)) => match Path::new(path).file_name() {
+            Some(file) => Path::new(GUEST_IMAGES).join(file),
+            None => beside_self(IMAGE_ARCHIVE)?,
+        },
+        (Side::Worker(_), None) => beside_self(IMAGE_ARCHIVE)?,
+    })
+}
+
+/// File `name` beside this process's executable: a worker's bundle.
+fn beside_self(name: &str) -> Result<PathBuf> {
+    Ok(std::env::current_exe()
+        .map_err(failed)?
+        .with_file_name(name))
 }
 
 /// The docker machine's worker container name.
 #[cfg(feature = "machine")]
-pub(super) fn docker_vm(home: &Path, record: &SdkValue) -> Result<String> {
+fn docker_vm(home: &Path, record: &SdkValue) -> Result<String> {
     Ok(match record.get_text("vm_name") {
         Some(name) => name.to_owned(),
         None => crate::machine::vm_name(&crate::common::home::open(home)?.id, "docker"),
@@ -117,158 +258,41 @@ pub(super) fn docker_vm(home: &Path, record: &SdkValue) -> Result<String> {
 }
 
 #[cfg(not(feature = "machine"))]
-pub(super) fn docker_vm(_: &Path, _: &SdkValue) -> Result<String> {
+fn docker_vm(_: &Path, _: &SdkValue) -> Result<String> {
     Err(refused(
         "Unsupported",
         "a docker machine's worker is reached from a host build",
     ))
 }
 
-/// Completes the docker settings in this process: the docker machine's
-/// socket and the Linux daemon it uploads (the record's `daemon`, else on
-/// Linux this host's own, else the sealed bundle's). A Store folder bind
-/// mounted from here must be the container's root user's, as the daemon
-/// requires of it, so only a root caller binds one.
-pub(super) fn docker_here(home: &Path, settings: SdkValue) -> Result<SdkValue> {
-    let record = read_record(&paths::machine_record(home, "docker"))?.unwrap_or_default();
-    if settings.get("volume").is_some() && crate::sandbox::files::user().0 != 0 {
-        return Err(refused(
-            "Unsupported",
-            "a docker Sandbox of a sqlite Store opened in this process bind mounts the Store's folder, which its daemon (root in the container) must own; run as root, or keep the Store on native",
-        ));
-    }
-    let socket = record
-        .get_text("docker")
-        .unwrap_or("/var/run/docker.sock")
-        .to_owned();
-    let daemon = match record.get_text("daemon") {
-        Some(path) => path.to_owned(),
-        None if cfg!(target_os = "linux") => daemon(home)?,
-        None => bundle_daemon()?,
-    };
-    let SdkValue::Map(mut fields) = settings else {
-        return Err(refused("InvalidInput", "docker settings are a map"));
-    };
-    fields.push(("docker".to_owned(), SdkValue::text(socket)));
-    fields.push(("daemon".to_owned(), SdkValue::text(daemon)));
-    Ok(SdkValue::Map(fields))
+/// The docker machine's image when none is named: the bundle's Sandbox
+/// image, loaded into Docker once (P5).
+#[cfg(feature = "machine")]
+fn docker_default(home: &Path) -> Result<String> {
+    crate::machine::docker_default(home)
+}
+
+#[cfg(not(feature = "machine"))]
+fn docker_default(_: &Path) -> Result<String> {
+    Err(refused(
+        "InvalidInput",
+        "the docker machine names no Sandbox image; `layerfs machine update docker --image sha256:<digest>`",
+    ))
 }
 
 /// The sealed bundle's Linux daemon.
 #[cfg(feature = "machine")]
-pub(super) fn bundle_daemon() -> Result<String> {
+fn bundle_daemon() -> Result<String> {
     let bundle = crate::machine::bundle()?;
     Ok(bundle.dir.join("layerfs-daemon").display().to_string())
 }
 
 #[cfg(not(feature = "machine"))]
-pub(super) fn bundle_daemon() -> Result<String> {
+fn bundle_daemon() -> Result<String> {
     Err(refused(
         "Unsupported",
         "no Linux daemon for a docker Sandbox; set the docker machine's daemon",
     ))
-}
-
-/// Completes the docker settings in the worker: the Engine socket mounted
-/// into its container and the daemon beside its own executable (the
-/// bundle's). The Store's folder in the data volume is made the container
-/// root user's alone first, as the daemon requires.
-pub(super) fn docker_in_worker(root: &Path, store: &str, settings: &SdkValue) -> Result<SdkValue> {
-    use std::os::unix::fs::PermissionsExt;
-    let daemon = std::env::current_exe()
-        .map_err(failed)?
-        .with_file_name("layerfs-daemon");
-    let folder = paths::store_dir(root, store);
-    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o700)).map_err(failed)?;
-    let file = paths::store_file(root, store);
-    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).map_err(failed)?;
-    let SdkValue::Map(mut fields) = settings.clone() else {
-        return Err(refused("InvalidInput", "docker settings are a map"));
-    };
-    fields.retain(|(name, _)| matches!(name.as_str(), "image" | "volume" | "daemonHost"));
-    fields.push(("docker".to_owned(), SdkValue::text("/var/run/docker.sock")));
-    fields.push((
-        "daemon".to_owned(),
-        SdkValue::text(daemon.display().to_string()),
-    ));
-    Ok(SdkValue::Map(fields))
-}
-
-/// The native machine's settings in this process: its daemon and, for a
-/// namespaces Sandbox (Linux), the Sandbox image archive and digest: the
-/// native record's `image_archive`, else the bundle's archive, and the
-/// call's `image`, else the record's (a digest the archive holds).
-pub(super) fn native_here(home: &Path, image: Option<&str>) -> Result<Vec<(String, SdkValue)>> {
-    let record = read_record(&paths::machine_record(home, "native"))?.unwrap_or_default();
-    let mut fields = vec![("daemon".to_owned(), SdkValue::text(daemon(home)?))];
-    if cfg!(target_os = "linux") {
-        let archive = match record.get_text("image_archive") {
-            Some(path) => PathBuf::from(path),
-            None => bundle_dir("linux")?.join(IMAGE_ARCHIVE),
-        };
-        fields.push((
-            "imageArchive".to_owned(),
-            SdkValue::text(archive.display().to_string()),
-        ));
-        if let Some(digest) = image.or(record.get_text("image")).filter(|i| is_digest(i)) {
-            fields.push(("image".to_owned(), SdkValue::text(digest)));
-        }
-    }
-    Ok(fields)
-}
-
-/// What a VM or ssh machine's worker needs for a namespaces Sandbox: the
-/// image digest (the call's, else the machine record's when it is one) and,
-/// when the record names its own archive file, the guest's copy of it.
-pub(super) fn guest_settings(home: &Path, machine: &str, image: Option<&str>) -> Result<SdkValue> {
-    let record = read_record(&paths::machine_record(home, machine))?.unwrap_or_default();
-    let mut fields = Vec::new();
-    let named = record.get_text("image");
-    if let Some(digest) = image.or(named).filter(|i| is_digest(i)) {
-        fields.push(("image".to_owned(), SdkValue::text(digest)));
-    }
-    let archive = record
-        .get_text("image_archive")
-        .or(named.filter(|i| i.starts_with('/')));
-    if let Some(file) = archive.and_then(|a| Path::new(a).file_name()?.to_str()) {
-        fields.push((
-            "image_archive".to_owned(),
-            SdkValue::text(format!("{GUEST_IMAGES}/{file}")),
-        ));
-    }
-    Ok(SdkValue::Map(fields))
-}
-
-/// Completes a namespaces Sandbox's settings in a worker: the daemon beside
-/// its own executable (the bundle's), the caller's digest, and the guest's
-/// copy of the machine's archive, else the bundle's own archive.
-pub(super) fn native_in_worker(settings: Option<&SdkValue>) -> Result<Vec<(String, SdkValue)>> {
-    let bundle = std::env::current_exe().map_err(failed)?;
-    let mut fields = vec![(
-        "daemon".to_owned(),
-        SdkValue::text(
-            bundle
-                .with_file_name("layerfs-daemon")
-                .display()
-                .to_string(),
-        ),
-    )];
-    let archive = settings
-        .and_then(|s| s.get_text("image_archive"))
-        .filter(|a| a.starts_with(GUEST_IMAGES))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| bundle.with_file_name(IMAGE_ARCHIVE));
-    fields.push((
-        "imageArchive".to_owned(),
-        SdkValue::text(archive.display().to_string()),
-    ));
-    if let Some(digest) = settings
-        .and_then(|s| s.get_text("image"))
-        .filter(|i| is_digest(i))
-    {
-        fields.push(("image".to_owned(), SdkValue::text(digest)));
-    }
-    Ok(fields)
 }
 
 /// Whether `image` is an image digest, `sha256:<64 hex>`.

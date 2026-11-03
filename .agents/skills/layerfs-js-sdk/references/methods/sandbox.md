@@ -52,7 +52,7 @@ ready.
 | `project` | `<store>/<project>` |
 | `name` | 1–63 lowercase letters, digits, `_ . -`; unique in the home |
 | `machine` | Where it runs. For a sqlite Store it must be the machine the Store is on (`store.get` names it) |
-| `image` | An image digest, where the machine allows one |
+| `image` | An image digest, where the machine allows one; on `docker` it overrides the machine's image and the bundle's default |
 
 **What runs where in this build** (from source):
 
@@ -61,7 +61,7 @@ ready.
 | `native` on macOS | host processes, Workspaces over loopback NFS. Needs the daemon: the native machine record's `daemon`, else `~/.cache/layerfs/bundle/<version>/<os>-<arch>/layerfs-daemon` (`Unavailable` when missing) |
 | `native` on Linux | Linux namespaces |
 | a VM or ssh machine | sent to that machine's worker, which runs it on its own `native` |
-| `docker`, sqlite Store on `docker` | a container on the docker machine's image (`machine update docker --image`); on macOS the docker worker starts it beside itself, mounting only the Store's folder; on Linux this process starts it (root only) |
+| `docker`, sqlite Store on `docker` | a container on `image`, else the docker machine's image (`machine update docker --image`), else the bundle's Sandbox image, loaded into Docker once (#535 P5); on macOS and Linux the docker worker starts it beside itself, mounting only the Store's folder (G8) |
 | `native` or `docker`, PostgreSQL Store | from this process; the native daemon needs the `postgresql` build |
 | a VM or ssh machine, PostgreSQL Store | `Unsupported` with the support table's reason (`machine.platforms`) |
 
@@ -101,6 +101,11 @@ mounted Workspaces, and `next_page_pos` (`page_size`, `page_pos` as for
 the part after `:` in `ws`), `head_moved_since_mount`, `dirty`
 (`{ inodes, entries }` or `null`), `pending_merge` and `revision`. Not
 checked live.
+
+`sandbox.list` and `sandbox.get` never start a machine (#535 P4). When the
+Sandbox's machine is down, `get` answers its record with `workspaces: []` and
+`down_reason` (why its worker was not reached); `machine.start(machine)`
+starts it.
 
 `activity` is `Idle` when nothing runs in the Workspace; `Busy` while a Commit
 or mount runs; `Closing`, `Uncertain` or `Failed` need a look before you

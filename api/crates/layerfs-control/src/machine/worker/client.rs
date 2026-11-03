@@ -38,30 +38,47 @@ pub fn call(
     args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
 ) -> Outcome {
-    exchange(endpoint, op, args, events, None)
+    let request = request(op, args)?;
+    send(endpoint, op, &request, events, None).unwrap_or_else(|Unreached(refusal)| Err(refusal))
 }
 
-fn exchange(
-    endpoint: &Endpoint,
-    op: &str,
-    args: SdkValue,
-    events: &mut dyn FnMut(SdkValue),
-    answer_within: Option<Duration>,
-) -> Outcome {
+/// A worker that was not reached: the connection, the secret or the
+/// worker's answer to it failed, and the request was not sent. Only this
+/// may start a machine before the request is sent once (#535 R1).
+#[derive(Debug)]
+pub struct Unreached(pub SdkRefusal);
+
+/// Request `{ op, args }` framed once, with the caller's home id; `TooLarge`
+/// past [`super::MAX_FRAME`].
+pub fn request(op: &str, args: SdkValue) -> Result<Vec<u8>, SdkRefusal> {
     let mut request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
     // the caller's home id: the worker's root has none of its own (O33)
     if let Some(id) = crate::common::home::guest::current_id() {
         request = crate::common::home::with_field(request, "home_id", SdkValue::Text(id));
     }
-    let request = frame_bytes(&request)?;
+    frame_bytes(&request)
+}
+
+/// Sends the framed `request` (for operation `op`) on one new connection:
+/// the secret first, alone, then the request once. [`Unreached`] when
+/// nothing was sent; otherwise the operation's outcome, `Unknown` when the
+/// answer was lost after the request was sent. The answer is waited for at
+/// most `answer_within`, or as long as the operation runs.
+pub fn send(
+    endpoint: &Endpoint,
+    op: &str,
+    request: &[u8],
+    events: &mut dyn FnMut(SdkValue),
+    answer_within: Option<Duration>,
+) -> Result<Outcome, Unreached> {
     let unavailable = |why: &dyn std::fmt::Display| {
-        refused(
+        Unreached(refused(
             "Unavailable",
             format!(
                 "the worker at {} does not answer: {why}; {op} was not sent",
                 endpoint.address
             ),
-        )
+        ))
     };
     let mut stream = TcpStream::connect_timeout(&endpoint.address, CONNECT)
         .map_err(|error| unavailable(&error))?;
@@ -75,13 +92,13 @@ fn exchange(
     match read_frame_within(&mut stream, MAX_HELLO) {
         Ok(Some(frame)) if frame.get("ready").is_some() => {}
         Ok(Some(frame)) => {
-            return Err(match frame.get("refused") {
+            return Err(Unreached(match frame.get("refused") {
                 Some(refusal) => refusal_of(refusal),
                 None => refused(
                     "Failed",
                     "the worker answered its secret with no known frame",
                 ),
-            })
+            }))
         }
         Ok(None) => return Err(unavailable(&"it closed the connection")),
         Err(refusal) => return Err(unavailable(&refusal.message)),
@@ -89,8 +106,19 @@ fn exchange(
     stream
         .set_read_timeout(answer_within)
         .map_err(|error| unavailable(&error))?;
+    // from here the request may have reached the worker: nothing is resent
+    Ok(answer(stream, op, request, events))
+}
+
+/// Writes the request and reads the events and the answer.
+fn answer(
+    mut stream: TcpStream,
+    op: &str,
+    request: &[u8],
+    events: &mut dyn FnMut(SdkValue),
+) -> Outcome {
     stream
-        .write_all(&request)
+        .write_all(request)
         .and_then(|()| stream.flush())
         .map_err(|error| {
             refused(
@@ -137,11 +165,13 @@ fn lost(op: &str, why: &str) -> SdkRefusal {
 /// Whether the worker answers its secret: `{ kind: "worker", version, pid }`.
 /// Its answer is waited for at most [`PING_WAIT`].
 pub fn ping(endpoint: &Endpoint) -> Outcome {
-    exchange(
+    let request = request("worker.ping", SdkValue::Null)?;
+    send(
         endpoint,
         "worker.ping",
-        SdkValue::Null,
+        &request,
         &mut |_| {},
         Some(PING_WAIT),
     )
+    .unwrap_or_else(|Unreached(refusal)| Err(refusal))
 }

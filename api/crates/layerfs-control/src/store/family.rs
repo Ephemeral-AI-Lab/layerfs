@@ -14,8 +14,7 @@ use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::{self, paths, read_record, with_field, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::common::place;
-use crate::machine::worker::Endpoint;
+use crate::common::place::{self, Executor, Start};
 use crate::store::record::StoreRef;
 use crate::store::resolve;
 use crate::store::transfer::steps::CHUNK;
@@ -84,12 +83,12 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
 }
 
 /// One step on the machine that holds a Store's file.
-fn step(home: &Path, endpoint: &Option<Endpoint>, op: &str, args: SdkValue) -> Outcome {
-    match endpoint {
-        None => crate::store::transfer::steps::run(home, op, &args),
-        Some(endpoint) => {
+fn step(home: &Path, executor: &mut Executor, op: &str, args: SdkValue) -> Outcome {
+    match executor {
+        Executor::Local => crate::store::transfer::steps::run(home, op, &args),
+        Executor::Worker(worker) => {
             let request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
-            crate::machine::worker::call(endpoint, "store.file", request, &mut |_| {})
+            worker.call("store.file", request, &mut |_| {})
         }
     }
 }
@@ -120,11 +119,11 @@ fn status(home: &Path, name: &str) -> Outcome {
     if let StoreRef::Postgres { .. } = store_ref {
         more.push(("server", crate::store::connect::status(&record, name)));
     } else {
-        let machine = store_ref.machine()?.to_owned();
-        more.push(("machine", SdkValue::text(&machine)));
-        // the file's size where it lives; a machine that is down says why
-        let file = place::endpoint_now(home, &machine)
-            .and_then(|endpoint| step(home, &endpoint, "stat", of_store(name, vec![])));
+        more.push(("machine", SdkValue::text(store_ref.machine()?)));
+        // the file's size where it lives, starting nothing (P4); a machine
+        // that is down says why
+        let file = place::plan(home, &store_ref, Start::Never)
+            .and_then(|mut executor| step(home, &mut executor, "stat", of_store(name, vec![])));
         let file = file.unwrap_or_else(|why| {
             down = Some(why.message.clone());
             SdkValue::map([("unavailable", SdkValue::Text(why.message))])
@@ -322,10 +321,10 @@ fn remove(home: &Path, name: &str) -> Outcome {
         ));
     }
     let machine = store_ref.machine()?.to_owned();
-    let endpoint = match machine.as_str() {
-        "native" => None,
-        _ => place::endpoint(home, &machine)?,
-    };
+    let mut executor = place::plan(home, &store_ref, Start::OnDemand)?;
+    if let Executor::Worker(worker) = &mut executor {
+        worker.ready()?;
+    }
     {
         let _lock = home::lock::take(home)?;
         let record = record_of(home, name)?;
@@ -346,9 +345,9 @@ fn remove(home: &Path, name: &str) -> Outcome {
     // home: it goes with the Store's directory below
     let removed = settle(home, name).and_then(|lease| {
         drop(lease);
-        match endpoint {
-            None => Ok(SdkValue::Null),
-            Some(_) => step(home, &endpoint, "remove", of_store(name, vec![])),
+        match executor {
+            Executor::Local => Ok(SdkValue::Null),
+            Executor::Worker(_) => step(home, &mut executor, "remove", of_store(name, vec![])),
         }
     });
     if let Err(refusal) = removed {
@@ -436,11 +435,16 @@ fn at<T>(phase: &'static str, result: Result<T>) -> Phased<T> {
 
 fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased<SdkValue> {
     let home = context.home.clone();
-    let source = at("check", place::endpoint(&home, from))?;
-    let target = at("check", place::endpoint(&home, to))?;
+    let mut source = at("check", place::on_machine(&home, from, Start::OnDemand))?;
+    let mut target = at("check", place::on_machine(&home, to, Start::OnDemand))?;
+    for executor in [&mut source, &mut target] {
+        if let Executor::Worker(worker) = executor {
+            at("check", worker.ready())?;
+        }
+    }
     let exists = at(
         "check",
-        step(&home, &target, "stat", of_store(name, vec![])),
+        step(&home, &mut target, "stat", of_store(name, vec![])),
     )?;
     if matches!(exists.get("exists"), Some(SdkValue::Bool(true))) {
         return Err((
@@ -455,7 +459,7 @@ fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased
     progress(context, "snapshot", 0, 0);
     let snapshot = at(
         "snapshot",
-        step(&home, &source, "snapshot", of_store(name, vec![])),
+        step(&home, &mut source, "snapshot", of_store(name, vec![])),
     )?;
     let total = snapshot.get_int("bytes").unwrap_or(0) as u64;
     // send, in pieces through this process
@@ -466,7 +470,7 @@ fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased
             "send",
             step(
                 &home,
-                &source,
+                &mut source,
                 "read",
                 of_store(
                     name,
@@ -489,7 +493,7 @@ fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased
             "send",
             step(
                 &home,
-                &target,
+                &mut target,
                 "write",
                 of_store(
                     name,
@@ -514,12 +518,12 @@ fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased
         .collect();
     at(
         "verify",
-        step(&home, &target, "verify", of_store(name, digest)),
+        step(&home, &mut target, "verify", of_store(name, digest)),
     )?;
     progress(context, "install", 0, 0);
     at(
         "install",
-        step(&home, &target, "install", of_store(name, vec![])),
+        step(&home, &mut target, "install", of_store(name, vec![])),
     )?;
     // record: the Store is on `to` from here on
     progress(context, "record", 0, 0);
@@ -549,7 +553,7 @@ fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased
     progress(context, "retire", 0, 0);
     at(
         "retire",
-        step(&home, &source, "retire", of_store(name, vec![])),
+        step(&home, &mut source, "retire", of_store(name, vec![])),
     )?;
     Ok(SdkValue::map([
         ("store", SdkValue::text(name)),

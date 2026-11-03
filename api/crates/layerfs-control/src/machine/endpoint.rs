@@ -1,14 +1,18 @@
-//! A machine starts on the first call that needs it (H §7.2, step 13): the
-//! caller finds the worker gone, starts the machine and its worker, waits
-//! until it is ready and replaces `worker.json`. That wait is a readiness
-//! wait, not a retry; the call itself is then sent once. Two processes that
-//! need the same stopped machine take turns on its `start.lock`. A
-//! Firecracker machine's Lima host is started the same way first: its own
-//! worker may have stopped it.
+//! A machine starts on the first call that needs it (H §7.2, step 13). The
+//! call dials the worker its `worker.json` records, once; only when nothing
+//! was sent (the connection, the secret or its answer failed) does the
+//! caller start the machine and its worker, wait until it is ready, replace
+//! `worker.json` and send the call once (#535 R1, [`start_after`]). That
+//! wait is a readiness wait, not a retry: the first attempt never reached
+//! the worker. `machine.start` and an operation of several steps make the
+//! machine ready first instead ([`running`]). Two processes that need the
+//! same stopped machine take turns on its `start.lock`. A Firecracker
+//! machine's Lima host is started the same way first: its own worker may
+//! have stopped it.
 use super::record::{self, machine_of, refusal, save_running};
 use crate::common::outcome::{failed, refused};
 use crate::machine::worker::Endpoint;
-use layerfs_bridge::control::SdkRefusal;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_machine::{self as adapters, HostOs, Platform, Route};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
@@ -17,8 +21,8 @@ use std::time::{Duration, Instant};
 /// How long a call waits for another process starting the same machine.
 const START_WAIT: Duration = Duration::from_secs(600);
 
-/// The worker of machine `name`, started if it is not running; `None` when
-/// the machine's calls run in this process (`native`, `docker` on Linux).
+/// The worker of machine `name`, started if it does not answer its secret;
+/// `None` when the machine's calls run in this process (`native`).
 pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> {
     let record = machine_of(home, name)?;
     let kind = record::kind_of(&record)?;
@@ -28,30 +32,68 @@ pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> 
     if let Some(endpoint) = answering(home, name)? {
         return Ok(Some(endpoint));
     }
-    if kind == Platform::Firecracker {
+    host_first(home, &record)?;
+    let _start = start_lock(home, name)?;
+    // another process may have started it, or removed it, meanwhile
+    let record = machine_of(home, name)?;
+    if let Some(endpoint) = answering(home, name)? {
+        return Ok(Some(endpoint));
+    }
+    start(home, name, &record)
+}
+
+/// Starts machine `name` and its worker after a call to the worker it
+/// recorded (`tried`, or none) was not sent (R1), and answers the worker to
+/// send that call to, once. A worker another process recorded meanwhile is
+/// that one, as recorded: it is not pinged first.
+pub fn start_after(
+    home: &Path,
+    name: &str,
+    tried: Option<&Endpoint>,
+) -> Result<Endpoint, SdkRefusal> {
+    let record = machine_of(home, name)?;
+    host_first(home, &record)?;
+    let _start = start_lock(home, name)?;
+    let record = machine_of(home, name)?;
+    if let Some(now) = record::worker(home, name)? {
+        let now = endpoint_of(&now);
+        if Some(&now) != tried {
+            return Ok(now);
+        }
+    }
+    start(home, name, &record)?
+        .ok_or_else(|| refused("Failed", format!("machine {name} has no worker to start")))
+}
+
+/// A Firecracker machine's Lima host, started first if it does not answer.
+fn host_first(home: &Path, record: &SdkValue) -> Result<(), SdkRefusal> {
+    if record::kind_of(record)? == Platform::Firecracker {
         if let Some(host) = record.get_text("host") {
             running(home, host)?;
         }
     }
-    let _start = start_lock(home, name)?;
-    (|| {
-        // another process may have started it, or removed it, meanwhile
-        let record = machine_of(home, name)?;
-        if let Some(endpoint) = answering(home, name)? {
-            return Ok(Some(endpoint));
+    Ok(())
+}
+
+/// Starts machine `name` (its `record`) and records its worker; under its
+/// start lock.
+fn start(home: &Path, name: &str, record: &SdkValue) -> Result<Option<Endpoint>, SdkRefusal> {
+    let id = crate::common::home::open(home)?.id;
+    let mut spec = record::spec(home, &id, name, record)?;
+    let bundle = super::bundle::bundle()?;
+    // the docker worker's container runs the bundle's image when the
+    // machine names none (P5)
+    if spec.kind == Platform::Docker && spec.os_image.is_none() {
+        spec.os_image = Some(super::image::docker_default(home)?);
+    }
+    match adapters::start(&spec, &bundle).map_err(refusal)? {
+        None => Ok(None),
+        Some(running) => {
+            let _lock = crate::common::home::lock::take(home)?;
+            save_running(home, name, &running)?;
+            Ok(Some(endpoint_of(&running.endpoint)))
         }
-        let id = crate::common::home::open(home)?.id;
-        let spec = record::spec(home, &id, name, &record)?;
-        let bundle = super::bundle::bundle()?;
-        match adapters::start(&spec, &bundle).map_err(refusal)? {
-            None => Ok(None),
-            Some(running) => {
-                let _lock = crate::common::home::lock::take(home)?;
-                save_running(home, name, &running)?;
-                Ok(Some(endpoint_of(&running.endpoint)))
-            }
-        }
-    })()
+    }
 }
 
 /// Machine `name`'s `start.lock`, held until dropped. Starting, creating and

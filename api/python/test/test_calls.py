@@ -74,7 +74,7 @@ class Calls(unittest.TestCase):
             layerfs.FAMILIES,
             ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"],
         )
-        self.assertEqual(len(layerfs.TABLE), 58)
+        self.assertEqual(len(layerfs.TABLE), 60)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
         with self.assertRaises(layerfs.LayerFSError) as caught:

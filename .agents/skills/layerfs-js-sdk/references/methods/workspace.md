@@ -213,3 +213,5 @@ What a Workspace holds before you commit. New in the SDK surface for 2.0
 
 Use it before a Commit you might want to keep separate from other writers'
 changes, or to decide whether a leftover Workspace holds anything.
+It never starts a machine (#535 P4): on a Sandbox whose machine is down it is
+`Unavailable`, naming `machine start`.
