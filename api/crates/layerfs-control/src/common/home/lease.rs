@@ -1,13 +1,14 @@
-//! Store leases (H §7.8): every process that uses a sqlite Store holds
-//! `store/<name>/open/<pid>`: the process that opens it, or, for a Store
-//! behind a worker, the host process that sends it calls. A lease is taken
-//! under the home lock after the Store's record shows no move or remove
-//! running (`in_progress`), so a lease and a move never overlap. `store
-//! move` and `store remove` read leases under the home lock and refuse
-//! `InUse` while one is held. A lease names its process by id, kernel start time and boot, so
-//! a reused id does not keep it alive; a lease whose process is not alive on
-//! this host is stale: it is removed under the home lock and the removal is
-//! logged (O35).
+//! Store leases (H §7.8): every process that uses a Store holds
+//! `store/<name>/open/<pid>`: the process that opens it (a PostgreSQL
+//! Store's too), or, for a Store behind a worker, the host process that
+//! sends it calls. A lease is taken under the Store's lock (#536 §8) after
+//! the Store's record shows no operation holding it (`op`), so a lease and
+//! a move or remove never overlap. `store move`, `store remove` and `store
+//! disconnect` read leases under the Store's lock and refuse `InUse` while
+//! one is held. A lease names its process by id, kernel start time and
+//! boot, so a reused id does not keep it alive; a lease whose process is
+//! not alive on this host is stale: it is removed under the Store's lock
+//! and the removal is logged (O35).
 use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused};
 use crate::store::record::StoreRecord;
@@ -48,7 +49,7 @@ fn me() -> Option<(u64, u128)> {
     })
 }
 
-/// The fields that name this process in a record (a move's `in_progress`).
+/// The fields that name this process in a record (an `op`'s owner).
 pub(crate) fn identity() -> Vec<(&'static str, SdkValue)> {
     let mut fields = vec![("pid", SdkValue::Int(i64::from(std::process::id())))];
     if let Some((start, boot)) = me() {
@@ -72,24 +73,28 @@ pub(crate) fn recorded_alive(value: &SdkValue) -> bool {
     )
 }
 
-/// Holds Store `store`'s lease for this process. Under the home lock it
-/// re-reads the Store's record: no record is `NoSuchStore`, a move or remove
-/// running (by any live process, this one included) is `InUse`.
+/// Holds Store `store`'s lease for this process. Under the Store's lock it
+/// re-reads the Store's record: no record is `NoSuchStore`; an operation
+/// running on it (by any live process, this one included) is `Busy`, one a
+/// gone process left unresolved `Unresolved`.
 pub fn hold(home: &Path, store: &str) -> Result<Lease, SdkRefusal> {
     claim(home, store).map(|(lease, _)| lease)
 }
 
-/// [`hold`], answering the Store's record as read under the home lock.
+/// [`hold`], answering the Store's record as read under the Store's lock.
 pub(crate) fn claim(home: &Path, store: &str) -> Result<(Lease, StoreRecord), SdkRefusal> {
-    let _lock = home::lock::take(home)?;
-    let record = StoreRecord::read(home, store)?
-        .ok_or_else(|| refused("NoSuchStore", format!("no Store named {store}")))?;
-    record.moving()?;
+    let none = || refused("NoSuchStore", format!("no Store named {store}"));
+    if !paths::store_record(home, store).is_file() {
+        return Err(none());
+    }
+    let _store = crate::store::record::lock(home, store)?;
+    let record = StoreRecord::read(home, store)?.ok_or_else(none)?;
+    record.unblocked()?;
     Ok((hold_locked(home, store)?, record))
 }
 
 /// Holds Store `store`'s lease under `root` with no record check: the
-/// caller holds the home lock, or is a worker under its own root.
+/// caller holds the Store's lock, or is a worker under its own root.
 pub(crate) fn hold_locked(root: &Path, store: &str) -> Result<Lease, SdkRefusal> {
     let dir = paths::lease_dir(root, store);
     let path = dir.join(std::process::id().to_string());
@@ -161,7 +166,7 @@ fn lease_alive(pid: u32, text: &str) -> bool {
 }
 
 /// The processes holding Store `store`, other than this one; stale leases
-/// are removed and logged (O35). The caller holds the home lock.
+/// are removed and logged (O35). The caller holds the Store's lock.
 pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
     let dir = paths::lease_dir(home, store);
     let mut live = Vec::new();

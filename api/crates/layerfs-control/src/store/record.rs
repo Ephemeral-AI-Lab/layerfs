@@ -5,7 +5,9 @@
 //! [`StoreKind`]; no caller compares a record's `kind` text, and no caller
 //! reads or writes a Store record's fields but through [`StoreRecord`].
 use crate::backup::record::StoreLink;
-use crate::common::home::{self, lease, paths, read_record, with_field, write_entity};
+use crate::common::home::entity_lock::{self, EntityLock};
+use crate::common::home::{self, paths, read_record, with_field, write_entity};
+use crate::common::op::{self, Op, Standing};
 use crate::common::outcome::{refused, View};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 pub(crate) use layerfs_bridge::StoreKind;
@@ -134,30 +136,45 @@ pub struct StoreDerived {
 }
 
 /// A Store's state (#536 §7.2), as `store.status` and each `store.list`
-/// item show it. F3's `op` intent adds `busy` and `unresolved`; until then
-/// a live move or remove is `moving`, as before.
+/// item show it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StoreState {
-    /// A live process moves or removes it (its record's `in_progress`).
-    Moving,
-    /// Its machine did not answer (a sqlite Store's file could not be read).
-    Down,
     /// No other process holds it.
     Idle,
     /// Another live process holds its lease.
     InUse,
+    /// A live process runs an operation on it (its record's `op`).
+    Busy,
+    /// Its machine did not answer (a sqlite Store's file could not be read).
+    Down,
+    /// A gone process left an operation on it whose outcome is not known.
+    Unresolved,
 }
 
 impl StoreState {
     /// The state's name in results.
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Moving => "moving",
-            Self::Down => "down",
             Self::Idle => "idle",
             Self::InUse => "in_use",
+            Self::Busy => "busy",
+            Self::Down => "down",
+            Self::Unresolved => "unresolved",
         }
     }
+}
+
+/// Takes Store `name`'s lock, `store/<name>/lock` (#536 §8): it guards the
+/// Store's record changes and lease grants. Taken after the home lock,
+/// never before it, and never held across a worker call or a byte
+/// transfer. A Store with no folder is `NotFound`.
+pub(crate) fn lock(home: &Path, name: &str) -> Result<EntityLock> {
+    let dir = paths::store_dir(home, name);
+    if !dir.is_dir() {
+        return Err(refused("NotFound", format!("no Store named {name}")));
+    }
+    let held = format!("Store {name}'s lock was held");
+    entity_lock::take(&dir.join("lock"), entity_lock::WAIT, &held)
 }
 
 impl StoreRecord {
@@ -236,31 +253,35 @@ impl StoreRecord {
         }
     }
 
-    /// The record's `in_progress`: the move or remove that marked it.
-    pub(crate) fn in_progress(&self) -> Option<&SdkValue> {
-        self.fields.get("in_progress")
+    /// The record without field `field`.
+    pub(crate) fn without(self, field: &str) -> Self {
+        let fields = match self.fields {
+            SdkValue::Map(fields) => fields.into_iter().filter(|(n, _)| n != field).collect(),
+            _ => Vec::new(),
+        };
+        Self::from_record(&self.name, SdkValue::Map(fields))
     }
 
-    /// Refuses `InUse` while a live process moves or removes the Store (its
-    /// record's `in_progress`), this process included: a move's own steps
-    /// take no lease and make no Store call, so nothing else in its process
-    /// may either. A move whose process is gone does not block.
-    pub(crate) fn moving(&self) -> Result<()> {
-        let Some(progress @ SdkValue::Map(_)) = self.in_progress() else {
-            return Ok(());
-        };
-        if lease::recorded_alive(progress) {
-            let pid = progress.get_int("pid").unwrap_or(0);
-            let doing = match progress.get_text("op") {
-                Some("remove") => "removed",
-                _ => "moved",
-            };
-            return Err(refused(
-                "InUse",
-                format!("Store {} is being {doing} by process {pid}", self.name),
-            ));
+    /// The operation the record holds (its `op`), if any.
+    pub(crate) fn op(&self) -> Option<Op> {
+        Op::of(&self.fields)
+    }
+
+    /// Refuses a new operation, a lease or a Store call while the record's
+    /// `op` holds the Store: `Busy` while its process lives (this process
+    /// included: a move's own steps take no lease and make no Store call,
+    /// so nothing else in its process may either), `Unresolved` once a gone
+    /// process left its outcome unknown. A gone process's certain failure
+    /// holds nothing.
+    pub(crate) fn unblocked(&self) -> Result<()> {
+        match self.op() {
+            None => Ok(()),
+            Some(op) => op.blocks(
+                &format!("Store {}", self.name),
+                &format!("store status {}", self.name),
+                &format!("store remove {}", self.name),
+            ),
         }
-        Ok(())
     }
 
     fn raw_links(&self) -> &[(String, SdkValue)] {
@@ -273,9 +294,12 @@ impl StoreRecord {
     /// The Store's state from its record, whether its machine answered
     /// (`down`) and the live processes other than this one that hold it.
     pub fn state(&self, down: bool, holders: &[u32]) -> StoreState {
-        if self.moving().is_err() {
-            StoreState::Moving
-        } else if down {
+        match self.op().map(|op| op.standing()) {
+            Some(Standing::Running) => return StoreState::Busy,
+            Some(Standing::Unresolved) => return StoreState::Unresolved,
+            _ => {}
+        }
+        if down {
             StoreState::Down
         } else if holders.is_empty() {
             StoreState::Idle
@@ -321,7 +345,8 @@ impl StoreRecord {
 
     /// The Store as `store.get` and each `store.list` item show it: the
     /// record's fields with `name` first, never its cursor key, binding or
-    /// `v`, then its projects; a list item then its `state`.
+    /// `v`, its `op` as H6 shows it, then its projects; a list item then
+    /// its `state`.
     pub fn to_sdk(&self, view: View, derived: &StoreDerived) -> Result<SdkValue> {
         let SdkValue::Map(fields) = &self.fields else {
             return Err(refused(
@@ -334,6 +359,9 @@ impl StoreRecord {
             .filter(|(field, _)| !matches!(field.as_str(), "cursor" | "binding" | "v"))
             .cloned()
             .collect();
+        if let (Some(op), Some(slot)) = (self.op(), out.iter_mut().find(|(f, _)| f == op::FIELD)) {
+            slot.1 = op.to_sdk();
+        }
         out.retain(|(field, _)| field != "name");
         out.insert(0, ("name".to_owned(), SdkValue::text(&self.name)));
         let names = derived.projects.iter().map(SdkValue::text).collect();

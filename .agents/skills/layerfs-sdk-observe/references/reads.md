@@ -73,7 +73,7 @@ layerfs machine status native
 ```
 
 ```json
-{"name":"shop","kind":"sqlite","state":"idle","holders":[],"in_progress":null,"machine":"native",
+{"name":"shop","kind":"sqlite","state":"idle","holders":[],"op":null,"machine":"native",
  "file":{"exists":true,"bytes":212992,"wal_bytes":799312}}
 ```
 
@@ -81,8 +81,10 @@ layerfs machine status native
 {"name":"native","platform":"native","state":"running","free_disk":null,"tool_version":null,"down_reason":null,"stores":["shop"]}
 ```
 
-- `store.status`: `state`, `holders` (processes with the Store open),
-  `in_progress` (a move under way), and `file.bytes` / `file.wal_bytes`. The
+- `store.status`: `state` (`idle`, `in_use`, `busy`, `down`,
+  `unresolved`), `holders` (processes with the Store open), `op` (a move or
+  remove under way: `{id, name, phase, started, uncertain}`), and
+  `file.bytes` / `file.wal_bytes`. The
   WAL can be larger than the main file during a run; add both for the Store's
   disk use.
 - `store.get` / `store.list`: kind, machine, profile (`disposable`), SQLite

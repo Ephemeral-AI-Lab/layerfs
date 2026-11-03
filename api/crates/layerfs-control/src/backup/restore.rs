@@ -50,6 +50,7 @@ pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             // refused before the download too; checked again before the install
             {
                 let _lock = home::lock::take(&home)?;
+                let _store = crate::store::record::lock(&home, store)?;
                 replaceable(&home, store, bucket, record)?;
             }
             _lease = Some(lease::hold(&home, store)?);
@@ -83,6 +84,12 @@ pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let found = projects_in(&home, store, &record, &staged)?;
     progress(context, "install");
     let _lock = home::lock::take(&home)?;
+    // a Store replaced here is checked and replaced under its lock, which
+    // the link below takes again
+    let store_lock = match &existing {
+        Some(_) => Some(crate::store::record::lock(&home, store)?),
+        None => None,
+    };
     let destination = paths::store_file(&home, store);
     let now = StoreRecord::read(&home, store)?;
     match (&existing, now) {
@@ -115,6 +122,7 @@ pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             std::fs::rename(&staged, &destination).map_err(failed)?;
         }
     }
+    drop(store_lock);
     write_link(
         &home,
         store,
@@ -163,13 +171,13 @@ impl Drop for Staging {
 
 /// Refuses replacing Store `store` unless it is an idle sqlite Store on
 /// `native`, unchanged since its last backup or restore through `bucket`.
-/// Under the home lock.
+/// Under the home lock and the Store's lock.
 fn replaceable(home: &Path, store: &str, bucket: &str, record: &StoreRecord) -> Result<()> {
     let machine = record.machine()?;
     if machine != "native" {
         return Err(refused("Unsupported", format!("Store {store} is on {machine}; a restore replaces a Store on native: move it there first")));
     }
-    record.moving()?;
+    record.unblocked()?;
     let destination = paths::store_file(home, store);
     // this process's own open copy closes first
     crate::store::open::close(&destination)?;

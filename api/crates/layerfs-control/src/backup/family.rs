@@ -61,6 +61,7 @@ fn disconnect(home: &Path, name: &str) -> Outcome {
     let _lock = home::lock::take(home)?;
     let mut unlinked = Vec::new();
     for store in paths::names(&home.join("store")).map_err(failed)? {
+        let _store = crate::store::record::lock(home, &store)?;
         let Some(record) = StoreRecord::read(home, &store)? else {
             continue;
         };
@@ -87,12 +88,12 @@ pub(super) fn hex(bytes: &[u8; 32]) -> SdkValue {
 
 /// The Store's link to `bucket` after a transfer.
 pub(super) fn save_link(home: &Path, store: &str, bucket: &str, link: StoreLink) -> Result<()> {
-    let _lock = home::lock::take(home)?;
     write_link(home, store, bucket, link)
 }
 
-/// [`save_link`] for a caller that holds the home lock.
+/// [`save_link`], under the Store's lock (the caller does not hold it).
 pub(super) fn write_link(home: &Path, store: &str, bucket: &str, link: StoreLink) -> Result<()> {
+    let _store = crate::store::record::lock(home, store)?;
     let record = StoreRecord::read(home, store)?
         .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
     record.with_link(bucket, &link).write(home)

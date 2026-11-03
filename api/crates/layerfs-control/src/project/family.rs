@@ -132,7 +132,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             format!("no Store named {store}; `store create {store}` makes one"),
         )
     })?;
-    record.moving()?;
+    record.unblocked()?;
     let timeout = args.get_int("timeout").unwrap_or(INIT_TIMEOUT_MS);
     let store_ref = record.store_ref()?;
     if let StoreRef::Postgres { .. } = store_ref {
@@ -233,6 +233,8 @@ fn init_postgresql(
         ],
     );
     let watch = host_args(&home, store, vec![("project", SdkValue::text(name))]);
+    // this process uses the Store meanwhile, as a sqlite Init does
+    let _lease = lease::hold(&home, store)?;
     let added = observed(context, &watch, || {
         crate::project::postgres_init::add_project(&call)
     })?;
@@ -253,7 +255,7 @@ fn init_postgresql(
 fn remove(context: &mut Context<'_>, project: &str) -> Outcome {
     let home = context.home.clone();
     let target = resolve::target(&home, project)?;
-    target.record.moving()?;
+    target.record.unblocked()?;
     crate::inventory::can_remove_project(&home, project)?;
     let args = vec![
         ("project", SdkValue::text(&target.project)),

@@ -25,7 +25,7 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     // that claims the name, so a store.move cannot pass between them
     let _lock = home::lock::take(&home)?;
     let target = resolve::target(&home, project)?;
-    target.record.moving()?;
+    target.record.unblocked()?;
     // refused too while the machine is being removed
     #[cfg(feature = "machine")]
     {

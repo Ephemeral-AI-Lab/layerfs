@@ -1,8 +1,11 @@
-//! Store lifecycle races and machines (#533 review, group store): a lease
-//! and a move or remove never overlap, even inside the mover's own process;
-//! `store.status` starts no machine; `store.remove` refuses a Store whose
-//! machine is unknown and never starts a machine under the home lock. All
-//! from records: no Store is opened, so these run on any host.
+//! Store lifecycle races and machines (#533 review, group store; #536
+//! §7.1): a lease and a move or remove never overlap, even inside the
+//! mover's own process; a live `op` refuses `Busy`, a gone process's
+//! uncertain one `Unresolved` until `store remove` clears it, its certain
+//! one nothing; `store.status` shows the `op` and starts no machine;
+//! `store.remove` refuses a Store whose machine is unknown and never starts
+//! a machine under the home lock. All from records: no Store is opened, so
+//! these run on any host.
 use layerfs_api::calls;
 use layerfs_api::home::lease;
 use layerfs_api::home::{self, paths, read_record, write_record};
@@ -78,21 +81,31 @@ fn record(home: &Path) -> SdkValue {
         .unwrap()
 }
 
-fn set_in_progress(home: &Path, value: SdkValue) {
+fn set_op(home: &Path, value: SdkValue) {
     let path = paths::store_record(home, "shop");
-    write_record(&path, &home::with_field(record(home), "in_progress", value)).unwrap();
+    write_record(&path, &home::with_field(record(home), "op", value)).unwrap();
 }
 
-/// `in_progress` naming this process, its start time moved by `skew`.
-fn this_process_moving(skew: u64) -> SdkValue {
+/// A `store.move` intent of this process, its start time moved by `skew`
+/// (a moved start time names a process that is gone).
+fn this_process_moving(skew: u64, uncertain: bool) -> SdkValue {
     let me = LocalProcess::observe(std::process::id()).unwrap();
     SdkValue::map([
-        ("op", t("move")),
-        ("from", t("native")),
-        ("to", t("box")),
-        ("pid", SdkValue::Int(i64::from(std::process::id()))),
-        ("pid_start", t(&(me.start + skew).to_string())),
-        ("pid_boot", t(&format!("{:032x}", me.boot.unwrap()))),
+        ("id", t("op-00000000000000ab")),
+        ("name", t("store.move")),
+        ("phase", t("record")),
+        ("args", SdkValue::map([("to", t("box"))])),
+        (
+            "owner",
+            SdkValue::map([
+                ("pid", SdkValue::Int(i64::from(std::process::id()))),
+                ("pid_start", t(&(me.start + skew).to_string())),
+                ("pid_boot", t(&format!("{:032x}", me.boot.unwrap()))),
+            ]),
+        ),
+        ("started", SdkValue::Int(1)),
+        ("updated", SdkValue::Int(2)),
+        ("uncertain", SdkValue::Bool(uncertain)),
     ])
 }
 
@@ -109,22 +122,22 @@ fn read(home: &Path) -> Result<SdkValue, (String, String)> {
 }
 
 #[test]
-fn a_store_call_during_a_move_is_refused_even_from_the_movers_process() {
+fn a_store_call_during_a_move_is_busy_even_from_the_movers_process() {
     let (home, root) = home_with_shop();
     // a move this process runs: its other threads' calls and leases wait
-    set_in_progress(&home, this_process_moving(0));
+    set_op(&home, this_process_moving(0, false));
     let (code, message) = read(&home).unwrap_err();
-    assert_eq!(code, "InUse", "{message}");
-    assert!(message.contains("being moved"), "{message}");
+    assert_eq!(code, "Busy", "{message}");
+    assert!(message.contains("store.move"), "{message}");
     assert_eq!(
         lease::hold(&home, "shop").err().map(|r| r.code).as_deref(),
-        Some("InUse")
+        Some("Busy")
     );
     assert_eq!(
         call(&home, "store.remove", &[("name", t("shop"))])
             .unwrap_err()
             .0,
-        "InUse"
+        "Busy"
     );
     assert!(
         !paths::lease_dir(&home, "shop")
@@ -133,13 +146,50 @@ fn a_store_call_during_a_move_is_refused_even_from_the_movers_process() {
         "no lease was taken"
     );
     let status = call(&home, "store.status", &[("name", t("shop"))]).unwrap();
-    assert_eq!(status.get_text("state"), Some("moving"));
+    assert_eq!(status.get_text("state"), Some("busy"));
+    let op = status.get("op").unwrap();
+    assert_eq!(op.get_text("name"), Some("store.move"));
+    assert_eq!(op.get_text("phase"), Some("record"));
+    assert!(op.get("owner").is_none(), "{op:?}");
 
-    // the same id with another start time is a mover that is gone
-    set_in_progress(&home, this_process_moving(1));
+    // the same id with another start time is a mover that is gone: after a
+    // certain failure its intent holds nothing
+    set_op(&home, this_process_moving(1, false));
     let refused = read(&home).err().map(|(code, _)| code);
-    assert_ne!(refused.as_deref(), Some("InUse"));
+    assert_ne!(refused.as_deref(), Some("Busy"));
     drop(lease::hold(&home, "shop").unwrap());
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_gone_movers_uncertain_op_is_unresolved_until_store_remove_clears_it() {
+    let (home, root) = home_with_shop();
+    set_op(&home, this_process_moving(1, true));
+    let (code, message) = read(&home).unwrap_err();
+    assert_eq!(code, "Unresolved", "{message}");
+    for named in ["`layerfs store status shop`", "`layerfs store remove shop`"] {
+        assert!(message.contains(named), "{named} not in {message}");
+    }
+    assert_eq!(
+        lease::hold(&home, "shop").err().map(|r| r.code).as_deref(),
+        Some("Unresolved")
+    );
+    let moved = call(
+        &home,
+        "store.move",
+        &[("name", t("shop")), ("machine", t("box"))],
+    );
+    assert_eq!(moved.unwrap_err().0, "Unresolved");
+    let status = call(&home, "store.status", &[("name", t("shop"))]).unwrap();
+    assert_eq!(status.get_text("state"), Some("unresolved"));
+    assert_eq!(
+        status.get("op").and_then(|op| op.get("uncertain")),
+        Some(&SdkValue::Bool(true))
+    );
+    // the clearing call is not refused by what it clears
+    call(&home, "store.remove", &[("name", t("shop"))]).unwrap();
+    assert!(!paths::store_dir(&home, "shop").exists());
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(root);
 }
@@ -158,8 +208,8 @@ fn a_move_or_remove_waits_for_a_lease_another_thread_of_its_process_holds() {
         let (code, message) = call(&home, name, &args).unwrap_err();
         assert_eq!(code, "InUse", "{name}: {message}");
         assert!(message.contains("this process"), "{name}: {message}");
-        // nothing moved: the refusal is certain, so `in_progress` is cleared
-        assert_eq!(record(&home).get("in_progress"), Some(&SdkValue::Null));
+        // nothing moved: the refusal is certain, so `op` is dropped
+        assert_eq!(record(&home).get("op"), None);
         assert_eq!(record(&home).get_text("machine"), Some("native"));
         assert!(paths::store_file(&home, "shop").is_file());
     }
@@ -237,7 +287,7 @@ fn remove_reaches_a_stopped_machine_before_it_takes_the_home_lock() {
     );
     assert!(!message.contains("layerfs.lock"), "{code}: {message}");
     drop(lock);
-    assert_eq!(record(&home).get("in_progress"), None, "nothing was marked");
+    assert_eq!(record(&home).get("op"), None, "nothing was marked");
     assert!(paths::store_record(&home, "shop").is_file());
     std::fs::remove_dir_all(home).unwrap();
 }

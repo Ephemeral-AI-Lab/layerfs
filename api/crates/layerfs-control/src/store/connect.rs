@@ -346,7 +346,9 @@ fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
 
 /// `store.disconnect(name)`: forgets a PostgreSQL Store; its data stays.
 fn disconnect(home: &Path, name: &str) -> Outcome {
+    crate::common::names::StoreName::parse(name)?;
     let _lock = home::lock::take(home)?;
+    let _store = crate::store::record::lock(home, name)?;
     let record = StoreRecord::read(home, name)?
         .ok_or_else(|| refused("NotFound", format!("no Store named {name}")))?;
     if record.kind()? != StoreKind::Postgresql {

@@ -135,7 +135,7 @@ fn a_store_moves_to_a_worker_machine_and_back_with_equal_heads() {
         .unwrap()
         .unwrap();
     assert_eq!(record.get_text("machine"), Some("box"));
-    assert_eq!(record.get("in_progress"), Some(&SdkValue::Null));
+    assert_eq!(record.get("op"), None, "the record phase drops `op`");
     // its machine's worker answers: the list finds it idle there
     let listed = call(&home, "store.list", &[]).unwrap();
     let Some(SdkValue::List(items)) = listed.get("items") else {
