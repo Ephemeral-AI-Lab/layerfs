@@ -1,0 +1,88 @@
+$ layerfs store pull pwa
+# at 2026-11-03T07:38:56Z load1 5.57
+{"store":"pwa","from":"lfs535k2a","to":"native","bytes":212992,"heads":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+exit 0  wall_ms 134
+
+$ layerfs store remove pwa
+# at 2026-11-03T07:38:56Z load1 5.57
+{"removed":"pwa"}
+exit 0  wall_ms 42
+
+$ layerfs store pull pwm
+# at 2026-11-03T07:38:56Z load1 5.57
+{"store":"pwm","from":"lfs535k2m","to":"native","bytes":212992,"heads":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+exit 0  wall_ms 101
+
+$ layerfs store remove pwm
+# at 2026-11-03T07:38:57Z load1 5.57
+{"removed":"pwm"}
+exit 0  wall_ms 44
+
+$ layerfs store pull pws
+# at 2026-11-03T07:38:57Z load1 5.57
+{"store":"pws","from":"lfs535k2s","to":"native","bytes":212992,"heads":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+exit 0  wall_ms 108
+
+$ layerfs store remove pws
+# at 2026-11-03T07:38:57Z load1 5.57
+{"removed":"pws"}
+exit 0  wall_ms 44
+
+$ layerfs store list
+# at 2026-11-03T07:38:57Z load1 5.57
+{"items":[]}
+exit 0  wall_ms 36
+
+$ layerfs machine list --text
+# at 2026-11-03T07:38:57Z load1 5.57
+NAME       PLATFORM         BACKEND     STATE    CPUS  MEMORY      DISK
+docker     docker           docker      ready    -     -           -
+lfs535k2a  apple-container  namespaces  running  2     4294967296  21474836480
+lfs535k2m  microsandbox     namespaces  running  2     4294967296  21474836480
+lfs535k2s  ssh              namespaces  running  -     -           -
+native     native           native      ready    -     -           -
+exit 0  wall_ms 470
+
+$ layerfs machine remove lfs535k2a
+# at 2026-11-03T07:39:16Z load1 5.80
+{"name":"lfs535k2a","removed":true}
+exit 0  wall_ms 1799
+
+$ layerfs machine remove lfs535k2m
+# at 2026-11-03T07:39:18Z load1 5.80
+{"name":"lfs535k2m","removed":true}
+exit 0  wall_ms 341
+
+$ layerfs machine disconnect lfs535k2s
+# at 2026-11-03T07:39:19Z load1 5.80
+{"name":"lfs535k2s","removed":true}
+exit 0  wall_ms 441
+
+$ layerfs machine list --text
+# at 2026-11-03T07:39:19Z load1 5.80
+NAME    PLATFORM  BACKEND  STATE  CPUS  MEMORY  DISK
+docker  docker    docker   ready  -     -       -
+native  native    native   ready  -     -       -
+exit 0  wall_ms 38
+
+# external checks and host-side removal, 2026-11-03T07:39:29Z
+$ ssh root@lfs535k2s ls /layerfs; pgrep -af "layerfs worker"
+total 12
+drwxr-xr-x  3 root root 4096 Nov  3 15:39 .
+drwxr-xr-x 24 root root 4096 Nov  3 15:21 ..
+drwx-----x  5 root root 4096 Nov  3 15:28 data
+21030 bash -c ls -la /layerfs 2>&1; pgrep -af "/layerfs/bundle/layerfs worker" || echo no worker
+$ container list -a | grep lfs535k2; container volume list | grep lfs535k2
+none
+none
+$ msb list | grep lfs535k2
+none
+$ msb volume list | grep b2c5c8a0
+none
+$ limactl delete -f lfs535k2s
+time="2026-11-03T15:39:29+08:00" level=info msg="Removing `/Users/yifanxu/.lima/lfs535k2s/vz.pid`"
+time="2026-11-03T15:39:29+08:00" level=info msg="Deleted `lfs535k2s` (`/Users/yifanxu/.lima/lfs535k2s`)"
+lima: none
+$ docker rm -fv lfs535k2-pg
+lfs535k2-pg
+docker: none

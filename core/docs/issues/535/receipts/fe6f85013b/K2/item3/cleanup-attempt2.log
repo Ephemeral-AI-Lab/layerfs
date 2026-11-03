@@ -1,0 +1,50 @@
+$ layerfs sandbox get i3s1
+# at 2026-11-03T07:30:05Z load1 13.49
+{"name":"i3s1","project":"i3s1/p","machine":"lfs535k2m","created":1793690977688,"id":"i3s1","platform":"linux","runtime":"namespaces","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","backend":"namespaces","route":"fuse","state":"running","workspaces":[{"workspace":"3ccdf45f4c3d6c6a1af2c09e2a1938eee652bd798af177dc7909566ecc310a49","namespace":1,"branch":"lane","base":null,"base_layer":"32d543d55358264549f4691355a9f3057066e51bbd1cf5c05a0e8b37d06a8e1bda","root":"64c4b2be004eb3c851331d5b39d9e35d6fd7d6a6fe952548cab32663c0e0297e","activity":"idle","mounted":true,"directory":"/layerfs/data/machine/native/run/lfs-b2c5c8a0-i3s1/workspaces/1","head_moved_since_mount":false,"dirty":{"inodes":2,"entries":1},"pending_merge":false,"revision":2,"path":"/layerfs/data/machine/native/run/lfs-b2c5c8a0-i3s1/workspaces/1","name":null,"ws":"i3s1:/layerfs/data/machine/native/run/lfs-b2c5c8a0-i3s1/workspaces/1"}],"next_page_pos":null}
+exit 0  wall_ms 200
+
+$ layerfs workspace unmount i3s1:/layerfs/data/machine/native/run/lfs-b2c5c8a0-i3s1/workspaces/1 --discard
+# at 2026-11-03T07:30:06Z load1 14.42
+{"kind":"Unmounted"}
+exit 0  wall_ms 137
+
+$ layerfs sandbox close i3s1
+# at 2026-11-03T07:30:06Z load1 14.42
+{"kind":"Closed","sandbox":"i3s1","unknown":[],"closed":"i3s1"}
+exit 0  wall_ms 172
+
+$ layerfs store pull i3s1
+# at 2026-11-03T07:30:07Z load1 14.42
+{"store":"i3s1","from":"lfs535k2m","to":"native","bytes":212992,"heads":"6b4b9c18449d11ba205bf40585d02daaa2cfc3972eae6fae689a6486d5ed01fa"}
+exit 0  wall_ms 245
+
+$ layerfs store remove i3s1
+# at 2026-11-03T07:30:07Z load1 14.42
+{"removed":"i3s1"}
+exit 0  wall_ms 96
+
+$ layerfs sandbox get i3s2
+# at 2026-11-03T07:30:07Z load1 14.42
+{"name":"i3s2","project":"i3s2/p","machine":"lfs535k2m","created":1793690977701,"id":"i3s2","platform":"linux","runtime":"namespaces","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","backend":"namespaces","route":"fuse","state":"running","workspaces":[{"workspace":"79bb43c3462e3fec064643893643c62e2719a692022d10bf2163aafde9c2e327","namespace":1,"branch":"lane","base":null,"base_layer":"328f0b7bde3ff67fbd23820cc3344aa1b9a5228221e37c3b88de4c8cb49ace9c42","root":"ff8b22a778896781c35ae8bd0f2bcee4e3de34c1c5c6d908fcd7529182b3d21f","activity":"idle","mounted":true,"directory":"/layerfs/data/machine/native/run/lfs-b2c5c8a0-i3s2/workspaces/1","head_moved_since_mount":false,"dirty":{"inodes":2,"entries":1},"pending_merge":false,"revision":2,"path":"/layerfs/data/machine/native/run/lfs-b2c5c8a0-i3s2/workspaces/1","name":null,"ws":"i3s2:/layerfs/data/machine/native/run/lfs-b2c5c8a0-i3s2/workspaces/1"}],"next_page_pos":null}
+exit 0  wall_ms 108
+
+$ layerfs workspace unmount i3s2:/layerfs/data/machine/native/run/lfs-b2c5c8a0-i3s2/workspaces/1 --discard
+# at 2026-11-03T07:30:08Z load1 14.42
+{"kind":"Unmounted"}
+exit 0  wall_ms 143
+
+$ layerfs sandbox close i3s2
+# at 2026-11-03T07:30:08Z load1 14.42
+{"kind":"Closed","sandbox":"i3s2","unknown":[],"closed":"i3s2"}
+exit 0  wall_ms 159
+
+$ layerfs store pull i3s2
+# at 2026-11-03T07:30:08Z load1 14.42
+{"store":"i3s2","from":"lfs535k2m","to":"native","bytes":212992,"heads":"36492828ce33c7b614aa4c530c4409c6a3fca10e86ce94935d32a7bbe1c724bf"}
+exit 0  wall_ms 195
+
+$ layerfs store remove i3s2
+# at 2026-11-03T07:30:09Z load1 14.42
+{"removed":"i3s2"}
+exit 0  wall_ms 85
+

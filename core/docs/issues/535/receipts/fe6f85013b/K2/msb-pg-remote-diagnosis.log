@@ -1,0 +1,19 @@
+# microsandbox pg-remote diagnosis: TCP connect from the msb guest (lfs-b2c5c8a0-lfs535k2m, created by layerfs with --net public,host)
+# at 2026-11-03T07:28:13Z
+$ msb exec lfs-b2c5c8a0-lfs535k2m -- bash -c 'timeout 5 bash -c "</dev/tcp/192.168.2.123/55542" && echo open || echo rc=$?'
+rc=1
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/192.168.2.123/55542: Connection refused
+$ msb exec lfs-b2c5c8a0-lfs535k2m -- bash -c 'timeout 5 bash -c "</dev/tcp/host.microsandbox.internal/55542" && echo open || echo rc=$?'
+open
+$ msb exec ... getent hosts host.microsandbox.internal
+172.16.0.5      host.microsandbox.internal
+$ msb inspect (network section): no output matched
+
+# control: a throwaway msb sandbox lfs535k2-netprobe made by hand with --net public,private,host (not a LayerFS machine), same image
+$ msb create --name lfs535k2-netprobe --cpus 1 --memory 512 --net public,private,host debian:trixie-slim
+$ msb exec lfs535k2-netprobe -- bash -c 'timeout 5 bash -c "</dev/tcp/192.168.2.123/55542" && echo open'
+open
+$ msb stop lfs535k2-netprobe; msb remove lfs535k2-netprobe; msb list | grep -c lfs535k2-netprobe
+  ✓ Removed             lfs535k2-netprobe
+0
