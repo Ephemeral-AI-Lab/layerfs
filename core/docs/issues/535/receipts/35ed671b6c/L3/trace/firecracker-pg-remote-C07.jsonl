@@ -1,0 +1,13 @@
+{"at":1793697076908,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":860}
+{"at":1793697077083,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":172}
+{"at":1793697079769,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":2684}
+{"at":1793697079790,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":19}
+{"at":1793697079951,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":159}
+{"at":1793697082454,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":2502}
+{"at":1793697094640,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":12184}
+{"at":1793697094698,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":56}
+{"at":1793697094872,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":172}
+{"at":1793697094927,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":54}
+{"at":1793697096155,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":1227}
+{"at":1793697096167,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":10}
+{"at":1793697096202,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:64840","sent":true,"ms":33}

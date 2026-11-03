@@ -1,0 +1,37 @@
+start C01 09:03:48
+C01 native postgresql PASS  timed exec 657.309 ms
+exit 0
+start C02 09:03:59
+C02 native postgresql PASS  timed exec 1615.406 ms
+exit 0
+start C03 09:04:13
+C03 native postgresql PASS  timed exec 1280.304 ms
+exit 0
+start C04 09:04:26
+C04 native postgresql PASS  timed exec 989.727 ms
+exit 0
+start C05 09:04:36
+C05 native postgresql PASS  timed exec 1041.876 ms
+exit 0
+start C06 09:04:45
+C06 native postgresql PASS  timed exec 1068.192 ms
+exit 0
+start C07 09:05:00
+C07 native postgresql PASS  timed exec 2503.502 ms
+exit 0
+start C08 09:05:25
+C08 native postgresql PASS  timed exec 1342.571 ms
+exit 0
+start C09 09:05:46
+C09 native postgresql PASS  timed exec 109.006 ms
+exit 0
+start C10 09:06:01
+C10 native postgresql PASS  timed exec 1129.158 ms
+exit 0
+start C11 09:06:18
+C11 native postgresql PASS  timed exec 246.947 ms
+exit 0
+start C12 09:06:34
+C12 native postgresql PASS  timed exec 345.519 ms
+exit 0
+DONE native pg-remote 09:06:48

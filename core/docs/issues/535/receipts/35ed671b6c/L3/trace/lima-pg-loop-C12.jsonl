@@ -1,0 +1,6 @@
+{"at":1793696435740,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:58307","sent":true,"ms":2167}
+{"at":1793696439194,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:58307","sent":true,"ms":1698}
+{"at":1793696441230,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:58307","sent":true,"ms":1582}
+{"at":1793696444040,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:58307","sent":true,"ms":37}
+{"at":1793696445132,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:58307","sent":true,"ms":1088}
+{"at":1793696445333,"event":"worker.connection","op":"sandbox.host","worker":"127.0.0.1:58307","sent":true,"ms":172}

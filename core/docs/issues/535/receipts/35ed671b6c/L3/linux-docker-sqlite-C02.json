@@ -1,0 +1,60 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C02",
+  "machine": "docker",
+  "product": "35ed671b6c",
+  "startedAt": "2026-11-03T09:08:59.560Z",
+  "load1": 1.32,
+  "body": {
+    "sha256": "76883ee8358e23ebea7af1931db3d7201684d1da240bc0fefec72781ff569cf6"
+  },
+  "ok": false,
+  "cause": "store.push: Unavailable store push, check: machine docker is not running; start it with `layerfs machine start docker`",
+  "phases": {},
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 6.011,
+      "ok": true
+    },
+    {
+      "name": "store.create",
+      "ms": 18.096,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 14.306,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 8.37,
+      "ok": true
+    },
+    {
+      "name": "machine.update",
+      "ms": 0.63,
+      "ok": true
+    },
+    {
+      "name": "store.push",
+      "ms": 0.54,
+      "ok": false,
+      "error": {
+        "code": "Unavailable",
+        "message": "store push, check: machine docker is not running; start it with `layerfs machine start docker`"
+      }
+    },
+    {
+      "name": "store.remove",
+      "ms": 1.277,
+      "ok": true
+    }
+  ],
+  "store": {
+    "kind": "sqlite"
+  },
+  "failedStep": "store.push",
+  "endedAt": "2026-11-03T09:08:59.612Z"
+}

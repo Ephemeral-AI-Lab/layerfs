@@ -1,0 +1,47 @@
+$ lt-exe.sh plain api/crates/layerfs-api debug/deps/sandbox_family-4dd864ead58ddd48 -- --exact sandbox_family::named_sandboxes_on_native
+# at 2026-11-03T08:59:52Z load1 10.08
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.01s
+### rc=0 wall=2s
+
+# the first invocation above named the test with its file prefix (sandbox_family::...), which matches none inside the test binary: 0 run, not a verdict; rerun with the binary's own name
+$ lt-exe.sh plain api/crates/layerfs-api debug/deps/sandbox_family-4dd864ead58ddd48 -- --exact named_sandboxes_on_native
+# at 2026-11-03T09:00:01Z load1 11.20
+running 1 test
+test named_sandboxes_on_native ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+### rc=0 wall=1s
+
+$ lt-exe.sh plain api/crates/layerfs-api debug/deps/sandbox_machines-b5901eb49a07b046 -- --exact a_sandbox_with_no_machine_runs_on_its_store_s
+# at 2026-11-03T09:00:10Z load1 12.49
+running 1 test
+test a_sandbox_with_no_machine_runs_on_its_store_s ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.02s
+### rc=0 wall=1s
+
+$ lt-exe.sh plain api/crates/layerfs-api debug/deps/sandbox_deploy-05769390a263890b -- 
+# at 2026-11-03T09:00:11Z load1 12.49
+running 1 test
+test the_daemon_and_the_linux_bundle_come_from_the_versioned_cache ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+### rc=0 wall=1s
+
+$ lt-exe.sh plain connect/crates/layerfs-machine debug/deps/machine_providers-8e327fdcbc0f051f -- 
+# at 2026-11-03T09:00:12Z load1 12.45
+running 13 tests
+test built_in_machines_are_never_created_or_removed ... ok
+test a_bundle_without_its_binaries_is_refused_before_any_effect ... ok
+test apple_container_runs_one_container_with_its_data_volume_and_no_home ... ok
+test docker_leaves_a_foreign_container_alone ... ok
+test docker_loads_the_bundle_image_once_and_answers_its_id ... ok
+test docker_on_macos_and_linux_starts_one_worker_container_without_the_home ... ok
+test apple_container_status_reads_status_state_from_inspect ... ok
+test firecracker_names_what_its_lima_host_lacks ... ok
+test a_microvm_chooses_its_huge_pages_at_each_boot ... ok
+test microsandbox_leaves_a_volume_that_was_there_before ... ok
+test firecracker_on_a_stopped_host_is_unavailable ... ok
+test microsandbox_remove_takes_the_record_then_the_volume ... ok
+test microsandbox_creates_a_disk_volume_and_runs_setup_through_msb_exec ... ok
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+### rc=0 wall=2s
+
