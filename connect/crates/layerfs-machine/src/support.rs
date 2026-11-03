@@ -1,9 +1,9 @@
 //! The one support table (#535 §7.3, G1, G7): for each platform, host and
 //! Store kind, whether a Sandbox is supported or the fixed reason it is
 //! refused. It encodes what is allowed; phase 5a enabled PostgreSQL
-//! Sandboxes on native (macOS and Linux), docker and ssh, and phases 5b and
-//! 5c flip the VM platforms' rows here once their receipts exist (G7);
-//! `connect/SUPPORT.json` (rendered by [`support_json`], compared by a
+//! Sandboxes on native (macOS and Linux), docker and ssh, and the G7 live
+//! receipts (`core/docs/issues/535/receipts/g7-live/`) enabled them on the
+//! VM platforms; `connect/SUPPORT.json` (rendered by [`support_json`], compared by a
 //! test) and `machine.platforms` follow.
 use crate::options::OptSpec;
 use crate::platform::{ExecutorKind, HostOs, How, KernelRoute, Platform};
@@ -81,19 +81,15 @@ fn host_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
 }
 
 /// Why a PostgreSQL Sandbox does not run on `platform` (on a host it is
-/// on, with a backend), or `None` where it does. #535 phase 5a: native
-/// (Linux namespaces with no bind), docker and ssh (whose `reach` refuses
-/// a loopback URL) run them; the VM platforms wait for live G7 receipts of
-/// their `reach` routes (`platforms/*/adapter.rs`).
+/// on, with a backend), or `None` where it does. Every platform with a
+/// backend runs them: native (Linux namespaces with no bind; #535 phase
+/// 5a), docker and ssh (whose `reach` refuses a loopback URL), and lima,
+/// apple-container, microsandbox and firecracker through their `reach`
+/// routes (`platforms/*/adapter.rs`; G7 live receipts).
 fn postgresql_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
     match (platform, host) {
-        (Platform::Native, HostOs::Macos | HostOs::Linux)
-        | (Platform::Docker | Platform::Ssh, _) => None,
-        (Platform::Native, _) => Some(NO_BACKEND),
-        (Platform::Lima, _) => Some("lima host alias not verified (G7)"),
-        (Platform::AppleContainer, _) => Some("apple-container gateway route not verified (G7)"),
-        (Platform::Microsandbox, _) => Some("microsandbox host route not verified (G7)"),
-        (Platform::Firecracker, _) => Some("firecracker NAT route not verified (G7)"),
+        (Platform::Native, HostOs::Windows | HostOs::Other) => Some(NO_BACKEND),
+        _ => None,
     }
 }
 

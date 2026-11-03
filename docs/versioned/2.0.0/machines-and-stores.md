@@ -379,18 +379,18 @@ layerfs project init pg-main/load ./load
   under the Store's lease.
 - PostgreSQL needs a build with the `postgresql` feature; without it these
   calls are `Unsupported`.
-- A PostgreSQL Store's Sandboxes run on `native` (macOS and Linux),
-  `docker` and ssh machines (#535 phase 5a; the daemon is built with
-  `postgresql`), started where the machine starts Sandboxes. The caller
+- A PostgreSQL Store's Sandboxes run on every machine: `native` (macOS
+  and Linux), `docker`, ssh, `lima`, `apple-container`, `microsandbox` and
+  `firecracker` (the daemon and the worker are built with `postgresql`),
+  started where the machine starts Sandboxes. The caller
   resolves the password and rewrites a loopback host for the machine
   (`docker`: `host.docker.internal`, given to the containers on a Linux
   Engine as its `host-gateway`; ssh refuses a loopback URL); the URL
   travels only in that one request. `sandbox create` first checks, from
   the machine, that the server answers with the Store's schema binding.
   The server always runs off the machine (on this host or elsewhere);
-  nothing installs PostgreSQL in a machine (D12). The VM platforms have
-  their rewrites, and each stays refused until a live run proves it
-  (`layerfs machine platforms` says why):
+  nothing installs PostgreSQL in a machine (D12). The VM platforms'
+  rewrites, each proven by a live run (#535 `receipts/g7-live/`):
   - `lima`: `192.168.5.2` (the guest's `host.lima.internal`; the address,
     because the Sandbox's own root has no hosts entry for the name), which
     reaches a server on this host's loopback.

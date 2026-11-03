@@ -30,7 +30,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "apple-container gateway route not verified (G7)" },
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
           "description": "an Apple container VM (Apple silicon); Sandboxes run in Linux namespaces and a cgroup"
         },
@@ -40,7 +40,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "microsandbox host route not verified (G7)" },
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
           "description": "a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup"
         },
@@ -50,7 +50,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "lima host alias not verified (G7)" },
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "nested", "kind": "bool" } ],
           "description": "a Lima VM (vz); Sandboxes run in Linux namespaces and a cgroup"
         },
@@ -60,7 +60,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker NAT route not verified (G7)" },
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "host", "kind": "name" } ],
           "description": "a Firecracker microVM in a nested lima machine; Sandboxes run in Linux namespaces and a cgroup"
         },
@@ -115,7 +115,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "microsandbox host route not verified (G7)" },
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
           "description": "a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup"
         },
@@ -190,7 +190,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "microsandbox host route not verified (G7)" },
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
           "description": "a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup"
         },

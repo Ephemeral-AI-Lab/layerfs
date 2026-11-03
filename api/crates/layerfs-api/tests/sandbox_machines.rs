@@ -168,16 +168,24 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
         )
         .unwrap_err()
     };
-    // lima: the support table's reason, word for word (#535 §7.3)
+    // lima runs PostgreSQL Sandboxes on macOS (G7 live receipt): its
+    // stopped machine is refused naming its start; elsewhere the support
+    // table's reason, word for word (#535 §7.3)
     let (code, message) = create("dev");
-    assert_eq!(code, "Unsupported", "{message}");
-    let reason = layerfs_machine::sandbox_allowed(
+    match layerfs_machine::sandbox_allowed(
         layerfs_machine::Platform::Lima,
         layerfs_machine::HostOs::current(),
         layerfs_machine::StoreKind::Postgresql,
-    )
-    .unwrap_err();
-    assert!(message.ends_with(reason), "{message}");
+    ) {
+        Ok(()) => {
+            assert_eq!(code, "Unavailable", "{message}");
+            assert!(message.contains("layerfs machine start dev"), "{message}");
+        }
+        Err(reason) => {
+            assert_eq!(code, "Unsupported", "{message}");
+            assert!(message.ends_with(reason), "{message}");
+        }
+    }
     // ssh runs PostgreSQL Sandboxes (5a), but cannot dial the caller's
     // loopback: `reach` refuses before any machine is started (#535 §7.4)
     let (code, message) = create("box");

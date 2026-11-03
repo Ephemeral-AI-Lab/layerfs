@@ -560,25 +560,6 @@ fn a_url_reach_cannot_rewrite_is_refused_unless_the_loopback_is_shared() {
     }
 }
 
-#[test]
-fn a_g7_loopback_refusal_is_the_support_tables_reason() {
-    let scratch = Scratch::new("kit-reach-g7");
-    for platform in Platform::ALL {
-        let Loopback::Refused(why) = loopback(&valid_spec(&scratch, platform)) else {
-            continue;
-        };
-        if !why.ends_with("(G7)") {
-            continue;
-        }
-        for host in platform.profile().hosts {
-            let row = support(platform, *host);
-            if row.backend.is_some() {
-                assert_eq!(row.postgresql.reason, Some(why), "{platform:?} on {host:?}");
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Options and Spec
 // ---------------------------------------------------------------------------

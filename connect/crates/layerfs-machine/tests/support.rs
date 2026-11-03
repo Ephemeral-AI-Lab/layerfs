@@ -43,18 +43,27 @@ fn every_refusal_is_the_rows_reason() {
     }
 }
 
-/// #535 phase 5a (§7.3): PostgreSQL Sandboxes run on native (macOS, and
-/// Linux namespaces with no bind), docker and ssh; lima, apple-container,
-/// microsandbox and firecracker stay refused with their G7 reasons.
+/// #535 §7.3: PostgreSQL Sandboxes run on native (macOS, and Linux
+/// namespaces with no bind; phase 5a), docker, ssh, and since the G7 live
+/// receipts on lima, apple-container, microsandbox and firecracker, on every
+/// host each is on.
 #[test]
-fn postgresql_sandboxes_run_where_phase_5a_enables_them() {
+fn postgresql_sandboxes_run_on_every_platform_with_a_backend() {
     let allowed = |p, h| sandbox_allowed(p, h, StoreKind::Postgresql);
     for host in [HostOs::Macos, HostOs::Linux] {
         assert_eq!(allowed(Platform::Native, host), Ok(()));
         assert_eq!(allowed(Platform::Docker, host), Ok(()));
+        assert_eq!(allowed(Platform::Microsandbox, host), Ok(()), "{host:?}");
     }
     for host in HostOs::NAMED {
         assert_eq!(allowed(Platform::Ssh, host), Ok(()), "{host:?}");
+    }
+    for platform in [
+        Platform::Lima,
+        Platform::AppleContainer,
+        Platform::Firecracker,
+    ] {
+        assert_eq!(allowed(platform, HostOs::Macos), Ok(()), "{platform:?}");
     }
     assert_eq!(
         allowed(Platform::Native, HostOs::Windows),
@@ -63,22 +72,6 @@ fn postgresql_sandboxes_run_where_phase_5a_enables_them() {
     assert_eq!(
         allowed(Platform::Docker, HostOs::Windows),
         Err("docker through WSL2 is not designed yet")
-    );
-    assert_eq!(
-        allowed(Platform::Lima, HostOs::Macos),
-        Err("lima host alias not verified (G7)")
-    );
-    assert_eq!(
-        allowed(Platform::AppleContainer, HostOs::Macos),
-        Err("apple-container gateway route not verified (G7)")
-    );
-    assert_eq!(
-        allowed(Platform::Microsandbox, HostOs::Linux),
-        Err("microsandbox host route not verified (G7)")
-    );
-    assert_eq!(
-        allowed(Platform::Firecracker, HostOs::Macos),
-        Err("firecracker NAT route not verified (G7)")
     );
     assert_eq!(
         allowed(Platform::Lima, HostOs::Linux),
