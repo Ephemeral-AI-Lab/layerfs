@@ -59,8 +59,11 @@ hold a password or a bucket key. They are not settings; see
 - **Records** are one JSON value each, written to a private temporary file
   (named with the process id and a per-process counter, so threads never
   share one) and renamed into place, so a reader sees the old record or the
-  new one. Every writer that reads, changes and writes a record holds the
-  home lock.
+  new one. Every writer that reads, changes and writes a record holds a
+  lock: the home lock where a name is claimed or another entity is checked,
+  and the entity's own lock (`store/<s>/lock`, `sandbox/<name>/lock`) for
+  its record's other changes. Locks are taken home first, then a machine's
+  `start.lock`, then a Store's, then a Sandbox's (#536 §8).
   Files are 0600 and folders 0700. Bytes are stored as `{"hex": "…"}`.
   Every machine, Store, project, bucket, Sandbox and Workspace record
   carries `"v": 1` as its first field; call results never show it.
@@ -80,13 +83,15 @@ hold a password or a bucket key. They are not settings; see
   are never removed.
 - **`store/<name>/open/<pid>`** is a lease. Every process that uses a sqlite
   Store holds one: the process that opens it, or, for a Store behind a
-  worker, the host process that sends it calls. `store move` and
-  `store remove` read the leases under the home lock and refuse `InUse`
-  while one is held. A lease is taken under the home lock, and refused
-  `InUse` while a move or remove of the Store runs. It records its
-  process's start time and boot: a lease whose process is no longer alive
-  on this host, or whose id now names another process, is stale; it is
-  removed under the home lock and the removal is logged (O35).
+  worker, the host process that sends it calls; a PostgreSQL Store's
+  in-process calls hold one too. `store move` and `store remove` read the
+  leases under the Store's lock and refuse `InUse` while one is held. A
+  lease is taken under the Store's lock, and refused `Busy` while a move or
+  remove of the Store runs (`Unresolved` after one whose outcome is not
+  known). It records its process's start time and boot: a lease whose
+  process is no longer alive on this host, or whose id now names another
+  process, is stale; it is removed under the Store's lock and the removal
+  is logged (O35).
 - **`sandbox/<name>/`** is all a Sandbox has in the home, whatever its
   machine: listing Sandboxes reads `sandbox/*` and nothing else, and one
   Sandbox is one folder read. Its `record.json` holds facts: its name,

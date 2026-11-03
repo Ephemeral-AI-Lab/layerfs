@@ -422,15 +422,16 @@ Codes seen in the 2.0 library include:
 | `NoSuchBranch`, `NoSuchCommit` | no such Branch, or no such Commit on it (`branch.get`, `commit.get`, …) |
 | `NoSuchPath`, `NoSuchSandbox`, `NoSuchProcess`, … | 1.1.0's codes for paths, Sandboxes and processes |
 | `Exists` | the name is taken, the same host or database is already connected (under any name), or a bucket object was exported from another home |
-| `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine, a move or remove in progress, a machine being removed, a Sandbox still being created; a layout 2 home with any of these, which is not converted yet ([the home](home.md#a-layout-2-home)) |
+| `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine; a layout 2 home with any of these, or with a move, removal or create still running, which is not converted yet ([the home](home.md#a-layout-2-home)) |
+| `Busy` | an operation runs on the entity: a Store being moved or removed, a machine being made, connected or removed, a Sandbox being created or closed; the message names it (`op` id and phase) and its process (#536 §7.1). Also: another project is being added to the same Store |
+| `Unresolved` | an earlier operation on the entity ended with its outcome not known; its process is gone and its `op` stays. The message names the call that shows it (`store status`, `machine status`, `sandbox get`) and the one that clears it (`store remove`, `machine remove` or `disconnect`, `sandbox close`) |
 | `Unsupported` | not possible here, or not built (see [limitations](limitations.md)); a missing tool is listed in `detail.missing` |
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret |
 | `Conflict` | a merge or Commit conflict; for `backup.restore`, the Store changed since its last backup or restore |
 | `Binary` | `file.read` of a file that is not text |
 | `Capacity` | a Sandbox's Workspace limit |
-| `Busy` | another project is being added to the same Store |
 | `Failed` | it was tried and did not happen; whatever exists is kept |
-| `Unknown` | the outcome is not known; both sides are kept and logged in `log/uncertain.jsonl` |
+| `Unknown` | the outcome is not known; both sides are kept and logged in `log/uncertain.jsonl`, and the entity keeps an uncertain `op` (later calls on it are `Unresolved`) |
 
 Every call is one attempt. After `Unknown`, read the state with `list`,
 `get` or `status` before acting again.
