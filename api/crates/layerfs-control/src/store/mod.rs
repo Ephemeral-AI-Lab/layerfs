@@ -21,3 +21,7 @@ pub(crate) mod resolve;
 pub mod service;
 mod status;
 pub(crate) mod transfer;
+
+/// The Store connection reaper (not lifecycle, #535 D11), for its test.
+#[doc(hidden)]
+pub use open::close_idle;

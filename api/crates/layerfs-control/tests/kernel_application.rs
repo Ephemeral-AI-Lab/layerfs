@@ -59,7 +59,6 @@ fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
             namespaces: 8,
             pager_kib: 1024,
             serial_low_water: 0,
-            idle_exit_s: 0,
         },
         store: DaemonStore::Sqlite {
             locator: f.project.manifest.locator.clone(),

@@ -109,6 +109,28 @@ class ProductBoundaryTests(unittest.TestCase):
         clean = violations(Path("api/crates/layerfs-api/src/calls/table.rs"), "pub use std::io::Read;")
         self.assertFalse(any("retired by #536" in message for _, message in clean))
 
+    def test_d11_idle_stop_and_on_demand_start_cannot_return(self):
+        for relative in (
+            "api/crates/layerfs-control/src/machine/worker/idle.rs",
+            "engine/crates/layerfs-daemon/src/application/idle.rs",
+        ):
+            findings = violations(Path(relative), "pub use std::io::Read;")
+            self.assertTrue(any("#535 D11" in message for _, message in findings), relative)
+        for source in (
+            "pub fn serve_until_idle() {}",
+            "const IDLE_EXIT_S: u32 = 120;",
+            "let x = limits.idle_exit_s;",
+            "Start::OnDemand",
+            'std::env::var("LAYERFS_WORKER_POWEROFF")',
+            "fn guest_stop(self) {}",
+        ):
+            findings = violations(Path("api/crates/layerfs-control/src/common/place.rs"), source)
+            self.assertTrue(any("#535 D11" in message for _, message in findings), source)
+        # the Store connection reaper is not lifecycle
+        reaper = "pub const IDLE: Duration = Duration::from_secs(60); fn close_idle() {}"
+        clean = violations(Path("api/crates/layerfs-control/src/store/open.rs"), reaper)
+        self.assertFalse(any("#535 D11" in message for _, message in clean))
+
     def test_retired_packages_cannot_return(self):
         self.assertEqual(
             RETIRED_PACKAGES,

@@ -325,6 +325,24 @@ def dependency_violations(source):
     return found
 
 
+# #535 D11 (owner, 2026-11-03): machine lifecycle is manual. No worker or VM
+# idle stop, Sandbox daemon idle close or on-demand machine start returns;
+# `machine.start` and `machine.stop` are the only lifecycle entry points.
+# The Store connection reaper (store/open.rs) is not lifecycle and stays.
+LIFECYCLE = "retired by #535 D11: machine lifecycle is manual (no idle stop, idle close or on-demand start)"
+LIFECYCLE_NAMES = re.compile(
+    r"\b(?:serve_until_idle|stop_if_idle|watch_idle|idle_exit_s|IDLE_EXIT_S|guest_stop|"
+    r"power_off|start_after|OnDemand)\b|LAYERFS_WORKER_POWEROFF|LAYERFS_DAEMON_IDLE_EXIT"
+)
+
+
+def lifecycle_violations(path, source):
+    """Refuse an idle.rs or an idle-stop/on-demand-start name in product source."""
+    if path.name == "idle.rs":
+        return [(1, LIFECYCLE)]
+    return [(source.count("\n", 0, match.start()) + 1, LIFECYCLE) for match in LIFECYCLE_NAMES.finditer(source)]
+
+
 def component_violations(path, source):
     """Reject forbidden crate references in domain code and first-party imports."""
     name = crate_name(path)
@@ -353,9 +371,9 @@ def component_violations(path, source):
     }
     if any(part in path.as_posix() for part in moved.get(name, ())):
         return [(1, "retired by #536: management lives in layerfs-control by entity")]
+    found = lifecycle_violations(path, source)
     if name not in ALLOWED_DEPENDENCIES:
-        return []
-    found = []
+        return found
     if name == "layerfs-daemon" and "/src/store/" in path.as_posix():
         concrete = r"\b(?:layerfs_persistence|layerfs_api|layerfs_bridge|rusqlite|sqlite)\s*::|\b(?:Path|PathBuf)\b"
         for match in re.finditer(concrete, source):

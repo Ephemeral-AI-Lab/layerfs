@@ -48,7 +48,6 @@ fn setup(store: DaemonStore, route: KernelRoute) -> DaemonSetup {
             namespaces: 16,
             pager_kib: 1024,
             serial_low_water: 256,
-            idle_exit_s: 120,
         },
         store,
     }

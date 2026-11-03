@@ -103,7 +103,6 @@ fn native_resource_paths_are_validated_before_launch() {
             namespaces: 2,
             pager_kib: 1024,
             serial_low_water: 0,
-            idle_exit_s: 0,
         },
     };
     let request = ProviderCreate {

@@ -6,7 +6,7 @@ use crate::{
     wire::{Reader, Writer},
 };
 use std::fmt;
-const MAGIC: &[u8] = b"LFSD\x07";
+const MAGIC: &[u8] = b"LFSD\x08";
 /// Explicit daemon startup resources; these are windows/admission, not file caps.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DaemonLimits {
@@ -24,9 +24,6 @@ pub struct DaemonLimits {
     /// Unconsumed local inode serials below which a create makes one early
     /// reservation attempt. Zero makes none before the range is exhausted.
     pub serial_low_water: u64,
-    /// Seconds with no Workspace and no control call after which the daemon
-    /// ends its process (#373 idle close). Zero never ends it.
-    pub idle_exit_s: u32,
 }
 /// Private configuration for one real daemon; caller supplies all policy/resource values.
 #[derive(Clone, Eq, PartialEq)]
@@ -72,7 +69,6 @@ impl DaemonSetup {
             out.put(&v.to_be_bytes())?;
         }
         out.put(&l.serial_low_water.to_be_bytes())?;
-        out.put(&l.idle_exit_s.to_be_bytes())?;
         out.byte(match self.route {
             KernelRoute::Fuse => 0,
             KernelRoute::Nfs => 1,
@@ -97,7 +93,6 @@ impl DaemonSetup {
             namespaces: u32::from_be_bytes(input.array()?),
             pager_kib: u32::from_be_bytes(input.array()?),
             serial_low_water: u64::from_be_bytes(input.array()?),
-            idle_exit_s: u32::from_be_bytes(input.array()?),
         };
         let route = match input.byte()? {
             0 => KernelRoute::Fuse,

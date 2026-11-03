@@ -42,11 +42,6 @@ pub(crate) fn operation(failure: Box<OperationFailure>) -> SdkRefusal {
     values::refusal(&failure).unwrap_or_else(|| failed(failure))
 }
 
-/// A Sandbox's daemon ends itself after this many seconds with no Workspace
-/// and no call (#373 idle close; owner answer, 2026-10-21: 2 minutes). Its
-/// container then stops, and `sandbox.close` reclaims it.
-const IDLE_EXIT_S: u32 = 120;
-
 /// Workspaces one Sandbox holds at once; a mount into a full one is refused
 /// `Capacity`.
 pub(crate) const WORKSPACES: u32 = 16;
@@ -83,7 +78,6 @@ pub(crate) fn setup(
             namespaces: WORKSPACES,
             pager_kib: 1024,
             serial_low_water: 256,
-            idle_exit_s: IDLE_EXIT_S,
         },
         store,
     }

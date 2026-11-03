@@ -95,7 +95,7 @@ fn enter(args: &SdkValue, lease: Option<Lease>, calls: usize) -> Result<PathBuf,
 
 /// Closes every Store unused for at least `idle` with no call running;
 /// returns how many.
-pub(crate) fn close_idle(idle: Duration) -> usize {
+pub fn close_idle(idle: Duration) -> usize {
     let stale: Vec<Entry> = {
         let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
         let names: Vec<PathBuf> = open

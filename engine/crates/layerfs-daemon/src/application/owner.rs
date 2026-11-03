@@ -36,8 +36,6 @@ pub(super) struct Startup {
 pub(super) struct State {
     pub startup: Startup,
     pub slots: Vec<Slot>,
-    /// Control calls begun and not yet answered.
-    pub in_flight: usize,
 }
 /// One real daemon application; Store/Overlay are initialized once and reused.
 pub struct Application {
@@ -204,7 +202,6 @@ impl Application {
                     install_failure: None,
                 },
                 slots: (0..count).map(|_| Slot::Vacant).collect(),
-                in_flight: 0,
             }),
             changed: Condvar::new(),
             workers: Mutex::new((0..count).map(|_| None).collect()),
