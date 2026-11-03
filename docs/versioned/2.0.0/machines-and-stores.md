@@ -399,9 +399,9 @@ layerfs project init pg-main/load ./load
     on that bridge (`0.0.0.0`, as Docker Desktop publishes a port), not on
     127.0.0.1 alone, and admit connections from it.
   - `microsandbox`: `host.microsandbox.internal`. Machines are created
-    with `--net public,host`, so the guest reaches every port on this
-    host, as lima and docker guests do; a machine created before this
-    needs re-creating.
+    with `--net public,private,host`, so the guest reaches every port on
+    this host and servers on private addresses, as lima and docker guests
+    do; a machine created before this needs re-creating.
   - `firecracker`: `192.168.5.2`, the Lima host's own host address; the
     Lima host forwards and masquerades its microVMs' traffic.
 - Not built: `project remove` from a PostgreSQL Store, and backups of

@@ -33,7 +33,7 @@ Store is backed up. Layers are `core < engine < connect < api`; nothing in
   host to their alias, and so do
   `apple-container` (its network's gateway from `container inspect`),
   `microsandbox` (`host.microsandbox.internal`; machines get
-  `--net public,host`) and `firecracker` (`192.168.5.2`, through the Lima
+  `--net public,private,host`) and `firecracker` (`192.168.5.2`, through the Lima
   host's masquerade); `ssh` refuses it. Facts: the G7 receipt in
   `core/docs/issues/535/receipts/g7-reach/`. A
   rewrite is refused for `sslmode=verify-full`; other hosts are used as
