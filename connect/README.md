@@ -90,3 +90,20 @@ returns the same data for the running host.
 | a bucket provider | `layerfs-store-backup/src/bucket/<p>/` |
 
 A Store kind and a kernel route are engine changes; see #535 §9.
+
+## Conformance kit
+
+Each crate has one `tests/conformance.rs` (#536 §11 step 9) that every
+platform or backend passes, with stand-in tools and no Docker Engine, VM,
+ssh host or root. The machine kit runs over `Platform::ALL`: the profile
+against `support.rs` and `SUPPORT.json`, each lifecycle call running
+through the platform's tool or refused with the fixed text its `How`
+declares, `reach` against the rules above, and the declared options
+against `Spec::validate`. The Sandbox kit runs over `Backend::ALL`: the
+stored name, capabilities against `SUPPORT.json`'s kernel routes, binds,
+the runtime this host has and the lifecycle it can run here. A new
+variant is covered automatically; the kits' exhaustive matches (`loopback`;
+`binds`, `options`, `record`, `runtime`, `lifecycle`) do not compile until
+it declares its answers. Run them with `cargo +1.85.1 test --locked -p
+layerfs-machine --test conformance` and `-p layerfs-sandbox --test
+conformance`; real platforms run them in the terminal pass.
