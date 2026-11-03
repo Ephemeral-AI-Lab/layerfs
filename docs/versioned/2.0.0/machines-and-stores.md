@@ -127,6 +127,14 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   call whose answer is lost after it was sent is `Unknown`; it starts
   nothing and is not resent. `store move` and `store remove` make their
   machines ready before they mark the Store.
+- No list, get or status call starts a machine (#535 P4): every `*.list`,
+  `*.get` and `*.status` call and `machine platforms` answer from records
+  and live probes, and a stopped machine reads as `stopped` (`store status`:
+  `down`; `sandbox get`: no Workspaces and `down_reason`; `workspace
+  status`: `Unavailable`). Calls that need the worker start it on demand:
+  Store calls on a sqlite Store there, `project remove`, `sandbox create`,
+  the Workspace calls that change something, `store move`, `store remove`
+  and `backup create`.
 - Two processes that need the same stopped machine take turns on its
   `start.lock`, which `machine create` and `machine remove` also take. The
   second waits up to 600 s, then is refused `Unavailable`. The lock is

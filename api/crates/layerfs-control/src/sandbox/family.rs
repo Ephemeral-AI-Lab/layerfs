@@ -17,6 +17,7 @@ use crate::common::context::Context;
 use crate::common::home::{self, paths, read_record, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
 use crate::common::place::{self, Executor, Start};
+use crate::machine::worker::Unreached;
 use crate::store::record::{StoreKind, StoreRef};
 use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -185,19 +186,28 @@ pub fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcom
         "get" => {
             let name = args.get_text("name").unwrap_or("");
             let (machine, record) = sandbox_of(&home, name)?;
-            let workspaces = on_machine(
+            // a get starts no machine (P4): a machine that is down answers
+            // the record with no Workspaces and why
+            let listed = reach(
                 context,
                 &machine,
                 &record,
                 "sandbox.list_workspaces",
                 vec![],
-            )?;
-            let all = match workspaces.get("workspaces") {
-                Some(SdkValue::List(items)) => items.clone(),
-                _ => Vec::new(),
+                Start::Never,
+            );
+            let (all, down) = match listed {
+                Ok(workspaces) => match workspaces?.get("workspaces") {
+                    Some(SdkValue::List(items)) => (items.clone(), None),
+                    _ => (Vec::new(), None),
+                },
+                Err(Unreached(why)) => (Vec::new(), Some(why.message)),
             };
             let (items, next) = page(all, args);
-            let record = home::with_field(record, "workspaces", SdkValue::List(items));
+            let mut record = home::with_field(record, "workspaces", SdkValue::List(items));
+            if let Some(why) = down {
+                record = home::with_field(record, "down_reason", SdkValue::Text(why));
+            }
             Ok(home::with_field(record, "next_page_pos", next))
         }
         "close" => {
@@ -359,13 +369,45 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     }
 }
 
-/// Runs host Sandbox operation `op` for Sandbox `record` on `machine`.
+/// Runs host Sandbox operation `op` for Sandbox `record` on `machine`,
+/// starting the machine when it is down.
 fn on_machine(
     context: &mut Context<'_>,
     machine: &str,
     record: &SdkValue,
     op: &str,
     more: Vec<(&str, SdkValue)>,
+) -> Outcome {
+    reach(context, machine, record, op, more, Start::OnDemand)
+        .unwrap_or_else(|Unreached(refusal)| Err(refusal))
+}
+
+/// [`on_machine`], with `start` saying whether a machine that is down is
+/// started; [`Unreached`] when it was not and nothing was sent.
+fn reach(
+    context: &mut Context<'_>,
+    machine: &str,
+    record: &SdkValue,
+    op: &str,
+    more: Vec<(&str, SdkValue)>,
+    start: Start,
+) -> std::result::Result<Outcome, Unreached> {
+    let mut unreached = None;
+    let outcome = host_op(context, (machine, record, op), more, start, &mut unreached);
+    match unreached {
+        Some(unreached) => Err(unreached),
+        None => Ok(outcome),
+    }
+}
+
+/// [`reach`]'s operation; a request that was not sent leaves its
+/// [`Unreached`] in `unreached`.
+fn host_op(
+    context: &mut Context<'_>,
+    (machine, record, op): (&str, &SdkValue, &str),
+    more: Vec<(&str, SdkValue)>,
+    start: Start,
+    unreached: &mut Option<Unreached>,
 ) -> Outcome {
     let home = context.home.clone();
     let project = record.get_text("project").unwrap_or("");
@@ -392,7 +434,7 @@ fn on_machine(
     // the password (O3)
     let executor = match postgresql {
         true => Executor::Local,
-        false => place::on_machine(&home, machine, Start::OnDemand)?,
+        false => place::on_machine(&home, machine, start)?,
     };
     let docker = match machine {
         "docker" => Some(deploy::docker_settings(
@@ -459,7 +501,13 @@ fn on_machine(
             ));
             let request =
                 SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
-            worker.call("sandbox.host", request, &mut |event| context.event(event))
+            match worker.attempt("sandbox.host", request, &mut |event| context.event(event)) {
+                Ok(outcome) => outcome,
+                Err(Unreached(refusal)) => {
+                    *unreached = Some(Unreached(refusal.clone()));
+                    Err(refusal)
+                }
+            }
         }
     }
 }
@@ -693,7 +741,21 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
         "status" => "backend.daemon.workspace.status",
         _ => return Err(refused("InvalidInput", format!("no call workspace.{call}"))),
     };
-    let out = on_machine(context, &machine, &record, op, more)?;
+    // a status starts no machine (P4)
+    let out = match call {
+        "status" => reach(context, &machine, &record, op, more, Start::Never).unwrap_or_else(
+            |Unreached(why)| {
+                Err(refused(
+                    "Unavailable",
+                    format!(
+                        "{}; workspace.status starts no machine (`machine start {machine}` starts it)",
+                        why.message
+                    ),
+                ))
+            },
+        ),
+        _ => on_machine(context, &machine, &record, op, more),
+    }?;
     if call == "exec" {
         // the command's output as events too, for front ends that stream
         for stream in ["stdout", "stderr"] {

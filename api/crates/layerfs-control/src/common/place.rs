@@ -100,30 +100,47 @@ impl Worker {
         request: SdkValue,
         events: &mut dyn FnMut(SdkValue),
     ) -> Outcome {
-        let request = worker::request(op, request)?;
+        self.attempt(op, request, events)
+            .unwrap_or_else(|Unreached(refusal)| Err(refusal))
+    }
+
+    /// [`Worker::call`], answering [`Unreached`] when the request was not
+    /// sent: for a [`Start::Never`] caller, a machine whose worker is not
+    /// recorded or does not answer, which it may report as down (P4).
+    pub(crate) fn attempt(
+        &mut self,
+        op: &str,
+        request: SdkValue,
+        events: &mut dyn FnMut(SdkValue),
+    ) -> std::result::Result<Outcome, Unreached> {
+        let request = match worker::request(op, request) {
+            Ok(request) => request,
+            Err(refusal) => return Ok(Err(refusal)),
+        };
         let send = |endpoint: &Endpoint, events: &mut dyn FnMut(SdkValue)| {
             worker::send(endpoint, op, &request, events, None)
         };
         if let Some(endpoint) = &self.endpoint {
-            return send(endpoint, events).unwrap_or_else(|Unreached(refusal)| Err(refusal));
+            return send(endpoint, events);
         }
         let tried = recorded(&self.home, &self.machine);
         let not_sent = match &tried {
             Ok(endpoint) => match send(endpoint, events) {
                 Ok(outcome) => {
                     self.endpoint = tried.ok();
-                    return outcome;
+                    return Ok(outcome);
                 }
-                Err(Unreached(refusal)) => refusal,
+                Err(unreached) => unreached,
             },
-            Err(refusal) => refusal.clone(),
+            Err(refusal) => Unreached(refusal.clone()),
         };
         if self.start == Start::Never {
             return Err(not_sent);
         }
-        let endpoint = started_after(&self.home, &self.machine, tried.ok().as_ref())?;
+        let endpoint =
+            started_after(&self.home, &self.machine, tried.ok().as_ref()).map_err(Unreached)?;
         let endpoint = self.endpoint.insert(endpoint);
-        send(endpoint, events).unwrap_or_else(|Unreached(refusal)| Err(refusal))
+        send(endpoint, events)
     }
 }
 

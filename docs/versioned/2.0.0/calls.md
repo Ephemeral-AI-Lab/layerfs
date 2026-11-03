@@ -186,6 +186,9 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 - `list` and `get` page: `list` its Sandboxes, `get` the Sandbox's
   `workspaces` (`page_size` 1 to 1000, default 50; `page_pos`), with
   `next_page_pos`, `null` after the last page.
+- `list` and `get` start no machine (#535 P4). `get` on a Sandbox whose
+  machine is down answers its record with `workspaces: []` and
+  `down_reason`, the reason its worker was not reached.
 - `close` without `force` is `MountsActive` while a Workspace is mounted.
   With `force` (O31) it stops the Sandbox through its backend anyway and
   answers `{kind: "Closed", sandbox, unknown}`: `unknown` lists the
@@ -229,6 +232,9 @@ A Workspace is `<sandbox>:<path>`, answered as `ws` by `mount`.
   publishes over a moved head instead.
 - `unmount` with `discard` drops uncommitted changes; `force` aborts its
   connection.
+- `status` starts no machine (#535 P4): on a Sandbox whose machine is down
+  it is `Unavailable`, naming `machine start`. `mount`, `exec`, `commit`
+  and `unmount` start a stopped machine, as Store calls do.
 - Not run for this manual.
 
 ### `machine` (9)

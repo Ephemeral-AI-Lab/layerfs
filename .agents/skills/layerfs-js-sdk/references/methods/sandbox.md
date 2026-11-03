@@ -102,6 +102,11 @@ the part after `:` in `ws`), `head_moved_since_mount`, `dirty`
 (`{ inodes, entries }` or `null`), `pending_merge` and `revision`. Not
 checked live.
 
+`sandbox.list` and `sandbox.get` never start a machine (#535 P4). When the
+Sandbox's machine is down, `get` answers its record with `workspaces: []` and
+`down_reason` (why its worker was not reached); `machine.start(machine)`
+starts it.
+
 `activity` is `Idle` when nothing runs in the Workspace; `Busy` while a Commit
 or mount runs; `Closing`, `Uncertain` or `Failed` need a look before you
 unmount.
