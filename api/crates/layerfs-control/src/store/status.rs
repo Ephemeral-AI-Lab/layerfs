@@ -3,20 +3,17 @@ use super::family::{fields_map, of_store, record_of, step};
 use crate::common::home::lease;
 use crate::common::outcome::Outcome;
 use crate::common::place;
-use crate::store::record;
 use crate::store::record::StoreRef;
 use layerfs_bridge::control::SdkValue;
 use std::path::Path;
 
 /// `store.status`: who holds it, the operation its record holds (`op`, as
 /// H6 shows it), its size. It starts no machine: a Store whose machine is
-/// not running is `down`, with the reason (O34).
+/// not running is `down`, with the reason (O34). It changes nothing (#536
+/// §12 item 3): no lock, and a stale lease is ignored, not removed.
 pub(super) fn status(home: &Path, name: &str) -> Outcome {
     let record = record_of(home, name)?;
-    let holders = {
-        let _store = record::lock(home, name)?;
-        lease::holders(home, name)?
-    };
+    let (holders, _) = lease::read_holders(home, name)?;
     let mut down = None;
     let mut more = Vec::new();
     let store_ref = record.store_ref()?;

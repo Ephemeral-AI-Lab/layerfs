@@ -181,14 +181,7 @@ fn replaceable(home: &Path, store: &str, bucket: &str, record: &StoreRecord) -> 
     let destination = paths::store_file(home, store);
     // this process's own open copy closes first
     crate::store::open::close(&destination)?;
-    let holders = lease::holders(home, store)?;
-    if !holders.is_empty() {
-        return Err(refused(
-            "InUse",
-            format!("Store {store} is open in process {holders:?}"),
-        ));
-    }
-    crate::inventory::can_retire_store(home, store)?;
+    crate::inventory::store_idle(home, store)?;
     let linked = record.link(bucket).and_then(|link| link.heads());
     let now = remote::heads(&destination).ok().map(|h| pieces::hex(&h));
     if linked.is_none() || now != linked {

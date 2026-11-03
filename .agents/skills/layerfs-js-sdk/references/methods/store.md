@@ -44,7 +44,8 @@ makes its Stores `down`. `store.get(name)` is one record (no `state`):
  "file":{"exists":true,"bytes":212992,"wal_bytes":799312}}
 ```
 
-`holders` are processes holding the Store open; `op` names a push, pull or remove
+`holders` are live processes holding the Store open (a dead process's
+stale lease is left out, not removed: reads change nothing); `op` names a push, pull or remove
 under way (`{ id, name, phase, started, uncertain }`; `get` and `list` items
 show it too). For a PostgreSQL Store a `server`
 field carries the server's status instead of `file` (not run here).
@@ -62,7 +63,7 @@ machine is stopped, or whose worker does not answer, is `state: "down"` with
 | `push(name, machine, …)` | Sends a sqlite Store's file from `native` to `machine` | `InvalidInput` unless the Store is on `native` (pull it first). Progress `{ phase, done, total }` on `on_progress` / `--progress`: `done` and `total` are bytes during `send`, null in the other phases (`check`, `snapshot`, `verify`, `install`, `record`, `retire`). `InUse` while the Store is held (Sandbox records, processes with it open; `detail.related` lists them as `{ kind, name }`); `Capacity` when the target has less free disk than the Store plus a headroom of 1 GiB (or a tenth of the Store), checked before anything changes; `Unavailable` naming `layerfs machine start <m>` for a stopped machine; while it runs, Store calls and operations on it are `Busy`, from the caller's process too. An uncertain push whose process is gone leaves every later call `Unresolved`, naming `store status` and `store remove` |
 | `pull(name, …)` | Brings a sqlite Store's file from its machine to `native` | `InvalidInput` when it is already on `native`; otherwise as `push`. Between two machines: `pull`, then `push` |
 | `remove(name)` | Deletes a sqlite Store with every project in it | Returns `{ removed }`. `NotFound` for an unknown name (live); `Unavailable` for a Store whose machine is unknown; `Busy` while a live process pushes, pulls or removes it. It clears an `Unresolved` Store. Backups stay |
-| `disconnect(name)` | Forgets a PostgreSQL Store; its data stays | `InUse` while another process holds the Store (its calls hold it while it stays open) or a Sandbox of it runs |
+| `disconnect(name)` | Forgets a PostgreSQL Store; its data stays | `InUse` while another process holds the Store (its calls hold it while it stays open) or a Sandbox of it runs; `detail.related` lists them as `{ kind: "lease", name: <pid> }` and `{ kind: "sandbox", name }` |
 
 Pushing or pulling a Store moves where its Sandboxes can run: a Sandbox of a sqlite Store
 runs only on the Store's machine.

@@ -185,7 +185,7 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         "project.stage" => crate::project::staged::run(root, &args),
         // adds a folder copy the caller sent as a new project of a Store
         // under this worker's root (#536 H11, H11a)
-        "project.init" => crate::project::init::in_worker(&with_home(args, root), events),
+        "project.init" => crate::project::init::in_worker(&with_home(args, root)),
         _ => Err(refused(
             "InvalidInput",
             format!("the worker has no operation {op}"),

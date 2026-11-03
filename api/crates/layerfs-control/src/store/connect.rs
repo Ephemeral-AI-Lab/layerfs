@@ -4,7 +4,6 @@
 //! and the password as a reference (`env:NAME` or `file:/path`), resolved on
 //! each call; the full URL is never written down.
 use crate::common::context::Context;
-use crate::common::home::lease;
 use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused, Outcome};
 use crate::common::secrets::{parts, resolve, url};
@@ -274,16 +273,9 @@ fn disconnect(home: &Path, name: &str) -> Outcome {
             format!("Store {name} is a sqlite Store; `store remove` deletes it"),
         ));
     }
-    let holders = lease::holders(home, name)?;
-    if !holders.is_empty() {
-        return Err(refused(
-            "InUse",
-            format!("Store {name} is open in process {holders:?}"),
-        ));
-    }
-    // a Sandbox's daemon dials the server from its machine, which holds no
-    // lease in this home (#535 §7.4)
-    crate::inventory::can_retire_store(home, name)?;
+    // leases, and Sandboxes: a Sandbox's daemon dials the server from its
+    // machine, which holds no lease in this home (#535 §7.4)
+    crate::inventory::store_idle(home, name)?;
     crate::store::open::close(&record.postgresql_key(home, name))?;
     std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
     Ok(SdkValue::map([("disconnected", SdkValue::text(name))]))

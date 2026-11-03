@@ -4,7 +4,7 @@
 //! The schema's URL is the call's (`postgresql: { url, schema,
 //! synchronousCommit }`) and is never stored.
 use crate::common::outcome::{refused, Outcome};
-use crate::sandbox::registry::{lock, random, text, INITS};
+use crate::sandbox::registry::{random, text};
 use crate::store::identity::{self as stores, Identity};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::sdk_values::hex;
@@ -70,13 +70,7 @@ pub(crate) fn add_project(args: &SdkValue) -> Outcome {
     }
     let deadline = crate::project::init::deadline(args)?;
     let counters = Arc::new(layerfs_project::InitCounters::new());
-    let key = stores::init_key(args, name);
-    lock(&INITS)?.insert(key.clone(), Arc::clone(&counters));
-    let added = run(args, &identity, name, deadline, counters);
-    if let Ok(mut inits) = INITS.lock() {
-        inits.remove(&key);
-    }
-    let (added, stack) = added?;
+    let (added, stack) = run(args, &identity, name, deadline, counters)?;
     let added = added.map_err(|failure| stores::add_failure(failure.error, None, name, store))?;
     Ok(SdkValue::map([
         (

@@ -46,9 +46,6 @@ pub(crate) struct SandboxState {
     pub(crate) mounts: Mutex<BTreeMap<String, Mount>>,
 }
 
-/// The live counts of each Init still running, by project name.
-pub(crate) static INITS: LazyLock<Mutex<BTreeMap<String, Arc<crate::InitCounters>>>> =
-    LazyLock::new(Default::default);
 /// This process's live Sandboxes, by their folder.
 pub(crate) static SANDBOXES: LazyLock<Mutex<BTreeMap<std::path::PathBuf, Arc<SandboxState>>>> =
     LazyLock::new(Default::default);

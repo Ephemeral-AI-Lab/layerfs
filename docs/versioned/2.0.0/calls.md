@@ -94,7 +94,8 @@ Sandbox names (H §7.6).
   FIFO or device file, is refused before anything is sent. Run: answers
   `project`, `store`, `name`, `kind`, `machine`, `created`, `layer` and
   `root`.
-- `remove` is refused while a Sandbox of the project runs, and is
+- `remove` is refused `InUse` while a Sandbox of the project is recorded
+  (`detail.related` lists each as `{kind: "sandbox", name}`), and is
   `Unsupported` for a PostgreSQL Store.
 
 ### `branch` (6)
@@ -363,7 +364,9 @@ $ layerfs store status shop
 move or remove running on the Store, `{id, name, phase, started,
 uncertain}`, or `null`. `store status` starts no
 machine: a Store whose machine is stopped, or whose recorded worker does
-not answer, is `down`, with `down_reason` and `file.unavailable` (O34). See
+not answer, is `down`, with `down_reason` and `file.unavailable` (O34).
+`store status`, `store list` and `store get` change nothing: they take no
+lock, and `holders` leaves out a stale lease without removing it. See
 [Stores](machines-and-stores.md#stores).
 
 Each `store list` item is the Store's record (as `store get` shows it) with
@@ -498,11 +501,13 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 `--option=value` works for every option. `machine create … --nested` alone
 is true; `--nested=false` is false.
 
-`project init --progress` printed no lines for a small folder in the run
-for this manual; `store push` and `store pull` report their phases
-(`check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire`) as
-`{"progress": {"phase", "done", "total"}}`: `done` and `total` are bytes
-during `send` and null in the other phases.
+`store push` and `store pull` report their phases (`check`, `snapshot`,
+`send`, `verify`, `install`, `record`, `retire`) as `{"progress": {"phase",
+"done", "total"}}`: `done` and `total` are bytes during `send` and null in
+the other phases. `project init` reports the same shape on every route:
+`check`, `send` (only into a sqlite Store on another machine, while the
+folder is copied), `install` (Init adds the folder) and `record` (from
+source and tests; the run for this manual predates it).
 
 ## Folder scope
 
