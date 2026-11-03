@@ -7,3 +7,4 @@ mod v2;
 mod volume;
 
 pub use open::{note_failure, open, open_from};
+pub(crate) use v2::blockers as layout_2_blockers;

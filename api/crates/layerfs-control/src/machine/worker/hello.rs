@@ -64,37 +64,38 @@ impl Hello {
         ])
     }
 
-    /// Why this worker is not one this build may send calls to, if it is
-    /// not: another protocol (or none), or a bundle other than the one this
+    /// What this build expects of a worker, when it differs from this
+    /// one: another protocol (or none), or a bundle other than the one this
     /// build deploys. A worker run from no sealed bundle is checked by its
-    /// protocol alone. `Unavailable`, its `detail` naming both sides
-    /// (`worker`, `expected`); nothing was sent.
-    pub fn mismatch(&self, address: &str) -> Option<SdkRefusal> {
-        let deployed = if self.bundle.is_some() {
-            deployed()
-        } else {
-            None
-        };
-        let expected = Self {
-            protocol: Some(PROTOCOL),
-            bundle: deployed.clone(),
-        };
+    /// protocol alone.
+    pub fn expected(&self) -> Option<Self> {
+        let deployed = self.bundle.as_ref().and_then(|_| deployed());
         let same_protocol = self.protocol == Some(PROTOCOL);
         let same_bundle = self.bundle.is_none() || self.bundle == deployed;
-        if same_protocol && same_bundle {
-            return None;
-        }
-        let show = |hello: &Self| {
-            let protocol = hello.protocol.map_or("none".to_owned(), |p| p.to_string());
-            let bundle = hello.bundle.as_deref().unwrap_or("none");
-            format!("protocol {protocol}, bundle {bundle}")
-        };
+        (!(same_protocol && same_bundle)).then_some(Self {
+            protocol: Some(PROTOCOL),
+            bundle: deployed,
+        })
+    }
+
+    /// `protocol <p>, bundle <hash>` (`none` for either it lacks).
+    pub fn describe(&self) -> String {
+        let protocol = self.protocol.map_or("none".to_owned(), |p| p.to_string());
+        let bundle = self.bundle.as_deref().unwrap_or("none");
+        format!("protocol {protocol}, bundle {bundle}")
+    }
+
+    /// Why this worker is not one this build may send calls to, if it is
+    /// not ([`Hello::expected`]): `Unavailable`, its `detail` naming both
+    /// sides (`worker`, `expected`); nothing was sent.
+    pub fn mismatch(&self, address: &str) -> Option<SdkRefusal> {
+        let expected = self.expected()?;
         let mut refusal = refused(
             "Unavailable",
             format!(
                 "the worker at {address} is of another build ({}; this build: {}); nothing was sent",
-                show(self),
-                show(&expected)
+                self.describe(),
+                expected.describe()
             ),
         );
         refusal.detail =
