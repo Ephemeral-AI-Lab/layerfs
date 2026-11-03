@@ -192,11 +192,15 @@ fn file_family() {
 
 #[test]
 fn sandbox_family() {
-    assert!(code(
+    assert!(
+        code("sandbox.create", map(&[("project", t("shop/api"))])).contains("`name` is required")
+    );
+    // `machine` is optional (#536 §10): the create reaches the library
+    let reached = code(
         "sandbox.create",
-        map(&[("project", t("shop/api")), ("name", t("tests"))])
-    )
-    .contains("`machine` is required"));
+        map(&[("project", t("shop/api")), ("name", t("tests"))]),
+    );
+    assert!(!reached.contains("`machine`"), "{reached}");
     let reached = code(
         "sandbox.close",
         map(&[("name", t("tests")), ("force", SdkValue::Bool(true))]),

@@ -174,7 +174,7 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `create` | `project`, `name`, `machine` | `image` | starts a named Sandbox of a project on a machine |
+| `create` | `project`, `name`, `machine` (optional) | `image` | starts a named Sandbox of a project on a machine; with none, its sqlite Store's machine, or `native` for a PostgreSQL Store |
 | `list` | `[project]` | `page_size`, `page_pos` | every Sandbox in the home, or one project's |
 | `get` | `name` | `page_size`, `page_pos` | a Sandbox and its Workspaces |
 | `close` | `name` | `force` | stops a Sandbox |

@@ -12,12 +12,13 @@ use crate::store::record::StoreRef;
 use crate::store::resolve;
 use layerfs_bridge::control::SdkValue;
 
-/// `sandbox.create(project, name, machine, { image })`.
+/// `sandbox.create(project, name, machine?, { image })`: with no `machine`,
+/// a sqlite Store's machine, or `native` for a PostgreSQL Store (#536 §10).
 pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let project = args.get_text("project").unwrap_or("");
     let name = args.get_text("name").unwrap_or("");
-    let machine = args.get_text("machine").unwrap_or("");
+    let named = args.get_text("machine").filter(|m| !m.is_empty());
     crate::common::names::SandboxName::parse(name)?;
     if matches!(name, "native" | "docker") {
         return Err(refused(
@@ -30,6 +31,12 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let _lock = home::lock::take(&home)?;
     let target = resolve::target(&home, project)?;
     target.record.unblocked()?;
+    let machine = match (named, &target.store_ref) {
+        (Some(machine), _) => machine.to_owned(),
+        (None, StoreRef::Sqlite { .. }) => target.store_ref.machine()?.to_owned(),
+        (None, _) => "native".to_owned(),
+    };
+    let machine = machine.as_str();
     // refused too while the machine is being removed
     #[cfg(feature = "machine")]
     {

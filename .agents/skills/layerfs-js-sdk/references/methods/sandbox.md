@@ -7,7 +7,7 @@
 > (`{"items":[]}`, seen live).
 
 ```js
-sandbox.create(project, name, machine, { image })
+sandbox.create(project, name, machine?, { image })
 sandbox.list(project?, { page_size, page_pos })
 sandbox.get(name, { page_size, page_pos })
 sandbox.close(name, { force })
@@ -42,7 +42,10 @@ layerfs sandbox create shop/api build-1 native
 
 ## `sandbox.create`
 
-`sandbox.create(project, name, machine, { image })`
+`sandbox.create(project, name, machine?, { image })`
+
+With no `machine`, the Sandbox runs on its sqlite Store's machine, or on
+`native` for a PostgreSQL Store.
 
 Starts a Sandbox, binds it to the project and returns its record when it is
 ready.

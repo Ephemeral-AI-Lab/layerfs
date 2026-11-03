@@ -437,3 +437,68 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
         std::panic::resume_unwind(panic);
     }
 }
+
+/// With no machine named, `sandbox.create` runs where the Store's calls
+/// run (#536 §10): a sqlite Store's machine (here a stopped lima machine,
+/// so the create is refused naming its start), and `native` for a
+/// PostgreSQL Store (refused here by the reach check, which runs there).
+#[test]
+fn a_sandbox_with_no_machine_runs_on_its_store_s() {
+    let home = tempdir("default");
+    home::open(&home).unwrap();
+    home::write_record(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([("name", t("box")), ("platform", t("lima"))]),
+    )
+    .unwrap();
+    home::write_record(
+        &paths::store_record(&home, "shop"),
+        &SdkValue::map([
+            ("name", t("shop")),
+            ("kind", t("sqlite")),
+            ("machine", t("box")),
+        ]),
+    )
+    .unwrap();
+    home::write_record(
+        &paths::project_record(&home, "shop", "api"),
+        &SdkValue::map([("name", t("api"))]),
+    )
+    .unwrap();
+    let (code, message) = call(
+        &home,
+        "sandbox.create",
+        &[("project", t("shop/api")), ("name", t("t1"))],
+    )
+    .unwrap_err();
+    assert_eq!(code, "Unavailable", "{message}");
+    assert!(message.contains("layerfs machine start box"), "{message}");
+    assert!(
+        !paths::sandbox_dir(&home, "t1").exists(),
+        "a refused create leaves no claim"
+    );
+
+    home::write_record(
+        &paths::store_record(&home, "pg"),
+        &SdkValue::map([
+            ("name", t("pg")),
+            ("kind", t("postgresql")),
+            ("url", t("postgres://u@127.0.0.1:1/db")),
+        ]),
+    )
+    .unwrap();
+    home::write_record(
+        &paths::project_record(&home, "pg", "app"),
+        &SdkValue::map([("name", t("app"))]),
+    )
+    .unwrap();
+    let refused = call(
+        &home,
+        "sandbox.create",
+        &[("project", t("pg/app")), ("name", t("t2"))],
+    )
+    .unwrap_err();
+    assert_ne!(refused.0, "NotFound", "{refused:?}");
+    assert!(!refused.1.contains("machine start"), "{refused:?}");
+    let _ = std::fs::remove_dir_all(home);
+}

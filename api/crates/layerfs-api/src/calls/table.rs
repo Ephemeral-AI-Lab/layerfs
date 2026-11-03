@@ -402,9 +402,9 @@ pub static CALLS: &[Call] = &[
     call(
         "sandbox",
         "create",
-        &[a("project", Project), a("name", Name), a("machine", Name)],
+        &[a("project", Project), a("name", Name), opt("machine", Name)],
         &[opt("image", Text)],
-        "start a named Sandbox of a project on a machine",
+        "start a named Sandbox of a project on a machine (default: its sqlite Store's, or native)",
     ),
     call(
         "sandbox",

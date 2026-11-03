@@ -83,7 +83,7 @@ reach a Workspace's uncommitted state, such as conflict markers.
   `tests:/workspaces/1`. Pass that `ws` string to `exec`, `commit`, `unmount`
   and `status`.
 - **You name the Sandbox.** A Sandbox is created once with
-  `sandbox.create(project, name, machine)`, holds up to 16 Workspaces, and runs
+  `sandbox.create(project, name, machine?)`, holds up to 16 Workspaces, and runs
   on the machine that holds the project's Store. `workspace.mount(sandbox,
   branch)` never starts one. See [sandbox](references/methods/sandbox.md).
 - **Inside a command, use relative paths.** `exec` starts in the Workspace
@@ -294,7 +294,7 @@ and examples.
 | [branch](references/methods/branch.md) | `list(project)`, `get(project, branch)`, `fork(project, name, from_branch, from_commit?)`, `merge(project, name, a, b, { message, units })`, `publish(project, branch, commit?)`, `diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor })` |
 | [commit](references/methods/commit.md) | `list(project, branch)`, `get(project, branch, commit)`, `diff(project, from_commit, to_commit, { paths_only, … })` |
 | [file](references/methods/file.md) | reads `read`, `stat`, `list`, `glob`, `grep`, `blame`, `diff`; writes `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |
-| [sandbox](references/methods/sandbox.md) | `create(project, name, machine, { image })`, `list(project?, { page_size, page_pos })`, `get(name, { page_size, page_pos })`, `close(name, { force })` |
+| [sandbox](references/methods/sandbox.md) | `create(project, name, machine?, { image })`, `list(project?, { page_size, page_pos })`, `get(name, { page_size, page_pos })`, `close(name, { force })` |
 | [workspace](references/methods/workspace.md) | `mount(sandbox, branch, { name })`, `exec(ws, command, { message, stream, stdout, stderr })`, `commit(ws, { message, force })`, `unmount(ws, { discard, force })`, `status(ws)` |
 | [machine](references/methods/machine.md) | `list`, `platforms`, `get`, `status`, `start`, `stop`, `create`, `connect`, `remove`, `disconnect`, `update` |
 | [store](references/methods/store.md) | `list`, `get`, `status`, `create`, `connect`, `push`, `pull`, `remove`, `disconnect` |
@@ -327,7 +327,7 @@ next one.
 | `branch.fork(name, fromRef?)` | `branch.fork(project, name, from_branch, from_commit?)` |
 | `branch.merge(a, b, name)` | `branch.merge(project, name, a, b)` |
 | `branch.list_commits`, `diff_commits`, `diff_branches` | `commit.list`, `commit.diff`, `branch.diff` |
-| `sandbox.create()` → a number | `sandbox.create(project, name, machine)` |
+| `sandbox.create()` → a number | `sandbox.create(project, name, machine?)` |
 | `project.list_sandboxes()`, `sandbox.list_workspaces(n)` | `sandbox.list(project?)`, `sandbox.get(name)` |
 | `{ sandbox, path }` Workspace object | `ws` string `<sandbox>:<path>` |
 | positional `message`, `force`, `discard` | options `{ message }`, `{ force }`, `{ discard }` |
