@@ -9,7 +9,7 @@
 //! `runtime.sandbox.reclaim`.
 use crate::job::{failed, Outcome};
 use crate::registry::{
-    lock, naming, random, sandbox, sandbox_live, sandbox_refreshed, text, Mount,
+    lock, naming, random, sandbox, sandbox_live, sandbox_refreshed, text, Mount, SandboxState,
 };
 use crate::sandbox::{operation, WORKSPACES};
 use layerfs_api::internal::workspace;
@@ -249,8 +249,25 @@ pub(crate) fn commit(args: &SdkValue) -> Outcome {
     values::commit(&reply)
 }
 
+/// A `Busy` refusal naming the processes that still run in the Workspace.
+fn busy(state: &SandboxState, path: &str, processes: Vec<String>) -> SdkRefusal {
+    SdkRefusal {
+        code: "Busy".to_owned(),
+        message: format!(
+            "{}:{path} is busy: {} still running",
+            state.id,
+            processes.join(", ")
+        ),
+        detail: SdkValue::map([(
+            "processes",
+            SdkValue::List(processes.into_iter().map(SdkValue::Text).collect()),
+        )]),
+    }
+}
+
 /// `workspace.unmount(ws, { discard?, force? })`: `Busy` while a background
-/// process this binding started still runs there, then the daemon's answer.
+/// process this binding started, or a foreground exec, still runs there, then
+/// the daemon's answer.
 pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     let state = sandbox_refreshed(args)?;
     let _guard = crate::discovery::guard(&state.directory)?;
@@ -260,32 +277,54 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     // still answers Busy for any other holder.
     let running = crate::exec::running_in(&state, path)?;
     if !running.is_empty() {
-        return Err(SdkRefusal {
-            code: "Busy".to_owned(),
-            message: format!(
-                "{}:{path} is busy: {} still running",
-                state.id,
-                running.join(", ")
-            ),
-            detail: SdkValue::map([(
-                "processes",
-                SdkValue::List(running.into_iter().map(SdkValue::Text).collect()),
-            )]),
-        });
+        return Err(busy(&state, path, running));
+    }
+    let force = args.get_bool("force");
+    if force {
+        // A foreground exec that is still running owns this Workspace. Forcing
+        // now would detach it as Retained(Detach); make the caller cancel the
+        // listed ids and unmount normally instead. A scan that fails leaves
+        // the recovery path (force) as it was.
+        if let Ok(records) = crate::exec::foreground_in(&state, path) {
+            let ids = records
+                .into_iter()
+                .map(|record| record.id)
+                .collect::<Vec<_>>();
+            if !ids.is_empty() {
+                return Err(busy(&state, path, ids));
+            }
+        }
     }
     let value = {
         let mut control = crate::trace::control(&state.controls)?;
         let mut api = workspace(&mut control);
         // Forced: one abort write ends the connection, also after a normal
         // unmount stalled at Join; uncommitted changes are dropped.
-        if args.get_bool("force") {
+        if force {
             match api.unmount(token, true).map_err(operation)? {
                 Some(outcome) => values::force_unmounted(&outcome),
                 None => values::unmounted(&Unmounted::Closed)?,
             }
         } else {
             let discard = args.get_bool("discard");
-            values::unmounted(&api.unmount_checked(token, discard).map_err(operation)?)?
+            match api.unmount_checked(token, discard).map_err(operation) {
+                Ok(unmounted) => values::unmounted(&unmounted)?,
+                // The daemon saw a holder the runtime owner may know as a
+                // foreground exec: name its id so the caller can cancel it.
+                Err(refusal) if refusal.code == "Busy" => {
+                    match crate::exec::foreground_in(&state, path) {
+                        Ok(records) if !records.is_empty() => {
+                            return Err(busy(
+                                &state,
+                                path,
+                                records.into_iter().map(|record| record.id).collect(),
+                            ))
+                        }
+                        _ => return Err(refusal),
+                    }
+                }
+                Err(refusal) => return Err(refusal),
+            }
         }
     };
     std::fs::remove_file(crate::discovery::workspace_file(&state, token)).map_err(failed)?;

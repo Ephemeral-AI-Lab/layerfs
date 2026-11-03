@@ -187,6 +187,19 @@ Workspaces, with a message that says to create a new Sandbox with
 delete, each once), refused `MountsActive` while a Workspace is mounted in it
 and `NoSuchSandbox` when it is not running. A Sandbox still closes itself two
 minutes after its last Workspace is unmounted, with no call in flight.
+
+Every foreground `workspace.exec` records itself before it runs: a private
+`/tmp/layerfs-exec-<id>.record` in its Sandbox naming the Workspace, its pid
+and that pid's start time, removed when the command ends. While such a record
+names a live process, `workspace.unmount` reports its id in
+`detail.processes`: a normal unmount when the daemon refuses `Busy`, and a
+forced unmount before it does anything. `backend.daemon.process.cancel(id)`
+finds a foreground exec by that record, also from a client that did not start
+it, and signals its process group. `workspace.unmount(ws, kill: "workspace")`
+cancels every foreground record and background process the target Workspace
+still holds, waits for each to stop, then retries a normal daemon unmount; it
+never stops or deletes the Sandbox and never touches another Workspace. The
+image must provide util-linux `setsid --wait` (Debian 12 has it).
 `project.list_sandboxes(pageSize, pagePos)` lists the running ones, each
 `{ sandbox, name, image, workspaces }`, reading records and starting and
 changing nothing; `sandbox.list_workspaces(sandbox, pageSize, pagePos)` asks

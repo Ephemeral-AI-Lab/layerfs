@@ -37,7 +37,10 @@ await backend.daemon.sandbox.get_log("1", { lines: 200 }); // { sandbox, contain
 Backend names (`backend.*`) are refused by the agent's public call and by
 public native, Rust and daemon dispatch; they use the binding's backend table.
 Background processes run through the Sandbox's ordinary command launcher; the
-daemon supervises no command. The names before #428 (`operator.*`) map to
+daemon supervises no command. `process.cancel` also accepts a foreground
+exec's id: the exec's `/tmp/layerfs-exec-<id>.record` names its process group,
+so a second client can stop an orphan left by a first client that exited
+before its unmount. The names before #428 (`operator.*`) map to
 these through `RENAMED_METHODS` in `@layerfs/agent`, for old traces.
 
 ## Comparing a Layer

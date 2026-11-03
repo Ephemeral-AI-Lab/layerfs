@@ -136,6 +136,9 @@ Runs one shell command in a mounted Workspace and waits for it to end.
   the end, so your script doesn't hold it all.
 - Files the command writes are in the Workspace and get committed; keep scratch files
   in `/tmp`.
+- A foreground run leaves `/tmp/layerfs-exec-<id>.record` in its Sandbox until it ends;
+  `backend.daemon.process.cancel(id)` uses it, also from another client. The image must
+  provide util-linux `setsid --wait` (Debian 12 has it).
 
 **Run a check and report its output**
 
@@ -282,7 +285,7 @@ Unmounts a Workspace. A Sandbox left with no Workspace closes itself two minutes
 | --- | --- |
 | `ws` | The Workspace from `mount` |
 | `discard` | `true` to drop uncommitted changes instead of refusing |
-| `force` | `true` to abort the Workspace's kernel connection instead; drops uncommitted changes. A normal unmount that stalls at `Join` ends itself with one abort write, use `force` for a live connection with a usable abort control, not to replay an attempted abort |
+| `force` | `true` to abort the Workspace's kernel connection instead; drops uncommitted changes. A normal unmount that stalls at `Join` ends itself with one abort write, use `force` for a live connection with a usable abort control, not to replay an attempted abort. While a foreground exec's record names a live process, `force` is refused `Busy`: cancel its id and unmount normally, so it cannot create a new `Retained(Detach)` |
 
 **Returns:** `{ kind: "Unmounted" }`, or with `force`
 `{ kind: "ForceUnmounted", abort, detach, cleanup }`.
@@ -292,13 +295,22 @@ Unmounts a Workspace. A Sandbox left with no Workspace closes itself two minutes
 | Code | Meaning | Do |
 | --- | --- | --- |
 | `Dirty` | Uncommitted changes; `detail.changed` lists paths | Commit them, so the step is recorded; discard only a Workspace you're abandoning |
-| `Busy` | A background process still runs there | Stop it (`backend.daemon.process.cancel`, in the observe skill), or wait for it |
+| `Busy` | A background process this binding started, or a foreground exec, still runs there; `detail.processes` lists the ids | Cancel each (`backend.daemon.process.cancel`, in the observe skill), then unmount normally; a Workspace the daemon keeps `Retained(Detach)` is recovered with `sandbox.close(sandbox, true)` |
 | `NotMounted` | Already unmounted, or the wrong Workspace | Use the Workspace from `mount` |
 | `Failed` with `TeardownCustody { stage: Join` in the message | The mount is gone but its drain did not finish; the custody records whether an abort was attempted. Later unmounts retain that custody | Preserve the custody; do not retry an attempted abort. Replace the Sandbox if its connection cannot be ended |
 | `Failed` with `TeardownCustody { stage: Abort` in the message | The one abort write failed or returned a short count; the original cause and abort facts are retained | Preserve the custody and replace the Sandbox; neither normal nor forced unmount repeats the abort |
 
 ```js
 // ws: from workspace.mount. Every mount creates a new Workspace; never hard-code one.
+await layerfs.workspace.unmount(ws);
+```
+
+After a `Busy` refusal, cancel every id in `detail.processes` — including a
+foreground exec another client started — and unmount again:
+
+```js
+// busy: the Busy refusal; ws: its Workspace
+for (const id of busy.detail.processes) await backend.daemon.process.cancel(id);
 await layerfs.workspace.unmount(ws);
 ```
 
