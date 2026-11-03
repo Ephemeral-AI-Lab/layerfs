@@ -9,6 +9,8 @@ pub(crate) mod files;
 pub(crate) mod launch;
 #[doc(hidden)]
 pub mod output;
+#[doc(hidden)]
+pub mod record;
 pub(crate) mod registry;
 pub(crate) mod runtime;
 pub(crate) mod serve;

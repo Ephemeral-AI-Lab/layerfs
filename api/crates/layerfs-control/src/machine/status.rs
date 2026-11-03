@@ -1,8 +1,9 @@
 //! `machine.status` and the home id the machine specs use.
-use super::spec::{self as record, machine_of, refusal, stores_on};
+use super::spec::{self as record, machine_of, refusal};
 use crate::common::context::Context;
 use crate::common::home::{self};
 use crate::common::outcome::Outcome;
+use crate::inventory::stores_on;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_machine as adapters;
 use std::path::Path;
@@ -19,7 +20,7 @@ pub fn status(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = &context.home;
     let name = args.get_text("name").unwrap_or("");
     let record = machine_of(home, name)?;
-    let spec = record::spec(home, &home_id(home)?, name, &record)?;
+    let spec = record::spec(home, &home_id(home)?, &record)?;
     let status = adapters::status(&spec).map_err(refusal)?;
     Ok(SdkValue::map([
         ("name", SdkValue::text(name)),

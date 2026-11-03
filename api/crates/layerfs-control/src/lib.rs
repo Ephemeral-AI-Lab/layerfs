@@ -11,6 +11,8 @@ pub mod backup;
 pub mod common;
 pub mod daemon;
 #[doc(hidden)]
+pub mod inventory;
+#[doc(hidden)]
 pub mod machine;
 pub mod project;
 pub mod sandbox;

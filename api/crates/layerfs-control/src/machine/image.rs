@@ -6,10 +6,10 @@
 //! another bundle's image is loaded again. A load is one attempt.
 use super::spec::{self as record, machine_of, refusal};
 use super::status::home_id;
-use crate::common::home::{lock, with_field};
+use crate::common::home::lock;
 use crate::common::outcome::refused;
 use crate::sandbox::deploy::IMAGE_ARCHIVE;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::SdkRefusal;
 use layerfs_machine as adapters;
 use std::path::Path;
 
@@ -19,11 +19,9 @@ use std::path::Path;
 pub(crate) fn docker_default(home: &Path) -> Result<String, SdkRefusal> {
     let bundle = super::bundle::bundle()?;
     let record = machine_of(home, "docker")?;
-    if let Some(loaded) = record.get("loaded_image") {
-        if let (Some(id), Some(of)) = (loaded.get_text("id"), loaded.get_text("bundle")) {
-            if of == bundle.hash {
-                return Ok(id.to_owned());
-            }
+    if let Some((id, of)) = record.loaded_image() {
+        if of == bundle.hash {
+            return Ok(id.to_owned());
         }
     }
     let archive = bundle.dir.join(IMAGE_ARCHIVE);
@@ -38,15 +36,11 @@ pub(crate) fn docker_default(home: &Path) -> Result<String, SdkRefusal> {
             ),
         ));
     }
-    let spec = record::spec(home, &home_id(home)?, "docker", &record)?;
+    let spec = record::spec(home, &home_id(home)?, &record)?;
     let id = adapters::load_image(&spec, &archive).map_err(refusal)?;
     let _lock = lock::take(home)?;
     record::update(home, "docker", |record| {
-        let loaded = SdkValue::map([
-            ("id", SdkValue::text(&id)),
-            ("bundle", SdkValue::text(&bundle.hash)),
-        ]);
-        with_field(record, "loaded_image", loaded)
+        record.with_loaded_image(&id, &bundle.hash)
     })?;
     Ok(id)
 }

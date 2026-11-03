@@ -1,10 +1,11 @@
 //! `machine.connect`: an ssh host.
 use super::bundle::bundle;
 use super::create::{finish, new_name};
+use super::record::MachineRecord;
 use super::spec::{self as record, refusal, update as update_record};
 use super::status::home_id;
 use crate::common::context::Context;
-use crate::common::home::{self, lock, paths, read_record, with_field, write_record};
+use crate::common::home::{self, lock, paths};
 use crate::common::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::SdkValue;
 use layerfs_machine::{self as adapters, Platform};
@@ -49,17 +50,20 @@ pub fn connect(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             SdkValue::text(args.get_text("root").unwrap_or(adapters::DATA)),
         ),
     ]);
-    let record = SdkValue::map([
-        ("name", SdkValue::text(&name)),
-        ("platform", SdkValue::text("ssh")),
-        ("ssh", ssh),
-        ("state", SdkValue::text("creating")),
-        ("created", SdkValue::Int(home::now_ms())),
-    ]);
+    let record = MachineRecord::from_record(
+        &name,
+        SdkValue::map([
+            ("name", SdkValue::text(&name)),
+            ("platform", SdkValue::text("ssh")),
+            ("ssh", ssh),
+            ("state", SdkValue::text("creating")),
+            ("created", SdkValue::Int(home::now_ms())),
+        ]),
+    );
     let spec = {
         let _lock = lock::take(&home)?;
         new_name(&home, &name)?;
-        write_record(&paths::machine_record(&home, &name), &record)?;
+        record.write(&home)?;
         // the accepted host key is checked strictly against the caller's file
         let copied = std::fs::copy(
             &known_hosts,
@@ -67,7 +71,7 @@ pub fn connect(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         );
         match copied
             .map_err(|e| refused("InvalidInput", format!("{}: {e}", known_hosts.display())))
-            .and_then(|_| record::spec(&home, &id, &name, &record))
+            .and_then(|_| record::spec(&home, &id, &record))
         {
             Ok(spec) => spec,
             Err(refusal) => {
@@ -87,11 +91,8 @@ pub fn connect(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     {
         let _lock = lock::take(&home)?;
         for other in paths::names(&home.join("machine")).map_err(failed)? {
-            let same = read_record(&paths::machine_record(&home, &other))?.and_then(|r| {
-                r.get("ssh")
-                    .and_then(|s| s.get_text("host_id"))
-                    .map(|h| h == identity)
-            });
+            let same = MachineRecord::read(&home, &other)?
+                .and_then(|r| r.host_id().map(|h| h == identity));
             if other != name && same == Some(true) {
                 let _ = std::fs::remove_dir_all(paths::machine_dir(&home, &name));
                 return Err(refused(
@@ -100,14 +101,7 @@ pub fn connect(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
                 ));
             }
         }
-        update_record(&home, &name, |r| {
-            let ssh = with_field(
-                r.get("ssh").cloned().unwrap_or_default(),
-                "host_id",
-                SdkValue::text(&identity),
-            );
-            with_field(r, "ssh", ssh)
-        })?;
+        update_record(&home, &name, |r| r.with_host_id(&identity))?;
     }
     finish(&home, &name, adapters::connect(&spec, &bundle))
 }

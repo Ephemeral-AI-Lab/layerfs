@@ -155,10 +155,10 @@ fn local(home: &Path, machine: &str, start: Start) -> Result<bool> {
         _ => {
             let record = match start {
                 Start::OnDemand => crate::machine::machine_of(home, machine)?,
-                Start::Never => read_record(&paths::machine_record(home, machine))?
+                Start::Never => crate::machine::record::MachineRecord::read(home, machine)?
                     .ok_or_else(|| refused("NotFound", format!("no machine named {machine}")))?,
             };
-            crate::machine::platform_of(&record)?
+            record.platform()?
         }
     };
     Ok(platform.executor(HostOs::current()) == ExecutorKind::Local)

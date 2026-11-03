@@ -6,7 +6,7 @@
 //! projects; `remove` drops one project's history from its Store.
 use crate::common::context::Context;
 use crate::common::home::lease;
-use crate::common::home::{paths, read_record};
+use crate::common::home::paths;
 use crate::common::outcome::{failed, refused, Outcome, View};
 use crate::common::place::{self, Executor, Start};
 use crate::project::record::ProjectRecord;
@@ -254,18 +254,7 @@ fn remove(context: &mut Context<'_>, project: &str) -> Outcome {
     let home = context.home.clone();
     let target = resolve::target(&home, project)?;
     target.record.moving()?;
-    for machine in paths::names(&home.join("machine")).map_err(failed)? {
-        let dir = paths::machine_dir(&home, &machine).join("sandbox");
-        for sandbox in paths::names(&dir).map_err(failed)? {
-            let record = read_record(&dir.join(&sandbox).join("record.json"))?;
-            if record.as_ref().and_then(|r| r.get_text("project")) == Some(project) {
-                return Err(refused(
-                    "InUse",
-                    format!("Sandbox {sandbox} of {project} is running"),
-                ));
-            }
-        }
-    }
+    crate::inventory::can_remove_project(&home, project)?;
     let args = vec![
         ("project", SdkValue::text(&target.project)),
         ("store_record", target.record.to_record().clone()),

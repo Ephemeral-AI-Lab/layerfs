@@ -12,9 +12,10 @@
 //! `log/uncertain.jsonl`; nothing is cleaned up on a guess.
 use crate::common::context::Context;
 use crate::common::home::lease;
-use crate::common::home::{self, paths, read_record, with_field};
+use crate::common::home::{self, paths, with_field};
 use crate::common::outcome::{failed, refused, Outcome, View};
 use crate::common::place::{self, Executor, Start};
+use crate::machine::record::MachineRecord;
 use crate::store::record::{StoreDerived, StoreRecord, StoreRef};
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -173,25 +174,6 @@ fn create(home: &Path, name: &str) -> Outcome {
     public(home, &record, View::Full)
 }
 
-/// The Sandboxes of any machine whose project is in Store `name`.
-fn sandboxes_of(home: &Path, name: &str) -> Result<Vec<String>> {
-    let mut found = Vec::new();
-    for machine in paths::names(&home.join("machine")).map_err(failed)? {
-        let dir = paths::machine_dir(home, &machine).join("sandbox");
-        for sandbox in paths::names(&dir).map_err(failed)? {
-            let record = read_record(&dir.join(&sandbox).join("record.json"))?;
-            let project = record
-                .as_ref()
-                .and_then(|r| r.get_text("project"))
-                .unwrap_or("");
-            if project.split_once('/').map(|(s, _)| s) == Some(name) {
-                found.push(sandbox);
-            }
-        }
-    }
-    Ok(found)
-}
-
 /// Refuses `InUse` while another process holds the Store, a Sandbox of
 /// one of its projects runs, or a live process moves or removes it. Under
 /// the home lock.
@@ -204,16 +186,7 @@ fn idle(home: &Path, name: &str, record: &StoreRecord) -> Result<()> {
             format!("Store {name} is open in process {holders:?}"),
         ));
     }
-    let sandboxes = sandboxes_of(home, name)?;
-    if !sandboxes.is_empty() {
-        return Err(refused(
-            "InUse",
-            format!(
-                "Store {name} has running Sandboxes: {}",
-                sandboxes.join(", ")
-            ),
-        ));
-    }
+    crate::inventory::can_retire_store(home, name)?;
     Ok(())
 }
 
@@ -238,16 +211,7 @@ fn settle(home: &Path, name: &str) -> Result<lease::Lease> {
             format!("Store {name} is open in process {holders:?}"),
         ));
     }
-    let sandboxes = sandboxes_of(home, name)?;
-    if !sandboxes.is_empty() {
-        return Err(refused(
-            "InUse",
-            format!(
-                "Store {name} has running Sandboxes: {}",
-                sandboxes.join(", ")
-            ),
-        ));
-    }
+    crate::inventory::can_retire_store(home, name)?;
     lease::hold_locked(home, name)
 }
 
@@ -360,7 +324,7 @@ fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Outcome {
                 format!("Store {name} is a PostgreSQL database; it does not move"),
             ));
         }
-        if read_record(&paths::machine_record(&home, to))?.is_none() {
+        if MachineRecord::read(&home, to)?.is_none() {
             return Err(refused("NotFound", format!("no machine named {to}")));
         }
         let from = record.machine()?;

@@ -15,10 +15,12 @@
 //! or `docker` from this process, which resolves the password (O3), until
 //! the worker takes the resolved URL (#535 phase 5a).
 use super::deploy::{self, Deploy, Side};
+use super::record::SandboxRecord;
 use crate::common::context::Context;
-use crate::common::home::{self, paths, read_record, write_record};
-use crate::common::outcome::{failed, refused, Outcome};
+use crate::common::home::{self, paths};
+use crate::common::outcome::{failed, refused, Outcome, View};
 use crate::common::place::{self, Executor, Start};
+use crate::inventory;
 use crate::machine::worker::Unreached;
 use crate::project::record::ProjectRecord;
 use crate::store::record::{StoreKind, StoreRecord, StoreRef};
@@ -28,35 +30,15 @@ use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// Every Sandbox record in the home: `(machine, name, record)`.
-fn all(home: &Path) -> Result<Vec<(String, String, SdkValue)>> {
-    let mut found = Vec::new();
-    for machine in paths::names(&home.join("machine")).map_err(failed)? {
-        let dir = paths::machine_dir(home, &machine).join("sandbox");
-        for name in paths::names(&dir).map_err(failed)? {
-            if let Some(record) = read_record(&dir.join(&name).join("record.json"))? {
-                found.push((machine.clone(), name, record));
-            }
-        }
-    }
-    Ok(found)
-}
-
-/// The Sandbox named `name`: its machine and record, or `NoSuchSandbox`.
-fn sandbox_of(home: &Path, name: &str) -> Result<(String, SdkValue)> {
+/// The Sandbox named `name`, or `NoSuchSandbox`.
+fn sandbox_of(home: &Path, name: &str) -> Result<SandboxRecord> {
     crate::common::names::SandboxName::parse(name)?;
-    all(home)?
-        .into_iter()
-        .find(|(_, n, _)| n == name)
-        .map(|(machine, _, record)| (machine, record))
-        .ok_or_else(|| {
-            refused(
-                "NoSuchSandbox",
-                format!(
-                    "no Sandbox named {name}; `sandbox.create(project, name, machine)` starts one"
-                ),
-            )
-        })
+    inventory::sandbox(home, name)?.ok_or_else(|| {
+        refused(
+            "NoSuchSandbox",
+            format!("no Sandbox named {name}; `sandbox.create(project, name, machine)` starts one"),
+        )
+    })
 }
 
 /// The host Sandbox operations' arguments for project `<store>/<project>`,
@@ -166,10 +148,10 @@ pub fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcom
         "create" => create(context, args),
         "list" => {
             let only = args.get_text("project");
-            let items: Vec<SdkValue> = all(&home)?
-                .into_iter()
-                .filter(|(_, _, r)| only.is_none() || r.get_text("project") == only)
-                .map(|(_, _, record)| record)
+            let items: Vec<SdkValue> = inventory::sandboxes(&home)?
+                .iter()
+                .filter(|r| only.is_none() || r.project() == only)
+                .map(|record| record.to_sdk(View::List))
                 .collect();
             let (items, next) = page(items, args);
             Ok(SdkValue::map([
@@ -179,12 +161,11 @@ pub fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcom
         }
         "get" => {
             let name = args.get_text("name").unwrap_or("");
-            let (machine, record) = sandbox_of(&home, name)?;
+            let record = sandbox_of(&home, name)?;
             // a get starts no machine (P4): a machine that is down answers
             // the record with no Workspaces and why
             let listed = reach(
                 context,
-                &machine,
                 &record,
                 "sandbox.list_workspaces",
                 vec![],
@@ -198,7 +179,8 @@ pub fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcom
                 Err(Unreached(why)) => (Vec::new(), Some(why.message)),
             };
             let (items, next) = page(all, args);
-            let mut record = home::with_field(record, "workspaces", SdkValue::List(items));
+            let shown = record.to_sdk(View::Full);
+            let mut record = home::with_field(shown, "workspaces", SdkValue::List(items));
             if let Some(why) = down {
                 record = home::with_field(record, "down_reason", SdkValue::Text(why));
             }
@@ -206,17 +188,16 @@ pub fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcom
         }
         "close" => {
             let name = args.get_text("name").unwrap_or("");
-            let (machine, record) = sandbox_of(&home, name)?;
-            if record.get_text("id").is_none() {
-                if let Some(closed) = close_unstarted(&home, &machine, name)? {
+            let record = sandbox_of(&home, name)?;
+            if record.id().is_none() {
+                if let Some(closed) = close_unstarted(&home, record.machine(), name)? {
                     return Ok(closed);
                 }
             }
-            let (machine, record) = sandbox_of(&home, name)?;
+            let record = sandbox_of(&home, name)?;
             let force = matches!(args.get("force"), Some(SdkValue::Bool(true)));
             let closed = on_machine(
                 context,
-                &machine,
                 &record,
                 "sandbox.close",
                 vec![("force", SdkValue::Bool(force))],
@@ -224,15 +205,13 @@ pub fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcom
             match closed {
                 Ok(value) => {
                     let _lock = home::lock::take(&home)?;
-                    std::fs::remove_dir_all(paths::sandbox_dir(&home, &machine, name))
-                        .map_err(failed)?;
+                    std::fs::remove_dir_all(record.dir(&home)).map_err(failed)?;
                     Ok(home::with_field(value, "closed", SdkValue::text(name)))
                 }
                 // a Sandbox already gone loses its record too
                 Err(refusal) if refusal.code == "NoSuchSandbox" => {
                     let _lock = home::lock::take(&home)?;
-                    std::fs::remove_dir_all(paths::sandbox_dir(&home, &machine, name))
-                        .map_err(failed)?;
+                    std::fs::remove_dir_all(record.dir(&home)).map_err(failed)?;
                     Ok(SdkValue::map([
                         ("closed", SdkValue::text(name)),
                         ("was_gone", SdkValue::Bool(true)),
@@ -269,7 +248,7 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         // where a Sandbox of this Store's kind may run is the support
         // table's answer, word for word (#535 §7.3)
         use layerfs_machine::{sandbox_allowed, HostOs};
-        let platform = crate::machine::platform_of(&crate::machine::machine_of(&home, machine)?)?;
+        let platform = crate::machine::machine_of(&home, machine)?.platform()?;
         sandbox_allowed(platform, HostOs::current(), target.store_ref.kind()).map_err(
             |reason| {
                 refused(
@@ -285,7 +264,7 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         )?;
     }
     #[cfg(not(feature = "machine"))]
-    if read_record(&paths::machine_record(&home, machine))?.is_none() {
+    if crate::machine::record::MachineRecord::read(&home, machine)?.is_none() {
         return Err(refused("NotFound", format!("no machine named {machine}")));
     }
     if let StoreRef::Postgres { .. } = target.store_ref {
@@ -307,72 +286,45 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     }
     // claim the name across the home; the creator's pid lets a close tell
     // a create in flight from one whose process is gone
-    if all(&home)?.iter().any(|(_, n, _)| n == name) {
+    if inventory::sandbox(&home, name)?.is_some() {
         return Err(refused("Exists", format!("a Sandbox named {name} exists")));
     }
-    write_record(
-        &paths::sandbox_dir(&home, machine, name).join("record.json"),
-        &SdkValue::map([
-            ("name", SdkValue::text(name)),
-            ("project", SdkValue::text(project)),
-            ("machine", SdkValue::text(machine)),
-            ("state", SdkValue::text("creating")),
-            ("created", SdkValue::Int(home::now_ms())),
-            ("pid", SdkValue::Int(i64::from(std::process::id()))),
-        ]),
-    )?;
+    SandboxRecord::creating(name, project, machine).write(&home)?;
     drop(_lock);
     let mut more = vec![];
     if let Some(image) = args.get_text("image") {
         more.push(("image", SdkValue::text(image)));
     }
-    let record = read_record(&paths::sandbox_dir(&home, machine, name).join("record.json"))?
-        .unwrap_or_default();
-    let started = on_machine(context, machine, &record, "sandbox.create", more);
+    let record = SandboxRecord::read(&home, machine, name)?
+        .unwrap_or_else(|| SandboxRecord::from_record(machine, name, SdkValue::Null));
+    let started = on_machine(context, &record, "sandbox.create", more);
     let _lock = home::lock::take(&home)?;
-    let path = paths::sandbox_dir(&home, machine, name).join("record.json");
     match started {
         Ok(value) => {
-            let mut record = record;
-            for (field, value) in [
-                ("id", value.get("sandbox").cloned().unwrap_or_default()),
-                (
-                    "platform",
-                    value.get("platform").cloned().unwrap_or_default(),
-                ),
-                ("runtime", value.get("runtime").cloned().unwrap_or_default()),
-                ("image", value.get("image").cloned().unwrap_or_default()),
-                ("state", SdkValue::text("running")),
-            ] {
-                record = home::with_field(record, field, value);
-            }
-            write_record(&path, &record)?;
-            Ok(record)
+            let record = record.started(&value);
+            record.write(&home)?;
+            Ok(record.to_sdk(View::Full))
         }
         Err(refusal) if refusal.code == "Unknown" => {
-            write_record(
-                &path,
-                &home::with_field(record, "state", SdkValue::text("unknown")),
-            )?;
+            record.unknown().write(&home)?;
             Err(refusal)
         }
         Err(refusal) => {
-            let _ = std::fs::remove_dir_all(paths::sandbox_dir(&home, machine, name));
+            let _ = std::fs::remove_dir_all(record.dir(&home));
             Err(refusal)
         }
     }
 }
 
-/// Runs host Sandbox operation `op` for Sandbox `record` on `machine`,
+/// Runs host Sandbox operation `op` for Sandbox `record` on its machine,
 /// starting the machine when it is down.
 fn on_machine(
     context: &mut Context<'_>,
-    machine: &str,
-    record: &SdkValue,
+    record: &SandboxRecord,
     op: &str,
     more: Vec<(&str, SdkValue)>,
 ) -> Outcome {
-    reach(context, machine, record, op, more, Start::OnDemand)
+    reach(context, record, op, more, Start::OnDemand)
         .unwrap_or_else(|Unreached(refusal)| Err(refusal))
 }
 
@@ -380,14 +332,13 @@ fn on_machine(
 /// started; [`Unreached`] when it was not and nothing was sent.
 fn reach(
     context: &mut Context<'_>,
-    machine: &str,
-    record: &SdkValue,
+    record: &SandboxRecord,
     op: &str,
     more: Vec<(&str, SdkValue)>,
     start: Start,
 ) -> std::result::Result<Outcome, Unreached> {
     let mut unreached = None;
-    let outcome = host_op(context, (machine, record, op), more, start, &mut unreached);
+    let outcome = host_op(context, (record, op), more, start, &mut unreached);
     match unreached {
         Some(unreached) => Err(unreached),
         None => Ok(outcome),
@@ -398,16 +349,17 @@ fn reach(
 /// [`Unreached`] in `unreached`.
 fn host_op(
     context: &mut Context<'_>,
-    (machine, record, op): (&str, &SdkValue, &str),
+    (record, op): (&SandboxRecord, &str),
     more: Vec<(&str, SdkValue)>,
     start: Start,
     unreached: &mut Option<Unreached>,
 ) -> Outcome {
     let home = context.home.clone();
-    let project = record.get_text("project").unwrap_or("");
+    let machine = record.machine();
+    let project = record.project().unwrap_or("");
     let target = resolve::target(&home, project)?;
     let mut more = more;
-    if let Some(id) = record.get_text("id") {
+    if let Some(id) = record.id() {
         more.push(("sandbox", SdkValue::text(id)));
     }
     // the call's image (sandbox.create) else the Sandbox's own travels in
@@ -419,7 +371,7 @@ fn host_op(
     let image = match called {
         Some(SdkValue::Text(text)) => Some(text),
         _ => record
-            .get_text("image")
+            .image()
             .filter(|_| op != "sandbox.create")
             .map(str::to_owned),
     };
@@ -620,15 +572,15 @@ fn page(items: Vec<SdkValue>, args: &SdkValue) -> (Vec<SdkValue>, SdkValue) {
 /// meanwhile, for the ordinary close.
 fn close_unstarted(home: &Path, machine: &str, name: &str) -> Result<Option<SdkValue>> {
     let _lock = home::lock::take(home)?;
-    let dir = paths::sandbox_dir(home, machine, name);
-    let Some(record) = read_record(&dir.join("record.json"))? else {
+    let Some(record) = SandboxRecord::read(home, machine, name)? else {
         return Err(refused("NoSuchSandbox", format!("no Sandbox named {name}")));
     };
-    if record.get_text("id").is_some() {
+    if record.id().is_some() {
         return Ok(None);
     }
-    let state = record.get_text("state").unwrap_or("creating").to_owned();
-    let pid = record.get_int("pid").unwrap_or(0);
+    let dir = record.dir(home);
+    let state = record.recorded_state().unwrap_or("creating").to_owned();
+    let pid = record.pid().unwrap_or(0);
     if state == "creating" && pid > 0 && crate::common::home::lease::alive(pid as u32) {
         return Err(refused(
             "InUse",
@@ -656,11 +608,10 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
     let home = context.home.clone();
     if call == "mount" {
         let name = args.get_text("sandbox").unwrap_or("");
-        let (machine, record) = sandbox_of(&home, name)?;
+        let record = sandbox_of(&home, name)?;
         let branch = args.get("branch").cloned().unwrap_or_default();
         let mounted = on_machine(
             context,
-            &machine,
             &record,
             "workspace.mount",
             vec![("branch", branch)],
@@ -676,7 +627,8 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
         ));
     }
     let ws = crate::common::names::WorkspaceRef::parse(args.get_text("ws").unwrap_or(""))?;
-    let (machine, record) = sandbox_of(&home, &ws.sandbox)?;
+    let record = sandbox_of(&home, &ws.sandbox)?;
+    let machine = record.machine();
     let mut more = vec![("path", SdkValue::text(&ws.path))];
     let op = match call {
         "exec" => {
@@ -705,7 +657,7 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
     };
     // a status starts no machine (P4)
     let out = match call {
-        "status" => reach(context, &machine, &record, op, more, Start::Never).unwrap_or_else(
+        "status" => reach(context, &record, op, more, Start::Never).unwrap_or_else(
             |Unreached(why)| {
                 Err(refused(
                     "Unavailable",
@@ -716,7 +668,7 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
                 ))
             },
         ),
-        _ => on_machine(context, &machine, &record, op, more),
+        _ => on_machine(context, &record, op, more),
     }?;
     if call == "exec" {
         // the command's output as events too, for front ends that stream

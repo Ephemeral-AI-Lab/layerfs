@@ -87,3 +87,123 @@ fn a_bucket_shows_its_record() {
     let versioned = BucketRecord::from_record("r", value(&text.replacen('{', r#"{"v":1,"#, 1)));
     assert_eq!(print(&versioned.to_sdk(View::Full)), text);
 }
+
+#[test]
+fn a_sandbox_shows_its_record() {
+    use layerfs_control::sandbox::record::SandboxRecord;
+    let text = r#"{"name":"t1","project":"shop/api","machine":"native","state":"running","created":3,"pid":9,"id":"sb-1","platform":"macos","runtime":"native","image":null}"#;
+    let record = SandboxRecord::from_record("native", "t1", value(text));
+    assert_eq!(print(&record.to_sdk(View::List)), text);
+    assert_eq!(print(&record.to_sdk(View::Full)), text);
+    let versioned =
+        SandboxRecord::from_record("native", "t1", value(&text.replacen('{', r#"{"v":1,"#, 1)));
+    assert_eq!(print(&versioned.to_sdk(View::List)), text);
+    assert_eq!(record.project(), Some("shop/api"));
+    assert_eq!(record.id(), Some("sb-1"));
+    assert_eq!(record.recorded_state(), Some("running"));
+}
+
+#[cfg(feature = "machine")]
+mod machines {
+    use super::*;
+    use layerfs_control::machine::record::{MachineDerived, MachineRecord};
+
+    fn keys(value: &SdkValue) -> Vec<&str> {
+        match value {
+            SdkValue::Map(fields) => fields.iter().map(|(n, _)| n.as_str()).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_vm_shows_its_live_state_size_and_settings() {
+        let record = MachineRecord::from_record(
+            "dev",
+            value(
+                r#"{"v":1,"name":"dev","platform":"lima","cpus":2,"memory":4,"disk":20,"vm_name":"lfs-x-dev",
+                   "state":"running","created":1,"image":"sha256:ab","nested":true,"error":"old",
+                   "lasting":{"port":2222}}"#,
+            ),
+        );
+        let derived = MachineDerived {
+            live: Some(("stopped".into(), Some("its probe did not answer".into()))),
+            stores: vec!["shop".into()],
+            sandboxes: vec!["t1".into()],
+        };
+        let shown = record.to_sdk(View::List, &derived).unwrap();
+        assert_eq!(
+            keys(&shown),
+            [
+                "name",
+                "platform",
+                "backend",
+                "supports",
+                "state",
+                "cpus",
+                "memory",
+                "disk",
+                "stores",
+                "sandboxes",
+                "image",
+                "nested",
+                "error"
+            ]
+        );
+        assert_eq!(shown.get_text("platform"), Some("lima"));
+        assert_eq!(shown.get_text("state"), Some("stopped"));
+        assert_eq!(shown.get_text("error"), Some("its probe did not answer"));
+        assert_eq!(shown.get("cpus"), Some(&SdkValue::Int(2)));
+        assert_eq!(print(shown.get("stores").unwrap()), r#"["shop"]"#);
+        assert_eq!(print(shown.get("sandboxes").unwrap()), r#"["t1"]"#);
+        assert_eq!(shown.get("nested"), Some(&SdkValue::Bool(true)));
+        // without a live answer the record's state and error show
+        let derived = MachineDerived::default();
+        let shown = record.to_sdk(View::Full, &derived).unwrap();
+        assert_eq!(shown.get_text("state"), Some("running"));
+        assert_eq!(shown.get_text("error"), Some("old"));
+    }
+
+    #[test]
+    fn a_built_in_machine_is_ready_and_unsized() {
+        let record = MachineRecord::from_record(
+            "docker",
+            value(r#"{"name":"docker","platform":"docker","created":1,"docker":"/run/d.sock"}"#),
+        );
+        let shown = record
+            .to_sdk(View::List, &MachineDerived::default())
+            .unwrap();
+        assert_eq!(
+            keys(&shown),
+            [
+                "name",
+                "platform",
+                "backend",
+                "supports",
+                "state",
+                "cpus",
+                "memory",
+                "disk",
+                "stores",
+                "sandboxes",
+                "docker"
+            ]
+        );
+        assert_eq!(shown.get_text("state"), Some("ready"));
+        assert_eq!(shown.get("cpus"), Some(&SdkValue::Null));
+        let ssh = MachineRecord::from_record(
+            "box",
+            value(
+                r#"{"name":"box","platform":"ssh","ssh":{"host":"h","host_id":"k"},"state":"creating"}"#,
+            ),
+        );
+        let shown = ssh.to_sdk(View::Full, &MachineDerived::default()).unwrap();
+        assert_eq!(keys(&shown).last(), Some(&"ssh"));
+        assert_eq!(shown.get_text("state"), Some("creating"));
+        let unknown = MachineRecord::from_record("x", value(r#"{"platform":"vmware"}"#));
+        let refusal = unknown
+            .to_sdk(View::List, &MachineDerived::default())
+            .unwrap_err();
+        assert_eq!(refusal.code, "Failed");
+        assert_eq!(refusal.message, "a machine record names no known platform");
+    }
+}

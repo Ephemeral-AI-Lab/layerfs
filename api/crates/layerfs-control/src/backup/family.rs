@@ -8,7 +8,7 @@
 use super::record::{remote_error, BucketRecord, StoreLink};
 use crate::common::context::Context;
 use crate::common::home::lease;
-use crate::common::home::{self, paths, read_record};
+use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused, Outcome, View};
 use crate::common::place::{self, Executor, Start};
 use crate::project::record::ProjectRecord;
@@ -593,16 +593,7 @@ fn replaceable(home: &Path, store: &str, bucket: &str, record: &StoreRecord) -> 
             format!("Store {store} is open in process {holders:?}"),
         ));
     }
-    let sandboxes = sandboxes_of(home, store)?;
-    if !sandboxes.is_empty() {
-        return Err(refused(
-            "InUse",
-            format!(
-                "Store {store} has running Sandboxes: {}",
-                sandboxes.join(", ")
-            ),
-        ));
-    }
+    crate::inventory::can_retire_store(home, store)?;
     let linked = record.link(bucket).and_then(|link| link.heads());
     let now = remote::heads(&destination).ok().map(|h| pieces::hex(&h));
     if linked.is_none() || now != linked {
@@ -624,25 +615,6 @@ fn replaceable(home: &Path, store: &str, bucket: &str, record: &StoreRecord) -> 
         }
     }
     Ok(())
-}
-
-/// The Sandboxes of any machine whose project is in Store `store`.
-fn sandboxes_of(home: &Path, store: &str) -> Result<Vec<String>> {
-    let mut found = Vec::new();
-    for machine in paths::names(&home.join("machine")).map_err(failed)? {
-        let dir = paths::machine_dir(home, &machine).join("sandbox");
-        for sandbox in paths::names(&dir).map_err(failed)? {
-            let record = read_record(&dir.join(&sandbox).join("record.json"))?;
-            let project = record
-                .as_ref()
-                .and_then(|r| r.get_text("project"))
-                .unwrap_or("");
-            if project.split_once('/').map(|(s, _)| s) == Some(store) {
-                found.push(sandbox);
-            }
-        }
-    }
-    Ok(found)
 }
 
 /// `(name, stack)` of each project the Store file `file` holds, read on a
