@@ -90,20 +90,6 @@ pub(super) fn of_store(name: &str, more: Vec<(&str, SdkValue)>) -> SdkValue {
     fields_map(fields)
 }
 
-/// Refuses `InUse` while another process holds the Store or a Sandbox of
-/// one of its projects runs. Under the home lock and the Store's lock.
-fn idle(home: &Path, name: &str) -> Result<()> {
-    let holders = lease::holders(home, name)?;
-    if !holders.is_empty() {
-        return Err(refused(
-            "InUse",
-            format!("Store {name} is open in process {holders:?}"),
-        ));
-    }
-    crate::inventory::can_retire_store(home, name)?;
-    Ok(())
-}
-
 /// Starts a push, pull or remove: under the home lock (the Sandbox check) and
 /// the Store's lock, re-reads the record, lets `check` refuse it or answer
 /// what the call needs, finds the Store idle and writes `op` into the
@@ -118,7 +104,7 @@ pub(super) fn begin<T>(
     let _store = record::lock(home, name)?;
     let record = record_of(home, name)?;
     let answer = check(&record)?;
-    idle(home, name)?;
+    crate::inventory::store_idle(home, name)?;
     record.with(op::FIELD, op.to_record().clone()).write(home)?;
     Ok(answer)
 }
@@ -138,7 +124,7 @@ pub(super) fn settle(home: &Path, name: &str) -> Result<lease::Lease> {
             format!("Store {name} is in use in this process"),
         ));
     }
-    idle(home, name)?;
+    crate::inventory::store_idle(home, name)?;
     lease::hold_locked(home, name)
 }
 

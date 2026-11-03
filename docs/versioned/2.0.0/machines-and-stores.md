@@ -236,8 +236,16 @@ $ layerfs store pull shop --progress       # not run
     `InvalidInput` for a postgresql Store; a push to an unknown machine is
     `NotFound`. A stopped machine is `Unavailable`, naming `layerfs machine
     start <m>` (#535 D11).
-  - It is `InUse` while any process holds the Store or a Sandbox of one of
-    its projects is recorded.
+  - Its check runs before it marks the Store: both machines answer, the
+    target holds no Store file of that name (`Exists`), and the target has
+    the Store's bytes (with its write-ahead log) plus a headroom of 1 GiB,
+    or a tenth of the Store when that is more, free. Too little is
+    `Capacity`, naming the bytes needed and free (`detail.needed`,
+    `detail.free`). A push measures the machine's free disk in its worker,
+    a pull on this host.
+  - It is `InUse` while any other process holds the Store or a Sandbox of
+    one of its projects is recorded; `detail.related` names each as
+    `{kind: "lease", name: <pid>}` or `{kind: "sandbox", name}`.
   - While a push, pull or remove runs, the Store's record holds one `op`
     (#536 §7.1): its id, `name` (`store.push`, `store.pull`,
     `store.remove`), `phase`, `args` (`from`, `to`), owner process and
@@ -263,13 +271,12 @@ $ layerfs store pull shop --progress       # not run
     operation, lease and Store call on the Store `Unresolved`, naming
     `layerfs store status <name>` and `layerfs store remove <name>`; a
     certain one holds nothing.
-  - It is `Exists` when the target already holds a Store file of that name.
   - A failure names its phase in the message and in `detail.phase`, and
     keeps whatever exists.
   - While it runs, `store status` shows `state: "busy"` and `op`.
 - `store remove` deletes a sqlite Store wherever it is, with every project
   in it. Its backups stay in their buckets. It is `InUse` while the Store is
-  held and `Busy` while a live process runs an operation on it. A Store
+  held (`detail.related` as for a push) and `Busy` while a live process runs an operation on it. A Store
   whose machine is unknown is `Unavailable` (as for a push or pull). A stopped
   machine is refused `Unavailable`, naming `machine start`, before the
   home lock is taken; a Store whose machine changed meanwhile is

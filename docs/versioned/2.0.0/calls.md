@@ -430,7 +430,7 @@ Codes seen in the 2.0 library include:
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret |
 | `Conflict` | a merge or Commit conflict; for `backup.restore`, the Store changed since its last backup or restore |
 | `Binary` | `file.read` of a file that is not text |
-| `Capacity` | a Sandbox's Workspace limit |
+| `Capacity` | a Sandbox's Workspace limit; a `store push` or `store pull` target without room for the Store (`detail.needed`, `detail.free`) |
 | `Failed` | it was tried and did not happen; whatever exists is kept |
 | `Unknown` | the outcome is not known; both sides are kept and logged in `log/uncertain.jsonl`, and the entity keeps an uncertain `op` (later calls on it are `Unresolved`) |
 

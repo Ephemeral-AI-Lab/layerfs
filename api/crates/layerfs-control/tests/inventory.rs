@@ -7,6 +7,7 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_control::common::home::{paths, write_record};
 use layerfs_control::common::json::parse;
 use layerfs_control::inventory;
+use layerfs_control::store::record::StoreRecord;
 use std::path::{Path, PathBuf};
 
 fn tempdir() -> PathBuf {
@@ -149,9 +150,58 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
     );
     let refusal = inventory::can_retire_store(&home, "shop").unwrap_err();
     assert_eq!(refusal.message, "Store shop has running Sandboxes: a, c");
+    let names = |related: &SdkValue| match related {
+        SdkValue::List(items) => items
+            .iter()
+            .map(|i| i.get_text("name").unwrap().to_owned())
+            .collect(),
+        _ => Vec::new(),
+    };
+    assert_eq!(names(refusal.detail.get("related").unwrap()), ["a", "c"]);
     assert!(inventory::can_retire_store(&home, "pg").is_ok());
     let refusal = inventory::can_remove_project(&home, "docs/web").unwrap_err();
     assert_eq!(refusal.message, "Sandbox b of docs/web is running");
     assert!(inventory::can_remove_project(&home, "shop/web").is_ok());
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn push_and_pull_check_the_stores_side() {
+    let home = home();
+    let store = |name: &str, text: &str| StoreRecord::from_record(name, parse(text).unwrap());
+    let on_dev = store("shop", r#"{"name":"shop","kind":"sqlite","machine":"dev"}"#);
+    let here = store(
+        "app",
+        r#"{"name":"app","kind":"sqlite","machine":"native"}"#,
+    );
+    let pg = store(
+        "pg",
+        r#"{"name":"pg","kind":"postgresql","url":"postgresql://u@h/d"}"#,
+    );
+    let code = |result: Result<(), layerfs_bridge::control::SdkRefusal>| result.unwrap_err().code;
+    assert_eq!(inventory::can_pull(&on_dev).unwrap(), "dev");
+    assert_eq!(inventory::can_pull(&here).unwrap_err().code, "InvalidInput");
+    let refusal = inventory::can_pull(&pg).unwrap_err();
+    assert!(
+        refusal.message.contains("does not move"),
+        "{}",
+        refusal.message
+    );
+    let refusal = inventory::can_push(&home, &on_dev, "fc").unwrap_err();
+    assert!(
+        refusal.message.contains("`layerfs store pull shop`"),
+        "{}",
+        refusal.message
+    );
+    assert!(inventory::can_push(&home, &here, "dev").is_ok());
+    assert_eq!(
+        code(inventory::can_push(&home, &here, "native")),
+        "InvalidInput"
+    );
+    assert_eq!(
+        code(inventory::can_push(&home, &here, "nosuch")),
+        "NotFound"
+    );
+    assert_eq!(code(inventory::can_push(&home, &pg, "dev")), "InvalidInput");
     let _ = std::fs::remove_dir_all(&home);
 }

@@ -47,32 +47,15 @@ fn transfer(context: &mut Context<'_>, name: &str, target: Option<&str>) -> Outc
         Some(_) => "store.push",
         None => "store.pull",
     };
-    // check: the Store's side and the target machine; again under the locks
-    progress(context, "check", 0, 0);
-    let record = record_of(&home, name)?;
-    record.unblocked()?;
-    let (from, to) = sides(&home, &record, target)?;
-    let args = SdkValue::map([("from", SdkValue::text(&from)), ("to", SdkValue::text(&to))]);
-    let mut op = Op::begin(call, "check", args)?;
-    begin(&home, name, &op, |record| {
-        record.unblocked()?;
-        if sides(&home, record, target)? != (from.clone(), to.clone()) {
-            return Err(refused(
-                "Conflict",
-                format!("Store {name} moved meanwhile; nothing was sent"),
-            ));
-        }
-        Ok(())
-    })?;
-    let result = at("check", settle(&home, name))
-        .and_then(|_lease| phases(context, &mut op, name, &from, &to));
-    if let Err((phase, refusal)) = &result {
+    let mut written = None;
+    let result = run(context, name, target, call, &mut written);
+    if let (Err((phase, refusal)), Some(op)) = (&result, &written) {
         // past install both copies exist: a record phase that failed (its
         // lock wait expired, say) leaves the outcome open; past record the
         // Store is on `to` and `op` is gone
         let uncertain = refusal.code == "Unknown" || *phase == "record";
         if *phase != "retire" {
-            ended(&home, name, &op, phase, refusal, uncertain, None);
+            ended(&home, name, op, phase, refusal, uncertain, None);
         }
     }
     let verb = call.replace('.', " ");
@@ -81,6 +64,94 @@ fn transfer(context: &mut Context<'_>, name: &str, target: Option<&str>) -> Outc
         refusal.detail = with_field(refusal.detail, "phase", SdkValue::text(phase));
         refusal
     })
+}
+
+/// The check phase, then the rest once `op` is written into `written`.
+fn run(
+    context: &mut Context<'_>,
+    name: &str,
+    target: Option<&str>,
+    call: &str,
+    written: &mut Option<Op>,
+) -> Phased<SdkValue> {
+    let home = context.home.clone();
+    // check, before `op` and outside the locks: the Store's side, both
+    // machines, the target's file and its free disk; the side again under
+    // the locks, where `op` is written
+    progress(context, "check", 0, 0);
+    let record = at("check", record_of(&home, name))?;
+    at("check", record.unblocked())?;
+    let (from, to) = at("check", sides(&home, &record, target))?;
+    let (mut source, mut target_side) = at("check", reach(&home, name, &from, &to))?;
+    let args = SdkValue::map([("from", SdkValue::text(&from)), ("to", SdkValue::text(&to))]);
+    let op = at("check", Op::begin(call, "check", args))?;
+    let begun = begin(&home, name, &op, |record| {
+        record.unblocked()?;
+        if sides(&home, record, target)? != (from.clone(), to.clone()) {
+            return Err(refused(
+                "Conflict",
+                format!("Store {name} moved meanwhile; nothing was sent"),
+            ));
+        }
+        Ok(())
+    });
+    at("check", begun)?;
+    let op = written.insert(op);
+    let _lease = at("check", settle(&home, name))?;
+    phases(
+        context,
+        op,
+        name,
+        (&from, &mut source),
+        (&to, &mut target_side),
+    )
+}
+
+/// The headroom a target keeps beyond the Store's bytes: at least 1 GiB,
+/// and a tenth of the Store when that is more.
+const HEADROOM: u64 = 1 << 30;
+
+/// Both machines' executors, once each answers: the target holds no Store
+/// file named `name` and has the Store's bytes (with its write-ahead log)
+/// plus [`HEADROOM`] free (#536 §7.3, §11 item 7). A stopped machine is
+/// `Unavailable`, naming `layerfs machine start` (#535 D11).
+fn reach(home: &Path, name: &str, from: &str, to: &str) -> Result<(Executor, Executor)> {
+    let mut source = place::on_machine(home, from)?;
+    let mut target = place::on_machine(home, to)?;
+    for executor in [&mut source, &mut target] {
+        if let Executor::Worker(worker) = executor {
+            worker.ready()?;
+        }
+    }
+    let held = step(home, &mut source, "stat", of_store(name, vec![]))?;
+    let there = step(home, &mut target, "stat", of_store(name, vec![]))?;
+    if matches!(there.get("exists"), Some(SdkValue::Bool(true))) {
+        return Err(refused(
+            "Exists",
+            format!("machine {to} already holds a Store file named {name}"),
+        ));
+    }
+    let size = |field| held.get_int(field).unwrap_or(0).max(0) as u64;
+    let bytes = size("bytes").saturating_add(size("wal_bytes"));
+    let Some(free) = there.get_int("free") else {
+        return Err(refused(
+            "Unsupported",
+            format!("machine {to}'s worker does not report its free disk (an older bundle)"),
+        ));
+    };
+    let headroom = HEADROOM.max(bytes / 10);
+    let needed = bytes.saturating_add(headroom);
+    let free = free.max(0) as u64;
+    if free < needed {
+        let mut refusal = refused(
+            "Capacity",
+            format!("machine {to} has {free} bytes free; Store {name} needs {needed} ({bytes} bytes and {headroom} of headroom)"),
+        );
+        let int = |n: u64| SdkValue::Int(n.min(i64::MAX as u64) as i64);
+        refusal.detail = SdkValue::map([("needed", int(needed)), ("free", int(free))]);
+        return Err(refusal);
+    }
+    Ok((source, target))
 }
 
 type Phased<T> = std::result::Result<T, (&'static str, SdkRefusal)>;
@@ -100,34 +171,14 @@ fn phases(
     context: &mut Context<'_>,
     op: &mut Op,
     name: &str,
-    from: &str,
-    to: &str,
+    (from, source): (&str, &mut Executor),
+    (to, target): (&str, &mut Executor),
 ) -> Phased<SdkValue> {
     let home = context.home.clone();
-    let mut source = at("check", place::on_machine(&home, from))?;
-    let mut target = at("check", place::on_machine(&home, to))?;
-    for executor in [&mut source, &mut target] {
-        if let Executor::Worker(worker) = executor {
-            at("check", worker.ready())?;
-        }
-    }
-    let exists = at(
-        "check",
-        step(&home, &mut target, "stat", of_store(name, vec![])),
-    )?;
-    if matches!(exists.get("exists"), Some(SdkValue::Bool(true))) {
-        return Err((
-            "check",
-            refused(
-                "Exists",
-                format!("machine {to} already holds a Store file named {name}"),
-            ),
-        ));
-    }
     enter(context, op, name, "snapshot")?;
     let snapshot = at(
         "snapshot",
-        step(&home, &mut source, "snapshot", of_store(name, vec![])),
+        step(&home, source, "snapshot", of_store(name, vec![])),
     )?;
     let total = snapshot.get_int("bytes").unwrap_or(0) as u64;
     // send, in pieces through this process
@@ -139,7 +190,7 @@ fn phases(
             "send",
             step(
                 &home,
-                &mut source,
+                source,
                 "read",
                 of_store(
                     name,
@@ -162,7 +213,7 @@ fn phases(
             "send",
             step(
                 &home,
-                &mut target,
+                target,
                 "write",
                 of_store(
                     name,
@@ -187,12 +238,12 @@ fn phases(
         .collect();
     at(
         "verify",
-        step(&home, &mut target, "verify", of_store(name, digest)),
+        step(&home, target, "verify", of_store(name, digest)),
     )?;
     enter(context, op, name, "install")?;
     at(
         "install",
-        step(&home, &mut target, "install", of_store(name, vec![])),
+        step(&home, target, "install", of_store(name, vec![])),
     )?;
     // record: the Store is on `to` from here on, and `op` goes in the same
     // write; a crash before it leaves both copies, so the phase is written
@@ -224,7 +275,7 @@ fn phases(
     progress(context, "retire", 0, 0);
     at(
         "retire",
-        step(&home, &mut source, "retire", of_store(name, vec![])),
+        step(&home, source, "retire", of_store(name, vec![])),
     )?;
     Ok(SdkValue::map([
         ("store", SdkValue::text(name)),

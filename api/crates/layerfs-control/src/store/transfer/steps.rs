@@ -42,6 +42,15 @@ fn length(path: &Path) -> Result<u64, SdkRefusal> {
     }
 }
 
+/// The bytes free to this process on the filesystem that holds `path`,
+/// or would: its nearest existing ancestor.
+fn free(path: &Path) -> Result<u64, SdkRefusal> {
+    let at = path.ancestors().find(|at| at.exists()).unwrap_or(path);
+    let filesystem = nix::sys::statvfs::statvfs(at).map_err(failed)?;
+    let free = u128::from(filesystem.blocks_available()) * u128::from(filesystem.fragment_size());
+    Ok(u64::try_from(free).unwrap_or(u64::MAX))
+}
+
 fn hex(bytes: &[u8]) -> SdkValue {
     SdkValue::text(layerfs_bridge::sdk_values::hex(bytes))
 }
@@ -70,9 +79,14 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
         crate::store::open::close(&file)?;
     }
     match op {
-        // whether the file is here, and its size with its write-ahead log
+        // whether the file is here, its size with its write-ahead log, and
+        // the free bytes where it is (or would be)
         "stat" => Ok(SdkValue::map([
             ("exists", SdkValue::Bool(file.is_file())),
+            (
+                "free",
+                SdkValue::Int(free(&file)?.min(i64::MAX as u64) as i64),
+            ),
             ("bytes", SdkValue::Int(length(&file)? as i64)),
             (
                 "wal_bytes",

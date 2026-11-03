@@ -342,3 +342,93 @@ fn push_and_pull_refuse_the_wrong_side_and_a_stopped_machine_naming_machine_star
     assert_eq!(record(&home).get_text("machine"), Some("vm"));
     std::fs::remove_dir_all(home).unwrap();
 }
+
+/// The whole refusal of `name` with `args`.
+fn refusal(
+    home: &Path,
+    name: &str,
+    args: &[(&str, SdkValue)],
+) -> layerfs_bridge::control::SdkRefusal {
+    let args = SdkValue::Map(
+        args.iter()
+            .map(|(n, v)| ((*n).to_owned(), v.clone()))
+            .collect(),
+    );
+    calls::call(Some(home), name, args, &mut |_| {}).unwrap_err()
+}
+
+fn related(kind: &str, name: &str) -> SdkValue {
+    SdkValue::map([("kind", t(kind)), ("name", t(name))])
+}
+
+/// A write-ahead log beside `store` that says it holds 15 TiB (a sparse
+/// file: no bytes are written), so no target has room for the Store.
+fn huge_wal(store: &Path) -> PathBuf {
+    let wal = PathBuf::from(format!("{}-wal", store.display()));
+    assert!(!wal.exists(), "the Store is closed and checkpointed");
+    let file = std::fs::File::create(&wal).unwrap();
+    file.set_len(15 << 40).unwrap();
+    wal
+}
+
+#[test]
+fn push_and_pull_name_what_holds_the_store_and_need_room_on_the_target() {
+    let (home, root) = home_with_shop();
+    let push = [("name", t("shop")), ("machine", t("box"))];
+    // a live lease (process 1 is always alive) and a Sandbox record, even
+    // one that is not running: `InUse`, `detail.related` names both
+    let lease = paths::lease_dir(&home, "shop").join("1");
+    std::fs::create_dir_all(lease.parent().unwrap()).unwrap();
+    std::fs::write(&lease, "1\n").unwrap();
+    write_record(
+        &paths::sandbox_record(&home, "t1"),
+        &SdkValue::map([
+            ("v", SdkValue::Int(1)),
+            ("name", t("t1")),
+            ("project", t("shop/api")),
+            ("machine", t("native")),
+        ]),
+    )
+    .unwrap();
+    let held = refusal(&home, "store.push", &push);
+    assert_eq!(held.code, "InUse", "{}", held.message);
+    assert_eq!(
+        held.detail.get("related"),
+        Some(&SdkValue::List(vec![
+            related("lease", "1"),
+            related("sandbox", "t1")
+        ]))
+    );
+    assert_eq!(held.detail.get_text("phase"), Some("check"));
+    let removed = refusal(&home, "store.remove", &[("name", t("shop"))]);
+    assert_eq!(removed.code, "InUse");
+    assert_eq!(held.detail.get("related"), removed.detail.get("related"));
+    std::fs::remove_file(&lease).unwrap();
+    std::fs::remove_dir_all(paths::sandbox_dir(&home, "t1")).unwrap();
+
+    // no room on the target: `Capacity` before `op` is written
+    for (side, call, args) in [
+        (&home, "store.push", push.to_vec()),
+        (&root, "store.pull", vec![("name", t("shop"))]),
+    ] {
+        let wal = huge_wal(&paths::store_file(side, "shop"));
+        let full = refusal(&home, call, &args);
+        assert_eq!(full.code, "Capacity", "{call}: {}", full.message);
+        assert!(full.message.contains("bytes free"), "{}", full.message);
+        let needed = full.detail.get_int("needed").unwrap();
+        assert!(needed > 15 << 40, "{needed}");
+        assert!(full.detail.get_int("free").unwrap() < needed);
+        assert_eq!(record(&home).get("op"), None, "nothing was marked");
+        std::fs::remove_file(wal).unwrap();
+        // with room, it goes
+        let moved = call_ok(&home, call, &args);
+        assert_eq!(moved.get_text("store"), Some("shop"));
+    }
+    assert_eq!(record(&home).get_text("machine"), Some("native"));
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+}
+
+fn call_ok(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> SdkValue {
+    call(home, name, args).unwrap_or_else(|(code, message)| panic!("{name}: {code}: {message}"))
+}
