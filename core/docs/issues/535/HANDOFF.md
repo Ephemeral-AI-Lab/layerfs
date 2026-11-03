@@ -3,6 +3,10 @@
 > **Status:** Dated handoff, 2026-11-03; not release evidence or a product
 > contract. Closes the work [HANDOFF-2](HANDOFF-2.md) assigned. Nothing is
 > pushed, merged into `layerfs_v2_0_0` or commented on GitHub.
+>
+> **Later the same day (owner's instruction):** the branch was merged into
+> `layerfs_v2_0_0` and pushed to `origin`. The next step is
+> [INTEGRATION-PROMPT.md](INTEGRATION-PROMPT.md).
 
 ## Where it is
 

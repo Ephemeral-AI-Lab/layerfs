@@ -8,7 +8,8 @@
 
 Do these in order:
 
-1. Bring the finished #535 + #536 work into `layerfs_v2_0_0`, locally.
+1. Check that `layerfs_v2_0_0` holds the finished #535 + #536 work. The lead
+   merged and pushed it (Step A); you only verify it.
 2. Build the LayerFS outputs Connect needs from the merged commit.
 3. Back up Connect's LayerFS home before the new code converts it.
 4. Carry out [#537](../537/README.md) in LayerFS Connect, the work order for
@@ -25,19 +26,18 @@ independent. Stop and ask only at the points marked **Owner decision**.
   `~/Ephemeral-AI-Lab/layerfs-issue535-connect`.
   - Final product commit: `32aec70a64`, production LOC 136,044.
   - The commits after it are docs and receipts.
-  - The branch is 200 commits ahead of `layerfs_v2_0_0` (`58b8d1742b`) and
-    0 behind, so the merge is a fast-forward.
+  - The lead merged the branch into `layerfs_v2_0_0` on 2026-11-03, on top of
+    two remote commits (`2ec16ad784` CLI banner, `bb53a84a7b` npm publish
+    setting), and pushed it to `origin` (owner's instruction).
 - **Read first:** [HANDOFF.md](HANDOFF.md) (open items, commit table),
   [TERMINAL-PASS.md](TERMINAL-PASS.md), [535 DECISIONS](DECISIONS.md),
   [536 DECISIONS](../536/DECISIONS.md) and [#537](../537/README.md).
 - **`layerfs_v2_0_0` is checked out** in `~/Ephemeral-AI-Lab/layerfs-v2-merge`.
   - Its registration is `layerfs-v2-merge-7a9cf366f324`
     (`~/.cache/layerfs-worktrees/layerfs-v2-merge-7a9cf366f324/resources.json`).
-  - That checkout holds untracked older copies of
-    `core/docs/issues/535/{HANDOFF-2,HANDOFF-PROMPT,README}.md`,
-    `536/README.md` and `537/README.md`. The branch tracks newer versions of
-    all of them (`HANDOFF-2.md` is identical).
-  - They block a fast-forward.
+  - The lead moved that checkout's untracked older copies of the 535, 536
+    and 537 docs to
+    `~/.cache/layerfs-worktrees/layerfs-v2-merge-7a9cf366f324/archive/untracked-docs-20261103/`.
   - Leave `core/docs/issues/527/README.untracked-draft-20261101.md` alone.
 - **LayerFS Connect** is the private repo `~/Ephemeral-AI-Lab/layerfs-connect`,
   worked on directly on `main` (no worktree).
@@ -62,10 +62,9 @@ independent. Stop and ask only at the points marked **Owner decision**.
 
 ## Rules (binding)
 
-- **No pushing anywhere.** No push, PR, GitHub comment or tag in either repo.
-  Never rewrite history, force anything or bypass hooks.
-- **Fast-forward `layerfs_v2_0_0` locally only.** The owner handing you this
-  prompt is the authorization for that; it covers nothing else.
+- **No further pushing.** No push, PR, GitHub comment or tag in either repo
+  without the owner's word. Never rewrite history, force anything or bypass
+  hooks.
 - **LayerFS commits** carry `Production LOC: <before> -> <after> (delta
   <signed>)`, measured with the pinned `tools/production_loc.py` on the parent
   and the staged tree (AGENTS.md "Production LOC comparison"). Every commit
@@ -97,19 +96,13 @@ independent. Stop and ask only at the points marked **Owner decision**.
 - **Disk.** Run `python3 tools/cleanup.py check` at the start, every 30
   minutes and at the end.
 
-## Step A: fast-forward `layerfs_v2_0_0`
+## Step A: verify `layerfs_v2_0_0` (already merged and pushed)
 
-1. In `layerfs-v2-merge`, confirm the checkout is otherwise clean and idle:
-   - `git status`;
-   - no process has its cwd or open files there (`lsof +D` on the source
-     folders, not `target/`).
-2. Compare each blocking untracked file with the branch's version.
-   - Move them, don't delete them, to
-     `~/.cache/layerfs-worktrees/layerfs-v2-merge-7a9cf366f324/archive/untracked-docs-<date>/`.
-   - Record each file's path and SHA-256 in your report.
-3. Run `git merge --ff-only issue535-connect`. Check that
-   `git rev-parse layerfs_v2_0_0` equals the branch head.
-4. Don't delete `issue535-connect` or the lane branches.
+1. `git fetch origin`, then check that `origin/layerfs_v2_0_0` equals the
+   local `layerfs_v2_0_0` in `layerfs-v2-merge` and contains
+   `issue535-connect` (`git merge-base --is-ancestor`).
+2. If either check fails, stop and report; don't merge or push yourself.
+3. Don't delete `issue535-connect` or the lane branches.
 
 ## Step B: LayerFS builds for Connect
 
@@ -232,7 +225,7 @@ Leave `layerfs-issue533-v2` in place.
 
 Done means:
 
-- `layerfs_v2_0_0` is fast-forwarded to `issue535-connect`;
+- `layerfs_v2_0_0` is verified to hold `issue535-connect`;
 - the builds are recorded;
 - `home-2` is backed up and converted;
 - the #537 steps are committed on Connect `main`;
@@ -241,7 +234,7 @@ Done means:
 
 Report to the owner, outcome first:
 
-- the merged head;
+- the verified `layerfs_v2_0_0` head;
 - build hashes;
 - the bundle decision (or that it is waiting);
 - Connect commits;
@@ -249,4 +242,4 @@ Report to the owner, outcome first:
 - deviations from #537;
 - the open items Connect met;
 - disk at start and end;
-- anything left for the owner (push, the shared bundle, #537 §13).
+- anything left for the owner (a push of Connect, the shared bundle, #537 §13).
