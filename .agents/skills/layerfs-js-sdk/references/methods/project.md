@@ -23,10 +23,16 @@ Imports the host folder `folder` as a new project into the Store named before
 the `/`. Init never creates a Store: make one first with `store.create`.
 Everything in the folder is imported, including `.git` and ignored files.
 
+The folder is always on the caller's host. When the Store is a sqlite Store on
+another machine, the folder is copied to that machine and Init runs there on
+the copy, which is deleted afterwards: the machine needs free room for the copy
+while Init runs, and progress first reports `{ phase: "send", done, total }`
+in bytes.
+
 | Arg | Meaning |
 | --- | --- |
 | `project` | `<store>/<project>`; names are 1–63 lowercase letters, digits, `_ . -`, starting and ending alphanumeric |
-| `folder` | An absolute host folder path |
+| `folder` | An absolute folder path on the caller's host |
 | `timeout` | Milliseconds Init may take; default 300000 |
 | `on_progress` | A function called with each progress update (shell: `--progress`, JSON lines on stderr) |
 
