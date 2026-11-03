@@ -94,7 +94,8 @@ Sandbox names (H §7.6).
   FIFO or device file, is refused before anything is sent. Run: answers
   `project`, `store`, `name`, `kind`, `machine`, `created`, `layer` and
   `root`.
-- `remove` is refused while a Sandbox of the project runs, and is
+- `remove` is refused `InUse` while a Sandbox of the project is recorded
+  (`detail.related` lists each as `{kind: "sandbox", name}`), and is
   `Unsupported` for a PostgreSQL Store.
 
 ### `branch` (6)

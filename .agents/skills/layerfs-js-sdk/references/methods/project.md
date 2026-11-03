@@ -131,8 +131,10 @@ it; there is no undo. The live result:
 
 `packs_kept: true`: the project's records are gone, but its stored content
 stays in the Store file. Removing a project from a PostgreSQL Store is
-`Unsupported` in this build. To delete a whole Store with every project in it,
-use `store.remove`.
+`Unsupported` in this build. While a Sandbox of the project is recorded it is
+refused `InUse`; `detail.related` lists each as `{ kind: "sandbox", name }`
+(close them first). To delete a whole Store with every project in it, use
+`store.remove`.
 
 An agent working on a project never needs `remove`; it is for whoever owns the
 home.

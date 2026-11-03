@@ -161,6 +161,10 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
     assert!(inventory::can_retire_store(&home, "pg").is_ok());
     let refusal = inventory::can_remove_project(&home, "docs/web").unwrap_err();
     assert_eq!(refusal.message, "Sandbox b of docs/web is running");
+    assert_eq!(names(refusal.detail.get("related").unwrap()), ["b"]);
+    let refusal = inventory::can_remove_project(&home, "shop/api").unwrap_err();
+    assert_eq!(refusal.message, "Sandboxes a, c of shop/api are running");
+    assert_eq!(names(refusal.detail.get("related").unwrap()), ["a", "c"]);
     assert!(inventory::can_remove_project(&home, "shop/web").is_ok());
     let _ = std::fs::remove_dir_all(&home);
 }

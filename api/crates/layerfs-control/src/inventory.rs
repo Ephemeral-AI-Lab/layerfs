@@ -267,14 +267,14 @@ pub fn store_idle(home: &Path, store: &str) -> Result<()> {
     Err(in_use(why.join("; "), held))
 }
 
-/// `project.remove`: refused `InUse` while a Sandbox of `project` runs
-/// (the first one found is named).
+/// `project.remove`: refused `InUse` while a Sandbox of `project` is
+/// recorded; `detail.related` lists them as `{kind: "sandbox", name}`.
 pub fn can_remove_project(home: &Path, project: &str) -> Result<()> {
-    match sandboxes_of_project(home, project)?.first() {
-        None => Ok(()),
-        Some(sandbox) => Err(refused(
-            "InUse",
-            format!("Sandbox {sandbox} of {project} is running"),
-        )),
-    }
+    let sandboxes = sandboxes_of_project(home, project)?;
+    let message = match sandboxes.as_slice() {
+        [] => return Ok(()),
+        [sandbox] => format!("Sandbox {sandbox} of {project} is running"),
+        many => format!("Sandboxes {} of {project} are running", many.join(", ")),
+    };
+    Err(in_use(message, related("sandbox", &sandboxes)))
 }
