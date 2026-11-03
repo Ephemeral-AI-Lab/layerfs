@@ -1,6 +1,6 @@
 //! `machine.update`.
 use super::list::summary;
-use super::record::{kind_of, machine_of, sandboxes_on};
+use super::spec::{kind_of, machine_of, sandboxes_on};
 use crate::common::context::Context;
 use crate::common::home::{lock, paths, with_field, write_record};
 use crate::common::outcome::{refused, Outcome};

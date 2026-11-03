@@ -5,7 +5,7 @@
 //! where there is one, the VM; its disks stay. Built-in `native` answers
 //! both at once. Each answers the machine's summary as `machine.get` does.
 use super::endpoint::{running, start_lock};
-use super::record::{self, hosted_on, kind_of, machine_of, refusal, sandboxes_on};
+use super::spec::{self as record, hosted_on, kind_of, machine_of, refusal, sandboxes_on};
 use super::status::home_id;
 use crate::common::context::Context;
 use crate::common::home::{lock, paths, with_field};

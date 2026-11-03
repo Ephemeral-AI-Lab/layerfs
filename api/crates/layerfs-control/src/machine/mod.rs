@@ -23,9 +23,9 @@ mod platforms;
 #[cfg(feature = "machine")]
 mod power;
 #[cfg(feature = "machine")]
-mod record;
-#[cfg(feature = "machine")]
 mod remove;
+#[cfg(feature = "machine")]
+mod spec;
 #[cfg(feature = "machine")]
 mod status;
 #[cfg(feature = "machine")]
@@ -51,9 +51,9 @@ pub use platforms::platforms;
 #[cfg(feature = "machine")]
 pub use power::{start, stop};
 #[cfg(feature = "machine")]
-pub use record::{ensure_built_ins, kind_of as platform_of, machine_of, vm_name};
-#[cfg(feature = "machine")]
 pub use remove::{disconnect, remove};
+#[cfg(feature = "machine")]
+pub use spec::{ensure_built_ins, kind_of as platform_of, machine_of, vm_name};
 #[cfg(feature = "machine")]
 pub use status::status;
 #[cfg(feature = "machine")]

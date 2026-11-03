@@ -1,5 +1,7 @@
 //! `machine.list` and the live probes and summaries it shares with `get`, `update` and the create/connect outcome.
-use super::record::{self, backend_name, kind_of, refusal, removing, sandboxes_on, stores_on};
+use super::spec::{
+    self as record, backend_name, kind_of, refusal, removing, sandboxes_on, stores_on,
+};
 use super::status::home_id;
 use crate::common::context::Context;
 use crate::common::home::{paths, read_record};

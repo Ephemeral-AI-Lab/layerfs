@@ -1,6 +1,6 @@
 //! `machine.get`.
 use super::list::{live, summary};
-use super::record::machine_of;
+use super::spec::machine_of;
 use crate::common::context::Context;
 use crate::common::outcome::Outcome;
 use layerfs_bridge::control::SdkValue;

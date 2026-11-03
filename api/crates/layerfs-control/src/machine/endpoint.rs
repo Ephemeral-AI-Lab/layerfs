@@ -9,7 +9,7 @@
 //! same stopped machine take turns on its `start.lock`. A Firecracker
 //! machine's Lima host is started the same way first: its own worker may
 //! have stopped it.
-use super::record::{self, machine_of, refusal, save_running};
+use super::spec::{self as record, machine_of, refusal, save_running};
 use crate::common::outcome::{failed, refused};
 use crate::machine::worker::Endpoint;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};

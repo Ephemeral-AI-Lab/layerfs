@@ -5,7 +5,9 @@
 //! an `Unknown` outcome keeps everything and is logged.
 use super::bundle::bundle;
 use super::list::summary;
-use super::record::{self, kind_of, machine_of, refusal, save_running, update as update_record};
+use super::spec::{
+    self as record, kind_of, machine_of, refusal, save_running, update as update_record,
+};
 use super::status::home_id;
 use crate::common::context::Context;
 use crate::common::home::{self, lock, paths, with_field, write_record};

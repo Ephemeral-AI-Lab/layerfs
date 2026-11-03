@@ -4,7 +4,7 @@
 //! image id Docker reports is used, for the docker worker's container and
 //! for Sandboxes. The docker record keeps `loaded_image: { id, bundle }`;
 //! another bundle's image is loaded again. A load is one attempt.
-use super::record::{self, machine_of, refusal};
+use super::spec::{self as record, machine_of, refusal};
 use super::status::home_id;
 use crate::common::home::{lock, with_field};
 use crate::common::outcome::refused;

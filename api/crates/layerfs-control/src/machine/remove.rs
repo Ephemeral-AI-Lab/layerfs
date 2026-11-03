@@ -1,5 +1,7 @@
 //! `machine.remove` and `machine.disconnect`.
-use super::record::{self, hosted_on, kind_of, machine_of, refusal, sandboxes_on, stores_on};
+use super::spec::{
+    self as record, hosted_on, kind_of, machine_of, refusal, sandboxes_on, stores_on,
+};
 use super::status::home_id;
 use crate::common::context::Context;
 use crate::common::home::{lock, paths, with_field, write_record};

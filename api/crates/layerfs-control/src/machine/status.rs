@@ -1,5 +1,5 @@
 //! `machine.status` and the home id the machine specs use.
-use super::record::{self, machine_of, refusal, stores_on};
+use super::spec::{self as record, machine_of, refusal, stores_on};
 use crate::common::context::Context;
 use crate::common::home::{self};
 use crate::common::outcome::Outcome;

@@ -1,7 +1,7 @@
 //! `machine.connect`: an ssh host.
 use super::bundle::bundle;
 use super::create::{finish, new_name};
-use super::record::{self, refusal, update as update_record};
+use super::spec::{self as record, refusal, update as update_record};
 use super::status::home_id;
 use crate::common::context::Context;
 use crate::common::home::{self, lock, paths, read_record, with_field, write_record};
