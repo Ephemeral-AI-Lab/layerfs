@@ -1,0 +1,12 @@
++(eval):17> limactl disk create g7probe-lima-data --size 1024MiB --format raw
+time="2026-11-03T10:21:08+08:00" level=info msg="Creating raw disk `g7probe-lima-data` with size 1GiB"
++(eval):17> limactl create --name g7probe-lima '--tty=false' -
+time="2026-11-03T10:21:09+08:00" level=info msg="Terminal is not available, proceeding without opening an editor"
+time="2026-11-03T10:21:09+08:00" level=info msg="Replacing `http_proxy` value `http://127.0.0.1:15236` with `http://192.168.5.2:15236`"
+time="2026-11-03T10:21:09+08:00" level=info msg="Replacing `https_proxy` value `http://127.0.0.1:15236` with `http://192.168.5.2:15236`"
+time="2026-11-03T10:21:09+08:00" level=info msg="Replacing `HTTP_PROXY` value `http://127.0.0.1:15236` with `http://192.168.5.2:15236`"
+time="2026-11-03T10:21:09+08:00" level=info msg="Replacing `HTTPS_PROXY` value `http://127.0.0.1:15236` with `http://192.168.5.2:15236`"
+time="2026-11-03T10:21:09+08:00" level=info msg="Attempting to download the image" arch=aarch64 digest= location="https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img"
+time="2026-11-03T10:21:10+08:00" level=info msg="Using cache `/Users/yifanxu/Library/Caches/lima/download/by-url-sha256/002fbe468673695a2206b26723b1a077a71629001a5b94efd8ea1580e1c3dd06/imgconv/raw`"
+time="2026-11-03T10:21:10+08:00" level=info msg="Resize instance g7probe-lima's disk from 3.5GiB to 100GiB"
+time="2026-11-03T10:21:10+08:00" level=info msg="Run `limactl start g7probe-lima` to start the instance."
