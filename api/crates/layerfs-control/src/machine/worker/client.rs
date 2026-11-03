@@ -1,5 +1,6 @@
 //! The caller's side: one request per connection, sent once.
 use super::frame::{frame_bytes, read_frame, read_frame_within, write_frame, MAX_HELLO};
+use super::hello::Hello;
 use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::io::Write;
@@ -28,8 +29,9 @@ pub const PING_WAIT: Duration = Duration::from_secs(10);
 /// Runs one host operation `op` in the worker. Events the worker sends
 /// (progress, command output) go to `events`. A request too large is
 /// `TooLarge` and a worker that cannot be reached or does not answer its
-/// secret in [`HELLO_WAIT`] is `Unavailable`; a wrong secret is the
-/// worker's refusal (`Denied`). In each, the request was not sent. A
+/// secret in [`HELLO_WAIT`] is `Unavailable`, and so is one of another
+/// build ([`super::Hello::mismatch`]); a wrong secret is the worker's
+/// refusal (`Denied`). In each, the request was not sent. A
 /// connection lost after the request was sent is `Unknown`: the operation
 /// may have run, and nothing is resent.
 pub fn call(
@@ -80,34 +82,72 @@ pub fn send(
             ),
         ))
     };
-    let mut stream = TcpStream::connect_timeout(&endpoint.address, CONNECT)
-        .map_err(|error| unavailable(&error))?;
-    let _ = stream.set_nodelay(true);
-    // the secret first, alone: the worker answers it before the request
-    stream
-        .set_read_timeout(Some(HELLO_WAIT))
-        .map_err(|error| unavailable(&error))?;
-    let hello = SdkValue::map([("secret", SdkValue::text(&endpoint.secret))]);
-    write_frame(&mut stream, &hello).map_err(|error| unavailable(&error))?;
-    match read_frame_within(&mut stream, MAX_HELLO) {
-        Ok(Some(frame)) if frame.get("ready").is_some() => {}
-        Ok(Some(frame)) => {
-            return Err(Unreached(match frame.get("refused") {
-                Some(refusal) => refusal_of(refusal),
-                None => refused(
-                    "Failed",
-                    "the worker answered its secret with no known frame",
-                ),
-            }))
-        }
-        Ok(None) => return Err(unavailable(&"it closed the connection")),
-        Err(refusal) => return Err(unavailable(&refusal.message)),
+    let (stream, hello) = greet(endpoint).map_err(|refusal| match refusal {
+        Greeting::Refused(refusal) => Unreached(refusal),
+        Greeting::Unanswered(why) => unavailable(&why),
+    })?;
+    // a worker of another build is sent nothing
+    if let Some(refusal) = hello.mismatch(&endpoint.address.to_string()) {
+        return Err(Unreached(refusal));
     }
     stream
         .set_read_timeout(answer_within)
         .map_err(|error| unavailable(&error))?;
     // from here the request may have reached the worker: nothing is resent
     Ok(answer(stream, op, request, events))
+}
+
+/// Why a worker did not answer its secret.
+enum Greeting {
+    /// It refused (a wrong secret: `Denied`) or answered no known frame.
+    Refused(SdkRefusal),
+    /// It could not be reached or did not answer in [`HELLO_WAIT`].
+    Unanswered(String),
+}
+
+/// One new connection to the worker, its secret sent alone and answered:
+/// the open stream and what the worker said of itself. Nothing else is sent.
+fn greet(endpoint: &Endpoint) -> Result<(TcpStream, Hello), Greeting> {
+    let unanswered = |why: &dyn std::fmt::Display| Greeting::Unanswered(why.to_string());
+    let mut stream = TcpStream::connect_timeout(&endpoint.address, CONNECT)
+        .map_err(|error| unanswered(&error))?;
+    let _ = stream.set_nodelay(true);
+    // the secret first, alone: the worker answers it before the request
+    stream
+        .set_read_timeout(Some(HELLO_WAIT))
+        .map_err(|error| unanswered(&error))?;
+    let secret = SdkValue::map([("secret", SdkValue::text(&endpoint.secret))]);
+    write_frame(&mut stream, &secret).map_err(|error| unanswered(&error))?;
+    match read_frame_within(&mut stream, MAX_HELLO) {
+        Ok(Some(frame)) if frame.get("ready").is_some() => {
+            let hello = Hello::of(&frame);
+            Ok((stream, hello))
+        }
+        Ok(Some(frame)) => Err(Greeting::Refused(match frame.get("refused") {
+            Some(refusal) => refusal_of(refusal),
+            None => refused(
+                "Failed",
+                "the worker answered its secret with no known frame",
+            ),
+        })),
+        Ok(None) => Err(unanswered(&"it closed the connection")),
+        Err(refusal) => Err(unanswered(&refusal.message)),
+    }
+}
+
+/// What the worker at `endpoint` says of itself when it answers its secret
+/// (its protocol and bundle), whatever build it is; the connection then
+/// closes with no request. `Unavailable` when it does not answer, its
+/// refusal (`Denied`) when it refuses the secret.
+pub fn hello(endpoint: &Endpoint) -> Result<Hello, SdkRefusal> {
+    match greet(endpoint) {
+        Ok((_, hello)) => Ok(hello),
+        Err(Greeting::Refused(refusal)) => Err(refusal),
+        Err(Greeting::Unanswered(why)) => Err(refused(
+            "Unavailable",
+            format!("the worker at {} does not answer: {why}", endpoint.address),
+        )),
+    }
 }
 
 /// Writes the request and reads the events and the answer.

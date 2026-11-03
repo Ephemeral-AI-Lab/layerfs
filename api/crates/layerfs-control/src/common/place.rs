@@ -103,7 +103,7 @@ impl Worker {
         };
         if let Some(endpoint) = &self.endpoint {
             return worker::send(endpoint, op, &request, events, None)
-                .map_err(|Unreached(why)| Unreached(stopped(&self.machine, &why.message)));
+                .map_err(|Unreached(why)| Unreached(stopped(&self.machine, why)));
         }
         let endpoint = recorded(&self.home, &self.machine).map_err(Unreached)?;
         match worker::send(&endpoint, op, &request, events, None) {
@@ -111,18 +111,28 @@ impl Worker {
                 self.endpoint = Some(endpoint);
                 Ok(outcome)
             }
-            Err(Unreached(why)) => Err(Unreached(stopped(&self.machine, &why.message))),
+            Err(Unreached(why)) => Err(Unreached(stopped(&self.machine, why))),
         }
     }
 }
 
 /// The refusal of a call whose machine's worker did not answer: the
-/// machine is stopped, or its worker ended. Nothing was sent.
-fn stopped(machine: &str, why: &str) -> SdkRefusal {
+/// machine is stopped, or its worker ended. A worker of another build is
+/// replaced by stopping and starting its machine. Nothing was sent.
+fn stopped(machine: &str, why: SdkRefusal) -> SdkRefusal {
+    if worker::is_mismatch(&why) {
+        let message = format!(
+            "machine {machine}: {}; replace its worker with this build's: {}",
+            why.message,
+            worker::replace_with(machine)
+        );
+        return SdkRefusal { message, ..why };
+    }
     refused(
         "Unavailable",
         format!(
-            "machine {machine}'s worker did not answer ({why}); start it with `layerfs machine start {machine}`"
+            "machine {machine}'s worker did not answer ({}); start it with `layerfs machine start {machine}`",
+            why.message
         ),
     )
 }

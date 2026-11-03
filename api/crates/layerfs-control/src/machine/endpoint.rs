@@ -87,13 +87,15 @@ fn endpoint_of(endpoint: &adapters::Endpoint) -> Endpoint {
     }
 }
 
-/// The recorded worker, when it answers its secret now.
+/// The recorded worker, when it answers its secret now, whatever build it
+/// is: a worker of another build is replaced by `machine stop` and then
+/// `machine start`, never by a start over it.
 fn answering(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> {
     let Some(recorded) = record::worker(home, name)? else {
         return Ok(None);
     };
     let endpoint = endpoint_of(&recorded);
-    Ok(crate::machine::worker::ping(&endpoint)
+    Ok(crate::machine::worker::hello(&endpoint)
         .is_ok()
         .then_some(endpoint))
 }
