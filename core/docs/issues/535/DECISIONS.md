@@ -24,6 +24,7 @@ none is to be re-confirmed.
 | D8 | Docker is not treated as a namespaces machine; it keeps its own backend. | owner, 2026-11-03 |
 | D9 | Every machine can use both PostgreSQL and sqlite Stores, several of each. | owner, 2026-11-03 |
 | D10 | The support matrix is generated (`connect/SUPPORT.json`) and exposed as the call `machine.platforms`. | owner, 2026-11-03 |
+| D11 | **Machine lifecycle is manual.** No automatic idle stop of workers or VMs, and no on-demand start: a call on a stopped machine is refused `Unavailable`, naming `layerfs machine start <name>`. Sandbox daemons no longer end themselves when idle. The Store connection reaper (`store/open.rs`, 60 s) stays: it frees a connection and is not lifecycle. **Supersedes** #533 O2 (worker idle stop), #535 R1's on-demand start (R1 keeps "no ping before a worker call") and #373's 120 s Sandbox idle close. Owner's words: "i think we should remove it, if we have start or stop. make the lifecycle management to be mannual"; answers "Refuse, name machine start" and "Remove Sandbox 2-min close". | owner, 2026-11-03, relayed by a forked side session (`local_404fb529`) to this session; scheduled after F2 merges (F2 edits the worker idle files) |
 
 ## Gates
 
