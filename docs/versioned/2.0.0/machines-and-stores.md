@@ -180,8 +180,8 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
 - A Sandbox on `docker` is a container on the docker machine's image. On
   macOS and Linux the docker worker (a container on that image) starts it
   beside itself, mounting only its Store's folder of the worker's data
-  volume. A PostgreSQL Store's Sandbox on `native` or `docker` is started by
-  the caller.
+  volume. A PostgreSQL Store's Sandbox starts the same way as a sqlite
+  Store's on that machine; it binds no Store file.
 - Every machine other than `native` is reached through its worker, `docker`
   on Linux included (its sqlite Stores live in a Docker volume). Checked in
   the terminal pass on a Linux VM.
@@ -280,11 +280,16 @@ layerfs project init pg-main/load ./load
 - `project init` into a PostgreSQL Store runs in the caller's process.
 - PostgreSQL needs a build with the `postgresql` feature; without it these
   calls are `Unsupported`.
-- A PostgreSQL Store's Sandboxes run on `native` (macOS, a daemon built
-  with `postgresql`) or `docker`, started from the caller's process, which
-  resolves the password and hands the URL to the daemon. Under Docker
-  Desktop a loopback URL reaches the container's daemon as
-  `host.docker.internal`. On a VM or ssh host they come later (O3).
+- A PostgreSQL Store's Sandboxes run on `native` (macOS and Linux),
+  `docker` and ssh machines (#535 phase 5a; the daemon is built with
+  `postgresql`), started where the machine starts Sandboxes. The caller
+  resolves the password and rewrites a loopback host for the machine
+  (`docker`: `host.docker.internal`, given to the containers on a Linux
+  Engine as its `host-gateway`; ssh refuses a loopback URL); the URL
+  travels only in that one request. `sandbox create` first checks, from
+  the machine, that the server answers with the Store's schema binding.
+  `lima`, `apple-container`, `microsandbox` and `firecracker` stay refused
+  until their G7 facts allow it (`layerfs machine platforms` says why).
 - Not built: `project remove` from a PostgreSQL Store, and backups of
   PostgreSQL Stores (back it up with PostgreSQL's own tools).
 - The step 10a and 10b commits record `store connect` and Init into a
