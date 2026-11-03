@@ -11,8 +11,8 @@
 //! moved or deleted. A file with a write-ahead log (a process stopped
 //! without closing it) is not placed: its log would not follow it.
 //! Anything not placed keeps its `volume` and is reported.
-use super::paths;
-use super::records::{private_dir, write_record};
+use crate::common::home::paths;
+use crate::common::home::records::{private_dir, with_field, write_record};
 use layerfs_bridge::control::SdkValue;
 use layerfs_store_backup::bucket::pieces;
 use std::fs;
@@ -46,8 +46,8 @@ pub(super) fn place(
 ) -> Result<(SdkValue, Option<String>), layerfs_bridge::control::SdkRefusal> {
     let target = paths::store_file(home, store);
     let native = |record: SdkValue, from: &Path| {
-        let record = super::with_field(record, "machine", SdkValue::text("native"));
-        super::with_field(
+        let record = with_field(record, "machine", SdkValue::text("native"));
+        with_field(
             record,
             "file_1_1_0",
             SdkValue::text(from.display().to_string()),

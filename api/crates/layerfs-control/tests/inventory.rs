@@ -1,6 +1,8 @@
 //! The relationships no record stores (#536 §5, §9.2): which Stores and
 //! Sandboxes a machine holds, which Sandboxes a Store or a project has, and
-//! the `InUse` refusals built from them, with their texts.
+//! the `InUse` refusals built from them, with their texts. Layout 3: a
+//! Sandbox is read from `sandbox/<name>/` alone; a layout 2 folder under a
+//! machine is never read.
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::common::home::{paths, write_record};
 use layerfs_control::common::json::parse;
@@ -26,8 +28,9 @@ fn record(path: &Path, text: &str) {
 
 /// Machines `native` and `dev` (a Lima host of `fc`); Stores `shop` (on
 /// `dev`), `docs` (no machine: `native`) and `pg` (PostgreSQL); Sandboxes
-/// `a` (shop/api, on dev), `b` (docs/web, on native) and a folder `c` on
-/// dev with no record.
+/// `a` (shop/api, on dev), `b` (docs/web, on native) and `c` (shop/api, on
+/// dev); a folder `d` with no record and a layout 2 record `z` under
+/// `machine/dev/sandbox/`, which no call reads.
 fn home() -> PathBuf {
     let home = tempdir();
     record(
@@ -52,14 +55,22 @@ fn home() -> PathBuf {
         r#"{"kind":"postgresql"}"#,
     );
     record(
-        &paths::sandbox_dir(&home, "dev", "a").join("record.json"),
-        r#"{"name":"a","project":"shop/api"}"#,
+        &paths::sandbox_record(&home, "a"),
+        r#"{"v":1,"name":"a","project":"shop/api","machine":"dev"}"#,
     );
     record(
-        &paths::sandbox_dir(&home, "native", "b").join("record.json"),
-        r#"{"name":"b","project":"docs/web"}"#,
+        &paths::sandbox_record(&home, "b"),
+        r#"{"v":1,"name":"b","project":"docs/web","machine":"native"}"#,
     );
-    std::fs::create_dir_all(paths::sandbox_dir(&home, "dev", "c")).unwrap();
+    record(
+        &paths::sandbox_record(&home, "c"),
+        r#"{"v":1,"name":"c","project":"shop/api","machine":"dev"}"#,
+    );
+    std::fs::create_dir_all(paths::sandbox_dir(&home, "d")).unwrap();
+    record(
+        &paths::machine_dir(&home, "dev").join("sandbox/z/record.json"),
+        r#"{"name":"z","project":"shop/api","machine":"dev"}"#,
+    );
     home
 }
 
@@ -77,14 +88,22 @@ fn relationships_are_read_from_the_records() {
         .collect();
     assert_eq!(
         names,
-        [("dev".into(), "a".into()), ("native".into(), "b".into())]
+        [
+            ("dev".into(), "a".into()),
+            ("native".into(), "b".into()),
+            ("dev".into(), "c".into())
+        ]
     );
     assert_eq!(
         inventory::sandbox(&home, "b").unwrap().unwrap().machine(),
         "native"
     );
-    assert!(inventory::sandbox(&home, "c").unwrap().is_none());
-    assert_eq!(inventory::sandboxes_of_store(&home, "shop").unwrap(), ["a"]);
+    assert!(inventory::sandbox(&home, "d").unwrap().is_none());
+    assert!(inventory::sandbox(&home, "z").unwrap().is_none());
+    assert_eq!(
+        inventory::sandboxes_of_store(&home, "shop").unwrap(),
+        ["a", "c"]
+    );
     assert_eq!(
         inventory::sandboxes_of_project(&home, "docs/web").unwrap(),
         ["b"]
@@ -129,7 +148,7 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
         "Sandboxes [b] run on native; close them before changing it"
     );
     let refusal = inventory::can_retire_store(&home, "shop").unwrap_err();
-    assert_eq!(refusal.message, "Store shop has running Sandboxes: a");
+    assert_eq!(refusal.message, "Store shop has running Sandboxes: a, c");
     assert!(inventory::can_retire_store(&home, "pg").is_ok());
     let refusal = inventory::can_remove_project(&home, "docs/web").unwrap_err();
     assert_eq!(refusal.message, "Sandbox b of docs/web is running");

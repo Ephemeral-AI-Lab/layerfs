@@ -1,13 +1,11 @@
 //! What this process owns: its running Inits and its live Sandboxes. A
-//! project itself is only its home entry (`<home>/<name>/`), so a project
-//! removed there can be initialized again without a restart.
+//! project itself is only its home entry, so a project removed there can be
+//! initialized again without a restart.
 //!
 //! A Sandbox is one container and its daemon (or, with the local runtime,
-//! one daemon process: `runtime`). Its runtime runs commands
-//! directly; its control connections (`pool`) each carry one exchange at a
-//! time, and concurrent calls take separate connections. The Sandbox runtime owner (this
-//! binding) also keeps the background processes it started; the daemon holds
-//! no process record.
+//! one daemon process: `runtime`), known by its name. Its runtime runs
+//! commands directly; its control connections (`pool`) each carry one
+//! exchange at a time, and concurrent calls take separate connections.
 use crate::common::outcome::refused;
 use crate::MountedWorkspace;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
@@ -30,34 +28,25 @@ pub(crate) struct Mount {
     pub(crate) branch: String,
 }
 
-/// One background process an earlier bundle started in a Workspace (its
-/// `process-<id>.record`), probed before an unmount.
-pub(crate) struct Process {
-    pub(crate) path: String,
-    pub(crate) pid: u32,
-    pub(crate) stopped: bool,
-    pub(crate) start: String,
-}
-
-/// One live Sandbox: Sandbox `id` (its number) of `project`.
+/// One live Sandbox: Sandbox `id` (its name) of `project`.
 pub(crate) struct SandboxState {
     pub(crate) id: String,
     pub(crate) project: String,
-    /// Its container's name, `<prefix><project>-<id>` (a local Sandbox's
-    /// directory name).
+    /// Its container's name, `<prefix><id>` (a local Sandbox's directory
+    /// name).
     pub(crate) name: String,
+    /// Its folder, `<root>/sandbox/<id>/`.
     pub(crate) directory: std::path::PathBuf,
     pub(crate) runtime: Box<layerfs_sandbox::Sandbox>,
     pub(crate) identity: CommandIdentity,
     pub(crate) controls: crate::daemon::pool::Controls,
     pub(crate) mounts: Mutex<BTreeMap<String, Mount>>,
-    pub(crate) processes: Mutex<BTreeMap<String, Process>>,
 }
 
 /// The live counts of each Init still running, by project name.
 pub(crate) static INITS: LazyLock<Mutex<BTreeMap<String, Arc<crate::InitCounters>>>> =
     LazyLock::new(Default::default);
-/// This process's live Sandboxes, by their record directory.
+/// This process's live Sandboxes, by their folder.
 pub(crate) static SANDBOXES: LazyLock<Mutex<BTreeMap<std::path::PathBuf, Arc<SandboxState>>>> =
     LazyLock::new(Default::default);
 
@@ -85,7 +74,7 @@ pub(crate) fn text<'a>(args: &'a SdkValue, name: &str) -> Result<&'a str, SdkRef
 /// that needs every mount or process another process may have changed takes
 /// `discovery::refresh`.
 pub(crate) fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let directory = crate::sandbox::files::sandbox_dir(args, text(args, "sandbox")?)?;
+    let directory = crate::sandbox::files::sandbox_dir(args)?;
     let existing = lock(&SANDBOXES)?.get(&directory).cloned();
     match existing {
         Some(state) => Ok(state),
@@ -103,14 +92,14 @@ pub(crate) fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> 
 /// Sandbox's daemon ends itself, #373) is the refusal of
 /// `discovery::gone`, and this process forgets the state.
 pub(crate) fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
-    let directory = crate::sandbox::files::sandbox_dir(args, text(args, "sandbox")?)?;
+    let directory = crate::sandbox::files::sandbox_dir(args)?;
     let Some(state) = lock(&SANDBOXES)?.get(&directory).cloned() else {
         return sandbox(args);
     };
     if let Err(failure) = state.runtime.endpoint() {
         lock(&SANDBOXES)?.remove(&directory);
         return Err(if failure.container_gone() || failure.container_stopped() {
-            crate::sandbox::files::gone(
+            crate::sandbox::recorded::gone(
                 &state.id,
                 &state.runtime.identity().to_string(),
                 failure.container_stopped(),
@@ -120,20 +109,6 @@ pub(crate) fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefu
         });
     }
     Ok(state)
-}
-
-/// `args` naming Sandbox `id` of their project.
-pub(crate) fn naming(args: &SdkValue, id: &str) -> SdkValue {
-    let mut fields = match args {
-        SdkValue::Map(fields) => fields
-            .iter()
-            .filter(|(name, _)| name != "sandbox")
-            .cloned()
-            .collect(),
-        _ => Vec::new(),
-    };
-    fields.push(("sandbox".to_owned(), SdkValue::text(id)));
-    SdkValue::Map(fields)
 }
 
 impl SandboxState {

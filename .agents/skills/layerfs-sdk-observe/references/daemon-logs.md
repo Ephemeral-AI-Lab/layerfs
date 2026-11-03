@@ -26,7 +26,7 @@ There is no general log level or logging framework.
 
 | Sandbox on | Log |
 | --- | --- |
-| `native` (macOS host processes, Linux namespaces) | The file `daemon.log` (stdout and stderr together, mode 0600) in the Sandbox's private folder under `$LAYERFS_HOME/machine/native/sandbox-root/`. The folder is named after the Sandbox's container name, the `container` field of `workspace.mount`'s result |
+| `native` (macOS host processes, Linux namespaces) | The file `daemon.log` (stdout and stderr together, mode 0600) in the Sandbox's private folder under `$LAYERFS_HOME/machine/native/run/`. The folder is named `lfs-<home id, 8 digits>-<Sandbox name>`, the `container` field of `workspace.mount`'s result |
 | a VM or ssh machine | Inside that machine, under its worker's root; no call reads it from the host |
 | `docker` | Sandboxes on `docker` are `Unsupported` in this build |
 
@@ -36,8 +36,8 @@ log.
 
 ```bash
 # from source; check the folder name against workspace.mount's `container`
-ls "$LAYERFS_HOME/machine/native/sandbox-root/"
-cp "$LAYERFS_HOME/machine/native/sandbox-root/<container>/daemon.log" run/daemon-<container>.log
+ls "$LAYERFS_HOME/machine/native/run/"
+cp "$LAYERFS_HOME/machine/native/run/<container>/daemon.log" run/daemon-<container>.log
 ```
 
 When a Sandbox fails to start, `sandbox.create`'s `Failed` message carries

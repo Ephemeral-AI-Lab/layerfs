@@ -432,7 +432,7 @@ pub static CALLS: &[Call] = &[
         "workspace",
         "mount",
         &[a("sandbox", Name), a("branch", Name)],
-        &[],
+        &[opt("name", Name)],
         "mount a Branch in a Sandbox",
     ),
     call(

@@ -1,12 +1,13 @@
 //! The `sandbox` and `workspace` families (#533 step 12): Sandboxes named
 //! across the home (unique under `layerfs.lock`), recorded in
-//! `machine/<machine>/sandbox/<name>/record.json`, each running one project's
-//! daemon on the machine that holds its Store. A Workspace is
+//! `sandbox/<name>/record.json` (layout 3, #536 §5), each running one
+//! project's daemon on the machine that holds its Store. A Workspace is
 //! `<sandbox>:<path>`. A Sandbox on `native` runs in this process's host
 //! Sandbox code: host processes over loopback NFS on macOS, namespaces on
-//! Linux. On any other machine the same call runs in that machine's worker,
-//! which keeps the Sandbox's records under its own root; this home keeps
-//! the name, the project and the machine. A Sandbox on `docker` is a
+//! Linux; what reopens it is in the same folder. On any other machine the
+//! same call runs in that machine's worker, which keeps the Sandbox's thin
+//! record, keys and Workspaces in `sandbox/<name>/` under its own root
+//! (§6); this home keeps the name, the project and the machine. A Sandbox on `docker` is a
 //! container whose image comes from the docker machine's record and travels
 //! with the call (H §7.6, §7.7); a sqlite Store's is started by the docker
 //! machine's worker on every host (G8). Where a call runs is

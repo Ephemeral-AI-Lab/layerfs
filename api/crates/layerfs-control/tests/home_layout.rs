@@ -64,8 +64,23 @@ fn a_newer_or_broken_layout_is_refused() {
     )
     .unwrap();
     assert_eq!(detect(&home).unwrap_err().code, "Unsupported");
-    std::fs::write(home.join("layerfs.json"), "{\"layout\":2,\"id\":\"xyz\"}").unwrap();
+    std::fs::write(home.join("layerfs.json"), "{\"layout\":3,\"id\":\"xyz\"}").unwrap();
     assert_eq!(detect(&home).unwrap_err().code, "Failed");
+    let id = "b".repeat(32);
+    std::fs::write(
+        home.join("layerfs.json"),
+        format!("{{\"layout\":1,\"id\":\"{id}\"}}"),
+    )
+    .unwrap();
+    assert_eq!(detect(&home).unwrap_err().code, "Failed");
+    // layout 2 is read, and refused by `ensure` until it converts
+    std::fs::write(
+        home.join("layerfs.json"),
+        format!("{{\"layout\":2,\"id\":\"{id}\"}}"),
+    )
+    .unwrap();
+    assert!(matches!(detect(&home).unwrap(), Layout::Previous(file) if file.layout == 2));
+    assert_eq!(ensure(&home).unwrap_err().code, "InvalidInput");
     std::fs::write(home.join("layerfs.json"), "not json").unwrap();
     assert_eq!(detect(&home).unwrap_err().code, "Failed");
     std::fs::remove_dir_all(home).unwrap();

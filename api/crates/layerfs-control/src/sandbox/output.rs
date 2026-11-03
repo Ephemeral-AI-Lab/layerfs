@@ -43,10 +43,6 @@ impl Spool {
             limit: if spool { 0 } else { INLINE },
         }
     }
-    /// The kept bytes; empty once the stream spilled to its file.
-    pub(crate) fn kept(&self) -> &[u8] {
-        &self.kept
-    }
     fn spill(&mut self) -> io::Result<()> {
         let name = std::env::temp_dir().join(format!(
             "layerfs-exec-{}",

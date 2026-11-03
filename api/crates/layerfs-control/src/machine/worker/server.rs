@@ -62,6 +62,7 @@ pub(crate) fn serve_gated(
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o701))?;
     }
     crate::common::home::guest::serve_root(&root);
+    crate::common::home::guest::retire_layout_2(&root);
     let secret = Arc::new(secret);
     let root = Arc::new(root);
     let served = Arc::new(AtomicU64::new(0));

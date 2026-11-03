@@ -1,7 +1,8 @@
-//! Where each record lives in the home (H §7.8). What never moves nests
-//! under its owner: projects under their Store, Sandboxes under their
-//! machine. A sqlite Store moves between machines, so it stays at the top
-//! and its record names its machine.
+//! Where each record lives in the home (layout 3, #536 §5). Each entity
+//! kind has one folder and each entity one identity, its name: projects
+//! nest under their Store, Workspaces under their Sandbox. Sandboxes and
+//! sqlite Stores are at the top and their records name their machine. A
+//! worker's root uses the same paths for what it keeps (§6).
 use std::path::{Path, PathBuf};
 
 /// `store/<name>/`.
@@ -54,9 +55,31 @@ pub fn worker_record(home: &Path, machine: &str) -> PathBuf {
     machine_dir(home, machine).join("worker.json")
 }
 
-/// `machine/<machine>/sandbox/<name>/`.
-pub fn sandbox_dir(home: &Path, machine: &str, sandbox: &str) -> PathBuf {
-    machine_dir(home, machine).join("sandbox").join(sandbox)
+/// `sandbox/<name>/`: a Sandbox's record, daemon keys and Workspaces.
+pub fn sandbox_dir(home: &Path, sandbox: &str) -> PathBuf {
+    home.join("sandbox").join(sandbox)
+}
+
+/// `sandbox/<name>/record.json`.
+pub fn sandbox_record(home: &Path, sandbox: &str) -> PathBuf {
+    sandbox_dir(home, sandbox).join("record.json")
+}
+
+/// `sandbox/<name>/control.json`: its daemon's keys (0600, #535 G4).
+pub fn sandbox_control(home: &Path, sandbox: &str) -> PathBuf {
+    sandbox_dir(home, sandbox).join("control.json")
+}
+
+/// `sandbox/<name>/workspace/`: one `<id>.json` per Workspace.
+pub fn workspace_dir(home: &Path, sandbox: &str) -> PathBuf {
+    sandbox_dir(home, sandbox).join("workspace")
+}
+
+/// `machine/native/run/`: the local Sandbox backends' runtime root (0755),
+/// one directory per Sandbox beside the image cache the namespaces backend
+/// keeps there (`images/`), in the home and under a worker's root.
+pub fn run_root(root: &Path) -> PathBuf {
+    machine_dir(root, "native").join("run")
 }
 
 /// `log/`: init-failures.jsonl, uncertain.jsonl.

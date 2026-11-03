@@ -73,7 +73,7 @@ fn home_with_stopped_vm(tag: &str) -> PathBuf {
     )
     .unwrap();
     write_record(
-        &paths::sandbox_dir(&home, "dev", "s1").join("record.json"),
+        &paths::sandbox_record(&home, "s1"),
         &SdkValue::map([
             ("name", t("s1")),
             ("project", t("shop/api")),

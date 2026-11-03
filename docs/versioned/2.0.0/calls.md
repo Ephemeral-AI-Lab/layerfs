@@ -178,8 +178,11 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 | `close` | `name` | `force` | stops a Sandbox |
 
 - `create` answers the Sandbox's record: `name`, `project`, `machine`,
-  `state`, `created`, `id`, `platform`, `runtime` and `image`. A Sandbox
-  name taken anywhere in the home is `Exists`. The Store's machine, a
+  `state`, `created`, `id` (the Sandbox's name, as its machine knows it),
+  `platform`, `runtime`, `image`, `backend` and `route` (the kernel route,
+  `fuse` or `nfs`). A Sandbox name taken anywhere in the home is `Exists`.
+  A create whose outcome is not known (its machine's answer was lost) is
+  `Unknown` and its record says `unknown`. The Store's machine, a
   running `store move` and the name are checked under one home lock.
 - A sqlite project's Sandbox runs on the machine that holds its Store;
   another machine is `Unsupported`, naming the Store's machine.
@@ -191,7 +194,9 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   archive is `Unsupported`, naming it (#535 P5).
 - `list` and `get` page: `list` its Sandboxes, `get` the Sandbox's
   `workspaces` (`page_size` 1 to 1000, default 50; `page_pos`), with
-  `next_page_pos`, `null` after the last page.
+  `next_page_pos`, `null` after the last page. Each Workspace carries `ws`
+  (`<sandbox>:<name>` when named, else `<sandbox>:<path>`), `name` (or
+  `null`) and `path`, beside the daemon's fields.
 - `list` and `get` start no machine (#535 P4). `get` on a Sandbox whose
   machine is down answers its record with `workspaces: []` and
   `down_reason`, the reason its worker was not reached.
@@ -200,27 +205,36 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   answers `{kind: "Closed", sandbox, unknown}`: `unknown` lists the
   Workspaces it could not drain, whose uncommitted changes and processes
   end with the Sandbox. Closing a Sandbox that is already gone answers
-  `{closed, was_gone: true}`.
+  `{closed, was_gone: true}`; a gone native Sandbox's stopped runtime and
+  local directory are deleted by that close.
 - A record with no id yet (a create in flight, one whose outcome was
   unknown, or one whose process ended) is closed too: `InUse` while the
   creating process lives, else the record goes and the name is free
   (`{closed, was}`; for `unknown`, `left` says a Sandbox may remain on its
-  machine).
+  machine). A Sandbox the layout 3 conversion found ended is closed this
+  way too, with `was: "gone"` ([the home](home.md#a-layout-2-home)).
 - Not run for this manual. See
   [limitations](limitations.md#not-built-refused-as-unsupported).
 
 ### `workspace` (5)
 
-A Workspace is `<sandbox>:<path>`, answered as `ws` by `mount`.
+A Workspace is `<sandbox>:<path>`, or `<sandbox>:<name>` when its mount
+named it, answered as `ws` by `mount`. Every `workspace` call takes either
+form.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `mount` | `sandbox`, `branch` | — | mounts a Branch in a Sandbox |
+| `mount` | `sandbox`, `branch` | `name` | mounts a Branch in a Sandbox |
 | `exec` | `ws`, `command` | `message`, `stream`, `stdout`, `stderr` | runs one bash command in a Workspace |
 | `commit` | `ws` | `message`, `force` | commits a Workspace's changes to its Branch |
 | `unmount` | `ws` | `discard`, `force` | ends a Workspace |
 | `status` | `ws` | — | a Workspace's changes since its base (O14) |
 
+- `mount` with `name` names the Workspace (a name, as for Sandboxes);
+  `ws` is then `<sandbox>:<name>`. A name is unique within its Sandbox: one
+  in use is `Exists`. It is free again once that Workspace is unmounted.
+  `mount` answers `name` (or `null`) beside `path`. A name no mounted
+  Workspace carries is `NotMounted`.
 - `exec` answers `kind` (`exit:<code>`), `exit_code`, `stdout`, `stderr`,
   `message` and `truncated`. A command that exits non-zero is still exit 0
   for the shell unless `--stream` is given. Inline output that is not UTF-8
@@ -387,7 +401,7 @@ Codes seen in the 2.0 library include:
 | `NoSuchBranch`, `NoSuchCommit` | no such Branch, or no such Commit on it (`branch.get`, `commit.get`, …) |
 | `NoSuchPath`, `NoSuchSandbox`, `NoSuchProcess`, … | 1.1.0's codes for paths, Sandboxes and processes |
 | `Exists` | the name is taken, the same host or database is already connected (under any name), or a bucket object was exported from another home |
-| `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine, a move or remove in progress, a machine being removed, a Sandbox still being created |
+| `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine, a move or remove in progress, a machine being removed, a Sandbox still being created; a layout 2 home with any of these, which is not converted yet ([the home](home.md#a-layout-2-home)) |
 | `Unsupported` | not possible here, or not built (see [limitations](limitations.md)); a missing tool is listed in `detail.missing` |
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret |
 | `Conflict` | a merge or Commit conflict; for `backup.restore`, the Store changed since its last backup or restore |

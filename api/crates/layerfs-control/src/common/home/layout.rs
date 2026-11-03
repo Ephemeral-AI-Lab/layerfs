@@ -1,7 +1,7 @@
 //! `layerfs.json`: the home's layout version and its id (#533 step 3).
 //!
-//! A home without `layerfs.json` is 1.1.0's layout; with it, the 2.0
-//! layout. The id is 16 random bytes in hex, written once; the `docker`
+//! A home without `layerfs.json` is 1.1.0's layout; with it, layout 2
+//! (2.0) or layout 3 (#536 §5, Sandboxes at `sandbox/<name>/`). The id is 16 random bytes in hex, written once; the `docker`
 //! machine names its containers with it (O33) and backups record it as
 //! where they were exported from. Reading never changes anything.
 use super::records::{private_dir, read_record, write_record};
@@ -10,7 +10,10 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 /// The layout this build writes.
-pub const LAYOUT_VERSION: i64 = 2;
+pub const LAYOUT_VERSION: i64 = 3;
+
+/// The layout 2.0 wrote, converted once to [`LAYOUT_VERSION`].
+pub const PREVIOUS_LAYOUT: i64 = 2;
 
 /// What `layerfs.json` holds.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -43,7 +46,9 @@ pub enum Layout {
     Empty,
     /// 1.1.0's layout: its records but no `layerfs.json`.
     Old,
-    /// The 2.0 layout, with its `layerfs.json`.
+    /// Layout 2 (2.0), converted once (`migrate/v2.rs`).
+    Previous(HomeFile),
+    /// The current layout, with its `layerfs.json`.
     Current(HomeFile),
 }
 
@@ -52,7 +57,10 @@ pub enum Layout {
 pub fn detect(home: &Path) -> Result<Layout, SdkRefusal> {
     let file = home.join("layerfs.json");
     match read_record(&file)? {
-        Some(value) => parse(&value).map(Layout::Current),
+        Some(value) => parse(&value).map(|file| match file.layout {
+            PREVIOUS_LAYOUT => Layout::Previous(file),
+            _ => Layout::Current(file),
+        }),
         None => match old_records(home) {
             Ok(true) => Ok(Layout::Old),
             Ok(false) => Ok(Layout::Empty),
@@ -88,7 +96,7 @@ fn parse(value: &SdkValue) -> Result<HomeFile, SdkRefusal> {
             format!("this home has layout {layout}; this build reads layout {LAYOUT_VERSION}"),
         ));
     }
-    if layout < LAYOUT_VERSION {
+    if layout < PREVIOUS_LAYOUT {
         return Err(bad(&format!("unknown layout {layout}")));
     }
     Ok(HomeFile {
@@ -107,6 +115,13 @@ fn bad(why: &str) -> SdkRefusal {
 pub fn ensure(home: &Path) -> Result<HomeFile, SdkRefusal> {
     match detect(home)? {
         Layout::Current(file) => Ok(file),
+        Layout::Previous(_) => Err(refused(
+            "InvalidInput",
+            format!(
+                "{} has layout {PREVIOUS_LAYOUT}; it is converted on its first call",
+                home.display()
+            ),
+        )),
         Layout::Old => Err(refused(
             "InvalidInput",
             format!(
@@ -126,12 +141,17 @@ pub(crate) fn create(home: &Path) -> Result<HomeFile, SdkRefusal> {
         layout: LAYOUT_VERSION,
         id: layerfs_bridge::sdk_values::hex(&random[..16]),
     };
+    write(home, &file)?;
+    Ok(file)
+}
+
+/// Writes `layerfs.json` as `file` says, replacing it whole.
+pub(crate) fn write(home: &Path, file: &HomeFile) -> Result<(), SdkRefusal> {
     write_record(
         &home.join("layerfs.json"),
         &SdkValue::map([
             ("layout", SdkValue::Int(file.layout)),
             ("id", SdkValue::text(&file.id)),
         ]),
-    )?;
-    Ok(file)
+    )
 }

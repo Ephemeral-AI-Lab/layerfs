@@ -1,6 +1,6 @@
 //! The worker's idle stop (#533 step 13): it stops serving only when no
 //! call is in flight, no Store is open, no Sandbox is recorded under its
-//! root (where the host Sandbox code records it), no Firecracker microVM it
+//! root (`sandbox/<name>/record.json`), no Firecracker microVM it
 //! hosts runs, and the idle time has passed since its last call.
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::common::home::{paths, write_record};
@@ -15,16 +15,17 @@ fn an_idle_worker_stops_and_a_busy_one_does_not() {
     std::fs::create_dir_all(&root).unwrap();
 
     // a Sandbox the host Sandbox code recorded under the root keeps the
-    // worker up, where a guest records it: store/<s>/project/<p>/sandboxes/<n>
-    let sandbox = paths::project_dir(&root, "shop", "app").join("sandboxes/1/sandbox.record");
-    write_record(&sandbox, &SdkValue::map([("name", SdkValue::text("1"))])).unwrap();
+    // worker up, where a guest records it: sandbox/<name>/record.json (#536 §6)
+    let sandbox = paths::sandbox_record(&root, "t1");
+    write_record(&sandbox, &SdkValue::map([("name", SdkValue::text("t1"))])).unwrap();
     assert!(!worker::idle(&root, Duration::ZERO, 0));
     std::fs::remove_dir_all(sandbox.parent().unwrap()).unwrap();
     assert!(worker::idle(&root, Duration::ZERO, 0));
-    // the 1.1.0-style folder under machine/native is not where a guest
-    // records its Sandboxes, and holds nothing up by itself
-    let old = paths::machine_dir(&root, "native").join("sandbox/t1/record.json");
-    write_record(&old, &SdkValue::map([("name", SdkValue::text("t1"))])).unwrap();
+    // a folder a failed create left (no record) holds nothing up, and
+    // neither does a layout 2 folder
+    std::fs::create_dir_all(paths::sandbox_dir(&root, "t2")).unwrap();
+    let old = paths::project_dir(&root, "shop", "app").join("sandboxes/1/sandbox.record");
+    write_record(&old, &SdkValue::map([("name", SdkValue::text("1"))])).unwrap();
     assert!(worker::idle(&root, Duration::ZERO, 0));
 
     // a Lima host stays up while a Firecracker microVM it hosts runs

@@ -66,8 +66,9 @@ ready.
 | PostgreSQL Store, a platform the table refuses (`lima`, `apple-container`, `microsandbox`, `firecracker`) | `Unsupported` with the support table's reason (`machine.platforms`) |
 
 **Returns:** the Sandbox's record: `{ name, project, machine, state: "running",
-created, id, platform, runtime, image }`. `name` is what you pass to every other
-call; `id` is the host's internal number.
+created, id, platform, runtime, image, backend, route }`. `name` is what you
+pass to every other call; `id` is the same name, as its machine knows it;
+`route` is the kernel route (`fuse`, or `nfs` on macOS `native`).
 
 **Refusals**
 
@@ -79,6 +80,7 @@ call; `id` is the host's internal number.
 | `Unavailable` | The machine cannot reach the PostgreSQL server, or reaches a server holding another Store (message names the host tried) | Make the server reachable from that machine |
 | `Unavailable` | The daemon bundle is missing | Report it; the home's owner installs the bundle |
 | `InvalidInput` | A bad name or project, or the name `native` or `docker` (they name the built-in machines) | Fix the call |
+| `Unknown` | The machine's answer was lost: a Sandbox may or may not have started; the record says `unknown` | Report it; `sandbox.close(name)` drops the record (a Sandbox it left on its machine is not recorded) |
 | `Failed` | Starting it failed; its record is removed | Stop and report the message |
 | `Unknown` | The start's outcome is unknown; the record is kept with `state: "unknown"` | Stop and report; don't create it again |
 
@@ -97,11 +99,12 @@ only; it does not ask the daemons whether they still run.
 
 The Sandbox's record plus `workspaces`, one page of the daemon's list of
 mounted Workspaces, and `next_page_pos` (`page_size`, `page_pos` as for
-`list`). From source, each entry has `workspace`, `namespace`, `branch`,
-`base`, `base_layer`, `root`, `activity`, `mounted`, `directory` (its path,
-the part after `:` in `ws`), `head_moved_since_mount`, `dirty`
-(`{ inodes, entries }` or `null`), `pending_merge` and `revision`. Not
-checked live.
+`list`). From source, each entry has `ws` (`<sandbox>:<name>` when its mount
+named it, else `<sandbox>:<path>`: pass it to the `workspace` calls), `name`
+(or `null`), `path`, and the daemon's `workspace`, `namespace`, `branch`,
+`base`, `base_layer`, `root`, `activity`, `mounted`, `directory` (the same
+path), `head_moved_since_mount`, `dirty` (`{ inodes, entries }` or `null`),
+`pending_merge` and `revision`. Not checked live.
 
 `sandbox.list` and `sandbox.get` never start a machine (#535 P4). When the
 Sandbox's machine is down, `get` answers its record with `workspaces: []` and
@@ -153,11 +156,11 @@ nothing uncommitted and that no agent is keeping on purpose (a build Workspace,
 one running a dev server). Field names are from source:
 
 ```js
-const keep = new Set([/* "<sandbox>:<path>" Workspaces agents said they keep */]);
+const keep = new Set([/* the `ws` of Workspaces agents said they keep */]);
 for (const sb of (await layerfs.sandbox.list("shop/api")).items) {
   const got = await layerfs.sandbox.get(sb.name);
   for (const w of got.workspaces ?? []) {
-    const ws = `${sb.name}:${w.directory}`;
+    const ws = w.ws;
     if (w.activity === "Idle" && w.dirty === null && !w.pending_merge && !keep.has(ws)) {
       await layerfs.workspace.unmount(ws);   // no discard: a Dirty one stays for its owner
     }

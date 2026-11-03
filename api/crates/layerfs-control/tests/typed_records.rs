@@ -100,15 +100,21 @@ fn a_bucket_shows_its_record() {
 #[test]
 fn a_sandbox_shows_its_record() {
     use layerfs_control::sandbox::record::SandboxRecord;
-    let text = r#"{"name":"t1","project":"shop/api","machine":"native","state":"running","created":3,"pid":9,"id":"sb-1","platform":"macos","runtime":"native","image":null}"#;
-    let record = SandboxRecord::from_record("native", "t1", value(text));
+    let text = r#"{"name":"t1","project":"shop/api","machine":"native","state":"running","created":3,"pid":9,"id":"t1","platform":"macos","runtime":"native","image":null,"backend":"native","route":"nfs"}"#;
+    let record = SandboxRecord::from_record("t1", value(text));
     assert_eq!(print(&record.to_sdk(View::List)), text);
     assert_eq!(print(&record.to_sdk(View::Full)), text);
-    let versioned =
-        SandboxRecord::from_record("native", "t1", value(&text.replacen('{', r#"{"v":1,"#, 1)));
+    // layout 3: `v`, `runtime_id` and what reopens it (`daemon`) are not shown
+    let hidden = text.replacen('{', r#"{"v":1,"#, 1).replacen(
+        r#""route":"nfs""#,
+        r#""route":"nfs","runtime_id":"c0ffee","daemon":{"pid":7}"#,
+        1,
+    );
+    let versioned = SandboxRecord::from_record("t1", value(&hidden));
     assert_eq!(print(&versioned.to_sdk(View::List)), text);
+    assert_eq!(versioned.machine(), "native");
     assert_eq!(record.project(), Some("shop/api"));
-    assert_eq!(record.id(), Some("sb-1"));
+    assert_eq!(record.id(), Some("t1"));
     assert_eq!(record.recorded_state(), Some("running"));
 }
 
@@ -254,18 +260,17 @@ fn a_store_state_is_moving_down_idle_or_in_use() {
 #[test]
 fn a_sandbox_state_is_its_recorded_one() {
     use layerfs_control::sandbox::record::SandboxRecord;
-    let running = SandboxRecord::from_record("native", "a", value(r#"{"state":"running"}"#));
+    let running = SandboxRecord::from_record("a", value(r#"{"state":"running"}"#));
     assert_eq!(running.state(), "running");
     assert_eq!(running.creator(), None);
     let me = std::process::id();
     let creating = SandboxRecord::from_record(
-        "native",
         "b",
         value(&format!(r#"{{"name":"b","state":"creating","pid":{me}}}"#)),
     );
     assert_eq!(creating.creator(), Some(i64::from(me)));
     // a record with no state shows `creating` in a list, and nothing more in a get
-    let bare = SandboxRecord::from_record("native", "c", value(r#"{"name":"c"}"#));
+    let bare = SandboxRecord::from_record("c", value(r#"{"name":"c"}"#));
     assert_eq!(
         print(&bare.to_sdk(View::List)),
         r#"{"name":"c","state":"creating"}"#

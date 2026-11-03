@@ -212,6 +212,12 @@ fn workspace_family() {
     );
     let reached = code("workspace.status", map(&[("ws", t("tests:/workspaces/1"))]));
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
+    // a Workspace by its name (#536 C3)
+    let reached = code("workspace.status", map(&[("ws", t("tests:dev"))]));
+    assert!(!reached.starts_with("InvalidInput"), "{reached}");
+    let mount = calls::find("workspace.mount").unwrap();
+    let options: Vec<_> = mount.options.iter().map(|o| (o.name, o.kind)).collect();
+    assert_eq!(options, [("name", Kind::Name)]);
 }
 
 #[test]

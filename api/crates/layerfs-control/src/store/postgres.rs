@@ -7,7 +7,6 @@
 //! PostgreSQL only by an Init into it. Built without the `postgresql`
 //! feature, every call here is `Unsupported`.
 use crate::common::outcome::{refused, Outcome};
-use crate::sandbox::files as discovery;
 use crate::sandbox::registry::text;
 use crate::store::identity::{self as stores, Identity, Kind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -165,11 +164,6 @@ pub(crate) fn sandbox_store(
             format!("no project {name} in the PostgreSQL Store's schema {schema}"),
         ));
     }
-    let entry = discovery::project_entry(args)?;
-    if let Some(projects) = entry.parent() {
-        discovery::directory(projects)?;
-    }
-    discovery::directory(&entry)?;
     Ok(Some(layerfs_bridge::DaemonStore::Postgres {
         url,
         schema,

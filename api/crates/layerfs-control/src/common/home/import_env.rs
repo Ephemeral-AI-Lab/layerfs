@@ -9,7 +9,7 @@
 //! own) and never writes a secret: for those it answers the command to run.
 //! Every name it read and what became of it is in the answer and in
 //! `log/import-env.jsonl`.
-use super::{lock, log_line, now_ms, paths, read_record, with_field, write_record};
+use super::{lock, log_line, now_ms, paths, read_record, with_field, write_entity};
 use crate::common::outcome::{failed, refused, Outcome};
 use crate::store::record::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -55,7 +55,7 @@ fn fill(
     match record.get(field) {
         Some(old) if *old != SdkValue::Null => Report::line(&mut report.kept, setting, what),
         _ => {
-            write_record(path, &with_field(record, field, value))?;
+            write_entity(path, &with_field(record, field, value))?;
             Report::line(&mut report.written, setting, what);
         }
     }
@@ -75,7 +75,7 @@ fn machine_of(sandbox: &str) -> Option<&'static str> {
 fn built_in(home: &Path, name: &str) -> Result<std::path::PathBuf> {
     let path = paths::machine_record(home, name);
     if read_record(&path)?.is_none() {
-        write_record(
+        write_entity(
             &path,
             &SdkValue::map([
                 ("name", SdkValue::text(name)),
@@ -190,7 +190,7 @@ fn bucket(home: &Path, env: &[(String, String)], report: &mut Report) -> Result<
         None => 8 << 20,
     };
     let key = get(env, "LAYERFS_REMOTE_CREDENTIALS").unwrap_or("env:LAYERFS_REMOTE");
-    write_record(
+    write_entity(
         &path,
         &SdkValue::map([
             ("name", SdkValue::text("remote")),
