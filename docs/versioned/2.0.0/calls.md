@@ -178,12 +178,23 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 | `close` | `name` | `force` | stops a Sandbox |
 
 - `create` answers the Sandbox's record: `name`, `project`, `machine`,
-  `state`, `created`, `id` (the Sandbox's name, as its machine knows it),
-  `platform`, `runtime`, `image`, `backend` and `route` (the kernel route,
-  `fuse` or `nfs`). A Sandbox name taken anywhere in the home is `Exists`.
-  A create whose outcome is not known (its machine's answer was lost) is
-  `Unknown` and its record says `unknown`. The Store's machine, a
-  running `store move` and the name are checked under one home lock.
+  `created`, `id` (the Sandbox's name, as its machine knows it),
+  `platform`, `runtime`, `image`, `backend`, `route` (the kernel route,
+  `fuse` or `nfs`) and `state`. A Sandbox name taken anywhere in the home
+  is `Exists`. The Store's machine, a running `store move` and the name
+  are checked under one home lock, where the create claims the name with
+  its `op` intent (#536 §7.1); its success records the result and drops
+  the `op` in one write, a refused start removes the record. A create
+  whose outcome is not known (its machine's answer was lost) is `Unknown`
+  and its record keeps the `op`, marked `uncertain`.
+- Every Sandbox's `state` is derived, never stored: `creating` or
+  `closing` while that call's process runs it, `unresolved` once a create
+  or close lost its answer and its process ended, `gone` with no id (or
+  when `get` hears from its machine that it no longer runs), else
+  `running`. While a create or close runs, `close` and the `workspace`
+  calls but `status` are `Busy`; an `unresolved` Sandbox refuses them
+  `Unresolved`, naming `layerfs sandbox get <name>` and `layerfs sandbox
+  close <name>`, the call that clears it.
 - A sqlite project's Sandbox runs on the machine that holds its Store;
   another machine is `Unsupported`, naming the Store's machine.
 - On `docker`, the image is `image`, else the one `machine update docker
@@ -194,12 +205,19 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   archive is `Unsupported`, naming it (#535 P5).
 - `list` and `get` page: `list` its Sandboxes, `get` the Sandbox's
   `workspaces` (`page_size` 1 to 1000, default 50; `page_pos`), with
-  `next_page_pos`, `null` after the last page. Each Workspace carries `ws`
+  `next_page_pos`, `null` after the last page. Both show each Sandbox's
+  `state` and, while it has one, its `op` (`{id, name, phase, started,
+  uncertain}`, H6); reading never clears it. `get` asks no daemon for a
+  Sandbox with no id. Each Workspace carries `ws`
   (`<sandbox>:<name>` when named, else `<sandbox>:<path>`), `name` (or
   `null`) and `path`, beside the daemon's fields.
 - `list` and `get` start no machine (#535 P4). `get` on a Sandbox whose
   machine is down answers its record with `workspaces: []` and
   `down_reason`, the reason its worker was not reached.
+- `close` records its `op` (`sandbox.close`) before it stops the
+  Sandbox and removes the record at the end; a lost answer (`Unknown`)
+  keeps the record with the `op` uncertain until another `close`, and any
+  other refusal leaves the Sandbox as it was.
 - `close` without `force` is `MountsActive` while a Workspace is mounted.
   With `force` (O31) it stops the Sandbox through its backend anyway and
   answers `{kind: "Closed", sandbox, unknown}`: `unknown` lists the
@@ -208,10 +226,10 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   `{closed, was_gone: true}`; a gone native Sandbox's stopped runtime and
   local directory are deleted by that close.
 - A record with no id yet (a create in flight, one whose outcome was
-  unknown, or one whose process ended) is closed too: `InUse` while the
+  unknown, or one whose process ended) is closed too: `Busy` while the
   creating process lives, else the record goes and the name is free
-  (`{closed, was}`; for `unknown`, `left` says a Sandbox may remain on its
-  machine). A Sandbox the layout 3 conversion found ended is closed this
+  (`{closed, was}`, `was` being `gone` or `unresolved`; for
+  `unresolved`, `left` says a Sandbox may remain on its machine). A Sandbox the layout 3 conversion found ended is closed this
   way too, with `was: "gone"` ([the home](home.md#a-layout-2-home)).
 - Not run for this manual. See
   [limitations](limitations.md#not-built-refused-as-unsupported).

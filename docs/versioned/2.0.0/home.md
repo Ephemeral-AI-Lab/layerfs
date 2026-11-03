@@ -39,9 +39,10 @@ hold a password or a bucket key. They are not settings; see
     start.lock                 taken while a process starts, makes or removes the machine
   machine/native/run/          native Sandboxes' local directories, and their image cache
   sandbox/<name>/
-    record.json                v, name, project, machine, state, backend, route, ...
+    record.json                v, name, project, machine, backend, route, ..., op?
     control.json               the Sandbox daemon's keys (0600; native only)
-    lock                       held by the call that runs the Sandbox (native only)
+    lock                       the Sandbox lock: its record and Workspace record changes
+    serve.lock                 held by the call that runs the Sandbox (native only)
     workspace/<id>.json        one per mounted Workspace: v, id, name?, branch, path, created
   store/<name>/
     record.json                kind, machine, profile, backup links
@@ -88,10 +89,16 @@ hold a password or a bucket key. They are not settings; see
   removed under the home lock and the removal is logged (O35).
 - **`sandbox/<name>/`** is all a Sandbox has in the home, whatever its
   machine: listing Sandboxes reads `sandbox/*` and nothing else, and one
-  Sandbox is one folder read. Its `record.json` holds what its create
-  recorded (`creating` with the creating process, `running`, `unknown`, or
-  `gone`) and, once started, its `backend`, kernel `route` (`fuse`, or
-  `nfs` on a macOS native Sandbox) and `runtime_id`. On `native` the side
+  Sandbox is one folder read. Its `record.json` holds facts: its name,
+  project and machine and, once started, its id, `backend`, kernel `route`
+  (`fuse`, or `nfs` on a macOS native Sandbox) and `runtime_id`; and,
+  while a `sandbox.create` or `sandbox.close` runs or after one lost its
+  answer, one `op` intent (`{id, name, phase, args, owner: {pid,
+  pid_start, pid_boot}, started, updated, uncertain}`, #536 §7.1). Its
+  state is derived, never stored. Its `lock` is taken after the home lock
+  for each change of the record and of its Workspace records, and never
+  held across a machine or daemon call; the call that runs a native
+  Sandbox takes turns on `serve.lock`, a different file. On `native` the side
   that runs the Sandbox adds what reopens its runtime (`daemon`) to the
   same file, and its daemon keys to `control.json`. `runtime_id` and
   `daemon` are never shown. The Sandbox's `id` is its name.
@@ -154,9 +161,14 @@ A refused conversion changes nothing (it only appends to
 one pass:
 
 1. It writes each Sandbox record from `machine/<m>/sandbox/<name>/` to
-   `sandbox/<name>/record.json`. A Sandbox whose native runtime had ended
-   is written `gone` (with no id), its stopped runtime deleted once and its
-   numbered folder removed; `sandbox close` then answers `was: gone`. It
+   `sandbox/<name>/record.json`, without layout 2's `state` and creator
+   `pid` (a 2.0 record names its creator by pid alone, so that is how the
+   check above reads it). A Sandbox whose native runtime had ended, or
+   whose create's process ended, is written with no id (`gone`); an ended
+   runtime is deleted once and its numbered folder removed; `sandbox
+   close` then answers `was: gone`. A create whose outcome was `unknown`
+   is written with an uncertain `sandbox.create` `op` owned by no process
+   (`unresolved`; `sandbox close` clears it). It
    writes `"v": 1` into every machine, Store, project and bucket record.
 2. It writes `log/layout-3.pending`, then `layerfs.json` at layout 3.
 3. It deletes `machine/*/sandbox/` and `store/*/project/*/sandboxes/`,
