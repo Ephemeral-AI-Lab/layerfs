@@ -60,8 +60,8 @@ ready.
 | --- | --- |
 | `native` on macOS | host processes, Workspaces over loopback NFS. Needs the daemon: the native machine record's `daemon`, else `~/.cache/layerfs/bundle/<version>/<os>-<arch>/layerfs-daemon` (`Unavailable` when missing) |
 | `native` on Linux | Linux namespaces |
-| a VM or ssh machine | sent to that machine's worker, which runs it on its own `native` |
-| `docker`, sqlite Store on `docker` | a container on `image`, else the docker machine's image (`machine update docker --image`), else the bundle's Sandbox image, loaded into Docker once (#535 P5); on macOS and Linux the docker worker starts it beside itself, mounting only the Store's folder (G8) |
+| a VM or ssh machine | sent to that machine's worker, which runs it on its own `native`. On `ssh` and `lima` this process then forwards the daemon's port to its loopback and keeps its keys in the home (#535 G4): the Workspace calls but `exec` go to the daemon directly. A forward that fails leaves the Sandbox on the worker route and the answer says `forward_failed` |
+| `docker`, sqlite Store on `docker` | a container on `image`, else the docker machine's image (`machine update docker --image`), else the bundle's Sandbox image, loaded into Docker once (#535 P5); on macOS and Linux the docker worker starts it beside itself, mounting only the Store's folder (G8). Its daemon's port is published on this host's loopback: the Workspace calls but `exec` go to it directly (#535 G4) |
 | PostgreSQL Store, a platform the support table allows (`native`, `docker`, ssh) | where that machine runs Sandboxes (rows above). This process resolves the password and rewrites a loopback host for the machine (`docker`: `host.docker.internal`; ssh refuses a loopback URL); the create first checks, from that machine, that the server answers with the Store's schema binding. The daemon needs the `postgresql` build |
 | PostgreSQL Store, a platform the table refuses (`lima`, `apple-container`, `microsandbox`, `firecracker`) | `Unsupported` with the support table's reason (`machine.platforms`) |
 

@@ -274,6 +274,10 @@ form.
   it is `Unavailable`, naming `machine start`. `mount`, `exec`, `commit`
   and `unmount` on a stopped machine are refused the same way, as Store
   calls are; nothing starts a machine but `machine start` (#535 D11).
+- On `ssh`, `lima` and `docker`, `mount`, `commit`, `unmount` and
+  `status` go from the caller straight to the Sandbox's daemon (#535 G4);
+  `exec` goes through the machine's worker. See machines-and-stores.md,
+  Routes.
 - Not run for this manual.
 
 ### `machine` (11)
