@@ -22,8 +22,8 @@ pub use failure::ProviderFailure;
 pub use listener::{ListenerFailure, ListenerObservation};
 pub use provider::DockerProvider;
 pub use sandbox::{
-    desktop_url, store_locator, CreatePhase, Sandbox, SandboxCreateFailure, SandboxDisposition,
-    SandboxRequest, DESKTOP_HOST,
+    store_locator, CreatePhase, Sandbox, SandboxCreateFailure, SandboxDisposition, SandboxRequest,
+    DESKTOP_HOST,
 };
 pub use streams::{
     Attached, ExecHandle, InputCloseFailure, InputEnd, OutputFailure, OutputProgress, RuntimeInput,

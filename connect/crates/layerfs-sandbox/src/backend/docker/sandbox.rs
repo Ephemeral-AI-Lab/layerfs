@@ -76,13 +76,6 @@ pub fn store_locator(source: &str) -> Option<&'static str> {
 /// own (macOS, Windows), and on Linux the Engine's `host-gateway`, which
 /// every Sandbox container is given at create.
 pub const DESKTOP_HOST: &str = "host.docker.internal";
-/// A PostgreSQL URL on this host's loopback as a container under Docker
-/// Desktop (macOS, Windows) reaches it: its host `host.docker.internal`.
-/// `None` for any other URL, which the container dials as given.
-pub fn desktop_url(url: &str) -> Option<String> {
-    let url = crate::PostgresUrl::parse(url)?;
-    url.loopback().then(|| url.with_host(DESKTOP_HOST))
-}
 
 /// A label key or value of plain characters that need no JSON escape.
 fn label_text(text: &str) -> bool {

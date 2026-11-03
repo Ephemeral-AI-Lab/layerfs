@@ -321,7 +321,6 @@ fn launch_options(
                 // the daemon starts with `PATH` and its provider's kernel route only;
                 // 2.0 passes it no platform setting (#533 step 17)
                 environment: Vec::new(),
-                store: PathBuf::new(),
                 image,
                 archive,
             }

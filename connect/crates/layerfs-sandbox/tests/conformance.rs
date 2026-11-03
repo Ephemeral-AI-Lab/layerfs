@@ -76,7 +76,6 @@ fn options(backend: Backend) -> ProviderLaunchOptions {
         Backend::Namespaces => ProviderLaunchOptions::Namespaces {
             command_identity,
             environment: Vec::new(),
-            store: PathBuf::new(),
             image: image(),
             archive: PathBuf::from("/layerfs/bundle/images/a.tar"),
         },
