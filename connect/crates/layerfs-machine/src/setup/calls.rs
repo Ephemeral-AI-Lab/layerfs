@@ -1,14 +1,14 @@
-//! The machine calls: create, connect, start, stop, remove, status and
-//! reach, each dispatched to the platform's adapter (`crate::adapter`).
+//! The machine calls: create, connect, start, stop, remove, status, reach
+//! and forward, each dispatched to the platform's adapter (`crate::adapter`).
 //! Setup steps 1 to 4 (VM and disk, bundle, worker, forward and readiness)
 //! end in a [`Running`]; writing `worker.json` and `record.json` is the
 //! caller's step 5.
 use super::guest::Guest;
 use super::worker;
 use crate::adapter::{adapter, refused};
-use crate::error::MachineError;
+use crate::error::{Code, MachineError};
 use crate::platform::{HostOs, How, Route};
-use crate::spec::{Bundle, Running, Spec};
+use crate::spec::{Bundle, Forward, Running, Spec};
 use std::path::Path;
 use std::time::Instant;
 
@@ -142,6 +142,39 @@ pub fn host_identity(spec: &Spec) -> Result<String, MachineError> {
 pub fn reach(spec: &Spec, url: &str) -> Result<String, MachineError> {
     spec.validate()?;
     adapter(spec.kind).reach(spec, url)
+}
+
+/// The host loopback address at which this process reaches a Sandbox
+/// daemon listening on `127.0.0.1:<guest_port>` in `spec`'s machine (#535
+/// G4, §7.2): Workspace calls dial it, not the worker. `native` answers
+/// `127.0.0.1:<guest_port>` with nothing to close; `ssh` and `lima` start a
+/// detached `ssh -N -L 127.0.0.1:<free port>:127.0.0.1:<guest_port>` (lima
+/// through its own `ssh.config`, as its template forwards no other guest
+/// port) and answer its pid, which [`forward_close`] ends. `docker` refuses
+/// `InvalidInput`: each docker Sandbox publishes its daemon's port on the
+/// host's loopback itself, and that is its endpoint. `apple-container`,
+/// `microsandbox` (ports are published only at create) and `firecracker`
+/// (its daemons listen on the microVM's loopback, which its Lima host's
+/// forward cannot reach) refuse `Unsupported`; their Workspace calls stay
+/// on the worker. One attempt: a forward that ends at once is `Failed`.
+pub fn forward(spec: &Spec, guest_port: u16) -> Result<Forward, MachineError> {
+    spec.validate()?;
+    if guest_port == 0 {
+        return Err(MachineError::new(
+            Code::InvalidInput,
+            "port 0 is no Sandbox daemon's port",
+        ));
+    }
+    adapter(spec.kind).forward(spec, guest_port)
+}
+
+/// Ends the `ssh -L` a [`forward`] started, if it still runs and is still
+/// that forward (a reused pid is never ended); a forward without one has
+/// nothing to end. Bounded: SIGTERM, then SIGKILL after 3 s.
+pub fn forward_close(spec: &Spec, forward: &Forward) {
+    if let Some(pid) = forward.pid {
+        super::forward::end(spec, pid, forward.address.port());
+    }
 }
 
 /// Streams `entry` of the host folder `dir` (or all of it) into the guest

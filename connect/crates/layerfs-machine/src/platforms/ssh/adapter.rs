@@ -1,5 +1,5 @@
 //! `ssh`'s adapter: `create` connects and `remove` disconnects.
-use super::{connect, disconnect, identity, machine_guest, start, status, stop};
+use super::{connect, daemon_forward, disconnect, identity, machine_guest, start, status, stop};
 use crate::adapter::Adapter;
 use crate::error::MachineError;
 use crate::platform::HostOs;
@@ -7,7 +7,7 @@ use crate::probe::first_line;
 use crate::reach::{dial, Loopback};
 use crate::setup::guest::Guest;
 use crate::setup::{tool, Status};
-use crate::spec::{Bundle, Running, Spec, Tools};
+use crate::spec::{Bundle, Forward, Running, Spec, Tools};
 
 /// Why an ssh machine's daemons cannot dial the caller's loopback: they run
 /// on another host, whose own loopback is not the caller's.
@@ -47,5 +47,8 @@ impl Adapter for Ssh {
     }
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
         dial(spec, url, Loopback::Refused(LOOPBACK))
+    }
+    fn forward(&self, spec: &Spec, guest_port: u16) -> Result<Forward, MachineError> {
+        daemon_forward(spec, guest_port)
     }
 }

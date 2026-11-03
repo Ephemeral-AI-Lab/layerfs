@@ -21,12 +21,13 @@ use crate::error::{Code, MachineError};
 use crate::facts;
 use crate::platform::HostOs;
 use crate::probe::{first_line, nested_missing};
+use crate::setup::forward;
 use crate::setup::guest::Guest;
 use crate::setup::vm::{call, checked, CALL};
 use crate::setup::{tool, worker};
 use crate::setup::{with_worker, State, Status};
-use crate::spec::Spec;
-use std::path::PathBuf;
+use crate::spec::{Forward, Spec};
+use std::path::{Path, PathBuf};
 
 pub(super) const CLI: &str = "limactl";
 
@@ -78,6 +79,32 @@ pub(crate) fn guest(spec: &Spec) -> Result<Guest, MachineError> {
             format!("the lima machine {} is {}", spec.name, state.as_str()),
         )),
     }
+}
+
+/// The ssh options and destination of a detached forward through a running
+/// Lima instance (`setup/forward.rs`): Lima's own `ssh.config`, without its
+/// shared connection, so the forward is its own ssh process.
+pub(crate) fn tunnel(dir: &Path, vm: &str) -> (Vec<String>, String) {
+    #[rustfmt::skip]
+    let options: Vec<String> = [
+        "-F", &dir.join("ssh.config").display().to_string(),
+        "-o", "ControlMaster=no", "-o", "ControlPath=none",
+    ].map(String::from).to_vec();
+    (options, format!("lima-{vm}"))
+}
+
+/// A Sandbox daemon's port of a running instance, through a new forward
+/// over Lima's ssh: the template forwards no guest port but the worker's
+/// (`template.rs`), so Lima's host agent never carries it.
+pub(crate) fn daemon_forward(spec: &Spec, guest_port: u16) -> Result<Forward, MachineError> {
+    let Guest::Lima { dir, vm } = guest(spec)? else {
+        return Err(MachineError::new(
+            Code::Failed,
+            "a lima guest is reached through Lima's ssh",
+        ));
+    };
+    let (options, dest) = tunnel(&dir, &vm);
+    forward::daemon(spec, &options, &dest, guest_port)
 }
 
 /// What a lima machine needs on this host before anything is made.

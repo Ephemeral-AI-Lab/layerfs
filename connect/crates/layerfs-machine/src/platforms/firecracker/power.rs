@@ -2,6 +2,7 @@
 use super::observe::{guest, host_guest, inspect, ROOT};
 use super::scripts::{BOOT_VM, STOP};
 use crate::error::{Code, MachineError};
+use crate::platforms::lima;
 use crate::setup::forward;
 use crate::setup::guest::Guest;
 use crate::setup::vm::{not_found, BOOT};
@@ -52,13 +53,9 @@ pub(super) fn boot_and_bring_up(
             "a firecracker host is a lima machine",
         ));
     };
-    #[rustfmt::skip]
-    let options: Vec<String> = [
-        "-F", &dir.join("ssh.config").display().to_string(),
-        "-o", "ControlMaster=no", "-o", "ControlPath=none",
-    ].map(String::from).to_vec();
+    let (options, dest) = lima::tunnel(dir, vm);
     let target = format!("{ip}:{WORKER_PORT}");
-    let pid = forward::open(spec, &options, &format!("lima-{vm}"), port, &target)?;
+    let pid = forward::open(spec, &options, &dest, port, &target)?;
     let endpoint = worker::bring_up(spec, &guest(spec, host.clone()), bundle, port, Some(pid))
         .inspect_err(|_| forward::end(spec, pid, port))?;
     Ok(Running {

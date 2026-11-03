@@ -8,7 +8,7 @@ use crate::platform::{HostOs, Platform};
 use crate::platforms::{apple_container, docker, firecracker, lima, microsandbox, native, ssh};
 use crate::setup::guest::Guest;
 use crate::setup::Status;
-use crate::spec::{Bundle, Running, Spec, Tools};
+use crate::spec::{Bundle, Forward, Running, Spec, Tools};
 
 /// What a platform does; implemented once per platform folder.
 pub(crate) trait Adapter: Sync {
@@ -33,6 +33,11 @@ pub(crate) trait Adapter: Sync {
     /// `url`: a loopback host becomes the machine's host alias, or is
     /// refused naming what is missing (`crate::reach`). Starts nothing.
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError>;
+    /// The host loopback address at which this process reaches a Sandbox
+    /// daemon listening on `127.0.0.1:<guest_port>` in the machine (the
+    /// worker's network namespace), or why the machine forwards none
+    /// (`setup::forward::refuse`). One attempt; nothing is retried.
+    fn forward(&self, spec: &Spec, guest_port: u16) -> Result<Forward, MachineError>;
 }
 
 /// The platform's adapter: the one match over platforms for what they do.

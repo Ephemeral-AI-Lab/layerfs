@@ -29,12 +29,12 @@ pub use options::{OptKind, OptSpec};
 pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Route};
 pub use probe::{native_missing, nested_missing, probe, Probe};
 pub use setup::{
-    connect, copy_in, copy_out, create, host_identity, load_image, reach, remove, start, status,
-    status_within, stop, State, Status,
+    connect, copy_in, copy_out, create, forward, forward_close, host_identity, load_image, reach,
+    remove, start, status, status_within, stop, State, Status,
 };
 pub use spec::{
-    parse_size, Bundle, Endpoint, Lasting, Running, Spec, SshSpec, Tools, BUNDLE, DATA, IMAGE,
-    STATE, WORKER_PORT,
+    parse_size, Bundle, Endpoint, Forward, Lasting, Running, Spec, SshSpec, Tools, BUNDLE, DATA,
+    IMAGE, STATE, WORKER_PORT,
 };
 pub use support::{
     platforms, sandbox_allowed, support, support_json, CallSite, PostgresqlSupport, StoreKind,

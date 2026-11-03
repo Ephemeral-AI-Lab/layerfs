@@ -1,13 +1,20 @@
 //! `docker`'s adapter: the built-in machine on Docker's kernel.
 use super::{guest, start, status, stop};
 use crate::adapter::{refused, Adapter};
-use crate::error::MachineError;
+use crate::error::{Code, MachineError};
 use crate::platform::{ExecutorKind, HostOs, Platform};
 use crate::probe::first_line;
 use crate::reach::{dial, Loopback};
+use crate::setup::forward::refuse;
 use crate::setup::guest::Guest;
 use crate::setup::{tool, Status};
-use crate::spec::{Bundle, Running, Spec, Tools};
+use crate::spec::{Bundle, Forward, Running, Spec, Tools};
+
+/// Why `forward` is not where a docker Sandbox's daemon address comes from:
+/// the Sandbox's container publishes it (`PortBindings`, host IP
+/// `127.0.0.1`, an Engine-chosen port; `layerfs-sandbox`'s
+/// `backend/docker/create.rs`), and its recorded endpoint is that address.
+const FORWARD: &str = "each docker Sandbox publishes its daemon's port on the host's loopback when it is created, and that published address is its endpoint";
 
 pub(crate) struct Docker;
 pub(crate) static ADAPTER: Docker = Docker;
@@ -63,5 +70,8 @@ impl Adapter for Docker {
             url,
             Loopback::Alias(layerfs_sandbox::docker::DESKTOP_HOST),
         )
+    }
+    fn forward(&self, spec: &Spec, _guest_port: u16) -> Result<Forward, MachineError> {
+        Err(refuse(spec, Code::InvalidInput, FORWARD))
     }
 }
