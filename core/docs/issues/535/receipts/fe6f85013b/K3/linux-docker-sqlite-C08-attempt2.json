@@ -1,0 +1,65 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C08",
+  "machine": "docker",
+  "product": "fe6f85013b",
+  "startedAt": "2026-11-03T07:42:22.489Z",
+  "load1": 0.16,
+  "body": {
+    "sha256": "af994b2385d66c015921c49f44fce0cdb247cb42cbe64710ad36556b418a865d"
+  },
+  "ok": false,
+  "cause": "sandbox.create: Failed sandbox create stopped at Connect: Io(Os { code: 111, kind: ConnectionRefused, message: \"Connection refused\" }); its daemon's last log lines:\nLAYERFS_DAEMON_LISTEN 0.0.0.0:30421",
+  "phases": {},
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 3.166,
+      "ok": true
+    },
+    {
+      "name": "store.create",
+      "ms": 15.991,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 103.357,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 7.98,
+      "ok": true
+    },
+    {
+      "name": "store.push",
+      "ms": 53.033,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 387.417,
+      "ok": false,
+      "error": {
+        "code": "Failed",
+        "message": "sandbox create stopped at Connect: Io(Os { code: 111, kind: ConnectionRefused, message: \"Connection refused\" }); its daemon's last log lines:\nLAYERFS_DAEMON_LISTEN 0.0.0.0:30421"
+      }
+    },
+    {
+      "name": "store.pull",
+      "ms": 52.078,
+      "ok": true
+    },
+    {
+      "name": "store.remove",
+      "ms": 0.909,
+      "ok": true
+    }
+  ],
+  "store": {
+    "kind": "sqlite"
+  },
+  "failedStep": "sandbox.create",
+  "endedAt": "2026-11-03T07:42:23.117Z"
+}

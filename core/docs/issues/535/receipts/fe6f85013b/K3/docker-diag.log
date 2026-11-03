@@ -1,0 +1,11 @@
+# worker container lfs-2a120156-docker publishes 7070 on: 127.0.0.1:32768
+172.17.0.1      host.docker.internal
+# from the VM host: 127.0.0.1:32768
+connected
+# from inside the worker container: host.docker.internal:32768
+/usr/bin/bash
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/host.docker.internal/32768: Connection refused
+refused/failed rc=1
+# VM host listeners for that port:
+LISTEN 0      4096       127.0.0.1:32768      0.0.0.0:*    users:(("docker-proxy",pid=20632,fd=7))                

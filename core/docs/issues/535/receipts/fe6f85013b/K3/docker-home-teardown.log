@@ -1,0 +1,12 @@
+$ layerfs machine list
+# at 2026-11-03T07:45:06Z
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"image":"sha256:1499b86412fa5c7474cf28832aca519531ba0f08dc79f5e1f7e441da9ab7a0a7"},{"name":"native","platform":"native","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}]}
+exit 0
+
+$ layerfs machine stop docker
+# at 2026-11-03T07:45:06Z
+{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"image":"sha256:1499b86412fa5c7474cf28832aca519531ba0f08dc79f5e1f7e441da9ab7a0a7"}
+exit 0
+
+lfs-2a120156-docker
+lfs-2a120156-docker-data
