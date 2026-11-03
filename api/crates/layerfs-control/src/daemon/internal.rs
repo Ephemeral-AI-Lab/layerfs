@@ -81,11 +81,6 @@ pub fn into_connection(control: Control) -> Connection {
     control.into_connection()
 }
 
-/// Original authenticated control owner, without a reconnect or reset.
-#[cfg(unix)]
-pub fn control(sandbox: &mut crate::sandbox::ProviderSandbox) -> &mut Control {
-    &mut sandbox.control
-}
 /// Transfers provider runtime, original channel and admitted command identity.
 #[cfg(unix)]
 pub fn split_provider(
@@ -96,27 +91,4 @@ pub fn split_provider(
     layerfs_sandbox::CommandIdentity,
 ) {
     (sandbox.runtime, sandbox.control, sandbox.command_identity)
-}
-/// Borrows the same provider instance and original channel for concurrent execution.
-#[cfg(unix)]
-pub fn provider_parts(
-    sandbox: &mut crate::sandbox::ProviderSandbox,
-) -> (&layerfs_sandbox::Sandbox, &mut Control) {
-    (sandbox.runtime.as_ref(), &mut sandbox.control)
-}
-/// Original one-attempt startup used by existing-Store deployments and lifecycle proofs.
-#[cfg(unix)]
-pub fn start(
-    api: &crate::SandboxApi,
-    request: crate::sandbox::ProviderCreate,
-) -> Result<crate::sandbox::ProviderSandbox, Box<crate::sandbox::ProviderFailure>> {
-    api.start(request)
-}
-/// Existing bounded startup observation for control-channel qualification.
-#[cfg(unix)]
-pub fn sandbox_status(
-    sandbox: &mut crate::sandbox::ProviderSandbox,
-    wait_for_store: bool,
-) -> Result<layerfs_bridge::control::DaemonStatus, Box<OperationFailure>> {
-    sandbox.status(wait_for_store)
 }

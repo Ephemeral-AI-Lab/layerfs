@@ -81,33 +81,10 @@ pub struct ProviderSandbox {
     /// Command identity admitted for this Sandbox deployment.
     pub command_identity: CommandIdentity,
 }
-impl ProviderSandbox {
-    /// Explicit startup observation/wait on the same incarnation and Control owner.
-    pub(crate) fn status(
-        &mut self,
-        wait_for_store: bool,
-    ) -> Result<DaemonStatus, Box<crate::OperationFailure>> {
-        super::create::hello(
-            &mut self.control,
-            layerfs_bridge::control::HelloRequest {
-                expected_instance: Some(self.startup.instance),
-                wait_for_store,
-            },
-        )
-    }
-}
 impl SandboxApi {
     /// Uses the deployment's selected runtime.
     pub fn with_runtime(runtime: Arc<Runtime>) -> Self {
         Self { runtime }
-    }
-    /// Creates, privately configures, starts and authenticates once, preserving partial ownership on failure.
-    pub fn create(
-        &self,
-        request: ProviderCreate,
-        project: &crate::SealedProject,
-    ) -> Result<ProviderSandbox, Box<ProviderFailure>> {
-        self.create_provider_file(request, &project.store, &project.manifest)
     }
     /// Creates a new daemon on the PostgreSQL Store its setup selects
     /// (#506): no Store file, volume or install; it starts ready. A Docker
