@@ -26,7 +26,9 @@ type Live = Option<(String, Option<String>)>;
 /// [`PROBE`]. A probe that fails or does not answer in time is `unknown`, with
 /// the reason; a command it still runs then is killed with its process group
 /// and reaped by the probe's thread. Nothing is written back. `None` keeps
-/// the record's state: a built-in machine, or one being created or removed.
+/// the record's state: `native`, or a machine being created or removed.
+/// The built-in `docker` is probed like a VM: its worker is started and
+/// stopped by hand (#535 D11), so a fixed `ready` would be wrong.
 pub(super) fn live(home: &Path, records: &[MachineRecord]) -> Result<Vec<Live>> {
     let id = home_id(home)?;
     let (send, answers) = mpsc::channel();
@@ -38,7 +40,7 @@ pub(super) fn live(home: &Path, records: &[MachineRecord]) -> Result<Vec<Live>> 
     // so a late probe is reported as late, not as its stopped command
     let stop = until + Duration::from_millis(200);
     for (index, record) in records.iter().enumerate() {
-        if record.platform()?.built_in() || record.in_flight() {
+        if record.platform()? == adapters::Platform::Native || record.in_flight() {
             continue;
         }
         match record::spec(home, &id, record) {

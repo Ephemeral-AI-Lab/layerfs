@@ -37,9 +37,13 @@ layerfs machine list --text
 
 ```
 NAME    PLATFORM  BACKEND  STATE  CPUS  MEMORY  DISK
-docker  docker    docker   ready  -     -       -
-native  native    native   ready  -     -       -
+docker  docker    docker   stopped  -     -       -
+native  native    native   ready    -     -       -
 ```
+
+`native` is always `ready`. Every other machine, the built-in `docker`
+included, shows its live state as `machine status` reads it (`running`,
+`stopped`, …): its worker is started and stopped by hand (`machine start`).
 
 Each machine also carries `supports` (`sqlite`, `postgresql_sandbox`,
 `reason`). `machine.platforms()` (`layerfs machine platforms`) answers each

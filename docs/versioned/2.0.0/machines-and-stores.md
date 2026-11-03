@@ -28,7 +28,9 @@ a copy of a sqlite Store in a bucket.
   Sandbox runs; the kind decides.
 - `machine list` answers every machine, each with `supports` (`sqlite`,
   `postgresql_sandbox` and the `reason` when not), its platform's row of the
-  support table. `machine platforms` answers each platform on this host:
+  support table, and its live `state` as `machine status` reads it
+  (`native` is always `ready`; the built-in `docker` shows `stopped` until
+  `machine start docker`). `machine platforms` answers each platform on this host:
   backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox
   runs here and why not, `ready`, `missing` (such as `tool:msb`), the tool's
   `version` and the options `machine create` takes; the same rows as
