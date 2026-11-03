@@ -13,6 +13,7 @@ use crate::common::home::paths;
 use crate::common::outcome::{failed, refused, Outcome, View};
 use crate::common::place::{self, Executor};
 use crate::project::record::ProjectRecord;
+use crate::store::family::progress;
 use crate::store::record::{StoreRecord, StoreRef};
 use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -116,7 +117,10 @@ fn host_args(home: &Path, store: &str, more: Vec<(&str, SdkValue)>) -> SdkValue 
     SdkValue::Map(fields)
 }
 
-/// `project.init(project, folder, { timeout, on_progress })`.
+/// `project.init(project, folder, { timeout, on_progress })`. Its progress
+/// is a push's (#536 §10b), `{ phase, done, total }`: `check`, `send`
+/// (bytes, to a worker only), `install` (Init adds the folder to the
+/// Store) and `record` (the home's project record), whatever the route.
 fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let project = args.get_text("project").unwrap_or("");
@@ -136,6 +140,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         )
     })?;
     record.unblocked()?;
+    progress(context, "check", None);
     let timeout = args.get_int("timeout").unwrap_or(INIT_TIMEOUT_MS);
     let store_ref = record.store_ref()?;
     if let StoreRef::Postgres { .. } = store_ref {
@@ -162,11 +167,10 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             ("timeoutMs", SdkValue::Int(timeout)),
         ],
     );
-    let watch = host_args(&home, store, vec![("project", SdkValue::text(name))]);
-    let added = observed(context, &watch, || {
-        crate::store::identity::add_project(&call)
-    })?;
+    progress(context, "install", None);
+    let added = crate::store::identity::add_project(&call)?;
     // the project's record keeps when it was made
+    progress(context, "record", None);
     {
         let _lock = crate::common::home::lock::take(&home)?;
         if let Some(project) = ProjectRecord::read(&home, store, name)? {
@@ -182,15 +186,6 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     Ok(out)
 }
 
-/// Runs an add on its own thread while this one reports its counts.
-fn observed(
-    context: &mut Context<'_>,
-    watch: &SdkValue,
-    add: impl FnOnce() -> Outcome + Send,
-) -> Outcome {
-    crate::project::init::watched(&mut |progress| context.progress(progress), watch, add)
-}
-
 /// What one `project.init` into a worker's Store names.
 struct InitCall<'a> {
     store: &'a str,
@@ -204,8 +199,7 @@ struct InitCall<'a> {
 /// process walks the folder on its own host (refusing what Init would
 /// before the machine is reached), checks the machine has room for a copy,
 /// copies it to the machine's worker ([`crate::project::send`]), and the
-/// worker adds the copy under its own lease, sends its progress and
-/// removes the copy. This process holds the Store's lease meanwhile, as for
+/// worker adds the copy under its own lease and removes the copy. This process holds the Store's lease meanwhile, as for
 /// any call it sends there, then records the project in the home. One
 /// attempt per request: a lost answer is `Unknown`, and the home gains no
 /// record (`project list` does not show a project whose outcome is not
@@ -230,7 +224,6 @@ fn init_on_worker(
             format!("Store {store} already has a project named {name}"),
         ));
     }
-    crate::store::family::progress(context, "check", None);
     let total = send::measure(Path::new(folder), name)?;
     let copy = send::Copy {
         store,
@@ -250,6 +243,7 @@ fn init_on_worker(
         ("timeoutMs", SdkValue::Int(timeout)),
         ("store_record", record.to_record().clone()),
     ]);
+    progress(context, "install", None);
     let added = worker.call("project.init", request, &mut |event| context.event(event));
     drop(lease);
     let added = added.map_err(|mut refusal| {
@@ -263,6 +257,7 @@ fn init_on_worker(
         refusal
     })?;
     let stack = added.get("stack").cloned().unwrap_or_default();
+    progress(context, "record", None);
     {
         let _lock = crate::common::home::lock::take(&home)?;
         ProjectRecord::initialised(store, name, stack).write(&home)?;
@@ -306,13 +301,12 @@ fn init_postgresql(
             ("postgresql", crate::store::connect::selection(record)?),
         ],
     );
-    let watch = host_args(&home, store, vec![("project", SdkValue::text(name))]);
     // this process uses the Store meanwhile, as a sqlite Init does
     let _lease = lease::hold(&home, store)?;
-    let added = observed(context, &watch, || {
-        crate::project::postgres_init::add_project(&call)
-    })?;
+    progress(context, "install", None);
+    let added = crate::project::postgres_init::add_project(&call)?;
     let stack = added.get("stack").cloned().unwrap_or_default();
+    progress(context, "record", None);
     ProjectRecord::initialised(store, name, stack).write(&home)?;
     let mut out = summary(&home, store, name, record, View::Full);
     for field in ["layer", "root"] {

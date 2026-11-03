@@ -500,11 +500,13 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 `--option=value` works for every option. `machine create … --nested` alone
 is true; `--nested=false` is false.
 
-`project init --progress` printed no lines for a small folder in the run
-for this manual; `store push` and `store pull` report their phases
-(`check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire`) as
-`{"progress": {"phase", "done", "total"}}`: `done` and `total` are bytes
-during `send` and null in the other phases.
+`store push` and `store pull` report their phases (`check`, `snapshot`,
+`send`, `verify`, `install`, `record`, `retire`) as `{"progress": {"phase",
+"done", "total"}}`: `done` and `total` are bytes during `send` and null in
+the other phases. `project init` reports the same shape on every route:
+`check`, `send` (only into a sqlite Store on another machine, while the
+folder is copied), `install` (Init adds the folder) and `record` (from
+source and tests; the run for this manual predates it).
 
 ## Folder scope
 

@@ -87,15 +87,29 @@ fn init_files_branches_move_and_remove() {
     );
     assert_eq!(refused.unwrap_err().0, "NotFound");
     ok(&home, "store.create", &[("name", t("shop"))]);
-    let mut events = 0;
+    let mut events = Vec::new();
     let args = SdkValue::map([
         ("project", t("shop/api")),
         ("folder", t(&folder.display().to_string())),
     ]);
-    let made = calls::call(Some(&home), "project.init", args, &mut |_| events += 1)
+    let made = calls::call(Some(&home), "project.init", args, &mut |e| events.push(e))
         .unwrap_or_else(|e| panic!("init: {} {}", e.code, e.message));
     assert_eq!(made.get_text("project"), Some("shop/api"));
     assert_eq!(made.get_text("machine"), Some("native"));
+    // in process on native, progress is a push's (#536 §10b): no `send`,
+    // null counts, nothing but `phase`, `done` and `total`
+    let expected: Vec<SdkValue> = ["check", "install", "record"]
+        .iter()
+        .map(|phase| {
+            let progress = SdkValue::map([
+                ("phase", t(phase)),
+                ("done", SdkValue::Null),
+                ("total", SdkValue::Null),
+            ]);
+            SdkValue::map([("progress", progress)])
+        })
+        .collect();
+    assert_eq!(events, expected);
 
     let list = ok(&home, "project.list", &[]);
     let SdkValue::List(items) = list.get("items").unwrap() else {

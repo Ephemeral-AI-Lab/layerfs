@@ -12,7 +12,7 @@
 //! is one attempt; nothing is retried.
 use crate::common::outcome::{failed, refused, Outcome};
 use crate::sandbox::files as discovery;
-use crate::sandbox::registry::{lock, random, text, Project, INITS};
+use crate::sandbox::registry::{random, text, Project};
 use crate::store::record::{required, StoreKind, StoreRecord, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
@@ -358,14 +358,6 @@ pub(crate) fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf
     Ok(entry)
 }
 
-/// The key of a running Init's counts: `store/name` for a shared Store.
-pub(crate) fn init_key(args: &SdkValue, name: &str) -> String {
-    match args.get_text("store") {
-        Some(store) => format!("{store}/{name}"),
-        None => name.to_owned(),
-    }
-}
-
 /// `project.init`'s add into a sqlite Store, `{ home, store, storePath, name, path, timeoutMs }`:
 /// Inits the folder `path` as the new project `name` of the live SQLite
 /// Store, through its admission and writer lane, then records its entry.
@@ -420,14 +412,9 @@ pub(crate) fn add_project(args: &SdkValue) -> Outcome {
         deadline,
     };
     let counters = Arc::new(InitCounters::new());
-    let key = init_key(args, name);
-    lock(&INITS)?.insert(key.clone(), Arc::clone(&counters));
     let (added, _) = layerfs_telemetry::timer::Timing::disabled("store.add_project", |timer| {
         ProjectApi::new().add_project(request, timer, counters)
     });
-    if let Ok(mut inits) = INITS.lock() {
-        inits.remove(&key);
-    }
     let added = match added {
         Ok(added) => added,
         Err(failure) => return Err(add_failure(failure.error, Some(&entry), name, store)),

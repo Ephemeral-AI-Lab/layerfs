@@ -130,7 +130,8 @@ On macOS arm64, with the debug build, in a private temporary home:
 - `file.read` of a 3-byte binary file is refused `Binary`. Bytes can be
   written (`file.write` with a `Buffer` or `bytes`), but no 2.0 call reads
   them back as bytes.
-- `project init --progress` printed no progress lines for a small folder.
+- `project init --progress` printed no progress lines for a small folder
+  (a later build reports its phases on every route; not rerun).
 
 ## Seen in the code, not tested
 

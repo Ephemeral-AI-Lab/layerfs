@@ -26,8 +26,13 @@ Everything in the folder is imported, including `.git` and ignored files.
 The folder is always on the caller's host. When the Store is a sqlite Store on
 another machine, the folder is copied to that machine and Init runs there on
 the copy, which is deleted afterwards: the machine needs free room for the copy
-while Init runs, and progress first reports `{ phase: "send", done, total }`
-in bytes.
+while Init runs, and progress reports `{ phase: "send", done, total }` in
+bytes while the folder is copied.
+
+Progress is `{ phase, done, total }` on every route (#536 §10b, from source
+and tests): `check`, then `send` (another machine only; `done`/`total` in
+bytes), `install` (Init adds the folder) and `record`; `done` and `total`
+are null outside `send`.
 
 | Arg | Meaning |
 | --- | --- |
@@ -56,7 +61,8 @@ layerfs project init shop/api /work/api --progress
 `layer` is `main`'s first Layer. The new project has one line, `main`, and no
 Branch: fork one before you change anything. (S, the spec, describes the result
 as `{ project, branch: "main", commit }`; the build returns the record above.)
-A tiny folder sent no progress update in the live run.
+A tiny folder sent no progress update in the live run (an older build;
+the current one reports `check`, `install`, `record`).
 
 Where Init runs depends on the Store: into a sqlite Store on `native` or a
 PostgreSQL Store it runs in your process and reads the folder on this host.

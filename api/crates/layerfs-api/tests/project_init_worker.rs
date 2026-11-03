@@ -178,15 +178,21 @@ fn init_into_a_worker_s_store_copies_the_caller_s_folder() {
     let big = sample(&folder);
 
     let mut sent = Vec::new();
+    let mut phases: Vec<String> = Vec::new();
     let added = call(
         &home,
         "project.init",
         init_args("shop/web", &folder),
         &mut |event| {
-            if let Some(progress) = event.get("progress") {
-                if progress.get_text("phase") == Some("send") {
-                    sent.push((progress.get_int("done"), progress.get_int("total")));
-                }
+            let progress = event.get("progress").expect("only progress events");
+            let phase = progress.get_text("phase").expect("a phase").to_owned();
+            if phase == "send" {
+                sent.push((progress.get_int("done"), progress.get_int("total")));
+            } else {
+                assert_eq!(progress.get("done"), Some(&SdkValue::Null), "{event:?}");
+            }
+            if phases.last() != Some(&phase) {
+                phases.push(phase);
             }
         },
     )
@@ -199,6 +205,8 @@ fn init_into_a_worker_s_store_copies_the_caller_s_folder() {
     assert_eq!(sent.first(), Some(&(Some(0), Some(total))), "{sent:?}");
     assert_eq!(sent.last(), Some(&(Some(total), Some(total))), "{sent:?}");
     assert!(sent.len() >= 3, "{sent:?}");
+    // the same phases as Init on native, with `send` between (#536 §10b)
+    assert_eq!(phases, ["check", "send", "install", "record"]);
     // the caller records it; the worker's root holds the Store's project
     // and no copy
     let record = read_record(&paths::project_record(&home, "shop", "web")).unwrap();
