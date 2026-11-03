@@ -1,0 +1,67 @@
+diff --git a/connect/crates/layerfs-machine/src/platforms/lima/adapter.rs b/connect/crates/layerfs-machine/src/platforms/lima/adapter.rs
+index fec061cde6..cf24f690ef 100644
+--- a/connect/crates/layerfs-machine/src/platforms/lima/adapter.rs
++++ b/connect/crates/layerfs-machine/src/platforms/lima/adapter.rs
+@@ -11,7 +11,9 @@ use crate::spec::{Bundle, Forward, Running, Spec, Tools};
+ 
+ /// The name a lima guest reaches the host's loopback by (#535 §7.3; not yet
+ /// verified live, G7: `support.rs` refuses its PostgreSQL Sandboxes).
+-const HOST_ALIAS: &str = "host.lima.internal";
++// LOCAL DIAGNOSTIC (lfs535), never committed: the address the alias names,
++// since the Sandbox root has no /etc/hosts entry for the alias
++const HOST_ALIAS: &str = "192.168.5.2";
+ 
+ pub(crate) struct Lima;
+ pub(crate) static ADAPTER: Lima = Lima;
+diff --git a/connect/crates/layerfs-machine/src/platforms/microsandbox/adapter.rs b/connect/crates/layerfs-machine/src/platforms/microsandbox/adapter.rs
+index bddf116982..4fa300318e 100644
+--- a/connect/crates/layerfs-machine/src/platforms/microsandbox/adapter.rs
++++ b/connect/crates/layerfs-machine/src/platforms/microsandbox/adapter.rs
+@@ -49,7 +49,23 @@ impl Adapter for Microsandbox {
+         Err(refused(spec, "has no ssh host"))
+     }
+     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
+-        dial(spec, url, Loopback::Alias(HOST_ALIAS))
++        // LOCAL DIAGNOSTIC (lfs535), never committed: the address the guest
++        // resolves the alias to, since the Sandbox root cannot resolve it
++        let read = || {
++            let out = crate::setup::vm::call(
++                spec,
++                "msb",
++                &["exec", &spec.vm_name, "--no-tty", "--", "getent", "hosts", HOST_ALIAS],
++                crate::setup::vm::CALL,
++            )?;
++            out.stdout
++                .split_whitespace()
++                .next()
++                .filter(|a| a.parse::<std::net::Ipv4Addr>().is_ok())
++                .map(str::to_owned)
++                .ok_or_else(|| MachineError::new(Code::Unavailable, "no address for the alias"))
++        };
++        dial(spec, url, Loopback::Lookup(&read))
+     }
+     fn forward(&self, spec: &Spec, _guest_port: u16) -> Result<Forward, MachineError> {
+         Err(refuse(spec, Code::Unsupported, FORWARD))
+diff --git a/connect/crates/layerfs-machine/src/support.rs b/connect/crates/layerfs-machine/src/support.rs
+index 2677445c15..61f26abf2f 100644
+--- a/connect/crates/layerfs-machine/src/support.rs
++++ b/connect/crates/layerfs-machine/src/support.rs
+@@ -90,10 +90,14 @@ fn postgresql_refusal(platform: Platform, host: HostOs) -> Option<&'static str>
+         (Platform::Native, HostOs::Macos | HostOs::Linux)
+         | (Platform::Docker | Platform::Ssh, _) => None,
+         (Platform::Native, _) => Some(NO_BACKEND),
+-        (Platform::Lima, _) => Some("lima host alias not verified (G7)"),
+-        (Platform::AppleContainer, _) => Some("apple-container gateway route not verified (G7)"),
+-        (Platform::Microsandbox, _) => Some("microsandbox host route not verified (G7)"),
+-        (Platform::Firecracker, _) => Some("firecracker NAT route not verified (G7)"),
++        // LOCAL LIFT for the #535 G7 live check (lfs535); never committed
++        (
++            Platform::Lima
++            | Platform::AppleContainer
++            | Platform::Microsandbox
++            | Platform::Firecracker,
++            _,
++        ) => None,
+     }
+ }
+ 

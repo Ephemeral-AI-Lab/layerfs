@@ -1,0 +1,130 @@
+# CLI layerfs-lifted-diag (7457db1f…): lift + local, uncommitted microsandbox reach = Loopback::Lookup of 'msb exec <vm> -- getent hosts host.microsandbox.internal'
+$ layerfs machine create lfs535m microsandbox
+# at 2026-11-03T06:31:09Z load1 4.32
+{"name":"lfs535m","platform":"microsandbox","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":2,"memory":4294967296,"disk":21474836480,"stores":[],"sandboxes":[]}
+exit 0  wall_ms 24406
+
+172.16.0.5      host.microsandbox.internal
+$ layerfs sandbox create pg/app sm lfs535m
+# at 2026-11-03T06:31:37Z load1 5.59
+{"name":"sm","project":"pg/app","machine":"lfs535m","created":1793687497691,"id":"sm","platform":"linux","runtime":"namespaces","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","backend":"namespaces","route":"fuse","state":"running"}
+exit 0  wall_ms 6761
+
+$ layerfs workspace mount sm wm
+# at 2026-11-03T06:31:50Z load1 7.18
+{"kind":"Mounted","path":"/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm/workspaces/1","workspace":"cfe8a1709a5d61f19f0e820c32032191f7b34803ab6856c815ec4e4c16921455","namespace":1,"branch":"wm","base":null,"base_layer":"32bd92d8521bf9531a7db56a616f23614abf1a3702d7d7c596cd005e4b6942445d","root":"555a700b19b1e4ecbb8f89bcb847d0c6e53dffbf08800c01b89fbcc982b58dd7","sandbox":"sm","container":"lfs-1dfaa5f6-sm","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","platform":"linux","runtime":"namespaces","name":null,"ws":"sm:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm/workspaces/1"}
+exit 0  wall_ms 550
+
+$ layerfs workspace exec sm:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm/workspaces/1 cat\ readme.txt\;\ cat\ sub/deeper/leaf.txt\;\ readlink\ link-to-list\;\ echo\ \"written\ in\ microsandbox\ lfs535m\"\ \>\ from-msb.txt\;\ ls\ -la --message lfs535\ microsandbox\ exec
+# at 2026-11-03T06:31:51Z load1 7.18
+{"kind":"exit:0","exit_code":0,"stdout":"hello from the mac\ndeep\nsub/list.txt\ntotal 6\ndrwx------ 3  501 dialout    0 Nov  3 06:31 .\ndrwxr-xr-x 3 root root    4096 Nov  3 06:31 ..\n-rw-r--r-- 1  501 dialout   32 Nov  3 06:31 from-msb.txt\nlrwxrwxrwx 1  501 dialout   12 Nov  3 06:24 link-to-list -> sub/list.txt\n-rw-r--r-- 1  501 dialout   19 Nov  3 06:24 readme.txt\ndrwxr-xr-x 3  501 dialout    0 Nov  3 06:24 sub\n","stderr":"","message":"lfs535 microsandbox exec","truncated":false}
+exit 0  wall_ms 320
+
+$ layerfs workspace commit sm:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm/workspaces/1 --message lfs535\ commit\ from\ microsandbox
+# at 2026-11-03T06:31:52Z load1 7.18
+{"kind":"Committed","head":"12ac2c2815c007f7d6716688a725e449b4cbaa2f36576124494b23211d45232926","commit":{"id":"12ac2c2815c007f7d6716688a725e449b4cbaa2f36576124494b23211d45232926","branch":null,"parent":null,"second_parent":null,"base":"32bd92d8521bf9531a7db56a616f23614abf1a3702d7d7c596cd005e4b6942445d","root":"f45744616e59974f0fcd9f2effd325b060d204f1329ab130cc13dfec6df25ec4","via":"exec","message":"lfs535 commit from microsandbox","merged_from":null,"time":1793687512407,"logical":62,"new_canonical":997,"new_stored":456,"new_metadata":387,"displaced":null,"lww":[],"lww_truncated":false},"displaced_head":null,"merged":null,"lww":[],"lww_truncated":false}
+exit 0  wall_ms 386
+
+$ layerfs workspace unmount sm:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm/workspaces/1
+# at 2026-11-03T06:31:52Z load1 7.18
+{"kind":"Unmounted"}
+exit 0  wall_ms 156
+
+$ layerfs file read pg/app wm /from-msb.txt
+# at 2026-11-03T06:31:52Z load1 7.57
+{"kind":"ok","snapshot":"wm@ac2c2815c007","root":"f45744616e59974f0fcd9f2effd325b060d204f1329ab130cc13dfec6df25ec4","path":"/from-msb.txt","text":"written in microsandbox lfs535m\n","start_line":1,"end_line":1,"line_truncated":false,"truncated":false,"next_line":null,"size":32}
+exit 0  wall_ms 226
+
+$ layerfs sandbox close sm
+# at 2026-11-03T06:31:53Z load1 7.57
+{"kind":"Closed","sandbox":"sm","unknown":[],"closed":"sm"}
+exit 0  wall_ms 538
+
+# --- control: CLI layerfs-lifted (5001a074…, commit's alias host.microsandbox.internal, lift only) ---
+$ layerfs sandbox create pg/app sm0 lfs535m
+# at 2026-11-03T06:32:00Z load1 7.36
+{"name":"sm0","project":"pg/app","machine":"lfs535m","created":1793687520643,"id":"sm0","platform":"linux","runtime":"namespaces","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","backend":"namespaces","route":"fuse","state":"running"}
+exit 0  wall_ms 610
+
+$ layerfs sandbox list
+# at 2026-11-03T06:32:01Z load1 7.36
+{"items":[{"name":"sm0","project":"pg/app","machine":"lfs535m","created":1793687520643,"id":"sm0","platform":"linux","runtime":"namespaces","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","backend":"namespaces","route":"fuse","state":"running"}],"next_page_pos":null}
+exit 0  wall_ms 38
+
+# finding: msb answers DNS for host.microsandbox.internal even through the Sandbox root's resolv.conf (1.1.1.1): chroot <image root> getent hosts host.microsandbox.internal -> 172.16.0.5 rc=0. So the commit's alias works; continue sm0 with CLI layerfs-lifted (lift only)
+$ layerfs branch fork pg/app wm0 main
+# at 2026-11-03T06:32:16Z load1 7.02
+{"kind":"Forked","branch":"wm0","base":"32bd92d8521bf9531a7db56a616f23614abf1a3702d7d7c596cd005e4b6942445d","head":null}
+exit 0  wall_ms 215
+
+$ layerfs workspace mount sm0 wm0
+# at 2026-11-03T06:32:16Z load1 7.02
+{"kind":"Mounted","path":"/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm0/workspaces/1","workspace":"a0a29edbed494f75777654998980b00b10563e94203fe44c045734fd9ab4b457","namespace":1,"branch":"wm0","base":null,"base_layer":"32bd92d8521bf9531a7db56a616f23614abf1a3702d7d7c596cd005e4b6942445d","root":"555a700b19b1e4ecbb8f89bcb847d0c6e53dffbf08800c01b89fbcc982b58dd7","sandbox":"sm0","container":"lfs-1dfaa5f6-sm0","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","platform":"linux","runtime":"namespaces","name":null,"ws":"sm0:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm0/workspaces/1"}
+exit 0  wall_ms 222
+
+$ layerfs workspace exec sm0:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm0/workspaces/1 cat\ readme.txt\;\ readlink\ link-to-list\;\ echo\ \"written\ in\ microsandbox\ lfs535m\,\ commit\ alias\"\ \>\ from-msb0.txt
+# at 2026-11-03T06:32:17Z load1 7.02
+{"kind":"exit:0","exit_code":0,"stdout":"hello from the mac\nsub/list.txt\n","stderr":"","message":null,"truncated":false}
+exit 0  wall_ms 85
+
+$ layerfs workspace commit sm0:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm0/workspaces/1 --message lfs535\ commit\ from\ microsandbox\ \(alias\)
+# at 2026-11-03T06:32:17Z load1 7.02
+{"kind":"Committed","head":"12ef1c5ae82f449325c1d9d041977a35740ab47f989052191d6ebef3deac027559","commit":{"id":"12ef1c5ae82f449325c1d9d041977a35740ab47f989052191d6ebef3deac027559","branch":null,"parent":null,"second_parent":null,"base":"32bd92d8521bf9531a7db56a616f23614abf1a3702d7d7c596cd005e4b6942445d","root":"9a84371f8ff3246c7814729ac034e147aacd7bdbe7a04feeb158793b17c13042","via":"exec","message":"lfs535 commit from microsandbox (alias)","merged_from":null,"time":1793687537586,"logical":76,"new_canonical":1012,"new_stored":475,"new_metadata":392,"displaced":null,"lww":[],"lww_truncated":false},"displaced_head":null,"merged":null,"lww":[],"lww_truncated":false}
+exit 0  wall_ms 173
+
+$ layerfs workspace unmount sm0:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm0/workspaces/1
+# at 2026-11-03T06:32:17Z load1 7.02
+{"kind":"Unmounted"}
+exit 0  wall_ms 40
+
+$ layerfs file read pg/app wm0 /from-msb0.txt
+# at 2026-11-03T06:32:17Z load1 6.78
+{"kind":"ok","snapshot":"wm0@ef1c5ae82f44","root":"9a84371f8ff3246c7814729ac034e147aacd7bdbe7a04feeb158793b17c13042","path":"/from-msb0.txt","text":"written in microsandbox lfs535m, commit alias\n","start_line":1,"end_line":1,"line_truncated":false,"truncated":false,"next_line":null,"size":46}
+exit 0  wall_ms 192
+
+$ layerfs sandbox close sm0
+# at 2026-11-03T06:32:18Z load1 6.78
+{"kind":"Closed","sandbox":"sm0","unknown":[],"closed":"sm0"}
+exit 0  wall_ms 219
+
+# --- loopback-only Store pglo (127.0.0.1:55536), CLI layerfs-lifted ---
+$ layerfs sandbox create pglo/app sm2 lfs535m
+# at 2026-11-03T06:32:24Z load1 6.96
+{"name":"sm2","project":"pglo/app","machine":"lfs535m","created":1793687544549,"id":"sm2","platform":"linux","runtime":"namespaces","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","backend":"namespaces","route":"fuse","state":"running"}
+exit 0  wall_ms 858
+
+$ layerfs branch fork pglo/app wm main
+# at 2026-11-03T06:32:25Z load1 6.96
+{"kind":"Forked","branch":"wm","base":"32f0ad2a4fd4bdf983f197bbdb80ee0b35f09331c701a5437741a13a068609fc7a","head":null}
+exit 0  wall_ms 185
+
+$ layerfs workspace mount sm2 wm
+# at 2026-11-03T06:32:25Z load1 6.96
+{"kind":"Mounted","path":"/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm2/workspaces/1","workspace":"91fac9d874b1f9f656787a9bc7ad7bfc0b2d8bddeecd8f33051f25986c26a545","namespace":1,"branch":"wm","base":null,"base_layer":"32f0ad2a4fd4bdf983f197bbdb80ee0b35f09331c701a5437741a13a068609fc7a","root":"a64b7d6a8bf41e445a23e67e18fd414398011cf8e15658488afb7d526953783b","sandbox":"sm2","container":"lfs-1dfaa5f6-sm2","image":"sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9","platform":"linux","runtime":"namespaces","name":null,"ws":"sm2:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm2/workspaces/1"}
+exit 0  wall_ms 248
+
+$ layerfs workspace exec sm2:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm2/workspaces/1 cat\ readme.txt\;\ echo\ lo-msb\ \>\ lo-msb.txt
+# at 2026-11-03T06:32:26Z load1 6.96
+{"kind":"exit:0","exit_code":0,"stdout":"hello from the mac\n","stderr":"","message":null,"truncated":false}
+exit 0  wall_ms 86
+
+$ layerfs workspace commit sm2:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm2/workspaces/1 --message lfs535\ loopback-only\ from\ microsandbox
+# at 2026-11-03T06:32:26Z load1 6.96
+{"kind":"Committed","head":"121cbee8fd6532cf8c755ee5612b73707be6d3e7c5dbf97ae5fa8cf8ae72185243","commit":{"id":"121cbee8fd6532cf8c755ee5612b73707be6d3e7c5dbf97ae5fa8cf8ae72185243","branch":null,"parent":null,"second_parent":null,"base":"32f0ad2a4fd4bdf983f197bbdb80ee0b35f09331c701a5437741a13a068609fc7a","root":"5a17c01069c6b3e7a71cb77dfc64a1713436941bb9a95b8e4b54e28459e2dd6d","via":"exec","message":"lfs535 loopback-only from microsandbox","merged_from":null,"time":1793687546344,"logical":37,"new_canonical":970,"new_stored":431,"new_metadata":387,"displaced":null,"lww":[],"lww_truncated":false},"displaced_head":null,"merged":null,"lww":[],"lww_truncated":false}
+exit 0  wall_ms 170
+
+$ layerfs workspace unmount sm2:/layerfs/data/machine/native/run/lfs-1dfaa5f6-sm2/workspaces/1
+# at 2026-11-03T06:32:26Z load1 6.96
+{"kind":"Unmounted"}
+exit 0  wall_ms 40
+
+$ layerfs file read pglo/app wm /lo-msb.txt
+# at 2026-11-03T06:32:26Z load1 6.96
+{"kind":"ok","snapshot":"wm@1cbee8fd6532","root":"5a17c01069c6b3e7a71cb77dfc64a1713436941bb9a95b8e4b54e28459e2dd6d","path":"/lo-msb.txt","text":"lo-msb\n","start_line":1,"end_line":1,"line_truncated":false,"truncated":false,"next_line":null,"size":7}
+exit 0  wall_ms 190
+
+$ layerfs sandbox close sm2
+# at 2026-11-03T06:32:26Z load1 6.96
+{"kind":"Closed","sandbox":"sm2","unknown":[],"closed":"sm2"}
+exit 0  wall_ms 240
+
