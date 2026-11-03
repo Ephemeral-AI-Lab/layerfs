@@ -1,19 +1,38 @@
 //! A Sandbox's record, `sandbox/<name>/record.json` (layout 3, #536 §5):
-//! its name, project, machine, the state its create left (`creating` with
-//! the creator's pid, `running`, `unknown`, or `gone` for one a conversion
-//! found ended) and, once started, its backend, kernel route, runtime id,
-//! platform, runtime and image. On `native` the side that runs the Sandbox
+//! facts and at most one `op` intent (§7.1). A create claims the name with
+//! its project, machine and an `op` (`sandbox.create`); its success records
+//! the backend, kernel route, runtime id, platform, runtime and image and
+//! drops the `op` in one write. A close records its `op` (`sandbox.close`)
+//! before it stops the runtime. On `native` the side that runs the Sandbox
 //! adds what reopens it (`daemon`) to the same file; its daemon keys are in
 //! `control.json` beside it. The name is the folder's: one read finds it.
+//! No state is stored: [`SandboxRecord::state`] derives it (§7.2).
+use crate::common::home::entity_lock::{self, EntityLock};
 use crate::common::home::{self, paths, read_record, with_field, write_entity};
+use crate::common::op::{self, Op, Standing};
 use crate::common::outcome::View;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// Fields a record keeps that its call results never show.
-const HIDDEN: [&str; 3] = ["v", "runtime_id", "daemon"];
+/// Fields a record keeps that its call results never show as written: what
+/// only reopens it, and the intent (shown as [`Op::to_sdk`]).
+const HIDDEN: [&str; 5] = ["v", "runtime_id", "daemon", "state", op::FIELD];
+
+/// Takes Sandbox `name`'s lock, `sandbox/<name>/lock` (#536 §8): it guards
+/// the Sandbox's record changes and its Workspace records, taken after the
+/// home lock and never held across a worker or daemon call.
+pub(crate) fn lock(home: &Path, name: &str) -> Result<EntityLock> {
+    lock_in(&paths::sandbox_dir(home, name), name)
+}
+
+/// [`lock`] of the Sandbox folder `dir` (on `native` the home's, on a
+/// machine the worker's own), named `name` in its refusal.
+pub(crate) fn lock_in(dir: &Path, name: &str) -> Result<EntityLock> {
+    let held = format!("Sandbox {name}'s record was being changed by another process");
+    entity_lock::take(&dir.join("lock"), entity_lock::WAIT, &held)
+}
 
 /// One Sandbox's record as read.
 #[derive(Clone, Debug)]
@@ -38,29 +57,28 @@ impl SandboxRecord {
     }
 
     /// The record a create claims the name with: the project, the machine,
-    /// `creating`, now and the creating process.
-    pub(crate) fn creating(name: &str, project: &str, machine: &str) -> Self {
+    /// now and the create's intent `op`.
+    pub(crate) fn creating(name: &str, project: &str, machine: &str, op: &Op) -> Self {
         let fields = SdkValue::map([
             ("name", SdkValue::text(name)),
             ("project", SdkValue::text(project)),
             ("machine", SdkValue::text(machine)),
-            ("state", SdkValue::text("creating")),
             ("created", SdkValue::Int(home::now_ms())),
-            ("pid", SdkValue::Int(i64::from(std::process::id()))),
+            (op::FIELD, op.to_record().clone()),
         ]);
         Self::from_record(name, fields)
     }
 
-    /// The record of a started Sandbox: what its create answered (`started`).
+    /// The record of a started Sandbox: what its create answered
+    /// (`started`), with its intent dropped.
     pub(crate) fn started(self, started: &SdkValue) -> Self {
-        let mut record = self;
+        let mut record = self.without(op::FIELD);
         let copied = |name: &str| started.get(name).cloned().unwrap_or_default();
         for (field, value) in [
             ("id", copied("sandbox")),
             ("platform", copied("platform")),
             ("runtime", copied("runtime")),
             ("image", copied("image")),
-            ("state", SdkValue::text("running")),
             ("backend", copied("runtime")),
             ("route", copied("route")),
             ("runtime_id", copied("runtime_id")),
@@ -70,9 +88,33 @@ impl SandboxRecord {
         record
     }
 
-    /// The record of a create whose outcome is not known.
-    pub(crate) fn unknown(self) -> Self {
-        self.with("state", SdkValue::text("unknown"))
+    /// The intent the record holds, if any.
+    pub fn op(&self) -> Option<Op> {
+        Op::of(&self.fields)
+    }
+
+    /// The record holding intent `op`.
+    pub(crate) fn with_op(self, op: &Op) -> Self {
+        self.with(op::FIELD, op.to_record().clone())
+    }
+
+    /// The record with no intent.
+    pub(crate) fn without_op(self) -> Self {
+        self.without(op::FIELD)
+    }
+
+    /// Refuses a new operation on this Sandbox while its intent holds it:
+    /// `Busy` while its owner lives, `Unresolved` (naming `sandbox get` and
+    /// `sandbox close`) once a gone owner left it uncertain.
+    pub(crate) fn free(&self) -> Result<()> {
+        match self.op() {
+            None => Ok(()),
+            Some(op) => op.blocks(
+                &format!("Sandbox {}", self.name),
+                &format!("sandbox get {}", self.name),
+                &format!("sandbox close {}", self.name),
+            ),
+        }
     }
 
     /// `field` set to `value`.
@@ -116,25 +158,21 @@ impl SandboxRecord {
         self.fields.get_text("image")
     }
 
-    /// The state its create recorded (`creating`, `running`, `unknown`,
-    /// `gone`).
-    pub fn recorded_state(&self) -> Option<&str> {
-        self.fields.get_text("state")
-    }
-
-    /// The Sandbox's state (#536 §7.2) from its record: the state its
-    /// create recorded, `creating` when none. F3 adds the daemon's answer
-    /// and `op` (`closing`, `unresolved`).
-    pub fn state(&self) -> &str {
-        self.recorded_state().unwrap_or("creating")
-    }
-
-    /// The live process creating it: its recorded creator while the record
-    /// says `creating` and that process is alive.
-    pub fn creator(&self) -> Option<i64> {
-        let pid = self.fields.get_int("pid").filter(|pid| *pid > 0)?;
-        let alive = crate::common::home::lease::alive(pid as u32);
-        (self.state() == "creating" && alive).then_some(pid)
+    /// The Sandbox's state (#536 §7.2), from its record, its `op` and,
+    /// where the call asked, the daemon's answer (`gone`: its machine
+    /// answered that no such Sandbox runs): `creating` or `closing` while
+    /// that intent's owner lives, `unresolved` once a gone owner left it
+    /// uncertain, `gone` with no id (its create never recorded one, or a
+    /// conversion found it ended) or when answered so, else `running`.
+    pub fn state(&self, gone: bool) -> &'static str {
+        let op = self.op();
+        match op.as_ref().map(|op| (op.standing(), op.name())) {
+            Some((Standing::Running, "sandbox.close")) => "closing",
+            Some((Standing::Running, _)) => "creating",
+            Some((Standing::Unresolved, _)) => "unresolved",
+            _ if gone || self.id().is_none() => "gone",
+            _ => "running",
+        }
     }
 
     /// The record as written.
@@ -144,9 +182,10 @@ impl SandboxRecord {
 
     /// The Sandbox as each `sandbox.list` item and the start of
     /// `sandbox.get` show it: its record without what only reopens it
-    /// (`v`, `runtime_id`, `daemon`); a list item whose record holds no
-    /// `state` gains its derived one.
+    /// (`v`, `runtime_id`, `daemon`), its derived `state` and its `op`
+    /// (H6) when it has one. Both views show the same fields.
     pub fn to_sdk(&self, view: View) -> SdkValue {
+        let _ = view;
         let SdkValue::Map(fields) = &self.fields else {
             return self.fields.clone();
         };
@@ -154,9 +193,22 @@ impl SandboxRecord {
             .filter(|(n, _)| !HIDDEN.contains(&n.as_str()))
             .cloned()
             .collect();
-        if view == View::List && self.recorded_state().is_none() {
-            shown.push(("state".to_owned(), SdkValue::text(self.state())));
+        shown.push(("state".to_owned(), SdkValue::text(self.state(false))));
+        if let Some(op) = self.op() {
+            shown.push((op::FIELD.to_owned(), op.to_sdk()));
         }
         SdkValue::Map(shown)
+    }
+
+    /// The record without `field`.
+    fn without(self, field: &str) -> Self {
+        let fields = match self.fields {
+            SdkValue::Map(mut fields) => {
+                fields.retain(|(name, _)| name != field);
+                SdkValue::Map(fields)
+            }
+            other => other,
+        };
+        Self { fields, ..self }
     }
 }

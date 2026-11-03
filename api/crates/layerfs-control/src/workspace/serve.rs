@@ -266,6 +266,7 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     if outcome.is_ok() {
         let cleanup = (|| {
             let _guard = crate::sandbox::files::guard(&state.directory)?;
+            let _sandbox = crate::sandbox::record::lock_in(&state.directory, &state.id)?;
             match std::fs::remove_file(crate::sandbox::files::workspace_file(&state, token)) {
                 Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}

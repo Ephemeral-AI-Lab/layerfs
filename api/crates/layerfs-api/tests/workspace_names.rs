@@ -59,7 +59,6 @@ fn home_with_a_named_workspace(tag: &str) -> PathBuf {
             ("name", t("one")),
             ("project", t("shop/app")),
             ("machine", t("native")),
-            ("state", t("running")),
             ("id", t("one")),
             ("daemon", SdkValue::map([("runtime", t("native"))])),
         ]),

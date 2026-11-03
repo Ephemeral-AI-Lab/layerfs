@@ -36,6 +36,11 @@ at the Commit. For one small read or edit, [`file.*`](file.md) is cheaper.
 - **Everything in it is committed:** sources, `.git`, `node_modules`, build
   output and caches. Scratch files belong in `/tmp`, outside the Workspace.
 - Keep each Workspace's calls sequential.
+- While its Sandbox is being created or closed, `mount`, `exec`, `commit`
+  and `unmount` are refused `Busy`; once such a call lost its answer and its
+  process ended (`state: "unresolved"` in `sandbox.get`), they are refused
+  `Unresolved` until `sandbox.close(name)` clears it. `status` only reads
+  and is not refused for that (see [sandbox](sandbox.md)).
 
 ```js
 const { ws } = await layerfs.workspace.mount("tests", "work");   // a NEW Workspace

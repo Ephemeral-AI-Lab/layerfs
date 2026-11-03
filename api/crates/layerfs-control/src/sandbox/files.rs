@@ -178,10 +178,16 @@ pub(crate) fn guard(directory: &Path) -> Result<Guard> {
         }
     }
 }
+/// The file of a directory's discovery turn. It is not `lock`: on `native`
+/// a Sandbox's directory is the home's `sandbox/<name>/`, where `lock` is
+/// the Sandbox lock (#536 §8), which is short and never held across a
+/// daemon call, while this turn is held across a start, a mount or a close.
+pub(crate) const TURN: &str = "serve.lock";
+
 /// The OS lock, waited for until `deadline`; it is released even if its
 /// process exits.
 fn os_lock(directory: &Path, deadline: std::time::Instant) -> Result<File> {
-    let path = directory.join("lock");
+    let path = directory.join(TURN);
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -413,6 +419,8 @@ pub(crate) fn save_sandbox(
         ]),
     )?;
     // on `native` this is the home's record, which keeps its other fields
+    // (its `op` among them): changed under the Sandbox lock (#536 §8)
+    let _sandbox = crate::sandbox::record::lock_in(directory, &state.id)?;
     let mut record = read_record(&directory.join("record.json"))?.unwrap_or_default();
     let store = args.get_text("store").unwrap_or(&state.project);
     for (field, value) in [
@@ -645,7 +653,8 @@ pub(crate) fn workspace_file(
     ))
 }
 /// Records the Workspace `mount` mounted of `branch`, with its `name` if
-/// it has one: `{ v, id, name?, branch, path, namespace, created }`.
+/// it has one: `{ v, id, name?, branch, path, namespace, created }`,
+/// after the mount succeeded, under the Sandbox lock (#536 §8).
 pub(crate) fn save_workspace(
     state: &SandboxState,
     mount: &MountedWorkspace,
@@ -666,6 +675,7 @@ pub(crate) fn save_workspace(
         ("namespace", SdkValue::Int(token.namespace)),
         ("created", SdkValue::Int(crate::common::home::now_ms())),
     ]);
+    let _sandbox = crate::sandbox::record::lock_in(&state.directory, &state.id)?;
     write_entity(
         &workspace_file(state, token),
         &SdkValue::Map(

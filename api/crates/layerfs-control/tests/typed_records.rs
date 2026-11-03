@@ -102,10 +102,12 @@ fn a_bucket_shows_its_record() {
 #[test]
 fn a_sandbox_shows_its_record() {
     use layerfs_control::sandbox::record::SandboxRecord;
-    let text = r#"{"name":"t1","project":"shop/api","machine":"native","state":"running","created":3,"pid":9,"id":"t1","platform":"macos","runtime":"native","image":null,"backend":"native","route":"nfs"}"#;
+    let text = r#"{"name":"t1","project":"shop/api","machine":"native","created":3,"id":"t1","platform":"macos","runtime":"native","image":null,"backend":"native","route":"nfs"}"#;
+    // its state is derived, never stored (#536 H4), and shown last
+    let shown = text.replacen('}', r#","state":"running"}"#, 1);
     let record = SandboxRecord::from_record("t1", value(text));
-    assert_eq!(print(&record.to_sdk(View::List)), text);
-    assert_eq!(print(&record.to_sdk(View::Full)), text);
+    assert_eq!(print(&record.to_sdk(View::List)), shown);
+    assert_eq!(print(&record.to_sdk(View::Full)), shown);
     // layout 3: `v`, `runtime_id` and what reopens it (`daemon`) are not shown
     let hidden = text.replacen('{', r#"{"v":1,"#, 1).replacen(
         r#""route":"nfs""#,
@@ -113,11 +115,10 @@ fn a_sandbox_shows_its_record() {
         1,
     );
     let versioned = SandboxRecord::from_record("t1", value(&hidden));
-    assert_eq!(print(&versioned.to_sdk(View::List)), text);
+    assert_eq!(print(&versioned.to_sdk(View::List)), shown);
     assert_eq!(versioned.machine(), "native");
     assert_eq!(record.project(), Some("shop/api"));
     assert_eq!(record.id(), Some("t1"));
-    assert_eq!(record.recorded_state(), Some("running"));
 }
 
 #[cfg(feature = "machine")]
@@ -311,23 +312,53 @@ fn a_store_state_is_busy_unresolved_down_idle_or_in_use() {
     assert_eq!(names, ["idle", "in_use", "busy", "down", "unresolved"]);
 }
 
+/// A record with an id or none and a `name` intent owned by `pid`.
+fn sandbox_with(
+    id: bool,
+    op: Option<(&str, i64, bool)>,
+) -> layerfs_control::sandbox::record::SandboxRecord {
+    let mut text = String::from(r#"{"name":"b""#);
+    if id {
+        text.push_str(r#","id":"b""#);
+    }
+    if let Some((name, pid, uncertain)) = op {
+        text.push_str(&format!(
+            r#","op":{{"id":"op-00000000000000cc","name":"{name}","phase":"stop","args":null,"owner":{{"pid":{pid}}},"started":4,"updated":5,"uncertain":{uncertain}}}"#
+        ));
+    }
+    text.push('}');
+    layerfs_control::sandbox::record::SandboxRecord::from_record("b", value(&text))
+}
+
 #[test]
-fn a_sandbox_state_is_its_recorded_one() {
-    use layerfs_control::sandbox::record::SandboxRecord;
-    let running = SandboxRecord::from_record("a", value(r#"{"state":"running"}"#));
-    assert_eq!(running.state(), "running");
-    assert_eq!(running.creator(), None);
-    let me = std::process::id();
-    let creating = SandboxRecord::from_record(
-        "b",
-        value(&format!(r#"{{"name":"b","state":"creating","pid":{me}}}"#)),
-    );
-    assert_eq!(creating.creator(), Some(i64::from(me)));
-    // a record with no state shows `creating` in a list, and nothing more in a get
-    let bare = SandboxRecord::from_record("c", value(r#"{"name":"c"}"#));
+fn a_sandbox_state_is_derived_from_its_record_and_intent() {
+    let me = i64::from(std::process::id());
+    assert_eq!(sandbox_with(true, None).state(false), "running");
+    // the daemon answered that it does not run
+    assert_eq!(sandbox_with(true, None).state(true), "gone");
+    // no id: its create never recorded one
+    assert_eq!(sandbox_with(false, None).state(false), "gone");
     assert_eq!(
-        print(&bare.to_sdk(View::List)),
-        r#"{"name":"c","state":"creating"}"#
+        sandbox_with(false, Some(("sandbox.create", me, false))).state(false),
+        "creating"
     );
-    assert_eq!(print(&bare.to_sdk(View::Full)), r#"{"name":"c"}"#);
+    assert_eq!(
+        sandbox_with(true, Some(("sandbox.close", me, false))).state(false),
+        "closing"
+    );
+    // a gone owner (id 0): uncertain blocks, certain is ignored
+    assert_eq!(
+        sandbox_with(true, Some(("sandbox.close", 0, true))).state(false),
+        "unresolved"
+    );
+    assert_eq!(
+        sandbox_with(true, Some(("sandbox.close", 0, false))).state(false),
+        "running"
+    );
+    // the intent shows as `{id, name, phase, started, uncertain}`, never its owner
+    let shown = sandbox_with(true, Some(("sandbox.close", 0, true))).to_sdk(View::List);
+    assert_eq!(
+        print(&shown),
+        r#"{"name":"b","id":"b","state":"unresolved","op":{"id":"op-00000000000000cc","name":"sandbox.close","phase":"stop","started":4,"uncertain":true}}"#
+    );
 }

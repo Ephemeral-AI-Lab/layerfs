@@ -1,10 +1,17 @@
 //! `sandbox.close`, and the close of a Sandbox whose create never recorded an id.
+//!
+//! A close records its `op` intent (`sandbox.close`, #536 §7.1) under the
+//! home and Sandbox locks before it stops the runtime, and removes the
+//! record at the end. A live intent of another operation refuses it
+//! `Busy`; a gone owner's uncertain intent does not: `sandbox.close` is the
+//! call that clears it.
 use super::create::remove_folder;
 use super::family::sandbox_of;
-use super::record::SandboxRecord;
+use super::record::{self, SandboxRecord};
 use crate::common::context::Context;
 use crate::common::home;
-use crate::common::outcome::{failed, refused, Outcome};
+use crate::common::op::{Op, Standing};
+use crate::common::outcome::{refused, Outcome};
 use crate::sandbox::route::on_machine;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -15,67 +22,95 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 pub(super) fn close(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
-    let record = sandbox_of(&home, name)?;
-    if record.id().is_none() {
-        if let Some(closed) = close_unstarted(&home, name)? {
-            return Ok(closed);
-        }
-    }
-    let record = sandbox_of(&home, name)?;
+    sandbox_of(&home, name)?;
     let force = matches!(args.get("force"), Some(SdkValue::Bool(true)));
+    let op = Op::begin(
+        "sandbox.close",
+        "stop",
+        SdkValue::map([("force", SdkValue::Bool(force))]),
+    )?;
+    let record = {
+        let _lock = home::lock::take(&home)?;
+        let _sandbox = record::lock(&home, name)?;
+        let Some(record) = SandboxRecord::read(&home, name)? else {
+            return Err(refused("NoSuchSandbox", format!("no Sandbox named {name}")));
+        };
+        clearable(&record)?;
+        if record.id().is_none() {
+            return close_unstarted(&home, &record);
+        }
+        let record = record.with_op(&op);
+        record.write(&home)?;
+        record
+    };
     let closed = on_machine(
         context,
         &record,
         "sandbox.close",
         vec![("force", SdkValue::Bool(force))],
     );
+    let _lock = home::lock::take(&home)?;
+    // on `native` the Sandbox's own side removed the folder already
+    let dir = record.dir(&home);
+    let _sandbox = match dir.exists() {
+        true => Some(record::lock(&home, name)?),
+        false => None,
+    };
     match closed {
-        // on `native` the Sandbox's own side removed the folder already
         Ok(value) => {
-            let _lock = home::lock::take(&home)?;
-            remove_folder(&record.dir(&home))?;
+            remove_folder(&dir)?;
             Ok(home::with_field(value, "closed", SdkValue::text(name)))
         }
         // a Sandbox already gone loses its record too
         Err(refusal) if refusal.code == "NoSuchSandbox" => {
-            let _lock = home::lock::take(&home)?;
-            remove_folder(&record.dir(&home))?;
+            remove_folder(&dir)?;
             Ok(SdkValue::map([
                 ("closed", SdkValue::text(name)),
                 ("was_gone", SdkValue::Bool(true)),
             ]))
         }
-        Err(refusal) => Err(refusal),
+        // its outcome is not known: the record stays with the intent,
+        // uncertain, until another `sandbox.close` clears it
+        Err(refusal) if refusal.code == "Unknown" => {
+            let op = op.as_uncertain();
+            if let Some(now) = SandboxRecord::read(&home, name)? {
+                now.with_op(&op).write(&home)?;
+            }
+            op.log_uncertain(&home, "sandbox", name, &refusal.message);
+            Err(refusal)
+        }
+        // a certain failure leaves the Sandbox as it was
+        Err(refusal) => {
+            if let Some(now) = SandboxRecord::read(&home, name)? {
+                now.without_op().write(&home)?;
+            }
+            Err(refusal)
+        }
     }
 }
 
-/// Closes Sandbox `name` whose record has no id: its create is in flight,
-/// its outcome was unknown, or its process ended before recording one.
-/// Refused `InUse` while the creating process lives; otherwise the record
-/// goes and the name is free. `None` when the record gained an id
-/// meanwhile, for the ordinary close.
-fn close_unstarted(home: &Path, name: &str) -> Result<Option<SdkValue>> {
-    let _lock = home::lock::take(home)?;
-    let Some(record) = SandboxRecord::read(home, name)? else {
-        return Err(refused("NoSuchSandbox", format!("no Sandbox named {name}")));
-    };
-    if record.id().is_some() {
-        return Ok(None);
+/// Refuses a close while another operation's intent holds Sandbox
+/// `record` (`Busy`); a gone owner's uncertain intent is what a close
+/// clears, and a gone owner's certain one holds nothing.
+fn clearable(record: &SandboxRecord) -> Result<()> {
+    match record.op() {
+        Some(op) if op.standing() == Standing::Unresolved => Ok(()),
+        _ => record.free(),
     }
-    let dir = record.dir(home);
-    let state = record.state().to_owned();
-    if let Some(pid) = record.creator() {
-        return Err(refused(
-            "InUse",
-            format!("Sandbox {name} is being created by process {pid}"),
-        ));
-    }
-    std::fs::remove_dir_all(&dir).map_err(failed)?;
+}
+
+/// Closes Sandbox `record`, which has no id: its create's outcome was not
+/// known, or its process ended before recording one. The folder goes and
+/// the name is free. The caller holds the home and Sandbox locks and has
+/// refused a live create.
+fn close_unstarted(home: &Path, record: &SandboxRecord) -> Outcome {
+    let state = record.state(false);
+    remove_folder(&record.dir(home))?;
     let mut fields = vec![
-        ("closed", SdkValue::text(name)),
-        ("was", SdkValue::text(&state)),
+        ("closed", SdkValue::text(record.name())),
+        ("was", SdkValue::text(state)),
     ];
-    if state == "unknown" {
+    if state == "unresolved" {
         fields.push((
             "left",
             SdkValue::text("its create's outcome was unknown: a Sandbox it may have started on its machine is not recorded here"),
@@ -85,7 +120,7 @@ fn close_unstarted(home: &Path, name: &str) -> Result<Option<SdkValue>> {
     if let Some(left) = record.to_record().get_text("left") {
         fields.push(("left", SdkValue::text(left)));
     }
-    Ok(Some(SdkValue::Map(
+    Ok(SdkValue::Map(
         fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
-    )))
+    ))
 }

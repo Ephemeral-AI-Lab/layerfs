@@ -65,10 +65,27 @@ ready.
 | PostgreSQL Store, a platform the support table allows (`native`, `docker`, ssh) | where that machine runs Sandboxes (rows above). This process resolves the password and rewrites a loopback host for the machine (`docker`: `host.docker.internal`; ssh refuses a loopback URL); the create first checks, from that machine, that the server answers with the Store's schema binding. The daemon needs the `postgresql` build |
 | PostgreSQL Store, a platform the table refuses (`lima`, `apple-container`, `microsandbox`, `firecracker`) | `Unsupported` with the support table's reason (`machine.platforms`) |
 
-**Returns:** the Sandbox's record: `{ name, project, machine, state: "running",
-created, id, platform, runtime, image, backend, route }`. `name` is what you
-pass to every other call; `id` is the same name, as its machine knows it;
+**Returns:** the Sandbox's record: `{ name, project, machine, created, id,
+platform, runtime, image, backend, route, state: "running" }`. `name` is what
+you pass to every other call; `id` is the same name, as its machine knows it;
 `route` is the kernel route (`fuse`, or `nfs` on macOS `native`).
+
+**State and intent** (#536 §7): a Sandbox's record stores facts and, while a
+`sandbox.create` or `sandbox.close` runs, one `op` intent; `state` is derived
+when asked:
+
+| `state` | When |
+| --- | --- |
+| `creating` | a `sandbox.create`'s process is still running it |
+| `closing` | a `sandbox.close`'s process is still running it |
+| `running` | it has an id and no live or unresolved intent |
+| `gone` | it has no id (its create's process ended before recording one), or `sandbox.get` heard from its machine that it no longer runs |
+| `unresolved` | a create or close lost its answer and its process has ended |
+
+While an intent's process lives, `sandbox.close` and every `workspace` call
+but `status` are refused `Busy` (naming the operation). An `unresolved`
+Sandbox refuses them `Unresolved`, naming `layerfs sandbox get <name>` (shows
+the `op`) and `layerfs sandbox close <name>`, the call that clears it.
 
 **Refusals**
 
@@ -80,9 +97,8 @@ pass to every other call; `id` is the same name, as its machine knows it;
 | `Unavailable` | The machine cannot reach the PostgreSQL server, or reaches a server holding another Store (message names the host tried) | Make the server reachable from that machine |
 | `Unavailable` | The daemon bundle is missing | Report it; the home's owner installs the bundle |
 | `InvalidInput` | A bad name or project, or the name `native` or `docker` (they name the built-in machines) | Fix the call |
-| `Unknown` | The machine's answer was lost: a Sandbox may or may not have started; the record says `unknown` | Report it; `sandbox.close(name)` drops the record (a Sandbox it left on its machine is not recorded) |
 | `Failed` | Starting it failed; its record is removed | Stop and report the message |
-| `Unknown` | The start's outcome is unknown; the record is kept with `state: "unknown"` | Stop and report; don't create it again |
+| `Unknown` | The machine's answer was lost: a Sandbox may or may not have started. The record keeps its `op`, marked `uncertain` (`state: "unresolved"`) | Stop and report; don't create it again. `sandbox.close(name)` clears it (a Sandbox it left on its machine is not recorded) |
 
 ## `sandbox.list`
 
@@ -90,16 +106,22 @@ pass to every other call; `id` is the same name, as its machine knows it;
 
 Every Sandbox record in the home, or one project's, one page at a time:
 `{ items: [record, …], next_page_pos }` (`page_size` 1–1000, default 50;
-`next_page_pos` is `null` after the last page). It reads the home's records
-only; it does not ask the daemons whether they still run.
+`next_page_pos` is `null` after the last page). Each item carries its
+derived `state` and, while it has one, its `op` (`{ id, name, phase,
+started, uncertain }`). It reads the home's records only; it does not ask
+the daemons whether they still run (a Sandbox whose daemon ended reads
+`running` here).
 
 ## `sandbox.get`
 
 `sandbox.get(name, { page_size, page_pos })`
 
-The Sandbox's record plus `workspaces`, one page of the daemon's list of
-mounted Workspaces, and `next_page_pos` (`page_size`, `page_pos` as for
-`list`). From source, each entry has `ws` (`<sandbox>:<name>` when its mount
+The Sandbox's record with its derived `state` and its `op` while it has one
+(`{ id, name, phase, started, uncertain }`; reading never clears it), plus
+`workspaces`, one page of the daemon's list of mounted Workspaces, and
+`next_page_pos` (`page_size`, `page_pos` as for `list`). A Sandbox with no
+`id` asks no daemon; one whose machine answers that it no longer runs reads
+`state: "gone"` with `workspaces: []`. From source, each entry has `ws` (`<sandbox>:<name>` when its mount
 named it, else `<sandbox>:<path>`: pass it to the `workspace` calls), `name`
 (or `null`), `path`, and the daemon's `workspace`, `namespace`, `branch`,
 `base`, `base_layer`, `root`, `activity`, `mounted`, `directory` (the same
@@ -120,7 +142,11 @@ unmount.
 `sandbox.close(name, { force })`
 
 Stops the Sandbox now (stop, then delete, each attempted once), then removes
-its record.
+its record. Its `op` (`sandbox.close`) is recorded before the stop: a lost
+answer (`Unknown`) keeps the record with that `op` uncertain
+(`state: "unresolved"`) until another `sandbox.close` clears it; any other
+refusal leaves the Sandbox as it was. `Busy` while another create or close
+of it runs.
 
 - **Returns:** `{ kind: "Closed", sandbox: <id>, closed: <name> }`. For a
   Sandbox that was already gone (it closed itself), `{ closed, was_gone: true }`
@@ -133,10 +159,10 @@ its record.
   not drain. Their uncommitted changes and processes end with the Sandbox:
   commit first what you want to keep.
 - A record with no `id` (a create still running, one whose outcome was
-  unknown, or one whose process ended) closes too: `InUse` while the
+  unknown, or one whose process ended) closes too: `Busy` while the
   creating process lives, otherwise the record goes and the name is free
-  (`{ closed, was }`; for an unknown create, `left` says a Sandbox may remain
-  on its machine).
+  (`{ closed, was }`, `was` being `gone` or `unresolved`; for an unresolved
+  create, `left` says a Sandbox may remain on its machine).
 
 ## Sandbox lifetime
 

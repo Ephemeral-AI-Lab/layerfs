@@ -7,24 +7,35 @@ use crate::machine::worker::Unreached;
 use crate::sandbox::route::reach;
 use layerfs_bridge::control::SdkValue;
 
-/// `sandbox.get(name, { page_size, page_pos })`: its record with one page
-/// of its Workspaces.
+/// `sandbox.get(name, { page_size, page_pos })`: its record with its
+/// derived `state`, its `op` when it has one (H6), and one page of its
+/// Workspaces. Reading never clears an intent.
 pub(super) fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
     let record = sandbox_of(&home, name)?;
-    // a get starts no machine (P4): a machine that is down answers
-    // the record with no Workspaces and why
-    let listed = reach(context, &record, "sandbox.list_workspaces", vec![], false);
-    let (all, down) = match listed {
+    // a Sandbox with no id has no daemon to ask; a get starts no machine
+    // (P4): a machine that is down answers the record with no Workspaces
+    // and why
+    let listed = match record.id() {
+        Some(_) => reach(context, &record, "sandbox.list_workspaces", vec![], false),
+        None => Ok(Ok(SdkValue::Null)),
+    };
+    let (all, down, gone) = match listed {
+        Ok(Err(refusal)) if refusal.code == "NoSuchSandbox" => (Vec::new(), None, true),
         Ok(workspaces) => match workspaces?.get("workspaces") {
-            Some(SdkValue::List(items)) => (items.iter().map(|i| with_ws(name, i)).collect(), None),
-            _ => (Vec::new(), None),
+            Some(SdkValue::List(items)) => (
+                items.iter().map(|i| with_ws(name, i)).collect(),
+                None,
+                false,
+            ),
+            _ => (Vec::new(), None, false),
         },
-        Err(Unreached(why)) => (Vec::new(), Some(why.message)),
+        Err(Unreached(why)) => (Vec::new(), Some(why.message), false),
     };
     let (items, next) = page(all, args);
     let shown = record.to_sdk(View::Full);
+    let shown = home::with_field(shown, "state", SdkValue::text(record.state(gone)));
     let mut record = home::with_field(shown, "workspaces", SdkValue::List(items));
     if let Some(why) = down {
         record = home::with_field(record, "down_reason", SdkValue::Text(why));

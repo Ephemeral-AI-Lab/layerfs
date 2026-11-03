@@ -448,10 +448,10 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
     let state = match made {
         Ok(state) => state,
         Err(refusal) => {
-            // a worker's folder held only this call's lock; on `native` the
+            // a worker's folder held only this call's turn; on `native` the
             // folder keeps the caller's record, which the caller removes
             if refusal.code == "Failed" || refusal.code == "InvalidInput" {
-                let _ = std::fs::remove_file(directory.join("lock"));
+                let _ = std::fs::remove_file(directory.join(crate::sandbox::files::TURN));
                 let _ = std::fs::remove_dir(&directory);
             }
             return Err(refusal);

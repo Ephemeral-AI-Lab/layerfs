@@ -14,6 +14,9 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
     if call == "mount" {
         let name = args.get_text("sandbox").unwrap_or("");
         let record = sandbox_of(&home, name)?;
+        // refused while a create or close holds the Sandbox, or left it
+        // unresolved (#536 §7.1)
+        record.free()?;
         let branch = args.get("branch").cloned().unwrap_or_default();
         let mut more = vec![("branch", branch)];
         // a name, unique in the Sandbox, which `ws` then uses (#536 C3)
@@ -38,6 +41,11 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
     }
     let ws = WorkspaceRef::parse(args.get_text("ws").unwrap_or(""))?;
     let record = sandbox_of(&home, &ws.sandbox)?;
+    // a status only reads; every other call is refused while an intent
+    // holds the Sandbox
+    if call != "status" {
+        record.free()?;
+    }
     // a path, or a name the Sandbox's side resolves to its path
     let mut more = vec![("path", SdkValue::text(ws.at.as_str()))];
     let op = match call {
