@@ -6,7 +6,7 @@
 //! project with a Store of its own becomes Store `<p>` holding project
 //! `<p>`), `stores.json` and `stores.v1.json` (folded into each Store's
 //! record), the volume `.runtime/projects/<p>.json` names, each sqlite
-//! Store's file where this host can read it (`place.rs`),
+//! Store's file where this host can read it (`volume.rs`),
 //! `remote-state/<s>` (the Store's backup link), `remotes` (one
 //! `backup/<bucket>/record.json` per remote), `.runtime/` (Init failures to
 //! `log/`) and `traces/` (to `trace/`). Sandbox folders stay inside their
@@ -16,9 +16,9 @@
 //! nothing is deleted. An unknown file is left where it is and reported.
 //! `layerfs.json` is written last, so a conversion stopped part way is
 //! continued by the next call, and a second run changes nothing.
-use super::layout::{create, detect, HomeFile, Layout, OLD};
-use super::paths;
-use super::records::{log_line, now_ms, private_dir, read_record, with_field, write_record};
+use crate::common::home::layout::OLD;
+use crate::common::home::paths;
+use crate::common::home::records::{now_ms, private_dir, read_record, with_field, write_record};
 use crate::common::outcome::{failed, refused};
 use crate::store::record::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -38,43 +38,6 @@ const OWNED: [&str; 7] = [
     "trace",
     "log",
 ];
-
-/// The home ready for 2.0 calls: created when empty, converted once when it
-/// is a 1.1.0 home. Answers its `layerfs.json`. A worker's root is not a
-/// home: it answers the id its caller sent, and nothing is written.
-pub fn open(home: &Path) -> Result<HomeFile> {
-    open_from(home, Path::new(super::place::DOCKER_VOLUMES))
-}
-
-/// [`open`], with a 1.1.0 home's Docker volumes read from `volumes` (1.1.0's
-/// `volumes` setting; a rootless Docker keeps them elsewhere).
-pub fn open_from(home: &Path, volumes: &Path) -> Result<HomeFile> {
-    if super::guest::is_root(home) {
-        return super::guest::file(home);
-    }
-    let file = ready(home, volumes)?;
-    super::guest::opened(&file.id);
-    Ok(file)
-}
-
-fn ready(home: &Path, volumes: &Path) -> Result<HomeFile> {
-    match detect(home)? {
-        Layout::Current(file) => Ok(file),
-        Layout::Empty | Layout::Old => {
-            let _lock = super::lock::take(home)?;
-            match detect(home)? {
-                Layout::Current(file) => Ok(file),
-                Layout::Empty => create(home),
-                Layout::Old => {
-                    let report = convert(home, volumes)?;
-                    let file = create(home)?;
-                    write_record(&paths::log_dir(home).join("migration.json"), &report)?;
-                    Ok(file)
-                }
-            }
-        }
-    }
-}
 
 /// What one conversion did.
 #[derive(Default)]
@@ -106,7 +69,7 @@ impl Report {
     }
 }
 
-fn convert(home: &Path, volumes: &Path) -> Result<SdkValue> {
+pub(super) fn convert(home: &Path, volumes: &Path) -> Result<SdkValue> {
     let mut report = Report::default();
     let old = paths::log_dir(home).join("1.1.0");
     // 1. Stores with records of their own, and their projects
@@ -136,7 +99,7 @@ fn convert(home: &Path, volumes: &Path) -> Result<SdkValue> {
             continue;
         }
         let was_native = record.get_text("machine") == Some("native");
-        let (record, note) = super::place::place(home, volumes, &store, record)?;
+        let (record, note) = super::volume::place(home, volumes, &store, record)?;
         match note {
             Some(note) => report.notes.push(note),
             None if !was_native && record.get_text("machine") == Some("native") => {
@@ -454,18 +417,4 @@ fn buckets(home: &Path, report: &mut Report) -> Result<()> {
         }
     }
     Ok(())
-}
-
-/// Logs a line for a conversion that could not finish (the next call
-/// continues it).
-pub fn note_failure(home: &Path, refusal: &SdkRefusal) {
-    let _ = log_line(
-        home,
-        "migration-failures.jsonl",
-        &SdkValue::map([
-            ("at", SdkValue::Int(now_ms())),
-            ("code", SdkValue::text(&refusal.code)),
-            ("message", SdkValue::text(&refusal.message)),
-        ]),
-    );
 }
