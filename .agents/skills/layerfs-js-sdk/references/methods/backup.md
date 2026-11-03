@@ -25,7 +25,7 @@ bucket, so it can be backed up to several buckets.
 | `disconnect(name)` | Forgets the bucket and this home's links to it; its objects stay |
 | `list(bucket?)` | Every Store file on the connected buckets, checked live, one item per linked Store, each with a `state`: `current`, `store_changed`, `bucket_changed`, `both_changed`, `unknown` (with a `reason`: a Store not on `native`, a PostgreSQL Store, a link or listing without heads or sha256), `unlinked` or `missing` |
 | `create(store, bucket, file?)` | Uploads a snapshot of the Store and links the Store to it. `file` defaults to the Store's name. `Exists` when the object there was exported from another home; `Conflict` when it is not the copy this home last moved |
-| `restore(store, bucket, file?)` | Downloads a file and installs it as the sqlite Store `store` on `native`: a new Store, or replacing an idle one on `native`. `Conflict` when that Store changed since its last backup or restore; `InUse` while it is open or a Sandbox of its projects runs; `Exists` when another restore made the name first |
+| `restore(store, bucket, file?)` | Downloads a file and installs it as the sqlite Store `store` on `native`: a new Store, or replacing an idle one on `native`. `Conflict` when that Store changed since its last backup or restore; `InUse` while it is open or a Sandbox of its projects runs (`detail.related` lists them as `{ kind, name }`, leases and Sandboxes); `Exists` when another restore made the name first |
 
 `create` and `restore` report `{ phase }` updates (`snapshot`, `upload`,
 `download`, …) on `on_progress` / `--progress`. LayerFS never deletes bucket

@@ -374,7 +374,9 @@ layerfs project init pg-main/load ./load
 - A process that makes calls on a PostgreSQL Store holds its lease while
   it keeps the Store open, as for a sqlite Store. `store disconnect`
   forgets the Store; its data stays on the server. It is `InUse` while
-  another process holds the Store or a Sandbox of it runs.
+  another process holds the Store or a Sandbox of it is recorded;
+  `detail.related` names each as `{kind: "lease", name: <pid>}` or
+  `{kind: "sandbox", name}`, as for a push.
 - `project init` into a PostgreSQL Store runs in the caller's process,
   under the Store's lease.
 - PostgreSQL needs a build with the `postgresql` feature; without it these

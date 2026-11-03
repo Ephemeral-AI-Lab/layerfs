@@ -1,8 +1,9 @@
-//! `InUse` from `project.remove` fills `detail.related` with `{kind,
-//! name}` entries (#536 §10b refusal detail): the project's Sandboxes.
+//! `InUse` from `project.remove` and `store.disconnect` fills
+//! `detail.related` with `{kind, name}` entries (#536 §10b refusal detail):
+//! the project's Sandboxes, and another process's lease on the Store.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_control::common::context::Context;
-use layerfs_control::common::home::{paths, write_entity, write_record};
+use layerfs_control::common::home::{paths, private_dir, write_entity, write_record};
 use std::path::{Path, PathBuf};
 
 fn t(s: &str) -> SdkValue {
@@ -70,5 +71,38 @@ fn project_remove_names_the_project_s_sandboxes() {
     assert_eq!(related(&refusal), [sandbox("sa"), sandbox("sb")]);
     // nothing was removed
     assert!(paths::project_record(&home, "shop", "api").is_file());
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn store_disconnect_names_another_process_s_lease() {
+    let home = home("disconnect");
+    let store = SdkValue::map([("name", t("g")), ("kind", t("postgresql"))]);
+    write_entity(&paths::store_record(&home, "g"), &store).unwrap();
+    // a live process other than this one holds the Store's lease
+    let mut holder = std::process::Command::new("sleep")
+        .arg("60")
+        .spawn()
+        .unwrap();
+    private_dir(&paths::lease_dir(&home, "g")).unwrap();
+    std::fs::write(
+        paths::lease_dir(&home, "g").join(holder.id().to_string()),
+        "1\n",
+    )
+    .unwrap();
+    let refusal = refused(
+        &home,
+        layerfs_control::store::connect::run,
+        "disconnect",
+        SdkValue::map([("name", t("g"))]),
+    );
+    let _ = holder.kill();
+    let _ = holder.wait();
+    assert_eq!(refusal.code, "InUse", "{refusal:?}");
+    assert_eq!(
+        related(&refusal),
+        [("lease".to_owned(), holder.id().to_string())]
+    );
+    assert!(paths::store_record(&home, "g").is_file());
     let _ = std::fs::remove_dir_all(&home);
 }

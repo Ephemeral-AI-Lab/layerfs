@@ -227,22 +227,8 @@ fn sqlite_machine(record: &StoreRecord) -> Result<String> {
     record.machine()
 }
 
-/// `store.disconnect` and `backup.restore`: refused `InUse` while a
-/// Sandbox of one of Store `store`'s projects is recorded; `detail.related`
-/// lists them as `{kind: "sandbox", name}`.
-pub fn can_retire_store(home: &Path, store: &str) -> Result<()> {
-    let sandboxes = sandboxes_of_store(home, store)?;
-    if sandboxes.is_empty() {
-        return Ok(());
-    }
-    let message = format!(
-        "Store {store} has running Sandboxes: {}",
-        sandboxes.join(", ")
-    );
-    Err(in_use(message, related("sandbox", &sandboxes)))
-}
-
-/// `store.push`, `store.pull` and `store.remove`: refused `InUse` while
+/// `store.push`, `store.pull`, `store.remove`, `store.disconnect` and
+/// `backup.restore`: refused `InUse` while
 /// another live process holds Store `store` (its lease) or a Sandbox of one
 /// of its projects is recorded; `detail.related` lists them as `{kind:
 /// "lease", name: <pid>}` and `{kind: "sandbox", name}`. Under the home
