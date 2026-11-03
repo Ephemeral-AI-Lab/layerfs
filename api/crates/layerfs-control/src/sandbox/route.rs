@@ -79,7 +79,7 @@ fn host_args(
         ("store_record", record.to_record().clone()),
         (
             "storePath",
-            SdkValue::text(store_path(home, store, kind).display().to_string()),
+            SdkValue::text(store_path(home, store, record, kind).display().to_string()),
         ),
         ("deploy", deploy),
     ];
@@ -178,9 +178,9 @@ fn reach_check(
 
 /// The path the open-Store cache keys `store` by: its file, or for a
 /// PostgreSQL Store the path [`route`] keys it by, which no file has.
-fn store_path(home: &Path, store: &str, kind: StoreKind) -> PathBuf {
+fn store_path(home: &Path, store: &str, record: &StoreRecord, kind: StoreKind) -> PathBuf {
     match kind {
-        StoreKind::Postgresql => paths::store_dir(home, store).join("postgresql"),
+        StoreKind::Postgresql => record.postgresql_key(home, store),
         StoreKind::Sqlite => paths::store_file(home, store),
     }
 }

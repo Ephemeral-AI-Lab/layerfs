@@ -235,7 +235,7 @@ fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
         ("postgresql", selection),
         (
             "storePath",
-            SdkValue::text(directory.join("postgresql").display().to_string()),
+            SdkValue::text(record.postgresql_key(home, name).display().to_string()),
         ),
     ]))?;
     let _lock = home::lock::take(home)?;
@@ -284,7 +284,7 @@ fn disconnect(home: &Path, name: &str) -> Outcome {
     // a Sandbox's daemon dials the server from its machine, which holds no
     // lease in this home (#535 §7.4)
     crate::inventory::can_retire_store(home, name)?;
-    crate::store::open::close(&paths::store_dir(home, name).join("postgresql"))?;
+    crate::store::open::close(&record.postgresql_key(home, name))?;
     std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
     Ok(SdkValue::map([("disconnected", SdkValue::text(name))]))
 }

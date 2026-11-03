@@ -84,8 +84,9 @@ fn postgresql(
         "postgresql".to_owned(),
         SdkValue::map([("url", SdkValue::text(url))]),
     ));
-    // one open service per PostgreSQL Store, keyed by a path no file has
-    let key = paths::store_dir(home, &target.store).join("postgresql");
+    // one open service per PostgreSQL Store and binding, keyed by a path no
+    // file has
+    let key = target.record.postgresql_key(home, &target.store);
     fields.push((
         "storePath".to_owned(),
         SdkValue::text(key.display().to_string()),

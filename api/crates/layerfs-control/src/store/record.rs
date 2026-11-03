@@ -245,6 +245,16 @@ impl StoreRecord {
         self.fields.get_text(field)
     }
 
+    /// The path a process's open-Store cache keys this PostgreSQL Store by
+    /// under `home` (a path no file has): its name and its schema binding,
+    /// so a name connected again to another database never reuses the
+    /// service still open on the old one (lane K2, terminal pass).
+    pub(crate) fn postgresql_key(&self, home: &Path, store: &str) -> std::path::PathBuf {
+        let binding = self.binding().unwrap_or_default();
+        let bound = layerfs_bridge::sdk_values::hex(&binding[..binding.len().min(8)]);
+        paths::store_dir(home, store).join(format!("postgresql-{bound}"))
+    }
+
     /// The Store's binding, as its record holds it.
     pub(crate) fn binding(&self) -> Option<&[u8]> {
         match self.fields.get("binding") {
