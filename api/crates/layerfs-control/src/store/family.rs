@@ -12,48 +12,27 @@
 //! `log/uncertain.jsonl`; nothing is cleaned up on a guess.
 use crate::common::context::Context;
 use crate::common::home::lease;
-use crate::common::home::{self, paths, read_record, with_field, write_record};
-use crate::common::outcome::{failed, refused, Outcome};
+use crate::common::home::{self, paths, read_record, with_field};
+use crate::common::outcome::{failed, refused, Outcome, View};
 use crate::common::place::{self, Executor, Start};
-use crate::store::record::StoreRef;
-use crate::store::resolve;
+use crate::store::record::{StoreDerived, StoreRecord, StoreRef};
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-fn record_of(home: &Path, name: &str) -> Result<SdkValue> {
-    crate::common::names::StoreName::parse(name)?;
-    read_record(&paths::store_record(home, name))?
-        .ok_or_else(|| refused("NotFound", format!("no Store named {name}")))
+fn record_of(home: &Path, name: &str) -> Result<StoreRecord> {
+    StoreRecord::of(home, name)
 }
 
-fn projects(home: &Path, name: &str) -> Result<Vec<String>> {
-    paths::names(&paths::store_dir(home, name).join("project")).map_err(failed)
-}
-
-/// A record as callers see it: never the cursor key.
-fn public(home: &Path, name: &str, record: &SdkValue) -> Result<SdkValue> {
-    let SdkValue::Map(fields) = record else {
-        return Err(refused(
-            "Failed",
-            format!("Store {name}'s record is not a record"),
-        ));
+/// A Store as callers see it, with its projects: never the cursor key.
+fn public(home: &Path, record: &StoreRecord, view: View) -> Outcome {
+    let projects = paths::names(&paths::store_dir(home, record.name()).join("project"));
+    let derived = StoreDerived {
+        projects: projects.map_err(failed)?,
     };
-    let mut out: Vec<(String, SdkValue)> = fields
-        .iter()
-        .filter(|(field, _)| !matches!(field.as_str(), "cursor" | "binding"))
-        .cloned()
-        .collect();
-    out.retain(|(field, _)| field != "name");
-    out.insert(0, ("name".to_owned(), SdkValue::text(name)));
-    let names = projects(home, name)?
-        .into_iter()
-        .map(SdkValue::Text)
-        .collect();
-    out.push(("projects".to_owned(), SdkValue::List(names)));
-    Ok(SdkValue::Map(out))
+    record.to_sdk(view, &derived)
 }
 
 /// Runs one sqlite `store` call.
@@ -64,13 +43,13 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
         "list" => {
             let mut items = Vec::new();
             for store in paths::names(&home.join("store")).map_err(failed)? {
-                if let Some(record) = read_record(&paths::store_record(&home, &store))? {
-                    items.push(public(&home, &store, &record)?);
+                if let Some(record) = StoreRecord::read(&home, &store)? {
+                    items.push(public(&home, &record, View::List)?);
                 }
             }
             Ok(SdkValue::map([("items", SdkValue::List(items))]))
         }
-        "get" => public(&home, name, &record_of(&home, name)?),
+        "get" => public(&home, &record_of(&home, name)?, View::Full),
         "status" => status(&home, name),
         "create" => create(&home, name),
         "remove" => remove(&home, name),
@@ -112,17 +91,17 @@ fn status(home: &Path, name: &str) -> Outcome {
         let _lock = home::lock::take(home)?;
         lease::holders(home, name)?
     };
-    let moving = resolve::moving(&record, name).is_err();
+    let moving = record.moving().is_err();
     let mut down = None;
     let mut more = Vec::new();
-    let store_ref = StoreRef::from_record(name, &record)?;
+    let store_ref = record.store_ref()?;
     if let StoreRef::Postgres { .. } = store_ref {
-        more.push(("server", crate::store::connect::status(&record, name)));
+        more.push(("server", crate::store::connect::status(&record)));
     } else {
         more.push(("machine", SdkValue::text(store_ref.machine()?)));
         // the file's size where it lives, starting nothing (P4); a machine
         // that is down says why
-        let file = place::plan(home, &store_ref, Start::Never)
+        let file = place::plan(home, store_ref, Start::Never)
             .and_then(|mut executor| step(home, &mut executor, "stat", of_store(name, vec![])));
         let file = file.unwrap_or_else(|why| {
             down = Some(why.message.clone());
@@ -154,7 +133,7 @@ fn status(home: &Path, name: &str) -> Outcome {
         ),
         (
             "in_progress",
-            record.get("in_progress").cloned().unwrap_or_default(),
+            record.in_progress().cloned().unwrap_or_default(),
         ),
         ("down_reason", down.map(SdkValue::Text).unwrap_or_default()),
     ];
@@ -187,18 +166,11 @@ fn create(home: &Path, name: &str) -> Outcome {
         }
     };
     crate::store::identity::save_record(home, name, &identity)?;
-    let path = paths::store_record(home, name);
-    let mut record = read_record(&path)?.unwrap_or_default();
-    for (field, value) in [
-        ("machine", SdkValue::text("native")),
-        ("profile", SdkValue::text("disposable")),
-        ("created", SdkValue::Int(home::now_ms())),
-        ("sqlite", SdkValue::text(&sealed.sqlite_version)),
-    ] {
-        record = with_field(record, field, value);
-    }
-    write_record(&path, &record)?;
-    public(home, name, &record)
+    let record = StoreRecord::read(home, name)?
+        .unwrap_or_else(|| StoreRecord::from_record(name, SdkValue::Null))
+        .created_on_native(&sealed.sqlite_version);
+    record.write(home)?;
+    public(home, &record, View::Full)
 }
 
 /// The Sandboxes of any machine whose project is in Store `name`.
@@ -223,8 +195,8 @@ fn sandboxes_of(home: &Path, name: &str) -> Result<Vec<String>> {
 /// Refuses `InUse` while another process holds the Store, a Sandbox of
 /// one of its projects runs, or a live process moves or removes it. Under
 /// the home lock.
-fn idle(home: &Path, name: &str, record: &SdkValue) -> Result<()> {
-    resolve::moving(record, name)?;
+fn idle(home: &Path, name: &str, record: &StoreRecord) -> Result<()> {
+    record.moving()?;
     let holders = lease::holders(home, name)?;
     if !holders.is_empty() {
         return Err(refused(
@@ -313,7 +285,7 @@ fn ended(home: &Path, call: &str, name: &str, phase: &str, refusal: &SdkRefusal,
 /// before the home lock is taken, never under it.
 fn remove(home: &Path, name: &str) -> Outcome {
     let record = record_of(home, name)?;
-    let store_ref = StoreRef::from_record(name, &record)?;
+    let store_ref = record.store_ref()?;
     if let StoreRef::Postgres { .. } = store_ref {
         return Err(refused(
             "InvalidInput",
@@ -321,14 +293,14 @@ fn remove(home: &Path, name: &str) -> Outcome {
         ));
     }
     let machine = store_ref.machine()?.to_owned();
-    let mut executor = place::plan(home, &store_ref, Start::OnDemand)?;
+    let mut executor = place::plan(home, store_ref, Start::OnDemand)?;
     if let Executor::Worker(worker) = &mut executor {
         worker.ready()?;
     }
     {
         let _lock = home::lock::take(home)?;
         let record = record_of(home, name)?;
-        if resolve::machine(&record, name)? != machine {
+        if record.machine()? != machine {
             return Err(refused(
                 "Conflict",
                 format!("Store {name} moved off {machine} meanwhile; nothing was removed"),
@@ -336,10 +308,7 @@ fn remove(home: &Path, name: &str) -> Outcome {
         }
         idle(home, name, &record)?;
         let at = in_progress("remove", vec![("machine", SdkValue::text(&machine))]);
-        write_record(
-            &paths::store_record(home, name),
-            &with_field(record, "in_progress", at),
-        )?;
+        record.with("in_progress", at).write(home)?;
     }
     // a machine whose Stores open in this process keeps the file under the
     // home: it goes with the Store's directory below
@@ -371,9 +340,9 @@ fn progress(context: &mut Context<'_>, phase: &str, done: u64, total: u64) {
 /// Sets or clears the record's `in_progress`, under the home lock.
 fn mark(home: &Path, name: &str, value: SdkValue) -> Result<()> {
     let _lock = home::lock::take(home)?;
-    let path = paths::store_record(home, name);
-    let record = record_of(home, name)?;
-    write_record(&path, &with_field(record, "in_progress", value))
+    record_of(home, name)?
+        .with("in_progress", value)
+        .write(home)
 }
 
 /// `store.move`: the Store's file from its machine to `to`.
@@ -385,7 +354,7 @@ fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Outcome {
     let from = {
         let _lock = home::lock::take(&home)?;
         let record = record_of(&home, name)?;
-        if let StoreRef::Postgres { .. } = StoreRef::from_record(name, &record)? {
+        if let StoreRef::Postgres { .. } = record.store_ref()? {
             return Err(refused(
                 "InvalidInput",
                 format!("Store {name} is a PostgreSQL database; it does not move"),
@@ -394,7 +363,7 @@ fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Outcome {
         if read_record(&paths::machine_record(&home, to))?.is_none() {
             return Err(refused("NotFound", format!("no machine named {to}")));
         }
-        let from = resolve::machine(&record, name)?;
+        let from = record.machine()?;
         if from == to {
             return Err(refused(
                 "InvalidInput",
@@ -406,10 +375,7 @@ fn move_store(context: &mut Context<'_>, name: &str, to: &str) -> Outcome {
             "move",
             vec![("from", SdkValue::text(&from)), ("to", SdkValue::text(to))],
         );
-        write_record(
-            &paths::store_record(&home, name),
-            &with_field(record, "in_progress", at),
-        )?;
+        record.with("in_progress", at).write(&home)?;
         from
     };
     let result =
@@ -542,11 +508,9 @@ fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased
         "record",
         (|| {
             let _lock = home::lock::take(&home)?;
-            let path = paths::store_record(&home, name);
-            let record = record_of(&home, name)?;
-            let record = with_field(record, "machine", SdkValue::text(to));
-            let record = with_field(record, "last_move", last.clone());
-            write_record(&path, &with_field(record, "in_progress", SdkValue::Null))
+            let record = record_of(&home, name)?.with("machine", SdkValue::text(to));
+            let record = record.with("last_move", last.clone());
+            record.with("in_progress", SdkValue::Null).write(&home)
         })(),
     )?;
     // retire the source's copy

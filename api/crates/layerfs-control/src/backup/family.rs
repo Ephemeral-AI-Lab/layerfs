@@ -5,14 +5,14 @@
 //! bytes go through the caller's process: machines never hold bucket keys.
 //! Objects are `<prefix>/<file>/store.sqlite` (whole or a manifest) plus its
 //! pieces. LayerFS never deletes a bucket object.
-use super::record::{bucket_record, driver, remote_error};
+use super::record::{remote_error, BucketRecord, StoreLink};
 use crate::common::context::Context;
 use crate::common::home::lease;
-use crate::common::home::{self, paths, read_record, with_field, write_record};
-use crate::common::outcome::{failed, refused, Outcome};
+use crate::common::home::{self, paths, read_record};
+use crate::common::outcome::{failed, refused, Outcome, View};
 use crate::common::place::{self, Executor, Start};
-use crate::store::record::{kind_of, StoreKind, StoreRef};
-use crate::store::resolve;
+use crate::project::record::ProjectRecord;
+use crate::store::record::{StoreKind, StoreRecord, StoreRef};
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_backup::backup as remote;
@@ -21,12 +21,6 @@ use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-fn bucket_of(home: &Path, name: &str) -> Result<SdkValue> {
-    crate::common::names::BucketName::parse(name)?;
-    read_record(&paths::bucket_record(home, name))?
-        .ok_or_else(|| refused("NotFound", format!("no bucket named {name}")))
-}
-
 /// Runs one `backup` call.
 pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
@@ -34,9 +28,9 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
         "connect" => {
             let name = args.get_text("name").unwrap_or("");
             crate::common::names::BucketName::parse(name)?;
-            let record = bucket_record(name, args.get_text("url").unwrap_or(""), args)?;
+            let record = BucketRecord::from_url(name, args.get_text("url").unwrap_or(""), args)?;
             // one listing proves the bucket answers with this key
-            let driver = driver(&record)?;
+            let driver = record.driver()?;
             remote::list_stores(driver.as_ref()).map_err(remote_error)?;
             let _lock = home::lock::take(&home)?;
             if paths::bucket_record(&home, name).exists() {
@@ -45,8 +39,8 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
                     format!("a bucket named {name} is connected"),
                 ));
             }
-            write_record(&paths::bucket_record(&home, name), &record)?;
-            Ok(record)
+            record.write(&home)?;
+            Ok(record.to_sdk(View::Full))
         }
         "disconnect" => disconnect(&home, args.get_text("name").unwrap_or("")),
         "list" => list(&home, args.get_text("bucket")),
@@ -58,23 +52,16 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
 
 /// Forgets a bucket and every Store's link to it; its objects stay.
 fn disconnect(home: &Path, name: &str) -> Outcome {
-    bucket_of(home, name)?;
+    BucketRecord::of(home, name)?;
     let _lock = home::lock::take(home)?;
     let mut unlinked = Vec::new();
     for store in paths::names(&home.join("store")).map_err(failed)? {
-        let path = paths::store_record(home, &store);
-        let Some(record) = read_record(&path)? else {
+        let Some(record) = StoreRecord::read(home, &store)? else {
             continue;
         };
-        if let Some(SdkValue::Map(links)) = record.get("backups") {
-            if links.iter().any(|(bucket, _)| bucket == name) {
-                let kept: Vec<_> = links.iter().filter(|(b, _)| b != name).cloned().collect();
-                write_record(
-                    &path,
-                    &with_field(record.clone(), "backups", SdkValue::Map(kept)),
-                )?;
-                unlinked.push(SdkValue::text(&store));
-            }
+        if let Some(kept) = record.without_link(name) {
+            kept.write(home)?;
+            unlinked.push(SdkValue::text(&store));
         }
     }
     std::fs::remove_dir_all(
@@ -93,28 +80,19 @@ fn hex(bytes: &[u8; 32]) -> SdkValue {
     SdkValue::text(pieces::hex(bytes))
 }
 
-/// The heads digest a link records, as hex.
-fn link_heads(link: &SdkValue) -> Option<String> {
-    match link.get("heads") {
-        Some(SdkValue::Text(text)) => Some(text.clone()),
-        Some(SdkValue::Bytes(bytes)) => Some(pieces::hex(bytes)),
-        _ => None,
-    }
-}
-
 /// Whether linked Store `store` changed since its link's last transfer: its
 /// heads now against the link's. `Err` says why that cannot be read here.
 fn store_changed(
     home: &Path,
     store: &str,
-    record: &SdkValue,
-    link: &SdkValue,
+    record: &StoreRecord,
+    link: &StoreLink,
 ) -> std::result::Result<bool, String> {
-    let then = link_heads(link).ok_or("the link records no heads")?;
-    if let Ok(StoreKind::Postgresql) = kind_of(record) {
+    let then = link.heads().ok_or("the link records no heads")?;
+    if let Ok(StoreKind::Postgresql) = record.kind() {
         return Err(format!("Store {store} is a PostgreSQL database"));
     }
-    let machine = resolve::machine(record, store).map_err(|refusal| refusal.message)?;
+    let machine = record.machine().map_err(|refusal| refusal.message)?;
     if machine != "native" {
         return Err(format!(
             "Store {store} is on {machine}; its heads are read on native only"
@@ -126,8 +104,10 @@ fn store_changed(
 
 /// Whether the bucket's copy changed since the link's last transfer: its
 /// sha256 against the one that transfer moved.
-fn bucket_changed(link: &SdkValue, copy: &remote::Copy) -> std::result::Result<bool, String> {
-    let then = link_sha256(link).ok_or("the link records no sha256 of its last copy")?;
+fn bucket_changed(link: &StoreLink, copy: &remote::Copy) -> std::result::Result<bool, String> {
+    let then = link
+        .sha256()
+        .ok_or("the link records no sha256 of its last copy")?;
     let now = copy.sha256.ok_or(format!(
         "the listing read no sha256 of {} (at most {} stats per listing)",
         copy.file,
@@ -140,8 +120,8 @@ fn bucket_changed(link: &SdkValue, copy: &remote::Copy) -> std::result::Result<b
 fn state(
     home: &Path,
     store: &str,
-    record: &SdkValue,
-    link: &SdkValue,
+    record: &StoreRecord,
+    link: &StoreLink,
     copy: &remote::Copy,
 ) -> (&'static str, Option<String>) {
     match (
@@ -175,26 +155,18 @@ fn list(home: &Path, only: Option<&str>) -> Outcome {
     // (bucket, file, store, link, store record)
     let mut links = Vec::new();
     for store in paths::names(&home.join("store")).map_err(failed)? {
-        let Some(record) = read_record(&paths::store_record(home, &store))? else {
+        let Some(record) = StoreRecord::read(home, &store)? else {
             continue;
         };
-        if let Some(SdkValue::Map(fields)) = record.get("backups") {
-            for (bucket, link) in fields {
-                let file = link.get_text("file").unwrap_or(&store).to_owned();
-                links.push((
-                    bucket.clone(),
-                    file,
-                    store.clone(),
-                    link.clone(),
-                    record.clone(),
-                ));
-            }
+        for (bucket, link) in record.links() {
+            let file = link.file().unwrap_or(&store).to_owned();
+            links.push((bucket, file, store.clone(), link, record.clone()));
         }
     }
     let mut items = Vec::new();
     for bucket in buckets {
-        let record = bucket_of(home, &bucket)?;
-        let copies = remote::list_stores(driver(&record)?.as_ref()).map_err(remote_error)?;
+        let record = BucketRecord::of(home, &bucket)?;
+        let copies = remote::list_stores(record.driver()?.as_ref()).map_err(remote_error)?;
         for copy in &copies {
             let item = |store: SdkValue, state: &str, reason: Option<String>| {
                 let mut fields = vec![
@@ -243,40 +215,16 @@ fn list(home: &Path, only: Option<&str>) -> Outcome {
 }
 
 /// The Store's link to `bucket` after a transfer.
-fn save_link(home: &Path, store: &str, bucket: &str, link: SdkValue) -> Result<()> {
+fn save_link(home: &Path, store: &str, bucket: &str, link: StoreLink) -> Result<()> {
     let _lock = home::lock::take(home)?;
     write_link(home, store, bucket, link)
 }
 
 /// [`save_link`] for a caller that holds the home lock.
-fn write_link(home: &Path, store: &str, bucket: &str, link: SdkValue) -> Result<()> {
-    let path = paths::store_record(home, store);
-    let record = read_record(&path)?
+fn write_link(home: &Path, store: &str, bucket: &str, link: StoreLink) -> Result<()> {
+    let record = StoreRecord::read(home, store)?
         .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
-    let links = match record.get("backups") {
-        Some(SdkValue::Map(fields)) => SdkValue::Map(fields.clone()),
-        _ => SdkValue::Map(Vec::new()),
-    };
-    write_record(
-        &path,
-        &with_field(record, "backups", with_field(links, bucket, link)),
-    )
-}
-
-fn link(file: &str, op: &str, bytes: u64, sha256: &[u8; 32], heads: Option<&[u8; 32]>) -> SdkValue {
-    SdkValue::map([
-        ("file", SdkValue::text(file)),
-        ("heads", heads.map(hex).unwrap_or_default()),
-        (
-            "last",
-            SdkValue::map([
-                ("op", SdkValue::text(op)),
-                ("at", SdkValue::Int(home::now_ms())),
-                ("bytes", SdkValue::Int(bytes as i64)),
-                ("sha256", hex(sha256)),
-            ]),
-        ),
-    ])
+    record.with_link(bucket, &link).write(home)
 }
 
 fn progress(context: &mut Context<'_>, phase: &str) {
@@ -287,22 +235,14 @@ fn progress(context: &mut Context<'_>, phase: &str) {
 /// `<home id>/<machine>`.
 const EXPORTED_FROM: &str = "layerfs-exported-from";
 
-/// The sha256 of the copy a link's last transfer moved.
-fn link_sha256(link: &SdkValue) -> Option<[u8; 32]> {
-    link.get("last").and_then(|l| match l.get("sha256") {
-        Some(SdkValue::Text(t)) => pieces::parse_hex32(t),
-        Some(SdkValue::Bytes(b)) => b.as_slice().try_into().ok(),
-        _ => None,
-    })
-}
-
 /// What the bucket must hold for a create: the copy this home last moved
 /// through the Store's link to that file, or nothing. A link that records
 /// no sha256 knows no copy, so the file must be absent.
-fn expected(record: &SdkValue, bucket: &str, file: &str) -> remote::Expected {
-    let link = record.get("backups").and_then(|b| b.get(bucket));
-    match link.filter(|link| link.get_text("file") == Some(file)) {
-        Some(link) => link_sha256(link).map_or(remote::Expected::Absent, remote::Expected::Sha256),
+fn expected(record: &StoreRecord, bucket: &str, file: &str) -> remote::Expected {
+    match record.link(bucket).filter(|link| link.file() == Some(file)) {
+        Some(link) => link
+            .sha256()
+            .map_or(remote::Expected::Absent, remote::Expected::Sha256),
         None => remote::Expected::Absent,
     }
 }
@@ -317,23 +257,23 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let store = args.get_text("store").unwrap_or("");
     let bucket = args.get_text("bucket").unwrap_or("");
     let file = args.get_text("file").unwrap_or(store).to_owned();
-    let bucket_record = bucket_of(&home, bucket)?;
-    let record = read_record(&paths::store_record(&home, store))?
+    let bucket_record = BucketRecord::of(&home, bucket)?;
+    let record = StoreRecord::read(&home, store)?
         .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
     // the record parsed once (R4)
-    let store_ref = StoreRef::from_record(store, &record)?;
+    let store_ref = record.store_ref()?;
     if let StoreRef::Postgres { .. } = store_ref {
         return Err(refused(
             "InvalidInput",
             format!("Store {store} is a PostgreSQL database; back it up with PostgreSQL's tools"),
         ));
     }
-    resolve::moving(&record, store)?;
-    let driver = driver(&bucket_record)?;
+    record.moving()?;
+    let driver = bucket_record.driver()?;
     let expected = expected(&record, bucket, &file);
     let machine = store_ref.machine()?.to_owned();
-    let executor = place::plan(&home, &store_ref, Start::OnDemand)?;
-    let identity = crate::store::identity::identity_in(store_ref, &record)?;
+    let executor = place::plan(&home, store_ref, Start::OnDemand)?;
+    let identity = crate::store::identity::identity_in(&record)?;
     let home_id = home::ensure(&home)?.id;
     let object = remote::store_object(&file).map_err(|why| refused("InvalidInput", why))?;
     let local_steps = matches!(executor, Executor::Local);
@@ -344,7 +284,7 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let step = |op: &str, more: Vec<(&str, SdkValue)>| {
         let mut fields = vec![
             ("store", SdkValue::text(store)),
-            ("store_record", record.clone()),
+            ("store_record", record.to_record().clone()),
         ];
         fields.extend(more);
         let args = SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
@@ -404,7 +344,7 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     }
     let _ = step("unstage", vec![]);
     let (moved, heads) = result?;
-    let saved = link(&file, "create", moved.bytes, &moved.sha256, heads.as_ref());
+    let saved = StoreLink::new(&file, "create", moved.bytes, &moved.sha256, heads.as_ref());
     save_link(&home, store, bucket, saved)?;
     Ok(SdkValue::map([
         ("store", SdkValue::text(store)),
@@ -499,32 +439,27 @@ fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let store = args.get_text("store").unwrap_or("");
     crate::common::names::StoreName::parse(store)?;
     let bucket = args.get_text("bucket").unwrap_or("");
-    let bucket_record = bucket_of(&home, bucket)?;
-    let driver = driver(&bucket_record)?;
-    let existing = read_record(&paths::store_record(&home, store))?;
+    let driver = BucketRecord::of(&home, bucket)?.driver()?;
+    let existing = StoreRecord::read(&home, store)?;
     let file = args
         .get_text("file")
         .map(str::to_owned)
         .or_else(|| {
-            existing.as_ref().and_then(|r| {
-                r.get("backups")?
-                    .get(bucket)?
-                    .get_text("file")
-                    .map(str::to_owned)
-            })
+            let link = existing.as_ref()?.link(bucket)?;
+            link.file().map(str::to_owned)
         })
         .unwrap_or_else(|| store.to_owned());
     let mut _lease = None;
     let identity = match &existing {
         None => None,
         Some(record) => {
-            if kind_of(record)? == StoreKind::Postgresql {
+            if record.kind()? == StoreKind::Postgresql {
                 return Err(refused(
                     "InvalidInput",
                     format!("Store {store} is a PostgreSQL database"),
                 ));
             }
-            let identity = crate::store::identity::identity_of(record)?;
+            let identity = crate::store::identity::identity_in(record)?;
             // refused before the download too; checked again before the install
             {
                 let _lock = home::lock::take(&home)?;
@@ -556,27 +491,19 @@ fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             }
             record.clone()
         }
-        _ => SdkValue::map([
-            ("name", SdkValue::text(store)),
-            ("kind", SdkValue::text("sqlite")),
-            ("binding", SdkValue::Bytes(loaded.binding.clone())),
-            ("cursor", SdkValue::Bytes(cursor.to_vec())),
-            ("machine", SdkValue::text("native")),
-            ("profile", SdkValue::text("disposable")),
-            ("created", SdkValue::Int(home::now_ms())),
-        ]),
+        _ => StoreRecord::restored(store, &loaded.binding, &cursor),
     };
     let found = projects_in(&home, store, &record, &staged)?;
     progress(context, "install");
     let _lock = home::lock::take(&home)?;
     let destination = paths::store_file(&home, store);
-    let now = read_record(&paths::store_record(&home, store))?;
+    let now = StoreRecord::read(&home, store)?;
     match (&existing, now) {
         (None, None) if !destination.exists() => {
             home::private_dir(&paths::store_dir(&home, store))?;
             // a link never replaces a Store that appeared meanwhile
             std::fs::hard_link(&staged, &destination).map_err(failed)?;
-            write_record(&paths::store_record(&home, store), &record)?;
+            record.write(&home)?;
         }
         (None, _) => {
             return Err(refused(
@@ -591,7 +518,7 @@ fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             ));
         }
         (Some(_), Some(now)) => {
-            if now.get("binding") != record.get("binding") {
+            if now.field("binding") != record.field("binding") {
                 return Err(refused(
                     "Conflict",
                     format!("Store {store} was replaced while this restore downloaded"),
@@ -605,7 +532,7 @@ fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         &home,
         store,
         bucket,
-        link(
+        StoreLink::new(
             &file,
             "restore",
             loaded.bytes,
@@ -650,12 +577,12 @@ impl Drop for Staging {
 /// Refuses replacing Store `store` unless it is an idle sqlite Store on
 /// `native`, unchanged since its last backup or restore through `bucket`.
 /// Under the home lock.
-fn replaceable(home: &Path, store: &str, bucket: &str, record: &SdkValue) -> Result<()> {
-    let machine = resolve::machine(record, store)?;
+fn replaceable(home: &Path, store: &str, bucket: &str, record: &StoreRecord) -> Result<()> {
+    let machine = record.machine()?;
     if machine != "native" {
         return Err(refused("Unsupported", format!("Store {store} is on {machine}; a restore replaces a Store on native: move it there first")));
     }
-    resolve::moving(record, store)?;
+    record.moving()?;
     let destination = paths::store_file(home, store);
     // this process's own open copy closes first
     crate::store::open::close(&destination)?;
@@ -676,10 +603,7 @@ fn replaceable(home: &Path, store: &str, bucket: &str, record: &SdkValue) -> Res
             ),
         ));
     }
-    let linked = record
-        .get("backups")
-        .and_then(|b| b.get(bucket))
-        .and_then(link_heads);
+    let linked = record.link(bucket).and_then(|link| link.heads());
     let now = remote::heads(&destination).ok().map(|h| pieces::hex(&h));
     if linked.is_none() || now != linked {
         return Err(refused(
@@ -726,13 +650,13 @@ fn sandboxes_of(home: &Path, store: &str) -> Result<Vec<String>> {
 fn projects_in(
     home: &Path,
     store: &str,
-    record: &SdkValue,
+    record: &StoreRecord,
     file: &Path,
 ) -> Result<Vec<(String, SdkValue)>> {
     let args = SdkValue::map([
         ("home", SdkValue::text(home.display().to_string())),
         ("store", SdkValue::text(store)),
-        ("store_record", record.clone()),
+        ("store_record", record.to_record().clone()),
         ("storePath", SdkValue::text(file.display().to_string())),
     ]);
     let SdkValue::List(items) = crate::store::identity::list_projects(&args)? else {
@@ -753,12 +677,8 @@ fn projects_in(
 fn write_projects(home: &Path, store: &str, found: &[(String, SdkValue)]) -> Result<SdkValue> {
     let mut names = Vec::new();
     for (name, stack) in found {
-        let path = paths::project_record(home, store, name);
-        if read_record(&path)?.is_none() {
-            write_record(
-                &path,
-                &SdkValue::map([("name", SdkValue::text(name)), ("stack", stack.clone())]),
-            )?;
+        if ProjectRecord::read(home, store, name)?.is_none() {
+            ProjectRecord::found(store, name, stack.clone()).write(home)?;
         }
         names.push(SdkValue::text(name));
     }

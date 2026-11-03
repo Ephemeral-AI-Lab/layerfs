@@ -11,7 +11,8 @@ pub mod family;
 pub(crate) mod identity;
 pub(crate) mod open;
 pub(crate) mod postgres;
-pub(crate) mod record;
+#[doc(hidden)]
+pub mod record;
 pub(crate) mod resolve;
 #[doc(hidden)]
 pub mod service;

@@ -20,7 +20,8 @@ use crate::common::home::{self, paths, read_record, write_record};
 use crate::common::outcome::{failed, refused, Outcome};
 use crate::common::place::{self, Executor, Start};
 use crate::machine::worker::Unreached;
-use crate::store::record::{StoreKind, StoreRef};
+use crate::project::record::ProjectRecord;
+use crate::store::record::{StoreKind, StoreRecord, StoreRef};
 use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
@@ -62,7 +63,7 @@ fn sandbox_of(home: &Path, name: &str) -> Result<(String, SdkValue)> {
 /// plus `more`, run as `how` says.
 fn host_args(
     home: &Path,
-    (store, project, record): (&str, &str, &SdkValue),
+    (store, project, record): (&str, &str, &StoreRecord),
     kind: StoreKind,
     how: Deploy,
     more: Vec<(&str, SdkValue)>,
@@ -116,7 +117,7 @@ fn host_args(
         ("home", SdkValue::text(home.display().to_string())),
         ("store", SdkValue::text(store)),
         ("project", SdkValue::text(project)),
-        ("store_record", record.clone()),
+        ("store_record", record.to_record().clone()),
         (
             "storePath",
             SdkValue::text(store_path(home, store, kind).display().to_string()),
@@ -126,7 +127,7 @@ fn host_args(
     // a PostgreSQL Store's URL with its password, resolved now and never
     // written (H §7.4)
     if kind == StoreKind::Postgresql {
-        let url = crate::store::connect::url(record, store)?;
+        let url = crate::store::connect::url(record)?;
         let mut postgresql = vec![("url", SdkValue::text(&url))];
         if in_container && cfg!(not(target_os = "linux")) {
             if let Some(daemon_url) = layerfs_sandbox::docker::desktop_url(&url) {
@@ -261,7 +262,7 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     // that claims the name, so a store.move cannot pass between them
     let _lock = home::lock::take(&home)?;
     let target = resolve::target(&home, project)?;
-    resolve::moving(&target.record, &target.store)?;
+    target.record.moving()?;
     // refused too while the machine is being removed
     #[cfg(feature = "machine")]
     {
@@ -457,17 +458,14 @@ fn host_op(
         Executor::Worker(mut worker) => {
             // the guest runs the same call on its own native machine, with
             // the records it needs sent along
-            let project_record = read_record(&paths::project_record(
-                &home,
-                &target.store,
-                &target.project,
-            ))?
-            .unwrap_or_default();
+            let project_record = ProjectRecord::read(&home, &target.store, &target.project)?
+                .map(|record| record.to_record().clone())
+                .unwrap_or_default();
             let mut fields = vec![
                 ("op", SdkValue::text(op)),
                 ("store", SdkValue::text(&target.store)),
                 ("project", SdkValue::text(&target.project)),
-                ("store_record", target.record.clone()),
+                ("store_record", target.record.to_record().clone()),
                 ("project_record", project_record),
             ];
             fields.push(("deploy", choice));
@@ -515,26 +513,23 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     let project = args.get_text("project").unwrap_or("");
     crate::common::names::StoreName::parse(store)?;
     crate::common::names::ProjectName::parse(project)?;
-    let record = home::with_field(
-        args.get("store_record").cloned().unwrap_or_default(),
-        "machine",
-        SdkValue::text("native"),
-    );
+    let sent = args.get("store_record").cloned().unwrap_or_default();
+    let record = StoreRecord::from_record(store, sent).with("machine", SdkValue::text("native"));
     // written only when it changed (#535 R5): most calls send the same one
-    let path = paths::store_record(root, store);
-    if read_record(&path)?.as_ref() != Some(&record) {
-        write_record(&path, &record)?;
+    let local = StoreRecord::read(root, store)?;
+    if local.as_ref().map(StoreRecord::to_record) != Some(record.to_record()) {
+        record.write(root)?;
     }
     // the caller's record replaces one left by a project of the same name
     // that was removed and made again (its `created` differs)
-    let project_path = paths::project_record(root, store, project);
     let sent = args.get("project_record").cloned().unwrap_or_default();
-    let stale = match read_record(&project_path)? {
+    let sent = ProjectRecord::from_record(store, project, sent);
+    let stale = match ProjectRecord::read(root, store, project)? {
         None => true,
-        Some(local) => sent.get("created").is_some() && local.get("created") != sent.get("created"),
+        Some(local) => sent.created().is_some() && local.created() != sent.created(),
     };
     if stale {
-        write_record(&project_path, &sent)?;
+        sent.write(root)?;
     }
     let more: Vec<(&str, SdkValue)> = match args.get("more") {
         Some(SdkValue::Map(fields)) => fields
@@ -545,7 +540,7 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     };
     let choice = args.get("deploy").cloned().unwrap_or_default();
     let how = deploy::resolve(&Side::Worker(root), store, &choice)?;
-    let kind = StoreRef::from_record(store, &record)?.kind();
+    let kind = record.kind()?;
     let host = host_args(root, (store, project, &record), kind, how, more)?;
     crate::store::open::hold(&host, None)?;
     if op == "backend.daemon.workspace.status" {

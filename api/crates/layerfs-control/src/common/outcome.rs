@@ -18,3 +18,13 @@ pub fn refused(code: &str, message: impl Into<String>) -> SdkRefusal {
 pub fn failed(error: impl std::fmt::Debug) -> SdkRefusal {
     refused("Failed", format!("{error:?}"))
 }
+
+/// Which shape of an entity a call answers (#536 §9.7): a get's whole
+/// record, or one item of a list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum View {
+    /// What the entity's get answers.
+    Full,
+    /// One item of the entity's list.
+    List,
+}
