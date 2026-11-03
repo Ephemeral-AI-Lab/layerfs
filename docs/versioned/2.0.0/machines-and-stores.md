@@ -35,8 +35,11 @@ a copy of a sqlite Store in a bucket.
   `connect/SUPPORT.json`. Neither starts a machine. A VM or ssh machine's `state` is read live, as
   `machine status` reads it, for all of them at once within 10 s; it starts
   nothing and writes nothing. A machine whose probe fails or does not answer
-  in time is `unknown`, with the reason in `error`; one being created or
-  removed keeps its recorded state. `machine get` answers the same state.
+  in time is `unknown`, with the reason in `error`. A machine that an
+  operation holds (its record's `op`, below) is not probed: it is
+  `creating` or `removing` while that process lives, and `unresolved` once
+  it is gone with the outcome unknown. `machine get` answers the same
+  state.
 - `native` and `docker` are never created, removed or disconnected.
 
 ### Creating a VM machine
@@ -71,9 +74,18 @@ layerfs machine create fc1 firecracker --host host1
   `<cache>` is `XDG_CACHE_HOME`, else `~/.cache`. Without it the create is
   `Unsupported` with `detail.missing` = `bundle:<folder>`. Fetching the
   bundle is not built; a build places it.
+- From the claim until the outcome is recorded, the record holds the
+  create's `op` (`machine.create`; `machine.connect` for ssh): its id,
+  phase and process (process id, start time and boot). While that process
+  lives, every other call on the machine is `Busy`.
 - A create that fails before the VM exists removes what it made. Once the
   VM exists, a failure keeps it with state `failed` and its `error`.
-  `Unknown` keeps everything and is logged.
+  `Unknown` keeps everything, its `op` marked `uncertain` with the
+  `error`, and is logged to `log/uncertain.jsonl`. Once that process is
+  gone, every call on the machine but `machine status`, `machine get`,
+  `machine list` and the remove is `Unresolved`, naming
+  `layerfs machine status <name>` and `layerfs machine remove <name>`
+  (`machine disconnect` for ssh).
 - The home lock is held only to claim the name and to record the outcome,
   never while the VM boots. A create also holds the machine's `start.lock`
   (taken before the home lock), so an on-demand start cannot overwrite the
@@ -104,12 +116,16 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   the machine holds Stores, Sandboxes or hosted Firecracker machines. Each
   is `InvalidInput` on the other kind.
 - A remove takes the machine's `start.lock` first, then, under the home
-  lock, marks the record `removing` with its process id. The VM is deleted
-  outside the home lock. While that process lives, every call that would
-  start the machine, move a Store to it, create a Sandbox on it, update or
-  remove it is `InUse`. A refused delete puts the record back as it was;
-  one whose outcome is unknown records `state: "unknown"` and the error. A
-  remover that is gone holds nothing.
+  lock, writes its `op` (`machine.remove`; `machine.disconnect` for ssh)
+  into the record. The VM is deleted outside the home lock. While that
+  process lives, every call that would start the machine, move a Store to
+  it, create a Sandbox on it, update or remove it is `Busy`; `machine get`
+  and `machine status` answer `removing`. A refused delete puts the record
+  back as it was; one whose outcome is unknown keeps the `op` marked
+  `uncertain` with the `error`, and is logged, as for a create. A remover
+  that is gone after a known outcome holds nothing.
+- A remove or disconnect is refused only while another process's `op`
+  lives: it is the call that clears an `unresolved` machine.
 - `machine update native` and `machine update docker` set `image` and
   `docker` (the Docker socket); `wsl` is a Windows host's setting. Any
   update is `InUse` while Sandboxes run on the machine, naming them.
@@ -156,8 +172,10 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   same way (its `start.lock`, readiness wait and `worker.json`) before the
   microVM, within that one call.
 - `machine status` answers `state`, `free_disk`, `tool_version` and
-  `down_reason` (O34). A stopped VM answers without being started. There is
-  no change event; callers poll.
+  `down_reason` (O34). A stopped VM answers without being started. While a
+  record holds an `op`, it also answers `op` (`id`, `name`, `phase`,
+  `started`, `uncertain`), probes nothing and answers the state above; it
+  never clears the `op`. There is no change event; callers poll.
 
 ### Routes
 
