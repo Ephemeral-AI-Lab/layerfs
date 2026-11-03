@@ -105,6 +105,17 @@ fn every_read(home: &Path) {
     }
     let status = call(home, "store.status", &[("name", "shop")]).unwrap();
     assert_eq!(status.get_text("state"), Some("down"), "{status:?}");
+    // a list item carries the same state, starting nothing (#536 §10b)
+    let listed = call(home, "store.list", &[]).unwrap();
+    let Some(SdkValue::List(items)) = listed.get("items") else {
+        panic!("{listed:?}")
+    };
+    let shop = items.iter().find(|i| i.get_text("name") == Some("shop"));
+    assert_eq!(
+        shop.and_then(|i| i.get_text("state")),
+        Some("down"),
+        "{listed:?}"
+    );
     let machine = call(home, "machine.get", &[("name", "dev")]).unwrap();
     assert_eq!(machine.get_text("state"), Some("stopped"), "{machine:?}");
 

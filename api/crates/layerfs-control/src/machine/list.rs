@@ -38,8 +38,7 @@ pub(super) fn live(home: &Path, records: &[MachineRecord]) -> Result<Vec<Live>> 
     // so a late probe is reported as late, not as its stopped command
     let stop = until + Duration::from_millis(200);
     for (index, record) in records.iter().enumerate() {
-        let in_flight = record.state() == Some("creating") || record.removing().is_some();
-        if record.platform()?.built_in() || in_flight {
+        if record.platform()?.built_in() || record.in_flight() {
             continue;
         }
         match record::spec(home, &id, record) {

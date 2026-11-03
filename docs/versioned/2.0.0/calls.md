@@ -288,7 +288,7 @@ refusals.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `list` | — | — | every Store, from the home's records |
+| `list` | — | — | every Store, from the home's records, each with its `state` |
 | `get` | `name` | — | a Store's record |
 | `status` | `name` | — | a Store's live state |
 | `create` | `name` | — | an empty sqlite Store on `native` |
@@ -318,6 +318,12 @@ $ layerfs store status shop
 machine: a Store whose machine is stopped, or whose recorded worker does
 not answer, is `down`, with `down_reason` and `file.unavailable` (O34). See
 [Stores](machines-and-stores.md#stores).
+
+Each `store list` item is the Store's record (as `store get` shows it) with
+the same `state` last, derived as `store status` derives it (#536 §10b):
+it starts no machine, dials a machine's recorded worker once for all its
+Stores, and is `down` for a Store whose kind or machine its record does
+not tell. Not run for this manual (from source and tests).
 
 ### `backup` (5)
 

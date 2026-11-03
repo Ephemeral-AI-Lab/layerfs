@@ -124,11 +124,40 @@ pub struct StoreRecord {
     fields: SdkValue,
 }
 
-/// What a Store's result shows beside its record: its projects.
+/// What a Store's result shows beside its record.
 #[derive(Clone, Debug, Default)]
 pub struct StoreDerived {
     /// The names of its projects' records, sorted.
     pub projects: Vec<String>,
+    /// Its state, shown by a list item (a get shows none).
+    pub state: Option<StoreState>,
+}
+
+/// A Store's state (#536 §7.2), as `store.status` and each `store.list`
+/// item show it. F3's `op` intent adds `busy` and `unresolved`; until then
+/// a live move or remove is `moving`, as before.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StoreState {
+    /// A live process moves or removes it (its record's `in_progress`).
+    Moving,
+    /// Its machine did not answer (a sqlite Store's file could not be read).
+    Down,
+    /// No other process holds it.
+    Idle,
+    /// Another live process holds its lease.
+    InUse,
+}
+
+impl StoreState {
+    /// The state's name in results.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Moving => "moving",
+            Self::Down => "down",
+            Self::Idle => "idle",
+            Self::InUse => "in_use",
+        }
+    }
 }
 
 impl StoreRecord {
@@ -241,6 +270,20 @@ impl StoreRecord {
         }
     }
 
+    /// The Store's state from its record, whether its machine answered
+    /// (`down`) and the live processes other than this one that hold it.
+    pub fn state(&self, down: bool, holders: &[u32]) -> StoreState {
+        if self.moving().is_err() {
+            StoreState::Moving
+        } else if down {
+            StoreState::Down
+        } else if holders.is_empty() {
+            StoreState::Idle
+        } else {
+            StoreState::InUse
+        }
+    }
+
     /// The Store's link to each bucket, `(bucket, link)` in record order.
     pub(crate) fn links(&self) -> Vec<(String, StoreLink)> {
         let links = self.raw_links().iter();
@@ -278,8 +321,8 @@ impl StoreRecord {
 
     /// The Store as `store.get` and each `store.list` item show it: the
     /// record's fields with `name` first, never its cursor key, binding or
-    /// `v`, then its projects.
-    pub fn to_sdk(&self, _view: View, derived: &StoreDerived) -> Result<SdkValue> {
+    /// `v`, then its projects; a list item then its `state`.
+    pub fn to_sdk(&self, view: View, derived: &StoreDerived) -> Result<SdkValue> {
         let SdkValue::Map(fields) = &self.fields else {
             return Err(refused(
                 "Failed",
@@ -295,6 +338,9 @@ impl StoreRecord {
         out.insert(0, ("name".to_owned(), SdkValue::text(&self.name)));
         let names = derived.projects.iter().map(SdkValue::text).collect();
         out.push(("projects".to_owned(), SdkValue::List(names)));
+        if let (View::List, Some(state)) = (view, derived.state) {
+            out.push(("state".to_owned(), SdkValue::text(state.as_str())));
+        }
         Ok(SdkValue::Map(out))
     }
 

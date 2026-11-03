@@ -16,7 +16,7 @@ use crate::common::home::{self, paths, with_field};
 use crate::common::outcome::{failed, refused, Outcome, View};
 use crate::common::place::{self, Executor, Start};
 use crate::machine::record::MachineRecord;
-use crate::store::record::{StoreDerived, StoreRecord, StoreRef};
+use crate::store::record::{StoreDerived, StoreRecord, StoreRef, StoreState};
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -27,13 +27,54 @@ fn record_of(home: &Path, name: &str) -> Result<StoreRecord> {
     StoreRecord::of(home, name)
 }
 
-/// A Store as callers see it, with its projects: never the cursor key.
-fn public(home: &Path, record: &StoreRecord, view: View) -> Outcome {
+/// A Store as callers see it, with its projects (and a list item's
+/// `state`): never the cursor key.
+fn public(home: &Path, record: &StoreRecord, view: View, state: Option<StoreState>) -> Outcome {
     let projects = paths::names(&paths::store_dir(home, record.name()).join("project"));
     let derived = StoreDerived {
         projects: projects.map_err(failed)?,
+        state,
     };
     record.to_sdk(view, &derived)
+}
+
+/// `store.list`: every Store with its state, derived as `store.status`
+/// derives it (#536 §10b), starting nothing: the lease holders, read under
+/// the home lock once, and for a sqlite Store whether its machine answers
+/// a `stat` of its file. A machine that did not answer once is down for
+/// its other Stores too, without dialing it again; a Store whose kind or
+/// machine its record does not tell is `down`.
+fn list(home: &Path) -> Outcome {
+    let records = crate::inventory::stores(home)?;
+    let holders = {
+        let _lock = home::lock::take(home)?;
+        let held = records.iter().map(|r| lease::holders(home, r.name()));
+        held.collect::<Result<Vec<_>>>()?
+    };
+    let mut unanswered = std::collections::BTreeSet::new();
+    let mut items = Vec::new();
+    for (record, holders) in records.iter().zip(holders) {
+        let down = match record.store_ref() {
+            Err(_) => true,
+            Ok(StoreRef::Postgres { .. }) => false,
+            Ok(store_ref) => match store_ref.machine() {
+                Err(_) => true,
+                Ok(machine) if unanswered.contains(machine) => true,
+                Ok(machine) => {
+                    let stat = place::plan(home, store_ref, Start::Never).and_then(|mut on| {
+                        step(home, &mut on, "stat", of_store(record.name(), vec![]))
+                    });
+                    if stat.is_err() {
+                        unanswered.insert(machine.to_owned());
+                    }
+                    stat.is_err()
+                }
+            },
+        };
+        let state = record.state(down, &holders);
+        items.push(public(home, record, View::List, Some(state))?);
+    }
+    Ok(SdkValue::map([("items", SdkValue::List(items))]))
 }
 
 /// Runs one sqlite `store` call.
@@ -41,16 +82,8 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
     match call {
-        "list" => {
-            let mut items = Vec::new();
-            for store in paths::names(&home.join("store")).map_err(failed)? {
-                if let Some(record) = StoreRecord::read(&home, &store)? {
-                    items.push(public(&home, &record, View::List)?);
-                }
-            }
-            Ok(SdkValue::map([("items", SdkValue::List(items))]))
-        }
-        "get" => public(&home, &record_of(&home, name)?, View::Full),
+        "list" => list(&home),
+        "get" => public(&home, &record_of(&home, name)?, View::Full, None),
         "status" => status(&home, name),
         "create" => create(&home, name),
         "remove" => remove(&home, name),
@@ -92,7 +125,6 @@ fn status(home: &Path, name: &str) -> Outcome {
         let _lock = home::lock::take(home)?;
         lease::holders(home, name)?
     };
-    let moving = record.moving().is_err();
     let mut down = None;
     let mut more = Vec::new();
     let store_ref = record.store_ref()?;
@@ -110,15 +142,7 @@ fn status(home: &Path, name: &str) -> Outcome {
         });
         more.push(("file", file));
     }
-    let state = if moving {
-        "moving"
-    } else if down.is_some() {
-        "down"
-    } else if holders.is_empty() {
-        "idle"
-    } else {
-        "in_use"
-    };
+    let state = record.state(down.is_some(), &holders).as_str();
     let mut fields = vec![
         ("name", SdkValue::text(name)),
         ("kind", SdkValue::text(store_ref.kind().as_str())),
@@ -171,7 +195,7 @@ fn create(home: &Path, name: &str) -> Outcome {
         .unwrap_or_else(|| StoreRecord::from_record(name, SdkValue::Null))
         .created_on_native(&sealed.sqlite_version);
     record.write(home)?;
-    public(home, &record, View::Full)
+    public(home, &record, View::Full, None)
 }
 
 /// Refuses `InUse` while another process holds the Store, a Sandbox of

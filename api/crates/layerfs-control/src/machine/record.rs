@@ -94,8 +94,14 @@ impl MachineRecord {
     }
 
     /// The state a create, connect, start, stop or remove recorded.
-    pub fn state(&self) -> Option<&str> {
+    pub fn recorded_state(&self) -> Option<&str> {
         self.fields.get_text("state")
+    }
+
+    /// Whether a create or a remove of the machine is in flight: a list
+    /// shows its recorded state and probes nothing.
+    pub fn in_flight(&self) -> bool {
+        self.recorded_state() == Some("creating") || self.removing().is_some()
     }
 
     /// The Sandbox image the record names (a digest, or a file).
@@ -197,6 +203,18 @@ impl MachineRecord {
             .ok_or_else(|| refused("Failed", "a machine record names no known platform"))
     }
 
+    /// The machine's state (#536 §7.2): its live probe's answer (`live`),
+    /// else the state its record holds, else `ready` for a built-in
+    /// machine and `stopped` for any other. F3's `op` adds `removing` and
+    /// `unresolved`.
+    pub fn state<'a>(&'a self, live: Option<&'a str>) -> Result<&'a str> {
+        let fallback = match self.platform()?.built_in() {
+            true => "ready",
+            false => "stopped",
+        };
+        Ok(live.or(self.recorded_state()).unwrap_or(fallback))
+    }
+
     /// The machine as `machine.get`, each `machine.list` item, `start`,
     /// `stop`, `update`, `create` and `connect` show it: name, platform,
     /// backend, `supports`, state, size, Stores and Sandboxes, then the
@@ -208,18 +226,16 @@ impl MachineRecord {
         derived: &MachineDerived,
     ) -> Result<SdkValue> {
         let kind = self.platform()?;
-        let (state, error) = match &derived.live {
-            Some((state, error)) => (Some(state.as_str()), error.clone()),
-            None => (self.state(), None),
-        };
+        let live = derived.live.as_ref();
+        let state = self.state(live.map(|(state, _)| state.as_str()))?;
+        let error = live.and_then(|(_, error)| error.clone());
         let list = |items: &[String]| SdkValue::List(items.iter().map(SdkValue::text).collect());
-        let fallback = if kind.built_in() { "ready" } else { "stopped" };
         let mut fields = vec![
             ("name", SdkValue::text(&self.name)),
             ("platform", SdkValue::text(kind.name())),
             ("backend", SdkValue::text(super::spec::backend_name(kind))),
             ("supports", super::platforms::supports(kind)),
-            ("state", SdkValue::text(state.unwrap_or(fallback))),
+            ("state", SdkValue::text(state)),
             ("cpus", self.field("cpus").cloned().unwrap_or_default()),
             ("memory", self.field("memory").cloned().unwrap_or_default()),
             ("disk", self.field("disk").cloned().unwrap_or_default()),

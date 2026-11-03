@@ -579,9 +579,8 @@ fn close_unstarted(home: &Path, machine: &str, name: &str) -> Result<Option<SdkV
         return Ok(None);
     }
     let dir = record.dir(home);
-    let state = record.recorded_state().unwrap_or("creating").to_owned();
-    let pid = record.pid().unwrap_or(0);
-    if state == "creating" && pid > 0 && crate::common::home::lease::alive(pid as u32) {
+    let state = record.state().to_owned();
+    if let Some(pid) = record.creator() {
         return Err(refused(
             "InUse",
             format!("Sandbox {name} is being created by process {pid}"),

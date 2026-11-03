@@ -120,9 +120,20 @@ impl SandboxRecord {
         self.fields.get_text("state")
     }
 
-    /// The process that created it, as recorded.
-    pub fn pid(&self) -> Option<i64> {
-        self.fields.get_int("pid")
+    /// The Sandbox's state (#536 §7.2) from its record: the state its
+    /// create recorded (`creating`, `running`, `unknown`), `creating` when
+    /// none. F2/F3 add the daemon's answer and `op` (`closing`, `gone`,
+    /// `unresolved`).
+    pub fn state(&self) -> &str {
+        self.recorded_state().unwrap_or("creating")
+    }
+
+    /// The live process creating it: its recorded creator while the record
+    /// says `creating` and that process is alive.
+    pub fn creator(&self) -> Option<i64> {
+        let pid = self.fields.get_int("pid").filter(|pid| *pid > 0)?;
+        let alive = crate::common::home::lease::alive(pid as u32);
+        (self.state() == "creating" && alive).then_some(pid)
     }
 
     /// The record as written.
@@ -131,13 +142,16 @@ impl SandboxRecord {
     }
 
     /// The Sandbox as each `sandbox.list` item and the start of
-    /// `sandbox.get` show it: its record (never a `v`).
-    pub fn to_sdk(&self, _view: View) -> SdkValue {
-        match &self.fields {
-            SdkValue::Map(fields) => {
-                SdkValue::Map(fields.iter().filter(|(n, _)| n != "v").cloned().collect())
-            }
-            other => other.clone(),
+    /// `sandbox.get` show it: its record (never a `v`); a list item whose
+    /// record holds no `state` gains its derived one.
+    pub fn to_sdk(&self, view: View) -> SdkValue {
+        let SdkValue::Map(fields) = &self.fields else {
+            return self.fields.clone();
+        };
+        let mut shown: Vec<_> = fields.iter().filter(|(n, _)| n != "v").cloned().collect();
+        if view == View::List && self.recorded_state().is_none() {
+            shown.push(("state".to_owned(), SdkValue::text(self.state())));
         }
+        SdkValue::Map(shown)
     }
 }
