@@ -8,5 +8,6 @@ pub mod op;
 #[doc(hidden)]
 pub mod outcome;
 pub(crate) mod place;
+pub(crate) mod secrets;
 #[doc(hidden)]
 pub mod trace;

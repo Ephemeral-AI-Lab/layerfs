@@ -79,7 +79,7 @@ fn postgresql(
     mut fields: Vec<(String, SdkValue)>,
     lease: lease::Lease,
 ) -> Outcome {
-    let url = crate::store::connect::url(&target.record)?;
+    let url = crate::common::secrets::url(&target.record)?;
     fields.push((
         "postgresql".to_owned(),
         SdkValue::map([("url", SdkValue::text(url))]),

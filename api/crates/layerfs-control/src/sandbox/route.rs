@@ -99,7 +99,7 @@ fn host_args(
 /// (`layerfs_machine::reach`). It travels only in the one request that runs
 /// the call and is never written to a record.
 fn reached(home: &Path, machine: &str, record: &StoreRecord) -> Result<SdkValue> {
-    let url = crate::store::connect::url(record)?;
+    let url = crate::common::secrets::url(record)?;
     // a build without machines (the guest's) runs its own Sandboxes on the
     // machine it is, which shares its loopback
     #[cfg(feature = "machine")]
