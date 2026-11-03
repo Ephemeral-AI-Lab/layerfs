@@ -3,7 +3,6 @@ use crate::common::context::Context;
 use crate::common::home;
 use crate::common::names::{WorkspaceAt, WorkspaceName, WorkspaceRef};
 use crate::common::outcome::{refused, Outcome};
-use crate::common::place::Start;
 use crate::machine::worker::Unreached;
 use crate::sandbox::family::sandbox_of;
 use crate::sandbox::route::{on_machine, reach};
@@ -39,7 +38,6 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
     }
     let ws = WorkspaceRef::parse(args.get_text("ws").unwrap_or(""))?;
     let record = sandbox_of(&home, &ws.sandbox)?;
-    let machine = record.machine();
     // a path, or a name the Sandbox's side resolves to its path
     let mut more = vec![("path", SdkValue::text(ws.at.as_str()))];
     let op = match call {
@@ -69,17 +67,9 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
     };
     // a status starts no machine (P4)
     let out = match call {
-        "status" => reach(context, &record, op, more, Start::Never).unwrap_or_else(
-            |Unreached(why)| {
-                Err(refused(
-                    "Unavailable",
-                    format!(
-                        "{}; workspace.status starts no machine (`machine start {machine}` starts it)",
-                        why.message
-                    ),
-                ))
-            },
-        ),
+        "status" => {
+            reach(context, &record, op, more, false).unwrap_or_else(|Unreached(why)| Err(why))
+        }
         _ => on_machine(context, &record, op, more),
     }?;
     if call == "exec" {

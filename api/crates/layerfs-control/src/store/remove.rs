@@ -2,7 +2,7 @@
 use super::family::{ended, idle, in_progress, of_store, record_of, settle, step};
 use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::common::place::{self, Executor, Start};
+use crate::common::place::{self, Executor};
 use crate::store::record::StoreRef;
 use layerfs_bridge::control::SdkValue;
 use std::path::Path;
@@ -20,7 +20,7 @@ pub(super) fn remove(home: &Path, name: &str) -> Outcome {
         ));
     }
     let machine = store_ref.machine()?.to_owned();
-    let mut executor = place::plan(home, store_ref, Start::OnDemand)?;
+    let mut executor = place::plan(home, store_ref)?;
     if let Executor::Worker(worker) = &mut executor {
         worker.ready()?;
     }

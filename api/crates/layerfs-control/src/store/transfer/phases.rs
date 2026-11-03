@@ -3,7 +3,7 @@
 use crate::common::context::Context;
 use crate::common::home::{self, with_field};
 use crate::common::outcome::{refused, Outcome};
-use crate::common::place::{self, Executor, Start};
+use crate::common::place::{self, Executor};
 use crate::machine::record::MachineRecord;
 use crate::store::family::{ended, idle, in_progress, of_store, progress, record_of, settle, step};
 use crate::store::record::StoreRef;
@@ -68,8 +68,8 @@ fn at<T>(phase: &'static str, result: Result<T>) -> Phased<T> {
 
 fn phases(context: &mut Context<'_>, name: &str, from: &str, to: &str) -> Phased<SdkValue> {
     let home = context.home.clone();
-    let mut source = at("check", place::on_machine(&home, from, Start::OnDemand))?;
-    let mut target = at("check", place::on_machine(&home, to, Start::OnDemand))?;
+    let mut source = at("check", place::on_machine(&home, from))?;
+    let mut target = at("check", place::on_machine(&home, to))?;
     for executor in [&mut source, &mut target] {
         if let Executor::Worker(worker) = executor {
             at("check", worker.ready())?;

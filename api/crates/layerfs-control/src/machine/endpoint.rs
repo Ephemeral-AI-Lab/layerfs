@@ -1,14 +1,10 @@
-//! A machine starts on the first call that needs it (H §7.2, step 13). The
-//! call dials the worker its `worker.json` records, once; only when nothing
-//! was sent (the connection, the secret or its answer failed) does the
-//! caller start the machine and its worker, wait until it is ready, replace
-//! `worker.json` and send the call once (#535 R1, [`start_after`]). That
-//! wait is a readiness wait, not a retry: the first attempt never reached
-//! the worker. `machine.start` and an operation of several steps make the
-//! machine ready first instead ([`running`]). Two processes that need the
-//! same stopped machine take turns on its `start.lock`. A Firecracker
-//! machine's Lima host is started the same way first: its own worker may
-//! have stopped it.
+//! `machine.start` (#535 D11: the only call that starts a machine): it
+//! dials the worker its `worker.json` records and, when that worker does
+//! not answer, starts the machine and its worker, waits until it is ready
+//! (a readiness wait, not a retry) and replaces `worker.json`
+//! ([`running`]). Two processes starting the same machine take turns on its
+//! `start.lock`. A Firecracker machine's Lima host is started first by the
+//! same call.
 use super::record::MachineRecord;
 use super::spec::{self as record, machine_of, refusal, save_running};
 use crate::common::outcome::{failed, refused};
@@ -43,29 +39,6 @@ pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> 
     start(home, name, &record)
 }
 
-/// Starts machine `name` and its worker after a call to the worker it
-/// recorded (`tried`, or none) was not sent (R1), and answers the worker to
-/// send that call to, once. A worker another process recorded meanwhile is
-/// that one, as recorded: it is not pinged first.
-pub fn start_after(
-    home: &Path,
-    name: &str,
-    tried: Option<&Endpoint>,
-) -> Result<Endpoint, SdkRefusal> {
-    let record = machine_of(home, name)?;
-    host_first(home, &record)?;
-    let _start = start_lock(home, name)?;
-    let record = machine_of(home, name)?;
-    if let Some(now) = record::worker(home, name)? {
-        let now = endpoint_of(&now);
-        if Some(&now) != tried {
-            return Ok(now);
-        }
-    }
-    start(home, name, &record)?
-        .ok_or_else(|| refused("Failed", format!("machine {name} has no worker to start")))
-}
-
 /// A Firecracker machine's Lima host, started first if it does not answer.
 fn host_first(home: &Path, record: &MachineRecord) -> Result<(), SdkRefusal> {
     if record.platform()? == Platform::Firecracker {
@@ -98,8 +71,8 @@ fn start(home: &Path, name: &str, record: &MachineRecord) -> Result<Option<Endpo
 }
 
 /// Machine `name`'s `start.lock`, held until dropped. Starting, creating and
-/// removing a machine take it, always before the home lock, so an
-/// on-demand start never runs beside a create or a remove of the same VM.
+/// removing a machine take it, always before the home lock, so a start
+/// never runs beside a create or a remove of the same VM.
 /// A wait for it, at most [`START_WAIT`], is not a retry.
 pub(crate) struct StartLock(std::fs::File);
 

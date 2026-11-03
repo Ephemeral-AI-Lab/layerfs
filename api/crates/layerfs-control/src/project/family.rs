@@ -8,7 +8,7 @@ use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::paths;
 use crate::common::outcome::{failed, refused, Outcome, View};
-use crate::common::place::{self, Executor, Start};
+use crate::common::place::{self, Executor};
 use crate::project::record::ProjectRecord;
 use crate::store::record::{StoreRecord, StoreRef};
 use crate::store::resolve;
@@ -139,7 +139,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         return init_postgresql(context, store, name, folder, timeout, &record);
     }
     // Init runs where the Store's calls run in this process
-    if let Executor::Worker(worker) = place::plan(&home, store_ref, Start::Never)? {
+    if let Executor::Worker(worker) = place::plan(&home, store_ref)? {
         let machine = worker.machine();
         return Err(refused(
             "Unsupported",
@@ -265,7 +265,7 @@ fn remove(context: &mut Context<'_>, project: &str) -> Outcome {
             "removing a project from a PostgreSQL Store is not built",
         ));
     }
-    let removed = match place::plan(&home, &target.store_ref, Start::OnDemand)? {
+    let removed = match place::plan(&home, &target.store_ref)? {
         Executor::Local => {
             let _lease = lease::hold(&home, &target.store)?;
             crate::store::identity::remove_project(&host_args(&home, &target.store, args))?

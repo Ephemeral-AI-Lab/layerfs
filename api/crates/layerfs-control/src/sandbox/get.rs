@@ -3,7 +3,6 @@ use super::family::{page, sandbox_of};
 use crate::common::context::Context;
 use crate::common::home;
 use crate::common::outcome::{Outcome, View};
-use crate::common::place::Start;
 use crate::machine::worker::Unreached;
 use crate::sandbox::route::reach;
 use layerfs_bridge::control::SdkValue;
@@ -16,13 +15,7 @@ pub(super) fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let record = sandbox_of(&home, name)?;
     // a get starts no machine (P4): a machine that is down answers
     // the record with no Workspaces and why
-    let listed = reach(
-        context,
-        &record,
-        "sandbox.list_workspaces",
-        vec![],
-        Start::Never,
-    );
+    let listed = reach(context, &record, "sandbox.list_workspaces", vec![], false);
     let (all, down) = match listed {
         Ok(workspaces) => match workspaces?.get("workspaces") {
             Some(SdkValue::List(items)) => (items.iter().map(|i| with_ws(name, i)).collect(), None),

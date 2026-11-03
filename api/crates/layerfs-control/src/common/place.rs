@@ -23,44 +23,35 @@ pub(crate) enum Executor {
     Worker(Worker),
 }
 
-/// Whether a call may start its machine (#535 P4, #536 §10b).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Start {
-    /// The call needs the worker: a stopped machine is started first.
-    OnDemand,
-    /// A list, get or status call: it uses the worker the records name, or
-    /// is refused `Unavailable`, and never starts the machine.
-    Never,
-}
-
 /// One machine's worker. [`plan`] reads no worker record and dials
 /// nothing: the first call dials the worker its records name, and later
 /// calls of the same operation (a move's steps) use the worker it reached.
+/// Nothing here starts a machine (#535 D11): a call whose worker is not
+/// recorded or does not answer is refused `Unavailable`, naming
+/// `layerfs machine start`.
 pub(crate) struct Worker {
     home: PathBuf,
     machine: String,
-    start: Start,
     endpoint: Option<Endpoint>,
 }
 
 /// Where a call on Store `store` runs.
-pub(crate) fn plan(home: &Path, store: &StoreRef, start: Start) -> Result<Executor> {
+pub(crate) fn plan(home: &Path, store: &StoreRef) -> Result<Executor> {
     match store {
         StoreRef::Postgres { .. } => Ok(Executor::Local),
-        StoreRef::Sqlite { .. } => on_machine(home, store.machine()?, start),
+        StoreRef::Sqlite { .. } => on_machine(home, store.machine()?),
     }
 }
 
 /// Where a call on machine `machine` runs: its Sandboxes' host operations,
 /// and the Store calls of the sqlite Stores on it.
-pub(crate) fn on_machine(home: &Path, machine: &str, start: Start) -> Result<Executor> {
-    if local(home, machine, start)? {
+pub(crate) fn on_machine(home: &Path, machine: &str) -> Result<Executor> {
+    if local(home, machine)? {
         return Ok(Executor::Local);
     }
     Ok(Executor::Worker(Worker {
         home: home.to_owned(),
         machine: machine.to_owned(),
-        start,
         endpoint: None,
     }))
 }
@@ -71,29 +62,20 @@ impl Worker {
         &self.machine
     }
 
-    /// Makes sure the worker is up before an operation of several steps
-    /// marks anything (`store.remove`, `store.move`): a stopped machine is
-    /// started now, before the home lock, not by its first step. This is a
-    /// readiness wait, not a call.
+    /// The worker an operation of several steps uses (`store.remove`,
+    /// `store.move`), read before it marks anything: a machine with no
+    /// recorded worker is refused now, naming `layerfs machine start`.
     pub(crate) fn ready(&mut self) -> Result<()> {
         if self.endpoint.is_none() {
-            self.endpoint = Some(match self.start {
-                Start::OnDemand => started(&self.home, &self.machine)?,
-                Start::Never => recorded(&self.home, &self.machine)?,
-            });
+            self.endpoint = Some(recorded(&self.home, &self.machine)?);
         }
         Ok(())
     }
 
     /// Runs worker operation `op` once with `request`; its events go to
     /// `events`. No ping comes first (#535 R1): the call dials the worker
-    /// once. Only when nothing was sent ([`Unreached`]: the connection, the
-    /// secret or its answer failed) on this operation's first call does a
-    /// [`Start::OnDemand`] caller start the machine and send the call once,
-    /// to the worker that start recorded. That is not a retry: the first
-    /// attempt never reached a worker. A failure after the request went out
-    /// is the call's outcome (`Unknown` when its answer was lost), never
-    /// resent.
+    /// its records name, once. A failure after the request went out is the
+    /// call's outcome (`Unknown` when its answer was lost), never resent.
     pub(crate) fn call(
         &mut self,
         op: &str,
@@ -105,8 +87,10 @@ impl Worker {
     }
 
     /// [`Worker::call`], answering [`Unreached`] when the request was not
-    /// sent: for a [`Start::Never`] caller, a machine whose worker is not
-    /// recorded or does not answer, which it may report as down (P4).
+    /// sent (no worker recorded, or it did not answer its secret): the
+    /// machine is stopped or its worker gone, which a list, get or status
+    /// call may report as down (P4). The refusal names `layerfs machine
+    /// start`; nothing is started (#535 D11).
     pub(crate) fn attempt(
         &mut self,
         op: &str,
@@ -117,92 +101,50 @@ impl Worker {
             Ok(request) => request,
             Err(refusal) => return Ok(Err(refusal)),
         };
-        let send = |endpoint: &Endpoint, events: &mut dyn FnMut(SdkValue)| {
-            worker::send(endpoint, op, &request, events, None)
-        };
         if let Some(endpoint) = &self.endpoint {
-            return send(endpoint, events);
+            return worker::send(endpoint, op, &request, events, None)
+                .map_err(|Unreached(why)| Unreached(stopped(&self.machine, &why.message)));
         }
-        let tried = recorded(&self.home, &self.machine);
-        let not_sent = match &tried {
-            Ok(endpoint) => match send(endpoint, events) {
-                Ok(outcome) => {
-                    self.endpoint = tried.ok();
-                    return Ok(outcome);
-                }
-                Err(unreached) => unreached,
-            },
-            Err(refusal) => Unreached(refusal.clone()),
-        };
-        if self.start == Start::Never {
-            return Err(not_sent);
+        let endpoint = recorded(&self.home, &self.machine).map_err(Unreached)?;
+        match worker::send(&endpoint, op, &request, events, None) {
+            Ok(outcome) => {
+                self.endpoint = Some(endpoint);
+                Ok(outcome)
+            }
+            Err(Unreached(why)) => Err(Unreached(stopped(&self.machine, &why.message))),
         }
-        let endpoint =
-            started_after(&self.home, &self.machine, tried.ok().as_ref()).map_err(Unreached)?;
-        let endpoint = self.endpoint.insert(endpoint);
-        send(endpoint, events)
     }
 }
 
+/// The refusal of a call whose machine's worker did not answer: the
+/// machine is stopped, or its worker ended. Nothing was sent.
+fn stopped(machine: &str, why: &str) -> SdkRefusal {
+    refused(
+        "Unavailable",
+        format!(
+            "machine {machine}'s worker did not answer ({why}); start it with `layerfs machine start {machine}`"
+        ),
+    )
+}
+
 /// Whether machine `machine`'s calls run in this process: its platform's
-/// executor on this host (G8). A machine being removed is refused `InUse`
-/// to a call that may start it.
+/// executor on this host (G8).
 #[cfg(feature = "machine")]
-fn local(home: &Path, machine: &str, start: Start) -> Result<bool> {
+fn local(home: &Path, machine: &str) -> Result<bool> {
     use layerfs_machine::{ExecutorKind, HostOs, Platform};
     let platform = match machine {
         "native" => Platform::Native,
-        _ => {
-            let record = match start {
-                Start::OnDemand => crate::machine::machine_of(home, machine)?,
-                Start::Never => crate::machine::record::MachineRecord::read(home, machine)?
-                    .ok_or_else(|| refused("NotFound", format!("no machine named {machine}")))?,
-            };
-            record.platform()?
-        }
+        _ => crate::machine::record::MachineRecord::of(home, machine)?.platform()?,
     };
     Ok(platform.executor(HostOs::current()) == ExecutorKind::Local)
 }
 
 /// Without the machine adapters (the guest worker's build): `native` is
 /// this process; any other machine's worker is the one its `worker.json`
-/// records, never started.
+/// records.
 #[cfg(not(feature = "machine"))]
-fn local(_: &Path, machine: &str, _: Start) -> Result<bool> {
+fn local(_: &Path, machine: &str) -> Result<bool> {
     Ok(machine == "native")
-}
-
-/// The worker of `machine`, started first if it does not answer.
-#[cfg(feature = "machine")]
-fn started(home: &Path, machine: &str) -> Result<Endpoint> {
-    crate::machine::running(home, machine)?.ok_or_else(|| {
-        refused(
-            "Failed",
-            format!("machine {machine} has no worker to start"),
-        )
-    })
-}
-
-#[cfg(not(feature = "machine"))]
-fn started(home: &Path, machine: &str) -> Result<Endpoint> {
-    recorded(home, machine)
-}
-
-/// The worker of `machine` once started, after a call to `tried` (its
-/// recorded worker, if any) sent nothing.
-#[cfg(feature = "machine")]
-fn started_after(home: &Path, machine: &str, tried: Option<&Endpoint>) -> Result<Endpoint> {
-    crate::machine::start_after(home, machine, tried)
-}
-
-/// Without the machine adapters nothing is started: the call that sent
-/// nothing is refused.
-#[cfg(not(feature = "machine"))]
-fn started_after(_: &Path, machine: &str, _: Option<&Endpoint>) -> Result<Endpoint> {
-    Err(refused(
-        "Unavailable",
-        format!("machine {machine} is not running"),
-    ))
 }
 
 /// The worker `machine`'s `worker.json` records, starting nothing; refused
@@ -212,7 +154,9 @@ fn recorded(home: &Path, machine: &str) -> Result<Endpoint> {
     let Some(value) = read_record(&paths::worker_record(home, machine))? else {
         return Err(refused(
             "Unavailable",
-            format!("machine {machine} is not running"),
+            format!(
+                "machine {machine} is not running; start it with `layerfs machine start {machine}`"
+            ),
         ));
     };
     let address = value

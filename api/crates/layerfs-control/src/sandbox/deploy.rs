@@ -10,7 +10,6 @@
 //! guest never reads the home, H §7.7).
 use crate::common::home::paths;
 use crate::common::outcome::{failed, refused};
-use crate::common::place::Start;
 use crate::machine::record::MachineRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
@@ -82,7 +81,7 @@ pub(super) fn choose(
     machine: &str,
     image: Option<&str>,
     postgresql: bool,
-    start: Start,
+    load: bool,
 ) -> Result<SdkValue> {
     let record = MachineRecord::read(home, machine)?
         .unwrap_or_else(|| MachineRecord::from_record(machine, SdkValue::Null));
@@ -90,10 +89,10 @@ pub(super) fn choose(
     let mut fields = Vec::new();
     if machine == "docker" {
         // a call that starts nothing loads no image either (P4)
-        let image = match (named, start) {
+        let image = match (named, load) {
             (Some(image), _) => Some(image.to_owned()),
-            (None, Start::OnDemand) => Some(docker_default(home)?),
-            (None, Start::Never) => None,
+            (None, true) => Some(docker_default(home)?),
+            (None, false) => None,
         };
         fields.push(("backend", SdkValue::text("docker")));
         if let Some(image) = image {

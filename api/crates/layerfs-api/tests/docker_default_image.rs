@@ -1,8 +1,9 @@
 //! A docker Sandbox with no image named uses the bundle's Sandbox image
-//! (#535 P5): `sandbox-image.tar` is loaded into Docker once, its image id
-//! recorded on the docker machine and used for the worker's container and
-//! the Sandbox; `--image` still overrides; a bundle without the archive is
-//! refused naming it. A stand-in `docker` (it loads, but runs no
+//! (#535 P5): `sandbox-image.tar` is loaded into Docker once, by
+//! `machine.start docker` (the only call that starts a machine, D11), its
+//! image id recorded on the docker machine and used for the worker's
+//! container and the Sandbox; `--image` still overrides; a bundle without
+//! the archive is refused naming it. A stand-in `docker` (it loads, but runs no
 //! container) and a bundle folder of empty stand-ins; no Docker is used.
 //! One test, because it sets the process's environment.
 #![cfg(feature = "machine")]
@@ -39,6 +40,16 @@ fn create(home: &Path, name: &str, image: Option<&str>) -> SdkRefusal {
         Some(home),
         "sandbox.create",
         SdkValue::Map(fields),
+        &mut |_| {},
+    )
+    .expect_err("no container runs here")
+}
+
+fn start(home: &Path) -> SdkRefusal {
+    calls::call(
+        Some(home),
+        "machine.start",
+        SdkValue::map([("name", t("docker"))]),
         &mut |_| {},
     )
     .expect_err("no container runs here")
@@ -95,7 +106,7 @@ esac
     .unwrap();
 
     // no archive in the bundle: refused naming it, nothing loaded
-    let refusal = create(&home, "s1", None);
+    let refusal = start(&home);
     assert_eq!(refusal.code, "Unsupported", "{}", refusal.message);
     assert!(
         refusal.message.contains("sandbox-image.tar"),
@@ -107,7 +118,7 @@ esac
     // with the archive: loaded once, recorded, and the worker's container
     // is started on it (the stand-in runs none)
     std::fs::write(bundle.join("sandbox-image.tar"), b"").unwrap();
-    let refusal = create(&home, "s2", None);
+    let refusal = start(&home);
     assert_eq!(refusal.code, "Failed", "{}", refusal.message);
     let record = read_record(&paths::machine_record(&home, "docker"))
         .unwrap()
@@ -124,10 +135,18 @@ esac
     let run = calls.lines().find(|l| l.contains(" run ")).unwrap_or("");
     assert!(run.contains(&format!("--entrypoint sh {ID} -c")), "{calls}");
 
-    // the next create uses the recorded id: no second load
-    let _ = create(&home, "s3", None);
+    // a create uses the recorded id: no second load; with no worker
+    // running it is refused naming `machine start`, and starts nothing
+    let refusal = create(&home, "s3", None);
+    assert_eq!(refusal.code, "Unavailable", "{}", refusal.message);
+    assert!(
+        refusal.message.contains("layerfs machine start docker"),
+        "{}",
+        refusal.message
+    );
     let calls = log(&tools);
     assert_eq!(calls.matches(" load ").count(), 1, "{calls}");
+    assert_eq!(calls.matches(" run ").count(), 1, "{calls}");
 
     // a named image overrides it: the worker still runs the loaded one,
     // and nothing is loaded again

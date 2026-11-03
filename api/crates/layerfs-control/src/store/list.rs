@@ -3,7 +3,7 @@ use super::family::{of_store, public, step};
 use crate::common::home;
 use crate::common::home::lease;
 use crate::common::outcome::{Outcome, View};
-use crate::common::place::{self, Start};
+use crate::common::place;
 use crate::store::record::StoreRef;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -33,7 +33,7 @@ pub(super) fn list(home: &Path) -> Outcome {
                 Err(_) => true,
                 Ok(machine) if unanswered.contains(machine) => true,
                 Ok(machine) => {
-                    let stat = place::plan(home, store_ref, Start::Never).and_then(|mut on| {
+                    let stat = place::plan(home, store_ref).and_then(|mut on| {
                         step(home, &mut on, "stat", of_store(record.name(), vec![]))
                     });
                     if stat.is_err() {

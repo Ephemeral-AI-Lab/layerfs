@@ -8,7 +8,7 @@ use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::paths;
 use crate::common::outcome::Outcome;
-use crate::common::place::{plan, Executor, Start};
+use crate::common::place::{plan, Executor};
 use crate::store::open;
 use crate::store::record::{StoreRecord, StoreRef};
 use crate::store::resolve::Target;
@@ -33,7 +33,7 @@ pub(crate) fn store_call(
     let (lease, record) = lease::claim(&home, &target.store)?;
     let mut fields = with_target(args, target, &record);
     // the record read under the lock, parsed once (R4)
-    match plan(&home, record.store_ref()?, Start::OnDemand)? {
+    match plan(&home, record.store_ref()?)? {
         Executor::Local => {
             let file = paths::store_file(&home, &target.store);
             fields.push((

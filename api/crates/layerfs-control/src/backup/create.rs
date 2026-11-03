@@ -5,7 +5,7 @@ use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::common::place::{self, Executor, Start};
+use crate::common::place::{self, Executor};
 use crate::store::record::{StoreRecord, StoreRef};
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -56,7 +56,7 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let driver = bucket_record.driver()?;
     let expected = expected(&record, bucket, &file);
     let machine = store_ref.machine()?.to_owned();
-    let executor = place::plan(&home, store_ref, Start::OnDemand)?;
+    let executor = place::plan(&home, store_ref)?;
     let identity = crate::store::identity::identity_in(&record)?;
     let home_id = home::ensure(&home)?.id;
     let object = remote::store_object(&file).map_err(|why| refused("InvalidInput", why))?;

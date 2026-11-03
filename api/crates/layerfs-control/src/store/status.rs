@@ -3,7 +3,7 @@ use super::family::{fields_map, of_store, record_of, step};
 use crate::common::home;
 use crate::common::home::lease;
 use crate::common::outcome::Outcome;
-use crate::common::place::{self, Start};
+use crate::common::place;
 use crate::store::record::StoreRef;
 use layerfs_bridge::control::SdkValue;
 use std::path::Path;
@@ -26,7 +26,7 @@ pub(super) fn status(home: &Path, name: &str) -> Outcome {
         more.push(("machine", SdkValue::text(store_ref.machine()?)));
         // the file's size where it lives, starting nothing (P4); a machine
         // that is down says why
-        let file = place::plan(home, store_ref, Start::Never)
+        let file = place::plan(home, store_ref)
             .and_then(|mut executor| step(home, &mut executor, "stat", of_store(name, vec![])));
         let file = file.unwrap_or_else(|why| {
             down = Some(why.message.clone());

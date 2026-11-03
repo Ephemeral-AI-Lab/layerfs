@@ -1,10 +1,9 @@
 //! A worker call dials the recorded worker once, with no ping first (#535
-//! R1). Only a failure before the request is sent (a refused connection,
-//! a refused secret) starts the machine; a call whose answer is lost after
-//! it was sent is `Unknown` and starts nothing. Stand-in workers here; the
-//! start fails at the missing Linux bundle, after the machine's
-//! `start.lock` shows it ran. One test, because it sets the process's
-//! environment.
+//! R1), and never starts its machine (D11): a failure before the request
+//! is sent (a refused connection, a refused secret) is `Unavailable`
+//! naming `layerfs machine start`; a call whose answer is lost after it
+//! was sent is `Unknown`. Stand-in workers here; no `start.lock` is ever
+//! taken. One test, because it sets the process's environment.
 #![cfg(feature = "machine")]
 use layerfs_api::calls;
 use layerfs_api::home::{self, paths, write_record};
@@ -149,7 +148,7 @@ fn closed() -> SocketAddr {
 }
 
 #[test]
-fn a_worker_call_dials_once_and_starts_only_when_nothing_was_sent() {
+fn a_worker_call_dials_once_and_never_starts_its_machine() {
     let cache = tempdir("cache");
     std::env::set_var("XDG_CACHE_HOME", &cache);
     std::env::remove_var("LAYERFS_BUNDLE");
@@ -177,21 +176,22 @@ fn a_worker_call_dials_once_and_starts_only_when_nothing_was_sent() {
     assert!(!started(&home), "a sent call never starts the machine");
     std::fs::remove_dir_all(&home).unwrap();
 
-    // nothing listens: nothing was sent, so the machine is started (here
-    // refused for the missing bundle) and the call is not sent
+    // nothing listens: nothing was sent, and nothing is started; the
+    // refusal names the call that starts the machine
     let home = home_on_box("closed", closed());
     let (code, message) = read(&home).unwrap_err();
-    assert_eq!(code, "Unsupported", "{message}");
-    assert!(message.contains("bundle"), "{message}");
-    assert!(started(&home), "the start ran");
+    assert_eq!(code, "Unavailable", "{message}");
+    assert!(message.contains("layerfs machine start box"), "{message}");
+    assert!(!started(&home), "a call started the machine");
     std::fs::remove_dir_all(&home).unwrap();
 
     // a worker that refuses the secret was not sent the request either
     let (address, log) = worker(Meet::Deny);
     let home = home_on_box("deny", address);
     let (code, message) = read(&home).unwrap_err();
-    assert_eq!(code, "Unsupported", "{message}");
-    assert!(started(&home), "the start ran");
+    assert_eq!(code, "Unavailable", "{message}");
+    assert!(message.contains("layerfs machine start box"), "{message}");
+    assert!(!started(&home), "a call started the machine");
     assert_eq!(log.lock().unwrap().as_slice(), ["hello"], "no request");
     std::fs::remove_dir_all(&home).unwrap();
     std::fs::remove_dir_all(cache).unwrap();

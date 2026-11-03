@@ -127,7 +127,8 @@ fn every_read(home: &Path) {
 
     let (code, message) = call(home, "workspace.status", &[("ws", "s1:/w")]).unwrap_err();
     assert_eq!(code, "Unavailable", "{message}");
-    assert!(message.contains("starts no machine"), "{message}");
+    // D11: nothing starts a machine; the refusal names the call that does
+    assert!(message.contains("layerfs machine start dev"), "{message}");
 }
 
 fn nothing_started(home: &Path, tools: &Path) {

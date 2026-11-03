@@ -7,7 +7,7 @@ use super::record::SandboxRecord;
 use crate::common::context::Context;
 use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::common::place::{self, Executor, Start};
+use crate::common::place::{self, Executor};
 use crate::machine::worker::Unreached;
 use crate::project::record::ProjectRecord;
 use crate::store::record::{StoreKind, StoreRecord};
@@ -157,28 +157,29 @@ fn store_path(home: &Path, store: &str, kind: StoreKind) -> PathBuf {
 }
 
 /// Runs host Sandbox operation `op` for Sandbox `record` on its machine,
-/// starting the machine when it is down.
+/// refused `Unavailable` naming `layerfs machine start` when it is down.
 pub(crate) fn on_machine(
     context: &mut Context<'_>,
     record: &SandboxRecord,
     op: &str,
     more: Vec<(&str, SdkValue)>,
 ) -> Outcome {
-    reach(context, record, op, more, Start::OnDemand)
-        .unwrap_or_else(|Unreached(refusal)| Err(refusal))
+    reach(context, record, op, more, true).unwrap_or_else(|Unreached(refusal)| Err(refusal))
 }
 
-/// [`on_machine`], with `start` saying whether a machine that is down is
-/// started; [`Unreached`] when it was not and nothing was sent.
+/// [`on_machine`], answering [`Unreached`] when the machine's worker was
+/// not reached and nothing was sent (nothing starts it, #535 D11);
+/// `load_image` says whether the call may load the docker machine's
+/// default image (a get or status call does not, P4).
 pub(crate) fn reach(
     context: &mut Context<'_>,
     record: &SandboxRecord,
     op: &str,
     more: Vec<(&str, SdkValue)>,
-    start: Start,
+    load_image: bool,
 ) -> std::result::Result<Outcome, Unreached> {
     let mut unreached = None;
-    let outcome = host_op(context, (record, op), more, start, &mut unreached);
+    let outcome = host_op(context, (record, op), more, load_image, &mut unreached);
     match unreached {
         Some(unreached) => Err(unreached),
         None => Ok(outcome),
@@ -191,7 +192,7 @@ fn host_op(
     context: &mut Context<'_>,
     (record, op): (&SandboxRecord, &str),
     more: Vec<(&str, SdkValue)>,
-    start: Start,
+    load_image: bool,
     unreached: &mut Option<Unreached>,
 ) -> Outcome {
     let home = context.home.clone();
@@ -221,7 +222,7 @@ fn host_op(
     };
     // a Sandbox's host operations run where its machine runs them, for
     // either Store kind (#535 §7.4)
-    let executor = place::on_machine(&home, machine, start)?;
+    let executor = place::on_machine(&home, machine)?;
     // what the machine's record chooses; the side that runs the call
     // resolves the rest
     let choice = deploy::choose(
@@ -229,7 +230,7 @@ fn host_op(
         machine,
         image.as_deref(),
         postgresql.is_some(),
-        start,
+        load_image,
     )?;
     match executor {
         Executor::Local => {
