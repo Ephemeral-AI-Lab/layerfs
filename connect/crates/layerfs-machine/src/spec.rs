@@ -3,9 +3,9 @@
 //! comes from the caller.
 use crate::error::{Code, MachineError};
 use crate::platform::Platform;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The machine's guest worker port, inside the guest.
 pub const WORKER_PORT: u16 = 7070;
@@ -102,13 +102,30 @@ pub struct Tools {
     pub docker_socket: PathBuf,
 }
 
+/// Folders under `HOME` where a provider's own installer puts its CLI
+/// without adding it to `PATH`: microsandbox's puts `msb` in
+/// `~/.microsandbox/bin`.
+const INSTALL_DIRS: [&str; 1] = [".microsandbox/bin"];
+
 impl Tools {
-    /// This process's `PATH` and Docker's usual socket.
+    /// This process's `PATH`, then `INSTALL_DIRS` under `HOME`, and
+    /// Docker's usual socket.
     pub fn from_env() -> Self {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let home = std::env::var_os("HOME").map(PathBuf::from);
         Self {
-            path: std::env::var_os("PATH").unwrap_or_default(),
+            path: Self::search_path(&path, home.as_deref()),
             docker_socket: PathBuf::from("/var/run/docker.sock"),
         }
+    }
+
+    /// `path` first, then each of `INSTALL_DIRS` under `home`, if given.
+    pub fn search_path(path: &OsStr, home: Option<&Path>) -> OsString {
+        let installed = home
+            .into_iter()
+            .flat_map(|home| INSTALL_DIRS.iter().map(move |dir| home.join(dir)));
+        let dirs = std::env::split_paths(path).chain(installed);
+        std::env::join_paths(dirs).unwrap_or_else(|_| path.to_owned())
     }
 }
 

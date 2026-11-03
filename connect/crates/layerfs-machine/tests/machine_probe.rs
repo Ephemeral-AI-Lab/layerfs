@@ -2,7 +2,7 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_machine::{native_missing, nested_missing, probe, HostOs, Platform};
+use layerfs_machine::{native_missing, nested_missing, probe, HostOs, Platform, Tools};
 use standin::Scratch;
 
 #[test]
@@ -69,6 +69,24 @@ fn a_stand_in_tool_reports_its_version() {
     let ssh = probe(Platform::Ssh, &tools);
     assert!(ssh.ready);
     assert_eq!(ssh.version.as_deref(), Some("OpenSSH_9.9p1"));
+}
+
+#[test]
+fn msb_is_found_where_its_installer_puts_it() {
+    let scratch = Scratch::new("probe-msb-home");
+    let home = scratch.dir.join("home");
+    let installed = home.join(".microsandbox/bin");
+    std::fs::create_dir_all(&installed).unwrap();
+    scratch.tool("msb", "echo 'msb 0.7.11'");
+    std::fs::rename(scratch.bin().join("msb"), installed.join("msb")).unwrap();
+    let mut tools = scratch.tools();
+    assert!(!probe(Platform::Microsandbox, &tools).ready);
+    tools.path = Tools::search_path(&tools.path, Some(&home));
+    let dirs: Vec<_> = std::env::split_paths(&tools.path).collect();
+    assert_eq!(dirs, [scratch.bin(), installed]);
+    let msb = probe(Platform::Microsandbox, &tools);
+    assert!(msb.ready, "{:?}", msb.missing);
+    assert_eq!(msb.version.as_deref(), Some("msb 0.7.11"));
 }
 
 #[test]
