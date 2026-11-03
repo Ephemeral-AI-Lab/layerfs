@@ -3,7 +3,7 @@
 //! Firecracker microVM it hosts, no connection open past its secret and no
 //! call for [`IDLE`], the worker stops serving. A call is an authenticated
 //! request for an operation that does work (`store.call`, `store.file`,
-//! `sandbox.host`, `host.call`, `host.backend`): a connection, the secret
+//! `sandbox.host`, `project.remove`): a connection, the secret
 //! alone, a ping, an unknown operation, or a denied or malformed frame is a
 //! probe and does not restart the clock. Its front end then exits, and in a
 //! VM guest powers it off. The host notices at its next call (the worker

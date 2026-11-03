@@ -549,7 +549,8 @@ pub(crate) fn add_failure(
     refusal
 }
 
-/// `runtime.store.remove_project { home, store, storePath, project }`:
+/// `project.remove`'s work on the Store's machine (here, or in its worker
+/// as the worker op `project.remove`), `{ home, store, storePath, project }`:
 /// drops the project's stack (its Layers, Branches and Commits) from the
 /// Store in one write, then its entry from the home. The other projects
 /// stay. The entry of the project a Store was made by (its own Init) holds

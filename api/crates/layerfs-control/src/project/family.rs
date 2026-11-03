@@ -319,13 +319,12 @@ fn remove(context: &mut Context<'_>, project: &str) -> Outcome {
                 let _lease = lease::hold(&home, &target.store)?;
                 let mut fields = vec![("store".to_owned(), SdkValue::text(&target.store))];
                 fields.extend(args.into_iter().map(|(n, v)| (n.to_owned(), v)));
-                let request = SdkValue::map([
-                    ("op", SdkValue::text("runtime.store.remove_project")),
-                    ("args", SdkValue::Map(fields)),
-                ]);
-                crate::machine::worker::call(&endpoint, "host.backend", request, &mut |e| {
-                    context.event(e)
-                })?
+                crate::machine::worker::call(
+                    &endpoint,
+                    "project.remove",
+                    SdkValue::Map(fields),
+                    &mut |e| context.event(e),
+                )?
             }
         }
     };

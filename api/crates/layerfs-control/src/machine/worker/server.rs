@@ -5,10 +5,10 @@
 //! `{ ready: true }`, or refuses a wrong secret and closes, before it reads
 //! anything larger. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
-//! `host.call` and `host.backend` run one host operation (`args.op` with
-//! `args.args`) on this machine, with `home` set to the worker's own root
-//! (the machine's data disk), never a path the caller sends. Answers are `{ value }` or
-//! `{ refused }`, after any `{ event }` frames.
+//! `store.call`, `store.file`, `sandbox.host` and `project.remove` run one
+//! operation on this machine, with `home` set to the worker's own root (the
+//! machine's data disk), never a path the caller sends. Answers are
+//! `{ value }` or `{ refused }`, after any `{ event }` frames.
 //!
 //! A request may carry `home_id`, the caller's home id: the root is not a
 //! home and has no id of its own (O33), so host code that asks for one
@@ -36,13 +36,7 @@ pub struct Served {
 
 /// The operations that do work: only a request for one restarts the idle
 /// clock.
-const WORK: [&str; 5] = [
-    "store.call",
-    "store.file",
-    "sandbox.host",
-    "host.call",
-    "host.backend",
-];
+const WORK: [&str; 4] = ["store.call", "store.file", "sandbox.host", "project.remove"];
 
 /// Serves `listener` until it fails. `root` is the worker's own state root.
 pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::Result<Served> {
@@ -240,18 +234,9 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         }
         // a Sandbox or Workspace operation on this machine's own native
         "sandbox.host" => crate::sandbox::family::in_worker(root, &args, events),
-        "host.call" | "host.backend" => {
-            let name = args
-                .get_text("op")
-                .ok_or_else(|| refused("InvalidInput", "host operation name"))?
-                .to_owned();
-            let inner = with_home(args.get("args").cloned().unwrap_or_default(), root);
-            if op == "host.call" {
-                crate::sandbox::dispatch::call(&name, inner)
-            } else {
-                crate::sandbox::dispatch::backend(name, inner)
-            }
-        }
+        // drops one project from the Store under this worker's root (2.0):
+        // `{ store, project, store_record }`
+        "project.remove" => crate::store::identity::remove_project(&with_home(args, root)),
         _ => Err(refused(
             "InvalidInput",
             format!("the worker has no operation {op}"),

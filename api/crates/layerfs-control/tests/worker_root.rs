@@ -94,3 +94,33 @@ fn a_worker_root_is_not_converted_and_uses_the_callers_home_id() {
     untouched(&root);
     std::fs::remove_dir_all(scratch).unwrap();
 }
+
+/// The 1.1 worker ops `host.call` and `host.backend` are gone (#536 step
+/// 2): a caller from an older bundle is refused before anything runs, once.
+#[test]
+fn the_retired_host_ops_are_refused() {
+    let root = tempdir("retired");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = Endpoint {
+        address: listener.local_addr().unwrap(),
+        secret: "k".to_owned(),
+    };
+    let guest = root.clone();
+    std::thread::spawn(move || worker::serve(listener, "k".to_owned(), guest));
+    for _ in 0..200 {
+        if worker::ping(&endpoint).is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    for op in ["host.call", "host.backend"] {
+        let args = SdkValue::map([
+            ("op", SdkValue::text("runtime.store.remove_project")),
+            ("args", SdkValue::map([("store", SdkValue::text("shop"))])),
+        ]);
+        let refusal = worker::call(&endpoint, op, args, &mut |_| {}).unwrap_err();
+        assert_eq!(refusal.code, "InvalidInput", "{}", refusal.message);
+        assert_eq!(refusal.message, format!("the worker has no operation {op}"));
+    }
+    std::fs::remove_dir_all(root).unwrap();
+}
