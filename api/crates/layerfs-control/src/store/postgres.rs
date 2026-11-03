@@ -118,19 +118,31 @@ pub(crate) fn read_binding(args: &SdkValue) -> Result<Vec<u8>, SdkRefusal> {
     binding(url(args)?, &schema(args)?, &setting(args)?)
 }
 
+/// The refusal for a PostgreSQL call that got no session, `None` for any
+/// other failure: no connection was made, or the server answered it with
+/// an error (no such database, failed authentication).
+#[cfg(feature = "postgresql")]
+pub(crate) fn no_session(error: &layerfs_storage::port::PersistenceError) -> Option<SdkRefusal> {
+    let layerfs_storage::port::PersistenceError::Refused { status, .. } = error else {
+        return None;
+    };
+    let message = match status.as_str() {
+        "Closed" => "no connection to the server was made (it refused the connection, did not answer, or closed it)",
+        "Rejected" => "the server refused the session: the database does not exist, or the user or password is wrong",
+        _ => return None,
+    };
+    Some(refused("Unavailable", message))
+}
+
 /// The binding key the LayerFS schema `schema` records.
 fn binding(url: &str, schema: &str, sync: &str) -> Result<Vec<u8>, SdkRefusal> {
     #[cfg(feature = "postgresql")]
     {
-        use layerfs_storage::port::PersistenceError;
         (layerfs_persistence::PostgresHandles::binding(&selection(url, schema, sync))).map_err(
-            |error| match error {
-                // the driver made no connection: refused, no answer, or closed
-                PersistenceError::Refused { status, .. } if status == "Closed" => refused(
-                    "Unavailable",
-                    "no connection to the server was made (it refused the connection, did not answer, or closed it)",
-                ),
-                error => refused("Failed", format!("reading schema {schema}: {error}")),
+            |error| {
+                no_session(&error).unwrap_or_else(|| {
+                    refused("Failed", format!("reading schema {schema}: {error}"))
+                })
             },
         )
     }

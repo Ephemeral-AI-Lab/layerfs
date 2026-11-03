@@ -41,6 +41,10 @@ pub(crate) fn create_schema(args: &SdkValue, identity: &Identity) -> Result<bool
             {
                 Ok(false)
             }
+            Err(InitError::Persistence(error)) => Err(crate::store::postgres::no_session(&error)
+                .unwrap_or_else(|| {
+                    refused("Failed", format!("making the PostgreSQL Store: {error:?}"))
+                })),
             Err(error) => Err(refused(
                 "Failed",
                 format!("making the PostgreSQL Store: {error:?}"),

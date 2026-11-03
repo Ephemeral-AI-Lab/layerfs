@@ -200,3 +200,37 @@ fn connect_read_and_disconnect() {
     std::fs::remove_dir_all(home).unwrap();
     let _ = std::fs::remove_dir_all(folder);
 }
+
+/// A database the server does not have is a session the server refused,
+/// not a server that took no connection (#535 terminal pass, lane K3).
+#[test]
+fn a_missing_database_is_a_refused_session() {
+    let (Ok(url), Ok(_)) = (
+        std::env::var("LAYERFS_TEST_PG_URL"),
+        std::env::var("LAYERFS_TEST_PG_PASSWORD"),
+    ) else {
+        eprintln!("NOT_RUN: LAYERFS_TEST_PG_URL / LAYERFS_TEST_PG_PASSWORD unset");
+        return;
+    };
+    let home = tempdir("missing");
+    home::open(&home).unwrap();
+    let (server, _) = url.rsplit_once('/').unwrap();
+    let missing = format!("{server}/lfs_no_such_database");
+    let (code, message) = call(
+        &home,
+        "store.connect",
+        &[
+            ("name", t("gone")),
+            ("url", t(&missing)),
+            ("password", t("env:LAYERFS_TEST_PG_PASSWORD")),
+        ],
+    )
+    .unwrap_err();
+    assert_eq!(code, "Unavailable", "{message}");
+    assert!(
+        message.contains("the server refused the session"),
+        "{message}"
+    );
+    assert!(!paths::store_dir(&home, "gone").exists());
+    std::fs::remove_dir_all(&home).unwrap();
+}
