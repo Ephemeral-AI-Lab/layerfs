@@ -123,6 +123,17 @@ pub struct Endpoint {
     pub forward_pid: Option<u32>,
 }
 
+/// A Sandbox daemon's port as this host reaches it (`machine::forward`,
+/// #535 G4): Workspace calls dial `address`. `pid` is the detached
+/// `ssh -L` that carries it, if one does (`ssh`, `lima`); the caller
+/// records both and ends it with `machine::forward_close`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Forward {
+    /// A host loopback address.
+    pub address: SocketAddr,
+    pub pid: Option<u32>,
+}
+
 /// A started machine: its endpoint, and the lasting state to record.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Running {

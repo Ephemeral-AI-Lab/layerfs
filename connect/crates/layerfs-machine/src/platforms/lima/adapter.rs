@@ -1,5 +1,5 @@
 //! `lima`'s adapter.
-use super::{create, guest, remove, start, status, stop};
+use super::{create, daemon_forward, guest, remove, start, status, stop};
 use crate::adapter::{refused, Adapter};
 use crate::error::MachineError;
 use crate::platform::HostOs;
@@ -7,7 +7,7 @@ use crate::probe::{macos_missing, tool_version};
 use crate::reach::{dial, Loopback};
 use crate::setup::guest::Guest;
 use crate::setup::Status;
-use crate::spec::{Bundle, Running, Spec, Tools};
+use crate::spec::{Bundle, Forward, Running, Spec, Tools};
 
 /// The name a lima guest reaches the host's loopback by (#535 §7.3; not yet
 /// verified live, G7: `support.rs` refuses its PostgreSQL Sandboxes).
@@ -44,5 +44,8 @@ impl Adapter for Lima {
     }
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
         dial(spec, url, Loopback::Alias(HOST_ALIAS))
+    }
+    fn forward(&self, spec: &Spec, guest_port: u16) -> Result<Forward, MachineError> {
+        daemon_forward(spec, guest_port)
     }
 }

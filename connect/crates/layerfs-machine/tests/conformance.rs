@@ -15,12 +15,17 @@
 //!   the platform's alias or refused; a rewrite is refused for
 //!   `sslmode=verify-full`; every other host is dialled as given; no error
 //!   text or `Debug` holds the password;
+//! - `forward` (#535 G4): a daemon's port is used as it is, carried by a
+//!   detached `ssh -L 127.0.0.1:<free port>:127.0.0.1:<guest port>` that
+//!   runs through the platform's own tools, or refused before any tool
+//!   runs with the platform's fixed code and reason;
 //! - that the options its profile declares are the `Spec` fields
 //!   `Spec::validate` accepts for it, and only those.
 //!
-//! The one per-platform declaration the kit needs is [`loopback`], an
-//! exhaustive match: a new platform does not compile here until it says how
-//! its machine reaches the caller's loopback.
+//! The per-platform declarations the kit needs are [`loopback`] and
+//! [`daemon_port`], exhaustive matches: a new platform does not compile
+//! here until it says how its machine reaches the caller's loopback and how
+//! the caller reaches its Sandbox daemons.
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
@@ -28,7 +33,8 @@ mod standin;
 mod support_json;
 use layerfs_machine::{
     self as machine, platforms, sandbox_allowed, support, Backend, CallSite, Code, ExecutorKind,
-    HostOs, How, KernelRoute, MachineError, OptKind, Platform, Route, Spec, SshSpec, StoreKind,
+    Forward, HostOs, How, KernelRoute, MachineError, OptKind, Platform, Route, Spec, SshSpec,
+    StoreKind,
 };
 use layerfs_sandbox::MountDriver;
 use standin::Scratch;
@@ -685,6 +691,116 @@ fn spec_accepts_exactly_the_fields_the_profile_declares() {
         let mut spec = base.clone();
         spec.disk = 1 << 20;
         assert_eq!(refused_spec(&spec), sized, "{at} disk");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// forward
+// ---------------------------------------------------------------------------
+
+/// How the caller reaches a Sandbox daemon on `127.0.0.1:<guest port>` in
+/// a platform's machine (#535 G4, `connect/README.md`).
+enum DaemonPort {
+    /// The daemon is on the caller's loopback: the port is used as it is.
+    Shared,
+    /// A detached `ssh -L` through the platform's own tools carries it.
+    Tunnel,
+    /// Refused before any tool runs, with this code and reason.
+    Refused(Code, &'static str),
+}
+
+fn daemon_port(spec: &Spec) -> DaemonPort {
+    match spec.kind {
+        Platform::Native => DaemonPort::Shared,
+        Platform::Ssh | Platform::Lima => DaemonPort::Tunnel,
+        Platform::Docker => DaemonPort::Refused(Code::InvalidInput, "each docker Sandbox publishes its daemon's port on the host's loopback when it is created, and that published address is its endpoint"),
+        Platform::AppleContainer => DaemonPort::Refused(Code::Unsupported, "the container CLI publishes a port only when the machine's container is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),
+        Platform::Microsandbox => DaemonPort::Refused(Code::Unsupported, "msb publishes a port only when the machine's sandbox is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),
+        Platform::Firecracker => DaemonPort::Refused(Code::Unsupported, "its Sandbox daemons listen on the microVM's loopback, which a forward through the Lima host cannot reach (it reaches only the microVM's tap address); its Workspace calls go through the worker"),
+    }
+}
+
+#[test]
+fn each_platform_forwards_a_daemon_port_as_it_declares() {
+    const GUEST: u16 = 41234;
+    for platform in Platform::ALL {
+        let scratch = Scratch::new("kit-forward");
+        refusing_tools(&scratch);
+        // the system's `sh` and `ps` after the stand-ins: a forward starts detached
+        let mut spec = valid_spec(&scratch, platform);
+        spec.tools.path.push(":/bin:/usr/bin");
+        // the stand-in `ssh` runs once first: macOS assesses a new script at
+        // its first run, which would otherwise outlast the forward's settle
+        let _ = std::process::Command::new(scratch.bin().join("ssh")).output();
+        let _ = std::fs::remove_file(scratch.log_file());
+        let _ = std::fs::remove_file(scratch.path("tools.log"));
+        let own: BTreeSet<&str> = platform.tool().into_iter().chain(TRANSPORTS).collect();
+        let outcome = machine::forward(&spec, GUEST);
+        let log = scratch.log();
+        let tools = standin::read(&scratch.path("tools.log"));
+        let at = format!("{platform:?}: {outcome:?}\n{log}");
+        match daemon_port(&spec) {
+            DaemonPort::Shared => {
+                let shared = Forward {
+                    address: ([127, 0, 0, 1], GUEST).into(),
+                    pid: None,
+                };
+                assert_eq!(outcome, Ok(shared), "{at}");
+                assert!(log.is_empty(), "{at}");
+            }
+            DaemonPort::Refused(code, why) => {
+                let error = outcome.expect_err(&at);
+                assert_eq!(error.code, code, "{at}");
+                assert_eq!(
+                    error.message,
+                    format!(
+                        "the {} machine dev forwards no Sandbox daemon port: {why}",
+                        platform.name()
+                    ),
+                    "{at}"
+                );
+                assert!(!error.vm_exists, "{at}");
+                assert!(log.is_empty(), "refused after an effect: {at}");
+            }
+            DaemonPort::Tunnel => {
+                // the stand-ins refuse, so the forward ends at once (or its
+                // machine is not observed running) and nothing is left
+                let error = outcome.expect_err(&at);
+                assert!(!error.vm_exists, "{at}");
+                assert!(!log.is_empty(), "ran no tool: {at}");
+                for tool in tools.lines() {
+                    assert!(own.contains(tool), "drove another platform's {tool}: {at}");
+                }
+                let ssh: Vec<&str> = log.lines().filter(|l| l.starts_with("ssh ")).collect();
+                assert!(ssh.len() <= 1, "one attempt: {at}");
+                for call in ssh {
+                    assert!(
+                        call.starts_with("ssh -N -o ExitOnForwardFailure=yes "),
+                        "{at}"
+                    );
+                    let target = format!(":127.0.0.1:{GUEST} ");
+                    let local = call.split(" -L 127.0.0.1:").nth(1).expect(&at);
+                    let (port, rest) = local.split_once(':').expect(&at);
+                    assert_ne!(port.parse::<u16>().expect(&at), GUEST, "{at}");
+                    assert!(format!(":{rest}").starts_with(&target), "{at}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn forward_close_of_a_forward_without_a_pid_runs_nothing() {
+    for platform in Platform::ALL {
+        let scratch = Scratch::new("kit-forward-close");
+        refusing_tools(&scratch);
+        let spec = valid_spec(&scratch, platform);
+        let forward = Forward {
+            address: ([127, 0, 0, 1], 41235).into(),
+            pid: None,
+        };
+        machine::forward_close(&spec, &forward);
+        assert!(scratch.log().is_empty(), "{platform:?}: {}", scratch.log());
     }
 }
 

@@ -23,8 +23,8 @@ Store is backed up. Layers are `core < engine < connect < api`; nothing in
   worker, and the options `machine create` or `machine connect` accept
   (`options.rs`). `Platform::profile()` is the one match.
 - `layerfs-machine/src/adapter.rs` is the sealed `Adapter` trait (probe,
-  guest, create/remove, start/stop, status, host identity, reach) and the
-  one `adapter()` match the machine calls dispatch through.
+  guest, create/remove, start/stop, status, host identity, reach, forward)
+  and the one `adapter()` match the machine calls dispatch through.
 - `layerfs-machine/src/reach.rs` is `reach` (the call `machine::reach`):
   the PostgreSQL Store URL a Sandbox daemon on the machine dials. Each
   adapter names how its machine reaches the caller's loopback: `native`
@@ -36,14 +36,27 @@ Store is backed up. Layers are `core < engine < connect < api`; nothing in
   per the G7 receipt in `core/docs/issues/535/receipts/g7-reach/`. A
   rewrite is refused for `sslmode=verify-full`; other hosts are used as
   given.
+- `machine::forward` (#535 G4, phase 6) is the host loopback address at
+  which the caller reaches a Sandbox daemon listening on
+  `127.0.0.1:<guest port>` in the machine, so Workspace calls skip the
+  worker; `machine::forward_close` ends what it started. `native` answers
+  the port as it is. `ssh` and `lima` start a detached
+  `ssh -N -L 127.0.0.1:<free port>:127.0.0.1:<guest port>`
+  (`setup/forward.rs`, the worker forward's code; lima through its own
+  `ssh.config`, as its template forwards no guest port but the worker's)
+  and answer its pid. `docker` refuses `InvalidInput`: each docker Sandbox
+  publishes its daemon's port on the host's loopback itself, and that is
+  its endpoint. `apple-container` and `microsandbox` (ports are published
+  only at create) and `firecracker` (its daemons listen on the microVM's
+  loopback; the Lima host's forward reaches only its tap address) refuse
+  `Unsupported`, and their Workspace calls stay on the worker.
 - `layerfs-machine/src/support.rs` is the one support table:
   platform × host × Store kind → supported, or a refusal with its reason.
 - `layerfs-machine/src/platforms/<p>/`: `profile.rs` holds its `PROFILE`
   and `adapter.rs` its `ADAPTER` (the guard keeps both out of `mod.rs`);
   `observe.rs`, `create.rs` (create and remove), `power.rs` (start and
   stop); ssh has `connect.rs` (connect and disconnect) instead of
-  `create.rs`. `network.rs` holds docker's published port today; `forward`
-  arrives in #535 phase 6.
+  `create.rs`. `network.rs` holds the docker worker's published port.
 - `layerfs-sandbox/src/backend/<b>/` is one Sandbox backend, with its
   `ADAPTER` (stored name, description, capabilities) in `adapter.rs`,
   reached through the sealed `BackendAdapter`'s one `adapter()` match in
@@ -103,12 +116,12 @@ platform or backend passes, with stand-in tools and no Docker Engine, VM,
 ssh host or root. The machine kit runs over `Platform::ALL`: the profile
 against `support.rs` and `SUPPORT.json`, each lifecycle call running
 through the platform's tool or refused with the fixed text its `How`
-declares, `reach` against the rules above, and the declared options
-against `Spec::validate`. The Sandbox kit runs over `Backend::ALL`: the
-stored name, capabilities against `SUPPORT.json`'s kernel routes, binds,
-the runtime this host has and the lifecycle it can run here. A new
-variant is covered automatically; the kits' exhaustive matches (`loopback`;
-`binds`, `options`, `record`, `runtime`, `lifecycle`) do not compile until
-it declares its answers. Run them with `cargo +1.85.1 test --locked -p
+declares, `reach` and `forward` against the rules above, and the declared
+options against `Spec::validate`. The Sandbox kit runs over `Backend::ALL`:
+the stored name, capabilities against `SUPPORT.json`'s kernel routes,
+binds, the runtime this host has and the lifecycle it can run here. A new
+variant is covered automatically; the kits' exhaustive matches (`loopback`,
+`daemon_port`; `binds`, `options`, `record`, `runtime`, `lifecycle`) do not
+compile until it declares its answers. Run them with `cargo +1.85.1 test --locked -p
 layerfs-machine --test conformance` and `-p layerfs-sandbox --test
 conformance`; real platforms run them in the terminal pass.

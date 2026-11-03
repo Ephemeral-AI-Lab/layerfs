@@ -1,10 +1,11 @@
 //! The detached `ssh -N -L 127.0.0.1:<port>:<target>` that carries a worker's
-//! port to the host (`ssh`, and `firecracker` through its Lima host). It is
-//! started detached so it outlives one CLI call; its pid goes into the
-//! endpoint. `ExitOnForwardFailure` makes a busy port fail at once.
+//! port to the host (`ssh`, and `firecracker` through its Lima host), or a
+//! Sandbox daemon's (`ssh`, `lima`; #535 G4). It is started detached so it
+//! outlives one CLI call; its pid goes into the endpoint or the [`Forward`].
+//! `ExitOnForwardFailure` makes a busy port fail at once.
 use crate::error::{Code, MachineError};
-use crate::setup::tool;
-use crate::spec::Spec;
+use crate::setup::{tool, worker};
+use crate::spec::{Forward, Spec};
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
@@ -50,6 +51,43 @@ pub(crate) fn open(
         ));
     }
     Ok(pid)
+}
+
+/// A new forward from a free host loopback port to the daemon listening on
+/// `127.0.0.1:<guest_port>` where `dest` is (`ssh <options...> dest`).
+pub(crate) fn daemon(
+    spec: &Spec,
+    options: &[String],
+    dest: &str,
+    guest_port: u16,
+) -> Result<Forward, MachineError> {
+    let port = tool::free_port()?;
+    let target = format!("127.0.0.1:{guest_port}");
+    let pid = open(spec, options, dest, port, &target)?;
+    Ok(Forward {
+        address: worker::loopback(port),
+        pid: Some(pid),
+    })
+}
+
+/// A daemon's port this host reaches as it is: nothing carries it.
+pub(crate) fn shared(guest_port: u16) -> Forward {
+    Forward {
+        address: worker::loopback(guest_port),
+        pid: None,
+    }
+}
+
+/// Why a machine forwards no Sandbox daemon port.
+pub(crate) fn refuse(spec: &Spec, code: Code, why: &str) -> MachineError {
+    MachineError::new(
+        code,
+        format!(
+            "the {} machine {} forwards no Sandbox daemon port: {why}",
+            spec.kind.name(),
+            spec.name
+        ),
+    )
 }
 
 /// Ends the forward recorded in the machine's last endpoint, if it still runs.

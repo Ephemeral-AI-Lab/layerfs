@@ -13,7 +13,7 @@ use crate::setup::forward;
 use crate::setup::guest::{Guest, EXEC};
 use crate::setup::{tool, worker};
 use crate::setup::{with_worker, State, Status};
-use crate::spec::{Spec, SshSpec};
+use crate::spec::{Forward, Spec, SshSpec};
 use std::path::Path;
 
 /// Ends the worker, if its recorded pid is still exactly the bundle's
@@ -66,6 +66,13 @@ pub(super) fn guest(spec: &Spec, known_hosts: &Path) -> Result<Guest, MachineErr
 /// The guest of a connected host, through its accepted key.
 pub(crate) fn machine_guest(spec: &Spec) -> Result<Guest, MachineError> {
     guest(spec, &accepted(spec))
+}
+
+/// A Sandbox daemon's port on the host, through a new forward checked
+/// against the accepted key, as the worker's is.
+pub(crate) fn daemon_forward(spec: &Spec, guest_port: u16) -> Result<Forward, MachineError> {
+    let ssh = ssh_of(spec)?;
+    forward::daemon(spec, &options(ssh, &accepted(spec)), &dest(ssh), guest_port)
 }
 
 /// The host's identity: its key's fingerprint, else `/etc/machine-id`.

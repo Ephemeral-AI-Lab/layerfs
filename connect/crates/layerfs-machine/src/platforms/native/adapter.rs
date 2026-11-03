@@ -5,9 +5,10 @@ use crate::error::MachineError;
 use crate::platform::HostOs;
 use crate::probe::native_missing;
 use crate::reach::{dial, Loopback};
+use crate::setup::forward::shared;
 use crate::setup::guest::Guest;
 use crate::setup::Status;
-use crate::spec::{Bundle, Running, Spec, Tools};
+use crate::spec::{Bundle, Forward, Running, Spec, Tools};
 
 pub(crate) struct Native;
 pub(crate) static ADAPTER: Native = Native;
@@ -40,5 +41,9 @@ impl Adapter for Native {
     }
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
         dial(spec, url, Loopback::Shared)
+    }
+    /// The daemon is on this host's loopback: its port is used as it is.
+    fn forward(&self, _spec: &Spec, guest_port: u16) -> Result<Forward, MachineError> {
+        Ok(shared(guest_port))
     }
 }

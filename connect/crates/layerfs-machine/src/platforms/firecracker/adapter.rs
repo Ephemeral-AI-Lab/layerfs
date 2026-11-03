@@ -1,14 +1,23 @@
 //! `firecracker`'s adapter.
 use super::{create, machine_guest, remove, start, status, stop};
 use crate::adapter::{refused, Adapter};
-use crate::error::MachineError;
+use crate::error::{Code, MachineError};
 use crate::platform::HostOs;
 use crate::probe::{macos_missing, nested_missing, tool_version};
 use crate::reach::{dial, Loopback};
+use crate::setup::forward::refuse;
 use crate::setup::guest::Guest;
 use crate::setup::Status;
-use crate::spec::{Bundle, Running, Spec, Tools};
+use crate::spec::{Bundle, Forward, Running, Spec, Tools};
 use crate::support::FIRECRACKER_REACH;
+
+/// Why a Sandbox daemon's port is not forwarded: a daemon listens on the
+/// microVM's loopback (`layerfs-sandbox`'s local listener takes only a
+/// loopback address), and the worker's forward is an `ssh -L` to the Lima
+/// host, which reaches the microVM only at its tap address, where only the
+/// worker listens (`worker_bind` 0.0.0.0). Reaching the microVM's loopback
+/// needs a second hop LayerFS does not have.
+const FORWARD: &str = "its Sandbox daemons listen on the microVM's loopback, which a forward through the Lima host cannot reach (it reaches only the microVM's tap address); its Workspace calls go through the worker";
 
 pub(crate) struct Firecracker;
 pub(crate) static ADAPTER: Firecracker = Firecracker;
@@ -46,5 +55,8 @@ impl Adapter for Firecracker {
     /// dialled as given.
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
         dial(spec, url, Loopback::Refused(FIRECRACKER_REACH))
+    }
+    fn forward(&self, spec: &Spec, _guest_port: u16) -> Result<Forward, MachineError> {
+        Err(refuse(spec, Code::Unsupported, FORWARD))
     }
 }

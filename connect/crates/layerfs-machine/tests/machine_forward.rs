@@ -1,0 +1,241 @@
+//! `forward` (#535 G4, §7.2): the host loopback address at which a caller
+//! reaches a Sandbox daemon on `127.0.0.1:<guest_port>` in the machine, and
+//! `forward_close`. `ssh` and `lima` start a detached stand-in `ssh -L`
+//! (a shell script that waits until it is ended); `native` answers the port
+//! as it is; the others refuse before any tool runs. No host, VM or
+//! container is reached.
+//!
+//! A stand-in `ssh` is run once before its forward ([`warm`]): macOS
+//! assesses a new script at its first run (about 0.4 s here), which would
+//! otherwise eat the forward's 0.6 s settle time.
+#![cfg(unix)]
+#[path = "support/standin.rs"]
+mod standin;
+use layerfs_machine::{self as machine, Code, Forward, Platform, Spec};
+use standin::Scratch;
+use std::net::SocketAddr;
+use std::process::Command;
+use std::time::{Duration, Instant};
+
+/// A stand-in `ssh -N -L` that runs, as a forward does, until it is ended;
+/// `ssh -V` ends at once ([`warm`]).
+const FORWARDING: &str =
+    "[ \"$1\" = -V ] && exit 0\ntrap 'kill $! 2>/dev/null; exit 0' TERM\nsleep 60 &\nwait";
+
+/// Runs the stand-in `ssh -V` once, so its first-run cost is paid before a
+/// forward's settle time starts.
+fn warm(scratch: &Scratch) {
+    Command::new(scratch.bin().join("ssh"))
+        .arg("-V")
+        .output()
+        .unwrap();
+}
+
+/// The stand-ins first, then the system's `sh` and `ps`, which a detached
+/// forward is started and checked with.
+fn with_system(scratch: &Scratch, mut spec: Spec) -> Spec {
+    let mut path = scratch.bin().into_os_string();
+    path.push(":/bin:/usr/bin");
+    spec.tools.path = path;
+    spec
+}
+
+fn ssh_spec(scratch: &Scratch) -> Spec {
+    let mut spec = with_system(scratch, scratch.spec(Platform::Ssh));
+    spec.ssh.as_mut().unwrap().port = 2222;
+    spec
+}
+
+/// A lima spec whose stand-in `limactl list` answers `status` and the
+/// instance folder `$SCRATCH/lima`.
+fn lima_spec(scratch: &Scratch, status: &str) -> Spec {
+    scratch.tool(
+        "limactl",
+        &format!(r#"[ "$1" = list ] && printf '{status}\t%s\n' "$SCRATCH/lima"; exit 0"#),
+    );
+    with_system(scratch, scratch.spec(Platform::Lima))
+}
+
+fn runs(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .unwrap()
+        .success()
+}
+
+/// The forwards the stand-in `ssh` logged.
+fn ssh_calls(scratch: &Scratch) -> Vec<String> {
+    scratch
+        .log()
+        .lines()
+        .filter(|l| l.starts_with("ssh ") && l.contains(" -L "))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// The forwards logged once `count` are: a detached stand-in logs on its
+/// own time (a bounded readiness wait, at most 5 s).
+fn logged(scratch: &Scratch, count: usize) -> Vec<String> {
+    let until = Instant::now() + Duration::from_secs(5);
+    while ssh_calls(scratch).len() < count && Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    ssh_calls(scratch)
+}
+
+/// The forward's host loopback address and its pid; the address's port is free
+/// and not the daemon's.
+fn opened(forward: &Forward, guest_port: u16) -> (u16, u32) {
+    assert!(forward.address.ip().is_loopback(), "{forward:?}");
+    assert_ne!(forward.address.port(), guest_port);
+    let pid = forward.pid.expect("a forward with a pid");
+    assert!(runs(pid), "{forward:?}");
+    (forward.address.port(), pid)
+}
+
+#[test]
+fn native_answers_the_daemons_port_and_has_nothing_to_close() {
+    let scratch = Scratch::new("forward-native");
+    let spec = scratch.spec(Platform::Native);
+    let forward = machine::forward(&spec, 43210).unwrap();
+    let expected: SocketAddr = "127.0.0.1:43210".parse().unwrap();
+    assert_eq!(
+        forward,
+        Forward {
+            address: expected,
+            pid: None
+        }
+    );
+    machine::forward_close(&spec, &forward);
+    assert!(scratch.log().is_empty(), "{}", scratch.log());
+}
+
+#[test]
+fn ssh_forwards_a_free_port_to_the_daemon_and_close_ends_exactly_it() {
+    let scratch = Scratch::new("forward-ssh");
+    scratch.tool("ssh", FORWARDING);
+    warm(&scratch);
+    let spec = ssh_spec(&scratch);
+    let first = machine::forward(&spec, 40001).unwrap();
+    let second = machine::forward(&spec, 40002).unwrap();
+    let (port, pid) = opened(&first, 40001);
+    let (other_port, other_pid) = opened(&second, 40002);
+    let known = spec.work_dir.join("known_hosts");
+    let calls = logged(&scratch, 2);
+    assert_eq!(
+        calls,
+        [(port, 40001), (other_port, 40002)].map(|(port, guest)| format!(
+            "ssh -N -o ExitOnForwardFailure=yes -o BatchMode=yes -o ConnectTimeout=15 \
+             -o StrictHostKeyChecking=yes -o UserKnownHostsFile={} -p 2222 \
+             -L 127.0.0.1:{port}:127.0.0.1:{guest} root@example.test",
+            known.display()
+        ))
+    );
+    // a recorded pid whose command line is not that port's forward is left alone
+    let stale = Forward {
+        address: second.address,
+        pid: Some(pid),
+    };
+    machine::forward_close(&spec, &stale);
+    assert!(runs(pid), "a pid that is not that forward was ended");
+    machine::forward_close(&spec, &first);
+    assert!(!runs(pid), "the forward still runs");
+    assert!(runs(other_pid), "another forward was ended");
+    machine::forward_close(&spec, &second);
+    assert!(!runs(other_pid));
+    assert_eq!(ssh_calls(&scratch).len(), 2, "close runs no ssh");
+}
+
+#[test]
+fn a_forward_that_ends_at_once_fails_once_and_leaves_nothing() {
+    let scratch = Scratch::new("forward-ssh-busy");
+    scratch.tool(
+        "ssh",
+        "[ \"$1\" = -V ] && exit 0\necho 'bind [127.0.0.1]: Address already in use' >&2; exit 255",
+    );
+    warm(&scratch);
+    let spec = ssh_spec(&scratch);
+    let error = machine::forward(&spec, 40003).unwrap_err();
+    assert_eq!(error.code, Code::Failed, "{error}");
+    assert!(error.message.contains("ended at once"), "{error}");
+    assert!(error.message.contains("Address already in use"), "{error}");
+    assert!(!error.vm_exists);
+    assert_eq!(ssh_calls(&scratch).len(), 1, "one attempt, no retry");
+}
+
+#[test]
+fn lima_forwards_through_its_own_ssh_config() {
+    let scratch = Scratch::new("forward-lima");
+    scratch.tool("ssh", FORWARDING);
+    warm(&scratch);
+    let spec = lima_spec(&scratch, "Running");
+    let forward = machine::forward(&spec, 40004).unwrap();
+    let (port, pid) = opened(&forward, 40004);
+    assert_eq!(
+        logged(&scratch, 1),
+        [format!(
+            "ssh -N -o ExitOnForwardFailure=yes -F {}/ssh.config -o ControlMaster=no \
+             -o ControlPath=none -L 127.0.0.1:{port}:127.0.0.1:40004 lima-lfs-dev",
+            scratch.path("lima").display()
+        )]
+    );
+    machine::forward_close(&spec, &forward);
+    assert!(!runs(pid));
+}
+
+#[test]
+fn a_stopped_lima_machine_forwards_nothing() {
+    let scratch = Scratch::new("forward-lima-stopped");
+    scratch.tool("ssh", FORWARDING);
+    let spec = lima_spec(&scratch, "Stopped");
+    let error = machine::forward(&spec, 40005).unwrap_err();
+    assert_eq!(error.code, Code::Unavailable, "{error}");
+    assert!(ssh_calls(&scratch).is_empty());
+}
+
+#[test]
+fn the_other_platforms_refuse_before_any_tool_runs() {
+    let scratch = Scratch::new("forward-refused");
+    for kind in [
+        Platform::Docker,
+        Platform::AppleContainer,
+        Platform::Microsandbox,
+        Platform::Firecracker,
+    ] {
+        let mut spec = scratch.spec(kind);
+        if kind == Platform::Firecracker {
+            let mut host = scratch.spec(Platform::Lima);
+            host.nested = true;
+            spec.host = Some(Box::new(host));
+        }
+        let error = machine::forward(&spec, 40006).unwrap_err();
+        let (code, why) = match kind {
+            Platform::Docker => (Code::InvalidInput, "each docker Sandbox publishes its daemon's port on the host's loopback when it is created, and that published address is its endpoint"),
+            Platform::AppleContainer => (Code::Unsupported, "the container CLI publishes a port only when the machine's container is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),
+            Platform::Microsandbox => (Code::Unsupported, "msb publishes a port only when the machine's sandbox is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),
+            _ => (Code::Unsupported, "its Sandbox daemons listen on the microVM's loopback, which a forward through the Lima host cannot reach (it reaches only the microVM's tap address); its Workspace calls go through the worker"),
+        };
+        assert_eq!(error.code, code, "{kind:?}");
+        assert_eq!(
+            error.message,
+            format!(
+                "the {} machine dev forwards no Sandbox daemon port: {why}",
+                kind.name()
+            )
+        );
+        assert!(!error.vm_exists);
+    }
+    assert!(scratch.log().is_empty(), "{}", scratch.log());
+}
+
+#[test]
+fn port_zero_is_refused_before_any_tool_runs() {
+    let scratch = Scratch::new("forward-zero");
+    scratch.tool("ssh", FORWARDING);
+    for kind in [Platform::Native, Platform::Ssh] {
+        let error = machine::forward(&scratch.spec(kind), 0).unwrap_err();
+        assert_eq!(error.code, Code::InvalidInput, "{kind:?}");
+    }
+    assert!(scratch.log().is_empty(), "{}", scratch.log());
+}
