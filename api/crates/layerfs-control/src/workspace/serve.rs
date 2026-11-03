@@ -57,6 +57,13 @@ pub(crate) fn mount_with(
             ))
         }
     };
+    if branch == "main" {
+        // main is the project's line of Layers, not a Branch (#535 terminal pass)
+        return Err(crate::common::outcome::refused(
+            "InvalidInput",
+            "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it with `branch.fork(project, name, \"main\")` and mount that",
+        ));
+    }
     let directory = crate::sandbox::files::sandbox_dir(args)?;
     let missing = || {
         no_sandbox(crate::common::outcome::refused(

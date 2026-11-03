@@ -67,7 +67,9 @@ layerfs workspace unmount "$ws"
 `workspace.mount(sandbox, branch, { name })`
 
 Mounts the Branch's head as it is now, in the Sandbox named `sandbox`. It never
-starts a Sandbox. `name` (optional, #536 C3) names the Workspace: 1–63
+starts a Sandbox. Only side Branches are mounted: `main` (the project's
+published line, not a Branch) is refused `InvalidInput`; fork a Branch from it
+with `branch.fork(project, name, "main")` and mount that. `name` (optional, #536 C3) names the Workspace: 1–63
 lowercase letters, digits, `_ . -`, unique within the Sandbox while it is
 mounted; `ws` is then `<sandbox>:<name>`.
 

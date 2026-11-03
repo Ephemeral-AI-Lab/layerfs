@@ -249,7 +249,7 @@ form.
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
-| `mount` | `sandbox`, `branch` | `name` | mounts a Branch in a Sandbox |
+| `mount` | `sandbox`, `branch` | `name` | mounts a side Branch in a Sandbox; `main` is refused `InvalidInput` (fork a Branch from it) |
 | `exec` | `ws`, `command` | `message`, `stream`, `stdout`, `stderr` | runs one bash command in a Workspace |
 | `commit` | `ws` | `message`, `force` | commits a Workspace's changes to its Branch |
 | `unmount` | `ws` | `discard`, `force` | ends a Workspace |

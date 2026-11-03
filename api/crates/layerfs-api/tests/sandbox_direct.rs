@@ -304,6 +304,19 @@ fn workspace_calls_reach_a_forwarded_sandbox_s_daemon_directly() {
     );
     assert_eq!(ops(&log), ["sandbox.create"]);
 
+    // only side Branches are mounted: main is refused before any dial
+    let (code, message) = call(
+        &home,
+        "workspace.mount",
+        &[("sandbox", t("t1")), ("branch", t("main"))],
+    )
+    .unwrap_err();
+    assert_eq!(code, "InvalidInput", "{message}");
+    assert!(
+        message.contains("not a Branch") && message.contains("branch.fork"),
+        "{message}"
+    );
+
     // mount, status, commit, unmount and get's list dial the daemon from
     // here: none reaches the worker; nothing answers behind the forward
     let mounted = call(
