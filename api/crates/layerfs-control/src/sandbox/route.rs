@@ -42,8 +42,9 @@ fn host_args(
                 "namespaces"
             };
             // the local runtime's root: this user's, traversable (0755), as
-            // the runtime requires
-            let local = paths::machine_dir(home, "native").join("sandbox-root");
+            // the runtime requires; one directory per Sandbox beside the
+            // image cache it shares
+            let local = paths::run_root(home);
             {
                 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
                 std::fs::DirBuilder::new()
@@ -160,9 +161,8 @@ fn host_op(
     let project = record.project().unwrap_or("");
     let target = resolve::target(&home, project)?;
     let mut more = more;
-    if let Some(id) = record.id() {
-        more.push(("sandbox", SdkValue::text(id)));
-    }
+    // the Sandbox's name is its identity on every machine
+    more.push(("sandbox", SdkValue::text(record.name())));
     // the call's image (sandbox.create) else the Sandbox's own travels in
     // the deploy settings, never as a top-level argument
     let called = more
@@ -240,8 +240,9 @@ fn host_op(
 }
 
 /// Runs a Sandbox host operation in a worker for its caller (`sandbox.host`):
-/// the Store's and project's records are written under the root first,
-/// with the Store on this machine's own `native`.
+/// the caller sends the Store's and project's records; the worker keeps a
+/// thin record of the Store (#536 §6) and the project's record under its
+/// root, with the Store on this machine's own `native`.
 pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(SdkValue)) -> Outcome {
     let op = args
         .get_text("op")
@@ -268,10 +269,19 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     crate::common::names::ProjectName::parse(project)?;
     let sent = args.get("store_record").cloned().unwrap_or_default();
     let record = StoreRecord::from_record(store, sent).with("machine", SdkValue::text("native"));
-    // written only when it changed (#535 R5): most calls send the same one
+    let kind = record.kind()?;
+    // written only when it changed (#535 R5): most calls find it as it is
+    let thin = StoreRecord::from_record(
+        store,
+        SdkValue::map([
+            ("v", SdkValue::Int(1)),
+            ("name", SdkValue::text(store)),
+            ("kind", SdkValue::text(kind.as_str())),
+        ]),
+    );
     let local = StoreRecord::read(root, store)?;
-    if local.as_ref().map(StoreRecord::to_record) != Some(record.to_record()) {
-        record.write(root)?;
+    if local.as_ref().map(StoreRecord::to_record) != Some(thin.to_record()) {
+        thin.write(root)?;
     }
     // the caller's record replaces one left by a project of the same name
     // that was removed and made again (its `created` differs)
@@ -293,7 +303,6 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     };
     let choice = args.get("deploy").cloned().unwrap_or_default();
     let how = deploy::resolve(&Side::Worker(root), store, &choice)?;
-    let kind = record.kind()?;
     let host = host_args(root, (store, project, &record), kind, how, more)?;
     crate::store::open::hold(&host, None)?;
     if op == "backend.daemon.workspace.status" {

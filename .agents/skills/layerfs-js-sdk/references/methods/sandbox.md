@@ -66,8 +66,9 @@ ready.
 | a VM or ssh machine, PostgreSQL Store | `Unsupported` with the support table's reason (`machine.platforms`) |
 
 **Returns:** the Sandbox's record: `{ name, project, machine, state: "running",
-created, id, platform, runtime, image }`. `name` is what you pass to every other
-call; `id` is the host's internal number.
+created, id, platform, runtime, image, backend, route }`. `name` is what you
+pass to every other call; `id` is the same name, as its machine knows it;
+`route` is the kernel route (`fuse`, or `nfs` on macOS `native`).
 
 **Refusals**
 
@@ -78,6 +79,7 @@ call; `id` is the host's internal number.
 | `Unsupported` | The machine is not the Store's (message names the Store's machine), `docker`, or a PostgreSQL Store | Use the Store's machine, or `store.move` the Store |
 | `Unavailable` | The daemon bundle is missing | Report it; the home's owner installs the bundle |
 | `InvalidInput` | A bad name or project, or the name `native` or `docker` (they name the built-in machines) | Fix the call |
+| `Unknown` | The machine's answer was lost: a Sandbox may or may not have started; the record says `unknown` | Report it; `sandbox.close(name)` drops the record (a Sandbox it left on its machine is not recorded) |
 | `Failed` | Starting it failed; its record is removed | Stop and report the message |
 | `Unknown` | The start's outcome is unknown; the record is kept with `state: "unknown"` | Stop and report; don't create it again |
 

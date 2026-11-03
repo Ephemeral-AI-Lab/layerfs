@@ -88,7 +88,7 @@ fn lima(home: &Path, name: &str, more: &[(&str, SdkValue)]) {
 
 fn sandbox(home: &Path, machine: &str, name: &str) {
     write_record(
-        &paths::sandbox_dir(home, machine, name).join("record.json"),
+        &paths::sandbox_record(home, name),
         &SdkValue::map([
             ("name", t(name)),
             ("project", t("shop/api")),
@@ -153,8 +153,8 @@ fn start_and_stop_a_machine() {
     let named = |name: &str| SdkValue::map([("kind", t("sandbox")), ("name", t(name))]);
     assert_eq!(related, SdkValue::List(vec![named("s1"), named("s2")]));
     assert!(!log(&tools).contains("stop"), "{}", log(&tools));
-    for (machine, name) in [("dev", "s1"), ("fc", "s2")] {
-        std::fs::remove_dir_all(paths::sandbox_dir(&home, machine, name)).unwrap();
+    for name in ["s1", "s2"] {
+        std::fs::remove_dir_all(paths::sandbox_dir(&home, name)).unwrap();
     }
 
     // stop stops the VM and forgets its worker; disks and records stay

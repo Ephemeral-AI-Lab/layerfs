@@ -78,30 +78,18 @@ pub fn idle(root: &Path, idle: Duration, started_ms: u64) -> bool {
 }
 
 /// Whether a Sandbox lives under the worker's root: one this process runs,
-/// or one the host Sandbox code recorded at
-/// `store/<s>/project/<p>/sandboxes/<n>/` (its daemon may outlive a worker
-/// restart). An unreadable folder counts as one, so the guest stays up.
+/// or one recorded at `sandbox/<name>/record.json` (its daemon may outlive
+/// a worker restart). An unreadable folder counts as one, so the guest
+/// stays up.
 fn sandboxes_held(root: &Path) -> bool {
     use crate::common::home::paths;
     if crate::sandbox::registry::live_sandboxes() > 0 {
         return true;
     }
-    let Ok(stores) = paths::names(&root.join("store")) else {
-        return true;
-    };
-    for store in stores {
-        let Ok(projects) = paths::names(&paths::store_dir(root, &store).join("project")) else {
-            return true;
-        };
-        for project in projects {
-            let sandboxes = paths::project_dir(root, &store, &project).join("sandboxes");
-            match paths::names(&sandboxes) {
-                Ok(names) if names.is_empty() => {}
-                _ => return true,
-            }
-        }
+    match paths::names(&root.join("sandbox")) {
+        Ok(names) => (names.iter()).any(|name| paths::sandbox_record(root, name).exists()),
+        Err(_) => true,
     }
-    false
 }
 
 /// Whether a Firecracker microVM this guest hosts still runs: a live

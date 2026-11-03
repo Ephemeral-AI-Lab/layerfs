@@ -106,19 +106,6 @@ pub(crate) fn backend(deploy: &SdkValue) -> Result<Option<Backend>, SdkRefusal> 
     Ok(selected)
 }
 
-/// The backend a Sandbox record names, from its `runtime`: Docker (`None`,
-/// a Docker record has none), native or namespaces. A record of the former
-/// `local` runtime, or of an unknown one, names none of them (`Err`, with
-/// that runtime).
-pub(crate) fn recorded(record: &SdkValue) -> Result<Option<Backend>, &str> {
-    match record.get_text("runtime") {
-        None => Ok(None),
-        Some(NATIVE) => Ok(Some(Backend::HostProcess)),
-        Some(NAMESPACES) => Ok(Some(Backend::Namespaces)),
-        Some(other) => Err(other),
-    }
-}
-
 /// The platforms a Sandbox names (#529 P4): what a caller chooses and
 /// reads. The record keeps the lower-level `runtime` beside it.
 pub(crate) const PLATFORMS: [&str; 8] = [

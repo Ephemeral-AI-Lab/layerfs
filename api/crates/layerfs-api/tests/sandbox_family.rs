@@ -255,7 +255,7 @@ fn named_sandboxes_on_native() {
         other => panic!("{other:?} in {closed:?}"),
     };
     assert_eq!(unknown, 2, "{closed:?}");
-    assert!(!paths::sandbox_dir(&home, "native", "t1").exists());
+    assert!(!paths::sandbox_dir(&home, "t1").exists());
     ok(
         &home,
         "sandbox.create",
@@ -278,7 +278,7 @@ fn named_sandboxes_on_native() {
         "InUse"
     );
     ok(&home, "sandbox.close", &[("name", t("t1"))]);
-    assert!(!paths::sandbox_dir(&home, "native", "t1").exists());
+    assert!(!paths::sandbox_dir(&home, "t1").exists());
     let _ = std::fs::remove_dir_all(home);
     let _ = std::fs::remove_dir_all(folder);
 }

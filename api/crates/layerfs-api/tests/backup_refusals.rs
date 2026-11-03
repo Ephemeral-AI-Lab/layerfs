@@ -86,8 +86,12 @@ fn restore_over_a_store_with_a_running_sandbox_is_in_use() {
     )]);
     write_record(&path, &home::with_field(record, "backups", linked)).unwrap();
     write_record(
-        &paths::sandbox_dir(&home, "docker", "tests").join("record.json"),
-        &SdkValue::map([("name", t("tests")), ("project", t("shop/api"))]),
+        &paths::sandbox_record(&home, "tests"),
+        &SdkValue::map([
+            ("name", t("tests")),
+            ("project", t("shop/api")),
+            ("machine", t("docker")),
+        ]),
     )
     .unwrap();
 
@@ -103,7 +107,7 @@ fn restore_over_a_store_with_a_running_sandbox_is_in_use() {
 
     // without the Sandbox the same restore goes on to the bucket, which
     // does not answer: the refusal above came before any request
-    std::fs::remove_dir_all(paths::sandbox_dir(&home, "docker", "tests")).unwrap();
+    std::fs::remove_dir_all(paths::sandbox_dir(&home, "tests")).unwrap();
     let failed = call(
         &home,
         "backup.restore",

@@ -56,7 +56,7 @@ fn a_running_sandbox_keeps_its_machine_s_settings() {
     home::open(&home).unwrap();
     call(&home, "machine.list", &[]).unwrap();
     write_record(
-        &paths::sandbox_dir(&home, "docker", "s1").join("record.json"),
+        &paths::sandbox_record(&home, "s1"),
         &SdkValue::map([
             ("name", t("s1")),
             ("project", t("shop/app")),
@@ -73,7 +73,7 @@ fn a_running_sandbox_keeps_its_machine_s_settings() {
     .unwrap_err();
     assert_eq!(code, "InUse", "{message}");
     assert!(message.contains("s1"), "{message}");
-    std::fs::remove_dir_all(paths::sandbox_dir(&home, "docker", "s1")).unwrap();
+    std::fs::remove_dir_all(paths::sandbox_dir(&home, "s1")).unwrap();
     call(
         &home,
         "machine.update",

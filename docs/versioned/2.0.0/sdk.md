@@ -135,6 +135,11 @@ Store on `native` or on a PostgreSQL Store runs in the calling process; a
 call on a Store on another machine goes to that machine's worker. See
 [routes](machines-and-stores.md#routes).
 
+The first call of this build on a layout 2 home converts it to layout 3,
+or is refused `InUse` while a Sandbox, lease or move in it is live; the
+refusal's `detail.related` names each (`{kind, name, why}`). See
+[the home](home.md#a-layout-2-home).
+
 ## Checks on this branch
 
 From the step commits, not repeated for this manual:

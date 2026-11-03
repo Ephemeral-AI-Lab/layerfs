@@ -2,10 +2,9 @@
 //! stored", §9.2): reads by name, the relationships no record stores
 //! (machine → its sqlite Stores, its Sandboxes and the Firecracker
 //! machines it hosts; Store → its projects' Sandboxes; project → its
-//! Sandboxes), and the checks the calls that need them make. Layout 2
-//! keeps Sandboxes under their machine, so a Sandbox read by name or by
-//! Store or project scans `machine/*/sandbox/*`; layout 3 (F2) reads one
-//! folder instead.
+//! Sandboxes), and the checks the calls that need them make. Layout 3
+//! keeps each Sandbox at `sandbox/<name>/`: a Sandbox by name is one read;
+//! only the relationships (by machine, Store or project) list `sandbox/*`.
 use crate::common::home::paths;
 use crate::common::outcome::{failed, refused};
 use crate::machine::record::MachineRecord;
@@ -39,21 +38,18 @@ pub fn machines(home: &Path) -> Result<Vec<MachineRecord>> {
     Ok(found)
 }
 
-/// Every Sandbox record, by machine then name.
+/// Every Sandbox record, by name.
 pub fn sandboxes(home: &Path) -> Result<Vec<SandboxRecord>> {
     let mut found = Vec::new();
-    for machine in names(&home.join("machine"))? {
-        let dir = paths::machine_dir(home, &machine).join("sandbox");
-        for name in names(&dir)? {
-            found.extend(SandboxRecord::read(home, &machine, &name)?);
-        }
+    for name in names(&home.join("sandbox"))? {
+        found.extend(SandboxRecord::read(home, &name)?);
     }
     Ok(found)
 }
 
-/// The Sandbox named `name`, wherever it is recorded.
+/// The Sandbox named `name`: one read of `sandbox/<name>/record.json`.
 pub fn sandbox(home: &Path, name: &str) -> Result<Option<SandboxRecord>> {
-    Ok(sandboxes(home)?.into_iter().find(|r| r.name() == name))
+    SandboxRecord::read(home, name)
 }
 
 /// The sqlite Stores whose record names machine `machine`. A Store record
@@ -74,10 +70,11 @@ pub fn stores_on(home: &Path, machine: &str) -> Result<Vec<String>> {
     Ok(on)
 }
 
-/// The Sandboxes recorded under machine `machine` (each folder, with a
-/// record or not).
+/// The Sandboxes whose record names machine `machine`.
 pub fn sandboxes_on(home: &Path, machine: &str) -> Result<Vec<String>> {
-    names(&paths::machine_dir(home, machine).join("sandbox"))
+    let on = sandboxes(home)?.into_iter();
+    let on = on.filter(|sandbox| sandbox.machine() == machine);
+    Ok(on.map(|sandbox| sandbox.name().to_owned()).collect())
 }
 
 /// The Firecracker machines Lima machine `machine` hosts.

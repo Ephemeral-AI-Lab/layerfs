@@ -125,6 +125,24 @@ fn unhex(text: &str) -> Option<Vec<u8>> {
         .collect()
 }
 
+/// The version every entity record carries, `"v": 1` (layout 3, #536 §5).
+pub const RECORD_VERSION: i64 = 1;
+
+/// Writes entity record `value` at `path` ([`write_record`]) with its
+/// version first, `"v": 1`.
+pub fn write_entity(path: &Path, value: &SdkValue) -> Result<(), SdkRefusal> {
+    write_record(path, &versioned(value))
+}
+
+/// `value` (a record) with `"v": 1` as its first field.
+pub fn versioned(value: &SdkValue) -> SdkValue {
+    let mut fields = vec![("v".to_owned(), SdkValue::Int(RECORD_VERSION))];
+    if let SdkValue::Map(old) = value {
+        fields.extend(old.iter().filter(|(n, _)| n != "v").cloned());
+    }
+    SdkValue::Map(fields)
+}
+
 /// `value` (a record) with field `name` set to `field`, added when absent.
 pub fn with_field(value: SdkValue, name: &str, field: SdkValue) -> SdkValue {
     let mut fields = match value {

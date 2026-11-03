@@ -1,6 +1,6 @@
 //! The folders above a namespaces Sandbox's local root (#533 terminal pass):
 //! its commands run as another identity, so the worker's root and the home's
-//! folders down to `machine/native/sandbox-root` must let others pass (o+x),
+//! folders down to `machine/native/run` must let others pass (o+x),
 //! while staying unlistable. Folders above the home are left alone. (The
 //! host's private-home check, which accepts o+x on a folder and nothing
 //! more, is covered through `project.init` in layerfs-api's
@@ -32,7 +32,7 @@ fn set(path: &Path, mode: u32) {
 fn the_home_s_folders_down_to_the_local_root_let_others_pass() {
     let top = tempdir("home");
     let home = top.join("h");
-    let local = home.join("machine/native/sandbox-root");
+    let local = home::paths::run_root(&home);
     std::fs::create_dir_all(&local).unwrap();
     for folder in [&home, &home.join("machine"), &home.join("machine/native")] {
         set(folder, 0o700);

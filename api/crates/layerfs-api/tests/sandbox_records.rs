@@ -4,7 +4,7 @@
 //! pages, and a worker replaces a project record left by a removed project
 //! of the same name.
 use layerfs_api::calls;
-use layerfs_api::home::{self, paths, read_record, write_record};
+use layerfs_api::home::{self, paths, read_record, versioned, write_record};
 use layerfs_api::worker;
 use layerfs_bridge::control::SdkValue;
 use std::net::TcpListener;
@@ -36,7 +36,7 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
 /// A Sandbox record as `sandbox.create` leaves it, without an id.
 fn unstarted(home: &Path, name: &str, state: &str, pid: i64) {
     write_record(
-        &paths::sandbox_dir(home, "native", name).join("record.json"),
+        &paths::sandbox_record(home, name),
         &SdkValue::map([
             ("name", t(name)),
             ("project", t("shop/app")),
@@ -99,7 +99,7 @@ fn sandbox_records_without_a_sandbox() {
     let closed = call(&home, "sandbox.close", &[("name", t("lost"))]).unwrap();
     assert_eq!(closed.get_text("was"), Some("unknown"), "{closed:?}");
     assert!(closed.get_text("left").is_some(), "{closed:?}");
-    assert!(!paths::sandbox_dir(&home, "native", "lost").exists());
+    assert!(!paths::sandbox_dir(&home, "lost").exists());
     assert_eq!(
         call(&home, "sandbox.close", &[("name", t("lost"))])
             .unwrap_err()
@@ -172,6 +172,6 @@ fn a_worker_replaces_a_removed_project_s_record() {
     // the call itself fails here (no daemon beside this test); the record
     // was written first
     let _ = worker::call(&endpoint, "sandbox.host", request, &mut |_| {});
-    assert_eq!(read_record(&stale).unwrap(), Some(fresh));
+    assert_eq!(read_record(&stale).unwrap(), Some(versioned(&fresh)));
     let _ = std::fs::remove_dir_all(root);
 }

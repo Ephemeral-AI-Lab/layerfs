@@ -5,27 +5,16 @@
 //! `{ sandbox, path }`; status, Commit and unmount go to its Sandbox's
 //! daemon. Nothing is retried: a refused or failed step is the call's answer.
 //! A Sandbox whose daemon ended itself when idle is refused `NoSuchSandbox`
-//! by a mount and reclaimed by the next `sandbox.create`.
+//! by a mount and reclaimed by its `sandbox.close`. Each Workspace is
+//! recorded in its Sandbox's folder, `workspace/<id>.json`.
 use crate::common::outcome::{failed, Outcome};
 use crate::daemon::values;
 use crate::internal::workspace;
-use crate::sandbox::registry::{lock, naming, random, sandbox, sandbox_live, text, Mount};
+use crate::sandbox::registry::{lock, random, sandbox, sandbox_live, text, Mount};
 use crate::sandbox::serve::{operation, WORKSPACES};
 use crate::Unmounted;
 use layerfs_bridge::control::{CommitControl, SdkRefusal, SdkValue};
 use layerfs_history::WorkspaceId;
-use std::path::Path;
-
-/// The Workspaces Sandbox directory `directory` records.
-fn recorded(directory: &Path) -> Result<usize, SdkRefusal> {
-    let mut count = 0;
-    for item in std::fs::read_dir(directory).map_err(failed)? {
-        let name = item.map_err(failed)?.file_name();
-        let name = name.to_string_lossy();
-        count += usize::from(name.starts_with("workspace-") && name.ends_with(".record"));
-    }
-    Ok(count)
-}
 
 /// A mount's `NoSuchSandbox`: `refusal` (its detail kept) with the next
 /// step in its message, which agents read.
@@ -53,28 +42,27 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
             ))
         }
     };
-    let directory = crate::sandbox::files::sandbox_dir(args, sandbox)?;
-    let record = directory.join("sandbox.record");
+    let directory = crate::sandbox::files::sandbox_dir(args)?;
     let missing = || {
         no_sandbox(crate::common::outcome::refused(
             "NoSuchSandbox",
-            format!("the project has no Sandbox {sandbox}"),
+            format!("no Sandbox {sandbox} runs on this machine"),
         ))
     };
-    if !record.exists() {
+    if crate::sandbox::files::started(&directory)?.is_none() {
         return Err(missing());
     }
-    let state =
-        sandbox_live(&naming(args, sandbox)).map_err(|refusal| match refusal.code.as_str() {
-            "NoSuchSandbox" => no_sandbox(refusal),
-            _ => refusal,
-        })?;
+    let state = sandbox_live(args).map_err(|refusal| match refusal.code.as_str() {
+        "NoSuchSandbox" => no_sandbox(refusal),
+        _ => refusal,
+    })?;
     let _guard = crate::sandbox::files::guard(&state.directory)?;
     // under the Sandbox's guard: a close may have removed it, or mounts filled it
-    if !record.exists() {
+    let Some(saved) = crate::sandbox::files::started(&directory)? else {
         return Err(missing());
-    }
-    if recorded(&directory)? >= WORKSPACES as usize {
+    };
+    let workspaces = crate::sandbox::files::workspaces(&directory)?;
+    if workspaces.len() >= WORKSPACES as usize {
         return Err(crate::common::outcome::refused(
             "Capacity",
             format!(
@@ -98,15 +86,14 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
             "image".to_owned(),
             SdkValue::text(crate::sandbox::runtime::image(&state.runtime)),
         ));
-        // what its record names (#529); a record from before has no platform
-        let saved = crate::sandbox::files::load(&record)?;
+        // what its record names (#529)
         fields.push(("platform".to_owned(), platform_of(&saved)));
         fields.push((
             "runtime".to_owned(),
             SdkValue::text(crate::sandbox::runtime::runtime_name(&saved)),
         ));
     }
-    crate::sandbox::files::save_workspace(&state, &mounted, branch)?;
+    crate::sandbox::files::save_workspace(&state, &mounted, branch, None)?;
     lock(&state.mounts)?.insert(
         mounted.ready.directory.clone(),
         Mount {
@@ -115,127 +102,6 @@ pub(crate) fn mount(args: &SdkValue) -> Outcome {
         },
     );
     Ok(value)
-}
-
-/// What one record's Sandbox was found to be: running, ended (`container`,
-/// and whether it stopped rather than went), or the record refused when read
-/// (#529 finding 6), which leaves it out of listing and reclaim.
-enum Found {
-    Running,
-    Ended(String, bool),
-    Refused(SdkRefusal),
-}
-
-/// Inspects one record's container (or local daemon process) once; no
-/// daemon is dialed. A record that cannot be read for this call (its
-/// directory or owner marker, for example) is `Found::Refused`; a failure
-/// to inspect what it names fails the call.
-fn observed(
-    args: &SdkValue,
-    id: &str,
-    record: &SdkValue,
-    directory: &Path,
-) -> Result<Found, SdkRefusal> {
-    let cached = lock(&crate::sandbox::registry::SANDBOXES)?
-        .get(directory)
-        .cloned();
-    let observed = match cached {
-        Some(state) => state.runtime.endpoint().map(drop),
-        // a container, or with the local runtime a daemon process
-        None => match crate::sandbox::recorded::recorded(args, id, record) {
-            Ok(recorded) => recorded.reopen().map(drop),
-            Err(refusal) => return Ok(Found::Refused(refusal)),
-        },
-    };
-    match observed {
-        Ok(()) => Ok(Found::Running),
-        Err(failure) if failure.container_gone() || failure.container_stopped() => {
-            Ok(Found::Ended(
-                text(record, "container")?.to_owned(),
-                failure.container_stopped(),
-            ))
-        }
-        Err(failure) => Err(failed(failure)),
-    }
-}
-
-/// One record of the project: its number, directory and contents, or the
-/// refusal reading the file gave (a damaged record).
-type Entry = (String, std::path::PathBuf, Result<SdkValue, SdkRefusal>);
-
-/// The project's recorded Sandboxes that a call may reopen, lowest number
-/// first, each found once, and the records left out: `{ sandbox, code,
-/// message }` for each one refused when read (#529 finding 6: damaged, or
-/// failing its directory checks), which is kept in place and fails nothing.
-/// Every Docker, native and namespaces record counts, whatever backend the
-/// caller's deployment selects (#529: the record decides). A record of the
-/// former `local` runtime is nobody's and is left out silently. The
-/// deployment's Sandbox and
-/// `localDir` settings are still checked, so a malformed one is refused here
-/// as everywhere.
-type Readable = Vec<(String, std::path::PathBuf, SdkValue, Found)>;
-fn records(args: &SdkValue) -> Result<(Readable, Vec<SdkValue>), SdkRefusal> {
-    if let Some(deploy) = args.get("deploy") {
-        crate::sandbox::runtime::backend(deploy)?;
-    }
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    crate::sandbox::launch::local::local_dir_setting(args)?;
-    let (mut readable, mut skipped) = (Vec::new(), Vec::new());
-    for (id, directory, value) in recorded_all(args)? {
-        let record = match value {
-            Ok(record) => record,
-            Err(refusal) => {
-                skipped.push(refused_entry(&id, &refusal));
-                continue;
-            }
-        };
-        if crate::sandbox::runtime::recorded(&record).is_err() {
-            continue;
-        }
-        match observed(args, &id, &record, &directory)? {
-            Found::Refused(refusal) => skipped.push(refused_entry(&id, &refusal)),
-            found => readable.push((id, directory, record, found)),
-        }
-    }
-    Ok((readable, skipped))
-}
-
-/// A record left out, as listing, reclaim and create report it.
-fn refused_entry(id: &str, refusal: &SdkRefusal) -> SdkValue {
-    SdkValue::map([
-        ("sandbox", SdkValue::text(id)),
-        ("code", SdkValue::text(&refusal.code)),
-        ("message", SdkValue::text(&refusal.message)),
-    ])
-}
-
-/// Every recorded Sandbox of the project, lowest number first, with each record.
-fn recorded_all(args: &SdkValue) -> Result<Vec<Entry>, SdkRefusal> {
-    let mut found = Vec::new();
-    for id in crate::sandbox::files::sandbox_ids(args)? {
-        let directory = crate::sandbox::files::sandbox_dir(args, &id)?;
-        let record = directory.join("sandbox.record");
-        // a number claimed by a start that has not finished is not a Sandbox yet
-        if record.exists() {
-            let value = crate::sandbox::files::load(&record);
-            found.push((id, directory, value));
-        }
-    }
-    Ok(found)
-}
-
-/// Reclaims every recorded Sandbox of the project found gone or stopped (an
-/// idle-closed one), so its number is free again, and answers the records
-/// it left out. `sandbox.create` calls it under the project's guard before
-/// it starts one.
-pub(crate) fn reclaim_gone(args: &SdkValue) -> Result<Vec<SdkValue>, SdkRefusal> {
-    let (readable, skipped) = records(args)?;
-    for (id, _, _, found) in readable {
-        if let Found::Ended(container, stopped) = found {
-            crate::sandbox::serve::reclaim(args, &id, &container, stopped)?;
-        }
-    }
-    Ok(skipped)
 }
 
 /// A record's `platform` (#529), or null for a record from before it, which
@@ -278,8 +144,7 @@ pub(crate) fn commit(args: &SdkValue) -> Outcome {
     values::commit(&reply)
 }
 
-/// `workspace.unmount(ws, { discard?, force? })`: `Busy` while a background
-/// process this binding started still runs there, then the daemon's answer.
+/// `workspace.unmount(ws, { discard?, force? })`: the daemon's answer.
 pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;
     let path = text(args, "path")?;
@@ -294,23 +159,7 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     }
     let token = state.token(path)?;
     crate::sandbox::files::refresh(&state)?;
-    // The runtime owner knows its own processes; the daemon's kernel probe
-    // still answers Busy for any other holder.
-    let running = crate::sandbox::exec::running_in(&state, path)?;
-    if !running.is_empty() {
-        return Err(SdkRefusal {
-            code: "Busy".to_owned(),
-            message: format!(
-                "{}:{path} is busy: {} still running",
-                state.id,
-                running.join(", ")
-            ),
-            detail: SdkValue::map([(
-                "processes",
-                SdkValue::List(running.into_iter().map(SdkValue::Text).collect()),
-            )]),
-        });
-    }
+    // the daemon's kernel probe answers Busy for a process still holding it
     let attempt = crate::workspace::unmount_guard::begin(&state, token, path)?;
     drop(guard);
     // Only this Workspace's lease remains held. Other Workspaces and

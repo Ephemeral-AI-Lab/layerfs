@@ -188,10 +188,14 @@ fn a_scoped_workspace_call_needs_a_sandbox_of_its_project() {
     let home = tempdir("sandbox");
     home::open(&home).unwrap();
     for (name, project) in [("mine", "shop/api"), ("theirs", "shop/other")] {
-        let record = paths::sandbox_dir(&home, "native", name).join("record.json");
+        let record = paths::sandbox_record(&home, name);
         write_record(
             &record,
-            &SdkValue::map([("name", t(name)), ("project", t(project))]),
+            &SdkValue::map([
+                ("name", t(name)),
+                ("project", t(project)),
+                ("machine", t("native")),
+            ]),
         )
         .unwrap();
     }

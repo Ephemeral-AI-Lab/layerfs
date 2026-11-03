@@ -5,17 +5,18 @@
 //! cgroup. Linux starts no native Sandbox (#533 O27): `native` there is
 //! refused before any effect.
 //!
-//! Each Sandbox gets a directory `<deploy.localDir>/<prefix><project>-<n>` (in 2.0 the home's
-//! `machine/native/sandbox-root`)
-//! with what a container held at fixed paths: its setup
+//! Each Sandbox gets a directory `<deploy.localDir>/<prefix><name>` (the
+//! machine's `machine/native/run/`, beside the image cache the namespaces
+//! backend keeps there) with what a container held at fixed paths: its setup
 //! (`/layerfs-local/config`), overlay template (`/layerfs-local/overlay`) and
 //! Workspace mounts (`/workspaces`). The daemon opens the installed Store
 //! where this process opens it (`storePath`), so the daemon setup and the
 //! Store's locator name that path instead of `/layerfs-store`. The daemon
 //! listens on 127.0.0.1 only. macOS serves loopback NFS as this user; Linux
 //! namespaces keep the root FUSE daemon and nonroot commands (501:20) from
-//! #402. Start, failure and reclaim follow the Docker route: one attempt, a creation intent while the outcome is open, and a failed start's
-//! daemon stopped and its directory deleted, each once.
+//! #402. Start, failure and reclaim follow the Docker route: one attempt,
+//! `Unknown` while the outcome is open, and a failed start's daemon stopped
+//! and its directory deleted, each once.
 use crate::common::outcome::{failed, refused};
 use crate::sandbox::registry::{lock, text, SandboxState, SANDBOXES};
 use crate::sandbox::serve::OpenedStore;
@@ -27,10 +28,10 @@ use layerfs_sandbox::{LaunchRequest, ProviderLaunchOptions};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
-/// Starts the project's next Sandbox as a native (macOS) or namespaces
+/// Starts the Sandbox the call names as a native (macOS) or namespaces
 /// (Linux) daemon. Linux refuses `native` and requires root before any
 /// effect. Called by
-/// [`crate::sandbox::serve::start`] under the project's guard, with the
+/// [`crate::sandbox::serve::start`] under its folder's guard, with the
 /// project's installed Store file or its PostgreSQL Store already read. A
 /// PostgreSQL Store runs on a native daemon only (#533 O3): a namespaces root
 /// binds a Store file.
@@ -68,7 +69,7 @@ pub(crate) fn start(
     let root = deploy.get_text("localDir").ok_or_else(|| {
         refused(
             "InvalidInput",
-            "deploy.localDir is not configured; a native Sandbox needs it (the home's machine/native/sandbox-root)",
+            "deploy.localDir is not configured; a native Sandbox needs it (the machine's machine/native/run)",
         )
     })?;
     let runtime = native_runtime(root, backend)
@@ -83,31 +84,21 @@ pub(crate) fn start(
             ))
         }
     };
-    crate::sandbox::serve::unresolved(
-        directory,
-        &format!("a directory under {root} named for it, and its daemon process"),
-    )?;
-    let (id, saved_directory) = crate::sandbox::files::claim_next(args)?;
-    let made = start_claimed(
+    let id = text(args, "sandbox")?;
+    start_named(
         args,
         directory,
-        &saved_directory,
-        &id,
+        id,
         project,
         (runtime, backend, executable, store),
-    );
-    if made.is_err() {
-        let _ = std::fs::remove_dir(&saved_directory);
-    }
-    made
+    )
 }
 
-/// Starts the claimed Sandbox `id`: directory and daemon on the installed
-/// Store, its first control connection, then its records.
-fn start_claimed(
+/// Starts Sandbox `id`: directory and daemon on the installed Store, its
+/// first control connection, then its records in its folder `directory`.
+fn start_named(
     args: &SdkValue,
     directory: &Path,
-    saved_directory: &Path,
     id: &str,
     project: OpenedStore,
     (runtime, backend, executable, store): (
@@ -163,11 +154,6 @@ fn start_claimed(
         gid: setup.command_gid,
     };
     setup.encode().map_err(failed)?;
-    // Read only if this process ends before the intent is resolved.
-    crate::sandbox::files::save(
-        &directory.join("create.intent"),
-        SdkValue::text(format!("creation of Sandbox {id} began and never finished")),
-    )?;
     let daemon_locator = match &setup.store {
         DaemonStore::Sqlite { locator, .. } => locator.clone(),
         _ => String::new(),
@@ -200,7 +186,6 @@ fn start_claimed(
     let created = created.map_err(|mut failure| {
         drop(failure.control.take());
         abandon(
-            directory,
             id,
             format!(
                 "native sandbox stopped at {:?}: {:?}",
@@ -216,7 +201,6 @@ fn start_claimed(
         Err(error) => {
             drop(control);
             return Err(abandon(
-                directory,
                 id,
                 format!("native endpoint after startup: {error:?}"),
                 Some(sandbox),
@@ -234,15 +218,14 @@ fn start_claimed(
         id: id.to_owned(),
         project: name.to_owned(),
         name: sandbox_name,
-        directory: saved_directory.to_owned(),
+        directory: directory.to_owned(),
         runtime: sandbox,
         identity,
         controls: crate::daemon::pool::Controls::new(control, dial),
         mounts: Default::default(),
-        processes: Default::default(),
     };
     let recorded = (|| {
-        mark_owner(&self::directory(args, id, None)?, saved_directory)?;
+        mark_owner(&self::directory(args, id, None)?, directory)?;
         crate::sandbox::files::save_sandbox(
             &state.directory,
             &state,
@@ -250,23 +233,15 @@ fn start_claimed(
             controller.private,
             daemon.public,
             instance,
-        )?;
-        crate::sandbox::files::save_text(
-            &state.directory.join("container"),
-            &state.runtime.identity().to_string(),
-        )?;
-        std::fs::remove_file(directory.join("create.intent")).map_err(failed)
+        )
     })();
     if let Err(refusal) = recorded {
         // The daemon runs and is this start's own: it is stopped and its
-        // directory deleted like any failed start's, and the records written
-        // so far are removed, so its number is free again.
+        // directory deleted like any failed start's, and the keys written
+        // so far are removed, so the name is free again.
         let SandboxState { runtime, .. } = state;
-        for record in ["sandbox.record", "container"] {
-            let _ = std::fs::remove_file(saved_directory.join(record));
-        }
+        let _ = std::fs::remove_file(directory.join("control.json"));
         return Err(abandon(
-            directory,
             id,
             format!("local sandbox records: {}", refusal.message),
             Some(runtime),
@@ -352,7 +327,7 @@ fn launch_options(
 }
 
 /// Where this deployment puts Sandbox `id`:
-/// `<deploy.localDir>/<prefix><project>-<id>`, computed from the
+/// `<deploy.localDir>/<prefix><id>`, computed from the
 /// configuration, as a record's directory must be. With no deploy.localDir
 /// configured, `recorded` (a record's own parent directory) stands in for
 /// it: a call on a Sandbox follows its record (#529).
@@ -393,27 +368,6 @@ pub(crate) fn directory(
     Ok(root.join(name))
 }
 
-/// The deployment's `localDir`, when set, is an absolute
-/// path with no `.` or `..`. A call with another is refused before any record
-/// is read: the setting is the caller's, not a record's (#529 finding 6).
-pub(crate) fn local_dir_setting(args: &SdkValue) -> Result<(), SdkRefusal> {
-    let Some(root) = (args.get("deploy")).and_then(|deploy| deploy.get_text("localDir")) else {
-        return Ok(());
-    };
-    let root = Path::new(root);
-    let dotted = (root.components()).any(|c| matches!(c, Component::ParentDir | Component::CurDir));
-    if root.is_absolute() && !dotted {
-        return Ok(());
-    }
-    Err(refused(
-        "InvalidInput",
-        format!(
-            "deploy.localDir {} must be an absolute path with no . or ..",
-            root.display()
-        ),
-    ))
-}
-
 /// The marker in a local Sandbox's directory naming, after realpath, the
 /// directory of the record that owns it (#529).
 const OWNER: &str = "owner";
@@ -437,9 +391,9 @@ fn mark_owner(own: &Path, record: &Path) -> Result<(), SdkRefusal> {
 
 /// With no deploy.localDir, a record's `directory` is used only when it
 /// is its own real path and its `owner` marker (not followed if a symlink)
-/// names the real path of this record's directory
-/// `LAYERFS_HOME/<project>/sandboxes/<id>`. Anything else, including a
-/// record made before the marker, is refused before any effect.
+/// names the real path of this record's folder `<root>/sandbox/<name>`.
+/// Anything else, including a record made before the marker, is refused
+/// before any effect.
 pub(crate) fn owned(args: &SdkValue, id: &str, own: &Path) -> Result<(), SdkRefusal> {
     use std::io::Read;
     use std::os::unix::fs::OpenOptionsExt;
@@ -467,7 +421,7 @@ pub(crate) fn owned(args: &SdkValue, id: &str, own: &Path) -> Result<(), SdkRefu
         .and_then(|file| file.take(4096).read_to_end(&mut marker))
         .map_err(|error| refuse(format!("whose owner marker cannot be read ({error})")))?;
     let record =
-        std::fs::canonicalize(crate::sandbox::files::sandbox_dir(args, id)?).map_err(failed)?;
+        std::fs::canonicalize(crate::sandbox::files::sandbox_dir(args)?).map_err(failed)?;
     if marker != record.as_os_str().as_encoded_bytes() {
         let named = String::from_utf8_lossy(&marker);
         return Err(refuse(format!(
@@ -481,14 +435,9 @@ pub(crate) fn owned(args: &SdkValue, id: &str, own: &Path) -> Result<(), SdkRefu
 /// The refusal for a failed start. Everything a local start makes is its
 /// own (a directory and a child process), so each effect is known: the
 /// daemon's last log lines are read once, then it is stopped and its
-/// directory deleted, each once, and the intent removed. If that cleanup
-/// fails, the intent stays and says what is left.
-fn abandon(
-    directory: &Path,
-    id: &str,
-    mut cause: String,
-    sandbox: Option<Box<Sandbox>>,
-) -> SdkRefusal {
+/// directory deleted, each once (`Failed`). If that cleanup fails, the
+/// outcome is `Unknown`, saying what is left.
+fn abandon(id: &str, mut cause: String, sandbox: Option<Box<Sandbox>>) -> SdkRefusal {
     let container = sandbox.as_ref().map(|s| s.identity().to_string());
     let mut log = None;
     let mut left = None;
@@ -512,26 +461,16 @@ fn abandon(
             )
         });
     }
-    let intent = directory.join("create.intent");
-    let (message, removed) = match left {
-        None => match std::fs::remove_file(&intent) {
-            Ok(()) => (cause, container.is_some()),
-            Err(error) => (
-                format!("{cause}; its creation intent stays: {error}"),
-                container.is_some(),
-            ),
-        },
-        Some(left) => {
-            let state = format!("creation of Sandbox {id} failed ({cause}); {left}");
-            let kept = crate::sandbox::files::save(&intent, SdkValue::text(&state))
-                .err()
-                .map(|error| format!(" (recording it failed: {})", error.message))
-                .unwrap_or_default();
-            (format!("{state}; its creation intent stays{kept}"), false)
-        }
+    let (code, message, removed) = match left {
+        None => ("Failed", cause, container.is_some()),
+        Some(left) => (
+            "Unknown",
+            format!("creation of Sandbox {id} failed ({cause}); {left}"),
+            false,
+        ),
     };
     SdkRefusal {
-        code: "Failed".to_owned(),
+        code: code.to_owned(),
         message,
         detail: SdkValue::map([
             ("container", SdkValue::opt_text(container)),

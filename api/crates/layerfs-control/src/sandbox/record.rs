@@ -1,38 +1,40 @@
-//! A Sandbox's record in the home (#536 §9.2), layout 2:
-//! `machine/<machine>/sandbox/<name>/record.json` with its name, project,
-//! machine, the state its create left (`creating` with the creator's pid,
-//! `running`, `unknown`) and, once started, its runtime id, platform,
-//! runtime and image. Kept whole, so `sandbox.list` and `sandbox.get` show
-//! the record as before. Layout 3 (F2) moves it to `sandbox/<name>/`.
-use crate::common::home::{self, paths, read_record, with_field, write_record};
+//! A Sandbox's record, `sandbox/<name>/record.json` (layout 3, #536 §5):
+//! its name, project, machine, the state its create left (`creating` with
+//! the creator's pid, `running`, `unknown`, or `gone` for one a conversion
+//! found ended) and, once started, its backend, kernel route, runtime id,
+//! platform, runtime and image. On `native` the side that runs the Sandbox
+//! adds what reopens it (`daemon`) to the same file; its daemon keys are in
+//! `control.json` beside it. The name is the folder's: one read finds it.
+use crate::common::home::{self, paths, read_record, with_field, write_entity};
 use crate::common::outcome::View;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// One Sandbox's record as read, with the machine whose folder holds it.
+/// Fields a record keeps that its call results never show.
+const HIDDEN: [&str; 3] = ["v", "runtime_id", "daemon"];
+
+/// One Sandbox's record as read.
 #[derive(Clone, Debug)]
 pub struct SandboxRecord {
-    machine: String,
     name: String,
     fields: SdkValue,
 }
 
 impl SandboxRecord {
-    /// Sandbox `name`'s record `value`, found under machine `machine`.
-    pub fn from_record(machine: &str, name: &str, value: SdkValue) -> Self {
+    /// Sandbox `name`'s record `value`.
+    pub fn from_record(name: &str, value: SdkValue) -> Self {
         Self {
-            machine: machine.to_owned(),
             name: name.to_owned(),
             fields: value,
         }
     }
 
-    /// Sandbox `name`'s record under machine `machine`, if it has one.
-    pub(crate) fn read(home: &Path, machine: &str, name: &str) -> Result<Option<Self>> {
-        let path = paths::sandbox_dir(home, machine, name).join("record.json");
-        Ok(read_record(&path)?.map(|value| Self::from_record(machine, name, value)))
+    /// Sandbox `name`'s record, if it has one.
+    pub(crate) fn read(home: &Path, name: &str) -> Result<Option<Self>> {
+        let path = paths::sandbox_record(home, name);
+        Ok(read_record(&path)?.map(|value| Self::from_record(name, value)))
     }
 
     /// The record a create claims the name with: the project, the machine,
@@ -46,24 +48,22 @@ impl SandboxRecord {
             ("created", SdkValue::Int(home::now_ms())),
             ("pid", SdkValue::Int(i64::from(std::process::id()))),
         ]);
-        Self::from_record(machine, name, fields)
+        Self::from_record(name, fields)
     }
 
     /// The record of a started Sandbox: what its create answered (`started`).
     pub(crate) fn started(self, started: &SdkValue) -> Self {
         let mut record = self;
+        let copied = |name: &str| started.get(name).cloned().unwrap_or_default();
         for (field, value) in [
-            ("id", started.get("sandbox").cloned().unwrap_or_default()),
-            (
-                "platform",
-                started.get("platform").cloned().unwrap_or_default(),
-            ),
-            (
-                "runtime",
-                started.get("runtime").cloned().unwrap_or_default(),
-            ),
-            ("image", started.get("image").cloned().unwrap_or_default()),
+            ("id", copied("sandbox")),
+            ("platform", copied("platform")),
+            ("runtime", copied("runtime")),
+            ("image", copied("image")),
             ("state", SdkValue::text("running")),
+            ("backend", copied("runtime")),
+            ("route", copied("route")),
+            ("runtime_id", copied("runtime_id")),
         ] {
             record = record.with(field, value);
         }
@@ -75,19 +75,20 @@ impl SandboxRecord {
         self.with("state", SdkValue::text("unknown"))
     }
 
-    fn with(self, field: &str, value: SdkValue) -> Self {
+    /// `field` set to `value`.
+    pub(crate) fn with(self, field: &str, value: SdkValue) -> Self {
         let fields = with_field(self.fields, field, value);
         Self { fields, ..self }
     }
 
     /// The Sandbox's folder in the home.
     pub(crate) fn dir(&self, home: &Path) -> PathBuf {
-        paths::sandbox_dir(home, &self.machine, &self.name)
+        paths::sandbox_dir(home, &self.name)
     }
 
-    /// Writes the record into its folder under `home`.
+    /// Writes the record into its folder under `home`, with its version.
     pub(crate) fn write(&self, home: &Path) -> Result<()> {
-        write_record(&self.dir(home).join("record.json"), &self.fields)
+        write_entity(&paths::sandbox_record(home, &self.name), &self.fields)
     }
 
     /// The Sandbox's name (its folder's).
@@ -95,9 +96,9 @@ impl SandboxRecord {
         &self.name
     }
 
-    /// The machine whose folder holds the record.
+    /// The machine it runs on, as recorded.
     pub fn machine(&self) -> &str {
-        &self.machine
+        self.fields.get_text("machine").unwrap_or("")
     }
 
     /// Its project, `<store>/<project>`, as recorded.
@@ -105,7 +106,7 @@ impl SandboxRecord {
         self.fields.get_text("project")
     }
 
-    /// The runtime's id of a started Sandbox.
+    /// Its id once started: the name its machine knows it by.
     pub fn id(&self) -> Option<&str> {
         self.fields.get_text("id")
     }
@@ -115,15 +116,15 @@ impl SandboxRecord {
         self.fields.get_text("image")
     }
 
-    /// The state its create recorded (`creating`, `running`, `unknown`).
+    /// The state its create recorded (`creating`, `running`, `unknown`,
+    /// `gone`).
     pub fn recorded_state(&self) -> Option<&str> {
         self.fields.get_text("state")
     }
 
     /// The Sandbox's state (#536 §7.2) from its record: the state its
-    /// create recorded (`creating`, `running`, `unknown`), `creating` when
-    /// none. F2/F3 add the daemon's answer and `op` (`closing`, `gone`,
-    /// `unresolved`).
+    /// create recorded, `creating` when none. F3 adds the daemon's answer
+    /// and `op` (`closing`, `unresolved`).
     pub fn state(&self) -> &str {
         self.recorded_state().unwrap_or("creating")
     }
@@ -142,13 +143,17 @@ impl SandboxRecord {
     }
 
     /// The Sandbox as each `sandbox.list` item and the start of
-    /// `sandbox.get` show it: its record (never a `v`); a list item whose
-    /// record holds no `state` gains its derived one.
+    /// `sandbox.get` show it: its record without what only reopens it
+    /// (`v`, `runtime_id`, `daemon`); a list item whose record holds no
+    /// `state` gains its derived one.
     pub fn to_sdk(&self, view: View) -> SdkValue {
         let SdkValue::Map(fields) = &self.fields else {
             return self.fields.clone();
         };
-        let mut shown: Vec<_> = fields.iter().filter(|(n, _)| n != "v").cloned().collect();
+        let mut shown: Vec<_> = (fields.iter())
+            .filter(|(n, _)| !HIDDEN.contains(&n.as_str()))
+            .cloned()
+            .collect();
         if view == View::List && self.recorded_state().is_none() {
             shown.push(("state".to_owned(), SdkValue::text(self.state())));
         }

@@ -102,8 +102,8 @@ pub(crate) fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Re
             format!(
                 "Sandbox {id} is a {other} Sandbox, which this host never reopens, so the record \
                  is neither used nor deleted. Remove what it left by hand, then delete \
-                 LAYERFS_HOME/{}/sandboxes/{id}/sandbox.record",
-                registry::text(args, "project")?
+                 the folder {}",
+                crate::sandbox::files::sandbox_dir(args)?.display()
             ),
         ));
     }
@@ -111,7 +111,7 @@ pub(crate) fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Re
     Ok(Recorded::Docker(docker, container, request))
 }
 /// A local record is used only where this deployment puts that Sandbox:
-/// its directory must be exactly `<LAYERFS_LOCAL_DIR>/<prefix><project>-<id>`
+/// its directory must be exactly `<LAYERFS_LOCAL_DIR>/<prefix><id>`
 /// and named so, so a damaged, edited or stale record (another
 /// LAYERFS_LOCAL_DIR or prefix) never points a delete elsewhere. A record
 /// without `boot` was written before boot ids were kept: its daemon is
@@ -119,6 +119,11 @@ pub(crate) fn recorded(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Re
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
     let (directory, record) = local_record_of(args, id, value)?;
+    local(directory, record, value)
+}
+/// The local Sandbox in `directory` that `record` names.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn local(directory: PathBuf, record: LocalRecord, value: &SdkValue) -> Result<Recorded> {
     Ok(Recorded::Local {
         directory,
         id: ContainerId::parse(registry::text(value, "container")?).map_err(failed)?,
@@ -150,10 +155,10 @@ fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathB
                 "Sandbox {id}'s local record names {} (as {name}), but this deployment puts it at \
                  {}: the record is damaged or from another LAYERFS_LOCAL_DIR or prefix, so it is \
                  neither used nor deleted. Remove what it left by hand, then delete \
-                 LAYERFS_HOME/{}/sandboxes/{id}/sandbox.record",
+                 the folder {}",
                 directory.display(),
                 expected.display(),
-                registry::text(args, "project")?
+                crate::sandbox::files::sandbox_dir(args)?.display()
             ),
         ));
     }
@@ -164,6 +169,13 @@ fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathB
     {
         crate::sandbox::launch::local::owned(args, id, &directory)?;
     }
+    local_parts(value)
+}
+/// A local record's directory and physical facts, unchecked.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn local_parts(value: &SdkValue) -> Result<(PathBuf, LocalRecord)> {
+    let directory = PathBuf::from(registry::text(value, "directory")?);
+    let name = registry::text(value, "name")?;
     let process = recorded_process(value)?;
     let port = value
         .get_int("port")
@@ -208,6 +220,16 @@ fn recorded_process(value: &SdkValue) -> Result<LocalProcess> {
 #[cfg(target_os = "linux")]
 fn namespaces_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded> {
     let (directory, local) = local_record_of(args, id, value)?;
+    namespaces(id, directory, local, value)
+}
+/// The namespaces Sandbox in `directory` that `local` and its record name.
+#[cfg(target_os = "linux")]
+fn namespaces(
+    id: &str,
+    directory: PathBuf,
+    local: LocalRecord,
+    value: &SdkValue,
+) -> Result<Recorded> {
     let image =
         layerfs_sandbox::Image::parse(registry::text(value, "image")?).map_err(|error| {
             refused(
@@ -235,6 +257,32 @@ fn namespaces_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Reco
         ContainerId::parse(registry::text(value, "container")?).map_err(failed)?,
         SandboxRecord::Namespaces(record),
     ))
+}
+
+/// What a layout 2 Sandbox record names (#536 H10), read for its home's
+/// conversion with no directory check: the conversion checks that a local
+/// one's directory is in the home's old local root itself.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub(crate) fn unchecked(id: &str, value: &SdkValue) -> Result<Recorded> {
+    match value.get_text("runtime") {
+        None => {
+            let (docker, container, request) = runtime(value)?;
+            Ok(Recorded::Docker(docker, container, request))
+        }
+        Some(NATIVE) => {
+            let (directory, record) = local_parts(value)?;
+            local(directory, record, value)
+        }
+        #[cfg(target_os = "linux")]
+        Some(NAMESPACES) => {
+            let (directory, record) = local_parts(value)?;
+            namespaces(id, directory, record, value)
+        }
+        Some(other) => Err(refused(
+            "InvalidInput",
+            format!("Sandbox {id} is a {other} Sandbox, which this host never reopens"),
+        )),
+    }
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]

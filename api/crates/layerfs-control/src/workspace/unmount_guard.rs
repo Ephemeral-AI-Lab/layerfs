@@ -1,4 +1,5 @@
-//! Workspace-scoped unmount ownership; Sandbox discovery is held only at
+//! Workspace-scoped unmount ownership, recorded beside the Workspace's
+//! record (`workspace/<id>.unmount`); the Sandbox's guard is held only at
 //! admission and shared-record cleanup, never during the daemon's helper wait.
 //! Mount paths are unique within one daemon lifetime; Sandbox removal clears
 //! the terminal records before that directory can be reused.
@@ -135,6 +136,15 @@ fn inspect(path: &std::path::Path) -> Result<Option<SdkValue>, SdkRefusal> {
         }
     }
 }
+/// The entries of the Sandbox's `workspace/` folder; none before its first
+/// Workspace.
+fn unmounts(state: &SandboxState) -> Result<Vec<std::io::Result<std::fs::DirEntry>>, SdkRefusal> {
+    match std::fs::read_dir(state.directory.join("workspace")) {
+        Ok(entries) => Ok(entries.collect()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(error) => Err(failed(error)),
+    }
+}
 pub(crate) fn check(state: &SandboxState, path: &str) -> Result<(), SdkRefusal> {
     if let Some(value) = find(state, path)? {
         if value.get_text("state") == Some("Unmounted") {
@@ -153,7 +163,7 @@ pub(crate) fn find(state: &SandboxState, path: &str) -> Result<Option<SdkValue>,
     if let Some(token) = known {
         return inspect(&record(state, token));
     }
-    for entry in std::fs::read_dir(&state.directory).map_err(failed)? {
+    for entry in unmounts(state)? {
         let entry = entry.map_err(failed)?;
         if entry.path().extension().is_some_and(|ext| ext == "unmount") {
             if let Some(value) = observed(&entry.path())? {
@@ -168,7 +178,7 @@ pub(crate) fn find(state: &SandboxState, path: &str) -> Result<Option<SdkValue>,
 /// Closing a running Sandbox may not race a registered terminal operation.
 pub(crate) fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal> {
     let mut recoverable = Vec::new();
-    for entry in std::fs::read_dir(&state.directory).map_err(failed)? {
+    for entry in unmounts(state)? {
         let entry = entry.map_err(failed)?;
         if entry.path().extension().is_some_and(|ext| ext == "unmount") {
             // Even a published result may still be cleaning its Workspace

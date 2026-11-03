@@ -5,7 +5,7 @@
 //! showed before. Built without the `machine` feature too (the guest
 //! worker reads its own `native` and `docker` records); the platform and
 //! the summary need the adapters.
-use crate::common::home::{self, paths, read_record, with_field, write_record};
+use crate::common::home::{self, paths, read_record, with_field, write_entity};
 use crate::common::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -70,7 +70,7 @@ impl MachineRecord {
 
     /// Writes the record to `machine/<name>/record.json` under `home`.
     pub fn write(&self, home: &Path) -> Result<()> {
-        write_record(&paths::machine_record(home, &self.name), &self.fields)
+        write_entity(&paths::machine_record(home, &self.name), &self.fields)
     }
 
     /// The record's field `field` as written.

@@ -5,7 +5,7 @@
 //! [`StoreKind`]; no caller compares a record's `kind` text, and no caller
 //! reads or writes a Store record's fields but through [`StoreRecord`].
 use crate::backup::record::StoreLink;
-use crate::common::home::{self, lease, paths, read_record, with_field, write_record};
+use crate::common::home::{self, lease, paths, read_record, with_field, write_entity};
 use crate::common::outcome::{refused, View};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 pub(crate) use layerfs_bridge::StoreKind;
@@ -214,7 +214,7 @@ impl StoreRecord {
 
     /// Writes the record to `store/<name>/record.json` under `home`.
     pub(crate) fn write(&self, home: &Path) -> Result<()> {
-        write_record(&paths::store_record(home, &self.name), &self.fields)
+        write_entity(&paths::store_record(home, &self.name), &self.fields)
     }
 
     /// The record's field `field` as written.

@@ -1,9 +1,8 @@
 //! `sandbox.create`: the name claimed under the home lock, the Sandbox started on its machine.
 use super::record::SandboxRecord;
 use crate::common::context::Context;
-use crate::common::home;
+use crate::common::home::{self, paths};
 use crate::common::outcome::{refused, Outcome, View};
-use crate::inventory;
 use crate::sandbox::route::on_machine;
 use crate::store::record::StoreRef;
 use crate::store::resolve;
@@ -69,9 +68,9 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             format!("Store {} is on machine {store_machine}; a Sandbox of {project} runs there (`store move` moves the Store)", target.store),
         ));
     }
-    // claim the name across the home; the creator's pid lets a close tell
-    // a create in flight from one whose process is gone
-    if inventory::sandbox(&home, name)?.is_some() {
+    // claim the name across the home (one folder per name); the creator's
+    // pid lets a close tell a create in flight from one whose process is gone
+    if paths::sandbox_dir(&home, name).exists() {
         return Err(refused("Exists", format!("a Sandbox named {name} exists")));
     }
     SandboxRecord::creating(name, project, machine).write(&home)?;
@@ -80,10 +79,12 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if let Some(image) = args.get_text("image") {
         more.push(("image", SdkValue::text(image)));
     }
-    let record = SandboxRecord::read(&home, machine, name)?
-        .unwrap_or_else(|| SandboxRecord::from_record(machine, name, SdkValue::Null));
+    let record = SandboxRecord::read(&home, name)?
+        .unwrap_or_else(|| SandboxRecord::from_record(name, SdkValue::Null));
     let started = on_machine(context, &record, "sandbox.create", more);
     let _lock = home::lock::take(&home)?;
+    // read again: on `native` the Sandbox's own side added to the record
+    let record = SandboxRecord::read(&home, name)?.unwrap_or(record);
     match started {
         Ok(value) => {
             let record = record.started(&value);
@@ -95,8 +96,20 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             Err(refusal)
         }
         Err(refusal) => {
-            let _ = std::fs::remove_dir_all(record.dir(&home));
+            remove_folder(&record.dir(&home))?;
             Err(refusal)
         }
+    }
+}
+
+/// Removes a Sandbox's folder; one its own side removed already is gone.
+pub(super) fn remove_folder(
+    dir: &std::path::Path,
+) -> Result<(), layerfs_bridge::control::SdkRefusal> {
+    match std::fs::remove_dir_all(dir) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+            Err(crate::common::outcome::failed(error))
+        }
+        _ => Ok(()),
     }
 }

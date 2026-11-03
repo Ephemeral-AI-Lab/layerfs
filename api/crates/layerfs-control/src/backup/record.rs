@@ -2,7 +2,7 @@
 //! MinIO bucket and prefix with a key reference, never a secret, made from
 //! the URL `backup.connect` is given; and the driver it names. Also each
 //! Store's link to a bucket, which the Store's record holds.
-use crate::common::home::{self, paths, read_record, write_record};
+use crate::common::home::{self, paths, read_record, write_entity};
 use crate::common::outcome::{refused, View};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_backup::backup::Provider;
@@ -49,7 +49,7 @@ impl BucketRecord {
 
     /// Writes the record to `backup/<name>/record.json` under `home`.
     pub(crate) fn write(&self, home: &Path) -> Result<()> {
-        write_record(&paths::bucket_record(home, &self.name), &self.fields)
+        write_entity(&paths::bucket_record(home, &self.name), &self.fields)
     }
 
     /// The record as written.
