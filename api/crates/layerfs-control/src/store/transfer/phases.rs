@@ -78,7 +78,7 @@ fn run(
     // check, before `op` and outside the locks: the Store's side, both
     // machines, the target's file and its free disk; the side again under
     // the locks, where `op` is written
-    progress(context, "check", 0, 0);
+    progress(context, "check", None);
     let record = at("check", record_of(&home, name))?;
     at("check", record.unblocked())?;
     let (from, to) = at("check", sides(&home, &record, target))?;
@@ -160,9 +160,16 @@ fn at<T>(phase: &'static str, result: Result<T>) -> Phased<T> {
     result.map_err(|refusal| (phase, refusal))
 }
 
-/// Enters `phase`: shown as progress and written to the record's `op`.
-fn enter(context: &mut Context<'_>, op: &mut Op, name: &str, phase: &'static str) -> Phased<()> {
-    progress(context, phase, 0, 0);
+/// Enters `phase`: shown as progress (with `bytes` done and total while
+/// sending) and written to the record's `op`.
+fn enter(
+    context: &mut Context<'_>,
+    op: &mut Op,
+    name: &str,
+    phase: &'static str,
+    bytes: Option<(u64, u64)>,
+) -> Phased<()> {
+    progress(context, phase, bytes);
     let home = context.home.clone();
     at(phase, advance(&home, name, op, phase))
 }
@@ -175,7 +182,7 @@ fn phases(
     (to, target): (&str, &mut Executor),
 ) -> Phased<SdkValue> {
     let home = context.home.clone();
-    enter(context, op, name, "snapshot")?;
+    enter(context, op, name, "snapshot", None)?;
     let snapshot = at(
         "snapshot",
         step(&home, source, "snapshot", of_store(name, vec![])),
@@ -183,8 +190,7 @@ fn phases(
     let total = snapshot.get_int("bytes").unwrap_or(0) as u64;
     // send, in pieces through this process
     let mut offset = 0u64;
-    enter(context, op, name, "send")?;
-    progress(context, "send", 0, total);
+    enter(context, op, name, "send", Some((0, total)))?;
     loop {
         let piece = at(
             "send",
@@ -225,13 +231,13 @@ fn phases(
             ),
         )?;
         offset += len;
-        progress(context, "send", offset, total);
+        progress(context, "send", Some((offset, total)));
         if len < CHUNK {
             break;
         }
     }
     // verify, install
-    enter(context, op, name, "verify")?;
+    enter(context, op, name, "verify", None)?;
     let digest: Vec<(&str, SdkValue)> = ["bytes", "sha256", "heads"]
         .into_iter()
         .map(|field| (field, snapshot.get(field).cloned().unwrap_or_default()))
@@ -240,7 +246,7 @@ fn phases(
         "verify",
         step(&home, target, "verify", of_store(name, digest)),
     )?;
-    enter(context, op, name, "install")?;
+    enter(context, op, name, "install", None)?;
     at(
         "install",
         step(&home, target, "install", of_store(name, vec![])),
@@ -249,7 +255,7 @@ fn phases(
     // write; a crash before it leaves both copies, so the phase is written
     // uncertain first
     *op = op.clone().as_uncertain();
-    enter(context, op, name, "record")?;
+    enter(context, op, name, "record", None)?;
     let last = SdkValue::map([
         ("call", SdkValue::text(op.name())),
         ("from", SdkValue::text(from)),
@@ -272,7 +278,7 @@ fn phases(
         })(),
     )?;
     // retire the source's copy
-    progress(context, "retire", 0, 0);
+    progress(context, "retire", None);
     at(
         "retire",
         step(&home, source, "retire", of_store(name, vec![])),

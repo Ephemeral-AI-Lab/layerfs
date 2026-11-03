@@ -110,12 +110,22 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
     let bytes = std::fs::read(paths::store_file(&home, "shop")).unwrap();
 
     let mut phases = Vec::new();
+    let mut sent = Vec::new();
     let args = SdkValue::map([("name", t("shop")), ("machine", t("box"))]);
     let moved = calls::call(Some(&home), "store.push", args, &mut |event| {
-        if let Some(phase) = event.get("progress").and_then(|p| p.get_text("phase")) {
-            if phases.last().map(String::as_str) != Some(phase) {
-                phases.push(phase.to_owned());
-            }
+        let progress = event.get("progress").unwrap();
+        let phase = progress.get_text("phase").unwrap();
+        if phases.last().map(String::as_str) != Some(phase) {
+            phases.push(phase.to_owned());
+        }
+        // bytes while sending, null in every other phase (#536 §10b)
+        let (done, total) = (progress.get("done"), progress.get("total"));
+        match phase {
+            "send" => sent.push((done.cloned(), total.cloned())),
+            _ => assert_eq!(
+                (done, total),
+                (Some(&SdkValue::Null), Some(&SdkValue::Null))
+            ),
         }
     })
     .unwrap();
@@ -123,6 +133,12 @@ fn a_store_is_pushed_to_a_worker_machine_and_pulled_back_with_equal_heads() {
         phases,
         ["check", "snapshot", "send", "verify", "install", "record", "retire"]
     );
+    let all = SdkValue::Int(bytes.len() as i64);
+    assert_eq!(
+        sent.first(),
+        Some(&(Some(SdkValue::Int(0)), Some(all.clone())))
+    );
+    assert_eq!(sent.last(), Some(&(Some(all.clone()), Some(all))));
     let heads = moved.get("heads").cloned().unwrap();
     assert!(
         !paths::store_file(&home, "shop").exists(),

@@ -457,7 +457,9 @@ is true; `--nested=false` is false.
 
 `project init --progress` printed no lines for a small folder in the run
 for this manual; `store push` and `store pull` report their phases
-(`check`, `snapshot`, `send`, …) as progress.
+(`check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire`) as
+`{"progress": {"phase", "done", "total"}}`: `done` and `total` are bytes
+during `send` and null in the other phases.
 
 ## Folder scope
 

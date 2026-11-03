@@ -172,10 +172,17 @@ pub(super) fn ended(
     }
 }
 
-pub(super) fn progress(context: &mut Context<'_>, phase: &str, done: u64, total: u64) {
+/// `{ phase, done, total }` (#536 §10b): `done` and `total` are bytes
+/// while bytes are sent (`bytes`), and null in every other phase.
+pub(super) fn progress(context: &mut Context<'_>, phase: &str, bytes: Option<(u64, u64)>) {
+    let count = |n: u64| SdkValue::Int(n as i64);
+    let (done, total) = match bytes {
+        Some((done, total)) => (count(done), count(total)),
+        None => (SdkValue::Null, SdkValue::Null),
+    };
     context.progress(SdkValue::map([
         ("phase", SdkValue::text(phase)),
-        ("done", SdkValue::Int(done as i64)),
-        ("total", SdkValue::Int(total as i64)),
+        ("done", done),
+        ("total", total),
     ]));
 }
