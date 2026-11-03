@@ -43,7 +43,7 @@ fn all(home: &Path) -> Result<Vec<(String, String, SdkValue)>> {
 
 /// The Sandbox named `name`: its machine and record, or `NoSuchSandbox`.
 fn sandbox_of(home: &Path, name: &str) -> Result<(String, SdkValue)> {
-    crate::common::names::name("sandbox", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::SandboxName::parse(name)?;
     all(home)?
         .into_iter()
         .find(|(_, n, _)| n == name)
@@ -250,7 +250,7 @@ fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let project = args.get_text("project").unwrap_or("");
     let name = args.get_text("name").unwrap_or("");
     let machine = args.get_text("machine").unwrap_or("");
-    crate::common::names::name("sandbox", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::SandboxName::parse(name)?;
     if matches!(name, "native" | "docker") {
         return Err(refused(
             "InvalidInput",
@@ -513,8 +513,8 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     }
     let store = args.get_text("store").unwrap_or("");
     let project = args.get_text("project").unwrap_or("");
-    crate::common::names::name("store", store).map_err(|why| refused("InvalidInput", why))?;
-    crate::common::names::name("project", project).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::StoreName::parse(store)?;
+    crate::common::names::ProjectName::parse(project)?;
     let record = home::with_field(
         args.get("store_record").cloned().unwrap_or_default(),
         "machine",
@@ -656,18 +656,6 @@ fn close_unstarted(home: &Path, machine: &str, name: &str) -> Result<Option<SdkV
     )))
 }
 
-/// `(sandbox, path)` of a Workspace written `<sandbox>:<path>`.
-fn ws(text: &str) -> Result<(&str, &str)> {
-    text.split_once(':')
-        .filter(|(s, p)| !s.is_empty() && p.starts_with('/'))
-        .ok_or_else(|| {
-            refused(
-                "InvalidInput",
-                format!("a Workspace is <sandbox>:<path>, not {text:?}"),
-            )
-        })
-}
-
 /// Runs one `workspace` call.
 pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
@@ -682,16 +670,19 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
             "workspace.mount",
             vec![("branch", branch)],
         )?;
-        let path = mounted.get_text("path").unwrap_or("").to_owned();
+        let ws = crate::common::names::WorkspaceRef {
+            sandbox: name.to_owned(),
+            path: mounted.get_text("path").unwrap_or("").to_owned(),
+        };
         return Ok(home::with_field(
             mounted,
             "ws",
-            SdkValue::text(format!("{name}:{path}")),
+            SdkValue::text(ws.to_string()),
         ));
     }
-    let (name, path) = ws(args.get_text("ws").unwrap_or(""))?;
-    let (machine, record) = sandbox_of(&home, name)?;
-    let mut more = vec![("path", SdkValue::text(path))];
+    let ws = crate::common::names::WorkspaceRef::parse(args.get_text("ws").unwrap_or(""))?;
+    let (machine, record) = sandbox_of(&home, &ws.sandbox)?;
+    let mut more = vec![("path", SdkValue::text(&ws.path))];
     let op = match call {
         "exec" => {
             more.push(("command", args.get("command").cloned().unwrap_or_default()));

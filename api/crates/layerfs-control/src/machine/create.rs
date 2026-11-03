@@ -18,7 +18,7 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// A new machine's name: valid, not built in, not taken.
 pub(super) fn new_name(home: &Path, name: &str) -> Result<()> {
-    crate::common::names::name("machine", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::MachineName::parse(name)?;
     if crate::common::names::BUILT_IN.contains(&name) {
         return Err(refused(
             "InvalidInput",

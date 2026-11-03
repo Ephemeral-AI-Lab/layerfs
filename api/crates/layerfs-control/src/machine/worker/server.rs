@@ -207,8 +207,7 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
             let store = inner
                 .get_text("store")
                 .ok_or_else(|| refused("InvalidInput", "a Store call names its Store"))?;
-            crate::common::names::name("store", store)
-                .map_err(|why| refused("InvalidInput", why))?;
+            crate::common::names::StoreName::parse(store)?;
             let file = crate::common::home::paths::store_file(root, store);
             // the worker holds the Store's lease under its root while it
             // keeps the Store open
@@ -250,7 +249,7 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
 fn with_home(args: SdkValue, root: &Path) -> SdkValue {
     let file = args
         .get_text("store")
-        .filter(|store| crate::common::names::name("store", store).is_ok())
+        .filter(|store| crate::common::names::StoreName::parse(store).is_ok())
         .map(|store| crate::common::home::paths::store_file(root, store));
     let text = SdkValue::text(root.display().to_string());
     let args = crate::common::home::with_field(args, "home", text);

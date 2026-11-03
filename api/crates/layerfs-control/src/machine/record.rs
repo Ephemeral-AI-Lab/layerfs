@@ -91,7 +91,7 @@ pub fn machine_of(home: &Path, name: &str) -> Result<SdkValue> {
 
 /// Machine `name`'s record as it is, being removed or not.
 pub fn raw(home: &Path, name: &str) -> Result<SdkValue> {
-    crate::common::names::name("machine", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::MachineName::parse(name)?;
     read_record(&paths::machine_record(home, name))?
         .ok_or_else(|| refused("NotFound", format!("no machine named {name}")))
 }

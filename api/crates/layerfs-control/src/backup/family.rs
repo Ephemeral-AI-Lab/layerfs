@@ -23,7 +23,7 @@ use std::path::Path;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 fn bucket_of(home: &Path, name: &str) -> Result<SdkValue> {
-    crate::common::names::name("bucket", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::BucketName::parse(name)?;
     read_record(&paths::bucket_record(home, name))?
         .ok_or_else(|| refused("NotFound", format!("no bucket named {name}")))
 }
@@ -138,8 +138,7 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     match call {
         "connect" => {
             let name = args.get_text("name").unwrap_or("");
-            crate::common::names::name("bucket", name)
-                .map_err(|why| refused("InvalidInput", why))?;
+            crate::common::names::BucketName::parse(name)?;
             let record = bucket_record(name, args.get_text("url").unwrap_or(""), args)?;
             // one listing proves the bucket answers with this key
             let driver = driver(&record)?;
@@ -603,7 +602,7 @@ fn check(
 fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let store = args.get_text("store").unwrap_or("");
-    crate::common::names::name("store", store).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::StoreName::parse(store)?;
     let bucket = args.get_text("bucket").unwrap_or("");
     let bucket_record = bucket_of(&home, bucket)?;
     let driver = driver(&bucket_record)?;

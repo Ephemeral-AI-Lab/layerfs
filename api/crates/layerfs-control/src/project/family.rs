@@ -82,8 +82,7 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
 fn list(home: &Path, args: &SdkValue) -> Outcome {
     let stores = match args.get_text("store") {
         Some(store) => {
-            crate::common::names::name("store", store)
-                .map_err(|why| refused("InvalidInput", why))?;
+            crate::common::names::StoreName::parse(store)?;
             if !paths::store_record(home, store).exists() {
                 return Err(refused("NotFound", format!("no Store named {store}")));
             }
@@ -137,7 +136,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let project = args.get_text("project").unwrap_or("");
     let (store, name) = split(project)?;
-    crate::common::names::name("project", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::ProjectName::parse(name)?;
     let folder = args.get_text("folder").unwrap_or("");
     if !Path::new(folder).is_absolute() {
         return Err(refused(

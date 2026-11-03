@@ -1,7 +1,10 @@
 //! Names of machines, Stores, buckets, projects and Sandboxes (S §2.3): 1 to
 //! 63 lowercase letters, digits, `_`, `.` and `-`, starting and ending with a
 //! letter or digit, never a Windows device name (each name is a folder in
-//! the home). A project is always `<store>/<project>`.
+//! the home). A project is always `<store>/<project>`. Each kind of name
+//! is a type checked once by its `parse` (#536 §9.2).
+use crate::common::outcome::refused;
+use layerfs_bridge::control::SdkRefusal;
 
 /// Windows device names, refused everywhere.
 const DEVICES: [&str; 22] = [
@@ -45,4 +48,126 @@ pub fn project(text: &str) -> Result<(&str, &str), String> {
     name("Store", store)?;
     name("project", project)?;
     Ok((store, project))
+}
+
+/// One kind of checked name: `parse` refuses `InvalidInput` with [`name`]'s
+/// reason; `listed` takes a folder name the home already holds as it is
+/// (each was checked by the call that made it), so a list shows every
+/// folder as before.
+macro_rules! checked {
+    ($($(#[$doc:meta])* $type:ident = $what:literal;)*) => {$(
+        $(#[$doc])*
+        #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $type(String);
+
+        impl $type {
+            /// `text` as this name, checked once.
+            pub fn parse(text: &str) -> Result<Self, SdkRefusal> {
+                name($what, text).map_err(|why| refused("InvalidInput", why))?;
+                Ok(Self(text.to_owned()))
+            }
+
+            /// A folder name the home holds, listed as it is.
+            pub fn listed(text: String) -> Self {
+                Self(text)
+            }
+
+            /// The name as text.
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+        }
+
+        impl std::ops::Deref for $type {
+            type Target = str;
+            fn deref(&self) -> &str {
+                &self.0
+            }
+        }
+
+        impl std::fmt::Display for $type {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str(&self.0)
+            }
+        }
+    )*};
+}
+
+checked! {
+    /// A machine's name (`machine/<name>/`).
+    MachineName = "machine";
+    /// A Store's name (`store/<name>/`).
+    StoreName = "store";
+    /// A project's name within its Store.
+    ProjectName = "project";
+    /// A Sandbox's name, unique across the home.
+    SandboxName = "sandbox";
+    /// A connected bucket's name (`backup/<name>/`).
+    BucketName = "bucket";
+}
+
+/// A project as every call names it, `<store>/<project>`.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ProjectRef {
+    /// The Store that holds it.
+    pub store: StoreName,
+    /// Its name in that Store.
+    pub project: ProjectName,
+}
+
+impl ProjectRef {
+    /// `text` as `<store>/<project>`, checked once ([`project`]'s refusals).
+    pub fn parse(text: &str) -> Result<Self, SdkRefusal> {
+        let (store, name) = project(text).map_err(|why| refused("InvalidInput", why))?;
+        Ok(Self {
+            store: StoreName(store.to_owned()),
+            project: ProjectName(name.to_owned()),
+        })
+    }
+
+    /// The project `project` of Store `store`.
+    pub fn new(store: StoreName, project: ProjectName) -> Self {
+        Self { store, project }
+    }
+}
+
+impl std::fmt::Display for ProjectRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.store, self.project)
+    }
+}
+
+/// A Workspace as the `workspace` calls name it, `<sandbox>:<path>`: its
+/// Sandbox and the Workspace's absolute path there.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkspaceRef {
+    /// The Sandbox it is mounted in.
+    pub sandbox: String,
+    /// Its path in that Sandbox.
+    pub path: String,
+}
+
+impl WorkspaceRef {
+    /// `text` as `<sandbox>:<path>`; the Sandbox's name is checked where
+    /// the Sandbox is looked up, as before.
+    pub fn parse(text: &str) -> Result<Self, SdkRefusal> {
+        text.split_once(':')
+            .filter(|(s, p)| !s.is_empty() && p.starts_with('/'))
+            .map(|(sandbox, path)| Self {
+                sandbox: sandbox.to_owned(),
+                path: path.to_owned(),
+            })
+            .ok_or_else(|| {
+                refused(
+                    "InvalidInput",
+                    format!("a Workspace is <sandbox>:<path>, not {text:?}"),
+                )
+            })
+    }
+}
+
+impl std::fmt::Display for WorkspaceRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.sandbox, self.path)
+    }
 }

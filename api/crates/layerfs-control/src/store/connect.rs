@@ -116,7 +116,7 @@ pub(crate) fn selection(record: &SdkValue, store: &str) -> Result<SdkValue> {
 pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
-    crate::common::names::name("store", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::StoreName::parse(name)?;
     match call {
         "connect" => connect(&home, name, args),
         _ => disconnect(&home, name),
