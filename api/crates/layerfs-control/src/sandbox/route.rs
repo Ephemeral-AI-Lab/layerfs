@@ -386,15 +386,16 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
         thin.write(root)?;
     }
     // the caller's record replaces one left by a project of the same name
-    // that was removed and made again (its `created` differs)
+    // that was removed and made again (its `created` differs); one this
+    // side's own Init wrote (its manifest, no `created`: Init through the
+    // worker, H11a) takes the caller's fields and keeps its manifest
     let sent = args.get("project_record").cloned().unwrap_or_default();
     let sent = ProjectRecord::from_record(store, project, sent);
-    let stale = match ProjectRecord::read(root, store, project)? {
-        None => true,
-        Some(local) => sent.created().is_some() && local.created() != sent.created(),
-    };
-    if stale {
-        sent.write(root)?;
+    match ProjectRecord::read(root, store, project)? {
+        None => sent.write(root)?,
+        Some(local) if sent.created().is_none() || local.created() == sent.created() => {}
+        Some(local) if local.created().is_none() => local.with_fields_of(&sent).write(root)?,
+        Some(_) => sent.write(root)?,
     }
     let more: Vec<(&str, SdkValue)> = match args.get("more") {
         Some(SdkValue::Map(fields)) => fields

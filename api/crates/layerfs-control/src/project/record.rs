@@ -60,6 +60,17 @@ impl ProjectRecord {
         )
     }
 
+    /// This record with each of `other`'s fields set over its own.
+    pub(crate) fn with_fields_of(self, other: &Self) -> Self {
+        let mut fields = self.fields;
+        if let SdkValue::Map(given) = &other.fields {
+            for (name, value) in given {
+                fields = with_field(fields, name, value.clone());
+            }
+        }
+        Self { fields, ..self }
+    }
+
     /// When the project was made, as its record holds it.
     pub(crate) fn created(&self) -> Option<&SdkValue> {
         self.fields.get("created")
