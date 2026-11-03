@@ -3,8 +3,9 @@
 > **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
 
 Part of the [2.0.0 manual](README.md). The source is the one call table,
-[`engine/crates/layerfs-api/src/calls/table.rs`](../../../engine/crates/layerfs-api/src/calls/table.rs),
-and the command in `engine/crates/layerfs-cli/src/`. The shell parser, the
+one file per call under its family in
+[`api/crates/layerfs-api/src/`](../../../api/crates/layerfs-api/src/)
+(`<family>/<call>.rs`), and the command in `api/crates/layerfs-cli/src/`. The shell parser, the
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 

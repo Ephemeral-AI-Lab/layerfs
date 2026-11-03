@@ -44,6 +44,11 @@ and [checks and completion rules](../engine/AGENTS.md#checks-and-completion),
 including bounded test commands, build-before-run, locked dependencies, ARM64
 flags, per-commit LOC and the Disposable-only profile. Preserve the existing
 unsafe-code boundaries; do not add test hooks or inline tests to production src.
-Do not add a call, argument or result name in JavaScript: change the table in
-`crates/layerfs-api/src/calls/table.rs` and the package follows. CI
-reports and does not gate a push.
+Do not add a call, argument or result name in JavaScript: change the call's
+entry in `crates/layerfs-api/src/<family>/<call>.rs` and the package follows.
+`layerfs-api/src` holds only `lib.rs` and one folder per family: its
+`mod.rs` (the family's calls in help order) and one file per call (its table
+entry and the function that runs it, a call into `layerfs-control`); the call
+machinery (checks, scope, dispatcher) is `layerfs-control/src/calls/`. A
+test pins this shape (`tests/calls_table.rs`). CI reports and does not gate a
+push.

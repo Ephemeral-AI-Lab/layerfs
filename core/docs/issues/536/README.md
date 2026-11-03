@@ -49,7 +49,9 @@ Done means:
 - every multi-step operation records exactly one `op` intent in its entity's
   record, with the same owner identity everywhere;
 - `layerfs-api/src` holds `calls/`, `lib.rs` and nothing that opens a Store,
-  writes a record or talks to a worker or daemon;
+  writes a record or talks to a worker or daemon (since owner D15,
+  2026-11-04: `lib.rs` and one folder per family, `mod.rs` plus one file per
+  call; the machinery in `calls/` moved to `layerfs-control/src/calls/`);
 - the terminal pass (§12) passes.
 
 ## 2. Settled decisions
@@ -692,7 +694,9 @@ without an account.
    `store/*/project/*/sandboxes/` on any machine; `doctor` reports nothing
    on the final home.
 6. **Size:** `layerfs-api/src` contains only `calls/` and `lib.rs`; the
-   commit table shows the deleted 1.1 paths.
+   commit table shows the deleted 1.1 paths. (Superseded after the pass by
+   owner D15, 2026-11-04: only `lib.rs` and `<family>/{mod.rs,<call>.rs}`,
+   pinned by `layerfs-api/tests/calls_table.rs`.)
 7. **Checks:** #535 §11 on the final commit.
 
 ## 13. Risks

@@ -55,8 +55,9 @@ Commit, merge, and publish to `main`.
 
 The code wins over every document below where they differ.
 
-- [The call table](../../../engine/crates/layerfs-api/src/calls/table.rs):
-  the 61 calls, their arguments and options.
+- [The call table](../../../api/crates/layerfs-api/src/), one file per call
+  under its family (`<family>/<call>.rs`): the 61 calls, their arguments and
+  options.
 - [The #533 work order](../../../core/docs/issues/533/README.md) and
   [its decisions log](../../../core/docs/issues/533/DECISIONS.md): owner
   decisions and the implementation choices taken on this branch.
