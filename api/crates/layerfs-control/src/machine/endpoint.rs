@@ -7,13 +7,11 @@
 //! same call.
 use super::record::MachineRecord;
 use super::spec::{self as record, machine_of, refusal, save_running};
-use crate::common::outcome::{failed, refused};
 use crate::machine::worker::Endpoint;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_machine::{self as adapters, HostOs, Platform, Route};
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// How long a call waits for another process starting the same machine.
 const START_WAIT: Duration = Duration::from_secs(600);
@@ -74,35 +72,12 @@ fn start(home: &Path, name: &str, record: &MachineRecord) -> Result<Option<Endpo
 /// removing a machine take it, always before the home lock, so a start
 /// never runs beside a create or a remove of the same VM.
 /// A wait for it, at most [`START_WAIT`], is not a retry.
-pub(crate) struct StartLock(std::fs::File);
-
-impl Drop for StartLock {
-    fn drop(&mut self) {
-        crate::common::home::flock::unlock(&self.0);
-    }
-}
+pub(crate) type StartLock = crate::common::home::entity_lock::EntityLock;
 
 pub(crate) fn start_lock(home: &Path, name: &str) -> Result<StartLock, SdkRefusal> {
-    let lock_path = crate::common::home::paths::machine_dir(home, name).join("start.lock");
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .mode(0o600)
-        .open(&lock_path)
-        .map_err(failed)?;
-    let deadline = Instant::now() + START_WAIT;
-    while !crate::common::home::flock::try_lock(&file, true).map_err(failed)? {
-        if Instant::now() >= deadline {
-            return Err(refused(
-                "Unavailable",
-                format!("machine {name} is being started, made or removed by another process"),
-            ));
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    Ok(StartLock(file))
+    let path = crate::common::home::paths::machine_dir(home, name).join("start.lock");
+    let held = format!("machine {name} was being started, made or removed by another process");
+    crate::common::home::entity_lock::take(&path, START_WAIT, &held)
 }
 
 fn endpoint_of(endpoint: &adapters::Endpoint) -> Endpoint {
