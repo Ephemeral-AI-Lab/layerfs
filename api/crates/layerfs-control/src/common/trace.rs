@@ -2,12 +2,17 @@
 //! makes travels as a traced observation under the call's scope, and the
 //! telemetry of the replies is collected for its trace line. An untraced call
 //! sends exactly what it did before. Telemetry never changes a result.
+//!
+//! [`connection`] appends one line per connection to a machine's worker to
+//! the file `LAYERFS_TRACE` names (#535 phase 8 item 6).
 use crate::daemon::pool::{Controls, Lease};
 use crate::internal::{self, Control};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::cell::{Cell, RefCell};
+use std::io::Write;
 use std::ops::{Deref, DerefMut};
-use std::time::Duration;
+use std::os::unix::fs::OpenOptionsExt;
+use std::time::{Duration, Instant};
 
 /// Most telemetry values one call keeps; later ones are dropped.
 const TELEMETRY: usize = 64;
@@ -100,5 +105,38 @@ impl Deref for Traced<'_> {
 impl DerefMut for Traced<'_> {
     fn deref_mut(&mut self) -> &mut Control {
         &mut self.0
+    }
+}
+
+/// Appends `{at, event: "worker.connection", op, worker, sent, ms}` to the
+/// file `LAYERFS_TRACE` names, for one connection to the worker at
+/// `worker` that began at `started`: `op` is the request it carried
+/// (`hello` for one that sent none) and `sent` whether the request went
+/// out. Unset, nothing is written; a trace that cannot be written changes
+/// no outcome.
+pub(crate) fn connection(worker: &str, op: &str, sent: bool, started: Instant) {
+    let Some(path) = std::env::var_os("LAYERFS_TRACE").filter(|path| !path.is_empty()) else {
+        return;
+    };
+    let line = SdkValue::map([
+        ("at", SdkValue::Int(crate::common::home::now_ms())),
+        ("event", SdkValue::text("worker.connection")),
+        ("op", SdkValue::text(op)),
+        ("worker", SdkValue::text(worker)),
+        ("sent", SdkValue::Bool(sent)),
+        (
+            "ms",
+            SdkValue::Int(i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX)),
+        ),
+    ]);
+    let mut text = crate::common::json::print(&line);
+    text.push('\n');
+    let file = std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .mode(0o600)
+        .open(path);
+    if let Ok(mut file) = file {
+        let _ = file.write_all(text.as_bytes());
     }
 }

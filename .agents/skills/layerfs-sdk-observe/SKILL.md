@@ -32,9 +32,9 @@ every caller.
 Said plainly, so nobody looks for it:
 
 - **Call timing and phase trees.** 1.1.0's trace line writer lived in
-  `@layerfs/agent` and was deleted with it. No 2.0 code reads `LAYERFS_TRACE`;
-  a traced `layerfs file read` wrote nothing (checked). See
-  [tracing](references/tracing.md).
+  `@layerfs/agent` and was deleted with it. In 2.0 `LAYERFS_TRACE` records
+  only connections to a machine's worker (one line each, #535); calls on
+  `native` write nothing. See [tracing](references/tracing.md).
 - **Store totals:** canonical, stored, metadata, dedupe and compression ratios
   (`backend.store.project.get_storage`). `store.status` gives only the file and
   WAL sizes.

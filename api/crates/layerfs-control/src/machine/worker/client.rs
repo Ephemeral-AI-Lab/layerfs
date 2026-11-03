@@ -5,7 +5,7 @@ use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// How the caller reaches a machine's worker (from `machine/<name>/worker.json`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,6 +67,20 @@ pub fn request(op: &str, args: SdkValue) -> Result<Vec<u8>, SdkRefusal> {
 /// answer was lost after the request was sent. The answer is waited for at
 /// most `answer_within`, or as long as the operation runs.
 pub fn send(
+    endpoint: &Endpoint,
+    op: &str,
+    request: &[u8],
+    events: &mut dyn FnMut(SdkValue),
+    answer_within: Option<Duration>,
+) -> Result<Outcome, Unreached> {
+    let started = Instant::now();
+    let sent = send_once(endpoint, op, request, events, answer_within);
+    let worker = endpoint.address.to_string();
+    crate::common::trace::connection(&worker, op, sent.is_ok(), started);
+    sent
+}
+
+fn send_once(
     endpoint: &Endpoint,
     op: &str,
     request: &[u8],
@@ -140,7 +154,10 @@ fn greet(endpoint: &Endpoint) -> Result<(TcpStream, Hello), Greeting> {
 /// closes with no request. `Unavailable` when it does not answer, its
 /// refusal (`Denied`) when it refuses the secret.
 pub fn hello(endpoint: &Endpoint) -> Result<Hello, SdkRefusal> {
-    match greet(endpoint) {
+    let started = Instant::now();
+    let greeted = greet(endpoint);
+    crate::common::trace::connection(&endpoint.address.to_string(), "hello", false, started);
+    match greeted {
         Ok((_, hello)) => Ok(hello),
         Err(Greeting::Refused(refusal)) => Err(refusal),
         Err(Greeting::Unanswered(why)) => Err(refused(
