@@ -70,7 +70,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "namespaces binds a Store file and ssh reach is not built; enabled in #535 phase 5a" },
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [ { "name": "user", "kind": "text" }, { "name": "port", "kind": "int" }, { "name": "identity", "kind": "text" }, { "name": "known_hosts", "kind": "text" }, { "name": "root", "kind": "text" } ],
           "description": "a Linux host over ssh, connected and never created; Sandboxes run in Linux namespaces and a cgroup"
         }
@@ -85,7 +85,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "in_process",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "namespaces binds a Store file; enabled in #535 phase 5a" },
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [],
           "description": "this host; Sandboxes run in Linux namespaces and a cgroup"
         },
@@ -145,7 +145,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "namespaces binds a Store file and ssh reach is not built; enabled in #535 phase 5a" },
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [ { "name": "user", "kind": "text" }, { "name": "port", "kind": "int" }, { "name": "identity", "kind": "text" }, { "name": "known_hosts", "kind": "text" }, { "name": "root", "kind": "text" } ],
           "description": "a Linux host over ssh, connected and never created; Sandboxes run in Linux namespaces and a cgroup"
         }
@@ -220,7 +220,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "namespaces binds a Store file and ssh reach is not built; enabled in #535 phase 5a" },
+          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [ { "name": "user", "kind": "text" }, { "name": "port", "kind": "int" }, { "name": "identity", "kind": "text" }, { "name": "known_hosts", "kind": "text" }, { "name": "root", "kind": "text" } ],
           "description": "a Linux host over ssh, connected and never created; Sandboxes run in Linux namespaces and a cgroup"
         }
