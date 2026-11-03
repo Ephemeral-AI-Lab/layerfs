@@ -51,8 +51,9 @@ fn transfer(context: &mut Context<'_>, name: &str, target: Option<&str>) -> Outc
     let result = run(context, name, target, call, &mut written);
     if let (Err((phase, refusal)), Some(op)) = (&result, &written) {
         // past install both copies exist: a record phase that failed (its
-        // lock wait expired, say) leaves the outcome open; past record the
-        // Store is on `to` and `op` is gone
+        // lock wait expired, say) leaves the outcome open; a certain install
+        // failure put nothing in place; past record the Store is on `to`
+        // and `op` is gone
         let uncertain = refusal.code == "Unknown" || *phase == "record";
         if *phase != "retire" {
             ended(&home, name, op, phase, refusal, uncertain, None);
@@ -79,6 +80,8 @@ fn run(
     // machines, the target's file and its free disk; the side again under
     // the locks, where `op` is written
     progress(context, "check", None);
+    // first the copy an ended push or pull left, which this call clears
+    at("check", super::resolve::resolve(&home, name))?;
     let record = at("check", record_of(&home, name))?;
     at("check", record.unblocked())?;
     let (from, to) = at("check", sides(&home, &record, target))?;
@@ -256,15 +259,18 @@ fn phases(
         "verify",
         step(&home, target, "verify", of_store(name, digest)),
     )?;
+    // install puts the target's copy in place, which no step undoes with
+    // certainty: from here until the record names the target a crash leaves
+    // both copies, so the intent is written uncertain before it (H4–H6); the
+    // next push or pull deletes the copy the record does not name
+    *op = op.clone().as_uncertain();
     enter(context, op, name, "install", None)?;
     at(
         "install",
         step(&home, target, "install", of_store(name, vec![])),
     )?;
     // record: the Store is on `to` from here on, and `op` goes in the same
-    // write; a crash before it leaves both copies, so the phase is written
-    // uncertain first
-    *op = op.clone().as_uncertain();
+    // write
     enter(context, op, name, "record", None)?;
     let last = SdkValue::map([
         ("call", SdkValue::text(op.name())),

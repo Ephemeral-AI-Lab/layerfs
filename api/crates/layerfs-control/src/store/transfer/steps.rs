@@ -237,12 +237,15 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
                 SdkValue::text(file.display().to_string()),
             )]))
         }
-        // retire: the source's copy, after the record names the target
+        // retire: a copy the record does not name (the source's, after the
+        // record names the target, or what an ended transfer left), with
+        // any partial copy; the Store's folder and records stay
         "retire" => {
             for path in [
                 file.clone(),
                 with_suffix(&file, "-wal"),
                 with_suffix(&file, "-shm"),
+                incoming,
             ] {
                 match std::fs::remove_file(&path) {
                     Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(failed(e)),

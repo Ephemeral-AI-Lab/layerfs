@@ -1,7 +1,7 @@
 //! Store lifecycle races and machines (#533 review, group store; #536
 //! §7.1, §7.3): a lease and a push or remove never overlap, even inside the
 //! pusher's own process; a live `op` refuses `Busy`, a gone process's
-//! uncertain one `Unresolved` until `store remove` clears it, its certain
+//! uncertain one `Unresolved` until a new push or `store remove` clears it, its certain
 //! one nothing; `store.status` shows the `op` and starts no machine;
 //! `store.remove` refuses a Store whose machine is unknown and never starts
 //! a machine under the home lock; push and pull refuse the wrong side and
@@ -172,24 +172,17 @@ fn a_gone_pushers_uncertain_op_is_unresolved_until_store_remove_clears_it() {
     set_op(&home, this_process_pushing(1, true));
     let (code, message) = read(&home).unwrap_err();
     assert_eq!(code, "Unresolved", "{message}");
-    for named in ["`layerfs store status shop`", "`layerfs store remove shop`"] {
+    // a new push is the call that clears a push's intent (H6; the push
+    // that does it is in store_transfer_crash.rs)
+    for named in [
+        "`layerfs store status shop`",
+        "`layerfs store push shop box`",
+    ] {
         assert!(message.contains(named), "{named} not in {message}");
     }
     assert_eq!(
         lease::hold(&home, "shop").err().map(|r| r.code).as_deref(),
         Some("Unresolved")
-    );
-    let moved = call(
-        &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("box"))],
-    );
-    assert_eq!(moved.unwrap_err().0, "Unresolved");
-    assert_eq!(
-        call(&home, "store.pull", &[("name", t("shop"))])
-            .unwrap_err()
-            .0,
-        "Unresolved"
     );
     let status = call(&home, "store.status", &[("name", t("shop"))]).unwrap();
     assert_eq!(status.get_text("state"), Some("unresolved"));

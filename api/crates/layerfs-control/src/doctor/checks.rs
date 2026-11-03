@@ -30,7 +30,7 @@ pub(super) fn check(
         if let Some(op) = &op {
             let (show, clear) = (
                 format!("store status {name}"),
-                format!("store remove {name}"),
+                crate::store::record::clearing_call(op, name),
             );
             intent(entity, op, &show, &clear, findings);
         }

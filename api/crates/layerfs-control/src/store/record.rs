@@ -282,12 +282,21 @@ impl StoreRecord {
     /// included: a push's or pull's own steps take no lease and make no Store call,
     /// so nothing else in its process may either), `Unresolved` once a gone
     /// process left its outcome unknown. A gone process's certain failure
-    /// holds nothing.
+    /// holds nothing. An unresolved push or pull names a new one as the
+    /// call that clears it (H6), anything else `store remove`.
     pub(crate) fn unblocked(&self) -> Result<()> {
-        match self.op() {
-            None => Ok(()),
-            Some(op) => op.blocks("store", &self.name, "store status", "store remove"),
-        }
+        let Some(op) = self.op() else {
+            return Ok(());
+        };
+        let clear = clearing_call(&op, &self.name);
+        op.blocks("store", &self.name, "store status", "store remove")
+            .map_err(|mut refusal| {
+                let named = format!("`layerfs store remove {}`", self.name);
+                refusal.message = refusal
+                    .message
+                    .replace(&named, &format!("`layerfs {clear}`"));
+                refusal
+            })
     }
 
     fn raw_links(&self) -> &[(String, SdkValue)] {
@@ -430,5 +439,17 @@ impl StoreRecord {
             Some(password) => record.with("password", SdkValue::text(password)),
             None => record,
         }
+    }
+}
+
+/// The call that clears Store `name`'s intent `op` once its process is
+/// gone, with its arguments: a new `store push <name> <machine>` or `store
+/// pull <name>` for a push or pull (it deletes the copy the record does not
+/// name first), else `store remove <name>`.
+pub(crate) fn clearing_call(op: &Op, name: &str) -> String {
+    match (op.name(), op.args().get_text("to")) {
+        ("store.push", Some(to)) => format!("store push {name} {to}"),
+        ("store.pull", _) => format!("store pull {name}"),
+        _ => format!("store remove {name}"),
     }
 }

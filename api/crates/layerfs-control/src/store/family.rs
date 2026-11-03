@@ -11,8 +11,9 @@
 //! uncertain step (`Unknown`, or any failure of the record phase, after
 //! both copies exist) keeps both copies, leaves `op` marked uncertain and
 //! is logged to `log/uncertain.jsonl`; nothing is cleaned up on a guess.
-//! A phase a crash would leave unknown (a push's or pull's record, a remove's
-//! remove) is written uncertain before it starts. This file
+//! A phase a crash would leave unknown (a push's or pull's install and
+//! record, a remove's remove) is written uncertain before it starts; a new
+//! push or pull first deletes the copy such an ended one left. This file
 //! dispatches and holds the steps the calls share; each call is in its own
 //! file (`list`, `status`, `create`, `remove`, `transfer/phases` for push
 //! and pull).

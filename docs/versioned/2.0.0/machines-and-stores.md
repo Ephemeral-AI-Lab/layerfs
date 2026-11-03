@@ -295,15 +295,22 @@ $ layerfs store pull shop --progress       # not run
   - A certain failure drops `op`. An uncertain one (an `Unknown` step, or
     any failure of the record phase, after both copies exist) keeps both
     copies, keeps `op` with `uncertain: true` and is logged to
-    `log/uncertain.jsonl`. The record phase is written uncertain before it
-    starts, so a call that dies there is uncertain too; the record write
-    that puts the Store on its new machine drops `op` and records
+    `log/uncertain.jsonl`. The install phase is written uncertain before
+    it starts, so a call that dies during install or record (the target
+    may hold a copy the record does not name) is uncertain too; the record
+    write that puts the Store on its new machine drops `op` and records
     `last_transfer` (`call`, `from`, `to`, `at`, `bytes`, `sha256`,
     `heads`).
   - Once that process is gone, an uncertain `op` makes every later
     operation, lease and Store call on the Store `Unresolved`, naming
-    `layerfs store status <name>` and `layerfs store remove <name>`; a
-    certain one holds nothing.
+    `layerfs store status <name>` and the call that clears it: a new
+    `layerfs store push <name> <machine>` (with the machine the push named)
+    or `layerfs store pull <name>`. A new push or pull first deletes the
+    copy on whichever of the two machines the record does not name (on
+    `native` its file and any partial copy; on another machine the Store's
+    folder under its worker's root), then runs as usual. `store remove`
+    clears it too, but deletes only the copy on the record's machine. A
+    certain `op` holds nothing.
   - A failure names its phase in the message and in `detail.phase`, and
     keeps whatever exists.
   - While it runs, `store status` shows `state: "busy"` and `op`.
