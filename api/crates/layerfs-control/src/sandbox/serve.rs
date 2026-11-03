@@ -484,6 +484,8 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
 /// Forced (O31), it stops the Sandbox through its backend anyway and
 /// answers each Workspace it could not drain as `Unknown` (`unknown`: their
 /// paths): their uncommitted changes and processes end with the Sandbox.
+/// `held` names Workspaces the caller records (a Sandbox it reaches
+/// directly, #535 G4), counted as mounted.
 /// Stop, then delete, each attempted once: a failed stop is not followed by
 /// a delete and keeps its cause; the folder goes after the delete. A
 /// Sandbox whose runtime ended by itself is reclaimed ([`reclaim`]) and
@@ -512,11 +514,23 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
     // Explicit close can take over an orphaned/retained unmount, but must
     // still refuse every unrelated live Workspace. Stop detaches before
     // killing the daemon; Delete independently checks physical detach.
-    let mounted = lock(&state.mounts)?
+    let mut mounted = lock(&state.mounts)?
         .keys()
         .filter(|path| !recoverable.contains(path))
         .cloned()
         .collect::<Vec<_>>();
+    // a caller that reaches the daemon directly keeps the Workspace records
+    // and sends the paths it holds (#535 G4)
+    if let Some(SdkValue::List(held)) = args.get("held") {
+        for path in held.iter().filter_map(|path| match path {
+            SdkValue::Text(path) => Some(path),
+            _ => None,
+        }) {
+            if !mounted.iter().any(|known| known == path) {
+                mounted.push(path.to_owned());
+            }
+        }
+    }
     let force = args.get_bool("force");
     if !mounted.is_empty() && !force {
         return Err(SdkRefusal {

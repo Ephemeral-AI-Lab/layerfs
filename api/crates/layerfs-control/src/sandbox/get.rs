@@ -1,4 +1,5 @@
 //! `sandbox.get`: a Sandbox's record with one page of its Workspaces.
+use super::direct;
 use super::family::{page, sandbox_of};
 use crate::common::context::Context;
 use crate::common::home;
@@ -18,6 +19,8 @@ pub(super) fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     // (P4): a machine that is down answers the record with no Workspaces
     // and why
     let listed = match record.id() {
+        // one reached directly lists its daemon's Workspaces from here (#535 G4)
+        Some(_) if direct::forwarded(&record) => direct::list(context, &record),
         Some(_) => reach(context, &record, "sandbox.list_workspaces", vec![], false),
         None => Ok(Ok(SdkValue::Null)),
     };

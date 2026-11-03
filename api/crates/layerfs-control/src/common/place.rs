@@ -4,8 +4,8 @@
 //! Store's run in this process on a machine whose platform runs them
 //! locally (`native`, except on Windows, whose Stores are in its worker),
 //! else in that machine's worker, `docker` on every host included (G8).
-//! The third executor, a Sandbox's daemon reached directly (G4), arrives
-//! with direct Workspace calls (#535 phase 6).
+//! A Sandbox's daemon reached directly (G4) is not an executor here: its
+//! Workspace calls take that route in `sandbox/direct.rs`.
 use crate::common::home::{paths, read_record};
 use crate::common::outcome::{refused, Outcome};
 use crate::machine::worker::{self, Endpoint, Unreached};

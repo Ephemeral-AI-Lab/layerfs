@@ -95,6 +95,11 @@ pub(crate) fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefu
         return sandbox(args);
     };
     let Some(runtime) = &state.runtime else {
+        // a forwarded Sandbox: its forward must still run (#535 G4)
+        if let Err(refusal) = crate::sandbox::direct::live(&state) {
+            lock(&SANDBOXES)?.remove(&directory);
+            return Err(refusal);
+        }
         return Ok(state);
     };
     if let Err(failure) = runtime.endpoint() {

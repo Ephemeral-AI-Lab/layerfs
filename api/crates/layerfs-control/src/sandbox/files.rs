@@ -78,7 +78,8 @@ pub(crate) fn user() -> (u32, u32) {
     )
 }
 /// The folder of the Sandbox a call names (`sandbox`, its name):
-/// `<root>/sandbox/<name>/`, in the home on `native` and under a worker's
+/// `<root>/sandbox/<name>/`, in the home on `native` and for a Sandbox
+/// whose daemon the home reaches directly (#535 G4), and under a worker's
 /// root on every other machine.
 pub(crate) fn sandbox_dir(args: &SdkValue) -> Result<PathBuf> {
     let name = crate::common::names::SandboxName::parse(registry::text(args, "sandbox")?)?;
@@ -500,8 +501,19 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     let keys = read_record(&directory.join("control.json"))?
         .ok_or_else(|| refused("NoSuchSandbox", format!("Sandbox {id} has no daemon keys")))?;
     let project = registry::text(args, "project")?;
-    let (runtime, host) = observed(args, id, &value)?;
-    let endpoint = runtime.endpoint().map_err(failed)?;
+    // a Sandbox in a machine whose daemon's port is forwarded here (#535
+    // G4): only its forward is checked; its runtime is the machine's
+    let (runtime, endpoint, host) = match crate::sandbox::direct::forward_of(&value) {
+        Some(address) => {
+            crate::sandbox::direct::check(&home(args)?, id, &value)?;
+            (None, address, None)
+        }
+        None => {
+            let (runtime, host) = observed(args, id, &value)?;
+            let endpoint = runtime.endpoint().map_err(failed)?;
+            (Some(runtime), endpoint, host)
+        }
+    };
     let dial = crate::daemon::pool::Dial {
         endpoint,
         host,
@@ -509,13 +521,17 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
         peer: bytes(&keys, "peer")?,
         instance: bytes(&keys, "instance")?,
     };
-    let control = dial.open_waiting()?;
+    let forwarded = runtime.is_none();
+    let control = dial.open_waiting().map_err(|refusal| match forwarded {
+        true => crate::sandbox::direct::unanswered(id, &value, refusal),
+        false => refusal,
+    })?;
     let state = Arc::new(SandboxState {
         id: id.to_owned(),
         project: project.to_owned(),
         name: value.get_text("name").unwrap_or_default().to_owned(),
         directory,
-        runtime: Some(runtime),
+        runtime,
         identity: recorded_identity(&value),
         controls: crate::daemon::pool::Controls::new(control, dial),
         mounts: Default::default(),
