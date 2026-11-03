@@ -95,6 +95,20 @@ class ProductBoundaryTests(unittest.TestCase):
             findings = violations(Path("core/crates") / relative, "pub use std::io::Read;")
             self.assertTrue(any("retired host-mediated" in message for _, message in findings), relative)
 
+    def test_536_moved_paths_cannot_return(self):
+        for relative in (
+            "api/crates/layerfs-api/src/host/sync.rs",
+            "api/crates/layerfs-api/src/family/stores.rs",
+            "api/crates/layerfs-api/src/fs/read.rs",
+            "api/crates/layerfs-control/src/host/sync.rs",
+            "api/crates/layerfs-control/src/operator/mod.rs",
+            "engine/crates/layerfs-store-service/src/remote/push.rs",
+        ):
+            findings = violations(Path(relative), "pub use std::io::Read;")
+            self.assertTrue(any("retired by #536" in message for _, message in findings), relative)
+        clean = violations(Path("api/crates/layerfs-api/src/calls/table.rs"), "pub use std::io::Read;")
+        self.assertFalse(any("retired by #536" in message for _, message in clean))
+
     def test_retired_packages_cannot_return(self):
         self.assertEqual(
             RETIRED_PACKAGES,
