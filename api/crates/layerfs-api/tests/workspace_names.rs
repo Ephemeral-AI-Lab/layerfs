@@ -70,7 +70,7 @@ fn home_with_a_named_workspace(tag: &str) -> PathBuf {
             ("v", SdkValue::Int(1)),
             ("id", t(&"ab".repeat(32))),
             ("name", t("dev")),
-            ("branch", t("main")),
+            ("branch", t("lane")),
             ("path", t("/w/1")),
             ("namespace", SdkValue::Int(1)),
             ("created", SdkValue::Int(1)),
@@ -89,7 +89,7 @@ fn a_name_is_unique_in_its_sandbox() {
             "workspace.mount",
             &[
                 ("sandbox", t("one")),
-                ("branch", t("main")),
+                ("branch", t("lane")),
                 ("name", t(name)),
             ],
         )
