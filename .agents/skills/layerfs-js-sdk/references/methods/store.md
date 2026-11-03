@@ -25,8 +25,12 @@ Disposable (WAL, `synchronous=OFF`), the only allowed profile.
 
 ## Reads
 
-`store.list()` reads the home's records, with no network call:
-`{ items: [record, …] }`. `store.get(name)` is one record:
+`store.list()` reads the home's records: `{ items: [record, …] }`, each
+item the record `store.get` shows plus a last `state`, derived as
+`store.status` derives it (from source and tests, #536 §10b; not run here).
+It starts no machine but asks a sqlite Store's machine's recorded worker,
+once per machine, whether the file is there; a machine that does not answer
+makes its Stores `down`. `store.get(name)` is one record (no `state`):
 
 ```json
 {"name":"shop","kind":"sqlite","machine":"native","profile":"disposable","created":1793574061147,"sqlite":"3.53.2","projects":["api"]}

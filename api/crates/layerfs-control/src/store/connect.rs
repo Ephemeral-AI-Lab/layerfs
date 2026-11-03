@@ -5,9 +5,10 @@
 //! each call; the full URL is never written down.
 use crate::common::context::Context;
 use crate::common::home::lease;
-use crate::common::home::{self, paths, read_record, write_record};
+use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused, Outcome};
-use crate::store::record::{kind_of, StoreKind};
+use crate::project::record::ProjectRecord;
+use crate::store::record::{StoreKind, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -73,14 +74,14 @@ pub(crate) fn resolve(reference: &str) -> Result<String> {
 }
 
 /// The full URL of a PostgreSQL Store's record, its password resolved now.
-pub(crate) fn url(record: &SdkValue, store: &str) -> Result<String> {
-    let url = record.get_text("url").ok_or_else(|| {
+pub(crate) fn url(record: &StoreRecord) -> Result<String> {
+    let url = record.text("url").ok_or_else(|| {
         refused(
             "Failed",
-            format!("PostgreSQL Store {store}'s record has no url"),
+            format!("PostgreSQL Store {}'s record has no url", record.name()),
         )
     })?;
-    with_password(url, record.get_text("password"))
+    with_password(url, record.text("password"))
 }
 
 fn with_password(url: &str, password: Option<&str>) -> Result<String> {
@@ -101,13 +102,13 @@ fn with_password(url: &str, password: Option<&str>) -> Result<String> {
 }
 
 /// The host operations' `postgresql` argument for a Store record.
-pub(crate) fn selection(record: &SdkValue, store: &str) -> Result<SdkValue> {
+pub(crate) fn selection(record: &StoreRecord) -> Result<SdkValue> {
     Ok(SdkValue::map([
-        ("url", SdkValue::text(url(record, store)?)),
+        ("url", SdkValue::text(url(record)?)),
         ("schema", SdkValue::text(SCHEMA)),
         (
             "synchronousCommit",
-            SdkValue::text(record.get_text("synchronous_commit").unwrap_or("off")),
+            SdkValue::text(record.text("synchronous_commit").unwrap_or("off")),
         ),
     ]))
 }
@@ -116,7 +117,7 @@ pub(crate) fn selection(record: &SdkValue, store: &str) -> Result<SdkValue> {
 pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
-    crate::common::names::name("store", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::StoreName::parse(name)?;
     match call {
         "connect" => connect(&home, name, args),
         _ => disconnect(&home, name),
@@ -231,19 +232,17 @@ fn unclaimed(
         return Err(refused("Exists", format!("a Store named {name} exists")));
     }
     for other in paths::names(&home.join("store")).map_err(failed)? {
-        let Some(record) = read_record(&paths::store_record(home, &other))? else {
+        let Some(record) = StoreRecord::read(home, &other)? else {
             continue;
         };
-        if kind_of(&record)? != StoreKind::Postgresql {
+        if record.kind()? != StoreKind::Postgresql {
             continue;
         }
         let same_url = record
-            .get_text("url")
+            .text("url")
             .and_then(|url| target(url).ok())
             .is_some_and(|found| found == *target_of);
-        let same_binding = binding.is_some_and(
-            |binding| matches!(record.get("binding"), Some(SdkValue::Bytes(b)) if b == binding),
-        );
+        let same_binding = binding.is_some_and(|binding| record.binding() == Some(binding));
         if same_url || same_binding {
             return Err(refused(
                 "Exists",
@@ -276,19 +275,12 @@ fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
             ),
         ));
     }
-    let mut record = SdkValue::map([
-        ("name", SdkValue::text(name)),
-        ("kind", SdkValue::text("postgresql")),
-        ("url", SdkValue::text(given)),
-        ("schema", SdkValue::text(SCHEMA)),
-        ("synchronous_commit", SdkValue::text(sync)),
-        ("created", SdkValue::Int(home::now_ms())),
-    ]);
-    if let Some(password) = args.get_text("password") {
+    let password = args.get_text("password");
+    if let Some(password) = password {
         resolve(password)?;
-        record = home::with_field(record, "password", SdkValue::text(password));
     }
-    let selection = selection(&record, name)?;
+    let record = StoreRecord::connected(name, given, SCHEMA, sync, password);
+    let selection = selection(&record)?;
     let target_of = target(given)?;
     unclaimed(home, name, &target_of, None)?;
     // an empty database gets the schema, with a new binding (#533 step
@@ -308,15 +300,15 @@ fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
     } else {
         crate::store::postgres::read_binding(&probe)?
     };
-    let record = home::with_field(record, "binding", SdkValue::Bytes(binding.clone()));
-    let record = home::with_field(record, "cursor", SdkValue::Bytes(fresh.cursor_key.to_vec()));
+    let record = record.with("binding", SdkValue::Bytes(binding.clone()));
+    let record = record.with("cursor", SdkValue::Bytes(fresh.cursor_key.to_vec()));
     let directory = paths::store_dir(home, name);
     // the projects the schema holds become this home's project records; a
     // schema that does not open is not connected
     let listed = crate::store::identity::list_projects(&SdkValue::map([
         ("home", SdkValue::text(home.display().to_string())),
         ("store", SdkValue::text(name)),
-        ("store_record", record.clone()),
+        ("store_record", record.to_record().clone()),
         ("postgresql", selection),
         (
             "storePath",
@@ -326,18 +318,13 @@ fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
     let _lock = home::lock::take(home)?;
     unclaimed(home, name, &target_of, Some(&binding))?;
     home::private_dir(&directory)?;
-    write_record(&paths::store_record(home, name), &record)?;
+    record.write(home)?;
     let mut projects = Vec::new();
     if let SdkValue::List(items) = &listed {
         for item in items {
             if let Some(project) = item.get_text("name") {
-                write_record(
-                    &paths::project_record(home, name, project),
-                    &SdkValue::map([
-                        ("name", SdkValue::text(project)),
-                        ("stack", item.get("stack").cloned().unwrap_or_default()),
-                    ]),
-                )?;
+                let stack = item.get("stack").cloned().unwrap_or_default();
+                ProjectRecord::found(name, project, stack).write(home)?;
                 projects.push(SdkValue::text(project));
             }
         }
@@ -354,9 +341,9 @@ fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
 /// `store.disconnect(name)`: forgets a PostgreSQL Store; its data stays.
 fn disconnect(home: &Path, name: &str) -> Outcome {
     let _lock = home::lock::take(home)?;
-    let record = read_record(&paths::store_record(home, name))?
+    let record = StoreRecord::read(home, name)?
         .ok_or_else(|| refused("NotFound", format!("no Store named {name}")))?;
-    if kind_of(&record)? != StoreKind::Postgresql {
+    if record.kind()? != StoreKind::Postgresql {
         return Err(refused(
             "InvalidInput",
             format!("Store {name} is a sqlite Store; `store remove` deletes it"),
@@ -376,8 +363,8 @@ fn disconnect(home: &Path, name: &str) -> Outcome {
 
 /// `store.status` of a PostgreSQL Store: whether its server answers, its
 /// version and the schema's size.
-pub(crate) fn status(record: &SdkValue, name: &str) -> SdkValue {
-    let url = match url(record, name) {
+pub(crate) fn status(record: &StoreRecord) -> SdkValue {
+    let url = match url(record) {
         Ok(url) => url,
         Err(refusal) => return SdkValue::map([("unavailable", SdkValue::Text(refusal.message))]),
     };

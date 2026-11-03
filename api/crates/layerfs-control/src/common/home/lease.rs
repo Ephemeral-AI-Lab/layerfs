@@ -8,8 +8,9 @@
 //! a reused id does not keep it alive; a lease whose process is not alive on
 //! this host is stale: it is removed under the home lock and the removal is
 //! logged (O35).
-use crate::common::home::{self, paths, read_record};
+use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused};
+use crate::store::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_sandbox::local::LocalProcess;
 use std::collections::BTreeMap;
@@ -79,11 +80,11 @@ pub fn hold(home: &Path, store: &str) -> Result<Lease, SdkRefusal> {
 }
 
 /// [`hold`], answering the Store's record as read under the home lock.
-pub(crate) fn claim(home: &Path, store: &str) -> Result<(Lease, SdkValue), SdkRefusal> {
+pub(crate) fn claim(home: &Path, store: &str) -> Result<(Lease, StoreRecord), SdkRefusal> {
     let _lock = home::lock::take(home)?;
-    let record = read_record(&paths::store_record(home, store))?
+    let record = StoreRecord::read(home, store)?
         .ok_or_else(|| refused("NoSuchStore", format!("no Store named {store}")))?;
-    crate::store::resolve::moving(&record, store)?;
+    record.moving()?;
     Ok((hold_locked(home, store)?, record))
 }
 

@@ -9,10 +9,11 @@
 //! same stopped machine take turns on its `start.lock`. A Firecracker
 //! machine's Lima host is started the same way first: its own worker may
 //! have stopped it.
-use super::record::{self, machine_of, refusal, save_running};
+use super::record::MachineRecord;
+use super::spec::{self as record, machine_of, refusal, save_running};
 use crate::common::outcome::{failed, refused};
 use crate::machine::worker::Endpoint;
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::SdkRefusal;
 use layerfs_machine::{self as adapters, HostOs, Platform, Route};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
@@ -25,7 +26,7 @@ const START_WAIT: Duration = Duration::from_secs(600);
 /// `None` when the machine's calls run in this process (`native`).
 pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> {
     let record = machine_of(home, name)?;
-    let kind = record::kind_of(&record)?;
+    let kind = record.platform()?;
     if kind.route(HostOs::current()) == Route::InProcess {
         return Ok(None);
     }
@@ -66,9 +67,9 @@ pub fn start_after(
 }
 
 /// A Firecracker machine's Lima host, started first if it does not answer.
-fn host_first(home: &Path, record: &SdkValue) -> Result<(), SdkRefusal> {
-    if record::kind_of(record)? == Platform::Firecracker {
-        if let Some(host) = record.get_text("host") {
+fn host_first(home: &Path, record: &MachineRecord) -> Result<(), SdkRefusal> {
+    if record.platform()? == Platform::Firecracker {
+        if let Some(host) = record.host() {
             running(home, host)?;
         }
     }
@@ -77,9 +78,9 @@ fn host_first(home: &Path, record: &SdkValue) -> Result<(), SdkRefusal> {
 
 /// Starts machine `name` (its `record`) and records its worker; under its
 /// start lock.
-fn start(home: &Path, name: &str, record: &SdkValue) -> Result<Option<Endpoint>, SdkRefusal> {
+fn start(home: &Path, name: &str, record: &MachineRecord) -> Result<Option<Endpoint>, SdkRefusal> {
     let id = crate::common::home::open(home)?.id;
-    let mut spec = record::spec(home, &id, name, record)?;
+    let mut spec = record::spec(home, &id, record)?;
     let bundle = super::bundle::bundle()?;
     // the docker worker's container runs the bundle's image when the
     // machine names none (P5)

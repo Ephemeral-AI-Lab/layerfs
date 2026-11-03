@@ -6,10 +6,11 @@
 //! projects; `remove` drops one project's history from its Store.
 use crate::common::context::Context;
 use crate::common::home::lease;
-use crate::common::home::{paths, read_record};
-use crate::common::outcome::{failed, refused, Outcome};
+use crate::common::home::paths;
+use crate::common::outcome::{failed, refused, Outcome, View};
 use crate::common::place::{self, Executor, Start};
-use crate::store::record::{kind_of, StoreRef};
+use crate::project::record::ProjectRecord;
+use crate::store::record::{StoreRecord, StoreRef};
 use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -28,33 +29,13 @@ fn split(project: &str) -> Result<(&str, &str)> {
     })
 }
 
-/// One project's public record.
-fn summary(home: &Path, store: &str, name: &str, record: &SdkValue) -> SdkValue {
-    let project = read_record(&paths::project_record(home, store, name))
-        .ok()
-        .flatten();
-    let created = project
-        .as_ref()
-        .and_then(|p| p.get("created").cloned())
-        .unwrap_or_default();
-    // a record whose kind is not one LayerFS writes shows none
-    let kind = kind_of(record)
-        .map(|kind| SdkValue::text(kind.as_str()))
-        .unwrap_or_default();
-    SdkValue::map([
-        ("project", SdkValue::text(format!("{store}/{name}"))),
-        ("store", SdkValue::text(store)),
-        ("name", SdkValue::text(name)),
-        ("kind", kind),
-        (
-            "machine",
-            record
-                .get("machine")
-                .cloned()
-                .unwrap_or_else(|| SdkValue::text("native")),
-        ),
-        ("created", created),
-    ])
+/// One project as callers see it; a record that does not read shows no
+/// `created`.
+fn summary(home: &Path, store: &str, name: &str, record: &StoreRecord, view: View) -> SdkValue {
+    let project = ProjectRecord::read(home, store, name).ok().flatten();
+    let project =
+        project.unwrap_or_else(|| ProjectRecord::from_record(store, name, SdkValue::Null));
+    project.to_sdk(view, record)
 }
 
 /// Runs one `project` call.
@@ -70,6 +51,7 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
                 &target.store,
                 &target.project,
                 &target.record,
+                View::Full,
             ))
         }
         "init" => init(context, args),
@@ -82,8 +64,7 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
 fn list(home: &Path, args: &SdkValue) -> Outcome {
     let stores = match args.get_text("store") {
         Some(store) => {
-            crate::common::names::name("store", store)
-                .map_err(|why| refused("InvalidInput", why))?;
+            crate::common::names::StoreName::parse(store)?;
             if !paths::store_record(home, store).exists() {
                 return Err(refused("NotFound", format!("no Store named {store}")));
             }
@@ -93,11 +74,11 @@ fn list(home: &Path, args: &SdkValue) -> Outcome {
     };
     let mut items = Vec::new();
     for store in stores {
-        let Some(record) = read_record(&paths::store_record(home, &store))? else {
+        let Some(record) = StoreRecord::read(home, &store)? else {
             continue;
         };
         for name in paths::names(&paths::store_dir(home, &store).join("project")).map_err(failed)? {
-            items.push(summary(home, &store, &name, &record));
+            items.push(summary(home, &store, &name, &record, View::List));
         }
     }
     let size = args.get_int("page_size").unwrap_or(50).clamp(1, 1000) as usize;
@@ -137,7 +118,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let project = args.get_text("project").unwrap_or("");
     let (store, name) = split(project)?;
-    crate::common::names::name("project", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::ProjectName::parse(name)?;
     let folder = args.get_text("folder").unwrap_or("");
     if !Path::new(folder).is_absolute() {
         return Err(refused(
@@ -145,20 +126,20 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             "the folder must be an absolute path",
         ));
     }
-    let record = read_record(&paths::store_record(&home, store))?.ok_or_else(|| {
+    let record = StoreRecord::read(&home, store)?.ok_or_else(|| {
         refused(
             "NotFound",
             format!("no Store named {store}; `store create {store}` makes one"),
         )
     })?;
-    resolve::moving(&record, store)?;
+    record.moving()?;
     let timeout = args.get_int("timeout").unwrap_or(INIT_TIMEOUT_MS);
-    let store_ref = StoreRef::from_record(store, &record)?;
+    let store_ref = record.store_ref()?;
     if let StoreRef::Postgres { .. } = store_ref {
         return init_postgresql(context, store, name, folder, timeout, &record);
     }
     // Init runs where the Store's calls run in this process
-    if let Executor::Worker(worker) = place::plan(&home, &store_ref, Start::Never)? {
+    if let Executor::Worker(worker) = place::plan(&home, store_ref, Start::Never)? {
         let machine = worker.machine();
         return Err(refused(
             "Unsupported",
@@ -183,19 +164,13 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         crate::store::identity::add_project(&call)
     })?;
     // the project's record keeps when it was made
-    let path = paths::project_record(&home, store, name);
     {
         let _lock = crate::common::home::lock::take(&home)?;
-        if let Some(record) = read_record(&path)? {
-            let record = crate::common::home::with_field(
-                record,
-                "created",
-                SdkValue::Int(crate::common::home::now_ms()),
-            );
-            crate::common::home::write_record(&path, &record)?;
+        if let Some(project) = ProjectRecord::read(&home, store, name)? {
+            project.created_now().write(&home)?;
         }
     }
-    let mut out = summary(&home, store, name, &record);
+    let mut out = summary(&home, store, name, &record, View::Full);
     for field in ["layer", "root"] {
         if let Some(value) = added.get(field) {
             out = crate::common::home::with_field(out, field, value.clone());
@@ -236,7 +211,7 @@ fn init_postgresql(
     name: &str,
     folder: &str,
     timeout: i64,
-    record: &SdkValue,
+    record: &StoreRecord,
 ) -> Outcome {
     let home = context.home.clone();
     let path = paths::project_record(&home, store, name);
@@ -253,26 +228,17 @@ fn init_postgresql(
             ("name", SdkValue::text(name)),
             ("path", SdkValue::text(folder)),
             ("timeoutMs", SdkValue::Int(timeout)),
-            ("store_record", record.clone()),
-            (
-                "postgresql",
-                crate::store::connect::selection(record, store)?,
-            ),
+            ("store_record", record.to_record().clone()),
+            ("postgresql", crate::store::connect::selection(record)?),
         ],
     );
     let watch = host_args(&home, store, vec![("project", SdkValue::text(name))]);
     let added = observed(context, &watch, || {
         crate::project::postgres_init::add_project(&call)
     })?;
-    crate::common::home::write_record(
-        &path,
-        &SdkValue::map([
-            ("name", SdkValue::text(name)),
-            ("stack", added.get("stack").cloned().unwrap_or_default()),
-            ("created", SdkValue::Int(crate::common::home::now_ms())),
-        ]),
-    )?;
-    let mut out = summary(&home, store, name, record);
+    let stack = added.get("stack").cloned().unwrap_or_default();
+    ProjectRecord::initialised(store, name, stack).write(&home)?;
+    let mut out = summary(&home, store, name, record, View::Full);
     for field in ["layer", "root"] {
         if let Some(value) = added.get(field) {
             out = crate::common::home::with_field(out, field, value.clone());
@@ -287,22 +253,11 @@ fn init_postgresql(
 fn remove(context: &mut Context<'_>, project: &str) -> Outcome {
     let home = context.home.clone();
     let target = resolve::target(&home, project)?;
-    resolve::moving(&target.record, &target.store)?;
-    for machine in paths::names(&home.join("machine")).map_err(failed)? {
-        let dir = paths::machine_dir(&home, &machine).join("sandbox");
-        for sandbox in paths::names(&dir).map_err(failed)? {
-            let record = read_record(&dir.join(&sandbox).join("record.json"))?;
-            if record.as_ref().and_then(|r| r.get_text("project")) == Some(project) {
-                return Err(refused(
-                    "InUse",
-                    format!("Sandbox {sandbox} of {project} is running"),
-                ));
-            }
-        }
-    }
+    target.record.moving()?;
+    crate::inventory::can_remove_project(&home, project)?;
     let args = vec![
         ("project", SdkValue::text(&target.project)),
-        ("store_record", target.record.clone()),
+        ("store_record", target.record.to_record().clone()),
     ];
     if let StoreRef::Postgres { .. } = target.store_ref {
         return Err(refused(

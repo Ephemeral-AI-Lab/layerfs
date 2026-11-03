@@ -2,7 +2,7 @@
 //! and build, the rows of `connect/SUPPORT.json`, each with its live probe
 //! (`ready`, `missing`, `version`). It starts no machine (P4). Also the
 //! per-machine `supports` of `machine.list` and `machine.get` (P3).
-use super::record;
+use super::spec as record;
 use crate::common::context::Context;
 use crate::common::outcome::Outcome;
 use layerfs_bridge::control::SdkValue;

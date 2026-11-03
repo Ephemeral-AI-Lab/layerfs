@@ -63,7 +63,7 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
     let store = args
         .get_text("store")
         .ok_or_else(|| refused("InvalidInput", "a Store step names its Store"))?;
-    crate::common::names::name("store", store).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::StoreName::parse(store)?;
     let file = paths::store_file(root, store);
     let incoming = with_suffix(&file, ".incoming");
     if matches!(op, "snapshot" | "install" | "retire" | "remove") {

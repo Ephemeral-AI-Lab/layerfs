@@ -8,9 +8,10 @@
 //! This process resolves from the home's records and the sealed bundle in
 //! the user cache (O16); a machine's worker from its own bundle folder (a
 //! guest never reads the home, H §7.7).
-use crate::common::home::{paths, read_record};
+use crate::common::home::paths;
 use crate::common::outcome::{failed, refused};
 use crate::common::place::Start;
+use crate::machine::record::MachineRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
@@ -83,8 +84,9 @@ pub(super) fn choose(
     postgresql: bool,
     start: Start,
 ) -> Result<SdkValue> {
-    let record = read_record(&paths::machine_record(home, machine))?.unwrap_or_default();
-    let named = image.or(record.get_text("image"));
+    let record = MachineRecord::read(home, machine)?
+        .unwrap_or_else(|| MachineRecord::from_record(machine, SdkValue::Null));
+    let named = image.or(record.image());
     let mut fields = Vec::new();
     if machine == "docker" {
         // a call that starts nothing loads no image either (P4)
@@ -107,8 +109,8 @@ pub(super) fn choose(
             fields.push(("image", SdkValue::text(digest)));
         }
         let archive = record
-            .get_text("image_archive")
-            .or(record.get_text("image").filter(|i| i.starts_with('/')));
+            .text("image_archive")
+            .or(record.image().filter(|i| i.starts_with('/')));
         if let Some(archive) = archive {
             fields.push(("archive", SdkValue::text(archive)));
         }
@@ -159,8 +161,8 @@ fn docker(side: &Side<'_>, store: &str, choice: &SdkValue) -> Result<SdkValue> {
                 "a docker Sandbox of a sqlite Store runs through the docker machine's worker",
             ))
         }
-        Side::Home(home) => read_record(&paths::machine_record(home, "docker"))?
-            .and_then(|record| record.get_text("docker").map(str::to_owned))
+        Side::Home(home) => MachineRecord::read(home, "docker")?
+            .and_then(|record| record.docker().map(str::to_owned))
             .unwrap_or_else(|| "/var/run/docker.sock".to_owned()),
         Side::Worker(_) => {
             fields.push((
@@ -203,8 +205,8 @@ fn daemon(side: &Side<'_>, machine: &str) -> Result<String> {
         Side::Worker(_) => return Ok(beside_self("layerfs-daemon")?.display().to_string()),
         Side::Home(home) => home,
     };
-    let record = read_record(&paths::machine_record(home, machine))?.unwrap_or_default();
-    if let Some(path) = record.get_text("daemon") {
+    let record = MachineRecord::read(home, machine)?;
+    if let Some(path) = record.as_ref().and_then(MachineRecord::daemon) {
         return Ok(path.to_owned());
     }
     if machine == "docker" && !cfg!(target_os = "linux") {
@@ -250,15 +252,15 @@ fn beside_self(name: &str) -> Result<PathBuf> {
 
 /// The docker machine's worker container name.
 #[cfg(feature = "machine")]
-fn docker_vm(home: &Path, record: &SdkValue) -> Result<String> {
-    Ok(match record.get_text("vm_name") {
+fn docker_vm(home: &Path, record: &MachineRecord) -> Result<String> {
+    Ok(match record.text("vm_name") {
         Some(name) => name.to_owned(),
         None => crate::machine::vm_name(&crate::common::home::open(home)?.id, "docker"),
     })
 }
 
 #[cfg(not(feature = "machine"))]
-fn docker_vm(_: &Path, _: &SdkValue) -> Result<String> {
+fn docker_vm(_: &Path, _: &MachineRecord) -> Result<String> {
     Err(refused(
         "Unsupported",
         "a docker machine's worker is reached from a host build",

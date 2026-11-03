@@ -202,7 +202,8 @@ $ layerfs store move shop dev --progress   # not run
 - `store create` makes an empty sqlite Store on `native`, at
   `store/<name>/store.sqlite`. Its record has `name`, `kind`, `machine`,
   `profile`, `created` and `sqlite` (the SQLite version); `store get` and
-  `store list` add `projects` and never show the Store's keys.
+  `store list` add `projects` and never show the Store's keys; each
+  `store list` item also ends with the `state` `store status` shows.
 - `store move <name> <machine>` moves the file to another machine. It runs
   its phases once each: check, snapshot, send, verify, install, record and
   retire. The bytes pass through the calling process in pieces, so a move

@@ -10,8 +10,8 @@ use crate::common::home::paths;
 use crate::common::outcome::Outcome;
 use crate::common::place::{plan, Executor, Start};
 use crate::store::open;
-use crate::store::record::StoreRef;
-use crate::store::resolve::{moving, Target};
+use crate::store::record::{StoreRecord, StoreRef};
+use crate::store::resolve::Target;
 use layerfs_bridge::control::SdkValue;
 use std::path::Path;
 
@@ -23,7 +23,7 @@ pub(crate) fn store_call(
     args: Vec<(String, SdkValue)>,
 ) -> Outcome {
     let home = context.home.clone();
-    moving(&target.record, &target.store)?;
+    target.record.moving()?;
     if let StoreRef::Postgres { .. } = target.store_ref {
         let fields = with_target(args, target, &target.record);
         return postgresql(&home, target, op, fields);
@@ -33,8 +33,7 @@ pub(crate) fn store_call(
     let (lease, record) = lease::claim(&home, &target.store)?;
     let mut fields = with_target(args, target, &record);
     // the record read under the lock, parsed once (R4)
-    let store = StoreRef::from_record(&target.store, &record)?;
-    match plan(&home, &store, Start::OnDemand)? {
+    match plan(&home, record.store_ref()?, Start::OnDemand)? {
         Executor::Local => {
             let file = paths::store_file(&home, &target.store);
             fields.push((
@@ -57,13 +56,13 @@ pub(crate) fn store_call(
 fn with_target(
     args: Vec<(String, SdkValue)>,
     target: &Target,
-    record: &SdkValue,
+    record: &StoreRecord,
 ) -> Vec<(String, SdkValue)> {
     let mut fields = args;
     fields.extend([
         ("project".to_owned(), SdkValue::text(&target.project)),
         ("store".to_owned(), SdkValue::text(&target.store)),
-        ("store_record".to_owned(), record.clone()),
+        ("store_record".to_owned(), record.to_record().clone()),
     ]);
     fields
 }
@@ -76,7 +75,7 @@ fn postgresql(
     op: &str,
     mut fields: Vec<(String, SdkValue)>,
 ) -> Outcome {
-    let url = crate::store::connect::url(&target.record, &target.store)?;
+    let url = crate::store::connect::url(&target.record)?;
     fields.push((
         "postgresql".to_owned(),
         SdkValue::map([("url", SdkValue::text(url))]),

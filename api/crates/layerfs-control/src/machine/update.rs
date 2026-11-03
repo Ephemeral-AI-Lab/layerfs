@@ -1,8 +1,8 @@
 //! `machine.update`.
 use super::list::summary;
-use super::record::{kind_of, machine_of, sandboxes_on};
+use super::spec::machine_of;
 use crate::common::context::Context;
-use crate::common::home::{lock, paths, with_field, write_record};
+use crate::common::home::lock;
 use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::SdkValue;
 use layerfs_machine::HostOs;
@@ -15,7 +15,7 @@ pub fn update(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let name = args.get_text("name").unwrap_or("");
     let _lock = lock::take(&home)?;
     let record = machine_of(&home, name)?;
-    let kind = kind_of(&record)?;
+    let kind = record.platform()?;
     let resize = args.get("cpus").is_some() || args.get("memory").is_some();
     if kind.built_in() && resize {
         return Err(refused(
@@ -33,16 +33,7 @@ pub fn update(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         return Err(refused("InvalidInput", "wsl is a Windows host's setting"));
     }
     // a running Sandbox keeps the image and settings it started with
-    let running = sandboxes_on(&home, name)?;
-    if !running.is_empty() {
-        return Err(refused(
-            "InUse",
-            format!(
-                "Sandboxes [{}] run on {name}; close them before changing it",
-                running.join(", ")
-            ),
-        ));
-    }
+    crate::inventory::can_change_machine(&home, name)?;
     if resize {
         return Err(refused(
             "Unsupported",
@@ -55,9 +46,9 @@ pub fn update(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let mut record = record;
     for field in ["image", "docker", "wsl"] {
         if let Some(value) = args.get(field) {
-            record = with_field(record, field, value.clone());
+            record = record.with(field, value.clone());
         }
     }
-    write_record(&paths::machine_record(&home, name), &record)?;
-    summary(&home, name, &record, None)
+    record.write(&home)?;
+    summary(&home, &record, None)
 }

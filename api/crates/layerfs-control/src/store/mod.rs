@@ -6,13 +6,18 @@ pub(crate) mod call;
 pub mod calls;
 #[doc(hidden)]
 pub mod connect;
+mod create;
 #[doc(hidden)]
 pub mod family;
 pub(crate) mod identity;
+mod list;
 pub(crate) mod open;
 pub(crate) mod postgres;
-pub(crate) mod record;
+#[doc(hidden)]
+pub mod record;
+mod remove;
 pub(crate) mod resolve;
 #[doc(hidden)]
 pub mod service;
+mod status;
 pub(crate) mod transfer;

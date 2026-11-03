@@ -1,0 +1,274 @@
+//! Each typed record's `to_sdk` gives the shape its calls answered before
+//! the records were typed (#536 §10 "Result keys stay stable"), byte for
+//! byte as JSON text, and reads past a layout-3 `v`.
+use layerfs_bridge::control::SdkValue;
+use layerfs_control::backup::record::BucketRecord;
+use layerfs_control::common::json::{parse, print};
+use layerfs_control::common::outcome::View;
+use layerfs_control::project::record::ProjectRecord;
+use layerfs_control::store::record::{StoreDerived, StoreRecord, StoreState};
+
+fn value(text: &str) -> SdkValue {
+    parse(text).unwrap()
+}
+
+fn projects(names: &[&str]) -> StoreDerived {
+    StoreDerived {
+        projects: names.iter().map(|n| n.to_string()).collect(),
+        state: None,
+    }
+}
+
+#[test]
+fn a_store_shows_its_record_without_secrets_then_its_projects() {
+    let record = StoreRecord::from_record(
+        "shop",
+        value(
+            r#"{"v":1,"binding":"b","name":"old","cursor":"c","kind":"sqlite","machine":"box",
+               "profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},
+               "in_progress":null,"last_move":{"from":"native","to":"box"}}"#,
+        ),
+    );
+    let want = r#"{"name":"shop","kind":"sqlite","machine":"box","profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},"in_progress":null,"last_move":{"from":"native","to":"box"},"projects":["api","web"]}"#;
+    for view in [View::Full, View::List] {
+        let shown = record.to_sdk(view, &projects(&["api", "web"])).unwrap();
+        assert_eq!(print(&shown), want);
+    }
+    // a list item ends with its state; a get shows none
+    let mut derived = projects(&["api", "web"]);
+    derived.state = Some(StoreState::InUse);
+    let listed = record.to_sdk(View::List, &derived).unwrap();
+    let mut want_listed = want.trim_end_matches('}').to_owned();
+    want_listed.push_str(r#","state":"in_use"}"#);
+    assert_eq!(print(&listed), want_listed);
+    assert_eq!(print(&record.to_sdk(View::Full, &derived).unwrap()), want);
+    // the record itself is written back as read, `v` and all
+    assert_eq!(record.to_record().get("v"), Some(&SdkValue::Int(1)));
+}
+
+#[test]
+fn a_store_record_of_an_unknown_kind_still_shows() {
+    let record = StoreRecord::from_record("odd", value(r#"{"kind":"oracle"}"#));
+    let shown = record.to_sdk(View::List, &projects(&[])).unwrap();
+    assert_eq!(
+        print(&shown),
+        r#"{"name":"odd","kind":"oracle","projects":[]}"#
+    );
+    let broken = StoreRecord::from_record("odd", SdkValue::Text("x".into()));
+    let refusal = broken.to_sdk(View::Full, &projects(&[])).unwrap_err();
+    assert_eq!(refusal.code, "Failed");
+    assert_eq!(refusal.message, "Store odd's record is not a record");
+}
+
+#[test]
+fn a_project_shows_its_store_kind_machine_and_creation() {
+    let sqlite = StoreRecord::from_record("shop", value(r#"{"kind":"sqlite"}"#));
+    let project =
+        ProjectRecord::from_record("shop", "api", value(r#"{"v":1,"name":"api","created":7}"#));
+    assert_eq!(
+        print(&project.to_sdk(View::Full, &sqlite)),
+        r#"{"project":"shop/api","store":"shop","name":"api","kind":"sqlite","machine":"native","created":7}"#
+    );
+    let placed = StoreRecord::from_record("shop", value(r#"{"machine":"box"}"#));
+    let missing = ProjectRecord::from_record("shop", "web", SdkValue::Null);
+    assert_eq!(
+        print(&missing.to_sdk(View::List, &placed)),
+        r#"{"project":"shop/web","store":"shop","name":"web","kind":"sqlite","machine":"box","created":null}"#
+    );
+    let unknown = StoreRecord::from_record("shop", value(r#"{"kind":"oracle","machine":null}"#));
+    assert_eq!(
+        print(&missing.to_sdk(View::List, &unknown)),
+        r#"{"project":"shop/web","store":"shop","name":"web","kind":null,"machine":null,"created":null}"#
+    );
+    let postgres = StoreRecord::from_record("pg", value(r#"{"kind":"postgresql"}"#));
+    let project = ProjectRecord::from_record("pg", "api", value(r#"{"name":"api","stack":"s"}"#));
+    assert_eq!(
+        print(&project.to_sdk(View::Full, &postgres)),
+        r#"{"project":"pg/api","store":"pg","name":"api","kind":"postgresql","machine":"native","created":null}"#
+    );
+}
+
+#[test]
+fn a_bucket_shows_its_record() {
+    let text = r#"{"name":"r","provider":"r2","account":"a","jurisdiction":"","bucket":"b","prefix":"p","region":"auto","key":"env:K","part_size":8}"#;
+    let record = BucketRecord::from_record("r", value(text));
+    assert_eq!(print(&record.to_sdk(View::Full)), text);
+    let versioned = BucketRecord::from_record("r", value(&text.replacen('{', r#"{"v":1,"#, 1)));
+    assert_eq!(print(&versioned.to_sdk(View::Full)), text);
+}
+
+#[test]
+fn a_sandbox_shows_its_record() {
+    use layerfs_control::sandbox::record::SandboxRecord;
+    let text = r#"{"name":"t1","project":"shop/api","machine":"native","state":"running","created":3,"pid":9,"id":"sb-1","platform":"macos","runtime":"native","image":null}"#;
+    let record = SandboxRecord::from_record("native", "t1", value(text));
+    assert_eq!(print(&record.to_sdk(View::List)), text);
+    assert_eq!(print(&record.to_sdk(View::Full)), text);
+    let versioned =
+        SandboxRecord::from_record("native", "t1", value(&text.replacen('{', r#"{"v":1,"#, 1)));
+    assert_eq!(print(&versioned.to_sdk(View::List)), text);
+    assert_eq!(record.project(), Some("shop/api"));
+    assert_eq!(record.id(), Some("sb-1"));
+    assert_eq!(record.recorded_state(), Some("running"));
+}
+
+#[cfg(feature = "machine")]
+mod machines {
+    use super::*;
+    use layerfs_control::machine::record::{MachineDerived, MachineRecord};
+
+    fn keys(value: &SdkValue) -> Vec<&str> {
+        match value {
+            SdkValue::Map(fields) => fields.iter().map(|(n, _)| n.as_str()).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_vm_shows_its_live_state_size_and_settings() {
+        let record = MachineRecord::from_record(
+            "dev",
+            value(
+                r#"{"v":1,"name":"dev","platform":"lima","cpus":2,"memory":4,"disk":20,"vm_name":"lfs-x-dev",
+                   "state":"running","created":1,"image":"sha256:ab","nested":true,"error":"old",
+                   "lasting":{"port":2222}}"#,
+            ),
+        );
+        let derived = MachineDerived {
+            live: Some(("stopped".into(), Some("its probe did not answer".into()))),
+            stores: vec!["shop".into()],
+            sandboxes: vec!["t1".into()],
+        };
+        let shown = record.to_sdk(View::List, &derived).unwrap();
+        assert_eq!(
+            keys(&shown),
+            [
+                "name",
+                "platform",
+                "backend",
+                "supports",
+                "state",
+                "cpus",
+                "memory",
+                "disk",
+                "stores",
+                "sandboxes",
+                "image",
+                "nested",
+                "error"
+            ]
+        );
+        assert_eq!(shown.get_text("platform"), Some("lima"));
+        assert_eq!(shown.get_text("state"), Some("stopped"));
+        assert_eq!(shown.get_text("error"), Some("its probe did not answer"));
+        assert_eq!(shown.get("cpus"), Some(&SdkValue::Int(2)));
+        assert_eq!(print(shown.get("stores").unwrap()), r#"["shop"]"#);
+        assert_eq!(print(shown.get("sandboxes").unwrap()), r#"["t1"]"#);
+        assert_eq!(shown.get("nested"), Some(&SdkValue::Bool(true)));
+        assert_eq!(record.state(Some("missing")).unwrap(), "missing");
+        assert_eq!(record.state(None).unwrap(), "running");
+        // without a live answer the record's state and error show
+        let derived = MachineDerived::default();
+        let shown = record.to_sdk(View::Full, &derived).unwrap();
+        assert_eq!(shown.get_text("state"), Some("running"));
+        assert_eq!(shown.get_text("error"), Some("old"));
+    }
+
+    #[test]
+    fn a_built_in_machine_is_ready_and_unsized() {
+        let record = MachineRecord::from_record(
+            "docker",
+            value(r#"{"name":"docker","platform":"docker","created":1,"docker":"/run/d.sock"}"#),
+        );
+        let shown = record
+            .to_sdk(View::List, &MachineDerived::default())
+            .unwrap();
+        assert_eq!(
+            keys(&shown),
+            [
+                "name",
+                "platform",
+                "backend",
+                "supports",
+                "state",
+                "cpus",
+                "memory",
+                "disk",
+                "stores",
+                "sandboxes",
+                "docker"
+            ]
+        );
+        assert_eq!(shown.get_text("state"), Some("ready"));
+        assert_eq!(shown.get("cpus"), Some(&SdkValue::Null));
+        let vm = MachineRecord::from_record("vm", value(r#"{"platform":"lima"}"#));
+        assert_eq!(vm.state(None).unwrap(), "stopped");
+        let ssh = MachineRecord::from_record(
+            "box",
+            value(
+                r#"{"name":"box","platform":"ssh","ssh":{"host":"h","host_id":"k"},"state":"creating"}"#,
+            ),
+        );
+        let shown = ssh.to_sdk(View::Full, &MachineDerived::default()).unwrap();
+        assert_eq!(keys(&shown).last(), Some(&"ssh"));
+        assert_eq!(shown.get_text("state"), Some("creating"));
+        let unknown = MachineRecord::from_record("x", value(r#"{"platform":"vmware"}"#));
+        let refusal = unknown
+            .to_sdk(View::List, &MachineDerived::default())
+            .unwrap_err();
+        assert_eq!(refusal.code, "Failed");
+        assert_eq!(refusal.message, "a machine record names no known platform");
+    }
+}
+
+#[test]
+fn a_store_state_is_moving_down_idle_or_in_use() {
+    let idle = StoreRecord::from_record("s", value(r#"{"kind":"sqlite","in_progress":null}"#));
+    assert_eq!(idle.state(false, &[]), StoreState::Idle);
+    assert_eq!(idle.state(false, &[42]), StoreState::InUse);
+    assert_eq!(idle.state(true, &[42]), StoreState::Down);
+    // a live move (this process) wins over everything; a dead one is ignored
+    let me = std::process::id();
+    let moving = StoreRecord::from_record(
+        "s",
+        value(&format!(r#"{{"in_progress":{{"op":"move","pid":{me}}}}}"#)),
+    );
+    assert_eq!(moving.state(true, &[42]), StoreState::Moving);
+    let dead = StoreRecord::from_record(
+        "s",
+        value(r#"{"in_progress":{"op":"move","pid":2147483647}}"#),
+    );
+    assert_eq!(dead.state(false, &[]), StoreState::Idle);
+    let names: Vec<_> = [
+        StoreState::Moving,
+        StoreState::Down,
+        StoreState::Idle,
+        StoreState::InUse,
+    ]
+    .iter()
+    .map(|s| s.as_str())
+    .collect();
+    assert_eq!(names, ["moving", "down", "idle", "in_use"]);
+}
+
+#[test]
+fn a_sandbox_state_is_its_recorded_one() {
+    use layerfs_control::sandbox::record::SandboxRecord;
+    let running = SandboxRecord::from_record("native", "a", value(r#"{"state":"running"}"#));
+    assert_eq!(running.state(), "running");
+    assert_eq!(running.creator(), None);
+    let me = std::process::id();
+    let creating = SandboxRecord::from_record(
+        "native",
+        "b",
+        value(&format!(r#"{{"name":"b","state":"creating","pid":{me}}}"#)),
+    );
+    assert_eq!(creating.creator(), Some(i64::from(me)));
+    // a record with no state shows `creating` in a list, and nothing more in a get
+    let bare = SandboxRecord::from_record("native", "c", value(r#"{"name":"c"}"#));
+    assert_eq!(
+        print(&bare.to_sdk(View::List)),
+        r#"{"name":"c","state":"creating"}"#
+    );
+    assert_eq!(print(&bare.to_sdk(View::Full)), r#"{"name":"c"}"#);
+}

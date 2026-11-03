@@ -1,33 +1,15 @@
 //! `machine.remove` and `machine.disconnect`.
-use super::record::{self, hosted_on, kind_of, machine_of, refusal, sandboxes_on, stores_on};
+use super::record::MachineRecord;
+use super::spec::{self as record, machine_of, refusal};
 use super::status::home_id;
 use crate::common::context::Context;
-use crate::common::home::{lock, paths, with_field, write_record};
+use crate::common::home::{lock, paths};
 use crate::common::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_machine::{self as adapters, Code, Platform};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
-
-/// `InUse` while the machine holds Stores, Sandboxes or Firecracker machines.
-fn idle(home: &Path, name: &str) -> Result<()> {
-    let stores = stores_on(home, name)?;
-    let sandboxes = sandboxes_on(home, name)?;
-    let hosted = hosted_on(home, name)?;
-    if stores.is_empty() && sandboxes.is_empty() && hosted.is_empty() {
-        return Ok(());
-    }
-    Err(refused(
-        "InUse",
-        format!(
-            "machine {name} holds Stores [{}], Sandboxes [{}] and hosts [{}]",
-            stores.join(", "),
-            sandboxes.join(", "),
-            hosted.join(", ")
-        ),
-    ))
-}
 
 /// The home lock covers only the checks and the record writes: the record
 /// says `removing` (with this process) while the VM is deleted under the
@@ -42,26 +24,17 @@ fn take_down(context: &mut Context<'_>, args: &SdkValue, ssh: bool) -> Outcome {
     let (record, spec) = {
         let _lock = lock::take(&home)?;
         let (record, spec) = removable(&home, name, ssh)?;
-        let marked = with_field(
-            record.clone(),
-            "removing",
-            SdkValue::map([("pid", SdkValue::Int(i64::from(std::process::id())))]),
-        );
-        write_record(&paths::machine_record(&home, name), &marked)?;
+        record.clone().marked_removing().write(&home)?;
         (record, spec)
     };
     if let Err(error) = adapters::remove(&spec) {
         // an unknown outcome says so in the record; a refused one leaves it as it was
         let record = match error.code {
-            Code::Unknown => with_field(
-                with_field(record, "state", SdkValue::text("unknown")),
-                "error",
-                SdkValue::text(&error.message),
-            ),
+            Code::Unknown => record.failed_as("unknown", &error.message),
             _ => record,
         };
         let _lock = lock::take(&home)?;
-        write_record(&paths::machine_record(&home, name), &record)?;
+        record.write(&home)?;
         return Err(refusal(error));
     }
     let _lock = lock::take(&home)?;
@@ -74,9 +47,9 @@ fn take_down(context: &mut Context<'_>, args: &SdkValue, ssh: bool) -> Outcome {
 
 /// The checks before a remove or disconnect, under the home lock: the
 /// machine's record and spec.
-fn removable(home: &Path, name: &str, ssh: bool) -> Result<(SdkValue, adapters::Spec)> {
+fn removable(home: &Path, name: &str, ssh: bool) -> Result<(MachineRecord, adapters::Spec)> {
     let record = machine_of(home, name)?;
-    let kind = kind_of(&record)?;
+    let kind = record.platform()?;
     if kind.built_in() {
         return Err(refused(
             "InvalidInput",
@@ -94,8 +67,8 @@ fn removable(home: &Path, name: &str, ssh: bool) -> Result<(SdkValue, adapters::
             format!("{name} is a {} machine; use {call}", kind.name()),
         ));
     }
-    idle(home, name)?;
-    let spec = record::spec(home, &home_id(home)?, name, &record)?;
+    crate::inventory::can_remove_machine(home, name)?;
+    let spec = record::spec(home, &home_id(home)?, &record)?;
     Ok((record, spec))
 }
 

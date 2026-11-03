@@ -13,7 +13,7 @@
 use crate::common::outcome::{failed, refused, Outcome};
 use crate::sandbox::files as discovery;
 use crate::sandbox::registry::{lock, random, text, Project, INITS};
-use crate::store::record::{kind_of, required, StoreKind, StoreRef};
+use crate::store::record::{required, StoreKind, StoreRecord, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_bridge::sdk_values::hex;
@@ -60,9 +60,10 @@ fn record_path(home: &Path, store: &str) -> Result<PathBuf> {
     Ok(crate::common::home::paths::store_record(home, store))
 }
 
-/// The Store record at `path` (`store/<name>/record.json`).
-fn load_record(path: &Path) -> Result<SdkValue> {
-    crate::common::home::read_record(path)?
+/// Store `store`'s record in `home` (`store/<name>/record.json`).
+fn load_record(home: &Path, store: &str) -> Result<StoreRecord> {
+    let path = record_path(home, store)?;
+    StoreRecord::read(home, store)?
         .ok_or_else(|| refused("NoSuchStore", format!("no Store record {}", path.display())))
 }
 
@@ -106,7 +107,7 @@ pub(crate) fn identity(args: &SdkValue) -> Result<Identity> {
     if let Some(store) = store {
         let path = record_path(&home, store)?;
         if path.exists() {
-            return identity_of(&load_record(&path)?);
+            return identity_in(&load_record(&home, store)?);
         }
     }
     // a Store made by its project's own Init: that project's entry
@@ -129,30 +130,30 @@ pub(crate) fn identity(args: &SdkValue) -> Result<Identity> {
     })
 }
 
-/// The identity a Store record holds.
+/// The identity a Store record sent with a call holds.
 pub(crate) fn identity_of(value: &SdkValue) -> Result<Identity> {
     let name = value.get_text("name").unwrap_or("");
-    identity_in(StoreRef::from_record(name, value)?, value)
+    identity_in(&StoreRecord::from_record(name, value.clone()))
 }
 
-/// The identity Store record `value` holds, its [`StoreRef`] already parsed
-/// from it (R4).
-pub(crate) fn identity_in(store: StoreRef, value: &SdkValue) -> Result<Identity> {
-    let kind = match store {
+/// The identity Store record `record` holds, from its [`StoreRef`], parsed
+/// once (R4).
+pub(crate) fn identity_in(record: &StoreRecord) -> Result<Identity> {
+    let kind = match record.store_ref()? {
         StoreRef::Sqlite { .. } => Kind::Sqlite,
         StoreRef::Postgres { server, .. } => Kind::Postgresql {
-            schema: required(server.schema, "schema")?,
-            synchronous_commit: required(server.synchronous_commit, "synchronous_commit")?,
+            schema: required(server.schema.clone(), "schema")?,
+            synchronous_commit: required(server.synchronous_commit.clone(), "synchronous_commit")?,
         },
     };
-    let binding = match value.get("binding") {
-        Some(SdkValue::Bytes(bytes)) => bytes.clone(),
-        _ => return Err(refused("InvalidInput", "Store record binding")),
-    };
+    let binding = record
+        .binding()
+        .ok_or_else(|| refused("InvalidInput", "Store record binding"))?
+        .to_vec();
     Ok(Identity {
         kind,
         binding,
-        cursor_key: bytes32(value, "cursor")?,
+        cursor_key: bytes32(record.to_record(), "cursor")?,
     })
 }
 
@@ -176,13 +177,14 @@ pub(crate) fn save_record(home: &Path, store: &str, identity: &Identity) -> Resu
     }
     // the identity fields are this module's; the record's other fields
     // (machine, backups) are kept, read and written under the home lock
-    let path = record_path(home, store)?;
+    record_path(home, store)?;
     let _lock = crate::common::home::lock::take(home)?;
-    let mut record = crate::common::home::read_record(&path)?.unwrap_or(SdkValue::Map(Vec::new()));
+    let mut record = StoreRecord::read(home, store)?
+        .unwrap_or_else(|| StoreRecord::from_record(store, SdkValue::Map(Vec::new())));
     for (name, value) in fields {
-        record = crate::common::home::with_field(record, name, value);
+        record = record.with(name, value);
     }
-    crate::common::home::write_record(&path, &record)
+    record.write(home)
 }
 
 /// The Store file a call names (`storePath`).
@@ -201,8 +203,9 @@ pub(crate) fn postgresql(args: &SdkValue) -> Result<bool> {
     let Some(store) = args.get_text("store") else {
         return Ok(false);
     };
-    let path = record_path(&discovery::home(args)?, store)?;
-    Ok(path.exists() && kind_of(&load_record(&path)?)? == StoreKind::Postgresql)
+    let home = discovery::home(args)?;
+    let path = record_path(&home, store)?;
+    Ok(path.exists() && load_record(&home, store)?.kind()? == StoreKind::Postgresql)
 }
 
 /// Refuses a call on a PostgreSQL Store that needs a Store file.

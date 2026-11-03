@@ -1,321 +1,263 @@
-//! A machine's records: `machine/<name>/record.json` (kind, size, images,
-//! ssh host, lasting guest state, state) and `machine/<name>/worker.json`
-//! (endpoint, secret, live forward; 0600, while the worker runs). Records
-//! become the adapters' [`Spec`]; nothing in the adapters reads the home.
+//! A machine's record, `machine/<name>/record.json` (#536 §9.2): its
+//! platform, size, images, ssh host, lasting guest state, the state a
+//! create, stop or remove left, and the built-in machines' settings. Read
+//! once and kept whole, so `machine.get` and `machine.list` show what they
+//! showed before. Built without the `machine` feature too (the guest
+//! worker reads its own `native` and `docker` records); the platform and
+//! the summary need the adapters.
 use crate::common::home::{self, paths, read_record, with_field, write_record};
 use crate::common::outcome::refused;
-use crate::store::record::{Placement, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_machine::{
-    Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, SshSpec, Tools,
-};
-use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// Default size of a new VM machine.
-pub const DEFAULT_CPUS: i64 = 2;
-/// 4 GiB.
-pub const DEFAULT_MEMORY: i64 = 4 << 30;
-/// 20 GiB.
-pub const DEFAULT_DISK: i64 = 20 << 30;
-
-/// The homes, by path and id, whose built-in machines this process has
-/// found or written (#535 R6).
-static ENSURED: Mutex<BTreeSet<(PathBuf, String)>> = Mutex::new(BTreeSet::new());
-
-/// `machine/native/` and `machine/docker/` exist from the first call and
-/// are never removed. Checked once per process for each home, by its path
-/// and its id `id` (a home made again at the same path is checked again),
-/// not on every call (#535 R6). Read first; the home lock is taken only to
-/// write one.
-pub fn ensure_built_ins(home: &Path, id: &str) -> Result<()> {
-    let key = (home.to_owned(), id.to_owned());
-    if ENSURED
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .contains(&key)
-    {
-        return Ok(());
-    }
-    write_built_ins(home)?;
-    ENSURED
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(key);
-    Ok(())
+/// One machine's record as read (fields kept whole and in order).
+#[derive(Clone, Debug)]
+pub struct MachineRecord {
+    name: String,
+    fields: SdkValue,
 }
 
-fn write_built_ins(home: &Path) -> Result<()> {
-    let missing = |name: &str| -> Result<bool> {
-        Ok(read_record(&paths::machine_record(home, name))?.is_none())
-    };
-    if !crate::common::names::BUILT_IN
-        .iter()
-        .any(|name| missing(name).unwrap_or(true))
-    {
-        return Ok(());
-    }
-    let _lock = home::lock::take(home)?;
-    for name in crate::common::names::BUILT_IN {
-        let path = paths::machine_record(home, name);
-        if missing(name)? {
-            write_record(
-                &path,
-                &SdkValue::map([
-                    ("name", SdkValue::text(name)),
-                    ("platform", SdkValue::text(name)),
-                    ("created", SdkValue::Int(home::now_ms())),
-                ]),
-            )?;
+impl MachineRecord {
+    /// Machine `name`'s record `value`, as read.
+    pub fn from_record(name: &str, value: SdkValue) -> Self {
+        Self {
+            name: name.to_owned(),
+            fields: value,
         }
     }
-    Ok(())
-}
 
-/// The machine `name`'s record, or `NotFound`.
-/// Refused `InUse` while a live process removes the machine (its record's
-/// `removing` pid), so no call starts, moves to or runs on it meanwhile.
-pub fn machine_of(home: &Path, name: &str) -> Result<SdkValue> {
-    let record = raw(home, name)?;
-    if let Some(pid) = removing(&record) {
-        return Err(refused(
-            "InUse",
-            format!("machine {name} is being removed by process {pid}"),
-        ));
+    /// Machine `name`'s record in `home`, if it has one.
+    pub fn read(home: &Path, name: &str) -> Result<Option<Self>> {
+        Ok(read_record(&paths::machine_record(home, name))?.map(|v| Self::from_record(name, v)))
     }
-    Ok(record)
-}
 
-/// Machine `name`'s record as it is, being removed or not.
-pub fn raw(home: &Path, name: &str) -> Result<SdkValue> {
-    crate::common::names::name("machine", name).map_err(|why| refused("InvalidInput", why))?;
-    read_record(&paths::machine_record(home, name))?
-        .ok_or_else(|| refused("NotFound", format!("no machine named {name}")))
-}
-
-/// The live process removing a machine, from its record.
-pub fn removing(record: &SdkValue) -> Option<i64> {
-    let pid = record.get("removing")?.get_int("pid")?;
-    crate::common::home::lease::alive(u32::try_from(pid).ok()?).then_some(pid)
-}
-
-/// A record's kind.
-pub fn kind_of(record: &SdkValue) -> Result<Platform> {
-    record
-        .get_text("platform")
-        .and_then(Platform::parse)
-        .ok_or_else(|| refused("Failed", "a machine record names no known platform"))
-}
-
-/// The provider's name for a machine's VM: `lfs-<home id prefix>-<machine>`,
-/// so two homes on one host never share a VM (O33).
-pub fn vm_name(home_id: &str, name: &str) -> String {
-    let plain: String = name
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect();
-    format!("lfs-{}-{plain}", &home_id[..8])
-}
-
-fn int(record: &SdkValue, name: &str, default: i64) -> i64 {
-    record.get_int(name).unwrap_or(default)
-}
-
-/// How this process reaches its tools, with the docker machine's socket.
-pub fn tools(home: &Path) -> Result<Tools> {
-    let mut tools = Tools::from_env();
-    if let Some(record) = read_record(&paths::machine_record(home, "docker"))? {
-        if let Some(socket) = record.get_text("docker") {
-            tools.docker_socket = PathBuf::from(socket);
-        }
+    /// Machine `name`'s record as it is, being removed or not; a bad name
+    /// is `InvalidInput`, none `NotFound`.
+    pub fn of(home: &Path, name: &str) -> Result<Self> {
+        crate::common::names::MachineName::parse(name)?;
+        Self::read(home, name)?
+            .ok_or_else(|| refused("NotFound", format!("no machine named {name}")))
     }
-    Ok(tools)
-}
 
-/// The adapters' description of machine `name`.
-pub fn spec(home: &Path, home_id: &str, name: &str, record: &SdkValue) -> Result<Spec> {
-    let kind = kind_of(record)?;
-    let host = match record.get_text("host") {
-        Some(host) if kind == Platform::Firecracker => {
-            let host_record = machine_of(home, host)?;
-            Some(Box::new(spec(home, home_id, host, &host_record)?))
-        }
-        _ => None,
-    };
-    let ssh = match record.get("ssh") {
-        Some(ssh @ SdkValue::Map(_)) => Some(SshSpec {
-            host: ssh.get_text("host").unwrap_or("").to_owned(),
-            user: ssh.get_text("user").unwrap_or("root").to_owned(),
-            port: ssh.get_int("port").unwrap_or(22) as u16,
-            identity: ssh.get_text("identity").map(PathBuf::from),
-            known_hosts: paths::machine_dir(home, name).join("known_hosts"),
-            data_root: ssh
-                .get_text("root")
-                .unwrap_or(layerfs_machine::DATA)
-                .to_owned(),
-        }),
-        _ => None,
-    };
-    let lasting = record.get("lasting");
-    Ok(Spec {
-        name: name.to_owned(),
-        kind,
-        vm_name: record
-            .get_text("vm_name")
-            .map(str::to_owned)
-            .unwrap_or_else(|| vm_name(home_id, name)),
-        cpus: int(record, "cpus", DEFAULT_CPUS) as u32,
-        memory: int(record, "memory", DEFAULT_MEMORY) as u64,
-        disk: int(record, "disk", DEFAULT_DISK) as u64,
-        // the machine's own Sandbox image archive, copied in at start: the
-        // record's `image_archive`, or an `image` that names a file (an
-        // `image` digest is one the bundle's archive holds)
-        image: record
-            .get_text("image_archive")
-            .or(record.get_text("image").filter(|i| i.starts_with('/')))
-            .map(PathBuf::from),
-        // the docker machine's worker container runs its Sandbox image, as
-        // 1.1.0's macOS worker did
-        os_image: record
-            .get_text("os_image")
-            .or(record
-                .get_text("image")
-                .filter(|_| kind == Platform::Docker))
-            .map(str::to_owned),
-        nested: matches!(record.get("nested"), Some(SdkValue::Bool(true))),
-        host,
-        ssh,
-        state: Lasting {
-            port: lasting.and_then(|l| l.get_int("port")).map(|p| p as u16),
-            network: lasting.and_then(|l| l.get_int("network")).map(|n| n as u8),
-        },
-        worker: worker(home, name)?,
-        work_dir: paths::machine_dir(home, name),
-        tools: tools(home)?,
-    })
-}
-
-/// The endpoint in `worker.json`, if the machine has one.
-pub fn worker(home: &Path, name: &str) -> Result<Option<Endpoint>> {
-    let Some(value) = read_record(&paths::worker_record(home, name))? else {
-        return Ok(None);
-    };
-    let address = value
-        .get_text("address")
-        .and_then(|a| a.parse().ok())
-        .ok_or_else(|| {
-            refused(
-                "Failed",
-                format!("machine {name}'s worker.json has no address"),
-            )
-        })?;
-    Ok(Some(Endpoint {
-        address,
-        secret: value.get_text("secret").unwrap_or("").to_owned(),
-        forward_pid: value.get_int("forward_pid").map(|p| p as u32),
-    }))
-}
-
-/// Writes `worker.json` and the lasting state of a started machine.
-pub fn save_running(home: &Path, name: &str, running: &Running) -> Result<()> {
-    let endpoint = &running.endpoint;
-    write_record(
-        &paths::worker_record(home, name),
-        &SdkValue::map([
-            ("address", SdkValue::text(endpoint.address.to_string())),
-            ("secret", SdkValue::text(&endpoint.secret)),
-            (
-                "forward_pid",
-                endpoint
-                    .forward_pid
-                    .map(|p| SdkValue::Int(i64::from(p)))
-                    .unwrap_or_default(),
-            ),
-            ("started", SdkValue::Int(home::now_ms())),
-        ]),
-    )?;
-    let mut lasting = Vec::new();
-    if let Some(port) = running.lasting.port {
-        lasting.push(("port".to_owned(), SdkValue::Int(i64::from(port))));
+    /// A built-in machine's first record: its name, platform and now.
+    pub fn built_in(name: &str) -> Self {
+        Self::from_record(
+            name,
+            SdkValue::map([
+                ("name", SdkValue::text(name)),
+                ("platform", SdkValue::text(name)),
+                ("created", SdkValue::Int(home::now_ms())),
+            ]),
+        )
     }
-    if let Some(network) = running.lasting.network {
-        lasting.push(("network".to_owned(), SdkValue::Int(i64::from(network))));
+
+    /// The machine's name (its folder's).
+    pub fn name(&self) -> &str {
+        &self.name
     }
-    update(home, name, |record| {
-        let record = with_field(record, "lasting", SdkValue::Map(lasting));
-        with_field(record, "state", SdkValue::text("running"))
-    })
+
+    /// The record as written.
+    pub fn to_record(&self) -> &SdkValue {
+        &self.fields
+    }
+
+    /// The record with field `field` set to `value` (added when absent).
+    pub fn with(self, field: &str, value: SdkValue) -> Self {
+        Self::from_record(&self.name, with_field(self.fields, field, value))
+    }
+
+    /// Writes the record to `machine/<name>/record.json` under `home`.
+    pub fn write(&self, home: &Path) -> Result<()> {
+        write_record(&paths::machine_record(home, &self.name), &self.fields)
+    }
+
+    /// The record's field `field` as written.
+    pub fn field(&self, field: &str) -> Option<&SdkValue> {
+        self.fields.get(field)
+    }
+
+    /// The text field `field` (`vm_name`, `image_archive`, `os_image`, ...).
+    pub fn text(&self, field: &str) -> Option<&str> {
+        self.fields.get_text(field)
+    }
+
+    /// The whole-number field `field` (`cpus`, `memory`, `disk`).
+    pub fn int(&self, field: &str) -> Option<i64> {
+        self.fields.get_int(field)
+    }
+
+    /// The platform's name, as written (`platform()` parses it).
+    pub fn platform_name(&self) -> Option<&str> {
+        self.fields.get_text("platform")
+    }
+
+    /// The state a create, connect, start, stop or remove recorded.
+    pub fn recorded_state(&self) -> Option<&str> {
+        self.fields.get_text("state")
+    }
+
+    /// Whether a create or a remove of the machine is in flight: a list
+    /// shows its recorded state and probes nothing.
+    pub fn in_flight(&self) -> bool {
+        self.recorded_state() == Some("creating") || self.removing().is_some()
+    }
+
+    /// The Sandbox image the record names (a digest, or a file).
+    pub fn image(&self) -> Option<&str> {
+        self.fields.get_text("image")
+    }
+
+    /// The docker machine's Docker socket.
+    pub fn docker(&self) -> Option<&str> {
+        self.fields.get_text("docker")
+    }
+
+    /// The daemon a built-in machine's Sandboxes run (`import-env` writes it).
+    pub fn daemon(&self) -> Option<&str> {
+        self.fields.get_text("daemon")
+    }
+
+    /// A Firecracker machine's Lima host.
+    pub fn host(&self) -> Option<&str> {
+        self.fields.get_text("host")
+    }
+
+    /// Whether a Lima machine was made `--nested`.
+    pub fn nested(&self) -> bool {
+        matches!(self.fields.get("nested"), Some(SdkValue::Bool(true)))
+    }
+
+    /// An ssh machine's host settings.
+    pub fn ssh(&self) -> Option<&SdkValue> {
+        self.fields.get("ssh")
+    }
+
+    /// The identity of the host an ssh machine reaches.
+    pub fn host_id(&self) -> Option<&str> {
+        self.ssh().and_then(|ssh| ssh.get_text("host_id"))
+    }
+
+    /// The record with its ssh settings' `host_id` set.
+    pub fn with_host_id(self, identity: &str) -> Self {
+        let ssh = self.ssh().cloned().unwrap_or_default();
+        let ssh = with_field(ssh, "host_id", SdkValue::text(identity));
+        self.with("ssh", ssh)
+    }
+
+    /// The live process removing the machine, from its record's `removing`.
+    pub fn removing(&self) -> Option<i64> {
+        let pid = self.fields.get("removing")?.get_int("pid")?;
+        crate::common::home::lease::alive(u32::try_from(pid).ok()?).then_some(pid)
+    }
+
+    /// The record marked as being removed by this process.
+    pub fn marked_removing(self) -> Self {
+        let pid = SdkValue::Int(i64::from(std::process::id()));
+        self.with("removing", SdkValue::map([("pid", pid)]))
+    }
+
+    /// The record with `state` and the `error` that left it there.
+    pub fn failed_as(self, state: &str, error: &str) -> Self {
+        let record = self.with("state", SdkValue::text(state));
+        record.with("error", SdkValue::text(error))
+    }
+
+    /// The docker machine's loaded default image, `(id, bundle hash)`.
+    pub fn loaded_image(&self) -> Option<(&str, &str)> {
+        let loaded = self.fields.get("loaded_image")?;
+        Some((loaded.get_text("id")?, loaded.get_text("bundle")?))
+    }
+
+    /// The record with the default image `id` loaded from bundle `bundle`.
+    pub fn with_loaded_image(self, id: &str, bundle: &str) -> Self {
+        let loaded = SdkValue::map([
+            ("id", SdkValue::text(id)),
+            ("bundle", SdkValue::text(bundle)),
+        ]);
+        self.with("loaded_image", loaded)
+    }
 }
 
-/// Rewrites machine `name`'s record through `change`.
-pub fn update(home: &Path, name: &str, change: impl FnOnce(SdkValue) -> SdkValue) -> Result<()> {
-    let path = paths::machine_record(home, name);
-    let record = read_record(&path)?
-        .ok_or_else(|| refused("NotFound", format!("no machine named {name}")))?;
-    write_record(&path, &change(record))
+/// What a machine's result shows beside its record.
+#[cfg(feature = "machine")]
+#[derive(Clone, Debug, Default)]
+pub struct MachineDerived {
+    /// Its live state and, when that could not be read, why; `None` keeps
+    /// the record's state (a built-in machine, or one being made or removed).
+    pub live: Option<(String, Option<String>)>,
+    /// The sqlite Stores on it.
+    pub stores: Vec<String>,
+    /// The Sandboxes recorded on it.
+    pub sandboxes: Vec<String>,
 }
 
-/// The Stores whose record names machine `name`.
-pub fn stores_on(home: &Path, name: &str) -> Result<Vec<String>> {
-    let mut stores = Vec::new();
-    for store in paths::names(&home.join("store")).map_err(crate::common::outcome::failed)? {
-        if let Some(record) = read_record(&paths::store_record(home, &store))? {
-            if let StoreRef::Sqlite {
-                machine: Placement::Machine(machine),
-                ..
-            } = StoreRef::from_record(&store, &record)?
+#[cfg(feature = "machine")]
+impl MachineRecord {
+    /// The machine's platform; a record naming none LayerFS knows is
+    /// refused `Failed`.
+    pub fn platform(&self) -> Result<layerfs_machine::Platform> {
+        self.platform_name()
+            .and_then(layerfs_machine::Platform::parse)
+            .ok_or_else(|| refused("Failed", "a machine record names no known platform"))
+    }
+
+    /// The machine's state (#536 §7.2): its live probe's answer (`live`),
+    /// else the state its record holds, else `ready` for a built-in
+    /// machine and `stopped` for any other. F3's `op` adds `removing` and
+    /// `unresolved`.
+    pub fn state<'a>(&'a self, live: Option<&'a str>) -> Result<&'a str> {
+        let fallback = match self.platform()?.built_in() {
+            true => "ready",
+            false => "stopped",
+        };
+        Ok(live.or(self.recorded_state()).unwrap_or(fallback))
+    }
+
+    /// The machine as `machine.get`, each `machine.list` item, `start`,
+    /// `stop`, `update`, `create` and `connect` show it: name, platform,
+    /// backend, `supports`, state, size, Stores and Sandboxes, then the
+    /// settings it has (`image`, `host`, `nested`, `docker`, `wsl`,
+    /// `error`, `ssh`).
+    pub fn to_sdk(
+        &self,
+        _view: crate::common::outcome::View,
+        derived: &MachineDerived,
+    ) -> Result<SdkValue> {
+        let kind = self.platform()?;
+        let live = derived.live.as_ref();
+        let state = self.state(live.map(|(state, _)| state.as_str()))?;
+        let error = live.and_then(|(_, error)| error.clone());
+        let list = |items: &[String]| SdkValue::List(items.iter().map(SdkValue::text).collect());
+        let mut fields = vec![
+            ("name", SdkValue::text(&self.name)),
+            ("platform", SdkValue::text(kind.name())),
+            ("backend", SdkValue::text(super::spec::backend_name(kind))),
+            ("supports", super::platforms::supports(kind)),
+            ("state", SdkValue::text(state)),
+            ("cpus", self.field("cpus").cloned().unwrap_or_default()),
+            ("memory", self.field("memory").cloned().unwrap_or_default()),
+            ("disk", self.field("disk").cloned().unwrap_or_default()),
+            ("stores", list(&derived.stores)),
+            ("sandboxes", list(&derived.sandboxes)),
+        ];
+        for extra in ["image", "host", "nested", "docker", "wsl", "error"] {
+            if let Some(value) = self
+                .field(extra)
+                .filter(|_| extra != "error" || error.is_none())
             {
-                if machine == name {
-                    stores.push(store);
-                }
+                fields.push((extra, value.clone()));
             }
         }
-    }
-    Ok(stores)
-}
-
-/// The Sandboxes recorded under machine `name`.
-pub fn sandboxes_on(home: &Path, name: &str) -> Result<Vec<String>> {
-    paths::names(&paths::machine_dir(home, name).join("sandbox"))
-        .map_err(crate::common::outcome::failed)
-}
-
-/// The Firecracker machines a Lima machine hosts.
-pub fn hosted_on(home: &Path, name: &str) -> Result<Vec<String>> {
-    let mut hosted = Vec::new();
-    for machine in paths::names(&home.join("machine")).map_err(crate::common::outcome::failed)? {
-        if let Some(record) = read_record(&paths::machine_record(home, &machine))? {
-            if record.get_text("host") == Some(name) {
-                hosted.push(machine);
-            }
+        if let Some(error) = error {
+            fields.push(("error", SdkValue::Text(error)));
         }
-    }
-    Ok(hosted)
-}
-
-/// A machine error as a refusal: its code, message and what is missing.
-pub fn refusal(error: MachineError) -> SdkRefusal {
-    let mut refusal = refused(error.code.as_str(), error.message);
-    refusal.detail = SdkValue::map([
-        (
-            "missing",
-            SdkValue::List(error.missing.into_iter().map(SdkValue::Text).collect()),
-        ),
-        ("vm_exists", SdkValue::Bool(error.vm_exists)),
-    ]);
-    refusal
-}
-
-/// The backend a machine's Sandboxes run on, on this host.
-pub fn backend_name(kind: Platform) -> &'static str {
-    use layerfs_machine::Backend;
-    match kind.backend(HostOs::current()) {
-        Some(Backend::HostProcess) => "native",
-        Some(Backend::Namespaces) => "namespaces",
-        Some(Backend::Docker) => "docker",
-        None => "-",
+        if let Some(ssh) = self.ssh() {
+            fields.push(("ssh", ssh.clone()));
+        }
+        Ok(SdkValue::Map(
+            fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
+        ))
     }
 }

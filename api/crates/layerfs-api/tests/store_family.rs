@@ -83,6 +83,8 @@ fn create_list_get_and_status() {
         panic!()
     };
     assert_eq!(items.len(), 1);
+    // each item carries the state `store.status` shows (#536 §10b)
+    assert_eq!(items[0].get_text("state"), Some("idle"), "{items:?}");
     assert_eq!(
         call(&home, "store.get", &[("name", t("nope"))])
             .unwrap_err()
@@ -134,6 +136,13 @@ fn a_store_moves_to_a_worker_machine_and_back_with_equal_heads() {
         .unwrap();
     assert_eq!(record.get_text("machine"), Some("box"));
     assert_eq!(record.get("in_progress"), Some(&SdkValue::Null));
+    // its machine's worker answers: the list finds it idle there
+    let listed = call(&home, "store.list", &[]).unwrap();
+    let Some(SdkValue::List(items)) = listed.get("items") else {
+        panic!("{listed:?}")
+    };
+    assert_eq!(items[0].get_text("machine"), Some("box"));
+    assert_eq!(items[0].get_text("state"), Some("idle"), "{items:?}");
 
     // a second move to the same machine is refused before any effect
     let again = call(
@@ -181,6 +190,11 @@ fn move_and_remove_refuse_a_store_in_use_and_remove_deletes_it() {
     );
     let status = call(&home, "store.status", &[("name", t("shop"))]).unwrap();
     assert_eq!(status.get_text("state"), Some("in_use"));
+    let listed = call(&home, "store.list", &[]).unwrap();
+    assert!(
+        calls::json::print(&listed).contains(r#""state":"in_use""#),
+        "{listed:?}"
+    );
     std::fs::remove_file(&lease).unwrap();
 
     // a failed phase keeps what exists: the target already has a file

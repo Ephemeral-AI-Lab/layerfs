@@ -5,10 +5,11 @@
 //! an `Unknown` outcome keeps everything and is logged.
 use super::bundle::bundle;
 use super::list::summary;
-use super::record::{self, kind_of, machine_of, refusal, save_running, update as update_record};
+use super::record::MachineRecord;
+use super::spec::{self as record, machine_of, refusal, save_running, update as update_record};
 use super::status::home_id;
 use crate::common::context::Context;
-use crate::common::home::{self, lock, paths, with_field, write_record};
+use crate::common::home::{self, lock, paths};
 use crate::common::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_machine::{self as adapters, Code, Platform};
@@ -18,7 +19,7 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// A new machine's name: valid, not built in, not taken.
 pub(super) fn new_name(home: &Path, name: &str) -> Result<()> {
-    crate::common::names::name("machine", name).map_err(|why| refused("InvalidInput", why))?;
+    crate::common::names::MachineName::parse(name)?;
     if crate::common::names::BUILT_IN.contains(&name) {
         return Err(refused(
             "InvalidInput",
@@ -97,24 +98,23 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if let Some(host) = args.get_text("host") {
         fields.push(("host", SdkValue::text(host)));
     }
-    let record = SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
+    let fields = fields.into_iter().map(|(n, v)| (n.to_owned(), v));
+    let record = MachineRecord::from_record(&name, SdkValue::Map(fields.collect()));
     // claim the name under the lock; the VM is made outside it
     let spec = {
         let _lock = lock::take(&home)?;
         new_name(&home, &name)?;
         if let Some(host) = args.get_text("host") {
             let host_record = machine_of(&home, host)?;
-            if kind_of(&host_record)? != Platform::Lima
-                || !matches!(host_record.get("nested"), Some(SdkValue::Bool(true)))
-            {
+            if host_record.platform()? != Platform::Lima || !host_record.nested() {
                 return Err(refused(
                     "InvalidInput",
                     format!("{host} is not a lima machine made with --nested"),
                 ));
             }
         }
-        write_record(&paths::machine_record(&home, &name), &record)?;
-        record::spec(&home, &id, &name, &record)
+        record.write(&home)?;
+        record::spec(&home, &id, &record)
     };
     let spec = match spec {
         Ok(spec) => spec,
@@ -143,13 +143,10 @@ pub(super) fn finish(
         Ok(running) => {
             save_running(home, name, &running)?;
             let record = machine_of(home, name)?;
-            summary(home, name, &record, None)
+            summary(home, &record, None)
         }
         Err(error) if error.code == Code::Unknown => {
-            update_record(home, name, |r| {
-                let r = with_field(r, "state", SdkValue::text("unknown"));
-                with_field(r, "error", SdkValue::text(&error.message))
-            })?;
+            update_record(home, name, |r| r.failed_as("unknown", &error.message))?;
             home::log_line(
                 home,
                 "uncertain.jsonl",
@@ -163,10 +160,7 @@ pub(super) fn finish(
             Err(refusal(error))
         }
         Err(error) if error.vm_exists => {
-            update_record(home, name, |r| {
-                let r = with_field(r, "state", SdkValue::text("failed"));
-                with_field(r, "error", SdkValue::text(&error.message))
-            })?;
+            update_record(home, name, |r| r.failed_as("failed", &error.message))?;
             Err(refusal(error))
         }
         Err(error) => {
