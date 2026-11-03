@@ -1,0 +1,51 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C02",
+  "machine": "lfs535k2m",
+  "product": "fe6f85013b",
+  "startedAt": "2026-11-03T07:27:39.361Z",
+  "load1": 10.6884765625,
+  "body": {
+    "sha256": "76883ee8358e23ebea7af1931db3d7201684d1da240bc0fefec72781ff569cf6"
+  },
+  "ok": false,
+  "cause": "sandbox.create: Unavailable machine lfs535k2m cannot reach PostgreSQL Store c02's server at 192.168.2.123: no connection to the server was made (it refused the connection, did not answer, or closed it)",
+  "phases": {},
+  "steps": [
+    {
+      "name": "store.connect",
+      "ms": 384.391,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 429.788,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 146.02,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 31.085,
+      "ok": false,
+      "error": {
+        "code": "Unavailable",
+        "message": "machine lfs535k2m cannot reach PostgreSQL Store c02's server at 192.168.2.123: no connection to the server was made (it refused the connection, did not answer, or closed it)"
+      }
+    },
+    {
+      "name": "store.disconnect",
+      "ms": 4.659,
+      "ok": true
+    }
+  ],
+  "store": {
+    "kind": "postgresql",
+    "host": "192.168.2.123"
+  },
+  "failedStep": "sandbox.create",
+  "endedAt": "2026-11-03T07:27:40.360Z"
+}

@@ -1,0 +1,49 @@
+# Where LAYERFS_TRACE is read in fe6f85013b (grep of the tree, product sources)
+$ grep -rn LAYERFS_TRACE api connect engine core | grep -E "\.(rs|js|mjs|cjs|py|ts):"
+core/docs/issues/340/tables/b2-r1-failed/tool-sources/unchanged-analysis/tools/decode_observations.py:226:    parser.add_argument("--trace", help="SDK trace file (LAYERFS_TRACE) to join by scope")
+core/docs/issues/340/tables/b2-r2-failed/tool-sources/unchanged-analysis/tools/decode_observations.py:226:    parser.add_argument("--trace", help="SDK trace file (LAYERFS_TRACE) to join by scope")
+
+$ grep -rln LAYERFS_TRACE . (all files, excluding target/node_modules)
+tools/worktree_run.py
+tools/decode_observations.py
+core/docs/issues/337/BUILDER-COMMON.md
+core/docs/issues/352/SPEC.md
+core/docs/issues/352/SCRIPTS.md
+core/docs/issues/535/README.md
+core/docs/issues/535/receipts/fe6f85013b/K2/item4/trace-config.txt
+core/docs/issues/535/receipts/fe6f85013b/K2/item4/roundtrips.sh
+core/docs/issues/340/LEAD-PROMPT.md
+core/docs/issues/340/TEAM.md
+core/docs/issues/340/tables/b2-r1-failed/tool-sources/unchanged-analysis/tools/decode_observations.py
+core/docs/issues/340/tables/b2-r2-failed/tool-sources/unchanged-analysis/tools/decode_observations.py
+core/docs/issues/340/frozen/revision-3/TEAM.md
+core/docs/issues/340/frozen/revision-3/LEAD-PROMPT.md
+core/docs/issues/340/frozen/revision-1/LEAD-PROMPT.md
+core/docs/issues/340/verbatim/b2-r1/lead-NOTES.md
+core/docs/issues/340/frozen/revision-1/TEAM.md
+core/docs/issues/340/frozen/revision-2/TEAM.md
+core/docs/issues/340/frozen/revision-2/LEAD-PROMPT.md
+core/docs/issues/334/README.md
+core/docs/issues/428/README.md
+core/docs/proposals/layerfs-sdk-cli.md
+.agents/skills/layerfs-sdk-observe/references/tracing.md
+.agents/skills/layerfs-sdk-observe/SKILL.md
+docs/versioned/2.0.0/home.md
+docs/release-notes/1.1.0/README.md
+
+$ grep -rn "take_scope\|trace::run(" api connect (callers of the trace route)
+api/crates/layerfs-control/src/common/trace.rs:29:pub fn take_scope(args: &mut SdkValue) -> Option<[u8; 32]> {
+
+Frozen k-macos build:
+layerfs: strings matching LAYERFS_TRACE = 0
+layerfs.node: strings matching LAYERFS_TRACE = 0
+_native.abi3.so: strings matching LAYERFS_TRACE = 0
+/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-connect-7500a2864564/builds/k-macos/node/src/index.js:0
+/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-connect-7500a2864564/builds/k-macos/node/src/native.js:0
+/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-connect-7500a2864564/builds/k-macos/node/src/values.js:0
+/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-connect-7500a2864564/builds/k-macos/node/src/errors.js:0
+/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-connect-7500a2864564/builds/k-macos/python/src/layerfs/__init__.py:0
+/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-connect-7500a2864564/builds/k-macos/python/src/layerfs/_client.py:0
+/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-connect-7500a2864564/builds/k-macos/python/src/layerfs/_errors.py:0
+/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-connect-7500a2864564/builds/k-macos/python/src/layerfs/_values.py:0
+/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-connect-7500a2864564/builds/k-macos/python/src/layerfs/aio.py:0
