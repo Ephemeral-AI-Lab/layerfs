@@ -28,11 +28,14 @@ Store is backed up. Layers are `core < engine < connect < api`; nothing in
 - `layerfs-machine/src/reach.rs` is `reach` (the call `machine::reach`):
   the PostgreSQL Store URL a Sandbox daemon on the machine dials. Each
   adapter names how its machine reaches the caller's loopback: `native`
-  shares it; `docker` (`host.docker.internal`), `lima`
-  (`host.lima.internal`) and `firecracker` (`172.30.<n>.1`) rewrite a
-  loopback host to their alias; `ssh` refuses it, and `apple-container` and
-  `microsandbox` refuse it until their aliases are verified (G7). A rewrite
-  is refused for `sslmode=verify-full`; other hosts are used as given.
+  shares it; `docker` (`host.docker.internal`) and `lima`
+  (`host.lima.internal`) rewrite a loopback host to their alias; `ssh`
+  refuses it, and so do `apple-container` (no host alias), `microsandbox`
+  (host traffic needs `--net host`, which LayerFS does not set) and
+  `firecracker` (no outbound NAT; its tap address is the nested Lima host),
+  per the G7 receipt in `core/docs/issues/535/receipts/g7-reach/`. A
+  rewrite is refused for `sslmode=verify-full`; other hosts are used as
+  given.
 - `layerfs-machine/src/support.rs` is the one support table:
   platform × host × Store kind → supported, or a refusal with its reason.
 - `layerfs-machine/src/platforms/<p>/`: `profile.rs` holds its `PROFILE`

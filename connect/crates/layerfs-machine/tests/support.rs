@@ -64,7 +64,7 @@ fn postgresql_sandboxes_run_where_they_run_today() {
     );
     assert_eq!(
         allowed(Platform::Firecracker, HostOs::Macos),
-        Err("outbound NAT and host alias not verified (G7)")
+        Err("a firecracker guest has no outbound NAT and its tap address is the nested lima host, not this host (G7)")
     );
     assert!(allowed(Platform::Ssh, HostOs::Linux)
         .unwrap_err()

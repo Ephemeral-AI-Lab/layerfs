@@ -61,10 +61,15 @@ pub struct Supports {
 const OTHER_HOST: &str = "LayerFS names no host other than macOS, Linux and Windows";
 const NO_BACKEND: &str = "no Sandbox backend on Windows (O5)";
 const NAMESPACES_BINDS: &str = "namespaces binds a Store file; enabled in #535 phase 5a";
-/// G7: no live receipt records these platforms' host aliases yet; `reach`
-/// refuses a loopback URL with the same text.
-pub(crate) const APPLE_CONTAINER_ALIAS: &str = "apple-container host alias not verified (G7)";
-pub(crate) const MICROSANDBOX_ALIAS: &str = "microsandbox host alias not verified (G7)";
+/// G7 (live receipt `core/docs/issues/535/receipts/g7-reach/`): these
+/// platforms' guests cannot reach the caller's loopback as LayerFS creates
+/// them; `reach` refuses a loopback URL with the same text.
+pub(crate) const APPLE_CONTAINER_ALIAS: &str =
+    "an apple-container guest has no host alias and cannot reach the host's loopback (G7)";
+pub(crate) const MICROSANDBOX_ALIAS: &str =
+    "a microsandbox guest reaches the host only with --net host, which LayerFS does not set (G7)";
+pub(crate) const FIRECRACKER_REACH: &str =
+    "a firecracker guest has no outbound NAT and its tap address is the nested lima host, not this host (G7)";
 
 /// Why `platform` cannot be on `host`, or `None` where it can.
 fn host_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
@@ -96,7 +101,7 @@ fn postgresql_refusal(platform: Platform, host: HostOs) -> Option<&'static str> 
         (Platform::Lima, _) => Some("lima host alias not verified (G7)"),
         (Platform::AppleContainer, _) => Some(APPLE_CONTAINER_ALIAS),
         (Platform::Microsandbox, _) => Some(MICROSANDBOX_ALIAS),
-        (Platform::Firecracker, _) => Some("outbound NAT and host alias not verified (G7)"),
+        (Platform::Firecracker, _) => Some(FIRECRACKER_REACH),
     }
 }
 

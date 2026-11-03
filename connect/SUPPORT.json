@@ -30,7 +30,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "apple-container host alias not verified (G7)" },
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "an apple-container guest has no host alias and cannot reach the host's loopback (G7)" },
           "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
           "description": "an Apple container VM (Apple silicon); Sandboxes run in Linux namespaces and a cgroup"
         },
@@ -40,7 +40,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "microsandbox host alias not verified (G7)" },
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "a microsandbox guest reaches the host only with --net host, which LayerFS does not set (G7)" },
           "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
           "description": "a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup"
         },
@@ -60,7 +60,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "outbound NAT and host alias not verified (G7)" },
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "a firecracker guest has no outbound NAT and its tap address is the nested lima host, not this host (G7)" },
           "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "host", "kind": "name" } ],
           "description": "a Firecracker microVM in a nested lima machine; Sandboxes run in Linux namespaces and a cgroup"
         },
@@ -115,7 +115,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "microsandbox host alias not verified (G7)" },
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "a microsandbox guest reaches the host only with --net host, which LayerFS does not set (G7)" },
           "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
           "description": "a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup"
         },
@@ -190,7 +190,7 @@
           "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "microsandbox host alias not verified (G7)" },
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "a microsandbox guest reaches the host only with --net host, which LayerFS does not set (G7)" },
           "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" } ],
           "description": "a microsandbox microVM (libkrun); Sandboxes run in Linux namespaces and a cgroup"
         },
