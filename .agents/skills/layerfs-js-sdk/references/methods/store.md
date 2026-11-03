@@ -39,17 +39,18 @@ makes its Stores `down`. `store.get(name)` is one record (no `state`):
 `store.status(name)` is the live state, read from the Store's machine:
 
 ```json
-{"name":"shop","kind":"sqlite","state":"idle","holders":[],"in_progress":null,"machine":"native",
+{"name":"shop","kind":"sqlite","state":"idle","holders":[],"op":null,"machine":"native",
  "file":{"exists":true,"bytes":212992,"wal_bytes":799312}}
 ```
 
-`holders` are processes holding the Store open; `in_progress` names a move
-under way (`{ from, to, pid, started, … }`). For a PostgreSQL Store a `server`
+`holders` are processes holding the Store open; `op` names a move or remove
+under way (`{ id, name, phase, started, uncertain }`; `get` and `list` items
+show it too). For a PostgreSQL Store a `server`
 field carries the server's status instead of `file` (not run here).
 `store.status` starts no machine (from source, `75f83ec9b6`): a Store whose
 machine is stopped, or whose worker does not answer, is `state: "down"` with
-`down_reason` and `file.unavailable`. `state` is `idle`, `in_use`, `moving`
-or `down`.
+`down_reason` and `file.unavailable`. `state` is `idle`, `in_use`, `busy`
+(a live `op`), `down` or `unresolved` (a gone process's uncertain `op`).
 
 ## Changes
 
@@ -57,9 +58,9 @@ or `down`.
 | --- | --- | --- |
 | `create(name)` | An empty sqlite Store on `native` | Live result: the record above, with `projects: []`. `Exists` for a taken name |
 | `connect(name, url, …)` | Attaches a PostgreSQL database | `url` is `postgresql://<user>@<host>:<port>/<database>[?sslmode=…]` without a password (one in the user part or in any query parameter whose name contains `password` is `InvalidInput`); `password` is a reference, `env:LAYERFS_<NAME>` or `file:/path`. `synchronous_commit` defaults to `off`. The same database under a second name is `Exists` |
-| `move(name, machine, …)` | Moves a sqlite Store's file to another machine | Progress `{ phase, done, total }` on `on_progress` / `--progress`. `InUse` while the Store is held (Sandboxes running, processes with it open); while it runs, Store calls on it are `InUse`, from the mover's process too |
-| `remove(name)` | Deletes a sqlite Store with every project in it | Returns `{ removed }`. `NotFound` for an unknown name (live); `Unavailable` for a Store whose machine is unknown. Backups stay |
-| `disconnect(name)` | Forgets a PostgreSQL Store; its data stays | |
+| `move(name, machine, …)` | Moves a sqlite Store's file to another machine | Progress `{ phase, done, total }` on `on_progress` / `--progress`. `InUse` while the Store is held (Sandboxes running, processes with it open); while it runs, Store calls and operations on it are `Busy`, from the mover's process too. An uncertain move whose process is gone leaves every later call `Unresolved`, naming `store status` and `store remove` |
+| `remove(name)` | Deletes a sqlite Store with every project in it | Returns `{ removed }`. `NotFound` for an unknown name (live); `Unavailable` for a Store whose machine is unknown; `Busy` while a live process moves or removes it. It clears an `Unresolved` Store. Backups stay |
+| `disconnect(name)` | Forgets a PostgreSQL Store; its data stays | `InUse` while another process holds the Store (its calls hold it while it stays open) or a Sandbox of it runs |
 
 Moving a Store moves where its Sandboxes can run: a Sandbox of a sqlite Store
 runs only on the Store's machine.

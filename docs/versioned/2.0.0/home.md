@@ -157,7 +157,9 @@ one pass:
    `sandbox/<name>/record.json`. A Sandbox whose native runtime had ended
    is written `gone` (with no id), its stopped runtime deleted once and its
    numbered folder removed; `sandbox close` then answers `was: gone`. It
-   writes `"v": 1` into every machine, Store, project and bucket record.
+   drops a Store record's `in_progress` whose process ended (2.0 did not
+   let it hold the Store; layout 3 records hold `op` instead), with a note.
+   It writes `"v": 1` into every machine, Store, project and bucket record.
 2. It writes `log/layout-3.pending`, then `layerfs.json` at layout 3.
 3. It deletes `machine/*/sandbox/` and `store/*/project/*/sandboxes/`,
    renames `machine/native/sandbox-root/` to `machine/native/run/` (its

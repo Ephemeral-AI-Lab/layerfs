@@ -208,36 +208,54 @@ $ layerfs store move shop dev --progress   # not run
   its phases once each: check, snapshot, send, verify, install, record and
   retire. The bytes pass through the calling process in pieces, so a move
   between two machines other than `native` is one call (O12).
-  - It is `InUse` while any process holds the Store, a Sandbox of one of
-    its projects runs, or another live process moves it.
-  - A Store call made while a move or remove runs is `InUse`, from the
+  - It is `InUse` while any process holds the Store or a Sandbox of one of
+    its projects runs.
+  - While a move or remove runs, the Store's record holds one `op` (#536
+    §7.1): its id, `name` (`store.move`, `store.remove`), `phase`,
+    `args`, owner process and `uncertain`. Every other operation, lease and
+    Store call on the Store is `Busy` while that process lives, from the
     mover's own process too: the lease is taken, and the record re-read,
-    under the home lock. The mover writes `in_progress` under the lock,
-    closes its own open copy, then re-checks the leases (another thread's
-    included) and Sandboxes under the lock again before the snapshot.
-  - The home lock covers only the checks and record writes, never a machine
-    start, a Store step or the close of an open Store. A move whose record
-    phase fails (its lock wait expired, say) keeps `in_progress` with both
-    copies and logs the uncertain outcome.
+    under the Store's lock, `store/<name>/lock`. The mover writes `op`
+    under the home lock and the Store's lock, closes its own open copy,
+    then re-checks the leases (another thread's included) and Sandboxes
+    under both locks again before the snapshot, and writes each phase into
+    `op` as it starts.
+  - The locks cover only the checks and record writes, never a machine
+    start, a Store step or the close of an open Store.
+  - A certain failure drops `op`. An uncertain one (an `Unknown` step, or
+    any failure of the record phase, after both copies exist) keeps both
+    copies, keeps `op` with `uncertain: true` and is logged to
+    `log/uncertain.jsonl`. The record phase is written uncertain before it
+    starts, so a move that dies there is uncertain too; the record write
+    that puts the Store on its new machine drops `op`.
+  - Once that process is gone, an uncertain `op` makes every later
+    operation, lease and Store call on the Store `Unresolved`, naming
+    `layerfs store status <name>` and `layerfs store remove <name>`; a
+    certain one holds nothing.
   - It is `Exists` when the target already holds a Store file of that name,
     and `InvalidInput` for the Store's own machine or a postgresql Store.
   - A failure names its phase in the message and in `detail.phase`, and
     keeps whatever exists.
-  - An `Unknown` step keeps both copies, leaves the record's `in_progress`
-    set and is logged to `log/uncertain.jsonl`.
-  - While it runs, `store status` shows `state: "moving"` and
-    `in_progress`.
+  - While it runs, `store status` shows `state: "busy"` and `op`.
 - `store remove` deletes a sqlite Store wherever it is, with every project
   in it. Its backups stay in their buckets. It is `InUse` while the Store is
-  held. A Store whose machine is unknown is `Unavailable` (as for a move).
-  A stopped machine is refused `Unavailable`, naming `machine start`,
-  before the home lock is taken; a Store whose machine changed meanwhile is `Conflict`. A certain
-  failure clears `in_progress`.
+  held and `Busy` while a live process runs an operation on it. A Store
+  whose machine is unknown is `Unavailable` (as for a move). A stopped
+  machine is refused `Unavailable`, naming `machine start`, before the
+  home lock is taken; a Store whose machine changed meanwhile is
+  `Conflict`. It is the call that clears an unresolved `op`: a gone
+  process's intent does not refuse it. Its remove phase is written
+  uncertain before it starts. A certain failure drops its `op`, putting
+  back the unresolved one it would have cleared.
 - `store status` starts no machine. A Store whose machine is not running,
   or whose recorded worker does not answer, has `state: "down"` with
   `down_reason`, and `file.unavailable` (O34).
-- A lease records its process's start time and boot, so a lease or move
-  whose process id was reused by another process is stale. A lease written
+- A Store's `state` is `idle`, `in_use` (another live process holds its
+  lease), `busy` (a live `op`), `down` or `unresolved` (a gone process's
+  uncertain `op`). `store status`, `store get` and each `store list` item
+  show `op` as `{id, name, phase, started, uncertain}`.
+- A lease or `op` records its process's start time and boot, so one whose
+  process id was reused by another process is stale. A lease written
   without them is matched by id alone.
 - Init writes only into a sqlite Store on `native`. To add a project to a
   Store on another machine, move it to `native`, Init, and move it back.
@@ -275,9 +293,12 @@ layerfs project init pg-main/load ./load
   schema has another name is opened and one with several is refused. The
   connect code names only the schema `layerfs`.
 - `store status` adds a `server` field from one connection.
-- `store disconnect` forgets the Store; its data stays on the server. It is
-  `InUse` while the Store is held.
-- `project init` into a PostgreSQL Store runs in the caller's process.
+- A process that makes calls on a PostgreSQL Store holds its lease while
+  it keeps the Store open, as for a sqlite Store. `store disconnect`
+  forgets the Store; its data stays on the server. It is `InUse` while
+  another process holds the Store or a Sandbox of it runs.
+- `project init` into a PostgreSQL Store runs in the caller's process,
+  under the Store's lease.
 - PostgreSQL needs a build with the `postgresql` feature; without it these
   calls are `Unsupported`.
 - A PostgreSQL Store's Sandboxes run on `native` (macOS and Linux),

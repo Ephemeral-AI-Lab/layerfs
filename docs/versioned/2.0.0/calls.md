@@ -326,10 +326,12 @@ sqlite  3.53.2
 PROJECTS  (none)
 
 $ layerfs store status shop
-{"name":"shop","kind":"sqlite","state":"idle","holders":[],"in_progress":null,"machine":"native","file":{"exists":true,"bytes":212992,"wal_bytes":271952}}
+{"name":"shop","kind":"sqlite","state":"idle","holders":[],"op":null,"machine":"native","file":{"exists":true,"bytes":212992,"wal_bytes":271952}}
 ```
 
-`state` is `idle`, `in_use`, `moving` or `down`. `store status` starts no
+`state` is `idle`, `in_use`, `busy`, `down` or `unresolved`; `op` is the
+move or remove running on the Store, `{id, name, phase, started,
+uncertain}`, or `null`. `store status` starts no
 machine: a Store whose machine is stopped, or whose recorded worker does
 not answer, is `down`, with `down_reason` and `file.unavailable` (O34). See
 [Stores](machines-and-stores.md#stores).
