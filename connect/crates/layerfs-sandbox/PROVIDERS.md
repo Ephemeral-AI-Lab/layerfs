@@ -153,8 +153,9 @@ unified cgroup v2 hierarchy (and `cgroup.kill`), `/dev/fuse`, and
 user namespace and hold its own copy of the Workspace mount. The runtime never
 sets that limit itself. There is no image: the private root binds the VM's own
 userland, so the Sandbox runs the daemon and libraries the VM already has.
-`ProviderLaunchOptions::Namespaces { command_identity, environment, store }`
-names the Store file whose directory is bound in; `SandboxRecord::Namespaces`
+`ProviderLaunchOptions::Namespaces { command_identity, environment, image,
+archive }` with `Runtime::launch_with_binds` binds a sqlite Store file's
+directory in (`Bind::store`), or nothing for a PostgreSQL Store; `SandboxRecord::Namespaces`
 keeps the same physical facts as `LocalRecord`.
 
 ## Windows

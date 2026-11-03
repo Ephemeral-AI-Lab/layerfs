@@ -86,7 +86,7 @@ fn configure(f: &support::Fixture, deployment: &Deployment) -> PathBuf {
             idle_exit_s: deployment.idle_exit_s,
         },
         store: DaemonStore::Sqlite {
-            locator: "/layerfs-store/global/store.sqlite".into(),
+            locator: f.project.manifest.locator.clone(),
             install: deployment.existing_store.clone(),
         },
     };

@@ -9,7 +9,7 @@
 mod support {
     pub mod engine;
 }
-use layerfs_sandbox::docker::{desktop_url, store_locator, SandboxRequest};
+use layerfs_sandbox::docker::{store_locator, SandboxRequest};
 use std::{
     fs::{self, File},
     io::Write,
@@ -165,32 +165,4 @@ fn a_malformed_source_is_refused_before_any_engine_request() {
     let (docker, peer) = Peer::new(Vec::new(), 8192);
     assert!(docker.create_sandbox(request("vol/../x")).is_err());
     assert!(peer.finish().is_empty());
-}
-
-#[test]
-fn a_loopback_postgresql_url_names_the_desktop_host() {
-    assert_eq!(
-        desktop_url("postgres://u:p@127.0.0.1:5432/db?sslmode=disable").as_deref(),
-        Some("postgres://u:p@host.docker.internal:5432/db?sslmode=disable")
-    );
-    assert_eq!(
-        desktop_url("postgresql://localhost/db").as_deref(),
-        Some("postgresql://host.docker.internal/db")
-    );
-    assert_eq!(
-        desktop_url("postgres://u@[::1]:6543/db").as_deref(),
-        Some("postgres://u@host.docker.internal:6543/db")
-    );
-    for other in [
-        "postgres://u@db.example.com:5432/db",
-        "postgres://u@127.0.0.2/db",
-        "not a url",
-        // a port that is not 1 to 5 digits (here a password's unescaped `/`
-        // cut the authority) is not read
-        "postgres://u:pw/x@localhost/db",
-        "postgres://u@localhost:/db",
-        "postgres://u@[::1]x/db",
-    ] {
-        assert_eq!(desktop_url(other), None, "{other}");
-    }
 }

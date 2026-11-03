@@ -1,0 +1,28 @@
++(eval):1> perl -e 'alarm shift; exec @ARGV' 120 limactl delete --force g7probe-lima
+time="2026-11-03T10:25:43+08:00" level=info msg="Sending SIGKILL to the vz driver process 18810"
+time="2026-11-03T10:25:43+08:00" level=info msg="Sending SIGKILL to the host agent process 18810"
+time="2026-11-03T10:25:43+08:00" level=info msg="Removing *.pid *.sock *.tmp under `/Users/yifanxu/.lima/g7probe-lima`"
+time="2026-11-03T10:25:43+08:00" level=info msg="Removing `/Users/yifanxu/.lima/g7probe-lima/boot-session.tmp`"
+time="2026-11-03T10:25:43+08:00" level=info msg="Removing `/Users/yifanxu/.lima/g7probe-lima/default_ep.sock`"
+time="2026-11-03T10:25:43+08:00" level=info msg="Removing `/Users/yifanxu/.lima/g7probe-lima/default_fd.sock`"
+time="2026-11-03T10:25:43+08:00" level=info msg="Removing `/Users/yifanxu/.lima/g7probe-lima/ha.pid`"
+time="2026-11-03T10:25:43+08:00" level=info msg="Removing `/Users/yifanxu/.lima/g7probe-lima/ha.sock`"
+time="2026-11-03T10:25:43+08:00" level=info msg="Removing `/Users/yifanxu/.lima/g7probe-lima/ssh.sock`"
+time="2026-11-03T10:25:43+08:00" level=info msg="Removing `/Users/yifanxu/.lima/g7probe-lima/vz.pid`"
+time="2026-11-03T10:25:43+08:00" level=info msg="Deleted `g7probe-lima` (`/Users/yifanxu/.lima/g7probe-lima`)"
++(eval):1> limactl disk delete g7probe-lima-data
+time="2026-11-03T10:25:43+08:00" level=info msg="Deleted `g7probe-lima-data` (`/Users/yifanxu/.lima/_disks/g7probe-lima-data`)"
++(eval):1> limactl list
+NAME         STATUS     SSH                VMTYPE    ARCH       CPUS    MEMORY    DISK     DIR
+lfc-linux    Stopped    127.0.0.1:60023    vz        aarch64    4       6GiB      40GiB    ~/.lima/lfc-linux
+lfc-ssh      Stopped    127.0.0.1:60022    vz        aarch64    4       4GiB      30GiB    ~/.lima/lfc-ssh
+lfc-vzkvm    Stopped    127.0.0.1:62810    vz        aarch64    4       4GiB      30GiB    ~/.lima/lfc-vzkvm
++(eval):1> limactl disk list
+NAME            SIZE     FORMAT    DIR                                         IN-USE-BY
+lfcssh-store    40GiB    raw       /Users/yifanxu/.lima/_disks/lfcssh-store    
++(eval):1> ls /Users/yifanxu/.lima
+_config
+_disks
+lfc-linux
+lfc-ssh
+lfc-vzkvm

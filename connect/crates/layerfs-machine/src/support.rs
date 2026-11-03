@@ -1,8 +1,10 @@
 //! The one support table (#535 §7.3, G1, G7): for each platform, host and
 //! Store kind, whether a Sandbox is supported or the fixed reason it is
-//! refused. It encodes what is allowed today; each later phase flips rows
-//! here and `connect/SUPPORT.json` (rendered by [`support_json`], compared
-//! by a test) and `machine.platforms` follow.
+//! refused. It encodes what is allowed; phase 5a enabled PostgreSQL
+//! Sandboxes on native (macOS and Linux), docker and ssh, and phases 5b and
+//! 5c flip the VM platforms' rows here once their receipts exist (G7);
+//! `connect/SUPPORT.json` (rendered by [`support_json`], compared by a
+//! test) and `machine.platforms` follow.
 use crate::options::OptSpec;
 use crate::platform::{ExecutorKind, HostOs, How, KernelRoute, Platform};
 pub use layerfs_bridge::StoreKind;
@@ -60,11 +62,15 @@ pub struct Supports {
 
 const OTHER_HOST: &str = "LayerFS names no host other than macOS, Linux and Windows";
 const NO_BACKEND: &str = "no Sandbox backend on Windows (O5)";
-const NAMESPACES_BINDS: &str = "namespaces binds a Store file; enabled in #535 phase 5a";
-/// G7: no live receipt records these platforms' host aliases yet; `reach`
-/// refuses a loopback URL with the same text.
-pub(crate) const APPLE_CONTAINER_ALIAS: &str = "apple-container host alias not verified (G7)";
-pub(crate) const MICROSANDBOX_ALIAS: &str = "microsandbox host alias not verified (G7)";
+/// G7 (live receipt `core/docs/issues/535/receipts/g7-reach/`): these
+/// platforms' guests cannot reach the caller's loopback as LayerFS creates
+/// them; `reach` refuses a loopback URL with the same text.
+pub(crate) const APPLE_CONTAINER_ALIAS: &str =
+    "an apple-container guest has no host alias and cannot reach the host's loopback (G7)";
+pub(crate) const MICROSANDBOX_ALIAS: &str =
+    "a microsandbox guest reaches the host only with --net host, which LayerFS does not set (G7)";
+pub(crate) const FIRECRACKER_REACH: &str =
+    "a firecracker guest has no outbound NAT and its tap address is the nested lima host, not this host (G7)";
 
 /// Why `platform` cannot be on `host`, or `None` where it can.
 fn host_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
@@ -84,19 +90,18 @@ fn host_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
 }
 
 /// Why a PostgreSQL Sandbox does not run on `platform` (on a host it is
-/// on, with a backend), or `None` where it does.
+/// on, with a backend), or `None` where it does. #535 phase 5a: native
+/// (Linux namespaces with no bind), docker and ssh (whose `reach` refuses
+/// a loopback URL) run them; the VM platforms wait for G7 receipts.
 fn postgresql_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
     match (platform, host) {
-        (Platform::Native, HostOs::Macos) | (Platform::Docker, _) => None,
-        (Platform::Native, HostOs::Linux) => Some(NAMESPACES_BINDS),
+        (Platform::Native, HostOs::Macos | HostOs::Linux)
+        | (Platform::Docker | Platform::Ssh, _) => None,
         (Platform::Native, _) => Some(NO_BACKEND),
-        (Platform::Ssh, _) => Some(
-            "namespaces binds a Store file and ssh reach is not built; enabled in #535 phase 5a",
-        ),
         (Platform::Lima, _) => Some("lima host alias not verified (G7)"),
         (Platform::AppleContainer, _) => Some(APPLE_CONTAINER_ALIAS),
         (Platform::Microsandbox, _) => Some(MICROSANDBOX_ALIAS),
-        (Platform::Firecracker, _) => Some("outbound NAT and host alias not verified (G7)"),
+        (Platform::Firecracker, _) => Some(FIRECRACKER_REACH),
     }
 }
 

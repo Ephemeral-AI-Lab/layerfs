@@ -39,9 +39,15 @@ pub struct Listed {
     pub metadata: Option<Metadata>,
 }
 
+/// Only this crate's providers implement [`Driver`]: the trait is sealed
+/// (#535 G2, #536 §9.4); a new provider is a folder under `bucket/`.
+pub(crate) mod sealed {
+    pub trait Sealed {}
+}
+
 /// One remote. Each call sends each of its requests once; a sent request
 /// with an unknown outcome is `Uncertain` and never resent.
-pub trait Driver: Send + Sync {
+pub trait Driver: sealed::Sealed + Send + Sync {
     /// What this remote allows.
     fn limits(&self) -> Limits;
 

@@ -1,0 +1,349 @@
+{
+  "active_config": {
+    "deployment_profile": "single_tenant",
+    "env": [
+      {
+        "key": "PATH",
+        "value": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    ],
+    "external_mount_policy": "strict",
+    "image": {
+      "Oci": {
+        "reference": "debian:trixie-slim",
+        "root_disk": {
+          "kind": "managed",
+          "size_mib": 4096
+        }
+      }
+    },
+    "init": null,
+    "labels": {
+      "layerfs.role": "g7probe"
+    },
+    "lifecycle": {
+      "ephemeral": false,
+      "idle_timeout_secs": null,
+      "max_duration_secs": null
+    },
+    "manifest_digest": "sha256:1470991b497d26788dc4d6f438bf5690c6ba0d499235d237e55f4b43caea7a75",
+    "mounts": [],
+    "name": "g7probe-msb3",
+    "network": {
+      "dns": {
+        "nameservers": [],
+        "query_timeout_ms": 5000,
+        "rebind_protection": true
+      },
+      "enabled": true,
+      "http": {
+        "deny_response": true,
+        "deny_response_format": "json"
+      },
+      "interface": {},
+      "max_connections": null,
+      "nat64_prefixes": [
+        "64:ff9b::/96"
+      ],
+      "policy": {
+        "default_egress": "deny",
+        "default_ingress": "allow",
+        "rules": [
+          {
+            "action": "allow",
+            "destination": {
+              "group": "public"
+            },
+            "direction": "egress",
+            "ports": [],
+            "protocols": []
+          },
+          {
+            "action": "allow",
+            "destination": {
+              "group": "host"
+            },
+            "direction": "egress",
+            "ports": [
+              {
+                "end": 55432,
+                "start": 55432
+              }
+            ],
+            "protocols": [
+              "tcp"
+            ]
+          },
+          {
+            "action": "allow",
+            "destination": {
+              "group": "host"
+            },
+            "direction": "egress",
+            "ports": [
+              {
+                "end": 53,
+                "start": 53
+              }
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ]
+          },
+          {
+            "action": "allow",
+            "destination": {
+              "group": "public"
+            },
+            "direction": "egress",
+            "ports": [],
+            "protocols": []
+          }
+        ]
+      },
+      "ports": [
+        {
+          "guest_port": 7070,
+          "host_bind": "127.0.0.1",
+          "host_port": 55454,
+          "protocol": "tcp"
+        }
+      ],
+      "secrets": {
+        "secrets": [],
+        "violation_action": "block-and-log"
+      },
+      "strict": true,
+      "tls": {
+        "block_quic_on_intercept": true,
+        "bypass": [],
+        "cache": {
+          "capacity": 1000,
+          "validity_hours": 24
+        },
+        "enabled": false,
+        "intercept_ca": {
+          "cert_path": null,
+          "key_path": null
+        },
+        "intercepted_ports": [
+          443
+        ],
+        "scoped_upstream_ca_cert": [],
+        "scoped_verify_upstream": [],
+        "upstream_ca_cert": [],
+        "verify_upstream": true
+      },
+      "trust_host_cas": false
+    },
+    "patches": [],
+    "pull_policy": "IfMissing",
+    "resources": {
+      "cpus": 2,
+      "max_cpus": 2,
+      "max_memory_mib": 1024,
+      "memory_mib": 1024
+    },
+    "rlimits": [],
+    "runtime": {
+      "cmd": [
+        "bash"
+      ],
+      "disable_metrics_sample": false,
+      "entrypoint": [],
+      "hostname": null,
+      "log_level": null,
+      "metrics_sample_interval_ms": 1000,
+      "scripts": {},
+      "shell": "/bin/sh",
+      "user": null,
+      "workdir": null
+    },
+    "security_profile": "default"
+  },
+  "config": {
+    "deployment_profile": "single_tenant",
+    "env": [
+      {
+        "key": "PATH",
+        "value": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    ],
+    "external_mount_policy": "strict",
+    "image": {
+      "Oci": {
+        "reference": "debian:trixie-slim",
+        "root_disk": {
+          "kind": "managed",
+          "size_mib": 4096
+        }
+      }
+    },
+    "init": null,
+    "labels": {
+      "layerfs.role": "g7probe"
+    },
+    "lifecycle": {
+      "ephemeral": false,
+      "idle_timeout_secs": null,
+      "max_duration_secs": null
+    },
+    "manifest_digest": "sha256:1470991b497d26788dc4d6f438bf5690c6ba0d499235d237e55f4b43caea7a75",
+    "mounts": [],
+    "name": "g7probe-msb3",
+    "network": {
+      "dns": {
+        "nameservers": [],
+        "query_timeout_ms": 5000,
+        "rebind_protection": true
+      },
+      "enabled": true,
+      "http": {
+        "deny_response": true,
+        "deny_response_format": "json"
+      },
+      "interface": {},
+      "max_connections": null,
+      "nat64_prefixes": [
+        "64:ff9b::/96"
+      ],
+      "policy": {
+        "default_egress": "deny",
+        "default_ingress": "allow",
+        "rules": [
+          {
+            "action": "allow",
+            "destination": {
+              "group": "public"
+            },
+            "direction": "egress",
+            "ports": [],
+            "protocols": []
+          },
+          {
+            "action": "allow",
+            "destination": {
+              "group": "host"
+            },
+            "direction": "egress",
+            "ports": [
+              {
+                "end": 55432,
+                "start": 55432
+              }
+            ],
+            "protocols": [
+              "tcp"
+            ]
+          },
+          {
+            "action": "allow",
+            "destination": {
+              "group": "host"
+            },
+            "direction": "egress",
+            "ports": [
+              {
+                "end": 53,
+                "start": 53
+              }
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ]
+          },
+          {
+            "action": "allow",
+            "destination": {
+              "group": "public"
+            },
+            "direction": "egress",
+            "ports": [],
+            "protocols": []
+          }
+        ]
+      },
+      "ports": [
+        {
+          "guest_port": 7070,
+          "host_bind": "127.0.0.1",
+          "host_port": 55454,
+          "protocol": "tcp"
+        }
+      ],
+      "secrets": {
+        "secrets": [],
+        "violation_action": "block-and-log"
+      },
+      "strict": true,
+      "tls": {
+        "block_quic_on_intercept": true,
+        "bypass": [],
+        "cache": {
+          "capacity": 1000,
+          "validity_hours": 24
+        },
+        "enabled": false,
+        "intercept_ca": {
+          "cert_path": null,
+          "key_path": null
+        },
+        "intercepted_ports": [
+          443
+        ],
+        "scoped_upstream_ca_cert": [],
+        "scoped_verify_upstream": [],
+        "upstream_ca_cert": [],
+        "verify_upstream": true
+      },
+      "trust_host_cas": false
+    },
+    "patches": [],
+    "pull_policy": "IfMissing",
+    "resources": {
+      "cpus": 2,
+      "max_cpus": 2,
+      "max_memory_mib": 1024,
+      "memory_mib": 1024
+    },
+    "rlimits": [],
+    "runtime": {
+      "cmd": [
+        "bash"
+      ],
+      "disable_metrics_sample": false,
+      "entrypoint": [],
+      "hostname": null,
+      "log_level": null,
+      "metrics_sample_interval_ms": 1000,
+      "scripts": {},
+      "shell": "/bin/sh",
+      "user": null,
+      "workdir": null
+    },
+    "security_profile": "default"
+  },
+  "created_at": "2026-11-03T02:27:33.204220+00:00",
+  "name": "g7probe-msb3",
+  "pause": {
+    "capture_unavailable": null,
+    "paused": false,
+    "recovery_required": false
+  },
+  "pending_changes": [],
+  "status": "Running",
+  "storage": {
+    "allocated_bytes": 3956736,
+    "in_use": null,
+    "logical_bytes": 4294973477,
+    "name": "g7probe-msb3",
+    "path": "/Users/yifanxu/.microsandbox/sandboxes/g7probe-msb3",
+    "reasons": [
+      "Persisted sandbox data is retained, including stopped and crashed sandboxes. Host bind mounts and shared runtime-memory caches are excluded."
+    ],
+    "reclaimable": null
+  },
+  "updated_at": "2026-11-03T02:27:33.848071+00:00"
+}

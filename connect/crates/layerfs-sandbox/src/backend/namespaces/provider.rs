@@ -49,40 +49,10 @@ impl NamespaceProvider {
         self.local.clone().naming(name)?.paths()
     }
 
-    /// Starts one Sandbox once with the options' `store`, the exact sqlite
-    /// Store file, bound as its directory ([`Bind::store`]). Compatibility
-    /// entry: the same as [`Self::launch_with_binds`] with that one bind and
-    /// an empty `store`.
-    pub fn launch(&self, request: LaunchRequest) -> Result<Sandbox, Box<LaunchFailure>> {
-        let binds = match &request.options {
-            ProviderLaunchOptions::Namespaces { store, .. } => {
-                vec![Bind::store(store).map_err(refused)?]
-            }
-            _ => Vec::new(),
-        };
-        self.start(request, binds)
-    }
-
     /// Starts one Sandbox once with exactly `binds` in its private root
     /// (#535 §6.3): a sqlite Store's [`Bind::store`], or none for a
-    /// PostgreSQL Store. The options' `store` must be empty: the binds
-    /// replace it. A failed start keeps the acknowledged owner.
+    /// PostgreSQL Store. A failed start keeps the acknowledged owner.
     pub fn launch_with_binds(
-        &self,
-        request: LaunchRequest,
-        binds: Vec<Bind>,
-    ) -> Result<Sandbox, Box<LaunchFailure>> {
-        if let ProviderLaunchOptions::Namespaces { store, .. } = &request.options {
-            if !store.as_os_str().is_empty() {
-                return Err(refused(RuntimeError::Protocol(
-                    "namespaces launch with binds names no Store file",
-                )));
-            }
-        }
-        self.start(request, binds)
-    }
-
-    fn start(
         &self,
         request: LaunchRequest,
         binds: Vec<Bind>,

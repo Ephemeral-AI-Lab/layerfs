@@ -114,11 +114,24 @@ impl Fixture {
             options: ProviderLaunchOptions::Namespaces {
                 command_identity: CommandIdentity { uid: 501, gid: 20 },
                 environment: Vec::new(),
-                store: self.store.join("sealed.sqlite"),
                 image: self.image(),
                 archive: self.archive.clone(),
             },
         }
+    }
+
+    /// The bind of the fixture's sqlite Store file (#535 §6.3).
+    fn store_bind(&self) -> Bind {
+        Bind::store(&self.store.join("sealed.sqlite")).unwrap()
+    }
+
+    /// Launches `name` with the Store's bind.
+    fn launch(
+        &self,
+        provider: &NamespaceProvider,
+        name: &str,
+    ) -> Result<Sandbox, Box<layerfs_sandbox::LaunchFailure>> {
+        provider.launch_with_binds(self.request(name), vec![self.store_bind()])
     }
 
     /// The Sandbox directory a launch names.
@@ -253,7 +266,7 @@ fn a_sandbox_is_its_own_namespaces_and_nothing_of_it_is_left_behind() {
     }
     let fixture = Fixture::new("lifecycle");
     let provider = fixture.provider().unwrap();
-    let mut sandbox = provider.launch(fixture.request("sandbox-1")).unwrap();
+    let mut sandbox = fixture.launch(&provider, "sandbox-1").unwrap();
     assert_eq!(sandbox.port(), PORT);
     assert!(sandbox.endpoint().is_ok());
     assert!(sandbox.process().unwrap().alive());
@@ -396,8 +409,8 @@ fn two_sandboxes_on_one_store_cannot_see_each_other() {
     }
     let fixture = Fixture::new("isolation");
     let provider = fixture.provider().unwrap();
-    let first = Arc::new(provider.launch(fixture.request("sandbox-1")).unwrap());
-    let second = Arc::new(provider.launch(fixture.request("sandbox-2")).unwrap());
+    let first = Arc::new(fixture.launch(&provider, "sandbox-1").unwrap());
+    let second = Arc::new(fixture.launch(&provider, "sandbox-2").unwrap());
     let other = fixture.directory("sandbox-2").display().to_string();
 
     // the other Sandbox's directory is not in this mount namespace
@@ -526,7 +539,7 @@ fn a_record_reopens_the_exact_sandbox_and_nothing_else() {
     }
     let fixture = Fixture::new("reopen");
     let provider = fixture.provider().unwrap();
-    let sandbox = provider.launch(fixture.request("sandbox-1")).unwrap();
+    let sandbox = fixture.launch(&provider, "sandbox-1").unwrap();
     let id = sandbox.identity();
     let record = sandbox.record().unwrap();
     // the record names the image its root is an overlay of
@@ -610,11 +623,12 @@ fn a_request_is_refused_before_any_effect() {
     request.options = ProviderLaunchOptions::Namespaces {
         command_identity: CommandIdentity { uid: 0, gid: 0 },
         environment: Vec::new(),
-        store: fixture.store.join("sealed.sqlite"),
         image: fixture.image(),
         archive: fixture.archive.clone(),
     };
-    let failure = provider.launch(request).unwrap_err();
+    let failure = provider
+        .launch_with_binds(request, vec![fixture.store_bind()])
+        .unwrap_err();
     assert!(matches!(
         failure.cause,
         RuntimeError::Protocol("nonroot command uid/gid")
@@ -627,18 +641,22 @@ fn a_request_is_refused_before_any_effect() {
         command_identity: CommandIdentity { uid: 501, gid: 20 },
         environment: Vec::new(),
     };
-    let failure = provider.launch(request).unwrap_err();
+    let failure = provider
+        .launch_with_binds(request, vec![fixture.store_bind()])
+        .unwrap_err();
     assert!(failure.instance.is_none());
     // a Store directory that would expose every Sandbox
     let mut request = fixture.request("sandbox-3");
     request.options = ProviderLaunchOptions::Namespaces {
         command_identity: CommandIdentity { uid: 501, gid: 20 },
         environment: Vec::new(),
-        store: fixture.root.join("sealed.sqlite"),
         image: fixture.image(),
         archive: fixture.archive.clone(),
     };
-    let failure = provider.launch(request).unwrap_err();
+    let exposed = Bind::store(&fixture.root.join("sealed.sqlite")).unwrap();
+    let failure = provider
+        .launch_with_binds(request, vec![exposed])
+        .unwrap_err();
     assert!(matches!(failure.cause, RuntimeError::Protocol(_)));
     assert!(!fixture.directory("sandbox-3").exists());
     // a bundle without the image archive
@@ -646,11 +664,12 @@ fn a_request_is_refused_before_any_effect() {
     request.options = ProviderLaunchOptions::Namespaces {
         command_identity: CommandIdentity { uid: 501, gid: 20 },
         environment: Vec::new(),
-        store: fixture.store.join("sealed.sqlite"),
         image: fixture.image(),
         archive: fixture.base.join("no-such-image.tar"),
     };
-    let failure = provider.launch(request).unwrap_err();
+    let failure = provider
+        .launch_with_binds(request, vec![fixture.store_bind()])
+        .unwrap_err();
     assert!(failure.instance.is_none(), "{:?}", failure.cause);
     assert!(format!("{:?}", failure.cause).contains("no-such-image.tar"));
     assert!(!fixture.directory("sandbox-4").exists());
@@ -660,11 +679,12 @@ fn a_request_is_refused_before_any_effect() {
     request.options = ProviderLaunchOptions::Namespaces {
         command_identity: CommandIdentity { uid: 501, gid: 20 },
         environment: Vec::new(),
-        store: fixture.store.join("sealed.sqlite"),
         image: other.clone(),
         archive: fixture.archive.clone(),
     };
-    let failure = provider.launch(request).unwrap_err();
+    let failure = provider
+        .launch_with_binds(request, vec![fixture.store_bind()])
+        .unwrap_err();
     assert!(failure.instance.is_none(), "{:?}", failure.cause);
     let message = format!("{:?}", failure.cause);
     assert!(message.contains(other.hex()), "{message}");
@@ -672,10 +692,9 @@ fn a_request_is_refused_before_any_effect() {
     assert!(!fixture.directory("sandbox-5").exists());
 }
 
-/// #535 §6.3: binds replace the Store file. A PostgreSQL Store's Sandbox
-/// binds nothing (its Store's directory is not there); another bind is
-/// seen at its guest path with its mode; a launch with binds that also
-/// names a Store file is refused before any effect.
+/// #535 §6.3: binds are all a namespaces root takes. A PostgreSQL Store's
+/// Sandbox binds nothing (its Store's directory is not there); another
+/// bind is seen at its guest path with its mode.
 #[test]
 fn binds_replace_the_store_file() {
     if let Some(reason) = unavailable() {
@@ -684,22 +703,9 @@ fn binds_replace_the_store_file() {
     }
     let fixture = Fixture::new("binds");
     let provider = fixture.provider().unwrap();
-    let unbound = |name: &str| {
-        let mut request = fixture.request(name);
-        if let ProviderLaunchOptions::Namespaces { store, .. } = &mut request.options {
-            *store = PathBuf::new();
-        }
-        request
-    };
-    // a launch with binds names no Store file
-    let failure = provider
-        .launch_with_binds(fixture.request("sandbox-0"), Vec::new())
-        .unwrap_err();
-    assert!(failure.instance.is_none(), "{:?}", failure.cause);
-    assert!(!fixture.directory("sandbox-0").exists());
     // no bind: the Store's directory is not in the Sandbox
     let mut sandbox = provider
-        .launch_with_binds(unbound("sandbox-1"), Vec::new())
+        .launch_with_binds(fixture.request("sandbox-1"), Vec::new())
         .unwrap();
     let store = fixture.store.to_str().unwrap();
     let (code, _, _) = run(&sandbox, &["/bin/test", "-e", store], &[]);
@@ -713,7 +719,7 @@ fn binds_replace_the_store_file() {
         read_write: false,
     };
     let mut sandbox = provider
-        .launch_with_binds(unbound("sandbox-2"), vec![bind])
+        .launch_with_binds(fixture.request("sandbox-2"), vec![bind])
         .unwrap();
     let (code, out, _) = run(&sandbox, &["/bin/cat", "/srv/reference/sealed.sqlite"], &[]);
     assert_eq!((code, out.as_str()), (0, "stub"));
@@ -735,7 +741,7 @@ fn a_running_command_ends_with_its_sandbox() {
     }
     let fixture = Fixture::new("teardown");
     let provider = fixture.provider().unwrap();
-    let mut sandbox = provider.launch(fixture.request("sandbox-1")).unwrap();
+    let mut sandbox = fixture.launch(&provider, "sandbox-1").unwrap();
     // a command that outlives its own process group and keeps running
     let (code, out, _) = run(
         &sandbox,

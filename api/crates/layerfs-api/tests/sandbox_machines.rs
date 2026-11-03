@@ -142,33 +142,50 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
         )
         .unwrap();
     }
-    for (name, platform) in [("dev", "lima"), ("box", "ssh")] {
-        home::write_record(
-            &paths::machine_record(&home, name),
-            &SdkValue::map([("name", t(name)), ("platform", t(platform))]),
-        )
-        .unwrap();
-        let (code, message) = call(
+    home::write_record(
+        &paths::machine_record(&home, "dev"),
+        &SdkValue::map([("name", t("dev")), ("platform", t("lima"))]),
+    )
+    .unwrap();
+    home::write_record(
+        &paths::machine_record(&home, "box"),
+        &SdkValue::map([
+            ("name", t("box")),
+            ("platform", t("ssh")),
+            ("ssh", SdkValue::map([("host", t("box.invalid"))])),
+        ]),
+    )
+    .unwrap();
+    let create = |machine: &str| {
+        call(
             &home,
             "sandbox.create",
             &[
                 ("project", t("pg/app")),
                 ("name", t("t")),
-                ("machine", t(name)),
+                ("machine", t(machine)),
             ],
         )
-        .unwrap_err();
-        assert_eq!(code, "Unsupported", "{message}");
-        // the support table's reason, word for word (#535 §7.3)
-        let kind = layerfs_machine::Platform::parse(platform).unwrap();
-        let reason = layerfs_machine::sandbox_allowed(
-            kind,
-            layerfs_machine::HostOs::current(),
-            layerfs_machine::StoreKind::Postgresql,
-        )
-        .unwrap_err();
-        assert!(message.ends_with(reason), "{message}");
-    }
+        .unwrap_err()
+    };
+    // lima: the support table's reason, word for word (#535 §7.3)
+    let (code, message) = create("dev");
+    assert_eq!(code, "Unsupported", "{message}");
+    let reason = layerfs_machine::sandbox_allowed(
+        layerfs_machine::Platform::Lima,
+        layerfs_machine::HostOs::current(),
+        layerfs_machine::StoreKind::Postgresql,
+    )
+    .unwrap_err();
+    assert!(message.ends_with(reason), "{message}");
+    // ssh runs PostgreSQL Sandboxes (5a), but cannot dial the caller's
+    // loopback: `reach` refuses before any machine is started (#535 §7.4)
+    let (code, message) = create("box");
+    assert_eq!(code, "Unsupported", "{message}");
+    assert!(
+        message.ends_with("an ssh machine cannot reach the caller's loopback"),
+        "{message}"
+    );
     let (code, message) = call(
         &home,
         "sandbox.create",

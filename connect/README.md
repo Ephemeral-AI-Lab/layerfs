@@ -28,11 +28,14 @@ Store is backed up. Layers are `core < engine < connect < api`; nothing in
 - `layerfs-machine/src/reach.rs` is `reach` (the call `machine::reach`):
   the PostgreSQL Store URL a Sandbox daemon on the machine dials. Each
   adapter names how its machine reaches the caller's loopback: `native`
-  shares it; `docker` (`host.docker.internal`), `lima`
-  (`host.lima.internal`) and `firecracker` (`172.30.<n>.1`) rewrite a
-  loopback host to their alias; `ssh` refuses it, and `apple-container` and
-  `microsandbox` refuse it until their aliases are verified (G7). A rewrite
-  is refused for `sslmode=verify-full`; other hosts are used as given.
+  shares it; `docker` (`host.docker.internal`) and `lima`
+  (`host.lima.internal`) rewrite a loopback host to their alias; `ssh`
+  refuses it, and so do `apple-container` (no host alias), `microsandbox`
+  (host traffic needs `--net host`, which LayerFS does not set) and
+  `firecracker` (no outbound NAT; its tap address is the nested Lima host),
+  per the G7 receipt in `core/docs/issues/535/receipts/g7-reach/`. A
+  rewrite is refused for `sslmode=verify-full`; other hosts are used as
+  given.
 - `layerfs-machine/src/support.rs` is the one support table:
   platform × host × Store kind → supported, or a refusal with its reason.
 - `layerfs-machine/src/platforms/<p>/`: `profile.rs` holds its `PROFILE`
@@ -77,8 +80,10 @@ host without its live fields (`ready`, `missing`, `version`):
   its `kind` (`int`, `size`, `text`, `bool`, `name`);
 - `description`: the platform and how its Sandboxes run.
 
-The table encodes what is allowed today; #535 phase 5 flips its
-PostgreSQL rows. `layerfs machine platforms` (the call `machine.platforms`)
+The table encodes what is allowed. #535 phase 5a enabled PostgreSQL
+Sandboxes on `native` (macOS and Linux), `docker` and `ssh`; `lima`,
+`apple-container`, `microsandbox` and `firecracker` stay refused with their
+G7 reasons until phases 5b and 5c flip them. `layerfs machine platforms` (the call `machine.platforms`)
 returns the same data for the running host.
 
 ## Adding things
@@ -90,3 +95,20 @@ returns the same data for the running host.
 | a bucket provider | `layerfs-store-backup/src/bucket/<p>/` |
 
 A Store kind and a kernel route are engine changes; see #535 §9.
+
+## Conformance kit
+
+Each crate has one `tests/conformance.rs` (#536 §11 step 9) that every
+platform or backend passes, with stand-in tools and no Docker Engine, VM,
+ssh host or root. The machine kit runs over `Platform::ALL`: the profile
+against `support.rs` and `SUPPORT.json`, each lifecycle call running
+through the platform's tool or refused with the fixed text its `How`
+declares, `reach` against the rules above, and the declared options
+against `Spec::validate`. The Sandbox kit runs over `Backend::ALL`: the
+stored name, capabilities against `SUPPORT.json`'s kernel routes, binds,
+the runtime this host has and the lifecycle it can run here. A new
+variant is covered automatically; the kits' exhaustive matches (`loopback`;
+`binds`, `options`, `record`, `runtime`, `lifecycle`) do not compile until
+it declares its answers. Run them with `cargo +1.85.1 test --locked -p
+layerfs-machine --test conformance` and `-p layerfs-sandbox --test
+conformance`; real platforms run them in the terminal pass.

@@ -1,0 +1,63 @@
+== uname
+Linux g7probe-ac 6.18.35 #1 SMP Mon Jun 15 12:55:27 UTC 2026 aarch64 GNU/Linux
+== /etc/os-release
+PRETTY_NAME="Debian GNU/Linux 13 (trixie)"
+== ip addr
+Main:
+  +-- 0.0.0.0/0 3 0 5
+     |-- 0.0.0.0
+        /0 universe UNICAST
+     +-- 127.0.0.0/8 2 0 2
+        +-- 127.0.0.0/31 1 0 0
+           |-- 127.0.0.0
+              /8 host LOCAL
+           |-- 127.0.0.1
+              /32 host LOCAL
+        |-- 127.255.255.255
+           /32 link BROADCAST
+     +-- 192.168.64.0/24 2 0 2
+        +-- 192.168.64.0/28 2 0 2
+           |-- 192.168.64.0
+              /24 link UNICAST
+           |-- 192.168.64.10
+              /32 host LOCAL
+        |-- 192.168.64.255
+           /32 link BROADCAST
+== ip route
+Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT                                                       
+eth0	00000000	0140A8C0	0003	0	0	0	00000000	0	0	0                                                                               
+eth0	0040A8C0	00000000	0001	0	0	0	00FFFFFF	0	0	0                                                                               
+== /etc/hosts
+127.0.0.1 localhost
+192.168.64.10 g7probe-ac
+== /etc/resolv.conf
+nameserver 192.168.64.1
+== getent hosts host.lima.internal: (no answer, rc=2)
+== getent hosts host.containers.internal: (no answer, rc=2)
+== getent hosts host.docker.internal: (no answer, rc=2)
+== getent hosts host.container.internal: (no answer, rc=2)
+== getent hosts host.microsandbox.internal: (no answer, rc=2)
+== getent hosts gateway.internal: (no answer, rc=2)
+== default gateway: none
+== PG SSLRequest 192.168.64.1:55432 -> bash: connect: Connection refused
+bash: line 1: /dev/tcp/192.168.64.1/55432: Connection refused
+ (rc=1)
+== PG SSLRequest 192.168.64.1:55433 -> N (rc=0)
+== host-native listener 192.168.64.1:55442 -> bash: connect: Connection refused
+bash: line 1: /dev/tcp/192.168.64.1/55442: Connection refused
+ (rc=1)
+== host-native listener 192.168.64.1:55443 -> G7OK 0.0.0.0:55443
+ (rc=0)
+== PG SSLRequest host.container.internal:55432 -> bash: line 1: host.container.internal: Name or service not known
+bash: line 1: /dev/tcp/host.container.internal/55432: Invalid argument
+ (rc=1)
+== PG SSLRequest host.container.internal:55433 -> bash: line 1: host.container.internal: Name or service not known
+bash: line 1: /dev/tcp/host.container.internal/55433: Invalid argument
+ (rc=1)
+== host-native listener host.container.internal:55442 -> bash: line 1: host.container.internal: Name or service not known
+bash: line 1: /dev/tcp/host.container.internal/55442: Invalid argument
+ (rc=1)
+== host-native listener host.container.internal:55443 -> bash: line 1: host.container.internal: Name or service not known
+bash: line 1: /dev/tcp/host.container.internal/55443: Invalid argument
+ (rc=1)
+== psql not installed in guest

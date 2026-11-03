@@ -1,0 +1,12 @@
++(eval):1> T 60 container delete --force g7probe-ac
++T:0> perl -e 'alarm shift; exec @ARGV' 60 container delete --force g7probe-ac
+g7probe-ac
++(eval):1> T 30 container volume delete g7probe-ac-data
++T:0> perl -e 'alarm shift; exec @ARGV' 30 container volume delete g7probe-ac-data
+g7probe-ac-data
++(eval):1> T 30 container list --all
++T:0> perl -e 'alarm shift; exec @ARGV' 30 container list --all
+ID  IMAGE  OS  ARCH  STATE  IP  CPUS  MEMORY  STARTED
++(eval):1> T 30 container volume list
++T:0> perl -e 'alarm shift; exec @ARGV' 30 container volume list
+NAME  TYPE  DRIVER  OPTIONS

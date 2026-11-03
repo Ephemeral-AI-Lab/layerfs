@@ -1,0 +1,2 @@
+== PG startup 192.168.64.1:55432 -> bash: connect: Connection refused.bash: line 1: /dev/tcp/192.168.64.1/55432: Connection refused. (rc=1)
+== PG startup 192.168.64.1:55433 -> R........SCRAM-SHA-256.. (rc=0)

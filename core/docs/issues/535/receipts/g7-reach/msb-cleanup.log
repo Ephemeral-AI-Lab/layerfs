@@ -1,0 +1,14 @@
++(eval):2> T 90 /Users/yifanxu/.microsandbox/bin/msb remove --force g7probe-msb g7probe-msb2 g7probe-msb3
++T:0> perl -e 'alarm shift; exec @ARGV' 90 /Users/yifanxu/.microsandbox/bin/msb remove --force g7probe-msb g7probe-msb2 g7probe-msb3
+  ✓ Removed             g7probe-msb
+  ✓ Removed             g7probe-msb2
+  ✓ Removed             g7probe-msb3
++(eval):2> T 30 /Users/yifanxu/.microsandbox/bin/msb volume remove g7probe-msb-data
++T:0> perl -e 'alarm shift; exec @ARGV' 30 /Users/yifanxu/.microsandbox/bin/msb volume remove g7probe-msb-data
+  ✓ Removed             g7probe-msb-data
++(eval):2> T 30 /Users/yifanxu/.microsandbox/bin/msb list
++T:0> perl -e 'alarm shift; exec @ARGV' 30 /Users/yifanxu/.microsandbox/bin/msb list
+No sandboxes found.
++(eval):2> T 30 /Users/yifanxu/.microsandbox/bin/msb volume list
++T:0> perl -e 'alarm shift; exec @ARGV' 30 /Users/yifanxu/.microsandbox/bin/msb volume list
+No volumes found.

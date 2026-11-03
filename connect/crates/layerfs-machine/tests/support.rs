@@ -43,32 +43,43 @@ fn every_refusal_is_the_rows_reason() {
     }
 }
 
+/// #535 phase 5a (§7.3): PostgreSQL Sandboxes run on native (macOS, and
+/// Linux namespaces with no bind), docker and ssh; lima, apple-container,
+/// microsandbox and firecracker stay refused with their G7 reasons.
 #[test]
-fn postgresql_sandboxes_run_where_they_run_today() {
+fn postgresql_sandboxes_run_where_phase_5a_enables_them() {
     let allowed = |p, h| sandbox_allowed(p, h, StoreKind::Postgresql);
-    assert_eq!(allowed(Platform::Native, HostOs::Macos), Ok(()));
     for host in [HostOs::Macos, HostOs::Linux] {
+        assert_eq!(allowed(Platform::Native, host), Ok(()));
         assert_eq!(allowed(Platform::Docker, host), Ok(()));
     }
-    assert_eq!(
-        allowed(Platform::Native, HostOs::Linux),
-        Err("namespaces binds a Store file; enabled in #535 phase 5a")
-    );
+    for host in HostOs::NAMED {
+        assert_eq!(allowed(Platform::Ssh, host), Ok(()), "{host:?}");
+    }
     assert_eq!(
         allowed(Platform::Native, HostOs::Windows),
         Err("no Sandbox backend on Windows (O5)")
+    );
+    assert_eq!(
+        allowed(Platform::Docker, HostOs::Windows),
+        Err("docker through WSL2 is not designed yet")
     );
     assert_eq!(
         allowed(Platform::Lima, HostOs::Macos),
         Err("lima host alias not verified (G7)")
     );
     assert_eq!(
-        allowed(Platform::Firecracker, HostOs::Macos),
-        Err("outbound NAT and host alias not verified (G7)")
+        allowed(Platform::AppleContainer, HostOs::Macos),
+        Err("an apple-container guest has no host alias and cannot reach the host's loopback (G7)")
     );
-    assert!(allowed(Platform::Ssh, HostOs::Linux)
-        .unwrap_err()
-        .contains("phase 5a"));
+    assert_eq!(
+        allowed(Platform::Microsandbox, HostOs::Linux),
+        Err("a microsandbox guest reaches the host only with --net host, which LayerFS does not set (G7)")
+    );
+    assert_eq!(
+        allowed(Platform::Firecracker, HostOs::Macos),
+        Err("a firecracker guest has no outbound NAT and its tap address is the nested lima host, not this host (G7)")
+    );
     assert_eq!(
         allowed(Platform::Lima, HostOs::Linux),
         Err("lima runs on macOS hosts only")

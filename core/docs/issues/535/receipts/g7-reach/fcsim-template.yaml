@@ -1,0 +1,13 @@
+{
+  "vmType": "vz",
+  "cpus": 2,
+  "memory": "2048MiB",
+  "images": [{"location": "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img", "arch": "aarch64"}, {"location": "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img", "arch": "x86_64"}],
+  "containerd": {"system": false, "user": false},
+  "mounts": [],
+  "additionalDisks": [{"name": "g7probe-fcsim-data", "format": true, "fsType": "ext4"}],
+  "portForwards": [
+    {"guestIP": "127.0.0.1", "guestPort": 7070, "hostIP": "127.0.0.1", "hostPort": 55455},
+    {"guestIP": "0.0.0.0", "guestPortRange": [1, 65535], "ignore": true}
+  ]
+}

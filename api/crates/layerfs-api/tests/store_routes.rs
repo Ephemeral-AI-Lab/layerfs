@@ -115,12 +115,13 @@ fn a_store_on_another_machine_goes_to_its_worker_with_its_record() {
     std::thread::spawn(move || layerfs_api::worker::serve(listener, "s3cret".to_owned(), guest));
     let worker =
         |secret: &str| SdkValue::map([("address", t(&address.to_string())), ("secret", t(secret))]);
-    // a wrong secret is refused by the worker (with the adapters, a worker
-    // that does not answer its secret counts as not running)
+    // a worker that refuses the secret was not reached (#535 R1): the
+    // caller would start the machine, which a build without the adapters
+    // cannot, so the call is Unavailable and nothing was sent
     #[cfg(not(feature = "machine"))]
     {
         write_record(&paths::worker_record(&home, "box"), &worker("wrong")).unwrap();
-        assert_eq!(read(&home, "shop/api").unwrap_err().0, "Denied");
+        assert_eq!(read(&home, "shop/api").unwrap_err().0, "Unavailable");
     }
 
     write_record(&paths::worker_record(&home, "box"), &worker("s3cret")).unwrap();

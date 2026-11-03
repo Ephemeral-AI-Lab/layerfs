@@ -77,26 +77,17 @@ impl Runtime {
         }
     }
 
-    /// Starts one Sandbox once; a failed launch keeps the acknowledged owner.
+    /// Starts one Sandbox once with no binds; a failed launch keeps the
+    /// acknowledged owner.
     pub fn launch(&self, request: LaunchRequest) -> Result<Sandbox, Box<LaunchFailure>> {
-        match self {
-            Self::Docker(provider) => provider.launch(request).map(Sandbox::Docker),
-            #[cfg(target_os = "macos")]
-            Self::HostProcess(provider) => provider.launch(request).map(Sandbox::HostProcess),
-            #[cfg(target_os = "linux")]
-            Self::Namespaces(provider) => provider
-                .launch(request)
-                .map(|sandbox| Sandbox::Namespaces(Box::new(sandbox))),
-        }
+        self.launch_with_binds(request, Vec::new())
     }
 
     /// Starts one Sandbox once with exactly `binds` in its private root
     /// (#535 §6.3: a sqlite Store's [`Bind::store`]; none for a PostgreSQL
-    /// Store). Only the namespaces backend binds: its options' `store` must
-    /// then be empty. Docker takes its Store as a volume and a host-process
-    /// daemon shares the host's files, so they refuse a bind before any
-    /// effect. [`Self::launch`] is the same with the namespaces options'
-    /// `store` as the one bind.
+    /// Store). Only the namespaces backend binds. Docker takes its Store as
+    /// a volume and a host-process daemon shares the host's files, so they
+    /// refuse a bind before any effect.
     pub fn launch_with_binds(
         &self,
         request: LaunchRequest,
@@ -113,15 +104,17 @@ impl Runtime {
             Self::Docker(_) if !binds.is_empty() => Err(unbound(
                 "a docker Sandbox takes its Store as a volume, not a bind",
             )),
+            Self::Docker(provider) => provider.launch(request).map(Sandbox::Docker),
             #[cfg(target_os = "macos")]
             Self::HostProcess(_) if !binds.is_empty() => Err(unbound(
                 "a host-process Sandbox shares the host's files and takes no bind",
             )),
+            #[cfg(target_os = "macos")]
+            Self::HostProcess(provider) => provider.launch(request).map(Sandbox::HostProcess),
             #[cfg(target_os = "linux")]
             Self::Namespaces(provider) => provider
                 .launch_with_binds(request, binds)
                 .map(|sandbox| Sandbox::Namespaces(Box::new(sandbox))),
-            _ => self.launch(request),
         }
     }
 

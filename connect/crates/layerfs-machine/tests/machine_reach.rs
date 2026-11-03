@@ -59,8 +59,10 @@ fn each_platform_rewrites_or_refuses_a_loopback_host() {
             Platform::Native => Some("unchanged"),
             Platform::Docker => Some("host.docker.internal"),
             Platform::Lima => Some("host.lima.internal"),
-            Platform::Firecracker => Some("172.30.7.1"),
-            Platform::AppleContainer | Platform::Microsandbox | Platform::Ssh => None,
+            Platform::AppleContainer
+            | Platform::Microsandbox
+            | Platform::Firecracker
+            | Platform::Ssh => None,
         };
         for (i, url) in loopback_urls().iter().enumerate() {
             let outcome = machine::reach(&spec, url);
@@ -72,8 +74,9 @@ fn each_platform_rewrites_or_refuses_a_loopback_host() {
                     assert_eq!(code, Code::Unsupported);
                     let why = match kind {
                         Platform::Ssh => "an ssh machine cannot reach the caller's loopback",
-                        Platform::AppleContainer => "apple-container host alias not verified (G7)",
-                        _ => "microsandbox host alias not verified (G7)",
+                        Platform::AppleContainer => "an apple-container guest has no host alias and cannot reach the host's loopback (G7)",
+                        Platform::Firecracker => "a firecracker guest has no outbound NAT and its tap address is the nested lima host, not this host (G7)",
+                        _ => "a microsandbox guest reaches the host only with --net host, which LayerFS does not set (G7)",
                     };
                     assert_eq!(
                         message,
@@ -89,20 +92,17 @@ fn each_platform_rewrites_or_refuses_a_loopback_host() {
 }
 
 #[test]
-fn a_firecracker_machine_without_its_network_number_is_refused() {
+fn a_firecracker_machine_refuses_loopback_with_or_without_its_network_number() {
     let scratch = Scratch::new("reach-firecracker");
-    let spec = spec(&scratch, Platform::Firecracker, None);
-    let (code, message) = refused(machine::reach(&spec, &loopback_urls()[0]));
-    assert_eq!(code, Code::Unsupported);
-    assert!(
-        message.ends_with(
-            "its network number (the n of 172.30.<n>.1, recorded at create) is not known"
-        ),
-        "{message}"
-    );
-    // a server elsewhere needs no network number
-    let remote = format!("postgres://lfs:{SECRET}@db.example.com:5432/layerfs");
-    assert_eq!(machine::reach(&spec, &remote), Ok(remote.clone()));
+    for network in [None, Some(7)] {
+        let spec = spec(&scratch, Platform::Firecracker, network);
+        let (code, message) = refused(machine::reach(&spec, &loopback_urls()[0]));
+        assert_eq!(code, Code::Unsupported);
+        assert!(message.ends_with("a firecracker guest has no outbound NAT and its tap address is the nested lima host, not this host (G7)"), "{message}");
+        // a server elsewhere is dialled as given
+        let remote = format!("postgres://lfs:{SECRET}@db.example.com:5432/layerfs");
+        assert_eq!(machine::reach(&spec, &remote), Ok(remote.clone()));
+    }
 }
 
 #[test]
@@ -127,7 +127,7 @@ fn every_other_host_is_dialled_as_given_everywhere() {
 fn a_rewrite_is_refused_for_verify_full() {
     let scratch = Scratch::new("reach-tls");
     let url = format!("postgres://lfs:{SECRET}@localhost:5432/layerfs?sslmode=verify-full");
-    for kind in [Platform::Docker, Platform::Lima, Platform::Firecracker] {
+    for kind in [Platform::Docker, Platform::Lima] {
         let (code, message) = refused(machine::reach(&spec(&scratch, kind, Some(2)), &url));
         assert_eq!(code, Code::Unsupported);
         assert!(message.contains("sslmode=verify-full"), "{message}");

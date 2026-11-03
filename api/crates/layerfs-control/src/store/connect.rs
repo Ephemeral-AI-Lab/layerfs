@@ -103,14 +103,20 @@ fn with_password(url: &str, password: Option<&str>) -> Result<String> {
 
 /// The host operations' `postgresql` argument for a Store record.
 pub(crate) fn selection(record: &StoreRecord) -> Result<SdkValue> {
-    Ok(SdkValue::map([
-        ("url", SdkValue::text(url(record)?)),
+    Ok(selection_at(record, url(record)?))
+}
+
+/// [`selection`] dialling `url`: the record's URL with its password, as a
+/// machine reaches it (#535 §7.4).
+pub(crate) fn selection_at(record: &StoreRecord, url: String) -> SdkValue {
+    SdkValue::map([
+        ("url", SdkValue::Text(url)),
         ("schema", SdkValue::text(SCHEMA)),
         (
             "synchronousCommit",
             SdkValue::text(record.text("synchronous_commit").unwrap_or("off")),
         ),
-    ]))
+    ])
 }
 
 /// Runs `store.connect` or `store.disconnect`.
@@ -356,6 +362,9 @@ fn disconnect(home: &Path, name: &str) -> Outcome {
             format!("Store {name} is open in process {holders:?}"),
         ));
     }
+    // a Sandbox's daemon dials the server from its machine, which holds no
+    // lease in this home (#535 §7.4)
+    crate::inventory::can_retire_store(home, name)?;
     crate::store::open::close(&paths::store_dir(home, name).join("postgresql"))?;
     std::fs::remove_dir_all(paths::store_dir(home, name)).map_err(failed)?;
     Ok(SdkValue::map([("disconnected", SdkValue::text(name))]))

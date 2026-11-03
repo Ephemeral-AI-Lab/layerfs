@@ -95,6 +95,8 @@ fn replace(path: &Path, fill: impl FnOnce(&mut File) -> io::Result<()>) -> io::R
     fs::rename(&staging, path)
 }
 
+impl crate::bucket::driver::sealed::Sealed for LocalFolder {}
+
 impl Driver for LocalFolder {
     fn limits(&self) -> Limits {
         self.limits

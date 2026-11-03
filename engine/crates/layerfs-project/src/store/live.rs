@@ -95,9 +95,11 @@ impl std::fmt::Display for AddFailure {
 }
 impl std::error::Error for AddFailure {}
 
+/// The Disposable profile rule applies to a SQLite Store only; a PostgreSQL
+/// Store has no SQLite profile and passes.
 fn disposable(store: &StoreSelection) -> Result<(), InitError> {
     let StoreSelection::Sqlite(store) = store else {
-        return Err(InitError::Manifest("a Store file selection required"));
+        return Ok(());
     };
     if store.sqlite_profile != SqlitePersistenceProfile::Disposable {
         return Err(InitError::Manifest(

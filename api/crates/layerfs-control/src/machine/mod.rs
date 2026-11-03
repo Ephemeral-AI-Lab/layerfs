@@ -57,6 +57,8 @@ pub use remove::{disconnect, remove};
 #[cfg(feature = "machine")]
 pub use spec::{ensure_built_ins, machine_of, vm_name};
 #[cfg(feature = "machine")]
+pub(crate) use spec::{refusal as machine_refusal, spec as machine_spec};
+#[cfg(feature = "machine")]
 pub use status::status;
 #[cfg(feature = "machine")]
 pub use update::update;
