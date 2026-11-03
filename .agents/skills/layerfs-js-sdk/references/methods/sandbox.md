@@ -93,7 +93,7 @@ the `op`) and `layerfs sandbox close <name>`, the call that clears it.
 | --- | --- | --- |
 | `Exists` | A Sandbox with that name is recorded in the home (even one that closed itself) | Pick another name, or `sandbox.close(name)` first to drop the old record |
 | `NotFound` | No machine of that name, or no such Store | Check `machine.list`, `project.get` |
-| `Unsupported` | The machine is not the sqlite Store's (message names the Store's machine), the support table refuses the platform for the Store's kind, or the PostgreSQL URL cannot be rewritten for the machine (a loopback URL on ssh; `sslmode=verify-full` with a rewrite) | Use the Store's machine, `store.move` the Store, or give the Store a URL the machine can dial |
+| `Unsupported` | The machine is not the sqlite Store's (message names the Store's machine), the support table refuses the platform for the Store's kind, or the PostgreSQL URL cannot be rewritten for the machine (a loopback URL on ssh; `sslmode=verify-full` with a rewrite) | Use the Store's machine, `store.pull` / `store.push` the Store, or give the Store a URL the machine can dial |
 | `Unavailable` | The machine cannot reach the PostgreSQL server, or reaches a server holding another Store (message names the host tried) | Make the server reachable from that machine |
 | `Unavailable` | The daemon bundle is missing | Report it; the home's owner installs the bundle |
 | `InvalidInput` | A bad name or project, or the name `native` or `docker` (they name the built-in machines) | Fix the call |

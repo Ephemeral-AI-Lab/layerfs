@@ -26,12 +26,12 @@ fn a_store_shows_its_record_without_secrets_then_its_projects() {
         value(
             r#"{"v":1,"binding":"b","name":"old","cursor":"c","kind":"sqlite","machine":"box",
                "profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},
-               "op":{"id":"op-1","name":"store.move","phase":"send","args":{"to":"box"},
+               "op":{"id":"op-1","name":"store.push","phase":"send","args":{"to":"box"},
                      "owner":{"pid":0},"started":3,"updated":4,"uncertain":true},
-               "last_move":{"from":"native","to":"box"}}"#,
+               "last_transfer":{"from":"native","to":"box"}}"#,
         ),
     );
-    let want = r#"{"name":"shop","kind":"sqlite","machine":"box","profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},"op":{"id":"op-1","name":"store.move","phase":"send","started":3,"uncertain":true},"last_move":{"from":"native","to":"box"},"projects":["api","web"]}"#;
+    let want = r#"{"name":"shop","kind":"sqlite","machine":"box","profile":"disposable","created":5,"sqlite":"3.50","backups":{"r2":{"file":"shop"}},"op":{"id":"op-1","name":"store.push","phase":"send","started":3,"uncertain":true},"last_transfer":{"from":"native","to":"box"},"projects":["api","web"]}"#;
     for view in [View::Full, View::List] {
         let shown = record.to_sdk(view, &projects(&["api", "web"])).unwrap();
         assert_eq!(print(&shown), want);
@@ -288,7 +288,7 @@ fn a_store_state_is_busy_unresolved_down_idle_or_in_use() {
     assert_eq!(idle.state(true, &[42]), StoreState::Down);
     // a live operation (this process) wins over everything; a gone one's
     // uncertain outcome is unresolved, its certain one is ignored
-    let live = Op::begin("store.move", "send", SdkValue::Null).unwrap();
+    let live = Op::begin("store.push", "send", SdkValue::Null).unwrap();
     let with = |op: SdkValue| StoreRecord::from_record("s", SdkValue::map([("op", op)]));
     let busy = with(live.to_record().clone());
     assert_eq!(busy.state(true, &[42]), StoreState::Busy);

@@ -12,13 +12,13 @@
 // LFS533_DAEMON names the daemon for the `native` machine; it reaches the
 // home's record through `layerfs import-env` (the repository's debug
 // `layerfs`, or LFS533_LAYERFS), as a 1.1.0 environment would. On any other
-// machine the Store moves there after Init; for `docker`, LFS533_IMAGE is
+// machine the Store is pushed there after Init; for `docker`, LFS533_IMAGE is
 // the Sandbox image (`machine update docker --image`), and a docker worker
 // this home started (`lfs-<home id>-docker`) is removed with its data
 // volume at the end.
 // LFS533_HOME names an existing home that already holds <machine> (a VM is
 // made once per kind, not per cell): the cell's own Store `c<nn>` is made
-// there, moved native -> <machine> and, after the cells, back to native, then
+// there, pushed native -> <machine> and, after the cells, pulled back to native, then
 // removed; the home stays.
 // One cell per command; nothing else runs a cell at the same time, so the
 // 1.1.0 host-wide lock is not ported. The receipt holds every step's time,
@@ -71,7 +71,7 @@ const empty = mkdtempSync(join(tmpdir(), "lfs533-src-"));
 const lfs = client({ home });
 const storeName = shared ? `c${cell.slice(1)}` : "cells";
 const project = `${storeName}/p`;
-let moved = false;
+let pushed = false;
 const name = `c${cell.slice(1)}`;
 let sandbox = null;
 const mounted = new Set();
@@ -105,8 +105,8 @@ try {
     await step("machine.update", () => lfs.machine.update("docker", { image: process.env.LFS533_IMAGE }));
   }
   if (machine !== "native") {
-    await step("store.move", () => lfs.store.move(storeName, machine));
-    moved = true;
+    await step("store.push", () => lfs.store.push(storeName, machine));
+    pushed = true;
   }
   out.sandbox = (await step("sandbox.create", () => lfs.sandbox.create(project, name, machine))).value;
   sandbox = name;
@@ -165,7 +165,7 @@ try {
   if (sandbox) await step("sandbox.close", () => lfs.sandbox.close(sandbox)).catch((error) => { out.closeError = error.message; });
   if (shared) {
     // the Store comes back to native, then goes; the home and its machine stay
-    if (moved) await step("store.move.back", () => lfs.store.move(storeName, "native")).catch((error) => { out.moveBackError = error.message; });
+    if (pushed) await step("store.pull", () => lfs.store.pull(storeName)).catch((error) => { out.pullError = error.message; });
     await step("store.remove", () => lfs.store.remove(storeName)).catch((error) => { out.removeError = error.message; });
   }
   if (machine === "docker" && !shared) {

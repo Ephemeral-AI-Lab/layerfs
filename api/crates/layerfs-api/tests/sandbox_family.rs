@@ -272,11 +272,11 @@ fn named_sandboxes_on_native() {
         ],
     );
 
-    // a running Sandbox keeps its Store from moving
+    // a Sandbox record keeps its Store from being pushed
     assert_eq!(
         call(
             &home,
-            "store.move",
+            "store.push",
             &[("name", t("shop")), ("machine", t("box"))]
         )
         .unwrap_err()

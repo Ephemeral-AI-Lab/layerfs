@@ -82,7 +82,7 @@ layerfs machine status native
 ```
 
 - `store.status`: `state` (`idle`, `in_use`, `busy`, `down`,
-  `unresolved`), `holders` (processes with the Store open), `op` (a move or
+  `unresolved`), `holders` (processes with the Store open), `op` (a push, pull or
   remove under way: `{id, name, phase, started, uncertain}`), and
   `file.bytes` / `file.wal_bytes`. The
   WAL can be larger than the main file during a run; add both for the Store's

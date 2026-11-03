@@ -8,7 +8,7 @@ and the command in `engine/crates/layerfs-cli/src/`. The shell parser, the
 help, and the Node and Python functions are all built from that table, so
 the three front ends take the same arguments.
 
-There are 60 calls in nine families. `layerfs help` lists them, and
+There are 61 calls in nine families. `layerfs help` lists them, and
 `layerfs help <family> [<call>]` prints one family or one call.
 
 ## How a call is written
@@ -70,7 +70,7 @@ Sandbox names (H §7.6).
 | size | bytes as a number, or text with `K`, `M` or `G` (`512M`, `8G`) | a word |
 | function | a callback (Node, Python only) | — |
 
-## The 60 calls
+## The 61 calls
 
 `[x]` is an optional positional. Every family's results are snake_case.
 
@@ -183,7 +183,7 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   `created`, `id` (the Sandbox's name, as its machine knows it),
   `platform`, `runtime`, `image`, `backend`, `route` (the kernel route,
   `fuse` or `nfs`) and `state`. A Sandbox name taken anywhere in the home
-  is `Exists`. The Store's machine, a running `store move` and the name
+  is `Exists`. The Store's machine, a running `store push` or `store pull` and the name
   are checked under one home lock, where the create claims the name with
   its `op` intent (#536 §7.1); its success records the result and drops
   the `op` in one write, a refused start removes the record. A create
@@ -319,7 +319,7 @@ $ layerfs machine status native
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals.
 
-### `store` (8)
+### `store` (9)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -328,7 +328,8 @@ refusals.
 | `status` | `name` | — | a Store's live state |
 | `create` | `name` | — | an empty sqlite Store on `native` |
 | `connect` | `name`, `url` | `password`, `synchronous_commit` | attaches a PostgreSQL database as a Store |
-| `move` | `name`, `machine` | `on_progress` | moves a sqlite Store to another machine |
+| `push` | `name`, `machine` | `on_progress` | sends a sqlite Store from `native` to a machine |
+| `pull` | `name` | `on_progress` | brings a sqlite Store from its machine to `native` |
 | `remove` | `name` | — | deletes a sqlite Store with every project in it |
 | `disconnect` | `name` | — | forgets a PostgreSQL Store; its data stays |
 
@@ -425,13 +426,13 @@ Codes seen in the 2.0 library include:
 | `NoSuchPath`, `NoSuchSandbox`, `NoSuchProcess`, … | 1.1.0's codes for paths, Sandboxes and processes |
 | `Exists` | the name is taken, the same host or database is already connected (under any name), or a bucket object was exported from another home |
 | `InUse` | held: running Sandboxes, processes with the Store open, Stores on a machine; a layout 2 home with any of these, or with a move, removal or create still running, which is not converted yet ([the home](home.md#a-layout-2-home)) |
-| `Busy` | an operation runs on the entity: a Store being moved or removed, a machine being made, connected or removed, a Sandbox being created or closed; the message names it (`op` id and phase) and its process (#536 §7.1). Also: another project is being added to the same Store |
+| `Busy` | an operation runs on the entity: a Store being pushed, pulled or removed, a machine being made, connected or removed, a Sandbox being created or closed; the message names it (`op` id and phase) and its process (#536 §7.1). Also: another project is being added to the same Store |
 | `Unresolved` | an earlier operation on the entity ended with its outcome not known; its process is gone and its `op` stays. The message names the call that shows it (`store status`, `machine status`, `sandbox get`) and the one that clears it (`store remove`, `machine remove` or `disconnect`, `sandbox close`) |
 | `Unsupported` | not possible here, or not built (see [limitations](limitations.md)); a missing tool is listed in `detail.missing` |
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret |
 | `Conflict` | a merge or Commit conflict; for `backup.restore`, the Store changed since its last backup or restore |
 | `Binary` | `file.read` of a file that is not text |
-| `Capacity` | a Sandbox's Workspace limit |
+| `Capacity` | a Sandbox's Workspace limit; a `store push` or `store pull` target without room for the Store (`detail.needed`, `detail.free`) |
 | `Failed` | it was tried and did not happen; whatever exists is kept |
 | `Unknown` | the outcome is not known; both sides are kept and logged in `log/uncertain.jsonl`, and the entity keeps an uncertain `op` (later calls on it are `Unresolved`) |
 
@@ -443,7 +444,7 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 | Switch | Calls | Does |
 | --- | --- | --- |
 | `--text` | all | a readable result instead of JSON |
-| `--progress` | `project init`, `store move`, `backup create`, `backup restore` | progress as one JSON line per update on stderr, `{"progress": {…}}` |
+| `--progress` | `project init`, `store push`, `store pull`, `backup create`, `backup restore` | progress as one JSON line per update on stderr, `{"progress": {…}}` |
 | `--stream` | `workspace exec` | passes the command's stdout and stderr through (output over 1 MiB too) and exits with its code |
 | `--from <file>` | `file write`, `file apply` | reads the content or JSON from a file instead of stdin |
 | `--<option>-from <file>` | any optional text option (`--old-from`, `--new-from`, `--message-from`) | reads the option's value from a file |
@@ -457,8 +458,10 @@ Every call is one attempt. After `Unknown`, read the state with `list`,
 is true; `--nested=false` is false.
 
 `project init --progress` printed no lines for a small folder in the run
-for this manual; `store move` reports its phases (`check`, `snapshot`,
-`send`, …) as progress.
+for this manual; `store push` and `store pull` report their phases
+(`check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire`) as
+`{"progress": {"phase", "done", "total"}}`: `done` and `total` are bytes
+during `send` and null in the other phases.
 
 ## Folder scope
 

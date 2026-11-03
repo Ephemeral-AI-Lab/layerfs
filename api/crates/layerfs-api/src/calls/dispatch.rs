@@ -5,7 +5,7 @@
 //! A call runs once. Its arguments are checked against the table before any
 //! effect, then its family's function runs with a [`Context`]: the home and
 //! the call's one event stream (O22), which carries `workspace.exec`'s
-//! output and the progress of `project.init`, `store.move`, `backup.create`
+//! output and the progress of `project.init`, `store.push`, `store.pull`, `backup.create`
 //! and `backup.restore`. Result keys are snake_case in every front end.
 use super::{check, route, table};
 use layerfs_bridge::control::SdkValue;

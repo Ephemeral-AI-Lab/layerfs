@@ -285,7 +285,7 @@ For Rust projects, follow the [Cargo workflow](references/rules/cargo.md).
 
 ## Calls
 
-57 calls in nine families. Each family's page has arguments, results, refusals
+61 calls in nine families. Each family's page has arguments, results, refusals
 and examples.
 
 | Family | Calls |
@@ -296,8 +296,8 @@ and examples.
 | [file](references/methods/file.md) | reads `read`, `stat`, `list`, `glob`, `grep`, `blame`, `diff`; writes `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |
 | [sandbox](references/methods/sandbox.md) | `create(project, name, machine, { image })`, `list(project?, { page_size, page_pos })`, `get(name, { page_size, page_pos })`, `close(name, { force })` |
 | [workspace](references/methods/workspace.md) | `mount(sandbox, branch, { name })`, `exec(ws, command, { message, stream, stdout, stderr })`, `commit(ws, { message, force })`, `unmount(ws, { discard, force })`, `status(ws)` |
-| [machine](references/methods/machine.md) | `list`, `get`, `status`, `create`, `connect`, `remove`, `disconnect`, `update` |
-| [store](references/methods/store.md) | `list`, `get`, `status`, `create`, `connect`, `move`, `remove`, `disconnect` |
+| [machine](references/methods/machine.md) | `list`, `platforms`, `get`, `status`, `start`, `stop`, `create`, `connect`, `remove`, `disconnect`, `update` |
+| [store](references/methods/store.md) | `list`, `get`, `status`, `create`, `connect`, `push`, `pull`, `remove`, `disconnect` |
 | [backup](references/methods/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore` |
 
 `machine`, `store` and `backup` set up where things live; an agent working on a

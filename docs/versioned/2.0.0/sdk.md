@@ -110,12 +110,12 @@ asyncio.run(main())
 
 | Option | Calls | Called with |
 | --- | --- | --- |
-| `on_progress` | `project.init`, `store.move`, `backup.create`, `backup.restore` | each progress update (an object or dict) |
+| `on_progress` | `project.init`, `store.push`, `store.pull`, `backup.create`, `backup.restore` | each progress update (an object or dict) |
 | `stdout`, `stderr` | `workspace.exec` | the command's output, piece by piece: a string when the piece is UTF-8, else a `Buffer` (Node) or `bytes` (Python) |
 
 There is one progress stream and no job registry (O22). Another process
-cannot watch a call it did not start; `store status` shows a move in
-progress. `workspace.exec` sends its output after the command ends; there
+cannot watch a call it did not start; `store status` shows a push or
+pull in progress. `workspace.exec` sends its output after the command ends; there
 is no live output stream yet. A stream over 1 MiB comes only through these
 functions (one 1 MiB piece at a time) or `stream: true`; the result then
 has that stream `null`, its byte count and `streamed: true`.
@@ -138,7 +138,7 @@ call on a Store on another machine goes to that machine's worker. See
 [routes](machines-and-stores.md#routes).
 
 The first call of this build on a layout 2 home converts it to layout 3,
-or is refused `InUse` while a Sandbox, lease or move in it is live; the
+or is refused `InUse` while a Sandbox, lease or Store move in it is live; the
 refusal's `detail.related` names each (`{kind, name, why}`). See
 [the home](home.md#a-layout-2-home).
 

@@ -5,7 +5,7 @@
 //! Sandboxes), and the checks the calls that need them make. Layout 3
 //! keeps each Sandbox at `sandbox/<name>/`: a Sandbox by name is one read;
 //! only the relationships (by machine, Store or project) list `sandbox/*`.
-use crate::common::home::paths;
+use crate::common::home::{lease, paths};
 use crate::common::outcome::{failed, refused};
 use crate::machine::record::MachineRecord;
 use crate::sandbox::record::SandboxRecord;
@@ -14,6 +14,9 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
+
+/// The machine that is this host.
+const NATIVE: &str = "native";
 
 /// The folder names under `dir`, sorted; none when it is absent.
 fn names(dir: &Path) -> Result<Vec<String>> {
@@ -131,24 +134,29 @@ pub fn can_stop_machine(home: &Path, name: &str) -> Result<()> {
     if sandboxes.is_empty() {
         return Ok(());
     }
-    let mut refusal = refused(
-        "InUse",
-        format!(
-            "machine {name} runs Sandboxes [{}]; close them first",
-            sandboxes.join(", ")
-        ),
+    let message = format!(
+        "machine {name} runs Sandboxes [{}]; close them first",
+        sandboxes.join(", ")
     );
-    let related = sandboxes
-        .into_iter()
-        .map(|sandbox| {
-            SdkValue::map([
-                ("kind", SdkValue::text("sandbox")),
-                ("name", SdkValue::Text(sandbox)),
-            ])
-        })
-        .collect();
+    Err(in_use(message, related("sandbox", &sandboxes)))
+}
+
+/// `{kind, name}` for each of `names`, as `detail.related` lists them.
+fn related(kind: &str, names: &[String]) -> Vec<SdkValue> {
+    let entry = |name: &String| {
+        SdkValue::map([
+            ("kind", SdkValue::text(kind)),
+            ("name", SdkValue::text(name)),
+        ])
+    };
+    names.iter().map(entry).collect()
+}
+
+/// `InUse` with `message`, `detail.related` listing what holds the entity.
+fn in_use(message: String, related: Vec<SdkValue>) -> SdkRefusal {
+    let mut refusal = refused("InUse", message);
     refusal.detail = SdkValue::map([("related", SdkValue::List(related))]);
-    Err(refusal)
+    refusal
 }
 
 /// `machine.update`: refused `InUse` while Sandboxes run on machine `name`
@@ -167,20 +175,96 @@ pub fn can_change_machine(home: &Path, name: &str) -> Result<()> {
     ))
 }
 
-/// `store.move`, `store.remove` and `backup.restore`: refused `InUse`
-/// while a Sandbox of one of Store `store`'s projects runs.
+/// `store.push`: refused `InvalidInput` unless `record` is a sqlite Store
+/// on `native` and `to` another machine; `NotFound` for an unknown `to`.
+/// Its in-use half, [`store_idle`], runs under the Store's lock.
+pub fn can_push(home: &Path, record: &StoreRecord, to: &str) -> Result<()> {
+    let name = record.name();
+    let on = sqlite_machine(record)?;
+    if on != NATIVE {
+        return Err(refused(
+            "InvalidInput",
+            format!("Store {name} is on machine {on}; `layerfs store pull {name}` brings it to {NATIVE} first"),
+        ));
+    }
+    if to == NATIVE {
+        return Err(refused(
+            "InvalidInput",
+            format!("Store {name} is already on {NATIVE}"),
+        ));
+    }
+    if MachineRecord::read(home, to)?.is_none() {
+        return Err(refused("NotFound", format!("no machine named {to}")));
+    }
+    Ok(())
+}
+
+/// `store.pull`: refused `InvalidInput` unless `record` is a sqlite Store
+/// on a machine other than `native`; answers that machine. Its in-use half,
+/// [`store_idle`], runs under the Store's lock.
+pub fn can_pull(record: &StoreRecord) -> Result<String> {
+    let on = sqlite_machine(record)?;
+    if on == NATIVE {
+        return Err(refused(
+            "InvalidInput",
+            format!("Store {} is already on {NATIVE}", record.name()),
+        ));
+    }
+    Ok(on)
+}
+
+/// The machine of sqlite Store `record`; a PostgreSQL Store never moves.
+fn sqlite_machine(record: &StoreRecord) -> Result<String> {
+    if let StoreRef::Postgres { .. } = record.store_ref()? {
+        return Err(refused(
+            "InvalidInput",
+            format!(
+                "Store {} is a PostgreSQL database; it does not move",
+                record.name()
+            ),
+        ));
+    }
+    record.machine()
+}
+
+/// `store.disconnect` and `backup.restore`: refused `InUse` while a
+/// Sandbox of one of Store `store`'s projects is recorded; `detail.related`
+/// lists them as `{kind: "sandbox", name}`.
 pub fn can_retire_store(home: &Path, store: &str) -> Result<()> {
     let sandboxes = sandboxes_of_store(home, store)?;
     if sandboxes.is_empty() {
         return Ok(());
     }
-    Err(refused(
-        "InUse",
-        format!(
-            "Store {store} has running Sandboxes: {}",
-            sandboxes.join(", ")
-        ),
-    ))
+    let message = format!(
+        "Store {store} has running Sandboxes: {}",
+        sandboxes.join(", ")
+    );
+    Err(in_use(message, related("sandbox", &sandboxes)))
+}
+
+/// `store.push`, `store.pull` and `store.remove`: refused `InUse` while
+/// another live process holds Store `store` (its lease) or a Sandbox of one
+/// of its projects is recorded; `detail.related` lists them as `{kind:
+/// "lease", name: <pid>}` and `{kind: "sandbox", name}`. Under the home
+/// lock and the Store's lock (it removes stale leases).
+pub fn store_idle(home: &Path, store: &str) -> Result<()> {
+    let holders = lease::holders(home, store)?;
+    let sandboxes = sandboxes_of_store(home, store)?;
+    let mut why = Vec::new();
+    if !holders.is_empty() {
+        why.push(format!("Store {store} is open in process {holders:?}"));
+    }
+    if !sandboxes.is_empty() {
+        let names = sandboxes.join(", ");
+        why.push(format!("Store {store} has running Sandboxes: {names}"));
+    }
+    if why.is_empty() {
+        return Ok(());
+    }
+    let pids: Vec<String> = holders.iter().map(u32::to_string).collect();
+    let mut held = related("lease", &pids);
+    held.extend(related("sandbox", &sandboxes));
+    Err(in_use(why.join("; "), held))
 }
 
 /// `project.remove`: refused `InUse` while a Sandbox of `project` runs

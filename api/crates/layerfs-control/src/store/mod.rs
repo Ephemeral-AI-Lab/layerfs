@@ -1,6 +1,6 @@
 //! Stores in the 2.0 home (#533): their records, the route each Store call
 //! takes, chosen from records, the Stores this process holds open, and the
-//! steps a move or remove takes on the file.
+//! steps a push, pull or remove takes on the file.
 pub(crate) mod call;
 #[doc(hidden)]
 pub mod calls;

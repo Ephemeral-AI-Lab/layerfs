@@ -1,4 +1,4 @@
-//! The call table and its one dispatcher (#533 step 2, H §7.10): 60 calls
+//! The call table and its one dispatcher (#533 step 2, H §7.10): 61 calls
 //! in nine families, the same from the `layerfs` binary, Node and Python.
 //! See [`table::CALLS`] and [`call`].
 mod check;
