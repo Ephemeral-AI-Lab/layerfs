@@ -7,7 +7,9 @@ use layerfs_bridge::{
     duplex::{public_key, ChannelWork},
     provision::StoreManifest,
 };
-use layerfs_sandbox::{CommandIdentity, LaunchRequest, ProviderLaunchOptions, Runtime, Sandbox};
+use layerfs_sandbox::{
+    Bind, CommandIdentity, LaunchRequest, ProviderLaunchOptions, Runtime, Sandbox,
+};
 use std::{fmt, sync::Arc};
 
 /// Runtime launch and private daemon authentication inputs.
@@ -88,8 +90,8 @@ impl SandboxApi {
     }
     /// Creates a new daemon on the PostgreSQL Store its setup selects
     /// (#506): no Store file, volume or install; it starts ready. A Docker
-    /// launch that mounts no Store volume opens one, and so does a native
-    /// (macOS) daemon process (#533 O3); a namespaces root binds a Store file.
+    /// launch that mounts no Store volume opens one, and so do a native
+    /// (macOS) daemon process and a namespaces root with no bind (#535 §7.4).
     pub fn create_provider_postgres(
         &self,
         request: ProviderCreate,
@@ -100,6 +102,7 @@ impl SandboxApi {
                 store_volume: None,
                 ..
             } | ProviderLaunchOptions::Local { .. }
+                | ProviderLaunchOptions::Namespaces { .. }
         );
         if !matches!(
             request.setup.store,
@@ -179,7 +182,8 @@ impl SandboxApi {
                     "provider topology/identity",
                 )));
             }
-            launched = Some(match self.runtime.launch(launch) {
+            let binds = binds(&launch, &request.setup.store)?;
+            launched = Some(match self.runtime.launch_with_binds(launch, binds) {
                 Ok(owner) => Box::new(owner),
                 Err(mut failure) => {
                     progress.phase = match failure.phase {
@@ -312,7 +316,8 @@ impl SandboxApi {
                     )));
                 }
             }
-            launched = Some(match self.runtime.launch(launch) {
+            let binds = binds(&launch, &request.setup.store)?;
+            launched = Some(match self.runtime.launch_with_binds(launch, binds) {
                 Ok(owner) => Box::new(owner),
                 Err(mut failure) => {
                     progress.phase = match failure.phase {
@@ -383,5 +388,23 @@ impl SandboxApi {
                 cause,
             })),
         }
+    }
+}
+
+/// The binds a namespaces daemon's private root takes (#535 §6.3): its
+/// sqlite Store file's directory, or none for a PostgreSQL Store, whose
+/// daemon dials the server. Other backends take none.
+fn binds(
+    launch: &LaunchRequest,
+    store: &layerfs_bridge::DaemonStore,
+) -> Result<Vec<Bind>, SandboxCause> {
+    match (&launch.options, store) {
+        (
+            ProviderLaunchOptions::Namespaces { .. },
+            layerfs_bridge::DaemonStore::Sqlite { locator, .. },
+        ) => Bind::store(std::path::Path::new(locator))
+            .map(|bind| vec![bind])
+            .map_err(|cause| SandboxCause::Runtime(layerfs_sandbox::WireFailure::local(cause))),
+        _ => Ok(Vec::new()),
     }
 }

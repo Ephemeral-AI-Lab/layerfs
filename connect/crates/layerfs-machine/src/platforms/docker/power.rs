@@ -63,6 +63,14 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
         "-v", &socket, "-v", &volume, "-v", &bundle_mount, "--tmpfs", &tmpfs,
         "-e", &listen, "-e", &secret_file, "--entrypoint", "sh", image, "-c", ENTRY,
     ];
+    let mut args = args.to_vec();
+    if cfg!(target_os = "linux") {
+        // a Linux Engine has no `host.docker.internal` of its own: the name
+        // `reach` gives a loopback PostgreSQL server (#535 §7.4) resolves to
+        // the bridge's gateway, the host, for the worker's Store calls and
+        // its Sandboxes' reach check
+        args.splice(7..7, ["--add-host", "host.docker.internal:host-gateway"]);
+    }
     run(spec, &args, "starting the worker container")?.answer("starting the worker container")?;
     let ports = run(
         spec,

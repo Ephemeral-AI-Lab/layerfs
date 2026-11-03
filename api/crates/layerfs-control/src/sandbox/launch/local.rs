@@ -32,8 +32,8 @@ use std::sync::Arc;
 /// effect. Called by
 /// [`crate::sandbox::serve::start`] under the project's guard, with the
 /// project's installed Store file or its PostgreSQL Store already read. A
-/// PostgreSQL Store runs on a native daemon only (#533 O3): a namespaces root
-/// binds a Store file.
+/// namespaces root binds a sqlite Store's file and nothing for a PostgreSQL
+/// Store, whose daemon dials the server (#535 §7.4).
 pub(crate) fn start(
     args: &SdkValue,
     directory: &Path,
@@ -49,14 +49,6 @@ pub(crate) fn start(
         return Err(refused(
             "Unsupported",
             crate::sandbox::runtime::NATIVE_ON_LINUX,
-        ));
-    }
-    if matches!(project, OpenedStore::Postgres(_))
-        && backend == crate::sandbox::runtime::Backend::Namespaces
-    {
-        return Err(refused(
-            "Unsupported",
-            "a Sandbox of a PostgreSQL Store runs on native (macOS) or docker; a namespaces Sandbox binds a Store file",
         ));
     }
     if cfg!(target_os = "linux") && crate::sandbox::files::user().0 != 0 {
@@ -175,7 +167,7 @@ fn start_claimed(
     let store = crate::store::identity::shared_store(args)?;
     let labels = crate::sandbox::serve::labels(name, store.as_deref(), id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
-    let options = launch_options(backend, identity, &daemon_locator, args)?;
+    let options = launch_options(backend, identity, args)?;
     let request = ProviderCreate {
         launch: LaunchRequest {
             name: sandbox_name.clone(),
@@ -304,13 +296,12 @@ fn native_runtime(
 }
 
 /// How the daemon of `backend` is launched: the same local options, and for
-/// the namespace backend the Store file its private root binds and the image
-/// archive its root is unpacked from.
+/// the namespace backend the image archive its root is unpacked from. Its
+/// binds follow from the daemon's Store when it is launched.
 #[cfg(target_os = "linux")]
 fn launch_options(
     backend: crate::sandbox::runtime::Backend,
     identity: CommandIdentity,
-    store: &str,
     args: &SdkValue,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(match backend {
@@ -330,7 +321,7 @@ fn launch_options(
                 // the daemon starts with `PATH` and its provider's kernel route only;
                 // 2.0 passes it no platform setting (#533 step 17)
                 environment: Vec::new(),
-                store: PathBuf::from(store),
+                store: PathBuf::new(),
                 image,
                 archive,
             }
@@ -342,7 +333,6 @@ fn launch_options(
 fn launch_options(
     _: crate::sandbox::runtime::Backend,
     identity: CommandIdentity,
-    _: &str,
     _: &SdkValue,
 ) -> Result<ProviderLaunchOptions, SdkRefusal> {
     Ok(ProviderLaunchOptions::Local {

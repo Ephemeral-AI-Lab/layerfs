@@ -325,6 +325,12 @@ esac"#,
     ] {
         assert!(run.contains(part), "{part} not in {run}");
     }
+    // a Linux Engine is given the name `reach` uses (#535 §7.4)
+    assert_eq!(
+        run.contains("--init --add-host host.docker.internal:host-gateway --label"),
+        cfg!(target_os = "linux"),
+        "{run}"
+    );
     assert_eq!(
         run.matches(" -v ").count(),
         3,

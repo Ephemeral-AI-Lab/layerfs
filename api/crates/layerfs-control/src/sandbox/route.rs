@@ -18,16 +18,16 @@ use std::path::{Path, PathBuf};
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// The host Sandbox operations' arguments for project `<store>/<project>`,
-/// plus `more`, run as `how` says.
+/// plus `more`, run as `how` says; a PostgreSQL Store's `postgresql` is
+/// the one the caller resolved and reached ([`reached`]).
 fn host_args(
     home: &Path,
     (store, project, record): (&str, &str, &StoreRecord),
-    kind: StoreKind,
+    (kind, postgresql): (StoreKind, Option<SdkValue>),
     how: Deploy,
     more: Vec<(&str, SdkValue)>,
 ) -> Result<SdkValue> {
     let prefix = SdkValue::text(format!("lfs-{}-", &home::open(home)?.id[..8]));
-    let in_container = matches!(how, Deploy::Docker(_));
     let deploy = match how {
         Deploy::Docker(SdkValue::Map(mut settings)) => {
             settings.push(("sandbox".to_owned(), SdkValue::text("docker")));
@@ -82,30 +82,68 @@ fn host_args(
         ),
         ("deploy", deploy),
     ];
-    // a PostgreSQL Store's URL with its password, resolved now and never
-    // written (H §7.4)
-    if kind == StoreKind::Postgresql {
-        let url = crate::store::connect::url(record)?;
-        let mut postgresql = vec![("url", SdkValue::text(&url))];
-        if in_container && cfg!(not(target_os = "linux")) {
-            if let Some(daemon_url) = layerfs_sandbox::docker::desktop_url(&url) {
-                postgresql.push(("daemon_url", SdkValue::text(daemon_url)));
-            }
-        }
-        fields.push((
-            "postgresql",
-            SdkValue::Map(
-                postgresql
-                    .into_iter()
-                    .map(|(n, v)| (n.to_owned(), v))
-                    .collect(),
-            ),
-        ));
+    // a PostgreSQL Store's URL with its password, never written (H §7.4)
+    if let Some(postgresql) = postgresql {
+        fields.push(("postgresql", postgresql));
     }
     fields.extend(more);
     Ok(SdkValue::Map(
         fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
     ))
+}
+
+/// A PostgreSQL Store's `postgresql` argument for a Sandbox on `machine`
+/// (#535 §7.4): the record's URL with its password, resolved here in the
+/// caller, with a loopback host rewritten to the machine's alias or refused
+/// (`layerfs_machine::reach`). It travels only in the one request that runs
+/// the call and is never written to a record.
+fn reached(home: &Path, machine: &str, record: &StoreRecord) -> Result<SdkValue> {
+    let url = crate::store::connect::url(record)?;
+    // a build without machines (the guest's) runs its own Sandboxes on the
+    // machine it is, which shares its loopback
+    #[cfg(feature = "machine")]
+    let url = {
+        let id = home::open(home)?.id;
+        let spec =
+            crate::machine::machine_spec(home, &id, &crate::machine::machine_of(home, machine)?)?;
+        layerfs_machine::reach(&spec, &url).map_err(crate::machine::machine_refusal)?
+    };
+    #[cfg(not(feature = "machine"))]
+    let _ = (home, machine);
+    Ok(crate::store::connect::selection_at(record, url))
+}
+
+/// The reach check of a PostgreSQL Sandbox's create (#535 §7.4 step 4), on
+/// the side that launches it: one connection to the server it will dial
+/// reads the LayerFS schema's binding, which must be the Store record's.
+/// It proves the server is reached and is the same Store; a failure names
+/// the host it tried, never the URL.
+fn reach_check(who: &str, store: &StoreRecord, postgresql: &SdkValue) -> Result<()> {
+    let url = postgresql.get_text("url").unwrap_or("");
+    let host = layerfs_sandbox::PostgresUrl::parse(url)
+        .map(|url| url.host().to_owned())
+        .unwrap_or_default();
+    let probe = SdkValue::map([("postgresql", postgresql.clone())]);
+    let binding = crate::store::postgres::read_binding(&probe).map_err(|refusal| {
+        refused(
+            "Unavailable",
+            format!(
+                "{who} cannot reach PostgreSQL Store {}'s server at {host}: {}",
+                store.name(),
+                refusal.message
+            ),
+        )
+    })?;
+    if store.binding() != Some(binding.as_slice()) {
+        return Err(refused(
+            "Unavailable",
+            format!(
+                "the PostgreSQL server {who} reaches at {host} holds another Store than {}",
+                store.name()
+            ),
+        ));
+    }
+    Ok(())
 }
 
 /// The path the open-Store cache keys `store` by: its file, or for a
@@ -176,32 +214,40 @@ fn host_op(
             .filter(|_| op != "sandbox.create")
             .map(str::to_owned),
     };
-    let postgresql = target.store_ref.kind() == StoreKind::Postgresql;
-    // a PostgreSQL Store's Sandboxes run from this process, which resolves
-    // the password (O3)
-    let executor = match postgresql {
-        true => Executor::Local,
-        false => place::on_machine(&home, machine, start)?,
+    let kind = target.store_ref.kind();
+    let postgresql = match kind {
+        StoreKind::Postgresql => Some(reached(&home, machine, &target.record)?),
+        StoreKind::Sqlite => None,
     };
+    // a Sandbox's host operations run where its machine runs them, for
+    // either Store kind (#535 §7.4)
+    let executor = place::on_machine(&home, machine, start)?;
     // what the machine's record chooses; the side that runs the call
     // resolves the rest
-    let choice = deploy::choose(&home, machine, image.as_deref(), postgresql, start)?;
+    let choice = deploy::choose(
+        &home,
+        machine,
+        image.as_deref(),
+        postgresql.is_some(),
+        start,
+    )?;
     match executor {
         Executor::Local => {
+            if let (Some(postgresql), "sandbox.create") = (&postgresql, op) {
+                reach_check(&format!("machine {machine}"), &target.record, postgresql)?;
+            }
             let how = deploy::resolve(&Side::Home(&home), &target.store, &choice)?;
             let args = host_args(
                 &home,
                 (&target.store, &target.project, &target.record),
-                target.store_ref.kind(),
+                (kind, postgresql),
                 how,
                 more,
             )?;
-            // the host code reads the project's Branches through its open Store
-            let lease = match postgresql {
-                true => None,
-                false => Some(crate::common::home::lease::hold(&home, &target.store)?),
-            };
-            crate::store::open::hold(&args, lease)?;
+            // the host code reads the project's Branches through its open
+            // Store, which this process leases, PostgreSQL ones too
+            let lease = crate::common::home::lease::hold(&home, &target.store)?;
+            crate::store::open::hold(&args, Some(lease))?;
             if op == "backend.daemon.workspace.status" {
                 return crate::sandbox::dispatch::backend(op.to_owned(), args);
             }
@@ -222,6 +268,9 @@ fn host_op(
                 ("project_record", project_record),
             ];
             fields.push(("deploy", choice));
+            if let Some(postgresql) = postgresql {
+                fields.push(("postgresql", postgresql));
+            }
             fields.push((
                 "more",
                 SdkValue::Map(more.into_iter().map(|(n, v)| (n.to_owned(), v)).collect()),
@@ -266,7 +315,17 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     let project = args.get_text("project").unwrap_or("");
     crate::common::names::StoreName::parse(store)?;
     crate::common::names::ProjectName::parse(project)?;
-    let sent = args.get("store_record").cloned().unwrap_or_default();
+    // a PostgreSQL Store's URL and password reference stay with the caller:
+    // the request's `postgresql` carries what this side dials (#535 §7.4)
+    let sent = match args.get("store_record").cloned().unwrap_or_default() {
+        SdkValue::Map(fields) => SdkValue::Map(
+            fields
+                .into_iter()
+                .filter(|(n, _)| !matches!(n.as_str(), "url" | "password"))
+                .collect(),
+        ),
+        other => other,
+    };
     let record = StoreRecord::from_record(store, sent).with("machine", SdkValue::text("native"));
     // written only when it changed (#535 R5): most calls send the same one
     let local = StoreRecord::read(root, store)?;
@@ -294,7 +353,25 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     let choice = args.get("deploy").cloned().unwrap_or_default();
     let how = deploy::resolve(&Side::Worker(root), store, &choice)?;
     let kind = record.kind()?;
-    let host = host_args(root, (store, project, &record), kind, how, more)?;
+    let postgresql = match kind {
+        StoreKind::Postgresql => Some(args.get("postgresql").cloned().ok_or_else(|| {
+            refused(
+                "InvalidInput",
+                "a PostgreSQL Sandbox call carries its server's resolved postgresql value",
+            )
+        })?),
+        StoreKind::Sqlite => None,
+    };
+    if let (Some(postgresql), "sandbox.create") = (&postgresql, op) {
+        reach_check("the worker's machine", &record, postgresql)?;
+    }
+    let host = host_args(
+        root,
+        (store, project, &record),
+        (kind, postgresql),
+        how,
+        more,
+    )?;
     crate::store::open::hold(&host, None)?;
     if op == "backend.daemon.workspace.status" {
         return crate::sandbox::dispatch::backend(op.to_owned(), host);

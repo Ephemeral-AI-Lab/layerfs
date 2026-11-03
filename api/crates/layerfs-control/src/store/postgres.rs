@@ -152,11 +152,9 @@ pub(crate) fn sandbox_store(
     else {
         return Err(refused("InvalidInput", "not a PostgreSQL Store"));
     };
-    // a container may reach the server by another name than this process
-    let url = args
-        .get("postgresql")
-        .and_then(|p| p.get_text("daemon_url"))
-        .map_or_else(|| url(args).map(str::to_owned), |u| Ok(u.to_owned()))?;
+    // the caller resolved the URL and rewrote it for the Sandbox's machine
+    // (#535 §7.4); the daemon dials the same server as this side
+    let url = url(args)?.to_owned();
     let name = text(args, "project")?;
     let listed = stores::list_projects(args)?;
     let found = matches!(&listed, SdkValue::List(items)

@@ -52,22 +52,16 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if crate::machine::record::MachineRecord::read(&home, machine)?.is_none() {
         return Err(refused("NotFound", format!("no machine named {machine}")));
     }
-    if let StoreRef::Postgres { .. } = target.store_ref {
-        // a PostgreSQL Store is on no machine; its daemon dials the server.
-        // A build without machines (the guest worker's) knows only these two.
-        #[cfg(not(feature = "machine"))]
-        if !matches!(machine, "native" | "docker") {
+    // a PostgreSQL Store is on no machine: its daemon dials the server from
+    // wherever it runs (G3), and the create's reach check proves it can
+    if let StoreRef::Sqlite { .. } = target.store_ref {
+        let store_machine = target.store_ref.machine()?;
+        if store_machine != machine {
             return Err(refused(
                 "Unsupported",
-                format!("a Sandbox of PostgreSQL Store {} runs on native or docker; on VMs and ssh hosts it comes later (O3)", target.store),
+                format!("Store {} is on machine {store_machine}; a Sandbox of {project} runs there (`store move` moves the Store)", target.store),
             ));
         }
-    } else if target.store_ref.machine()? != machine {
-        let store_machine = target.store_ref.machine()?;
-        return Err(refused(
-            "Unsupported",
-            format!("Store {} is on machine {store_machine}; a Sandbox of {project} runs there (`store move` moves the Store)", target.store),
-        ));
     }
     // claim the name across the home; the creator's pid lets a close tell
     // a create in flight from one whose process is gone
