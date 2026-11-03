@@ -115,8 +115,9 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
 ### Removing and updating
 
 - `machine remove` (VMs) and `machine disconnect` (ssh) are `InUse` while
-  the machine holds Stores, Sandboxes or hosted Firecracker machines. Each
-  is `InvalidInput` on the other kind.
+  the machine holds Stores, Sandboxes or hosted Firecracker machines;
+  `detail.related` names each as `{kind: "store" | "sandbox" | "machine",
+  name}`. Each is `InvalidInput` on the other kind.
 - A remove takes the machine's `start.lock` first, then, under the home
   lock, writes its `op` (`machine.remove`; `machine.disconnect` for ssh)
   into the record. The VM is deleted outside the home lock. While that

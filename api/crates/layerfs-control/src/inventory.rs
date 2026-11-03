@@ -104,7 +104,8 @@ pub fn sandboxes_of_project(home: &Path, project: &str) -> Result<Vec<String>> {
 }
 
 /// `machine.remove` and `machine.disconnect`: refused `InUse` while the
-/// machine holds Stores, Sandboxes or Firecracker machines.
+/// machine holds Stores, Sandboxes or Firecracker machines; `detail.related`
+/// lists them (#536 §10b).
 pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
     let stores = stores_on(home, name)?;
     let sandboxes = sandboxes_on(home, name)?;
@@ -112,15 +113,16 @@ pub fn can_remove_machine(home: &Path, name: &str) -> Result<()> {
     if stores.is_empty() && sandboxes.is_empty() && hosted.is_empty() {
         return Ok(());
     }
-    Err(refused(
-        "InUse",
-        format!(
-            "machine {name} holds Stores [{}], Sandboxes [{}] and hosts [{}]",
-            stores.join(", "),
-            sandboxes.join(", "),
-            hosted.join(", ")
-        ),
-    ))
+    let message = format!(
+        "machine {name} holds Stores [{}], Sandboxes [{}] and hosts [{}]",
+        stores.join(", "),
+        sandboxes.join(", "),
+        hosted.join(", ")
+    );
+    let mut held = related("store", &stores);
+    held.extend(related("sandbox", &sandboxes));
+    held.extend(related("machine", &hosted));
+    Err(in_use(message, held))
 }
 
 /// `machine.stop`: refused `InUse` while a Sandbox is recorded on machine

@@ -124,6 +124,22 @@ fn the_checks_refuse_in_use_with_the_same_texts() {
         refusal.message,
         "machine dev holds Stores [shop], Sandboxes [a, c] and hosts [fc]"
     );
+    // #536 §10b: what holds it, in `detail.related`
+    let held = |kind: &str, name: &str| {
+        SdkValue::map([
+            ("kind", SdkValue::text(kind)),
+            ("name", SdkValue::text(name)),
+        ])
+    };
+    assert_eq!(
+        refusal.detail.get("related"),
+        Some(&SdkValue::List(vec![
+            held("store", "shop"),
+            held("sandbox", "a"),
+            held("sandbox", "c"),
+            held("machine", "fc"),
+        ]))
+    );
     let refusal = inventory::can_stop_machine(&home, "dev").unwrap_err();
     assert_eq!(
         refusal.message,
