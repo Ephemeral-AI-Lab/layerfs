@@ -102,6 +102,31 @@ impl Hello {
             SdkValue::map([("worker", self.to_sdk()), ("expected", expected.to_sdk())]);
         Some(refusal)
     }
+
+    /// Why machine `machine`'s worker, just started from the bundle in
+    /// `bundle`, is not one this build may send calls to, if it is not: the
+    /// bundle was sealed from an older source than this build, so stopping
+    /// and starting again would start the same worker. Its `detail` is
+    /// [`Hello::mismatch`]'s, with the bundle's folder.
+    pub fn stale_bundle(&self, machine: &str, bundle: &Path, address: &str) -> Option<SdkRefusal> {
+        let expected = self.expected()?;
+        let mut refusal = refused(
+            "Unavailable",
+            format!(
+                "machine {machine} started, but its worker at {address} is of another build ({}; this build: {}) because the Linux bundle at {} was sealed before this build; rebuild it (`python3 tools/linux_bundle.py`), then {}",
+                self.describe(),
+                expected.describe(),
+                bundle.display(),
+                replace_with(machine)
+            ),
+        );
+        refusal.detail = SdkValue::map([
+            ("worker", self.to_sdk()),
+            ("expected", expected.to_sdk()),
+            ("bundle", SdkValue::text(bundle.display().to_string())),
+        ]);
+        Some(refusal)
+    }
 }
 
 /// Whether `refusal` is a [`Hello::mismatch`].

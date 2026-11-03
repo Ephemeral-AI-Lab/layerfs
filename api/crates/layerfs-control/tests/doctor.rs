@@ -274,7 +274,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
             "machine",
             "m1",
             "another build",
-            "`layerfs machine stop m1`, then `layerfs machine start m1`",
+            "`layerfs machine stop m1`, then `layerfs machine start m1`; if the start says the Linux bundle was sealed before this build, rebuild it",
         ),
     ];
     for (severity, kind, name, message, fix) in expect {

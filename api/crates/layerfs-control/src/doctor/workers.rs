@@ -41,7 +41,7 @@ pub(super) fn check(home: &Path, scanned: &Scanned, findings: &mut Findings) {
                             hello.describe(),
                             expected.describe()
                         ),
-                        replace,
+                        format!("{replace}; if the start says the Linux bundle was sealed before this build, rebuild it (`python3 tools/linux_bundle.py`) first"),
                     );
                 }
             }

@@ -120,6 +120,41 @@ fn a_worker_run_from_no_sealed_bundle_is_checked_by_protocol_alone() {
 }
 
 #[test]
+fn a_worker_just_started_of_another_build_names_its_stale_bundle() {
+    deployed_bundle();
+    let dir = PathBuf::from("/cache/layerfs/bundle/2.0.0/linux-aarch64");
+    let old = Hello {
+        protocol: None,
+        bundle: None,
+    };
+    let refusal = old.stale_bundle("lima1", &dir, "127.0.0.1:7").unwrap();
+    assert_eq!(refusal.code, "Unavailable");
+    assert!(worker::is_mismatch(&refusal), "{refusal:?}");
+    for said in [
+        "machine lima1 started",
+        "protocol none",
+        "/cache/layerfs/bundle/2.0.0/linux-aarch64 was sealed before this build",
+        "tools/linux_bundle.py",
+        "`layerfs machine stop lima1`, then `layerfs machine start lima1`",
+    ] {
+        assert!(
+            refusal.message.contains(said),
+            "{said}: {}",
+            refusal.message
+        );
+    }
+    assert_eq!(
+        refusal.detail.get_text("bundle"),
+        Some("/cache/layerfs/bundle/2.0.0/linux-aarch64")
+    );
+    let current = Hello {
+        protocol: Some(PROTOCOL),
+        bundle: Some(DEPLOYED.to_owned()),
+    };
+    assert!(current.stale_bundle("lima1", &dir, "127.0.0.1:7").is_none());
+}
+
+#[test]
 fn the_library_worker_says_its_protocol_and_answers() {
     deployed_bundle();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

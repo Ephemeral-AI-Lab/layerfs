@@ -58,14 +58,23 @@ fn start(home: &Path, name: &str, record: &MachineRecord) -> Result<Option<Endpo
     if spec.kind == Platform::Docker && spec.os_image.is_none() {
         spec.os_image = Some(super::image::docker_default(home)?);
     }
-    match adapters::start(&spec, &bundle).map_err(refusal)? {
-        None => Ok(None),
-        Some(running) => {
-            let _lock = crate::common::home::lock::take(home)?;
-            save_running(home, name, &running)?;
-            Ok(Some(endpoint_of(&running.endpoint)))
+    let Some(running) = adapters::start(&spec, &bundle).map_err(refusal)? else {
+        return Ok(None);
+    };
+    {
+        let _lock = crate::common::home::lock::take(home)?;
+        save_running(home, name, &running)?;
+    }
+    let endpoint = endpoint_of(&running.endpoint);
+    // a worker of another build just started means the bundle is older than
+    // this build: a stop and start would start it again (it stays recorded)
+    if let Ok(hello) = crate::machine::worker::hello(&endpoint) {
+        let address = endpoint.address.to_string();
+        if let Some(stale) = hello.stale_bundle(name, &bundle.dir, &address) {
+            return Err(stale);
         }
     }
+    Ok(Some(endpoint))
 }
 
 /// Machine `name`'s `start.lock`, held until dropped. Starting, creating and
