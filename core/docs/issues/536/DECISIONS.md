@@ -95,6 +95,7 @@ Rows added when the code contradicts a spec fact. The code wins; the step is adj
 | Workspace `.unmount` records kept (F3) | Unchanged, against §7.1's "replaces … Workspace `.unmount` records". | They are per Workspace and concurrent within one Sandbox (one op on the Sandbox record cannot hold them); their liveness is a kernel flock released at exit; they keep the daemon's terminal outcome for a repeated call; they live on the serving side. |
 | Layout 2 intents (F3) | The conversion reads 2.0's `in_progress`, `removing {pid}` and `creating`/`pid` to refuse while live (`removing` and `creating` name a pid alone: that is all a 2.0 record has). It drops a dead `in_progress` (with a note in `migration-2.json`) and a machine's `removing` and `state` `creating`/`unknown`; a Sandbox `unknown` becomes an uncertain `sandbox.create` op owned by no process (`unresolved`, cleared by `sandbox close`). | 2.0 records hold no phase or owner identity. |
 | `lease::alive` (F3) | No product code decides liveness from a bare pid; `lease::alive` stays `pub` as the primitive under `recorded_alive` (tests use it for the never-alive id range). | §11 item 5. |
+| Init through a worker (H11, `aa1a992fcd`) | The worker reads `folder` on the Store's machine (a guest or ssh-host path); the caller records the project when the worker answers; a lost answer is `Unknown` with no home record. **For owner review:** the spec does not say where the folder lives; streaming a host folder to the worker would need a new transfer (a tree, not one file as `store.file` carries). | Smallest reading of "through that machine's worker"; no new protocol. |
 | `layerfs_api::call` (C1) | Kept as a re-export of `layerfs_store_service::methods::call`; `layerfs_api::fs` and `::branch` are no longer public (nothing used them). | Front ends, examples and remaining tests keep their path. |
 
 ## Open items
@@ -107,6 +108,7 @@ Rows added when the code contradicts a spec fact. The code wins; the step is adj
 
 | Commit | Message says | Correct |
 | --- | --- | --- |
+| `aa1a992fcd` (H11 Init through a worker) | "project/family.rs +47, project/init.rs +20" | project/family.rs +33, project/init.rs +36 (measured per file with `tools/production_loc.py --files`); the other files and the total +68 are right |
 | `41a2a00525` (F1 merge) | "typed records +545, moves' imports/declarations +167" | behaviour commits +450 (F1a 77, F1d 170, F1e 137, F1f 61, F1g 5), moves +167 (F1b 6, F1c 7, F1h 154); total +617 is right |
 
 ## Phase log
