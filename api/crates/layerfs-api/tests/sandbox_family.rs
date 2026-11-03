@@ -118,6 +118,12 @@ fn named_sandboxes_on_native() {
         ],
     );
     assert_eq!(made.get_text("state"), Some("running"));
+    // its success dropped the create's intent in the same write (#536 §7.1)
+    assert!(made.get("op").is_none(), "{made:?}");
+    let record = home::read_record(&paths::sandbox_record(&home, "t1"))
+        .unwrap()
+        .unwrap();
+    assert!(record.get("op").is_none(), "{record:?}");
     let taken = call(
         &home,
         "sandbox.create",
