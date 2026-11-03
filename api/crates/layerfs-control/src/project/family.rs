@@ -233,6 +233,8 @@ fn init_postgresql(
         ],
     );
     let watch = host_args(&home, store, vec![("project", SdkValue::text(name))]);
+    // this process uses the Store meanwhile, as a sqlite Init does
+    let _lease = lease::hold(&home, store)?;
     let added = observed(context, &watch, || {
         crate::project::postgres_init::add_project(&call)
     })?;

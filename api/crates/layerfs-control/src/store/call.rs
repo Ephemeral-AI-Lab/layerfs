@@ -1,5 +1,6 @@
 //! The route of one Store call, chosen from records (H §7.7): a PostgreSQL
-//! Store and a sqlite Store on `native` run in this process; a sqlite Store
+//! Store and a sqlite Store on `native` run in this process, under its
+//! lease; a sqlite Store
 //! on any other machine runs in that machine's worker, started first if it
 //! is not running. The caller sends the worker the Store's record with the
 //! call, so a guest never reads the home; the worker finds the Store file
@@ -24,13 +25,13 @@ pub(crate) fn store_call(
 ) -> Outcome {
     let home = context.home.clone();
     target.record.unblocked()?;
-    if let StoreRef::Postgres { .. } = target.store_ref {
-        let fields = with_target(args, target, &target.record);
-        return postgresql(&home, target, op, fields);
-    }
     // the lease is taken under the Store's lock with the record read there:
     // a move or remove that started since `target` was read refuses it
     let (lease, record) = lease::claim(&home, &target.store)?;
+    if let StoreRef::Postgres { .. } = target.store_ref {
+        let fields = with_target(args, target, &record);
+        return postgresql(&home, target, op, fields, lease);
+    }
     let mut fields = with_target(args, target, &record);
     // the record read under the lock, parsed once (R4)
     match plan(&home, record.store_ref()?)? {
@@ -68,12 +69,15 @@ fn with_target(
 }
 
 /// A PostgreSQL Store's call in this process: its URL from the record, the
-/// password reference resolved now (H §7.4).
+/// password reference resolved now (H §7.4). Its lease is held while this
+/// process keeps the Store open, as a sqlite Store's is: `store.disconnect`
+/// refuses `InUse` meanwhile.
 fn postgresql(
     home: &Path,
     target: &Target,
     op: &str,
     mut fields: Vec<(String, SdkValue)>,
+    lease: lease::Lease,
 ) -> Outcome {
     let url = crate::store::connect::url(&target.record)?;
     fields.push((
@@ -86,5 +90,5 @@ fn postgresql(
         "storePath".to_owned(),
         SdkValue::text(key.display().to_string()),
     ));
-    open::run(op, SdkValue::Map(fields), None)
+    open::run(op, SdkValue::Map(fields), Some(lease))
 }

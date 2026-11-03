@@ -1,6 +1,7 @@
-//! Store leases (H §7.8): every process that uses a sqlite Store holds
-//! `store/<name>/open/<pid>`: the process that opens it, or, for a Store
-//! behind a worker, the host process that sends it calls. A lease is taken under the Store's lock (#536 §8) after
+//! Store leases (H §7.8): every process that uses a Store holds
+//! `store/<name>/open/<pid>`: the process that opens it (a PostgreSQL
+//! Store's too), or, for a Store behind a worker, the host process that
+//! sends it calls. A lease is taken under the Store's lock (#536 §8) after
 //! the Store's record shows no operation holding it (`op`), so a lease and
 //! a move or remove never overlap. `store move`, `store remove` and `store
 //! disconnect` read leases under the Store's lock and refuse `InUse` while
