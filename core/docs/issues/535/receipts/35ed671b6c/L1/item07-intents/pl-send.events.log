@@ -1,0 +1,5 @@
+1793696251.110812 begin pull pl-send - point=send pid=33791
+1793696251.111449 progress {"phase": "check", "done": null, "total": null}
+1793696251.118076 progress {"phase": "snapshot", "done": null, "total": null}
+1793696251.286692 progress {"phase": "send", "done": 0, "total": 12935168}
+1793696251.286805 SIGKILL at progress send

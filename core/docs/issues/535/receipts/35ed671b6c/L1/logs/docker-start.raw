@@ -1,0 +1,6 @@
+2026-11-03T08:49:15Z
+$ layerfs machine start docker
+{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}
+(exit 0)
+2026-11-03T08:49:44Z
+START-DONE

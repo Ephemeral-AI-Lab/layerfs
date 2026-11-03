@@ -1,0 +1,5 @@
+C01: SAME ok=[True, True, True] commit=Committed setup=None verify='VERIFY OK' steps=17
+C05: SAME ok=[True, True, True] commit=Committed setup=None verify='VERIFY OK' steps=17
+C09: SAME ok=[True, True, True] commit=UpToDate setup=Committed verify='VERIFY OK' steps=21
+C12: SAME ok=[True, True, True] commit=Committed setup=None verify='VERIFY OK' steps=17
+PARITY PASS

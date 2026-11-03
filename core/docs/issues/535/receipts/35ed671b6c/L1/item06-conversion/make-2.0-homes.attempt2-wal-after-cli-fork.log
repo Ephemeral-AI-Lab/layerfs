@@ -1,0 +1,124 @@
+== H6 docker part
+$ [2.0] layerfs machine update docker --image sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e
+{"name":"docker","platform":"docker","backend":"docker","state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"}
+ (exit 0)
+$ [2.0] layerfs store move d6 docker
+{"code":"Failed","message":"store move, snapshot: /tmp/lfs535l1-h6.3Q1P/store/d6/store.sqlite has an unfinished write-ahead log; open the Store once on its machine","detail":{"phase":"snapshot"}}
+ (exit 125)
+$ [2.0] layerfs sandbox create d6/p sd6 docker
+{"code":"Unsupported","message":"Store d6 is on machine native; a Sandbox of d6/p runs there (`store move` moves the Store)","detail":null}
+ (exit 125)
+$ [2.0] layerfs workspace mount sd6 lane
+{"code":"NoSuchSandbox","message":"no Sandbox named sd6; `sandbox.create(project, name, machine)` starts one","detail":null}
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys;d=json.load(sys.stdin);print(d.get('ws') or (sys.argv[1]+':'+d['path']))
+                                                                                 ~^^^^^^^^
+KeyError: 'path'
+no ws
+$ [2.0] layerfs sandbox close sd6
+{"code":"NoSuchSandbox","message":"no Sandbox named sd6; `sandbox.create(project, name, machine)` starts one","detail":null}
+ (exit 125)
+$ [2.0] layerfs sandbox list
+{"items":[],"next_page_pos":null}
+ (exit 0)
+$ [2.0] layerfs store list
+{"items":[{"name":"d6","kind":"sqlite","machine":"native","profile":"disposable","created":1793696606864,"sqlite":"3.53.2","in_progress":null,"projects":["p"]},{"name":"n6","kind":"sqlite","machine":"native","profile":"disposable","created":1793696603191,"sqlite":"3.53.2","projects":["p"]}]}
+ (exit 0)
+== H6R: one native and one docker Sandbox left running
+$ [2.0] layerfs machine update docker --image sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e
+{"name":"docker","platform":"docker","backend":"docker","state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"}
+ (exit 0)
+$ [2.0] layerfs store move dr6 docker
+{"code":"Failed","message":"store move, snapshot: /tmp/lfs535l1-h6r.YVEv/store/dr6/store.sqlite has an unfinished write-ahead log; open the Store once on its machine","detail":{"phase":"snapshot"}}
+ (exit 125)
+$ [2.0] layerfs sandbox create dr6/p sdr6 docker
+{"code":"Unsupported","message":"Store dr6 is on machine native; a Sandbox of dr6/p runs there (`store move` moves the Store)","detail":null}
+ (exit 125)
+$ [2.0] layerfs sandbox list
+{"items":[{"name":"sr6","project":"r6/p","machine":"native","state":"running","created":1793696608722,"pid":42857,"id":"1","platform":"mac","runtime":"native","image":"local"}],"next_page_pos":null}
+ (exit 0)
+== layout of /tmp/lfs535l1-h6.3Q1P
+{"layout":2,"id":"2f3f2250234385ef564cf2d25ed8ff99"}
+
+.
+./layerfs.json
+./layerfs.lock
+./log
+./log/import-env.jsonl
+./log/leases.jsonl
+./machine
+./machine/docker
+./machine/docker/record.json
+./machine/docker/start.lock
+./machine/docker/worker.json
+./machine/native
+./machine/native/record.json
+./machine/native/sandbox
+./machine/native/sandbox-root
+./store
+./store/d6
+./store/d6/open
+./store/d6/project
+./store/d6/project/p
+./store/d6/record.json
+./store/d6/store.sqlite
+./store/d6/store.sqlite-shm
+./store/d6/store.sqlite-wal
+./store/n6
+./store/n6/open
+./store/n6/open/42493
+./store/n6/open/42498
+./store/n6/open/42712
+./store/n6/open/42724
+./store/n6/open/42728
+./store/n6/open/42734
+./store/n6/open/42740
+./store/n6/open/42743
+./store/n6/project
+./store/n6/project/p
+./store/n6/record.json
+./store/n6/store.sqlite
+./store/n6/store.sqlite-shm
+./store/n6/store.sqlite-wal
+== layout of /tmp/lfs535l1-h6r.YVEv
+{"layout":2,"id":"52c7944abcebcc60eae6755396ae7013"}
+
+.
+./layerfs.json
+./layerfs.lock
+./log
+./log/import-env.jsonl
+./log/leases.jsonl
+./machine
+./machine/docker
+./machine/docker/record.json
+./machine/docker/start.lock
+./machine/docker/worker.json
+./machine/native
+./machine/native/record.json
+./machine/native/sandbox
+./machine/native/sandbox-root
+./machine/native/sandbox-root/lfs-52c7944a-r6.p-1
+./machine/native/sandbox/sr6
+./store
+./store/dr6
+./store/dr6/open
+./store/dr6/project
+./store/dr6/project/p
+./store/dr6/record.json
+./store/dr6/store.sqlite
+./store/dr6/store.sqlite-shm
+./store/dr6/store.sqlite-wal
+./store/r6
+./store/r6/open
+./store/r6/open/42853
+./store/r6/open/42857
+./store/r6/project
+./store/r6/project/p
+./store/r6/record.json
+./store/r6/store.sqlite
+./store/r6/store.sqlite-shm
+./store/r6/store.sqlite-wal
+MAKE-DONE

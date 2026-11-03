@@ -1,0 +1,49 @@
+08:55:56 prepare macos
+Worktree operation refused: PID 40057 owns an open file or cwd in /Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-kit-6d8fa8af9006/cargo-home-macos/registry: /Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-kit-6d8fa8af9006/cargo-home-macos/registry
+08:55:56 prepare linux
+Worktree operation refused: PID 40057 owns an open file or cwd in /Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-kit-6d8fa8af9006/cargo-home-macos/registry: /Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-kit-6d8fa8af9006/cargo-home-macos/registry
+08:55:57 macos cli
+   Compiling layerfs-api v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue535-l1base/api/crates/layerfs-api)
+   Compiling layerfs-cli v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue535-l1base/api/crates/layerfs-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 34.65s
+CLI-EXIT 0
+08:56:32 macos daemon
+   Compiling layerfs-store-service v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue535-l1base/engine/crates/layerfs-store-service)
+   Compiling layerfs-daemon v2.0.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue535-l1base/engine/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.78s
+DAEMON-EXIT 0
+c71698dee1d4fb5245d6c5b6e41da90a2c04dd930c8cfa172872cfb4716b4d41  /Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue535-l1base/target/debug/layerfs
+d04f9150dc1442165db3c4d375f00430c3835d114de362387ebae3e8ddd40d45  /Users/yifanxu/Ephemeral-AI-Lab/layerfs-issue535-l1base/target/debug/layerfs-daemon
+08:56:45 bundle daemon
+daemon: built in 43.5 s (/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-l1base-860c8face50e/builds/bundle-daemon-3ffea883856d47c3bc43d67336b6f9b0)
+STEP-EXIT daemon 0
+08:57:30 bundle worker
+worker: built in 20.2 s (/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-l1base-860c8face50e/builds/bundle-worker-07c321eb6b7a47a3aba64bfc7cf4a253)
+STEP-EXIT worker 0
+08:57:51 bundle helper
+helper: built in 5.0 s (/Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-l1base-860c8face50e/builds/bundle-helper-8e22d362ff204375919a2a84065c26ca)
+STEP-EXIT helper 0
+08:57:56 seal
+sealed /Users/yifanxu/.cache/layerfs-worktrees/layerfs-issue535-l1base-860c8face50e/bundle/2.0.0/linux-aarch64 (hash 216b8aa61446ce957c360ec8a94a2d8556073345796b65a4a11e9be3c696bc7b)
+SEAL-EXIT 0
+{
+  "hash": "216b8aa61446ce957c360ec8a94a2d8556073345796b65a4a11e9be3c696bc7b",
+  "version": "2.0.0",
+  "platform": "linux-aarch64",
+  "profile": "debug",
+  "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+  "saved_from": "sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e",
+  "source": {
+    "head": "58b8d1742bc3aae72e149ea9f4639c83afd1f863",
+    "sha256": "93ccefae64a19b1ccd98a19c4975cd8e08eb942e3ae215503903d01cd698e2a9"
+  },
+  "toolchain": "1.85.1",
+  "files": {
+    "layerfs": "136fb86c8a6c609204d3d712c2b175e9ec78c03d3c79a54b5740189d309de50b",
+    "layerfs-daemon": "3e2cf8d903a5a94008aa13f574869925394b7bcc432098fcd20b875a63fc5aad",
+    "layerfs-sandbox-helper": "3027aaab2928fe2aa1c696f7bc89e07484f9699dc746f8d0a9ea32a532abe851",
+    "sandbox-image.tar": "eb9b313b36113c9b6a73d67e04a08557ccc677f439cea02a05f9bec81cc0d129"
+  },
+  "at": "2026-11-03T08:58:19.321792+00:00"
+}
+BASE-BUILD-DONE

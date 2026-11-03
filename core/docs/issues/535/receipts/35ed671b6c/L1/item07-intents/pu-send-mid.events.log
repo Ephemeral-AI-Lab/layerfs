@@ -1,0 +1,6 @@
+1793696173.127748 begin push pu-send-mid docker point=send-mid pid=29325
+1793696173.128434 progress {"phase": "check", "done": null, "total": null}
+1793696173.136737 progress {"phase": "snapshot", "done": null, "total": null}
+1793696173.340655 progress {"phase": "send", "done": 0, "total": 12943360}
+1793696177.654666 progress {"phase": "send", "done": 8388608, "total": 12943360}
+1793696177.654815 SIGKILL at send-mid

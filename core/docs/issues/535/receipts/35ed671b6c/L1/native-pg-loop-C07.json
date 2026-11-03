@@ -1,0 +1,208 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C07",
+  "machine": "native",
+  "product": "35ed671b6c",
+  "startedAt": "2026-11-03T08:53:24.615Z",
+  "load1": 10.0576171875,
+  "body": {
+    "sha256": "4d50a741653d9e90efba6eece312ea5a57b13be6142c3bfc09b57f643088e723"
+  },
+  "ok": true,
+  "cause": null,
+  "phases": {
+    "warmup": {
+      "mountMs": 92.688,
+      "exec": {
+        "wallMs": 3631.157,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793696005422580000 1793696009038609000\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 3616.029
+      },
+      "unmountMs": 108.217
+    },
+    "timed": {
+      "mountMs": 96.438,
+      "workspace": {
+        "kind": "Mounted",
+        "path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs533-cell-dzSMxA/machine/native/run/lfs-ba4be15e-c07/workspaces/2",
+        "workspace": "03605432dfc6ff0cccbabee1ffa267f3fb2ff945f5e3bc93ebd14fc421d9496f",
+        "namespace": 2,
+        "branch": "lane",
+        "base": null,
+        "base_layer": "32703ca7497efe1e117c3e7500503ad03f6a899aea9ff4a80bb737c80e6d5bad8b",
+        "root": "c92dfd3d3b40ad0c3b7847f96fe9b7cb574ef2c74d7688eea2ca375a63fb1f60",
+        "sandbox": "c07",
+        "container": "lfs-ba4be15e-c07",
+        "image": "local",
+        "platform": "mac",
+        "runtime": "native",
+        "name": null,
+        "ws": "c07:/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/lfs533-cell-dzSMxA/machine/native/run/lfs-ba4be15e-c07/workspaces/2"
+      },
+      "exec": {
+        "wallMs": 3752.393,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793696009261323000 1793696012996415000\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 3735.092
+      },
+      "commitMs": 11842.577,
+      "commit": {
+        "kind": "Committed",
+        "head": "12a878386a8cb0a59a82746bd55ff39635dfa5dcad6d38761bb73ce783ec19d2da",
+        "commit": {
+          "id": "12a878386a8cb0a59a82746bd55ff39635dfa5dcad6d38761bb73ce783ec19d2da",
+          "branch": null,
+          "parent": null,
+          "second_parent": null,
+          "base": "32703ca7497efe1e117c3e7500503ad03f6a899aea9ff4a80bb737c80e6d5bad8b",
+          "root": "0d30281e176ada704fd2548889b448900fe4f2f65a77e3f9f353f7ea17ea6450",
+          "via": "exec",
+          "message": "lfs533 C07",
+          "merged_from": null,
+          "time": 1793696024392,
+          "logical": 134217728,
+          "new_canonical": 39358,
+          "new_stored": 838,
+          "new_metadata": 762,
+          "displaced": null,
+          "lww": [],
+          "lww_truncated": false
+        },
+        "displaced_head": null,
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "unmountMs": 31.7
+    },
+    "verify": {
+      "exitCode": 0,
+      "stdout": "VERIFY OK\n",
+      "stderr": ""
+    }
+  },
+  "steps": [
+    {
+      "name": "import-env",
+      "ms": 10.826,
+      "ok": true
+    },
+    {
+      "name": "store.connect",
+      "ms": 236.133,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 122.387,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 132.76,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 196.016,
+      "ok": true
+    },
+    {
+      "name": "warmup.mount",
+      "ms": 92.683,
+      "ok": true
+    },
+    {
+      "name": "warmup.exec",
+      "ms": 3631.147,
+      "ok": true
+    },
+    {
+      "name": "warmup.unmount",
+      "ms": 108.212,
+      "ok": true
+    },
+    {
+      "name": "timed.mount",
+      "ms": 96.434,
+      "ok": true
+    },
+    {
+      "name": "timed.exec",
+      "ms": 3752.383,
+      "ok": true
+    },
+    {
+      "name": "timed.commit",
+      "ms": 11842.571,
+      "ok": true
+    },
+    {
+      "name": "timed.unmount",
+      "ms": 31.694,
+      "ok": true
+    },
+    {
+      "name": "verify.mount",
+      "ms": 103.974,
+      "ok": true
+    },
+    {
+      "name": "verify.identity",
+      "ms": 47.556,
+      "ok": true
+    },
+    {
+      "name": "verify.exec",
+      "ms": 6007.834,
+      "ok": true
+    },
+    {
+      "name": "verify.unmount",
+      "ms": 28.005,
+      "ok": true
+    },
+    {
+      "name": "sandbox.close",
+      "ms": 59.837,
+      "ok": true
+    },
+    {
+      "name": "store.disconnect",
+      "ms": 1.74,
+      "ok": true
+    }
+  ],
+  "store": {
+    "kind": "postgresql",
+    "host": "127.0.0.1"
+  },
+  "sandbox": {
+    "name": "c07",
+    "project": "cells/p",
+    "machine": "native",
+    "created": 1793696005121,
+    "backend": "native",
+    "route": "nfs",
+    "id": "c07",
+    "platform": "mac",
+    "runtime": "native",
+    "image": "local",
+    "state": "running"
+  },
+  "where": {
+    "kernel": "Darwin 25.4.0",
+    "machine": "arm64",
+    "cpus": "14",
+    "memKiB": null,
+    "memBytes": "38654705664",
+    "cpuMax": null,
+    "id": "501:20"
+  },
+  "endedAt": "2026-11-03T08:53:51.122Z"
+}

@@ -1,0 +1,22 @@
+# fix: machine list docker state equals machine status docker (before start)
+home: <HD>
+2026-11-03T08:49:09Z
+$ layerfs machine list
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}]}
+(exit 0)
+$ layerfs machine get docker
+{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}
+(exit 0)
+$ layerfs machine status docker
+{"name":"docker","platform":"docker","state":"stopped","free_disk":null,"tool_version":"29.5.2","down_reason":"the machine is stopped","stores":[]}
+(exit 0)
+
+# after `layerfs machine start docker` (08:49:15Z -> 08:49:44Z, exit 0; full output in logs/docker-start.raw); the home recorded loaded_image sha256:50e8f040... (bundle 764e4977...), which Docker Desktop already held, so no new image was created
+2026-11-03T08:58:13Z
+$ layerfs machine list
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}]}
+$ layerfs machine get docker
+{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}
+$ layerfs machine status docker
+{"name":"docker","platform":"docker","state":"running","free_disk":131681374208,"tool_version":"29.5.2","down_reason":null,"stores":[]}
+Verdict: before start list/get state stopped = status stopped; after start list/get running = status running. PASS

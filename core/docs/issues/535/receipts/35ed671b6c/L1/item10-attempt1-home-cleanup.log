@@ -1,0 +1,27 @@
+$ layerfs store pull b
+{"store":"b","from":"docker","to":"native","bytes":12939264,"heads":"fb7e88a8f5fb347348aeb5e6836da89a1626e6e897b0d92a56152d5a8715d2f8"}
+
+$ layerfs store remove a
+{"removed":"a"}
+
+$ layerfs store remove b
+{"removed":"b"}
+
+$ layerfs store remove c
+{"removed":"c"}
+
+$ layerfs store remove k
+{"removed":"k"}
+
+$ layerfs store disconnect g
+{"disconnected":"g"}
+
+$ layerfs backup disconnect l1b
+{"disconnected":"l1b","unlinked":[]}
+
+$ layerfs machine stop docker
+{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}
+
+$ layerfs doctor --text
+ok: nothing to report
+

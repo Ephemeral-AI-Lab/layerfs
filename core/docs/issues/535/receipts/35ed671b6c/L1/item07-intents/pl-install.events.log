@@ -1,0 +1,9 @@
+1793696287.652374 begin pull pl-install - point=install pid=37633
+1793696287.653042 progress {"phase": "check", "done": null, "total": null}
+1793696287.660216 progress {"phase": "snapshot", "done": null, "total": null}
+1793696287.831491 progress {"phase": "send", "done": 0, "total": 12935168}
+1793696291.409977 progress {"phase": "send", "done": 8388608, "total": 12935168}
+1793696293.281990 progress {"phase": "send", "done": 12935168, "total": 12935168}
+1793696293.282442 progress {"phase": "verify", "done": null, "total": null}
+1793696293.449101 progress {"phase": "install", "done": null, "total": null}
+1793696293.449160 SIGKILL at progress install

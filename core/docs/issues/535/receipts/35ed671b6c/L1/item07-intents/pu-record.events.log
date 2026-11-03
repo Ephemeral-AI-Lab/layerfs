@@ -1,0 +1,10 @@
+1793696195.498842 begin push pu-record docker point=record pid=30047
+1793696195.499538 progress {"phase": "check", "done": null, "total": null}
+1793696195.505472 progress {"phase": "snapshot", "done": null, "total": null}
+1793696195.662843 progress {"phase": "send", "done": 0, "total": 12931072}
+1793696200.292484 progress {"phase": "send", "done": 8388608, "total": 12931072}
+1793696202.359189 progress {"phase": "send", "done": 12931072, "total": 12931072}
+1793696202.359599 progress {"phase": "verify", "done": null, "total": null}
+1793696202.526020 progress {"phase": "install", "done": null, "total": null}
+1793696202.529093 progress {"phase": "record", "done": null, "total": null}
+1793696202.529219 SIGKILL at progress record
