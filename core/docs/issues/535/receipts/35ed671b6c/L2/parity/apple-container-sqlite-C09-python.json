@@ -1,0 +1,251 @@
+{
+  "format": "lfs535-l2-parity/1",
+  "via": "python",
+  "cell": "C09",
+  "machine": "lfs535l2a",
+  "product": "35ed671b6c",
+  "startedAt": "2026-11-03T09:02:02.283076+00:00",
+  "load1": 11.9111328125,
+  "body": {
+    "sha256": "37eb10ecfa439aa69bc9e430d39ce029099fa2bb52a44a67ffef8a31ecdac9e5"
+  },
+  "store": {
+    "kind": "sqlite"
+  },
+  "ok": true,
+  "cause": null,
+  "phases": {
+    "setup": {
+      "exec": {
+        "wallMs": 1378.913,
+        "exitCode": 0,
+        "stdout": "",
+        "stderr": "",
+        "rc": null,
+        "ms": null
+      },
+      "commit": {
+        "kind": "Committed",
+        "head": "12045bb78b69e44a4fcb6cda10ff0bc1d89f2abbe516cb01e823f1a87689401fce",
+        "commit": {
+          "id": "12045bb78b69e44a4fcb6cda10ff0bc1d89f2abbe516cb01e823f1a87689401fce",
+          "branch": null,
+          "parent": null,
+          "second_parent": null,
+          "base": "323b2572f04fdd4f460fbd38dea0df393dff9b99d6f30fbe03855d2e954e346516",
+          "root": "6a0e42ec323b67ff7a9aef018b1a8b0ecf360a73a1f2114221043742cd750dc9",
+          "via": "exec",
+          "message": "lfs535 C09 setup",
+          "merged_from": null,
+          "time": 1793696531591,
+          "logical": 67108864,
+          "new_canonical": 39263,
+          "new_stored": 748,
+          "new_metadata": 672,
+          "displaced": null,
+          "lww": [],
+          "lww_truncated": false
+        },
+        "displaced_head": null,
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      }
+    },
+    "warmup": {
+      "mountMs": 13.704,
+      "exec": {
+        "wallMs": 170.719,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793696531846559336 1793696531999024336\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 152.465
+      },
+      "unmountMs": 9.505
+    },
+    "timed": {
+      "mountMs": 14.069,
+      "workspace": {
+        "kind": "Mounted",
+        "path": "/layerfs/data/machine/native/run/lfs-9778d174-py09/workspaces/3",
+        "workspace": "e7396ebf813cd8a6d84d138e9596a2847f44fb920fb7556bd4c38b0379d0f412",
+        "namespace": 3,
+        "branch": "lane",
+        "base": "12045bb78b69e44a4fcb6cda10ff0bc1d89f2abbe516cb01e823f1a87689401fce",
+        "base_layer": "323b2572f04fdd4f460fbd38dea0df393dff9b99d6f30fbe03855d2e954e346516",
+        "root": "6a0e42ec323b67ff7a9aef018b1a8b0ecf360a73a1f2114221043742cd750dc9",
+        "sandbox": "py09",
+        "container": "lfs-9778d174-py09",
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "platform": "linux",
+        "runtime": "namespaces",
+        "name": null,
+        "ws": "py09:/layerfs/data/machine/native/run/lfs-9778d174-py09/workspaces/3"
+      },
+      "exec": {
+        "wallMs": 157.423,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793696532046277711 1793696532180161087\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 133.883376
+      },
+      "commitMs": 3.667,
+      "commit": {
+        "kind": "UpToDate",
+        "head": "12045bb78b69e44a4fcb6cda10ff0bc1d89f2abbe516cb01e823f1a87689401fce",
+        "root": "6a0e42ec323b67ff7a9aef018b1a8b0ecf360a73a1f2114221043742cd750dc9",
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "unmountMs": 7.362
+    },
+    "verify": {
+      "exitCode": 0,
+      "stdout": "VERIFY OK\n",
+      "stderr": ""
+    }
+  },
+  "steps": [
+    {
+      "name": "store.create",
+      "ms": 9.8,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 15.21,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 7.945,
+      "ok": true
+    },
+    {
+      "name": "store.push",
+      "ms": 93.227,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 72.435,
+      "ok": true
+    },
+    {
+      "name": "setup.mount",
+      "ms": 9.786,
+      "ok": true
+    },
+    {
+      "name": "setup.exec",
+      "ms": 1378.913,
+      "ok": true
+    },
+    {
+      "name": "setup.commit",
+      "ms": 7921.089,
+      "ok": true
+    },
+    {
+      "name": "setup.unmount",
+      "ms": 14.403,
+      "ok": true
+    },
+    {
+      "name": "warmup.mount",
+      "ms": 13.704,
+      "ok": true
+    },
+    {
+      "name": "warmup.exec",
+      "ms": 170.719,
+      "ok": true
+    },
+    {
+      "name": "warmup.unmount",
+      "ms": 9.505,
+      "ok": true
+    },
+    {
+      "name": "timed.mount",
+      "ms": 14.069,
+      "ok": true
+    },
+    {
+      "name": "timed.exec",
+      "ms": 157.423,
+      "ok": true
+    },
+    {
+      "name": "timed.commit",
+      "ms": 3.667,
+      "ok": true
+    },
+    {
+      "name": "timed.unmount",
+      "ms": 7.362,
+      "ok": true
+    },
+    {
+      "name": "verify.mount",
+      "ms": 9.14,
+      "ok": true
+    },
+    {
+      "name": "verify.identity",
+      "ms": 25.563,
+      "ok": true
+    },
+    {
+      "name": "verify.exec",
+      "ms": 526.834,
+      "ok": true
+    },
+    {
+      "name": "verify.unmount",
+      "ms": 7.073,
+      "ok": true
+    },
+    {
+      "name": "sandbox.close",
+      "ms": 101.918,
+      "ok": true
+    },
+    {
+      "name": "store.pull",
+      "ms": 79.275,
+      "ok": true
+    },
+    {
+      "name": "store.remove",
+      "ms": 3.186,
+      "ok": true
+    }
+  ],
+  "sandbox": {
+    "name": "py09",
+    "project": "py09/p",
+    "machine": "lfs535l2a",
+    "created": 1793696522420,
+    "id": "py09",
+    "platform": "linux",
+    "runtime": "namespaces",
+    "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+    "backend": "namespaces",
+    "route": "fuse",
+    "state": "running"
+  },
+  "where": {
+    "kernel": "Linux 6.18.35",
+    "machine": "aarch64",
+    "cpus": "3",
+    "memKiB": "4144916",
+    "memBytes": "",
+    "cpuMax": "",
+    "id": "501:20"
+  },
+  "endedAt": "2026-11-03T09:02:12.946686+00:00"
+}

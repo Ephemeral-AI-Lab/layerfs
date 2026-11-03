@@ -1,0 +1,169 @@
+# 2026-11-03T09:01:09Z worker store folders on lfs535l2m before removal (after item 3 and the D2 recheck)
+c01
+c02
+c03
+c04
+c05
+c06
+c07
+c08
+c09
+c10
+c11
+c12
+e1
+i3p1
+i3p2
+pwm
+$ layerfs store pull pwm
+# at 2026-11-03T09:01:35Z load1 14.98
+{"store":"pwm","from":"lfs535l2m","to":"native","bytes":212992,"heads":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+exit 0  wall_ms 299
+
+$ layerfs store remove pwm
+# at 2026-11-03T09:01:45Z load1 14.28
+{"removed":"pwm"}
+exit 0  wall_ms 77
+
+$ layerfs machine remove lfs535l2m
+# at 2026-11-03T09:01:45Z load1 14.28
+{"name":"lfs535l2m","removed":true}
+exit 0  wall_ms 638
+
+$ msb list; msb volume list | grep lfs535l2m
+No sandboxes found.
+no lfs535l2m volume
+# 2026-11-03T09:08:01Z worker store folders before the last pulls
+## lfs535l2a
+c02
+c03
+c04
+c05
+c06
+c07
+c08
+c09
+c10
+c11
+c12
+fxp
+fxr
+pwa
+## lfs535l2s
+c01
+c02
+c03
+c04
+c05
+c06
+c07
+c08
+c09
+c10
+c11
+c12
+pws
+$ layerfs store pull pwa
+# at 2026-11-03T09:08:01Z load1 8.81
+{"store":"pwa","from":"lfs535l2a","to":"native","bytes":212992,"heads":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+exit 0  wall_ms 133
+
+$ layerfs store remove pwa
+# at 2026-11-03T09:08:01Z load1 8.81
+{"removed":"pwa"}
+exit 0  wall_ms 37
+
+$ layerfs store pull pws
+# at 2026-11-03T09:08:01Z load1 8.81
+{"store":"pws","from":"lfs535l2s","to":"native","bytes":212992,"heads":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+exit 0  wall_ms 99
+
+$ layerfs store remove pws
+# at 2026-11-03T09:08:02Z load1 8.81
+{"removed":"pws"}
+exit 0  wall_ms 39
+
+# after pulling pwa and pws
+## lfs535l2a
+c02
+c03
+c04
+c05
+c06
+c07
+c08
+c09
+c10
+c11
+c12
+fxp
+fxr
+## lfs535l2s
+c01
+c02
+c03
+c04
+c05
+c06
+c07
+c08
+c09
+c10
+c11
+c12
+$ layerfs store list
+# at 2026-11-03T09:08:02Z load1 8.50
+{"items":[]}
+exit 0  wall_ms 34
+
+$ layerfs sandbox list
+# at 2026-11-03T09:08:02Z load1 8.50
+{"items":[],"next_page_pos":null}
+exit 0  wall_ms 33
+
+$ layerfs machine list --text
+# at 2026-11-03T09:08:02Z load1 8.50
+NAME       PLATFORM         BACKEND     STATE    CPUS  MEMORY      DISK
+docker     docker           docker      stopped  -     -           -
+lfs535l2a  apple-container  namespaces  running  2     4294967296  21474836480
+lfs535l2s  ssh              namespaces  running  -     -           -
+native     native           native      ready    -     -           -
+exit 0  wall_ms 191
+
+$ layerfs machine remove lfs535l2a
+# at 2026-11-03T09:08:10Z load1 8.38
+{"name":"lfs535l2a","removed":true}
+exit 0  wall_ms 1294
+
+$ layerfs machine disconnect lfs535l2s
+# at 2026-11-03T09:08:12Z load1 8.03
+{"name":"lfs535l2s","removed":true}
+exit 0  wall_ms 452
+
+time="2026-11-03T17:08:13+08:00" level=info msg="Sending SIGKILL to the vz driver process 41497"
+time="2026-11-03T17:08:13+08:00" level=info msg="Sending SIGKILL to the host agent process 41497"
+time="2026-11-03T17:08:13+08:00" level=info msg="Removing *.pid *.sock *.tmp under `/Users/yifanxu/.lima/lfs535l2s`"
+time="2026-11-03T17:08:13+08:00" level=info msg="Removing `/Users/yifanxu/.lima/lfs535l2s/boot-session.tmp`"
+time="2026-11-03T17:08:13+08:00" level=info msg="Removing `/Users/yifanxu/.lima/lfs535l2s/default_ep.sock`"
+time="2026-11-03T17:08:13+08:00" level=info msg="Removing `/Users/yifanxu/.lima/lfs535l2s/default_fd.sock`"
+time="2026-11-03T17:08:13+08:00" level=info msg="Removing `/Users/yifanxu/.lima/lfs535l2s/ha.pid`"
+time="2026-11-03T17:08:13+08:00" level=info msg="Removing `/Users/yifanxu/.lima/lfs535l2s/ha.sock`"
+time="2026-11-03T17:08:13+08:00" level=info msg="Removing `/Users/yifanxu/.lima/lfs535l2s/ssh.sock`"
+time="2026-11-03T17:08:13+08:00" level=info msg="Removing `/Users/yifanxu/.lima/lfs535l2s/vz.pid`"
+time="2026-11-03T17:08:13+08:00" level=info msg="Deleted `lfs535l2s` (`/Users/yifanxu/.lima/lfs535l2s`)"
+limactl delete rc=0
+$ container list -a; container volume list | grep lfs535l2; limactl list | grep lfs535l2; msb list
+ID  IMAGE  OS  ARCH  STATE  IP  CPUS  MEMORY  STARTED
+no lfs535l2 container volume
+no lfs535l2 lima VM
+No sandboxes found.
+$ layerfs machine list --text
+# at 2026-11-03T09:08:13Z load1 8.03
+NAME    PLATFORM  BACKEND  STATE    CPUS  MEMORY  DISK
+docker  docker    docker   stopped  -     -       -
+native  native    native   ready    -     -       -
+exit 0  wall_ms 91
+
+$ docker rm -fv lfs535l2-pg
+lfs535l2-pg
+# removed: the shared home, the generated password, ssh key, known_hosts, the keyed Lima config, the server log copy and trace files (scratch)

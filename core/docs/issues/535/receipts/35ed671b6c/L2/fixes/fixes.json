@@ -1,0 +1,372 @@
+{
+  "format": "lfs535-l2-fixes/1",
+  "machine": "lfs535l2a",
+  "product": "35ed671b6c",
+  "startedAt": "2026-11-03T08:58:31.815Z",
+  "load1": 12.80126953125,
+  "checks": {
+    "missing-database": {
+      "verdict": "PASS",
+      "answer": {
+        "code": "Unavailable",
+        "message": "the server refused the session: the database does not exist, or the user or password is wrong",
+        "detail": null
+      },
+      "storeFolderLeft": false
+    },
+    "wrong-password": {
+      "verdict": "PASS",
+      "answer": {
+        "code": "Unavailable",
+        "message": "the server refused the session: the database does not exist, or the user or password is wrong",
+        "detail": null
+      },
+      "note": "LFS535_WRONG_PASSWORD is a fixed wrong value set by the driver"
+    },
+    "init-progress-every-route": {
+      "verdict": "PASS",
+      "routes": {
+        "native-sqlite": {
+          "ok": true,
+          "error": null,
+          "phases": [
+            "check",
+            "install",
+            "record"
+          ],
+          "events": [
+            {
+              "phase": "check",
+              "done": null,
+              "total": null
+            },
+            {
+              "phase": "install",
+              "done": null,
+              "total": null
+            },
+            {
+              "phase": "record",
+              "done": null,
+              "total": null
+            }
+          ],
+          "eventCount": 3
+        },
+        "postgresql": {
+          "ok": true,
+          "error": null,
+          "phases": [
+            "check",
+            "install",
+            "record"
+          ],
+          "events": [
+            {
+              "phase": "check",
+              "done": null,
+              "total": null
+            },
+            {
+              "phase": "install",
+              "done": null,
+              "total": null
+            },
+            {
+              "phase": "record",
+              "done": null,
+              "total": null
+            }
+          ],
+          "eventCount": 3
+        },
+        "worker-sqlite": {
+          "ok": true,
+          "error": null,
+          "phases": [
+            "check",
+            "send",
+            "send",
+            "install",
+            "record"
+          ],
+          "events": [
+            {
+              "phase": "check",
+              "done": null,
+              "total": null
+            },
+            {
+              "phase": "send",
+              "done": 0,
+              "total": 12
+            },
+            {
+              "phase": "send",
+              "done": 12,
+              "total": 12
+            },
+            {
+              "phase": "install",
+              "done": null,
+              "total": null
+            },
+            {
+              "phase": "record",
+              "done": null,
+              "total": null
+            }
+          ],
+          "eventCount": 5
+        }
+      }
+    },
+    "store-reads-change-nothing": {
+      "verdict": "PASS",
+      "changed": [],
+      "newLockFiles": [],
+      "leasesLog": "absent",
+      "answers": {
+        "status fxn": "idle",
+        "status fxp": "idle",
+        "status fxw": "idle",
+        "list": "5 items"
+      }
+    },
+    "mount-main-refused": {
+      "verdict": "FAIL",
+      "answer": {
+        "code": "NoSuchSandbox",
+        "message": "no Sandbox named fxwsb; `sandbox.create(project, name, machine)` starts one",
+        "detail": null
+      },
+      "sideBranchMount": {
+        "code": "NoSuchSandbox",
+        "message": "no Sandbox named fxwsb; `sandbox.create(project, name, machine)` starts one",
+        "detail": null
+      }
+    },
+    "project-remove-inuse-related": {
+      "verdict": "FAIL",
+      "answer": {
+        "stack": "318faac79438a4894b0f37f5962ffe9675",
+        "packs_kept": true,
+        "project": "fxw/p"
+      }
+    },
+    "store-disconnect-inuse-related": {
+      "verdict": "PASS",
+      "sandbox": "created",
+      "answer": {
+        "code": "InUse",
+        "message": "Store fxp has running Sandboxes: fxpsb",
+        "detail": {
+          "related": [
+            {
+              "kind": "sandbox",
+              "name": "fxpsb"
+            }
+          ]
+        }
+      }
+    },
+    "reach-refusal-server-refused-session": {
+      "verdict": "PASS",
+      "answer": {
+        "code": "Unavailable",
+        "message": "machine lfs535l2a cannot reach PostgreSQL Store fxr's server at 192.168.64.1: the server refused the session: the database does not exist, or the user or password is wrong; an apple-container machine reaches a server on this host only when it listens on the container network's bridge (0.0.0.0, as Docker Desktop publishes a port), not on 127.0.0.1 alone",
+        "detail": null
+      }
+    }
+  },
+  "steps": [
+    {
+      "name": "fxmiss.store.connect (missing database)",
+      "ms": 56,
+      "ok": false,
+      "error": {
+        "code": "Unavailable",
+        "message": "the server refused the session: the database does not exist, or the user or password is wrong",
+        "detail": null
+      }
+    },
+    {
+      "name": "fxpw.store.connect (wrong password)",
+      "ms": 51,
+      "ok": false,
+      "error": {
+        "code": "Unavailable",
+        "message": "the server refused the session: the database does not exist, or the user or password is wrong",
+        "detail": null
+      }
+    },
+    {
+      "name": "fxn.make",
+      "ms": 10,
+      "ok": true
+    },
+    {
+      "name": "fxn.project.init",
+      "ms": 23,
+      "ok": true
+    },
+    {
+      "name": "fxp.make",
+      "ms": 242,
+      "ok": true
+    },
+    {
+      "name": "fxp.project.init",
+      "ms": 129,
+      "ok": true
+    },
+    {
+      "name": "fxw.make",
+      "ms": 93,
+      "ok": true
+    },
+    {
+      "name": "fxw.project.init",
+      "ms": 19,
+      "ok": true
+    },
+    {
+      "name": "fxn.store.status",
+      "ms": 0,
+      "ok": true
+    },
+    {
+      "name": "fxp.store.status",
+      "ms": 57,
+      "ok": true
+    },
+    {
+      "name": "fxw.store.status",
+      "ms": 2,
+      "ok": true
+    },
+    {
+      "name": "store.list",
+      "ms": 8,
+      "ok": true
+    },
+    {
+      "name": "fxw.branch.fork",
+      "ms": 11,
+      "ok": true
+    },
+    {
+      "name": "fxw.sandbox.create",
+      "ms": 4,
+      "ok": false,
+      "error": {
+        "code": "NoSuchProject",
+        "message": "no complete project manifest",
+        "detail": null
+      }
+    },
+    {
+      "name": "fxwsb.workspace.mount main",
+      "ms": 0,
+      "ok": false,
+      "error": {
+        "code": "NoSuchSandbox",
+        "message": "no Sandbox named fxwsb; `sandbox.create(project, name, machine)` starts one",
+        "detail": null
+      }
+    },
+    {
+      "name": "fxwsb.workspace.mount lane",
+      "ms": 0,
+      "ok": false,
+      "error": {
+        "code": "NoSuchSandbox",
+        "message": "no Sandbox named fxwsb; `sandbox.create(project, name, machine)` starts one",
+        "detail": null
+      }
+    },
+    {
+      "name": "fxw/p project.remove (Sandbox recorded)",
+      "ms": 3,
+      "ok": true
+    },
+    {
+      "name": "fxp.sandbox.create",
+      "ms": 774,
+      "ok": true
+    },
+    {
+      "name": "fxp store.disconnect (Sandbox recorded)",
+      "ms": 1,
+      "ok": false,
+      "error": {
+        "code": "InUse",
+        "message": "Store fxp has running Sandboxes: fxpsb",
+        "detail": {
+          "related": [
+            {
+              "kind": "sandbox",
+              "name": "fxpsb"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "fxr.store.connect",
+      "ms": 231,
+      "ok": true
+    },
+    {
+      "name": "fxr.project.init",
+      "ms": 141,
+      "ok": true
+    },
+    {
+      "name": "drop database fx2 on the server",
+      "ms": 2255,
+      "ok": true
+    },
+    {
+      "name": "fxr.sandbox.create (database gone)",
+      "ms": 147,
+      "ok": false,
+      "error": {
+        "code": "Unavailable",
+        "message": "machine lfs535l2a cannot reach PostgreSQL Store fxr's server at 192.168.64.1: the server refused the session: the database does not exist, or the user or password is wrong; an apple-container machine reaches a server on this host only when it listens on the container network's bridge (0.0.0.0, as Docker Desktop publishes a port), not on 127.0.0.1 alone",
+        "detail": null
+      }
+    },
+    {
+      "name": "cleanup sandbox.close fxpsb",
+      "ms": 255,
+      "ok": true
+    },
+    {
+      "name": "cleanup store.remove fxn",
+      "ms": 44,
+      "ok": true
+    },
+    {
+      "name": "cleanup store.disconnect fxp",
+      "ms": 14,
+      "ok": true
+    },
+    {
+      "name": "cleanup store.pull fxw",
+      "ms": 62,
+      "ok": true
+    },
+    {
+      "name": "cleanup store.remove fxw",
+      "ms": 2,
+      "ok": true
+    },
+    {
+      "name": "cleanup store.disconnect fxr",
+      "ms": 1,
+      "ok": true
+    }
+  ],
+  "endedAt": "2026-11-03T08:58:36.461Z"
+}

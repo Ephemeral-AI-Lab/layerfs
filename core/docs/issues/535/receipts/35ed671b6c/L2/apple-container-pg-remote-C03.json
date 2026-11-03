@@ -1,0 +1,184 @@
+{
+  "format": "lfs533-cell/1",
+  "cell": "C03",
+  "machine": "lfs535l2a",
+  "product": "35ed671b6c",
+  "startedAt": "2026-11-03T08:55:39.973Z",
+  "load1": 14.009765625,
+  "body": {
+    "sha256": "520773ceacd8c44d633ffd1a40727ceb5d990d63a23259f28af8dd4b96fa204d"
+  },
+  "ok": true,
+  "cause": null,
+  "phases": {
+    "warmup": {
+      "mountMs": 125.664,
+      "exec": {
+        "wallMs": 1048.289,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793696141115128926 1793696142125669885\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 1010.540959
+      },
+      "unmountMs": 5.113
+    },
+    "timed": {
+      "mountMs": 114.783,
+      "workspace": {
+        "kind": "Mounted",
+        "path": "/layerfs/data/machine/native/run/lfs-9778d174-c03/workspaces/2",
+        "workspace": "6b3ecc8911b2825695a545dc2191e714f10353ae845921e23e0c97db61201278",
+        "namespace": 2,
+        "branch": "lane",
+        "base": null,
+        "base_layer": "32f674e2152273f5bd817776af8f515b3d588861311e4a933a0fde74f99e45a9d5",
+        "root": "961cd0bcad3559c2c29ac332038a7c3d7c1b67a4865da40f90143db7ade1c25e",
+        "sandbox": "c03",
+        "container": "lfs-9778d174-c03",
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "platform": "linux",
+        "runtime": "namespaces",
+        "name": null,
+        "ws": "c03:/layerfs/data/machine/native/run/lfs-9778d174-c03/workspaces/2"
+      },
+      "exec": {
+        "wallMs": 1218.303,
+        "exitCode": 0,
+        "stdout": "LFS527 0 1793696142270929385 1793696143464203052\n",
+        "stderr": "",
+        "rc": 0,
+        "ms": 1193.273667
+      },
+      "commitMs": 99.867,
+      "commit": {
+        "kind": "UpToDate",
+        "head": null,
+        "root": "961cd0bcad3559c2c29ac332038a7c3d7c1b67a4865da40f90143db7ade1c25e",
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "unmountMs": 6.567
+    },
+    "verify": {
+      "exitCode": 0,
+      "stdout": "VERIFY OK\n",
+      "stderr": ""
+    }
+  },
+  "steps": [
+    {
+      "name": "store.connect",
+      "ms": 257.776,
+      "ok": true
+    },
+    {
+      "name": "project.init",
+      "ms": 124.288,
+      "ok": true
+    },
+    {
+      "name": "branch.fork",
+      "ms": 131.886,
+      "ok": true
+    },
+    {
+      "name": "sandbox.create",
+      "ms": 463.312,
+      "ok": true
+    },
+    {
+      "name": "warmup.mount",
+      "ms": 125.656,
+      "ok": true
+    },
+    {
+      "name": "warmup.exec",
+      "ms": 1048.284,
+      "ok": true
+    },
+    {
+      "name": "warmup.unmount",
+      "ms": 5.109,
+      "ok": true
+    },
+    {
+      "name": "timed.mount",
+      "ms": 114.778,
+      "ok": true
+    },
+    {
+      "name": "timed.exec",
+      "ms": 1218.294,
+      "ok": true
+    },
+    {
+      "name": "timed.commit",
+      "ms": 99.863,
+      "ok": true
+    },
+    {
+      "name": "timed.unmount",
+      "ms": 6.561,
+      "ok": true
+    },
+    {
+      "name": "verify.mount",
+      "ms": 129.556,
+      "ok": true
+    },
+    {
+      "name": "verify.identity",
+      "ms": 21.733,
+      "ok": true
+    },
+    {
+      "name": "verify.exec",
+      "ms": 6.222,
+      "ok": true
+    },
+    {
+      "name": "verify.unmount",
+      "ms": 9.077,
+      "ok": true
+    },
+    {
+      "name": "sandbox.close",
+      "ms": 97.706,
+      "ok": true
+    },
+    {
+      "name": "store.disconnect",
+      "ms": 1.959,
+      "ok": true
+    }
+  ],
+  "store": {
+    "kind": "postgresql",
+    "host": "192.168.2.123"
+  },
+  "sandbox": {
+    "name": "c03",
+    "project": "c03/p",
+    "machine": "lfs535l2a",
+    "created": 1793696140490,
+    "id": "c03",
+    "platform": "linux",
+    "runtime": "namespaces",
+    "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+    "backend": "namespaces",
+    "route": "fuse",
+    "state": "running"
+  },
+  "where": {
+    "kernel": "Linux 6.18.35",
+    "machine": "aarch64",
+    "cpus": "3",
+    "memKiB": "4144916",
+    "memBytes": null,
+    "cpuMax": null,
+    "id": "501:20"
+  },
+  "endedAt": "2026-11-03T08:55:43.839Z"
+}

@@ -1,0 +1,75 @@
+# lfs535l2-pg (postgres:17-bookworm, 0.0.0.0:55552, log_connections=on): summary before removal, 2026-11-03T09:07:44Z
+authorized connections per database:
+  18 ac01
+  16 ac02
+  15 ac03
+  16 ac04
+  16 ac05
+  16 ac06
+  16 ac07
+  16 ac08
+  17 ac09
+  17 ac10
+  17 ac11
+  16 ac12
+  16 arc01
+  16 arc02
+  15 arc03
+  16 arc04
+  16 arc05
+  16 arc06
+  16 arc07
+  16 arc08
+  17 arc09
+  17 arc10
+  17 arc11
+  16 arc12
+  10 fx1
+   5 fx2
+  13 i3pg1
+  13 i3pg2
+  12 i3pg5
+  15 i3pg6
+  16 mc01
+  16 mc02
+  15 mc03
+  16 mc04
+  16 mc05
+  16 mc06
+  16 mc07
+  16 mc08
+  17 mc09
+  17 mc10
+  17 mc11
+  16 mc12
+  16 mrc01
+  16 mrc02
+  15 mrc03
+  16 mrc04
+  16 mrc05
+  16 mrc06
+  16 mrc07
+  16 mrc08
+  17 mrc09
+  17 mrc10
+  17 mrc11
+  16 mrc12
+   1 nosuchdb
+   6 postgres
+   6 sc01
+  16 src01
+  16 src02
+  15 src03
+  16 src04
+  16 src05
+  16 src06
+  16 src07
+  16 src08
+  17 src09
+  17 src10
+  17 src11
+  16 src12
+ERROR/FATAL lines (expected: the missing database and the wrong password of fixes.json, the dropped fx2):
+   1 2026-11-03 08:58:36.078 UTC [1033] FATAL:  database "fx2" does not exist
+   1 2026-11-03 08:58:31.922 UTC [1007] FATAL:  password authentication failed for user "postgres"
+   1 2026-11-03 08:58:31.870 UTC [1006] FATAL:  database "nosuchdb" does not exist
