@@ -260,7 +260,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
             "store",
             "s5",
             "stale lease of process 99999999",
-            "`layerfs store status s5`",
+            "`store/s5/open/99999999` by hand",
         ),
         (
             "warning",

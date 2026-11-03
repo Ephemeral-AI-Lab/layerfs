@@ -74,7 +74,10 @@ pub(super) fn check(
             findings.warning(
                 entity,
                 format!("Store {name} holds a stale lease of process {pid}, which ended"),
-                format!("`layerfs store status {name}` removes it"),
+                format!(
+                    "nothing reads it; delete `store/{name}/open/{pid}` by hand, or the next \
+                     `layerfs store push`, `store pull` or `store remove` of {name} removes it"
+                ),
             );
         }
     }

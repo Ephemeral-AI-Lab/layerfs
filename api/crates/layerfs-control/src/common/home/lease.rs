@@ -7,8 +7,10 @@
 //! remove` and `store disconnect` read leases under the Store's lock and refuse `InUse` while
 //! one is held. A lease names its process by id, kernel start time and
 //! boot, so a reused id does not keep it alive; a lease whose process is
-//! not alive on this host is stale: it is removed under the Store's lock
-//! and the removal is logged (O35).
+//! not alive on this host is stale: a push, pull, remove or disconnect
+//! removes it under the Store's lock and logs the removal (O35); reads
+//! (`store.status`, `store.list`, `layerfs doctor`) ignore it and change
+//! nothing.
 use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused};
 use crate::store::record::StoreRecord;
@@ -222,8 +224,8 @@ pub fn holders(home: &Path, store: &str) -> Result<Vec<u32>, SdkRefusal> {
     Ok(live)
 }
 
-/// Read only (`layerfs doctor`, a layout 2 home's survey): the live and the
-/// stale holders of Store `store` other than this process; nothing is
+/// Read only (`layerfs doctor`, `store.status`, `store.list`, a layout 2
+/// home's survey): the live and the stale holders of Store `store` other than this process; nothing is
 /// removed and no lock is taken.
 pub(crate) fn read_holders(home: &Path, store: &str) -> Result<(Vec<u32>, Vec<u32>), SdkRefusal> {
     let (mut live, mut stale) = (Vec::new(), Vec::new());

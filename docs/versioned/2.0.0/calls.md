@@ -363,7 +363,9 @@ $ layerfs store status shop
 move or remove running on the Store, `{id, name, phase, started,
 uncertain}`, or `null`. `store status` starts no
 machine: a Store whose machine is stopped, or whose recorded worker does
-not answer, is `down`, with `down_reason` and `file.unavailable` (O34). See
+not answer, is `down`, with `down_reason` and `file.unavailable` (O34).
+`store status`, `store list` and `store get` change nothing: they take no
+lock, and `holders` leaves out a stale lease without removing it. See
 [Stores](machines-and-stores.md#stores).
 
 Each `store list` item is the Store's record (as `store get` shows it) with

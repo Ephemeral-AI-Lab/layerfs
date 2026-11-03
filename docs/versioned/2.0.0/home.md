@@ -90,8 +90,9 @@ hold a password or a bucket key. They are not settings; see
   remove of the Store runs (`Unresolved` after one whose outcome is not
   known). It records its process's start time and boot: a lease whose
   process is no longer alive on this host, or whose id now names another
-  process, is stale; it is removed under the Store's lock and the removal
-  is logged (O35).
+  process, is stale; a push, pull, remove or disconnect of the Store removes
+  it under the Store's lock and logs the removal (O35). Reads (`store
+  status`, `store list`, `store get`, `doctor`) ignore it and change nothing.
 - **`sandbox/<name>/`** is all a Sandbox has in the home, whatever its
   machine: listing Sandboxes reads `sandbox/*` and nothing else, and one
   Sandbox is one folder read. Its `record.json` holds facts: its name,

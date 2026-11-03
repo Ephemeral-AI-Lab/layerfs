@@ -44,7 +44,8 @@ makes its Stores `down`. `store.get(name)` is one record (no `state`):
  "file":{"exists":true,"bytes":212992,"wal_bytes":799312}}
 ```
 
-`holders` are processes holding the Store open; `op` names a push, pull or remove
+`holders` are live processes holding the Store open (a dead process's
+stale lease is left out, not removed: reads change nothing); `op` names a push, pull or remove
 under way (`{ id, name, phase, started, uncertain }`; `get` and `list` items
 show it too). For a PostgreSQL Store a `server`
 field carries the server's status instead of `file` (not run here).
