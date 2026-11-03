@@ -1,0 +1,38 @@
+$ layerfs machine list
+# at 2026-11-03T09:37:57Z
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"image":"sha256:1499b86412fa5c7474cf28832aca519531ba0f08dc79f5e1f7e441da9ab7a0a7"},{"name":"native","platform":"native","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}]}
+exit 0  wall_s .097963302
+
+$ layerfs machine get docker
+# at 2026-11-03T09:37:57Z
+{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"image":"sha256:1499b86412fa5c7474cf28832aca519531ba0f08dc79f5e1f7e441da9ab7a0a7"}
+exit 0  wall_s .097344625
+
+$ layerfs machine status docker
+# at 2026-11-03T09:37:58Z
+{"name":"docker","platform":"docker","state":"running","free_disk":28638924800,"tool_version":"29.1.3","down_reason":null,"stores":[]}
+exit 0  wall_s .101823787
+
+$ layerfs machine stop docker
+# at 2026-11-03T09:37:58Z
+{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"image":"sha256:1499b86412fa5c7474cf28832aca519531ba0f08dc79f5e1f7e441da9ab7a0a7"}
+exit 0  wall_s .137913864
+
+$ layerfs machine list
+# at 2026-11-03T09:37:58Z
+{"machines":[{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"image":"sha256:1499b86412fa5c7474cf28832aca519531ba0f08dc79f5e1f7e441da9ab7a0a7"},{"name":"native","platform":"native","backend":"namespaces","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"ready","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[]}]}
+exit 0  wall_s .055905917
+
+$ layerfs machine get docker
+# at 2026-11-03T09:37:58Z
+{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":null,"memory":null,"disk":null,"stores":[],"sandboxes":[],"image":"sha256:1499b86412fa5c7474cf28832aca519531ba0f08dc79f5e1f7e441da9ab7a0a7"}
+exit 0  wall_s .054868773
+
+$ layerfs machine status docker
+# at 2026-11-03T09:37:58Z
+{"name":"docker","platform":"docker","state":"stopped","free_disk":null,"tool_version":"29.1.3","down_reason":"the machine is stopped","stores":[]}
+exit 0  wall_s .055238571
+
+lfs-a2d62c12-docker
+lfs-a2d62c12-docker-data
+$ docker ps -a; docker volume ls

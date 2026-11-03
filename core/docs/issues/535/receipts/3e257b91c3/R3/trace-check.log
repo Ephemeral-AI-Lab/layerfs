@@ -1,0 +1,36 @@
+$ node call.mjs <home> store.create '["tr"]'
+# at 2026-11-03T09:37:44Z
+{"ok":true,"value":{"name":"tr","kind":"sqlite","machine":"native","profile":"disposable","created":1793698664734,"sqlite":"3.53.2","projects":[]}}
+exit 0
+
+$ node call.mjs <home> project.init '["tr/p","/tmp/tmp.OeiTESVKAr"]'
+# at 2026-11-03T09:37:44Z
+{"ok":true,"value":{"project":"tr/p","store":"tr","name":"p","kind":"sqlite","machine":"native","created":1793698664826,"layer":"3290a26ac8943c229d67a171f977e178e79d50ae5290c30a91525859c08ae282ed","root":"c829c79fccce6f1a8c61ec20ee6fc4122ce3059d478976dccecfdfe917e6659f"}}
+exit 0
+
+$ node call.mjs <home> store.push '["tr","docker"]'
+# at 2026-11-03T09:37:44Z
+{"ok":true,"value":{"store":"tr","from":"native","to":"docker","bytes":212992,"heads":"e3871727ea1f74033c11c47a15ce57c65dfbcb8f205128073f427008168b5c8c"}}
+exit 0
+
+## the traced call (LAYERFS_TRACE=/private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/r3/lx/receipts/trace/linux-docker-tracecheck.jsonl)
+$ node call.mjs <home> branch.list '["tr/p"]'
+# at 2026-11-03T09:37:44Z
+{"ok":true,"value":{"items":[{"name":"main","id":null,"base":"3290a26ac8943c229d67a171f977e178e79d50ae5290c30a91525859c08ae282ed","head":null}],"has_more":false,"next_page_pos":null}}
+exit 0
+
+## trace file: 1 line(s)
+{"at":1793698665043,"event":"worker.connection","op":"store.call","worker":"127.0.0.1:38705","sent":true,"ms":6}
+
+lines 1 worker.connection 1 keys ['at', 'event', 'ms', 'op', 'sent', 'worker']
+VERDICT PASS
+$ node call.mjs <home> store.pull '["tr"]'
+# at 2026-11-03T09:37:45Z
+{"ok":true,"value":{"store":"tr","from":"docker","to":"native","bytes":212992,"heads":"e3871727ea1f74033c11c47a15ce57c65dfbcb8f205128073f427008168b5c8c"}}
+exit 0
+
+$ node call.mjs <home> store.remove '["tr"]'
+# at 2026-11-03T09:37:45Z
+{"ok":true,"value":{"removed":"tr"}}
+exit 0
+

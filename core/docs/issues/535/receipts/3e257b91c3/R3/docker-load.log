@@ -1,0 +1,16 @@
+2026-11-03T09:33:02Z
+Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2
+Loaded image ID: sha256:1499b86412fa5c7474cf28832aca519531ba0f08dc79f5e1f7e441da9ab7a0a7
+docker: 'docker image inspect' requires at least 1 argument
+
+Usage:  docker image inspect [OPTIONS] IMAGE [IMAGE...]
+
+See 'docker image inspect --help' for more information
+exit 1
+MemTotal:        3997920 kB
+MemFree:           76920 kB
+/dev/vda1        38G   12G   27G  30% /
+2026-11-03T09:33:15Z
+## image id from the load line above
+sha256:1499b86412fa5c7474cf28832aca519531ba0f08dc79f5e1f7e441da9ab7a0a7 arm64 2747688232
+exit 0
