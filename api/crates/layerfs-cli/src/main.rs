@@ -9,6 +9,7 @@
 //! `layerfs --version` need no home.
 #![forbid(unsafe_code)]
 
+mod banner;
 mod help;
 mod output;
 mod parse;

@@ -47,6 +47,7 @@ fn option(arg: &Arg) -> String {
 pub fn print(topic: &[&str]) -> ExitCode {
     match topic {
         [] => {
+            print!("{}", crate::banner::banner());
             println!("layerfs <family> <call> <arguments> [--options] [--text]");
             println!();
             for family in FAMILIES {
