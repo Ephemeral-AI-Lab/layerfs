@@ -1,9 +1,11 @@
 //! The `project` family (#533 step 9): projects are `<store>/<project>`
 //! everywhere. Init adds a folder as a new project to an existing Store, a
-//! live add through the Store's writer (it does not seal), in the caller's
-//! process, into a sqlite Store on `native`; a project for another machine
-//! is made on `native` and moved with its Store. Records in the home list
-//! projects; `remove` drops one project's history from its Store.
+//! live add through the Store's writer (it does not seal), where the
+//! Store's calls run: in the caller's process for a sqlite Store on
+//! `native` or a PostgreSQL Store, in the machine's worker for a sqlite
+//! Store on any other machine (#536 H11), which reads the folder on that
+//! machine. Records in the home list projects; `remove` drops one
+//! project's history from its Store.
 use crate::common::context::Context;
 use crate::common::home::lease;
 use crate::common::home::paths;
@@ -138,16 +140,15 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if let StoreRef::Postgres { .. } = store_ref {
         return init_postgresql(context, store, name, folder, timeout, &record);
     }
-    // Init runs where the Store's calls run in this process
+    // Init runs where the Store's calls run (H11)
     if let Executor::Worker(worker) = place::plan(&home, store_ref)? {
-        let machine = worker.machine();
-        return Err(refused(
-            "Unsupported",
-            format!(
-                "Store {store} is on machine {machine}; Init runs on native: \
-                 `store move {store} native`, Init, then move it back"
-            ),
-        ));
+        let call = InitCall {
+            store,
+            name,
+            folder,
+            timeout,
+        };
+        return init_on_worker(context, worker, call);
     }
     let _lease = lease::hold(&home, store)?;
     let call = host_args(
@@ -185,21 +186,66 @@ fn observed(
     watch: &SdkValue,
     add: impl FnOnce() -> Outcome + Send,
 ) -> Outcome {
-    let outcome = std::thread::scope(|scope| {
-        let worker = scope.spawn(add);
-        let mut last = SdkValue::Null;
-        while !worker.is_finished() {
-            if let Ok(progress) = crate::project::init::progress(watch) {
-                if progress != SdkValue::Null && progress != last {
-                    context.progress(progress.clone());
-                    last = progress;
-                }
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
+    crate::project::init::watched(&mut |progress| context.progress(progress), watch, add)
+}
+
+/// What one `project.init` into a worker's Store names.
+struct InitCall<'a> {
+    store: &'a str,
+    name: &'a str,
+    folder: &'a str,
+    timeout: i64,
+}
+
+/// `project.init` into a sqlite Store on another machine (H11): the
+/// machine's worker adds the folder it finds at `folder` on that machine,
+/// under its own lease, and sends its progress; this process holds the
+/// Store's lease meanwhile, as for any call it sends there, then records
+/// the project in the home. One attempt: a lost answer is `Unknown`, and
+/// the home gains no record (`project list` does not show a project whose
+/// outcome is not known; the Store may hold it).
+fn init_on_worker(
+    context: &mut Context<'_>,
+    mut worker: crate::common::place::Worker,
+    call: InitCall<'_>,
+) -> Outcome {
+    let home = context.home.clone();
+    let InitCall {
+        store,
+        name,
+        folder,
+        timeout,
+    } = call;
+    if paths::project_record(&home, store, name).exists() {
+        return Err(refused(
+            "Exists",
+            format!("Store {store} already has a project named {name}"),
+        ));
+    }
+    // the lease is taken under the Store's lock with the record read there
+    let (lease, record) = lease::claim(&home, store)?;
+    let request = SdkValue::map([
+        ("store", SdkValue::text(store)),
+        ("name", SdkValue::text(name)),
+        ("path", SdkValue::text(folder)),
+        ("timeoutMs", SdkValue::Int(timeout)),
+        ("store_record", record.to_record().clone()),
+    ]);
+    let added = worker.call("project.init", request, &mut |event| context.event(event));
+    drop(lease);
+    let added = added?;
+    let stack = added.get("stack").cloned().unwrap_or_default();
+    {
+        let _lock = crate::common::home::lock::take(&home)?;
+        ProjectRecord::initialised(store, name, stack).write(&home)?;
+    }
+    let mut out = summary(&home, store, name, &record, View::Full);
+    for field in ["layer", "root"] {
+        if let Some(value) = added.get(field) {
+            out = crate::common::home::with_field(out, field, value.clone());
         }
-        worker.join()
-    });
-    outcome.map_err(|_| refused("Failed", "the Init thread panicked"))?
+    }
+    Ok(out)
 }
 
 /// `project.init` into a PostgreSQL Store (#533 step 10b): the live add

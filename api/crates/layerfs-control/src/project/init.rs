@@ -30,6 +30,50 @@ pub(crate) fn deadline(args: &SdkValue) -> Result<Instant, layerfs_bridge::contr
         .ok_or_else(|| refused("InvalidInput", "timeoutMs is too large"))
 }
 
+/// Runs an add on its own thread while this one reports its counts to
+/// `report` (`step`, `entries`, `files`, `bytes`) as they change.
+pub(crate) fn watched(
+    report: &mut dyn FnMut(SdkValue),
+    watch: &SdkValue,
+    add: impl FnOnce() -> Outcome + Send,
+) -> Outcome {
+    let outcome = std::thread::scope(|scope| {
+        let worker = scope.spawn(add);
+        let mut last = SdkValue::Null;
+        while !worker.is_finished() {
+            if let Ok(counts) = progress(watch) {
+                if counts != SdkValue::Null && counts != last {
+                    report(counts.clone());
+                    last = counts;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        worker.join()
+    });
+    outcome.map_err(|_| refused("Failed", "the Init thread panicked"))?
+}
+
+/// `project.init` in a worker (H11), `{ home (its root), store, storePath,
+/// name, path, timeoutMs, store_record }`: the add under the worker's own
+/// lease on the Store file under its root, its counts sent as `{ progress }`
+/// events. The caller writes the home's project record.
+pub(crate) fn in_worker(args: &SdkValue, events: &mut dyn FnMut(SdkValue)) -> Outcome {
+    let root = crate::sandbox::files::home(args)?;
+    let store = text(args, "store")?;
+    crate::common::names::StoreName::parse(store)?;
+    let name = text(args, "name")?;
+    let _lease = crate::common::home::lease::hold_locked(&root, store)?;
+    let watch = SdkValue::map([
+        ("store", SdkValue::text(store)),
+        ("project", SdkValue::text(name)),
+    ]);
+    let mut report = |counts: SdkValue| events(SdkValue::map([("progress", counts)]));
+    watched(&mut report, &watch, || {
+        crate::store::identity::add_project(args)
+    })
+}
+
 /// How far the project's running Init has come
 /// (`step`, `entries`, `files`, `bytes`), or null when none runs.
 pub(crate) fn progress(args: &SdkValue) -> Outcome {

@@ -275,8 +275,11 @@ $ layerfs store move shop dev --progress   # not run
 - A lease or `op` records its process's start time and boot, so one whose
   process id was reused by another process is stale. A lease written
   without them is matched by id alone.
-- Init writes only into a sqlite Store on `native`. To add a project to a
-  Store on another machine, move it to `native`, Init, and move it back.
+- Init into a sqlite Store on another machine runs in that machine's
+  worker, which reads the folder on its own machine and holds the Store's
+  lease there; the caller holds its lease meanwhile and records the
+  project when the worker answers (#536 H11). A lost answer is `Unknown`
+  and records nothing in the home. Not run on a real VM or ssh host.
 - A Sandbox of a sqlite project runs only on the Store's machine.
 
 ### PostgreSQL Stores

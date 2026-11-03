@@ -36,7 +36,6 @@ for this manual.
 | On Linux, a `docker` Sandbox of a sqlite Store by a caller that is not root | the daemon (root in its container) must own the bind-mounted Store folder; run as root, or keep the Store on `native` |
 | A Sandbox on a machine other than its sqlite Store's | names the Store's machine; `store move` moves the Store |
 | `project remove` from a PostgreSQL Store | "removing a project from a PostgreSQL Store is not built" |
-| `project init` into a sqlite Store that is not on `native` | move it to `native`, Init, then move it back |
 | `backup restore` over a Store that is not on `native` | move it to `native` first |
 | Resizing a VM with `machine update` | "not built yet; nothing was changed" (`InUse` first if Sandboxes run on it) |
 | Creating or connecting a machine without the sealed Linux bundle | names the expected folder in `detail.missing` (`bundle:<folder>`); fetching the bundle into the cache is not built, a build places it |

@@ -83,9 +83,11 @@ Sandbox names (H §7.6).
 | `get` | `project` | — | a project's record: its Store, kind and machine |
 | `remove` | `project` | — | removes one project from its Store |
 
-- `init` never creates a Store; a missing one is `NotFound`. A sqlite Store
-  must be on `native` (move it there first); a PostgreSQL Store is written
-  from the caller's process. Run: answers `project`, `store`, `name`,
+- `init` never creates a Store; a missing one is `NotFound`. Into a sqlite
+  Store on `native` or a PostgreSQL Store it runs in the caller's process
+  and reads `folder` on this host; into a sqlite Store on another machine
+  it runs in that machine's worker and reads `folder` on that machine
+  (#536 H11), which must be running. Run: answers `project`, `store`, `name`,
   `kind`, `machine`, `created`, `layer` and `root`.
 - `remove` is refused while a Sandbox of the project runs, and is
   `Unsupported` for a PostgreSQL Store.

@@ -448,6 +448,7 @@ pub(crate) fn add_project(args: &SdkValue) -> Outcome {
         ("kind", SdkValue::text("Initialized")),
         ("project", SdkValue::text(name)),
         ("store", SdkValue::text(store)),
+        ("stack", SdkValue::text(hex(&stack.to_bytes()))),
         (
             "layer",
             SdkValue::text(hex(added.branch.branch.base_layer.as_slice())),

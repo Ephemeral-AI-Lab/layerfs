@@ -175,6 +175,9 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         // drops one project from the Store under this worker's root (2.0):
         // `{ store, project, store_record }`
         "project.remove" => crate::store::identity::remove_project(&with_home(args, root)),
+        // adds a folder on this machine as a new project of a Store under
+        // this worker's root (#536 H11)
+        "project.init" => crate::project::init::in_worker(&with_home(args, root), events),
         _ => Err(refused(
             "InvalidInput",
             format!("the worker has no operation {op}"),

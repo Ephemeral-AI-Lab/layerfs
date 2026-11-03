@@ -57,11 +57,6 @@ pub(crate) fn on_machine(home: &Path, machine: &str) -> Result<Executor> {
 }
 
 impl Worker {
-    /// The machine whose worker this is.
-    pub(crate) fn machine(&self) -> &str {
-        &self.machine
-    }
-
     /// The worker an operation of several steps uses (`store.remove`,
     /// `store.move`), read before it marks anything: a machine with no
     /// recorded worker is refused now, naming `layerfs machine start`.
