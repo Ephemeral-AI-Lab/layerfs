@@ -1,0 +1,358 @@
+{
+  "format": "lfs535-r2-d1/1",
+  "machine": "lfs535r2a",
+  "store": "d1a2",
+  "product": "54161c9e2d",
+  "startedAt": "2026-11-03T09:25:12.959Z",
+  "load1": 9.95166015625,
+  "checks": {
+    "init-through-worker": {
+      "verdict": "PASS",
+      "machine": "lfs535r2a",
+      "phases": [
+        "check",
+        "send",
+        "send",
+        "install",
+        "record"
+      ]
+    },
+    "sandbox-create-after-worker-init": {
+      "verdict": "PASS",
+      "answer": {
+        "name": "d1a2sb",
+        "project": "d1a2/p",
+        "machine": "lfs535r2a",
+        "created": 1793697913097,
+        "id": "d1a2sb",
+        "platform": "linux",
+        "runtime": "namespaces",
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "backend": "namespaces",
+        "route": "fuse",
+        "state": "running"
+      }
+    },
+    "mount-exec-commit-read": {
+      "verdict": "PASS",
+      "commit": {
+        "kind": "Committed",
+        "head": "1204c50875b3c5cb056d990449648163748a7f60c422a9cb3e0f24a841606c88c8",
+        "commit": {
+          "id": "1204c50875b3c5cb056d990449648163748a7f60c422a9cb3e0f24a841606c88c8",
+          "branch": null,
+          "parent": null,
+          "second_parent": null,
+          "base": "322bee5d1df5f106510cb4c37e0092c4f509bc0a80f5c112da4c7cbd205cf4b9dc",
+          "root": "0ac9cd14d85261557218d31aeac9aa211a29db402f0dffe9cf4fe006556f467d",
+          "via": "exec",
+          "message": "r2 d1",
+          "merged_from": null,
+          "time": 1793697913225,
+          "logical": 44,
+          "new_canonical": 545,
+          "new_stored": 359,
+          "new_metadata": 291,
+          "displaced": null,
+          "lww": [],
+          "lww_truncated": false
+        },
+        "displaced_head": null,
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      },
+      "read": "written in d1a2sb on lfs535r2a\n"
+    },
+    "project-remove-inuse-related": {
+      "verdict": "PASS",
+      "answer": {
+        "code": "InUse",
+        "message": "Sandbox d1a2sb of d1a2/p is running",
+        "detail": {
+          "related": [
+            {
+              "kind": "sandbox",
+              "name": "d1a2sb"
+            }
+          ]
+        }
+      }
+    },
+    "project-remove-after-close": {
+      "verdict": "PASS",
+      "answer": {
+        "stack": "31ea0fa00caa596f5e31e36f54349726b1",
+        "packs_kept": true,
+        "project": "d1a2/p"
+      }
+    }
+  },
+  "steps": [
+    {
+      "name": "store.create",
+      "startedAt": "2026-11-03T09:25:12.961Z",
+      "ms": 11,
+      "ok": true,
+      "value": {
+        "name": "d1a2",
+        "kind": "sqlite",
+        "machine": "native",
+        "profile": "disposable",
+        "created": 1793697912972,
+        "sqlite": "3.53.2",
+        "projects": []
+      }
+    },
+    {
+      "name": "store.push",
+      "startedAt": "2026-11-03T09:25:12.972Z",
+      "ms": 94,
+      "ok": true,
+      "value": {
+        "store": "d1a2",
+        "from": "native",
+        "to": "lfs535r2a",
+        "bytes": 212992,
+        "heads": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "project.init (worker route, folder on the Mac)",
+      "startedAt": "2026-11-03T09:25:13.066Z",
+      "ms": 21,
+      "ok": true,
+      "value": {
+        "project": "d1a2/p",
+        "store": "d1a2",
+        "name": "p",
+        "kind": "sqlite",
+        "machine": "lfs535r2a",
+        "created": 1793697913086,
+        "layer": "322bee5d1df5f106510cb4c37e0092c4f509bc0a80f5c112da4c7cbd205cf4b9dc",
+        "root": "e90368b1727d105e37adb6f9bf862ab4de78fce52fe3f306329a0d52ca9c2c76"
+      }
+    },
+    {
+      "name": "branch.fork lane",
+      "startedAt": "2026-11-03T09:25:13.087Z",
+      "ms": 9,
+      "ok": true,
+      "value": {
+        "kind": "Forked",
+        "branch": "lane",
+        "base": "322bee5d1df5f106510cb4c37e0092c4f509bc0a80f5c112da4c7cbd205cf4b9dc",
+        "head": null
+      }
+    },
+    {
+      "name": "sandbox.create",
+      "startedAt": "2026-11-03T09:25:13.096Z",
+      "ms": 85,
+      "ok": true,
+      "value": {
+        "name": "d1a2sb",
+        "project": "d1a2/p",
+        "machine": "lfs535r2a",
+        "created": 1793697913097,
+        "id": "d1a2sb",
+        "platform": "linux",
+        "runtime": "namespaces",
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "backend": "namespaces",
+        "route": "fuse",
+        "state": "running"
+      }
+    },
+    {
+      "name": "workspace.mount lane",
+      "startedAt": "2026-11-03T09:25:13.181Z",
+      "ms": 11,
+      "ok": true,
+      "value": {
+        "kind": "Mounted",
+        "path": "/layerfs/data/machine/native/run/lfs-02f244e1-d1a2sb/workspaces/1",
+        "workspace": "5dbf8a8c47d05d8a4c099f456fab6be264b360d2340150c5b806ed9a23b8c86d",
+        "namespace": 1,
+        "branch": "lane",
+        "base": null,
+        "base_layer": "322bee5d1df5f106510cb4c37e0092c4f509bc0a80f5c112da4c7cbd205cf4b9dc",
+        "root": "e90368b1727d105e37adb6f9bf862ab4de78fce52fe3f306329a0d52ca9c2c76",
+        "sandbox": "d1a2sb",
+        "container": "lfs-02f244e1-d1a2sb",
+        "image": "sha256:1d91885de27a20805af0d1b99602ace066f0514983613e391ee1f73ac8e7c2e9",
+        "platform": "linux",
+        "runtime": "namespaces",
+        "name": null,
+        "ws": "d1a2sb:/layerfs/data/machine/native/run/lfs-02f244e1-d1a2sb/workspaces/1"
+      }
+    },
+    {
+      "name": "workspace.exec write d1.txt",
+      "startedAt": "2026-11-03T09:25:13.192Z",
+      "ms": 30,
+      "ok": true,
+      "value": {
+        "kind": "exit:0",
+        "exit_code": 0,
+        "stdout": "written in d1a2sb on lfs535r2a\n",
+        "stderr": "",
+        "message": "r2 d1",
+        "truncated": false
+      }
+    },
+    {
+      "name": "workspace.commit",
+      "startedAt": "2026-11-03T09:25:13.222Z",
+      "ms": 16,
+      "ok": true,
+      "value": {
+        "kind": "Committed",
+        "head": "1204c50875b3c5cb056d990449648163748a7f60c422a9cb3e0f24a841606c88c8",
+        "commit": {
+          "id": "1204c50875b3c5cb056d990449648163748a7f60c422a9cb3e0f24a841606c88c8",
+          "branch": null,
+          "parent": null,
+          "second_parent": null,
+          "base": "322bee5d1df5f106510cb4c37e0092c4f509bc0a80f5c112da4c7cbd205cf4b9dc",
+          "root": "0ac9cd14d85261557218d31aeac9aa211a29db402f0dffe9cf4fe006556f467d",
+          "via": "exec",
+          "message": "r2 d1",
+          "merged_from": null,
+          "time": 1793697913225,
+          "logical": 44,
+          "new_canonical": 545,
+          "new_stored": 359,
+          "new_metadata": 291,
+          "displaced": null,
+          "lww": [],
+          "lww_truncated": false
+        },
+        "displaced_head": null,
+        "merged": null,
+        "lww": [],
+        "lww_truncated": false
+      }
+    },
+    {
+      "name": "workspace.unmount",
+      "startedAt": "2026-11-03T09:25:13.238Z",
+      "ms": 6,
+      "ok": true,
+      "value": {
+        "kind": "Unmounted"
+      }
+    },
+    {
+      "name": "file.read lane /d1.txt (from the Mac)",
+      "startedAt": "2026-11-03T09:25:13.244Z",
+      "ms": 7,
+      "ok": true,
+      "value": {
+        "kind": "ok",
+        "snapshot": "lane@04c50875b3c5",
+        "root": "0ac9cd14d85261557218d31aeac9aa211a29db402f0dffe9cf4fe006556f467d",
+        "path": "/d1.txt",
+        "text": "written in d1a2sb on lfs535r2a\n",
+        "start_line": 1,
+        "end_line": 1,
+        "line_truncated": false,
+        "truncated": false,
+        "next_line": null,
+        "size": 31
+      }
+    },
+    {
+      "name": "project.remove while the Sandbox lives",
+      "startedAt": "2026-11-03T09:25:13.250Z",
+      "ms": 1,
+      "ok": false,
+      "error": {
+        "code": "InUse",
+        "message": "Sandbox d1a2sb of d1a2/p is running",
+        "detail": {
+          "related": [
+            {
+              "kind": "sandbox",
+              "name": "d1a2sb"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "sandbox.close",
+      "startedAt": "2026-11-03T09:25:13.251Z",
+      "ms": 141,
+      "ok": true,
+      "value": {
+        "kind": "Closed",
+        "sandbox": "d1a2sb",
+        "unknown": [],
+        "closed": "d1a2sb"
+      }
+    },
+    {
+      "name": "project.remove after sandbox.close",
+      "startedAt": "2026-11-03T09:25:13.392Z",
+      "ms": 5,
+      "ok": true,
+      "value": {
+        "stack": "31ea0fa00caa596f5e31e36f54349726b1",
+        "packs_kept": true,
+        "project": "d1a2/p"
+      }
+    },
+    {
+      "name": "cleanup store.pull",
+      "startedAt": "2026-11-03T09:25:13.397Z",
+      "ms": 67,
+      "ok": true,
+      "value": {
+        "store": "d1a2",
+        "from": "lfs535r2a",
+        "to": "native",
+        "bytes": 212992,
+        "heads": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "cleanup store.remove",
+      "startedAt": "2026-11-03T09:25:13.464Z",
+      "ms": 3,
+      "ok": true,
+      "value": {
+        "removed": "d1a2"
+      }
+    }
+  ],
+  "initProgress": [
+    {
+      "phase": "check",
+      "done": null,
+      "total": null
+    },
+    {
+      "phase": "send",
+      "done": 0,
+      "total": 13
+    },
+    {
+      "phase": "send",
+      "done": 13,
+      "total": 13
+    },
+    {
+      "phase": "install",
+      "done": null,
+      "total": null
+    },
+    {
+      "phase": "record",
+      "done": null,
+      "total": null
+    }
+  ],
+  "endedAt": "2026-11-03T09:25:13.466Z",
+  "verdict": "FAIL"
+}

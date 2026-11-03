@@ -1,0 +1,16 @@
+START apple-container sqlite C01 09:25:42
+C01 lfs535r2a sqlite PASS  timed exec 595.269 ms
+END apple-container sqlite C01 rc=0 09:25:46
+QUEUE DONE apple-container sqlite
+START apple-container sqlite C12 09:25:57
+C12 lfs535r2a sqlite PASS  timed exec 330.002 ms
+END apple-container sqlite C12 rc=0 09:25:58
+QUEUE DONE apple-container sqlite
+START microsandbox sqlite C01 09:25:58
+C01 lfs535r2m sqlite PASS  timed exec 702.088 ms
+END microsandbox sqlite C01 rc=0 09:26:03
+QUEUE DONE microsandbox sqlite
+START microsandbox sqlite C12 09:26:03
+C12 lfs535r2m sqlite PASS  timed exec 425.032 ms
+END microsandbox sqlite C12 rc=0 09:26:05
+QUEUE DONE microsandbox sqlite
