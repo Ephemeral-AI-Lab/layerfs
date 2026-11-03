@@ -265,7 +265,7 @@ form.
 | `list` | — | — | every machine, with what it supports (`supports`) |
 | `platforms` | — | — | the platforms this host and build support: backend, kernel route, where Store calls run, whether a PostgreSQL Sandbox runs and why not, readiness and options (#535; the rows of `connect/SUPPORT.json`) |
 | `get` | `name` | — | a machine's record |
-| `status` | `name` | — | a machine's live state, free disk and tool version |
+| `status` | `name` | — | a machine's live state, free disk and tool version; `op` while a create, connect, remove or disconnect holds it (#536 H6) |
 | `start` | `name` | — | starts a stopped machine and its worker and waits until ready; a running one, and `native`, answer at once (#535 P1) |
 | `stop` | `name` | — | stops a machine's worker and, where it has one, its VM; disks stay; `InUse` while Sandboxes run on it (#535 P1) |
 | `create` | `name`, `platform` | `cpus`, `memory` (size), `disk` (size), `image`, `nested`, `host` | creates a VM machine |

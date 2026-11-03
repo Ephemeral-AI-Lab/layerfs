@@ -12,7 +12,9 @@
 //! 1. write: each Sandbox record from `machine/<m>/sandbox/<name>/` to
 //!    `sandbox/<name>/record.json` (`gone` when its runtime had ended,
 //!    which is reclaimed: a stopped container or local daemon deleted once),
-//!    and `"v": 1` into every machine, Store, project and bucket record;
+//!    and `"v": 1` into every machine, Store, project and bucket record,
+//!    dropping a machine record's layout 2 intent (`removing`, `state`
+//!    `creating` or `unknown`);
 //! 2. `log/layout-3.pending`, then `layerfs.json` at layout 3 (the flip);
 //! 3. delete the layout 2 paths (`machine/*/sandbox/`,
 //!    `store/*/project/*/sandboxes/`), rename `machine/native/sandbox-root/`
@@ -90,6 +92,7 @@ pub(super) fn convert(home: &Path, file: &HomeFile) -> Result<HomeFile> {
         reclaim(ended)?;
         reclaimed.push(SdkValue::text(format!("{}#{}", ended.project, ended.id)));
     }
+    drop_machine_intents(home)?;
     let versioned = version_records(home)?;
     let marker = paths::log_dir(home).join(PENDING);
     write_record(&marker, &SdkValue::map([("at", SdkValue::Int(now()))]))?;
@@ -214,8 +217,13 @@ fn survey(home: &Path) -> Result<Plan> {
             }
         }
     }
+    // a 2.0 record names its remover by process id alone: that is all
+    // there is to check
     for machine in names(&home.join("machine"))? {
-        if let Some(pid) = MachineRecord::read(home, &machine)?.and_then(|r| r.removing()) {
+        let record = MachineRecord::read(home, &machine)?;
+        let removing = record.and_then(|r| r.field("removing").cloned());
+        if let Some(removing) = removing.filter(lease::recorded_alive) {
+            let pid = removing.get_int("pid").unwrap_or(0);
             plan.live(
                 "machine",
                 &machine,
@@ -325,6 +333,30 @@ fn reclaim(entry: &Numbered) -> Result<()> {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(failed(error)),
         _ => Ok(()),
     }
+}
+
+/// Drops the layout 2 intent fields from each machine record: a gone
+/// remover's `removing`, and a `state` of `creating` or `unknown` (a 2.0
+/// create or remove that did not finish, or whose outcome was unknown; its
+/// `error` stays). Layout 3 keeps such intents in `op`; without one the
+/// machine's live probe says what is there. Idempotent.
+fn drop_machine_intents(home: &Path) -> Result<()> {
+    for machine in names(&home.join("machine"))? {
+        let file = paths::machine_record(home, &machine);
+        let Some(SdkValue::Map(fields)) = read_record(&file)? else {
+            continue;
+        };
+        let old = |(name, value): &(String, SdkValue)| {
+            name == "removing"
+                || (name == "state"
+                    && matches!(value, SdkValue::Text(t) if t == "creating" || t == "unknown"))
+        };
+        if fields.iter().any(old) {
+            let kept = fields.into_iter().filter(|field| !old(field));
+            write_record(&file, &SdkValue::Map(kept.collect()))?;
+        }
+    }
+    Ok(())
 }
 
 /// Writes `"v": 1` into each machine, Store, project and bucket record that

@@ -2,7 +2,7 @@
 //! built-in `native` and `docker`, VMs created by name and ssh hosts
 //! connected. The adapters that make and start machines are
 //! `layerfs-sandbox`'s `machine/` layer; this module writes the records and
-//! keeps `Exists` and `InUse`. Without the `machine` feature (the guest
+//! keeps `Exists`, `InUse` and each record's `op` (`Busy`, `Unresolved`). Without the `machine` feature (the guest
 //! worker's build) every machine call is `Unsupported`.
 #[cfg(feature = "machine")]
 mod bundle;

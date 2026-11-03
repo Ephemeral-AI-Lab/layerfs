@@ -33,7 +33,7 @@ hold a password or a bucket key. They are not settings; see
   layerfs.json                 layout version and home id
   layerfs.lock                 the home lock (host only)
   machine/<name>/
-    record.json                kind, size, lasting state
+    record.json                kind, size, lasting state, op (while a create, connect or remove runs)
     worker.json                endpoint, secret, live forward (0600)
     known_hosts                ssh machines only
     start.lock                 taken while a process starts, makes or removes the machine
@@ -157,7 +157,9 @@ one pass:
    `sandbox/<name>/record.json`. A Sandbox whose native runtime had ended
    is written `gone` (with no id), its stopped runtime deleted once and its
    numbered folder removed; `sandbox close` then answers `was: gone`. It
-   writes `"v": 1` into every machine, Store, project and bucket record.
+   writes `"v": 1` into every machine, Store, project and bucket record,
+   dropping a machine record's 2.0 intent (a gone remover's `removing`, a
+   `state` of `creating` or `unknown`; its `error` stays).
 2. It writes `log/layout-3.pending`, then `layerfs.json` at layout 3.
 3. It deletes `machine/*/sandbox/` and `store/*/project/*/sandboxes/`,
    renames `machine/native/sandbox-root/` to `machine/native/run/` (its

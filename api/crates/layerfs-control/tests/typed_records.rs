@@ -209,21 +209,70 @@ mod machines {
         assert_eq!(shown.get("cpus"), Some(&SdkValue::Null));
         let vm = MachineRecord::from_record("vm", value(r#"{"platform":"lima"}"#));
         assert_eq!(vm.state(None).unwrap(), "stopped");
+        // a connect in flight: its live `op` (this process) says `creating`
+        let me = std::process::id();
         let ssh = MachineRecord::from_record(
             "box",
-            value(
-                r#"{"name":"box","platform":"ssh","ssh":{"host":"h","host_id":"k"},"state":"creating"}"#,
-            ),
+            value(&format!(
+                r#"{{"name":"box","platform":"ssh","ssh":{{"host":"h","host_id":"k"}},
+                   "op":{{"name":"machine.connect","owner":{{"pid":{me}}},"uncertain":false}}}}"#
+            )),
         );
         let shown = ssh.to_sdk(View::Full, &MachineDerived::default()).unwrap();
         assert_eq!(keys(&shown).last(), Some(&"ssh"));
         assert_eq!(shown.get_text("state"), Some("creating"));
+        assert!(shown.get("op").is_none(), "{shown:?}");
+        assert!(ssh.in_flight());
         let unknown = MachineRecord::from_record("x", value(r#"{"platform":"vmware"}"#));
         let refusal = unknown
             .to_sdk(View::List, &MachineDerived::default())
             .unwrap_err();
         assert_eq!(refusal.code, "Failed");
         assert_eq!(refusal.message, "a machine record names no known platform");
+    }
+
+    /// Machine `dev` (lima, recorded `running`) holding intent `name` of
+    /// process `pid`.
+    fn held(name: &str, pid: u32, uncertain: bool) -> MachineRecord {
+        MachineRecord::from_record(
+            "dev",
+            value(&format!(
+                r#"{{"name":"dev","platform":"lima","state":"running",
+                   "op":{{"name":"{name}","owner":{{"pid":{pid}}},"uncertain":{uncertain}}}}}"#
+            )),
+        )
+    }
+
+    #[test]
+    fn a_machine_s_state_follows_its_op() {
+        let me = std::process::id();
+        // a live owner: its call, whatever the probe says
+        let removing = held("machine.remove", me, false);
+        assert_eq!(removing.state(Some("running")).unwrap(), "removing");
+        assert_eq!(
+            held("machine.disconnect", me, true).state(None).unwrap(),
+            "removing"
+        );
+        assert_eq!(
+            held("machine.create", me, false).state(None).unwrap(),
+            "creating"
+        );
+        assert!(removing.in_flight());
+        // a gone owner (id 0): unresolved when uncertain, else nothing
+        let unresolved = held("machine.create", 0, true);
+        assert_eq!(unresolved.state(Some("running")).unwrap(), "unresolved");
+        assert!(unresolved.in_flight());
+        let stale = held("machine.remove", 0, false);
+        assert_eq!(stale.state(Some("missing")).unwrap(), "missing");
+        assert_eq!(stale.state(None).unwrap(), "running");
+        assert!(!stale.in_flight());
+        stale.not_held().unwrap();
+        assert_eq!(removing.not_held().unwrap_err().code, "Busy");
+        assert_eq!(unresolved.not_held().unwrap_err().code, "Unresolved");
+        // a remove clears an unresolved intent, never a live one
+        unresolved.not_running().unwrap();
+        assert_eq!(removing.not_running().unwrap_err().code, "Busy");
+        assert!(stale.clone().without_op().op().is_none());
     }
 }
 

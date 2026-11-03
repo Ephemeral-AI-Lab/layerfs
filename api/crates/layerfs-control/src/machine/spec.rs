@@ -65,17 +65,13 @@ fn write_built_ins(home: &Path) -> Result<()> {
     Ok(())
 }
 
-/// The machine `name`'s record, or `NotFound`.
-/// Refused `InUse` while a live process removes the machine (its record's
-/// `removing` pid), so no call starts, moves to or runs on it meanwhile.
+/// The machine `name`'s record, or `NotFound`, for an operation on it.
+/// Refused `Busy` while a live process creates, connects, removes or
+/// disconnects it (its record's `op`), so no call starts, moves to or runs
+/// on it meanwhile; `Unresolved` once a gone one left that outcome unknown.
 pub fn machine_of(home: &Path, name: &str) -> Result<MachineRecord> {
     let record = MachineRecord::of(home, name)?;
-    if let Some(pid) = record.removing() {
-        return Err(refused(
-            "InUse",
-            format!("machine {name} is being removed by process {pid}"),
-        ));
-    }
+    record.not_held()?;
     Ok(record)
 }
 
@@ -187,7 +183,9 @@ pub fn worker(home: &Path, name: &str) -> Result<Option<Endpoint>> {
     }))
 }
 
-/// Writes `worker.json` and the lasting state of a started machine.
+/// Writes `worker.json` and the lasting state of a started machine; the
+/// record write that says `running` drops a create's or connect's `op` (a
+/// start runs under the machine's start lock, where no other one lives).
 pub fn save_running(home: &Path, name: &str, running: &Running) -> Result<()> {
     let endpoint = &running.endpoint;
     write_record(
@@ -214,7 +212,7 @@ pub fn save_running(home: &Path, name: &str, running: &Running) -> Result<()> {
     }
     update(home, name, |record| {
         let record = record.with("lasting", SdkValue::Map(lasting));
-        record.with("state", SdkValue::text("running"))
+        record.with("state", SdkValue::text("running")).without_op()
     })
 }
 

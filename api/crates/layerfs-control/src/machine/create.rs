@@ -1,15 +1,19 @@
 //! The machine calls (S §3.7, O11, O34). Record writes take the home lock;
 //! a create or connect holds it only to claim and to record, never while
-//! the VM boots. One attempt: a create that fails before its VM exists
-//! removes what it made, one that fails after keeps the VM as `failed`, and
-//! an `Unknown` outcome keeps everything and is logged.
+//! the VM boots. The record it claims holds its `op` (#536 §7.1), which
+//! keeps every other call off the machine meanwhile; the write that records
+//! it running drops the `op`. One attempt: a create that fails before its
+//! VM exists removes what it made, one that fails after keeps the VM as
+//! `failed`, and an `Unknown` outcome keeps everything, its `op` marked
+//! uncertain, and is logged.
 use super::bundle::bundle;
 use super::list::summary;
-use super::record::MachineRecord;
+use super::record::{MachineRecord, CREATE};
 use super::spec::{self as record, machine_of, refusal, save_running, update as update_record};
 use super::status::home_id;
 use crate::common::context::Context;
 use crate::common::home::{self, lock, paths};
+use crate::common::op::Op;
 use crate::common::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_machine::{self as adapters, Code, Platform};
@@ -86,7 +90,6 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             SdkValue::Int(args.get_int("disk").unwrap_or(record::DEFAULT_DISK)),
         ),
         ("vm_name", SdkValue::text(record::vm_name(&id, &name))),
-        ("state", SdkValue::text("creating")),
         ("created", SdkValue::Int(home::now_ms())),
     ];
     if let Some(image) = args.get_text("image") {
@@ -99,7 +102,8 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         fields.push(("host", SdkValue::text(host)));
     }
     let fields = fields.into_iter().map(|(n, v)| (n.to_owned(), v));
-    let record = MachineRecord::from_record(&name, SdkValue::Map(fields.collect()));
+    let op = Op::begin(CREATE, "create", SdkValue::Null)?;
+    let record = MachineRecord::from_record(&name, SdkValue::Map(fields.collect())).with_op(&op);
     // claim the name under the lock; the VM is made outside it
     let spec = {
         let _lock = lock::take(&home)?;
@@ -129,13 +133,16 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     ]));
     // a `machine start` waits for its create
     let _start = super::endpoint::start_lock(&home, &name)?;
-    finish(&home, &name, adapters::create(&spec, &bundle))
+    finish(&home, &name, op, adapters::create(&spec, &bundle))
 }
 
-/// Records the outcome of a create or connect (H §7.1.1 step 5).
+/// Records the outcome of a create or connect (H §7.1.1 step 5) that `op`
+/// names: running drops it; a failure that kept the VM drops it with state
+/// `failed`; an `Unknown` one keeps it, uncertain, with the `error`.
 pub(super) fn finish(
     home: &Path,
     name: &str,
+    op: Op,
     outcome: std::result::Result<adapters::Running, adapters::MachineError>,
 ) -> Outcome {
     let _lock = lock::take(home)?;
@@ -146,21 +153,17 @@ pub(super) fn finish(
             summary(home, &record, None)
         }
         Err(error) if error.code == Code::Unknown => {
-            update_record(home, name, |r| r.failed_as("unknown", &error.message))?;
-            home::log_line(
-                home,
-                "uncertain.jsonl",
-                &SdkValue::map([
-                    ("at", SdkValue::Int(home::now_ms())),
-                    ("call", SdkValue::text("machine.create")),
-                    ("machine", SdkValue::text(name)),
-                    ("message", SdkValue::text(&error.message)),
-                ]),
-            )?;
+            let op = op.as_uncertain();
+            update_record(home, name, |r| {
+                r.with_op(&op).with("error", SdkValue::text(&error.message))
+            })?;
+            op.log_uncertain(home, "machine", name, &error.message);
             Err(refusal(error))
         }
         Err(error) if error.vm_exists => {
-            update_record(home, name, |r| r.failed_as("failed", &error.message))?;
+            update_record(home, name, |r| {
+                r.failed_as("failed", &error.message).without_op()
+            })?;
             Err(refusal(error))
         }
         Err(error) => {

@@ -434,3 +434,36 @@ fn a_layout_2_home_with_anything_live_is_refused_and_left() {
     only_layout_3(&home);
     std::fs::remove_dir_all(&home).unwrap();
 }
+
+#[test]
+fn a_layout_2_machine_removal_refuses_while_its_remover_lives_and_leaves_no_intent() {
+    let lost = sandbox("lost", "dev", &[("state", t("unknown"))]);
+    let home = home_with("machine", &[("lost", lost)]);
+    downgrade(&home);
+    // a 2.0 record names its remover by process id alone
+    let dev = paths::machine_record(&home, "dev");
+    let removing = |pid: i64| {
+        let record = read_record(&dev).unwrap().unwrap();
+        let record = home::with_field(record, "state", t("creating"));
+        let remover = SdkValue::map([("pid", SdkValue::Int(pid))]);
+        write_record(&dev, &home::with_field(record, "removing", remover)).unwrap();
+    };
+    removing(i64::from(std::process::id()));
+    let refusal = call(&home, "store.list", &[]).unwrap_err();
+    assert_eq!(refusal.get_text("code"), Some("InUse"), "{refusal:?}");
+    let message = refusal.get_text("message").unwrap();
+    assert!(message.contains("machine dev"), "{message}");
+    assert!(matches!(home::detect(&home).unwrap(), Layout::Previous(_)));
+
+    // once its remover is gone, the home converts and the record holds no
+    // layout 2 intent
+    removing(dead_pid());
+    call(&home, "store.list", &[]).unwrap();
+    assert!(matches!(home::detect(&home).unwrap(), Layout::Current(_)));
+    let record = read_record(&dev).unwrap().unwrap();
+    assert_eq!(record.get_int("v"), Some(1), "{record:?}");
+    assert!(record.get("removing").is_none(), "{record:?}");
+    assert!(record.get("state").is_none(), "{record:?}");
+    assert_eq!(record.get_text("platform"), Some("lima"));
+    std::fs::remove_dir_all(&home).unwrap();
+}

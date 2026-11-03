@@ -1,5 +1,6 @@
 //! `machine.status` and the home id the machine specs use.
-use super::spec::{self as record, machine_of, refusal};
+use super::record::MachineRecord;
+use super::spec::{self as record, refusal};
 use crate::common::context::Context;
 use crate::common::home;
 use crate::common::outcome::Outcome;
@@ -15,32 +16,42 @@ pub(super) fn home_id(home: &Path) -> Result<String> {
 }
 
 /// `machine.status(name)`: live state, free disk, the tool's version and
-/// why it is down (O34). A stopped VM answers without being started.
+/// why it is down (O34). A stopped VM answers without being started. A
+/// read: while an `op` holds the machine it probes nothing, answers the
+/// state the record derives (`creating`, `removing`, `unresolved`) and
+/// shows the `op` (#536 H6), which it never clears.
 pub fn status(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = &context.home;
     let name = args.get_text("name").unwrap_or("");
-    let record = machine_of(home, name)?;
-    let spec = record::spec(home, &home_id(home)?, &record)?;
-    let status = adapters::status(&spec).map_err(refusal)?;
-    Ok(SdkValue::map([
+    let record = MachineRecord::of(home, name)?;
+    let kind = record.platform()?;
+    let (state, free_disk, tool_version, down_reason) = match record.in_flight() {
+        true => (record.state(None)?.to_owned(), None, None, None),
+        false => {
+            let spec = record::spec(home, &home_id(home)?, &record)?;
+            let status = adapters::status(&spec).map_err(refusal)?;
+            let state = status.state.as_str().to_owned();
+            (
+                state,
+                status.free_disk,
+                status.tool_version,
+                status.down_reason,
+            )
+        }
+    };
+    let text = |value: Option<String>| value.map(SdkValue::Text).unwrap_or_default();
+    let mut fields = vec![
         ("name", SdkValue::text(name)),
-        ("platform", SdkValue::text(spec.kind.name())),
-        ("state", SdkValue::text(status.state.as_str())),
+        ("platform", SdkValue::text(kind.name())),
+        ("state", SdkValue::Text(state)),
         (
             "free_disk",
-            status
-                .free_disk
+            free_disk
                 .map(|b| SdkValue::Int(b as i64))
                 .unwrap_or_default(),
         ),
-        (
-            "tool_version",
-            status.tool_version.map(SdkValue::Text).unwrap_or_default(),
-        ),
-        (
-            "down_reason",
-            status.down_reason.map(SdkValue::Text).unwrap_or_default(),
-        ),
+        ("tool_version", text(tool_version)),
+        ("down_reason", text(down_reason)),
         (
             "stores",
             SdkValue::List(
@@ -50,5 +61,11 @@ pub fn status(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
                     .collect(),
             ),
         ),
-    ]))
+    ];
+    if let Some(op) = record.op() {
+        fields.push(("op", op.to_sdk()));
+    }
+    Ok(SdkValue::Map(
+        fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
+    ))
 }
