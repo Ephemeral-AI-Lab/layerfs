@@ -128,6 +128,7 @@ Rows added when the code contradicts a spec fact. The code wins; the step is adj
 - #536 H2's typed Request/Refusal/Event API is not built (see the H2 row).
 - Push/pull `send` is still one worker request per 8 MiB chunk through the caller, as move was; §7.3's "ONE worker connection, streamed frames (#535 R8)" is not built.
 - `store remove` deletes only the record machine's copy: after a transfer stopped at retire, the other machine's copy stays until a push or pull (lane F1); a later push of a new Store of that name there is refused `Exists`.
+- `store.disconnect` of a PostgreSQL Store removes only the caller's folder: every machine that ran its Sandboxes keeps `store/<s>/record.json` and `project/<p>/record.json` under its worker root (written by `sandbox/route.rs` `in_worker`), so a later sqlite Store of that name pushed there has `project init` refused `Exists` until a pull removes the folder (final terminal pass lane L2, L2-D2). Removing them needs a worker call per machine at disconnect, which a stopped machine (D11) cannot answer; not built.
 - `PROVIDERS.md` stays in `layerfs-api` and describes the facade now in control `sandbox/launch/`.
 
 ## Corrections to commit messages
