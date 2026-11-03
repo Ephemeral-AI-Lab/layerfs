@@ -7,8 +7,24 @@ table, synchronous; ``layerfs.aio`` has the same calls as coroutines (O19).
     lfs = layerfs.client(home="/data/lfs", scope={"folder": "/web", "branch": "agent"})
 """
 
+from . import _native
 from ._client import FAMILIES, TABLE, Client, client
 from ._errors import LayerFSError
+from ._values import decode
+
+
+def doctor(home=None):
+    """``layerfs doctor``: what is wrong in ``home`` (default ``LAYERFS_HOME``,
+    else ``~/.layerfs``), changing nothing and starting no machine. Returns
+    ``{"ok": ..., "findings": [{"severity", "entity": {"kind", "name"},
+    "message", "fix"}]}``; ``ok`` is false when a finding is an error.
+    Outside the call table."""
+    answer = decode(_native.doctor(None if home is None else str(home)))
+    refused = answer.get("refused")
+    if refused is not None:
+        raise LayerFSError(refused["code"], refused["message"], refused.get("detail"))
+    return answer["value"]
+
 
 _default = Client()
 project = _default.project
@@ -30,6 +46,7 @@ __all__ = [
     "branch",
     "client",
     "commit",
+    "doctor",
     "file",
     "machine",
     "project",

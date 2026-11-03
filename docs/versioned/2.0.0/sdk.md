@@ -50,6 +50,10 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", fo
 - A refusal throws `LayerFSError` with `code`, `message` and `detail`.
 - `table` is the call table, `[{ family, call, args, options, help }]`;
   `families` lists the nine families.
+- `layerfs.doctor({ home })` (also a named export) is
+  [`layerfs doctor`](calls.md#layerfs-doctor), outside the table: it
+  resolves to `{ ok, findings: [{ severity, entity: { kind, name }, message,
+  fix }] }` and changes nothing; `home` defaults as above.
 - The native addon is looked for beside the package (`layerfs.node`), at a
   worktree build bundle's root, then beside its crate
   (`engine/crates/layerfs-node/layerfs.node`). Build it with
@@ -89,6 +93,9 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
   `.detail`.
 - `layerfs.TABLE` is the call table and `layerfs.FAMILIES` the nine
   families.
+- `layerfs.doctor(home=None)` is [`layerfs doctor`](calls.md#layerfs-doctor),
+  outside the table: a dict `{"ok", "findings"}` as in Node, changing
+  nothing.
 - Build: `cd api/python && maturin build --locked` (maturin 1.9.6 or a
   later 1.x, as `pyproject.toml` requires since `2793ee114c`). Only a macOS
   arm64 wheel was built on this branch; the Linux x64 and arm64 glibc

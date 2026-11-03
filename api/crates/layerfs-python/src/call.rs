@@ -1,7 +1,8 @@
-//! `table()` and `call(name, args, home=None, scope=None, on_event=None)`.
+//! `table()`, `call(name, args, home=None, scope=None, on_event=None)` and
+//! `doctor(home=None)`.
 use layerfs_api::calls;
 use pyo3::prelude::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The call table as JSON text.
 #[pyfunction]
@@ -37,4 +38,13 @@ pub fn call(
         };
         calls::call_json(home.as_deref(), scope.as_deref(), &name, &args, &mut send)
     })
+}
+
+/// `layerfs doctor` (report-only, outside the call table) on `home` (else
+/// the library's default), with the interpreter released. Returns JSON
+/// text `{ value }` or `{ refused }`.
+#[pyfunction]
+#[pyo3(signature = (home=None))]
+pub fn doctor(py: Python<'_>, home: Option<String>) -> String {
+    py.detach(move || layerfs_api::doctor_json(calls::home(home.as_deref().map(Path::new))))
 }

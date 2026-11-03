@@ -202,7 +202,8 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   stop <m>`, then `layerfs machine start <m>`" (a start copies this build's
   bundle in). `machine start` alone does not replace a running worker,
   whatever its build. A worker run from no sealed bundle (a development
-  build) is checked by protocol alone.
+  build) is checked by protocol alone. [`layerfs doctor`](calls.md#layerfs-doctor)
+  reports a running worker of another build as a warning.
 - A worker holds a Store's lease for as long as it keeps the Store open,
   and closes its own open copy before a move, retire or remove reads or
   deletes the file.

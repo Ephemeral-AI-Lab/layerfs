@@ -11,6 +11,8 @@
 
 pub mod calls;
 pub use layerfs_control::common::{home, names};
+/// `layerfs doctor` (#536 H7): report-only, outside the call table.
+pub use layerfs_control::doctor::{doctor, doctor_json};
 #[cfg(feature = "machine")]
 #[doc(hidden)]
 pub use layerfs_control::machine;

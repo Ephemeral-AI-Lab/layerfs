@@ -24,6 +24,42 @@ pub fn result(value: &SdkValue, text: bool) -> ExitCode {
     } else {
         format!("{}\n", json::print(value))
     };
+    print(&printed)
+}
+
+/// `layerfs doctor --text`: a count line, then each finding as
+/// `<severity> <kind> <name>: <message>` and its fix on the next line.
+pub fn findings(report: &SdkValue) -> ExitCode {
+    let empty = Vec::new();
+    let found = match report.get("findings") {
+        Some(SdkValue::List(found)) => found,
+        _ => &empty,
+    };
+    let text = |value: &SdkValue, key: &str| value.get_text(key).unwrap_or("").to_owned();
+    let errors = found
+        .iter()
+        .filter(|f| text(f, "severity") == "error")
+        .count();
+    let mut printed = match found.len() {
+        0 => "ok: nothing to report\n".to_owned(),
+        n => format!("{errors} error(s), {} warning(s)\n", n - errors),
+    };
+    for finding in found {
+        let entity = finding.get("entity").cloned().unwrap_or_default();
+        printed.push_str(&format!(
+            "{:<8} {} {}: {}\n         fix: {}\n",
+            text(finding, "severity"),
+            text(&entity, "kind"),
+            text(&entity, "name"),
+            text(finding, "message"),
+            text(finding, "fix"),
+        ));
+    }
+    print(&printed)
+}
+
+/// Writes `printed` to stdout.
+fn print(printed: &str) -> ExitCode {
     let mut out = std::io::stdout().lock();
     if out
         .write_all(printed.as_bytes())
