@@ -65,6 +65,12 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             "a firecracker machine names its lima --nested host",
         ));
     }
+    // a platform not on this host is refused in the support table's words
+    // (#535 §7.3), before any tool is looked for
+    let host = adapters::HostOs::current();
+    if let Err(reason) = adapters::sandbox_allowed(kind, host, adapters::StoreKind::Sqlite) {
+        return Err(refused("Unsupported", reason));
+    }
     let probe = adapters::probe(kind, &record::tools(&home)?);
     if !probe.ready {
         return Err(refusal(adapters::MachineError::missing(

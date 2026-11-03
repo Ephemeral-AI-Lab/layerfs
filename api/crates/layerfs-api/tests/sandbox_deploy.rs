@@ -81,7 +81,8 @@ fn the_daemon_and_the_linux_bundle_come_from_the_versioned_cache() {
     );
 
     // a VM needs the Linux bundle: refused naming linux-<arch> (or, on a
-    // host without the VM's tool, refused for the tool first)
+    // host without the VM's tool, refused for the tool first; on a host
+    // lima is not on, in the support table's words)
     let (code, message) = call(
         &home,
         "machine.create",
@@ -96,11 +97,13 @@ fn the_daemon_and_the_linux_bundle_come_from_the_versioned_cache() {
             .join(format!("linux-{arch}"));
         assert!(message.contains(&linux.display().to_string()), "{message}");
         assert!(message.contains("tools/linux_bundle.py"), "{message}");
-    } else {
+    } else if cfg!(target_os = "macos") {
         assert!(
             message.contains("cannot be created on this host"),
             "{message}"
         );
+    } else {
+        assert_eq!(message, "lima runs on macOS hosts only");
     }
     for dir in [home, folder, cache] {
         std::fs::remove_dir_all(dir).unwrap();
