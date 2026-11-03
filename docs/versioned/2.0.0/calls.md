@@ -410,7 +410,9 @@ layerfs doctor --text     # a count line, then each finding and its fix
   gone); an `op` a gone process left uncertain (an error naming the call
   that clears it) or certain (a warning); stale Store leases; what refuses
   a layout 2 home's conversion; a partial `store.sqlite.incoming` on
-  `native`; and each running machine's worker build (its hello alone, no
+  `native`; a copy a push or pull did not retire (its record's
+  `last_transfer` says `retired: false`; a warning naming the next `store
+  pull` or `store push`, which deletes it first); and each running machine's worker build (its hello alone, no
   request; another build is a warning naming `machine stop` then `machine
   start`, a worker that does not answer one naming `machine start`).
 - Not checked: partial copies and leftover layout 2 folders on other

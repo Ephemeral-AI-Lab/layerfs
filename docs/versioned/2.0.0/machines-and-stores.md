@@ -264,7 +264,11 @@ $ layerfs store pull shop --progress       # not run
   H1). Both run the same phases once each: check, snapshot, send, verify,
   install, record and retire; only the sides swap. The bytes pass through
   the calling process in pieces. Between two machines, pull, then push:
-  each half is its own call.
+  each half is its own call. Retire deletes the source's copy: on `native`
+  the file with its `-wal`, `-shm` and any partial copy (the folder keeps
+  the home's records); on another machine the Store's whole folder under
+  its worker's root, with the project entries the worker kept there (a
+  symlink in it is removed, never followed).
   - A push is `InvalidInput` unless the Store is on `native` (the message
     names `store pull`), and for `native` as the target; a pull is
     `InvalidInput` when the Store is already on `native`. Both are
@@ -297,15 +301,26 @@ $ layerfs store pull shop --progress       # not run
   - A certain failure drops `op`. An uncertain one (an `Unknown` step, or
     any failure of the record phase, after both copies exist) keeps both
     copies, keeps `op` with `uncertain: true` and is logged to
-    `log/uncertain.jsonl`. The record phase is written uncertain before it
-    starts, so a call that dies there is uncertain too; the record write
-    that puts the Store on its new machine drops `op` and records
-    `last_transfer` (`call`, `from`, `to`, `at`, `bytes`, `sha256`,
-    `heads`).
+    `log/uncertain.jsonl`. The install phase is written uncertain before
+    it starts, so a call that dies during install or record (the target
+    may hold a copy the record does not name) is uncertain too. The record
+    write that puts the Store on its new machine records `last_transfer`
+    (`call`, `from`, `to`, `at`, `bytes`, `sha256`, `heads`, `retired:
+    false`) and keeps `op`, certain, at phase retire while the source's
+    copy is deleted; then `op` goes and `retired` becomes `true`. A retire
+    that fails or whose process ends leaves the Store in use on its new
+    machine and the old copy, which the doctor reports and the next push
+    or pull deletes first.
   - Once that process is gone, an uncertain `op` makes every later
     operation, lease and Store call on the Store `Unresolved`, naming
-    `layerfs store status <name>` and `layerfs store remove <name>`; a
-    certain one holds nothing.
+    `layerfs store status <name>` and the call that clears it: a new
+    `layerfs store push <name> <machine>` (with the machine the push named)
+    or `layerfs store pull <name>`. A new push or pull first deletes the
+    copy left on whichever of the two machines the record does not name (on
+    `native` its file and any partial copy; on another machine the Store's
+    folder under its worker's root), then runs as usual. `store remove`
+    clears it too, but deletes only the copy on the record's machine. A
+    certain `op` holds nothing.
   - A failure names its phase in the message and in `detail.phase`, and
     keeps whatever exists.
   - While it runs, `store status` shows `state: "busy"` and `op`.

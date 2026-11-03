@@ -12,6 +12,7 @@ use crate::common::place::{self, Executor};
 use crate::inventory;
 use crate::store::family::{advance, begin, ended, of_store, progress, record_of, settle, step};
 use crate::store::record::{self, StoreRecord};
+use crate::store::transfer::resolve::retired;
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
@@ -51,12 +52,11 @@ fn transfer(context: &mut Context<'_>, name: &str, target: Option<&str>) -> Outc
     let result = run(context, name, target, call, &mut written);
     if let (Err((phase, refusal)), Some(op)) = (&result, &written) {
         // past install both copies exist: a record phase that failed (its
-        // lock wait expired, say) leaves the outcome open; past record the
-        // Store is on `to` and `op` is gone
-        let uncertain = refusal.code == "Unknown" || *phase == "record";
-        if *phase != "retire" {
-            ended(&home, name, op, phase, refusal, uncertain, None);
-        }
+        // lock wait expired, say) leaves the outcome open; a certain install
+        // failure put nothing in place; past record the Store is on `to`,
+        // and a retire that did not finish leaves `last_transfer` saying so
+        let uncertain = *phase != "retire" && (refusal.code == "Unknown" || *phase == "record");
+        ended(&home, name, op, phase, refusal, uncertain, None);
     }
     let verb = call.replace('.', " ");
     result.map_err(|(phase, mut refusal)| {
@@ -79,6 +79,8 @@ fn run(
     // machines, the target's file and its free disk; the side again under
     // the locks, where `op` is written
     progress(context, "check", None);
+    // first the copy an ended push or pull left, which this call clears
+    at("check", super::resolve::resolve(&home, name))?;
     let record = at("check", record_of(&home, name))?;
     at("check", record.unblocked())?;
     let (from, to) = at("check", sides(&home, &record, target))?;
@@ -256,15 +258,20 @@ fn phases(
         "verify",
         step(&home, target, "verify", of_store(name, digest)),
     )?;
+    // install puts the target's copy in place, which no step undoes with
+    // certainty: from here until the record names the target a crash leaves
+    // both copies, so the intent is written uncertain before it (H4–H6); the
+    // next push or pull deletes the copy the record does not name
+    *op = op.clone().as_uncertain();
     enter(context, op, name, "install", None)?;
     at(
         "install",
         step(&home, target, "install", of_store(name, vec![])),
     )?;
-    // record: the Store is on `to` from here on, and `op` goes in the same
-    // write; a crash before it leaves both copies, so the phase is written
-    // uncertain first
-    *op = op.clone().as_uncertain();
+    // record: the Store is on `to` from here on. The same write records
+    // that the source's copy is not yet retired and keeps `op`, certain, at
+    // retire while it is: a retire that does not finish leaves a Store in
+    // use on `to` and a copy the next push or pull deletes first
     enter(context, op, name, "record", None)?;
     let last = SdkValue::map([
         ("call", SdkValue::text(op.name())),
@@ -277,22 +284,32 @@ fn phases(
             snapshot.get("sha256").cloned().unwrap_or_default(),
         ),
         ("heads", snapshot.get("heads").cloned().unwrap_or_default()),
+        ("retired", SdkValue::Bool(false)),
     ]);
+    *op = op.clone().at("retire");
+    let retiring = with_field(op.to_record().clone(), "uncertain", SdkValue::Bool(false));
     at(
         "record",
         (|| {
             let _store = record::lock(&home, name)?;
             let record = record_of(&home, name)?.with("machine", SdkValue::text(to));
             let record = record.with("last_transfer", last.clone());
-            record.without(op::FIELD).write(&home)
+            record.with(op::FIELD, retiring.clone()).write(&home)
         })(),
     )?;
-    // retire the source's copy
+    // retire the source's copy: `native`'s file (its folder holds the
+    // home's records), or the Store's whole folder under a worker's root,
+    // with the project entries a worker keeps there
     progress(context, "retire", None);
+    let retire = match source {
+        Executor::Local => "retire",
+        Executor::Worker(_) => "remove",
+    };
     at(
         "retire",
-        step(&home, source, "retire", of_store(name, vec![])),
+        step(&home, source, retire, of_store(name, vec![])),
     )?;
+    at("retire", retired(&home, name, op.id()))?;
     Ok(SdkValue::map([
         ("store", SdkValue::text(name)),
         ("from", SdkValue::text(from)),

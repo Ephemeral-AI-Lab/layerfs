@@ -237,12 +237,15 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
                 SdkValue::text(file.display().to_string()),
             )]))
         }
-        // retire: the source's copy, after the record names the target
+        // retire: a copy the record does not name (the source's, after the
+        // record names the target, or what an ended transfer left), with
+        // any partial copy; the Store's folder and records stay
         "retire" => {
             for path in [
                 file.clone(),
                 with_suffix(&file, "-wal"),
                 with_suffix(&file, "-shm"),
+                incoming,
             ] {
                 match std::fs::remove_file(&path) {
                     Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(failed(e)),
@@ -251,10 +254,13 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
             }
             Ok(SdkValue::map([("retired", SdkValue::Bool(true))]))
         }
-        // remove: the Store's whole directory on this machine
+        // remove: the Store's whole directory on this machine (a worker's
+        // root: `store.remove`, and the retire of a push's or pull's
+        // source there). A symlink in it, or the directory itself if it is
+        // one, is removed, never followed.
         "remove" => {
             let dir = paths::store_dir(root, store);
-            let existed = dir.exists();
+            let existed = std::fs::symlink_metadata(&dir).is_ok();
             if existed {
                 std::fs::remove_dir_all(&dir).map_err(failed)?;
             }
