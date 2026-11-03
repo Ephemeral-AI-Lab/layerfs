@@ -25,29 +25,33 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     match call {
-        "connect" => {
-            let name = args.get_text("name").unwrap_or("");
-            crate::common::names::BucketName::parse(name)?;
-            let record = BucketRecord::from_url(name, args.get_text("url").unwrap_or(""), args)?;
-            // one listing proves the bucket answers with this key
-            let driver = record.driver()?;
-            remote::list_stores(driver.as_ref()).map_err(remote_error)?;
-            let _lock = home::lock::take(&home)?;
-            if paths::bucket_record(&home, name).exists() {
-                return Err(refused(
-                    "Exists",
-                    format!("a bucket named {name} is connected"),
-                ));
-            }
-            record.write(&home)?;
-            Ok(record.to_sdk(View::Full))
-        }
+        "connect" => connect(&home, args),
         "disconnect" => disconnect(&home, args.get_text("name").unwrap_or("")),
         "list" => list(&home, args.get_text("bucket")),
         "create" => create(context, args),
         "restore" => restore(context, args),
         _ => Err(refused("InvalidInput", format!("no call backup.{call}"))),
     }
+}
+
+/// `backup.connect(name, url, { key, region, part_size })`: one listing
+/// proves the bucket answers with this key before it is recorded.
+fn connect(home: &Path, args: &SdkValue) -> Outcome {
+    let name = args.get_text("name").unwrap_or("");
+    crate::common::names::BucketName::parse(name)?;
+    let record = BucketRecord::from_url(name, args.get_text("url").unwrap_or(""), args)?;
+    // one listing proves the bucket answers with this key
+    let driver = record.driver()?;
+    remote::list_stores(driver.as_ref()).map_err(remote_error)?;
+    let _lock = home::lock::take(home)?;
+    if paths::bucket_record(home, name).exists() {
+        return Err(refused(
+            "Exists",
+            format!("a bucket named {name} is connected"),
+        ));
+    }
+    record.write(home)?;
+    Ok(record.to_sdk(View::Full))
 }
 
 /// Forgets a bucket and every Store's link to it; its objects stay.

@@ -143,84 +143,96 @@ fn store_path(home: &Path, store: &str, kind: StoreKind) -> PathBuf {
 
 /// Runs one `sandbox` call.
 pub fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
-    let home = context.home.clone();
     match call {
         "create" => create(context, args),
-        "list" => {
-            let only = args.get_text("project");
-            let items: Vec<SdkValue> = inventory::sandboxes(&home)?
-                .iter()
-                .filter(|r| only.is_none() || r.project() == only)
-                .map(|record| record.to_sdk(View::List))
-                .collect();
-            let (items, next) = page(items, args);
+        "list" => list(&context.home, args),
+        "get" => get(context, args),
+        "close" => close(context, args),
+        _ => Err(refused("InvalidInput", format!("no call sandbox.{call}"))),
+    }
+}
+
+/// `sandbox.list(project?, { page_size, page_pos })`: one page of the
+/// Sandbox records, each with its state.
+fn list(home: &Path, args: &SdkValue) -> Outcome {
+    let only = args.get_text("project");
+    let items: Vec<SdkValue> = inventory::sandboxes(home)?
+        .iter()
+        .filter(|r| only.is_none() || r.project() == only)
+        .map(|record| record.to_sdk(View::List))
+        .collect();
+    let (items, next) = page(items, args);
+    Ok(SdkValue::map([
+        ("items", SdkValue::List(items)),
+        ("next_page_pos", next),
+    ]))
+}
+
+/// `sandbox.get(name, { page_size, page_pos })`: its record with one page
+/// of its Workspaces.
+fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let home = context.home.clone();
+    let name = args.get_text("name").unwrap_or("");
+    let record = sandbox_of(&home, name)?;
+    // a get starts no machine (P4): a machine that is down answers
+    // the record with no Workspaces and why
+    let listed = reach(
+        context,
+        &record,
+        "sandbox.list_workspaces",
+        vec![],
+        Start::Never,
+    );
+    let (all, down) = match listed {
+        Ok(workspaces) => match workspaces?.get("workspaces") {
+            Some(SdkValue::List(items)) => (items.clone(), None),
+            _ => (Vec::new(), None),
+        },
+        Err(Unreached(why)) => (Vec::new(), Some(why.message)),
+    };
+    let (items, next) = page(all, args);
+    let shown = record.to_sdk(View::Full);
+    let mut record = home::with_field(shown, "workspaces", SdkValue::List(items));
+    if let Some(why) = down {
+        record = home::with_field(record, "down_reason", SdkValue::Text(why));
+    }
+    Ok(home::with_field(record, "next_page_pos", next))
+}
+
+/// `sandbox.close(name, { force })`.
+fn close(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+    let home = context.home.clone();
+    let name = args.get_text("name").unwrap_or("");
+    let record = sandbox_of(&home, name)?;
+    if record.id().is_none() {
+        if let Some(closed) = close_unstarted(&home, record.machine(), name)? {
+            return Ok(closed);
+        }
+    }
+    let record = sandbox_of(&home, name)?;
+    let force = matches!(args.get("force"), Some(SdkValue::Bool(true)));
+    let closed = on_machine(
+        context,
+        &record,
+        "sandbox.close",
+        vec![("force", SdkValue::Bool(force))],
+    );
+    match closed {
+        Ok(value) => {
+            let _lock = home::lock::take(&home)?;
+            std::fs::remove_dir_all(record.dir(&home)).map_err(failed)?;
+            Ok(home::with_field(value, "closed", SdkValue::text(name)))
+        }
+        // a Sandbox already gone loses its record too
+        Err(refusal) if refusal.code == "NoSuchSandbox" => {
+            let _lock = home::lock::take(&home)?;
+            std::fs::remove_dir_all(record.dir(&home)).map_err(failed)?;
             Ok(SdkValue::map([
-                ("items", SdkValue::List(items)),
-                ("next_page_pos", next),
+                ("closed", SdkValue::text(name)),
+                ("was_gone", SdkValue::Bool(true)),
             ]))
         }
-        "get" => {
-            let name = args.get_text("name").unwrap_or("");
-            let record = sandbox_of(&home, name)?;
-            // a get starts no machine (P4): a machine that is down answers
-            // the record with no Workspaces and why
-            let listed = reach(
-                context,
-                &record,
-                "sandbox.list_workspaces",
-                vec![],
-                Start::Never,
-            );
-            let (all, down) = match listed {
-                Ok(workspaces) => match workspaces?.get("workspaces") {
-                    Some(SdkValue::List(items)) => (items.clone(), None),
-                    _ => (Vec::new(), None),
-                },
-                Err(Unreached(why)) => (Vec::new(), Some(why.message)),
-            };
-            let (items, next) = page(all, args);
-            let shown = record.to_sdk(View::Full);
-            let mut record = home::with_field(shown, "workspaces", SdkValue::List(items));
-            if let Some(why) = down {
-                record = home::with_field(record, "down_reason", SdkValue::Text(why));
-            }
-            Ok(home::with_field(record, "next_page_pos", next))
-        }
-        "close" => {
-            let name = args.get_text("name").unwrap_or("");
-            let record = sandbox_of(&home, name)?;
-            if record.id().is_none() {
-                if let Some(closed) = close_unstarted(&home, record.machine(), name)? {
-                    return Ok(closed);
-                }
-            }
-            let record = sandbox_of(&home, name)?;
-            let force = matches!(args.get("force"), Some(SdkValue::Bool(true)));
-            let closed = on_machine(
-                context,
-                &record,
-                "sandbox.close",
-                vec![("force", SdkValue::Bool(force))],
-            );
-            match closed {
-                Ok(value) => {
-                    let _lock = home::lock::take(&home)?;
-                    std::fs::remove_dir_all(record.dir(&home)).map_err(failed)?;
-                    Ok(home::with_field(value, "closed", SdkValue::text(name)))
-                }
-                // a Sandbox already gone loses its record too
-                Err(refusal) if refusal.code == "NoSuchSandbox" => {
-                    let _lock = home::lock::take(&home)?;
-                    std::fs::remove_dir_all(record.dir(&home)).map_err(failed)?;
-                    Ok(SdkValue::map([
-                        ("closed", SdkValue::text(name)),
-                        ("was_gone", SdkValue::Bool(true)),
-                    ]))
-                }
-                Err(refusal) => Err(refusal),
-            }
-        }
-        _ => Err(refused("InvalidInput", format!("no call sandbox.{call}"))),
+        Err(refusal) => Err(refusal),
     }
 }
 
