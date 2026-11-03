@@ -60,10 +60,15 @@ pub fn call_scoped(
         args = scope.apply(name, args)?;
     }
     let home = home(home_path)?;
-    crate::home::open(&home).inspect_err(|refusal| crate::home::note_failure(&home, refusal))?;
-    // `machine/native/` and `machine/docker/` exist from the first call
+    let id = crate::home::open(&home)
+        .inspect_err(|refusal| crate::home::note_failure(&home, refusal))?
+        .id;
+    // `machine/native/` and `machine/docker/` exist from the first call;
+    // checked once per process for each home (R6)
     #[cfg(feature = "machine")]
-    crate::machine::ensure_built_ins(&home)?;
+    crate::machine::ensure_built_ins(&home, &id)?;
+    #[cfg(not(feature = "machine"))]
+    let _ = id;
     if let Some(scope) = scope {
         scope.owns(&home, name, &args)?;
     }

@@ -544,7 +544,11 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
         "machine",
         SdkValue::text("native"),
     );
-    write_record(&paths::store_record(root, store), &record)?;
+    // written only when it changed (#535 R5): most calls send the same one
+    let path = paths::store_record(root, store);
+    if read_record(&path)?.as_ref() != Some(&record) {
+        write_record(&path, &record)?;
+    }
     // the caller's record replaces one left by a project of the same name
     // that was removed and made again (its `created` differs)
     let project_path = paths::project_record(root, store, project);
