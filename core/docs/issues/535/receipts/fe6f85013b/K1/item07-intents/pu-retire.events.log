@@ -1,0 +1,12 @@
+1793691234.799381 begin push pu-retire docker point=retire pid=42110
+1793691234.800183 progress {"phase": "check", "done": null, "total": null}
+1793691234.808047 progress {"phase": "snapshot", "done": null, "total": null}
+1793691235.234644 progress {"phase": "send", "done": 0, "total": 24477696}
+1793691238.814300 progress {"phase": "send", "done": 8388608, "total": 24477696}
+1793691242.387498 progress {"phase": "send", "done": 16777216, "total": 24477696}
+1793691245.628912 progress {"phase": "send", "done": 24477696, "total": 24477696}
+1793691245.629232 progress {"phase": "verify", "done": null, "total": null}
+1793691245.952443 progress {"phase": "install", "done": null, "total": null}
+1793691245.954718 progress {"phase": "record", "done": null, "total": null}
+1793691245.955769 progress {"phase": "retire", "done": null, "total": null}
+1793691245.955823 SIGKILL at progress retire

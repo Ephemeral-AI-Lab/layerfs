@@ -1,0 +1,186 @@
+{
+  "format": "k1-locks/1",
+  "home": "/tmp/lfs535k1-h10.sSUg",
+  "startedAt": "2026-11-03T07:42:12Z",
+  "runs": {
+    "native-solo": [
+      {
+        "ok": true,
+        "value": {
+          "name": "solo-l1",
+          "project": "l1/p",
+          "machine": "native",
+          "created": 1793691760134,
+          "backend": "native",
+          "route": "nfs",
+          "id": "solo-l1",
+          "platform": "mac",
+          "runtime": "native",
+          "image": "local",
+          "state": "running"
+        },
+        "start": 1793691760.126652,
+        "end": 1793691760.234889,
+        "pid": 48263
+      }
+    ],
+    "native-pair": [
+      {
+        "ok": true,
+        "value": {
+          "name": "x-l1",
+          "project": "l1/p",
+          "machine": "native",
+          "created": 1793691761329,
+          "backend": "native",
+          "route": "nfs",
+          "id": "x-l1",
+          "platform": "mac",
+          "runtime": "native",
+          "image": "local",
+          "state": "running"
+        },
+        "start": 1793691761.3232949,
+        "end": 1793691761.3755,
+        "pid": 48272,
+        "dur": 0.052
+      },
+      {
+        "ok": true,
+        "value": {
+          "name": "x-l2",
+          "project": "l2/p",
+          "machine": "native",
+          "created": 1793691761334,
+          "backend": "native",
+          "route": "nfs",
+          "id": "x-l2",
+          "platform": "mac",
+          "runtime": "native",
+          "image": "local",
+          "state": "running"
+        },
+        "start": 1793691761.3232949,
+        "end": 1793691761.376093,
+        "pid": 48273,
+        "dur": 0.053
+      }
+    ],
+    "docker-solo": [
+      {
+        "ok": true,
+        "value": {
+          "name": "solo-l3",
+          "project": "l3/p",
+          "machine": "docker",
+          "created": 1793691762529,
+          "id": "solo-l3",
+          "platform": "docker",
+          "runtime": "docker",
+          "image": "sha256:50e8f040592a52a0e9385b7a683c8ab455d391be50733a0dbf65edf9faeb0540",
+          "backend": "docker",
+          "route": "fuse",
+          "state": "running"
+        },
+        "start": 1793691762.52146,
+        "end": 1793691765.162781,
+        "pid": 48288
+      }
+    ],
+    "docker-pair": [
+      {
+        "ok": true,
+        "value": {
+          "name": "x-l3",
+          "project": "l3/p",
+          "machine": "docker",
+          "created": 1793691766440,
+          "id": "x-l3",
+          "platform": "docker",
+          "runtime": "docker",
+          "image": "sha256:50e8f040592a52a0e9385b7a683c8ab455d391be50733a0dbf65edf9faeb0540",
+          "backend": "docker",
+          "route": "fuse",
+          "state": "running"
+        },
+        "start": 1793691766.434379,
+        "end": 1793691769.8593879,
+        "pid": 48299,
+        "dur": 3.425
+      },
+      {
+        "ok": true,
+        "value": {
+          "name": "x-l4",
+          "project": "l4/p",
+          "machine": "docker",
+          "created": 1793691766445,
+          "id": "x-l4",
+          "platform": "docker",
+          "runtime": "docker",
+          "image": "sha256:50e8f040592a52a0e9385b7a683c8ab455d391be50733a0dbf65edf9faeb0540",
+          "backend": "docker",
+          "route": "fuse",
+          "state": "running"
+        },
+        "start": 1793691766.435148,
+        "end": 1793691769.852915,
+        "pid": 48300,
+        "dur": 3.418
+      }
+    ],
+    "push-same": [
+      {
+        "ok": false,
+        "code": "Busy",
+        "message": "store push, check: Store l5 is busy: store.push (op-6577a39e46a82e3c, phase snapshot) runs in process 48306",
+        "detail": {
+          "entity": {
+            "kind": "store",
+            "name": "l5"
+          },
+          "phase": "check",
+          "op": "op-6577a39e46a82e3c"
+        },
+        "start": 1793691771.437623,
+        "end": 1793691771.4651,
+        "pid": 48305
+      },
+      {
+        "ok": true,
+        "value": {
+          "store": "l5",
+          "from": "native",
+          "to": "docker",
+          "bytes": 24477696,
+          "heads": "e5e026fd6988067b7f7c36d5140ae18142673825fab91bc78f3dce4eaae0f9dd"
+        },
+        "start": 1793691771.4376209,
+        "end": 1793691782.059815,
+        "pid": 48306
+      }
+    ]
+  },
+  "checks": [
+    {
+      "check": "native: two processes creating Sandboxes of different projects do not wait on each other",
+      "pass": true,
+      "why": "solo 0.108s; concurrent durations [0.052, 0.053]s; starts differ 0.0 ms; overlap 0.052s"
+    },
+    {
+      "check": "docker: two processes creating Sandboxes of different projects do not wait on each other",
+      "pass": true,
+      "why": "solo 2.641s; concurrent durations [3.425, 3.418]s; starts differ 0.8 ms; overlap 3.418s"
+    },
+    {
+      "check": "two processes pushing the same Store: one pushes, the other is refused Busy",
+      "pass": true,
+      "why": "answers ['Busy', 'ok']; refusal store push, check: Store l5 is busy: store.push (op-6577a39e46a82e3c, phase snapshot) runs in process 48306; starts differ 0.0 ms"
+    }
+  ],
+  "doctor_end": {
+    "ok": true,
+    "findings": []
+  },
+  "endedAt": "2026-11-03T07:43:33Z"
+}

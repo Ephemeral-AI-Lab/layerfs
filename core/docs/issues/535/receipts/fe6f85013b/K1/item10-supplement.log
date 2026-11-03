@@ -1,0 +1,163 @@
+# item 10 supplement A: the unresolved row (Store ur: push SIGKILLed in the record window)
+$ layerfs store status ur
+{"name":"ur","kind":"sqlite","state":"idle","holders":[],"op":null,"down_reason":null,"machine":"native","file":{"exists":true,"free":212143525888,"bytes":24481792,"wal_bytes":12392}}
+ (exit 0)
+$ layerfs store get ur
+{"name":"ur","kind":"sqlite","machine":"native","profile":"disposable","created":1793691829158,"sqlite":"3.53.2","projects":["p"]}
+ (exit 0)
+$ layerfs project list ur
+{"items":[{"project":"ur/p","store":"ur","name":"p","kind":"sqlite","machine":"native","created":1793691830211}],"next_page_pos":null}
+ (exit 0)
+$ layerfs project get ur/p
+{"project":"ur/p","store":"ur","name":"p","kind":"sqlite","machine":"native","created":1793691830211}
+ (exit 0)
+$ layerfs file.list
+layerfs: no help for `file.list`; `layerfs help` lists the families
+ (exit 2)
+$ layerfs file list ur/p lane /
+{"kind":"ok","snapshot":"lane@70729747f387","root":"d0aeeca924fbd7d90e22c85e8196f25526c77e0680e68cf50ebbc0242bc1cc3b","path":"/","items":[{"name":"a.txt","path":"/a.txt","type":"file","inode":2},{"name":"r1","path":"/r1","type":"file","inode":3},{"name":"r2","path":"/r2","type":"file","inode":4},{"name":"r3","path":"/r3","type":"file","inode":5}],"has_more":false,"next_page_pos":null}
+ (exit 0)
+$ layerfs branch list ur/p
+{"items":[{"name":"lane","id":"11e322220a52432a93165e6c76c48c1cc0","base":"3270729747f387a81793a333c1a2e1f17c1de26f5cc5d035c4d489c6b1a2adf969","head":null,"forked_from":"3270729747f387a81793a333c1a2e1f17c1de26f5cc5d035c4d489c6b1a2adf969"},{"name":"main","id":null,"base":"3270729747f387a81793a333c1a2e1f17c1de26f5cc5d035c4d489c6b1a2adf969","head":null}],"has_more":false,"next_page_pos":null}
+ (exit 0)
+$ layerfs sandbox create ur/p sur native
+{"name":"sur","project":"ur/p","machine":"native","created":1793691830387,"backend":"native","route":"nfs","id":"sur","platform":"mac","runtime":"native","image":"local","state":"running"}
+ (exit 0)
+$ layerfs project init ur/q /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/k1/data12
+{"project":"ur/q","store":"ur","name":"q","kind":"sqlite","machine":"native","created":1793691830966,"layer":"3215ae5a19be41bdbbf556822bcf2b45b0bc0271c615c0673450f93339b16525ab","root":"e1befd241da0f00759e3267649ec34de2c614af4adb664c5b17d8af49552e00d"}
+ (exit 0)
+$ layerfs project remove ur/p
+{"code":"InUse","message":"Sandbox sur of ur/p is running","detail":null}
+ (exit 125)
+$ layerfs store push ur docker
+{"code":"InUse","message":"store push, check: Store ur has running Sandboxes: sur","detail":{"related":[{"kind":"sandbox","name":"sur"}],"phase":"check"}}
+ (exit 125)
+$ layerfs store pull ur
+{"code":"InvalidInput","message":"store pull, check: Store ur is already on native","detail":{"phase":"check"}}
+ (exit 125)
+$ layerfs store remove ur
+{"code":"InUse","message":"Store ur has running Sandboxes: sur","detail":{"related":[{"kind":"sandbox","name":"sur"}]}}
+ (exit 125)
+$ layerfs store get ur
+{"name":"ur","kind":"sqlite","machine":"native","profile":"disposable","created":1793691829158,"sqlite":"3.53.2","projects":["p","q"]}
+ (exit 0)
+
+# item 10 supplement B: down row, project.remove of an existing project (Store dn on docker, docker stopped)
+$ layerfs machine stop docker
+{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"stopped","cpus":null,"memory":null,"disk":null,"stores":["crd","dn","iso","pl-check","pl-record","pu-install","pu-retire","pu-send","pu-send-mid","pu-snapshot","pu-verify"],"sandboxes":[],"image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"}
+ (exit 0)
+worker running=false
+$ layerfs project remove dn/p
+{"code":"Unavailable","message":"machine docker is not running; start it with `layerfs machine start docker`","detail":null}
+ (exit 125)
+$ layerfs file list dn/p main /
+{"code":"Unavailable","message":"machine docker is not running; start it with `layerfs machine start docker`","detail":null}
+ (exit 125)
+worker running=false
+$ layerfs machine start docker
+{"name":"docker","platform":"docker","backend":"docker","supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"state":"running","cpus":null,"memory":null,"disk":null,"stores":["crd","dn","iso","pl-check","pl-record","pu-install","pu-retire","pu-send","pu-send-mid","pu-snapshot","pu-verify"],"sandboxes":[],"image":"sha256:afa1ef9c27294f9c7298820c06483e6fb1ddafc43a7cc7d6dec8cd2e67abf38e"}
+ (exit 0)
+$ layerfs store pull dn
+{"store":"dn","from":"docker","to":"native","bytes":12337152,"heads":"757e840afc508df7528e0169388e7f8e410ef7404d7d9e1a7db429665a807a59"}
+ (exit 0)
+$ layerfs store remove dn
+{"removed":"dn"}
+ (exit 0)
+
+# supplement A, attempt 1 diagnosis: the push of ur was refused at snapshot (above events: 'unfinished write-ahead log'), so ur never became unresolved and the calls above show the idle row. The CLI 'branch fork' left ur's WAL non-empty (status above: wal_bytes 12392).
+1793691830.274048 begin push ur docker point=record-window pid=48513
+1793691830.274687 progress {"phase": "check", "done": null, "total": null}
+1793691830.283236 progress {"phase": "snapshot", "done": null, "total": null}
+1793691830.284009 refused Failed store push, snapshot: /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/k1/hdock.bkzk/store/ur/store.sqlite has an unfinished write-ahead log; open the Store once on its machine
+$ layerfs sandbox close sur
+{"kind":"Closed","sandbox":"sur","unknown":[],"closed":"sur"}
+ (exit 0)
+$ layerfs store remove ur
+{"removed":"ur"}
+ (exit 0)
+
+# supplement A, attempt 2: Store ur2 (store create + project init by the CLI, no fork), push SIGKILLed in the record window
+$ layerfs store status ur2
+{"name":"ur2","kind":"sqlite","state":"idle","holders":[],"op":null,"down_reason":null,"machine":"native","file":{"exists":true,"free":212141182976,"bytes":24477696,"wal_bytes":0}}
+ (exit 0)
+1793691879.566808 progress {"phase": "record", "done": null, "total": null}
+1793691879.567452 SIGKILL record-window: record op.phase=record
+$ layerfs store status ur2
+{"name":"ur2","kind":"sqlite","state":"unresolved","holders":[],"op":{"id":"op-61222e98096bd9f7","name":"store.push","phase":"record","started":1793691868644,"uncertain":true},"down_reason":null,"machine":"native","file":{"exists":true,"free":211891974144,"bytes":24477696,"wal_bytes":0}}
+ (exit 0)
+$ layerfs store get ur2
+{"name":"ur2","kind":"sqlite","machine":"native","profile":"disposable","created":1793691867536,"sqlite":"3.53.2","op":{"id":"op-61222e98096bd9f7","name":"store.push","phase":"record","started":1793691868644,"uncertain":true},"projects":["p"]}
+ (exit 0)
+$ layerfs store list
+{"items":[{"name":"cr","kind":"sqlite","machine":"native","profile":"disposable","created":1793691454109,"sqlite":"3.53.2","projects":["p"],"state":"idle"},{"name":"crd","kind":"sqlite","machine":"docker","profile":"disposable","created":1793691455168,"sqlite":"3.53.2","last_transfer":{"call":"store.push","from":"native","to":"docker","at":1793691466824,"bytes":24489984,"sha256":"3ff294813873439adca1612df8a719cee47e4fab4e8e0ffc3b272d18ae9daa4e","heads":"128554beb6e15bd4de43a585776937dce87d5afaa4 (exit 0)
+$ layerfs project list ur2
+{"items":[{"project":"ur2/p","store":"ur2","name":"p","kind":"sqlite","machine":"native","created":1793691868591}],"next_page_pos":null}
+ (exit 0)
+$ layerfs project get ur2/p
+{"project":"ur2/p","store":"ur2","name":"p","kind":"sqlite","machine":"native","created":1793691868591}
+ (exit 0)
+$ layerfs file list ur2/p main /
+{"code":"Unresolved","message":"Store ur2 has an unresolved store.push (op-61222e98096bd9f7, phase record): its outcome is not known; see `layerfs store status ur2`, then clear it with `layerfs store remove ur2`","detail":{"entity":{"kind":"store","name":"ur2"},"phase":"record","op":"op-61222e98096bd9f7"}}
+ (exit 125)
+$ layerfs branch list ur2/p
+{"code":"Unresolved","message":"Store ur2 has an unresolved store.push (op-61222e98096bd9f7, phase record): its outcome is not known; see `layerfs store status ur2`, then clear it with `layerfs store remove ur2`","detail":{"entity":{"kind":"store","name":"ur2"},"phase":"record","op":"op-61222e98096bd9f7"}}
+ (exit 125)
+$ layerfs sandbox create ur2/p sur2 native
+{"code":"Unresolved","message":"Store ur2 has an unresolved store.push (op-61222e98096bd9f7, phase record): its outcome is not known; see `layerfs store status ur2`, then clear it with `layerfs store remove ur2`","detail":{"entity":{"kind":"store","name":"ur2"},"phase":"record","op":"op-61222e98096bd9f7"}}
+ (exit 125)
+$ layerfs project init ur2/q /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/k1/data12
+{"code":"Unresolved","message":"Store ur2 has an unresolved store.push (op-61222e98096bd9f7, phase record): its outcome is not known; see `layerfs store status ur2`, then clear it with `layerfs store remove ur2`","detail":{"entity":{"kind":"store","name":"ur2"},"phase":"record","op":"op-61222e98096bd9f7"}}
+ (exit 125)
+$ layerfs project remove ur2/p
+{"code":"Unresolved","message":"Store ur2 has an unresolved store.push (op-61222e98096bd9f7, phase record): its outcome is not known; see `layerfs store status ur2`, then clear it with `layerfs store remove ur2`","detail":{"entity":{"kind":"store","name":"ur2"},"phase":"record","op":"op-61222e98096bd9f7"}}
+ (exit 125)
+$ layerfs store push ur2 docker
+{"code":"Unresolved","message":"store push, check: Store ur2 has an unresolved store.push (op-61222e98096bd9f7, phase record): its outcome is not known; see `layerfs store status ur2`, then clear it with `layerfs store remove ur2`","detail":{"entity":{"kind":"store","name":"ur2"},"phase":"check","op":"op-61222e98096bd9f7"}}
+ (exit 125)
+$ layerfs store pull ur2
+{"code":"Unresolved","message":"store pull, check: Store ur2 has an unresolved store.push (op-61222e98096bd9f7, phase record): its outcome is not known; see `layerfs store status ur2`, then clear it with `layerfs store remove ur2`","detail":{"entity":{"kind":"store","name":"ur2"},"phase":"check","op":"op-61222e98096bd9f7"}}
+ (exit 125)
+$ layerfs backup list
+{"items":[]}
+ (exit 0)
+$ layerfs store remove ur2
+{"removed":"ur2"}
+ (exit 0)
+$ layerfs store get ur2
+{"code":"NotFound","message":"no Store named ur2","detail":null}
+ (exit 125)
+
+# supplement C: does a CLI write leave the Store's WAL non-empty (and push refuse it)?
+$ layerfs store create wl
+{"name":"wl","kind":"sqlite","machine":"native","profile":"disposable","created":1793691888477,"sqlite":"3.53.2","projects":[]}
+ (exit 0)
+$ layerfs project init wl/p /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/k1/data12
+{"project":"wl/p","store":"wl","name":"p","kind":"sqlite","machine":"native","created":1793691889104,"layer":"326e2a457a62f5aa3a3a420b109c6eeca843b3157d7b6cf52d6bb1719b24655040","root":"1ea37ce390209fc5bd0d1e4086dade10b4acdaeb04c21e3af7a2452062ffb6a5"}
+ (exit 0)
+$ layerfs store status wl
+{"name":"wl","kind":"sqlite","state":"idle","holders":[],"op":null,"down_reason":null,"machine":"native","file":{"exists":true,"free":211873185792,"bytes":12337152,"wal_bytes":0}}
+ (exit 0)
+$ layerfs branch fork wl/p lane main
+{"kind":"Forked","branch":"lane","base":"326e2a457a62f5aa3a3a420b109c6eeca843b3157d7b6cf52d6bb1719b24655040","head":null}
+ (exit 0)
+$ layerfs store status wl
+{"name":"wl","kind":"sqlite","state":"idle","holders":[],"op":null,"down_reason":null,"machine":"native","file":{"exists":true,"free":211873042432,"bytes":12337152,"wal_bytes":12392}}
+ (exit 0)
+$ layerfs store push wl docker
+{"code":"Failed","message":"store push, snapshot: /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/k1/hdock.bkzk/store/wl/store.sqlite has an unfinished write-ahead log; open the Store once on its machine","detail":{"phase":"snapshot"}}
+ (exit 125)
+$ layerfs file list wl/p lane /
+{"kind":"ok","snapshot":"lane@6e2a457a62f5","root":"1ea37ce390209fc5bd0d1e4086dade10b4acdaeb04c21e3af7a2452062ffb6a5","path":"/","items":[{"name":"a.txt","path":"/a.txt","type":"file","inode":2},{"name":"r1","path":"/r1","type":"file","inode":3},{"name":"r2","path":"/r2","type":"file","inode":4},{"name":"r3","path":"/r3","type":"file","inode":5}],"has_more":false,"next_page_pos":null}
+ (exit 0)
+$ layerfs store status wl
+{"name":"wl","kind":"sqlite","state":"idle","holders":[],"op":null,"down_reason":null,"machine":"native","file":{"exists":true,"free":211872636928,"bytes":12337152,"wal_bytes":12392}}
+ (exit 0)
+$ layerfs store push wl docker
+{"code":"Failed","message":"store push, snapshot: /private/tmp/claude-501/-Users-yifanxu-Ephemeral-AI-Lab-layerfs/27d9a7a0-17b1-4ee7-a64b-834245099cd7/scratchpad/k1/hdock.bkzk/store/wl/store.sqlite has an unfinished write-ahead log; open the Store once on its machine","detail":{"phase":"snapshot"}}
+ (exit 125)
+$ layerfs store pull wl
+{"code":"InvalidInput","message":"store pull, check: Store wl is already on native","detail":{"phase":"check"}}
+ (exit 125)
+$ layerfs store remove wl
+{"removed":"wl"}
+ (exit 0)
