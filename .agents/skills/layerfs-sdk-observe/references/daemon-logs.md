@@ -3,8 +3,7 @@
 > **Status:** Current general guide for LayerFS 2.0 (#533). Part of the
 > `layerfs-sdk-observe` skill. **Not run in this pass** (no Sandbox was
 > started). Read from `connect/crates/layerfs-sandbox/src/backend/native/`,
-> `api/crates/layerfs-api/src/family/sandboxes.rs` and the daemon's
-> `application/idle.rs`. 1.1.0's `backend.daemon.sandbox.get_log` has no 2.0
+> `api/crates/layerfs-api/src/family/sandboxes.rs`. 1.1.0's `backend.daemon.sandbox.get_log` has no 2.0
 > call.
 
 ## What the daemon writes
@@ -12,8 +11,6 @@
 Each Sandbox runs one LayerFS daemon. It writes to its stdout and stderr:
 
 - **Failures:** a fatal startup cause, or a control-connection failure.
-- **The idle exit:** `LAYERFS_DAEMON_IDLE_EXIT after 120 s with no Workspace
-  and no call`, last.
 - **Observation records** (`"layerfs_observation":1`): fixed-schema numeric
   records of SQL work, owner lock waits and holds, Store reader and cache work,
   FUSE kernel counters (Linux) and Workspace resources. The daemon writes them
@@ -30,9 +27,8 @@ There is no general log level or logging framework.
 | a VM or ssh machine | Inside that machine, under its worker's root; no call reads it from the host |
 | `docker` | Sandboxes on `docker` are `Unsupported` in this build |
 
-Copy the file while the Sandbox runs: a Sandbox closes itself 120 s after its
-last Workspace is unmounted, and `sandbox.close` deletes its folder with the
-log.
+Copy the file before `sandbox.close`, which deletes its folder with the log.
+A Sandbox no longer closes itself when its last Workspace goes (#535 D11).
 
 ```bash
 # from source; check the folder name against workspace.mount's `container`

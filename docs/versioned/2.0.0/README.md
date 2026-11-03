@@ -44,7 +44,7 @@ Commit, merge, and publish to `main`.
 3. [The calls](calls.md): all 60 calls with their positionals and options,
    results, errors and exit codes, and the shell switches.
 4. [Machines, Stores and backups](machines-and-stores.md): machine kinds,
-   start on demand and idle stop, sqlite and postgresql Stores, moves and
+   manual start and stop, sqlite and postgresql Stores, moves and
    backups.
 5. [Node and Python](sdk.md): the `layerfs` packages, clients, options,
    errors, progress and folder scope.

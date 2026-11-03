@@ -254,7 +254,8 @@ form.
   connection.
 - `status` starts no machine (#535 P4): on a Sandbox whose machine is down
   it is `Unavailable`, naming `machine start`. `mount`, `exec`, `commit`
-  and `unmount` start a stopped machine, as Store calls do.
+  and `unmount` on a stopped machine are refused the same way, as Store
+  calls are; nothing starts a machine but `machine start` (#535 D11).
 - Not run for this manual.
 
 ### `machine` (11)
@@ -286,14 +287,14 @@ $ layerfs machine status native
 {"name":"native","platform":"native","state":"running","free_disk":null,"tool_version":null,"down_reason":null,"stores":["shop"]}
 ```
 
-- `start` and `stop` answer the machine's summary as `get` does. `start`
-  is for UIs, which start a machine before using it: no list, get or
-  status call starts one (#535 P4). `stop` is refused `InUse` while
+- `start` and `stop` answer the machine's summary as `get` does. They are
+  the only lifecycle calls (#535 D11): no other call starts a machine, and
+  nothing stops one when it is unused. `stop` is refused `InUse` while
   Sandboxes are recorded on the machine (or on a Firecracker machine it
   hosts); `detail.related` lists them as `{kind: "sandbox", name}`. It
-  runs under the machine's `start.lock`, so no on-demand start runs
-  meanwhile, and removes `worker.json`; the next call that needs the
-  machine starts it again.
+  runs under the machine's `start.lock`, so no `machine start` runs
+  meanwhile, and removes `worker.json`; a later call that needs the machine
+  is refused `Unavailable` until `machine start`.
 
 See [machines](machines-and-stores.md#machines) for kinds, defaults and
 refusals.

@@ -89,12 +89,11 @@ step commits.
   were tested with provider tests only. On macOS the `docker` machine's
   worker did run (a private test bundle, `LAYERFS_BUNDLE`): `store move` to
   `docker`, its Sandboxes and the twelve cells passed; see the terminal pass.
-- **Machine boot, worker start and idle stop.** A guest powering off after
-  10 idle minutes and the next call starting it again were not run.
-  `machine start` and `machine stop` (#535 P1), and a worker call that
-  starts its machine only after a dial that sent nothing (R1), were tested
-  with stand-in tools and workers only; no VM, ssh host or Docker worker
-  was started or stopped by them.
+- **Machine boot and worker start.** `machine start` and `machine stop`
+  (#535 P1) and a worker call refused `Unavailable` on a stopped machine
+  (D11, R1) were tested with stand-in tools and workers only; no VM, ssh
+  host or Docker worker was started or stopped by them. There is no idle
+  stop and no start on demand (D11).
 - **The docker default image** (#535 P5). Loading the bundle's
   `sandbox-image.tar` with `docker load` and running the worker container
   and Sandboxes on the id it reports was tested with a stand-in `docker`

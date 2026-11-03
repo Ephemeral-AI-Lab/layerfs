@@ -198,7 +198,7 @@ impl Sandbox {
     }
 
     /// The daemon's endpoint while its init stage runs. A Sandbox whose init
-    /// stage exited (idle close, crash, kill) is the stopped observation
+    /// stage exited (crash, kill) is the stopped observation
     /// ([`WireFailure::container_stopped`]): its Workspaces went with it.
     pub fn endpoint(&self) -> Result<SocketAddr, Box<WireFailure>> {
         let Some(init) = self.init else {

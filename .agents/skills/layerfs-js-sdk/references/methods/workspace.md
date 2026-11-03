@@ -78,7 +78,7 @@ mounted; `ws` is then `<sandbox>:<name>`.
 
 | Code | Meaning | Do |
 | --- | --- | --- |
-| `NoSuchSandbox` | No Sandbox of that name, or it closed itself | `sandbox.create` (after `sandbox.close(name)` for one that closed itself; see [sandbox](sandbox.md#idle-close)) |
+| `NoSuchSandbox` | No Sandbox of that name, or its daemon ended (a crash or kill) | `sandbox.create` (after `sandbox.close(name)` for one whose daemon ended; see [sandbox](sandbox.md#sandbox-lifetime)) |
 | `NoSuchBranch` | No such Branch, or `main` | Fork first |
 | `Exists` | A Workspace of that `name` is mounted in the Sandbox | Pick another name, or use (or unmount) that one |
 | `Capacity` | The Sandbox holds 16 Workspaces. (Its message still names 1.1.0's `sandbox.list_workspaces`; use `sandbox.get`) | Create another Sandbox, or unmount Workspaces you're done with |
@@ -182,7 +182,7 @@ leaves their text out.
 
 `workspace.unmount(ws, { discard, force })`
 
-Ends a Workspace. A Sandbox left with no Workspace closes itself 120 s later.
+Ends a Workspace. The Sandbox keeps running with no Workspace until `sandbox.close` (#535 D11).
 
 | Option | Meaning |
 | --- | --- |

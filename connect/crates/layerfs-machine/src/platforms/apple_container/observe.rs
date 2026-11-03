@@ -1,6 +1,6 @@
 //! `apple-container` (Apple's `container` CLI; Apple silicon, macOS only):
 //! the VM is one container whose main process is a shell that sleeps and
-//! ends on SIGTERM (the idle worker's stop; [`MAIN`]), its data disk a named
+//! ends on SIGTERM (`container stop`; [`MAIN`]), its data disk a named
 //! volume `<vm>-data` sized at create and mounted at `/layerfs/data`, and its
 //! worker port published as `127.0.0.1:<port>:7070`. No host folder is
 //! mounted. Facts verified against `container` 1.6.1 (#527): `inspect`
@@ -21,7 +21,7 @@ pub(super) const CLI: &str = "container";
 pub(super) const DEFAULT_IMAGE: &str = "debian:trixie-slim";
 /// The container's main process. As PID 1 it ignores signals it has no
 /// handler for, and the container has no `CAP_SYS_BOOT`, so the trap is how
-/// an idle worker ends the container (`kill -TERM 1`).
+/// `container stop`'s SIGTERM ends it at once.
 pub(super) const MAIN: &str = "trap 'exit 0' TERM; sleep infinity & wait";
 /// FUSE, cgroups and loopback in the guest need these (#512).
 pub(super) const CAPABILITIES: [&str; 6] = [

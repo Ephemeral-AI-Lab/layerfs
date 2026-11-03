@@ -138,14 +138,15 @@ its record.
   (`{ closed, was }`; for an unknown create, `left` says a Sandbox may remain
   on its machine).
 
-## Idle close
+## Sandbox lifetime
 
-A Sandbox's daemon exits by itself 120 seconds after its last Workspace is
-unmounted with no call in flight (`IDLE_EXIT_S` in `host/sandbox.rs`). Its
-record stays in the home. A mount there is then refused `NoSuchSandbox`, and
-`sandbox.create` with the same name is refused `Exists` until
-`sandbox.close(name)` drops the record. So after an idle close: close, then
-create again (or use a new name).
+A Sandbox runs until `sandbox.close(name)`; `machine.stop` is refused
+`InUse` while it runs. Its daemon does not exit when its last
+Workspace is unmounted: the 120-second idle close (#373) is removed (#535
+D11). A Sandbox whose daemon ended for another reason (a crash, a kill)
+keeps its record: a mount there is refused `NoSuchSandbox`, and
+`sandbox.create` with the same name is `Exists` until `sandbox.close(name)`
+drops the record.
 
 ## Clearing idle Workspaces
 

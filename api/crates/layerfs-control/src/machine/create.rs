@@ -127,7 +127,7 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ("phase", SdkValue::text("create")),
         ("machine", SdkValue::text(&name)),
     ]));
-    // a first call that needs the machine waits for its create
+    // a `machine start` waits for its create
     let _start = super::endpoint::start_lock(&home, &name)?;
     finish(&home, &name, adapters::create(&spec, &bundle))
 }

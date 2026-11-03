@@ -185,7 +185,7 @@ array; it is never a successful zero-valued snapshot.
 
 The #320 reader implementation removes the fixed read_handles setup field and bumps
 the private DaemonSetup layout to LFSD\x04. Old records are refused, never
-misread. (#373 bumps it to LFSD\x05 for `idle_exit_s`, below.) Namespace admission now determines maximum mounted reader population;
+misread. (#373 bumps it to LFSD\x05 for `idle_exit_s`, below; #535 D11 removes that field and bumps it to LFSD\x08.) Namespace admission now determines maximum mounted reader population;
 each has a verified 2 MiB SQLite cache and short provider transactions. Reader
 observations do not keep closed connections alive. Section 39 declares this
 current demand/lock layout; historical pool records keep their own schema.
@@ -293,7 +293,13 @@ independent <=10% time/RSS allowances. Historical rejection/restoration records
 remain unchanged; current runtime qualification is pending. See the
 [reader design](../issues/320/WORKSPACE-READER-DESIGN-20261014.md).
 
-## Idle exit (#373)
+## Idle exit (#373, removed by #535 D11)
+
+> **Removed (#535 D11, 2026-11-03).** `application/idle.rs`, the per-call
+> in-flight count and `DaemonLimits.idle_exit_s` are deleted, and the
+> DaemonSetup magic is `LFSD\x08`. A daemon runs until its Sandbox is
+> closed or its machine stopped; it never exits because it is unused. The
+> paragraph below records the removed #373 behaviour.
 
 `DaemonLimits.idle_exit_s` (a `u32` after `serial_low_water`; record magic
 `LFSD\x05`) selects idle close. When it is not zero, `application/idle.rs`

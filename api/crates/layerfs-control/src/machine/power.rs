@@ -26,7 +26,7 @@ pub fn start(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 
 /// `machine.stop(name)`: refused `InUse` while Sandboxes run on it (or on a
 /// Firecracker machine it hosts), `detail.related` naming each; else its
-/// worker and VM stop under its `start.lock`, so no on-demand start runs
+/// worker and VM stop under its `start.lock`, so no `machine.start` runs
 /// meanwhile, and `worker.json` goes. Its disks and Stores stay.
 pub fn stop(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();

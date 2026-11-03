@@ -136,7 +136,7 @@ impl Sandbox {
         })
     }
     /// The daemon's endpoint while that exact process runs. A daemon that
-    /// exited (idle close, crash, kill) is the stopped observation
+    /// exited (crash, kill) is the stopped observation
     /// ([`WireFailure::container_stopped`]): its Workspaces went with it.
     pub fn endpoint(&self) -> Result<SocketAddr, Box<WireFailure>> {
         let Some(process) = self.process else {

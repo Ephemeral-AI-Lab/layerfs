@@ -116,45 +116,45 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
 - Resizing a VM with `machine update` is `Unsupported` ("not built yet");
   nothing is changed.
 
-### Start on demand and idle stop
+### Starting and stopping (manual, #535 D11)
 
-- A machine starts on the first call that needs it. The call dials the
-  worker `worker.json` records, once, with no ping first (#535 R1). Only
-  when nothing was sent (the connection, the secret or its answer failed)
-  does the caller start the machine and its worker, wait until it is
-  ready, record `worker.json` and send the call once. That wait is a
-  readiness wait, not a retry: the first attempt never reached a worker. A
-  call whose answer is lost after it was sent is `Unknown`; it starts
-  nothing and is not resent. `store move` and `store remove` make their
-  machines ready before they mark the Store.
-- `machine start <name>` starts a stopped machine and its worker and waits
-  until it is ready; a running machine answers at once. `machine stop
-  <name>` stops the worker and, where there is one, the VM (`docker`: its
-  worker container; `ssh`: the worker and its forward); disks and Stores
-  stay. It is `InUse` while Sandboxes run on the machine (`detail.related`
-  names them). `native` answers both at once (#535 P1).
+- A machine runs only between `machine start <name>` and `machine stop
+  <name>`. Nothing starts or stops one by itself: no call starts a stopped
+  machine, and a running machine, its worker and its Sandboxes stay up
+  however long they are unused. A Store is still closed after a quiet
+  minute (the worker's and the caller's Store connection reaper); that
+  closes a file, not a machine.
+- A call that needs a stopped machine is refused `Unavailable`, naming the
+  start command: "machine <m> is not running; start it with `layerfs
+  machine start <m>`". It dials the worker `worker.json` records once, with
+  no ping first (#535 R1); when that dial sent nothing (the connection, the
+  secret or its answer failed), the call is refused the same way ("machine
+  <m>'s worker did not answer (…); start it with `layerfs machine start
+  <m>`") and nothing is started or resent. A call whose answer is lost
+  after it was sent is `Unknown`; it is not resent.
+- The calls that need the machine's worker: Store calls on a sqlite Store
+  there, `project remove`, `sandbox create`, the Workspace calls that change
+  something, `store move`, `store remove` and `backup create`. `store move`
+  and `store remove` check both machines before they mark the Store.
+- `machine start <name>` starts a stopped machine and its worker, waits
+  until it is ready and records `worker.json`; a running machine answers at
+  once. `machine stop <name>` stops the worker and, where there is one, the
+  VM (`docker`: its worker container; `ssh`: the worker and its forward);
+  disks and Stores stay. It is `InUse` while Sandboxes run on the machine
+  (`detail.related` names them). `native` answers both at once (#535 P1).
 - No list, get or status call starts a machine (#535 P4): every `*.list`,
   `*.get` and `*.status` call and `machine platforms` answer from records
   and live probes, and a stopped machine reads as `stopped` (`store status`:
   `down`; `sandbox get`: no Workspaces and `down_reason`; `workspace
-  status`: `Unavailable`). Calls that need the worker start it on demand:
-  Store calls on a sqlite Store there, `project remove`, `sandbox create`,
-  the Workspace calls that change something, `store move`, `store remove`
-  and `backup create`.
-- Two processes that need the same stopped machine take turns on its
-  `start.lock`, which `machine create` and `machine remove` also take. The
-  second waits up to 600 s, then is refused `Unavailable`. The lock is
-  always taken before the home lock, and the start re-reads the record once
-  it holds it.
-- A `firecracker` machine's first call starts its `lima` host the same way
-  (its `start.lock`, readiness wait and `worker.json`) before the microVM.
-- The worker stops after 10 minutes (O2) with no open Store, no Sandbox, no
-  call in flight and no call. It counts the Sandboxes it runs and every one
-  recorded under `/layerfs/data/store/<s>/project/<p>/sandboxes/`, and on a
-  `lima` host each live Firecracker microVM; an unreadable entry counts as
-  in use. In a VM guest it then powers the guest off; a Firecracker microVM
-  resets instead (`sync; reboot -f`), since its VMM ignores a power-off. On
-  an ssh host only the worker stops.
+  status`: `Unavailable`).
+- Two `machine start` calls on the same machine take turns on its
+  `start.lock`, which `machine create`, `machine stop` and `machine remove`
+  also take. The second waits up to 600 s, then is refused `Unavailable`.
+  The lock is always taken before the home lock, and the start re-reads the
+  record once it holds it.
+- `machine start` on a `firecracker` machine starts its `lima` host the
+  same way (its `start.lock`, readiness wait and `worker.json`) before the
+  microVM, within that one call.
 - `machine status` answers `state`, `free_disk`, `tool_version` and
   `down_reason` (O34). A stopped VM answers without being started. There is
   no change event; callers poll.
@@ -230,8 +230,8 @@ $ layerfs store move shop dev --progress   # not run
 - `store remove` deletes a sqlite Store wherever it is, with every project
   in it. Its backups stay in their buckets. It is `InUse` while the Store is
   held. A Store whose machine is unknown is `Unavailable` (as for a move).
-  A stopped machine is started (or the call refused) before the home lock is
-  taken; a Store whose machine changed meanwhile is `Conflict`. A certain
+  A stopped machine is refused `Unavailable`, naming `machine start`,
+  before the home lock is taken; a Store whose machine changed meanwhile is `Conflict`. A certain
   failure clears `in_progress`.
 - `store status` starts no machine. A Store whose machine is not running,
   or whose recorded worker does not answer, has `state: "down"` with
