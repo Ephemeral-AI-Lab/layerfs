@@ -84,6 +84,12 @@ fn run(
     let record = at("check", record_of(&home, name))?;
     at("check", record.unblocked())?;
     let (from, to) = at("check", sides(&home, &record, target))?;
+    // a sqlite Store goes only to a machine that keeps its file (#545
+    // B0-150, B7-223): the check refuses `StoragePlacement` before either
+    // machine is reached, so nothing is sent to or installed on an
+    // ephemeral Family 2 disk
+    let store_ref = at("check", record.store_ref())?;
+    at("check", place::require_store_home(&home, store_ref, &to))?;
     // what holds the Store is refused before any machine is reached
     at("check", held_now(&home, name))?;
     let (mut source, mut target_side) = at("check", reach(&home, name, &from, &to))?;

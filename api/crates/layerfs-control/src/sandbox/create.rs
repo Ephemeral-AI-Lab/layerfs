@@ -75,6 +75,11 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         }
     };
     let machine = machine.as_str();
+    // a sqlite Store's file must live on the machine its Sandbox runs on
+    // (#545 B0-150): a Family 2 machine keeps no Store, and the create is
+    // refused `StoragePlacement` rather than silently routed there; a
+    // PostgreSQL Store is on no machine and passes
+    crate::common::place::require_store_home(&home, &target.store_ref, machine)?;
     // refused too while the machine is being removed
     #[cfg(feature = "machine")]
     let machine_record = Some(crate::machine::machine_of(&home, machine)?);
