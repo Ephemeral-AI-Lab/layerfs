@@ -3,6 +3,6 @@
 export default {
   args: ["ref", "path"],
   options: {},
-  summary: "one entry's type, size and mode",
+  summary: "one entry's type, size, mode, mtime and nlink",
   run: (lf, a) => lf.fs.stat(a.ref, a.path),
 };

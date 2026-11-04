@@ -12,7 +12,7 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::{
     compare::{memo::Memo, EntryFacts},
     filesystem::{
-        attributes::{read_portable, AttributeReadWork},
+        attributes::{read_portable, AttributeReadWork, PortableMetadata},
         directory::read::{list_after, DirectoryReadWork},
         sorted::DirectoryRoot,
     },
@@ -76,8 +76,23 @@ pub fn read(
     answer(fields)
 }
 
-/// The type, inode, size and permission mode of the entry at `path`. An
-/// inline mode costs no object read.
+/// Seconds and nanoseconds of a portable mtime, plus the committed namespace
+/// link count. Seconds and nanoseconds stay separate: a single nanosecond
+/// timestamp is not a JavaScript safe integer after 1970.
+fn metadata_fields(metadata: PortableMetadata, nlink: u64) -> [(&'static str, SdkValue); 4] {
+    [
+        ("mode", SdkValue::Int(i64::from(metadata.mode))),
+        ("mtimeSeconds", SdkValue::Int(metadata.mtime_seconds)),
+        (
+            "mtimeNanoseconds",
+            SdkValue::Int(i64::from(metadata.mtime_nanoseconds)),
+        ),
+        ("nlink", SdkValue::Int(nlink as i64)),
+    ]
+}
+
+/// The type, inode, size, permission mode, mtime and committed link count of
+/// the entry at `path`. Inline portable metadata costs no object read.
 pub fn stat(reader: &StorePorts, snap: &Snap, path: &str) -> Answer {
     let cached = Cached::new(reader)?;
     let entry = existing(&Memo::new(&cached), snap, path)?;
@@ -93,8 +108,8 @@ pub fn stat(reader: &StorePorts, snap: &Snap, path: &str) -> Answer {
         ("type", SdkValue::text(kind_name(entry.value.kind))),
         ("inode", SdkValue::Int(entry.serial as i64)),
         ("size", SdkValue::Int(size(reader, &entry)? as i64)),
-        ("mode", SdkValue::Int(i64::from(metadata.mode))),
     ]);
+    fields.extend(metadata_fields(metadata, entry.value.namespace_ref_count));
     answer(fields)
 }
 
@@ -133,19 +148,26 @@ pub fn list(reader: &StorePorts, snap: &Snap, path: &str, paging: Arg<(usize, u6
                 continue;
             }
             if items.len() + taken.len() == limit
-                || spent + name.as_str().len() + path.len() + 160 > REPLY_BUDGET
+                || spent + name.as_str().len() + path.len() + 240 > REPLY_BUDGET
             {
                 more = true;
                 break;
             }
-            spent += name.as_str().len() + path.len() + 160;
+            spent += name.as_str().len() + path.len() + 240;
             taken.push((name, *serial));
         }
         // The page's entries are looked up together, one descent per level.
         let serials: Vec<u64> = taken.iter().map(|(_, serial)| *serial).collect();
         let values = snap.tree.values(&memo, &serials).map_err(args::content)?;
+        let mut work = AttributeReadWork::default();
         for ((name, serial), value) in taken.into_iter().zip(values) {
             let value = value.ok_or_else(|| args::failed("missing bound inode"))?;
+            // Inline portable metadata is served from the inode value; a
+            // root-form tree shares this call's memo with the lookups.
+            let metadata = read_portable(&memo, value.metadata_root, value.kind, &mut work)
+                .map_err(args::content)?;
+            let [mode, mtime_seconds, mtime_nanoseconds, nlink] =
+                metadata_fields(metadata, value.namespace_ref_count);
             items.push(SdkValue::map([
                 ("name", SdkValue::text(name.as_str())),
                 (
@@ -154,6 +176,10 @@ pub fn list(reader: &StorePorts, snap: &Snap, path: &str, paging: Arg<(usize, u6
                 ),
                 ("type", SdkValue::text(kind_name(value.kind))),
                 ("inode", SdkValue::Int(serial as i64)),
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+                nlink,
             ]));
         }
         if more {
