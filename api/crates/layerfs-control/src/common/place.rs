@@ -190,29 +190,36 @@ pub(crate) enum StoreHome {
 
 /// The machine record field a Family 2 backend writes when it creates or
 /// connects its machine (#545 §Provider model): whether the machine keeps a
-/// sqlite Store's file. No platform this build names writes it, so every
-/// machine they make takes its platform's row in the support table instead.
+/// sqlite Store's file. It is the only fact this policy reads. No platform
+/// this build names writes it, and a record that leaves it out is a machine
+/// that keeps its Store.
 const LOCAL_SQLITE: &str = "local_sqlite";
 
 /// A machine's store home, the backend a refusal names, and why the machine
 /// keeps no Store when it does not.
 pub(crate) struct MachinePlacement {
     pub(crate) home: StoreHome,
-    /// The machine's backend, as records store it (`docker`, `native`,
-    /// `namespaces`); `Null` in the guest worker's build, which holds no
-    /// platform table.
+    /// The machine's backend as its record's platform names it (`docker`,
+    /// `native`, `namespaces`); `Null` when the record names no platform this
+    /// build knows, or the machine has no record. A record fact, so it is the
+    /// same on every host.
     pub(crate) backend: SdkValue,
     /// Why the machine keeps no Store of ours; `None` when it does.
     pub(crate) reason: Option<String>,
 }
 
-/// Machine `machine`'s store home: the `local_sqlite` its record writes,
-/// else its platform's row on this host — the support table's `sqlite`
-/// answer, which says where a sqlite Store's calls run there. A record that
-/// writes a `local_sqlite` that is not true or false is refused here; one
-/// with no such field whose platform this build has no adapter for is
-/// refused by its platform, and a machine with no record at all is left to
-/// the step that resolves it.
+/// Machine `machine`'s store home, from the machine record alone: its
+/// `local_sqlite` field says whether *this* machine keeps a sqlite Store's
+/// file. Present and `true` is [`StoreHome::Machine`]; present and `false` is
+/// [`StoreHome::Remote`]; absent is [`StoreHome::Machine`] — a backend that
+/// did not say keeps its Store, the compatible answer for every platform this
+/// build names. Present and anything else is refused `InvalidInput`. A
+/// machine with no record at all is also `Machine`: the step that resolves
+/// the machine refuses `NotFound`.
+///
+/// The record is the only fact, and the decision never asks the platform
+/// support table or the host it runs on: the same record must get the same
+/// answer on every host.
 pub(crate) fn placement(home: &Path, machine: &str) -> Result<MachinePlacement> {
     let Some(record) = MachineRecord::read(home, machine)? else {
         // a machine with no record keeps its Store as far as this guard can
@@ -240,7 +247,10 @@ pub(crate) fn placement(home: &Path, machine: &str) -> Result<MachinePlacement> 
                 format!("machine {machine}'s record `{LOCAL_SQLITE}` is not true or false"),
             ))
         }
-        None => row(&record)?,
+        // not written: the machine keeps its Store. This is the compatible
+        // answer for every platform this build names; only a Family 2
+        // backend that writes `local_sqlite: false` changes the decision.
+        None => (StoreHome::Machine, None),
     };
     Ok(MachinePlacement {
         home: store_home,
@@ -249,54 +259,18 @@ pub(crate) fn placement(home: &Path, machine: &str) -> Result<MachinePlacement> 
     })
 }
 
-/// The machine's platform row on this host: where a sqlite Store's calls
-/// run (`in_process` or in its worker, so the file lives there), or the
-/// reason there is no such route at all.
-#[cfg(feature = "machine")]
-fn row(record: &MachineRecord) -> Result<(StoreHome, Option<String>)> {
-    use layerfs_machine::HostOs;
-    let platform = record.platform()?;
-    let platform_row = layerfs_machine::support(platform, HostOs::current());
-    let (store_home, reason) = match platform_row.sqlite {
-        Some(_) => (StoreHome::Machine, None),
-        None => (
-            StoreHome::Remote,
-            Some(format!(
-                "its platform {} has no sqlite Store route on this host, so the \
-                 Store's file could not be live there",
-                platform.name()
-            )),
-        ),
-    };
-    Ok((store_home, reason))
-}
-
-/// Without the platform adapters (the guest worker's build) a machine's
-/// record is the only fact: a machine whose record does not say keeps its
-/// Store.
-#[cfg(not(feature = "machine"))]
-fn row(_: &MachineRecord) -> Result<(StoreHome, Option<String>)> {
-    Ok((StoreHome::Machine, None))
-}
-
-/// The machine's backend as its platform row names it, or `Null` when this
-/// build holds no platform table or no adapter for its platform.
-#[cfg(feature = "machine")]
+/// The machine's backend from its record's platform name alone, or `Null`
+/// when the record names no platform this build knows. A pure record fact:
+/// no support table and no host.
 fn backend(record: &MachineRecord) -> SdkValue {
-    use layerfs_machine::HostOs;
-    record
-        .platform()
-        .ok()
-        .and_then(|platform| layerfs_machine::support(platform, HostOs::current()).backend)
-        .map(|backend| SdkValue::text(backend.stored_name()))
-        .unwrap_or_default()
-}
-
-/// Without the platform adapters (the guest worker's build) a refusal names
-/// no backend.
-#[cfg(not(feature = "machine"))]
-fn backend(_: &MachineRecord) -> SdkValue {
-    SdkValue::Null
+    match record.platform_name() {
+        Some("docker") => SdkValue::text("docker"),
+        Some("native") => SdkValue::text("native"),
+        Some("apple-container" | "firecracker" | "lima" | "microsandbox" | "ssh") => {
+            SdkValue::text("namespaces")
+        }
+        _ => SdkValue::Null,
+    }
 }
 
 /// Refuses `StoragePlacement` unless a sqlite Store may be placed on machine

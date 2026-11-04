@@ -46,11 +46,12 @@ fn postgresql_record() -> SdkValue {
     ])
 }
 
-/// A home with Store `shop` (project `api`) and machine `dev`, an ssh host
+/// A home with Store `shop` (project `api`) and machine `dev` of `platform`,
 /// whose record says whether it keeps a sqlite Store's file: `false` is the
 /// Family 2 machine a provider with no worker and no disk of ours records,
-/// `None` leaves the field out so the platform's support row answers.
-fn home_with(store: SdkValue, dev_keeps_a_store: Option<bool>) -> PathBuf {
+/// `true` is a machine that keeps it, and `None` leaves the field out — a
+/// record that does not say, which is the compatible `Machine` answer.
+fn home_with_platform(store: SdkValue, dev_keeps_a_store: Option<bool>, platform: &str) -> PathBuf {
     let home = tempdir("home");
     home::open(&home).unwrap();
     write_record(&paths::store_record(&home, "shop"), &store).unwrap();
@@ -61,7 +62,7 @@ fn home_with(store: SdkValue, dev_keeps_a_store: Option<bool>) -> PathBuf {
     .unwrap();
     let mut fields: Vec<(String, SdkValue)> = vec![
         ("name".to_owned(), t("dev")),
-        ("platform".to_owned(), t("ssh")),
+        ("platform".to_owned(), t(platform)),
         ("created".to_owned(), SdkValue::Int(1)),
     ];
     if let Some(kept) = dev_keeps_a_store {
@@ -69,6 +70,12 @@ fn home_with(store: SdkValue, dev_keeps_a_store: Option<bool>) -> PathBuf {
     }
     write_record(&paths::machine_record(&home, "dev"), &SdkValue::Map(fields)).unwrap();
     home
+}
+
+/// [`home_with_platform`] on an ssh host, which this build names on every
+/// host.
+fn home_with(store: SdkValue, dev_keeps_a_store: Option<bool>) -> PathBuf {
+    home_with_platform(store, dev_keeps_a_store, "ssh")
 }
 
 fn call(
@@ -100,14 +107,10 @@ fn assert_placement_detail(detail: &SdkValue, message: &str) {
     let reason = detail.get_text("reason").expect("a reason");
     assert!(reason.contains("local_sqlite"), "{reason}");
     assert!(message.contains(reason), "{message}");
-    // the backend is the platform table's; the guest worker's build holds
-    // no table, so it names none
-    if cfg!(feature = "machine") {
-        assert_eq!(detail.get_text("backend"), Some("namespaces"), "{detail:?}");
-        assert!(message.contains("backend namespaces"), "{message}");
-    } else {
-        assert_eq!(detail.get("backend"), Some(&SdkValue::Null), "{detail:?}");
-    }
+    // the backend is the record's platform (`ssh` is namespaces), so the
+    // detail is the same on every host and in both builds
+    assert_eq!(detail.get_text("backend"), Some("namespaces"), "{detail:?}");
+    assert!(message.contains("backend namespaces"), "{message}");
 }
 
 #[test]
@@ -172,7 +175,46 @@ fn a_pull_from_a_machine_that_keeps_no_disk_stays_the_way_off() {
 }
 
 #[test]
-fn a_machine_record_that_does_not_say_whether_it_keeps_a_store_is_refused() {
+fn a_machine_record_without_local_sqlite_is_allowed() {
+    // the field is absent: the machine keeps its Store, the compatible
+    // answer for every platform this build names. `lima` is the platform
+    // whose row had no sqlite route on Linux, which is the host the old
+    // fallback refused; the record alone now allows it on every host. The
+    // push goes on to dial the machine's worker, which is not recorded
+    // (`Unavailable`); it is never refused by placement.
+    let home = home_with_platform(sqlite_record("native"), None, "lima");
+    let refused = call(
+        &home,
+        "store.push",
+        SdkValue::map([("name", t("shop")), ("machine", t("dev"))]),
+    )
+    .unwrap_err();
+    assert_ne!(refused.0, "StoragePlacement", "{}", refused.2);
+    assert!(!refused.2.contains("cannot be placed"), "{}", refused.2);
+    assert_eq!(refused.0, "Unavailable", "{}", refused.2);
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_machine_record_that_says_it_keeps_a_store_is_allowed() {
+    // `local_sqlite: true`: the machine keeps the file, so placement lets
+    // the push go on to its worker (not recorded here: `Unavailable`).
+    let home = home_with(sqlite_record("native"), Some(true));
+    let refused = call(
+        &home,
+        "store.push",
+        SdkValue::map([("name", t("shop")), ("machine", t("dev"))]),
+    )
+    .unwrap_err();
+    assert_ne!(refused.0, "StoragePlacement", "{}", refused.2);
+    assert!(!refused.2.contains("cannot be placed"), "{}", refused.2);
+    assert_eq!(refused.0, "Unavailable", "{}", refused.2);
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_machine_record_with_an_invalid_local_sqlite_is_refused() {
+    // anything other than `true`/`false` is malformed, not "does not say"
     let home = home_with(sqlite_record("native"), None);
     write_record(
         &paths::machine_record(&home, "dev"),
