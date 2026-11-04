@@ -1,11 +1,15 @@
 //! The worker's side: `layerfs worker` serves one request per connection.
 //!
 //! A connection starts with a small frame `{ secret }`: the worker reads at
-//! most [`MAX_HELLO`] bytes, waiting at most [`HELLO_WAIT`], and answers
-//! `{ ready: true, protocol, bundle }` ([`Hello`]), or refuses a wrong
-//! secret and closes, before it reads anything larger. A caller of another
-//! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
-//! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
+//! most [`MAX_HELLO`] bytes, the whole frame within [`HELLO_WAIT`], and
+//! answers `{ ready: true, protocol, bundle }` ([`Hello`]), or refuses a
+//! wrong secret and closes, before it reads anything larger. A caller of
+//! another build sends nothing more and closes. Then a request `{ op, args }`,
+//! read with at most [`REQUEST_WAIT`] between bytes. Once it is read, the
+//! worker claims it (`{ claimed: true }`) and beats (`{ beat: true }`) every
+//! [`HEARTBEAT`] while the operation runs, so the caller can tell a live
+//! worker from a dead one without bounding the operation. `worker.ping`
+//! answers who it is;
 //! `store.call`, `store.file`, `sandbox.host`, `project.stage`,
 //! `project.init` and `project.remove` run one operation on this machine,
 //! with `home` set to the worker's own root (the machine's data disk),
@@ -15,15 +19,15 @@
 //! A request may carry `home_id`, the caller's home id: the root is not a
 //! home and has no id of its own (O33), so host code that asks for one
 //! gets the caller's, and the root is never converted or written as a home.
-use super::client::HELLO_WAIT;
-use super::frame::{read_frame, read_frame_within, write_frame, MAX_HELLO};
+use super::client::{HEARTBEAT, HELLO_WAIT, SEND_WAIT};
+use super::frame::{read_frame, read_frame_within_wait, write_frame, MAX_HELLO};
 use super::hello::Hello;
 use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 /// The longest the worker waits for the next byte of a request.
@@ -83,12 +87,9 @@ fn same(a: &str, b: &str) -> bool {
 
 fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) -> bool {
     let _ = stream.set_nodelay(true);
-    // the secret first, from a small frame: nothing larger is read, and
-    // nothing is waited for long, before it matches
-    if stream.set_read_timeout(Some(HELLO_WAIT)).is_err() {
-        return false;
-    }
-    let hello = match read_frame_within(&mut stream, MAX_HELLO) {
+    // the secret first, from a small frame: nothing larger is read, and the
+    // whole frame, not each byte, is waited for at most HELLO_WAIT
+    let hello = match read_frame_within_wait(&mut stream, MAX_HELLO, HELLO_WAIT) {
         Ok(Some(hello)) => hello,
         _ => return false,
     };
@@ -107,20 +108,78 @@ fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) ->
         _ => return false,
     };
     let _ = stream.set_read_timeout(None);
+    if stream.set_write_timeout(Some(SEND_WAIT)).is_err() {
+        return false;
+    }
+    // writes from the beats and the answer share one stream: a frame is
+    // never interleaved with another
+    let stream = Arc::new(Mutex::new(stream));
+    // the request is read: claim it, so its caller stops waiting to be
+    // heard. Beats then carry its liveness until the answer is ready
+    if write_locked(&stream, &SdkValue::map([("claimed", SdkValue::Bool(true))])).is_err() {
+        return false;
+    }
+    let beats = Beats::start(stream.clone());
     let _home = crate::common::home::guest::sent(request.get_text("home_id"));
     let outcome = run(
         request.get_text("op").unwrap_or(""),
         request.get("args").cloned().unwrap_or_default(),
         root,
         &mut |event| {
-            let _ = write_frame(&mut stream, &SdkValue::map([("event", event)]));
+            let _ = write_locked(&stream, &SdkValue::map([("event", event)]));
         },
     );
+    // stop beating before the one answer: a caller never reads a beat after it
+    drop(beats);
     let frame = match outcome {
         Ok(value) => SdkValue::map([("value", value)]),
         Err(refusal) => refusal_frame(refusal),
     };
-    write_frame(&mut stream, &frame).is_ok()
+    write_locked(&stream, &frame).is_ok()
+}
+
+/// Writes one frame under the stream's lock.
+fn write_locked(stream: &Arc<Mutex<TcpStream>>, value: &SdkValue) -> std::io::Result<()> {
+    let mut stream = stream.lock().unwrap_or_else(|error| error.into_inner());
+    write_frame(&mut *stream, value)
+}
+
+/// Writes `{ beat: true }` every [`HEARTBEAT`] while a request runs, so a
+/// live worker is never mistaken for a dead one. Dropping it stops the
+/// beats and joins the thread at once.
+struct Beats {
+    stop: Option<mpsc::Sender<()>>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Beats {
+    fn start(stream: Arc<Mutex<TcpStream>>) -> Self {
+        let (stop, wait) = mpsc::channel::<()>();
+        let thread = std::thread::spawn(move || loop {
+            match wait.recv_timeout(HEARTBEAT) {
+                Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    let beat = SdkValue::map([("beat", SdkValue::Bool(true))]);
+                    if write_locked(&stream, &beat).is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+        Self {
+            stop: Some(stop),
+            thread: Some(thread),
+        }
+    }
+}
+
+impl Drop for Beats {
+    fn drop(&mut self) {
+        drop(self.stop.take());
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
 }
 
 fn refusal_frame(refusal: SdkRefusal) -> SdkValue {

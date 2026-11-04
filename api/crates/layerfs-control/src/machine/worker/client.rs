@@ -1,5 +1,5 @@
 //! The caller's side: one request per connection, sent once.
-use super::frame::{frame_bytes, read_frame, read_frame_within, write_frame, MAX_HELLO};
+use super::frame::{frame_bytes, read_frame, read_frame_within_wait, write_frame, MAX_HELLO};
 use super::hello::Hello;
 use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -18,13 +18,32 @@ pub struct Endpoint {
 
 const CONNECT: Duration = Duration::from_secs(10);
 
-/// How long the caller waits for the worker to answer its secret.
+/// How long the caller waits for the worker to answer its secret: the whole
+/// hello frame, not each socket read (a peer that trickles bytes cannot
+/// stretch it).
 pub const HELLO_WAIT: Duration = Duration::from_secs(10);
 
-/// How long a ping waits for its answer. Other operations wait for theirs
-/// as long as they run (a command, a move): the worker has answered the
-/// secret by then, so it is serving.
+/// How long the caller waits for a worker that read its request to claim it
+/// (`{ claimed: true }`). A worker that stops before claiming is dead: the
+/// call is `Unknown` within this wait.
+pub const CLAIM_WAIT: Duration = Duration::from_secs(10);
+
+/// How long the caller waits between frames of a running operation. The
+/// worker beats at [`HEARTBEAT`] while it runs; a worker that stops beating
+/// is dead, and the call is `Unknown` within this wait. It bounds no
+/// operation: a long command keeps beating and is never cut off.
+pub const HEARTBEAT_WAIT: Duration = Duration::from_secs(10);
+
+/// How often a worker beats while it runs an operation.
+pub const HEARTBEAT: Duration = Duration::from_secs(2);
+
+/// How long a ping waits for its answer, each frame of it.
 pub const PING_WAIT: Duration = Duration::from_secs(10);
+
+/// How long a socket write may make no progress. It bounds the connection,
+/// never the operation: a worker that stopped reading is `Unavailable` or
+/// `Unknown` within this wait, and a slow but live one keeps going.
+pub const SEND_WAIT: Duration = Duration::from_secs(60);
 
 /// Runs one host operation `op` in the worker. Events the worker sends
 /// (progress, command output) go to `events`. A request too large is
@@ -33,7 +52,11 @@ pub const PING_WAIT: Duration = Duration::from_secs(10);
 /// build ([`super::Hello::mismatch`]); a wrong secret is the worker's
 /// refusal (`Denied`). In each, the request was not sent. A
 /// connection lost after the request was sent is `Unknown`: the operation
-/// may have run, and nothing is resent.
+/// may have run, and nothing is resent. Once the request is sent, the
+/// worker's claim and its heartbeats bound how long the caller waits
+/// ([`CLAIM_WAIT`], [`HEARTBEAT_WAIT`]); a dead worker therefore answers
+/// `Unknown` in bounded time, while a live one keeps beating and a long
+/// operation is not cut off.
 pub fn call(
     endpoint: &Endpoint,
     op: &str,
@@ -64,8 +87,10 @@ pub fn request(op: &str, args: SdkValue) -> Result<Vec<u8>, SdkRefusal> {
 /// Sends the framed `request` (for operation `op`) on one new connection:
 /// the secret first, alone, then the request once. [`Unreached`] when
 /// nothing was sent; otherwise the operation's outcome, `Unknown` when the
-/// answer was lost after the request was sent. The answer is waited for at
-/// most `answer_within`, or as long as the operation runs.
+/// answer was lost after the request was sent. Every answer frame is waited
+/// for at most `answer_within` when the caller bounds the whole call (a
+/// ping), or by the claim and heartbeat waits otherwise: the operation's
+/// own duration is never a deadline.
 pub fn send(
     endpoint: &Endpoint,
     op: &str,
@@ -105,10 +130,10 @@ fn send_once(
         return Err(Unreached(refusal));
     }
     stream
-        .set_read_timeout(answer_within)
+        .set_write_timeout(Some(SEND_WAIT))
         .map_err(|error| unavailable(&error))?;
     // from here the request may have reached the worker: nothing is resent
-    Ok(answer(stream, op, request, events))
+    Ok(answer(stream, op, request, events, answer_within))
 }
 
 /// Why a worker did not answer its secret.
@@ -126,13 +151,13 @@ fn greet(endpoint: &Endpoint) -> Result<(TcpStream, Hello), Greeting> {
     let mut stream = TcpStream::connect_timeout(&endpoint.address, CONNECT)
         .map_err(|error| unanswered(&error))?;
     let _ = stream.set_nodelay(true);
-    // the secret first, alone: the worker answers it before the request
     stream
-        .set_read_timeout(Some(HELLO_WAIT))
+        .set_write_timeout(Some(SEND_WAIT))
         .map_err(|error| unanswered(&error))?;
+    // the secret first, alone: the worker answers it before the request
     let secret = SdkValue::map([("secret", SdkValue::text(&endpoint.secret))]);
     write_frame(&mut stream, &secret).map_err(|error| unanswered(&error))?;
-    match read_frame_within(&mut stream, MAX_HELLO) {
+    match read_frame_within_wait(&mut stream, MAX_HELLO, HELLO_WAIT) {
         Ok(Some(frame)) if frame.get("ready").is_some() => {
             let hello = Hello::of(&frame);
             Ok((stream, hello))
@@ -167,12 +192,19 @@ pub fn hello(endpoint: &Endpoint) -> Result<Hello, SdkRefusal> {
     }
 }
 
-/// Writes the request and reads the events and the answer.
+/// Writes the request and reads its claim, the events, the beats and the
+/// answer. The first frame must start within [`CLAIM_WAIT`] and every later
+/// one within [`HEARTBEAT_WAIT`], or within `answer_within` for every frame
+/// when the caller bounds the whole call (a ping). The wait is for bytes,
+/// not for a whole frame: a large answer (a file read) may take longer than
+/// the wait to transfer as long as it keeps arriving, and a worker that
+/// sends nothing for the wait is dead.
 fn answer(
     mut stream: TcpStream,
     op: &str,
     request: &[u8],
     events: &mut dyn FnMut(SdkValue),
+    answer_within: Option<Duration>,
 ) -> Outcome {
     stream
         .write_all(request)
@@ -183,12 +215,23 @@ fn answer(
                 format!("sending {op} to the worker failed part way ({error}); it was not resent"),
             )
         })?;
+    // the worker's claim, then its heartbeats, bound each wait: a worker
+    // that stops is dead, and a long operation keeps the call alive
+    let mut claimed = false;
     loop {
+        let wait = answer_within.unwrap_or(if claimed { HEARTBEAT_WAIT } else { CLAIM_WAIT });
+        if let Err(error) = stream.set_read_timeout(Some(wait)) {
+            return Err(lost(op, &format!("no wait could be set: {error}")));
+        }
         let frame = match read_frame(&mut stream) {
             Ok(Some(frame)) => frame,
             Ok(None) => return Err(lost(op, "the worker closed the connection")),
             Err(refusal) => return Err(lost(op, &refusal.message)),
         };
+        if frame.get("claimed").is_some() || frame.get("beat").is_some() {
+            claimed = true;
+            continue;
+        }
         if let Some(event) = frame.get("event") {
             events(event.clone());
         } else if let Some(value) = frame.get("value") {
@@ -220,7 +263,7 @@ fn lost(op: &str, why: &str) -> SdkRefusal {
 }
 
 /// Whether the worker answers its secret: `{ kind: "worker", version, pid }`.
-/// Its answer is waited for at most [`PING_WAIT`].
+/// Every frame of its answer is waited for at most [`PING_WAIT`].
 pub fn ping(endpoint: &Endpoint) -> Outcome {
     let request = request("worker.ping", SdkValue::Null)?;
     send(

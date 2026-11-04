@@ -208,13 +208,13 @@ layerfs machine create host1 lima --nested
   Store's record and the home id with the call; the worker never reads the
   home, and its own root (`/layerfs/data`) is never treated as a home.
 - A connection starts with a small frame holding only the secret (at most
-  4 KiB, read within 10 s); the worker answers it, or refuses `Denied` and
-  closes, before it reads the request. A caller that gets no answer in 10 s
-  is `Unavailable`; in both cases the request was not sent. Only a
-  connection lost after the request was sent is `Unknown`. One attempt;
-  nothing is resent.
+  4 KiB, the whole frame within 10 s); the worker answers it, or refuses
+  `Denied` and closes, before it reads the request. A caller that gets no
+  answer in 10 s is `Unavailable`; in both cases the request was not sent.
+  Only a connection lost after the request was sent is `Unknown`. One
+  attempt; nothing is resent.
 - The worker's answer to the secret (its hello) says which build it is:
-  `{ ready: true, protocol, bundle }`, the worker protocol it speaks (2)
+  `{ ready: true, protocol, bundle }`, the worker protocol it speaks (3)
   and the hash of the sealed bundle it runs from (`bundle.json` beside its
   `layerfs`). The caller compares both with its own protocol and the bundle
   it deploys before it sends anything. A worker of another protocol or
@@ -226,6 +226,18 @@ layerfs machine create host1 lima --nested
   whatever its build. A worker run from no sealed bundle (a development
   build) is checked by protocol alone. [`layerfs doctor`](calls.md#layerfs-doctor)
   reports a running worker of another build as a warning.
+- Once it has read a request the worker claims it (`{ claimed: true }`) and
+  then beats (`{ beat: true }`) every 2 s while the operation runs. The
+  caller bounds its waiting, never the operation: 10 s for the claim, 10 s
+  between beats, and 60 s for a socket write that makes no progress. The
+  wait is for bytes, not for a whole answer: a large frame (a file read)
+  may take longer than the wait to transfer as long as it keeps arriving.
+  A
+  worker that dies, hangs or loses its network is `Unknown` within one wait
+  (the request was sent); a long command keeps beating and is not cut off.
+  Protocol 3 is what lets the caller expect these frames; a protocol-2
+  worker is refused before the request is sent instead of leaving a call to
+  time out.
 - A worker holds a Store's lease for as long as it keeps the Store open,
   and closes its own open copy before a push, pull, retire or remove reads or
   deletes the file.
