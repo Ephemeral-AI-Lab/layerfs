@@ -239,6 +239,11 @@ pub(crate) fn commit(args: &SdkValue) -> Outcome {
     values::commit(&reply)
 }
 
+/// How long unmount's Workspace status probe waits for the daemon. After
+/// slot reclamation the ordinary path succeeds; a truly exhausted daemon
+/// returns `Capacity` in bounded time instead of blocking behind the guard.
+const UNMOUNT_STATUS_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// `workspace.unmount(ws, { discard?, force? })`: the daemon's answer.
 pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;
@@ -253,7 +258,10 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
         return crate::workspace::unmount_guard::repeat(&value);
     }
     let token = state.token(path)?;
-    crate::sandbox::files::refresh(&state)?;
+    // One short deadline, not the full admission wait: a Workspace unmount
+    // must not hold the folder guard while a refusing daemon keeps the
+    // ordinary 60 s control wait running (#540).
+    crate::sandbox::files::refresh_within(&state, UNMOUNT_STATUS_WAIT)?;
     // the daemon's kernel probe answers Busy for a process still holding it
     let attempt = crate::workspace::unmount_guard::begin(&state, token, path)?;
     drop(guard);

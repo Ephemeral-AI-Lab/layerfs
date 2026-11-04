@@ -25,6 +25,9 @@ pub fn call(op: &str, args: SdkValue) -> Outcome {
             let directory = crate::sandbox::files::sandbox_dir(&args)?;
             listed(daemon_backend(op, args)?, &directory)
         }
+        // The operator view of control admission and retained failures
+        // (#540). It is a read model, never a product operation.
+        layerfs_bridge::control::CAPACITY_OPERATION => daemon_backend(op, args),
         "sandbox.create" => crate::sandbox::serve::create(&args),
         "sandbox.close" => crate::sandbox::serve::close(&args),
         "workspace.mount" => workspace::mount(&args),
@@ -95,11 +98,22 @@ fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
         ),
         other => other,
     };
-    let answer = crate::daemon::operator::call(
-        &mut *crate::common::trace::control(&state.controls)?,
-        op,
-        args,
-    );
+    // The capacity read model is a best-effort diagnostic: bound its
+    // admission wait so a refusing daemon cannot delay `sandbox.get` by the
+    // ordinary 60 s. The product calls above keep the ordinary wait.
+    let answer = if op == CAPACITY_QUERY {
+        crate::daemon::operator::call(
+            &mut *crate::common::trace::control_within(&state.controls, CAPACITY_WAIT)?,
+            op,
+            args,
+        )
+    } else {
+        crate::daemon::operator::call(
+            &mut *crate::common::trace::control(&state.controls)?,
+            op,
+            args,
+        )
+    };
     answer.map_err(|error| match error {
         crate::SdkError::Refused(refusal) => refusal,
         crate::SdkError::Operation(failure) => {
@@ -108,6 +122,11 @@ fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
         crate::SdkError::Mount(failure) => outcome::failed(failure),
     })
 }
+
+/// The daemon's control-capacity/retained-failure read model (#540).
+const CAPACITY_QUERY: &str = layerfs_bridge::control::CAPACITY_OPERATION;
+/// How long a best-effort capacity read waits for control admission.
+const CAPACITY_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Runs the Workspace status read once.
 pub fn backend(op: String, args: SdkValue) -> Outcome {

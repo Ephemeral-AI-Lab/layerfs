@@ -37,6 +37,10 @@ const ENGINE: Duration = Duration::from_secs(30);
 /// A failed create's report keeps its daemon's last log lines, up to this many bytes.
 pub(crate) const LOG_LINES: u16 = 20;
 pub(crate) const LOG_BYTES: usize = 2048;
+/// How long an explicit close waits for the daemon's Workspace status before
+/// it returns the exact admission refusal. The close's `op` intent must not
+/// be held for the whole admission wait (#540).
+const CLOSE_STATUS_WAIT: Duration = Duration::from_secs(2);
 
 pub(crate) fn operation(failure: Box<OperationFailure>) -> SdkRefusal {
     values::refusal(&failure).unwrap_or_else(|| failed(failure))
@@ -509,8 +513,18 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
         Err(refusal) => return Err(refusal),
     };
     let _guard = crate::sandbox::files::guard(&state.directory)?;
+    let force = args.get_bool("force");
     let recoverable = crate::workspace::unmount_guard::check_all(&state)?;
-    crate::sandbox::files::refresh_except(&state, &recoverable)?;
+    if !force {
+        // A daemon that refuses all control connections must refuse this close
+        // with its exact cause in bounded time, not hold the `op` intent while
+        // the SDK's ordinary 60 s admission wait runs out. One shared deadline
+        // bounds all Workspace probes; N Workspaces cannot multiply it.
+        crate::sandbox::files::refresh_except_within(&state, &recoverable, CLOSE_STATUS_WAIT)?;
+    }
+    // `force` is the recovery path: it skips the daemon status probe and stops
+    // the runtime anyway, reporting every Workspace it could not drain as
+    // `unknown` below. It is still never blocked by the daemon it stops.
     // Explicit close can take over an orphaned/retained unmount, but must
     // still refuse every unrelated live Workspace. Stop detaches before
     // killing the daemon; Delete independently checks physical detach.
@@ -531,7 +545,6 @@ pub(crate) fn close(args: &SdkValue) -> Outcome {
             }
         }
     }
-    let force = args.get_bool("force");
     if !mounted.is_empty() && !force {
         return Err(SdkRefusal {
             code: "MountsActive".to_owned(),
