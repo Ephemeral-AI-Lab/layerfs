@@ -209,9 +209,10 @@ pub(crate) struct MachinePlacement {
 /// Machine `machine`'s store home: the `local_sqlite` its record writes,
 /// else its platform's row on this host — the support table's `sqlite`
 /// answer, which says where a sqlite Store's calls run there. A record that
-/// cannot be read, or writes a `local_sqlite` that is not true or false, is
-/// refused here; a record with no such field whose platform this build has
-/// no adapter for is refused by its platform.
+/// writes a `local_sqlite` that is not true or false is refused here; one
+/// with no such field whose platform this build has no adapter for is
+/// refused by its platform, and a machine with no record at all is left to
+/// the step that resolves it.
 pub(crate) fn placement(home: &Path, machine: &str) -> Result<MachinePlacement> {
     let Some(record) = MachineRecord::read(home, machine)? else {
         // a machine with no record keeps its Store as far as this guard can
@@ -255,19 +256,19 @@ pub(crate) fn placement(home: &Path, machine: &str) -> Result<MachinePlacement> 
 fn row(record: &MachineRecord) -> Result<(StoreHome, Option<String>)> {
     use layerfs_machine::HostOs;
     let platform = record.platform()?;
-    Ok(
-        match layerfs_machine::support(platform, HostOs::current()).sqlite {
-            Some(_) => (StoreHome::Machine, None),
-            None => (
-                StoreHome::Remote,
-                Some(format!(
-                    "its platform {} has no sqlite Store route on this host, so the Store's file \
-                 could not be live there",
-                    platform.name()
-                )),
-            ),
-        },
-    )
+    let platform_row = layerfs_machine::support(platform, HostOs::current());
+    let (store_home, reason) = match platform_row.sqlite {
+        Some(_) => (StoreHome::Machine, None),
+        None => (
+            StoreHome::Remote,
+            Some(format!(
+                "its platform {} has no sqlite Store route on this host, so the \
+                 Store's file could not be live there",
+                platform.name()
+            )),
+        ),
+    };
+    Ok((store_home, reason))
 }
 
 /// Without the platform adapters (the guest worker's build) a machine's
