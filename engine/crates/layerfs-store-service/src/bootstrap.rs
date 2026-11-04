@@ -122,11 +122,57 @@ pub fn open_store_observed(
     cache_bytes: usize,
     reservations: ReservationBlocks,
 ) -> StorageResult<OpenedStore> {
+    open_store_sessions(
+        config,
+        binding,
+        cursor_key,
+        workspace_capacity,
+        cache_bytes,
+        reservations,
+        true,
+    )
+}
+
+/// The same sessions as [`open_store_observed`], with the catalog handle
+/// opened read-only: mutation is refused before BEGIN, and merge scratch is
+/// not installed.
+pub fn open_store_read_only(
+    config: PersistenceConfig,
+    binding: &[u8],
+    cursor_key: [u8; 32],
+    workspace_capacity: usize,
+    cache_bytes: usize,
+    reservations: ReservationBlocks,
+) -> StorageResult<OpenedStore> {
+    open_store_sessions(
+        config,
+        binding,
+        cursor_key,
+        workspace_capacity,
+        cache_bytes,
+        reservations,
+        false,
+    )
+}
+
+fn open_store_sessions(
+    config: PersistenceConfig,
+    binding: &[u8],
+    cursor_key: [u8; 32],
+    workspace_capacity: usize,
+    cache_bytes: usize,
+    reservations: ReservationBlocks,
+    writable: bool,
+) -> StorageResult<OpenedStore> {
     if workspace_capacity == 0 {
         return Err(StorageError::Integrity("empty Workspace reader capacity"));
     }
     reservations.validate()?;
-    let writer = Handles::open_writable(config.clone(), binding, cursor_key)?;
+    let writer = if writable {
+        Handles::open_writable(config.clone(), binding, cursor_key)?
+    } else {
+        Handles::open_read_only(config.clone(), binding, cursor_key)?
+    };
     let sqlite_version = writer.profile().sqlite_version.clone();
     let observations = Arc::new(Mutex::new(ReaderObservations {
         live: BTreeMap::new(),
@@ -161,18 +207,20 @@ pub fn open_store_observed(
         }))
     });
     let control = factory(0)?;
-    let store = Arc::new(
-        Store::new(
-            writer.storage.clone(),
-            Arc::new(writer.history),
-            control,
-            factory,
-            cache_bytes,
-            reservations,
-            workspace_capacity,
-        )?
-        .with_merge_scratch(writer.storage.merge_scratch()),
-    );
+    let store = Store::new(
+        writer.storage.clone(),
+        Arc::new(writer.history),
+        control,
+        factory,
+        cache_bytes,
+        reservations,
+        workspace_capacity,
+    )?;
+    let store = Arc::new(if writable {
+        store.with_merge_scratch(writer.storage.merge_scratch())
+    } else {
+        store
+    });
     Ok(OpenedStore {
         store,
         sqlite_version,

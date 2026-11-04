@@ -7,7 +7,7 @@
 //! outcome is uncertain keeps its Workspace here, with the original failure,
 //! instead of closing it: the call is answered `Unknown` and nothing is
 //! resent or discarded.
-use crate::bootstrap::{open_store_observed, OpenedStore};
+use crate::bootstrap::{open_store_observed, open_store_read_only, OpenedStore};
 use crate::kernel_guard::{self, Unsupported};
 use crate::store::{BindRequest, BoundWorkspace, CommitFailure, Store};
 use crate::{Owner, OwnerClient, OwnerConfig};
@@ -51,10 +51,11 @@ pub struct StoreService {
     pub opened: OpenedStore,
     pub store: Arc<Store>,
     owned: Option<Owner>,
-    owner: OwnerClient,
+    owner: Option<OwnerClient>,
     capacity: usize,
     bound: AtomicUsize,
     retained: Mutex<Vec<Retained>>,
+    read_only: bool,
 }
 
 impl StoreService {
@@ -64,10 +65,11 @@ impl StoreService {
             store: opened.store.clone(),
             opened,
             owned: None,
-            owner: owner.client(),
+            owner: Some(owner.client()),
             capacity: owner.configuration().namespaces,
             bound: AtomicUsize::new(0),
             retained: Mutex::new(Vec::new()),
+            read_only: false,
         }
     }
 
@@ -114,6 +116,71 @@ impl StoreService {
         Ok(service)
     }
 
+    /// Opens the installed Store at `store` for reads only. The kernel guard
+    /// runs first; then the Store, selected Disposable explicitly, with the
+    /// catalog handle opened read-only. No overlay template is created, and
+    /// file-changing and history-mutating calls are refused `ReadOnly` before
+    /// they bind or write.
+    pub fn open_read_only(
+        store: &Path,
+        binding: &[u8],
+        cursor_key: [u8; 32],
+    ) -> Result<Self, OpenRefusal> {
+        kernel_guard::check(store).map_err(OpenRefusal::Unsupported)?;
+        if !store.is_file() {
+            return Err(OpenRefusal::Missing(format!(
+                "no installed Store at {}",
+                store.display()
+            )));
+        }
+        let opened = open_store_read_only(
+            PersistenceConfig::sqlite(store)
+                .with_sqlite_profile(SqlitePersistenceProfile::Disposable),
+            binding,
+            cursor_key,
+            1,
+            CACHE_BYTES,
+            ReservationBlocks::default(),
+        )
+        .map_err(|error| OpenRefusal::Failed(format!("Store open: {error}")))?;
+        Ok(Self::from_read_only(opened))
+    }
+
+    /// Serves Store reads over `opened` (from
+    /// [`crate::bootstrap::open_store_read_only`]). No overlay owner:
+    /// file-changing and history-mutating calls are refused `ReadOnly`
+    /// before they bind or write.
+    pub fn from_read_only(opened: OpenedStore) -> Self {
+        Self {
+            store: opened.store.clone(),
+            opened,
+            owned: None,
+            owner: None,
+            capacity: 1,
+            bound: AtomicUsize::new(0),
+            retained: Mutex::new(Vec::new()),
+            read_only: true,
+        }
+    }
+
+    /// Refuses when this service opened the Store read-only.
+    pub fn require_write(&self) -> Result<(), SdkRefusal> {
+        if self.read_only {
+            Err(crate::history::lookup::refuse(
+                "ReadOnly",
+                "this Store is open read-only",
+                SdkValue::Null,
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Whether this service opened the Store read-only.
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
+    }
+
     /// Stops the overlay owner this service started. Private Workspaces kept
     /// with an uncertain Commit stay with it until then.
     pub fn close(mut self) -> Result<(), String> {
@@ -130,11 +197,13 @@ impl StoreService {
         branch: BranchId,
         timing: &TimingScope<'_, Active>,
     ) -> Result<Arc<BoundWorkspace>, String> {
-        if let Some(stopped) = self
+        self.require_write()
+            .map_err(|error| format!("{}: {}", error.code, error.message))?;
+        let owner = self
             .owner
-            .maintenance_failure()
-            .map_err(|e| e.to_string())?
-        {
+            .as_ref()
+            .ok_or_else(|| "ReadOnly: this Store is open read-only".to_owned())?;
+        if let Some(stopped) = owner.maintenance_failure().map_err(|e| e.to_string())? {
             return Err(format!("overlay maintenance stopped: {stopped}"));
         }
         let admitted = self
@@ -147,7 +216,7 @@ impl StoreService {
         }
         let bound = crate::telemetry::phase(timing, "store.bind", || {
             self.store
-                .bind_private(self.owner.clone(), BindRequest { workspace, branch })
+                .bind_private(owner.clone(), BindRequest { workspace, branch })
         });
         match bound {
             Ok(success) => Ok(Arc::new(success.workspace)),
@@ -162,9 +231,12 @@ impl StoreService {
     pub fn release(&self, workspace: &BoundWorkspace) -> Result<(), String> {
         workspace.close().map_err(|e| format!("{e:?}"))?;
         self.bound.fetch_sub(1, Ordering::AcqRel);
-        self.owner
-            .retire_namespace(workspace.route().namespace())
-            .map_err(|e| e.to_string())
+        match self.owner.as_ref() {
+            Some(owner) => owner
+                .retire_namespace(workspace.route().namespace())
+                .map_err(|e| e.to_string()),
+            None => Ok(()),
+        }
     }
 
     /// Keeps a private Workspace whose Commit outcome is uncertain, with its

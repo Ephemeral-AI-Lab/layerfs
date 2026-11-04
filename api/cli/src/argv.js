@@ -14,13 +14,14 @@ export class UsageError extends Error {
 
 const camel = (name) => name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
-/** Splits the global options out of argv: --project <name>, --text, -h/--help, --version. */
+/** Splits the global options out of argv: --project <name>, --text, --read-only, -h/--help, --version. */
 export function globals(argv) {
-  const g = { rest: [], project: undefined, text: false, help: false, version: false };
+  const g = { rest: [], project: undefined, text: false, readOnly: false, help: false, version: false };
   for (let i = 0; i < argv.length; i++) {
     const t = argv[i];
     if (t === "--") { g.rest.push(...argv.slice(i)); break; }
     if (t === "--text") g.text = true;
+    else if (t === "--read-only") g.readOnly = true;
     else if (t === "-h" || t === "--help") g.help = true;
     else if (t === "--version") g.version = true;
     else if (t === "--project" || t.startsWith("--project=")) {

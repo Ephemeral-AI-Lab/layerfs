@@ -33,7 +33,7 @@ import { tmpdir } from "node:os";
 import { join, posix, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { decode, frame, readFrames } from "@layerfs/agent/internal";
-import { made, storeOf } from "./call.js";
+import { made, storeKey, storeOf } from "./call.js";
 
 const IDLE_MS = 60_000;
 /** The unauthenticated secret frame: its largest length, and how long a connection may wait to send it. */
@@ -107,46 +107,47 @@ mkdirSync(temp, { mode: 0o700 });
 process.env.TMPDIR = temp;
 const binding = createRequire(import.meta.url)(process.env.LAYERFS_NATIVE || join(config.bundle, "layerfs.node"));
 
-/** Open Stores by path: { opening, users, timer, args, closing }. */
+/** Open Stores by path and open mode: { opening, users, timer, args, closing }. */
 const stores = new Map(), sockets = new Set();
 let active = 0, closing = false, finishing = false;
 
-async function closeStore(path) {
-  const held = stores.get(path);
+async function closeStore(key) {
+  const held = stores.get(key);
   if (!held) return { value: null };
   if (held.users) return { refused: { code: "Busy", message: "the project's Store has active calls", detail: null } };
   clearTimeout(held.timer);
   held.closing ??= held.opening.then(() => binding.storeClose(storeOf(held.args))).then((answer) => {
     if (answer?.refused) throw new Error(JSON.stringify(answer.refused));
-  }).finally(() => { if (stores.get(path) === held) stores.delete(path); });
+  }).finally(() => { if (stores.get(key) === held) stores.delete(key); });
   await held.closing;
   return { value: null };
 }
 
 /** Runs `work` with the call's Store open: a Store that does not open answers its refusal. */
 async function withStore(args, work) {
-  let held = stores.get(args.storePath);
-  while (held?.closing) { await held.closing.catch(() => {}); held = stores.get(args.storePath); }
-  if (!held) stores.set(args.storePath, (held = { opening: binding.storeOpen(storeOf(args)), users: 0, timer: null, args }));
+  const key = storeKey(args);
+  let held = stores.get(key);
+  while (held?.closing) { await held.closing.catch(() => {}); held = stores.get(key); }
+  if (!held) stores.set(key, (held = { opening: binding.storeOpen(storeOf(args)), users: 0, timer: null, args }));
   held.users++;
   clearTimeout(held.timer);
   try {
     const opened = await held.opening.catch((error) => ({ thrown: error }));
     if (opened?.refused || opened?.thrown) {
-      if (stores.get(args.storePath) === held) stores.delete(args.storePath);
+      if (stores.get(key) === held) stores.delete(key);
       if (opened.thrown) throw opened.thrown;
       return opened;
     }
     return await work();
   } finally {
-    if (--held.users === 0 && stores.get(args.storePath) === held) {
-      held.timer = setTimeout(() => closeStore(args.storePath).catch((error) => console.error(`layerfs worker: closing ${args.storePath}: ${error}`)), IDLE_MS);
+    if (--held.users === 0 && stores.get(key) === held) {
+      held.timer = setTimeout(() => closeStore(key).catch((error) => console.error(`layerfs worker: closing ${args.storePath}: ${error}`)), IDLE_MS);
     }
   }
 }
 
 async function answer({ fn, op, args, open }) {
-  if (fn === "releaseStore") return closeStore(args.storePath);
+  if (fn === "releaseStore") return closeStore(storeKey(args));
   const sent = stdin && fn === "call" && op === "project.init" && typeof args.path === "string" ? { ...args, path: await linuxPath(args.path) } : args;
   const call = () => made(binding, fn, op, sent);
   return open ? withStore(sent, call) : call();

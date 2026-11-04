@@ -5,8 +5,27 @@ use crate::{branch, fs, project};
 use layerfs_bridge::control::{SdkCall, SdkValue};
 use layerfs_store_service::StoreService;
 
+fn writes(method: &str) -> bool {
+    matches!(
+        method,
+        "branch.fork"
+            | "branch.merge"
+            | "branch.publish"
+            | "fs.write"
+            | "fs.edit"
+            | "fs.mkdir"
+            | "fs.rm"
+            | "fs.cp"
+            | "fs.mv"
+            | "fs.apply"
+    )
+}
+
 /// Runs one public Store method once, in this process, on `service`.
 pub fn call(service: &StoreService, call: &SdkCall) -> Answer {
+    if writes(&call.method) {
+        service.require_write()?;
+    }
     let args = &call.args;
     if let Some(value) = args.get("message") {
         if !matches!(value, SdkValue::Null) {

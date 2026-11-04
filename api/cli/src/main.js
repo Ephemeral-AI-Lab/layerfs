@@ -1,7 +1,7 @@
 // layerfs (#428): one @layerfs/agent call per command. It finds the command
 // in the call table, parses its arguments, reads any input, opens the
-// project with LayerFS.open, makes the call once, prints the result and
-// closes. Nothing is retried. Exit 0 on success, 2 for a wrong command line
+// project with LayerFS.open (or LayerFS.openReadOnly when --read-only),
+// makes the call once, prints the result and closes. Nothing is retried. Exit 0 on success, 2 for a wrong command line
 // (nothing called), 125 when LayerFS refused or failed the call; exec
 // --stream exits with the command's own code.
 import { readFileSync } from "node:fs";
@@ -55,11 +55,12 @@ export async function main(argv, io) {
     const { LayerFS } = await import("@layerfs/agent");
     let result;
     if (entry.init) {
+      if (g.readOnly) throw new UsageError("--read-only cannot be used with init");
       result = await entry.run(LayerFS, a, o, exits);
     } else {
       const project = g.project ?? process.env.LAYERFS_PROJECT;
       if (!project) throw new UsageError("no LayerFS project: pass --project <name> or set LAYERFS_PROJECT");
-      const layerfs = await LayerFS.open(project);
+      const layerfs = await (g.readOnly ? LayerFS.openReadOnly : LayerFS.open)(project);
       try {
         result = await entry.run(layerfs, a, o, exits);
       } finally {

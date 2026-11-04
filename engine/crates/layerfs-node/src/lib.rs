@@ -33,6 +33,7 @@ pub fn exec_output(
 }
 
 /// One more client of the Store at `args.storePath` in this process.
+/// `readOnly: true` opens it for reads only and creates no overlay.
 #[napi]
 pub fn store_open(args: JsUnknown) -> napi::Result<AsyncTask<Job>> {
     dispatch::store(args, direct::acquire)

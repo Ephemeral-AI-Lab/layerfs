@@ -81,10 +81,19 @@ if (selected === "surface") {
   assert.deepEqual(native.stores.slice(before), [["open", "/missing"], ["close", "/missing"]]);
   // the options argument is gone: an object where it went is refused, never ignored
   const asked = native.calls.length;
-  for (const call of [() => LayerFS.open("website", {}), () => LayerFS.open("website", { storePath: "/missing" }), () => LayerFS.init("fresh", "/src/fresh", {}), () => LayerFS.init("fresh", "/src/fresh", { storePath: "/x" }, 5000), () => LayerFS.init("fresh", "/src/fresh", 5000, {})]) {
+  for (const call of [() => LayerFS.open("website", {}), () => LayerFS.open("website", { storePath: "/missing" }), () => LayerFS.openReadOnly("website", {}), () => LayerFS.init("fresh", "/src/fresh", {}), () => LayerFS.init("fresh", "/src/fresh", { storePath: "/x" }, 5000), () => LayerFS.init("fresh", "/src/fresh", 5000, {})]) {
     await assert.rejects(call(), { code: "InvalidInput", message: /takes no options: settings come from the environment/ });
   }
   assert.equal(native.calls.length, asked, "a refused options argument sends nothing");
+  // openReadOnly opens the Store with readOnly and refuses mutation at the binding
+  const reader = await LayerFS.openReadOnly("website");
+  assert.equal(reader.options.readOnly, true);
+  assert.deepEqual(native.stores.at(-1), ["open", "/fake/store.sqlite", true]);
+  await reader.fs.read("main", "/README.md");
+  assert.equal(native.args.at(-1).readOnly, true);
+  await assert.rejects(reader.fs.write("feat", "/README.md", "nope\n"), { code: "ReadOnly", message: /this Store is open read-only/ });
+  await assert.rejects(reader.branch.fork("other"), { code: "ReadOnly" });
+  await reader.close();
   // LayerFS.init runs project.init, then the same open
   const made = await LayerFS.init("fresh", "/src/fresh");
   assert.deepEqual(native.calls.slice(-2), ["project.init", "project.list_branches"]);
@@ -194,6 +203,11 @@ if (selected === "surface") {
     assert.equal(native.calls.length, local + 1, "the later client never reaches the addon");
     assert.deepEqual(worker.calls.at(-1).op, "fs.read");
     assert.equal(worker.calls.at(-1).open, true, "the worker opens the later client's Store");
+    assert.equal("readOnly" in worker.calls.at(-1).args, false);
+    const reader = await LayerFS.openReadOnly("website");
+    await reader.fs.read("main", "/README.md");
+    assert.equal(worker.calls.at(-1).args.readOnly, true);
+    await reader.close();
     // Init's timeout reaches the worker unchanged; an omitted one is the 300 s default
     await (await LayerFS.init("fresh", "/src/fresh", 2500)).close();
     await (await LayerFS.init("fresh", "/src/fresh")).close();
