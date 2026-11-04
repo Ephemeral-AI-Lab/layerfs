@@ -6,6 +6,7 @@
 //! taken. One test, because it sets the process's environment.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths, write_record};
+use layerfs_api::worker::PROTOCOL;
 use layerfs_bridge::control::SdkValue;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -126,7 +127,8 @@ fn worker(meet: Meet) -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
                 continue;
             }
             // this build's hello: its protocol, no sealed bundle
-            send(&mut stream, br#"{"ready":true,"protocol":2,"bundle":null}"#);
+            let ready = format!(r#"{{"ready":true,"protocol":{PROTOCOL},"bundle":null}}"#);
+            send(&mut stream, ready.as_bytes());
             let request = frame(&mut stream).unwrap_or_default();
             seen.lock()
                 .unwrap()
