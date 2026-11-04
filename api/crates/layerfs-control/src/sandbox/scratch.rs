@@ -12,6 +12,12 @@
 //! generation, so a stale plan aborts instead of deleting the new
 //! Sandbox's files.
 //!
+//! That `generation` is a **scratch token**, minted by one start. It is not
+//! the record/CAS generation #548 (B5) defines, and the two must not be
+//! treated as one: this token answers only "is this still the Sandbox that
+//! claimed this directory?". A record may later carry both, as two separate
+//! fields and two separate spaces; neither may stand in for the other.
+//!
 //! The policy is domain logic: it decides, and it does not know Docker, a
 //! worker, a daemon or the Store engine. The two ways in are
 //! [`clean`] (one settled close) and [`sweep`] (one bounded, machine-keyed
@@ -39,8 +45,12 @@ pub const GENERATION: &str = "generation";
 /// The leaf every scratch root ends in: the runtime's `tmp`, never a Store
 /// directory, a Workspace or the host's `/tmp` itself.
 const LEAF: &str = "tmp";
-/// Records one sweep may visit. A pass is bounded by construction; another
-/// pass picks up whatever is left.
+/// Roots one sweep may remove. A pass is bounded by construction: it visits
+/// records in name order and charges the batch only for a root it may
+/// remove, so records of other machines, kept records and already-gone roots
+/// cannot crowd out a later settled one. A removed root is gone next pass,
+/// so a home with more than this many settled records is covered over
+/// successive passes.
 const MAX_SWEEP: usize = 64;
 
 /// One Sandbox's scratch ownership, as its record holds it.
@@ -125,7 +135,8 @@ impl Scratch {
         self.created_at
     }
 
-    /// The token a cleaner re-checks immediately before deleting.
+    /// The token a cleaner re-checks immediately before deleting. It is this
+    /// scratch's own token, distinct from #548 (B5)'s record generation.
     pub fn generation(&self) -> u64 {
         self.generation
     }
@@ -251,12 +262,43 @@ pub fn clean(home: &Path, record: &SandboxRecord, owner: Owner) -> Result<Cleane
     Ok(Cleaned::Deleted(root))
 }
 
+/// Removes the scratch a settled close owns, without ever failing the close
+/// (#549): the runtime is already stopped, so a cleaner's error must not
+/// turn `sandbox.close` into an error after it succeeded. The failure is
+/// appended to `log/scratch.jsonl` for people, and nothing is deleted.
+pub fn clean_on_close(home: &Path, record: &SandboxRecord) {
+    let Err(refusal) = clean(home, record, Owner::Close) else {
+        return;
+    };
+    let root = record
+        .scratch()
+        .ok()
+        .flatten()
+        .map(|scratch| scratch.root().to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let _ = crate::common::home::log_line(
+        home,
+        "scratch.jsonl",
+        &SdkValue::map([
+            ("at", SdkValue::Int(crate::common::home::now_ms())),
+            ("sandbox", SdkValue::text(record.name())),
+            ("scratch", SdkValue::text(root)),
+            ("code", SdkValue::text(&refusal.code)),
+            ("message", SdkValue::text(&refusal.message)),
+        ]),
+    );
+}
+
 /// One bounded, machine-keyed pass over the home's Sandbox records: it
 /// deletes a settled record's scratch, and keeps a live or `Unresolved`
 /// one. `machine` is the machine the pass runs on, never an isolation
-/// class; records of other machines are left for that machine's pass. The
-/// report lists exactly what [`Mode::DryRun`] would delete and what
-/// [`Mode::Apply`] did.
+/// class; records of other machines are left for that machine's pass, and
+/// they are filtered out before the bounded batch so they cannot crowd a
+/// settled record out of it. The batch is charged only for a root this pass
+/// may remove: a kept record and an already-gone root do not consume it.
+/// Since a removed root is gone next pass, a home with more than [`MAX_SWEEP`]
+/// settled records is covered over successive passes. The report lists
+/// exactly what [`Mode::DryRun`] would delete and what [`Mode::Apply`] did.
 pub fn sweep(home: &Path, machine: &str, mode: Mode) -> Result<Report, SdkRefusal> {
     let mut report = Report::default();
     let dir = home.join("sandbox");
@@ -273,7 +315,12 @@ pub fn sweep(home: &Path, machine: &str, mode: Mode) -> Result<Report, SdkRefusa
         }
     }
     names.sort();
-    for name in names.into_iter().take(MAX_SWEEP) {
+    // Filter by machine before the bounded batch, and charge the batch only
+    // for a root this pass may remove. Another machine's records, a record
+    // this pass must keep and an already-gone root cannot use up the batch,
+    // so the settled record past them is still reached (#549).
+    let mut removing = 0;
+    for name in names {
         let Some(name) = name.to_str() else { continue };
         // a name that is not a Sandbox is not this pass's business
         if crate::common::names::SandboxName::parse(name).is_err() {
@@ -302,6 +349,10 @@ pub fn sweep(home: &Path, machine: &str, mode: Mode) -> Result<Report, SdkRefusa
             report.kept.push((root, why));
             continue;
         }
+        if removing == MAX_SWEEP {
+            break;
+        }
+        removing += 1;
         match mode {
             Mode::DryRun => report.planned.push(root),
             Mode::Apply => {

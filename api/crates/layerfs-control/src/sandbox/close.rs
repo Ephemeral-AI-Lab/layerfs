@@ -21,7 +21,7 @@ use crate::sandbox::lifecycle::{
     self, CloseDecision, CloseEvent, CloseRefusal, CloseState, SandboxState,
 };
 use crate::sandbox::route::on_machine;
-use crate::sandbox::scratch::{self, Mode, Owner};
+use crate::sandbox::scratch::{self, Mode};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
@@ -223,8 +223,10 @@ pub(super) fn close(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             Ok(value) => {
                 direct::release(&home, &record);
                 // one settled close may remove the scratch it owns; a stale
-                // generation or a path that is not its own is kept (#549)
-                scratch::clean(&home, &record, Owner::Close)?;
+                // generation or a path that is not its own is kept (#549). The
+                // close already stopped the runtime, so a cleaner's failure is
+                // recorded in `log/scratch.jsonl` and never changes this answer.
+                scratch::clean_on_close(&home, &record);
                 remove_folder(&dir)?;
                 sweep_scratch(&home, &record);
                 write_closed(&home, name, current, Some(next), "operator", None)?;
@@ -234,7 +236,7 @@ pub(super) fn close(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             // verified there is no runtime, so this is Closed, not Lost
             Err(_) => {
                 direct::release(&home, &record);
-                scratch::clean(&home, &record, Owner::Close)?;
+                scratch::clean_on_close(&home, &record);
                 remove_folder(&dir)?;
                 sweep_scratch(&home, &record);
                 write_closed(&home, name, current, Some(next), "gone", Some("closed"))?;
@@ -335,6 +337,8 @@ fn requested_generation(args: &SdkValue) -> Result<Option<u64>> {
 /// One bounded, machine-keyed pass over the home's settled scratch, on the
 /// same predicate as this close. The runtime is already stopped, so a
 /// failure here never changes the close's answer; the next pass retries.
+/// Like [`scratch::clean_on_close`], it is deliberately infallible to the
+/// caller.
 fn sweep_scratch(home: &Path, record: &SandboxRecord) {
     if record.machine().is_empty() {
         return;
@@ -367,8 +371,9 @@ fn close_unstarted(home: &Path, record: &SandboxRecord) -> Outcome {
     let state = record.state(false);
     let generation = record.generation();
     // a record that never got an id may still own a scratch from an attempt
-    // whose outcome was not known; the close is its explicit owner
-    scratch::clean(home, record, Owner::Close)?;
+    // whose outcome was not known; the close is its explicit owner. A
+    // cleaner failure is recorded and never changes the close's answer.
+    scratch::clean_on_close(home, record);
     remove_folder(&record.dir(home))?;
     let reason = match state {
         SandboxState::Unresolved => "unresolved",

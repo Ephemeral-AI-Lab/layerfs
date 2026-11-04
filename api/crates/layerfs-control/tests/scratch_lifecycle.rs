@@ -354,6 +354,74 @@ fn a_sweep_is_keyed_by_machine_never_by_isolation_class() {
 }
 
 #[test]
+fn a_clean_failure_is_recorded_and_never_changes_a_successful_close() {
+    let home = fresh_home();
+    seed_bystanders(&home);
+    let root = gone(&home, "b", "native", 9);
+    let inside = root.join("commands-left-this");
+    let record = SandboxRecord::from_record("b", record_value("b", "native", None, None, &root, 9));
+    // the generation re-read before the delete cannot be parsed, so the
+    // cleaner fails after deciding the root may go
+    fs::write(home.join("sandbox/b/record.json"), "{not json").unwrap();
+    assert!(scratch::clean(&home, &record, Owner::Close).is_err());
+    // the cleaner `sandbox.close` calls cannot fail: it records the failure
+    // and leaves the successful close's answer alone
+    scratch::clean_on_close(&home, &record);
+    assert!(inside.is_file(), "a failed clean deletes nothing");
+    bystanders(&home);
+    let log = fs::read_to_string(home.join("log/scratch.jsonl")).unwrap();
+    assert!(log.contains("\"sandbox\":\"b\""), "{log}");
+    assert!(log.contains("\"code\":\"Failed\""), "{log}");
+}
+
+#[test]
+fn a_sweep_reaches_a_settled_record_past_more_than_a_batch_of_unrelated_ones() {
+    let home = fresh_home();
+    // 70 records of another machine sort before the one this pass owns; the
+    // old pass took 64 names before it looked at the machine, so it never
+    // reached `zzz`
+    let mut others = Vec::new();
+    for index in 0..70 {
+        others.push(gone(&home, &format!("a{index:03}"), "elsewhere", 1));
+    }
+    let mine = gone(&home, "zzz", "native", 2);
+    let report = scratch::sweep(&home, "native", Mode::Apply).unwrap();
+    assert_eq!(report.deleted, vec![mine.clone()]);
+    assert!(!mine.exists());
+    for root in others {
+        assert!(
+            root.join("commands-left-this").is_file(),
+            "another machine's scratch survives: {}",
+            root.display()
+        );
+    }
+}
+
+#[test]
+fn a_pass_is_bounded_and_the_next_pass_reaches_the_next_batch() {
+    let home = fresh_home();
+    for index in 0..67 {
+        gone(&home, &format!("s{index:03}"), "native", 1);
+    }
+    let first = scratch::sweep(&home, "native", Mode::Apply).unwrap();
+    assert_eq!(first.deleted.len(), 64, "one pass is bounded");
+    // the batch is charged only for roots it removed, so the rest are
+    // reached by the next pass
+    let second = scratch::sweep(&home, "native", Mode::Apply).unwrap();
+    assert_eq!(second.deleted.len(), 3, "the next pass reaches the rest");
+    let covered: Vec<PathBuf> = first
+        .deleted
+        .into_iter()
+        .chain(second.deleted)
+        .filter(|root| root.exists())
+        .collect();
+    assert!(
+        covered.is_empty(),
+        "every settled scratch root is gone: {covered:?}"
+    );
+}
+
+#[test]
 fn a_symlinked_scratch_is_not_followed() {
     let home = fresh_home();
     let target = home.join("elsewhere");
