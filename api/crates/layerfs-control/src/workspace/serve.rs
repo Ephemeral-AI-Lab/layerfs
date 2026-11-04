@@ -239,8 +239,44 @@ pub(crate) fn commit(args: &SdkValue) -> Outcome {
     values::commit(&reply)
 }
 
-/// `workspace.unmount(ws, { discard?, force? })`: the daemon's answer.
+/// How one `workspace.unmount` call ends the Workspace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Ending {
+    /// The daemon's normal unmount; `force` aborts a live connection instead.
+    Normal { force: bool },
+    /// Cancel only the holders of this Workspace, then a normal unmount.
+    Kill,
+}
+
+/// Reads the `force` and `kill` arguments: `kill` accepts only `"workspace"`,
+/// it cannot be combined with `force`, and a missing `kill` leaves the
+/// existing force path alone. The caller's side (`workspace::calls`) uses it
+/// to cancel holders where the runtime is; this side uses it to refuse an
+/// invalid combination before any effect.
+pub(crate) fn ending(args: &SdkValue) -> Result<Ending, SdkRefusal> {
+    let force = args.get_bool("force");
+    match args.get_text("kill") {
+        None => Ok(Ending::Normal { force }),
+        Some("workspace") if !force => Ok(Ending::Kill),
+        Some("workspace") => Err(crate::common::outcome::refused(
+            "InvalidInput",
+            "force and kill cannot be combined: kill: \"workspace\" cancels only this Workspace's holders, then unmounts it normally",
+        )),
+        Some(other) => Err(crate::common::outcome::refused(
+            "InvalidInput",
+            format!(
+                "kill must be \"workspace\", not {other:?}: only a Workspace's own holders are killed, never another Workspace or the Sandbox"
+            ),
+        )),
+    }
+}
+
+/// `workspace.unmount(ws, { discard?, force?, kill? })`: the daemon's answer.
+/// `kill: "workspace"` first cancels only this Workspace's foreground execs,
+/// then unmounts normally; it never stops or deletes the Sandbox and never
+/// touches another Workspace.
 pub(crate) fn unmount(args: &SdkValue) -> Outcome {
+    let ending = ending(args)?;
     let state = sandbox(args)?;
     let path = text(args, "path")?;
     if let Some(value) = crate::workspace::unmount_guard::find(&state, path)? {
@@ -266,7 +302,7 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
         let mut api = workspace(&mut control);
         // Forced: one abort write ends the connection, also after a normal
         // unmount stalled at Join; uncommitted changes are dropped.
-        if args.get_bool("force") {
+        if ending == (Ending::Normal { force: true }) {
             match api.unmount(token, true).map_err(operation)? {
                 Some(outcome) => Ok(values::force_unmounted(&outcome)),
                 None => values::unmounted(&Unmounted::Closed),

@@ -239,6 +239,30 @@ pub(crate) fn scratch(runtime: &Sandbox) -> String {
     runtime.scratch_directory()
 }
 
+/// One command to its end, its two streams kept whole: used by the short
+/// probes and scans that read a command's answer (a foreground record scan, a
+/// process-group scope probe), never by an exec whose output is the result.
+pub(crate) fn capture(
+    runtime: &Sandbox,
+    identity: CommandIdentity,
+    arguments: Vec<String>,
+    environment: Vec<String>,
+    directory: &str,
+) -> Result<(i32, Vec<u8>, Vec<u8>), SdkRefusal> {
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let request = layerfs_sandbox::ExecRequest {
+        identity,
+        arguments,
+        environment,
+        directory: directory.to_owned(),
+        stdin: false,
+    };
+    let exit = runtime
+        .run(&request, &mut stdout, &mut stderr)
+        .map_err(failed)?;
+    Ok((exit.code, stdout, stderr))
+}
+
 /// One command to its end: exit code, stdout, stderr. `spool` sends every
 /// non-empty stream to its file instead of keeping it inline.
 pub(crate) fn run(

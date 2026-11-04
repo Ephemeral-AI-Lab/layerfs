@@ -9,7 +9,7 @@ use crate::machine::worker::Unreached;
 use crate::sandbox::direct;
 use crate::sandbox::family::sandbox_of;
 use crate::sandbox::route::{on_machine, reach};
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
 
 /// Runs one `workspace` call.
 pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
@@ -67,6 +67,33 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
             ("directory", SdkValue::Text(directory)),
         ];
     }
+    // A workspace-scoped kill, and the force gate, run where the Sandbox's
+    // runtime is: its machine's worker or this process, even when this host
+    // reaches only its daemon's forwarded port (#535 G4).
+    let ending = match call {
+        "unmount" => Some(crate::workspace::serve::ending(args)?),
+        _ => None,
+    };
+    let killing = ending == Some(crate::workspace::serve::Ending::Kill);
+    if killing || ending == Some(crate::workspace::serve::Ending::Normal { force: true }) {
+        let at = ws.at.as_str();
+        // a name is resolved here where the Workspace records are; the
+        // machine side resolves one it recorded itself
+        let path = match forwarded && !at.starts_with('/') {
+            true => direct::exec_directory(&home, &record, at)?,
+            false => at.to_owned(),
+        };
+        match holders(context, &record, &path, killing) {
+            Ok(Some((path, ids))) => {
+                return Err(crate::sandbox::exec::busy(record.name(), &path, ids))
+            }
+            Ok(None) => {}
+            // a scan that cannot run leaves the recovery path (`force`) as it
+            // was, exactly as before this option existed
+            Err(_) if !killing => {}
+            Err(refusal) => return Err(refusal),
+        }
+    }
     let op = match call {
         "exec" => {
             more.push(("command", args.get("command").cloned().unwrap_or_default()));
@@ -82,7 +109,7 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
             "workspace.commit"
         }
         "unmount" => {
-            for flag in ["discard", "force"] {
+            for flag in ["discard", "force", "kill"] {
                 if let Some(value) = args.get(flag) {
                     more.push((flag, value.clone()));
                 }
@@ -99,7 +126,30 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
             reach(context, &record, op, more, false).unwrap_or_else(|Unreached(why)| Err(why))
         }
         _ => on_machine(context, &record, op, more),
-    }?;
+    };
+    // A normal unmount the daemon refused Busy names the executor's foreground
+    // execs, so the caller can cancel them instead of forcing.
+    let out = match out {
+        Err(refusal)
+            if call == "unmount"
+                && refusal.code == "Busy"
+                && refusal.detail.get("processes").is_none() =>
+        {
+            let at = ws.at.as_str();
+            let path = match at.starts_with('/') {
+                true => at.to_owned(),
+                false => {
+                    direct::exec_directory(&home, &record, at).unwrap_or_else(|_| at.to_owned())
+                }
+            };
+            match holders(context, &record, &path, false) {
+                Ok(Some((path, ids))) => Err(crate::sandbox::exec::busy(record.name(), &path, ids)),
+                _ => Err(refusal),
+            }
+        }
+        other => other,
+    };
+    let out = out?;
     if call == "exec" {
         // the command's output as events too, for front ends that stream
         for stream in ["stdout", "stderr"] {
@@ -113,4 +163,31 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
         }
     }
     Ok(out)
+}
+
+/// The foreground execs still running in the Workspace at `path`, from the
+/// side that runs the Sandbox's runtime: `{ processes }` read, or cancelled
+/// first (`kill`). `Ok(None)` when none is left.
+fn holders(
+    context: &mut Context<'_>,
+    record: &crate::sandbox::record::SandboxRecord,
+    path: &str,
+    kill: bool,
+) -> Result<Option<(String, Vec<String>)>, SdkRefusal> {
+    let more = vec![
+        ("path", SdkValue::text(path)),
+        ("kill", SdkValue::Bool(kill)),
+    ];
+    let answer = on_machine(context, record, "workspace.holders", more)?;
+    let ids = match answer.get("processes") {
+        Some(SdkValue::List(items)) => (items.iter())
+            .filter_map(|item| match item {
+                SdkValue::Text(id) => Some(id.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        _ => Vec::new(),
+    };
+    let path = answer.get_text("path").unwrap_or(path).to_owned();
+    Ok((!ids.is_empty()).then_some((path, ids)))
 }

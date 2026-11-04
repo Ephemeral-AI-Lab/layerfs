@@ -348,6 +348,7 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
             | "workspace.exec"
             | "workspace.commit"
             | "workspace.unmount"
+            | "workspace.holders"
             | "backend.daemon.workspace.status"
     ) {
         return Err(refused(

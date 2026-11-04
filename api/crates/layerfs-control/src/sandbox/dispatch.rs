@@ -31,6 +31,7 @@ pub fn call(op: &str, args: SdkValue) -> Outcome {
         "workspace.commit" => workspace::commit(&workspace::by_name(args)?),
         "workspace.unmount" => workspace::unmount(&workspace::by_name(args)?),
         "workspace.exec" => exec::exec(&workspace::by_name(args)?),
+        "workspace.holders" => exec::holders(&workspace::by_name(args)?),
         _ => Err(refused("UnknownMethod", format!("no operation {op}"))),
     }
 }
