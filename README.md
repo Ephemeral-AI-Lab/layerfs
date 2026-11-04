@@ -1,3 +1,8 @@
+> [!NOTE]
+> LayerFS 2.0.0 development happens on the
+> [`layerfs_v2_0_0`](https://github.com/Ephemeral-AI-Lab/layerfs/tree/layerfs_v2_0_0) branch.
+> Check there for the latest 2.0.0 work.
+
 <p align="center">
   <a href="https://layerfs.ai/"><img src="docs/assets/readme/layerfs-mark.svg" alt="LayerFS" width="112"></a>
 </p>
