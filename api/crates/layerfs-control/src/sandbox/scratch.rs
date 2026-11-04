@@ -226,9 +226,14 @@ pub fn clean(home: &Path, record: &SandboxRecord, owner: Owner) -> Result<Cleane
     };
     let root = scratch.root().to_path_buf();
     // nothing at the root is already the desired state, even when the path
-    // would no longer pass the checks (a removed run directory)
-    if fs::symlink_metadata(&root).is_err() {
-        return Ok(Cleaned::Deleted(root));
+    // would no longer pass the checks (a removed run directory); any other
+    // error is not "gone" and must not be reported as deleted
+    match fs::symlink_metadata(&root) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(Cleaned::Deleted(root))
+        }
+        Err(error) => return Err(failed(error)),
+        Ok(_) => {}
     }
     if let Some(why) = keep(home, &root, record.state(false), owner) {
         return Ok(Cleaned::Kept(root, why));
