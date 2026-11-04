@@ -229,15 +229,24 @@ layerfs machine create host1 lima --nested
 - Once it has read a request the worker claims it (`{ claimed: true }`) and
   then beats (`{ beat: true }`) every 2 s while the operation runs. The
   caller bounds its waiting, never the operation: 10 s for the claim, 10 s
-  between beats, and 60 s for a socket write that makes no progress. The
-  wait is for bytes, not for a whole answer: a large frame (a file read)
-  may take longer than the wait to transfer as long as it keeps arriving.
-  A
-  worker that dies, hangs or loses its network is `Unknown` within one wait
-  (the request was sent); a long command keeps beating and is not cut off.
-  Protocol 3 is what lets the caller expect these frames; a protocol-2
-  worker is refused before the request is sent instead of leaving a call to
-  time out.
+  between beats, and 60 s for a socket write that makes no progress. Each
+  answer frame is bounded as a whole: its length and every read within the
+  wait, and its body within the wait or its length at 64 KiB/s, whichever
+  is longer. A large frame (a file read) that keeps arriving is therefore
+  not cut off, while a peer that trickles a frame byte by byte is bounded
+  rather than allowed to stretch the wait. A wait that expires writes one
+  `layerfs worker: liveness timeout: <op> at <address>: no
+  <claim|heartbeat> within <n> s` line to stderr. A worker that dies, hangs
+  or loses its network is `Unknown` within one wait (the request was sent);
+  a long command keeps beating and is not cut off. Protocol 3 is what lets
+  the caller expect these frames; a protocol-2 worker is refused before the
+  request is sent instead of leaving a call to time out.
+- Liveness is not progress. The beats prove the worker process is alive,
+  not that its operation is advancing, so a worker whose operation itself
+  never returns (for example a blocked Store or network call) keeps beating
+  and still holds the caller open. Bounding that needs an operation-level
+  progress marker the connection layer does not have; it is the stated
+  residual of #550 item 1, not a completed behaviour.
 - A worker holds a Store's lease for as long as it keeps the Store open,
   and closes its own open copy before a push, pull, retire or remove reads or
   deletes the file.

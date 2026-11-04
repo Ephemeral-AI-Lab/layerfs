@@ -1,5 +1,7 @@
 //! The caller's side: one request per connection, sent once.
-use super::frame::{frame_bytes, read_frame, read_frame_within_wait, write_frame, MAX_HELLO};
+use super::frame::{
+    frame_bytes, is_liveness_timeout, read_frame_within_wait, write_frame, MAX_FRAME, MAX_HELLO,
+};
 use super::hello::Hello;
 use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -90,7 +92,9 @@ pub fn request(op: &str, args: SdkValue) -> Result<Vec<u8>, SdkRefusal> {
 /// answer was lost after the request was sent. Every answer frame is waited
 /// for at most `answer_within` when the caller bounds the whole call (a
 /// ping), or by the claim and heartbeat waits otherwise: the operation's
-/// own duration is never a deadline.
+/// own duration is never a deadline. A frame is bounded as a whole (its
+/// length, each read and its body at a minimum rate), so a peer that
+/// trickles one cannot stretch the wait.
 pub fn send(
     endpoint: &Endpoint,
     op: &str,
@@ -133,7 +137,7 @@ fn send_once(
         .set_write_timeout(Some(SEND_WAIT))
         .map_err(|error| unavailable(&error))?;
     // from here the request may have reached the worker: nothing is resent
-    Ok(answer(stream, op, request, events, answer_within))
+    Ok(answer(stream, endpoint, op, request, events, answer_within))
 }
 
 /// Why a worker did not answer its secret.
@@ -193,14 +197,17 @@ pub fn hello(endpoint: &Endpoint) -> Result<Hello, SdkRefusal> {
 }
 
 /// Writes the request and reads its claim, the events, the beats and the
-/// answer. The first frame must start within [`CLAIM_WAIT`] and every later
+/// answer. The first frame must arrive within [`CLAIM_WAIT`] and every later
 /// one within [`HEARTBEAT_WAIT`], or within `answer_within` for every frame
-/// when the caller bounds the whole call (a ping). The wait is for bytes,
-/// not for a whole frame: a large answer (a file read) may take longer than
-/// the wait to transfer as long as it keeps arriving, and a worker that
-/// sends nothing for the wait is dead.
+/// when the caller bounds the whole call (a ping). Each frame is bounded as
+/// a whole: its length and every read within the wait, and its body within
+/// the wait or its length at a minimum rate. A large answer (a file read)
+/// may therefore take longer than the wait to transfer as long as it keeps
+/// arriving, while a worker that sends nothing, or trickles a frame, is
+/// dead.
 fn answer(
     mut stream: TcpStream,
+    endpoint: &Endpoint,
     op: &str,
     request: &[u8],
     events: &mut dyn FnMut(SdkValue),
@@ -220,13 +227,22 @@ fn answer(
     let mut claimed = false;
     loop {
         let wait = answer_within.unwrap_or(if claimed { HEARTBEAT_WAIT } else { CLAIM_WAIT });
-        if let Err(error) = stream.set_read_timeout(Some(wait)) {
-            return Err(lost(op, &format!("no wait could be set: {error}")));
-        }
-        let frame = match read_frame(&mut stream) {
+        let stage = if answer_within.is_some() {
+            "answer"
+        } else if claimed {
+            "heartbeat"
+        } else {
+            "claim"
+        };
+        let frame = match read_frame_within_wait(&mut stream, MAX_FRAME, wait) {
             Ok(Some(frame)) => frame,
             Ok(None) => return Err(lost(op, "the worker closed the connection")),
-            Err(refusal) => return Err(lost(op, &refusal.message)),
+            Err(refusal) => {
+                if is_liveness_timeout(&refusal) {
+                    liveness_timeout(endpoint, op, stage, wait);
+                }
+                return Err(lost(op, &refusal.message));
+            }
         };
         if frame.get("claimed").is_some() || frame.get("beat").is_some() {
             claimed = true;
@@ -253,6 +269,19 @@ fn refusal_of(refusal: &SdkValue) -> SdkRefusal {
         message: refusal.get_text("message").unwrap_or("").to_owned(),
         detail: refusal.get("detail").cloned().unwrap_or_default(),
     }
+}
+
+/// One stable line on stderr when a call loses its worker to a wait that
+/// expired. It names the operation, the worker and the wait it was in, so an
+/// operator can tell a dead worker from a refused call without a metrics
+/// framework. A lost connection (closed or reset) is not a liveness timeout
+/// and logs nothing.
+fn liveness_timeout(endpoint: &Endpoint, op: &str, stage: &str, wait: Duration) {
+    eprintln!(
+        "layerfs worker: liveness timeout: {op} at {}: no {stage} within {} s; the answer is Unknown and was not resent",
+        endpoint.address,
+        wait.as_secs()
+    );
 }
 
 fn lost(op: &str, why: &str) -> SdkRefusal {

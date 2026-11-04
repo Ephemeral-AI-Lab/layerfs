@@ -76,6 +76,35 @@ fn a_worker_that_dies_mid_wait_is_unknown_at_once() {
 }
 
 #[test]
+fn a_trickled_answer_is_unknown_within_its_wait() {
+    // the worker claimed, then sends its answer one byte at a time: a frame
+    // that never really progresses is dead, not slow, and the whole-frame
+    // rule bounds it instead of each socket read extending it forever
+    let wait = Duration::from_secs(1);
+    let endpoint = stand_in(true, move |mut stream| {
+        let frame =
+            worker::frame_bytes(&SdkValue::map([("value", SdkValue::text("trickled"))])).unwrap();
+        for byte in frame {
+            if stream.write_all(&[byte]).is_err() {
+                return;
+            }
+            std::thread::sleep(wait / 3);
+        }
+    });
+    let request = worker::request("worker.ping", SdkValue::Null).unwrap();
+    let started = Instant::now();
+    let refusal = worker::send(&endpoint, "worker.ping", &request, &mut |_| {}, Some(wait))
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(refusal.code, "Unknown", "{refusal:?}");
+    assert!(
+        started.elapsed() < wait + Duration::from_secs(3),
+        "{:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
 fn a_long_operation_is_not_cut_off_while_the_worker_beats() {
     // longer than the claim and heartbeat waits together: only the beats
     // keep the call alive, and they do, however long it runs

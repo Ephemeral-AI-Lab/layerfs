@@ -15,6 +15,15 @@
 //! beats while it runs, so every wait after the request is bounded (connect,
 //! hello, claim, heartbeat) while the operation itself is not: a dead worker
 //! is `Unknown` in bounded time, and a long command keeps running.
+//!
+//! A frame is bounded as a whole: its length and every read within the wait,
+//! and its body within the wait or its length at a minimum rate, so a peer
+//! that trickles a frame cannot stretch a wait. A wait that expires writes
+//! one `layerfs worker: liveness timeout:` line to stderr. Liveness is not
+//! progress: a worker that stays alive and keeps beating while its operation
+//! itself never returns still holds the call open. Detecting that needs an
+//! operation-level progress marker, which the connection layer cannot
+//! invent; it is a stated residual of #550, not a completed item.
 mod client;
 mod frame;
 mod hello;
