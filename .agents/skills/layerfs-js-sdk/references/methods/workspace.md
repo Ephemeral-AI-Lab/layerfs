@@ -277,7 +277,7 @@ conflict detail also exposes `conflictsTruncated`, and individual conflicts mark
 their text. Inspect those files with bounded `workspace.exec` commands and Commit
 each command. The omission flags never mean the unresolved source is safe to drop.
 
-## `workspace.unmount(ws, discard?, force?, kill?)`
+## `workspace.unmount(ws, { discard?, force?, kill? })`
 
 Unmounts a Workspace. A Sandbox left with no Workspace closes itself two minutes later.
 
@@ -317,7 +317,7 @@ try {
   await layerfs.workspace.unmount(ws);              // busy: a holder is live
 } catch (error) {
   if (error.code !== "Busy") throw error;
-  await layerfs.workspace.unmount(ws, false, false, "workspace");
+  await layerfs.workspace.unmount(ws, { kill: "workspace" });
 }
 ```
 

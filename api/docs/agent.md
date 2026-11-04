@@ -195,13 +195,13 @@ names a live process, `workspace.unmount` reports its id in
 `detail.processes`: a normal unmount when the daemon refuses `Busy`, and a
 forced unmount before it does anything. `backend.daemon.process.cancel(id)`
 finds a foreground exec by that record, also from a client that did not start
-it, and signals its process group. `workspace.unmount(ws, kill: "workspace")`
+it, and signals its process group. `workspace.unmount(ws, { kill: "workspace" })`
 cancels every foreground record and background process the target Workspace
 still holds, waits for each to stop, then retries a normal daemon unmount; it
 never stops or deletes the Sandbox and never touches another Workspace. The
 image must provide util-linux `setsid --wait` (Debian 12 has it).
 
-`workspace.unmount(ws, kill: "workspace")` accepts only that value (anything
+`workspace.unmount(ws, { kill: "workspace" })` accepts only that value (anything
 else, or `force` plus `kill`, is `InvalidInput`). It cancels only the target
 Workspace's holders: TERM to each process group, a bounded wait, then KILL only
 if a holder is still there, and a *normal* daemon unmount afterwards; it never

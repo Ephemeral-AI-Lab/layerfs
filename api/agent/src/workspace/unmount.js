@@ -6,9 +6,23 @@
 // (background processes and foreground execs), then unmounts normally; it
 // never stops or deletes the Sandbox. An attempted abort is never repeated.
 // A Sandbox left with no Workspace closes once it has been idle.
+// The third argument is an options object. The old positional form
+// (`discard?, force?, kill?`) is kept for existing callers.
 import { invokeClient, workspaceArgs } from "../client.js";
-export function unmount(client, ws, discard = false, force = false, kill = undefined) {
+
+export function unmount(client, ws, options = {}, force = false, kill = undefined) {
+  let discard;
+  let killScope;
+  if (options !== null && typeof options === "object" && !Array.isArray(options)) {
+    discard = options.discard === true;
+    force = options.force === true;
+    killScope = options.kill;
+  } else {
+    discard = options === true;
+    force = force === true;
+    killScope = kill;
+  }
   const args = { ...workspaceArgs(ws), discard, force };
-  if (kill !== undefined) args.kill = kill;
+  if (killScope !== undefined) args.kill = killScope;
   return invokeClient(client, "workspace.unmount", args);
 }
