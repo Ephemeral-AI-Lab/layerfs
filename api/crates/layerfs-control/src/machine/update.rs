@@ -7,9 +7,11 @@ use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::SdkValue;
 use layerfs_machine::HostOs;
 
-/// `machine.update(name, { cpus, memory, image, docker, wsl })` (O11): the
-/// built-in machines' image, Docker socket and WSL distribution. Resizing
-/// a VM is refused while Sandboxes run on it.
+/// `machine.update(name, { cpus, memory, image, docker, wsl, daemon })`
+/// (O11): the built-in machines' image, Docker socket, WSL distribution
+/// and the daemon their Sandboxes run (an absolute path to a file; it
+/// replaces what `import-env` recorded). Resizing a VM is refused while
+/// Sandboxes run on it.
 pub fn update(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
@@ -23,11 +25,21 @@ pub fn update(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             format!("{name} is built in; it has no size of its own"),
         ));
     }
-    if !kind.built_in() && (args.get("docker").is_some() || args.get("wsl").is_some()) {
+    let built_in_only = ["docker", "wsl", "daemon"];
+    if !kind.built_in() && built_in_only.iter().any(|f| args.get(f).is_some()) {
         return Err(refused(
             "InvalidInput",
-            "docker and wsl are the built-in machines' settings",
+            "docker, wsl and daemon are the built-in machines' settings",
         ));
+    }
+    if let Some(daemon) = args.get_text("daemon") {
+        let path = std::path::Path::new(daemon);
+        if !path.is_absolute() || !path.is_file() {
+            return Err(refused(
+                "InvalidInput",
+                format!("daemon must be the absolute path of a file; {daemon} is not one"),
+            ));
+        }
     }
     if args.get("wsl").is_some() && HostOs::current() != HostOs::Windows {
         return Err(refused("InvalidInput", "wsl is a Windows host's setting"));
@@ -44,7 +56,7 @@ pub fn update(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ));
     }
     let mut record = record;
-    for field in ["image", "docker", "wsl"] {
+    for field in ["image", "docker", "wsl", "daemon"] {
         if let Some(value) = args.get(field) {
             record = record.with(field, value.clone());
         }

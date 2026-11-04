@@ -198,12 +198,23 @@ fn private_store(root: &Path, store: &str) -> Result<()> {
     std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).map_err(failed)
 }
 
+/// Why built-in machine `machine`'s recorded daemon `path` cannot run (it
+/// is not a file), and the call that records another: the Sandbox refusal
+/// and `layerfs doctor` say the same.
+pub(crate) fn missing_daemon(machine: &str, path: &str) -> String {
+    format!(
+        "machine {machine}'s recorded daemon {path} is not there; record another with \
+         `layerfs machine update {machine} --daemon <path>`"
+    )
+}
+
 /// The daemon a Sandbox on `machine` (`native` or `docker`) runs, on `side`:
 /// in a worker, the one beside its own executable (the bundle's); here, the
 /// machine record's `daemon` (`import-env` writes native's from 1.1.0's
 /// `LAYERFS_DAEMON`), else for `native` this host's bundle's, and for
 /// `docker` (a Linux daemon) native's on Linux, else the sealed Linux
-/// bundle's.
+/// bundle's. A recorded daemon that is not there is refused before any
+/// launch, naming the call that records another.
 fn daemon(side: &Side<'_>, machine: &str) -> Result<String> {
     let home = match side {
         Side::Worker(_) => return Ok(beside_self("layerfs-daemon")?.display().to_string()),
@@ -211,6 +222,9 @@ fn daemon(side: &Side<'_>, machine: &str) -> Result<String> {
     };
     let record = MachineRecord::read(home, machine)?;
     if let Some(path) = record.as_ref().and_then(MachineRecord::daemon) {
+        if !Path::new(path).is_file() {
+            return Err(refused("Unavailable", missing_daemon(machine, path)));
+        }
         return Ok(path.to_owned());
     }
     if machine == "docker" && !cfg!(target_os = "linux") {

@@ -303,7 +303,7 @@ form.
 | `connect` | `name`, `host` | `user`, `port`, `identity`, `known_hosts`, `root` | connects an ssh host as a machine |
 | `remove` | `name` | — | deletes a VM machine and its disk |
 | `disconnect` | `name` | — | forgets an ssh machine; its data root stays |
-| `update` | `name` | `cpus`, `memory`, `image`, `docker`, `wsl` | sets a built-in machine's image, Docker socket and WSL distribution (O11); `InUse` while Sandboxes run on the machine; resizing a VM is not built |
+| `update` | `name` | `cpus`, `memory`, `image`, `docker`, `wsl`, `daemon` | sets a built-in machine's image, Docker socket, WSL distribution and daemon (an absolute path to a file; it replaces what `import-env` recorded) (O11); `InUse` while Sandboxes run on the machine; resizing a VM is not built |
 
 Run:
 
@@ -408,8 +408,10 @@ layerfs doctor --text     # a count line, then each finding and its fix
   record modes other than 0600; broken references (a Sandbox whose Store,
   project or machine is gone, a Store on a machine with no record, a project
   in a Store folder with no record, a Firecracker machine whose Lima host is
-  gone); an `op` a gone process left uncertain (an error naming the call
-  that clears it) or certain (a warning); stale Store leases; what refuses
+  gone, a built-in machine whose recorded daemon is not there, an error
+  naming `machine update <name> --daemon <path>`); an `op` a gone process left uncertain (an error naming the call
+  that clears it) or certain (a warning); stale Store leases (a warning: the
+  Store's next call removes them); what refuses
   a layout 2 home's conversion; a partial `store.sqlite.incoming` on
   `native`; a copy a push or pull did not retire (its record's
   `last_transfer` says `retired: false`; a warning naming the next `store

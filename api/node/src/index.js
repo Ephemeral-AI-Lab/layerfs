@@ -114,7 +114,16 @@ export async function doctor({ home } = {}) {
   return answer.value;
 }
 
+/** Closes every Store this process holds open with no call running,
+ * releasing its leases, so it leaves none behind when it exits (a lease
+ * of a process that ended is stale until the Store's next call). Call it
+ * before the process exits; a later call opens its Store again. Answers
+ * how many Stores it closed. Outside the call table. */
+export function close() {
+  return native.close();
+}
+
 const fallback = client();
 export const { project, branch, commit, file, sandbox, workspace, machine, store, backup } = fallback;
 export { LayerFSError };
-export default { ...fallback, client, doctor, table, families, LayerFSError };
+export default { ...fallback, client, close, doctor, table, families, LayerFSError };

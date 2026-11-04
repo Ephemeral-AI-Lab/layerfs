@@ -16,6 +16,14 @@ sys.path.insert(0, str(HERE.parent / "src"))
 import layerfs  # noqa: E402
 
 
+class Close(unittest.TestCase):
+    def test_close_is_outside_the_table_and_closes_nothing_when_nothing_is_open(self):
+        # outside the table: its families keep only their own calls (sandbox.close is one)
+        self.assertNotIn("close", [spec["family"] for spec in layerfs.TABLE])
+        layerfs.close()
+        self.assertEqual(layerfs.close(), 0)
+
+
 class Doctor(unittest.TestCase):
     def test_a_home_not_made_yet_is_ok_and_stays_absent(self):
         parent = tempfile.mkdtemp(prefix="layerfs-py-doctor-")

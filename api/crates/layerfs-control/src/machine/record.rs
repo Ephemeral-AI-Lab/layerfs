@@ -313,7 +313,9 @@ impl MachineRecord {
             ("stores", list(&derived.stores)),
             ("sandboxes", list(&derived.sandboxes)),
         ];
-        for extra in ["image", "host", "nested", "docker", "wsl", "error"] {
+        for extra in [
+            "image", "host", "nested", "docker", "wsl", "daemon", "error",
+        ] {
             if let Some(value) = self
                 .field(extra)
                 .filter(|_| extra != "error" || error.is_none())

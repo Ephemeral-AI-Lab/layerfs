@@ -1,6 +1,7 @@
 //! The checks on what the scan read: broken references (a Sandbox whose
 //! Store, project or machine is gone, a Store on a machine with no record,
-//! a Firecracker machine whose host is gone), dead and uncertain `op`
+//! a Firecracker machine whose host is gone, a built-in machine's recorded
+//! daemon that is not there), dead and uncertain `op`
 //! intents, stale Store leases (read, never removed), a partial Store
 //! copy (`store.sqlite.incoming`) an interrupted transfer left on `native`
 //! and a copy a push or pull did not retire (from the record).
@@ -81,8 +82,8 @@ pub(super) fn check(
                 entity,
                 format!("Store {name} holds a stale lease of process {pid}, which ended"),
                 format!(
-                    "nothing reads it; delete `store/{name}/open/{pid}` by hand, or the next \
-                     `layerfs store push`, `store pull` or `store remove` of {name} removes it"
+                    "nothing reads it; the next call on {name} removes it, or delete \
+                     `store/{name}/open/{pid}` by hand"
                 ),
             );
         }
@@ -91,11 +92,19 @@ pub(super) fn check(
     Ok(())
 }
 
-/// Machines: their intents, and a Firecracker machine's Lima host.
+/// Machines: their intents, a Firecracker machine's Lima host, and a
+/// built-in machine's recorded daemon that is not there.
 fn machines(scanned: &Scanned, findings: &mut Findings) {
     for machine in &scanned.machines {
         let name = machine.name();
         let entity = ("machine", name);
+        if let Some(daemon) = machine.daemon().filter(|d| !Path::new(d).is_file()) {
+            findings.error(
+                entity,
+                crate::sandbox::deploy::missing_daemon(name, daemon),
+                format!("`layerfs machine update {name} --daemon <path>`"),
+            );
+        }
         if let Some(op) = machine.op() {
             let clear = format!("{} {name}", machine.clearing_call());
             intent(

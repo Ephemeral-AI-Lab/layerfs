@@ -37,9 +37,12 @@ fn call(home: &Path, name: &str, args: &[(&str, SdkValue)]) -> Result<SdkValue, 
 
 #[test]
 fn machines_over_records() {
-    // no provider tool and no bundle: every create is refused before a VM
+    // no provider tool and no bundle: every create is refused before a VM.
+    // Tools are found on PATH and in installers' folders under HOME
+    // (~/.microsandbox/bin), so both point at an empty folder.
     let empty = tempdir("path");
     std::env::set_var("PATH", &empty);
+    std::env::set_var("HOME", &empty);
     std::env::set_var("LAYERFS_BUNDLE", empty.join("missing"));
     let home = tempdir("home");
 
@@ -126,6 +129,32 @@ fn machines_over_records() {
         .unwrap()
         .unwrap();
     assert_eq!(docker.get_text("docker"), Some("/tmp/docker.sock"));
+
+    // a built-in machine's daemon: an absolute path to a file, shown by machine.get
+    for bad in ["layerfs-daemon", "/no/such/layerfs-daemon"] {
+        let (code, message) = call(
+            &home,
+            "machine.update",
+            &[("name", t("native")), ("daemon", t(bad))],
+        )
+        .unwrap_err();
+        assert_eq!(code, "InvalidInput", "{bad}: {message}");
+    }
+    let daemon = empty.join("layerfs-daemon");
+    std::fs::write(&daemon, "").unwrap();
+    let daemon = daemon.display().to_string();
+    call(
+        &home,
+        "machine.update",
+        &[("name", t("native")), ("daemon", t(&daemon))],
+    )
+    .unwrap();
+    let native = read_record(&paths::machine_record(&home, "native"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(native.get_text("daemon"), Some(daemon.as_str()));
+    let shown = call(&home, "machine.get", &[("name", t("native"))]).unwrap();
+    assert_eq!(shown.get_text("daemon"), Some(daemon.as_str()));
 
     // a machine with a Store is InUse
     write_record(

@@ -166,6 +166,30 @@ fn a_store_call_during_a_push_is_busy_even_from_the_pushers_process() {
 }
 
 #[test]
+fn taking_a_lease_removes_the_leases_of_processes_that_ended_and_keeps_live_ones() {
+    let (home, root) = home_with_shop();
+    let dir = paths::lease_dir(&home, "shop");
+    std::fs::create_dir_all(&dir).unwrap();
+    // a process id above every kernel's pid_max ended; process 1 is alive
+    std::fs::write(dir.join("99999999"), "1\n").unwrap();
+    std::fs::write(dir.join("1"), "1\n").unwrap();
+    let status = call(&home, "store.status", &[("name", t("shop"))]).unwrap();
+    assert!(
+        dir.join("99999999").exists(),
+        "a read removed a lease: {status:?}"
+    );
+    let held = lease::hold(&home, "shop").unwrap();
+    assert!(!dir.join("99999999").exists(), "the stale lease stayed");
+    assert!(dir.join("1").exists(), "a live holder's lease was removed");
+    let log = std::fs::read_to_string(home.join("log").join("leases.jsonl")).unwrap();
+    assert!(log.contains("\"removed_stale_lease_of\":99999999"), "{log}");
+    drop(held);
+    std::fs::remove_file(dir.join("1")).unwrap();
+    std::fs::remove_dir_all(home).unwrap();
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn a_gone_pushers_uncertain_op_is_unresolved_until_store_remove_clears_it() {
     let (home, root) = home_with_shop();
     set_op(&home, this_process_pushing(1, true));

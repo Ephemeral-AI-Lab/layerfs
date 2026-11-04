@@ -7,10 +7,12 @@
 //! remove` and `store disconnect` read leases under the Store's lock and refuse `InUse` while
 //! one is held. A lease names its process by id, kernel start time and
 //! boot, so a reused id does not keep it alive; a lease whose process is
-//! not alive on this host is stale: a push, pull, remove or disconnect
-//! removes it under the Store's lock and logs the removal (O35); reads
-//! (`store.status`, `store.list`, `layerfs doctor`) ignore it and change
-//! nothing.
+//! not alive on this host is stale: a push, pull, remove or disconnect, and
+//! a process taking its own lease on the Store ([`claim`]), removes it under
+//! the Store's lock and logs the removal (O35), so a process that ended
+//! without closing its Stores leaves nothing once the Store is used again;
+//! reads (`store.status`, `store.list`, `layerfs doctor`) ignore it and
+//! change nothing.
 use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused};
 use crate::store::record::StoreRecord;
@@ -78,7 +80,8 @@ pub(crate) fn recorded_alive(value: &SdkValue) -> bool {
 /// Holds Store `store`'s lease for this process. Under the Store's lock it
 /// re-reads the Store's record: no record is `NoSuchStore`; an operation
 /// running on it (by any live process, this one included) is `Busy`, one a
-/// gone process left unresolved `Unresolved`.
+/// gone process left unresolved `Unresolved`. Stale leases of the Store are
+/// removed there first ([`holders`]).
 pub fn hold(home: &Path, store: &str) -> Result<Lease, SdkRefusal> {
     claim(home, store).map(|(lease, _)| lease)
 }
@@ -92,6 +95,8 @@ pub(crate) fn claim(home: &Path, store: &str) -> Result<(Lease, StoreRecord), Sd
     let _store = crate::store::record::lock(home, store)?;
     let record = StoreRecord::read(home, store)?.ok_or_else(none)?;
     record.unblocked()?;
+    // the leases of processes that ended go now; the live holders' stay
+    holders(home, store)?;
     Ok((hold_locked(home, store)?, record))
 }
 

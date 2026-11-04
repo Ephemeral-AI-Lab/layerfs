@@ -129,9 +129,15 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   that is gone after a known outcome holds nothing.
 - A remove or disconnect is refused only while another process's `op`
   lives: it is the call that clears an `unresolved` machine.
-- `machine update native` and `machine update docker` set `image` and
-  `docker` (the Docker socket); `wsl` is a Windows host's setting. Any
+- `machine update native` and `machine update docker` set `image`,
+  `docker` (the Docker socket) and `daemon` (the daemon their Sandboxes
+  run: an absolute path to a file, replacing what `import-env` recorded;
+  `machine get` shows it); `wsl` is a Windows host's setting. Any
   update is `InUse` while Sandboxes run on the machine, naming them.
+- A recorded daemon that is not there (its build moved or was removed)
+  refuses a Sandbox on that machine `Unavailable` before any launch,
+  naming `machine update <name> --daemon <path>`; `layerfs doctor` reports
+  it as an error.
 - Resizing a VM with `machine update` is `Unsupported` ("not built yet");
   nothing is changed.
 
@@ -345,6 +351,12 @@ $ layerfs store pull shop --progress       # not run
 - A lease or `op` records its process's start time and boot, so one whose
   process id was reused by another process is stale. A lease written
   without them is matched by id alone.
+- A process that ends with Stores open leaves their leases. Taking a
+  lease removes the Store's stale ones first, under the Store's lock, and
+  logs each (`log/leases.jsonl`), as a push, pull, remove or disconnect
+  does; reads leave them. A process that is about to exit calls
+  `layerfs.close()` (Node and Python, [SDK](sdk.md)) to close its open
+  Stores and drop its leases.
 - Init into a sqlite Store on another machine reads the folder on the
   caller's host and copies it, in pieces of at most 8 MiB, into
   `incoming/init-<id>` under that machine's worker root; the worker runs

@@ -1,5 +1,5 @@
-//! `table()`, `call(name, args, home=None, scope=None, on_event=None)` and
-//! `doctor(home=None)`.
+//! `table()`, `call(name, args, home=None, scope=None, on_event=None)`,
+//! `close()` and `doctor(home=None)`.
 use pyo3::prelude::*;
 use std::path::{Path, PathBuf};
 
@@ -37,6 +37,14 @@ pub fn call(
         };
         layerfs_api::call_json(home.as_deref(), scope.as_deref(), &name, &args, &mut send)
     })
+}
+
+/// Closes every Store this process holds open with no call running, which
+/// releases its leases (outside the call table), with the interpreter
+/// released. Returns how many Stores it closed.
+#[pyfunction]
+pub fn close(py: Python<'_>) -> usize {
+    py.detach(|| layerfs_api::close_idle(std::time::Duration::ZERO))
 }
 
 /// `layerfs doctor` (report-only, outside the call table) on `home` (else

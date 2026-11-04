@@ -1,4 +1,4 @@
-//! The binding's two functions and the task that runs one call.
+//! The binding's functions and the task that runs one call.
 use napi::bindgen_prelude::AsyncTask;
 use napi::threadsafe_function::{
     ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
@@ -43,6 +43,15 @@ pub fn call(
         scope,
         events,
     }))
+}
+
+/// Closes every Store this process holds open with no call running, which
+/// releases its leases (outside the call table): what a process calls
+/// before it exits. A later call opens its Store again. Answers how many
+/// Stores it closed.
+#[napi]
+pub fn close() -> u32 {
+    u32::try_from(layerfs_api::close_idle(std::time::Duration::ZERO)).unwrap_or(u32::MAX)
 }
 
 /// `layerfs doctor` (report-only, outside the call table) on `home` (else

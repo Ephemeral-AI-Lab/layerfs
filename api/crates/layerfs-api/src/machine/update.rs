@@ -1,4 +1,4 @@
-//! `machine.update`: resize a VM, or set a built-in machine's image and Docker socket.
+//! `machine.update`: resize a VM, or set a built-in machine's image, Docker socket and daemon.
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::calls::table::Kind::{Int, Name, Size, Text};
 use layerfs_control::calls::table::{a, call, opt, Call};
@@ -16,8 +16,9 @@ pub(crate) const CALL: Call = call(
         opt("image", Text),
         opt("docker", Text),
         opt("wsl", Text),
+        opt("daemon", Text),
     ],
-    "resize a VM, or set a built-in machine's image and Docker socket",
+    "resize a VM, or set a built-in machine's image, Docker socket and daemon",
     run,
 );
 

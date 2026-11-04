@@ -26,6 +26,15 @@ def doctor(home=None):
     return answer["value"]
 
 
+def close():
+    """Closes every Store this process holds open with no call running,
+    releasing its leases, so it leaves none behind when it exits (a lease
+    of a process that ended is stale until the Store's next call). Call it
+    before the process exits; a later call opens its Store again. Returns
+    how many Stores it closed. Outside the call table."""
+    return _native.close()
+
+
 _default = Client()
 project = _default.project
 branch = _default.branch
@@ -45,6 +54,7 @@ __all__ = [
     "backup",
     "branch",
     "client",
+    "close",
     "commit",
     "doctor",
     "file",

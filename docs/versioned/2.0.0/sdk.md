@@ -54,6 +54,10 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", fo
   [`layerfs doctor`](calls.md#layerfs-doctor), outside the table: it
   resolves to `{ ok, findings: [{ severity, entity: { kind, name }, message,
   fix }] }` and changes nothing; `home` defaults as above.
+- `layerfs.close()` (also a named export), outside the table, closes every
+  Store this process holds open with no call running, which drops its
+  leases; it answers how many it closed. A process calls it before it
+  exits, so it leaves no stale lease; a later call opens its Store again.
 - The native addon is looked for beside the package (`layerfs.node`), at a
   worktree build bundle's root, then beside its crate
   (`engine/crates/layerfs-node/layerfs.node`). Build it with
@@ -96,6 +100,8 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
 - `layerfs.doctor(home=None)` is [`layerfs doctor`](calls.md#layerfs-doctor),
   outside the table: a dict `{"ok", "findings"}` as in Node, changing
   nothing.
+- `layerfs.close()` is Node's `close()`: it closes this process's open
+  Stores, dropping their leases, and returns how many.
 - Build: `cd api/python && maturin build --locked` (maturin 1.9.6 or a
   later 1.x, as `pyproject.toml` requires since `2793ee114c`). Only a macOS
   arm64 wheel was built on this branch; the Linux x64 and arm64 glibc

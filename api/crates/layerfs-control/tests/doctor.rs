@@ -201,6 +201,13 @@ fn each_problem_gives_one_finding_naming_its_fix() {
         "partial",
     )
     .unwrap();
+    // a built-in machine whose recorded daemon is not there
+    let native = SdkValue::map([
+        ("name", t("native")),
+        ("platform", t("native")),
+        ("daemon", t("/no/such/layerfs-daemon")),
+    ]);
+    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
     // a running machine whose worker is of an older build
     let (address, received) = old_worker();
     let m1 = SdkValue::map([("name", t("m1")), ("platform", t("lima"))]);
@@ -261,6 +268,13 @@ fn each_problem_gives_one_finding_naming_its_fix() {
             "s5",
             "stale lease of process 99999999",
             "`store/s5/open/99999999` by hand",
+        ),
+        (
+            "error",
+            "machine",
+            "native",
+            "recorded daemon /no/such/layerfs-daemon is not there",
+            "`layerfs machine update native --daemon <path>`",
         ),
         (
             "warning",
