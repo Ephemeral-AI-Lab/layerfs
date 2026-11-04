@@ -490,3 +490,91 @@ connects. These tests do not cover the following, which need later CI:
 5. **`Stop` is policy-shaped but untested.** It is a bounded SIGTERM wrapper,
    not presence or force policy; whether it belongs in the supervisor or the
    future orchestrator is open.
+
+> Items 1, 2 and 5 are resolved by [Presence + registry decisions
+> (locked)](#presence--registry-decisions-locked); they stay listed as the
+> record of what was open at this checkpoint.
+
+## Presence + registry decisions (locked)
+
+This section locks the decisions that §1.5, §1.6 and §7 leave open. They are
+design decisions for the phases after this skeleton; they do not add code to
+this PR and they do not change any behaviour described above.
+
+1. **Launcher.** Engine exec spawns the supervisor and owns stdio and the exit
+   code. The daemon only receives the registration and owns the registry,
+   presence and policy. The daemon does not become a general command I/O broker
+   and does not spawn the supervisor in this phase.
+   *Rationale:* §1.5's open question — "where the orchestrator lives" — is
+   answered without reversing the current rule that the daemon has no command
+   supervisor and without reintroducing the declined launcher proposal. The
+   daemon's new surface stays a record-and-observe one, so a daemon restart or
+   policy decision cannot alter a running command's byte streams or exit status.
+
+2. **Lease granularity.** One dedicated lease connection per client process per
+   Sandbox, multiplexing all of that process's sessions over it — not one
+   connection per exec. Session ids and per-session tokens identify the
+   individual sessions. The connection budget is one lease connection plus
+   pooled RPC slots.
+   *Rationale:* per-exec connections make the connection count scale with
+   concurrent commands, which is exactly the quantity a client controls; a
+   single multiplexed lease bounds it to one per client process per Sandbox and
+   gives presence a natural unit ("this client process is gone") instead of
+   inferring it per exec.
+
+3. **Daemon restart.** P1 does not adopt old sessions. On a daemon restart the
+   registry and the lease are lost; supervisors treat control EOF according to
+   their foreground (cancel/cleanup) versus background (keep) policy; only host
+   records remain. This is documented as **lost-session semantics**, not
+   recovery.
+   *Rationale:* adopting sessions would require durable, replayable session
+   state and a supervisor that can be re-addressed after the daemon restarts —
+   neither exists and neither is needed for the first phase. Stating it as
+   lost-session semantics keeps the guarantee honest: after a daemon restart the
+   command may still run, but no session is addressable through the daemon.
+
+4. **Lease auth.** Require `SO_PEERCRED` **plus** a daemon-issued per-session
+   capability/token delivered over the authenticated control channel. Do not put
+   the token in argv: same-uid processes can read `/proc/<pid>/cmdline`. If
+   same-Sandbox hostile multi-tenancy is in scope, user/namespace isolation is
+   additionally required.
+   *Rationale:* the skeleton's peer-uid check (§2.2, §5 "Authorization beyond
+   socket mode + peer uid: deferred") is admission, not authorization: every
+   process with the same uid in the Sandbox can pass it. A per-session token
+   bound to an authenticated channel narrows authority to the session; argv is
+   not a channel because `/proc/<pid>/cmdline` is readable by same-uid peers.
+   A token alone still does not defend against a same-uid attacker who can read
+   the process's memory or fds, so hostile multi-tenancy additionally needs
+   user or namespace isolation, which is out of scope here.
+
+5. **Background.** Do not overload one boolean. Keep `mode: foreground |
+   background` and a separate `onDisconnect: cancel | keep | reconnectWindow`.
+   This phase ships `background` with `cancel`; `reconnectWindow` comes later.
+   `detachOnDisconnect` is not its own state: it is `foreground` + `keep`.
+   *Rationale:* "background" answers *who waits for the command*; "what happens
+   when the client disappears" is a different question with different
+   mechanisms. Collapsing them into one flag produces cases (background +
+   cancel, foreground + keep) that cannot be expressed, and `reconnectWindow`
+   is a third policy value, not a fourth boolean.
+
+6. **Cancelling.** No 500 ms reversible *Cancelling* window. The reconnect
+   window is the *Orphaned* phase (5 s default); once *Cancelling* starts it is
+   one-way; the grace period is only `TERM` → `KILL` cleanup time.
+   *Rationale:* a reversible *Cancelling* state means a cancel can be undone
+   after signals may already have been delivered, which makes the observed
+   outcome race the client's intent. Two distinct phases — *Orphaned*, which is
+   recoverable, and *Cancelling*, which is not — keep "may I resume this?" and
+   "is this being torn down?" answerable without inspecting timers. The grace
+   period then has one meaning: how long `TERM` gets before `KILL`.
+
+### Impact on phases
+
+The decisions above map onto the phases as follows; only P1's registry and
+`starttime` capture are preconditions for anything else.
+
+| Phase | Adds | Enabled by |
+| --- | --- | --- |
+| P1 | daemon session registry, `(pid, pgid, starttime)` identity | decision 1 (daemon records, does not broker), decision 2 (lease unit), decision 3 (no adoption) |
+| P2 | presence detection, orphan reaper | decision 2 (client-process lease), decision 4 (authenticated lease), decision 6 (*Orphaned* phase) |
+| P3 | reconnect, background/detach policy | decision 5 (`mode` / `onDisconnect`), decision 6 (one-way *Cancelling*) |
+| P4 | Engine wiring | decision 1 (Engine spawns, owns stdio and exit code) |
