@@ -11,19 +11,30 @@ may quietly route a Store there. The guard is one decision in the placement
 layer; both placement paths ask it **before** they reach a machine, so a
 refusal leaves nothing behind.
 
-## The fact, in order
+## The fact
 
 | source | says | written by |
 | --- | --- | --- |
 | `machine/<name>/record.json` field `local_sqlite` | whether *this* machine keeps a sqlite Store's file | a Family 2 backend, when it creates or connects its machine — no platform this build names writes it |
-| the platform's row in the one support table (`layerfs_machine::support`, rendered by `connect/SUPPORT.json` and `machine.platforms`) | where a sqlite Store's calls run on this host — `sqlite: in_process` or `worker`, else no route | the platform table, per host |
 
-A record that writes `local_sqlite: false` is refused without consulting the
-row; a record that does not say takes its platform's answer; anything other
-than `true`/`false` is `InvalidInput`. Every platform built here is Family 1
-(`sqlite: in_process | worker`), so no machine that exists today changes
-behaviour. A machine with no record is not refused here: the step that
-resolves the machine refuses `NotFound`.
+The machine record is the only fact. The policy asks no platform support
+table and no host, so the same record gets the same answer everywhere:
+
+| record | answer |
+| --- | --- |
+| `local_sqlite: true` | `Machine` — allowed |
+| `local_sqlite: false` | `Remote` — refused `StoragePlacement` |
+| field absent | `Machine` — allowed; a backend that did not say keeps its Store, the compatible answer for every platform this build names |
+| anything other than `true`/`false` | `InvalidInput` |
+| no machine record | allowed here; the step that resolves the machine refuses `NotFound` |
+
+Only a Family 2 backend that writes `local_sqlite: false` changes a
+machine's behaviour. The older fallback to the platform's support row — where
+a sqlite Store's calls run **on this host** — is gone: it made this policy
+depend on the host and disagreed with the machine record. On Linux it also
+refused a `lima` machine whose row had no sqlite route, even though its record
+never said it keeps no Store; the record-only answer restores the compatible
+answer on every host.
 
 ## The decision
 
@@ -57,9 +68,9 @@ platform: only the *Store* cannot live there, not the compute.
 ## Tests
 
 `api/crates/layerfs-api/tests/storage_placement.rs`, through the call surface,
-on a home whose machine `dev` records `local_sqlite: false` — so they hold on
-every host and in both builds of this layer (with and without the `machine`
-feature):
+on homes whose machine `dev` records what each case asks about — every case
+holds on every host and in both builds of this layer (with and without the
+`machine` feature), because the fact is the record, not the host:
 
 | test | asserts |
 | --- | --- |
@@ -67,14 +78,20 @@ feature):
 | `a_postgresql_store_is_never_refused_by_placement` | the same create is refused by its own machine checks, never by placement |
 | `a_push_to_a_machine_that_keeps_no_disk_is_refused` | `store.push` is `StoragePlacement`; the same push to a machine that keeps its Store goes on to dial its worker (`Unavailable`) |
 | `a_pull_from_a_machine_that_keeps_no_disk_stays_the_way_off` | `store.pull` is never `StoragePlacement` |
-| `a_machine_record_that_does_not_say_whether_it_keeps_a_store_is_refused` | a `local_sqlite` that is not true or false is `InvalidInput` |
+| `a_machine_record_without_local_sqlite_is_allowed` | the field absent is `Machine`: a `lima` push goes on to dial its worker (`Unavailable`), never `StoragePlacement` |
+| `a_machine_record_that_says_it_keeps_a_store_is_allowed` | `local_sqlite: true` is `Machine`: `store.push` goes on to dial its worker (`Unavailable`) |
+| `a_machine_record_with_an_invalid_local_sqlite_is_refused` | a `local_sqlite` that is not true or false is `InvalidInput` |
+
+## Doctor
+
+`layerfs doctor` reports an error on a `store/<s>` whose `sqlite.machine` names
+a machine whose record says `local_sqlite: false`, or whose `local_sqlite`
+cannot be read: the two write paths make that state unreachable from this
+build, but an old or hand-edited home is still worth a report. The finding
+names `store pull <s>` and the machine record to repair.
 
 ## Not in this change
 
-- The doctor invariant the review asked for beside the two calls (`store/<s>`
-  whose `sqlite.machine` names a `local_sqlite: false` machine is a `doctor`
-  error): not built here; the two write paths make the state unreachable from
-  this build, and an old or hand-edited home is still worth a report.
 - The SQLite snapshot route (push/pull of a snapshot instead of a live Store):
   `store.pull` is the only route off today.
 - Any Family 2 adapter. The guard lands first on purpose: the fact is a record
@@ -89,16 +106,17 @@ rendered from, element for element.
 
 - [`architecture.png`](architecture.png),
   [`architecture.excalidraw`](architecture.excalidraw) (35 elements) — Store
-  placement: Family 1 vs Family 2, the fact in order, the one decision, the
-  two guard points, and the PostgreSQL exception.
+  placement: Family 1 vs Family 2, the fact (the machine record's
+  `local_sqlite`: `absent` is `Machine`, `false` is `Remote`), the one
+  decision, the two guard points, and the PostgreSQL exception.
 - [`sequence.png`](sequence.png), [`sequence.excalidraw`](sequence.excalidraw)
-  (30 elements) — create/push → query the placement → allow or refuse, with
-  what each answer lets happen.
+  (30 elements) — create/push → query the placement → the record's
+  `local_sqlite` → allow or refuse, with what each answer lets happen.
 
 | Scene | Id | Canvas | Source | PNG sha256 |
 | --- | --- | --- | --- | --- |
-| `SandboxComputePlane — #545 storage placement` | `5bQ0SFRz1wG` | 1210 × 1032 | [`architecture.excalidraw`](architecture.excalidraw) | `cf18d3ca0e29ca4bf187051d7dbf9077e242468128585135efcbf3e6791ac7c2` |
-| `SandboxComputePlane — #545 placement sequence` | `V2KzRbdKl9` | 1210 × 1026 | [`sequence.excalidraw`](sequence.excalidraw) | `83c483213fdcf001bc10913dbaebc8f843577503307ea8b27689d76a81060bf9` |
+| `SandboxComputePlane — #545 storage placement` | `5bQ0SFRz1wG` | 1210 × 1032 | [`architecture.excalidraw`](architecture.excalidraw) | `d580bf445d0cdb11c85f55dbc30bcd1cbe8f85a6d46459e9c823040c9e96b5b4` |
+| `SandboxComputePlane — #545 placement sequence` | `V2KzRbdKl9` | 1210 × 1026 | [`sequence.excalidraw`](sequence.excalidraw) | `1794b36ec286f1ebd2346d76f0c4e0e47ce54cfdb51676cfe7d03667b737e849` |
 
 Each source's bounds are the PNG's canvas, every text element is Comic Shanns
 at 26 or 38 px, no text passes x = 1234, and re-rendering either scene yields
