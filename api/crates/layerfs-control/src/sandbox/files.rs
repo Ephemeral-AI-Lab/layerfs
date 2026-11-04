@@ -572,6 +572,17 @@ pub(crate) fn refresh(state: &SandboxState) -> Result<()> {
 /// daemon for a Ready receipt that no longer exists. Other records still
 /// undergo the ordinary refresh and MountsActive admission.
 pub(crate) fn refresh_except(state: &SandboxState, retained: &[String]) -> Result<()> {
+    refresh_except_within(state, retained, crate::daemon::pool::ADMISSION_WAIT)
+}
+
+/// [`refresh_except`], waiting at most `wait` for a daemon control connection.
+/// An explicit close uses a short wait so its `op` intent is not held for the
+/// whole admission wait while the daemon refuses connections (#540).
+pub(crate) fn refresh_except_within(
+    state: &SandboxState,
+    retained: &[String],
+    wait: std::time::Duration,
+) -> Result<()> {
     let mut mounts = std::collections::BTreeMap::new();
     for (_, value) in workspaces(&state.directory)? {
         let path = registry::text(&value, "path")?;
@@ -579,13 +590,17 @@ pub(crate) fn refresh_except(state: &SandboxState, retained: &[String]) -> Resul
             continue;
         }
         let token = token_of(&value)?;
-        let status =
-            match workspace(&mut *crate::common::trace::control(&state.controls)?).status(token) {
-                Ok(status) => status,
-                // Unmounted by the daemon; its owner removes the record next.
-                Err(failure) if absent(&failure) => continue,
-                Err(failure) => return Err(failed(failure)),
-            };
+        let status = match workspace(&mut *crate::common::trace::control_within(
+            &state.controls,
+            wait,
+        )?)
+        .status(token)
+        {
+            Ok(status) => status,
+            // Unmounted by the daemon; its owner removes the record next.
+            Err(failure) if absent(&failure) => continue,
+            Err(failure) => return Err(failed(failure)),
+        };
         let ready = status
             .kernel
             .and_then(|k| k.ready)

@@ -60,24 +60,88 @@ pub(crate) const ADMISSION_WAIT: Duration = Duration::from_secs(60);
 /// before it ends, and its `Busy` refusal is not retried.
 pub(crate) const LEND_WAIT: Duration = ADMISSION_WAIT;
 
-/// Whether a failed open is the daemon closing a connection it did not admit:
-/// the stream ended before the Hello reply. Through a port proxy the client
-/// reads the end (`UnexpectedEof`); dialing the daemon directly, its handshake
-/// write can meet the closed socket first (`BrokenPipe`, `ConnectionReset`).
-/// Nothing but Hello was sent, so no operation was attempted and opening
-/// again is safe.
-fn not_admitted(refusal: &SdkRefusal) -> bool {
-    refusal.code == "Failed"
-        && ["UnexpectedEof", "BrokenPipe", "ConnectionReset"]
-            .iter()
-            .any(|kind| refusal.message.contains(kind))
+/// Why an open ended before the daemon's Hello reply. Both mean the call was
+/// not admitted and nothing was attempted, so opening again is safe; they
+/// name different observable causes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum NotAdmitted {
+    /// The daemon accepted the socket, then closed it before Hello: it had no
+    /// vacant control slot (the accept loop's capacity refusal).
+    NoVacantSlot,
+    /// The connection itself failed before Hello (`BrokenPipe`,
+    /// `ConnectionReset`).
+    ConnectionFailed,
+}
+
+impl NotAdmitted {
+    fn code(self) -> &'static str {
+        match self {
+            Self::NoVacantSlot => "Busy",
+            Self::ConnectionFailed => "Unavailable",
+        }
+    }
+
+    fn detail(self) -> &'static str {
+        match self {
+            Self::NoVacantSlot => "no-vacant-slot",
+            Self::ConnectionFailed => "connection-failed",
+        }
+    }
+}
+
+/// Classify a failed open that never reached the Hello reply. Through a port
+/// proxy the client reads the end (`UnexpectedEof`, a clean close by the
+/// daemon's accept loop); dialing the daemon directly, its handshake write can
+/// meet the closed socket first (`BrokenPipe`, `ConnectionReset`). The old
+/// message claimed "other processes hold all 8 connections"; that is not
+/// knowledge the client has (#540).
+fn not_admitted(refusal: &SdkRefusal) -> Option<(NotAdmitted, &'static str)> {
+    if refusal.code != "Failed" {
+        return None;
+    }
+    if refusal.message.contains("UnexpectedEof") {
+        return Some((NotAdmitted::NoVacantSlot, "UnexpectedEof"));
+    }
+    for kind in ["BrokenPipe", "ConnectionReset"] {
+        if refusal.message.contains(kind) {
+            return Some((NotAdmitted::ConnectionFailed, kind));
+        }
+    }
+    None
+}
+
+/// The exact refusal after `wait`: what the client observed, not a guess at
+/// what another process is doing.
+fn admission_refusal(wait: Duration, admission: NotAdmitted, kind: &str) -> SdkRefusal {
+    let message = match admission {
+        NotAdmitted::NoVacantSlot => format!(
+            "the Sandbox's daemon admitted no control connection for {}s: it closed the \
+             connection before Hello ({kind}), which it does when it has no vacant control \
+             slot. The call was not admitted",
+            wait.as_secs()
+        ),
+        NotAdmitted::ConnectionFailed => format!(
+            "the connection to the Sandbox's daemon failed before Hello for {}s ({kind}): \
+             the call was not admitted",
+            wait.as_secs()
+        ),
+    };
+    SdkRefusal {
+        code: admission.code().to_owned(),
+        message,
+        detail: SdkValue::map([
+            ("admission", SdkValue::text(admission.detail())),
+            ("io", SdkValue::text(kind)),
+        ]),
+    }
 }
 
 impl Dial {
     /// The first connection a process opens to a Sandbox. While the daemon
-    /// admits no more connections (other processes hold all of them), waits
-    /// for one to be released, up to [`ADMISSION_WAIT`], instead of failing
-    /// the caller's operation with a bare `UnexpectedEof`.
+    /// refuses admission, waits for one to be released, up to
+    /// [`ADMISSION_WAIT`], instead of failing the caller's operation with a
+    /// bare `UnexpectedEof`. Its final refusal names what the client actually
+    /// observed: no vacant control slot, or a failed connection (#540).
     pub(crate) fn open_waiting(&self) -> Result<Control, SdkRefusal> {
         self.open_admitted(ADMISSION_WAIT)
     }
@@ -88,20 +152,16 @@ impl Dial {
         let mut pause = Duration::from_millis(20);
         loop {
             match self.open() {
-                Err(refusal) if not_admitted(&refusal) && started.elapsed() < wait => {
-                    std::thread::sleep(pause);
-                    pause = (pause * 2).min(Duration::from_millis(500));
-                }
-                Err(refusal) if not_admitted(&refusal) => {
-                    return Err(refused(
-                        "Busy",
-                        format!(
-                            "the Sandbox's daemon admitted no connection for {}s: other processes hold all {} of its connections",
-                            wait.as_secs(),
-                            crate::sandbox::serve::DAEMON_CONNECTIONS
-                        ),
-                    ))
-                }
+                Err(refusal) => match not_admitted(&refusal) {
+                    Some(_) if started.elapsed() < wait => {
+                        std::thread::sleep(pause);
+                        pause = (pause * 2).min(Duration::from_millis(500));
+                    }
+                    Some((admission, kind)) => {
+                        return Err(admission_refusal(wait, admission, kind))
+                    }
+                    None => return Err(refusal),
+                },
                 other => return other,
             }
         }
@@ -175,6 +235,14 @@ impl Controls {
 
     /// A connection for one call, and how long the call waited for it.
     pub(crate) fn lend(&self) -> Result<(Lease<'_>, Duration), SdkRefusal> {
+        self.lend_within(LEND_WAIT)
+    }
+
+    /// [`Controls::lend`], waiting at most `wait` for admission and for an
+    /// in-use connection. A caller that must not hold an operation intent
+    /// while a daemon refuses connections (an explicit close) uses a short
+    /// wait and reports the exact refusal (#540).
+    pub(crate) fn lend_within(&self, wait: Duration) -> Result<(Lease<'_>, Duration), SdkRefusal> {
         let started = Instant::now();
         let poisoned = || refused("Failed", "binding state poisoned");
         let mut pool = self.pool.lock().map_err(|_| poisoned())?;
@@ -188,7 +256,7 @@ impl Controls {
                 let only = pool.open == 1;
                 drop(pool);
                 let opened = if only {
-                    self.dial.open_waiting()
+                    self.dial.open_admitted(wait)
                 } else {
                     self.dial.open()
                 };
@@ -206,14 +274,14 @@ impl Controls {
                     }
                 }
             }
-            let remaining = LEND_WAIT.saturating_sub(started.elapsed());
+            let remaining = wait.saturating_sub(started.elapsed());
             if remaining.is_zero() {
                 return Err(refused(
                     "Busy",
                     format!(
                         "all {} of this process's connections to the Sandbox stayed in use for {}s; nothing was attempted",
                         pool.open,
-                        LEND_WAIT.as_secs()
+                        wait.as_secs()
                     ),
                 ));
             }
@@ -265,5 +333,107 @@ impl Deref for Lease<'_> {
 impl DerefMut for Lease<'_> {
     fn deref_mut(&mut self) -> &mut Control {
         self.control.as_mut().expect("lent connection")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::TcpListener;
+    use std::thread;
+
+    fn failed_open(message: &str) -> SdkRefusal {
+        refused("Failed", message)
+    }
+
+    #[test]
+    fn clean_close_before_hello_is_no_vacant_slot() {
+        assert_eq!(
+            not_admitted(&failed_open("Io(Kind(UnexpectedEof))")),
+            Some((NotAdmitted::NoVacantSlot, "UnexpectedEof"))
+        );
+    }
+
+    #[test]
+    fn transport_errors_before_hello_are_connection_failures() {
+        for kind in ["BrokenPipe", "ConnectionReset"] {
+            assert_eq!(
+                not_admitted(&failed_open(&format!("Io(Kind({kind}))"))),
+                Some((NotAdmitted::ConnectionFailed, kind))
+            );
+        }
+    }
+
+    #[test]
+    fn other_refusals_are_not_admission_refusals() {
+        assert_eq!(not_admitted(&refused("StaleSandbox", "saved daemon")), None);
+        assert_eq!(not_admitted(&failed_open("Io(Kind(TimedOut))")), None);
+    }
+
+    #[test]
+    fn admission_refusal_names_only_what_was_observed() {
+        let capacity = admission_refusal(
+            Duration::from_secs(60),
+            NotAdmitted::NoVacantSlot,
+            "UnexpectedEof",
+        );
+        assert_eq!(capacity.code, "Busy");
+        assert!(capacity.message.contains("no vacant control slot"));
+        assert!(capacity.message.contains("UnexpectedEof"));
+        assert!(!capacity.message.contains("other processes"));
+        assert_eq!(
+            capacity.detail.get_text("admission"),
+            Some("no-vacant-slot")
+        );
+
+        let failure = admission_refusal(
+            Duration::from_secs(60),
+            NotAdmitted::ConnectionFailed,
+            "ConnectionReset",
+        );
+        assert_eq!(failure.code, "Unavailable");
+        assert!(failure.message.contains("connection"));
+        assert!(failure.message.contains("ConnectionReset"));
+        assert!(!failure.message.contains("other processes"));
+        assert_eq!(
+            failure.detail.get_text("admission"),
+            Some("connection-failed")
+        );
+    }
+
+    #[test]
+    fn a_daemon_that_closes_before_hello_refuses_precisely() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        // The daemon's accept loop with no vacant slot: accept once, close.
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                drop(stream);
+            }
+        });
+        let dial = Dial {
+            endpoint: address,
+            host: None,
+            secret: [7; 32],
+            peer: layerfs_bridge::duplex::public_key(&[8; 32]).unwrap(),
+            instance: [9; 32],
+        };
+        let Err(refusal) = dial.open_admitted(Duration::from_millis(120)) else {
+            panic!("a daemon that closes before Hello was admitted");
+        };
+        assert!(
+            matches!(refusal.code.as_str(), "Busy" | "Unavailable"),
+            "{refusal:?}"
+        );
+        assert!(
+            !refusal.message.contains("other processes"),
+            "{}",
+            refusal.message
+        );
+        assert!(
+            refusal.message.contains("not admitted"),
+            "{}",
+            refusal.message
+        );
     }
 }

@@ -86,6 +86,19 @@ pub(crate) fn control(controls: &Controls) -> Result<Traced<'_>, SdkRefusal> {
     internal::trace(&mut lease, SCOPE.get());
     Ok(Traced(lease))
 }
+
+/// [`control`], waiting at most `wait` for admission and for an in-use
+/// connection. A short-wait caller reports the daemon's exact refusal instead
+/// of holding its operation intent for the whole admission wait (#540).
+pub(crate) fn control_within(
+    controls: &Controls,
+    wait: Duration,
+) -> Result<Traced<'_>, SdkRefusal> {
+    let (mut lease, waited) = controls.lend_within(wait)?;
+    WAITED.set(WAITED.get() + waited);
+    internal::trace(&mut lease, SCOPE.get());
+    Ok(Traced(lease))
+}
 impl Drop for Traced<'_> {
     fn drop(&mut self) {
         let telemetry = internal::take_telemetry(&mut self.0);

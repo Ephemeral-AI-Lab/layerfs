@@ -69,7 +69,8 @@ impl fmt::Display for ApplicationError {
 impl std::error::Error for ApplicationError {}
 /// Original failed connection admission/dispatch result and input custody.
 pub struct ConnectionFailure {
-    /// Exact admitted slot identity; never recycled while this custody remains.
+    /// Exact admitted slot identity at the failure; the slot is released once
+    /// this result is recorded, so a later connection may occupy it.
     pub slot: usize,
     /// Original malformed metadata bytes only; successful requests own decoded fields.
     pub received: Option<Vec<u8>>,

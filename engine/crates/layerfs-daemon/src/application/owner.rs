@@ -1,4 +1,5 @@
 //! One startup lifecycle owner, Store transfer and bounded connection custody.
+use super::retained::{RetainedFailure, RetainedFailures, RetainedSnapshot};
 use super::{ApplicationError, ConnectionFailure};
 use crate::{
     bootstrap::{open_store_observed, OpenedStore},
@@ -19,12 +20,97 @@ use layerfs_storage::ReservationBlocks;
 use std::{
     sync::{Arc, Condvar, Mutex},
     thread::JoinHandle,
+    time::Instant,
 };
 
 pub(super) enum Slot {
     Vacant,
     Running,
-    Retained(Box<ConnectionFailure>),
+}
+
+/// What finishing one connection did with its failure, if any.
+pub(super) enum Finished {
+    /// The worker ended without a failure.
+    Clean,
+    /// The failure was written to the daemon log and needs no record.
+    Released(Box<ConnectionFailure>),
+    /// The failure was recorded in the bounded store; its slot is already free.
+    Retained(RetainedFailure),
+}
+
+/// The fixed control-slot table and the bounded retained-failure store beside it.
+///
+/// A retained failure never owns a slot: `finish` always leaves it `Vacant`
+/// and only records the failure. Admission capacity therefore cannot leak
+/// (#540).
+pub(super) struct Slots {
+    slots: Vec<Slot>,
+    retained: RetainedFailures,
+}
+
+impl Slots {
+    pub(super) fn new(count: usize) -> Self {
+        Self {
+            slots: (0..count).map(|_| Slot::Vacant).collect(),
+            retained: RetainedFailures::default(),
+        }
+    }
+
+    /// Claims one vacant slot, marking it `Running`, or `None` when every
+    /// slot is in use.
+    pub(super) fn admit(&mut self) -> Option<usize> {
+        let slot = self
+            .slots
+            .iter()
+            .position(|value| matches!(value, Slot::Vacant))?;
+        self.slots[slot] = Slot::Running;
+        Some(slot)
+    }
+
+    /// Ends one worker: release its slot and, for a retained failure, record it.
+    pub(super) fn finish(
+        &mut self,
+        slot: usize,
+        result: Result<(), ConnectionFailure>,
+        now: Instant,
+    ) -> Finished {
+        let Some(current) = self.slots.get_mut(slot) else {
+            return Finished::Clean;
+        };
+        *current = Slot::Vacant;
+        match result {
+            Ok(()) => Finished::Clean,
+            Err(failure) if releases_after_logging(&failure) => {
+                Finished::Released(Box::new(failure))
+            }
+            Err(failure) => Finished::Retained(self.retained.record(&failure, now)),
+        }
+    }
+
+    pub(super) fn snapshot(&mut self, now: Instant) -> RetainedSnapshot {
+        self.retained.snapshot(now)
+    }
+
+    /// Vacant and running (in-use) slots.
+    pub(super) fn counts(&self) -> (usize, usize) {
+        let vacant = self
+            .slots
+            .iter()
+            .filter(|value| matches!(value, Slot::Vacant))
+            .count();
+        (vacant, self.slots.len() - vacant)
+    }
+}
+
+/// A failure with no decoded product attempt or custody: the existing daemon
+/// log line is the whole record, and the slot is released.
+fn releases_after_logging(failure: &ConnectionFailure) -> bool {
+    failure.original.is_none()
+        && failure.received.is_none()
+        && matches!(
+            failure.cause,
+            ApplicationError::Channel(_) | ApplicationError::Io(_)
+        )
 }
 pub(super) struct Startup {
     pub phase: DaemonPhase,
@@ -35,7 +121,7 @@ pub(super) struct Startup {
 }
 pub(super) struct State {
     pub startup: Startup,
-    pub slots: Vec<Slot>,
+    pub slots: Slots,
 }
 /// One real daemon application; Store/Overlay are initialized once and reused.
 pub struct Application {
@@ -201,7 +287,7 @@ impl Application {
                     existing,
                     install_failure: None,
                 },
-                slots: (0..count).map(|_| Slot::Vacant).collect(),
+                slots: Slots::new(count),
             }),
             changed: Condvar::new(),
             workers: Mutex::new((0..count).map(|_| None).collect()),
@@ -271,27 +357,16 @@ impl Application {
         }
         Ok(self.observation(&state))
     }
-    /// Transfers original failed connection custody out only at an explicit operator request.
-    /// Taking a receipt does not resolve its unknowns, replay it or remove artifacts.
-    pub fn take_connection_failure(
-        &self,
-        slot: usize,
-    ) -> Result<Option<Box<ConnectionFailure>>, ApplicationError> {
+    /// The bounded retained-failure store, pruned at this observation.
+    pub fn retained_connection_failures(&self) -> Result<RetainedSnapshot, ApplicationError> {
         let mut state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
-        let current = state.slots.get_mut(slot).ok_or_else(|| {
-            ApplicationError::Io(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "connection slot",
-            ))
-        })?;
-        if !matches!(current, Slot::Retained(_)) {
-            return Ok(None);
-        }
-        let Slot::Retained(failure) = std::mem::replace(current, Slot::Vacant) else {
-            unreachable!()
-        };
-        self.changed.notify_all();
-        Ok(Some(failure))
+        Ok(state.slots.snapshot(Instant::now()))
+    }
+
+    /// Vacant and in-use control slots.
+    pub fn connection_slots(&self) -> Result<(usize, usize), ApplicationError> {
+        let state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
+        Ok(state.slots.counts())
     }
 }
 
