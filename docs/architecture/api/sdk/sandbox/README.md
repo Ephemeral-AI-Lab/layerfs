@@ -1,6 +1,6 @@
 # sandbox family
 
-[Architecture](../../../README.md) › [API](../../README.md) › [Call table](../README.md) › sandbox family
+[Architecture](../../../README.md) › [API](../../README.md) › [SDK](../README.md) › sandbox
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
@@ -8,10 +8,22 @@ The `sandbox` calls.
 
 | | |
 | --- | --- |
-| Component | [Call table](../README.md) |
+| Component | [Call table](../../call-table/README.md) |
 | Source | [`api/crates/layerfs-api/src/sandbox`](../../../../../api/crates/layerfs-api/src/sandbox), [`api/crates/layerfs-control/src/sandbox`](../../../../../api/crates/layerfs-control/src/sandbox) |
 
 ## Calls
+
+```text
+ project.init --> create <project> <name> [machine]  (starts the daemon)
+                     |
+                     +--> list / get                (records, Workspaces)
+                     |
+                     +--> workspace.mount ... unmount  (up to 16 at once)
+                     |
+                     v
+                  close <name>   (ends the daemon; clears an unresolved
+                                  create or close)
+```
 
 Four calls, in help order
 ([`sandbox/mod.rs`](../../../../../api/crates/layerfs-api/src/sandbox/mod.rs)).
@@ -22,10 +34,10 @@ unique across the home.
 
 | Call | Arguments | Options | Returns | Where it runs |
 | --- | --- | --- | --- | --- |
-| [`create`](../../../../../api/crates/layerfs-api/src/sandbox/create.rs) | `project` (Project), `name` (Name), `machine?` (Name) | `image` (Text) | the Sandbox record with `state`; `forward_failed` when a direct daemon forward did not open | its machine: here or `sandbox.host` in the worker |
-| [`list`](../../../../../api/crates/layerfs-api/src/sandbox/list.rs) | `project?` (Project) | `page_size`, `page_pos` (Int) | `{ items: [record], next_page_pos }` | caller's process, home records only |
-| [`get`](../../../../../api/crates/layerfs-api/src/sandbox/get.rs) | `name` (Name) | `page_size`, `page_pos` | the record with `state`, `workspaces`, `next_page_pos`, and `down_reason` when its machine is down | its machine or its daemon; starts nothing |
-| [`close`](../../../../../api/crates/layerfs-api/src/sandbox/close.rs) | `name` (Name) | `force` (Bool) | `{ kind: "Closed", sandbox, unknown, closed }`, or `{ closed, was_gone: true }`, or `{ closed, was, left? }` for a record with no id | its machine: here or `sandbox.host` in the worker |
+| [`create`](create.md) | `project` (Project), `name` (Name), `machine?` (Name) | `image` (Text) | the Sandbox record with `state`; `forward_failed` when a direct daemon forward did not open | its machine: here or `sandbox.host` in the worker |
+| [`list`](list.md) | `project?` (Project) | `page_size`, `page_pos` (Int) | `{ items: [record], next_page_pos }` | caller's process, home records only |
+| [`get`](get.md) | `name` (Name) | `page_size`, `page_pos` | the record with `state`, `workspaces`, `next_page_pos`, and `down_reason` when its machine is down | its machine or its daemon; starts nothing |
+| [`close`](close.md) | `name` (Name) | `force` (Bool) | `{ kind: "Closed", sandbox, unknown, closed }`, or `{ closed, was_gone: true }`, or `{ closed, was, left? }` for a record with no id | its machine: here or `sandbox.host` in the worker |
 
 The record is `SandboxRecord::to_sdk`
 ([`record.rs`](../../../../../api/crates/layerfs-control/src/sandbox/record.rs)):
@@ -70,8 +82,8 @@ Sandbox may run for its Store kind is the support table's
 After `Unknown` the record keeps its `op` with `uncertain: true` and a line
 goes to `log/uncertain.jsonl`; later calls on the Sandbox are refused
 `Unresolved`, naming `sandbox get` (shows it) and `sandbox close` (clears
-it). See [error kinds](../errors.md#error-kinds) and
-[uncertain outcomes](../errors.md#uncertain-outcomes).
+it). See [error kinds](../../call-table/errors.md#error-kinds) and
+[uncertain outcomes](../../call-table/errors.md#uncertain-outcomes).
 
 ## Where it runs
 
@@ -119,11 +131,11 @@ $ layerfs sandbox close tests --force
 
 ## Related
 
-- [workspace family](workspace.md): the calls on a Sandbox's Workspaces.
+- [workspace family](../workspace/README.md): the calls on a Sandbox's Workspaces.
 - [Control: Families](../../control/families.md) and [Routing table](../../routing/routing-table.md).
 - [Connect: Sandboxes](../../../connect/sandboxes/README.md) and [Connect: Machines](../../../connect/machines/README.md).
 - [A Workspace session](../../../flows/workspace.md).
 
 ---
 
-← [Call table: file family](file.md) · [Up: Call table](../README.md) · [Call table: workspace family](workspace.md) →
+← [file.apply](../file/apply.md) · [Up: SDK](../README.md) · [sandbox.create](create.md) →

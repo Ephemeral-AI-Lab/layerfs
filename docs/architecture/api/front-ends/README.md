@@ -156,4 +156,4 @@ Folded into these pages. Matched by title, so check each one before relying on i
 
 ---
 
-← [Call table: Errors](../call-table/errors.md) · [Up: API](../README.md) · [Front ends: CLI](cli.md) →
+← [backup.restore](../sdk/backup/restore.md) · [Up: API](../README.md) · [Front ends: CLI](cli.md) →

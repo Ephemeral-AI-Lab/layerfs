@@ -1,6 +1,6 @@
 # store family
 
-[Architecture](../../../README.md) › [API](../../README.md) › [Call table](../README.md) › store family
+[Architecture](../../../README.md) › [API](../../README.md) › [SDK](../README.md) › store
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
@@ -8,10 +8,24 @@ The `store` calls.
 
 | | |
 | --- | --- |
-| Component | [Call table](../README.md) |
+| Component | [Call table](../../call-table/README.md) |
 | Source | [`api/crates/layerfs-api/src/store`](../../../../../api/crates/layerfs-api/src/store), [`api/crates/layerfs-control/src/store`](../../../../../api/crates/layerfs-control/src/store) |
 
 ## Calls
+
+```text
+  reads, any time:  list    get    status
+                         |
+     sqlite              |                 PostgreSQL
+     ------              |                 ----------
+     create (on native)  |                 connect (url, password ref)
+        |                |                    |
+        v                |                    |
+     push --> on <machine> --> pull           |  project.init, branch.*,
+        |     (back to native)                |  file.*, Sandboxes ...
+        v                                     v
+     remove (file + projects)              disconnect (data stays)
+```
 
 Nine calls, in help order
 ([`store/mod.rs`](../../../../../api/crates/layerfs-api/src/store/mod.rs)).
@@ -22,15 +36,15 @@ history ([glossary](../../../glossary.md)).
 
 | Call | Arguments | Options | Returns |
 | --- | --- | --- | --- |
-| [`list`](../../../../../api/crates/layerfs-api/src/store/list.rs) | — | — | `{ items: [record + state] }` |
-| [`get`](../../../../../api/crates/layerfs-api/src/store/get.rs) | `name` (Name) | — | the Store's record with `projects`; never the cursor key |
-| [`status`](../../../../../api/crates/layerfs-api/src/store/status.rs) | `name` | — | `{ name, kind, state, holders, op, down_reason }` plus `machine` and `file` (sqlite) or `server` (PostgreSQL) |
-| [`create`](../../../../../api/crates/layerfs-api/src/store/create.rs) | `name` | — | the new record: `machine: "native"`, `profile: "disposable"`, `created`, `sqlite`, `projects` |
-| [`connect`](../../../../../api/crates/layerfs-api/src/store/connect.rs) | `name`, `url` (Text) | `password`, `synchronous_commit` (Text) | `{ name, kind: "postgresql", schema, synchronous_commit, projects }` |
-| [`push`](../../../../../api/crates/layerfs-api/src/store/push.rs) | `name`, `machine` (Name) | `on_progress` (Function) | `{ store, from, to, bytes, heads }` |
-| [`pull`](../../../../../api/crates/layerfs-api/src/store/pull.rs) | `name` | `on_progress` | `{ store, from, to, bytes, heads }` |
-| [`remove`](../../../../../api/crates/layerfs-api/src/store/remove.rs) | `name` | — | `{ removed: name }` |
-| [`disconnect`](../../../../../api/crates/layerfs-api/src/store/disconnect.rs) | `name` | — | `{ disconnected: name }`; the database keeps its data |
+| [`list`](list.md) | — | — | `{ items: [record + state] }` |
+| [`get`](get.md) | `name` (Name) | — | the Store's record with `projects`; never the cursor key |
+| [`status`](status.md) | `name` | — | `{ name, kind, state, holders, op, down_reason }` plus `machine` and `file` (sqlite) or `server` (PostgreSQL) |
+| [`create`](create.md) | `name` | — | the new record: `machine: "native"`, `profile: "disposable"`, `created`, `sqlite`, `projects` |
+| [`connect`](connect.md) | `name`, `url` (Text) | `password`, `synchronous_commit` (Text) | `{ name, kind: "postgresql", schema, synchronous_commit, projects }` |
+| [`push`](push.md) | `name`, `machine` (Name) | `on_progress` (Function) | `{ store, from, to, bytes, heads }` |
+| [`pull`](pull.md) | `name` | `on_progress` | `{ store, from, to, bytes, heads }` |
+| [`remove`](remove.md) | `name` | — | `{ removed: name }` |
+| [`disconnect`](disconnect.md) | `name` | — | `{ disconnected: name }`; the database keeps its data |
 
 Sources: [`list.rs`](../../../../../api/crates/layerfs-control/src/store/list.rs),
 [`status.rs`](../../../../../api/crates/layerfs-control/src/store/status.rs),
@@ -81,8 +95,8 @@ then works past the locks; a failure names its phase in
 
 An uncertain push, pull or remove keeps both copies, leaves `op` marked
 uncertain and appends to `log/uncertain.jsonl`; nothing is cleaned up on a
-guess. See [error kinds](../errors.md#error-kinds) and
-[uncertain outcomes](../errors.md#uncertain-outcomes).
+guess. See [error kinds](../../call-table/errors.md#error-kinds) and
+[uncertain outcomes](../../call-table/errors.md#uncertain-outcomes).
 
 ## Where it runs
 
@@ -126,8 +140,8 @@ $ layerfs store push shop vm1 --progress
 - [Control: Families](../../control/families.md) and [Control: Home and records](../../control/home-and-records.md).
 - [Routing table](../../routing/routing-table.md).
 - [Engine: Store](../../../engine/store/README.md), [PostgreSQL](../../../engine/store/postgresql.md), [SQLite](../../../engine/store/sqlite.md).
-- [backup family](backup.md).
+- [backup family](../backup/README.md).
 
 ---
 
-← [Call table: machine family](machine.md) · [Up: Call table](../README.md) · [Call table: backup family](backup.md) →
+← [machine.update](../machine/update.md) · [Up: SDK](../README.md) · [store.list](list.md) →

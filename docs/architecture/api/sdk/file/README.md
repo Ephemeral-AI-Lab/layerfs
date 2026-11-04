@@ -1,6 +1,6 @@
 # file family
 
-[Architecture](../../../README.md) › [API](../../README.md) › [Call table](../README.md) › file family
+[Architecture](../../../README.md) › [API](../../README.md) › [SDK](../README.md) › file
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
@@ -8,33 +8,47 @@ The `file` calls.
 
 | | |
 | --- | --- |
-| Component | [Call table](../README.md) |
+| Component | [Call table](../../call-table/README.md) |
 | Source | [`api/crates/layerfs-api/src/file`](../../../../../api/crates/layerfs-api/src/file), [`api/crates/layerfs-control/src/store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs), [`engine/crates/layerfs-store-service/src/methods/file`](../../../../../engine/crates/layerfs-store-service/src/methods/file) |
 
 ## Calls
 
+```text
+ reads: at a Branch, main or a Commit        writes: one Commit on a Branch
+ (immutable snapshot, no lane)               (never main: ReadOnly)
+
+   stat  list  glob  grep                      write  edit  rm  mkdir
+     \     |     |    /                        mv  cp       \    |
+      read     blame    diff                         apply (many in one)
+                                                        |
+                                    private Workspace on the Branch
+                                    --> Commit (merge a moved head)
+                                    --> Committed | UpToDate | Conflict
+```
+
 Fourteen calls, in help order
 ([`file/mod.rs`](../../../../../api/crates/layerfs-api/src/file/mod.rs)):
 seven reads at a Branch or Commit, then seven writes that each make one
-Commit on a side Branch. Each runs `layerfs_control::store::calls::run`.
+Commit on the named Branch, through a private Workspace bound to it. Each
+runs `layerfs_control::store::calls::run`.
 Every call takes `project` (Project) first; `branch` and `commit` are Name.
 
 | Call | Arguments after `project` | Options | Returns | Store method |
 | --- | --- | --- | --- | --- |
-| [`read`](../../../../../api/crates/layerfs-api/src/file/read.rs) | `branch`, `path` (Text), `commit?` | `start_line`, `end_line` (Int) | header + `text`, `start_line`, `end_line`, `line_truncated`, `truncated`, `next_line`, `size` | `fs.read` |
-| [`stat`](../../../../../api/crates/layerfs-api/src/file/stat.rs) | `branch`, `path`, `commit?` | — | header + `type`, `inode`, `size`, `mode` | `fs.stat` |
-| [`list`](../../../../../api/crates/layerfs-api/src/file/list.rs) | `branch`, `path`, `commit?` | `PAGE` | header + `items: [{ name, path, type, inode }]`, `has_more`, `next_page_pos` | `fs.list` |
-| [`glob`](../../../../../api/crates/layerfs-api/src/file/glob.rs) | `branch`, `path`, `pattern` (Text), `commit?` | `PAGE` | header + `items: [path]`, `has_more`, `next_page_pos` | `fs.glob` |
-| [`grep`](../../../../../api/crates/layerfs-api/src/file/grep.rs) | `branch`, `path`, `pattern`, `commit?` | `PAGE` | header + `items: [{ path, line, text, line_truncated }]`, `skipped`, `has_more`, `next_page_pos` | `fs.grep` |
-| [`blame`](../../../../../api/crates/layerfs-api/src/file/blame.rs) | `branch`, `path`, `commit?` | `from_line` (Int) | header + `lines: [{ n, text, line_truncated, commit, message, … }]`, `versions`, `comparison_coarse` | `fs.blame` |
-| [`diff`](../../../../../api/crates/layerfs-api/src/file/diff.rs) | `left_branch`, `left_path`, `right_branch`, `right_path` | `left_commit`, `right_commit` | `{ kind: Equal, Text or Binary, left, right, content_equal, same_inode, hunks_omitted, hunks }` | `fs.diff_files` |
-| [`write`](../../../../../api/crates/layerfs-api/src/file/write.rs) | `branch`, `path`, `content` (Content) | `message`, `mode` (Int) | write outcome | `fs.write` |
-| [`edit`](../../../../../api/crates/layerfs-api/src/file/edit.rs) | `branch`, `path` | `old`, `new` (Text), `message` | write outcome | `fs.edit` |
-| [`rm`](../../../../../api/crates/layerfs-api/src/file/rm.rs) | `branch`, `path` | `message` | write outcome | `fs.rm` |
-| [`mkdir`](../../../../../api/crates/layerfs-api/src/file/mkdir.rs) | `branch`, `path` | `message`, `mode` | write outcome | `fs.mkdir` |
-| [`mv`](../../../../../api/crates/layerfs-api/src/file/mv.rs) | `branch`, `from_path`, `to_path` (Text) | `message` | write outcome | `fs.mv` |
-| [`cp`](../../../../../api/crates/layerfs-api/src/file/cp.rs) | `branch`, `from_path`, `to_path` | `message` | write outcome | `fs.cp` |
-| [`apply`](../../../../../api/crates/layerfs-api/src/file/apply.rs) | `branch`, `changes` (Json) | `message` | write outcome | `fs.apply` |
+| [`read`](read.md) | `branch`, `path` (Text), `commit?` | `start_line`, `end_line` (Int) | header + `text`, `start_line`, `end_line`, `line_truncated`, `truncated`, `next_line`, `size` | `fs.read` |
+| [`stat`](stat.md) | `branch`, `path`, `commit?` | — | header + `type`, `inode`, `size`, `mode` | `fs.stat` |
+| [`list`](list.md) | `branch`, `path`, `commit?` | `PAGE` | header + `items: [{ name, path, type, inode }]`, `has_more`, `next_page_pos` | `fs.list` |
+| [`glob`](glob.md) | `branch`, `path`, `pattern` (Text), `commit?` | `PAGE` | header + `items: [path]`, `has_more`, `next_page_pos` | `fs.glob` |
+| [`grep`](grep.md) | `branch`, `path`, `pattern`, `commit?` | `PAGE` | header + `items: [{ path, line, text, line_truncated }]`, `skipped`, `has_more`, `next_page_pos` | `fs.grep` |
+| [`blame`](blame.md) | `branch`, `path`, `commit?` | `from_line` (Int) | header + `lines: [{ n, text, line_truncated, commit, message, … }]`, `versions`, `comparison_coarse` | `fs.blame` |
+| [`diff`](diff.md) | `left_branch`, `left_path`, `right_branch`, `right_path` | `left_commit`, `right_commit` | `{ kind: Equal, Text or Binary, left, right, content_equal, same_inode, hunks_omitted, hunks }` | `fs.diff_files` |
+| [`write`](write.md) | `branch`, `path`, `content` (Content) | `message`, `mode` (Int) | write outcome | `fs.write` |
+| [`edit`](edit.md) | `branch`, `path` | `old`, `new` (Text), `message` | write outcome | `fs.edit` |
+| [`rm`](rm.md) | `branch`, `path` | `message` | write outcome | `fs.rm` |
+| [`mkdir`](mkdir.md) | `branch`, `path` | `message`, `mode` | write outcome | `fs.mkdir` |
+| [`mv`](mv.md) | `branch`, `from_path`, `to_path` (Text) | `message` | write outcome | `fs.mv` |
+| [`cp`](cp.md) | `branch`, `from_path`, `to_path` | `message` | write outcome | `fs.cp` |
+| [`apply`](apply.md) | `branch`, `changes` (Json) | `message` | write outcome | `fs.apply` |
 
 - The read header is `{ kind: "ok", snapshot, root, path }`
   ([`read/snapshot.rs`](../../../../../engine/crates/layerfs-store-service/src/read/snapshot.rs)).
@@ -80,8 +94,8 @@ A read reply is bounded by `REPLY_BUDGET` (48 KiB); `truncated`,
 
 After an `Unknown` write the Commit may exist. Read the Branch head with
 `branch.get` or `commit.list` before writing again. See
-[error kinds](../errors.md#error-kinds) and
-[uncertain outcomes](../errors.md#uncertain-outcomes).
+[error kinds](../../call-table/errors.md#error-kinds) and
+[uncertain outcomes](../../call-table/errors.md#uncertain-outcomes).
 
 ## Where it runs
 
@@ -125,11 +139,11 @@ $ layerfs file read shop/api agent /README.md --start-line 1
 
 ## Related
 
-- [Table](../table.md) and [Errors](../errors.md).
-- [branch family](branch.md) and [commit family](commit.md).
+- [Table](../../call-table/table.md) and [Errors](../../call-table/errors.md).
+- [branch family](../branch/README.md) and [commit family](../commit/README.md).
 - [Routing table](../../routing/routing-table.md).
 - [Engine: Store calls](../../../engine/store-calls/README.md): [reads](../../../engine/store-calls/reads.md), [writes](../../../engine/store-calls/writes.md), [SDK facade](../../../engine/store-calls/sdk-facade.md).
 
 ---
 
-← [Call table: commit family](commit.md) · [Up: Call table](../README.md) · [Call table: sandbox family](sandbox.md) →
+← [commit.diff](../commit/diff.md) · [Up: SDK](../README.md) · [file.read](read.md) →

@@ -132,7 +132,7 @@ open another. Other codes are in [Call table: Errors](../call-table/errors.md).
 - [Routing table](routing-table.md#workspace-calls): which process serves a Sandbox.
 - [Workers](workers.md): the channel to a worker that serves Sandboxes in a machine.
 - [Engine: Daemon](../../engine/daemon/README.md), [Daemon bridge](../../engine/daemon/bridge.md) and [Control calls](../../engine/daemon/control-calls.md): the daemon's side.
-- [Call table: workspace family](../call-table/families/workspace.md): the calls and their answers.
+- [Call table: workspace family](../sdk/workspace/README.md): the calls and their answers.
 - [Call table: Errors](../call-table/errors.md#uncertain-outcomes): uncertain outcomes.
 
 ---

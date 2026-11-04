@@ -170,7 +170,7 @@ and LayerFS never deletes a bucket object. See
 
 - [Home and records](home-and-records.md), [Doctor](doctor.md)
 - [Routing table](../routing/routing-table.md), [Workers](../routing/workers.md), [Daemon channel](../routing/daemon-channel.md)
-- [Call table](../call-table/README.md) and its family pages, such as [store family](../call-table/families/store.md)
+- [Call table](../call-table/README.md) and its family pages, such as [store family](../sdk/store/README.md)
 - [Engine: Store calls](../../engine/store-calls/README.md), [Engine: Project Init](../../engine/project-init/README.md), [Connect: Sandboxes](../../connect/sandboxes/README.md)
 
 ---

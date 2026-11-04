@@ -1,6 +1,6 @@
 # commit family
 
-[Architecture](../../../README.md) › [API](../../README.md) › [Call table](../README.md) › commit family
+[Architecture](../../../README.md) › [API](../../README.md) › [SDK](../README.md) › commit
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
@@ -8,10 +8,20 @@ The `commit` calls.
 
 | | |
 | --- | --- |
-| Component | [Call table](../README.md) |
+| Component | [Call table](../../call-table/README.md) |
 | Source | [`api/crates/layerfs-api/src/commit`](../../../../../api/crates/layerfs-api/src/commit), [`api/crates/layerfs-control/src/store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs), [`engine/crates/layerfs-store-service/src/methods/branch`](../../../../../engine/crates/layerfs-store-service/src/methods/branch) |
 
 ## Calls
+
+```text
+ Branch head
+    |
+    v
+  C3 --parent--> C2 --parent--> C1 --> (base Layer)
+  ^ list: newest first, paged      ^
+  | get <id or 8+ prefix>          |
+  +---------- diff <C1> <C3> ------+   (any two saved Commits)
+```
 
 Three read-only calls, in help order
 ([`commit/mod.rs`](../../../../../api/crates/layerfs-api/src/commit/mod.rs)).
@@ -19,9 +29,9 @@ Each runs `layerfs_control::store::calls::run`.
 
 | Call | Arguments | Options | Returns | Store method |
 | --- | --- | --- | --- | --- |
-| [`list`](../../../../../api/crates/layerfs-api/src/commit/list.rs) | `project` (Project), `branch` (Name) | `page_size`, `page_pos` (Int) | `{ items: [commit], has_more, next_page_pos }`, newest first | `branch.list_commits` |
-| [`get`](../../../../../api/crates/layerfs-api/src/commit/get.rs) | `project`, `branch` (Name), `commit` (Name) | — | one `commit` | `branch.list_commits`, paged |
-| [`diff`](../../../../../api/crates/layerfs-api/src/commit/diff.rs) | `project`, `from_commit`, `to_commit` (Name) | `paths_only` (Bool), `page_size`, `page_pos` (Int), `cursor` (Text) | `{ kind: "ok", from, to, items, has_more, next_page_pos, next_cursor }` | `branch.diff_commits` |
+| [`list`](list.md) | `project` (Project), `branch` (Name) | `page_size`, `page_pos` (Int) | `{ items: [commit], has_more, next_page_pos }`, newest first | `branch.list_commits` |
+| [`get`](get.md) | `project`, `branch` (Name), `commit` (Name) | — | one `commit` | `branch.list_commits`, paged |
+| [`diff`](diff.md) | `project`, `from_commit`, `to_commit` (Name) | `paths_only` (Bool), `page_size`, `page_pos` (Int), `cursor` (Text) | `{ kind: "ok", from, to, items, has_more, next_page_pos, next_cursor }` | `branch.diff_commits` |
 
 A `commit` value is `commit_value`
 ([`sdk_values.rs`](../../../../../engine/crates/layerfs-bridge/src/sdk_values.rs)):
@@ -71,8 +81,8 @@ read budget `REPLY_BUDGET` (48 KiB) and reports `has_more`
 
 These calls only read, so an `Unknown` here leaves no Store change behind.
 LayerFS does not resend it. See
-[error kinds](../errors.md#error-kinds) and
-[uncertain outcomes](../errors.md#uncertain-outcomes).
+[error kinds](../../call-table/errors.md#error-kinds) and
+[uncertain outcomes](../../call-table/errors.md#uncertain-outcomes).
 
 ## Where it runs
 
@@ -107,11 +117,11 @@ $ layerfs commit get shop/api agent 71e889e6
 
 ## Related
 
-- [Table](../table.md) and [Errors](../errors.md).
-- [branch family](branch.md) and [file family](file.md).
+- [Table](../../call-table/table.md) and [Errors](../../call-table/errors.md).
+- [branch family](../branch/README.md) and [file family](../file/README.md).
 - [Routing table](../../routing/routing-table.md).
 - [Engine: Store calls](../../../engine/store-calls/README.md), [reads](../../../engine/store-calls/reads.md).
 
 ---
 
-← [Call table: branch family](branch.md) · [Up: Call table](../README.md) · [Call table: file family](file.md) →
+← [branch.diff](../branch/diff.md) · [Up: SDK](../README.md) · [commit.list](list.md) →

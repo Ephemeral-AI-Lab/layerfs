@@ -1,6 +1,6 @@
 # workspace family
 
-[Architecture](../../../README.md) › [API](../../README.md) › [Call table](../README.md) › workspace family
+[Architecture](../../../README.md) › [API](../../README.md) › [SDK](../README.md) › workspace
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
@@ -8,10 +8,26 @@ The `workspace` calls.
 
 | | |
 | --- | --- |
-| Component | [Call table](../README.md) |
+| Component | [Call table](../../call-table/README.md) |
 | Source | [`api/crates/layerfs-api/src/workspace`](../../../../../api/crates/layerfs-api/src/workspace), [`api/crates/layerfs-control/src/workspace/calls.rs`](../../../../../api/crates/layerfs-control/src/workspace/calls.rs), [`api/crates/layerfs-control/src/daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs) |
 
 ## Calls
+
+```text
+ sandbox.create (running Sandbox)      branch.fork (a Branch, not main)
+            \                              /
+             mount <sandbox> <branch> --> ws = <sandbox>:<path|name>
+                |
+                v
+   +---> exec <ws> <command>   (bash -c via the Sandbox runtime)
+   |        |
+   |     status <ws>           (base, head moved?, activity, overlay)
+   |        |
+   +---- commit <ws>           (one Commit; merges a moved head)
+            |
+            v
+         unmount <ws>          (Dirty unless committed or discard)
+```
 
 Five calls, in help order
 ([`workspace/mod.rs`](../../../../../api/crates/layerfs-api/src/workspace/mod.rs)).
@@ -21,11 +37,11 @@ it ([`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/nam
 
 | Call | Arguments | Options | Returns | Host operation |
 | --- | --- | --- | --- | --- |
-| [`mount`](../../../../../api/crates/layerfs-api/src/workspace/mount.rs) | `sandbox` (Name), `branch` (Name) | `name` (Name) | `{ kind: "Mounted", path, workspace, namespace, branch, base, base_layer, root, sandbox, container, image, platform, runtime, name, ws }` | `workspace.mount` |
-| [`exec`](../../../../../api/crates/layerfs-api/src/workspace/exec.rs) | `ws` (Text), `command` (Text) | `message` (Text), `stream` (Bool), `stdout`, `stderr` (Function) | `{ kind: "exit:<code>", exit_code, stdout, stderr, message, truncated }`; a stream over 1 MiB is spooled (`output`, `stdout_bytes`, `stderr_bytes`) | `workspace.exec` |
-| [`commit`](../../../../../api/crates/layerfs-api/src/workspace/commit.rs) | `ws` | `message`, `force` (Bool) | `{ kind: "Committed", head, commit, displaced_head, merged, lww, lww_truncated }` or `{ kind: "UpToDate", head, root, merged, lww, lww_truncated }` | `workspace.commit` |
-| [`unmount`](../../../../../api/crates/layerfs-api/src/workspace/unmount.rs) | `ws` | `discard`, `force` (Bool) | `{ kind: "Unmounted" }`, or with `force` `{ kind: "ForceUnmounted", abort, detach, cleanup }` | `workspace.unmount` |
-| [`status`](../../../../../api/crates/layerfs-api/src/workspace/status.rs) | `ws` | — | `{ kind: "ok", base, base_layer, branch_head, head_moved_since_mount, activity, overlay: { inodes, entries, pending_merge } }` | `backend.daemon.workspace.status` |
+| [`mount`](mount.md) | `sandbox` (Name), `branch` (Name) | `name` (Name) | `{ kind: "Mounted", path, workspace, namespace, branch, base, base_layer, root, sandbox, container, image, platform, runtime, name, ws }` | `workspace.mount` |
+| [`exec`](exec.md) | `ws` (Text), `command` (Text) | `message` (Text), `stream` (Bool), `stdout`, `stderr` (Function) | `{ kind: "exit:<code>", exit_code, stdout, stderr, message, truncated }`; a stream over 1 MiB is spooled and sent as `{ stream, bytes }` events, the answer keeping it null with `stdout_bytes`, `stderr_bytes` and `streamed: true` | `workspace.exec` |
+| [`commit`](commit.md) | `ws` | `message`, `force` (Bool) | `{ kind: "Committed", head, commit, displaced_head, merged, lww, lww_truncated }` or `{ kind: "UpToDate", head, root, merged, lww, lww_truncated }` | `workspace.commit` |
+| [`unmount`](unmount.md) | `ws` | `discard`, `force` (Bool) | `{ kind: "Unmounted" }`, or with `force` `{ kind: "ForceUnmounted", abort, detach, cleanup }` | `workspace.unmount` |
+| [`status`](status.md) | `ws` | — | `{ kind: "ok", base, base_layer, branch_head, head_moved_since_mount, activity, overlay: { inodes, entries, pending_merge } }` | `backend.daemon.workspace.status` |
 
 Answers are built in
 [`daemon/values.rs`](../../../../../api/crates/layerfs-control/src/daemon/values.rs),
@@ -78,8 +94,8 @@ daemon exchange failure becomes `Failed`. A lost answer does not undo a
 mutation the daemon published: after an uncertain `commit` or `unmount`,
 read `workspace.status`, `sandbox.get` or `commit.list` before acting
 again. See
-[error kinds](../errors.md#error-kinds) and
-[uncertain outcomes](../errors.md#uncertain-outcomes).
+[error kinds](../../call-table/errors.md#error-kinds) and
+[uncertain outcomes](../../call-table/errors.md#uncertain-outcomes).
 
 ## Where it runs
 
@@ -130,11 +146,11 @@ $ layerfs workspace commit tests:build -m 'tests pass'
 
 ## Related
 
-- [sandbox family](sandbox.md).
+- [sandbox family](../sandbox/README.md).
 - [Routing table](../../routing/routing-table.md) and [Daemon channel](../../routing/daemon-channel.md).
 - [Engine: Daemon](../../../engine/daemon/README.md), [Engine: Workspace](../../../engine/workspace/README.md), [Engine: Commit](../../../engine/commit/README.md).
 - [A Workspace session](../../../flows/workspace.md) and [A Commit](../../../flows/commit.md).
 
 ---
 
-← [Call table: sandbox family](sandbox.md) · [Up: Call table](../README.md) · [Call table: machine family](machine.md) →
+← [sandbox.close](../sandbox/close.md) · [Up: SDK](../README.md) · [workspace.mount](mount.md) →

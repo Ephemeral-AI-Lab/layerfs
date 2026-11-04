@@ -25,15 +25,7 @@ for the front ends ([`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs)).
 | Topic | What it covers |
 | --- | --- |
 | [Table](table.md) | `layerfs.table`, keys, scopes and checks. |
-| [project family](families/project.md) | The `project` calls. |
-| [branch family](families/branch.md) | The `branch` calls. |
-| [commit family](families/commit.md) | The `commit` calls. |
-| [file family](families/file.md) | The `file` calls. |
-| [sandbox family](families/sandbox.md) | The `sandbox` calls. |
-| [workspace family](families/workspace.md) | The `workspace` calls. |
-| [machine family](families/machine.md) | The `machine` calls. |
-| [store family](families/store.md) | The `store` calls. |
-| [backup family](families/backup.md) | The `backup` calls. |
+| [SDK](../sdk/README.md) | Every family and every call, one page per call (moved out of this component). |
 | [Errors](errors.md) | The error catalog and uncertain outcomes. |
 
 ## The picture

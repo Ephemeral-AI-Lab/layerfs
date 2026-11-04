@@ -1,6 +1,6 @@
 # backup family
 
-[Architecture](../../../README.md) › [API](../../README.md) › [Call table](../README.md) › backup family
+[Architecture](../../../README.md) › [API](../../README.md) › [SDK](../README.md) › backup
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
@@ -8,10 +8,26 @@ The `backup` calls.
 
 | | |
 | --- | --- |
-| Component | [Call table](../README.md) |
+| Component | [Call table](../../call-table/README.md) |
 | Source | [`api/crates/layerfs-api/src/backup`](../../../../../api/crates/layerfs-api/src/backup), [`api/crates/layerfs-control/src/backup`](../../../../../api/crates/layerfs-control/src/backup) |
 
 ## Calls
+
+```text
+ connect (bucket name, url, key ref)
+    |
+    v
+ list  <---------------------------------------------+
+    |   current | store_changed | bucket_changed ...  |
+    v                                                 |
+ create (sqlite Store -> bucket) --- link saved ------+
+    |
+    v
+ restore (bucket -> sqlite Store on native) --- link saved
+    |
+    v
+ disconnect (forget bucket + links; objects stay)
+```
 
 Five calls, in help order
 ([`backup/mod.rs`](../../../../../api/crates/layerfs-api/src/backup/mod.rs)).
@@ -22,11 +38,11 @@ keeps one link per bucket in its record.
 
 | Call | Arguments | Options | Returns |
 | --- | --- | --- | --- |
-| [`connect`](../../../../../api/crates/layerfs-api/src/backup/connect.rs) | `name` (Name), `url` (Text) | `key`, `region` (Text), `part_size` (Size) | the bucket record (all fields but `v`) |
-| [`disconnect`](../../../../../api/crates/layerfs-api/src/backup/disconnect.rs) | `name` | — | `{ disconnected, unlinked: [store] }`; objects stay |
-| [`list`](../../../../../api/crates/layerfs-api/src/backup/list.rs) | `bucket?` (Name) | — | `{ items: [{ bucket, file, bytes, heads, store, state, reason? }] }` |
-| [`create`](../../../../../api/crates/layerfs-api/src/backup/create.rs) | `store`, `bucket` (Name), `file?` (Name) | `on_progress` (Function) | `{ store, bucket, file, object, bytes, pieces, sha256, heads }` |
-| [`restore`](../../../../../api/crates/layerfs-api/src/backup/restore.rs) | `store`, `bucket`, `file?` | `on_progress` | `{ store, bucket, file, bytes, sha256, heads, projects }` |
+| [`connect`](connect.md) | `name` (Name), `url` (Text) | `key`, `region` (Text), `part_size` (Size) | the bucket record (all fields but `v`) |
+| [`disconnect`](disconnect.md) | `name` | — | `{ disconnected, unlinked: [store] }`; objects stay |
+| [`list`](list.md) | `bucket?` (Name) | — | `{ items: [{ bucket, file, bytes, heads, store, state, reason? }] }` |
+| [`create`](create.md) | `store`, `bucket` (Name), `file?` (Name) | `on_progress` (Function) | `{ store, bucket, file, object, bytes, pieces, sha256, heads }` |
+| [`restore`](restore.md) | `store`, `bucket`, `file?` | `on_progress` | `{ store, bucket, file, bytes, sha256, heads, projects }` |
 
 Sources: [`record.rs`](../../../../../api/crates/layerfs-control/src/backup/record.rs),
 [`list.rs`](../../../../../api/crates/layerfs-control/src/backup/list.rs),
@@ -74,8 +90,8 @@ pieces.
 | `Unknown` | **uncertain:** the bucket driver reports `RemoteError::Uncertain`, or a worker's answer was lost | [`record.rs`](../../../../../api/crates/layerfs-control/src/backup/record.rs) |
 
 After an uncertain upload, `backup list` shows the bucket's state of each
-file. See [error kinds](../errors.md#error-kinds) and
-[uncertain outcomes](../errors.md#uncertain-outcomes).
+file. See [error kinds](../../call-table/errors.md#error-kinds) and
+[uncertain outcomes](../../call-table/errors.md#uncertain-outcomes).
 
 ## Where it runs
 
@@ -111,11 +127,11 @@ $ layerfs backup create shop archive --progress
 
 ## Related
 
-- [store family](store.md).
+- [store family](../store/README.md).
 - [Control: Families](../../control/families.md) and [Routing table](../../routing/routing-table.md).
 - [Connect: Backups](../../../connect/backups/README.md), [buckets](../../../connect/backups/buckets.md).
 - [Backup and restore flow](../../../flows/backup.md).
 
 ---
 
-← [Call table: store family](store.md) · [Up: Call table](../README.md) · [Call table: Errors](../errors.md) →
+← [store.disconnect](../store/disconnect.md) · [Up: SDK](../README.md) · [backup.connect](connect.md) →

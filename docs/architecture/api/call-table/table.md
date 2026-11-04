@@ -47,15 +47,15 @@ ends build their functions from (`table_json`); `layerfs doctor` and
 
 | Family | Calls, in help order | Count |
 | --- | --- | --- |
-| [project](families/project.md) | init, list, get, remove | 4 |
-| [branch](families/branch.md) | list, get, fork, merge, publish, diff | 6 |
-| [commit](families/commit.md) | list, get, diff | 3 |
-| [file](families/file.md) | read, stat, list, glob, grep, blame, diff, write, edit, rm, mkdir, mv, cp, apply | 14 |
-| [sandbox](families/sandbox.md) | create, list, get, close | 4 |
-| [workspace](families/workspace.md) | mount, exec, commit, unmount, status | 5 |
-| [machine](families/machine.md) | list, platforms, get, status, start, stop, create, connect, remove, disconnect, update | 11 |
-| [store](families/store.md) | list, get, status, create, connect, push, pull, remove, disconnect | 9 |
-| [backup](families/backup.md) | connect, disconnect, list, create, restore | 5 |
+| [project](../sdk/project/README.md) | init, list, get, remove | 4 |
+| [branch](../sdk/branch/README.md) | list, get, fork, merge, publish, diff | 6 |
+| [commit](../sdk/commit/README.md) | list, get, diff | 3 |
+| [file](../sdk/file/README.md) | read, stat, list, glob, grep, blame, diff, write, edit, rm, mkdir, mv, cp, apply | 14 |
+| [sandbox](../sdk/sandbox/README.md) | create, list, get, close | 4 |
+| [workspace](../sdk/workspace/README.md) | mount, exec, commit, unmount, status | 5 |
+| [machine](../sdk/machine/README.md) | list, platforms, get, status, start, stop, create, connect, remove, disconnect, update | 11 |
+| [store](../sdk/store/README.md) | list, get, status, create, connect, push, pull, remove, disconnect | 9 |
+| [backup](../sdk/backup/README.md) | connect, disconnect, list, create, restore | 5 |
 
 | Kind | Accepts | Shell form | Source |
 | --- | --- | --- | --- |
@@ -171,4 +171,4 @@ writes help, so the table and help cannot disagree.
 
 ---
 
-← [API: Call table](README.md) · [Up: Call table](README.md) · [Call table: project family](families/project.md) →
+← [API: Call table](README.md) · [Up: Call table](README.md) · [Call table: Errors](errors.md) →

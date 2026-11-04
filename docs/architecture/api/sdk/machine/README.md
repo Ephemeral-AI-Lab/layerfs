@@ -1,6 +1,6 @@
 # machine family
 
-[Architecture](../../../README.md) › [API](../../README.md) › [Call table](../README.md) › machine family
+[Architecture](../../../README.md) › [API](../../README.md) › [SDK](../README.md) › machine
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
@@ -8,10 +8,25 @@ The `machine` calls.
 
 | | |
 | --- | --- |
-| Component | [Call table](../README.md) |
+| Component | [Call table](../../call-table/README.md) |
 | Source | [`api/crates/layerfs-api/src/machine`](../../../../../api/crates/layerfs-api/src/machine), [`api/crates/layerfs-control/src/machine`](../../../../../api/crates/layerfs-control/src/machine) |
 
 ## Calls
+
+```text
+ reads (start nothing):  list   platforms   get   status
+
+ built in: native, docker ---------------------- update (image, docker,
+                                                  wsl, daemon)
+ platforms --> create <name> <vm platform> --+
+               connect <name> <ssh host> ----+--> running
+                                             |     |      ^
+                                             |   stop     |
+                                             |     v      |
+                                             |  stopped --+ start
+                                             v
+               remove (VM + disk)   |   disconnect (ssh; data root stays)
+```
 
 Eleven calls, in help order
 ([`machine/mod.rs`](../../../../../api/crates/layerfs-api/src/machine/mod.rs)).
@@ -24,17 +39,17 @@ state, cpus, memory, disk, stores, sandboxes, … }`
 
 | Call | Arguments | Options | Returns |
 | --- | --- | --- | --- |
-| [`list`](../../../../../api/crates/layerfs-api/src/machine/list.rs) | — | — | `{ machines: [summary] }`, live state probed in parallel |
-| [`platforms`](../../../../../api/crates/layerfs-api/src/machine/platforms.rs) | — | — | `{ host, platforms: [{ platform, how, backend, kernel, sqlite, postgresql, ready, missing, version, options, description }] }` |
-| [`get`](../../../../../api/crates/layerfs-api/src/machine/get.rs) | `name` (Name) | — | summary |
-| [`status`](../../../../../api/crates/layerfs-api/src/machine/status.rs) | `name` | — | `{ name, platform, state, free_disk, tool_version, down_reason, stores, … , op? }` |
-| [`start`](../../../../../api/crates/layerfs-api/src/machine/start.rs) | `name` | — | summary, once the worker answers its secret |
-| [`stop`](../../../../../api/crates/layerfs-api/src/machine/stop.rs) | `name` | — | summary with `state: "stopped"` |
-| [`create`](../../../../../api/crates/layerfs-api/src/machine/create.rs) | `name`, `platform` (Name) | `cpus` (Int), `memory`, `disk` (Size), `image` (Text), `nested` (Bool), `host` (Name) | summary |
-| [`connect`](../../../../../api/crates/layerfs-api/src/machine/connect.rs) | `name` (Name), `host` (Text) | `user` (Text), `port` (Int), `identity`, `known_hosts`, `root` (Text) | summary |
-| [`remove`](../../../../../api/crates/layerfs-api/src/machine/remove.rs) | `name` | — | `{ name, removed: true }` |
-| [`disconnect`](../../../../../api/crates/layerfs-api/src/machine/disconnect.rs) | `name` | — | `{ name, removed: true }`; the host's data root stays |
-| [`update`](../../../../../api/crates/layerfs-api/src/machine/update.rs) | `name` | `cpus` (Int), `memory` (Size), `image`, `docker`, `wsl`, `daemon` (Text) | summary |
+| [`list`](list.md) | — | — | `{ machines: [summary] }`, live state probed in parallel |
+| [`platforms`](platforms.md) | — | — | `{ host, platforms: [{ platform, how, backend, kernel, sqlite, postgresql, ready, missing, version, options, description }] }` |
+| [`get`](get.md) | `name` (Name) | — | summary |
+| [`status`](status.md) | `name` | — | `{ name, platform, state, free_disk, tool_version, down_reason, stores, … , op? }` |
+| [`start`](start.md) | `name` | — | summary, once the worker answers its secret |
+| [`stop`](stop.md) | `name` | — | summary with `state: "stopped"` |
+| [`create`](create.md) | `name`, `platform` (Name) | `cpus` (Int), `memory`, `disk` (Size), `image` (Text), `nested` (Bool), `host` (Name) | summary |
+| [`connect`](connect.md) | `name` (Name), `host` (Text) | `user` (Text), `port` (Int), `identity`, `known_hosts`, `root` (Text) | summary |
+| [`remove`](remove.md) | `name` | — | `{ name, removed: true }` |
+| [`disconnect`](disconnect.md) | `name` | — | `{ name, removed: true }`; the host's data root stays |
+| [`update`](update.md) | `name` | `cpus` (Int), `memory` (Size), `image`, `docker`, `wsl`, `daemon` (Text) | summary |
 
 Sources of the answers:
 [`list.rs`](../../../../../api/crates/layerfs-control/src/machine/list.rs),
@@ -74,8 +89,8 @@ show a probe that did not answer as `unknown`.
 
 An unresolved machine is shown by `machine status` and cleared by
 `machine remove` or `disconnect`. See
-[error kinds](../errors.md#error-kinds) and
-[uncertain outcomes](../errors.md#uncertain-outcomes).
+[error kinds](../../call-table/errors.md#error-kinds) and
+[uncertain outcomes](../../call-table/errors.md#uncertain-outcomes).
 
 ## Where it runs
 
@@ -124,8 +139,8 @@ $ layerfs machine start vm1
 
 - [Control: Families](../../control/families.md) and [Workers](../../routing/workers.md).
 - [Connect: Machines](../../../connect/machines/README.md) and [Connect: Support matrix](../../../connect/support-matrix/README.md).
-- [store family](store.md): `store push` and `pull` move sqlite Stores between machines.
+- [store family](../store/README.md): `store push` and `pull` move sqlite Stores between machines.
 
 ---
 
-← [Call table: workspace family](workspace.md) · [Up: Call table](../README.md) · [Call table: store family](store.md) →
+← [workspace.status](../workspace/status.md) · [Up: SDK](../README.md) · [machine.list](list.md) →

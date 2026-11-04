@@ -1,6 +1,6 @@
 # branch family
 
-[Architecture](../../../README.md) › [API](../../README.md) › [Call table](../README.md) › branch family
+[Architecture](../../../README.md) › [API](../../README.md) › [SDK](../README.md) › branch
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
@@ -8,10 +8,25 @@ The `branch` calls.
 
 | | |
 | --- | --- |
-| Component | [Call table](../README.md) |
+| Component | [Call table](../../call-table/README.md) |
 | Source | [`api/crates/layerfs-api/src/branch`](../../../../../api/crates/layerfs-api/src/branch), [`api/crates/layerfs-control/src/store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs), [`engine/crates/layerfs-store-service/src/methods`](../../../../../engine/crates/layerfs-store-service/src/methods) |
 
 ## Calls
+
+```text
+                 main (the project's line of Layers)
+                   |
+   list / get      | fork <name> main         fork <name> <branch> [commit]
+                   v                                   |
+                 agent  ---- file.* writes,            v
+                   |         workspace.commit -->  review
+                   |                                   |
+                   +------ diff <from> <to> -----------+
+                   +------ merge <new> <a> <b> --------+--> joined
+                                                            |
+                   main <---------- publish <branch> -------+
+                   (next Layer; overwritten Layers reported)
+```
 
 Six calls, in help order
 ([`branch/mod.rs`](../../../../../api/crates/layerfs-api/src/branch/mod.rs)).
@@ -22,12 +37,12 @@ Result keys are snake_case after the dispatcher.
 
 | Call | Arguments | Options | Returns | Store method |
 | --- | --- | --- | --- | --- |
-| [`list`](../../../../../api/crates/layerfs-api/src/branch/list.rs) | `project` (Project) | `page_size`, `page_pos` | `{ items, has_more, next_page_pos }`; each item `{ name, id, base, head, forked_from, … }`, `main` included | `project.list_branches` |
-| [`get`](../../../../../api/crates/layerfs-api/src/branch/get.rs) | `project`, `branch` (Name) | — | the one list item whose `name` or `id` is `branch` | `project.list_branches` with `name` |
-| [`fork`](../../../../../api/crates/layerfs-api/src/branch/fork.rs) | `project`, `name` (Name), `from_branch` (Name), `from_commit?` (Name) | — | `{ kind: "Forked", branch, base, head, … }` | `branch.fork` |
-| [`merge`](../../../../../api/crates/layerfs-api/src/branch/merge.rs) | `project`, `name`, `a`, `b` (Name) | `message` (Text), `units` (Json) | `{ kind: "Merged", fast_forward, branch, sources, merge_base, lww, units, … }` | `branch.merge` |
-| [`publish`](../../../../../api/crates/layerfs-api/src/branch/publish.rs) | `project`, `branch` (Name), `commit?` (Name) | — | `{ kind: "Added", source, published_layer, based_on, overwrote_count, overwrote, overwrote_has_more }`, or `UpToDate` / `NoChanges` | `branch.publish` |
-| [`diff`](../../../../../api/crates/layerfs-api/src/branch/diff.rs) | `project`, `from_branch`, `to_branch` (Name) | `paths_only`, `page_size`, `page_pos`, `cursor` | `{ kind: "ok", from, to, items, has_more, next_page_pos, next_cursor }` | `branch.diff_branches` |
+| [`list`](list.md) | `project` (Project) | `page_size`, `page_pos` | `{ items, has_more, next_page_pos }`; each item `{ name, id, base, head, forked_from, … }`, `main` included | `project.list_branches` |
+| [`get`](get.md) | `project`, `branch` (Name) | — | the one list item whose `name` or `id` is `branch` | `project.list_branches` with `name` |
+| [`fork`](fork.md) | `project`, `name` (Name), `from_branch` (Name), `from_commit?` (Name) | — | `{ kind: "Forked", branch, base, head, … }` | `branch.fork` |
+| [`merge`](merge.md) | `project`, `name`, `a`, `b` (Name) | `message` (Text), `units` (Json) | `{ kind: "Merged", fast_forward, branch, sources, merge_base, lww, units, … }` | `branch.merge` |
+| [`publish`](publish.md) | `project`, `branch` (Name), `commit?` (Name) | — | `{ kind: "Added", source, published_layer, based_on, overwrote_count, overwrote, overwrote_has_more }`, or `UpToDate` / `NoChanges` | `branch.publish` |
+| [`diff`](diff.md) | `project`, `from_branch`, `to_branch` (Name) | `paths_only`, `page_size`, `page_pos`, `cursor` | `{ kind: "ok", from, to, items, has_more, next_page_pos, next_cursor }` | `branch.diff_branches` |
 
 Result fields are built in
 [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs)
@@ -77,8 +92,8 @@ and [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/r
 
 An `Unknown` `fork`, `merge` or `publish` may have published. Read the
 Branch with `branch.get` or `branch.list` before acting again. See
-[error kinds](../errors.md#error-kinds) and
-[uncertain outcomes](../errors.md#uncertain-outcomes).
+[error kinds](../../call-table/errors.md#error-kinds) and
+[uncertain outcomes](../../call-table/errors.md#uncertain-outcomes).
 
 ## Where it runs
 
@@ -122,12 +137,12 @@ $ layerfs branch merge shop/api joined agent review -m join
 
 ## Related
 
-- [Table](../table.md) and [Errors](../errors.md).
-- [commit family](commit.md) and [file family](file.md): the other Store calls.
+- [Table](../../call-table/table.md) and [Errors](../../call-table/errors.md).
+- [commit family](../commit/README.md) and [file family](../file/README.md): the other Store calls.
 - [Routing table](../../routing/routing-table.md).
 - [Engine: Store calls](../../../engine/store-calls/README.md), [branches](../../../engine/store-calls/branches.md).
 - [Fork and merge flow](../../../flows/merge.md).
 
 ---
 
-← [Call table: project family](project.md) · [Up: Call table](../README.md) · [Call table: commit family](commit.md) →
+← [project.remove](../project/remove.md) · [Up: SDK](../README.md) · [branch.list](list.md) →

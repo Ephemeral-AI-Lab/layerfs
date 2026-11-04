@@ -5,7 +5,7 @@
 How LayerFS 2.0 is built, one component at a time. This is the maintained
 design reference for contributors. To *use* LayerFS, read the
 [2.0.0 manual](../versioned/2.0.0/README.md); for why a decision was made, read
-its issue under [`core/docs/issues/`](../../core/docs/issues/). Terms are in the
+its issue under [`core/docs/issues/`](../../core/docs/issues). Terms are in the
 [glossary](glossary.md).
 
 ## The four layers
@@ -16,8 +16,8 @@ enforces it.
 
 ```text
 +----------------------------------------------------------------+
-| api       Control . Routing and workers . Call table . Front   |
-|           ends                                                 |
+| api       Control . Routing and workers . Call table . SDK .   |
+|           Front ends                                           |
 +----------------------------------------------------------------+
         | depends on
         v
@@ -73,6 +73,7 @@ enforces it.
 | [API](api/README.md) | [Control](api/control/README.md) | The management library under the call table: the home and its records, machines and workers, Stores, projects, Sandboxes, Workspaces and backups. |
 |  | [Routing and workers](api/routing/README.md) | Where each call runs: in the caller's process, in a machine's worker, or in a Sandbox daemon. |
 |  | [Call table](api/call-table/README.md) | The nine call families and the one dispatcher every front end goes through. |
+|  | [SDK](api/sdk/README.md) | Every call a program can make: 61 calls in nine families, one page per call. |
 |  | [Front ends](api/front-ends/README.md) | The `layerfs` command, the Node addon and the Python module: one call each, over the call table. |
 
 ## Flows across layers
@@ -94,7 +95,7 @@ enforces it.
 | change how history is stored | [Objects](core/objects/README.md), [Physical storage](core/physical-storage/README.md), [Store](engine/store/README.md), [A Commit](flows/commit.md) |
 | work on mounts and file access | [Workspace](engine/workspace/README.md), [Overlay](engine/overlay/README.md), [Kernel routes](engine/kernel-routes/README.md), [Daemon](engine/daemon/README.md) |
 | add a platform or Sandbox backend | [Support matrix](connect/support-matrix/README.md), [Machines](connect/machines/README.md), [Network](connect/network/README.md), [Sandboxes](connect/sandboxes/README.md) |
-| add or change a call | [Call table](api/call-table/README.md), [Control](api/control/README.md), [Routing and workers](api/routing/README.md) |
+| use or change a call | [SDK](api/sdk/README.md), [Call table](api/call-table/README.md), [Control](api/control/README.md), [Routing and workers](api/routing/README.md) |
 
 ## How these pages work
 
@@ -115,7 +116,7 @@ docs/architecture/
 | --- | --- |
 | Diagrams, then tables, then prose | Explain with an ASCII diagram first, a table second, and prose only for what neither can say. |
 | One folder per component | A component is a unit of behaviour, not a crate: it may span crates, and one crate may hold several components. |
-| Same sections everywhere | Component pages and topic pages follow the [templates](_templates/). |
+| Same sections everywhere | Component pages and topic pages follow the [templates](_templates). |
 | Every page shows where it is | A breadcrumb at the top, a facts table, and previous / up / next links at the bottom. Following "next" from here visits every page once. |
 | Demonstrations point at code that runs | An existing test or example, its exact command and platform. |
 | Pages change with the source | A change that alters a boundary, format, algorithm or named limit updates its page in the same commit. |

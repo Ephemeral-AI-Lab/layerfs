@@ -1,6 +1,6 @@
 # project family
 
-[Architecture](../../../README.md) › [API](../../README.md) › [Call table](../README.md) › project family
+[Architecture](../../../README.md) › [API](../../README.md) › [SDK](../README.md) › project
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
@@ -8,10 +8,24 @@ The `project` calls.
 
 | | |
 | --- | --- |
-| Component | [Call table](../README.md) |
+| Component | [Call table](../../call-table/README.md) |
 | Source | [`api/crates/layerfs-api/src/project`](../../../../../api/crates/layerfs-api/src/project), [`api/crates/layerfs-control/src/project/family.rs`](../../../../../api/crates/layerfs-control/src/project/family.rs) |
 
 ## Calls
+
+```text
+ store.create | store.connect          (a Store must exist first)
+        |
+        v
+ init <store>/<project> <folder> --> main's first Layer
+        |
+        +--> list [store]   get <store>/<project>   (home records only)
+        |
+        +--> branch.*, commit.*, file.*, sandbox.create ...
+        |
+        v
+ remove <store>/<project>   (no Sandbox of it may run)
+```
 
 Four calls, in help order
 ([`project/mod.rs`](../../../../../api/crates/layerfs-api/src/project/mod.rs)).
@@ -21,10 +35,10 @@ snake_case after the dispatcher's
 
 | Call | Arguments | Options | Returns | Where it runs |
 | --- | --- | --- | --- | --- |
-| [`init`](../../../../../api/crates/layerfs-api/src/project/init.rs) | `project` (Project), `folder` (Text) | `timeout` (Int), `on_progress` (Function) | the project summary plus `layer` and `root` of the new project | where the Store's calls run |
-| [`list`](../../../../../api/crates/layerfs-api/src/project/list.rs) | `store?` (Name) | `page_size`, `page_pos` (Int) | `{ items: [summary], next_page_pos }` | caller's process, home records only |
-| [`get`](../../../../../api/crates/layerfs-api/src/project/get.rs) | `project` (Project) | — | the project summary | caller's process, home records only |
-| [`remove`](../../../../../api/crates/layerfs-api/src/project/remove.rs) | `project` (Project) | — | `{ stack, packs_kept: true, project }` | caller's process, or `project.remove` in the Store's worker |
+| [`init`](init.md) | `project` (Project), `folder` (Text) | `timeout` (Int), `on_progress` (Function) | the project summary plus `layer` and `root` of the new project | where the Store's calls run |
+| [`list`](list.md) | `store?` (Name) | `page_size`, `page_pos` (Int) | `{ items: [summary], next_page_pos }` | caller's process, home records only |
+| [`get`](get.md) | `project` (Project) | — | the project summary | caller's process, home records only |
+| [`remove`](remove.md) | `project` (Project) | — | `{ stack, packs_kept: true, project }` | caller's process, or `project.remove` in the Store's worker |
 
 The summary is `ProjectRecord::to_sdk`
 ([`project/record.rs`](../../../../../api/crates/layerfs-control/src/project/record.rs)):
@@ -64,8 +78,8 @@ The summary is `ProjectRecord::to_sdk`
 After an `Unknown` `init` the home writes no project record, so
 `project list` does not show the project, though the Store may hold it.
 The message names the staged copy the worker removes when its Init ends.
-See [error kinds](../errors.md#error-kinds) and
-[uncertain outcomes](../errors.md#uncertain-outcomes).
+See [error kinds](../../call-table/errors.md#error-kinds) and
+[uncertain outcomes](../../call-table/errors.md#uncertain-outcomes).
 
 ## Where it runs
 
@@ -115,11 +129,11 @@ $ layerfs project list shop --page-size 20
 
 ## Related
 
-- [Table](../table.md): entries, kinds and checks.
+- [Table](../../call-table/table.md): entries, kinds and checks.
 - [Control: Families](../../control/families.md): the `project` implementation.
 - [Routing table](../../routing/routing-table.md) and [Workers](../../routing/workers.md).
 - [Engine: Project Init](../../../engine/project-init/README.md) and the [Project Init flow](../../../flows/init.md).
 
 ---
 
-← [Call table: Table](../table.md) · [Up: Call table](../README.md) · [Call table: branch family](branch.md) →
+← [API: SDK](../README.md) · [Up: SDK](../README.md) · [project.init](init.md) →
