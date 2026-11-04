@@ -41,15 +41,20 @@ fn home_with_a_named_workspace(tag: &str) -> PathBuf {
         &SdkValue::map([("name", t("app")), ("created", SdkValue::Int(1))]),
     )
     .unwrap();
-    // the native daemon a call would launch: never started here
+    // the native daemon a call would launch: never started here, but the
+    // record must name a file so the call reaches the Sandbox itself
     let native = paths::machine_record(&home, "native");
     // (a home made without the machine calls has no native record yet)
     let record = read_record(&native)
         .unwrap()
         .unwrap_or_else(|| SdkValue::map([("name", t("native")), ("platform", t("native"))]));
+    // the recorded daemon must exist for a call to reach the Sandbox; this
+    // placeholder is never launched, because no daemon keys are recorded
+    let daemon = home.join("layerfs-daemon");
+    std::fs::write(&daemon, b"").unwrap();
     write_record(
         &native,
-        &home::with_field(record, "daemon", t("/nonexistent")),
+        &home::with_field(record, "daemon", t(&daemon.display().to_string())),
     )
     .unwrap();
     write_record(
