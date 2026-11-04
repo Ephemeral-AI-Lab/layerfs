@@ -9,8 +9,10 @@ use std::io::Read;
 /// namespace (`CLONE_NEWUSER` to `unshare` or `clone`; `clone3` answers
 /// `ENOSYS`, which the C library follows with `clone`) and allows everything
 /// else. An unprivileged command can make a mount namespace only inside a
-/// user namespace of its own, so with this no copy of a Workspace mount can
-/// exist outside the daemon's namespace and a normal unmount stays truthful.
+/// user namespace of its own, so with this no command can copy a Workspace
+/// mount out of the daemon's namespace. Processes outside the container are
+/// not filtered: a copy one makes keeps the connection alive after a plain
+/// detach, which the daemon keeps at `Join` for one forced unmount to end.
 /// It replaces the Engine's default filter; the command identity holds no
 /// capability and, with no user namespace, cannot gain one.
 pub(super) const SECCOMP: &str = concat!(

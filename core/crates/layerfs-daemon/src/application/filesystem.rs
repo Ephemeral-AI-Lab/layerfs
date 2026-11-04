@@ -40,7 +40,7 @@ mod linux {
     };
     use std::{
         fs::{self, OpenOptions, Permissions},
-        io,
+        io::{self, Write},
         os::unix::fs::{DirBuilderExt, FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt},
         path::Path,
         sync::Arc,
@@ -61,6 +61,21 @@ mod linux {
         let mounts = Path::new(&setup.mounts);
         device()?;
         home(mounts)?;
+        // Beside the Overlay file, in the directory configuration checked
+        // private, so no command identity can reach another connection.
+        // Best effort: where the mount is refused (a user namespace refuses
+        // it, though not FUSE mounts) the shared tree, unmounted there, binds
+        // nothing and forced unmount is refused before any effect, as it was
+        // before this mount existed. The refusal is written once to stderr.
+        let overlay = Path::new(&setup.overlay).parent();
+        let private = overlay.ok_or_else(|| invalid("Overlay parent"))?;
+        let control = match layerfs_fuse::mount::control_root(&private.join("fusectl")) {
+            Ok(control) => control,
+            Err(cause) => {
+                let _ = writeln!(io::stderr().lock(), "LAYERFS_DAEMON_ABORT_UNBOUND {cause}");
+                layerfs_fuse::mount::CONTROL.into()
+            }
+        };
         KernelServing::start(KernelConfig {
             mounts: mounts.to_owned(),
             owner_uid: Uid::effective().as_raw(),
@@ -69,6 +84,7 @@ mod linux {
             command_gid: setup.command_gid,
             ready_wait: READY_WAIT,
             drain_wait: DRAIN_WAIT,
+            control,
         })
         .map(|serving| Some(Arc::new(serving)))
         .map_err(|failure| io::Error::other(failure.to_string()))

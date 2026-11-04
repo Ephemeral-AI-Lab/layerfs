@@ -373,7 +373,7 @@ method, its arguments, result fields, refusals with what to do, limits and examp
 | [fs writes](references/methods/fs-write.md) | `write(branch, path, content, message?)`, `edit(branch, path, oldText, newText, message?)`, `apply(branch, changes, message?)`, `mkdir(branch, path, message?)`, `rm(branch, path, message?)`, `cp(branch, from, to, message?)`, `mv(branch, from, to, message?)` |
 | [branch](references/methods/branch.md) | `fork(name, fromRef?)`, `list_commits(branch, pageSize?, pagePos?)`, `diff_commits(from, to, pageSize?, pagePos?)`, `diff_branches(from, to, pageSize?, pagePos?)`, `merge(a, b, name, message?)`, `publish(branch, commit?)` |
 | [sandbox](references/methods/sandbox.md) | `create(options?)`, `list_workspaces(sandbox, pageSize?, pagePos?)`, `close(sandbox)` |
-| [workspace](references/methods/workspace.md) | `mount(sandbox, branch)` → `{ sandbox, path, image }`, `exec(ws, command, message?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?)` |
+| [workspace](references/methods/workspace.md) | `mount(sandbox, branch)` → `{ sandbox, path, image }`, `exec(ws, command, message?)`, `commit(ws, message?, force?)`, `unmount(ws, discard?, force?)` |
 
 A `ref` is `main`, a Branch name, a Commit id or a Layer id. Paths are absolute in the
 view (`/src/index.js`). Pages are `{ items, hasMore }`; advance with

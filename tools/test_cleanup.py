@@ -14,13 +14,35 @@ from unittest.mock import patch
 
 import cleanup
 from cleanup_discover import discover
-from cleanup_docker import guard as guard_container
+from cleanup_docker import guard as guard_container, identity as container_identity
 from cleanup_retirement import retirement_open_files
 from cleanup_archive import archive
 from cleanup_state import Refused, ensure_idle, ensure_volume_idle, git, inventory, same_volume
 
 
 class CleanupTests(unittest.TestCase):
+    def test_container_identity_ignores_mount_order_but_keeps_mount_changes(self):
+        mounts = [
+            {"Destination": "/work", "Source": "/source", "RW": False},
+            {"Destination": "/target", "Name": "cache", "RW": True},
+        ]
+        info = {
+            "Id": "fixture",
+            "Created": "then",
+            "Image": "image",
+            "Config": {"Cmd": ["cargo"]},
+            "Mounts": mounts,
+            "State": {"Status": "exited", "Running": False, "StartedAt": "start", "FinishedAt": "end"},
+        }
+        expected = container_identity(info)
+        reordered = dict(info, Mounts=list(reversed(mounts)))
+        self.assertEqual(expected, container_identity(reordered))
+        self.assertEqual(info["Mounts"], mounts)
+        for field, value in [("Source", "/different"), ("RW", True)]:
+            changed = dict(info, Mounts=[dict(mounts[0], **{field: value}), mounts[1]])
+            self.assertNotEqual(expected, container_identity(changed))
+        self.assertNotEqual(expected, container_identity(dict(info, Mounts=mounts[:1])))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

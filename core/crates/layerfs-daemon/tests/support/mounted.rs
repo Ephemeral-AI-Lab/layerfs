@@ -89,6 +89,7 @@ impl Harness {
                 command_gid: COMMAND,
                 ready_wait: Duration::from_secs(3),
                 drain_wait: Duration::from_secs(3),
+                control: layerfs_fuse::mount::CONTROL.into(),
             })
             .unwrap(),
         );

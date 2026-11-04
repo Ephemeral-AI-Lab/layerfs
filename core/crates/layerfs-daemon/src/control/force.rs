@@ -1,7 +1,9 @@
 //! Forced terminal unmount: a before-effect guard, one abort write, the local
 //! drain with its one plain detach, then Revoke and Close. Nothing is repeated.
+//! A normal unmount stalled at Join is forced the same way, its plain detach
+//! counting as the one detach.
 #[cfg(target_os = "linux")]
-use super::serving::{stage, work, Attached};
+use super::serving::{stage, work, Attached, Evidence, Leaving};
 use super::{
     kernel::Kernel,
     registry::{bound_mut, Binding},
@@ -48,9 +50,14 @@ fn guard(
     token: WorkspaceToken,
     relinquish_unknown: bool,
 ) -> Result<CommitKnowledge, Failure> {
-    // Stored custody answers first: no second abort or detach ever follows it.
+    // Stored custody answers first: no second abort or detach ever follows
+    // it. The one exception is a normal unmount stalled at Join, admitted
+    // idle with no Commit custody, whose abort control is still unused.
     #[cfg(target_os = "linux")]
     if let Kernel::Retained(kept) = &value.kernel {
+        if kept.forceable() {
+            return Ok(CommitKnowledge::Absent);
+        }
         return Err(Failure::Retained(Box::new(kept.custody(token))));
     }
     #[cfg(not(target_os = "linux"))]
@@ -149,6 +156,31 @@ struct Admitted {
     /// Restored only if the abort is refused before any effect.
     prior: Activity,
     commit: CommitKnowledge,
+    /// Taken from a normal unmount stalled at Join: already detached.
+    stalled: bool,
+}
+/// Moves a stalled normal unmount's session out of its retained custody,
+/// which `guard` checked, into the forced teardown's own first phase.
+#[cfg(target_os = "linux")]
+fn take_stalled(kernel: &mut Kernel) -> Box<Attached> {
+    let Kernel::Retained(kept) = std::mem::replace(kernel, Kernel::Attaching) else {
+        unreachable!("checked retained custody")
+    };
+    let kept = *kept;
+    let (Some(ready), Some(observer), Evidence::Stalled(undrained)) =
+        (kept.ready, kept.observer, kept.evidence)
+    else {
+        unreachable!("checked stalled custody")
+    };
+    *kernel = Kernel::Leaving(Box::new(Leaving {
+        ready: ready.clone(),
+        observer,
+        phase: MountPhase::Stopping,
+    }));
+    Box::new(Attached {
+        session: undrained.session,
+        ready,
+    })
 }
 #[cfg(target_os = "linux")]
 fn detach(attempt: DetachAttempt) -> DetachDisposition {
@@ -180,7 +212,12 @@ impl Service {
         let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
         let value = bound_mut(&mut entries, token)?;
         let commit = guard(value, token, relinquish_unknown)?;
-        let attached = super::detach::take(&mut value.kernel, MountPhase::Stopping)?;
+        let stalled = matches!(value.kernel, Kernel::Retained(_));
+        let attached = if stalled {
+            take_stalled(&mut value.kernel)
+        } else {
+            super::detach::take(&mut value.kernel, MountPhase::Stopping)?
+        };
         let prior = value.activity;
         value.activity = Activity::Closing;
         value.epoch = value.epoch.saturating_add(1);
@@ -189,6 +226,7 @@ impl Service {
             attached,
             prior,
             commit,
+            stalled,
         })
     }
     /// Each step is made once. A step that is not established keeps the exact
@@ -204,18 +242,40 @@ impl Service {
             attached,
             prior,
             commit,
+            stalled,
         } = admitted;
         let Attached { mut session, ready } = *attached;
         let mount = session.mount();
         let observer = session.observer();
         let mut facts = ForcedFacts {
             abort: AbortDisposition::Written,
-            detach: DetachDisposition::NotAttempted,
+            detach: if stalled {
+                DetachDisposition::Detached
+            } else {
+                DetachDisposition::NotAttempted
+            },
             commit,
             fenced: 0,
         };
-        let written = match session.abort() {
+        let aborted = if stalled {
+            session.abort_detached()
+        } else {
+            session.abort()
+        };
+        let written = match aborted {
             Ok(written) => written,
+            // Admitted under the lock with its control bound and unused, so
+            // this cannot happen; the detached owner is kept, never released.
+            Err(refusal) if stalled => {
+                return Err(self.retain(
+                    token,
+                    TeardownStage::Join,
+                    format!("abort refused before any effect: {refusal:?}"),
+                    Some(observer),
+                    Box::new(session),
+                    None,
+                ))
+            }
             Err(refusal) => {
                 // Refused before the write: the same connection returns with
                 // the activity it had.

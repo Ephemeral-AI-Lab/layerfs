@@ -197,9 +197,11 @@ Any step that is not established leaves the entry `Retained` with its stage
 (`Detach`, `Join`, `Owner`, `Requests`, `Lane`, `Revoke`, `Close` or `Registry`),
 the observer and the original evidence. The reply is `Retained` with
 `TeardownCustody`; it is not reported as an uncertain mutation and nothing is
-replayed. Later Attach, Unmount or ForceUnmount on that entry returns the same
-custody. The normal path never uses the abort control and never sets the
-terminal fence.
+replayed. Later Attach or Unmount on that entry returns the same custody, and
+so does ForceUnmount, except after a detached drain stopped at `Join`: that one
+[stalled normal unmount](80-forced-teardown.md#stalled-normal-unmount) is ended
+by one forced unmount. The normal path never uses the abort control and never
+sets the terminal fence.
 
 ## Forced unmount
 

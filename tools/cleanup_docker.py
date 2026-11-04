@@ -16,8 +16,11 @@ def inspect(name):
 
 
 def identity(info):
-    return {key: info[key] for key in ("Id", "Created", "Image", "Config", "Mounts")} | {
-        "state": {key: info["State"][key] for key in ("Status", "Running", "StartedAt", "FinishedAt")}
+    # Docker's inspect API does not promise mount ordering. Keep every field,
+    # but compare the set of mount records in a stable order.
+    return {key: info[key] for key in ("Id", "Created", "Image", "Config")} | {
+        "Mounts": sorted(info["Mounts"], key=lambda mount: json.dumps(mount, sort_keys=True)),
+        "state": {key: info["State"][key] for key in ("Status", "Running", "StartedAt", "FinishedAt")},
     }
 
 

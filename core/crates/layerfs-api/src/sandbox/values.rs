@@ -6,7 +6,7 @@
 //! refusals with stable codes.
 use super::{CommitReply, MountedWorkspace, Unmounted};
 use crate::{OperationCause, OperationFailure};
-use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceStatus};
+use layerfs_bridge::control::{ForcedOutcome, SdkRefusal, SdkValue, WorkspaceStatus};
 use layerfs_bridge::sdk_values::{
     commit_value, conflicts, conflicts_truncated, hex, lww, lww_truncated,
 };
@@ -169,6 +169,17 @@ pub fn commit(reply: &CommitReply) -> Result<SdkValue, SdkRefusal> {
             ]),
         }),
     }
+}
+
+/// `sandbox.unmount` with `force`: what the forced teardown established.
+pub fn force_unmounted(outcome: &ForcedOutcome) -> SdkValue {
+    let text = |value: &dyn std::fmt::Debug| SdkValue::text(format!("{value:?}"));
+    SdkValue::map([
+        ("kind", SdkValue::text("ForceUnmounted")),
+        ("abort", text(&outcome.facts.abort)),
+        ("detach", text(&outcome.facts.detach)),
+        ("cleanup", text(&outcome.cleanup)),
+    ])
 }
 
 /// `sandbox.unmount`: Unmounted, or the `Dirty` refusal naming the paths.
