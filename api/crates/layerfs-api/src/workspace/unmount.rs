@@ -10,7 +10,7 @@ pub(crate) const CALL: Call = call(
     "workspace",
     "unmount",
     &[a("ws", Text)],
-    &[opt("discard", Bool), opt("force", Bool)],
+    &[opt("discard", Bool), opt("force", Bool), opt("kill", Text)],
     "end a Workspace",
     run,
 );

@@ -11,7 +11,7 @@
 workspace.mount(sandbox, branch, { name })
 workspace.exec(ws, command, { message, stream, stdout, stderr })
 workspace.commit(ws, { message, force })
-workspace.unmount(ws, { discard, force })
+workspace.unmount(ws, { discard, force, kill })
 workspace.status(ws)
 ```
 
@@ -157,6 +157,15 @@ const run = await layerfs.workspace.exec(ws, `printf '%s' ${b64} | base64 -d > s
 too; mount again elsewhere), `NotMounted`, `Unknown` (the exit code is not
 known: the command may or may not have run; stop).
 
+A foreground command leaves a private `/tmp/layerfs-exec-<id>.record` in its
+Sandbox while it runs, naming its Workspace, its pid and that pid's start
+time; the record is removed when the command ends. A second client can use it
+([`workspace.unmount`](#workspaceunmount) `kill: "workspace"`) when the first
+client died before its unmount, leaving the command as an orphan that holds
+the mount. The record is written only where the Sandbox has `/proc` (Docker's
+container and Linux namespaces; a macOS host-process Sandbox writes none),
+and the image must provide util-linux `setsid --wait` (Debian 12 has it).
+
 ## `workspace.commit`
 
 `workspace.commit(ws, { message, force })`
@@ -190,24 +199,58 @@ leaves their text out.
 
 ## `workspace.unmount`
 
-`workspace.unmount(ws, { discard, force })`
+`workspace.unmount(ws, { discard, force, kill })`
 
 Ends a Workspace. The Sandbox keeps running with no Workspace until `sandbox.close` (#535 D11).
 
 | Option | Meaning |
 | --- | --- |
 | `discard` | Drop uncommitted changes instead of refusing |
-| `force` | Abort the Workspace's kernel connection; drops uncommitted changes. A normal unmount that stalls ends itself with one abort write; use `force` only for a live connection, never to repeat an attempted abort |
+| `force` | Abort the Workspace's kernel connection; drops uncommitted changes. A normal unmount that stalls ends itself with one abort write; use `force` only for a live connection, never to repeat an attempted abort. While a foreground command's record names a live process, `force` is refused `Busy`: cancel that command, then unmount normally, so it cannot create a new `Retained(Detach)` |
+| `kill` | `"workspace"` (the only accepted value) to cancel this Workspace's own foreground commands first, then unmount normally: TERM to each process group, a bounded wait, then KILL only if still there. It never stops or deletes the Sandbox, never aborts the Workspace's connection, and never touches another Workspace. Any other value is `InvalidInput`, as is combining it with `force` |
 
 **Returns:** `{ kind: "Unmounted" }`, or with `force`
-`{ kind: "ForceUnmounted", abort, detach, cleanup }`.
+`{ kind: "ForceUnmounted", abort, detach, cleanup }`. A `kill: "workspace"`
+unmount that ends the Workspace answers `{ kind: "Unmounted" }`: it is a
+normal unmount after the holders are cancelled, not a forced one.
 
 | Code | Meaning | Do |
 | --- | --- | --- |
 | `Dirty` | Uncommitted changes; `detail.changed` lists paths, with `pendingMerge` and `truncated` | Commit them so the step is recorded; discard only a Workspace you're abandoning |
-| `Busy` | A process still runs there (`detail.processes`) | Wait for it, or end it in a command |
+| `Busy` | A foreground command still runs there; `detail.processes` lists the ids | `workspace.unmount(ws, { kill: "workspace" })` cancels only this Workspace's holders and unmounts; a holder that survives makes it `Busy` again with the ids |
+| `InvalidInput` | `kill` was not `"workspace"`, or `kill` and `force` were combined | Pass only `kill: "workspace"`, without `force` |
 | `NotMounted` | Already unmounted, or the wrong `ws` | Use the Workspace from `mount` |
 | `Failed` with `TeardownCustody` in the message | The mount is gone but its drain did not finish | Preserve the message; don't repeat the abort; replace the Sandbox if its connection can't be ended |
+
+**Example**
+
+```js
+await layerfs.workspace.unmount(ws);                        // ws is now invalid
+```
+
+After a `Busy` refusal, cancel only this Workspace's holders and unmount again:
+
+```js
+try {
+  await layerfs.workspace.unmount(ws);
+} catch (error) {
+  if (error.code !== "Busy") throw error;
+  await layerfs.workspace.unmount(ws, { kill: "workspace" });
+}
+```
+
+`kill: "workspace"` is the recovery for a Workspace whose own foreground
+command was orphaned by a killed client. It cancels only the records whose
+Workspace path is this one, and a process group with a member whose cwd or
+open file is outside the Workspace is left alone: the call answers `Busy`
+with `detail.scope_conflict` instead of taking collateral. It is not a
+whole-Sandbox stop: `sandbox.close` has no force mode, and a Workspace the
+daemon already holds as `Retained(Detach)` needs its custody retry; `kill`
+cannot make that Workspace unmountable. A process that daemonized and escaped
+the exec's session has no record once the command ends, so it needs a
+separate explicit destroy. The cancel runs where the Sandbox's runtime is (its
+machine's worker, or this process), so a Sandbox this process reaches only
+through a forwarded daemon port is handled the same way.
 
 ## `workspace.status`
 

@@ -239,8 +239,44 @@ pub(crate) fn commit(args: &SdkValue) -> Outcome {
     values::commit(&reply)
 }
 
-/// `workspace.unmount(ws, { discard?, force? })`: the daemon's answer.
+/// How one `workspace.unmount` call ends the Workspace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Ending {
+    /// The daemon's normal unmount; `force` aborts a live connection instead.
+    Normal { force: bool },
+    /// Cancel only the holders of this Workspace, then a normal unmount.
+    Kill,
+}
+
+/// Reads the `force` and `kill` arguments: `kill` accepts only `"workspace"`,
+/// it cannot be combined with `force`, and a missing `kill` leaves the
+/// existing force path alone. The caller's side (`workspace::calls`) uses it
+/// to cancel holders where the runtime is; this side uses it to refuse an
+/// invalid combination before any effect.
+pub(crate) fn ending(args: &SdkValue) -> Result<Ending, SdkRefusal> {
+    let force = args.get_bool("force");
+    match args.get_text("kill") {
+        None => Ok(Ending::Normal { force }),
+        Some("workspace") if !force => Ok(Ending::Kill),
+        Some("workspace") => Err(crate::common::outcome::refused(
+            "InvalidInput",
+            "force and kill cannot be combined: kill: \"workspace\" cancels only this Workspace's holders, then unmounts it normally",
+        )),
+        Some(other) => Err(crate::common::outcome::refused(
+            "InvalidInput",
+            format!(
+                "kill must be \"workspace\", not {other:?}: only a Workspace's own holders are killed, never another Workspace or the Sandbox"
+            ),
+        )),
+    }
+}
+
+/// `workspace.unmount(ws, { discard?, force?, kill? })`: the daemon's answer.
+/// `kill: "workspace"` first cancels only this Workspace's foreground execs,
+/// then unmounts normally; it never stops or deletes the Sandbox and never
+/// touches another Workspace.
 pub(crate) fn unmount(args: &SdkValue) -> Outcome {
+    let ending = ending(args)?;
     let state = sandbox(args)?;
     let path = text(args, "path")?;
     if let Some(value) = crate::workspace::unmount_guard::find(&state, path)? {
@@ -266,7 +302,7 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
         let mut api = workspace(&mut control);
         // Forced: one abort write ends the connection, also after a normal
         // unmount stalled at Join; uncommitted changes are dropped.
-        if args.get_bool("force") {
+        if ending == (Ending::Normal { force: true }) {
             match api.unmount(token, true).map_err(operation)? {
                 Some(outcome) => Ok(values::force_unmounted(&outcome)),
                 None => values::unmounted(&Unmounted::Closed),
@@ -311,4 +347,59 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
         }
     }
     outcome
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(fields: &[(&str, SdkValue)]) -> SdkValue {
+        SdkValue::Map(
+            fields
+                .iter()
+                .map(|(name, value)| ((*name).to_owned(), value.clone()))
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn kill_accepts_only_the_workspace_scope() {
+        assert_eq!(
+            ending(&args(&[("kill", SdkValue::text("workspace"))])).unwrap(),
+            Ending::Kill
+        );
+        for other in ["sandbox", "workspaces", "WORKSPACE", "", "all"] {
+            let refusal = ending(&args(&[("kill", SdkValue::text(other))])).unwrap_err();
+            assert_eq!(refusal.code, "InvalidInput", "{other:?}");
+            assert!(
+                refusal.message.contains("workspace"),
+                "{other:?}: {}",
+                refusal.message
+            );
+        }
+    }
+
+    #[test]
+    fn kill_and_force_are_mutually_exclusive() {
+        let refusal = ending(&args(&[
+            ("force", SdkValue::Bool(true)),
+            ("kill", SdkValue::text("workspace")),
+        ]))
+        .unwrap_err();
+        assert_eq!(refusal.code, "InvalidInput");
+        assert!(
+            refusal.message.contains("force and kill"),
+            "{}",
+            refusal.message
+        );
+    }
+
+    #[test]
+    fn missing_or_absent_kill_keeps_the_normal_force_path() {
+        assert_eq!(ending(&args(&[])).unwrap(), Ending::Normal { force: false });
+        assert_eq!(
+            ending(&args(&[("force", SdkValue::Bool(true))])).unwrap(),
+            Ending::Normal { force: true }
+        );
+    }
 }
