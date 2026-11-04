@@ -1,10 +1,10 @@
 //! The checks on what the scan read: broken references (a Sandbox whose
-//! Store, project or machine is gone, a Store on a machine with no record,
-//! a Firecracker machine whose host is gone, a built-in machine's recorded
-//! daemon that is not there), dead and uncertain `op`
-//! intents, stale Store leases (read, never removed), a partial Store
-//! copy (`store.sqlite.incoming`) an interrupted transfer left on `native`
-//! and a copy a push or pull did not retire (from the record).
+//! Store, project or machine is gone, a Store on a machine with no record or
+//! on a machine that keeps no disk of ours, a Firecracker machine whose host
+//! is gone, a built-in machine's recorded daemon that is not there), dead and
+//! uncertain `op` intents, stale Store leases (read, never removed), a partial
+//! Store copy (`store.sqlite.incoming`) an interrupted transfer left on
+//! `native` and a copy a push or pull did not retire (from the record).
 use super::report::Findings;
 use super::scan::Scanned;
 use crate::common::home::{lease, paths};
@@ -55,6 +55,37 @@ pub(super) fn check(
                         format!("Store {name} is on machine {machine}, which has no record"),
                         format!("no call reaches it: restore machine {machine}'s record for inspection and explicit cleanup, or delete {} by hand", paths::store_dir(home, name).display()),
                     );
+                }
+                // the record's own fact: a machine that keeps no disk of ours
+                // cannot hold this Store, and a malformed field would refuse
+                // every placement
+                match crate::common::place::placement(home, machine) {
+                    Ok(placement)
+                        if placement.home == crate::common::place::StoreHome::Remote =>
+                    {
+                        findings.error(
+                            entity,
+                            format!(
+                                "Store {name} is on machine {machine}, which keeps no disk of ours: its record says local_sqlite is false"
+                            ),
+                            format!(
+                                "`layerfs store pull {name}` moves it back to native, or repair {} by hand",
+                                paths::machine_record(home, machine).display()
+                            ),
+                        );
+                    }
+                    Ok(_) => {}
+                    Err(refusal) => findings.error(
+                        entity,
+                        format!(
+                            "Store {name} is on machine {machine}, whose record cannot say whether it keeps a Store: {}",
+                            refusal.message
+                        ),
+                        format!(
+                            "repair {} by hand",
+                            paths::machine_record(home, machine).display()
+                        ),
+                    ),
                 }
                 // a transfer running now owns its partial copy
                 let standing = op.as_ref().map(Op::standing);

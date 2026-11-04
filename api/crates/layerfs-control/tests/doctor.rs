@@ -201,6 +201,14 @@ fn each_problem_gives_one_finding_naming_its_fix() {
         "partial",
     )
     .unwrap();
+    // a Store on a machine whose record says it keeps no disk of ours
+    let ephemeral = SdkValue::map([
+        ("name", t("ephemeral")),
+        ("platform", t("ssh")),
+        ("local_sqlite", SdkValue::Bool(false)),
+    ]);
+    write_entity(&paths::machine_record(&home, "ephemeral"), &ephemeral).unwrap();
+    store(&home, "s7", sqlite("s7", "ephemeral"));
     // a built-in machine whose recorded daemon is not there
     let native = SdkValue::map([
         ("name", t("native")),
@@ -282,6 +290,13 @@ fn each_problem_gives_one_finding_naming_its_fix() {
             "s6",
             "store.sqlite.incoming",
             "`layerfs store pull s6`",
+        ),
+        (
+            "error",
+            "store",
+            "s7",
+            "keeps no disk of ours",
+            "`layerfs store pull s7`",
         ),
         (
             "warning",
