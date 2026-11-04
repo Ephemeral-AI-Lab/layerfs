@@ -243,6 +243,20 @@ pub(crate) fn scratch(runtime: &Sandbox) -> String {
     runtime.scratch_directory()
 }
 
+/// The scratch ownership a started Sandbox reports (#549): its own scratch
+/// root and a fresh generation token. A Docker Sandbox reports none: its
+/// `/tmp` is the container's and goes with it, so the control plane records
+/// no host path it must never touch.
+pub(crate) fn scratch_owned(runtime: &Sandbox) -> Result<Option<SdkValue>, SdkRefusal> {
+    if matches!(runtime, Sandbox::Docker(_)) {
+        return Ok(None);
+    }
+    let root = std::path::PathBuf::from(runtime.scratch_directory());
+    Ok(Some(
+        crate::sandbox::scratch::Scratch::claim(&root)?.to_record(),
+    ))
+}
+
 /// One command to its end: exit code, stdout, stderr. `spool` sends every
 /// non-empty stream to its file instead of keeping it inline.
 pub(crate) fn run(

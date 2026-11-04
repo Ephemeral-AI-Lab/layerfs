@@ -21,6 +21,7 @@ use crate::sandbox::lifecycle::{
     self, CloseDecision, CloseEvent, CloseRefusal, CloseState, SandboxState,
 };
 use crate::sandbox::route::on_machine;
+use crate::sandbox::scratch::{self, Mode, Owner};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
@@ -221,7 +222,11 @@ pub(super) fn close(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         CloseDecision::Closed => match closed {
             Ok(value) => {
                 direct::release(&home, &record);
+                // one settled close may remove the scratch it owns; a stale
+                // generation or a path that is not its own is kept (#549)
+                scratch::clean(&home, &record, Owner::Close)?;
                 remove_folder(&dir)?;
+                sweep_scratch(&home, &record);
                 write_closed(&home, name, current, Some(next), "operator", None)?;
                 Ok(home::with_field(value, "closed", SdkValue::text(name)))
             }
@@ -229,7 +234,9 @@ pub(super) fn close(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             // verified there is no runtime, so this is Closed, not Lost
             Err(_) => {
                 direct::release(&home, &record);
+                scratch::clean(&home, &record, Owner::Close)?;
                 remove_folder(&dir)?;
+                sweep_scratch(&home, &record);
                 write_closed(&home, name, current, Some(next), "gone", Some("closed"))?;
                 Ok(SdkValue::map([
                     ("closed", SdkValue::text(name)),
@@ -325,6 +332,16 @@ fn requested_generation(args: &SdkValue) -> Result<Option<u64>> {
     }
 }
 
+/// One bounded, machine-keyed pass over the home's settled scratch, on the
+/// same predicate as this close. The runtime is already stopped, so a
+/// failure here never changes the close's answer; the next pass retries.
+fn sweep_scratch(home: &Path, record: &SandboxRecord) {
+    if record.machine().is_empty() {
+        return;
+    }
+    let _ = scratch::sweep(home, record.machine(), Mode::Apply);
+}
+
 /// Refuses a close while another operation's intent holds Sandbox
 /// `record` (`Busy`); a gone owner's uncertain intent is what a close
 /// clears, and a gone owner's certain one holds nothing.
@@ -349,6 +366,9 @@ fn clearable(record: &SandboxRecord) -> Result<()> {
 fn close_unstarted(home: &Path, record: &SandboxRecord) -> Outcome {
     let state = record.state(false);
     let generation = record.generation();
+    // a record that never got an id may still own a scratch from an attempt
+    // whose outcome was not known; the close is its explicit owner
+    scratch::clean(home, record, Owner::Close)?;
     remove_folder(&record.dir(home))?;
     let reason = match state {
         SandboxState::Unresolved => "unresolved",

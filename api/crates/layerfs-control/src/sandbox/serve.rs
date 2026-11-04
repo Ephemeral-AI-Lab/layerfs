@@ -458,7 +458,7 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
         }
     };
     let runtime = state.runtime()?;
-    Ok(SdkValue::map([
+    let mut fields = vec![
         ("sandbox", SdkValue::text(&state.id)),
         ("name", SdkValue::text(&state.name)),
         (
@@ -475,7 +475,15 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
             SdkValue::text(crate::sandbox::files::route(runtime)),
         ),
         ("runtime_id", SdkValue::text(runtime.identity().to_string())),
-    ]))
+    ];
+    // the scratch it owns (#549): the caller records it before the Sandbox
+    // is handed back, so a cleaner never has to guess a path
+    if let Some(scratch) = crate::sandbox::runtime::scratch_owned(runtime)? {
+        fields.push(("scratch", scratch));
+    }
+    Ok(SdkValue::Map(
+        fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect(),
+    ))
 }
 
 /// `sandbox.close(sandbox, { force })`: stops Sandbox `sandbox` now, under

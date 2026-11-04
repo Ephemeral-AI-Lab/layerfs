@@ -25,6 +25,7 @@ pub(crate) mod recorded;
 pub(crate) mod registry;
 pub(crate) mod route;
 pub(crate) mod runtime;
+pub mod scratch;
 pub(crate) mod serve;
 #[cfg(unix)]
 pub use launch::SandboxApi;

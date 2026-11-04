@@ -13,6 +13,7 @@ use crate::common::home::{self, paths, read_record, with_field, write_entity};
 use crate::common::op::{self, Op, Standing};
 use crate::common::outcome::{refused, View};
 use crate::sandbox::lifecycle;
+use crate::sandbox::scratch::{self, Scratch};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::{Path, PathBuf};
 
@@ -92,6 +93,12 @@ impl SandboxRecord {
         ] {
             record = record.with(field, value);
         }
+        // the scratch it owns (#549): only an equal generation may remove it
+        if let Some(scratch) = started.get(scratch::FIELD) {
+            if !matches!(scratch, SdkValue::Null) {
+                record = record.with(scratch::FIELD, scratch.clone());
+            }
+        }
         record
     }
 
@@ -142,6 +149,13 @@ impl SandboxRecord {
     /// The Sandbox's name (its folder's).
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// The scratch this Sandbox owns, if its start recorded one (#549):
+    /// the absolute root, its `createdAt` and the generation a cleaner
+    /// re-checks before deleting.
+    pub fn scratch(&self) -> Result<Option<Scratch>> {
+        Scratch::of(&self.fields)
     }
 
     /// The machine it runs on, as recorded.
