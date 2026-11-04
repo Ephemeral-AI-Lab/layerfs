@@ -146,9 +146,57 @@ pub fn receive(path: &Path) -> io::Result<File> {
     for extra in &descriptors[1..] {
         let _ = unistd::close(*extra);
     }
+    let namespace = open_namespace(descriptor)?;
+    let _ = unistd::close(descriptor);
+    Ok(namespace)
+}
+
+/// Like [`receive`], but the received descriptor is left open and inheritable
+/// so an `exec`ed child can inherit it. The caller must close it; the
+/// supervisor uses this to pass the descriptor to its child, then closes its
+/// own copy. `SCM_RIGHTS` descriptors are not close-on-exec, so no flag change
+/// is needed, and the descriptor is checked as a mount namespace before it is
+/// returned.
+pub fn receive_inheritable(path: &Path) -> io::Result<RawFd> {
+    let stream = UnixStream::connect(path)?;
+    let mut byte = [0u8; 1];
+    let mut iov = [IoSliceMut::new(&mut byte)];
+    let mut space = nix::cmsg_space!([RawFd; 1]);
+    let message = recvmsg::<()>(
+        stream.as_raw_fd(),
+        &mut iov,
+        Some(&mut space),
+        MsgFlags::empty(),
+    )?;
+    let mut descriptors = Vec::new();
+    for control in message.cmsgs()? {
+        if let ControlMessageOwned::ScmRights(received) = control {
+            descriptors.extend(received);
+        }
+    }
+    let Some(descriptor) = descriptors.first().copied() else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "the socket sent no mount namespace descriptor",
+        ));
+    };
+    for extra in &descriptors[1..] {
+        let _ = unistd::close(*extra);
+    }
+    if let Err(error) = open_namespace(descriptor) {
+        let _ = unistd::close(descriptor);
+        return Err(error);
+    }
+    Ok(descriptor)
+}
+
+/// Open one descriptor through `/proc/self/fd` as an owned file, after
+/// checking that it names a mount namespace. The duplicate is close-on-exec
+/// like every `File::open`, which is what `ns-exec` and the supervisor child
+/// want once they own the descriptor.
+fn open_namespace(descriptor: RawFd) -> io::Result<File> {
     let label = fs::read_link(format!("/proc/self/fd/{descriptor}"))?;
     let namespace = File::open(format!("/proc/self/fd/{descriptor}"))?;
-    let _ = unistd::close(descriptor);
     if !label.to_string_lossy().starts_with("mnt:") {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -156,4 +204,11 @@ pub fn receive(path: &Path) -> io::Result<File> {
         ));
     }
     Ok(namespace)
+}
+
+/// Reopen an inherited raw descriptor as an owned mount-namespace file, with
+/// the same label check as [`receive`]. The caller keeps ownership of the raw
+/// descriptor and closes it.
+pub fn inherit(descriptor: RawFd) -> io::Result<File> {
+    open_namespace(descriptor)
 }

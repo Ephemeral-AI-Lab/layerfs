@@ -1,5 +1,6 @@
 //! Thin actual deployment CLI; no launcher or shell command mode beyond the
-//! hidden `ns-exec` helper that joins this daemon's mount namespace.
+//! hidden `ns-exec` helper that joins this daemon's mount namespace and the
+//! hidden `ns-exec-supervisor`/`ns-exec-child` pair that owns one session.
 use super::{config, Application, ApplicationError};
 #[cfg(target_os = "linux")]
 use std::fs;
@@ -25,6 +26,18 @@ pub fn main() -> ExitCode {
     {
         return ns_exec(&args[1..]);
     }
+    if args
+        .first()
+        .is_some_and(|flag| flag == OsStr::new("ns-exec-supervisor"))
+    {
+        return ns_exec_supervisor(&args[1..]);
+    }
+    if args
+        .first()
+        .is_some_and(|flag| flag == OsStr::new("ns-exec-child"))
+    {
+        return ns_exec_child(&args[1..]);
+    }
     match run(&args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(cause) => {
@@ -42,6 +55,28 @@ fn ns_exec(args: &[OsString]) -> ExitCode {
 #[cfg(not(target_os = "linux"))]
 fn ns_exec(_args: &[OsString]) -> ExitCode {
     eprintln!("layerfs-daemon ns-exec: requires Linux");
+    ExitCode::FAILURE
+}
+
+#[cfg(target_os = "linux")]
+fn ns_exec_supervisor(args: &[OsString]) -> ExitCode {
+    super::ns_exec_supervisor::main(args)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn ns_exec_supervisor(_args: &[OsString]) -> ExitCode {
+    eprintln!("layerfs-daemon ns-exec-supervisor: requires Linux");
+    ExitCode::FAILURE
+}
+
+#[cfg(target_os = "linux")]
+fn ns_exec_child(args: &[OsString]) -> ExitCode {
+    super::ns_exec_supervisor::child_main(args)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn ns_exec_child(_args: &[OsString]) -> ExitCode {
+    eprintln!("layerfs-daemon ns-exec-child: requires Linux");
     ExitCode::FAILURE
 }
 
