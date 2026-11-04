@@ -49,6 +49,8 @@ pub struct SessionConfig {
 pub struct KernelSession {
     pub(super) mount: KernelMount,
     pub(super) directory: PathBuf,
+    /// The one removal attempt after a known detach, including its original error.
+    pub(super) removed: Option<io::Result<()>>,
     pub(super) queue: MountRequests,
     /// The mount's fence, kept so its count outlives the request owner's release.
     pub(super) fence: Fence,
@@ -198,6 +200,7 @@ impl fmt::Debug for KernelSession {
         f.debug_struct("KernelSession")
             .field("mount", &self.mount)
             .field("directory", &self.directory)
+            .field("removed", &self.removed)
             .field("facts", &self.facts())
             .field("owner_joined", &self.owner.is_none())
             .finish_non_exhaustive()
