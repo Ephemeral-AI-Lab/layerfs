@@ -46,7 +46,7 @@ predicate both entry points use:
 
 | Entry | Owner | When |
 | --- | --- | --- |
-| `clean(home, record, Owner::Close)` | the settled close that stopped the runtime | once per successful `sandbox.close`, and once for a `NoSuchSandbox` close |
+| `clean(home, record, Owner::Close)` | the settled close that stopped the runtime | once per successful `sandbox.close`, once for a `NoSuchSandbox` close, and once for an id-less record (`close_unstarted`) |
 | `sweep(home, machine, Mode::{DryRun, Apply})` | a bounded pass | once at the end of each successful close, for the closing record's machine |
 
 `keep` allows the delete only when all of these hold:
