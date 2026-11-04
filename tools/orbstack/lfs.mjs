@@ -17,14 +17,16 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 const [command, project, ...rest] = process.argv.slice(2);
-if (!command || !project) {
-  console.error("usage: lfs <init|fork|mount|commit|unmount|read|log|write|merge> <project> ...");
+const COMMANDS = ["init", "fork", "mount", "commit", "unmount", "read", "log", "write", "merge"];
+if (!COMMANDS.includes(command) || !project) {
+  console.error(`usage: lfs <${COMMANDS.join("|")}> <project> ...`);
   process.exit(2);
 }
 const volume = join(process.env.LAYERFS_STORE_ROOT ?? "/var/lib/layerfs/stores", project);
-mkdirSync(volume, { recursive: true });
 const { LayerFS } = await import(process.env.LAYERFS_SDK ?? "/opt/layerfs/sdk/src/index.js");
+// The constructor checks the project name, so a refused name makes no folder.
 const layerfs = new LayerFS(project, { runtime: "process", storePath: join(volume, "global/store.sqlite") });
+mkdirSync(volume, { recursive: true });
 const print = (value) => console.log(JSON.stringify(value));
 try {
   switch (command) {
