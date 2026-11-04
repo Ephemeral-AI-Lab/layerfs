@@ -429,62 +429,188 @@ pub(crate) fn cancel(args: &SdkValue) -> Outcome {
     let state = sandbox_live(&naming(args, sandbox))?;
     crate::discovery::refresh(&state)?;
     let _guard = crate::discovery::guard(&state.directory)?;
-    let (pid, start, stopped) = match lock(&state.processes)?
-        .get(id)
-        .map(|process| (process.pid, process.start.clone(), process.stopped))
-    {
-        Some(process) => process,
-        // not one this process started: a foreground exec leaves its record
-        None => {
-            let record = foreground_records(&state)?
-                .into_iter()
-                .find(|record| record.id == id)
-                .ok_or_else(|| {
-                    refused(
-                        "NoSuchProcess",
-                        format!("{id} is not owned by {}", state.id),
-                    )
-                })?;
-            (record.pid, record.start, false)
-        }
-    };
+    let (pid, start, stopped) = holder(&state, id)?;
     if stopped || !owned_alive(&state, pid, &start)? {
-        return Ok(SdkValue::map([
-            ("kind", SdkValue::text("Stopped")),
-            ("process", SdkValue::text(id)),
-            ("status", SdkValue::text("stopped")),
-        ]));
+        return Ok(stopped_value(id, "stopped"));
     }
-    run(
-        &state,
+    signal(&state, pid, "TERM")?;
+    let gone = wait_gone(&state, pid)?;
+    record_stopped(&state, id, gone)?;
+    Ok(stopped_value(id, if gone { "stopped" } else { "stopping" }))
+}
+
+/// What a workspace-scoped kill made of one holder.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Terminated {
+    /// The holder is gone (or already was).
+    Gone,
+    /// Signals were sent but the process group is still there.
+    Survived,
+    /// The process group has a member whose cwd or open file is outside the
+    /// target Workspace: nothing was signalled. Each entry is `pid path`.
+    Outside(Vec<String>),
+}
+
+/// The cwd and open files of every member of process group `$1`, when any is
+/// outside `$2`: one `pid path` line each, read from `/proc`. Outside means an
+/// absolute path that is not the Workspace or below it, not `/dev`, and not a
+/// framework file under `/tmp/layerfs-` (the exec's own record and log); a
+/// pipe, socket or deleted-or-anonymous file has no path and is not a
+/// conflict. Best-effort until the supervisor registry (#64) is the authority.
+const GROUP_OUTSIDE: &str = r#"pgid=$1
+root=$2
+outside() {
+  case "$1" in
+    "$root"|"$root"/*) return 1 ;;
+    /dev|/dev/*) return 1 ;;
+    /tmp/layerfs-*) return 1 ;;
+    /*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+for f in /proc/[0-9]*/stat; do
+  s=$(cat "$f" 2>/dev/null) || continue
+  set -- ${s##*) }
+  [ "$3" = "$pgid" ] || continue
+  pid=${f#/proc/}
+  pid=${pid%/stat}
+  c=$(readlink "/proc/$pid/cwd" 2>/dev/null) || continue
+  if outside "$c"; then printf "%s %s\n" "$pid" "$c"; continue; fi
+  for l in /proc/$pid/fd/*; do
+    t=$(readlink "$l" 2>/dev/null) || continue
+    if outside "$t"; then printf "%s %s\n" "$pid" "$t"; break; fi
+  done
+done
+exit 0"#;
+
+/// Stops one holder of the Workspace at `path` for a workspace-scoped kill:
+/// TERM to its process group, a bounded wait, and KILL only if it is still
+/// there, then a second bounded wait. A group with a member outside the
+/// Workspace is left alone. A foreground exec's wrapper removes its `/tmp`
+/// record once that session ends.
+pub(crate) fn terminate(
+    state: &SandboxState,
+    path: &str,
+    id: &str,
+) -> Result<Terminated, SdkRefusal> {
+    let (pid, start, stopped) = holder(state, id)?;
+    if stopped || !owned_alive(state, pid, &start)? {
+        return Ok(Terminated::Gone);
+    }
+    let outside = outside_scope(state, pid, path)?;
+    if !outside.is_empty() {
+        return Ok(Terminated::Outside(outside));
+    }
+    signal(state, pid, "TERM")?;
+    let mut gone = wait_gone(state, pid)?;
+    if !gone {
+        signal(state, pid, "KILL")?;
+        gone = wait_gone(state, pid)?;
+    }
+    record_stopped(state, id, gone)?;
+    Ok(if gone {
+        Terminated::Gone
+    } else {
+        Terminated::Survived
+    })
+}
+
+/// The members of process group `pid` whose cwd or open file is outside the
+/// Workspace at `path`, as `pid path` lines.
+fn outside_scope(state: &SandboxState, pid: u32, path: &str) -> Result<Vec<String>, SdkRefusal> {
+    let (code, out, _) = run(
+        state,
         "/tmp",
         vec![
             "bash".into(),
             "-c".into(),
-            format!("kill -TERM -- -{pid} 2>/dev/null; true"),
+            GROUP_OUTSIDE.into(),
+            "layerfs-kill".into(),
+            pid.to_string(),
+            path.into(),
         ],
         false,
     )?;
-    let mut gone = false;
+    if code != 0 {
+        return Err(refused(
+            "Failed",
+            format!("process-group scope probe exited {code}"),
+        ));
+    }
+    Ok(String::from_utf8_lossy(out.kept())
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(str::to_owned)
+        .collect())
+}
+
+/// The pid and start time one process id names, and whether this binding
+/// recorded it stopped. Precedence is the supervisor registry (not yet
+/// built, #64), then the foreground `/tmp` record, then the background
+/// process map; a record is scanned only while its pid and start time still
+/// match `/proc`, so a stale or reused pid is not a holder.
+fn holder(state: &SandboxState, id: &str) -> Result<(u32, String, bool), SdkRefusal> {
+    if let Some(record) = foreground_records(state)?
+        .into_iter()
+        .find(|record| record.id == id)
+    {
+        return Ok((record.pid, record.start, false));
+    }
+    if let Some((pid, start, stopped)) = lock(&state.processes)?
+        .get(id)
+        .map(|process| (process.pid, process.start.clone(), process.stopped))
+    {
+        return Ok((pid, start, stopped));
+    }
+    Err(refused(
+        "NoSuchProcess",
+        format!("{id} is not owned by {}", state.id),
+    ))
+}
+
+/// One signal to the process group `pid` leads. The command's own failure is
+/// ignored: a group that is already gone is the outcome we want.
+fn signal(state: &SandboxState, pid: u32, name: &str) -> Result<(), SdkRefusal> {
+    run(
+        state,
+        "/tmp",
+        vec![
+            "bash".into(),
+            "-c".into(),
+            format!("kill -{name} -- -{pid} 2>/dev/null; true"),
+        ],
+        false,
+    )?;
+    Ok(())
+}
+
+/// Waits (bounded) until the process group `pid` leads has no live member.
+fn wait_gone(state: &SandboxState, pid: u32) -> Result<bool, SdkRefusal> {
     for _ in 0..GONE_CHECKS {
-        if !alive(&state, pid)? {
-            gone = true;
-            break;
+        if !alive(state, pid)? {
+            return Ok(true);
         }
         std::thread::sleep(GONE_PAUSE);
     }
+    Ok(false)
+}
+
+/// Records whether a background process this binding started has stopped.
+fn record_stopped(state: &SandboxState, id: &str, gone: bool) -> Result<(), SdkRefusal> {
     if let Some(process) = lock(&state.processes)?.get_mut(id) {
         process.stopped = gone;
-        crate::discovery::save_process(&state, id, process)?;
+        crate::discovery::save_process(state, id, process)?;
     }
-    Ok(SdkValue::map([
+    Ok(())
+}
+
+/// The result of cancelling one id.
+fn stopped_value(id: &str, status: &str) -> SdkValue {
+    SdkValue::map([
         ("kind", SdkValue::text("Stopped")),
         ("process", SdkValue::text(id)),
-        (
-            "status",
-            SdkValue::text(if gone { "stopped" } else { "stopping" }),
-        ),
-    ]))
+        ("status", SdkValue::text(status)),
+    ])
 }
 
 #[cfg(test)]

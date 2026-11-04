@@ -109,6 +109,8 @@ export const CASES = [
     op: "workspace.unmount", sent: { ...WS, discard: true }, result: { kind: "Unmounted" } },
   { name: "workspace unmount (force)", argv: ["workspace", "unmount", HANDLE, "--force"], sdk: (lf) => lf.workspace.unmount(WS, false, true),
     op: "workspace.unmount", sent: { ...WS, force: true }, result: { kind: "ForceUnmounted", abort: "Written", detach: "Detached", cleanup: "Queued" } },
+  { name: "workspace unmount (kill workspace)", argv: ["workspace", "unmount", HANDLE, "--kill", "workspace"], sdk: (lf) => lf.workspace.unmount(WS, false, false, "workspace"),
+    op: "workspace.unmount", sent: { ...WS, kill: "workspace" }, result: { kind: "Unmounted" } },
   { name: "sandbox create", argv: ["sandbox", "create", "--image", "sha256:abc"], sdk: (lf) => lf.sandbox.create({ image: "sha256:abc" }),
     op: "sandbox.create", sent: { deploy: { image: "sha256:abc" } }, result: { sandbox: "2", image: "sha256:abc" } },
   { name: "sandbox list_workspaces", argv: ["sandbox", "list_workspaces", "2"], sdk: (lf) => lf.sandbox.list_workspaces("2"),

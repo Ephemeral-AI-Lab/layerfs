@@ -200,6 +200,18 @@ cancels every foreground record and background process the target Workspace
 still holds, waits for each to stop, then retries a normal daemon unmount; it
 never stops or deletes the Sandbox and never touches another Workspace. The
 image must provide util-linux `setsid --wait` (Debian 12 has it).
+
+`workspace.unmount(ws, kill: "workspace")` accepts only that value (anything
+else, or `force` plus `kill`, is `InvalidInput`). It cancels only the target
+Workspace's holders: TERM to each process group, a bounded wait, then KILL only
+if a holder is still there, and a *normal* daemon unmount afterwards; it never
+stops or deletes the Sandbox and never touches another Workspace. A holder that
+survives makes it answer `Busy` with the ids. It does not shorten a custody
+retry for a Workspace already `Retained(Detach)`, and an escaped, invisible
+holder (#460) still needs a separate explicit destroy: the future
+operator/CLI-only `sandbox.destroy(id, { confirm: true })`, gated on evidence.
+`sandbox.close` gains no force mode.
+
 `project.list_sandboxes(pageSize, pagePos)` lists the running ones, each
 `{ sandbox, name, image, workspaces }`, reading records and starting and
 changing nothing; `sandbox.list_workspaces(sandbox, pageSize, pagePos)` asks
@@ -531,7 +543,7 @@ table differs, and when a family's files stop matching the SDK's.
 | `workspace.mount` | `layerfs workspace mount <sandbox> <branch>` |
 | `workspace.exec` | `layerfs workspace exec <ws> <command> [-m <text>] [--stream]` |
 | `workspace.commit` | `layerfs workspace commit <ws> [-m <text>] [--force]` |
-| `workspace.unmount` | `layerfs workspace unmount <ws> [--discard] [--force]` |
+| `workspace.unmount` | `layerfs workspace unmount <ws> [--discard] [--force] [--kill <text>]` |
 | `sandbox.create` | `layerfs sandbox create [--image <text>]` |
 | `sandbox.list_workspaces` | `layerfs sandbox list_workspaces <sandbox> [--page-size <n>] [--page-pos <n>]` |
 | `sandbox.close` | `layerfs sandbox close <sandbox>` |

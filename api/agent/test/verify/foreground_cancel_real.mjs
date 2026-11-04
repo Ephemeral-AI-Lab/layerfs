@@ -5,12 +5,12 @@
 //   A `sleep 30`            cancel stops it, /proc and the record go
 //   B `bash -c 'sleep 30 & wait'`  cancel kills the descendants too
 //   C `trap "" TERM; sleep 30`     TERM is ignored: cancel says stopping and
-//                                  unmount stays Busy; close(force) ends it
+//                                  unmount stays Busy; kill: "workspace"
+//                                  escalates to KILL and unmounts
 // Under the E2E launcher:
 //   node api/agent/test/verify/foreground_cancel_real.mjs inner
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -23,26 +23,6 @@ const log = (line) => console.log(`[${((Date.now() - t0) / 1000).toFixed(2)}s] $
 const attempt = async (promise) => {
   try { return { value: await promise }; } catch (error) { return { error }; }
 };
-
-function containers(all = true) {
-  const filters = encodeURIComponent(JSON.stringify({ name: [process.env.LAYERFS_CONTAINER_PREFIX] }));
-  return new Promise((resolve, reject) => {
-    const call = request({ socketPath: process.env.LAYERFS_DOCKER, path: `/containers/json?all=${all ? 1 : 0}&filters=${filters}`, method: "GET" }, (answer) => {
-      let body = "";
-      answer.on("data", (chunk) => (body += chunk));
-      // the run's own client container shares the prefix; it is not a Sandbox
-      answer.on("end", () => {
-        try {
-          resolve(JSON.parse(body)
-            .map((item) => item.Names?.[0]?.replace(/^\//, ""))
-            .filter((name) => !name.endsWith("-client")));
-        } catch (error) { reject(error); }
-      });
-    });
-    call.on("error", reject);
-    call.end();
-  });
-}
 
 /** Client A: mount, start the foreground command, die while it runs. */
 async function child() {
@@ -172,7 +152,7 @@ async function inner() {
       }
     }
 
-    // ---- C: TERM ignored, so cancel cannot stop it; close(force) does ---------
+    // ---- C: TERM ignored, so cancel cannot stop it; kill escalates to KILL --
     {
       const handoff = mkdtempSync(join(tmpdir(), "fg-c-"));
       try {
@@ -194,11 +174,16 @@ async function inner() {
         const still = await attempt(lf.workspace.unmount(ws));
         assert.equal(still.error?.code, "Busy");
         log(`C unmount -> still Busy ${JSON.stringify(still.error.detail.processes)}`);
-        const forced = await attempt(lf.sandbox.close("1", true));
-        assert.deepEqual(forced.value, { kind: "Closed", sandbox: "1" }, forced.error?.message);
-        log(`C close(force) -> ${JSON.stringify(forced.value)}; containers ${JSON.stringify(await containers())}`);
-        assert.deepEqual(await containers(), [], "the Sandbox container is gone");
-        log("C TERM trap: PASS (close(force) is the escape)");
+        const startedAt = Date.now();
+        const killed = await attempt(lf.workspace.unmount(ws, false, false, "workspace"));
+        log(`C kill -> ${JSON.stringify(killed.value ?? killed.error)} in ${((Date.now() - startedAt) / 1000).toFixed(2)}s`);
+        assert.deepEqual(killed.value, { kind: "Unmounted" }, killed.error?.message);
+        assert.equal((await lf.workspace.exec(ws2, `test -e /proc/${pid}/stat && echo ALIVE || echo GONE`)).stdout.trim(), "GONE", "KILL escalation stopped it");
+        assert.equal((await lf.workspace.exec(ws2, `test -e /tmp/layerfs-exec-${id}.record && echo PRESENT || echo GONE`)).stdout.trim(), "GONE", "the record is gone");
+        assert.deepEqual((await attempt(owner.project.list_sandboxes())).value.items.length, 1, "the Sandbox still exists");
+        await lf.workspace.unmount(ws2);
+        assert.deepEqual((await attempt(lf.sandbox.close("1"))).value, { kind: "Closed", sandbox: "1" });
+        log("C TERM trap: PASS (kill escalates, the Sandbox is not destroyed)");
         await lf.close();
       } finally {
         rmSync(handoff, { recursive: true, force: true });

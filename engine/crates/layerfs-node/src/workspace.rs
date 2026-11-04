@@ -7,7 +7,7 @@
 //! A Sandbox whose daemon ended itself when idle is refused `NoSuchSandbox`
 //! by a mount and reclaimed by the next `sandbox.create` or
 //! `runtime.sandbox.reclaim`.
-use crate::job::{failed, Outcome};
+use crate::job::{failed, refused, Outcome};
 use crate::registry::{
     lock, naming, random, sandbox, sandbox_live, sandbox_refreshed, text, Mount, SandboxState,
 };
@@ -265,21 +265,162 @@ fn busy(state: &SandboxState, path: &str, processes: Vec<String>) -> SdkRefusal 
     }
 }
 
-/// `workspace.unmount(ws, { discard?, force? })`: `Busy` while a background
-/// process this binding started, or a foreground exec, still runs there, then
-/// the daemon's answer.
+/// How one `workspace.unmount` call ends the Workspace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Ending {
+    /// The daemon's normal unmount; `force` aborts a live connection instead.
+    Normal { force: bool },
+    /// Cancel only the holders of this Workspace, then a normal unmount.
+    Kill,
+}
+
+/// Reads the `force` and `kill` arguments: `kill` accepts only `"workspace"`,
+/// it cannot be combined with `force`, and a missing `kill` leaves the
+/// existing force path alone.
+fn ending(args: &SdkValue) -> Result<Ending, SdkRefusal> {
+    let force = args.get_bool("force");
+    match args.get_text("kill") {
+        None => Ok(Ending::Normal { force }),
+        Some("workspace") if !force => Ok(Ending::Kill),
+        Some("workspace") => Err(refused(
+            "InvalidInput",
+            "force and kill cannot be combined: kill: \"workspace\" cancels only this Workspace's holders, then unmounts it normally",
+        )),
+        Some(other) => Err(refused(
+            "InvalidInput",
+            format!("kill must be \"workspace\", not {other:?}: only a Workspace's own holders are killed, never another Workspace or the Sandbox"),
+        )),
+    }
+}
+
+/// Every process id still holding the Workspace at `path`: the background
+/// processes this binding started there and the foreground execs whose
+/// `/tmp` record names it. Nothing from another Workspace is included.
+fn holders(state: &SandboxState, path: &str) -> Result<Vec<String>, SdkRefusal> {
+    Ok(holder_ids(
+        crate::exec::running_in(state, path)?,
+        crate::exec::foreground_in(state, path)?,
+    ))
+}
+
+/// The holder ids of one Workspace: its background processes and foreground
+/// execs, in one sorted list with no duplicate.
+fn holder_ids(background: Vec<String>, foreground: Vec<crate::exec::Foreground>) -> Vec<String> {
+    let mut ids = background;
+    ids.extend(foreground.into_iter().map(|record| record.id));
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// The end of a kill-scoped unmount, once no holder is left: the daemon's
+/// normal unmount, which never stops or deletes the Sandbox and never aborts
+/// the Workspace's connection.
+fn unmount_normally(args: &SdkValue, state: &SandboxState) -> Outcome {
+    let path = text(args, "path")?;
+    let token = state.token(path)?;
+    let discard = args.get_bool("discard");
+    let value = {
+        let mut control = crate::trace::control(&state.controls)?;
+        let mut api = workspace(&mut control);
+        match api.unmount_checked(token, discard).map_err(operation) {
+            Ok(unmounted) => values::unmounted(&unmounted)?,
+            // The daemon saw a holder the runtime owner may know as a
+            // foreground exec: name its id so the caller can cancel it.
+            Err(refusal) if refusal.code == "Busy" => {
+                match crate::exec::foreground_in(state, path) {
+                    Ok(records) if !records.is_empty() => {
+                        return Err(busy(
+                            state,
+                            path,
+                            records.into_iter().map(|record| record.id).collect(),
+                        ))
+                    }
+                    _ => return Err(refusal),
+                }
+            }
+            Err(refusal) => return Err(refusal),
+        }
+    };
+    std::fs::remove_file(crate::discovery::workspace_file(state, token)).map_err(failed)?;
+    lock(&state.mounts)?.remove(path);
+    Ok(value)
+}
+
+/// A `Busy` refusal naming holders whose process group reaches outside the
+/// Workspace, so a workspace-scoped kill left them alone.
+fn scope_conflict(
+    state: &SandboxState,
+    path: &str,
+    conflicts: Vec<(String, Vec<String>)>,
+) -> SdkRefusal {
+    let ids = conflicts
+        .iter()
+        .map(|(id, _)| SdkValue::text(id.as_str()))
+        .collect::<Vec<_>>();
+    let outside = conflicts
+        .iter()
+        .flat_map(|(_, paths)| paths.iter())
+        .map(|path| SdkValue::text(path.as_str()))
+        .collect::<Vec<_>>();
+    SdkRefusal {
+        code: "Busy".to_owned(),
+        message: format!(
+            "{}:{path} has a holder whose process group reaches outside the Workspace; nothing was killed",
+            state.id
+        ),
+        detail: SdkValue::map([
+            ("processes", SdkValue::List(ids)),
+            ("scope_conflict", SdkValue::List(outside)),
+        ]),
+    }
+}
+
+/// `workspace.unmount(ws, { discard?, force?, kill? })`: `Busy` while a
+/// background process this binding started, or a foreground exec, still runs
+/// there, then the daemon's answer. `kill: "workspace"` first cancels those
+/// holders (TERM, a bounded wait, then KILL only if still there), then
+/// unmounts normally; if any holder survives it answers `Busy` with the ids.
+/// It never stops or deletes the Sandbox and never touches another Workspace.
 pub(crate) fn unmount(args: &SdkValue) -> Outcome {
+    let ending = ending(args)?;
     let state = sandbox_refreshed(args)?;
     let _guard = crate::discovery::guard(&state.directory)?;
     let path = text(args, "path")?;
     let token = state.token(path)?;
+    if ending == Ending::Kill {
+        // Cancel only this Workspace's holders, then look again: a process
+        // that would not stop is named rather than detached.
+        let mut remaining = holders(&state, path)?;
+        if !remaining.is_empty() {
+            let mut conflicts = Vec::new();
+            for id in &remaining {
+                match crate::exec::terminate(&state, path, id)? {
+                    crate::exec::Terminated::Outside(outside) => {
+                        conflicts.push((id.clone(), outside))
+                    }
+                    crate::exec::Terminated::Gone | crate::exec::Terminated::Survived => {}
+                }
+            }
+            // Never kill a group that reaches outside this Workspace: leave it
+            // and name it, so the caller can decide. No silent collateral.
+            if !conflicts.is_empty() {
+                return Err(scope_conflict(&state, path, conflicts));
+            }
+            remaining = holders(&state, path)?;
+        }
+        if !remaining.is_empty() {
+            return Err(busy(&state, path, remaining));
+        }
+        return unmount_normally(args, &state);
+    }
+    let force = ending == Ending::Normal { force: true };
     // The runtime owner knows its own processes; the daemon's kernel probe
     // still answers Busy for any other holder.
     let running = crate::exec::running_in(&state, path)?;
     if !running.is_empty() {
         return Err(busy(&state, path, running));
     }
-    let force = args.get_bool("force");
     if force {
         // A foreground exec that is still running owns this Workspace. Forcing
         // now would detach it as Retained(Detach); make the caller cancel the
@@ -295,39 +436,108 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
             }
         }
     }
-    let value = {
+    let value = if force {
         let mut control = crate::trace::control(&state.controls)?;
         let mut api = workspace(&mut control);
-        // Forced: one abort write ends the connection, also after a normal
-        // unmount stalled at Join; uncommitted changes are dropped.
-        if force {
-            match api.unmount(token, true).map_err(operation)? {
-                Some(outcome) => values::force_unmounted(&outcome),
-                None => values::unmounted(&Unmounted::Closed)?,
-            }
-        } else {
-            let discard = args.get_bool("discard");
-            match api.unmount_checked(token, discard).map_err(operation) {
-                Ok(unmounted) => values::unmounted(&unmounted)?,
-                // The daemon saw a holder the runtime owner may know as a
-                // foreground exec: name its id so the caller can cancel it.
-                Err(refusal) if refusal.code == "Busy" => {
-                    match crate::exec::foreground_in(&state, path) {
-                        Ok(records) if !records.is_empty() => {
-                            return Err(busy(
-                                &state,
-                                path,
-                                records.into_iter().map(|record| record.id).collect(),
-                            ))
-                        }
-                        _ => return Err(refusal),
-                    }
-                }
-                Err(refusal) => return Err(refusal),
-            }
+        // One abort write ends the connection, also after a normal unmount
+        // stalled at Join; uncommitted changes are dropped.
+        match api.unmount(token, true).map_err(operation)? {
+            Some(outcome) => values::force_unmounted(&outcome),
+            None => values::unmounted(&Unmounted::Closed)?,
         }
+    } else {
+        return unmount_normally(args, &state);
     };
     std::fs::remove_file(crate::discovery::workspace_file(&state, token)).map_err(failed)?;
     lock(&state.mounts)?.remove(path);
     Ok(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(fields: &[(&str, SdkValue)]) -> SdkValue {
+        let mut map = SdkValue::Map(Vec::new());
+        if let SdkValue::Map(entries) = &mut map {
+            entries.extend(
+                fields
+                    .iter()
+                    .map(|(name, value)| ((*name).to_owned(), value.clone())),
+            );
+        }
+        map
+    }
+
+    fn foreground(id: &str, path: &str) -> crate::exec::Foreground {
+        crate::exec::Foreground {
+            id: id.to_owned(),
+            path: path.to_owned(),
+            pid: 1,
+            start: "1".to_owned(),
+        }
+    }
+
+    #[test]
+    fn kill_accepts_only_the_workspace_scope() {
+        assert_eq!(
+            ending(&args(&[("kill", SdkValue::text("workspace"))])).unwrap(),
+            Ending::Kill
+        );
+        for other in ["sandbox", "workspaces", "WORKSPACE", "", "all"] {
+            let refusal = ending(&args(&[("kill", SdkValue::text(other))])).unwrap_err();
+            assert_eq!(refusal.code, "InvalidInput", "{other:?}");
+            assert!(
+                refusal.message.contains("workspace"),
+                "{other:?}: {}",
+                refusal.message
+            );
+        }
+    }
+
+    #[test]
+    fn kill_and_force_are_mutually_exclusive() {
+        let refusal = ending(&args(&[
+            ("force", SdkValue::Bool(true)),
+            ("kill", SdkValue::text("workspace")),
+        ]))
+        .unwrap_err();
+        assert_eq!(refusal.code, "InvalidInput");
+        assert!(
+            refusal.message.contains("force and kill"),
+            "{}",
+            refusal.message
+        );
+    }
+
+    #[test]
+    fn missing_or_absent_kill_keeps_the_normal_force_path() {
+        assert_eq!(ending(&args(&[])).unwrap(), Ending::Normal { force: false });
+        assert_eq!(
+            ending(&args(&[("force", SdkValue::Bool(true))])).unwrap(),
+            Ending::Normal { force: true }
+        );
+    }
+
+    #[test]
+    fn holder_ids_name_only_the_given_workspace_holders_once() {
+        let ids = holder_ids(
+            vec!["proc_1_aaaaaaaaaaaaaaaaaaaaaaaa".to_owned()],
+            vec![
+                foreground("proc_1_bbbbbbbbbbbbbbbbbbbbbbbb", "/workspaces/1"),
+                foreground("proc_1_aaaaaaaaaaaaaaaaaaaaaaaa", "/workspaces/1"),
+            ],
+        );
+        assert_eq!(
+            ids,
+            vec![
+                "proc_1_aaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
+                "proc_1_bbbbbbbbbbbbbbbbbbbbbbbb".to_owned(),
+            ]
+        );
+        // A Workspace's holders never include a command from another path:
+        // the selection is done by `running_in` / `foreground_in`, before the
+        // merge, and this only merges what they returned.
+        assert!(ids.iter().all(|id| id.starts_with("proc_1_")));
+    }
 }
