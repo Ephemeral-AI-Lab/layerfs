@@ -6,6 +6,8 @@
 
 - [2.0.0 manual](versioned/2.0.0/README.md): one home, machines and Stores, one call table
 - [The `layerfs` package](../api/README.md) for Node and [Python](../api/python/README.md)
+- [Architecture](architecture/README.md): how 2.0 is built, one page per
+  component in core, engine, connect and api, plus flows across them
 - [Work order](../core/docs/issues/533/README.md) and [decisions](../core/docs/issues/533/DECISIONS.md)
 
 ## LayerFS 1.1.0 (release candidate)
@@ -88,6 +90,7 @@ The directory classes are deliberately small:
 
 ```text
 versioned/    immutable released manuals
+architecture/ maintained design reference, one page per component
 general/      version-independent concepts and policies
 plugins/      the plugin listing guide, its template and checker
 research/     informative studies and historical design material

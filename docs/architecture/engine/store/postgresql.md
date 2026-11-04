@@ -1,0 +1,149 @@
+# PostgreSQL
+
+[Architecture](../../README.md) › [Engine](../README.md) › [Store](README.md) › PostgreSQL
+
+> **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
+
+The PostgreSQL backend.
+
+| | |
+| --- | --- |
+| Component | [Store](README.md) |
+| Source | [`engine/crates/layerfs-persistence/src/backend/postgresql`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql), [`engine/crates/layerfs-persistence/src/store/postgresql.rs`](../../../../engine/crates/layerfs-persistence/src/store/postgresql.rs) |
+
+The backend is compiled only with the cargo feature `postgresql`, which adds
+the `postgres`, `postgres-native-tls` and `native-tls` dependencies
+([`Cargo.toml`](../../../../engine/crates/layerfs-persistence/Cargo.toml)).
+Without it, selecting a PostgreSQL Store fails `BackendUnavailable`.
+
+## Schema
+
+```text
+ one PostgreSQL database
+ +--------------------------------------------------------------+
+ | schema <selection.schema>      (one Store; [a-z_][a-z0-9_]*) |
+ |  store_lane (id=1)   <-- the row every writer locks          |
+ |  store_policy, pack, object_location, inode_value,           |
+ |  content_signature, store_totals                             |
+ |  history_meta, layer_stack, layer, "commit", branch,         |
+ |  scope_allocator, binding_hint                               |
+ |  layer_lineage, commit_lineage, absorbed, reach, file_digest |
+ |  init_operation, init_entry, init_host_file   (if created)   |
+ +--------------------------------------------------------------+
+ | pg_temp of the writer connection: merge_operation,           |
+ |  merge_record   (gone when the connection ends)              |
+ +--------------------------------------------------------------+
+```
+
+| Difference from SQLite | PostgreSQL | Source |
+| --- | --- | --- |
+| Types | `bigint` for integers, `bytea` for BLOBs | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
+| Name order | history names `COLLATE "C"`, so paging matches SQLite byte order | same |
+| Pack bodies | one `bytea` per pack, `STORAGE EXTERNAL` (uncompressed, out of line) for ranged `substring` reads | same |
+| Pack units | absent: group rows are a SQLite physical layout | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+| Lane | `store_lane`, one row | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
+| Merge records | temporary tables of the writer connection | [`merge_records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/merge_records.rs) |
+| Schema version | `SCHEMA_VERSION = 1`, engine-scoped | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+
+`PostgresHandles::create` checks `pg_namespace` and refuses an existing
+schema (`Refused "schema exists"`) before writing. It then creates the
+schema, the Store and acquisition tables, the policy row and the
+`history_meta` row in one transaction. Open never creates or migrates a
+schema; it checks the exact table set (19 tables, or 22 with acquisition),
+the recorded source and definition, and the binding.
+
+## Connection and session
+
+```text
+ postgresql::Session
+ +--------------------------------------------------------------+
+ | admission: Admission          FIFO turn, as on SQLite        |
+ | state: Mutex<State>           client (statement cache 256),  |
+ |                               quarantined, work counters     |
+ | lane: Mutex<Option<Client>>   second connection, opened on   |
+ |                               first hold_lane                |
+ | settings: schema, synchronous_commit, lock_timeout_ms        |
+ | connector: Config + TLS (sslmode from the connection string) |
+ +--------------------------------------------------------------+
+```
+
+| Event | Result | Source |
+| --- | --- | --- |
+| Server answers a new connection with an error | `Rejected` | [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/connection.rs) |
+| No connection made | `Closed` | same |
+| Lost reply inside a transaction | `Unknown`; session quarantined | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
+| `COMMIT` refused (deferred constraint) | the error; counted as a rollback | same |
+
+## Transactions
+
+| `Mode` | `BEGIN` | Lane row | Used by | Source |
+| --- | --- | --- | --- | --- |
+| `Read` | `REPEATABLE READ READ ONLY` | no | history reads, policy, signatures | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs) |
+| `Write` | `READ COMMITTED` + `synchronous_commit` | `FOR UPDATE`, unless nested in the held lane | history writes, location rows, allocation | same |
+| `Stage` | `READ COMMITTED` + `synchronous_commit` | no | schema create, pack bodies, merge records | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
+| `Immutable` | none; autocommit statements | no | locates, pack reads, inode values | same |
+
+Every setting is `SET LOCAL` in the same round trip as `BEGIN`, so a
+transaction-pooling proxy never carries one session's settings to another.
+Writes are never `SERIALIZABLE` and never retried.
+
+```text
+ PostgresStorage::publish(batch)
+   validate(batch)                                (shared bounds)
+   tx 1  Stage: COPY BINARY pack bodies           ids were reserved: no
+                                                  other writer touches them
+   tx 2  Write: lane row; locations, inode values,
+                signatures, totals
+   tx 2 fails -> packs stay unreferenced; ids are never reused
+```
+
+Source: [`objects/publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish.rs),
+[`storage/provider.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/storage/provider.rs).
+
+The publication lane is one `READ COMMITTED` transaction on the lane
+connection holding `store_lane` `FOR UPDATE` with `lock_timeout`. While it
+is held, the thread's writes run on the session connection as nested
+transactions without locking the row again. Dropping `LaneHold` rolls the
+lane transaction back (it wrote nothing) and releases the turn. Source:
+[`lane.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/lane/lane.rs).
+
+## Acquisition
+
+`PostgresAcquisition` implements the same acquisition port as SQLite over the
+session: each unit is one transaction, reads in one `REPEATABLE READ`
+snapshot, writes lane-ordered. The live owner is matched against its row
+first, so a released or foreign operation is `Stale` before any row is read.
+A schema without the acquisition tables refuses every unit. Source:
+[`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition).
+
+`postgresql_status(url, schemas)` reports a server's version, one
+round trip's latency and each named schema's size, on a connection opened and
+closed for the call, with no retry
+([`status.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/status.rs)).
+
+## synchronous_commit
+
+| `SynchronousCommit` | Setting | Write is acknowledged after |
+| --- | --- | --- |
+| `Off` (default) | `off` | the server accepts it, before the WAL flush |
+| `Local` | `local` | the local WAL flush |
+| `RemoteWrite` | `remote_write` | standbys receive the WAL |
+| `On` | `on` | local and synchronous-standby flush |
+| `RemoteApply` | `remote_apply` | synchronous standbys apply the WAL |
+
+Source: [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs).
+The value is chosen per Store in `PostgresSelection` and applied with
+`SET LOCAL` to every `Write` and `Stage` transaction. The SQLite Disposable
+profile is unaffected.
+
+## Related
+
+- [Backends](backends.md): the seam and the shared admission.
+- [Lifecycle](lifecycle.md): `StoreSelection` and `Handles`.
+- [SQLite](sqlite.md): the tables these mirror.
+- [History publication](history-publication.md#the-publish-lane): what runs inside the lane.
+- [Connect: Network](../../connect/network/README.md): how a machine reaches the server.
+
+---
+
+← [Store: SQLite](sqlite.md) · [Up: Store](README.md) · [Store: History publication](history-publication.md) →

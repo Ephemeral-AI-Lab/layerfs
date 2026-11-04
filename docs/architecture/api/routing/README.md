@@ -1,0 +1,136 @@
+# Routing and workers
+
+[Architecture](../../README.md) › [API](../README.md) › Routing and workers
+
+> **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
+
+Where each call runs: in the caller's process, in a machine's worker, or in a Sandbox daemon.
+
+| | |
+| --- | --- |
+| Layer | [API](../README.md) |
+| Crates | `layerfs-control`, `layerfs-cli` |
+| Source | [`api/crates/layerfs-control/src/calls`](../../../../api/crates/layerfs-control/src/calls), [`api/crates/layerfs-control/src/daemon`](../../../../api/crates/layerfs-control/src/daemon), [`api/crates/layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs), [`common/place.rs`](../../../../api/crates/layerfs-control/src/common/place.rs), [`sandbox/route.rs`](../../../../api/crates/layerfs-control/src/sandbox/route.rs), [`sandbox/direct.rs`](../../../../api/crates/layerfs-control/src/sandbox/direct.rs) |
+| Uses | [Connect: Network](../../connect/network/README.md), [Engine: Daemon](../../engine/daemon/README.md) |
+| Used by | [Control](../control/README.md) |
+| Flows | [A call, end to end](../../flows/call.md), [A Workspace session](../../flows/workspace.md) |
+
+## Topics
+
+| Topic | What it covers |
+| --- | --- |
+| [Routing table](routing-table.md) | Where each call runs. |
+| [Workers](workers.md) | The `layerfs worker` process and its protocol. |
+| [Daemon channel](daemon-channel.md) | How Workspace calls reach a daemon. |
+
+## The picture
+
+```text
+ front end --> call table --> dispatcher (calls/dispatch.rs)
+                                   |
+                                   v
+                         control family function
+                                   |
+         +-------------------------+--------------------------+
+         | Store call              | Sandbox host operation   | Workspace
+         | (branch, commit, file)  | (sandbox.*, workspace.*) | call, daemon
+         v                         v                          | reached here
+   place::plan(StoreRef)    place::on_machine(machine)        v
+     |           |            |              |          direct::call
+  Local       Worker        Local          Worker            |
+     |           :            |              :               |
+     v           v            v              v               v
+ store::open  worker op    sandbox::     worker op      daemon pool
+ (in process) store.call   dispatch      sandbox.host   (this process)
+                 :            |              :               :
+                 v            v              v               v
+            Store file    daemon pool    daemon pool    Sandbox daemon
+            in guest      (this process) (in worker)
+```
+
+A dotted edge (`:`) crosses a process boundary over TCP. Both daemon pools
+end at the Sandbox daemon. The worker and the daemon pool are described in
+[Workers](workers.md) and [Daemon channel](daemon-channel.md); the decision
+itself is the [Routing table](routing-table.md).
+
+## What it does
+
+| Call | Runs in | Decided by |
+| --- | --- | --- |
+| Store call on a PostgreSQL Store | the caller's process | [`place::plan`](../../../../api/crates/layerfs-control/src/common/place.rs) |
+| Store call on a SQLite Store whose machine runs calls locally | the caller's process | `place::plan` → `local` |
+| Store call on a SQLite Store on any other machine | that machine's worker, op `store.call` | `place::plan` → `Executor::Worker` |
+| Sandbox create, get, close; Workspace mount, exec, commit, unmount, status | the Sandbox's machine: here, or its worker as `sandbox.host` | [`sandbox::route::on_machine`](../../../../api/crates/layerfs-control/src/sandbox/route.rs) |
+| Workspace mount, commit, unmount, status on a Sandbox whose daemon port reaches this host | this process, straight to the daemon | [`sandbox::direct`](../../../../api/crates/layerfs-control/src/sandbox/direct.rs) |
+| `workspace.exec` on such a Sandbox | still the machine's worker (the Sandbox runtime is there) | [`workspace/calls.rs`](../../../../api/crates/layerfs-control/src/workspace/calls.rs) |
+
+`layerfs worker` is one long-lived process on a machine whose kernel the
+caller cannot open a SQLite Store on: every VM and ssh host, `docker` on
+every host, and `native` on Windows. Only `machine.start` starts it; it
+serves until `machine.stop` ends it
+([`machine/worker/mod.rs`](../../../../api/crates/layerfs-control/src/machine/worker/mod.rs),
+[`machine/endpoint.rs`](../../../../api/crates/layerfs-control/src/machine/endpoint.rs)).
+
+## Invariants
+
+| Rule | Enforced by |
+| --- | --- |
+| SQLite Store calls run on the Store's kernel: in process on `native` (macOS, Linux), else in that machine's worker. | [`place.rs`](../../../../api/crates/layerfs-control/src/common/place.rs) `plan`, `local`; executor per platform in [`layerfs-machine` `platform.rs`](../../../../connect/crates/layerfs-machine/src/platform.rs) |
+| PostgreSQL Store calls run in the caller's process; the password is resolved per call and never written to a record. | `place::plan` (`StoreRef::Postgres` → `Local`); [`store/call.rs`](../../../../api/crates/layerfs-control/src/store/call.rs) `postgresql` |
+| Workspace calls go to the daemon; the daemon serves no Store calls. | [`daemon/call.rs`](../../../../api/crates/layerfs-control/src/daemon/call.rs) ("Store calls are not daemon calls"); [`daemon/operator.rs`](../../../../api/crates/layerfs-control/src/daemon/operator.rs) admits one read-model method |
+| A worker gets one attempt per call; nothing is resent. A lost answer after the request was sent is `Unknown`. | [`worker/client.rs`](../../../../api/crates/layerfs-control/src/machine/worker/client.rs) `send_once`, `answer`, `lost` |
+| No call starts a machine except `machine.start`; an unreached worker is `Unavailable` naming it. | `place.rs` `recorded`, `stopped` (#535 D11) |
+| A guest worker never reads the caller's home: each request carries the records it needs. | [`worker/server.rs`](../../../../api/crates/layerfs-control/src/machine/worker/server.rs) `with_home`; `sandbox/route.rs` `host_op` |
+| LayerFS reads `LAYERFS_*` settings only (`LAYERFS_HOME`, `LAYERFS_WORKER_LISTEN`, `LAYERFS_WORKER_SECRET`, `LAYERFS_DAEMON_HOST`, …) and names no plugin. | [`calls/dispatch.rs`](../../../../api/crates/layerfs-control/src/calls/dispatch.rs) `home`, [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
+
+## Limits and failures
+
+| Limit or failure | Value or error | Source |
+| --- | --- | --- |
+| Worker of another protocol or bundle | `Unavailable` with `detail {worker, expected}`; nothing sent; replace it with `machine stop`, then `machine start` | [`worker/hello.rs`](../../../../api/crates/layerfs-control/src/machine/worker/hello.rs) |
+| Requests per worker connection | one, after the secret frame | [`worker/server.rs`](../../../../api/crates/layerfs-control/src/machine/worker/server.rs) |
+| Worker frame size | 512 MiB (`MAX_FRAME`); first frame 4 KiB (`MAX_HELLO`); larger is `TooLarge` | [`worker/frame.rs`](../../../../api/crates/layerfs-control/src/machine/worker/frame.rs) |
+| Worker connect and secret-answer waits | 10 s each (`CONNECT`, `HELLO_WAIT`), then `Unavailable` | [`worker/client.rs`](../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| Worker wait between request bytes | 30 s (`REQUEST_WAIT`) | [`worker/server.rs`](../../../../api/crates/layerfs-control/src/machine/worker/server.rs) |
+| Machine with no `worker.json` | `Unavailable`: "start it with `layerfs machine start`" | [`place.rs`](../../../../api/crates/layerfs-control/src/common/place.rs) |
+| Daemon connections per process per Sandbox | 6 (`CONNECTIONS`); the daemon admits 8 (`DAEMON_CONNECTIONS`) | [`daemon/pool.rs`](../../../../api/crates/layerfs-control/src/daemon/pool.rs), [`sandbox/serve.rs`](../../../../api/crates/layerfs-control/src/sandbox/serve.rs) |
+| Wait for a free daemon connection | 60 s (`LEND_WAIT`), then `Busy`; nothing attempted | `daemon/pool.rs` |
+
+## Demonstration
+
+The commands below are written from source and were not run while writing
+this page. None needs Docker or root: the workers are stand-ins served on a
+loopback port by `worker::serve` in a test thread.
+
+```text
+ test --(SQLite Store on "box", platform lima)--> layerfs_api::call
+                                                      |
+             machine/box/worker.json {address, secret}|
+                                                      v
+ thread: worker::serve(listener, secret, guest root) <-- store.call frame
+```
+
+| Test or example | Crate | Shows |
+| --- | --- | --- |
+| [`store_routes.rs`](../../../../api/crates/layerfs-api/tests/store_routes.rs) | `layerfs-api` | A Store call goes where its records say: a SQLite Store on a `lima` machine is sent to a stand-in worker with its record; a PostgreSQL Store resolves its `env:` password reference per call; leases are held, counted and cleaned. |
+| [`worker_dial.rs`](../../../../api/crates/layerfs-api/tests/worker_dial.rs) | `layerfs-api` | A worker call dials the recorded worker once with no ping and never starts the machine: refused before sending is `Unavailable`, a lost answer is `Unknown`. |
+| [`worker_frames.rs`](../../../../api/crates/layerfs-control/tests/worker_frames.rs) | `layerfs-control` | The secret frame comes first and small; an oversized frame is refused from its length; a wrong secret is refused before the request is read; a silent worker is `Unavailable` in time. |
+| [`worker_hello.rs`](../../../../api/crates/layerfs-control/tests/worker_hello.rs) | `layerfs-control` | A worker of another protocol or bundle (or an old one whose hello names no protocol) is sent nothing; the matching worker answers. |
+
+| Test | Command | Needs |
+| --- | --- | --- |
+| `store_routes` | `cargo +1.85.1 test --locked -p layerfs-api --test store_routes` | loopback TCP; one case changes with `--features machine` |
+| `worker_dial` | `cargo +1.85.1 test --locked -p layerfs-api --features machine --test worker_dial` | `#![cfg(feature = "machine")]`: without the feature it builds no tests |
+| `worker_frames` | `cargo +1.85.1 test --locked -p layerfs-control --test worker_frames` | loopback TCP |
+| `worker_hello` | `cargo +1.85.1 test --locked -p layerfs-control --test worker_hello` | loopback TCP; sets `LAYERFS_BUNDLE` to a temporary folder |
+
+## Earlier material
+
+Folded into these pages. Matched by title, so check each one before relying on it.
+
+- [`core/docs/architecture/22-sdk-runtime.md`](../../../../core/docs/architecture/22-sdk-runtime.md): historical only (the host-mediated runtime it describes is retired).
+- [`core/docs/architecture/82-sdk-call-channel.md`](../../../../core/docs/architecture/82-sdk-call-channel.md): historical for front ends (the 2.0 call table replaces its channel); its daemon control exchange is covered in [Daemon channel](daemon-channel.md).
+
+---
+
+← [Control: Doctor](../control/doctor.md) · [Up: API](../README.md) · [Routing and workers: Routing table](routing-table.md) →

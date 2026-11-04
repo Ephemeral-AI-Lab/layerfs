@@ -1,0 +1,131 @@
+# machine family
+
+[Architecture](../../../README.md) › [API](../../README.md) › [Call table](../README.md) › machine family
+
+> **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
+
+The `machine` calls.
+
+| | |
+| --- | --- |
+| Component | [Call table](../README.md) |
+| Source | [`api/crates/layerfs-api/src/machine`](../../../../../api/crates/layerfs-api/src/machine), [`api/crates/layerfs-control/src/machine`](../../../../../api/crates/layerfs-control/src/machine) |
+
+## Calls
+
+Eleven calls, in help order
+([`machine/mod.rs`](../../../../../api/crates/layerfs-api/src/machine/mod.rs)).
+A machine is where Sandboxes and sqlite Stores live: the built-ins `native`
+and `docker`, a VM made by `create`, or an ssh host added by `connect`.
+Each entry runs `layerfs_control::machine::<call>`. "Summary" is the
+machine as `machine.get` shows it: `{ name, platform, backend, supports,
+state, cpus, memory, disk, stores, sandboxes, … }`
+([`machine/record.rs`](../../../../../api/crates/layerfs-control/src/machine/record.rs)).
+
+| Call | Arguments | Options | Returns |
+| --- | --- | --- | --- |
+| [`list`](../../../../../api/crates/layerfs-api/src/machine/list.rs) | — | — | `{ machines: [summary] }`, live state probed in parallel |
+| [`platforms`](../../../../../api/crates/layerfs-api/src/machine/platforms.rs) | — | — | `{ host, platforms: [{ platform, how, backend, kernel, sqlite, postgresql, ready, missing, version, options, description }] }` |
+| [`get`](../../../../../api/crates/layerfs-api/src/machine/get.rs) | `name` (Name) | — | summary |
+| [`status`](../../../../../api/crates/layerfs-api/src/machine/status.rs) | `name` | — | `{ name, platform, state, free_disk, tool_version, down_reason, stores, … , op? }` |
+| [`start`](../../../../../api/crates/layerfs-api/src/machine/start.rs) | `name` | — | summary, once the worker answers its secret |
+| [`stop`](../../../../../api/crates/layerfs-api/src/machine/stop.rs) | `name` | — | summary with `state: "stopped"` |
+| [`create`](../../../../../api/crates/layerfs-api/src/machine/create.rs) | `name`, `platform` (Name) | `cpus` (Int), `memory`, `disk` (Size), `image` (Text), `nested` (Bool), `host` (Name) | summary |
+| [`connect`](../../../../../api/crates/layerfs-api/src/machine/connect.rs) | `name` (Name), `host` (Text) | `user` (Text), `port` (Int), `identity`, `known_hosts`, `root` (Text) | summary |
+| [`remove`](../../../../../api/crates/layerfs-api/src/machine/remove.rs) | `name` | — | `{ name, removed: true }` |
+| [`disconnect`](../../../../../api/crates/layerfs-api/src/machine/disconnect.rs) | `name` | — | `{ name, removed: true }`; the host's data root stays |
+| [`update`](../../../../../api/crates/layerfs-api/src/machine/update.rs) | `name` | `cpus` (Int), `memory` (Size), `image`, `docker`, `wsl`, `daemon` (Text) | summary |
+
+Sources of the answers:
+[`list.rs`](../../../../../api/crates/layerfs-control/src/machine/list.rs),
+[`platforms.rs`](../../../../../api/crates/layerfs-control/src/machine/platforms.rs),
+[`status.rs`](../../../../../api/crates/layerfs-control/src/machine/status.rs),
+[`power.rs`](../../../../../api/crates/layerfs-control/src/machine/power.rs),
+[`create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs),
+[`remove.rs`](../../../../../api/crates/layerfs-control/src/machine/remove.rs),
+[`update.rs`](../../../../../api/crates/layerfs-control/src/machine/update.rs).
+
+## Arguments and options
+
+| Name | Kind | Rule |
+| --- | --- | --- |
+| `memory`, `disk` | Size | bytes as a number, or text with `K`, `M`, `G` (powers of 1024), turned into bytes by `check::size` ([`calls/check.rs`](../../../../../api/crates/layerfs-control/src/calls/check.rs)) |
+| `platform` | Name | a platform of the support table; `machine.platforms` lists what this host and build support |
+| `image`, `docker`, `wsl`, `daemon` | Text | `update` records them on the machine; `wsl` is a Windows host's setting; `daemon` is an absolute path |
+| `cpus`, `memory` on `update` | Int, Size | resizing a VM; refused while Sandboxes run on it, and "not built yet" for some platforms |
+
+The machine calls take no paging. `list`, `get`, `status` and `platforms`
+start nothing (P4); `list` and `get` wait for their probes together and
+show a probe that did not answer as `unknown`.
+
+## Errors
+
+| Code | When | Source |
+| --- | --- | --- |
+| `InvalidInput` | a bad name or option for this platform | [`create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs), [`update.rs`](../../../../../api/crates/layerfs-control/src/machine/update.rs) |
+| `NotFound` | no machine of that name | [`record.rs`](../../../../../api/crates/layerfs-control/src/machine/record.rs) |
+| `Exists` | the name, VM, disk or host is taken | [`create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs), [`connect.rs`](../../../../../api/crates/layerfs-control/src/machine/connect.rs) |
+| `InUse` | `stop`, `remove` or a resize while Sandboxes run (`detail.related`) | [`inventory.rs`](../../../../../api/crates/layerfs-control/src/inventory.rs) |
+| `Unsupported` | a platform this host or build lacks (`detail.missing`); every machine call in a build without the `machine` feature | [`spec.rs`](../../../../../api/crates/layerfs-control/src/machine/spec.rs), [`api/…/machine/create.rs`](../../../../../api/crates/layerfs-api/src/machine/create.rs) |
+| `Unavailable`, `Denied` | a provider or guest that does not answer; an ssh host that refuses the login or host key | [`layerfs-machine` `error.rs`](../../../../../connect/crates/layerfs-machine/src/error.rs) |
+| `Busy`, `Unresolved` | another operation's `op` on the machine | [`common/op.rs`](../../../../../api/crates/layerfs-control/src/common/op.rs) |
+| `Failed` | it ran once and failed; a create that failed after its VM existed keeps it as `failed` | [`create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs) |
+| `Unknown` | **uncertain:** the adapter timed out or lost its answer; everything made is kept, the `op` stays `uncertain` and is logged | [`create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs), [`remove.rs`](../../../../../api/crates/layerfs-control/src/machine/remove.rs) |
+
+An unresolved machine is shown by `machine status` and cleared by
+`machine remove` or `disconnect`. See
+[error kinds](../errors.md#error-kinds) and
+[uncertain outcomes](../errors.md#uncertain-outcomes).
+
+## Where it runs
+
+```text
+ machine.<call>  caller's process (host build, `machine` feature)
+   |  home records under the home lock (claim, record only)
+   v
+ layerfs-machine adapter: probe, create, start, stop, remove a VM or host
+   |
+   +-- start: under start.lock, start the VM and its `layerfs worker`
+   |          from the sealed Linux bundle, record it in worker.json,
+   |          wait until it answers its secret (readiness, not a retry)
+   +-- stop:  end the worker and VM; worker.json goes, disks stay
+```
+
+All machine calls run in the caller's process; none is sent to a worker.
+The guest worker is built without the `machine` feature, so no machine
+adapter runs inside a machine
+([`layerfs-api/Cargo.toml`](../../../../../api/crates/layerfs-api/Cargo.toml)).
+Nothing but `machine start` starts a machine (#535 D11): other calls on a
+stopped machine are refused `Unavailable`
+([`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs)).
+See the [routing table](../../routing/routing-table.md) and
+[workers](../../routing/workers.md).
+
+## Example
+
+Not run; written from the call table.
+
+```js
+await layerfs.machine.create("vm1", "lima", { cpus: 4, memory: "8G", disk: "64G" });
+await layerfs.machine.start("vm1");
+```
+
+```python
+layerfs.machine.create("vm1", "lima", cpus=4, memory="8G", disk="64G")
+layerfs.machine.start("vm1")
+```
+
+```console
+$ layerfs machine create vm1 lima --cpus 4 --memory 8G --disk 64G
+$ layerfs machine start vm1
+```
+
+## Related
+
+- [Control: Families](../../control/families.md) and [Workers](../../routing/workers.md).
+- [Connect: Machines](../../../connect/machines/README.md) and [Connect: Support matrix](../../../connect/support-matrix/README.md).
+- [store family](store.md): `store push` and `pull` move sqlite Stores between machines.
+
+---
+
+← [Call table: workspace family](workspace.md) · [Up: Call table](../README.md) · [Call table: store family](store.md) →

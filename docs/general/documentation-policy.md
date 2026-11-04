@@ -12,6 +12,11 @@
   `792715f00a` (see [the docs entry point](../README.md#removed-roadmap-and-raw-evidence)).
   Do not commit raw run output (`.json`, `.jsonl`, logs, databases) as
   documentation; keep the `.md` record and link to retained evidence.
+- `docs/architecture/<layer>/` is the maintained design reference for the
+  current source, one page per component of `core`, `engine`, `connect` and
+  `api`, with cross-layer flows under `docs/architecture/flows/`. A change that
+  alters a component's boundary, format, algorithm or named limit updates its
+  page in the same commit.
 - `docs/general/` contains maintained project practices and concepts.
 - `docs/plugins/` contains the plugin listing guide, its template and checker;
   the listings themselves are `plugins/<plugin-id>/` at the repository root.
@@ -30,6 +35,8 @@ Status: Release candidate for LayerFS <release>.
 Status: Current planning checklist; no release candidate exists.
 Status: Dated planning checkpoint; not release evidence or a product contract.
 Status: Current general guide.
+Status: Current architecture guide for LayerFS <release>; maintained with the source.
+Status: Outline; planned architecture page, not yet written. Not a product contract.
 Status: Proposal; target LayerFS <release>; not a released contract.
 Status: Research; informative and not a product contract.
 Status: Archived; retained for historical evidence only.
