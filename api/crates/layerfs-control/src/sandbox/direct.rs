@@ -344,7 +344,7 @@ pub(crate) fn call(
                 (found == id).then_some(head)
             })
         }
-        "sandbox.list_workspaces" | "backend.daemon.connection_failures" => {
+        "sandbox.list_workspaces" | layerfs_bridge::control::CAPACITY_OPERATION => {
             dispatch::call(op, args)
         }
         _ => Err(refused(

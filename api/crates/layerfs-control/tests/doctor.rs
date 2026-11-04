@@ -1,13 +1,19 @@
 //! `layerfs doctor` (#536 H7): a home with one of each problem gives one
 //! finding each, naming the call that fixes it; a clean home is `ok` with
 //! no findings; a layout 2 home reports what refuses its conversion; and
-//! the doctor writes nothing in the home.
-use layerfs_bridge::control::SdkValue;
+//! the doctor writes nothing in the home. A live fake daemon's capacity model
+//! is explained as warnings, and its Capacity refusal is a warning, not an
+//! error.
+use layerfs_bridge::control::{
+    AdmissionModel, Answer, Call, CapacityModel, DaemonPhase, DaemonStatus, Reply, Request,
+    RetainedModel, SdkRefusal, SdkValue, CAPACITY_OPERATION,
+};
+use layerfs_bridge::duplex;
 use layerfs_control::common::home::{self, paths, private_dir, write_entity, write_record};
 use layerfs_control::doctor::doctor;
 use layerfs_control::machine::worker::{read_frame, read_frame_within, write_frame, MAX_HELLO};
 use std::collections::BTreeMap;
-use std::net::TcpListener;
+use std::net::{SocketAddr, TcpListener};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -448,5 +454,195 @@ fn a_sandbox_without_a_recorded_endpoint_is_not_queried() {
     assert!(at.elapsed() < Duration::from_secs(1));
     assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)));
     assert!(findings(&report).is_empty(), "{report:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// A fake daemon that answers the doctor's two calls: its Hello, then the
+/// control-capacity read model with `reply`.
+fn capacity_daemon(reply: Reply) -> (SocketAddr, std::thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = listener.local_addr().unwrap();
+    let worker = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        stream
+            .set_write_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut channel = duplex::accept(
+            stream,
+            &DAEMON_PRIVATE,
+            duplex::public_key(&CLIENT_PRIVATE).unwrap(),
+        )
+        .unwrap();
+        let hello = Call::decode(channel.receive.receive().unwrap()).unwrap();
+        assert!(matches!(hello.request, Request::Hello(_)));
+        channel
+            .send
+            .send(
+                &Answer {
+                    id: hello.id,
+                    reply: Reply::Hello(DaemonStatus {
+                        instance: DAEMON_INSTANCE,
+                        phase: DaemonPhase::ControlReady,
+                        overlay_sqlite: Some("3.51.0".into()),
+                        store_sqlite: Some("3.51.0".into()),
+                    }),
+                }
+                .encode()
+                .unwrap(),
+            )
+            .unwrap();
+        let call = Call::decode(channel.receive.receive().unwrap()).unwrap();
+        let id = call.id;
+        let Request::Sdk(sdk) = call.request else {
+            panic!("expected the capacity read model");
+        };
+        assert_eq!(sdk.method, CAPACITY_OPERATION);
+        channel
+            .send
+            .send(&Answer { id, reply }.encode().unwrap())
+            .unwrap();
+    });
+    (endpoint, worker)
+}
+
+const CLIENT_PRIVATE: [u8; 32] = [2; 32];
+const DAEMON_PRIVATE: [u8; 32] = [1; 32];
+const DAEMON_INSTANCE: [u8; 32] = [3; 32];
+
+/// A homes home with one running Sandbox whose daemon keys name `endpoint`.
+fn running_sandbox(home: &Path, endpoint: SocketAddr) {
+    home::open(home).unwrap();
+    store(home, "shop", sqlite("shop", "native"));
+    let project = SdkValue::map([("name", t("api"))]);
+    write_entity(&paths::project_record(home, "shop", "api"), &project).unwrap();
+    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
+    write_entity(&paths::machine_record(home, "native"), &native).unwrap();
+    let sandbox = SdkValue::map([
+        ("name", t("sb")),
+        ("project", t("shop/api")),
+        ("machine", t("native")),
+        ("id", t("sb")),
+    ]);
+    write_entity(&paths::sandbox_record(home, "sb"), &sandbox).unwrap();
+    let keys = SdkValue::map([
+        ("endpoint", t(&endpoint.to_string())),
+        ("secret", SdkValue::Bytes(CLIENT_PRIVATE.to_vec())),
+        (
+            "peer",
+            SdkValue::Bytes(duplex::public_key(&DAEMON_PRIVATE).unwrap().to_vec()),
+        ),
+        ("instance", SdkValue::Bytes(DAEMON_INSTANCE.to_vec())),
+    ]);
+    write_record(&paths::sandbox_control(home, "sb"), &keys).unwrap();
+}
+
+#[test]
+fn capacity_model_warnings_name_retained_failures_and_an_exhausted_pool() {
+    let model = layerfs_bridge::control::CapacityModel {
+        admission: AdmissionModel {
+            pool_vacant: 0,
+            pool_running: 8,
+            reserved_vacant: 1,
+            reserved_running: 0,
+        },
+        retained: RetainedModel {
+            limit: 64,
+            ttl_ms: 3_600_000,
+            count: 3,
+            dropped: 2,
+            recorded: 3,
+            failures: Vec::new(),
+        },
+    };
+    let (endpoint, worker) = capacity_daemon(Reply::Sdk(model.to_sdk()));
+    let home = new_home("capacity");
+    running_sandbox(&home, endpoint);
+    let report = doctor(&home).unwrap();
+    worker.join().unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)), "{report:?}");
+    let found = findings(&report);
+    assert_eq!(found.len(), 2, "{found:#?}");
+    let text: Vec<String> = found
+        .iter()
+        .map(|(_, _, _, message, fix)| format!("{message} {fix}"))
+        .collect();
+    assert!(text[0].contains("retained 3 of 64"), "{text:#?}");
+    assert!(text[0].contains("2 dropped"), "{text:#?}");
+    assert!(
+        text[0].contains("backend.daemon.connection_failures"),
+        "{text:#?}"
+    );
+    assert!(text[1].contains("pool_vacant 0"), "{text:#?}");
+    assert!(text[1].contains("pool_running 8"), "{text:#?}");
+    assert!(text[1].contains("Capacity"), "{text:#?}");
+    assert!(text[1].contains("daemon_control_slot"), "{text:#?}");
+    for (severity, kind, name, _, _) in &found {
+        assert_eq!(
+            (severity.as_str(), kind.as_str(), name.as_str()),
+            ("warning", "sandbox", "sb")
+        );
+    }
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_healthy_capacity_model_gives_no_finding() {
+    let model = CapacityModel {
+        admission: AdmissionModel {
+            pool_vacant: 7,
+            pool_running: 1,
+            reserved_vacant: 1,
+            reserved_running: 0,
+        },
+        retained: RetainedModel {
+            limit: 64,
+            ttl_ms: 3_600_000,
+            count: 0,
+            dropped: 0,
+            recorded: 0,
+            failures: Vec::new(),
+        },
+    };
+    let (endpoint, worker) = capacity_daemon(Reply::Sdk(model.to_sdk()));
+    let home = new_home("capacity-healthy");
+    running_sandbox(&home, endpoint);
+    let report = doctor(&home).unwrap();
+    worker.join().unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)));
+    assert!(findings(&report).is_empty(), "{report:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_capacity_refusal_is_a_warning_not_an_error() {
+    let refusal = SdkRefusal {
+        code: "Capacity".to_owned(),
+        message: "the Sandbox's daemon has no vacant control slot".to_owned(),
+        detail: SdkValue::map([
+            ("resource", t("daemon_control_slot")),
+            ("retained", SdkValue::Int(3)),
+            ("pool_vacant", SdkValue::Int(0)),
+            ("reserved_vacant", SdkValue::Int(1)),
+            ("retryable", SdkValue::Bool(true)),
+        ]),
+    };
+    let (endpoint, worker) = capacity_daemon(Reply::SdkRefused(refusal));
+    let home = new_home("capacity-refused");
+    running_sandbox(&home, endpoint);
+    let report = doctor(&home).unwrap();
+    worker.join().unwrap();
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)));
+    let found = findings(&report);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    let message = &found[0].3;
+    assert!(message.contains("Capacity"), "{message}");
+    assert!(message.contains("daemon_control_slot"), "{message}");
+    assert!(message.contains("pool_vacant 0"), "{message}");
+    assert!(message.contains("reserved_vacant 1"), "{message}");
+    assert!(message.contains("retained 3"), "{message}");
+    assert_eq!(found[0].0, "warning");
     std::fs::remove_dir_all(home).unwrap();
 }

@@ -27,7 +27,7 @@ pub fn call(op: &str, args: SdkValue) -> Outcome {
         }
         // The operator view of control admission and retained failures
         // (#540). It is a read model, never a product operation.
-        "backend.daemon.connection_failures" => daemon_backend(op, args),
+        layerfs_bridge::control::CAPACITY_OPERATION => daemon_backend(op, args),
         "sandbox.create" => crate::sandbox::serve::create(&args),
         "sandbox.close" => crate::sandbox::serve::close(&args),
         "workspace.mount" => workspace::mount(&args),
@@ -124,7 +124,7 @@ fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
 }
 
 /// The daemon's control-capacity/retained-failure read model (#540).
-const CAPACITY_QUERY: &str = "backend.daemon.connection_failures";
+const CAPACITY_QUERY: &str = layerfs_bridge::control::CAPACITY_OPERATION;
 /// How long a best-effort capacity read waits for control admission.
 const CAPACITY_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 

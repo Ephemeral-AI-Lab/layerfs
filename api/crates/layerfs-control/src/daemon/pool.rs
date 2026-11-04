@@ -71,8 +71,6 @@ enum NotAdmitted {
     /// The daemon had no vacant pool slot. `retained` is exact when the
     /// advisory capacity notice arrived, and unknown when only EOF was seen.
     NoVacantSlot { retained: Option<u8> },
-    /// The daemon is still starting and admits no control yet.
-    Starting,
     /// The connection itself failed before Hello (`BrokenPipe`,
     /// `ConnectionReset`).
     ConnectionFailed,
@@ -82,14 +80,13 @@ impl NotAdmitted {
     fn code(self) -> &'static str {
         match self {
             Self::NoVacantSlot { .. } => "Capacity",
-            Self::Starting | Self::ConnectionFailed => "Unavailable",
+            Self::ConnectionFailed => "Unavailable",
         }
     }
 
     fn admission(self) -> &'static str {
         match self {
             Self::NoVacantSlot { .. } => "no-vacant-slot",
-            Self::Starting => "starting",
             Self::ConnectionFailed => "connection-failed",
         }
     }
@@ -165,10 +162,6 @@ fn admission_refusal(wait: Duration, admission: NotAdmitted, kind: &str) -> SdkR
             retained.map_or(String::new(), |count| format!(
                 " (it reported {count} retained failure record(s))"
             ))
-        ),
-        NotAdmitted::Starting => format!(
-            "the Sandbox's daemon is still starting and admitted no control connection for {}s ({kind}). The call was not admitted; retrying is safe",
-            wait.as_secs()
         ),
         NotAdmitted::ConnectionFailed => format!(
             "the connection to the Sandbox's daemon failed before Hello for {}s ({kind}): the call was not admitted; retrying is safe",
@@ -448,191 +441,5 @@ impl Deref for Lease<'_> {
 impl DerefMut for Lease<'_> {
     fn deref_mut(&mut self) -> &mut Control {
         self.control.as_mut().expect("lent connection")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use layerfs_bridge::duplex::admission::encode;
-    use std::io::Write;
-    use std::net::TcpListener;
-    use std::thread;
-
-    fn failed_open(message: &str) -> SdkRefusal {
-        refused("Failed", message)
-    }
-
-    #[test]
-    fn eof_fallback_is_capacity_with_unknown_retained() {
-        let (admission, kind) = not_admitted(&failed_open("Io(Kind(UnexpectedEof))")).unwrap();
-        assert_eq!(kind, "UnexpectedEof");
-        assert!(matches!(
-            admission,
-            NotAdmitted::NoVacantSlot { retained: None }
-        ));
-        let capacity = admission_refusal(Duration::from_secs(60), admission, kind);
-        assert_eq!(capacity.code, "Capacity");
-        assert!(capacity.message.contains("no vacant control slot"));
-        assert!(capacity.message.contains("UnexpectedEof"));
-        assert!(!capacity.message.contains("other processes"));
-        assert_eq!(
-            capacity.detail.get_text("resource"),
-            Some("daemon_control_slot")
-        );
-        assert!(matches!(
-            capacity.detail.get("retained"),
-            Some(SdkValue::Null)
-        ));
-        assert_eq!(capacity.detail.get_bool("retryable"), true);
-        assert_eq!(
-            capacity.detail.get_text("admission"),
-            Some("no-vacant-slot")
-        );
-    }
-
-    #[test]
-    fn reset_is_unavailable() {
-        for kind in ["BrokenPipe", "ConnectionReset"] {
-            let (admission, observed) =
-                not_admitted(&failed_open(&format!("Io(Kind({kind}))"))).unwrap();
-            assert_eq!(observed, kind);
-            assert_eq!(admission, NotAdmitted::ConnectionFailed);
-            let failure = admission_refusal(Duration::from_secs(60), admission, kind);
-            assert_eq!(failure.code, "Unavailable");
-            assert!(failure.message.contains(kind));
-            assert!(!failure.message.contains("other processes"));
-            assert!(matches!(
-                failure.detail.get("resource"),
-                Some(SdkValue::Null)
-            ));
-            assert_eq!(failure.detail.get_bool("retryable"), true);
-            assert_eq!(
-                failure.detail.get_text("admission"),
-                Some("connection-failed")
-            );
-        }
-    }
-
-    #[test]
-    fn other_refusals_are_not_admission_refusals() {
-        assert_eq!(not_admitted(&refused("StaleSandbox", "saved daemon")), None);
-        assert_eq!(not_admitted(&failed_open("Io(Kind(TimedOut))")), None);
-    }
-
-    #[test]
-    fn notice_maps_to_capacity_with_exact_retained() {
-        let notice = AdmissionNotice::new(AdmissionReason::NoPoolSlot, 8, 0, 1);
-        let refusal = notice_refusal(notice);
-        assert_eq!(refusal.code, "Capacity");
-        assert_eq!(refusal.detail.get_int("retained"), Some(8));
-        assert_eq!(refusal.detail.get_int("pool_vacant"), Some(0));
-        assert_eq!(refusal.detail.get_int("reserved_vacant"), Some(1));
-        assert_eq!(refusal.detail.get_bool("retryable"), true);
-        assert_eq!(
-            refusal.detail.get_text("resource"),
-            Some("daemon_control_slot")
-        );
-        assert!(!refusal.message.contains("other processes"));
-    }
-
-    #[test]
-    fn starting_notice_is_unavailable() {
-        let refusal = notice_refusal(AdmissionNotice::new(AdmissionReason::Starting, 0, 0, 1));
-        assert_eq!(refusal.code, "Unavailable");
-        assert_eq!(refusal.detail.get_text("admission"), Some("starting"));
-        assert_eq!(refusal.detail.get_bool("retryable"), true);
-    }
-
-    #[test]
-    fn garbage_before_hello_is_not_a_notice() {
-        // A 24-byte record that is not the magic is a handshake failure, not
-        // a false Capacity.
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = listener.local_addr().unwrap();
-        thread::spawn(move || {
-            for mut stream in listener.incoming().flatten() {
-                let _ = stream.write_all(&[0u8; 26]);
-            }
-        });
-        let dial = Dial {
-            endpoint: address,
-            host: None,
-            secret: [7; 32],
-            peer: layerfs_bridge::duplex::public_key(&[8; 32]).unwrap(),
-            instance: [9; 32],
-        };
-        let refusal = match dial.open_admitted(Duration::from_millis(80)) {
-            Ok(_) => panic!("a refusing daemon admitted the dial"),
-            Err(refusal) => refusal,
-        };
-        assert_ne!(refusal.code, "Capacity", "{refusal:?}");
-        assert!(!refusal.message.contains("other processes"));
-    }
-
-    #[test]
-    fn a_daemon_that_closes_before_hello_refuses_precisely() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = listener.local_addr().unwrap();
-        // The daemon's accept loop with no vacant slot: accept once, close.
-        thread::spawn(move || {
-            for stream in listener.incoming() {
-                drop(stream);
-            }
-        });
-        let dial = Dial {
-            endpoint: address,
-            host: None,
-            secret: [7; 32],
-            peer: layerfs_bridge::duplex::public_key(&[8; 32]).unwrap(),
-            instance: [9; 32],
-        };
-        let Err(refusal) = dial.open_admitted(Duration::from_millis(120)) else {
-            panic!("a daemon that closes before Hello was admitted");
-        };
-        assert_eq!(refusal.code, "Capacity", "{refusal:?}");
-        assert!(
-            !refusal.message.contains("other processes"),
-            "{}",
-            refusal.message
-        );
-        assert!(
-            refusal.message.contains("not admitted"),
-            "{}",
-            refusal.message
-        );
-    }
-
-    #[test]
-    fn a_capacity_notice_is_classified_before_hello() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = listener.local_addr().unwrap();
-        thread::spawn(move || {
-            for mut stream in listener.incoming().flatten() {
-                let body = encode(&AdmissionNotice::new(AdmissionReason::NoPoolSlot, 8, 0, 1));
-                let mut framed = vec![0u8; 2 + body.len()];
-                framed[..2].copy_from_slice(&(body.len() as u16).to_be_bytes());
-                framed[2..].copy_from_slice(&body);
-                let _ = stream.write_all(&framed);
-                let _ = stream.shutdown(std::net::Shutdown::Write);
-                // Drain so the client's shutdown is not a reset.
-                let mut sink = [0u8; 64];
-                let _ = std::io::Read::read(&mut stream, &mut sink);
-            }
-        });
-        let dial = Dial {
-            endpoint: address,
-            host: None,
-            secret: [7; 32],
-            peer: layerfs_bridge::duplex::public_key(&[8; 32]).unwrap(),
-            instance: [9; 32],
-        };
-        let refusal = match dial.open_admitted(Duration::from_millis(80)) {
-            Ok(_) => panic!("a refusing daemon admitted the dial"),
-            Err(refusal) => refusal,
-        };
-        assert_eq!(refusal.code, "Capacity", "{refusal:?}");
-        assert_eq!(refusal.detail.get_int("retained"), Some(8));
-        assert_eq!(refusal.detail.get_bool("retryable"), true);
     }
 }

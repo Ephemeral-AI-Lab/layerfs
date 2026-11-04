@@ -11,7 +11,7 @@ pub fn call(control: &mut Control, method: &str, args: SdkValue) -> SdkResult {
     match method {
         // The daemon's control admission and bounded retained-failure store
         // (#540): an operator read model, never a product operation.
-        "backend.daemon.connection_failures" => {
+        layerfs_bridge::control::CAPACITY_OPERATION => {
             crate::daemon::call::exchange_call(control, method, args)
         }
         "sandbox.list_workspaces" => crate::daemon::call::exchange_call(control, method, args),

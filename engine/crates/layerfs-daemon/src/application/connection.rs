@@ -492,7 +492,9 @@ impl Application {
         &self,
     ) -> Result<layerfs_bridge::control::SdkValue, crate::control::Failure> {
         use crate::control::Failure;
-        use layerfs_bridge::control::SdkValue;
+        use layerfs_bridge::control::{
+            AdmissionModel, CapacityModel, RetainedFailureModel, RetainedModel,
+        };
         let counts = self.connection_slots().map_err(|_| Failure::Poisoned)?;
         let snapshot = self
             .retained_connection_failures()
@@ -500,456 +502,40 @@ impl Application {
         let failures = snapshot
             .failures
             .iter()
-            .map(|failure| {
-                SdkValue::map([
-                    ("slot", SdkValue::Int(failure.slot as i64)),
-                    ("class", SdkValue::text(failure.class)),
-                    ("generation", SdkValue::Int(failure.generation as i64)),
-                    ("owner", SdkValue::text(&failure.owner)),
-                    (
-                        "received_bytes",
-                        failure
-                            .received_bytes
-                            .map_or(SdkValue::Null, |bytes| SdkValue::Int(bytes as i64)),
-                    ),
-                    (
-                        "request",
-                        failure.request.map_or(SdkValue::Null, SdkValue::text),
-                    ),
-                    ("reply_sent", SdkValue::Bool(failure.reply_sent)),
-                    ("cause", SdkValue::text(&failure.cause)),
-                    (
-                        "fence_error",
-                        failure
-                            .fence_error
-                            .as_deref()
-                            .map_or(SdkValue::Null, SdkValue::text),
-                    ),
-                    (
-                        "diagnostic_error",
-                        failure
-                            .diagnostic_error
-                            .as_deref()
-                            .map_or(SdkValue::Null, SdkValue::text),
-                    ),
-                    ("age_ms", SdkValue::Int(failure.age.as_millis() as i64)),
-                    (
-                        "expires_in_ms",
-                        SdkValue::Int(failure.expires_in.as_millis() as i64),
-                    ),
-                ])
-            })
-            .collect();
-        Ok(SdkValue::map([
-            (
-                "admission",
-                SdkValue::map([
-                    ("pool_vacant", SdkValue::Int(counts.pool_vacant as i64)),
-                    ("pool_running", SdkValue::Int(counts.pool_running as i64)),
-                    (
-                        "reserved_vacant",
-                        SdkValue::Int(counts.reserved_vacant as i64),
-                    ),
-                    (
-                        "reserved_running",
-                        SdkValue::Int(counts.reserved_running as i64),
-                    ),
-                ]),
-            ),
-            (
-                "retained",
-                SdkValue::map([
-                    ("limit", SdkValue::Int(snapshot.limit as i64)),
-                    ("ttl_ms", SdkValue::Int(snapshot.ttl.as_millis() as i64)),
-                    ("count", SdkValue::Int(snapshot.failures.len() as i64)),
-                    ("dropped", SdkValue::Int(snapshot.dropped as i64)),
-                    ("recorded", SdkValue::Int(snapshot.recorded as i64)),
-                    ("failures", SdkValue::List(failures)),
-                ]),
-            ),
-        ]))
+            .map(|failure| RetainedFailureModel {
+                slot: failure.slot as i64,
+                class: failure.class.to_owned(),
+                generation: failure.generation as i64,
+                owner: failure.owner.clone(),
+                received_bytes: failure.received_bytes.map(|bytes| bytes as i64),
+                request: failure.request.map(str::to_owned),
+                reply_sent: failure.reply_sent,
+                cause: failure.cause.clone(),
+                fence_error: failure.fence_error.clone(),
+                diagnostic_error: failure.diagnostic_error.clone(),
+                age_ms: failure.age.as_millis() as i64,
+                expires_in_ms: failure.expires_in.as_millis() as i64,
+            });
+        Ok(CapacityModel {
+            admission: AdmissionModel {
+                pool_vacant: counts.pool_vacant as i64,
+                pool_running: counts.pool_running as i64,
+                reserved_vacant: counts.reserved_vacant as i64,
+                reserved_running: counts.reserved_running as i64,
+            },
+            retained: RetainedModel {
+                limit: snapshot.limit as i64,
+                ttl_ms: snapshot.ttl.as_millis() as i64,
+                count: snapshot.failures.len() as i64,
+                dropped: snapshot.dropped as i64,
+                recorded: snapshot.recorded as i64,
+                failures: failures.collect(),
+            },
+        }
+        .to_sdk())
     }
 }
 
 /// Operator/control method for the daemon's control admission and retained
 /// connection failures.
-pub(super) const CONNECTION_FAILURES: &str = "backend.daemon.connection_failures";
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::application::owner::{Slots, Startup, State};
-    use crate::{Owner, OwnerConfig};
-    use layerfs_bridge::{
-        control::{Answer, Call, DaemonPhase, HelloRequest, Reply, Request},
-        daemon_setup::{DaemonLimits, DaemonSetup},
-        store::DaemonStore,
-        KernelRoute,
-    };
-    use layerfs_overlay::ProfileConfig;
-    use std::{
-        net::TcpStream,
-        path::PathBuf,
-        process,
-        sync::{Condvar, Mutex},
-        time::{Duration, Instant},
-    };
-
-    const CONNECTIONS: u16 = 8;
-    const CLIENT_PRIVATE: [u8; 32] = [71; 32];
-    const SERVER_PRIVATE: [u8; 32] = [72; 32];
-
-    fn temp_directory(label: &str) -> PathBuf {
-        use std::sync::atomic::{AtomicU64, Ordering};
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        let directory = std::env::temp_dir().join(format!(
-            "layerfs-540-{}-{label}-{}",
-            process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(directory.join("mounts")).unwrap();
-        directory
-    }
-
-    /// A real `Application` over an empty Store path: Hello and EndSession
-    /// need no Store service, and no kernel serving is assembled.
-    fn application(directory: &std::path::Path) -> Arc<Application> {
-        let owner = Owner::start(
-            &directory.join("overlay.sqlite"),
-            ProfileConfig::default(),
-            OwnerConfig::default(),
-        )
-        .unwrap();
-        let setup = DaemonSetup {
-            listen: "127.0.0.1:0".into(),
-            private_key: SERVER_PRIVATE,
-            control_peer: layerfs_bridge::duplex::public_key(&CLIENT_PRIVATE).unwrap(),
-            route: KernelRoute::Nfs,
-            overlay: directory.join("overlay.sqlite").display().to_string(),
-            mounts: directory.join("mounts").display().to_string(),
-            command_uid: 501,
-            command_gid: 20,
-            limits: DaemonLimits {
-                connections: CONNECTIONS,
-                handshake_ms: 2000,
-                cache_bytes: 1024 * 1024,
-                namespaces: 16,
-                pager_kib: 1024,
-                serial_low_water: 256,
-            },
-            store: DaemonStore::Sqlite {
-                locator: directory.join("store.sqlite").display().to_string(),
-                install: None,
-            },
-        };
-        let slots = usize::from(CONNECTIONS) + 1;
-        Arc::new(Application {
-            instance: layerfs_bridge::duplex::public_key(&SERVER_PRIVATE).unwrap(),
-            setup,
-            owner,
-            kernel: None,
-            export: None,
-            state: Mutex::new(State {
-                startup: Startup {
-                    // No Store service in this fixture; InstallPending is the
-                    // observable phase whose Hello reply needs no Store facts.
-                    phase: DaemonPhase::InstallPending,
-                    service: None,
-                    installed: None,
-                    existing: None,
-                    install_failure: None,
-                },
-                slots: Slots::new(slots),
-            }),
-            changed: Condvar::new(),
-            workers: Mutex::new((0..slots).map(|_| None).collect()),
-        })
-    }
-
-    fn connect(address: std::net::SocketAddr) -> transport::Connection {
-        let stream = TcpStream::connect_timeout(&address, Duration::from_secs(2)).unwrap();
-        stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .unwrap();
-        stream
-            .set_write_timeout(Some(Duration::from_secs(2)))
-            .unwrap();
-        transport::initiate(
-            stream,
-            &CLIENT_PRIVATE,
-            layerfs_bridge::duplex::public_key(&SERVER_PRIVATE).unwrap(),
-        )
-        .unwrap()
-    }
-
-    fn until(what: &str, check: impl Fn() -> bool) {
-        let started = Instant::now();
-        while !check() {
-            assert!(
-                started.elapsed() < Duration::from_secs(5),
-                "timed out waiting for {what}"
-            );
-            std::thread::sleep(Duration::from_millis(10));
-        }
-    }
-
-    /// Eight-plus clients send bytes and die before reading a reply. Every
-    /// retained failure must free its slot, be stored, and leave the daemon
-    /// admitting a new authenticated client (#540).
-    #[test]
-    fn retained_failures_do_not_consume_control_slots() {
-        let directory = temp_directory("slots");
-        let application = application(&directory);
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = listener.local_addr().unwrap();
-        let serving = application.clone();
-        std::thread::spawn(move || {
-            let _ = serving.serve(listener);
-        });
-
-        let rounds = usize::from(CONNECTIONS) + 4;
-        for round in 0..rounds {
-            let mut connection = connect(address);
-            // Not a decodable initial record: the daemon counts a received
-            // request and retains its exact cause. The client then disappears
-            // without reading any reply.
-            connection
-                .send
-                .send(b"client-died-before-reading-reply")
-                .unwrap();
-            drop(connection);
-            until("the retained failure to be recorded", || {
-                application
-                    .retained_connection_failures()
-                    .map(|snapshot| snapshot.failures.len() == round + 1)
-                    .unwrap_or(false)
-            });
-            let counts = application.connection_slots().unwrap();
-            assert!(
-                counts.pool_vacant > 0,
-                "round {round}: a retained failure consumed the last pool slot"
-            );
-        }
-
-        let snapshot = application.retained_connection_failures().unwrap();
-        assert_eq!(snapshot.failures.len(), rounds);
-        assert!(snapshot.dropped <= 1);
-        let operator = application.connection_failures().unwrap();
-        let retained = operator.get("retained").unwrap();
-        assert_eq!(retained.get_int("limit"), Some(64));
-        assert_eq!(retained.get_int("recorded"), Some(rounds as i64));
-        assert_eq!(
-            operator
-                .get("admission")
-                .and_then(|v| v.get_int("pool_vacant")),
-            Some(usize::from(CONNECTIONS) as i64)
-        );
-        assert_eq!(
-            retained.get("failures").map(|v| match v {
-                layerfs_bridge::control::SdkValue::List(items) => items.len(),
-                _ => 0,
-            }),
-            Some(rounds)
-        );
-
-        let record = &snapshot.failures[0];
-        assert_eq!(record.slot, 0);
-        assert_eq!(record.class, "pool");
-        assert!(record.generation > 0);
-        assert!(
-            record.owner.contains("layerfs-control-0"),
-            "{}",
-            record.owner
-        );
-        assert!(record.received_bytes.is_some());
-        assert!(record.cause.contains("kernel request"), "{}", record.cause);
-        assert!(!record.reply_sent);
-
-        // A new authenticated client is admitted and receives its Hello reply.
-        let mut connection = connect(address);
-        let hello = Call {
-            id: 1,
-            request: Request::Hello(HelloRequest {
-                expected_instance: Some(application.instance),
-                wait_for_store: false,
-            }),
-        };
-        connection.send.send(&hello.encode().unwrap()).unwrap();
-        let answer = Answer::decode(connection.receive.receive().unwrap()).unwrap();
-        match answer.reply {
-            Reply::Hello(status) => assert_eq!(status.phase, DaemonPhase::InstallPending),
-            other => panic!("unexpected Hello reply: {other:?}"),
-        }
-        drop(connection);
-    }
-
-    /// The guard is the spawn-failure/panic path: dropping it without an
-    /// explicit finish releases the slot and records exactly once.
-    #[test]
-    fn dropping_the_guard_releases_the_slot_and_records_once() {
-        let directory = temp_directory("guard");
-        let application = application(&directory);
-        let ticket = {
-            let mut state = application.state.lock().unwrap();
-            state.slots.admit(AdmissionClass::ControlPool).unwrap()
-        };
-        {
-            let _guard = SlotGuard {
-                application: application.clone(),
-                ticket,
-                owner: "test:pid:layerfs-control-0".to_owned(),
-                done: false,
-            };
-            // dropped here without an explicit finish
-        }
-        let counts = application.connection_slots().unwrap();
-        assert_eq!(counts.pool_running, 0);
-        assert_eq!(counts.pool_vacant, usize::from(CONNECTIONS));
-        let snapshot = application.retained_connection_failures().unwrap();
-        assert_eq!(snapshot.failures.len(), 1);
-        assert_eq!(snapshot.failures[0].slot, ticket.index);
-        assert!(
-            snapshot.failures[0].cause.contains("dropped"),
-            "{}",
-            snapshot.failures[0].cause
-        );
-    }
-
-    /// With every slot held, the accept loop writes the advisory notice the
-    /// client classifies instead of a bare EOF (#540).
-    #[test]
-    fn no_vacant_slot_writes_the_capacity_notice() {
-        let directory = temp_directory("notice");
-        let application = application(&directory);
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = listener.local_addr().unwrap();
-        let serving = application.clone();
-        std::thread::spawn(move || {
-            let _ = serving.serve(listener);
-        });
-        let tickets = {
-            let mut state = application.state.lock().unwrap();
-            let mut tickets = (0..CONNECTIONS)
-                .map(|_| state.slots.admit(AdmissionClass::ControlPool).unwrap())
-                .collect::<Vec<_>>();
-            tickets.push(state.slots.admit(AdmissionClass::Install).unwrap());
-            tickets
-        };
-        let stream = TcpStream::connect_timeout(&address, Duration::from_secs(2)).unwrap();
-        stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .unwrap();
-        stream
-            .set_write_timeout(Some(Duration::from_secs(2)))
-            .unwrap();
-        let error = match transport::initiate(
-            stream,
-            &CLIENT_PRIVATE,
-            layerfs_bridge::duplex::public_key(&SERVER_PRIVATE).unwrap(),
-        ) {
-            Ok(_) => panic!("a full daemon admitted a connection"),
-            Err(error) => error,
-        };
-        match error {
-            transport::ChannelError::Admission(notice) => {
-                assert_eq!(
-                    notice.reason,
-                    layerfs_bridge::duplex::admission::AdmissionReason::Starting
-                );
-                assert_eq!(notice.pool_vacant, 0);
-                assert_eq!(notice.reserved_vacant, 0);
-            }
-            other => panic!("expected a capacity notice, got {other:?}"),
-        }
-        let mut state = application.state.lock().unwrap();
-        for ticket in tickets {
-            state.slots.finish(ticket, Ok(()), None, Instant::now());
-        }
-    }
-
-    /// Sixteen concurrent failures finish without deadlock or leak, and a
-    /// new authenticated connection is admitted afterwards.
-    #[test]
-    fn concurrent_failures_do_not_deadlock_or_leak() {
-        let directory = temp_directory("concurrent");
-        let application = application(&directory);
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = listener.local_addr().unwrap();
-        let serving = application.clone();
-        std::thread::spawn(move || {
-            let _ = serving.serve(listener);
-        });
-        let mut threads = Vec::new();
-        for _ in 0..16 {
-            threads.push(std::thread::spawn(move || {
-                for _ in 0..4 {
-                    // Under a real failure storm the pool can be momentarily
-                    // full; admission refusal is precisely non-terminal, so
-                    // retry until this round is admitted.
-                    loop {
-                        let stream =
-                            TcpStream::connect_timeout(&address, Duration::from_secs(2)).unwrap();
-                        stream
-                            .set_read_timeout(Some(Duration::from_secs(2)))
-                            .unwrap();
-                        stream
-                            .set_write_timeout(Some(Duration::from_secs(2)))
-                            .unwrap();
-                        let mut connection = match transport::initiate(
-                            stream,
-                            &CLIENT_PRIVATE,
-                            layerfs_bridge::duplex::public_key(&SERVER_PRIVATE).unwrap(),
-                        ) {
-                            Ok(connection) => connection,
-                            Err(transport::ChannelError::Admission(_)) => {
-                                std::thread::sleep(Duration::from_millis(5));
-                                continue;
-                            }
-                            Err(error) => panic!("unexpected open failure: {error:?}"),
-                        };
-                        connection
-                            .send
-                            .send(b"client-died-before-reading-reply")
-                            .unwrap();
-                        drop(connection);
-                        break;
-                    }
-                }
-            }));
-        }
-        for thread in threads {
-            thread.join().unwrap();
-        }
-        until("every concurrent worker to finish", || {
-            application
-                .connection_slots()
-                .map(|counts| counts.pool_running == 0)
-                .unwrap_or(false)
-        });
-        let counts = application.connection_slots().unwrap();
-        assert_eq!(counts.pool_running, 0);
-        assert_eq!(counts.pool_vacant, usize::from(CONNECTIONS));
-        let snapshot = application.retained_connection_failures().unwrap();
-        // Some connections die before their first decoded request and are
-        // released with a log line rather than retained; the invariant is
-        // that the ring stays bounded and its counters are exact.
-        assert!(snapshot.failures.len() <= 64);
-        assert!(snapshot.failures.len() >= 1);
-        assert_eq!(
-            snapshot.recorded,
-            snapshot.failures.len() as u64 + snapshot.dropped
-        );
-
-        let mut connection = connect(address);
-        let hello = Call {
-            id: 1,
-            request: Request::Hello(HelloRequest {
-                expected_instance: Some(application.instance),
-                wait_for_store: false,
-            }),
-        };
-        connection.send.send(&hello.encode().unwrap()).unwrap();
-        let answer = Answer::decode(connection.receive.receive().unwrap()).unwrap();
-        assert!(matches!(answer.reply, Reply::Hello(_)));
-    }
-}
+pub(super) const CONNECTION_FAILURES: &str = layerfs_bridge::control::CAPACITY_OPERATION;

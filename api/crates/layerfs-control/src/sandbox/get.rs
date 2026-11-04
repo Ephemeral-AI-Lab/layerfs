@@ -69,20 +69,23 @@ fn daemon_capacity(
         direct::call(
             context,
             record,
-            "backend.daemon.connection_failures",
+            layerfs_bridge::control::CAPACITY_OPERATION,
             vec![],
         )
     } else {
         reach(
             context,
             record,
-            "backend.daemon.connection_failures",
+            layerfs_bridge::control::CAPACITY_OPERATION,
             vec![],
             false,
         )
         .ok()?
     };
-    outcome.ok()
+    // Parse the one typed contract, then publish exactly that shape: a daemon
+    // that answers something else is not passed through as capacity.
+    let answer = outcome.ok()?;
+    Some(layerfs_bridge::control::CapacityModel::parse(&answer).to_sdk())
 }
 
 /// Workspace `item` of Sandbox `sandbox` with its `ws` (#536 C3):
