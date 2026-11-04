@@ -83,18 +83,28 @@ feature):
 ## Diagrams
 
 Both are hand-built Excalidraw scenes in the `layerfs` collection (workspace
-`9Zq6XgRe98z`), Comic Shanns throughout, title 38 px and body 26 px.
+`9Zq6XgRe98z`), Comic Shanns throughout, title 38 px and body 26 px. The
+editable `.excalidraw` sources sit beside the PNGs — the scene each PNG was
+rendered from, element for element.
 
-- [`architecture.png`](architecture.png) — Store placement: Family 1 vs
-  Family 2, the fact in order, the one decision, the two guard points, and
-  the PostgreSQL exception.
-- [`sequence.png`](sequence.png) — create/push → query the placement → allow
-  or refuse, with what each answer lets happen.
+- [`architecture.png`](architecture.png),
+  [`architecture.excalidraw`](architecture.excalidraw) (35 elements) — Store
+  placement: Family 1 vs Family 2, the fact in order, the one decision, the
+  two guard points, and the PostgreSQL exception.
+- [`sequence.png`](sequence.png), [`sequence.excalidraw`](sequence.excalidraw)
+  (30 elements) — create/push → query the placement → allow or refuse, with
+  what each answer lets happen.
 
-| Scene | Id | Canvas | PNG sha256 |
-| --- | --- | --- | --- |
-| `SandboxComputePlane — #545 storage placement` | `5bQ0SFRz1wG` | 1210 × 1032 | `cf18d3ca0e29ca4bf187051d7dbf9077e242468128585135efcbf3e6791ac7c2` |
-| `SandboxComputePlane — #545 placement sequence` | `V2KzRbdKl9` | 1210 × 1026 | `83c483213fdcf001bc10913dbaebc8f843577503307ea8b27689d76a81060bf9` |
+| Scene | Id | Canvas | Source | PNG sha256 |
+| --- | --- | --- | --- | --- |
+| `SandboxComputePlane — #545 storage placement` | `5bQ0SFRz1wG` | 1210 × 1032 | [`architecture.excalidraw`](architecture.excalidraw) | `cf18d3ca0e29ca4bf187051d7dbf9077e242468128585135efcbf3e6791ac7c2` |
+| `SandboxComputePlane — #545 placement sequence` | `V2KzRbdKl9` | 1210 × 1026 | [`sequence.excalidraw`](sequence.excalidraw) | `83c483213fdcf001bc10913dbaebc8f843577503307ea8b27689d76a81060bf9` |
+
+Each source's bounds are the PNG's canvas, every text element is Comic Shanns
+at 26 or 38 px, no text passes x = 1234, and re-rendering either scene yields
+the PNG byte for byte (same sha256). The sources hold the scene's live
+elements (`type`, `version`, `source`, `appState`, `elements`, `files`), as
+[#547's](../547/) do.
 
 ## Links
 
