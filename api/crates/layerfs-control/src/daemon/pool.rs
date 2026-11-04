@@ -217,6 +217,44 @@ impl Dial {
         self.open_admitted(ADMISSION_WAIT)
     }
 
+    /// [`Dial::open`] within `within` (#540 doctor): connecting, the
+    /// handshake and its Hello must finish inside that time, and the
+    /// connection keeps those I/O waits for the one bounded call made on
+    /// it. Nothing is retried and no admission wait applies: a daemon that
+    /// refuses or does not answer is reported as it came.
+    pub(crate) fn open_within(&self, within: Duration) -> Result<Control, SdkRefusal> {
+        let deadline = Instant::now() + within;
+        let remaining = || {
+            deadline
+                .saturating_duration_since(Instant::now())
+                .max(Duration::from_millis(1))
+        };
+        let address =
+            crate::connect_address(self.endpoint, self.host.as_deref()).map_err(failed)?;
+        let stream = std::net::TcpStream::connect_timeout(&address, remaining()).map_err(failed)?;
+        stream.set_read_timeout(Some(remaining())).map_err(failed)?;
+        stream
+            .set_write_timeout(Some(remaining()))
+            .map_err(failed)?;
+        let connection = match initiate_observed(stream, &self.secret, self.peer).result {
+            Ok(connection) => connection,
+            Err(ChannelError::Admission(notice)) => return Err(notice_refusal(notice)),
+            Err(error) => return Err(failed(error)),
+        };
+        // the waits stay: the caller makes exactly one call and drops it
+        let mut control = Control::new(connection);
+        match control
+            .call(Request::Hello(HelloRequest {
+                expected_instance: Some(self.instance),
+                wait_for_store: false,
+            }))
+            .map_err(failed)?
+        {
+            Reply::Hello(status) if status.phase == DaemonPhase::ControlReady => Ok(control),
+            _ => Err(refused("StaleSandbox", "saved daemon is not ControlReady")),
+        }
+    }
+
     /// [`Dial::open_waiting`], waiting at most `wait`.
     fn open_admitted(&self, wait: Duration) -> Result<Control, SdkRefusal> {
         let started = Instant::now();

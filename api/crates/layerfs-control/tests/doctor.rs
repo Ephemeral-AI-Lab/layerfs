@@ -348,3 +348,105 @@ fn a_layout_2_home_reports_what_refuses_its_conversion_and_converts_nothing() {
     assert!(stale.exists());
     std::fs::remove_dir_all(home).unwrap();
 }
+
+#[test]
+fn a_stalled_daemon_endpoint_is_a_bounded_warning_and_starts_nothing() {
+    let home = new_home("stalled");
+    home::open(&home).unwrap();
+    store(&home, "shop", sqlite("shop", "native"));
+    let project = SdkValue::map([("name", t("api"))]);
+    write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();
+    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
+    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    let sandbox = SdkValue::map([
+        ("name", t("sb")),
+        ("project", t("shop/api")),
+        ("machine", t("native")),
+        ("id", t("sb")),
+    ]);
+    write_entity(&paths::sandbox_record(&home, "sb"), &sandbox).unwrap();
+    // a daemon endpoint that accepts and then says nothing: the connect
+    // succeeds and only the bounded handshake read ends the query
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = listener.local_addr().unwrap();
+    let (dialed, dialed_rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        if let Ok((stream, _)) = listener.accept() {
+            let _ = dialed.send(());
+            std::thread::sleep(Duration::from_secs(6));
+            drop(stream);
+        }
+    });
+    let keys = SdkValue::map([
+        ("endpoint", t(&endpoint.to_string())),
+        ("secret", SdkValue::Bytes(vec![1; 32])),
+        ("peer", SdkValue::Bytes(vec![2; 32])),
+        ("instance", SdkValue::Bytes(vec![3; 32])),
+    ]);
+    write_record(&paths::sandbox_control(&home, "sb"), &keys).unwrap();
+
+    let before = tree(&home);
+    let at = std::time::Instant::now();
+    let report = doctor(&home).unwrap();
+    let elapsed = at.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(4),
+        "the doctor stalled for {elapsed:?}"
+    );
+    assert!(
+        elapsed >= Duration::from_secs(1),
+        "the doctor did not wait for its bounded query: {elapsed:?}"
+    );
+    dialed_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("the doctor never dialed the endpoint");
+    assert_eq!(before, tree(&home), "the doctor wrote in the home");
+    // a daemon that does not answer is a warning, not an error: the doctor
+    // stays read-only and does not fail on an idle or stopped daemon
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)), "{report:?}");
+    let found = findings(&report);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    let (severity, kind, name, message, fix) = &found[0];
+    assert_eq!(
+        (severity.as_str(), kind.as_str(), name.as_str()),
+        ("warning", "sandbox", "sb")
+    );
+    assert!(message.contains(&endpoint.to_string()), "{message}");
+    assert!(
+        message.contains("backend.daemon.connection_failures"),
+        "{message}"
+    );
+    assert!(message.contains("within 2s"), "{message}");
+    assert!(fix.contains("sandbox get sb"), "{fix}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_sandbox_without_a_recorded_endpoint_is_not_queried() {
+    let home = new_home("noendpoint");
+    home::open(&home).unwrap();
+    store(&home, "shop", sqlite("shop", "native"));
+    let project = SdkValue::map([("name", t("api"))]);
+    write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();
+    let sandbox = SdkValue::map([
+        ("name", t("sb")),
+        ("project", t("shop/api")),
+        ("machine", t("native")),
+        ("id", t("sb")),
+    ]);
+    write_entity(&paths::sandbox_record(&home, "sb"), &sandbox).unwrap();
+    // daemon keys without an endpoint: nothing tells the doctor where to
+    // dial, and it starts nothing to find out
+    let keys = SdkValue::map([
+        ("secret", SdkValue::Bytes(vec![1; 32])),
+        ("peer", SdkValue::Bytes(vec![2; 32])),
+        ("instance", SdkValue::Bytes(vec![3; 32])),
+    ]);
+    write_record(&paths::sandbox_control(&home, "sb"), &keys).unwrap();
+    let at = std::time::Instant::now();
+    let report = doctor(&home).unwrap();
+    assert!(at.elapsed() < Duration::from_secs(1));
+    assert_eq!(report.get("ok"), Some(&SdkValue::Bool(true)));
+    assert!(findings(&report).is_empty(), "{report:?}");
+    std::fs::remove_dir_all(home).unwrap();
+}
