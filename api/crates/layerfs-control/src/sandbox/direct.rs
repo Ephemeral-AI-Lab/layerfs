@@ -344,7 +344,9 @@ pub(crate) fn call(
                 (found == id).then_some(head)
             })
         }
-        "sandbox.list_workspaces" => dispatch::call(op, args),
+        "sandbox.list_workspaces" | "backend.daemon.connection_failures" => {
+            dispatch::call(op, args)
+        }
         _ => Err(refused(
             "InvalidInput",
             format!("{op} is not sent to a Sandbox's daemon directly"),

@@ -1,4 +1,5 @@
 //! One-attempt authenticated duplex channels with bounded borrowed records.
+pub mod admission;
 mod channel;
 mod ending;
 mod error;

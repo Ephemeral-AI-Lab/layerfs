@@ -41,6 +41,8 @@ pub enum ApplicationError {
     RetainedControl(Box<Served>),
     /// Original install result retained after application publication synchronization failed.
     InstallPublication(Box<Result<InstalledStore, Box<InstallFailure>>>),
+    /// A connection worker panicked or was dropped before it could finish.
+    Worker(String),
     /// Actual application state synchronization failed; ownership remains held.
     Poisoned,
 }
@@ -62,6 +64,7 @@ impl fmt::Display for ApplicationError {
             Self::InstallPublication(_) => {
                 f.write_str("original install result retained; application publication poisoned")
             }
+            Self::Worker(message) => write!(f, "connection worker: {message}"),
             Self::Poisoned => f.write_str("application state poisoned; original custody retained"),
         }
     }

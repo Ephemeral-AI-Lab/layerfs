@@ -23,9 +23,64 @@ use std::{
     time::Instant,
 };
 
-pub(super) enum Slot {
+/// Slots reserved for the installer (and, later, a presence lease); ordinary
+/// controls never consume them.
+pub(super) const RESERVED_SLOTS: usize = 1;
+
+/// The fixed class of one slot index.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum SlotClass {
+    /// Ordinary authenticated control connections.
+    Pool,
+    /// Installer today, a presence lease later.
+    Reserved,
+}
+
+impl SlotClass {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::Pool => "pool",
+            Self::Reserved => "reserved",
+        }
+    }
+}
+
+/// What a caller is admitted for; maps to the slot class it may use.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum AdmissionClass {
+    /// An ordinary control connection.
+    ControlPool,
+    /// The one-time Store installer.
+    Install,
+    /// A future presence lease.
+    #[allow(dead_code)]
+    Lease,
+}
+
+impl AdmissionClass {
+    fn slot_class(self) -> SlotClass {
+        match self {
+            Self::ControlPool => SlotClass::Pool,
+            Self::Install | Self::Lease => SlotClass::Reserved,
+        }
+    }
+}
+
+/// One admission slot: free, or running one worker generation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum SlotState {
     Vacant,
-    Running,
+    Running { generation: u64, class: SlotClass },
+}
+
+/// Proof that one admission owns a slot and generation. Every path ends in
+/// exactly one `Slots::finish` with this ticket; a stale ticket changes
+/// nothing, so a duplicate or late finish cannot free a newer worker.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct SlotTicket {
+    pub(super) index: usize,
+    pub(super) generation: u64,
+    pub(super) class: SlotClass,
 }
 
 /// What finishing one connection did with its failure, if any.
@@ -36,54 +91,105 @@ pub(super) enum Finished {
     Released(Box<ConnectionFailure>),
     /// The failure was recorded in the bounded store; its slot is already free.
     Retained(RetainedFailure),
+    /// A stale or duplicate finish: nothing changed.
+    Stale,
+}
+
+/// Admission counts by class.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SlotCounts {
+    pub pool_vacant: usize,
+    pub pool_running: usize,
+    pub reserved_vacant: usize,
+    pub reserved_running: usize,
 }
 
 /// The fixed control-slot table and the bounded retained-failure store beside it.
 ///
 /// A retained failure never owns a slot: `finish` always leaves it `Vacant`
 /// and only records the failure. Admission capacity therefore cannot leak
-/// (#540).
+/// (#540). The layout is `connections` `Pool` entries followed by
+/// [`RESERVED_SLOTS`] `Reserved` entries; a class only ever admits within its
+/// own range.
 pub(super) struct Slots {
-    slots: Vec<Slot>,
+    slots: Vec<SlotState>,
+    pool: usize,
+    next_generation: u64,
     retained: RetainedFailures,
 }
 
 impl Slots {
     pub(super) fn new(count: usize) -> Self {
+        let pool = count.saturating_sub(RESERVED_SLOTS);
+        let mut slots = Vec::with_capacity(pool + RESERVED_SLOTS);
+        slots.resize(pool, SlotState::Vacant);
+        slots.resize(pool + RESERVED_SLOTS, SlotState::Vacant);
         Self {
-            slots: (0..count).map(|_| Slot::Vacant).collect(),
+            slots,
+            pool,
+            next_generation: 0,
             retained: RetainedFailures::default(),
         }
     }
 
-    /// Claims one vacant slot, marking it `Running`, or `None` when every
-    /// slot is in use.
-    pub(super) fn admit(&mut self) -> Option<usize> {
-        let slot = self
-            .slots
-            .iter()
-            .position(|value| matches!(value, Slot::Vacant))?;
-        self.slots[slot] = Slot::Running;
-        Some(slot)
+    fn class_of(&self, index: usize) -> SlotClass {
+        if index < self.pool {
+            SlotClass::Pool
+        } else {
+            SlotClass::Reserved
+        }
     }
 
-    /// Ends one worker: release its slot and, for a retained failure, record it.
+    /// Claims one vacant slot of `class`, or `None` when that class is full.
+    /// A pool admission never takes a reserved slot and vice versa.
+    pub(super) fn admit(&mut self, class: AdmissionClass) -> Option<SlotTicket> {
+        let wanted = class.slot_class();
+        let index = self.slots.iter().enumerate().find_map(|(index, value)| {
+            (self.class_of(index) == wanted && matches!(value, SlotState::Vacant)).then_some(index)
+        })?;
+        self.generation_ticket(index, wanted)
+    }
+
+    fn generation_ticket(&mut self, index: usize, class: SlotClass) -> Option<SlotTicket> {
+        self.next_generation = self.next_generation.saturating_add(1);
+        let generation = self.next_generation;
+        *self.slots.get_mut(index)? = SlotState::Running { generation, class };
+        Some(SlotTicket {
+            index,
+            generation,
+            class,
+        })
+    }
+
+    /// Ends one worker: release its slot and, for a retained failure, record
+    /// the already-built record. A ticket whose generation or class no longer
+    /// matches changes nothing.
     pub(super) fn finish(
         &mut self,
-        slot: usize,
+        ticket: SlotTicket,
         result: Result<(), ConnectionFailure>,
+        prebuilt: Option<RetainedFailure>,
         now: Instant,
     ) -> Finished {
-        let Some(current) = self.slots.get_mut(slot) else {
-            return Finished::Clean;
-        };
-        *current = Slot::Vacant;
+        let running = matches!(
+            self.slots.get(ticket.index),
+            Some(SlotState::Running { generation, class })
+                if *generation == ticket.generation && *class == ticket.class
+        );
+        if !running {
+            return Finished::Stale;
+        }
+        self.slots[ticket.index] = SlotState::Vacant;
         match result {
             Ok(()) => Finished::Clean,
             Err(failure) if releases_after_logging(&failure) => {
                 Finished::Released(Box::new(failure))
             }
-            Err(failure) => Finished::Retained(self.retained.record(&failure, now)),
+            Err(_) => {
+                let record = prebuilt.expect("a retained failure is described before the lock");
+                let record = self.retained.record(record, now);
+                Finished::Retained(record)
+            }
         }
     }
 
@@ -91,14 +197,33 @@ impl Slots {
         self.retained.snapshot(now)
     }
 
-    /// Vacant and running (in-use) slots.
-    pub(super) fn counts(&self) -> (usize, usize) {
-        let vacant = self
-            .slots
-            .iter()
-            .filter(|value| matches!(value, Slot::Vacant))
-            .count();
-        (vacant, self.slots.len() - vacant)
+    /// Admission counts for each class.
+    pub(super) fn counts(&self) -> SlotCounts {
+        let mut counts = SlotCounts {
+            pool_vacant: 0,
+            pool_running: 0,
+            reserved_vacant: 0,
+            reserved_running: 0,
+        };
+        for (index, value) in self.slots.iter().enumerate() {
+            match (self.class_of(index), value) {
+                (SlotClass::Pool, SlotState::Vacant) => counts.pool_vacant += 1,
+                (SlotClass::Pool, SlotState::Running { .. }) => counts.pool_running += 1,
+                (SlotClass::Reserved, SlotState::Vacant) => counts.reserved_vacant += 1,
+                (SlotClass::Reserved, SlotState::Running { .. }) => counts.reserved_running += 1,
+            }
+        }
+        counts
+    }
+
+    /// Visible retained records, for the admission notice.
+    pub(super) fn visible(&mut self) -> usize {
+        self.retained.len()
+    }
+
+    /// Drops expired records; the accept loop reaps when it refuses admission.
+    pub(super) fn reap(&mut self, now: Instant) {
+        self.retained.reap(now);
     }
 }
 
@@ -363,8 +488,8 @@ impl Application {
         Ok(state.slots.snapshot(Instant::now()))
     }
 
-    /// Vacant and in-use control slots.
-    pub fn connection_slots(&self) -> Result<(usize, usize), ApplicationError> {
+    /// Vacant and in-use control slots, by class.
+    pub fn connection_slots(&self) -> Result<SlotCounts, ApplicationError> {
         let state = self.state.lock().map_err(|_| ApplicationError::Poisoned)?;
         Ok(state.slots.counts())
     }
@@ -381,4 +506,125 @@ fn postgres(url: &str, schema: &str, synchronous_commit: &str) -> PostgresSelect
         _ => SynchronousCommit::Off,
     };
     PostgresSelection::new(url.to_string(), schema.to_string()).with_synchronous_commit(setting)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::retained::{RetainedFailure, TTL};
+    use std::time::Duration;
+
+    fn retained_failure(slot: usize) -> ConnectionFailure {
+        ConnectionFailure {
+            slot,
+            received: None,
+            original: None,
+            cause: ApplicationError::Poisoned,
+            fence_error: None,
+            diagnostic_error: None,
+        }
+    }
+
+    fn describe(slot: usize, class: SlotClass, generation: u64) -> RetainedFailure {
+        RetainedFailure::describe(
+            &retained_failure(slot),
+            class,
+            generation,
+            "daemon:pid:layerfs-control-0",
+        )
+    }
+
+    #[test]
+    fn admit_uses_only_its_class() {
+        let mut slots = Slots::new(8 + RESERVED_SLOTS);
+        for _ in 0..8 {
+            slots.admit(AdmissionClass::ControlPool).unwrap();
+        }
+        assert_eq!(
+            slots.admit(AdmissionClass::ControlPool),
+            None,
+            "a pool admission took the reserved slot"
+        );
+        let reserved = slots.admit(AdmissionClass::Install).unwrap();
+        assert_eq!(reserved.index, 8);
+        assert_eq!(reserved.class, SlotClass::Reserved);
+        assert_eq!(slots.admit(AdmissionClass::Lease), None);
+        let counts = slots.counts();
+        assert_eq!(counts.pool_vacant, 0);
+        assert_eq!(counts.pool_running, 8);
+        assert_eq!(counts.reserved_vacant, 0);
+        assert_eq!(counts.reserved_running, 1);
+    }
+
+    #[test]
+    fn finish_frees_even_for_retained_failure() {
+        let mut slots = Slots::new(8 + RESERVED_SLOTS);
+        let now = Instant::now();
+        let ticket = slots.admit(AdmissionClass::ControlPool).unwrap();
+        let prebuilt = describe(ticket.index, ticket.class, ticket.generation);
+        match slots.finish(
+            ticket,
+            Err(retained_failure(ticket.index)),
+            Some(prebuilt),
+            now,
+        ) {
+            Finished::Retained(record) => {
+                assert_eq!(record.class, "pool");
+                assert_eq!(record.generation, ticket.generation);
+            }
+            _ => panic!("a decoded failure was not retained"),
+        }
+        assert_eq!(slots.counts().pool_vacant, 8);
+        assert_eq!(slots.snapshot(now).failures.len(), 1);
+    }
+
+    #[test]
+    fn stale_or_duplicate_finish_is_ignored() {
+        let mut slots = Slots::new(8 + RESERVED_SLOTS);
+        let now = Instant::now();
+        let first = slots.admit(AdmissionClass::ControlPool).unwrap();
+        slots.finish(
+            first,
+            Err(retained_failure(first.index)),
+            Some(describe(first.index, first.class, first.generation)),
+            now,
+        );
+        // A duplicate finish of the same ticket changes nothing.
+        assert!(matches!(
+            slots.finish(first, Ok(()), None, now),
+            Finished::Stale
+        ));
+        let second = slots.admit(AdmissionClass::ControlPool).unwrap();
+        assert_eq!(second.index, first.index);
+        assert!(second.generation > first.generation);
+        // The old ticket cannot free the newer worker.
+        assert!(matches!(
+            slots.finish(first, Ok(()), None, now),
+            Finished::Stale
+        ));
+        assert_eq!(slots.counts().pool_running, 1);
+        slots.finish(second, Ok(()), None, now);
+        assert_eq!(slots.counts().pool_vacant, 8);
+    }
+
+    #[test]
+    fn retained_store_reaps_expired_records() {
+        let mut slots = Slots::new(1 + RESERVED_SLOTS);
+        let now = Instant::now();
+        let ticket = slots.admit(AdmissionClass::ControlPool).unwrap();
+        slots.finish(
+            ticket,
+            Err(retained_failure(ticket.index)),
+            Some(describe(ticket.index, ticket.class, ticket.generation)),
+            now,
+        );
+        slots.retained.reap(now + TTL + Duration::from_secs(1));
+        assert_eq!(
+            slots
+                .snapshot(now + TTL + Duration::from_secs(1))
+                .failures
+                .len(),
+            0
+        );
+    }
 }

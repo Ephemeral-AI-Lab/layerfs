@@ -14,7 +14,10 @@
 use crate::common::outcome::{failed, refused};
 use crate::internal::Control;
 use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
-use layerfs_bridge::duplex::initiate_observed;
+use layerfs_bridge::duplex::{
+    admission::{AdmissionNotice, AdmissionReason},
+    initiate_observed, ChannelError,
+};
 use std::net::SocketAddr;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Condvar, Mutex};
@@ -60,14 +63,16 @@ pub(crate) const ADMISSION_WAIT: Duration = Duration::from_secs(60);
 /// before it ends, and its `Busy` refusal is not retried.
 pub(crate) const LEND_WAIT: Duration = ADMISSION_WAIT;
 
-/// Why an open ended before the daemon's Hello reply. Both mean the call was
-/// not admitted and nothing was attempted, so opening again is safe; they
-/// name different observable causes.
+/// Why an open ended before the daemon's Hello reply. Every one means the
+/// call was not admitted and nothing was attempted, so opening again is
+/// safe; they name different observable causes (#540).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum NotAdmitted {
-    /// The daemon accepted the socket, then closed it before Hello: it had no
-    /// vacant control slot (the accept loop's capacity refusal).
-    NoVacantSlot,
+    /// The daemon had no vacant pool slot. `retained` is exact when the
+    /// advisory capacity notice arrived, and unknown when only EOF was seen.
+    NoVacantSlot { retained: Option<u8> },
+    /// The daemon is still starting and admits no control yet.
+    Starting,
     /// The connection itself failed before Hello (`BrokenPipe`,
     /// `ConnectionReset`).
     ConnectionFailed,
@@ -76,14 +81,15 @@ enum NotAdmitted {
 impl NotAdmitted {
     fn code(self) -> &'static str {
         match self {
-            Self::NoVacantSlot => "Busy",
-            Self::ConnectionFailed => "Unavailable",
+            Self::NoVacantSlot { .. } => "Capacity",
+            Self::Starting | Self::ConnectionFailed => "Unavailable",
         }
     }
 
-    fn detail(self) -> &'static str {
+    fn admission(self) -> &'static str {
         match self {
-            Self::NoVacantSlot => "no-vacant-slot",
+            Self::NoVacantSlot { .. } => "no-vacant-slot",
+            Self::Starting => "starting",
             Self::ConnectionFailed => "connection-failed",
         }
     }
@@ -100,7 +106,10 @@ fn not_admitted(refusal: &SdkRefusal) -> Option<(NotAdmitted, &'static str)> {
         return None;
     }
     if refusal.message.contains("UnexpectedEof") {
-        return Some((NotAdmitted::NoVacantSlot, "UnexpectedEof"));
+        return Some((
+            NotAdmitted::NoVacantSlot { retained: None },
+            "UnexpectedEof",
+        ));
     }
     for kind in ["BrokenPipe", "ConnectionReset"] {
         if refusal.message.contains(kind) {
@@ -110,30 +119,92 @@ fn not_admitted(refusal: &SdkRefusal) -> Option<(NotAdmitted, &'static str)> {
     None
 }
 
+/// The exact refusal for a decoded advisory capacity notice. This is the
+/// precise form: it names the resource and the retained record count.
+fn notice_refusal(notice: AdmissionNotice) -> SdkRefusal {
+    match notice.reason {
+        AdmissionReason::NoPoolSlot | AdmissionReason::ReservedBusy => SdkRefusal {
+            code: "Capacity".to_owned(),
+            message: format!(
+                "the Sandbox's daemon has no vacant control slot: {} pool slot(s) and {} reserved slot(s) are vacant, with {} retained failure record(s). The call was not admitted; retrying is safe",
+                notice.pool_vacant, notice.reserved_vacant, notice.retained
+            ),
+            detail: SdkValue::map([
+                ("resource", SdkValue::text("daemon_control_slot")),
+                ("retained", SdkValue::Int(i64::from(notice.retained))),
+                ("pool_vacant", SdkValue::Int(i64::from(notice.pool_vacant))),
+                (
+                    "reserved_vacant",
+                    SdkValue::Int(i64::from(notice.reserved_vacant)),
+                ),
+                ("retryable", SdkValue::Bool(true)),
+                ("admission", SdkValue::text(notice.reason.as_str())),
+            ]),
+        },
+        AdmissionReason::Starting => SdkRefusal {
+            code: "Unavailable".to_owned(),
+            message: "the Sandbox's daemon is still starting and admits no control connection yet. The call was not admitted; retrying is safe"
+                .to_owned(),
+            detail: SdkValue::map([
+                ("resource", SdkValue::Null),
+                ("retained", SdkValue::Null),
+                ("retryable", SdkValue::Bool(true)),
+                ("admission", SdkValue::text("starting")),
+            ]),
+        },
+    }
+}
+
 /// The exact refusal after `wait`: what the client observed, not a guess at
 /// what another process is doing.
 fn admission_refusal(wait: Duration, admission: NotAdmitted, kind: &str) -> SdkRefusal {
     let message = match admission {
-        NotAdmitted::NoVacantSlot => format!(
-            "the Sandbox's daemon admitted no control connection for {}s: it closed the \
-             connection before Hello ({kind}), which it does when it has no vacant control \
-             slot. The call was not admitted",
+        NotAdmitted::NoVacantSlot { retained } => format!(
+            "the Sandbox's daemon admitted no control connection for {}s: it closed the connection before Hello ({kind}), which it does when it has no vacant control slot{}. The call was not admitted; retrying is safe",
+            wait.as_secs(),
+            retained.map_or(String::new(), |count| format!(
+                " (it reported {count} retained failure record(s))"
+            ))
+        ),
+        NotAdmitted::Starting => format!(
+            "the Sandbox's daemon is still starting and admitted no control connection for {}s ({kind}). The call was not admitted; retrying is safe",
             wait.as_secs()
         ),
         NotAdmitted::ConnectionFailed => format!(
-            "the connection to the Sandbox's daemon failed before Hello for {}s ({kind}): \
-             the call was not admitted",
+            "the connection to the Sandbox's daemon failed before Hello for {}s ({kind}): the call was not admitted; retrying is safe",
             wait.as_secs()
         ),
+    };
+    let retained = match admission {
+        NotAdmitted::NoVacantSlot { retained } => {
+            retained.map_or(SdkValue::Null, |count| SdkValue::Int(i64::from(count)))
+        }
+        _ => SdkValue::Null,
     };
     SdkRefusal {
         code: admission.code().to_owned(),
         message,
         detail: SdkValue::map([
-            ("admission", SdkValue::text(admission.detail())),
-            ("io", SdkValue::text(kind)),
+            (
+                "resource",
+                match admission {
+                    NotAdmitted::NoVacantSlot { .. } => SdkValue::text("daemon_control_slot"),
+                    _ => SdkValue::Null,
+                },
+            ),
+            ("retained", retained),
+            ("retryable", SdkValue::Bool(true)),
+            ("admission", SdkValue::text(admission.admission())),
+            ("observed", SdkValue::text(kind)),
         ]),
     }
+}
+
+/// Whether this refusal says nothing was attempted and a later open may
+/// succeed. Only these exact refusals are retried.
+fn retryable(refusal: &SdkRefusal) -> bool {
+    matches!(refusal.code.as_str(), "Capacity" | "Unavailable")
+        && refusal.detail.get_bool("retryable")
 }
 
 impl Dial {
@@ -152,16 +223,20 @@ impl Dial {
         let mut pause = Duration::from_millis(20);
         loop {
             match self.open() {
-                Err(refusal) => match not_admitted(&refusal) {
-                    Some(_) if started.elapsed() < wait => {
+                Err(refusal) => {
+                    let legacy = not_admitted(&refusal);
+                    let may_retry = retryable(&refusal) || legacy.is_some();
+                    if may_retry && started.elapsed() < wait {
                         std::thread::sleep(pause);
                         pause = (pause * 2).min(Duration::from_millis(500));
+                        continue;
                     }
-                    Some((admission, kind)) => {
-                        return Err(admission_refusal(wait, admission, kind))
+                    if let Some((admission, kind)) = legacy {
+                        return Err(admission_refusal(wait, admission, kind));
                     }
-                    None => return Err(refusal),
-                },
+                    // A notice-based or transport refusal is already exact.
+                    return Err(refusal);
+                }
                 other => return other,
             }
         }
@@ -179,9 +254,11 @@ impl Dial {
         stream
             .set_write_timeout(Some(Duration::from_secs(10)))
             .map_err(failed)?;
-        let connection = initiate_observed(stream, &self.secret, self.peer)
-            .result
-            .map_err(failed)?;
+        let connection = match initiate_observed(stream, &self.secret, self.peer).result {
+            Ok(connection) => connection,
+            Err(ChannelError::Admission(notice)) => return Err(notice_refusal(notice)),
+            Err(error) => return Err(failed(error)),
+        };
         connection.clear_io_waits().map_err(failed)?;
         let mut control = Control::new(connection);
         match control
@@ -339,6 +416,8 @@ impl DerefMut for Lease<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use layerfs_bridge::duplex::admission::encode;
+    use std::io::Write;
     use std::net::TcpListener;
     use std::thread;
 
@@ -347,19 +426,52 @@ mod tests {
     }
 
     #[test]
-    fn clean_close_before_hello_is_no_vacant_slot() {
+    fn eof_fallback_is_capacity_with_unknown_retained() {
+        let (admission, kind) = not_admitted(&failed_open("Io(Kind(UnexpectedEof))")).unwrap();
+        assert_eq!(kind, "UnexpectedEof");
+        assert!(matches!(
+            admission,
+            NotAdmitted::NoVacantSlot { retained: None }
+        ));
+        let capacity = admission_refusal(Duration::from_secs(60), admission, kind);
+        assert_eq!(capacity.code, "Capacity");
+        assert!(capacity.message.contains("no vacant control slot"));
+        assert!(capacity.message.contains("UnexpectedEof"));
+        assert!(!capacity.message.contains("other processes"));
         assert_eq!(
-            not_admitted(&failed_open("Io(Kind(UnexpectedEof))")),
-            Some((NotAdmitted::NoVacantSlot, "UnexpectedEof"))
+            capacity.detail.get_text("resource"),
+            Some("daemon_control_slot")
+        );
+        assert!(matches!(
+            capacity.detail.get("retained"),
+            Some(SdkValue::Null)
+        ));
+        assert_eq!(capacity.detail.get_bool("retryable"), true);
+        assert_eq!(
+            capacity.detail.get_text("admission"),
+            Some("no-vacant-slot")
         );
     }
 
     #[test]
-    fn transport_errors_before_hello_are_connection_failures() {
+    fn reset_is_unavailable() {
         for kind in ["BrokenPipe", "ConnectionReset"] {
+            let (admission, observed) =
+                not_admitted(&failed_open(&format!("Io(Kind({kind}))"))).unwrap();
+            assert_eq!(observed, kind);
+            assert_eq!(admission, NotAdmitted::ConnectionFailed);
+            let failure = admission_refusal(Duration::from_secs(60), admission, kind);
+            assert_eq!(failure.code, "Unavailable");
+            assert!(failure.message.contains(kind));
+            assert!(!failure.message.contains("other processes"));
+            assert!(matches!(
+                failure.detail.get("resource"),
+                Some(SdkValue::Null)
+            ));
+            assert_eq!(failure.detail.get_bool("retryable"), true);
             assert_eq!(
-                not_admitted(&failed_open(&format!("Io(Kind({kind}))"))),
-                Some((NotAdmitted::ConnectionFailed, kind))
+                failure.detail.get_text("admission"),
+                Some("connection-failed")
             );
         }
     }
@@ -371,34 +483,53 @@ mod tests {
     }
 
     #[test]
-    fn admission_refusal_names_only_what_was_observed() {
-        let capacity = admission_refusal(
-            Duration::from_secs(60),
-            NotAdmitted::NoVacantSlot,
-            "UnexpectedEof",
-        );
-        assert_eq!(capacity.code, "Busy");
-        assert!(capacity.message.contains("no vacant control slot"));
-        assert!(capacity.message.contains("UnexpectedEof"));
-        assert!(!capacity.message.contains("other processes"));
+    fn notice_maps_to_capacity_with_exact_retained() {
+        let notice = AdmissionNotice::new(AdmissionReason::NoPoolSlot, 8, 0, 1);
+        let refusal = notice_refusal(notice);
+        assert_eq!(refusal.code, "Capacity");
+        assert_eq!(refusal.detail.get_int("retained"), Some(8));
+        assert_eq!(refusal.detail.get_int("pool_vacant"), Some(0));
+        assert_eq!(refusal.detail.get_int("reserved_vacant"), Some(1));
+        assert_eq!(refusal.detail.get_bool("retryable"), true);
         assert_eq!(
-            capacity.detail.get_text("admission"),
-            Some("no-vacant-slot")
+            refusal.detail.get_text("resource"),
+            Some("daemon_control_slot")
         );
+        assert!(!refusal.message.contains("other processes"));
+    }
 
-        let failure = admission_refusal(
-            Duration::from_secs(60),
-            NotAdmitted::ConnectionFailed,
-            "ConnectionReset",
-        );
-        assert_eq!(failure.code, "Unavailable");
-        assert!(failure.message.contains("connection"));
-        assert!(failure.message.contains("ConnectionReset"));
-        assert!(!failure.message.contains("other processes"));
-        assert_eq!(
-            failure.detail.get_text("admission"),
-            Some("connection-failed")
-        );
+    #[test]
+    fn starting_notice_is_unavailable() {
+        let refusal = notice_refusal(AdmissionNotice::new(AdmissionReason::Starting, 0, 0, 1));
+        assert_eq!(refusal.code, "Unavailable");
+        assert_eq!(refusal.detail.get_text("admission"), Some("starting"));
+        assert_eq!(refusal.detail.get_bool("retryable"), true);
+    }
+
+    #[test]
+    fn garbage_before_hello_is_not_a_notice() {
+        // A 24-byte record that is not the magic is a handshake failure, not
+        // a false Capacity.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            for mut stream in listener.incoming().flatten() {
+                let _ = stream.write_all(&[0u8; 26]);
+            }
+        });
+        let dial = Dial {
+            endpoint: address,
+            host: None,
+            secret: [7; 32],
+            peer: layerfs_bridge::duplex::public_key(&[8; 32]).unwrap(),
+            instance: [9; 32],
+        };
+        let refusal = match dial.open_admitted(Duration::from_millis(80)) {
+            Ok(_) => panic!("a refusing daemon admitted the dial"),
+            Err(refusal) => refusal,
+        };
+        assert_ne!(refusal.code, "Capacity", "{refusal:?}");
+        assert!(!refusal.message.contains("other processes"));
     }
 
     #[test]
@@ -421,10 +552,7 @@ mod tests {
         let Err(refusal) = dial.open_admitted(Duration::from_millis(120)) else {
             panic!("a daemon that closes before Hello was admitted");
         };
-        assert!(
-            matches!(refusal.code.as_str(), "Busy" | "Unavailable"),
-            "{refusal:?}"
-        );
+        assert_eq!(refusal.code, "Capacity", "{refusal:?}");
         assert!(
             !refusal.message.contains("other processes"),
             "{}",
@@ -435,5 +563,38 @@ mod tests {
             "{}",
             refusal.message
         );
+    }
+
+    #[test]
+    fn a_capacity_notice_is_classified_before_hello() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            for mut stream in listener.incoming().flatten() {
+                let body = encode(&AdmissionNotice::new(AdmissionReason::NoPoolSlot, 8, 0, 1));
+                let mut framed = vec![0u8; 2 + body.len()];
+                framed[..2].copy_from_slice(&(body.len() as u16).to_be_bytes());
+                framed[2..].copy_from_slice(&body);
+                let _ = stream.write_all(&framed);
+                let _ = stream.shutdown(std::net::Shutdown::Write);
+                // Drain so the client's shutdown is not a reset.
+                let mut sink = [0u8; 64];
+                let _ = std::io::Read::read(&mut stream, &mut sink);
+            }
+        });
+        let dial = Dial {
+            endpoint: address,
+            host: None,
+            secret: [7; 32],
+            peer: layerfs_bridge::duplex::public_key(&[8; 32]).unwrap(),
+            instance: [9; 32],
+        };
+        let refusal = match dial.open_admitted(Duration::from_millis(80)) {
+            Ok(_) => panic!("a refusing daemon admitted the dial"),
+            Err(refusal) => refusal,
+        };
+        assert_eq!(refusal.code, "Capacity", "{refusal:?}");
+        assert_eq!(refusal.detail.get_int("retained"), Some(8));
+        assert_eq!(refusal.detail.get_bool("retryable"), true);
     }
 }

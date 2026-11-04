@@ -25,6 +25,9 @@ pub fn call(op: &str, args: SdkValue) -> Outcome {
             let directory = crate::sandbox::files::sandbox_dir(&args)?;
             listed(daemon_backend(op, args)?, &directory)
         }
+        // The operator view of control admission and retained failures
+        // (#540). It is a read model, never a product operation.
+        "backend.daemon.connection_failures" => daemon_backend(op, args),
         "sandbox.create" => crate::sandbox::serve::create(&args),
         "sandbox.close" => crate::sandbox::serve::close(&args),
         "workspace.mount" => workspace::mount(&args),

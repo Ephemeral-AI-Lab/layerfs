@@ -37,13 +37,52 @@ pub(super) fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         Err(Unreached(why)) => (Vec::new(), Some(why.message), false),
     };
     let (items, next) = page(all, args);
+    // Read the capacity model before `record` is shadowed by the shown value.
+    let daemon_capacity = daemon_capacity(context, &record, gone);
     let shown = record.to_sdk(View::Full);
     let shown = home::with_field(shown, "state", SdkValue::text(record.state(gone)));
     let mut record = home::with_field(shown, "workspaces", SdkValue::List(items));
     if let Some(why) = down {
         record = home::with_field(record, "down_reason", SdkValue::Text(why));
     }
+    // Best effort: an operator sees the daemon's control capacity and
+    // retained connection failures with the Sandbox, but a get never fails
+    // because that read did (#540). `daemon` is the record's hidden reopen
+    // field, so it is free for this read model.
+    if let Some(value) = daemon_capacity {
+        record = home::with_field(record, "daemon_capacity", value);
+    }
     Ok(home::with_field(record, "next_page_pos", next))
+}
+
+/// The daemon's `backend.daemon.connection_failures` read model, when the
+/// Sandbox answers it. Nothing is attempted for a gone Sandbox, and any
+/// refusal is simply omitted.
+fn daemon_capacity(
+    context: &mut Context<'_>,
+    record: &crate::sandbox::record::SandboxRecord,
+    gone: bool,
+) -> Option<SdkValue> {
+    let _ = gone;
+    record.id()?;
+    let outcome = if direct::forwarded(record) {
+        direct::call(
+            context,
+            record,
+            "backend.daemon.connection_failures",
+            vec![],
+        )
+    } else {
+        reach(
+            context,
+            record,
+            "backend.daemon.connection_failures",
+            vec![],
+            false,
+        )
+        .ok()?
+    };
+    outcome.ok()
 }
 
 /// Workspace `item` of Sandbox `sandbox` with its `ws` (#536 C3):
