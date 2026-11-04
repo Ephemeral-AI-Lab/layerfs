@@ -21,6 +21,9 @@ const HOME: &str = "HOME=/tmp";
 const GONE_CHECKS: u32 = 50;
 /// Pause between those checks.
 const GONE_PAUSE: Duration = Duration::from_millis(100);
+/// Hex digits `process_token` writes: 12 random bytes, two digits each. One
+/// width only: a narrower token is not an id this binding generates.
+const PROCESS_TOKEN_HEX: usize = 24;
 /// Runs one foreground command in a new session and leaves a record in
 /// `/tmp` while it runs. argv: `bash -c FOREGROUND_WRAPPER layerfs-exec <id>
 /// <command>`; `$0` is the marker, `$1` the id and `$2` the command, passed
@@ -57,14 +60,19 @@ pub(crate) struct Foreground {
     pub(crate) start: String,
 }
 
-/// The id one exec uses: `proc_<sandbox>_<12 hex>`, shared by foreground and
+/// The random half of a process id: 12 bytes as 24 lowercase hex digits.
+/// `process_id` and the record parser share this one width, so a record the
+/// wrapper writes is always one `parse_foreground` accepts.
+fn process_token() -> Result<String, SdkRefusal> {
+    Ok(layerfs_bridge::sdk_values::hex(
+        &crate::registry::random()?[..12],
+    ))
+}
+
+/// The id one exec uses: `proc_<sandbox>_<24 hex>`, shared by foreground and
 /// background commands so `cancel` can find either.
 fn process_id(state: &SandboxState) -> Result<String, SdkRefusal> {
-    Ok(format!(
-        "proc_{}_{}",
-        state.id,
-        layerfs_bridge::sdk_values::hex(&crate::registry::random()?[..12])
-    ))
+    Ok(format!("proc_{}_{}", state.id, process_token()?))
 }
 
 /// The argv of a foreground exec, with its command as one separate argument.
@@ -276,7 +284,7 @@ fn parse_foreground(line: &str) -> Option<Foreground> {
     let (sandbox, token) = id.strip_prefix("proc_")?.split_once('_')?;
     if sandbox.is_empty()
         || !sandbox.bytes().all(|byte| byte.is_ascii_digit())
-        || token.len() != 12
+        || token.len() != PROCESS_TOKEN_HEX
         || !token
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
@@ -483,10 +491,43 @@ pub(crate) fn cancel(args: &SdkValue) -> Outcome {
 mod tests {
     use super::*;
 
+    /// One id shaped as `process_id` makes it.
+    fn id_for(sandbox: &str) -> String {
+        format!(
+            "proc_{sandbox}_{}",
+            process_token().expect("a random token")
+        )
+    }
+
+    #[test]
+    fn a_process_token_is_the_width_the_parser_accepts() {
+        let token = process_token().expect("a random token");
+        assert_eq!(token.len(), PROCESS_TOKEN_HEX);
+        assert!(token
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
+    }
+
+    #[test]
+    fn a_record_line_parses_the_id_process_id_produces() {
+        let id = id_for("2");
+        let record = parse_foreground(&format!("{id} /workspaces/3 4242 123456"))
+            .expect("an id this binding generates");
+        assert_eq!(
+            record,
+            Foreground {
+                id,
+                path: "/workspaces/3".to_owned(),
+                pid: 4242,
+                start: "123456".to_owned(),
+            }
+        );
+    }
+
     #[test]
     fn foreground_argv_passes_the_command_as_its_own_argument() {
-        let id = "proc_2_0123456789ab";
-        let args = foreground_arguments(id, "printf '%s' 'a b'");
+        let id = id_for("2");
+        let args = foreground_arguments(&id, "printf '%s' 'a b'");
         assert_eq!(
             args,
             vec![
@@ -494,7 +535,7 @@ mod tests {
                 "-c".to_owned(),
                 FOREGROUND_WRAPPER.to_owned(),
                 "layerfs-exec".to_owned(),
-                id.to_owned(),
+                id,
                 "printf '%s' 'a b'".to_owned(),
             ]
         );
@@ -504,46 +545,50 @@ mod tests {
     }
 
     #[test]
-    fn a_record_line_names_its_id_path_pid_and_start() {
-        let record = parse_foreground("proc_2_0123456789ab /workspaces/3 4242 123456")
-            .expect("a well-formed line");
-        assert_eq!(
-            record,
-            Foreground {
-                id: "proc_2_0123456789ab".to_owned(),
-                path: "/workspaces/3".to_owned(),
-                pid: 4242,
-                start: "123456".to_owned(),
-            }
-        );
-    }
-
-    #[test]
     fn malformed_record_lines_are_ignored() {
+        let token = process_token().expect("a random token");
+        let good = format!("proc_2_{token}");
+        let tail = &good["proc_2_".len()..];
         for line in [
-            "",
-            "proc_2_0123456789ab /workspaces/3 4242",
-            "proc_2_0123456789ab /workspaces/3 not-a-pid 123456",
-            "proc_2_0123456789ab /workspaces/3 0 123456",
-            "proc_2_0123456789ab /workspaces/3 4242 ",
-            "proc_2_0123456789ab /workspaces/3 4242 12 34",
-            "process_2_0123456789ab /workspaces/3 4242 123456",
-            "proc__0123456789ab /workspaces/3 4242 123456",
-            "proc_2_0123456789 /workspaces/3 4242 123456",
-            "proc_2_0123456789AB /workspaces/3 4242 123456",
-            "proc_2_0123456789zz /workspaces/3 4242 123456",
-            "garbage",
+            String::new(),
+            format!("{good} /workspaces/3 4242"),
+            format!("{good} /workspaces/3 not-a-pid 123456"),
+            format!("{good} /workspaces/3 0 123456"),
+            format!("{good} /workspaces/3 4242 "),
+            format!("{good} /workspaces/3 4242 12 34"),
+            format!("process_2_{tail} /workspaces/3 4242 123456"),
+            format!("proc__{tail} /workspaces/3 4242 123456"),
+            // A narrower token is not an id this binding generates: the record
+            // wrapper writes the width `process_id` gives it.
+            format!("proc_2_{} /workspaces/3 4242 123456", &tail[..12]),
+            "proc_2_0123456789ab /workspaces/3 4242 123456".to_owned(),
+            format!("{good} /workspaces/3 4242 123456 "),
+            format!("proc_2_{}a /workspaces/3 4242 123456", tail),
+            format!(
+                "proc_2_{} /workspaces/3 4242 123456",
+                tail[..PROCESS_TOKEN_HEX - 1].to_owned()
+            ),
+            format!("proc_2_F{} /workspaces/3 4242 123456", &tail[1..]),
+            format!(
+                "proc_2_{}z /workspaces/3 4242 123456",
+                &tail[..PROCESS_TOKEN_HEX - 2]
+            ),
+            format!(
+                "proc_2_{} /workspaces/3 4242 123456",
+                "0123456789ab_0123456789ab"
+            ),
+            "garbage".to_owned(),
         ] {
-            assert_eq!(parse_foreground(line), None, "accepted {line:?}");
+            assert_eq!(parse_foreground(&line), None, "accepted {line:?}");
         }
     }
 
     #[test]
     fn a_scan_keeps_only_its_sandbox_and_workspace() {
-        let scanned = "proc_2_111111111111 /workspaces/3 10 1\n\
-                       proc_3_222222222222 /workspaces/3 11 2\n\
-                       proc_2_333333333333 /workspaces/4 12 3\n\
-                       proc_2_444444444444 /workspaces/3 13 4\n";
+        let scanned = "proc_2_111111111111111111111111 /workspaces/3 10 1\n\
+                       proc_3_222222222222222222222222 /workspaces/3 11 2\n\
+                       proc_2_333333333333333333333333 /workspaces/4 12 3\n\
+                       proc_2_444444444444444444444444 /workspaces/3 13 4\n";
         let ids = |path| -> Vec<String> {
             records_in(scanned, "2", path)
                 .into_iter()
@@ -553,16 +598,22 @@ mod tests {
         assert_eq!(
             ids(None),
             vec![
-                "proc_2_111111111111",
-                "proc_2_333333333333",
-                "proc_2_444444444444",
+                "proc_2_111111111111111111111111",
+                "proc_2_333333333333333333333333",
+                "proc_2_444444444444444444444444",
             ]
         );
         assert_eq!(
             ids(Some("/workspaces/3")),
-            vec!["proc_2_111111111111", "proc_2_444444444444"]
+            vec![
+                "proc_2_111111111111111111111111",
+                "proc_2_444444444444444444444444"
+            ]
         );
-        assert_eq!(ids(Some("/workspaces/4")), vec!["proc_2_333333333333"]);
+        assert_eq!(
+            ids(Some("/workspaces/4")),
+            vec!["proc_2_333333333333333333333333"]
+        );
         assert!(records_in(scanned, "9", None).is_empty());
     }
 }
