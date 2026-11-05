@@ -78,8 +78,10 @@ operation-progress wait:
   worker's frames: one claim, `start` and `done` progress in increasing
   `seq`, then the value.
 
-`sandbox/runtime.rs` also has a unit test that a command's output write
-emits the `output` progress value. `tests/worker_liveness.rs` keeps the
+The `Reporting` sink has no inline unit test: this repository's
+`tools/check_product_boundary.py` forbids test attributes in product source,
+so its bytes-arrived reporting is exercised only by a command that produces
+output. `tests/worker_liveness.rs` keeps the
 frame-level cases (#556's): a worker that dies mid-wait, a trickled frame
 and a large answer that keeps arriving. `worker_hello`, `worker_frames`,
 `worker_lifecycle`, `worker_trace` and `doctor` stay green.
@@ -90,7 +92,6 @@ cargo 1.90, on this branch (`CARGO_TARGET_DIR=/tmp/layerfs-target`):
 
 - `cargo test -p layerfs-control --test worker_progress -- --test-threads=1`
   -- 7 passed (64 s; the 60 s case is the long one)
-- `cargo test -p layerfs-control --lib sandbox::runtime::tests` -- 1 passed
 - `cargo test -p layerfs-control --test worker_liveness --test worker_hello --test worker_frames --test worker_lifecycle --test worker_trace --test doctor`
   -- 3 + 7 + 5 + 1 + 1 + 4 passed
 - `cargo check -p layerfs-control --tests` -- exit 0

@@ -351,28 +351,3 @@ impl Write for Reporting<'_, '_> {
         self.spool.flush()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Write;
-
-    #[test]
-    fn a_command_output_reports_operation_progress() {
-        let seen: Mutex<Vec<SdkValue>> = Mutex::new(Vec::new());
-        {
-            let mut events = |value: SdkValue| seen.lock().unwrap().push(value);
-            let callback: &mut (dyn FnMut(SdkValue) + Send) = &mut events;
-            let slot = Mutex::new(Some(callback));
-            let mut reporting = Reporting::new(Spool::new(false), &slot, "stdout");
-            reporting.write_all(b"hello").unwrap();
-            reporting.flush().unwrap();
-        }
-        let seen = seen.into_inner().unwrap();
-        assert_eq!(seen.len(), 1, "{seen:?}");
-        let progress = seen[0].get("progress").expect("a progress value");
-        assert_eq!(progress.get_text("phase"), Some("output"));
-        assert_eq!(progress.get_text("stream"), Some("stdout"));
-        assert_eq!(progress.get_int("bytes"), Some(5));
-    }
-}
