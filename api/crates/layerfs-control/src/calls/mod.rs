@@ -1,6 +1,6 @@
 //! The call machinery under the call table (#533 step 2, H §7.10): the
 //! table's shape, argument checks, folder scope, result keys and the one
-//! dispatcher. The 61 entries in nine families live in `layerfs-api`, one
+//! dispatcher. The 62 entries in nine families live in `layerfs-api`, one
 //! file per call; each function here that needs them takes that list.
 mod check;
 mod dispatch;

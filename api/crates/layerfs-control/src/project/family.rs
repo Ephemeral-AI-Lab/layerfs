@@ -59,6 +59,7 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
             ))
         }
         "init" => init(context, args),
+        "export" => crate::project::export::run(context, args),
         "remove" => remove(context, args.get_text("project").unwrap_or("")),
         _ => Err(refused("InvalidInput", format!("no call project.{call}"))),
     }

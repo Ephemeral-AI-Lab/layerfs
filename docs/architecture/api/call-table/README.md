@@ -70,7 +70,7 @@ control side of each family in [Control: Families](../control/families.md).
 
 | Part | What a caller can rely on | Source |
 | --- | --- | --- |
-| Families | `project`, `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`: 61 calls, listed in help order | [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
+| Families | `project`, `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`: 62 calls, listed in help order | [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
 | Arguments | positionals in table order, then options; each has a snake_case name and a `Kind` | [`calls/table.rs`](../../../../api/crates/layerfs-control/src/calls/table.rs) |
 | Checks | every argument checked against the entry before any effect | [`calls/check.rs`](../../../../api/crates/layerfs-control/src/calls/check.rs) |
 | Scope | an optional folder scope guards and rewrites arguments before any effect | [`calls/scope.rs`](../../../../api/crates/layerfs-control/src/calls/scope.rs) |
@@ -111,7 +111,7 @@ this page. They need a Unix host and no Docker or root.
 
 | Test or example | Crate | Shows |
 | --- | --- | --- |
-| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `layerfs-api` | 61 calls in nine families; unknown calls and arguments refused before any effect; one test per family that a valid call reaches its family function and a wrong one is refused; JSON round trips; sizes and keys; a relative home refused; one source file per call. |
+| [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `layerfs-api` | 62 calls in nine families; unknown calls and arguments refused before any effect; one test per family that a valid call reaches its family function and a wrong one is refused; JSON round trips; sizes and keys; a relative home refused; one source file per call. |
 | [`calls_scope.rs`](../../../../api/crates/layerfs-api/tests/calls_scope.rs) | `layerfs-api` | A folder scope names its project, refuses every call it does not cover, needs a Sandbox of its project for `workspace` calls, and a scoped `branch.list` reads every page. |
 | [`project_family.rs`](../../../../api/crates/layerfs-api/tests/project_family.rs) | `layerfs-api` | End to end on this host: `project.init` refused without a Store (`NotFound`), `store.create`, Init in process with `check`, `install`, `record` progress, file and Branch calls, a push to a stand-in worker on a `lima` machine and reads there, then `project.remove`. |
 

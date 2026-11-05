@@ -183,6 +183,7 @@ fn answer(
                 format!("sending {op} to the worker failed part way ({error}); it was not resent"),
             )
         })?;
+    let _ = crate::project::export::take_stream_abort();
     loop {
         let frame = match read_frame(&mut stream) {
             Ok(Some(frame)) => frame,
@@ -191,6 +192,10 @@ fn answer(
         };
         if let Some(event) = frame.get("event") {
             events(event.clone());
+            if let Some(refusal) = crate::project::export::take_stream_abort() {
+                let _ = stream.shutdown(std::net::Shutdown::Both);
+                return Err(refusal);
+            }
         } else if let Some(value) = frame.get("value") {
             return Ok(value.clone());
         } else if let Some(refusal) = frame.get("refused") {
