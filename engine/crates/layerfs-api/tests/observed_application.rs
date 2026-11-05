@@ -85,6 +85,7 @@ fn configure(f: &support::Fixture, deployment: &Deployment) -> PathBuf {
             idle_exit_s: deployment.idle_exit_s,
         },
         existing_store: deployment.existing_store.clone(),
+        private_mount_ns: false,
     };
     let config = f.directory.join("daemon.config");
     fs::write(&config, setup.encode().unwrap()).unwrap();

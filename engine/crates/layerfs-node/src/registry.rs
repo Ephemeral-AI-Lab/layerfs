@@ -8,6 +8,7 @@
 //! binding) also keeps the background processes it started; the daemon holds
 //! no process record.
 use crate::job::refused;
+use layerfs_api::internal::MountNamespace;
 use layerfs_api::MountedWorkspace;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
 use layerfs_bridge::provision::StoreManifest;
@@ -47,9 +48,22 @@ pub(crate) struct SandboxState {
     pub(crate) directory: std::path::PathBuf,
     pub(crate) runtime: Sandbox,
     pub(crate) identity: CommandIdentity,
+    /// The socket of a daemon that serves from a private mount namespace, or
+    /// `None` for one whose mounts are in the container's initial namespace.
+    pub(crate) ns_socket: Option<String>,
+    /// The daemon's diagnostic pid file; evidence, not an exec route.
+    pub(crate) ns_pid_file: Option<String>,
+    /// A record whose daemon predates the socket: this live Sandbox cannot run
+    /// a private-namespace command and must be recreated.
+    pub(crate) ns_upgrade_required: bool,
     pub(crate) controls: crate::pool::Controls,
     pub(crate) mounts: Mutex<BTreeMap<String, Mount>>,
     pub(crate) processes: Mutex<BTreeMap<String, Process>>,
+}
+
+/// The mount namespace a command must enter, from a daemon that serves one.
+pub(crate) fn mount_namespace(socket: Option<&str>) -> Option<MountNamespace<'_>> {
+    socket.map(|socket| MountNamespace { socket })
 }
 
 /// The live counts of each Init still running, by project name.
@@ -138,6 +152,12 @@ pub(crate) fn sandbox_refreshed(args: &SdkValue) -> Result<Arc<SandboxState>, Sd
 }
 
 impl SandboxState {
+    /// Where this Sandbox's commands get the daemon's mount namespace, if it
+    /// serves from a private one.
+    pub(crate) fn mount_namespace(&self) -> Option<MountNamespace<'_>> {
+        mount_namespace(self.ns_socket.as_deref())
+    }
+
     /// The token of the Workspace mounted at `path`.
     pub(crate) fn token(&self, path: &str) -> Result<WorkspaceToken, SdkRefusal> {
         self.mounted(path, |mount| mount.workspace.bound.token)

@@ -37,6 +37,7 @@ fn setup(private: [u8; 32], peer: [u8; 32]) -> DaemonSetup {
             idle_exit_s: 0,
         },
         existing_store: None,
+        private_mount_ns: false,
     }
 }
 fn ordinary(owner: &ManagedSandbox) -> Result<(), Box<dyn std::error::Error>> {
@@ -48,6 +49,7 @@ fn ordinary(owner: &ManagedSandbox) -> Result<(), Box<dyn std::error::Error>> {
         vec![],
         "/".into(),
         false,
+        None,
     )
     .map_err(|f| format!("create {f:?}"))?;
     let attached = created.start().map_err(|f| format!("start {f:?}"))?;

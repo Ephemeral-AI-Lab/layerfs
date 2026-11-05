@@ -34,6 +34,7 @@ fn request() -> ExecRequest {
         environment: vec![],
         directory: "/tmp".into(),
         stdin: false,
+        root_launcher: false,
     }
 }
 fn response(status: u16, body: &str, close: bool) -> Vec<u8> {

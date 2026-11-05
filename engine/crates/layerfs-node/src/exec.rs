@@ -34,6 +34,7 @@ fn run(
         vec![HOME.to_owned()],
         directory.to_owned(),
         false,
+        state.mount_namespace(),
     )
     .map_err(failed)?;
     let attached = created.start().map_err(failed)?;
@@ -58,6 +59,15 @@ fn run(
 /// `stdoutBytes` and `stderrBytes` sizes.
 pub(crate) fn exec(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;
+    if state.ns_upgrade_required {
+        return Err(refused(
+            "Unsupported",
+            format!(
+                "Sandbox {} was created by a daemon that does not serve its private mount namespace;                  close it and create a new Sandbox to run commands in its Workspaces",
+                state.id
+            ),
+        ));
+    }
     let path = text(args, "path")?;
     let command = text(args, "command")?;
     let directory = state.directory(path)?;
