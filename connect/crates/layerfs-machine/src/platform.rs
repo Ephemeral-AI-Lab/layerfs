@@ -5,7 +5,7 @@
 use crate::options::OptSpec;
 use crate::platforms::{apple_container, docker, firecracker, lima, microsandbox, native, ssh};
 pub use layerfs_bridge::KernelRoute;
-use layerfs_sandbox::Backend;
+use layerfs_sandbox::{Backend, ExecMode, IsolationClass, KernelScope};
 use std::net::Ipv4Addr;
 
 /// Which kernel Sandboxes run on.
@@ -198,6 +198,38 @@ impl Platform {
     /// The kernel route its Sandboxes' daemons serve on `host`, or none.
     pub fn kernel(self, host: HostOs) -> Option<KernelRoute> {
         (self.profile().kernel)(host)
+    }
+
+    /// The isolation class this kind of machine provides on `host`, or
+    /// `None` where it runs no Sandbox there (#551 B0-144).
+    ///
+    /// A class is a capability, not the adapter's name: `native` and the
+    /// namespace backend are `process`, `docker` is `container`, every VM
+    /// kind is `vm` (a microVM included), and `ssh` is `remote`.
+    pub fn isolation(self, host: HostOs) -> Option<IsolationClass> {
+        self.backend(host)?;
+        Some(match self {
+            Self::Native => IsolationClass::Process,
+            Self::Docker => IsolationClass::Container,
+            Self::AppleContainer | Self::Microsandbox | Self::Lima | Self::Firecracker => {
+                IsolationClass::Vm
+            }
+            Self::Ssh => IsolationClass::Remote,
+        })
+    }
+
+    /// The kernel scope a Sandbox on this kind of machine has (#551
+    /// B0-144): shared for a process or a container, separate for a VM, and
+    /// a separate host for `ssh`.
+    pub fn kernel_scope(self, host: HostOs) -> Option<KernelScope> {
+        self.isolation(host).map(KernelScope::of_class)
+    }
+
+    /// Where this machine's Sandbox work runs (#551 B0-146). Every kind
+    /// built today runs the worker in its guest; a provider that runs each
+    /// command through its own API is `remote-exec`.
+    pub fn exec_mode(self, _host: HostOs) -> ExecMode {
+        ExecMode::Worker
     }
 
     /// Who runs a sqlite Store's calls on this machine (G8).

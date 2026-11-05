@@ -52,6 +52,24 @@ fn row_value(row: &SupportRow, probe: Probe) -> SdkValue {
         ("how", SdkValue::text(row.how.as_str())),
         ("backend", optional(row.backend.map(|b| b.stored_name()))),
         ("kernel", optional(row.kernel.map(|k| k.as_str()))),
+        // #551: the backend's declared capability, named apart from the
+        // mount route above (`kernel` there is fuse/nfs)
+        (
+            "isolation_class",
+            optional(row.platform.isolation(row.host).map(|class| class.as_str())),
+        ),
+        (
+            "exec_mode",
+            SdkValue::text(row.platform.exec_mode(row.host).as_str()),
+        ),
+        (
+            "kernel_scope",
+            optional(
+                row.platform
+                    .kernel_scope(row.host)
+                    .map(|scope| scope.as_str()),
+            ),
+        ),
         ("sqlite", optional(row.sqlite.map(|s| s.as_str()))),
         (
             "postgresql",

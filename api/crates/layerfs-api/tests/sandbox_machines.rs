@@ -17,6 +17,10 @@
 //!   removes its worker container and data volume.
 //!
 //! A test whose settings are missing says NOT_RUN and passes.
+//!
+//! Run with `cargo test -p layerfs-api --test sandbox_machines --features machine`: the
+//! `machine` feature is off by default, so without it this file compiles to
+//! an empty test.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{self, paths};
 use layerfs_bridge::control::SdkValue;
@@ -445,9 +449,10 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
 }
 
 /// With no machine named, `sandbox.create` runs where the Store's calls
-/// run (#536 §10): a sqlite Store's machine (here a stopped microsandbox machine,
-/// so the create is refused naming its start), and `native` for a
-/// PostgreSQL Store (refused here by the reach check, which runs there).
+/// run (#536 §10): a sqlite Store's machine (here a stopped microsandbox
+/// machine, so the create is refused naming its start). A PostgreSQL Store
+/// has no Store machine, so the #551 default decides: `docker`, and
+/// `native` only when `process` is asked for explicitly.
 #[test]
 fn a_sandbox_with_no_machine_runs_on_its_store_s() {
     let home = tempdir("default");
@@ -500,18 +505,59 @@ fn a_sandbox_with_no_machine_runs_on_its_store_s() {
         &SdkValue::map([("name", t("app"))]),
     )
     .unwrap();
+    // #551 B0-147: no machine and no isolation defaults to docker. A
+    // recorded image keeps the create from loading the sealed bundle (a
+    // host without one still answers the same way), and a worker endpoint
+    // on a closed port makes the refusal name the docker machine instead
+    // of silently using native.
+    home::write_record(
+        &paths::machine_record(&home, "docker"),
+        &SdkValue::map([
+            ("name", t("docker")),
+            ("platform", t("docker")),
+            (
+                "image",
+                t("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+            ),
+        ]),
+    )
+    .unwrap();
+    home::write_record(
+        &paths::worker_record(&home, "docker"),
+        &SdkValue::map([
+            ("address", t("127.0.0.1:1")),
+            (
+                "secret",
+                t("0000000000000000000000000000000000000000000000000000000000000000"),
+            ),
+        ]),
+    )
+    .unwrap();
     let refused = call(
         &home,
         "sandbox.create",
         &[("project", t("pg/app")), ("name", t("t2"))],
     )
     .unwrap_err();
-    assert_ne!(refused.0, "NotFound", "{refused:?}");
-    assert!(!refused.1.contains("machine start"), "{refused:?}");
-    // the reach check names the machine; a build without the PostgreSQL
-    // engine says so instead of "cannot reach", and a server that takes
-    // no connection is said to, not shown as an engine status
-    let (code, message) = refused;
+    assert_eq!(refused.0, "Unavailable", "{refused:?}");
+    assert!(refused.1.contains("machine docker"), "{refused:?}");
+
+    // process is opt-in: asking for it reaches native, and the reach check
+    // names the machine; a build without the PostgreSQL engine says so
+    // instead of "cannot reach", and a server that takes no connection is
+    // said to, not shown as an engine status
+    let (code, message) = call(
+        &home,
+        "sandbox.create",
+        &[
+            ("project", t("pg/app")),
+            ("name", t("t2")),
+            ("isolation", t("process")),
+        ],
+    )
+    .unwrap_err();
+    assert_ne!(code, "NotFound", "{message}");
+    assert!(!message.contains("machine start"), "{message}");
     if cfg!(feature = "postgresql") {
         assert_eq!(code, "Unavailable", "{message}");
         assert!(

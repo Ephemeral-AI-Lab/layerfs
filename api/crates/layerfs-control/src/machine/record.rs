@@ -6,10 +6,16 @@
 //! showed before. Built without the `machine` feature too (the guest
 //! worker reads its own `native` and `docker` records); the platform and
 //! the summary need the adapters.
+use crate::common::contract;
 use crate::common::home::{self, paths, read_record, with_field, write_entity};
+#[cfg(not(feature = "machine"))]
+use crate::common::isolation::legacy_class;
+#[cfg(feature = "machine")]
+use crate::common::isolation::{isolation_sdk, scheduling_sdk};
 use crate::common::op::{self, Op, Standing};
 use crate::common::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_sandbox::{ExecMode, IsolationClass, KernelScope};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -52,7 +58,8 @@ impl MachineRecord {
             .ok_or_else(|| refused("NotFound", format!("no machine named {name}")))
     }
 
-    /// A built-in machine's first record: its name, platform and now.
+    /// A built-in machine's first record: its name, platform, the #551
+    /// isolation contract and now.
     pub fn built_in(name: &str) -> Self {
         Self::from_record(
             name,
@@ -62,6 +69,92 @@ impl MachineRecord {
                 ("created", SdkValue::Int(home::now_ms())),
             ]),
         )
+        .with_contract()
+    }
+
+    /// The isolation class a machine of this platform provides on this host
+    /// (#551 B0-144). The record's own `isolation_class` wins; a record
+    /// written before the contract falls back to its platform, and an
+    /// unknown platform has none.
+    pub fn isolation_class(&self) -> Option<IsolationClass> {
+        self.text("isolation_class")
+            .and_then(IsolationClass::parse)
+            .or_else(|| self.platform_isolation())
+    }
+
+    /// The isolation class the record itself declares, if it has one. A
+    /// read that must not derive `doctor` uses this.
+    pub fn declared_isolation(&self) -> Option<IsolationClass> {
+        self.text("isolation_class").and_then(IsolationClass::parse)
+    }
+
+    /// Where this machine's Sandbox work runs (#551 B0-146), from the
+    /// record's `exec_mode` or the platform's declaration.
+    pub fn exec_mode(&self) -> Option<ExecMode> {
+        self.text("exec_mode")
+            .and_then(ExecMode::parse)
+            .or_else(|| self.platform_exec_mode())
+    }
+
+    /// Whether a Sandbox on this machine shares the caller's kernel (#551
+    /// B0-144), from the record's `kernel` or its isolation class.
+    pub fn kernel_scope(&self) -> Option<KernelScope> {
+        self.text("kernel")
+            .and_then(KernelScope::parse)
+            .or_else(|| self.isolation_class().map(KernelScope::of_class))
+    }
+
+    /// This record with the #551 fields it is missing, for a create, a
+    /// connect or a built-in record. Fields already present stay as they
+    /// are; an unknown platform is left alone.
+    pub fn with_contract(self) -> Self {
+        let name = self.name.clone();
+        let record = Self::from_record(&name, contract::with_schema_version(self.fields));
+        let Some(class) = record.isolation_class() else {
+            return record;
+        };
+        let mode = record.exec_mode().unwrap_or(ExecMode::Worker);
+        let kernel = record.kernel_scope().unwrap_or(KernelScope::of_class(class));
+        let mut record = record;
+        if record.field("isolation_class").is_none() {
+            record = record.with("isolation_class", SdkValue::text(class.as_str()));
+        }
+        if record.field("exec_mode").is_none() {
+            record = record.with("exec_mode", SdkValue::text(mode.as_str()));
+        }
+        if record.field("kernel").is_none() {
+            record = record.with("kernel", SdkValue::text(kernel.as_str()));
+        }
+        record
+    }
+
+    /// The platform's declared class, for a record written before #551.
+    fn platform_isolation(&self) -> Option<IsolationClass> {
+        let name = self.platform_name()?;
+        #[cfg(feature = "machine")]
+        {
+            let kind = layerfs_machine::Platform::parse(name)?;
+            kind.isolation(layerfs_machine::HostOs::current())
+        }
+        #[cfg(not(feature = "machine"))]
+        {
+            legacy_class(name)
+        }
+    }
+
+    /// The platform's declared exec mode, for a record written before #551.
+    fn platform_exec_mode(&self) -> Option<ExecMode> {
+        let name = self.platform_name()?;
+        #[cfg(feature = "machine")]
+        {
+            let kind = layerfs_machine::Platform::parse(name)?;
+            Some(kind.exec_mode(layerfs_machine::HostOs::current()))
+        }
+        #[cfg(not(feature = "machine"))]
+        {
+            let _ = legacy_class(name)?;
+            Some(ExecMode::Worker)
+        }
     }
 
     /// The machine's name (its folder's).
@@ -247,6 +340,11 @@ pub struct MachineDerived {
     pub stores: Vec<String>,
     /// The Sandboxes recorded on it.
     pub sandboxes: Vec<String>,
+    /// Its worker as `worker.json` records it, read without dialing
+    /// (#551 B8-156).
+    pub worker: Option<SdkValue>,
+    /// Its `start.lock` lease, read without taking it (#551 B8-156).
+    pub lease: Option<SdkValue>,
 }
 
 #[cfg(feature = "machine")]
@@ -301,17 +399,87 @@ impl MachineRecord {
         let state = self.state(live.map(|(state, _)| state.as_str()))?;
         let error = live.and_then(|(_, error)| error.clone());
         let list = |items: &[String]| SdkValue::List(items.iter().map(SdkValue::text).collect());
+        let isolation = self.isolation_class();
+        let mode = self.exec_mode().unwrap_or(ExecMode::Worker);
+        let kernel = self.kernel_scope();
+        #[cfg(feature = "machine")]
+        let capability = super::capability_of(self);
+        #[cfg(not(feature = "machine"))]
+        let capability = SdkValue::map([
+            (
+                "schema_version",
+                SdkValue::Int(contract::SCHEMA_VERSION),
+            ),
+            (
+                "isolation",
+                SdkValue::opt_text(isolation.map(|class| class.as_str())),
+            ),
+            (
+                "kernel",
+                SdkValue::opt_text(kernel.map(|scope| scope.as_str())),
+            ),
+        ]);
         let mut fields = vec![
             ("name", SdkValue::text(&self.name)),
+            // #551: `kind` is the isolation class only; the adapter is
+            // `platform` (a constructor, not a layer).
+            (
+                "kind",
+                SdkValue::opt_text(isolation.map(|class| class.as_str())),
+            ),
             ("platform", SdkValue::text(kind.name())),
             ("backend", SdkValue::text(super::spec::backend_name(kind))),
             ("supports", super::platforms::supports(kind)),
+            ("schema_version", SdkValue::Int(contract::schema_version(&self.fields))),
+            (
+                "isolation_class",
+                SdkValue::opt_text(isolation.map(|class| class.as_str())),
+            ),
+            ("exec_mode", SdkValue::text(mode.as_str())),
+            (
+                "kernel",
+                SdkValue::opt_text(kernel.map(|scope| scope.as_str())),
+            ),
             ("state", SdkValue::text(state)),
             ("cpus", self.field("cpus").cloned().unwrap_or_default()),
             ("memory", self.field("memory").cloned().unwrap_or_default()),
             ("disk", self.field("disk").cloned().unwrap_or_default()),
             ("stores", list(&derived.stores)),
             ("sandboxes", list(&derived.sandboxes)),
+            (
+                "isolation",
+                isolation
+                    .map(|class| isolation_sdk(None, class))
+                    .unwrap_or_default(),
+            ),
+            ("scheduling", scheduling_sdk(mode)),
+            ("capability", capability),
+            (
+                "health",
+                SdkValue::map([
+                    (
+                        "ok",
+                        SdkValue::Bool(matches!(state, "ready" | "running")),
+                    ),
+                    ("state", SdkValue::text(state)),
+                    (
+                        "reason",
+                        SdkValue::opt_text(error.clone()),
+                    ),
+                ]),
+            ),
+            (
+                "worker",
+                derived.worker.clone().unwrap_or_else(|| {
+                    SdkValue::map([("state", SdkValue::text("none"))])
+                }),
+            ),
+            (
+                "lease",
+                derived.lease.clone().unwrap_or_else(|| {
+                    SdkValue::map([("held", SdkValue::Bool(false))])
+                }),
+            ),
         ];
         for extra in [
             "image", "host", "nested", "docker", "wsl", "daemon", "error",

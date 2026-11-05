@@ -24,7 +24,7 @@ pub(super) fn check(
     scanned: &Scanned,
     findings: &mut Findings,
 ) -> Result<(), SdkRefusal> {
-    machines(scanned, findings);
+    machines(home, scanned, findings);
     for store in &scanned.stores {
         let name = store.name();
         let entity = ("store", name);
@@ -89,12 +89,14 @@ pub(super) fn check(
         }
     }
     sandboxes(scanned, findings);
+    isolation(scanned, findings);
     Ok(())
 }
 
 /// Machines: their intents, a Firecracker machine's Lima host, and a
 /// built-in machine's recorded daemon that is not there.
-fn machines(scanned: &Scanned, findings: &mut Findings) {
+fn machines(home: &Path, scanned: &Scanned, findings: &mut Findings) {
+    let _ = home;
     for machine in &scanned.machines {
         let name = machine.name();
         let entity = ("machine", name);
@@ -122,6 +124,30 @@ fn machines(scanned: &Scanned, findings: &mut Findings) {
                     format!("machine {name}'s Lima host {host} has no record"),
                     format!("`layerfs machine remove {name}`"),
                 );
+            }
+        }
+        // #551 B10-178: the declared capability, not the provider's name.
+        // A record may be older than its platform; the read model derives
+        // the class, so only a record that declares a different one warns.
+        #[cfg(feature = "machine")]
+        if let Some(declared) = machine.declared_isolation() {
+            if let Ok(platform) = machine.platform() {
+                let host = layerfs_machine::HostOs::current();
+                if let Some(provided) = platform.isolation(host) {
+                    if declared != provided {
+                        findings.warning(
+                            entity,
+                            format!(
+                                "machine {name}'s record declares {declared} isolation, but {} provides {provided} on this host",
+                                platform.name()
+                            ),
+                            format!(
+                                "repair {} by hand, or recreate machine {name} with the build that wrote its record",
+                                paths::machine_record(home, name).display()
+                            ),
+                        );
+                    }
+                }
             }
         }
     }
@@ -173,6 +199,35 @@ fn sandboxes(scanned: &Scanned, findings: &mut Findings) {
                 fix,
             );
         }
+    }
+}
+
+/// #551 B10-179 / B0-148: a Sandbox whose request is stronger than what its
+/// machine provides. The create refuses this now; an old record or a
+/// hand-edited one can still disagree. Warning only, and it reads the
+/// records: it starts nothing and writes nothing.
+fn isolation(scanned: &Scanned, findings: &mut Findings) {
+    for sandbox in &scanned.sandboxes {
+        let (Some(requested), Some(effective)) =
+            (sandbox.requested_isolation(), sandbox.effective_isolation())
+        else {
+            continue;
+        };
+        if effective.satisfies(requested) {
+            continue;
+        }
+        let name = sandbox.name();
+        let machine = sandbox.machine();
+        let project = sandbox.project().unwrap_or("<project>");
+        findings.warning(
+            ("sandbox", name),
+            format!(
+                "Sandbox {name} requested {requested} isolation, but machine {machine} provides {effective} isolation"
+            ),
+            format!(
+                "recreate it on a machine that provides {requested}: `layerfs sandbox close {name}`, then `layerfs sandbox.create {project} {name} <machine>`"
+            ),
+        );
     }
 }
 

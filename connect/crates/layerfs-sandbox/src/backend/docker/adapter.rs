@@ -1,6 +1,6 @@
 //! `docker`'s backend adapter.
 use crate::backend::adapter::BackendAdapter;
-use crate::{IsolationModel, MountDriver, ProviderCapabilities, SearchPathPolicy};
+use crate::{IdleStop, IsolationModel, MountDriver, ProviderCapabilities, SearchPathPolicy};
 
 pub(crate) struct DockerBackend;
 pub(crate) static ADAPTER: DockerBackend = DockerBackend;
@@ -14,6 +14,7 @@ impl BackendAdapter for DockerBackend {
     }
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
+            schema_version: crate::CAPABILITY_SCHEMA_VERSION,
             name: "docker",
             isolation: IsolationModel::Container,
             mount_driver: MountDriver::Fuse,
@@ -21,6 +22,9 @@ impl BackendAdapter for DockerBackend {
             search_path_policy: SearchPathPolicy::FixedContainer,
             supports_resource_limits: false,
             direct_store_access: true,
+            idle_stop: IdleStop::Ours,
+            // no backend built here snapshots a Sandbox
+            snapshot: None,
         }
     }
 }

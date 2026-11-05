@@ -211,7 +211,10 @@ pub(crate) type HeadOf<'a> = dyn FnMut(BranchId, Option<&str>) -> Option<Option<
 pub(crate) fn status_with(args: &SdkValue, head_of: &mut HeadOf<'_>) -> Outcome {
     let state = sandbox(args)?;
     let token = state.token(text(args, "path")?)?;
-    let mut control = crate::common::trace::control(&state.controls)?;
+    let mut control = crate::common::trace::control_within(
+        &state.controls,
+        std::time::Duration::from_millis(crate::common::contract::READ_BUDGET_MS),
+    )?;
     let status = workspace(&mut control).status(token).map_err(operation)?;
     drop(control);
     let branch = lock(&state.mounts)?
@@ -295,6 +298,21 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
         return crate::workspace::unmount_guard::cleanup_failure(outcome, error);
     }
     if outcome.is_ok() {
+        // what the read model remembers after this Workspace ended (#551
+        // B8-158): its name and Branch, before its record goes
+        let ended = crate::sandbox::files::workspaces(&state.directory)
+            .ok()
+            .and_then(|records| {
+                records
+                    .into_iter()
+                    .find(|(_, record)| record.get_text("path") == Some(path))
+                    .map(|(_, record)| {
+                        (
+                            record.get_text("name").map(str::to_owned),
+                            record.get_text("branch").map(str::to_owned),
+                        )
+                    })
+            });
         let cleanup = (|| {
             let _guard = crate::sandbox::files::guard(&state.directory)?;
             let _sandbox = crate::sandbox::record::lock_in(&state.directory, &state.id)?;
@@ -306,6 +324,16 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
             lock(&state.mounts)?.remove(path);
             Ok(())
         })();
+        if cleanup.is_ok() {
+            if let Some((name, branch)) = ended {
+                crate::sandbox::activity::closed(
+                    &state.directory,
+                    name.as_deref(),
+                    path,
+                    branch.as_deref(),
+                );
+            }
+        }
         if let Err(error) = cleanup {
             return crate::workspace::unmount_guard::cleanup_failure(outcome, error);
         }

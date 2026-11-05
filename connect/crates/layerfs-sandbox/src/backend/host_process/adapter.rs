@@ -1,6 +1,6 @@
 //! `host_process`'s backend adapter; stored and shown as `"native"` (G6).
 use crate::backend::adapter::BackendAdapter;
-use crate::{IsolationModel, MountDriver, ProviderCapabilities, SearchPathPolicy};
+use crate::{IdleStop, IsolationModel, MountDriver, ProviderCapabilities, SearchPathPolicy};
 
 pub(crate) struct HostProcessBackend;
 pub(crate) static ADAPTER: HostProcessBackend = HostProcessBackend;
@@ -14,6 +14,7 @@ impl BackendAdapter for HostProcessBackend {
     }
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
+            schema_version: crate::CAPABILITY_SCHEMA_VERSION,
             name: "native-macos",
             isolation: IsolationModel::HostProcess,
             mount_driver: MountDriver::LoopbackNfs,
@@ -21,6 +22,9 @@ impl BackendAdapter for HostProcessBackend {
             search_path_policy: SearchPathPolicy::InheritHost,
             supports_resource_limits: false,
             direct_store_access: true,
+            idle_stop: IdleStop::Ours,
+            // no backend built here snapshots a Sandbox
+            snapshot: None,
         }
     }
 }

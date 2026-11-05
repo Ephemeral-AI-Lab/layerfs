@@ -7,11 +7,14 @@
 //! adds what reopens it (`daemon`) to the same file; its daemon keys are in
 //! `control.json` beside it. The name is the folder's: one read finds it.
 //! No state is stored: [`SandboxRecord::state`] derives it (§7.2).
+use crate::common::contract::{self, Capacity};
 use crate::common::home::entity_lock::{self, EntityLock};
 use crate::common::home::{self, paths, read_record, with_field, write_entity};
+use crate::common::isolation::{isolation_sdk, legacy_class, scheduling_sdk};
 use crate::common::op::{self, Op, Standing};
 use crate::common::outcome::View;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_sandbox::{ExecMode, IsolationClass};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -57,12 +60,26 @@ impl SandboxRecord {
     }
 
     /// The record a create claims the name with: the project, the machine,
-    /// now and the create's intent `op`.
-    pub(crate) fn creating(name: &str, project: &str, machine: &str, op: &Op) -> Self {
+    /// the #551 isolation request and answer, now and the create's intent
+    /// `op`.
+    pub(crate) fn creating(
+        name: &str,
+        project: &str,
+        machine: &str,
+        requested: IsolationClass,
+        effective: IsolationClass,
+        mode: ExecMode,
+        op: &Op,
+    ) -> Self {
         let fields = SdkValue::map([
             ("name", SdkValue::text(name)),
+            ("schema_version", SdkValue::Int(contract::SCHEMA_VERSION)),
             ("project", SdkValue::text(project)),
             ("machine", SdkValue::text(machine)),
+            ("requested_isolation", SdkValue::text(requested.as_str())),
+            ("effective_isolation", SdkValue::text(effective.as_str())),
+            ("exec_mode", SdkValue::text(mode.as_str())),
+            ("capacity", Capacity::CONTRACT.to_sdk()),
             ("created", SdkValue::Int(home::now_ms())),
             (op::FIELD, op.to_record().clone()),
         ]);
@@ -154,6 +171,101 @@ impl SandboxRecord {
         self.fields.get_text("image")
     }
 
+    /// The isolation class the create asked for (#551 B0-149). A record
+    /// written before the contract falls back to its effective class,
+    /// which is what it ran with.
+    pub fn requested_isolation(&self) -> Option<IsolationClass> {
+        self.text("requested_isolation")
+            .and_then(IsolationClass::parse)
+            .or_else(|| self.effective_isolation())
+    }
+
+    /// The isolation class the Sandbox actually runs behind (#551 B0-149).
+    /// The record's own field wins; a record written before the contract
+    /// falls back to its platform or backend name.
+    pub fn effective_isolation(&self) -> Option<IsolationClass> {
+        self.text("effective_isolation")
+            .and_then(IsolationClass::parse)
+            .or_else(|| self.text("platform").and_then(legacy_class))
+            .or_else(|| self.text("backend").and_then(legacy_class))
+    }
+
+    /// Where its work runs (#551 B0-146); a record without the field is a
+    /// worker.
+    pub fn exec_mode(&self) -> ExecMode {
+        self.text("exec_mode")
+            .and_then(ExecMode::parse)
+            .unwrap_or(ExecMode::Worker)
+    }
+
+    /// The record's `schema_version`; a record written before #551 reads
+    /// this build's (#551 B0-152).
+    pub fn schema_version(&self) -> i64 {
+        contract::schema_version(&self.fields)
+    }
+
+    /// The capacity contract the record carries (#551 B0-151), the build's
+    /// default for a record written before it.
+    pub fn capacity(&self) -> Capacity {
+        let Some(value) = self.fields.get("capacity") else {
+            return Capacity::CONTRACT;
+        };
+        Capacity {
+            per_store_quota: value
+                .get_int("per_store_quota")
+                .and_then(|n| u32::try_from(n).ok())
+                .unwrap_or(Capacity::CONTRACT.per_store_quota),
+            in_flight: value
+                .get_int("in_flight_limit")
+                .and_then(|n| u32::try_from(n).ok())
+                .unwrap_or(Capacity::CONTRACT.in_flight),
+            queue: value
+                .get_int("queue_limit")
+                .and_then(|n| u32::try_from(n).ok())
+                .unwrap_or(Capacity::CONTRACT.queue),
+        }
+    }
+
+    /// The record's capacity as a read model shows it: the bounds, and what
+    /// this Sandbox measures now (`measured`), or zeros when this process
+    /// does not own it.
+    pub fn capacity_sdk(&self, measured: Option<(u32, u32)>) -> SdkValue {
+        let (in_flight, queued) = measured.unwrap_or((0, 0));
+        self.capacity().measured(in_flight, queued)
+    }
+
+    /// The record with the #551 fields it is missing filled in, for a write
+    /// that must migrate an old record: `schema_version`, `capacity`, the
+    /// effective class and the exec mode. A read never calls it.
+    pub fn with_contract(self) -> Self {
+        let mut record = self;
+        if record.fields.get("schema_version").is_none() {
+            record = record.with(
+                "schema_version",
+                SdkValue::Int(contract::SCHEMA_VERSION),
+            );
+        }
+        if record.fields.get("capacity").is_none() {
+            record = record.with("capacity", Capacity::CONTRACT.to_sdk());
+        }
+        if record.text("effective_isolation").is_none() {
+            if let Some(class) = record.effective_isolation() {
+                record = record.with("effective_isolation", SdkValue::text(class.as_str()));
+            }
+        }
+        if record.text("requested_isolation").is_none() {
+            if let Some(class) = record.requested_isolation() {
+                record = record.with("requested_isolation", SdkValue::text(class.as_str()));
+            }
+        }
+        record
+    }
+
+    /// The `text` field `field`.
+    fn text(&self, field: &str) -> Option<&str> {
+        self.fields.get_text(field)
+    }
+
     /// The Sandbox's state (#536 §7.2), from its record, its `op` and,
     /// where the call asked, the daemon's answer (`gone`: its machine
     /// answered that no such Sandbox runs): `creating` or `closing` while
@@ -186,9 +298,36 @@ impl SandboxRecord {
             return self.fields.clone();
         };
         let mut shown: Vec<_> = (fields.iter())
-            .filter(|(n, _)| !HIDDEN.contains(&n.as_str()))
+            .filter(|(n, _)| {
+                !HIDDEN.contains(&n.as_str())
+                    && !matches!(
+                        n.as_str(),
+                        "requested_isolation" | "effective_isolation" | "exec_mode"
+                    )
+            })
             .cloned()
             .collect();
+        let requested = self.requested_isolation();
+        let effective = self.effective_isolation();
+        if let Some(requested) = requested {
+            shown.push((
+                "requested_isolation".to_owned(),
+                SdkValue::text(requested.as_str()),
+            ));
+        }
+        if let Some(effective) = effective {
+            shown.push((
+                "effective_isolation".to_owned(),
+                SdkValue::text(effective.as_str()),
+            ));
+            shown.push(("isolation".to_owned(), isolation_sdk(requested, effective)));
+        }
+        shown.push(("scheduling".to_owned(), scheduling_sdk(self.exec_mode())));
+        shown.push(("schema_version".to_owned(), SdkValue::Int(self.schema_version())));
+        shown.push((
+            "capacity".to_owned(),
+            self.capacity_sdk(None),
+        ));
         shown.push(("state".to_owned(), SdkValue::text(self.state(false))));
         if let Some(op) = self.op() {
             shown.push((op::FIELD.to_owned(), op.to_sdk()));

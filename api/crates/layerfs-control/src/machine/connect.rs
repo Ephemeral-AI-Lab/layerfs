@@ -62,6 +62,7 @@ pub fn connect(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             ("created", SdkValue::Int(home::now_ms())),
         ]),
     )
+    .with_contract()
     .with_op(&op);
     let spec = {
         let _lock = lock::take(&home)?;

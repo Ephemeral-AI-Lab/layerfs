@@ -24,7 +24,7 @@ mod setup;
 mod spec;
 mod support;
 pub use error::{Code, MachineError};
-pub use layerfs_sandbox::Backend;
+pub use layerfs_sandbox::{Backend, ExecMode, IsolationClass, KernelScope};
 pub use options::{OptKind, OptSpec};
 pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Route};
 pub use probe::{native_missing, nested_missing, probe, Probe};

@@ -86,6 +86,18 @@ pub(crate) fn control(controls: &Controls) -> Result<Traced<'_>, SdkRefusal> {
     internal::trace(&mut lease, SCOPE.get());
     Ok(Traced(lease))
 }
+
+/// [`control`] with a budget for acquiring the connection; a read model
+/// passes its 2 s / 5 s bound so waiting is inside it (#551 B8-159).
+pub(crate) fn control_within(
+    controls: &Controls,
+    budget: std::time::Duration,
+) -> Result<Traced<'_>, SdkRefusal> {
+    let (mut lease, waited) = controls.lend_within(budget)?;
+    WAITED.set(WAITED.get() + waited);
+    internal::trace(&mut lease, SCOPE.get());
+    Ok(Traced(lease))
+}
 impl Drop for Traced<'_> {
     fn drop(&mut self) {
         let telemetry = internal::take_telemetry(&mut self.0);

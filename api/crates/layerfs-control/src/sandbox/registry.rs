@@ -81,6 +81,13 @@ pub(crate) fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> 
     }
 }
 
+/// The live Sandbox recorded at folder `directory`, when this process owns
+/// it: a read model asks it for its measured capacity, never opening or
+/// probing the Sandbox (#551 B8-157).
+pub(crate) fn live_at(directory: &std::path::Path) -> Option<Arc<SandboxState>> {
+    lock(&SANDBOXES).ok().and_then(|sandboxes| sandboxes.get(directory).cloned())
+}
+
 /// The Sandbox `args` name when its container still runs it: this
 /// process's state, checked with one Engine inspection, or reopened from its
 /// records (which inspects too). A container found gone or stopped (an idle

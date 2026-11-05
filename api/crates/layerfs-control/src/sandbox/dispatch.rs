@@ -53,35 +53,48 @@ fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {
         ));
     };
     let records = crate::sandbox::files::workspaces(directory)?;
-    let name_at = |path: Option<&str>| {
-        let found = records
+    let record_at = |path: Option<&str>| {
+        records
             .iter()
-            .find(|(_, r)| path.is_some() && r.get_text("path") == path);
-        SdkValue::opt_text(
-            found
-                .and_then(|(_, r)| r.get_text("name"))
-                .map(str::to_owned),
-        )
+            .find(|(_, r)| path.is_some() && r.get_text("path") == path)
+            .map(|(_, r)| r)
     };
     let named = |item: SdkValue| {
         let path = item.get("directory").cloned().unwrap_or_default();
-        let name = name_at(item.get_text("directory"));
+        let record = record_at(item.get_text("directory"));
         let item = crate::common::home::with_field(item, "path", path);
-        crate::common::home::with_field(item, "name", name)
+        let item = crate::common::home::with_field(
+            item,
+            "name",
+            SdkValue::opt_text(record.and_then(|r| r.get_text("name")).map(str::to_owned)),
+        );
+        // the Branch its record names (#551 B8-158)
+        crate::common::home::with_field(
+            item,
+            "branch",
+            SdkValue::opt_text(record.and_then(|r| r.get_text("branch")).map(str::to_owned)),
+        )
     };
-    Ok(SdkValue::Map(
-        fields
-            .into_iter()
-            .filter(|(name, _)| matches!(name.as_str(), "kind" | "version" | "workspaces"))
-            .map(|(field, value)| match (field.as_str(), value) {
-                ("workspaces", SdkValue::List(items)) => (
-                    field,
-                    SdkValue::List(items.into_iter().map(named).collect()),
-                ),
-                (_, value) => (field, value),
-            })
-            .collect(),
-    ))
+    // the command running now and the Workspaces closed recently (#551
+    // B8-158), written where this listing runs
+    let activity = crate::sandbox::activity::read(directory);
+    let mut shown: Vec<(String, SdkValue)> = fields
+        .into_iter()
+        .filter(|(name, _)| matches!(name.as_str(), "kind" | "version" | "workspaces"))
+        .map(|(field, value)| match (field.as_str(), value) {
+            ("workspaces", SdkValue::List(items)) => (
+                field,
+                SdkValue::List(items.into_iter().map(named).collect()),
+            ),
+            (_, value) => (field, value),
+        })
+        .collect();
+    for field in ["running", "recently_closed"] {
+        if let Some(value) = activity.get(field) {
+            shown.push((field.to_owned(), value.clone()));
+        }
+    }
+    Ok(SdkValue::Map(shown))
 }
 
 /// A daemon backend call through the named Sandbox of the project: its
@@ -101,8 +114,13 @@ fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
         ),
         other => other,
     };
+    // A read model's wait for a connection is inside its 5 s budget
+    // (#551 B8-159): queue time counts against it.
     let answer = crate::daemon::operator::call(
-        &mut *crate::common::trace::control(&state.controls)?,
+        &mut *crate::common::trace::control_within(
+            &state.controls,
+            std::time::Duration::from_millis(crate::common::contract::READ_BUDGET_MS),
+        )?,
         op,
         args,
     );

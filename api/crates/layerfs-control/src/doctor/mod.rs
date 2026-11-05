@@ -7,6 +7,7 @@
 //! that changes meanwhile may be reported as it was part way.
 mod checks;
 mod convert;
+mod host;
 mod report;
 mod scan;
 mod workers;

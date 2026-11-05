@@ -6,17 +6,22 @@ mod execution;
 mod failure;
 mod identity;
 mod image;
+mod isolation;
 mod options;
 mod request;
 mod transfer;
 pub use bind::Bind;
-pub use capabilities::{IsolationModel, MountDriver, ProviderCapabilities, SearchPathPolicy};
+pub use capabilities::{
+    IdleStop, IsolationModel, MountDriver, ProviderCapabilities, SearchPathPolicy,
+    SnapshotCapability, CAPABILITY_SCHEMA_VERSION,
+};
 pub use execution::{CommandIdentity, ExecInspection, Liveness};
 #[cfg(unix)]
 pub(crate) use failure::STOPPED;
 pub use failure::{ErrorDiagnostic, RuntimeError, WireFailure};
 pub use identity::{ContainerId, ExecId};
 pub use image::Image;
+pub use isolation::{ExecMode, IsolationClass, KernelScope};
 pub use options::{
     DockerRecord, ExecExit, LaunchPhase, LaunchRequest, LocalRecord, NamespaceRecord,
     ProviderLaunchOptions, SandboxInspection, SandboxRecord,
