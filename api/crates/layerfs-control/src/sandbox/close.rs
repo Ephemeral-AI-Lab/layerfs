@@ -264,8 +264,7 @@ pub(super) fn close(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
                     .to_owned(),
             };
             if let Some(now) = SandboxRecord::read(&home, name)? {
-                now.with_lost(&reason, clock::monotonic_ms())
-                    .write(&home)?;
+                now.with_lost(&reason, clock::monotonic_ms()).write(&home)?;
             }
             Err(refusal)
         }
@@ -335,9 +334,7 @@ fn clearable(record: &SandboxRecord) -> Result<()> {
         // a close that died after its generation CAS is uncertain even if it
         // predates the uncertain bit; another close may clear it
         Some(op)
-            if op.name() == "sandbox.close"
-                && op.phase() == "draining"
-                && !op.owner_alive() =>
+            if op.name() == "sandbox.close" && op.phase() == "draining" && !op.owner_alive() =>
         {
             Ok(())
         }
@@ -370,10 +367,7 @@ fn close_unstarted(home: &Path, record: &SandboxRecord) -> Outcome {
         ("was", SdkValue::text(state.as_str())),
     ];
     if state == SandboxState::Unresolved {
-        let left = if record
-            .op()
-            .is_some_and(|op| op.name() == "sandbox.close")
-        {
+        let left = if record.op().is_some_and(|op| op.name() == "sandbox.close") {
             "its close's outcome was unknown: the runtime it was stopping is not recorded here"
         } else {
             "its create's outcome was unknown: a Sandbox it may have started on its machine is not recorded here"

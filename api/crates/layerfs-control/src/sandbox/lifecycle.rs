@@ -5,11 +5,9 @@
 //!
 //! The protocol is:
 //!
-//! ```text
-//! Ready --CAS(generation)--> Draining --no live lease--> Closed
-//!                                   \--lease expiry--> Lost
-//!                                   \--unknown/panic--> Unresolved
-//! ```
+//!     Ready --CAS(generation)--> Draining --no live lease--> Closed
+//!                                       \--lease expiry--> Lost
+//!                                       \--unknown/panic--> Unresolved
 //!
 //! A live lease blocks a close (`LeaseActive`); it is never a reason to
 //! kill. An expired lease moves the record to `Lost`, which `sandbox get`

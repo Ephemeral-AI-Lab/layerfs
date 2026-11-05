@@ -10,7 +10,11 @@ pub(crate) const CALL: Call = call(
     "sandbox",
     "close",
     &[a("name", Name)],
-    &[opt("force", Bool), opt("generation", Int), opt("dry_run", Bool)],
+    &[
+        opt("force", Bool),
+        opt("generation", Int),
+        opt("dry_run", Bool),
+    ],
     "stop a Sandbox",
     run,
 );
