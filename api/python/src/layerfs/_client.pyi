@@ -15,7 +15,7 @@ class ProjectFamily:
         folder: str,
         *,
         timeout: int | None = None,
-        on_progress: Callable[[Progress], object] | None = None,
+        on_progress: Callable[[Progress], object] = ...,
     ) -> Result:
         """import a host folder as a new project into an existing Store"""
     def list(self, store: str | None = None, *, page_size: int | None = None, page_pos: int | None = None) -> Result:
@@ -208,8 +208,8 @@ class WorkspaceFamily:
         *,
         message: str | None = None,
         stream: bool | None = None,
-        stdout: Callable[[Output], object] | None = None,
-        stderr: Callable[[Output], object] | None = None,
+        stdout: Callable[[Output], object] = ...,
+        stderr: Callable[[Output], object] = ...,
     ) -> Result:
         """run one bash command in a Workspace"""
     def commit(self, ws: str, *, message: str | None = None, force: bool | None = None) -> Result:
@@ -292,9 +292,9 @@ class StoreFamily:
         synchronous_commit: str | None = None,
     ) -> Result:
         """attach a PostgreSQL database as a Store"""
-    def push(self, name: str, machine: str, *, on_progress: Callable[[Progress], object] | None = None) -> Result:
+    def push(self, name: str, machine: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
         """send a sqlite Store from native to a machine"""
-    def pull(self, name: str, *, on_progress: Callable[[Progress], object] | None = None) -> Result:
+    def pull(self, name: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
         """bring a sqlite Store from its machine to native"""
     def remove(self, name: str) -> Result:
         """delete a sqlite Store with every project in it"""
@@ -322,7 +322,7 @@ class BackupFamily:
         bucket: str,
         file: str | None = None,
         *,
-        on_progress: Callable[[Progress], object] | None = None,
+        on_progress: Callable[[Progress], object] = ...,
     ) -> Result:
         """upload a sqlite Store to a bucket"""
     def restore(
@@ -331,7 +331,7 @@ class BackupFamily:
         bucket: str,
         file: str | None = None,
         *,
-        on_progress: Callable[[Progress], object] | None = None,
+        on_progress: Callable[[Progress], object] = ...,
     ) -> Result:
         """download a backup as a sqlite Store on native"""
 

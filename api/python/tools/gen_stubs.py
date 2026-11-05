@@ -61,7 +61,9 @@ def method(spec, asynchronous):
         params.append(f"{arg['name']}: {annotation(arg)}" + (" | None = None" if arg["optional"] else ""))
     if spec["options"]:
         params.append("*")
-        params += [f"{opt['name']}: {annotation(opt)} | None = None" for opt in spec["options"]]
+        for opt in spec["options"]:
+            default = " = ..." if opt["kind"] == "function" else " | None = None"
+            params.append(f"{opt['name']}: {annotation(opt)}{default}")
     keyword = "async def" if asynchronous else "def"
     head = f"    {keyword} {spec['call']}({', '.join(params)}) -> Result:"
     if len(head) > LINE:

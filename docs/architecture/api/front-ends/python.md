@@ -110,7 +110,8 @@ await aio.store.push("s", "m",
 
 By argument kind: `name`, `project`, `text` → `str`; `int` → `int`; `bool` →
 `bool`; `size` → `int | str`; `content` → `str | bytes | bytearray | memoryview`;
-`json` → `JSON`; the function options are `on_progress: Callable[[Progress],
+`json` → `JSON`; function options may be omitted, but an explicitly supplied `None` is refused;
+the function options are `on_progress: Callable[[Progress],
 object]` and `stdout`, `stderr: Callable[[str | bytes], object]`. **Results are
 loose**: the table has argument kinds and no result schema (and the Rust table
 is not extended here), so every call returns `Result`, an alias of `Any` for the

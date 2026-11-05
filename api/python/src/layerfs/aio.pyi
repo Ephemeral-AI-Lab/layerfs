@@ -13,7 +13,7 @@ class AsyncProjectFamily:
         folder: str,
         *,
         timeout: int | None = None,
-        on_progress: Callable[[Progress], object] | None = None,
+        on_progress: Callable[[Progress], object] = ...,
     ) -> Result:
         """import a host folder as a new project into an existing Store"""
     async def list(
@@ -241,8 +241,8 @@ class AsyncWorkspaceFamily:
         *,
         message: str | None = None,
         stream: bool | None = None,
-        stdout: Callable[[Output], object] | None = None,
-        stderr: Callable[[Output], object] | None = None,
+        stdout: Callable[[Output], object] = ...,
+        stderr: Callable[[Output], object] = ...,
     ) -> Result:
         """run one bash command in a Workspace"""
     async def commit(self, ws: str, *, message: str | None = None, force: bool | None = None) -> Result:
@@ -325,9 +325,9 @@ class AsyncStoreFamily:
         synchronous_commit: str | None = None,
     ) -> Result:
         """attach a PostgreSQL database as a Store"""
-    async def push(self, name: str, machine: str, *, on_progress: Callable[[Progress], object] | None = None) -> Result:
+    async def push(self, name: str, machine: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
         """send a sqlite Store from native to a machine"""
-    async def pull(self, name: str, *, on_progress: Callable[[Progress], object] | None = None) -> Result:
+    async def pull(self, name: str, *, on_progress: Callable[[Progress], object] = ...) -> Result:
         """bring a sqlite Store from its machine to native"""
     async def remove(self, name: str) -> Result:
         """delete a sqlite Store with every project in it"""
@@ -355,7 +355,7 @@ class AsyncBackupFamily:
         bucket: str,
         file: str | None = None,
         *,
-        on_progress: Callable[[Progress], object] | None = None,
+        on_progress: Callable[[Progress], object] = ...,
     ) -> Result:
         """upload a sqlite Store to a bucket"""
     async def restore(
@@ -364,7 +364,7 @@ class AsyncBackupFamily:
         bucket: str,
         file: str | None = None,
         *,
-        on_progress: Callable[[Progress], object] | None = None,
+        on_progress: Callable[[Progress], object] = ...,
     ) -> Result:
         """download a backup as a sqlite Store on native"""
 

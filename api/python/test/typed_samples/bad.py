@@ -23,3 +23,7 @@ layerfs.machine.create("m", "docker", memory=1.5)  # E: a size is a number or te
 lfs.nosuch.list()  # E: no such family
 layerfs.doctor()["nosuch"]  # E: not a field of the report
 layerfs.client(scope={"project": 1, "folder": "/"})  # E: scope.project is text
+
+layerfs.project.init("shop/api", "/src", on_progress=None)  # E: supplied callback must be callable
+layerfs.workspace.exec("ws", "ls", stdout=None)  # E: supplied callback must be callable
+layerfs.workspace.exec("ws", "ls", stderr=None)  # E: supplied callback must be callable
