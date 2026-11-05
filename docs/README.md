@@ -68,6 +68,7 @@
 - [Cluster-two performance acceptance](../core/docs/issues/307/PERFORMANCE-ACCEPTANCE-S7-S12-20261007.md): existing numerical gates, required work/resource bounds, prospective registration and retained failures
 - [Historical S7–S9 continuation prompt](../core/docs/issues/307/HANDOFF-S7-S9.md): retained source and stopping-boundary context; use the complete plan for current remaining-work ordering
 - [Core concepts](general/concepts.md)
+- [Back up a Store to MinIO or Cloudflare R2](general/backups-minio-r2.md): tested setup, commands, limits, permissions, troubleshooting and cleanup
 - [Sandbox cache design](general/sandbox-cache-design.md): cluster-two ownership, branch sharing, source structure and remaining qualification
 - [Workspace filesystem view](general/workspace-filesystem-view.md): global Store base, daemon overlay, lazy FUSE read path and ASCII diagrams
 - [SQLite in macOS NFS Workspaces](general/sqlite-on-network-filesystems.md): imported WAL databases, local conversion and cache placement
