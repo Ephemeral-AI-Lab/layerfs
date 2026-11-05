@@ -35,10 +35,10 @@ pub fn probe(path: &Path) -> Option<LeaseProbe> {
     if !metadata.is_file() {
         return None;
     }
-    let since = i64::try_from(metadata.mtime())
-        .ok()
-        .and_then(|seconds| seconds.checked_mul(1000))
-        .and_then(|ms| ms.checked_add(i64::from(metadata.mtime_nsec() / 1_000_000)));
+    let since = metadata
+        .mtime()
+        .checked_mul(1000)
+        .and_then(|ms| ms.checked_add(metadata.mtime_nsec() / 1_000_000));
     let file = OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW)

@@ -95,11 +95,7 @@ fn sandbox_record(home: &Path, fields: Vec<(&str, SdkValue)>) {
         .into_iter()
         .map(|(name, value)| (name.to_owned(), value))
         .collect();
-    write_entity(
-        &paths::sandbox_record(home, "sb"),
-        &SdkValue::Map(fields),
-    )
-    .unwrap();
+    write_entity(&paths::sandbox_record(home, "sb"), &SdkValue::Map(fields)).unwrap();
 }
 
 /// B0-142: the skeleton a new contract field or call registers in. It is a
@@ -217,7 +213,11 @@ fn acceptance_85_requested_and_effective_are_returned() {
     );
     let isolation = got.get("isolation").unwrap();
     assert_eq!(isolation.get_text("requested"), Some("process"), "{got:?}");
-    assert_eq!(isolation.get_text("effective"), Some("container"), "{got:?}");
+    assert_eq!(
+        isolation.get_text("effective"),
+        Some("container"),
+        "{got:?}"
+    );
     let _ = std::fs::remove_dir_all(home);
 }
 
@@ -402,7 +402,10 @@ fn acceptance_89_no_provider_branch_and_one_naming_convention() {
             }
         }
     }
-    assert!(offenders.is_empty(), "provider branch in core: {offenders:#?}");
+    assert!(
+        offenders.is_empty(),
+        "provider branch in core: {offenders:#?}"
+    );
 
     let home = tempdir("naming");
     home::open(&home).unwrap();
@@ -455,11 +458,7 @@ fn acceptance_90_doctor_never_starts_and_never_writes() {
     // the report is a warning at most for a stopped machine, never ok=false
     if let Some(SdkValue::List(items)) = report.get("findings") {
         for finding in items {
-            assert_eq!(
-                finding.get_text("severity"),
-                Some("warning"),
-                "{finding:?}"
-            );
+            assert_eq!(finding.get_text("severity"), Some("warning"), "{finding:?}");
         }
     }
     let _ = std::fs::remove_dir_all(home);

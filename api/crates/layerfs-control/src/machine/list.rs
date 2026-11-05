@@ -105,20 +105,25 @@ fn worker(home: &Path, name: &str, state: &str) -> SdkValue {
     };
     let runs = matches!(state, "ready" | "running");
     SdkValue::map([
-        ("state", SdkValue::text(if runs { "running" } else { "recorded" })),
-        ("address", SdkValue::opt_text(recorded.get_text("address").map(str::to_owned))),
-        ("started", recorded.get("started").cloned().unwrap_or_default()),
+        (
+            "state",
+            SdkValue::text(if runs { "running" } else { "recorded" }),
+        ),
+        (
+            "address",
+            SdkValue::opt_text(recorded.get_text("address").map(str::to_owned)),
+        ),
+        (
+            "started",
+            recorded.get("started").cloned().unwrap_or_default(),
+        ),
         (
             "forward_pid",
             recorded.get("forward_pid").cloned().unwrap_or_default(),
         ),
         (
             "path",
-            SdkValue::text(
-                paths::worker_record(home, name)
-                    .display()
-                    .to_string(),
-            ),
+            SdkValue::text(paths::worker_record(home, name).display().to_string()),
         ),
     ])
 }

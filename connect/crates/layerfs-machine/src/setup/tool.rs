@@ -38,6 +38,14 @@ pub(crate) fn within<T>(deadline: Instant, probe: impl FnOnce() -> T) -> T {
     out
 }
 
+/// How much time this thread's [`within`] probe has left, or `None` when it
+/// is not a bounded probe. A worker-secret check uses it so its own limit
+/// fits inside the read model's budget instead of outliving it.
+pub(crate) fn remaining() -> Option<Duration> {
+    CAP.get()
+        .map(|deadline| deadline.saturating_duration_since(Instant::now()))
+}
+
 /// A finished command: its exit code (`None` when a signal ended it) and output.
 #[derive(Debug)]
 pub(crate) struct Output {

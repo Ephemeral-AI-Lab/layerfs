@@ -189,7 +189,10 @@ impl Controls {
     /// A connection for one call that may wait at most `budget`; a full
     /// queue or an exhausted budget is refused `Capacity`, naming the Store,
     /// its in-flight count and the queue bound (#551 B8-160, B8-161).
-    pub(crate) fn lend_within(&self, budget: Duration) -> Result<(Lease<'_>, Duration), SdkRefusal> {
+    pub(crate) fn lend_within(
+        &self,
+        budget: Duration,
+    ) -> Result<(Lease<'_>, Duration), SdkRefusal> {
         let started = Instant::now();
         let poisoned = || refused("Failed", "binding state poisoned");
         let mut pool = self.pool.lock().map_err(|_| poisoned())?;
