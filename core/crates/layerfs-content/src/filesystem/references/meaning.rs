@@ -100,11 +100,11 @@ pub(super) fn finish(row: Row, root: u64, work: &mut ReferenceWork) -> ContentRe
             }
         }
     };
-    // The leaf grammar gives a directory or a symlink exactly one binding. The
+    // The leaf grammar gives a non-root directory exactly one binding. The
     // count is derived from the bindings the merge observed, so a second parent
     // is refused here, where the value is produced, on every reducer route.
     if value
-        .is_some_and(|value| value.kind != InodeKind::RegularFile && value.namespace_ref_count > 1)
+        .is_some_and(|value| value.kind == InodeKind::Directory && value.namespace_ref_count > 1)
     {
         return Err(ContentError::InvalidRecord("multiple parents"));
     }

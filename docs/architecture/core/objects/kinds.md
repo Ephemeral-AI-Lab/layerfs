@@ -104,7 +104,7 @@ lives here where both Content and Storage can use it.
 | Page size | At most `MAXIMUM_NODE_OBJECT_BYTES = 8192` canonical bytes | [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
 | `subtree_bytes` | Row width (`count * 81`), not value width | [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
 | One encoding per value | Unknown kind, nonzero inline padding or inline metadata failing `PortableMetadata::validate` is refused | [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
-| Placement | `InodeValue::validate(is_root)`: the root is a directory with count 0; any other inode has count ≥ 1, and only a regular file may exceed 1 | [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
+| Placement | `InodeValue::validate(is_root)`: the root is a directory with count 0; any other inode has count ≥ 1, and only regular files and symlinks may exceed 1 | [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
 | One grammar | `InodeLeaf::encode`/`decode` and the sorted tree engine call the same `encode_leaf_value`/`decode_leaf_value`, so one malformation has one error | [`inode_leaf.rs`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
 
 The pooled layout splits a leaf into a body that names shared values:

@@ -73,6 +73,7 @@ pub enum Operation {
         name: PathName,
         target: SymlinkTarget,
     },
+    /// Add a name to a file or symlink inode without following its target.
     Link {
         serial: u64,
         parent: u64,
@@ -172,7 +173,7 @@ pub enum Refusal {
     IsDirectory,
     /// The directory still has visible entries (ENOTEMPTY).
     NotEmpty,
-    /// Not representable or not allowed: hard link to a directory or symlink,
+    /// Not representable or not allowed: hard link to a directory,
     /// set-id/sticky bits outside the portable grammar (EPERM).
     NotPermitted,
     /// No such attribute change for this kind, such as symlink mode (EOPNOTSUPP).

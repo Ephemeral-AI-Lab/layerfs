@@ -114,7 +114,7 @@ pub(crate) fn link(
     let file = eval.existing(serial)?;
     if file
         .as_ref()
-        .is_some_and(|inode| inode.kind != InodeKind::File)
+        .is_some_and(|inode| !matches!(inode.kind, InodeKind::File | InodeKind::Symlink))
     {
         return refuse(Refusal::NotPermitted);
     }
@@ -135,7 +135,7 @@ pub(crate) fn link(
         created: None,
         detached: None,
         moved_directory: None,
-        // A hard link is a file by the check above: no directory is gained.
+        // Linking a file or symlink gains no directory.
         inodes: vec![
             file.clone(),
             touched(&directory, now, Some(file.kind), None)?,

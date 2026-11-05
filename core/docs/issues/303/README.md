@@ -357,7 +357,7 @@ Real limits, listed with their kind in
 
 - **Cluster one format:** names of 255 UTF-8 bytes; file, directory and symlink
   only; mode and mtime only (no ownership, no ctime); hard links on regular
-  files only; 16 MiB per canonical object; inode serials up to `i64::MAX`.
+  files and symlinks (owner-authorized source extension, 2026-11-06); 16 MiB per canonical object; inode serials up to `i64::MAX`.
 - **Required integration corrections still present in source:** a heavily fragmented edit of one file
   can exceed `EDIT_DEFERRED_LIMIT` at Commit; one directory's changed names
   must fit in memory at Commit; a hole is committed as zeros.

@@ -215,8 +215,9 @@ fn ready_mount_serves_the_complete_root_to_unregistered_access_then_drains() {
 
     let served = h.status(token).kernel.unwrap().work.unwrap();
     // FLUSH, FSYNC and FSYNCDIR are refused once each with ENOSYS, beside
-    // the three refusals of `mutating::refusals`; none is an inline reply.
-    assert!(served.served > 0 && served.refused >= 6, "{served:?}");
+    // the two remaining refusals of `mutating::refusals`; symlink LINK now
+    // succeeds and is proven separately. None is an inline reply.
+    assert!(served.served > 0 && served.refused >= 5, "{served:?}");
     assert_eq!((served.terminal, served.retained), (0, 0));
     assert!(lookups(&h, token) > before);
     println!(

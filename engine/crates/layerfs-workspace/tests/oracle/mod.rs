@@ -231,10 +231,13 @@ impl Model {
         self.add(path, Body::Symlink(target.to_vec()), 0o777, now);
         true
     }
-    /// A new name of an existing file: the file's own time is unchanged.
+    /// A new name of a file or symlink: the inode's own time is unchanged.
     pub fn link(&mut self, existing: &str, path: &str, now: Stamp) -> bool {
         let id = self.id(existing);
-        assert!(matches!(self.nodes[id].body, Body::File(_)));
+        assert!(matches!(
+            self.nodes[id].body,
+            Body::File(_) | Body::Symlink(_)
+        ));
         let (parent, name) = self.parent(path);
         assert!(self.names(parent).insert(name.to_vec(), id).is_none());
         self.nodes[parent].mtime = now;
@@ -364,7 +367,7 @@ impl Model {
                     Body::Symlink(target) => (Kind::Symlink, target.clone()),
                 };
                 assert!(
-                    kind == Kind::File || names == 1,
+                    kind != Kind::Directory || names == 1,
                     "model: {names} names of one {kind:?}"
                 );
                 let seen = Seen {
