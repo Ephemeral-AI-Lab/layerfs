@@ -897,6 +897,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-provider-doks"
+version = "2.0.0"
+dependencies = [
+ "layerfs-machine",
+ "layerfs-sandbox",
+]
+
+[[package]]
 name = "layerfs-python"
 version = "2.0.0"
 dependencies = [

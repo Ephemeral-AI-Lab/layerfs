@@ -43,6 +43,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-bridge",
     "layerfs-cli",
     "layerfs-machine",
+    "layerfs-provider-doks",
 )
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
@@ -64,6 +65,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-sandbox": "#![deny(unsafe_code)]",
     "layerfs-cli": "#![forbid(unsafe_code)]",
     "layerfs-machine": "#![forbid(unsafe_code)]",
+    "layerfs-provider-doks": "#![forbid(unsafe_code)]",
 }
 
 
@@ -170,6 +172,9 @@ ALLOWED_DEPENDENCIES = {
     # The machine layer (#535 1.2): uses the Backend enum, shared types and
     # json; the bridge's KernelRoute and StoreKind name its support table (B).
     "layerfs-machine": {"layerfs-sandbox", "layerfs-bridge"},
+    # The DOKS provider adapter (#554): the public machine and sandbox
+    # contract only; it adds no core branch.
+    "layerfs-provider-doks": {"layerfs-machine", "layerfs-sandbox"},
     # The 2.0 front ends (#533): thin layers over the library's call table.
     "layerfs-cli": {"layerfs-api", "layerfs-bridge"},
     "layerfs-python": {"layerfs-api", "layerfs-bridge"},
@@ -196,6 +201,7 @@ LAYER = {
     # in phase 1; layerfs-machine and layerfs-store-backup follow there.
     "layerfs-sandbox": CONNECT,
     "layerfs-machine": CONNECT,
+    "layerfs-provider-doks": CONNECT,
     "layerfs-store-backup": CONNECT,
     # The public surface under api/crates: the call surface, the management
     # library under it (#536) and the 2.0 front ends (#533), the `layerfs`

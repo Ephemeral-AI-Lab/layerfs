@@ -1,0 +1,11 @@
+[package]
+name = "layerfs-provider-doks"
+description = "DigitalOcean Kubernetes (DOKS) provider adapter: the built-in ssh machine's Spec and capability, with no core branch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-machine = { path = "../layerfs-machine" }
+layerfs-sandbox = { path = "../layerfs-sandbox" }
