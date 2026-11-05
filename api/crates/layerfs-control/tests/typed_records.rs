@@ -6,6 +6,7 @@ use layerfs_control::backup::record::BucketRecord;
 use layerfs_control::common::json::{parse, print};
 use layerfs_control::common::outcome::View;
 use layerfs_control::project::record::ProjectRecord;
+use layerfs_control::sandbox::lifecycle::SandboxState;
 use layerfs_control::store::record::{StoreDerived, StoreRecord, StoreState};
 
 fn value(text: &str) -> SdkValue {
@@ -103,8 +104,8 @@ fn a_bucket_shows_its_record() {
 fn a_sandbox_shows_its_record() {
     use layerfs_control::sandbox::record::SandboxRecord;
     let text = r#"{"name":"t1","project":"shop/api","machine":"native","created":3,"id":"t1","platform":"macos","runtime":"native","image":null,"backend":"native","route":"nfs"}"#;
-    // its state is derived, never stored (#536 H4), and shown last
-    let shown = text.replacen('}', r#","state":"running"}"#, 1);
+    // its state is derived, never stored (#536 H4); B5 adds the generation
+    let shown = text.replacen('}', r#","generation":1,"state":"ready"}"#, 1);
     let record = SandboxRecord::from_record("t1", value(text));
     assert_eq!(print(&record.to_sdk(View::List)), shown);
     assert_eq!(print(&record.to_sdk(View::Full)), shown);
@@ -323,7 +324,7 @@ fn sandbox_with(
     }
     if let Some((name, pid, uncertain)) = op {
         text.push_str(&format!(
-            r#","op":{{"id":"op-00000000000000cc","name":"{name}","phase":"stop","args":null,"owner":{{"pid":{pid}}},"started":4,"updated":5,"uncertain":{uncertain}}}"#
+            r#","op":{{"id":"op-00000000000000cc","name":"{name}","phase":"claim","args":null,"owner":{{"pid":{pid}}},"started":4,"updated":5,"uncertain":{uncertain}}}"#
         ));
     }
     text.push('}');
@@ -333,32 +334,32 @@ fn sandbox_with(
 #[test]
 fn a_sandbox_state_is_derived_from_its_record_and_intent() {
     let me = i64::from(std::process::id());
-    assert_eq!(sandbox_with(true, None).state(false), "running");
+    assert_eq!(sandbox_with(true, None).state(false), SandboxState::Ready);
     // the daemon answered that it does not run
-    assert_eq!(sandbox_with(true, None).state(true), "gone");
+    assert_eq!(sandbox_with(true, None).state(true), SandboxState::Closed);
     // no id: its create never recorded one
-    assert_eq!(sandbox_with(false, None).state(false), "gone");
+    assert_eq!(sandbox_with(false, None).state(false), SandboxState::Closed);
     assert_eq!(
         sandbox_with(false, Some(("sandbox.create", me, false))).state(false),
-        "creating"
+        SandboxState::Creating
     );
     assert_eq!(
         sandbox_with(true, Some(("sandbox.close", me, false))).state(false),
-        "closing"
+        SandboxState::Draining
     );
     // a gone owner (id 0): uncertain blocks, certain is ignored
     assert_eq!(
         sandbox_with(true, Some(("sandbox.close", 0, true))).state(false),
-        "unresolved"
+        SandboxState::Unresolved
     );
     assert_eq!(
         sandbox_with(true, Some(("sandbox.close", 0, false))).state(false),
-        "running"
+        SandboxState::Ready
     );
     // the intent shows as `{id, name, phase, started, uncertain}`, never its owner
     let shown = sandbox_with(true, Some(("sandbox.close", 0, true))).to_sdk(View::List);
     assert_eq!(
         print(&shown),
-        r#"{"name":"b","id":"b","state":"unresolved","op":{"id":"op-00000000000000cc","name":"sandbox.close","phase":"stop","started":4,"uncertain":true}}"#
+        r#"{"name":"b","id":"b","generation":1,"state":"unresolved","op":{"id":"op-00000000000000cc","name":"sandbox.close","phase":"claim","started":4,"uncertain":true}}"#
     );
 }

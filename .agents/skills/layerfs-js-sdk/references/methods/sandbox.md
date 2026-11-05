@@ -69,7 +69,7 @@ ready.
 | PostgreSQL Store, a platform the table refuses (`lima`, `apple-container`, `microsandbox`, `firecracker`) | `Unsupported` with the support table's reason (`machine.platforms`) |
 
 **Returns:** the Sandbox's record: `{ name, project, machine, created, id,
-platform, runtime, image, backend, route, state: "running" }`. `name` is what
+platform, runtime, image, backend, route, state: "ready" }`. `name` is what
 you pass to every other call; `id` is the same name, as its machine knows it;
 `route` is the kernel route (`fuse`, or `nfs` on macOS `native`).
 
@@ -79,11 +79,24 @@ when asked:
 
 | `state` | When |
 | --- | --- |
-| `creating` | a `sandbox.create`'s process is still running it |
-| `closing` | a `sandbox.close`'s process is still running it |
-| `running` | it has an id and no live or unresolved intent |
-| `gone` | it has no id (its create's process ended before recording one), or `sandbox.get` heard from its machine that it no longer runs |
+| `creating` | a `sandbox.create` owns the name and is writing its record |
+| `provisioning` | a `sandbox.create` is provisioning the runtime, its Store or its image |
+| `starting` | a `sandbox.create` is waiting for the runtime's daemon to become ready |
+| `ready` | it has an id and no live or unresolved intent |
+| `busy` | it has an id and at least one unexpired exec lease |
+| `draining` | a `sandbox.close` owns it, from its generation CAS until it settles |
+| `closed` | it has no id (its create's process ended before recording one), or `sandbox.get` heard from its machine that it no longer runs |
+| `lost` | its runtime ended without a close: an expired exec lease, or a provider that no longer has it |
+| `failed` | a create failed and its record was kept with the failure |
 | `unresolved` | a create or close lost its answer and its process has ended |
+
+The ten states are one enum, `SandboxState` in
+`api/crates/layerfs-control/src/sandbox/lifecycle.rs` (`#[non_exhaustive]`).
+One mapping derives it from the record and its `op`; `sandbox.get` and
+`sandbox.list` only serialize it. A record written before layout 3 that
+still carries an explicit `state` is read through the same enum: `running`
+reads `ready`, `gone` reads `closed`, `closing` reads `draining`, and
+`unknown` reads `unresolved`.
 
 While an intent's process lives, `sandbox.close` and every `workspace` call
 but `status` are refused `Busy` (naming the operation). An `unresolved`
@@ -113,7 +126,7 @@ Every Sandbox record in the home, or one project's, one page at a time:
 derived `state` and, while it has one, its `op` (`{ id, name, phase,
 started, uncertain }`). It reads the home's records only; it does not ask
 the daemons whether they still run (a Sandbox whose daemon ended reads
-`running` here).
+`ready` here).
 
 ## `sandbox.get`
 
@@ -124,7 +137,7 @@ The Sandbox's record with its derived `state` and its `op` while it has one
 `workspaces`, one page of the daemon's list of mounted Workspaces, and
 `next_page_pos` (`page_size`, `page_pos` as for `list`). A Sandbox with no
 `id` asks no daemon; one whose machine answers that it no longer runs reads
-`state: "gone"` with `workspaces: []`. From source, each entry has `ws` (`<sandbox>:<name>` when its mount
+`state: "closed"` with `workspaces: []`. From source, each entry has `ws` (`<sandbox>:<name>` when its mount
 named it, else `<sandbox>:<path>`: pass it to the `workspace` calls), `name`
 (or `null`), `path`, and the daemon's `workspace`, `namespace`, `branch`,
 `base`, `base_layer`, `root`, `activity`, `mounted`, `directory` (the same
@@ -164,7 +177,7 @@ of it runs.
 - A record with no `id` (a create still running, one whose outcome was
   unknown, or one whose process ended) closes too: `Busy` while the
   creating process lives, otherwise the record goes and the name is free
-  (`{ closed, was }`, `was` being `gone` or `unresolved`; for an unresolved
+  (`{ closed, was }`, `was` being `closed` or `unresolved`; for an unresolved
   create, `left` says a Sandbox may remain on its machine).
 
 ## Sandbox lifetime

@@ -583,11 +583,51 @@ pub(crate) fn reclaim(args: &SdkValue, container: &str, stopped: bool) -> Outcom
             format!("no Sandbox {id} runs on this machine"),
         ));
     };
+    // Reclamation is keyed by the machine and backend that own the record;
+    // the isolation class never keys it. A call that named another backend
+    // is a Sandbox restarted elsewhere: leave it alone.
+    let record =
+        crate::common::home::read_record(&directory.join("record.json"))?.unwrap_or_default();
+    let key = crate::sandbox::lifecycle::ReclaimKey::of(&record);
+    // the caller names the machine it keeps the Sandbox under; a worker keeps
+    // its own thin record, so the caller's name is the read model's
+    let machine = args.get_text("machine").unwrap_or(&key.machine);
+    if let Some(backend) = args.get_text("backend") {
+        if backend != key.backend.as_str() {
+            return Err(refused(
+                "Busy",
+                format!(
+                    "Sandbox {id} runs on the {} backend, not {backend}; nothing was removed",
+                    key.backend.as_str()
+                ),
+            ));
+        }
+    }
     if text(&value, "container")? != container {
         return Err(refused(
             "Busy",
             format!("Sandbox {id} was started again while it was reclaimed; nothing was removed"),
         ));
+    }
+    // Automatic reclamation is destructive. The operator's brakes stop it
+    // before anything is removed; the record is kept and marked Lost by the
+    // caller, which records the brake as the close reason.
+    let decision = crate::sandbox::lifecycle::ReclaimPolicy::from_env().decide();
+    if let Some(brake) = decision.brake() {
+        return Err(SdkRefusal {
+            code: "Lost".to_owned(),
+            message: format!(
+                "Sandbox {id}'s runtime is gone, but automatic reclamation is stopped: {brake}; \
+                 its record is kept and marked Lost"
+            ),
+            detail: SdkValue::map([
+                ("sandbox", SdkValue::text(id)),
+                ("machine", SdkValue::text(machine)),
+                ("backend", SdkValue::text(key.backend.as_str())),
+                ("reclaim", SdkValue::text(brake)),
+                ("reason", SdkValue::text(brake)),
+            ]),
+        });
     }
     if stopped {
         match crate::sandbox::recorded::recorded(args, id, &value)?
@@ -603,5 +643,7 @@ pub(crate) fn reclaim(args: &SdkValue, container: &str, stopped: bool) -> Outcom
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Reclaimed")),
         ("id", SdkValue::text(id)),
+        ("machine", SdkValue::text(machine)),
+        ("backend", SdkValue::text(key.backend.as_str())),
     ]))
 }

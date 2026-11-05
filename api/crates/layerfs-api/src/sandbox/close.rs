@@ -1,6 +1,6 @@
 //! `sandbox.close`: stop a Sandbox.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::{Bool, Name};
+use layerfs_control::calls::table::Kind::{Bool, Int, Name};
 use layerfs_control::calls::table::{a, call, opt, Call};
 use layerfs_control::calls::Context;
 use layerfs_control::common::outcome::Outcome;
@@ -10,7 +10,7 @@ pub(crate) const CALL: Call = call(
     "sandbox",
     "close",
     &[a("name", Name)],
-    &[opt("force", Bool)],
+    &[opt("force", Bool), opt("generation", Int), opt("dry_run", Bool)],
     "stop a Sandbox",
     run,
 );

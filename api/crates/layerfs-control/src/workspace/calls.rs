@@ -7,6 +7,7 @@ use crate::common::names::{WorkspaceAt, WorkspaceName, WorkspaceRef};
 use crate::common::outcome::{refused, Outcome};
 use crate::machine::worker::Unreached;
 use crate::sandbox::direct;
+use crate::sandbox::exec_lease::ExecLease;
 use crate::sandbox::family::sandbox_of;
 use crate::sandbox::route::{on_machine, reach};
 use layerfs_bridge::control::SdkValue;
@@ -92,6 +93,12 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
         "status" => "backend.daemon.workspace.status",
         _ => return Err(refused("InvalidInput", format!("no call workspace.{call}"))),
     };
+    // B5 (#548): a running exec holds a lease on the Sandbox record; a
+    // close refuses while it is live, and its expiry marks the Sandbox
+    // Lost instead of killing it blindly.
+    let _lease = (call == "exec")
+        .then(|| ExecLease::begin(&home, &ws.sandbox))
+        .transpose()?;
     // a status starts no machine (P4)
     let out = match call {
         _ if forwarded && call != "exec" => direct::call(context, &record, op, more),

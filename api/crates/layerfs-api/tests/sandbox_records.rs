@@ -57,6 +57,13 @@ fn unstarted(home: &Path, name: &str, owner: Option<(i64, bool)>) {
     write_record(&paths::sandbox_record(home, name), &record).unwrap();
 }
 
+/// A process that has ended (and been reaped).
+fn dead_pid() -> i64 {
+    let mut child = std::process::Command::new("true").spawn().unwrap();
+    child.wait().unwrap();
+    i64::from(child.id())
+}
+
 fn names(listed: &SdkValue) -> Vec<String> {
     match listed.get("items") {
         Some(SdkValue::List(items)) => items
@@ -106,7 +113,7 @@ fn sandbox_records_without_a_sandbox() {
     .unwrap_err();
     assert_eq!(code, "Busy");
     let got = call(&home, "sandbox.get", &[("name", t("busy"))]).unwrap();
-    assert_eq!(got.get_text("state"), Some("creating"), "{got:?}");
+    assert_eq!(got.get_text("state"), Some("starting"), "{got:?}");
 
     // a gone owner's certain intent holds nothing: the Sandbox reads
     // `gone` and closes
@@ -115,9 +122,9 @@ fn sandbox_records_without_a_sandbox() {
     ended.wait().unwrap();
     unstarted(&home, "crashed", Some((dead, false)));
     let got = call(&home, "sandbox.get", &[("name", t("crashed"))]).unwrap();
-    assert_eq!(got.get_text("state"), Some("gone"), "{got:?}");
+    assert_eq!(got.get_text("state"), Some("closed"), "{got:?}");
     let closed = call(&home, "sandbox.close", &[("name", t("crashed"))]).unwrap();
-    assert_eq!(closed.get_text("was"), Some("gone"), "{closed:?}");
+    assert_eq!(closed.get_text("was"), Some("closed"), "{closed:?}");
 
     // a gone owner's uncertain intent refuses every other operation
     // `Unresolved`, naming the get that shows it and the close that clears it
@@ -146,12 +153,9 @@ fn sandbox_records_without_a_sandbox() {
     assert_eq!(closed.get_text("was"), Some("unresolved"), "{closed:?}");
     assert!(closed.get_text("left").is_some(), "{closed:?}");
     assert!(!paths::sandbox_dir(&home, "lost").exists());
-    assert_eq!(
-        call(&home, "sandbox.close", &[("name", t("lost"))])
-            .unwrap_err()
-            .0,
-        "NoSuchSandbox"
-    );
+    // B5 (#548): a repeated close is a quiet no-op, not a second delete
+    let replay = call(&home, "sandbox.close", &[("name", t("lost"))]).unwrap();
+    assert!(replay.get_bool("quiet"), "{replay:?}");
 
     // sandbox.list pages
     for name in ["a1", "a2", "a3"] {
@@ -212,4 +216,146 @@ fn a_worker_replaces_a_removed_project_s_record() {
     let _ = worker::call(&endpoint, "sandbox.host", request, &mut |_| {});
     assert_eq!(read_record(&stale).unwrap(), Some(versioned(&fresh)));
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn sandbox_get_and_list_serialize_the_explicit_states() {
+    let home = tempdir("states");
+    home::open(&home).unwrap();
+    let me = i64::from(std::process::id());
+    let dead = dead_pid();
+    let op = |name: &str, phase: &str, pid: i64, uncertain: bool| {
+        format!(
+            r#","op":{{"id":"op-00000000000000aa","name":"{name}","phase":"{phase}","args":null,"owner":{{"pid":{pid}}},"started":1,"updated":2,"uncertain":{uncertain}}}"#
+        )
+    };
+    let records = [
+        (
+            "creating",
+            String::new(),
+            op("sandbox.create", "claim", me, false),
+        ),
+        (
+            "provisioning",
+            String::new(),
+            op("sandbox.create", "provisioning", me, false),
+        ),
+        (
+            "starting",
+            String::new(),
+            op("sandbox.create", "start", me, false),
+        ),
+        ("ready", String::from(r#","id":"ready""#), String::new()),
+        (
+            "busy",
+            String::from(
+                r#","id":"busy","exec_leases":[{"id":"lease-1","deadline":9999999999999}]"#,
+            ),
+            String::new(),
+        ),
+        (
+            "draining",
+            String::from(r#","id":"draining""#),
+            op("sandbox.close", "draining", me, false),
+        ),
+        ("closed", String::new(), String::new()),
+        (
+            "lost",
+            String::from(r#","id":"lost","lost":true,"close_reason":"an exec lease expired""#),
+            String::new(),
+        ),
+        (
+            "failed",
+            String::from(r#","state":"failed""#),
+            String::new(),
+        ),
+        (
+            "unresolved",
+            String::new(),
+            op("sandbox.create", "start", dead, true),
+        ),
+    ];
+    for (name, facts, intent) in records {
+        let text = format!(
+            r#"{{"name":"{name}","project":"shop/app","machine":"native","generation":1{facts}{intent}}}"#
+        );
+        write_record(
+            &paths::sandbox_record(&home, name),
+            &layerfs_api::json::parse(&text).unwrap(),
+        )
+        .unwrap();
+    }
+
+    // Every one of the ten states is serialized under the existing `state`
+    // key, with the record's other keys unchanged.
+    let states = [
+        ("creating", "creating"),
+        ("provisioning", "provisioning"),
+        ("starting", "starting"),
+        ("ready", "ready"),
+        ("busy", "busy"),
+        ("draining", "draining"),
+        ("closed", "closed"),
+        ("lost", "lost"),
+        ("failed", "failed"),
+        ("unresolved", "unresolved"),
+    ];
+    let list = call(&home, "sandbox.list", &[]).unwrap();
+    let item = |listed: &SdkValue, name: &str| -> SdkValue {
+        match listed.get("items") {
+            Some(SdkValue::List(items)) => items
+                .iter()
+                .find(|item| item.get_text("name") == Some(name))
+                .unwrap_or_else(|| panic!("{name} not listed: {listed:?}"))
+                .clone(),
+            other => panic!("{other:?}"),
+        }
+    };
+    for (name, state) in states {
+        let item = item(&list, name);
+        assert_eq!(item.get_text("state"), Some(state), "{name}: {item:?}");
+        for key in ["name", "project", "machine", "generation"] {
+            assert!(
+                item.get(key).is_some(),
+                "{name} lost existing key {key}: {item:?}"
+            );
+        }
+        assert!(
+            item.get("v").is_none()
+                && item.get("runtime_id").is_none()
+                && item.get("daemon").is_none(),
+            "{name} shows a hidden field: {item:?}"
+        );
+    }
+
+    // `sandbox.get` shows the same explicit state for a record with no
+    // runtime id to ask; its keys are still the record's plus its Workspaces.
+    for (name, state) in states {
+        if matches!(name, "ready" | "busy" | "draining" | "lost") {
+            continue;
+        }
+        let got = call(&home, "sandbox.get", &[("name", t(name))]).unwrap();
+        assert_eq!(got.get_text("state"), Some(state), "{name}: {got:?}");
+        assert!(got.get("workspaces").is_some(), "{name}: {got:?}");
+        assert!(got.get("next_page_pos").is_some(), "{name}: {got:?}");
+        for key in ["name", "project", "machine", "generation"] {
+            assert!(
+                got.get(key).is_some(),
+                "{name} lost existing key {key}: {got:?}"
+            );
+        }
+        assert!(
+            got.get("v").is_none()
+                && got.get("runtime_id").is_none()
+                && got.get("daemon").is_none(),
+            "{name} shows a hidden field: {got:?}"
+        );
+        if matches!(
+            name,
+            "creating" | "provisioning" | "starting" | "unresolved"
+        ) {
+            assert!(got.get("op").is_some(), "{name} lost its intent: {got:?}");
+        }
+    }
+    std::fs::remove_dir_all(home).unwrap();
 }

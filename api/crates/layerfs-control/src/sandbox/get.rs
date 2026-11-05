@@ -38,7 +38,7 @@ pub(super) fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     };
     let (items, next) = page(all, args);
     let shown = record.to_sdk(View::Full);
-    let shown = home::with_field(shown, "state", SdkValue::text(record.state(gone)));
+    let shown = home::with_field(shown, "state", SdkValue::text(record.state(gone).as_str()));
     let mut record = home::with_field(shown, "workspaces", SdkValue::List(items));
     if let Some(why) = down {
         record = home::with_field(record, "down_reason", SdkValue::Text(why));

@@ -7,10 +7,14 @@ pub(crate) mod direct;
 pub mod dispatch;
 pub(crate) mod exec;
 #[doc(hidden)]
+pub mod exec_lease;
+#[doc(hidden)]
 pub mod family;
 pub(crate) mod files;
 mod get;
 pub(crate) mod launch;
+#[doc(hidden)]
+pub mod lifecycle;
 mod list;
 #[doc(hidden)]
 pub mod output;

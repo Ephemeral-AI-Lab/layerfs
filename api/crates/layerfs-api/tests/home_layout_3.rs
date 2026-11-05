@@ -316,7 +316,7 @@ fn a_closed_layout_2_home_converts_and_answers_as_before() {
     let home = home_with("same", &[("old", closed), ("lost", unknown)]);
     let before = settled(&answers(&home, &["old", "lost"]));
     assert!(before.iter().all(Result::is_ok), "{before:?}");
-    assert_eq!(item(&before[4], "old").get_text("state"), Some("gone"));
+    assert_eq!(item(&before[4], "old").get_text("state"), Some("closed"));
     assert_eq!(
         item(&before[4], "lost").get_text("state"),
         Some("unresolved")
@@ -348,7 +348,7 @@ fn a_closed_layout_2_home_converts_and_answers_as_before() {
     // the first call converts it; the ended Sandbox now reads `gone`
     let after = settled(&answers(&home, &["old", "lost"]));
     let gone = item(&after[4], "nat");
-    assert_eq!(gone.get_text("state"), Some("gone"));
+    assert_eq!(gone.get_text("state"), Some("closed"));
     assert_eq!(gone.get("id"), Some(&SdkValue::Null));
     let listed = |answer: &Result<SdkValue, SdkValue>| -> Vec<SdkValue> {
         match answer.as_ref().unwrap().get("items") {
@@ -410,7 +410,7 @@ fn a_closed_layout_2_home_converts_and_answers_as_before() {
 
     // the ended Sandbox closes as gone; a second open changes nothing
     let closed = call(&home, "sandbox.close", &[("name", t("nat"))]).unwrap();
-    assert_eq!(closed.get_text("was"), Some("gone"));
+    assert_eq!(closed.get_text("was"), Some("closed"));
     home::open(&home).unwrap();
     let again = settled(&answers(&home, &["old", "lost"]));
     assert_eq!(again[..4], after[..4]);
@@ -510,7 +510,7 @@ fn a_layout_2_home_with_anything_live_is_refused_and_left() {
     call(&home, "store.list", &[]).unwrap();
     assert!(matches!(home::detect(&home).unwrap(), Layout::Current(_)));
     let listed = call(&home, "sandbox.list", &[]);
-    assert_eq!(item(&listed, "nat").get_text("state"), Some("gone"));
+    assert_eq!(item(&listed, "nat").get_text("state"), Some("closed"));
     // the ended move's `in_progress` is not carried into layout 3
     let record = read_record(&store).unwrap().unwrap();
     assert_eq!(record.get("in_progress"), None, "{record:?}");

@@ -80,6 +80,8 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     if dir.exists() {
         return Err(refused("Exists", format!("a Sandbox named {name} exists")));
     }
+    // a closed name's tombstone (B5, #548) goes with the new claim
+    super::close::forget_closed(&home, name)?;
     let op = Op::begin("sandbox.create", "claim", SdkValue::Null)?;
     home::private_dir(&dir)?;
     let record = SandboxRecord::creating(name, project, machine, &op);

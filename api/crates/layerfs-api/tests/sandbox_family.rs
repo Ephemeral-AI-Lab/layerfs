@@ -118,7 +118,7 @@ fn named_sandboxes_on_native() {
             ("machine", t("native")),
         ],
     );
-    assert_eq!(made.get_text("state"), Some("running"));
+    assert_eq!(made.get_text("state"), Some("ready"));
     // its success dropped the create's intent in the same write (#536 §7.1)
     assert!(made.get("op").is_none(), "{made:?}");
     let record = home::read_record(&paths::sandbox_record(&home, "t1"))
