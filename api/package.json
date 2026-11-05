@@ -8,11 +8,12 @@
     "node"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "build:native": "node scripts/build-native.mjs",
     "build:isolated": "python3 ../tools/worktree.py build",
-    "test:isolated": "python3 ../tools/worktree.py run"
+    "test:isolated": "python3 ../tools/worktree.py run",
+    "gen:types": "node scripts/gen-node-types.mjs"
   }
 }
