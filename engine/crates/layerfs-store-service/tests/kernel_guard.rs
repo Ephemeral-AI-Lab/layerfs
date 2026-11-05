@@ -26,9 +26,50 @@ fn refused(directory: &Path) -> (String, Vec<u8>, Vec<u8>) {
 }
 
 fn scratch(parent: &Path, label: &str) -> PathBuf {
+    use std::os::unix::fs::DirBuilderExt;
     let directory = parent.join(format!("layerfs-guard-{label}-{}", std::process::id()));
-    std::fs::create_dir_all(&directory).unwrap();
+    let _ = std::fs::remove_dir_all(&directory);
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&directory)
+        .unwrap();
     directory
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn missing_store_directory_is_created_0700_and_non_private_directory_is_refused() {
+    use std::os::unix::fs::PermissionsExt;
+    let parent = scratch(&std::env::temp_dir(), "private-mode");
+    let missing = parent.join("global");
+    assert!(!missing.exists());
+    let checked = layerfs_store_service::kernel_guard::check(&missing.join("store.sqlite"));
+    assert!(checked.is_ok(), "{checked:?}");
+    let mode = std::fs::metadata(&missing).unwrap().permissions().mode() & 0o7777;
+    assert_eq!(mode, 0o700);
+
+    // An existing directory with group/other access (e.g. 0755 from default umask)
+    // is refused up front with its path, current mode, expected 0700 and chmod command,
+    // without modifying the user's directory permissions.
+    std::fs::set_permissions(&missing, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let refused = layerfs_store_service::kernel_guard::check(&missing.join("store.sqlite"))
+        .expect_err("0755 directory must be refused");
+    assert!(
+        refused.0.contains(&missing.display().to_string()),
+        "{refused}"
+    );
+    assert!(refused.0.contains("0755"), "{refused}");
+    assert!(refused.0.contains("0700"), "{refused}");
+    assert!(
+        refused
+            .0
+            .contains(&format!("chmod 700 {}", missing.display())),
+        "{refused}"
+    );
+    let unchanged = std::fs::metadata(&missing).unwrap().permissions().mode() & 0o7777;
+    assert_eq!(unchanged, 0o755);
+    std::fs::remove_dir_all(parent).unwrap();
 }
 
 #[cfg(target_os = "macos")]

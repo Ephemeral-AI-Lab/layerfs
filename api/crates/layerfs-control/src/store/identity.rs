@@ -227,13 +227,9 @@ pub(crate) fn make_empty(
     identity: &Identity,
     policy: layerfs_storage::StoragePolicy,
 ) -> Result<SealedStore> {
-    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-    if !global.exists() {
-        std::fs::DirBuilder::new()
-            .mode(0o700)
-            .create(global)
-            .map_err(failed)?;
-    }
+    use std::os::unix::fs::PermissionsExt;
+    layerfs_store_service::kernel_guard::check(global)
+        .map_err(|reason| refused("Unsupported", reason.0))?;
     let (target, _) = layerfs_store_service::install::paths(destination).map_err(failed)?;
     layerfs_store_service::install::absent(&target)
         .map_err(|error| refused("Exists", format!("{}: {error}", target.display())))?;
