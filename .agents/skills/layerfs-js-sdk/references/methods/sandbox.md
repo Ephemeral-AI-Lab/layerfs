@@ -61,7 +61,7 @@ ready.
 
 | Machine | Sandbox |
 | --- | --- |
-| `native` on macOS | host processes, Workspaces over loopback NFS. Needs the daemon: the native machine record's `daemon`, else `~/.cache/layerfs/bundle/<version>/<os>-<arch>/layerfs-daemon` (`Unavailable` when missing) |
+| `native` on macOS | host processes, Workspaces over loopback NFS. The sqlite Store's directory (`<home>/store/<store>`) must be owned by this user and private (mode `0700`, no group/other access; created `0700` when missing). Needs the daemon: the native machine record's `daemon`, else `~/.cache/layerfs/bundle/<version>/<os>-<arch>/layerfs-daemon` (`Unavailable` when missing) |
 | `native` on Linux | Linux namespaces |
 | a VM or ssh machine | sent to that machine's worker, which runs it on its own `native`. On `ssh` and `lima` this process then forwards the daemon's port to its loopback and keeps its keys in the home (#535 G4): the Workspace calls but `exec` go to the daemon directly. A forward that fails leaves the Sandbox on the worker route and the answer says `forward_failed` |
 | `docker`, sqlite Store on `docker` | a container on `image`, else the docker machine's image (`machine update docker --image`), else the bundle's Sandbox image, loaded into Docker once (#535 P5); on macOS and Linux the docker worker starts it beside itself, mounting only the Store's folder (G8). Its daemon's port is published on this host's loopback: the Workspace calls but `exec` go to it directly (#535 G4) |

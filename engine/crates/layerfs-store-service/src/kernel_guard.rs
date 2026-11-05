@@ -27,15 +27,102 @@ impl std::fmt::Display for Unsupported {
     }
 }
 
-/// Checks the platform and the filesystem holding `store`'s directory,
-/// before anything is opened. Returns the filesystem's name.
+/// Ensures `directory` exists (creating it `0700` when missing) and satisfies
+/// the daemon's private-directory requirements: a real directory (not a
+/// symlink) owned by the current effective user with no group/other access
+/// (`mode & 0o077 == 0`). Existing directories' permissions are never modified.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub fn ensure_private_directory(directory: &Path) -> Result<(), Unsupported> {
+    use std::fs;
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+    let euid = nix::unistd::geteuid().as_raw();
+    let meta = match fs::symlink_metadata(directory) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            fs::DirBuilder::new()
+                .mode(0o700)
+                .create(directory)
+                .map_err(|create_err| {
+                    Unsupported(format!(
+                        "the Store's directory {} cannot be examined: {error} (create 0700 failed: {create_err})",
+                        directory.display()
+                    ))
+                })?;
+            fs::symlink_metadata(directory).map_err(|stat_err| {
+                Unsupported(format!(
+                    "the Store's directory {} cannot be examined: {stat_err}",
+                    directory.display()
+                ))
+            })?
+        }
+        Err(error) => {
+            return Err(Unsupported(format!(
+                "the Store's directory {} cannot be examined: {error}",
+                directory.display()
+            )));
+        }
+    };
+    let path = directory.display();
+    if meta.file_type().is_symlink() {
+        return Err(Unsupported(format!(
+            "the Store's directory {path} is a symlink; a real private directory (mode 0700) is required"
+        )));
+    }
+    if !meta.is_dir() {
+        return Err(Unsupported(format!(
+            "the Store's directory {path} is not a directory (mode {:04o}); a private directory (mode 0700) is required",
+            meta.mode() & 0o7777
+        )));
+    }
+    if meta.uid() != euid {
+        return Err(Unsupported(format!(
+            "the Store's directory {path} is owned by uid {}, not the current user (uid {euid}); \
+             the daemon requires a private directory owned by uid {euid} (mode 0700)",
+            meta.uid()
+        )));
+    }
+    let mode = meta.mode() & 0o7777;
+    if mode & 0o077 != 0 {
+        return Err(Unsupported(format!(
+            "the Store's directory {path} has mode {mode:04o} (group/other bits {:04o} are set); \
+             the daemon requires a private directory (mode 0700, no group/other access); \
+             fix with: chmod 700 {path}",
+            mode & 0o077
+        )));
+    }
+    Ok(())
+}
+
+/// The directory Checked by the guard: `store` directly when it is already an
+/// existing directory (or has no file component), otherwise `store.parent()`
+/// when `store` names the `store.sqlite` file inside its directory.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn store_directory(store: &Path) -> &Path {
+    if store.is_dir() {
+        return store;
+    }
+    let is_store_file = store
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|name| name.starts_with("store.sqlite") || name.ends_with(".sqlite"));
+    if is_store_file {
+        store
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."))
+    } else {
+        store
+    }
+}
+
+/// Checks the platform, private-directory ownership/mode (creating `store`'s
+/// directory `0700` when missing) and the filesystem holding `store`'s
+/// directory, before anything is opened. Returns the filesystem's name.
 pub fn check(store: &Path) -> Result<&'static str, Unsupported> {
     #[cfg(target_os = "linux")]
     {
-        let directory = store
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-            .unwrap_or_else(|| Path::new("."));
+        let directory = store_directory(store);
+        ensure_private_directory(directory)?;
         let stat = nix::sys::statfs::statfs(directory).map_err(|error| {
             Unsupported(format!(
                 "the Store's directory {} cannot be examined: {error}",
@@ -56,15 +143,13 @@ pub fn check(store: &Path) -> Result<&'static str, Unsupported> {
                 ))
             })
     }
-    // macOS native (LAYERFS_SANDBOX=native): the daemon, the SDK and every
+    // macOS native (the `native` machine): the daemon, the SDK and every
     // command share this one macOS kernel, so the Store's locks coordinate
     // exactly as on Linux; only a local filesystem may hold the Store.
     #[cfg(target_os = "macos")]
     {
-        let directory = store
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-            .unwrap_or_else(|| Path::new("."));
+        let directory = store_directory(store);
+        ensure_private_directory(directory)?;
         let stat = nix::sys::statfs::statfs(directory).map_err(|error| {
             Unsupported(format!(
                 "the Store's directory {} cannot be examined: {error}",

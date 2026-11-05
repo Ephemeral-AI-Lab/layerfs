@@ -103,6 +103,7 @@ create it and then [push](push.md) it. See the
 | `InvalidInput` | a bad Store name; a folder-scoped client | no | [`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/names.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs) |
 | `Exists` | a Store record of that name exists, or a file is already at the target | no | [`create.rs`](../../../../../api/crates/layerfs-control/src/store/create.rs), [`identity.rs`](../../../../../api/crates/layerfs-control/src/store/identity.rs) `make_empty` |
 | `Unavailable` | another process held the home lock or the Store's lock for 120 s | no | [`common/home/lock.rs`](../../../../../api/crates/layerfs-control/src/common/home/lock.rs) |
+| `Unsupported` | the kernel guard refuses `store/<name>/` (not on a local lock-carrying filesystem, or an existing directory is not owned by this user or has group/other access instead of mode `0700`) | no | [`identity.rs`](../../../../../api/crates/layerfs-control/src/store/identity.rs), [`kernel_guard.rs`](../../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | `Failed` | the empty Store could not be made or written (`Store create: …`), or the record write failed | no | [`identity.rs`](../../../../../api/crates/layerfs-control/src/store/identity.rs) |
 
 A failure before the record is written removes the call's own

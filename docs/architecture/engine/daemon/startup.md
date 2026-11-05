@@ -39,7 +39,7 @@ carry no key and no command.
 | `command_uid` differs from the daemon uid, except on the NFS route | `command and daemon identities must differ` | [`config.rs`](../../../../engine/crates/layerfs-daemon/src/application/config.rs) |
 | `serial_low_water` below `layerfs_workspace::SERIAL_REFILL` | `serial low-water must be below the refill window` | [`config.rs`](../../../../engine/crates/layerfs-daemon/src/application/config.rs) |
 | Store, overlay and config paths outside the mount home; Store is not the overlay file | `separate protected backing and mount paths` | [`config.rs`](../../../../engine/crates/layerfs-daemon/src/application/config.rs) |
-| Overlay and Store parents are private `0700` directories (created once if absent); an installed Store file is protected | `private directory ownership/mode/type` | [`config.rs`](../../../../engine/crates/layerfs-daemon/src/application/config.rs) |
+| Overlay and Store parents are private `0700` directories (created once if absent); an installed Store file is protected | `private directory ownership/mode/type at <path>: …` | [`config.rs`](../../../../engine/crates/layerfs-daemon/src/application/config.rs) |
 
 The `DaemonSetup` fields are listed on [Bridge: Daemon setup](bridge.md#daemon-setup).
 

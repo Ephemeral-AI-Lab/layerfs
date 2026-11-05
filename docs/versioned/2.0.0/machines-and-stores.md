@@ -16,7 +16,7 @@ a copy of a sqlite Store in a bucket.
 
 | Kind | How many | Made by | Sandboxes run as | Tool |
 | --- | --- | --- | --- | --- |
-| `native` | one, built in | — | macOS: host processes with a loopback NFS mount. Linux: namespaces (needs root). Windows: none; `native` holds only records (O5) | — |
+| `native` | one, built in | — | macOS: host processes with a loopback NFS mount (each sqlite Store's directory must be owned by this user and private, mode `0700`). Linux: namespaces (needs root). Windows: none; `native` holds only records (O5) | — |
 | `docker` | one, built in | — | Docker containers on the image `machine update docker --image` records, else the bundle's Sandbox image, loaded into Docker once (#535 P5); see Routes | `docker` |
 | `apple-container` | many | `machine create` | namespaces inside the VM | `container` |
 | `microsandbox` | many | `machine create` | namespaces inside the VM | `msb` |

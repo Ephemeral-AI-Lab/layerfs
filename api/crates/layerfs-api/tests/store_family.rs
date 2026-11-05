@@ -63,8 +63,44 @@ fn home_with_box() -> (PathBuf, PathBuf) {
 
 #[test]
 fn create_list_get_and_status() {
+    use std::os::unix::fs::PermissionsExt;
     let (home, root) = home_with_box();
+    // a pre-existing store directory with group/other access is refused up
+    // front without changing the user's directory mode
+    let bad_dir = paths::store_dir(&home, "open-dir");
+    std::fs::create_dir_all(&bad_dir).unwrap();
+    std::fs::set_permissions(&bad_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let (code, message) = call(&home, "store.create", &[("name", t("open-dir"))]).unwrap_err();
+    assert_eq!(code, "Unsupported", "{message}");
+    assert!(
+        message.contains(&bad_dir.display().to_string()),
+        "{message}"
+    );
+    assert!(
+        message.contains("0755") && message.contains("0700"),
+        "{message}"
+    );
+    assert!(
+        message.contains(&format!("chmod 700 {}", bad_dir.display())),
+        "{message}"
+    );
+    assert!(bad_dir.exists(), "user's existing directory is not deleted");
+    assert_eq!(
+        std::fs::metadata(&bad_dir).unwrap().permissions().mode() & 0o7777,
+        0o755,
+        "user's existing directory permissions are not modified"
+    );
+    std::fs::remove_dir_all(&bad_dir).unwrap();
+
     let made = call(&home, "store.create", &[("name", t("shop"))]).unwrap();
+    assert_eq!(
+        std::fs::metadata(paths::store_dir(&home, "shop"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o700
+    );
     assert_eq!(made.get_text("machine"), Some("native"));
     assert!(
         made.get("cursor").is_none(),
