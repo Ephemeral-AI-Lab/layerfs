@@ -139,10 +139,28 @@ pub(crate) fn exchange(
                 if n == 0 {
                     return Err(uncertain("source shrank mid-request".to_owned()));
                 }
-                writer
-                    .write_all(&buffer[..n])
-                    .map_err(|e| uncertain(format!("send: {e}")))?;
-                crate::bucket::progress::add(n as u64);
+                // each write's timeout restarts when a few bytes move, so a
+                // peer that takes in a trickle is bounded per buffer instead
+                let started = std::time::Instant::now();
+                let mut rest = &buffer[..n];
+                while !rest.is_empty() {
+                    match writer.write(rest) {
+                        Ok(0) => return Err(uncertain("send: connection closed".to_owned())),
+                        Ok(sent) => {
+                            crate::bucket::progress::add(sent as u64);
+                            rest = &rest[sent..];
+                        }
+                        Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                        Err(e) => return Err(uncertain(format!("send: {e}"))),
+                    }
+                    if started.elapsed() >= config.io_timeout {
+                        return Err(uncertain(format!(
+                            "send stalled: {} of {n} bytes moved in {} ms",
+                            n - rest.len(),
+                            started.elapsed().as_millis()
+                        )));
+                    }
+                }
                 left -= n as u64;
             }
         }
