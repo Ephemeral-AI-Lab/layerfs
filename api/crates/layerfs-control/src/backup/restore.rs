@@ -1,5 +1,6 @@
 //! `backup.restore`: a backup as a sqlite Store on `native`.
-use super::family::{hex, progress, write_link};
+use super::family::{hex, write_link};
+use super::progress::Shown;
 use super::record::{BucketRecord, StoreLink};
 use crate::common::context::Context;
 use crate::common::home::lease;
@@ -61,10 +62,15 @@ pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         Some(identity) => identity.cursor_key,
         None => crate::sandbox::registry::random()?,
     };
-    progress(context, "download");
+    let mut shown = Shown::new();
+    shown.phase(context, "check");
     let staging = Staging::make(&home)?;
     let staged = staging.0.join(remote::STORE_FILE);
-    let loaded = remote::load(driver.as_ref(), &file, &staged, cursor)
+    // `download` with its bytes and pieces, `verify`, then `install`
+    let loaded = shown
+        .transfer(context, || {
+            remote::load(driver.as_ref(), &file, &staged, cursor)
+        })
         .map_err(|failure| refused("Failed", failure.to_string()))?;
     let record = match (&existing, &identity) {
         (Some(record), Some(identity)) => {
@@ -82,7 +88,7 @@ pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         _ => StoreRecord::restored(store, &loaded.binding, &cursor),
     };
     let found = projects_in(&home, store, &record, &staged)?;
-    progress(context, "install");
+    shown.phase(context, "install");
     let _lock = home::lock::take(&home)?;
     // a Store replaced here is checked and replaced under its lock, which
     // the link below takes again

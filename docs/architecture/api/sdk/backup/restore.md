@@ -46,7 +46,7 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `on_progress` | Function | none | called with `{ phase }`: `download`, `install` | [`backup/family.rs`](../../../../../api/crates/layerfs-control/src/backup/family.rs) `progress` |
+| `on_progress` | Function | none | called with `{ phase, done, total, pieces }`: `check`, `download` (with bytes, and pieces when the file is stored as pieces), `verify`, `install`; see [Progress](README.md#progress) | [`backup/progress.rs`](../../../../../api/crates/layerfs-control/src/backup/progress.rs) `Shown` |
 
 ## Returns
 

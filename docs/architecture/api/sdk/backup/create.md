@@ -45,7 +45,7 @@ layerfs backup create <store> <bucket> [<file>] [--progress]
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `on_progress` | Function | none | called with `{ phase }`: `snapshot`, `send` (worker machines only), `upload` | [`backup/family.rs`](../../../../../api/crates/layerfs-control/src/backup/family.rs) `progress` |
+| `on_progress` | Function | none | called with `{ phase, done, total, pieces }`: `check`, `snapshot`, `send` (worker machines only, with bytes), `check`, `hash` and `upload` (with bytes; `upload` with pieces when the file goes up as pieces); see [Progress](README.md#progress) | [`backup/progress.rs`](../../../../../api/crates/layerfs-control/src/backup/progress.rs) `Shown` |
 
 ## Returns
 

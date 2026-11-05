@@ -98,7 +98,3 @@ pub(super) fn write_link(home: &Path, store: &str, bucket: &str, link: StoreLink
         .ok_or_else(|| refused("NotFound", format!("no Store named {store}")))?;
     record.with_link(bucket, &link).write(home)
 }
-
-pub(super) fn progress(context: &mut Context<'_>, phase: &str) {
-    context.progress(SdkValue::map([("phase", SdkValue::text(phase))]));
-}
