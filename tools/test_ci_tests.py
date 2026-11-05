@@ -35,6 +35,7 @@ class SelectionAgainstTheTree(unittest.TestCase):
         self.assertNotIn("lane_merge", names)
         self.assertIn(("layerfs-api", "kernel_application"), mount)
         self.assertIn(("layerfs-api", "observed_application"), mount)
+        self.assertIn(("layerfs-api", "unmount_observability"), mount)
         self.assertIn(("layerfs-daemon", "forced_unavailable"), mount)
 
     def test_fast_filter_excludes_the_nightly_groups_and_nightly_selects_them(self):

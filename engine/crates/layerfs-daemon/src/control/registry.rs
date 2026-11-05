@@ -1,7 +1,7 @@
 //! Short control admission over bounded daemon-owned Workspace routes.
 use super::{
     kernel::{Kernel, KernelServing},
-    Failure,
+    Failure, UnmountAbort,
 };
 use crate::{
     store::{BoundWorkspace, Store},
@@ -67,6 +67,17 @@ impl Service {
             value.workspace.clone()
         };
         workspace.operation().map_err(Failure::Workspace)
+    }
+    /// The abort path a retained normal unmount recorded, if it took one.
+    /// Observation only: nothing is transferred, released, retried or settled.
+    pub fn retained_abort(&self, token: WorkspaceToken) -> Option<Box<UnmountAbort>> {
+        let entries = self.entries.lock().ok()?;
+        let binding = bound(&entries, token).ok()?;
+        match &binding.kernel {
+            #[cfg(target_os = "linux")]
+            Kernel::Retained(kept) => kept.abort.clone(),
+            _ => None,
+        }
     }
     /// Workspaces bound or binding; None when the registry is poisoned.
     pub fn workspaces(&self) -> Option<usize> {
