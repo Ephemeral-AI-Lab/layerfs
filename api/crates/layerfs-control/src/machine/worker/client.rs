@@ -30,11 +30,13 @@ pub const HELLO_WAIT: Duration = Duration::from_secs(10);
 /// call is `Unknown` within this wait.
 pub const CLAIM_WAIT: Duration = Duration::from_secs(10);
 
-/// How long the caller waits between frames of a running operation. The
-/// worker beats at [`HEARTBEAT`] while it runs; a worker that stops beating
-/// is dead, and the call is `Unknown` within this wait. It bounds no
-/// operation: a long command keeps beating and is never cut off.
-pub const HEARTBEAT_WAIT: Duration = Duration::from_secs(10);
+/// How long the caller waits for the next sign that a claimed operation is
+/// advancing: a `progress` or an `event` frame refreshes it. A liveness
+/// `beat` does not: it says the worker process is alive, not that its
+/// operation advances, so a worker that keeps beating while its operation
+/// never returns is `Unknown` within this wait. It bounds no operation: one
+/// that reports progress keeps its whole duration.
+pub const PROGRESS_WAIT: Duration = Duration::from_secs(30);
 
 /// How often a worker beats while it runs an operation.
 pub const HEARTBEAT: Duration = Duration::from_secs(2);
@@ -47,26 +49,59 @@ pub const PING_WAIT: Duration = Duration::from_secs(10);
 /// `Unknown` within this wait, and a slow but live one keeps going.
 pub const SEND_WAIT: Duration = Duration::from_secs(60);
 
+/// What one call waits for: the claim after its request, and then each sign
+/// of operation progress. [`Default`] is [`CLAIM_WAIT`] and
+/// [`PROGRESS_WAIT`]; tests use smaller windows to keep their clocks short.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Windows {
+    /// How long a sent request may go unclaimed.
+    pub claim: Duration,
+    /// How long a claimed operation may go without a progress or output
+    /// frame.
+    pub progress: Duration,
+}
+
+impl Default for Windows {
+    fn default() -> Self {
+        Self {
+            claim: CLAIM_WAIT,
+            progress: PROGRESS_WAIT,
+        }
+    }
+}
+
 /// Runs one host operation `op` in the worker. Events the worker sends
-/// (progress, command output) go to `events`. A request too large is
-/// `TooLarge` and a worker that cannot be reached or does not answer its
+/// (operation progress, command output) go to `events`. A request too large
+/// is `TooLarge` and a worker that cannot be reached or does not answer its
 /// secret in [`HELLO_WAIT`] is `Unavailable`, and so is one of another
 /// build ([`super::Hello::mismatch`]); a wrong secret is the worker's
-/// refusal (`Denied`). In each, the request was not sent. A
-/// connection lost after the request was sent is `Unknown`: the operation
-/// may have run, and nothing is resent. Once the request is sent, the
-/// worker's claim and its heartbeats bound how long the caller waits
-/// ([`CLAIM_WAIT`], [`HEARTBEAT_WAIT`]); a dead worker therefore answers
-/// `Unknown` in bounded time, while a live one keeps beating and a long
-/// operation is not cut off.
+/// refusal (`Denied`). In each, the request was not sent. Once the request
+/// was sent the outcome is never resent: a connection lost is `Unknown`, and
+/// so is a worker that does not claim the request in [`CLAIM_WAIT`] or
+/// claims it and then reports no progress for [`PROGRESS_WAIT`]. An
+/// operation that is `Unknown` this way may still run to its end; its
+/// effects stay observable.
 pub fn call(
     endpoint: &Endpoint,
     op: &str,
     args: SdkValue,
     events: &mut dyn FnMut(SdkValue),
 ) -> Outcome {
+    call_with(endpoint, op, args, events, Windows::default())
+}
+
+/// [`call`] with explicit [`Windows`]: the same call, waiting the given
+/// time for the claim and then for each sign of operation progress.
+pub fn call_with(
+    endpoint: &Endpoint,
+    op: &str,
+    args: SdkValue,
+    events: &mut dyn FnMut(SdkValue),
+    windows: Windows,
+) -> Outcome {
     let request = request(op, args)?;
-    send(endpoint, op, &request, events, None).unwrap_or_else(|Unreached(refusal)| Err(refusal))
+    send_with(endpoint, op, &request, events, windows)
+        .unwrap_or_else(|Unreached(refusal)| Err(refusal))
 }
 
 /// A worker that was not reached: the connection, the secret or the
@@ -89,12 +124,11 @@ pub fn request(op: &str, args: SdkValue) -> Result<Vec<u8>, SdkRefusal> {
 /// Sends the framed `request` (for operation `op`) on one new connection:
 /// the secret first, alone, then the request once. [`Unreached`] when
 /// nothing was sent; otherwise the operation's outcome, `Unknown` when the
-/// answer was lost after the request was sent. Every answer frame is waited
-/// for at most `answer_within` when the caller bounds the whole call (a
-/// ping), or by the claim and heartbeat waits otherwise: the operation's
-/// own duration is never a deadline. A frame is bounded as a whole (its
-/// length, each read and its body at a minimum rate), so a peer that
-/// trickles one cannot stretch the wait.
+/// answer was lost after the request was sent. `answer_within` bounds the
+/// whole answer when some (a ping); when none, the operation may run as long
+/// as it keeps reporting progress ([`CLAIM_WAIT`], then [`PROGRESS_WAIT`]).
+/// A frame is bounded as a whole (its length, each read and its body at a
+/// minimum rate), so a peer that trickles one cannot stretch the wait.
 pub fn send(
     endpoint: &Endpoint,
     op: &str,
@@ -103,7 +137,30 @@ pub fn send(
     answer_within: Option<Duration>,
 ) -> Result<Outcome, Unreached> {
     let started = Instant::now();
-    let sent = send_once(endpoint, op, request, events, answer_within);
+    let sent = send_once(
+        endpoint,
+        op,
+        request,
+        events,
+        answer_within,
+        Windows::default(),
+    );
+    let worker = endpoint.address.to_string();
+    crate::common::trace::connection(&worker, op, sent.is_ok(), started);
+    sent
+}
+
+/// [`send`] with explicit [`Windows`] for an answer that is not bounded as
+/// a whole: a test can shorten the claim and progress waits.
+pub fn send_with(
+    endpoint: &Endpoint,
+    op: &str,
+    request: &[u8],
+    events: &mut dyn FnMut(SdkValue),
+    windows: Windows,
+) -> Result<Outcome, Unreached> {
+    let started = Instant::now();
+    let sent = send_once(endpoint, op, request, events, None, windows);
     let worker = endpoint.address.to_string();
     crate::common::trace::connection(&worker, op, sent.is_ok(), started);
     sent
@@ -115,6 +172,7 @@ fn send_once(
     request: &[u8],
     events: &mut dyn FnMut(SdkValue),
     answer_within: Option<Duration>,
+    windows: Windows,
 ) -> Result<Outcome, Unreached> {
     let unavailable = |why: &dyn std::fmt::Display| {
         Unreached(refused(
@@ -137,7 +195,15 @@ fn send_once(
         .set_write_timeout(Some(SEND_WAIT))
         .map_err(|error| unavailable(&error))?;
     // from here the request may have reached the worker: nothing is resent
-    Ok(answer(stream, endpoint, op, request, events, answer_within))
+    Ok(answer(
+        stream,
+        endpoint,
+        op,
+        request,
+        events,
+        answer_within,
+        windows,
+    ))
 }
 
 /// Why a worker did not answer its secret.
@@ -196,15 +262,19 @@ pub fn hello(endpoint: &Endpoint) -> Result<Hello, SdkRefusal> {
     }
 }
 
-/// Writes the request and reads its claim, the events, the beats and the
-/// answer. The first frame must arrive within [`CLAIM_WAIT`] and every later
-/// one within [`HEARTBEAT_WAIT`], or within `answer_within` for every frame
-/// when the caller bounds the whole call (a ping). Each frame is bounded as
-/// a whole: its length and every read within the wait, and its body within
-/// the wait or its length at a minimum rate. A large answer (a file read)
-/// may therefore take longer than the wait to transfer as long as it keeps
-/// arriving, while a worker that sends nothing, or trickles a frame, is
-/// dead.
+/// Writes the request and reads the frames: the claim, the operation's
+/// progress and output, the liveness beats, then the value or the refusal.
+///
+/// With `answer_within` set, the whole answer is waited for that long (a
+/// ping). Without it, after the request is sent the worker has
+/// [`CLAIM_WAIT`] to claim it and then each sign of operation progress has
+/// [`PROGRESS_WAIT`]: a `progress` or `event` frame refreshes that wait, a
+/// liveness `beat` does not. A wait that runs out is `Unknown`, because the
+/// request was sent and may have run; it is never resent. Each frame is
+/// bounded as a whole: its length and every read within the wait, and its
+/// body within the wait or its length at a minimum rate, so a peer that
+/// trickles a frame cannot stretch a wait. A wait that expires writes one
+/// `layerfs worker: liveness timeout:` line to stderr.
 fn answer(
     mut stream: TcpStream,
     endpoint: &Endpoint,
@@ -212,6 +282,7 @@ fn answer(
     request: &[u8],
     events: &mut dyn FnMut(SdkValue),
     answer_within: Option<Duration>,
+    windows: Windows,
 ) -> Outcome {
     stream
         .write_all(request)
@@ -222,15 +293,40 @@ fn answer(
                 format!("sending {op} to the worker failed part way ({error}); it was not resent"),
             )
         })?;
-    // the worker's claim, then its heartbeats, bound each wait: a worker
-    // that stops is dead, and a long operation keeps the call alive
+    // the claim ends the first wait; progress or output then refreshes the
+    // next one, and a beat never does
+    let started = Instant::now();
     let mut claimed = false;
+    let mut signals = 0u64;
+    let mut last = started;
     loop {
-        let wait = answer_within.unwrap_or(if claimed { HEARTBEAT_WAIT } else { CLAIM_WAIT });
+        let wait = match answer_within {
+            Some(total) => total
+                .checked_sub(started.elapsed())
+                .filter(|left| !left.is_zero()),
+            None if !claimed => windows
+                .claim
+                .checked_sub(started.elapsed())
+                .filter(|left| !left.is_zero()),
+            None => windows
+                .progress
+                .checked_sub(last.elapsed())
+                .filter(|left| !left.is_zero()),
+        };
+        let Some(wait) = wait else {
+            if answer_within.is_some() {
+                return Err(lost(op, "the answer did not arrive within its wait"));
+            }
+            return Err(if claimed {
+                no_progress(op, signals, windows.progress, started)
+            } else {
+                no_claim(op, windows.claim, started)
+            });
+        };
         let stage = if answer_within.is_some() {
             "answer"
         } else if claimed {
-            "heartbeat"
+            "progress"
         } else {
             "claim"
         };
@@ -238,28 +334,60 @@ fn answer(
             Ok(Some(frame)) => frame,
             Ok(None) => return Err(lost(op, "the worker closed the connection")),
             Err(refusal) => {
-                if is_liveness_timeout(&refusal) {
+                let expired = is_liveness_timeout(&refusal);
+                if expired {
                     liveness_timeout(endpoint, op, stage, wait);
                 }
-                return Err(lost(op, &refusal.message));
+                // a liveness wait that expires on an operation is the
+                // operation not advancing, not just a dead connection
+                return Err(if expired && answer_within.is_none() {
+                    if claimed {
+                        no_progress(op, signals, windows.progress, started)
+                    } else {
+                        no_claim(op, windows.claim, started)
+                    }
+                } else {
+                    lost(op, &refusal.message)
+                });
             }
         };
-        if frame.get("claimed").is_some() || frame.get("beat").is_some() {
+        if frame.get("claimed").is_some() {
             claimed = true;
+            last = Instant::now();
+            continue;
+        }
+        if let Some(value) = frame.get("progress") {
+            signals += 1;
+            last = Instant::now();
+            // the worker's own start/done frame bounds the wait; only the
+            // operation's own progress is a caller event, as it is locally
+            if value.get_bool("worker") {
+                continue;
+            }
+            events(SdkValue::map([("progress", value.clone())]));
+            continue;
+        }
+        if frame.get("beat").is_some() {
+            // a liveness beat says the worker is alive, not that its
+            // operation is progressing: it does not refresh the wait
             continue;
         }
         if let Some(event) = frame.get("event") {
+            signals += 1;
+            last = Instant::now();
             events(event.clone());
-        } else if let Some(value) = frame.get("value") {
-            return Ok(value.clone());
-        } else if let Some(refusal) = frame.get("refused") {
-            return Err(refusal_of(refusal));
-        } else {
-            return Err(refused(
-                "Failed",
-                "the worker sent a frame of no known kind",
-            ));
+            continue;
         }
+        if let Some(value) = frame.get("value") {
+            return Ok(value.clone());
+        }
+        if let Some(refusal) = frame.get("refused") {
+            return Err(refusal_of(refusal));
+        }
+        return Err(refused(
+            "Failed",
+            "the worker sent a frame of no known kind",
+        ));
     }
 }
 
@@ -289,6 +417,53 @@ fn lost(op: &str, why: &str) -> SdkRefusal {
         "Unknown",
         format!("{op}: the worker's answer was lost ({why}); it may have run, and was not resent"),
     )
+}
+
+/// The request was sent but the worker never claimed it.
+fn no_claim(op: &str, wait: Duration, started: Instant) -> SdkRefusal {
+    let mut refusal = refused(
+        "Unknown",
+        format!(
+            "{op}: the worker did not claim the request within {}s; it was sent and may have run, and was not resent",
+            wait.as_secs_f64()
+        ),
+    );
+    refusal.detail = SdkValue::map([
+        ("op", SdkValue::text(op)),
+        ("claimed", SdkValue::Bool(false)),
+        ("progress", SdkValue::Int(0)),
+        ("waited_ms", SdkValue::Int(ms(started.elapsed()))),
+        ("window_ms", SdkValue::Int(ms(wait))),
+    ]);
+    refusal
+}
+
+/// The worker claimed the operation but stopped reporting progress: the
+/// operation may be wedged, so the caller stops waiting. Its eventual result
+/// is not replayed; if it does finish, its effects stay observable.
+fn no_progress(op: &str, signals: u64, wait: Duration, started: Instant) -> SdkRefusal {
+    let mut refusal = refused(
+        "Unknown",
+        format!(
+            "{op}: the worker claimed the request but reported no progress for {}s ({signals} progress frames); it may still run, and was not resent",
+            wait.as_secs_f64()
+        ),
+    );
+    refusal.detail = SdkValue::map([
+        ("op", SdkValue::text(op)),
+        ("claimed", SdkValue::Bool(true)),
+        (
+            "progress",
+            SdkValue::Int(i64::try_from(signals).unwrap_or(i64::MAX)),
+        ),
+        ("waited_ms", SdkValue::Int(ms(started.elapsed()))),
+        ("window_ms", SdkValue::Int(ms(wait))),
+    ]);
+    refusal
+}
+
+fn ms(duration: Duration) -> i64 {
+    i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
 }
 
 /// Whether the worker answers its secret: `{ kind: "worker", version, pid }`.

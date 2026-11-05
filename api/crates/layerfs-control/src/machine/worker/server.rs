@@ -6,15 +6,19 @@
 //! wrong secret and closes, before it reads anything larger. A caller of
 //! another build sends nothing more and closes. Then a request `{ op, args }`,
 //! read with at most [`REQUEST_WAIT`] between bytes. Once it is read, the
-//! worker claims it (`{ claimed: true }`) and beats (`{ beat: true }`) every
-//! [`HEARTBEAT`] while the operation runs, so the caller can tell a live
-//! worker from a dead one without bounding the operation. `worker.ping`
-//! answers who it is;
+//! worker claims it (`{ claimed: true, op }`) and then reports operation
+//! progress (`{ progress: { seq, op, phase, ... } }`) before and after the
+//! operation, and from its own path while it runs (a phase, a chunk of a
+//! command's output). It also beats (`{ beat: true }`) every [`HEARTBEAT`]
+//! while the operation runs: the beat says the process is alive, progress
+//! says the operation is advancing, and the caller times the operation on
+//! the latter only. `worker.ping` answers who it is;
 //! `store.call`, `store.file`, `sandbox.host`, `project.stage`,
 //! `project.init` and `project.remove` run one operation on this machine,
 //! with `home` set to the worker's own root (the machine's data disk),
 //! never a path the caller sends. Answers are
-//! `{ value }` or `{ refused }`, after any `{ event }` frames.
+//! `{ value }` or `{ refused }`, after any `{ progress }` or `{ event }`
+//! frames.
 //!
 //! A request may carry `home_id`, the caller's home id: the root is not a
 //! home and has no id of its own (O33), so host code that asks for one
@@ -28,7 +32,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// The longest the worker waits for the next byte of a request.
 pub const REQUEST_WAIT: Duration = Duration::from_secs(30);
@@ -114,23 +118,46 @@ fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) ->
     // writes from the beats and the answer share one stream: a frame is
     // never interleaved with another
     let stream = Arc::new(Mutex::new(stream));
-    // the request is read: claim it, so its caller stops waiting to be
-    // heard. Beats then carry its liveness until the answer is ready
-    if write_locked(&stream, &SdkValue::map([("claimed", SdkValue::Bool(true))])).is_err() {
+    // the request is read: claim it once, with its operation, so its caller
+    // stops waiting to be heard and can tell a worker that never got going
+    // from one that is running. Beats then carry its liveness until the
+    // answer is ready
+    let op = request.get_text("op").unwrap_or("").to_owned();
+    let args = request.get("args").cloned().unwrap_or_default();
+    let _home = crate::common::home::guest::sent(request.get_text("home_id"));
+    if write_locked(&stream, &claimed_frame(&op)).is_err() {
         return false;
     }
     let beats = Beats::start(stream.clone());
-    let _home = crate::common::home::guest::sent(request.get_text("home_id"));
-    let outcome = run(
-        request.get_text("op").unwrap_or(""),
-        request.get("args").cloned().unwrap_or_default(),
-        root,
-        &mut |event| {
-            let _ = write_locked(&stream, &SdkValue::map([("event", event)]));
-        },
-    );
-    // stop beating before the one answer: a caller never reads a beat after it
+    let mut seq = 0u64;
+    let _ = write_locked(&stream, &progress_frame(&mut seq, &op, "start", Vec::new()));
+    let started = Instant::now();
+    let outcome = {
+        // the operation's own path reports progress by sending an event
+        // `{ progress: ... }`; it becomes a top-level progress frame. Any
+        // other event (a command's output) goes as it came, and also shows
+        // the operation is progressing.
+        let mut events = |event: SdkValue| {
+            let frame = match event.get("progress") {
+                Some(value) => progress_event(&mut seq, &op, value.clone()),
+                None => SdkValue::map([("event", event)]),
+            };
+            let _ = write_locked(&stream, &frame);
+        };
+        run(&op, args, root, &mut events)
+    };
+    // stop beating before the progress-done and the one answer: a caller
+    // never reads a beat after them
     drop(beats);
+    let _ = write_locked(
+        &stream,
+        &progress_frame(
+            &mut seq,
+            &op,
+            "done",
+            vec![("elapsed_ms", SdkValue::Int(ms(started.elapsed())))],
+        ),
+    );
     let frame = match outcome {
         Ok(value) => SdkValue::map([("value", value)]),
         Err(refusal) => refusal_frame(refusal),
@@ -182,6 +209,54 @@ impl Drop for Beats {
     }
 }
 
+/// The operation was read and will run: distinct from the request being
+/// sent and from a liveness beat.
+fn claimed_frame(op: &str) -> SdkValue {
+    SdkValue::map([
+        ("claimed", SdkValue::Bool(true)),
+        ("op", SdkValue::text(op)),
+    ])
+}
+
+/// One operation-progress frame: `{ progress: { seq, op, phase, ... } }`.
+fn progress_frame(seq: &mut u64, op: &str, phase: &str, more: Vec<(&str, SdkValue)>) -> SdkValue {
+    *seq += 1;
+    let mut fields: Vec<(String, SdkValue)> = vec![
+        (
+            "seq".to_owned(),
+            SdkValue::Int(i64::try_from(*seq).unwrap_or(i64::MAX)),
+        ),
+        ("op".to_owned(), SdkValue::text(op)),
+        ("phase".to_owned(), SdkValue::text(phase)),
+    ];
+    // the worker's own frame times the wait; it is not an operation event,
+    // so a caller does not see it (the operation's own progress is)
+    fields.push(("worker".to_owned(), SdkValue::Bool(true)));
+    fields.extend(
+        more.into_iter()
+            .map(|(name, value)| (name.to_owned(), value)),
+    );
+    SdkValue::map([("progress", SdkValue::Map(fields))])
+}
+
+/// A progress value the operation path emitted, as a frame: its own fields
+/// kept, with this worker's sequence and operation added.
+fn progress_event(seq: &mut u64, op: &str, value: SdkValue) -> SdkValue {
+    *seq += 1;
+    let numbered = SdkValue::Int(i64::try_from(*seq).unwrap_or(i64::MAX));
+    let value = match value {
+        SdkValue::Map(_) => value,
+        other => SdkValue::map([("report", other)]),
+    };
+    let value = crate::common::home::with_field(value, "seq", numbered);
+    let value = crate::common::home::with_field(value, "op", SdkValue::text(op));
+    SdkValue::map([("progress", value)])
+}
+
+fn ms(duration: Duration) -> i64 {
+    i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
+}
+
 fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
     SdkValue::map([(
         "refused",
@@ -193,7 +268,12 @@ fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
     )])
 }
 
-fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) -> Outcome {
+fn run(
+    op: &str,
+    args: SdkValue,
+    root: &Path,
+    events: &mut (dyn FnMut(SdkValue) + Send),
+) -> Outcome {
     match op {
         "worker.ping" => Ok(SdkValue::map([
             ("kind", SdkValue::text("worker")),

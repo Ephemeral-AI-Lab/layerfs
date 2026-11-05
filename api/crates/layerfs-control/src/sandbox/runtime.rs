@@ -13,8 +13,11 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_sandbox::Image;
 use layerfs_sandbox::SandboxRecord;
 use layerfs_sandbox::{CommandIdentity, Sandbox};
+use std::io::{self, Write};
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 /// The image a native Sandbox records and reports, and the `runtime` of a
 /// record from the former `local` runtime, which is never used (a Docker
@@ -248,8 +251,11 @@ pub(crate) fn run(
     environment: Vec<String>,
     directory: &str,
     spool: bool,
+    progress: Option<&mut (dyn FnMut(SdkValue) + Send)>,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
-    let (mut stdout, mut stderr) = (Spool::new(spool), Spool::new(spool));
+    let progress = Mutex::new(progress);
+    let mut stdout = Reporting::new(Spool::new(spool), &progress, "stdout");
+    let mut stderr = Reporting::new(Spool::new(spool), &progress, "stderr");
     let request = layerfs_sandbox::ExecRequest {
         identity,
         arguments,
@@ -260,5 +266,113 @@ pub(crate) fn run(
     let exit = runtime
         .run(&request, &mut stdout, &mut stderr)
         .map_err(failed)?;
-    Ok((exit.code, stdout, stderr))
+    Ok((exit.code, stdout.into_spool(), stderr.into_spool()))
+}
+
+/// How often a command's output reports progress. The first bytes report at
+/// once; later ones at most this often, so a chatty command does not flood
+/// the caller's stream, and a quiet one still gets its bytes to the spool.
+const REPORT: Duration = Duration::from_millis(500);
+
+/// One command stream that keeps all its output and tells the caller how
+/// much has arrived. The sink reaches the runtime's copy threads, so it is
+/// `Send`; the one progress callback behind [`Mutex`] is shared by the two
+/// streams and called from whichever stream is being copied.
+struct Reporting<'a, 'b> {
+    spool: Spool,
+    progress: &'a Mutex<Option<&'b mut (dyn FnMut(SdkValue) + Send)>>,
+    stream: &'static str,
+    written: u64,
+    reported: u64,
+    last: Instant,
+}
+
+impl<'a, 'b> Reporting<'a, 'b> {
+    fn new(
+        spool: Spool,
+        progress: &'a Mutex<Option<&'b mut (dyn FnMut(SdkValue) + Send)>>,
+        stream: &'static str,
+    ) -> Self {
+        Self {
+            spool,
+            progress,
+            stream,
+            written: 0,
+            reported: 0,
+            last: Instant::now(),
+        }
+    }
+
+    fn into_spool(self) -> Spool {
+        self.spool
+    }
+
+    /// Reports the bytes written since the last report, at most [`REPORT`]
+    /// apart, as an operation progress value: `{ phase: "output", stream,
+    /// bytes }`. An operation that produces output is progressing even when
+    /// its command is long.
+    fn report(&mut self) {
+        if self.written == self.reported {
+            return;
+        }
+        if self.reported != 0 && self.last.elapsed() < REPORT {
+            return;
+        }
+        self.last = Instant::now();
+        self.reported = self.written;
+        let Ok(mut slot) = self.progress.lock() else {
+            return;
+        };
+        if let Some(progress) = slot.as_mut() {
+            progress(SdkValue::map([(
+                "progress",
+                SdkValue::map([
+                    ("phase", SdkValue::text("output")),
+                    ("stream", SdkValue::text(self.stream)),
+                    (
+                        "bytes",
+                        SdkValue::Int(i64::try_from(self.written).unwrap_or(i64::MAX)),
+                    ),
+                ]),
+            )]));
+        }
+    }
+}
+
+impl Write for Reporting<'_, '_> {
+    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        let written = self.spool.write(data)?;
+        self.written += written as u64;
+        self.report();
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.spool.flush()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn a_command_output_reports_operation_progress() {
+        let seen: Mutex<Vec<SdkValue>> = Mutex::new(Vec::new());
+        {
+            let mut events = |value: SdkValue| seen.lock().unwrap().push(value);
+            let callback: &mut (dyn FnMut(SdkValue) + Send) = &mut events;
+            let slot = Mutex::new(Some(callback));
+            let mut reporting = Reporting::new(Spool::new(false), &slot, "stdout");
+            reporting.write_all(b"hello").unwrap();
+            reporting.flush().unwrap();
+        }
+        let seen = seen.into_inner().unwrap();
+        assert_eq!(seen.len(), 1, "{seen:?}");
+        let progress = seen[0].get("progress").expect("a progress value");
+        assert_eq!(progress.get_text("phase"), Some("output"));
+        assert_eq!(progress.get_text("stream"), Some("stdout"));
+        assert_eq!(progress.get_int("bytes"), Some(5));
+    }
 }

@@ -19,6 +19,7 @@ fn run(
     directory: &str,
     arguments: Vec<String>,
     spool: bool,
+    progress: Option<&mut (dyn FnMut(SdkValue) + Send)>,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
     let runtime = state.runtime()?;
     crate::sandbox::runtime::run(
@@ -31,6 +32,7 @@ fn run(
         )],
         directory,
         spool,
+        progress,
     )
 }
 
@@ -43,7 +45,10 @@ fn run(
 /// `workspace.exec_output` and closed with `sandbox.exec_release`, and the
 /// `stdoutBytes` and `stderrBytes` sizes. A `directory` from a caller that
 /// keeps the Workspace's record (#535 G4) is the one the command runs in.
-pub(crate) fn exec(args: &SdkValue) -> Outcome {
+pub(crate) fn exec(
+    args: &SdkValue,
+    progress: Option<&mut (dyn FnMut(SdkValue) + Send)>,
+) -> Outcome {
     let state = sandbox(args)?;
     let path = text(args, "path")?;
     let command = text(args, "command")?;
@@ -58,6 +63,7 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
         &directory,
         vec!["bash".into(), "-c".into(), command.into()],
         args.get_bool("spool"),
+        progress,
     )?;
     let mut streams = crate::sandbox::output::fields(stdout, stderr)?.into_iter();
     let mut result = vec![

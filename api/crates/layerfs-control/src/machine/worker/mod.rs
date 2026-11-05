@@ -11,27 +11,30 @@
 //! it reads the request, with its protocol and bundle (`hello`): a worker of
 //! another build is sent nothing. A refusal or a lost connection before the
 //! request is sent is a plain refusal; a lost answer after it is `Unknown`,
-//! never resent. Once the request is read, the worker claims it and then
-//! beats while it runs, so every wait after the request is bounded (connect,
-//! hello, claim, heartbeat) while the operation itself is not: a dead worker
-//! is `Unknown` in bounded time, and a long command keeps running.
+//! never resent. Once the request is read, the worker claims it, reports
+//! operation progress while it runs and beats as a liveness signal, so
+//! every wait after the request is bounded (connect, hello, claim, progress)
+//! while the operation itself is not: a dead worker is `Unknown` in bounded
+//! time, a wedged one is `Unknown` once it stops progressing, and a long
+//! command that reports output keeps its whole duration.
 //!
-//! A frame is bounded as a whole: its length and every read within the wait,
-//! and its body within the wait or its length at a minimum rate, so a peer
-//! that trickles a frame cannot stretch a wait. A wait that expires writes
-//! one `layerfs worker: liveness timeout:` line to stderr. Liveness is not
-//! progress: a worker that stays alive and keeps beating while its operation
-//! itself never returns still holds the call open. Detecting that needs an
-//! operation-level progress marker, which the connection layer cannot
-//! invent; it is a stated residual of #550, not a completed item.
+//! Progress and liveness are separate frames. `{ progress: ... }` says the
+//! operation advanced and refreshes the caller's wait; `{ beat: true }` says
+//! the worker process is alive and never refreshes it, so a worker that
+//! keeps beating while its operation never returns is `Unknown` within
+//! `PROGRESS_WAIT` instead of holding the call open. A frame is bounded as a
+//! whole: its length and every read within the wait, and its body within the
+//! wait or its length at a minimum rate, so a peer that trickles a frame
+//! cannot stretch a wait. A wait that expires writes one `layerfs worker:
+//! liveness timeout:` line to stderr.
 mod client;
 mod frame;
 mod hello;
 mod server;
 
 pub use client::{
-    call, hello, ping, request, send, Endpoint, Unreached, CLAIM_WAIT, HEARTBEAT, HEARTBEAT_WAIT,
-    HELLO_WAIT, PING_WAIT, SEND_WAIT,
+    call, call_with, hello, ping, request, send, send_with, Endpoint, Unreached, Windows,
+    CLAIM_WAIT, HEARTBEAT, HELLO_WAIT, PING_WAIT, PROGRESS_WAIT, SEND_WAIT,
 };
 pub use frame::{
     frame_bytes, read_frame, read_frame_within, read_frame_within_wait, write_frame, MAX_FRAME,

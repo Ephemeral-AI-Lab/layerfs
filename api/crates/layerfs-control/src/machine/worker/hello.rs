@@ -9,11 +9,14 @@ use std::path::Path;
 
 /// The worker protocol this build speaks. The first worker answered its
 /// secret with `{ ready: true }` alone, which names no protocol. Protocol 3
-/// adds the worker's `{ claimed: true }` and `{ beat: true }` frames: the
-/// caller bounds a call's liveness by them, never its operation, so a dead
-/// worker is `Unknown` in bounded time and a long command is not cut off. A
-/// protocol-2 worker sends neither, so it is refused before a request is
-/// sent rather than silently failing a call that is still running.
+/// adds the worker's `{ claimed: true, op }`, `{ progress: ... }` and
+/// `{ beat: true }` frames: the caller bounds the wait for a claim and then
+/// times each sign of operation progress, while a liveness beat says only
+/// that the process is alive, so a dead worker is `Unknown` in bounded time,
+/// a wedged operation is `Unknown` once it stops progressing, and a long
+/// command that reports output is not cut off. A protocol-2 worker sends
+/// none of them, so it is refused before a request is sent rather than
+/// silently failing a call that is still running.
 pub const PROTOCOL: i64 = 3;
 
 /// What a worker says of itself when it answers its secret.

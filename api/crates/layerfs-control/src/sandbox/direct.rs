@@ -344,7 +344,7 @@ pub(crate) fn call(
                 (found == id).then_some(head)
             })
         }
-        "sandbox.list_workspaces" => dispatch::call(op, args),
+        "sandbox.list_workspaces" => dispatch::call(op, args, None),
         _ => Err(refused(
             "InvalidInput",
             format!("{op} is not sent to a Sandbox's daemon directly"),

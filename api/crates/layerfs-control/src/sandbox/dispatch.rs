@@ -7,8 +7,14 @@ use crate::sandbox::{exec, registry};
 use crate::workspace::serve as workspace;
 use layerfs_bridge::control::SdkValue;
 
-/// Runs one Sandbox or Workspace operation once.
-pub fn call(op: &str, args: SdkValue) -> Outcome {
+/// Runs one Sandbox or Workspace operation once. `progress` is where an
+/// operation that can be long reports its own progress (a caller sets it
+/// only when the operation runs in a worker; a local call passes `None`).
+pub fn call(
+    op: &str,
+    args: SdkValue,
+    progress: Option<&mut (dyn FnMut(SdkValue) + Send)>,
+) -> Outcome {
     if let Some(value) = args.get("message") {
         if !matches!(value, SdkValue::Null) {
             let SdkValue::Text(message) = value else {
@@ -30,7 +36,7 @@ pub fn call(op: &str, args: SdkValue) -> Outcome {
         "workspace.mount" => workspace::mount(&args),
         "workspace.commit" => workspace::commit(&workspace::by_name(args)?),
         "workspace.unmount" => workspace::unmount(&workspace::by_name(args)?),
-        "workspace.exec" => exec::exec(&workspace::by_name(args)?),
+        "workspace.exec" => exec::exec(&workspace::by_name(args)?, progress),
         _ => Err(refused("UnknownMethod", format!("no operation {op}"))),
     }
 }

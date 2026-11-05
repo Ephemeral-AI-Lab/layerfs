@@ -307,7 +307,7 @@ fn host_op(
             if op == "backend.daemon.workspace.status" {
                 return crate::sandbox::dispatch::backend(op.to_owned(), args);
             }
-            let out = crate::sandbox::dispatch::call(op, args)?;
+            let out = crate::sandbox::dispatch::call(op, args, None)?;
             let out = drain(out, &mut |event| context.event(event));
             closed(op, opened.as_deref(), &out);
             out
@@ -355,7 +355,11 @@ fn host_op(
 /// the caller sends the Store's and project's records; the worker keeps a
 /// thin record of the Store (#536 §6) and the project's record under its
 /// root, with the Store on this machine's own `native`.
-pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(SdkValue)) -> Outcome {
+pub(crate) fn in_worker(
+    root: &Path,
+    args: &SdkValue,
+    events: &mut (dyn FnMut(SdkValue) + Send),
+) -> Outcome {
     let op = args
         .get_text("op")
         .ok_or_else(|| refused("InvalidInput", "operation name"))?;
@@ -466,7 +470,11 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
         return crate::sandbox::dispatch::backend(op.to_owned(), host);
     }
     let name = host.get_text("sandbox").unwrap_or("").to_owned();
-    let out = drain(crate::sandbox::dispatch::call(op, host)?, events);
+    // an exec still running reports its own progress to the caller
+    let out = drain(
+        crate::sandbox::dispatch::call(op, host, Some(&mut *events))?,
+        &mut *events,
+    );
     closed(op, opened.as_deref(), &out);
     let out = out?;
     // the caller reaches the new Sandbox's daemon directly where its

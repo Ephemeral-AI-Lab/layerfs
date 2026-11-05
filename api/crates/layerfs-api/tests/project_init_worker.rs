@@ -279,11 +279,13 @@ fn stand_in(
             }
             worker::write_frame(&mut upstream, &request).unwrap();
             while let Some(frame) = worker::read_frame(&mut upstream).unwrap() {
-                // the worker's claim and beats are not its answer: it may
-                // send any number of them before the one value or refusal
+                // the worker's claim, progress and beats are not its
+                // answer: it may send any number of them before the one
+                // value or refusal
                 let answer = frame.get("event").is_none()
                     && frame.get("claimed").is_none()
-                    && frame.get("beat").is_none();
+                    && frame.get("beat").is_none()
+                    && frame.get("progress").is_none();
                 worker::write_frame(&mut client, &frame).unwrap();
                 if answer {
                     break;

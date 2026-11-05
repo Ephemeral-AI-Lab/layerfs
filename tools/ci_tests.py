@@ -51,9 +51,13 @@ SLOW = {
     ("layerfs-node", "native_connection_wait"): 66.11,
     # Linux SDK mount proof after the ownership move, 2026-10-27.
     ("layerfs-control", "observed_application"): 6.30,
-    # Worker claim/heartbeat liveness: the stall, long-operation and
-    # trickled-answer proofs, measured 13.62 s on the macOS host, 2026-11-05.
-    ("layerfs-control", "worker_liveness"): 13.62,
+    # Worker frame-level liveness: the death, trickled-answer and
+    # large-answer proofs, measured 12.91 s on the macOS host, 2026-11-06.
+    ("layerfs-control", "worker_liveness"): 12.91,
+    # Worker operation progress: claim, progress (including the 60 s case)
+    # and beat-is-not-progress proofs, measured 64.07 s on the macOS host,
+    # 2026-11-06.
+    ("layerfs-control", "worker_progress"): 64.07,
     # Linux functional run at the relocated tree, 2026-10-27.
     ("layerfs-persistence", "writer_admission"): 9.74,
     ("layerfs-store-service", "scale_lineage_cap"): 24.3,

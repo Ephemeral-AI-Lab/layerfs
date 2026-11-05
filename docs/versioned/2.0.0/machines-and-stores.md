@@ -226,27 +226,40 @@ layerfs machine create host1 lima --nested
   whatever its build. A worker run from no sealed bundle (a development
   build) is checked by protocol alone. [`layerfs doctor`](calls.md#layerfs-doctor)
   reports a running worker of another build as a warning.
-- Once it has read a request the worker claims it (`{ claimed: true }`) and
-  then beats (`{ beat: true }`) every 2 s while the operation runs. The
-  caller bounds its waiting, never the operation: 10 s for the claim, 10 s
-  between beats, and 60 s for a socket write that makes no progress. Each
-  answer frame is bounded as a whole: its length and every read within the
-  wait, and its body within the wait or its length at 64 KiB/s, whichever
-  is longer. A large frame (a file read) that keeps arriving is therefore
-  not cut off, while a peer that trickles a frame byte by byte is bounded
-  rather than allowed to stretch the wait. A wait that expires writes one
-  `layerfs worker: liveness timeout: <op> at <address>: no
-  <claim|heartbeat> within <n> s` line to stderr. A worker that dies, hangs
-  or loses its network is `Unknown` within one wait (the request was sent);
-  a long command keeps beating and is not cut off. Protocol 3 is what lets
-  the caller expect these frames; a protocol-2 worker is refused before the
-  request is sent instead of leaving a call to time out.
-- Liveness is not progress. The beats prove the worker process is alive,
-  not that its operation is advancing, so a worker whose operation itself
-  never returns (for example a blocked Store or network call) keeps beating
-  and still holds the caller open. Bounding that needs an operation-level
-  progress marker the connection layer does not have; it is the stated
-  residual of #550 item 1, not a completed behaviour.
+- Once it has read a request the worker claims it once, with its operation
+  (`{ claimed: true, op }`), reports operation progress
+  (`{ progress: { seq, op, phase, ... } }`) before and after the operation
+  and from its own path while it runs (a phase, a chunk of a command's
+  output), and beats (`{ beat: true }`) every 2 s while it runs. The
+  worker's own `start` and `done` progress frames carry `worker: true`: they
+  bound the wait and are not passed to the caller's event stream, so the
+  events a caller sees are the operation's own, as on a local call. The
+  caller bounds its waiting, never the operation: 10 s for the claim, 30 s
+  for each sign of progress, and 60 s for a socket write that makes no
+  progress. A
+  `progress` or `event` frame refreshes the progress wait; a liveness `beat`
+  does not. Each answer frame is bounded as a whole: its length and every
+  read within the wait, and its body within the wait or its length at
+  64 KiB/s, whichever is longer. A large frame (a file read) that keeps
+  arriving is therefore not cut off, while a peer that trickles a frame byte
+  by byte is bounded rather than allowed to stretch the wait. A wait that
+  expires writes one `layerfs worker: liveness timeout: <op> at <address>:
+  no <claim|progress|answer> within <n> s` line to stderr. A worker that
+  dies, hangs or loses its network is `Unknown` within one wait (the request
+  was sent), and so is an operation that stops progressing: a worker that
+  keeps beating while its operation never returns (a blocked Store or
+  network call) is `Unknown` after 30 s, not held open. The request is never
+  resent and the operation may still finish; its effects stay observable.
+  Protocol 3 is what lets the caller expect these frames; a protocol-2
+  worker is refused before the request is sent instead of leaving a call to
+  time out.
+- Progress is not a duration deadline. A long command keeps its whole
+  duration as long as it reports progress (a command's output reports at
+  most every 500 ms), and a 60 s operation that progresses completes. Only
+  an operation that shows no progress for the whole window is `Unknown`,
+  which is the case #550 item 1 names. An operation that is long and silent
+  must report a phase or its output; that is the contract the worker's
+  operation path keeps.
 - A worker holds a Store's lease for as long as it keeps the Store open,
   and closes its own open copy before a push, pull, retire or remove reads or
   deletes the file.
