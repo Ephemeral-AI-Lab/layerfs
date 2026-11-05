@@ -231,7 +231,9 @@ class ProductBoundaryTests(unittest.TestCase):
             )
         )
         self.assertTrue(
-            any("upward" in message for _, message in layer_violations("layerfs-sandbox", "layerfs-api", "dependencies"))
+            any(
+                "upward" in message for _, message in layer_violations("layerfs-sandbox", "layerfs-api", "dependencies")
+            )
         )
 
     def test_bridge_control_reuses_domain_records_without_engine_edges(self):
