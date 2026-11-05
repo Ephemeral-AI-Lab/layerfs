@@ -60,6 +60,7 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
                 .map_err(|refusal| match refusal {
                     OpenRefusal::Unsupported(reason) => refused("Unsupported", reason.0),
                     OpenRefusal::Missing(reason) => refused("NoStore", reason),
+                    OpenRefusal::Busy(reason) => refused("Busy", reason),
                     OpenRefusal::Failed(reason) => refused("Failed", reason),
                 })
         }
