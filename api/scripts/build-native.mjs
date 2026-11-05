@@ -8,8 +8,12 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const suffix = { darwin: "dylib", linux: "so" }[process.platform];
 if (!suffix) throw new Error(`native addon builds require macOS or Linux, got ${process.platform}`);
+const usage = "usage: build-native.mjs [--debug] [--features postgresql,tls]";
 const flags = process.argv.slice(2);
-if (flags.some((flag) => flag !== "--debug")) throw new Error("usage: build-native.mjs [--debug]");
+const featuresAt = flags.indexOf("--features");
+const features = featuresAt < 0 ? [] : (flags[featuresAt + 1] ?? "").split(",");
+if (featuresAt >= 0) flags.splice(featuresAt, 2);
+if (flags.some((flag) => flag !== "--debug") || features.some((name) => !["postgresql", "tls"].includes(name))) throw new Error(usage);
 const profile = flags.includes("--debug") ? "debug" : "release";
 const configured = process.env.CARGO_TARGET_DIR;
 const target = configured ? resolve(root, configured) : join(root, "target");
@@ -19,6 +23,7 @@ if (process.env.CARGO_BUILD_TARGET) throw new Error("build on the actual macOS/L
 const result = spawnSync("cargo", [
   "+1.85.1", "build", "--manifest-path", "Cargo.toml", "--offline", "--locked",
   ...(profile === "release" ? ["--release"] : []), "-p", "layerfs-node",
+  ...(features.length ? ["--features", features.join(",")] : []),
 ], { cwd: root, stdio: "inherit", env: { ...process.env, CARGO_TARGET_DIR: target } });
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
