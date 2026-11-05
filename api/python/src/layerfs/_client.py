@@ -7,7 +7,7 @@ import sys
 
 from . import _native
 from ._errors import LayerFSError
-from ._values import decode, encode
+from ._values import decode, encode, path_text
 
 #: The table: ``[{family, call, args, options, help}]``.
 TABLE = decode(_native.table())
@@ -116,7 +116,7 @@ class Client:
     with an optional folder scope ``{"project": ..., "folder": ..., "branch": ...}``."""
 
     def __init__(self, home=None, scope=None):
-        self.home = str(home) if home is not None else None
+        self.home = path_text(home)
         self.scope = scope
         for family in FAMILIES:
             setattr(self, family, Family(family))
