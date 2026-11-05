@@ -7,7 +7,8 @@
 //! Failures before the first byte is written, the connect and TLS handshake
 //! included, are `Unavailable`; after it, any failure to complete the
 //! exchange is `Uncertain`, and the request is never sent again, on this
-//! connection or another. A reply read to its exact end leaves its
+//! connection or another; except that a 4xx reply the server sent before
+//! closing on the body is that refusal. A reply read to its exact end leaves its
 //! connection to the client's next request. A file body's bytes are
 //! reported to the thread's transfer progress as they are written.
 use crate::bucket::driver::Span;
@@ -151,7 +152,10 @@ pub(crate) fn exchange(
                             rest = &rest[sent..];
                         }
                         Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                        Err(e) => return Err(uncertain(format!("send: {e}"))),
+                        Err(e) => {
+                            return early_refusal(writer, &e)
+                                .ok_or_else(|| uncertain(format!("send: {e}")))
+                        }
                     }
                     if started.elapsed() >= config.io_timeout {
                         return Err(uncertain(format!(
@@ -213,6 +217,35 @@ pub(crate) fn exchange(
         headers,
         body: memory,
         streamed,
+    })
+}
+
+/// The reply a server sent before it closed the connection on a request
+/// body it would not take (an S3 server answers a refused PUT, say a key
+/// without write access, then stops reading). A 4xx answer rejects the
+/// request outright, so nothing was stored and it is returned as the reply;
+/// any other answer, none, or a send that timed out leaves it `Uncertain`.
+fn early_refusal(connection: &mut Connection, error: &io::Error) -> Option<Reply> {
+    use io::ErrorKind::{BrokenPipe, ConnectionReset};
+    if !matches!(error.kind(), BrokenPipe | ConnectionReset) {
+        return None;
+    }
+    let mut reader = BufReader::new(connection);
+    let (_, status, headers) = read_head(&mut reader).ok()?;
+    if !(400..500).contains(&status) {
+        return None;
+    }
+    let framing = match headers.get("content-length") {
+        Some(length) => Framing::Length(parse_length(length).ok()?),
+        None => Framing::Close,
+    };
+    let mut body = Vec::new();
+    let _ = read_body(&mut reader, framing, &mut body, SMALL_BODY);
+    Some(Reply {
+        status,
+        headers,
+        body,
+        streamed: 0,
     })
 }
 

@@ -112,6 +112,8 @@ a `part_size` above that is refused `Invalid` before anything is sent. Source: [
    take a kept connection (idle <= 10 s and quiet) or connect once
    failure before the first byte written ............ Unavailable
    failure after it ................................. Uncertain (no resend)
+   body send reset or closed by the server, with a 4xx
+   reply already sent (a key without write access) ... Refused, definite
    each read or write: io_timeout (60 s); a request body buffer
    (256 KiB) that takes longer than io_timeout to send ... Uncertain
    reply read to its exact end -> connection kept (at most 4)

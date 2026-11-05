@@ -4,7 +4,8 @@
 //! with a lost abort is `PartsLeft` (it was not); a peer that takes the body
 //! in a trickle fails the request instead of holding it; MinIO's largest
 //! object is what one multipart upload carries, and a part may not exceed
-//! the provider's request limit.
+//! the provider's request limit; a 403 sent before the server stops
+//! reading the body is that refusal, not an uncertain outcome.
 use layerfs_store_backup::bucket::s3_api::{part_size, S3Client, S3Config, MAX_PART, MAX_PARTS};
 use layerfs_store_backup::bucket::{minio, r2, Credentials, Driver, Metadata, RemoteError};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -24,6 +25,8 @@ enum Act {
     HangUp,
     /// Reads the body 1 KiB every 20 ms and never answers.
     Trickle,
+    /// Answers 403 after the head, then closes without reading the body.
+    Deny,
 }
 
 /// The server's act for each kind of request.
@@ -94,6 +97,18 @@ fn serve(stream: TcpStream, script: Script) {
         } else {
             (script.put, 200, "etag: \"e\"\r\n".to_owned(), String::new())
         };
+        if act == Act::Deny {
+            let xml = "<Error><Code>AccessDenied</Code></Error>";
+            let reply = format!(
+                "HTTP/1.1 403 test\r\ncontent-length: {}\r\n\r\n{xml}",
+                xml.len()
+            );
+            out.write_all(reply.as_bytes()).unwrap();
+            // closing with the body unread resets the client's send
+            drop(reader);
+            drop(out);
+            return;
+        }
         if act == Act::Trickle {
             let mut piece = [0u8; 1024];
             while reader.read(&mut piece).unwrap_or(0) > 0 {
@@ -248,4 +263,21 @@ fn a_part_may_not_exceed_the_providers_request_limit() {
         "{refused:?}"
     );
     config(max).validate().unwrap();
+}
+
+#[test]
+fn a_refusal_sent_before_the_body_is_read_is_definite() {
+    let endpoint = server(Script {
+        put: Act::Deny,
+        ..OK
+    });
+    let error = upload(
+        client(&endpoint, Duration::from_secs(5), 64 * MIB),
+        file("deny", 32 * MIB),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&error, RemoteError::Refused { status: 403, code } if code == "AccessDenied"),
+        "{error:?}"
+    );
 }
