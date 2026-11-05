@@ -20,6 +20,7 @@ fn request() -> ExecRequest {
         environment: vec!["X=a\"b\\c\n".into()],
         directory: "/tmp".into(),
         stdin: false,
+        root_launcher: false,
     }
 }
 fn sandbox_request() -> SandboxRequest {

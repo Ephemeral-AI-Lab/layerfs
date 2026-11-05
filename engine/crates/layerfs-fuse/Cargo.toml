@@ -14,4 +14,4 @@ layerfs-content = { path = "../../../core/crates/layerfs-content" }
 [target.'cfg(target_os = "linux")'.dependencies]
 fuser = { version = "=0.18.0", default-features = false }
 libc = "=0.2.189"
-nix = { version = "=0.31.3", features = ["fs", "mount", "feature"] }
+nix = { version = "=0.31.3", features = ["fs", "mount", "feature", "sched"] }

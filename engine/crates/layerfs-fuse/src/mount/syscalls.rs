@@ -4,6 +4,7 @@
 use nix::{
     errno::Errno,
     mount::{mount, umount2, MntFlags, MsFlags},
+    sched::{unshare, CloneFlags},
     unistd::write,
 };
 use std::{
@@ -76,6 +77,26 @@ pub(crate) fn attach(device: &OwnedFd, target: &Path, uid: u32, gid: u32) -> Res
         MsFlags::MS_NOSUID | MsFlags::MS_NODEV | MsFlags::MS_NOATIME,
         Some(data.as_str()),
     )
+}
+/// One `unshare` of the mount namespace and one recursive private propagation
+/// of its root, so every FUSE mount this process makes is absent from the
+/// namespace the process started in and nothing made here propagates back into
+/// it. Called once, by the daemon entry, before any worker thread exists; the
+/// daemon owns the namespace for its whole life and restores nothing on exit.
+/// Prototype for #3/#499, gated by the daemon's private-namespace setting: the
+/// Sandbox's original namespace (what a `docker exec` enters) no longer holds
+/// a Workspace mount, so `workspace.exec` reaches it through the daemon's
+/// `ns-exec` helper instead.
+pub fn private_namespace() -> io::Result<()> {
+    unshare(CloneFlags::CLONE_NEWNS)?;
+    mount(
+        None::<&str>,
+        "/",
+        None::<&str>,
+        MsFlags::MS_REC | MsFlags::MS_PRIVATE,
+        None::<&str>,
+    )?;
+    Ok(())
 }
 /// Exactly one plain attempt. EBUSY is the kernel's reversible answer; no
 /// MNT_DETACH, MNT_FORCE or second call follows any outcome.

@@ -371,9 +371,31 @@ pub(crate) fn save_sandbox(
             ("secret", SdkValue::Bytes(secret.to_vec())),
             ("peer", SdkValue::Bytes(peer.to_vec())),
             ("instance", SdkValue::Bytes(instance.to_vec())),
+            (
+                "nsExecPidFile",
+                SdkValue::opt_text(state.ns_pid_file.clone()),
+            ),
+            ("nsExecSocket", SdkValue::opt_text(state.ns_socket.clone())),
         ]),
     )
 }
+/// The socket a Sandbox's daemon serves its mount namespace on, when its
+/// record names one. A record written before the socket existed names only the
+/// diagnostic pid file; its daemon never bound a socket, so the Sandbox refuses
+/// as an upgrade ([`ns_upgrade_required`]) instead of deriving a path that
+/// would fail on every command.
+fn saved_ns_socket(value: &SdkValue) -> Option<String> {
+    value.get_text("nsExecSocket").map(str::to_owned)
+}
+
+/// A live Sandbox whose record has the diagnostic pid file but no socket was
+/// created by a daemon from before the socket existed. Its commands cannot
+/// reach the private namespace, so they refuse with a recreate instruction
+/// rather than silently running in the initial namespace.
+fn ns_upgrade_required(value: &SdkValue) -> bool {
+    value.get_text("nsExecSocket").is_none() && value.get_text("nsExecPidFile").is_some()
+}
+
 /// A Sandbox whose container no longer runs it: the Engine no longer has the
 /// container, or has it stopped (it closed when idle, or Docker restarted),
 /// which lost its daemon and every mount in it. Only its records, and a
@@ -471,6 +493,10 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
         directory,
         runtime,
         identity: CommandIdentity { uid: 501, gid: 20 },
+        // absent in a record written before the private-namespace prototype
+        ns_socket: saved_ns_socket(&value),
+        ns_pid_file: value.get_text("nsExecPidFile").map(str::to_owned),
+        ns_upgrade_required: ns_upgrade_required(&value),
         controls: crate::pool::Controls::new(control, dial),
         mounts: Default::default(),
         processes: Default::default(),
@@ -602,4 +628,81 @@ pub(crate) fn save_process(state: &SandboxState, id: &str, p: &Process) -> Resul
             ("stopped", SdkValue::Bool(p.stopped)),
         ]),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::registry::mount_namespace;
+    use layerfs_api::internal::{exec_arguments, MountNamespace};
+    use layerfs_sandbox::CommandIdentity;
+
+    fn wrapped(record: &SdkValue, directory: &str) -> Vec<String> {
+        let socket = saved_ns_socket(record);
+        let namespace: Option<MountNamespace<'_>> = mount_namespace(socket.as_deref());
+        exec_arguments(
+            namespace,
+            CommandIdentity { uid: 501, gid: 20 },
+            directory,
+            vec!["bash".into(), "-c".into(), "printf ordinary".into()],
+        )
+    }
+
+    fn socket_record() -> SdkValue {
+        SdkValue::map([
+            (
+                "nsExecSocket",
+                SdkValue::text("/layerfs-local/ns-exec.sock"),
+            ),
+            ("nsExecPidFile", SdkValue::text("/layerfs-local/daemon.pid")),
+        ])
+    }
+
+    #[test]
+    fn a_saved_private_namespace_wraps_the_command() {
+        assert_eq!(
+            wrapped(&socket_record(), "/workspaces/1"),
+            [
+                "/usr/local/bin/layerfs-daemon",
+                "ns-exec",
+                "--socket",
+                "/layerfs-local/ns-exec.sock",
+                "--directory",
+                "/workspaces/1",
+                "--uid",
+                "501",
+                "--gid",
+                "20",
+                "--",
+                "bash",
+                "-c",
+                "printf ordinary",
+            ]
+        );
+    }
+
+    #[test]
+    fn an_older_record_requires_a_recreated_sandbox() {
+        let record =
+            SdkValue::map([("nsExecPidFile", SdkValue::text("/layerfs-local/daemon.pid"))]);
+        // No socket is derived for a daemon that never bound one: the node
+        // refuses the exec as an upgrade instead of running unwrapped.
+        assert_eq!(saved_ns_socket(&record), None);
+        assert!(ns_upgrade_required(&record));
+        assert_eq!(
+            wrapped(&record, "/workspaces/1"),
+            ["bash", "-c", "printf ordinary"]
+        );
+    }
+
+    #[test]
+    fn a_sandbox_without_a_private_namespace_keeps_the_command() {
+        let record = SdkValue::map([("id", SdkValue::text("1"))]);
+        assert_eq!(saved_ns_socket(&record), None);
+        assert!(!ns_upgrade_required(&record));
+        assert_eq!(
+            wrapped(&record, "/workspaces/1"),
+            ["bash", "-c", "printf ordinary"]
+        );
+    }
 }

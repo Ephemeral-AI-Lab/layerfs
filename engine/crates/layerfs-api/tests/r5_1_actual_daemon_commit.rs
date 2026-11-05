@@ -123,6 +123,7 @@ fn start(f: &support::Fixture, mounts: &Path) -> (Process, SocketAddr) {
             idle_exit_s: 0,
         },
         existing_store: None,
+        private_mount_ns: false,
     };
     let config = f.directory.join("daemon.config");
     fs::write(&config, setup.encode().unwrap()).unwrap();

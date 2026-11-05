@@ -12,11 +12,17 @@ use std::{
 /// Caller-owned ordinary command metadata. No hidden shell/classifier/preparation.
 #[derive(Clone)]
 pub struct ExecRequest {
+    /// The ordinary command identity, which the command must end up as.
     pub identity: CommandIdentity,
     pub arguments: Vec<String>,
     pub environment: Vec<String>,
     pub directory: String,
     pub stdin: bool,
+    /// Start the entry process as root instead of `identity`. Only the daemon's
+    /// `ns-exec` helper needs this: joining the daemon's mount namespace needs
+    /// a capability only root holds, and the helper drops to `identity` before
+    /// it execs the command. Every other exec starts as `identity`.
+    pub root_launcher: bool,
 }
 impl fmt::Debug for ExecRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -26,6 +32,7 @@ impl fmt::Debug for ExecRequest {
             .field("environment_count", &self.environment.len())
             .field("directory", &self.directory)
             .field("stdin", &self.stdin)
+            .field("root_launcher", &self.root_launcher)
             .finish()
     }
 }
@@ -57,7 +64,12 @@ impl ExecRequest {
         out.write_all(b"{\"AttachStdout\":true,\"AttachStderr\":true,\"AttachStdin\":")?;
         out.write_all(if self.stdin { b"true" } else { b"false" })?;
         out.write_all(b",\"Tty\":false,\"Privileged\":false,\"User\":")?;
-        quoted(out, &format!("{}:{}", self.identity.uid, self.identity.gid))?;
+        let user = if self.root_launcher {
+            "0:0".to_owned()
+        } else {
+            format!("{}:{}", self.identity.uid, self.identity.gid)
+        };
+        quoted(out, &user)?;
         out.write_all(b",\"WorkingDir\":")?;
         quoted(out, &self.directory)?;
         for (name, items) in [
