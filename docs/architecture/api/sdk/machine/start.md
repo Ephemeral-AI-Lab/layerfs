@@ -4,6 +4,12 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
+Firecracker and SSH are **permanently disabled for new work**. Their code
+and records remain for inspection and explicit cleanup. See the
+[platform restriction](../../../connect/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
+the source change required for re-enabling. Descriptions of their adapter
+mechanics below are retained implementation details, not selectable features.
+
 `machine.start` starts a stopped machine and its `layerfs worker`, waits
 until the worker answers its secret, and answers the machine's summary. A
 machine whose worker already answers is answered at once. It is the only

@@ -4,6 +4,12 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
+Firecracker and SSH are **permanently disabled for new work**. Their code
+and records remain for inspection and explicit cleanup. See the
+[platform restriction](../../../connect/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
+the source change required for re-enabling. Descriptions of their adapter
+mechanics below are retained implementation details, not selectable features.
+
 `machine.platforms` answers the support table for this host: each platform,
 how its machines come to exist, where their Store calls run, the options
 `create` or `connect` takes for it, and whether this host has what it needs.

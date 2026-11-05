@@ -23,6 +23,14 @@ const ANSWER: Duration = Duration::from_secs(10);
 
 /// Probes `kind` on this host.
 pub fn probe(kind: Platform, tools: &Tools) -> Probe {
+    if let Some(reason) = layerfs_sandbox::platform_policy::disabled_reason(kind.name()) {
+        return Probe {
+            kind,
+            ready: false,
+            missing: vec![reason.to_owned()],
+            version: None,
+        };
+    }
     let mut missing = Vec::new();
     let version = adapter(kind).probe(tools, HostOs::current(), &mut missing);
     Probe {

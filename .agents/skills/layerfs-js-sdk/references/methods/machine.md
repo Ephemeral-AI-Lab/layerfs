@@ -7,6 +7,11 @@
 > `layerfs help machine`, S §3.7 and H. An agent working on a project rarely
 > needs this family; it belongs to whoever sets up the home.
 
+
+Firecracker and SSH are permanently disabled for new work. Keep existing
+records and data; inspection and explicit cleanup remain available. There
+is no environment or feature override. `machine.start` cannot restart them.
+
 ```js
 machine.list()
 machine.platforms()
@@ -23,7 +28,7 @@ machine.update(name, { cpus, memory, image, docker, wsl })
 
 A machine is one kernel where Sandboxes run. Two are built in and always
 recorded: `native` (the host itself) and `docker`. VMs (`apple-container`,
-`microsandbox`, `lima`, `firecracker`) are created; an ssh host is connected.
+`microsandbox`, `lima`) are created; Firecracker and SSH are disabled.
 A machine runs only between `machine.start(name)` and `machine.stop(name)`
 (#535 D11): nothing starts it on demand and nothing stops it when unused. A
 call that needs a stopped machine is refused `Unavailable`, its message
@@ -78,10 +83,10 @@ is gone with the outcome unknown. `status` also answers
 
 | Call | What it does | Notes |
 | --- | --- | --- |
-| `start(name)` | Starts a stopped machine and its worker and waits until ready | A running machine and `native` answer at once. Returns the machine as `get` does. `Busy` while another call holds the machine (its `op`) |
+| `start(name)` | Starts a stopped machine and its worker and waits until ready | An enabled running machine and `native` answer at once; disabled machines always refuse. Returns the machine as `get` does. `Busy` while another call holds the machine (its `op`) |
 | `stop(name)` | Stops the worker and, where there is one, the VM; disks stay | `InUse` while Sandboxes run on it; `detail.related` lists them as `{ kind: "sandbox", name }`. `native` answers at once. Later calls that need the machine are refused `Unavailable` until `start` |
-| `create(name, platform, …)` | Makes and starts a VM | `Unsupported` when the platform's tool is missing; `InvalidInput` for `native`, `docker` or `ssh`. `memory`, `disk`: bytes or text with `K`, `M`, `G`. `nested` is for `lima` only; `host` (required for `firecracker`) names a nested `lima` machine |
-| `connect(name, host, …)` | Records an existing Linux host over ssh | `user` defaults to `root`, `port` to 22, `root` to `/layerfs/data`; the host key must already be known. `Unavailable` or `Denied` records nothing; a second machine for the same host is `Exists` |
+| `create(name, platform, …)` | Makes and starts a VM | `Unsupported` when the platform's tool is missing; `InvalidInput` for `native` or `docker`; `Unsupported` for permanently disabled `ssh` or `firecracker`. `memory`, `disk`: bytes or text with `K`, `M`, `G`. `nested` is for `lima` only; `host` (required for `firecracker`) names a nested `lima` machine |
+| `connect(name, host, …)` | Permanently refused `Unsupported` | `user` defaults to `root`, `port` to 22, `root` to `/layerfs/data`; the host key must already be known. `Unavailable` or `Denied` records nothing; a second machine for the same host is `Exists` |
 | `remove(name)` | Deletes a VM and its disk | `InUse` while it holds Stores, Sandboxes or Firecracker machines. While it runs, the record holds its `op` and every call that would start, update, remove or use the machine is `Busy` |
 | `disconnect(name)` | Forgets an ssh machine; its data root stays | `InUse` and `Busy` as above |
 | `update(name, …)` | Sets `native`/`docker`'s image, Docker socket (`docker`) and WSL distribution (`wsl`) | `InUse` while Sandboxes run on it; `wsl` only on a Windows host; resizing a VM (`cpus`, `memory`) is `Unsupported`, not built |

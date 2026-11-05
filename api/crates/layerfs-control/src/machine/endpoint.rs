@@ -21,6 +21,9 @@ const START_WAIT: Duration = Duration::from_secs(600);
 pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> {
     let record = machine_of(home, name)?;
     let kind = record.platform()?;
+    if let Some(reason) = layerfs_sandbox::platform_policy::disabled_reason(kind.name()) {
+        return Err(crate::common::outcome::refused("Unsupported", reason));
+    }
     if kind.route(HostOs::current()) == Route::InProcess {
         return Ok(None);
     }

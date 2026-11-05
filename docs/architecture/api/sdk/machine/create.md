@@ -4,6 +4,12 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
+Firecracker and SSH are **permanently disabled for new work**. Their code
+and records remain for inspection and explicit cleanup. See the
+[platform restriction](../../../connect/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
+the source change required for re-enabling. Descriptions of their adapter
+mechanics below are retained implementation details, not selectable features.
+
 Makes a new VM machine on this host, copies the sealed Linux bundle in and
 starts its worker, so Stores and Sandboxes can be placed on it.
 
@@ -39,7 +45,7 @@ layerfs machine create <name> <platform> [--cpus N] [--memory SIZE] \
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
 | `name` | Name | `MachineName::parse`; not `native` or `docker`; not taken | [`machine/create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs) `new_name` |
-| `platform` | Name | a platform whose profile is `created`: `apple-container`, `microsandbox`, `lima`, `firecracker` | [`platform.rs`](../../../../../connect/crates/layerfs-machine/src/platform.rs) `created` |
+| `platform` | Name | an enabled created platform: `apple-container`, `microsandbox`, `lima` | [`platform.rs`](../../../../../connect/crates/layerfs-machine/src/platform.rs) `created` |
 
 Which platform this host may create comes from the support table
 ([`support.rs`](../../../../../connect/crates/layerfs-machine/src/support.rs),
@@ -50,10 +56,10 @@ Which platform this host may create comes from the support table
 | `apple-container` | yes | no | no | cpus, memory, disk, image | [apple-container](../../../connect/machines/platforms/apple-container.md) |
 | `microsandbox` | yes | yes | yes | cpus, memory, disk, image | [microsandbox](../../../connect/machines/platforms/microsandbox.md) |
 | `lima` | yes | no | no | cpus, memory, disk, image, nested | [lima](../../../connect/machines/platforms/lima.md) |
-| `firecracker` | yes | no | no | cpus, memory, disk, image, host | [firecracker](../../../connect/machines/platforms/firecracker.md) |
+| `firecracker` | disabled | disabled | disabled | none selectable | [firecracker](../../../connect/machines/platforms/firecracker.md) |
 
-`native` and `docker` are built in; `ssh` is added with
-[machine.connect](connect.md).
+`native` and `docker` are built in; `ssh` and
+[machine.connect](connect.md) are permanently disabled.
 
 ## Options
 
@@ -150,7 +156,7 @@ layerfs.machine.create("mvm", "microsandbox", memory="2G")
 ```
 
 ```bash
-layerfs machine create fc1 firecracker --host vm1
+# Permanently refused: layerfs machine create fc1 firecracker --host vm1
 ```
 
 ## Related

@@ -4,6 +4,12 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
+Firecracker and SSH are **permanently disabled for new work**. Their code
+and records remain for inspection and explicit cleanup. See the
+[platform restriction](../support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
+the source change required for re-enabling. Descriptions of their adapter
+mechanics below are retained implementation details, not selectable features.
+
 Where Sandboxes run: one adapter per platform that probes, creates, starts, stops and removes a machine.
 
 **How to present:** ASCII diagrams first, then tables, then prose. Put each
@@ -149,7 +155,7 @@ Folded into these pages. Matched by title, so check each one before relying on i
   tree" and "Adding things" are covered in [Platforms and
   profiles](platforms-and-profiles.md), [Adapter](adapter.md) and [Adding a
   platform](adding-a-platform.md); it stays the layer guide.
-- [`docs/versioned/2.0.0/machines.md`](../../../versioned/2.0.0/machines.md):
+- [`docs/versioned/2.0.0/machines.md`](../../../versioned/2.0.0/machines-and-stores.md):
   the user manual for the same calls; its per-platform sections are
   covered in the platform pages, which follow source where they differ.
 
