@@ -106,6 +106,9 @@ command uses. There is no runtime timeout, no implicit Commit and no
 automatic unmount. See the [routing table](../../routing/routing-table.md)
 and [Connect: commands and streams](../../../connect/sandboxes/commands-and-streams.md).
 Under a folder scope the command runs as `cd '.<folder>' && <command>`.
+That is a prefix, not confinement: a scope guards call arguments, not
+processes, and the command can still read and write anywhere in the mounted
+tree ([Scopes](../../call-table/table.md#scopes)).
 
 ## Errors
 

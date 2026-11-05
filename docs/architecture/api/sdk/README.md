@@ -100,8 +100,15 @@ arguments in JavaScript, Python and the `layerfs` command.
 A folder scope `{ project, folder, branch? }` binds a client to one project:
 it allows only the `file` calls, `branch` list, get, fork, merge and
 publish, and the `workspace` calls; paths must lie under `folder` and
-Branch names become `<branch>.<name>`. A scope guards calls; it is not
-filesystem isolation
+Branch names become `<branch>.<name>`. A scope guards the arguments of a
+call, not processes or the filesystem: `workspace.exec` under a scope only
+prefixes the command with `cd '.<folder>' &&`, and the command can still
+reach anywhere in the mounted tree. `branch` is optional in the option but
+every `file` and `branch` call needs it (without it they are refused, see
+[Scopes](../call-table/table.md#scopes)); a Commit id is not confined to the
+namespace; the Branch of a Workspace is not checked. These gaps wait for an
+owner decision and are listed under
+[Scopes](../call-table/table.md#scopes)
 ([`calls/scope.rs`](../../../../api/crates/layerfs-control/src/calls/scope.rs)).
 Every function is generated from the call table
 ([`calls/table.rs`](../../../../api/crates/layerfs-control/src/calls/table.rs));

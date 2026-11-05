@@ -88,6 +88,7 @@ buckets.
 | Rule | Enforced by |
 | --- | --- |
 | A call's arguments are checked against the table before any effect | [`calls/check.rs`](../../../../api/crates/layerfs-control/src/calls/check.rs) |
+| A folder scope checks call arguments, not processes: `workspace.exec` is a `cd` prefix, not confinement; Commit and Layer ids and a Workspace's Branch are not confined ([open gaps](../call-table/table.md#scopes)) | [`calls/scope.rs`](../../../../api/crates/layerfs-control/src/calls/scope.rs) |
 | Every call opens (creates or converts) its home first | [`calls/dispatch.rs`](../../../../api/crates/layerfs-control/src/calls/dispatch.rs), [`common/home/migrate/open.rs`](../../../../api/crates/layerfs-control/src/common/home/migrate/open.rs) |
 | LayerFS reads `LAYERFS_*` settings only and names no plugin; `HOME` and `XDG_CACHE_HOME` are read only as fallback folders | [`calls/dispatch.rs`](../../../../api/crates/layerfs-control/src/calls/dispatch.rs) (`LAYERFS_HOME`, else `~/.layerfs`), [`common/trace.rs`](../../../../api/crates/layerfs-control/src/common/trace.rs) (`LAYERFS_TRACE`), [`sandbox/deploy.rs`](../../../../api/crates/layerfs-control/src/sandbox/deploy.rs) (bundle cache) |
 | Records never hold a PostgreSQL password: the URL is stored without it and the password as `env:NAME` or `file:/path`, resolved per call | [`store/connect.rs`](../../../../api/crates/layerfs-control/src/store/connect.rs) (`refuse_password`), [`common/secrets.rs`](../../../../api/crates/layerfs-control/src/common/secrets.rs) |
