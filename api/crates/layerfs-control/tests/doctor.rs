@@ -209,6 +209,14 @@ fn each_problem_gives_one_finding_naming_its_fix() {
     ]);
     write_entity(&paths::machine_record(&home, "ephemeral"), &ephemeral).unwrap();
     store(&home, "s7", sqlite("s7", "ephemeral"));
+    // a Store on a machine whose record cannot say whether it keeps one
+    let unsure = SdkValue::map([
+        ("name", t("unsure")),
+        ("platform", t("ssh")),
+        ("local_sqlite", t("yes")),
+    ]);
+    write_entity(&paths::machine_record(&home, "unsure"), &unsure).unwrap();
+    store(&home, "s8", sqlite("s8", "unsure"));
     // a built-in machine whose recorded daemon is not there
     let native = SdkValue::map([
         ("name", t("native")),
@@ -297,6 +305,13 @@ fn each_problem_gives_one_finding_naming_its_fix() {
             "s7",
             "keeps no disk of ours",
             "`layerfs store pull s7`",
+        ),
+        (
+            "error",
+            "store",
+            "s8",
+            "cannot say whether it keeps a Store",
+            "repair",
         ),
         (
             "warning",

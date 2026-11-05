@@ -5,7 +5,7 @@
 //! one whose backend has no worker and no disk of ours; a PostgreSQL Store
 //! is on no machine and is never refused, and `store.pull` stays the way off
 //! such a machine.
-use layerfs_api::home::{self, paths, write_record};
+use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
 use std::path::PathBuf;
 
@@ -124,6 +124,12 @@ fn a_sqlite_store_is_not_placed_on_a_machine_that_keeps_no_disk() {
         "{message}"
     );
     assert!(message.contains("Store shop"), "{message}");
+    // a refusal has no side effect: the name is not claimed and no
+    // Sandbox folder is made
+    assert!(
+        !paths::sandbox_dir(&home, "box").exists(),
+        "the refused create left a Sandbox folder"
+    );
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -140,8 +146,110 @@ fn a_postgresql_store_is_never_refused_by_placement() {
 }
 
 #[test]
+fn a_sqlite_store_on_its_owning_machine_is_admitted() {
+    // `local_sqlite: true` is a machine that keeps the file: placement
+    // admits the create, and it goes on to the Store's own machine rule (a
+    // Sandbox of a native Store may not run on dev), never to
+    // StoragePlacement and with no Sandbox folder made.
+    let home = home_with_platform(sqlite_record("native"), Some(true), "ssh");
+    let refused = create_on_dev(&home).unwrap_err();
+    assert_ne!(refused.0, "StoragePlacement", "{}", refused.2);
+    assert!(!refused.2.contains("cannot be placed"), "{}", refused.2);
+    assert_eq!(refused.0, "Unsupported", "{}", refused.2);
+    assert!(refused.2.contains("store pull"), "{}", refused.2);
+    assert!(
+        !paths::sandbox_dir(&home, "box").exists(),
+        "the admitted create left a Sandbox folder"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_sqlite_snapshot_is_admitted() {
+    // #552's matrix: a SQLite snapshot is a transfer, not a live Store on a
+    // machine, so placement never refuses it. The call reaches its bucket
+    // and stops at this test's bucket record, which names no provider;
+    // nothing is staged and no Store record changes.
+    let home = tempdir("snapshot");
+    home::open(&home).unwrap();
+    call(&home, "store.create", SdkValue::map([("name", t("shop"))])).unwrap();
+    write_record(
+        &paths::bucket_record(&home, "cold"),
+        &SdkValue::map([("name", t("cold")), ("key", t("env:LAYERFS_TEST"))]),
+    )
+    .unwrap();
+    let before = read_record(&paths::store_record(&home, "shop"))
+        .unwrap()
+        .unwrap();
+    let refused = call(
+        &home,
+        "backup.create",
+        SdkValue::map([("store", t("shop")), ("bucket", t("cold"))]),
+    )
+    .unwrap_err();
+    assert_ne!(refused.0, "StoragePlacement", "{}", refused.2);
+    assert_eq!(refused.0, "Failed", "{}", refused.2);
+    assert!(
+        refused.2.contains("bucket record names no known provider"),
+        "{}",
+        refused.2
+    );
+    assert_eq!(
+        read_record(&paths::store_record(&home, "shop"))
+            .unwrap()
+            .unwrap(),
+        before,
+        "the refused snapshot changed the Store record"
+    );
+    assert!(!paths::store_dir(&home, "shop")
+        .join("backup.staging")
+        .exists());
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn object_storage_is_never_a_live_store() {
+    // #552's matrix: object storage is backup and transfer only. A
+    // `store.connect` naming it is refused before any effect: no Store
+    // folder and no record.
+    let home = tempdir("object");
+    home::open(&home).unwrap();
+    for (name, url) in [
+        ("r2store", "r2://account/bucket/prefix"),
+        ("s3store", "s3://bucket/prefix"),
+        ("miniostore", "https://minio.example/bucket/prefix"),
+    ] {
+        let refused = call(
+            &home,
+            "store.connect",
+            SdkValue::map([("name", t(name)), ("url", t(url))]),
+        )
+        .unwrap_err();
+        assert_eq!(refused.0, "InvalidInput", "{url}: {}", refused.2);
+        assert!(refused.2.contains("object storage"), "{url}: {}", refused.2);
+        assert!(
+            refused.2.contains("backup and transfer only"),
+            "{url}: {}",
+            refused.2
+        );
+        assert!(
+            !paths::store_dir(&home, name).exists(),
+            "{url} left a Store folder"
+        );
+        assert!(
+            !paths::store_record(&home, name).exists(),
+            "{url} left a Store record"
+        );
+    }
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
 fn a_push_to_a_machine_that_keeps_no_disk_is_refused() {
     let home = home_with(sqlite_record("native"), Some(false));
+    let before = read_record(&paths::store_record(&home, "shop"))
+        .unwrap()
+        .unwrap();
     let (code, detail, message) = call(
         &home,
         "store.push",
@@ -151,6 +259,19 @@ fn a_push_to_a_machine_that_keeps_no_disk_is_refused() {
     assert_eq!(code, "StoragePlacement", "{message}");
     assert_placement_detail(&detail, &message);
     assert!(message.contains("store push"), "{message}");
+    // a refusal has no side effect: the Store's record is unchanged and no
+    // op intent was taken before either machine was reached
+    assert_eq!(
+        read_record(&paths::store_record(&home, "shop"))
+            .unwrap()
+            .unwrap(),
+        before,
+        "the refused push changed the Store's record"
+    );
+    assert!(
+        before.get("op").is_none(),
+        "the refused push took an op intent: {before:?}"
+    );
     std::fs::remove_dir_all(home).unwrap();
 
     // a machine that keeps the Store is not refused here: the same push
