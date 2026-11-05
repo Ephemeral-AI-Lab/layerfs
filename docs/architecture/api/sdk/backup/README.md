@@ -59,15 +59,41 @@ LayerFS never deletes a bucket object.
 | `region` | Text | MinIO region, default `us-east-1` |
 | `part_size` | Size | upload part size; `K`, `M`, `G` text is turned into bytes before dispatch |
 | `file` | Name | the object name; `create` defaults to the Store's name, `restore` to the Store's link |
-| `on_progress` | Function | `PROGRESS`; events `{ progress: { phase } }` |
+| `on_progress` | Function | `PROGRESS`; events `{ progress: { phase, done, total, pieces } }` (see [Progress](#progress)) |
+
+## Progress
+
+`create` and `restore` send `{ phase, done, total, pieces }`
+([`backup/progress.rs`](../../../../../api/crates/layerfs-control/src/backup/progress.rs)):
+
+| Field | Value |
+| --- | --- |
+| `phase` | the step now running (below) |
+| `done`, `total` | bytes while the phase moves bytes (`total` null when unknown); null in a phase that moves none |
+| `pieces` | `{ done, of }` while a file goes up or down as pieces, else null |
+
+The transfer runs on a thread of its own while the calling thread sends the
+bucket library's counts: at most one byte update per 250 ms, each phase's
+exact last count before the next phase starts, and nothing repeated. Byte
+counts are the bytes written to or read from the connection; the S3 part
+hash computed before each multipart part is not counted. A phase that
+reaches its total says only that its bytes moved: `restore` still verifies
+and installs, and either call has succeeded only when it returns its
+result. A failed transfer's last update is what it moved; nothing is
+retried. The CLI prints each update as one JSON line on stderr with
+`--progress`, and nothing without it.
 
 ```text
  backup.create                          backup.restore
- snapshot  store.file stage on the      download  objects -> this process
+ check     the bucket holds what        check     (before the download)
+           this home expects            download  bytes, pieces
+ snapshot  store.file stage on the      verify    the bytes open as the Store
            Store's machine              install   a sqlite Store on native
- send      (worker only) pieces
+ send      (worker only) bytes
            -> this process
- upload    this process -> bucket
+ check     again, just before upload
+ hash      bytes of the snapshot
+ upload    bytes, pieces -> bucket
            unstage on the machine
 ```
 

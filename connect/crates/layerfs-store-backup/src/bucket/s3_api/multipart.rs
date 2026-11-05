@@ -43,7 +43,15 @@ pub(crate) fn upload(
     metadata: &Metadata,
 ) -> Result<(), RemoteError> {
     let size = part_size(span.length, client.config().part_size)?;
+    let max_request = client.config().limits.max_request;
+    if size > max_request {
+        return Err(RemoteError::Invalid(format!(
+            "{} bytes need parts of {size}, above the provider's request limit {max_request}",
+            span.length
+        )));
+    }
     let upload = create(client, object, metadata)?;
+    let mut completing = false;
     let result = (|| {
         let mut etags = Vec::new();
         let mut offset = 0;
@@ -56,17 +64,26 @@ pub(crate) fn upload(
             etags.push(send_part(client, object, &upload, number, file, part)?);
             offset += part.length;
         }
+        completing = true;
         complete(client, object, &upload, &etags)
     })();
     match result {
         Ok(()) => Ok(()),
         Err(cause) => match abort(client, object, &upload) {
             Ok(()) => Err(cause),
-            Err(abort) => Err(RemoteError::PartsLeft {
-                cause: Box::new(cause),
-                upload,
-                abort: Box::new(abort),
-            }),
+            Err(abort) => match cause {
+                // a completion of unknown outcome may have replaced the
+                // object, so the upload's outcome stays unknown
+                RemoteError::Uncertain(why) if completing => Err(RemoteError::Uncertain(format!(
+                    "{why}; abort of multipart upload {upload} failed ({abort}), its parts may remain"
+                ))),
+                // a part failed: the object was not replaced
+                cause => Err(RemoteError::PartsLeft {
+                    cause: Box::new(cause),
+                    upload,
+                    abort: Box::new(abort),
+                }),
+            },
         },
     }
 }

@@ -127,3 +127,103 @@ fn restore_over_a_store_with_a_running_sandbox_is_in_use() {
         let _ = std::fs::remove_dir_all(dir);
     }
 }
+
+/// A restore killed mid-download leaves its folder; the next restore removes
+/// it, and keeps a folder whose restore still holds its lock and one with
+/// no lock file at all.
+#[test]
+#[allow(deprecated)] // nix's `Flock` consumes the file; this test keeps it
+fn the_next_restore_removes_a_killed_restores_folder() {
+    use nix::fcntl::{flock, FlockArg};
+    use std::os::unix::io::AsRawFd;
+    let home = tempdir("sweep");
+    home::open(&home).unwrap();
+    dead_bucket(&home);
+    let store = home.join("store");
+    let folder = |name: &str, lock: bool| {
+        let dir = store.join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("store.sqlite.pulling"), vec![0u8; 4096]).unwrap();
+        if lock {
+            std::fs::write(dir.join("lock"), b"").unwrap();
+        }
+        dir
+    };
+    let killed = folder(".restore-killed", true);
+    let running = folder(".restore-running", true);
+    let unknown = folder(".restore-unknown", false);
+    let held = std::fs::File::options()
+        .write(true)
+        .open(running.join("lock"))
+        .unwrap();
+    flock(held.as_raw_fd(), FlockArg::LockExclusiveNonblock).unwrap();
+
+    let failed = call(
+        &home,
+        "backup.restore",
+        &[("store", t("fresh")), ("bucket", t("dead"))],
+    )
+    .unwrap_err();
+    assert_ne!(failed.0, "Exists", "{failed:?}");
+    assert!(!killed.exists(), "the killed restore's folder stayed");
+    assert!(running.join("store.sqlite.pulling").is_file());
+    assert!(unknown.join("store.sqlite.pulling").is_file());
+    // the failed restore's own folder is gone too
+    let mut left: Vec<_> = std::fs::read_dir(&store)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with(".restore-"))
+        .collect();
+    left.sort();
+    assert_eq!(left, vec![".restore-running", ".restore-unknown"]);
+    drop(held);
+    let _ = std::fs::remove_dir_all(home);
+}
+
+/// Two creates of one Store would stage their snapshots at the same path:
+/// while one holds the Store's backup lock, another is `Busy` before it
+/// stages anything or sends a request.
+#[test]
+#[allow(deprecated)] // nix's `Flock` consumes the file; this test keeps it
+fn a_second_create_of_a_store_is_busy() {
+    use nix::fcntl::{flock, FlockArg};
+    use std::os::unix::io::AsRawFd;
+    let home = tempdir("busy");
+    home::open(&home).unwrap();
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    dead_bucket(&home);
+    let staged = home.join("store/shop/store.sqlite.backup");
+    std::fs::write(&staged, b"the running create's snapshot").unwrap();
+    let held = std::fs::File::options()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(home.join("store/shop/backup.lock"))
+        .unwrap();
+    flock(held.as_raw_fd(), FlockArg::LockExclusiveNonblock).unwrap();
+
+    let busy = call(
+        &home,
+        "backup.create",
+        &[("store", t("shop")), ("bucket", t("dead"))],
+    )
+    .unwrap_err();
+    assert_eq!(busy.0, "Busy", "{busy:?}");
+    assert!(busy.1.contains("backup.create"), "{busy:?}");
+    assert_eq!(
+        std::fs::read(&staged).unwrap(),
+        b"the running create's snapshot"
+    );
+
+    // once it ends, the next create goes on to the bucket
+    drop(held);
+    let next = call(
+        &home,
+        "backup.create",
+        &[("store", t("shop")), ("bucket", t("dead"))],
+    )
+    .unwrap_err();
+    assert_ne!(next.0, "Busy", "{next:?}");
+    let _ = std::fs::remove_dir_all(home);
+}

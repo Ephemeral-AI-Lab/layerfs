@@ -5,5 +5,7 @@ mod create;
 pub mod family;
 mod list;
 #[doc(hidden)]
+pub mod progress;
+#[doc(hidden)]
 pub mod record;
 mod restore;

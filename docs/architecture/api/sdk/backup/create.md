@@ -45,7 +45,7 @@ layerfs backup create <store> <bucket> [<file>] [--progress]
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `on_progress` | Function | none | called with `{ phase }`: `snapshot`, `send` (worker machines only), `upload` | [`backup/family.rs`](../../../../../api/crates/layerfs-control/src/backup/family.rs) `progress` |
+| `on_progress` | Function | none | called with `{ phase, done, total, pieces }`: `check`, `snapshot`, `send` (worker machines only, with bytes), `check`, `hash` and `upload` (with bytes; `upload` with pieces when the file goes up as pieces); see [Progress](README.md#progress) | [`backup/progress.rs`](../../../../../api/crates/layerfs-control/src/backup/progress.rs) `Shown` |
 
 ## Returns
 
@@ -100,6 +100,7 @@ backup does not refuse other calls. See the
 | `InvalidInput` | bad names or `file`; a PostgreSQL Store ("back it up with PostgreSQL's tools"); a folder-scoped client | no | [`backup/create.rs`](../../../../../api/crates/layerfs-control/src/backup/create.rs) |
 | `NotFound` | no such Store or bucket | no | same |
 | `Busy` / `Unresolved` | a push, pull or remove runs on the Store / an earlier one's outcome is unknown | no | [`store/record.rs`](../../../../../api/crates/layerfs-control/src/store/record.rs) `unblocked` |
+| `Busy` | another `backup.create` of the Store runs in this home (both would stage at one path); nothing was changed | no | [`backup/create.rs`](../../../../../api/crates/layerfs-control/src/backup/create.rs) `Creating` |
 | `Exists` | another home wrote the object | no | same, `check` |
 | `Conflict` | the object is not the copy this home last moved (or exists when none was expected) | no | same |
 | `Unavailable` | the Store's machine is stopped or its worker gone | no | [`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs) |

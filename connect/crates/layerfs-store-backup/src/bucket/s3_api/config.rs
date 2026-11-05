@@ -63,6 +63,13 @@ impl S3Config {
             return invalid("timeouts");
         }
         crate::bucket::s3_api::multipart::check_part(self.part_size)?;
+        // each part is one request (R2 allows 4.995 GiB of the 5 GiB)
+        if self.part_size > self.limits.max_request {
+            return Err(RemoteError::Invalid(format!(
+                "multipart part size {} above the provider's request limit {}",
+                self.part_size, self.limits.max_request
+            )));
+        }
         Ok(())
     }
 
