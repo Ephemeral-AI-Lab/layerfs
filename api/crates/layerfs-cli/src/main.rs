@@ -17,5 +17,13 @@ mod run;
 mod worker;
 
 fn main() -> std::process::ExitCode {
-    run::main(std::env::args().skip(1).collect())
+    let mut words = Vec::new();
+    for (at, word) in std::env::args_os().enumerate().skip(1) {
+        match word.into_string() {
+            Ok(word) => words.push(word),
+            // the calls take text; a word that is not UTF-8 is a wrong command line
+            Err(word) => return run::wrong(format!("argument {at} is not valid UTF-8: {word:?}")),
+        }
+    }
+    run::main(words)
 }
