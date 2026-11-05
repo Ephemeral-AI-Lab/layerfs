@@ -87,7 +87,7 @@ Start here. None of these needs new product code.
 | Store reader pool | `ReadServiceWork`: `readers`, `quarantined`, `waiting`, `leased`, `peak_outstanding`, `grants`, `queue_wait_ns`, `maximum_queue_wait_ns` | [`store/read_service.rs`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/2b4dc28a6d93aace6405a6baa5271e344b1cf5c2/core/crates/layerfs-daemon/src/store/read_service.rs) | Reader contention and quarantine |
 | Namespace construction in a Commit | `CapturedNamespaceWork`: rows, pages, `parent_points`, `base_lookups`, headers, values, `files_constructed`, record jobs | [`construction/outcome.rs`](../../engine/crates/layerfs-workspace/src/construction/outcome.rs) | In the Commit success or failure |
 | Storage read and save path | `Diagnostics`: locate, pack reads and selections, reservations, publish, payload reads, locator and pack cache hits and evictions | [`read/counters.rs`](../../core/crates/layerfs-storage/src/read/counters.rs) | In the Commit outcome |
-| Global Store SQL | `SqlWork`: statements, actual VM steps, transactions | [`sqlite/connection.rs`](../../engine/crates/layerfs-persistence/src/backend/sqlite/connection.rs) | Separate from the overlay engine |
+| Global Store SQL | `SqlWork`: statements, actual VM steps, transactions; on PostgreSQL also `round_trips`, `prepares`, `connects` | [`sqlite/connection.rs`](../../engine/crates/layerfs-persistence/src/backend/sqlite/connection.rs) | Separate from the overlay engine |
 | Kernel queue of one connection | `waiting`, `max_background`, `congestion_threshold` | the mount's own entry under the fusectl filesystem | Read only your own connection. Nothing writes there except the product's own abort |
 
 Existing count tests show the pattern for asserting work instead of time:

@@ -198,10 +198,14 @@ pub(super) fn sql<W: Write>(
     let Some(w) = work else {
         return rows.row(section, index, None);
     };
-    let mut values = crate::telemetry::sql_values(&w).to_vec();
+    let scalars = crate::telemetry::sql_values(&w);
+    let (phased, wire) = scalars.split_at(layerfs_store_service::telemetry::SQL_PHASED);
+    let mut values = phased.to_vec();
     for phase in w.statement_phases.iter().chain(&w.commit_phases) {
         values.extend([phase.calls, phase.wall_ns]);
     }
+    // PostgreSQL wire counters follow the phases, so older columns keep their place.
+    values.extend(wire);
     rows.row(section, index, Some(&values))?;
     Ok(())
 }

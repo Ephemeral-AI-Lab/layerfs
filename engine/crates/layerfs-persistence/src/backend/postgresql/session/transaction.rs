@@ -67,6 +67,7 @@ impl Transaction<'_> {
             .and_then(|rows| rows.iter().map(rows::record).collect::<Result<Vec<_>, _>>());
         let work = &mut state.work;
         work.statements += 1;
+        work.round_trips += 1;
         work.bound_bytes += bytes;
         work.statement_ns += start.elapsed().as_nanos() as u64;
         if let Ok(rows) = &result {
@@ -90,6 +91,7 @@ impl Transaction<'_> {
         let result = self.checked(result);
         let work = &mut state.work;
         work.statements += 1;
+        work.round_trips += 1;
         work.bound_bytes += bytes;
         work.statement_ns += start.elapsed().as_nanos() as u64;
         if let Ok(rows) = &result {
@@ -108,6 +110,10 @@ impl Transaction<'_> {
         let start = Instant::now();
         let mut state = self.state.borrow_mut();
         let result = (|| {
+            // Its own prepare, the start (CopyInResponse) and the finish;
+            // the rows stream between them without waiting.
+            state.work.prepares += 1;
+            state.work.round_trips += 3;
             let writer = state.client.copy_in(sql)?;
             let mut writer = BinaryCopyInWriter::new(writer, types);
             rows(&mut writer)?;
@@ -124,6 +130,7 @@ impl Transaction<'_> {
         let mut state = self.state.borrow_mut();
         let result = state.client.batch_execute(sql);
         state.work.statements += 1;
+        state.work.round_trips += 1;
         drop(state);
         self.checked(result)
     }
@@ -183,6 +190,7 @@ impl Session {
         };
         let schema = self.settings.schema.as_str();
         let result = (|| {
+            state.work.round_trips += 1;
             if let Err(e) = state.client.batch_execute(&begin) {
                 let error = rows::error(&e);
                 if error == BackendError::Unknown || rollback(state).is_err() {
@@ -214,6 +222,7 @@ impl Session {
             match result {
                 Ok(value) => {
                     let commit = Instant::now();
+                    state.work.round_trips += 1;
                     let outcome = state.client.batch_execute("COMMIT");
                     state.work.commit_ns += commit.elapsed().as_nanos() as u64;
                     match outcome {
@@ -276,5 +285,6 @@ fn immutable<T, E: From<BackendError> + OutcomeError>(
 }
 
 fn rollback(state: &mut State) -> Result<(), postgres::Error> {
+    state.work.round_trips += 1;
     state.client.batch_execute("ROLLBACK")
 }

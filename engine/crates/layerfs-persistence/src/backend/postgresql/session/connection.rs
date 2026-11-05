@@ -4,7 +4,14 @@ use crate::backend::{admission::Admission, records::BackendError};
 use crate::{PostgresSelection, SqlWork};
 use postgres::{Client, Config, Statement};
 use postgres_native_tls::MakeTlsConnector;
-use std::{collections::HashMap, str::FromStr, sync::Mutex};
+use std::{
+    collections::HashMap,
+    str::FromStr,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
+};
 
 /// Prepared statements kept per connection before the cache is cleared.
 const STATEMENT_CACHE: usize = 256;
@@ -22,6 +29,8 @@ impl State {
         if let Some(statement) = self.statements.get(sql) {
             return Ok(statement.clone());
         }
+        self.work.prepares += 1;
+        self.work.round_trips += 1;
         let statement = self.client.prepare(sql)?;
         if self.statements.len() >= STATEMENT_CACHE {
             self.statements.clear();
@@ -74,6 +83,23 @@ pub(crate) struct Session {
     pub(crate) settings: Settings,
     pub(crate) server_version: String,
     pub(crate) connector: Connector,
+    /// The lane connection's work, counted outside `state` because the lane
+    /// is held and released without the session state's lock.
+    pub(crate) lane_work: LaneWork,
+}
+
+/// Connections opened and round trips made on the lane connection.
+#[derive(Default)]
+pub(crate) struct LaneWork {
+    pub(crate) connects: AtomicU64,
+    pub(crate) round_trips: AtomicU64,
+}
+
+impl LaneWork {
+    pub(crate) fn add(&self, connects: u64, round_trips: u64) {
+        self.connects.fetch_add(connects, Ordering::Relaxed);
+        self.round_trips.fetch_add(round_trips, Ordering::Relaxed);
+    }
 }
 
 impl Session {
@@ -95,18 +121,28 @@ impl Session {
                 client,
                 statements: HashMap::new(),
                 quarantined: false,
-                work: SqlWork::default(),
+                // The connection, then `SHOW server_version`: prepare and execute.
+                work: SqlWork {
+                    connects: 1,
+                    round_trips: 2,
+                    prepares: 1,
+                    ..SqlWork::default()
+                },
             }),
             lane: Mutex::new(None),
             writable,
             settings,
             server_version: version,
             connector,
+            lane_work: LaneWork::default(),
         })
     }
 
     pub(crate) fn diagnostics(&self) -> Result<SqlWork, BackendError> {
         let state = self.state.lock().map_err(|_| BackendError::Unknown)?;
-        Ok(state.work)
+        let mut work = state.work;
+        work.connects += self.lane_work.connects.load(Ordering::Relaxed);
+        work.round_trips += self.lane_work.round_trips.load(Ordering::Relaxed);
+        Ok(work)
     }
 }

@@ -74,6 +74,22 @@ the recorded source and definition, and the binding.
 | Lost reply inside a transaction | `Unknown`; session quarantined | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
 | `COMMIT` refused (deferred constraint) | the error; counted as a rollback | same |
 
+`Session::diagnostics` returns the session's `SqlWork`. Besides the shared
+statement, transaction and wall counters it fills three PostgreSQL-only
+counters (zero on SQLite):
+
+| Counter | Counts | Source |
+| --- | --- | --- |
+| `round_trips` | each exchange that waits for the server: a prepare, a statement execution, a simple-query script (`BEGIN` with its `SET LOCAL`s, `COMMIT`, `ROLLBACK`, schema scripts), a binary COPY's start and finish, `SHOW server_version` at open (two), and the lane's `BEGIN … FOR UPDATE` and `ROLLBACK` | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/connection.rs), [`lane.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/lane/lane.rs) |
+| `prepares` | statement-cache misses, the open's `SHOW server_version`, and each COPY's unnamed statement | same |
+| `connects` | new connections: the session's own and its lane connection | same |
+
+A connection's handshake (TCP, the SSL probe of `sslmode=prefer`, startup
+and authentication) is one `connects`, not part of `round_trips`. The Store
+service reports the writer session and every Workspace reader session,
+live and retired, as on SQLite
+([`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs)).
+
 ## Transactions
 
 | `Mode` | `BEGIN` | Lane row | Used by | Source |

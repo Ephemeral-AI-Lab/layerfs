@@ -28,17 +28,22 @@ impl Session {
         }
         let mut lane = self.lane.lock().map_err(|_| BackendError::Unknown)?;
         if lane.is_none() {
+            self.lane_work.add(1, 0);
             *lane = Some(self.connector.connect()?);
         }
         let client = lane.as_mut().ok_or(BackendError::Unknown)?;
+        self.lane_work.add(0, 1);
         if let Err(e) = client.batch_execute(&self.settings.lane_begin()) {
             let error = rows::error(&e);
-            if error == BackendError::Unknown || client.batch_execute("ROLLBACK").is_err() {
-                // Closing the connection ends whatever the server still holds.
-                *lane = None;
-                return Err(BackendError::Unknown);
+            if error != BackendError::Unknown {
+                self.lane_work.add(0, 1);
+                if client.batch_execute("ROLLBACK").is_ok() {
+                    return Err(error);
+                }
             }
-            return Err(error);
+            // Closing the connection ends whatever the server still holds.
+            *lane = None;
+            return Err(BackendError::Unknown);
         }
         drop(lane);
         turn.hold()?;
@@ -57,6 +62,7 @@ impl Drop for LaneHold {
             .lock()
             .unwrap_or_else(|poison| poison.into_inner());
         if let Some(client) = lane.as_mut() {
+            self.session.lane_work.add(0, 1);
             if client.batch_execute("ROLLBACK").is_err() {
                 // The server ends the transaction, and its row lock, with the connection.
                 *lane = None;

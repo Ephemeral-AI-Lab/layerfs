@@ -255,9 +255,10 @@ pub fn delta(before: SaveCounters, after: SaveCounters) -> Option<SdkValue> {
     Some(SdkValue::Map(fields))
 }
 
-/// The scalar `SqlWork` counters, in `SQL_FIELDS` order (observation
-/// sections 13 and 14 begin with them).
-pub fn sql_values(w: &SqlWork) -> [u64; 27] {
+/// The scalar `SqlWork` counters, in `SQL_FIELDS` order. Observation
+/// sections 13 and 14 begin with the first `SQL_PHASED` of them, then the
+/// phase pairs, then the rest (PostgreSQL wire counters).
+pub fn sql_values(w: &SqlWork) -> [u64; 30] {
     [
         w.statements,
         w.vm_steps,
@@ -286,8 +287,14 @@ pub fn sql_values(w: &SqlWork) -> [u64; 27] {
         w.blob_read_bytes,
         w.blob_read_ns,
         w.blob_close_calls,
+        w.round_trips,
+        w.prepares,
+        w.connects,
     ]
 }
+
+/// How many `sql_values` precede the phase pairs in observation rows.
+pub const SQL_PHASED: usize = 27;
 
 pub fn named(names: &[&str], values: &[u64]) -> SdkValue {
     SdkValue::Map(
@@ -370,7 +377,7 @@ fn flatten(
 }
 
 /// The scalar Store SQL work counters, `SqlWork` names.
-pub const SQL_FIELDS: [&str; 27] = [
+pub const SQL_FIELDS: [&str; 30] = [
     "statements",
     "vm_steps",
     "fullscan_steps",
@@ -398,4 +405,7 @@ pub const SQL_FIELDS: [&str; 27] = [
     "blob_read_bytes",
     "blob_read_ns",
     "blob_close_calls",
+    "round_trips",
+    "prepares",
+    "connects",
 ];
