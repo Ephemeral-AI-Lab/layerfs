@@ -92,6 +92,9 @@ arguments in JavaScript, Python and the `layerfs` command.
 | Names | snake_case, the table's own | snake_case | `-` for `_` |
 | Content / JSON positionals | string, `Uint8Array`/`Buffer`, object | `str`, `bytes`, dict/list | stdin, or `--from FILE` |
 | Sizes | `8589934592` or `"8G"` | same | `8G` |
+| Whole numbers | exact: a `bigint` is sent as written; a result is a `number` when a safe integer, else a `bigint`; an unsafe `number`, `NaN`, `Map`, `Set` or lone surrogate is refused before the call ([Node](../front-ends/node.md#values)) | `int` | — |
+| Bytes | `Buffer` / `Uint8Array` ↔ `{ "base64": … }`; a one-key map with that key is read as bytes | `bytes` | — |
+| Types | `index.d.ts`, generated from the table; results are loose (`Result`) | — | — |
 | Answer | a Promise of a plain object | a dict (a coroutine in `layerfs.aio`) | one JSON line on stdout |
 | Progress | `on_progress: (e) => …` | `on_progress=fn` | `--progress` (JSON lines on stderr) |
 | Exec output | `stdout`, `stderr` functions, or `stream: true` | the same | `--stream` |
