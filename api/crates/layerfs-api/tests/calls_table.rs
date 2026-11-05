@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 61 calls in nine
+//! The call table and its dispatcher (#533 step 2): 65 calls in ten
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -51,9 +51,9 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_nine_families_and_61_calls() {
+fn the_table_has_ten_families_and_65_calls() {
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 61);
+    assert_eq!(all.len(), 65);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +66,7 @@ fn the_table_has_nine_families_and_61_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 61, "call names are unique");
+    assert_eq!(names.len(), 65, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -75,7 +75,7 @@ fn the_table_has_nine_families_and_61_calls() {
         }
     }
     let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [4, 6, 3, 14, 4, 5, 11, 9, 5]);
+    assert_eq!(counts, [4, 6, 3, 14, 4, 5, 11, 9, 5, 4]);
 }
 
 #[test]
@@ -254,6 +254,27 @@ fn backup_family() {
     assert!(code("backup.create", map(&[("store", t("shop"))])).contains("`bucket` is required"));
     let reached = code("backup.list", SdkValue::Null);
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
+}
+
+#[test]
+fn step_family() {
+    assert!(code("step.exec_async", map(&[("key", t("k"))])).contains("`command` is required"));
+    assert!(code("step.exec_wait", SdkValue::Null).contains("`exec_id` is required"));
+    // an id with no entry is an answer, not a refusal: no command is run
+    for name in ["step.exec_status", "step.cancel"] {
+        let answer = code(name, map(&[("exec_id", t("exec-0000000000000000"))]));
+        assert!(answer.starts_with("ok"), "{name}: {answer}");
+    }
+    // a negative deadline is refused before anything starts
+    assert!(code(
+        "step.exec_async",
+        map(&[
+            ("key", t("k")),
+            ("command", t("true")),
+            ("timeout_ms", SdkValue::Int(-1)),
+        ])
+    )
+    .contains("not negative"));
 }
 
 #[test]

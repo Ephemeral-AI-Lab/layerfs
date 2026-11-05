@@ -1,6 +1,7 @@
 //! The management library under the SDK call surface (`layerfs-api`): the
 //! home and its records, machines and their workers, Stores, projects,
-//! Sandboxes and their Workspaces, and backups (#536), and the call
+//! Sandboxes and their Workspaces, and backups (#536), the launcher-owned
+//! step runtime outside the Sandbox compute plane (#555), and the call
 //! machinery (`calls`). `layerfs-api` holds the call table's entries, one
 //! file per call, and runs each call here.
 #![forbid(unsafe_code)]
@@ -19,6 +20,7 @@ pub mod inventory;
 pub mod machine;
 pub mod project;
 pub mod sandbox;
+pub mod step;
 pub mod store;
 pub mod workspace;
 pub use daemon::call::{SdkError, SdkResult};

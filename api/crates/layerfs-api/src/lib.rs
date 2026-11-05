@@ -17,6 +17,7 @@ mod file;
 mod machine;
 mod project;
 mod sandbox;
+mod step;
 mod store;
 mod workspace;
 
@@ -46,7 +47,7 @@ pub use layerfs_control::{
     BoundWorkspace, MountFailure, MountedWorkspace, Unmounted, WorkspaceApi,
 };
 
-/// The nine families, in the order help lists them: 61 calls, the same
+/// The ten families, in the order help lists them: 65 calls, the same
 /// from the `layerfs` binary, Node and Python.
 pub fn families() -> Families {
     &[
@@ -85,6 +86,10 @@ pub fn families() -> Families {
         Family {
             name: "backup",
             list: backup::calls,
+        },
+        Family {
+            name: "step",
+            list: step::calls,
         },
     ]
 }

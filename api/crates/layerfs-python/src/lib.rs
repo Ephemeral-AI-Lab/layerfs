@@ -1,6 +1,6 @@
 //! The Python front end of the `layerfs` package (#533 step 16): the
 //! module `layerfs._native` with [`table`], the call table the package
-//! builds its nine families from; [`call`], exactly the library's one call,
+//! builds its ten families from; [`call`], exactly the library's one call,
 //! made once with the interpreter released; [`call::close`], the top-level
 //! `layerfs.close()`; and [`call::doctor`], the
 //! top-level `layerfs.doctor()`. Arguments, results and events cross as

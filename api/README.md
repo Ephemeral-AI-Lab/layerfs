@@ -7,7 +7,7 @@
 
 `api/` holds one JavaScript package, `layerfs` (in [`node/`](node)), and the
 script that builds its native addon. The package is the library's call table
-as nine families of functions:
+as ten families of functions:
 
 | Family | Calls |
 | --- | --- |
@@ -20,6 +20,7 @@ as nine families of functions:
 | `machine` | `list`, `get`, `status`, `create`, `connect`, `remove`, `disconnect`, `update` |
 | `store` | `list`, `get`, `status`, `create`, `connect`, `move`, `remove`, `disconnect` |
 | `backup` | `connect`, `disconnect`, `list`, `create`, `restore` |
+| `step` | `exec_async`, `exec_wait`, `exec_status`, `cancel` |
 
 `layerfs.table` lists every call with its arguments and options; it is the
 source for the list above, for the `layerfs` command (`layerfs help`) and for

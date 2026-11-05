@@ -1,5 +1,5 @@
 // The `layerfs` package (#533 step 14): one client per home (and optional
-// folder scope, O32), nine families built from the library's call table.
+// folder scope, O32), ten families built from the library's call table.
 // Each function takes its positionals in the table's order, then an options
 // object; every call is one call into the library, made once.
 //
@@ -13,7 +13,7 @@ import { LayerFSError } from "./errors.js";
 
 /** The table: `[{ family, call, args, options, help }]`. */
 export const table = decode(native.table());
-/** The nine families, in help order. */
+/** The ten families, in help order. */
 export const families = [...new Set(table.map((c) => c.family))];
 
 const FUNCTION = "function";
@@ -124,6 +124,6 @@ export function close() {
 }
 
 const fallback = client();
-export const { project, branch, commit, file, sandbox, workspace, machine, store, backup } = fallback;
+export const { project, branch, commit, file, sandbox, workspace, machine, store, backup, step } = fallback;
 export { LayerFSError };
 export default { ...fallback, client, close, doctor, table, families, LayerFSError };

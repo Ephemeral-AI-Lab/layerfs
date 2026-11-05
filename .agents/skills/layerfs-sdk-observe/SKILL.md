@@ -15,7 +15,7 @@ description: Use when observing, measuring or troubleshooting a LayerFS 2.0 run 
 > private home on 2026-11-02, unless marked "from source".
 
 Everything here is a read: it changes no project. 2.0 has no separate
-diagnostic package; the reads are ordinary calls of the nine families, open to
+diagnostic package; the reads are ordinary calls of the ten families, open to
 every caller.
 
 | Question | 2.0 source | Page |

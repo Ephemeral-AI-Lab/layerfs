@@ -75,6 +75,18 @@ pub fn workspace_dir(home: &Path, sandbox: &str) -> PathBuf {
     sandbox_dir(home, sandbox).join("workspace")
 }
 
+/// `step/`: the launcher-owned step entries and their idempotency index
+/// (#555).
+pub fn step_dir(home: &Path) -> PathBuf {
+    home.join("step")
+}
+
+/// `step/launch/`: the process launcher's pid, output and exit receipts,
+/// outside every launcher process (#555).
+pub fn step_launch_dir(home: &Path) -> PathBuf {
+    step_dir(home).join("launch")
+}
+
 /// `machine/native/run/`: the local Sandbox backends' runtime root (0755),
 /// one directory per Sandbox beside the image cache the namespaces backend
 /// keeps there (`images/`), in the home and under a worker's root.

@@ -1,4 +1,4 @@
-"""One client per home (and optional folder scope, O32): nine families
+"""One client per home (and optional folder scope, O32): ten families
 built from the library's call table. Each function takes its positionals
 in the table's order; optional positionals and options may be keywords.
 Every call is one call into the library, made once."""
@@ -11,7 +11,7 @@ from ._values import decode, encode
 
 #: The table: ``[{family, call, args, options, help}]``.
 TABLE = decode(_native.table())
-#: The nine families, in help order.
+#: The ten families, in help order.
 FAMILIES = list(dict.fromkeys(spec["family"] for spec in TABLE))
 
 _FUNCTION = "function"

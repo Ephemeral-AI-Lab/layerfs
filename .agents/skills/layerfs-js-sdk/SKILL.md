@@ -285,7 +285,7 @@ For Rust projects, follow the [Cargo workflow](references/rules/cargo.md).
 
 ## Calls
 
-61 calls in nine families. Each family's page has arguments, results, refusals
+65 calls in ten families. Each family's page has arguments, results, refusals
 and examples.
 
 | Family | Calls |
@@ -299,6 +299,7 @@ and examples.
 | [machine](references/methods/machine.md) | `list`, `platforms`, `get`, `status`, `start`, `stop`, `create`, `connect`, `remove`, `disconnect`, `update` |
 | [store](references/methods/store.md) | `list`, `get`, `status`, `create`, `connect`, `push`, `pull`, `remove`, `disconnect` |
 | [backup](references/methods/backup.md) | `connect`, `disconnect`, `list`, `create`, `restore` |
+| [step](references/methods/step.md) | `exec_async(key, command, { timeout_ms })`, `exec_wait(exec_id, { wait_ms })`, `exec_status(exec_id)`, `cancel(exec_id)` |
 
 One top-level function is outside the families: `doctor({ home })` (shell
 `layerfs doctor [--text]`) reports what is wrong in the home as `{ ok,

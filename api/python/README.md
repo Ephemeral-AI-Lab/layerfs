@@ -3,7 +3,7 @@
 > **Status:** Current implementation guide for LayerFS 2.0 (#533 step 16);
 > not a release receipt.
 
-The same nine families as the [JavaScript package](../README.md), from the
+The same ten families as the [JavaScript package](../README.md), from the
 same call table, through the PyO3 module `layerfs._native`
 (`api/crates/layerfs-python`). Calls are synchronous; `layerfs.aio` has
 the same calls as coroutines (O19).

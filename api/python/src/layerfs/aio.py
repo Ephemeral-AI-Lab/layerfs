@@ -84,5 +84,6 @@ workspace = _default.workspace
 machine = _default.machine
 store = _default.store
 backup = _default.backup
+step = _default.step
 
 __all__ = ["AsyncClient", "LayerFSError", "client"] + FAMILIES

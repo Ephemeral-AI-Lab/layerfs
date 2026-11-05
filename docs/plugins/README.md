@@ -30,7 +30,7 @@ Build a LayerFS plugin with me: <what it should do>.
    repository as layerfs.json: { "commit": "<the 40-character SHA>" }. The listing
    prompt reads it from there.
 2. Read api/README.md in that checkout: the `layerfs` package (Node, and Python in
-   api/python) has nine families of calls from one table; agents that only have Bash use
+   api/python) has ten families of calls from one table; agents that only have Bash use
    the `layerfs` command, which makes the same calls. Tell me which calls the plugin
    needs before writing code.
 3. Read the skill in .agents/skills/layerfs-js-sdk/. If agents will call LayerFS through

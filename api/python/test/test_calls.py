@@ -72,9 +72,9 @@ class Calls(unittest.TestCase):
     def test_the_table(self):
         self.assertEqual(
             layerfs.FAMILIES,
-            ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup"],
+            ["project", "branch", "commit", "file", "sandbox", "workspace", "machine", "store", "backup", "step"],
         )
-        self.assertEqual(len(layerfs.TABLE), 61)
+        self.assertEqual(len(layerfs.TABLE), 65)
         for spec in layerfs.TABLE:
             self.assertTrue(callable(getattr(getattr(layerfs, spec["family"]), spec["call"])))
         with self.assertRaises(layerfs.LayerFSError) as caught:
@@ -86,6 +86,11 @@ class Calls(unittest.TestCase):
         home = temp("refused")
         lfs = layerfs.client(home=home)
         for spec in layerfs.TABLE:
+            # `step.exec_async` accepts any text and starts a real command,
+            # so the second call answers `reused: true` by design; the step
+            # family has its own contract tests (api/crates/layerfs-api/tests/step_calls.rs).
+            if (spec["family"], spec["call"]) == ("step", "exec_async"):
+                continue
             args = [a for a in spec["args"] if not a["optional"]]
             positionals = [REFUSING[a["kind"]] for a in args]
             words, data = [spec["family"], spec["call"]], b""
