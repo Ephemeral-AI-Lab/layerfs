@@ -139,7 +139,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-workspace",
         "layerfs-store-service",
         "layerfs-mount-ports",
-    "layerfs-fuse",
+        "layerfs-fuse",
         "layerfs-nfs",
         "layerfs-bridge",
         "layerfs-content",
@@ -362,8 +362,7 @@ def component_violations(path, source):
     # its call machinery (calls/) lives in layerfs-control.
     moved = {
         "layerfs-api": tuple(
-            f"/src/{part}/"
-            for part in ("host", "family", "home", "worker", "fs", "base", "operator", "calls")
+            f"/src/{part}/" for part in ("host", "family", "home", "worker", "fs", "base", "operator", "calls")
         ),
         "layerfs-control": ("/src/host/", "/src/operator/"),
         "layerfs-store-service": ("/src/remote/",),
