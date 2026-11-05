@@ -21,7 +21,7 @@ async function main(): Promise<void> {
   await lfs.file.read("shop/api", "main", "/README.md", options);
   await lfs.file.write("shop/api", "agent", "/a.bin", Buffer.from([0, 1, 255]), { message: "bytes", mode: 0o644 });
   await lfs.file.write("shop/api", "agent", "/a.txt", "text");
-  await lfs.file.apply("shop/api", "agent", { "/a": { content: "x" } }, { message: "m" });
+  await lfs.file.apply("shop/api", "agent", [{ op: "write", path: "/a", content: new Uint8Array([0, 255]) }], { message: "m" });
   await lfs.workspace.exec("ws", "ls", { stream: true, stdout: (bytes) => process.stdout.write(bytes), stderr: (bytes) => void bytes });
   await lfs.machine.create("vm", "lima", { cpus: 2, memory: "8G", disk: 8589934592n, nested: true });
   await lfs.backup.create("shop", "bucket", "file", { on_progress: () => {} });

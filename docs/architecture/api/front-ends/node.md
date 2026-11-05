@@ -70,6 +70,9 @@ links it and holds the build script.
 
 ## Values
 
+The generated `Value` input type accepts `Uint8Array` (including `Buffer`)
+inside JSON arguments, including the content of a `file.apply` change.
+
 | Direction | Value | Behaviour |
 | --- | --- | --- |
 | In | `bigint` | written as its exact digits, in any position: `2n ** 60n + 1n`, `-(2n ** 63n)` arrive unchanged. The library reads a whole number as a signed 64-bit integer and refuses a larger one (`InvalidInput`, "number out of range") |

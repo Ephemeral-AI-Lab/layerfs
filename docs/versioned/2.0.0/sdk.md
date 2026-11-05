@@ -33,7 +33,7 @@ const { ws } = await layerfs.workspace.mount("tests", "agent", { name: "build" }
 const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", folder: "/web", branch: "agent" } });
 ```
 
-- Node 20 or later. The package is an ES module.
+- Node 22 or later. The package is an ES module.
 - The default export and the named exports `project`, `branch`, `commit`,
   `file`, `sandbox`, `workspace`, `machine`, `store` and `backup` use the
   default home (`LAYERFS_HOME`, else `~/.layerfs`).

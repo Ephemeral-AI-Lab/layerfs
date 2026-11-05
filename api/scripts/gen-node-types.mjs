@@ -44,7 +44,7 @@ export function render(table) {
 
 /** Any value the package returns or accepts as JSON: whole numbers beyond
  * ±(2^53 - 1) are \`bigint\`, bytes that are not UTF-8 are \`Buffer\`. */
-export type Value = null | boolean | number | bigint | string | Buffer | Value[] | { [key: string]: Value };
+export type Value = null | boolean | number | bigint | string | Uint8Array | Value[] | { [key: string]: Value };
 /** An answer: a map with snake_case keys. The call table has no result schema,
  * so its keys are not typed; the call's page in the SDK reference lists them. */
 export type Result = { [key: string]: Value };

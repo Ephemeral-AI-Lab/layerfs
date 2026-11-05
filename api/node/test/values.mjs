@@ -160,11 +160,12 @@ test("through the library: empty, binary, Unicode and one-key-map content", asyn
   // Inside a JSON value a one-key map with the reserved key is bytes: the
   // three bytes "ABC". (As the `content` positional of file.write it is taken
   // for the options object, which does not know "base64".)
-  await lfs.file.apply("shop/api", "agent", [{ op: "write", path: "/map", content: { base64: "QUJD" } }, { op: "write", path: "/buf", content: Buffer.from("ABC") }]);
+  await lfs.file.apply("shop/api", "agent", [{ op: "write", path: "/map", content: { base64: "QUJD" } }, { op: "write", path: "/buf", content: Buffer.from("ABC") }, { op: "write", path: "/u8", content: new Uint8Array([0, 255]) }]);
   await assert.rejects(lfs.file.write("shop/api", "agent", "/map", { base64: "QUJD" }), /unknown option "base64"/);
   assert.equal(await size("/empty.txt"), 0);
   assert.equal(await size("/empty.bin"), 0);
   assert.equal(await size("/bin"), 4);
+  assert.equal(await size("/u8"), 2);
   assert.equal(await text("/uni.txt"), "héllo 世界 😀\n");
   assert.equal(await text("/uni.bin"), "héllo 世界 😀\n", "bytes that are UTF-8 read back as text");
   assert.equal(await text("/map"), "ABC");
