@@ -26,7 +26,7 @@
 // Each call is made once; one that throws answers { thrown }.
 import { execFile } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { createReadStream, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { createReadStream, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -101,7 +101,8 @@ mkdirSync(config.home, { recursive: true, mode: 0o700 });
 // The addon opens each Store with a folder under TMPDIR named by pid. A
 // restarted container keeps its /tmp and may reuse the pid, so a private
 // folder per start keeps an earlier run's folders from refusing the open.
-for (const name of readdirSync(tmpdir())) if (name.startsWith("layerfs-worker-")) rmSync(join(tmpdir(), name), { recursive: true, force: true });
+// Other homes may have live workers in the same temporary parent. Never sweep
+// their directories; shutdown removes only this instance's directory below.
 const temp = join(tmpdir(), `layerfs-worker-${randomBytes(12).toString("hex")}`);
 mkdirSync(temp, { mode: 0o700 });
 process.env.TMPDIR = temp;
