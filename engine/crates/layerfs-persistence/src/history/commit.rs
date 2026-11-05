@@ -28,7 +28,8 @@ pub(crate) fn commit(tx: &Transaction<'_>, id: CommitId) -> HistoryResult<Option
     one(tx, COMMIT_BY_ID, [id.as_slice()], commit_row)
 }
 
-/// True when an existing row for this identity carries the same immutable fields.
+/// True when an existing row carries the same identity-bearing fields. Time,
+/// author and labels are creation-time annotations: the first stored row wins.
 pub(crate) fn verify_commit(tx: &Transaction<'_>, record: &CommitRecord) -> HistoryResult<bool> {
     match commit(tx, record.id)? {
         None => Ok(false),
@@ -40,6 +41,8 @@ pub(crate) fn verify_commit(tx: &Transaction<'_>, record: &CommitRecord) -> Hist
                 && stored.stack == record.stack
                 && (CommitMeta {
                     time_ms: record.meta.time_ms,
+                    author: record.meta.author.clone(),
+                    labels: record.meta.labels.clone(),
                     ..stored.meta
                 }) == record.meta
             {
@@ -221,13 +224,16 @@ pub(crate) fn new_commit(
                     .map_err(|_| HistoryError::Capacity("metadata bytes"))?,
                 super::facts::encode(&record.meta.lww, &record.meta.units)?,
                 record.meta.displaced.map(|id| id.to_bytes().to_vec()),
+                record.meta.author.clone(),
+                (!record.meta.labels.is_empty())
+                    .then(|| layerfs_history::labels::encode(&record.meta.labels)),
             ],
         )
         .map_err(sql)?;
         super::lineage::record_commit(tx, &record)?;
         return Ok(record);
     }
-    // An identical Commit already exists: it keeps its own recorded time.
+    // An identical Commit already exists: it keeps its original annotations.
     commit(tx, record.id)?.ok_or(HistoryError::Integrity("Commit identity"))
 }
 

@@ -146,7 +146,7 @@ fn actual_daemon_install_hello_bind_status_no_constructor_and_session_end() {
     // The real binary's Commit of an unchanged Workspace: the same root, no
     // new Commit record.
     assert!(
-        matches!(control.call(Request::Commit(layerfs_bridge::control::CommitControl { token: bound.token, force: false, message: None, })).unwrap(), Reply::Committed(layerfs_history::CommitOutcome::UpToDate { head: None, root }) if root == bound.binding.effective_root)
+        matches!(control.call(Request::Commit(layerfs_bridge::control::CommitControl { token: bound.token, force: false, message: None, author: None, labels: Vec::new(), })).unwrap(), Reply::Committed(layerfs_history::CommitOutcome::UpToDate { head: None, root }) if root == bound.binding.effective_root)
     );
     let after = layerfs_api::internal::workspace(&mut control)
         .status(bound.token)

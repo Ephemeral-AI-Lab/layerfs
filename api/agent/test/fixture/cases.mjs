@@ -14,7 +14,7 @@
 // returns (consistency).
 const WS = { sandbox: "1", path: "/workspaces/w1" };
 const HANDLE = "1:/workspaces/w1";
-const commit = { id: "c0ffee", logical: 120, newCanonical: 40, newStored: 30, newMetadata: 8 };
+const commit = { id: "c0ffee", author: null, labels: [], logical: 120, newCanonical: 40, newStored: 30, newMetadata: 8 };
 const committed = { kind: "Committed", head: "c0ffee", commit };
 const page = { items: [], hasMore: false, nextPagePos: null };
 

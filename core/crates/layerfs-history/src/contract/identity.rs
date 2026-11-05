@@ -8,9 +8,10 @@
 //!
 //! What a hash cannot carry is provenance: a Layer's source Branch and source
 //! Commit are deliberately outside its identity. Two records that derive the
-//! same identity must therefore agree on every immutable field, and a
-//! disagreement is an integrity failure rather than an overwrite. The catalog
-//! enforces that; this module only supplies the values.
+//! same identity must therefore agree on every identity-bearing field, and a
+//! disagreement is an integrity failure rather than an overwrite. Creation-time
+//! annotations such as a Commit's author, labels and time are not identity-bearing;
+//! the first stored record wins. The catalog enforces both rules.
 //!
 //! Identity creation is an authority decision. Stack and Branch IDs and Workspace
 //! incarnations arrive as explicit checked inputs; this crate never reads a
@@ -282,8 +283,8 @@ impl CommitId {
     /// extended by a merge's second parent. A Commit without a second parent
     /// keeps the identity it had before second parents existed.
     ///
-    /// The metadata's Branch, kind, attribution and merge origin are part of
-    /// the identity; its time is not.
+    /// The metadata's Branch, kind, message and merge origin are part of the
+    /// identity; its author, labels and time are creation-time annotations.
     pub fn derive(
         root: ObjectId,
         parent: Option<Self>,

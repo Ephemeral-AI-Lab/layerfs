@@ -79,6 +79,15 @@
 > fields and identity description are superseded. See the [SDK channel](82-sdk-call-channel.md)
 > and [counter screen](../issues/327/COUNTER-SCREEN-20261015.md).
 
+> **P7 Commit attribution, 2026-10-29:** Workspace Commits may carry one author
+> (at most 4096 UTF-8 bytes) and at most 64 labels (each at most 4096 bytes,
+> total JSON at most 4096 bytes), with newline/tab the only permitted controls.
+> Author and labels are creation-time annotations outside `layerfs/commit/v3`
+> identity, like time and statistics. Repeating a derived id returns the first
+> stored attribution. Nullable columns are appended additively; old or NULL rows
+> read as author null and labels `[]`. History values and the bounded reply
+> budgets include both fields.
+
 > **Commit metadata, overwrite publish and Branch merge, 2026-10-15 (#327):**
 > every Commit records `CommitMeta`: the Branch it was made on, how it was made
 > (`Workspace`, `Files`, `Merge`), the caller's `agent` and `call` (at most 128

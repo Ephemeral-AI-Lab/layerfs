@@ -1,1 +1,1 @@
-SELECT commit_id, layer_stack_id, root_id, parent_commit_id, base_layer_id, second_parent_id, branch_id, via, message, merged_from_id, created_ms, logical, new_canonical, new_stored, new_metadata, lww, displaced_id FROM "commit" WHERE commit_id = $1;
+SELECT commit_id, layer_stack_id, root_id, parent_commit_id, base_layer_id, second_parent_id, branch_id, via, message, merged_from_id, created_ms, logical, new_canonical, new_stored, new_metadata, lww, displaced_id, author, labels FROM "commit" WHERE commit_id = $1;

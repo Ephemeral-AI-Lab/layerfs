@@ -102,6 +102,8 @@ CREATE TABLE "commit" (
     new_metadata INTEGER NOT NULL DEFAULT 0 CHECK(new_metadata>=0),
     lww BLOB NOT NULL,
     displaced_id BLOB CHECK(displaced_id IS NULL OR length(displaced_id)=33),
+    author TEXT CHECK (author IS NULL OR length(CAST(author AS BLOB)) <= 4096),
+    labels TEXT CHECK (labels IS NULL OR length(CAST(labels AS BLOB)) <= 4096),
     FOREIGN KEY (layer_stack_id, base_layer_id)
         REFERENCES layer(layer_stack_id, layer_id) DEFERRABLE INITIALLY DEFERRED,
     FOREIGN KEY (layer_stack_id, parent_commit_id)

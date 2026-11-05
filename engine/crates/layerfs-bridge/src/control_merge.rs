@@ -25,6 +25,10 @@ pub struct CommitControl {
     pub force: bool,
     /// Description of the captured filesystem change.
     pub message: Option<String>,
+    /// Person or agent making the Commit.
+    pub author: Option<String>,
+    /// Free-form creation-time labels.
+    pub labels: Vec<String>,
 }
 
 /// A Commit published after merging with a moved head.
@@ -72,7 +76,7 @@ pub(crate) fn put_commit_control(
         }
         out.blob(text.as_bytes())?;
     }
-    Ok(())
+    crate::control_history::put_attribution(out, &value.author, &value.labels)
 }
 
 pub(crate) fn commit_control(input: &mut Reader<'_>) -> Result<CommitControl, ControlError> {
@@ -86,10 +90,13 @@ pub(crate) fn commit_control(input: &mut Reader<'_>) -> Result<CommitControl, Co
         }
     };
     let message = text()?;
+    let (author, labels) = crate::control_history::attribution(input)?;
     Ok(CommitControl {
         token,
         force,
         message,
+        author,
+        labels,
     })
 }
 

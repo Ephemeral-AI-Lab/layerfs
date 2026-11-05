@@ -21,6 +21,7 @@ mod contract;
 pub use contract::catalog;
 pub use contract::error;
 pub use contract::identity;
+pub use contract::labels;
 pub use contract::query;
 pub use contract::records;
 
@@ -35,5 +36,6 @@ pub use records::{
     CommitStatistics, CommitVia, FileDigest, ForkRequest, ForkSource, InitStatistics,
     LayerHistoryRequest, LayerRecord, LayerStackRecord, MergeCommit, MergeHead, MergeSide, Page,
     PageResult, RecordKind, Reservation, ReserveRequest, StackInitialization, StoreStatistics,
-    FILE_DIGEST_WINDOW, MAXIMUM_MESSAGE_BYTES, MAXIMUM_PAGE_RECORDS,
+    FILE_DIGEST_WINDOW, MAXIMUM_ATTRIBUTION_BYTES, MAXIMUM_LABELS, MAXIMUM_LABELS_JSON_BYTES,
+    MAXIMUM_MESSAGE_BYTES, MAXIMUM_PAGE_RECORDS,
 };

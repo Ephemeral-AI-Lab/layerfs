@@ -328,6 +328,8 @@ impl BoundWorkspace {
                                 .clone()
                                 .unwrap_or_else(|| "Commit Workspace changes".into()),
                         ),
+                        author: options.author.clone(),
+                        labels: options.labels.clone(),
                         statistics: {
                             let saved = retained
                                 .saved

@@ -598,6 +598,8 @@ fn commit(
             token,
             force: false,
             message: None,
+            author: None,
+            labels: Vec::new(),
         });
         let result = match gate {
             Some(gate) => service.execute(&request, move |_, _, snapshot| {

@@ -62,11 +62,30 @@ fn make_old(path: &std::path::Path) {
     let source: String = sql
         .query_row("SELECT schema_source FROM history_meta", [], |r| r.get(0))
         .unwrap();
+    // A Store written before #353 also predates P7's Commit author/labels
+    // columns, so a faithful old Store drops those too: the open-time
+    // migration chain only migrates a Store whose recorded schema is
+    // exactly the earlier stage, and attribution columns with a
+    // pre-lineage source match no stage. The column text is the P7
+    // `ATTRIBUTION` fragment in `schema.rs`.
+    sql.execute_batch(
+        "ALTER TABLE \"commit\" DROP COLUMN author; ALTER TABLE \"commit\" DROP COLUMN labels;",
+    )
+    .unwrap();
     let old = source
         .replacen(LINEAGE, "", 1)
         .replacen(SCRATCH, "", 1)
-        .replacen(DIGESTS, "", 1);
+        .replacen(DIGESTS, "", 1)
+        .replacen(
+            "    author TEXT CHECK (author IS NULL OR length(CAST(author AS BLOB)) <= 4096),\n    labels TEXT CHECK (labels IS NULL OR length(CAST(labels AS BLOB)) <= 4096),\n",
+            "",
+            1,
+        );
     assert_ne!(old, source, "the schema holds the lineage tables");
+    assert!(
+        !old.contains("    author TEXT"),
+        "the old schema must not keep the P7 attribution columns"
+    );
     sql.execute(
         "UPDATE history_meta SET schema_source=?1, schema_definition=?2",
         rusqlite::params![old, definition(&sql)],

@@ -47,15 +47,15 @@ struct Text {
 }
 fn text(reader: &StorePorts, file: EntryFacts) -> Result<Text> {
     let (mut lines, mut prefix, mut bytes, mut complete) = (0, Vec::new(), 0, true);
-    window::lines(reader, &file, window::BYTES, 1, |_, line| {
+    window::lines(reader, &file, window::BYTES, 1, false, |_, line| {
         lines += 1;
         if complete
             && !line.truncated
             && prefix.len() < window::LINES
-            && bytes + line.text.len() <= window::BYTES
+            && bytes + line.text().len() <= window::BYTES
         {
-            bytes += line.text.len();
-            prefix.push(line.text);
+            bytes += line.text().len();
+            prefix.push(line.text());
         } else {
             complete = false;
         }
@@ -141,18 +141,18 @@ pub fn blame(
     }
     let from = from?;
     let (mut tracks, mut spent, mut next_line) = (Vec::new(), 0, None);
-    window::lines(reader, &tip, window::BYTES, 1, |n, line| {
+    window::lines(reader, &tip, window::BYTES, 1, false, |n, line| {
         if n < from {
             return Ok(true);
         }
         // Include maximum message/identity overhead for each origin on the wire.
         if tracks.len() == window::LINES
-            || (!tracks.is_empty() && spent + line.text.len() + 256 > window::BYTES - 8192)
+            || (!tracks.is_empty() && spent + line.text().len() + 256 > window::BYTES - 8192)
         {
             next_line = Some(n);
             return Ok(false);
         }
-        let mut shown = line.text;
+        let mut shown = line.text();
         let mut end = shown.len().min(window::BYTES - 8192 - 256 - spent);
         while !shown.is_char_boundary(end) {
             end -= 1;
@@ -209,7 +209,7 @@ pub fn blame(
                 let (prefix, suffix) = equal_edges(reader, current, older)?;
                 let size = snapshot::size(reader, &current)?;
                 let (mut offset, mut ranges) = (0u64, Vec::new());
-                window::lines(reader, &current, 0, 1, |n, line| {
+                window::lines(reader, &current, 0, 1, false, |n, line| {
                     let start = offset;
                     offset += line.bytes;
                     if tracks.iter().any(|t| t.owner.is_none() && t.number == n) {

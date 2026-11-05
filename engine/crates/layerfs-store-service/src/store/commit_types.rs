@@ -92,6 +92,10 @@ pub struct CommitOptions {
     pub force: bool,
     /// Description of the captured filesystem change.
     pub message: Option<String>,
+    /// Person or agent making the Commit; outside Commit identity.
+    pub author: Option<String>,
+    /// Free-form creation-time labels, preserving order and duplicates.
+    pub labels: Vec<String>,
 }
 /// A Commit merged with a Branch head that moved since the Workspace bound.
 #[derive(Clone, Debug, Eq, PartialEq)]

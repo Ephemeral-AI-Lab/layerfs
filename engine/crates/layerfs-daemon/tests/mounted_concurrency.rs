@@ -498,6 +498,8 @@ fn commit(rig: &Rig, token: WorkspaceToken, what: &str) -> CommitRecord {
                 token,
                 force: false,
                 message: None,
+                author: None,
+                labels: Vec::new(),
             },
         )) {
             Ok(done) => {

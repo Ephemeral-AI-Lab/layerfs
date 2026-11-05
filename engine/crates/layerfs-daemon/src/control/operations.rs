@@ -104,6 +104,8 @@ impl Service {
                 workspace.commit_captured(&CommitOptions {
                     force: control.force,
                     message: control.message.clone(),
+                    author: control.author.clone(),
+                    labels: control.labels.clone(),
                 })
             }),
             Request::Unmount(control) => self.unmount(*control),
