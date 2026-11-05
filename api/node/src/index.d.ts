@@ -394,9 +394,9 @@ export interface MachineFamily {
   start(name: string): Promise<Result>;
   /** stop a machine's worker and VM; its disks stay */
   stop(name: string): Promise<Result>;
-  /** create a VM machine */
+  /** create an enabled VM machine (apple-container, microsandbox, lima) */
   create(name: string, platform: string, options?: MachineCreateOptions): Promise<Result>;
-  /** connect an ssh host as a machine */
+  /** SSH connections are permanently disabled; existing machines can be inspected or disconnected */
   connect(name: string, host: string, options?: MachineConnectOptions): Promise<Result>;
   /** delete a VM machine and its disk */
   remove(name: string): Promise<Result>;

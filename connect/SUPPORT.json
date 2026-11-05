@@ -57,22 +57,22 @@
         {
           "platform": "firecracker",
           "how": "created",
-          "backend": "namespaces",
-          "kernel": "fuse",
-          "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "host", "kind": "name" } ],
-          "description": "a Firecracker microVM in a nested lima machine; Sandboxes run in Linux namespaces and a cgroup"
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker is permanently disabled by product policy (layerfs-project#7)" },
+          "options": [],
+          "description": "firecracker is permanently disabled by product policy (layerfs-project#7)"
         },
         {
           "platform": "ssh",
           "how": "connected",
-          "backend": "namespaces",
-          "kernel": "fuse",
-          "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
-          "options": [ { "name": "user", "kind": "text" }, { "name": "port", "kind": "int" }, { "name": "identity", "kind": "text" }, { "name": "known_hosts", "kind": "text" }, { "name": "root", "kind": "text" } ],
-          "description": "a Linux host over ssh, connected and never created; Sandboxes run in Linux namespaces and a cgroup"
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "ssh is permanently disabled by product policy (layerfs-project#7)" },
+          "options": [],
+          "description": "ssh is permanently disabled by product policy (layerfs-project#7)"
         }
       ]
     },
@@ -135,19 +135,19 @@
           "backend": null,
           "kernel": null,
           "sqlite": null,
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker runs on macOS hosts only, in a nested lima machine" },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "host", "kind": "name" } ],
-          "description": "a Firecracker microVM in a nested lima machine"
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker is permanently disabled by product policy (layerfs-project#7)" },
+          "options": [],
+          "description": "firecracker is permanently disabled by product policy (layerfs-project#7)"
         },
         {
           "platform": "ssh",
           "how": "connected",
-          "backend": "namespaces",
-          "kernel": "fuse",
-          "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
-          "options": [ { "name": "user", "kind": "text" }, { "name": "port", "kind": "int" }, { "name": "identity", "kind": "text" }, { "name": "known_hosts", "kind": "text" }, { "name": "root", "kind": "text" } ],
-          "description": "a Linux host over ssh, connected and never created; Sandboxes run in Linux namespaces and a cgroup"
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "ssh is permanently disabled by product policy (layerfs-project#7)" },
+          "options": [],
+          "description": "ssh is permanently disabled by product policy (layerfs-project#7)"
         }
       ]
     },
@@ -210,19 +210,19 @@
           "backend": null,
           "kernel": null,
           "sqlite": null,
-          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker runs on macOS hosts only, in a nested lima machine" },
-          "options": [ { "name": "cpus", "kind": "int" }, { "name": "memory", "kind": "size" }, { "name": "disk", "kind": "size" }, { "name": "image", "kind": "text" }, { "name": "host", "kind": "name" } ],
-          "description": "a Firecracker microVM in a nested lima machine"
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "firecracker is permanently disabled by product policy (layerfs-project#7)" },
+          "options": [],
+          "description": "firecracker is permanently disabled by product policy (layerfs-project#7)"
         },
         {
           "platform": "ssh",
           "how": "connected",
-          "backend": "namespaces",
-          "kernel": "fuse",
-          "sqlite": "worker",
-          "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
-          "options": [ { "name": "user", "kind": "text" }, { "name": "port", "kind": "int" }, { "name": "identity", "kind": "text" }, { "name": "known_hosts", "kind": "text" }, { "name": "root", "kind": "text" } ],
-          "description": "a Linux host over ssh, connected and never created; Sandboxes run in Linux namespaces and a cgroup"
+          "backend": null,
+          "kernel": null,
+          "sqlite": null,
+          "postgresql": { "store_calls": "in_process", "sandbox": false, "reason": "ssh is permanently disabled by product policy (layerfs-project#7)" },
+          "options": [],
+          "description": "ssh is permanently disabled by product policy (layerfs-project#7)"
         }
       ]
     }

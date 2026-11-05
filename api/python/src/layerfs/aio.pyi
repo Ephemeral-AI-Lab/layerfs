@@ -277,7 +277,7 @@ class AsyncMachineFamily:
         nested: bool | None = None,
         host: str | None = None,
     ) -> Result:
-        """create a VM machine"""
+        """create an enabled VM machine (apple-container, microsandbox, lima)"""
     async def connect(
         self,
         name: str,
@@ -289,7 +289,7 @@ class AsyncMachineFamily:
         known_hosts: str | None = None,
         root: str | None = None,
     ) -> Result:
-        """connect an ssh host as a machine"""
+        """SSH connections are permanently disabled; existing machines can be inspected or disconnected"""
     async def remove(self, name: str) -> Result:
         """delete a VM machine and its disk"""
     async def disconnect(self, name: str) -> Result:

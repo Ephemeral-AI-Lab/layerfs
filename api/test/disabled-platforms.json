@@ -1,0 +1,263 @@
+{
+  "files": {
+    "machine/legacy/record.json": {
+      "name": "legacy",
+      "platform": "$platform",
+      "state": "running",
+      "vm_name": "retained",
+      "host": "parent",
+      "ssh": {
+        "host": "example.invalid"
+      }
+    },
+    "machine/legacy/worker.json": {
+      "address": "$address",
+      "secret": "retained"
+    },
+    "store/shop/record.json": {
+      "name": "shop",
+      "kind": "sqlite",
+      "profile": "disposable",
+      "machine": "legacy"
+    },
+    "store/local/record.json": {
+      "name": "local",
+      "kind": "sqlite",
+      "profile": "disposable",
+      "machine": "native"
+    },
+    "store/pg/record.json": {
+      "name": "pg",
+      "kind": "postgresql"
+    },
+    "store/leftover/record.json": {
+      "name": "leftover",
+      "kind": "sqlite",
+      "profile": "disposable",
+      "machine": "native",
+      "last_transfer": {
+        "call": "store.pull",
+        "from": "legacy",
+        "to": "native",
+        "retired": false
+      }
+    },
+    "sandbox/box/record.json": {
+      "name": "box",
+      "project": "shop/api",
+      "machine": "legacy",
+      "platform": "$platform",
+      "id": "retained",
+      "daemon": {
+        "forward": {
+          "machine": "legacy",
+          "address": "$address"
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "call": "machine.create",
+      "args": {
+        "name": "new",
+        "platform": "$platform"
+      }
+    },
+    {
+      "call": "machine.connect",
+      "args": {
+        "name": "new",
+        "host": "example.invalid"
+      }
+    },
+    {
+      "call": "machine.start",
+      "args": {
+        "name": "legacy"
+      }
+    },
+    {
+      "call": "machine.update",
+      "args": {
+        "name": "legacy",
+        "image": "unused"
+      }
+    },
+    {
+      "call": "sandbox.create",
+      "args": {
+        "project": "shop/api",
+        "name": "new",
+        "machine": "legacy"
+      }
+    },
+    {
+      "call": "sandbox.create",
+      "args": {
+        "project": "shop/api",
+        "name": "new"
+      }
+    },
+    {
+      "call": "sandbox.create",
+      "args": {
+        "project": "pg/api",
+        "name": "new",
+        "machine": "legacy"
+      }
+    },
+    {
+      "call": "workspace.mount",
+      "args": {
+        "sandbox": "box",
+        "branch": "main"
+      }
+    },
+    {
+      "call": "workspace.exec",
+      "args": {
+        "ws": "box:one",
+        "command": "touch /must-not-run"
+      }
+    },
+    {
+      "call": "workspace.commit",
+      "args": {
+        "ws": "box:one"
+      }
+    },
+    {
+      "call": "store.push",
+      "args": {
+        "name": "local",
+        "machine": "legacy"
+      }
+    },
+    {
+      "call": "store.push",
+      "args": {
+        "name": "shop",
+        "machine": "docker"
+      }
+    },
+    {
+      "call": "store.pull",
+      "args": {
+        "name": "shop"
+      }
+    },
+    {
+      "call": "store.push",
+      "args": {
+        "name": "leftover",
+        "machine": "docker"
+      }
+    },
+    {
+      "call": "store.pull",
+      "args": {
+        "name": "leftover"
+      }
+    },
+    {
+      "call": "project.init",
+      "args": {
+        "project": "shop/new",
+        "folder": "/must-not-read"
+      }
+    },
+    {
+      "call": "backup.create",
+      "args": {
+        "store": "shop",
+        "bucket": "missing"
+      }
+    },
+    {
+      "call": "branch.fork",
+      "args": {
+        "project": "shop/api",
+        "name": "new",
+        "from_branch": "main"
+      }
+    },
+    {
+      "call": "branch.merge",
+      "args": {
+        "project": "shop/api",
+        "name": "new",
+        "a": "a",
+        "b": "b"
+      }
+    },
+    {
+      "call": "branch.publish",
+      "args": {
+        "project": "shop/api",
+        "branch": "work"
+      }
+    },
+    {
+      "call": "file.write",
+      "args": {
+        "project": "shop/api",
+        "branch": "work",
+        "path": "/a",
+        "content": "x"
+      }
+    },
+    {
+      "call": "file.edit",
+      "args": {
+        "project": "shop/api",
+        "branch": "work",
+        "path": "/a",
+        "old": "x",
+        "new": "y"
+      }
+    },
+    {
+      "call": "file.apply",
+      "args": {
+        "project": "shop/api",
+        "branch": "work",
+        "changes": []
+      }
+    },
+    {
+      "call": "file.rm",
+      "args": {
+        "project": "shop/api",
+        "branch": "work",
+        "path": "/a"
+      }
+    },
+    {
+      "call": "file.mkdir",
+      "args": {
+        "project": "shop/api",
+        "branch": "work",
+        "path": "/a"
+      }
+    },
+    {
+      "call": "file.mv",
+      "args": {
+        "project": "shop/api",
+        "branch": "work",
+        "from_path": "/a",
+        "to_path": "/b"
+      }
+    },
+    {
+      "call": "file.cp",
+      "args": {
+        "project": "shop/api",
+        "branch": "work",
+        "from_path": "/a",
+        "to_path": "/b"
+      }
+    }
+  ]
+}

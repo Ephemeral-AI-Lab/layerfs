@@ -4,7 +4,9 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The support rows and what each field means.
+The support rows and what each field means. Firecracker and SSH are
+[permanently disabled](disabled-platforms.md), with empty selectable options
+and a fixed refusal reason on every host; their profile metadata remains.
 
 **How to present:** ASCII diagrams first, then tables, then prose. Put each
 diagram in a ```` ```text ```` block, keep it within 80 columns, and use prose only
@@ -41,8 +43,8 @@ backend · kernel · sqlite call site · PostgreSQL Sandbox; "—" is `null`.
 | `apple-container` | created | namespaces · fuse · worker · yes | — · — · — · no | — · — · — · no |
 | `microsandbox` | created | namespaces · fuse · worker · yes | namespaces · fuse · worker · yes | namespaces · fuse · worker · yes |
 | `lima` | created | namespaces · fuse · worker · yes | — · — · — · no | — · — · — · no |
-| `firecracker` | created | namespaces · fuse · worker · yes | — · — · — · no | — · — · — · no |
-| `ssh` | connected | namespaces · fuse · worker · yes | namespaces · fuse · worker · yes | namespaces · fuse · worker · yes |
+| `firecracker` | created (disabled) | — · — · — · no | — · — · — · no | — · — · — · no |
+| `ssh` | connected (disabled) | — · — · — · no | — · — · — · no | — · — · — · no |
 
 Every row has `postgresql.store_calls` = `in_process`. The Windows column is
 what the table allows, not a built host: the crate is `#![cfg(unix)]`
@@ -79,6 +81,7 @@ what the table allows, not a built host: the crate is `#![cfg(unix)]`
  sandbox_allowed(platform, host, store)
    |
    +-- host_refusal(platform, host)
+   |     disabled platform ................ Err(product policy reason)
    |     host == Other ..................... Err(OTHER_HOST)
    |     host not in profile.hosts ......... Err(per-platform text)
    +-- platform.backend(host) is None ...... Err(NO_BACKEND)
@@ -94,13 +97,16 @@ what the table allows, not a built host: the crate is `#![cfg(unix)]`
 | `docker through WSL2 is not designed yet` | `docker` on Windows | `host_refusal` |
 | `apple-container runs on macOS hosts only` | `apple-container` on Linux or Windows | `host_refusal` |
 | `lima runs on macOS hosts only` | `lima` on Linux or Windows | `host_refusal` |
-| `firecracker runs on macOS hosts only, in a nested lima machine` | `firecracker` on Linux or Windows | `host_refusal` |
+| `firecracker is permanently disabled by product policy (layerfs-project#7)` | `firecracker` on every host | shared platform policy |
+| `ssh is permanently disabled by product policy (layerfs-project#7)` | `ssh` on every host | shared platform policy |
 
 `postgresql_refusal` today refuses only `native` on Windows and `Other`,
 which `NO_BACKEND` already refuses first, so a PostgreSQL Sandbox runs
 wherever a sqlite one does. #535 phase 5a enabled `native`, `docker` and
-`ssh`; the [G7 live receipt](../../../../core/docs/issues/535/receipts/g7-live/RECEIPT.md)
-enabled `lima`, `apple-container`, `microsandbox` and `firecracker`. A
+`ssh` historically; the [G7 live receipt](../../../../core/docs/issues/535/receipts/g7-live/RECEIPT.md)
+historically enabled `lima`, `apple-container`, `microsandbox` and `firecracker`.
+The permanent product restriction supersedes those enablements for SSH and
+Firecracker without changing the receipts. A
 refusal reaches the caller as `Unsupported`; `sandbox create` wraps it as
 "a Sandbox of <kind> Store <s> cannot run on machine <m> (<platform>):
 <reason>" ([`sandbox/create.rs`](../../../../api/crates/layerfs-control/src/sandbox/create.rs)).

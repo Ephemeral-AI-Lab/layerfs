@@ -17,7 +17,7 @@ pub(crate) const CALL: Call = call(
         opt("known_hosts", Text),
         opt("root", Text),
     ],
-    "connect an ssh host as a machine",
+    "SSH connections are permanently disabled; existing machines can be inspected or disconnected",
     run,
 );
 

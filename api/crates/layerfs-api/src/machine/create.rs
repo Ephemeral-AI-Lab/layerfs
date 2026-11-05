@@ -18,7 +18,7 @@ pub(crate) const CALL: Call = call(
         opt("nested", Bool),
         opt("host", Name),
     ],
-    "create a VM machine",
+    "create an enabled VM machine (apple-container, microsandbox, lima)",
     run,
 );
 

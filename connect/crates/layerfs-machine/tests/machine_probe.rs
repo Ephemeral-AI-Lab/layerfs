@@ -3,6 +3,7 @@
 #[path = "support/standin.rs"]
 mod standin;
 use layerfs_machine::{native_missing, nested_missing, probe, HostOs, Platform, Tools};
+use layerfs_sandbox::platform_policy::disabled_reason;
 use standin::Scratch;
 
 #[test]
@@ -21,7 +22,9 @@ fn an_empty_search_path_names_every_missing_tool() {
         assert_eq!(found.kind, kind);
         assert!(!found.ready, "{kind:?}");
         assert!(
-            found.missing.contains(&tool.to_owned()),
+            found
+                .missing
+                .contains(&disabled_reason(kind.name()).unwrap_or(tool).to_owned()),
             "{kind:?}: {:?}",
             found.missing
         );
@@ -40,6 +43,10 @@ fn macos_only_kinds_name_the_host_elsewhere() {
         Platform::AppleContainer,
     ] {
         let found = probe(kind, &tools);
+        if let Some(reason) = disabled_reason(kind.name()) {
+            assert_eq!(found.missing, [reason]);
+            continue;
+        }
         assert_eq!(
             found.missing.contains(&"host:macos".to_owned()),
             !on_macos,
@@ -47,8 +54,15 @@ fn macos_only_kinds_name_the_host_elsewhere() {
         );
     }
     let firecracker = probe(Platform::Firecracker, &tools);
-    for fact in nested_missing(HostOs::current()) {
-        assert!(firecracker.missing.contains(&fact));
+    if disabled_reason("firecracker").is_none() {
+        for fact in nested_missing(HostOs::current()) {
+            assert!(firecracker.missing.contains(&fact));
+        }
+    } else {
+        assert_eq!(
+            firecracker.missing,
+            [disabled_reason("firecracker").unwrap()]
+        );
     }
 }
 
@@ -67,8 +81,9 @@ fn a_stand_in_tool_reports_its_version() {
     assert!(msb.ready);
     assert_eq!(msb.version.as_deref(), Some("msb 0.7.8"));
     let ssh = probe(Platform::Ssh, &tools);
-    assert!(ssh.ready);
-    assert_eq!(ssh.version.as_deref(), Some("OpenSSH_9.9p1"));
+    assert!(!ssh.ready);
+    assert_eq!(ssh.version, None);
+    assert_eq!(ssh.missing, [disabled_reason("ssh").unwrap()]);
 }
 
 #[test]

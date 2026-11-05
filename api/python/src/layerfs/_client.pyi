@@ -244,7 +244,7 @@ class MachineFamily:
         nested: bool | None = None,
         host: str | None = None,
     ) -> Result:
-        """create a VM machine"""
+        """create an enabled VM machine (apple-container, microsandbox, lima)"""
     def connect(
         self,
         name: str,
@@ -256,7 +256,7 @@ class MachineFamily:
         known_hosts: str | None = None,
         root: str | None = None,
     ) -> Result:
-        """connect an ssh host as a machine"""
+        """SSH connections are permanently disabled; existing machines can be inspected or disconnected"""
     def remove(self, name: str) -> Result:
         """delete a VM machine and its disk"""
     def disconnect(self, name: str) -> Result:
