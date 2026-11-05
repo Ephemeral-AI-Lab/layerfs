@@ -39,15 +39,45 @@ fn scratch(parent: &Path, label: &str) -> PathBuf {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
-fn missing_store_directory_is_created_0700_and_non_private_directory_is_refused() {
-    use std::os::unix::fs::PermissionsExt;
+fn missing_store_directory_is_refused_without_creating_it_and_non_private_directory_is_refused() {
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
     let parent = scratch(&std::env::temp_dir(), "private-mode");
     let missing = parent.join("global");
     assert!(!missing.exists());
-    let checked = layerfs_store_service::kernel_guard::check(&missing.join("store.sqlite"));
+    let refused_missing = layerfs_store_service::kernel_guard::check(&missing.join("store.sqlite"))
+        .expect_err("missing directory must be refused without creating it");
+    assert!(
+        refused_missing.0.contains(&missing.display().to_string()),
+        "{refused_missing}"
+    );
+    assert!(
+        !missing.exists(),
+        "kernel_guard::check must not create a missing directory"
+    );
+    let template = parent.join("overlay.sqlite");
+    let open_missing = StoreService::open_direct(
+        &missing.join("store.sqlite"),
+        b"binding",
+        [7; 32],
+        &template,
+    );
+    match open_missing {
+        Err(OpenRefusal::Unsupported(_)) => {}
+        Err(other) => panic!("expected OpenRefusal::Unsupported, got {other:?}"),
+        Ok(_) => panic!("expected OpenRefusal::Unsupported, Store opened"),
+    }
+    assert!(
+        !missing.exists(),
+        "open_direct on a missing Store directory must not leave an empty directory"
+    );
+
+    // An existing 0700 directory passes, even for a non-.sqlite filename.
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&missing)
+        .unwrap();
+    let checked = layerfs_store_service::kernel_guard::check(&missing.join("db"));
     assert!(checked.is_ok(), "{checked:?}");
-    let mode = std::fs::metadata(&missing).unwrap().permissions().mode() & 0o7777;
-    assert_eq!(mode, 0o700);
 
     // An existing directory with group/other access (e.g. 0755 from default umask)
     // is refused up front with its path, current mode, expected 0700 and chmod command,

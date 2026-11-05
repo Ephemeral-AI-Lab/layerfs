@@ -45,6 +45,15 @@ impl Fixture {
     ) -> Self {
         let directory =
             std::env::temp_dir().join(format!("layerfs-installed-{}-{label}", std::process::id()));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            std::fs::DirBuilder::new()
+                .mode(0o700)
+                .create(&directory)
+                .unwrap();
+        }
+        #[cfg(not(unix))]
         std::fs::create_dir(&directory).unwrap();
         let source = directory.join("source");
         std::fs::create_dir(&source).unwrap();
@@ -116,6 +125,15 @@ impl Fixture {
     pub fn cloned(label: &str, store: &std::path::Path, count: usize) -> Self {
         let directory =
             std::env::temp_dir().join(format!("layerfs-installed-{}-{label}", std::process::id()));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            std::fs::DirBuilder::new()
+                .mode(0o700)
+                .create(&directory)
+                .unwrap();
+        }
+        #[cfg(not(unix))]
         std::fs::create_dir(&directory).unwrap();
         let installed = directory.join("store.sqlite");
         std::fs::copy(store, &installed).unwrap();

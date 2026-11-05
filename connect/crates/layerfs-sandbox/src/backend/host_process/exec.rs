@@ -1,10 +1,10 @@
 //! One ordinary command to its end in a local Sandbox: the command identity,
 //! the Workspace directory, a search path (on macOS this process's own), and
-//! the caller's Rust and Git locations (`RUSTUP_HOME`, `CARGO_HOME`,
-//! `GIT_CONFIG_GLOBAL`) when present; nothing else of this process's
-//! environment, no shell of its own and no implicit timeout. Each command
-//! leads a process group of its own, named in the Sandbox until it is empty,
-//! so what it leaves running ends with the Sandbox.
+//! (on macOS) the caller's Rust and Git locations (`RUSTUP_HOME`,
+//! `CARGO_HOME`, `GIT_CONFIG_GLOBAL`) when present; nothing else of this
+//! process's environment, no shell of its own and no implicit timeout. Each
+//! command leads a process group of its own, named in the Sandbox until it is
+//! empty, so what it leaves running ends with the Sandbox.
 use super::sandbox::Sandbox;
 use crate::local::streams;
 use crate::local::{groups, process, process::LocalProcess, search::search_path};
@@ -14,7 +14,7 @@ use std::{
     ffi::OsString,
     io::{self, Write},
     os::unix::process::{CommandExt, ExitStatusExt},
-    path::{Path, PathBuf},
+    path::Path,
     process::{Command, Stdio},
 };
 
@@ -127,10 +127,12 @@ fn check(request: &ExecRequest) -> Result<(), RuntimeError> {
     Ok(())
 }
 
-/// The caller's Rust and Git locations, when present, so a command whose
-/// `HOME` is the Sandbox's scratch directory still sees them unless the
+/// The caller's Rust and Git locations on macOS, when present, so a command
+/// whose `HOME` is the Sandbox's scratch directory still sees them unless the
 /// caller's environment or the request sets its own.
+#[cfg(target_os = "macos")]
 fn user_environment() -> Vec<(&'static str, OsString)> {
+    use std::path::PathBuf;
     let home = non_empty_env("HOME").map(PathBuf::from);
     let existing = |path: PathBuf| path.exists().then(|| path.into_os_string());
     let mut vars = Vec::new();
@@ -155,6 +157,12 @@ fn user_environment() -> Vec<(&'static str, OsString)> {
     vars
 }
 
+#[cfg(not(target_os = "macos"))]
+fn user_environment() -> Vec<(&'static str, OsString)> {
+    Vec::new()
+}
+
+#[cfg(target_os = "macos")]
 fn non_empty_env(name: &str) -> Option<OsString> {
     std::env::var_os(name).filter(|value| !value.is_empty())
 }
