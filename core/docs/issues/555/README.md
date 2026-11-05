@@ -61,9 +61,24 @@ process. The durable entry stores the handle (pid and file paths), so
 `exec_status`, `exec_wait` and `cancel` on a **new** launcher instance read
 the same files; a command started before a restart is still observed.
 `cancel` signals the process group once with `TERM`, and the wrapper records
-143. The adapter never blocks: it starts the process, writes the pid and
-returns. It is the host-process compute path; a Sandbox-backed launcher can
+143. It is the host-process compute path; a Sandbox-backed launcher can
 implement the same port later without touching the runtime.
+
+`start` answers only once the wrapper reports ready: the wrapper installs its
+`TERM` trap, starts the command in the background and records the command's
+pid in `ready`, and the launcher waits for that file (bounded, 5 s) before it
+returns the handle. This is an ordering rule, not a wait for the command: a
+cancel that follows `start` must always name a group whose wrapper already
+holds the trap. Answered earlier, a fast `cancel` would land in the window
+before the trap exists, kill the wrapper with the signal's default action, and
+no exit receipt would be written at all.
+
+The wrapper runs the command in the background and `wait`s for it, so the
+trapped signal is handled as soon as it arrives — `bash` interrupts a `wait`
+whose signal is trapped — instead of after the command ends. With a
+foreground command, a signal that arrived before the command was in the group
+would leave the command running and defer the trap until it finished, so
+`cancel` could neither end the command nor record 143.
 
 ## Durable wait store
 

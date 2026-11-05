@@ -166,6 +166,27 @@ fn cancel_ends_a_real_command_and_keeps_its_outcome() {
 }
 
 #[test]
+fn start_answers_only_when_a_cancel_can_be_recorded() {
+    let temp = Temp::new("ready");
+    let runtime = runtime(&temp);
+    // the command outlives every bound here, so a receipt that arrives is
+    // the wrapper's trap and not the command's own exit
+    let id = start(&runtime, "k", "sleep 30", Some(60_000));
+    // `start` answered after the wrapper laid out its trap and put the
+    // command in the group: the ready marker names that command's pid
+    let ready = temp.receipt(&id).join("ready");
+    let command: i32 = fs::read_to_string(&ready).unwrap().trim().parse().unwrap();
+    assert!(command > 0);
+    assert_eq!(runtime.cancel(&id).unwrap(), CancelOutcome::Cancelled);
+    // the trap records the signal at once, not when the command would end
+    assert!(until(Duration::from_secs(2), || exit_of(&temp, &id) == Some(143)));
+    assert_eq!(
+        runtime.receipt(&id).unwrap().unwrap().status,
+        ExecStatus::Cancelled
+    );
+}
+
+#[test]
 fn a_passed_deadline_is_timed_out_not_cancelled() {
     let temp = Temp::new("timeout");
     let runtime = runtime(&temp);

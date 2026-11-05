@@ -19,13 +19,31 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
+
+/// How long `start` waits for the wrapper to lay out its `TERM` trap and put
+/// the command in the group before it answers. A started wrapper is ready in
+/// milliseconds; this bound only catches one that cannot run at all.
+const READY_WAIT: Duration = Duration::from_secs(5);
 
 /// The wrapper written beside one exec: run the command, then write its
 /// exit code, so the outcome survives a launcher restart.
+///
+/// The command runs in the background and the wrapper `wait`s for it, so a
+/// trapped `TERM` runs as soon as the signal arrives (`bash` interrupts a
+/// `wait` whose signal is trapped) instead of after the command ends. The
+/// wrapper writes the command's pid as its ready marker once the command is
+/// in the group, and `start` answers only after that file exists: a `cancel`
+/// therefore always names a group whose wrapper holds the trap and whose
+/// command is already a member, and `143` is recorded every time.
 const WRAPPER: &str = r#"#!/bin/bash
 set -u
-trap 'printf "%d" 143 > "$2"; exit 143' TERM
-bash -c "$1"
+child=
+trap 'printf "%d" 143 > "$2"; if [ -n "$child" ]; then kill -TERM "$child" 2>/dev/null; wait "$child" 2>/dev/null; fi; exit 143' TERM
+bash -c "$1" &
+child=$!
+printf '%d' "$child" > "$3"
+wait "$child"
 code=$?
 printf '%d' "$code" > "$2"
 exit "$code"
@@ -33,12 +51,13 @@ exit "$code"
 
 /// A launcher that runs each command as its own detached process.
 ///
-/// `start` lays out `root/<exec>/` (stdout, stderr, exit, pid, run), starts
-/// `bash run <command> <exit>` in a new process group and answers a handle
-/// naming those files. `observe` reads the exit receipt first and the
-/// process's liveness second, so any launcher instance over the same `root`
-/// observes the command. `cancel` sends its process group `SIGTERM` once; the
-/// exit receipt is written by the wrapper.
+/// `start` lays out `root/<exec>/` (stdout, stderr, exit, pid, ready, run),
+/// starts `bash run <command> <exit> <ready>` in a new process group and
+/// answers a handle naming those files once the wrapper reports ready.
+/// `observe` reads the exit receipt first and the process's liveness second,
+/// so any launcher instance over the same `root` observes the command.
+/// `cancel` sends its process group `SIGTERM` once; the exit receipt is
+/// written by the wrapper's trap.
 #[derive(Clone, Debug)]
 pub struct ProcessLauncher {
     root: PathBuf,
@@ -68,6 +87,7 @@ impl Launcher for ProcessLauncher {
         let stdout = directory.join("stdout");
         let stderr = directory.join("stderr");
         let exit = directory.join("exit");
+        let ready = directory.join("ready");
         let script = directory.join("run");
         write_receipt(&script, WRAPPER.as_bytes())?;
         let out = create(&stdout)?;
@@ -77,6 +97,7 @@ impl Launcher for ProcessLauncher {
             .arg(&script)
             .arg(&request.command)
             .arg(&exit)
+            .arg(&ready)
             .stdin(Stdio::null())
             .stdout(Stdio::from(out))
             .stderr(Stdio::from(err))
@@ -90,9 +111,16 @@ impl Launcher for ProcessLauncher {
             let _ = child.wait();
         });
         if let Err(error) = write_receipt(&directory.join("pid"), pid.to_string().as_bytes()) {
-            if let Ok(raw) = i32::try_from(pid) {
-                let _ = killpg(Pid::from_raw(raw), Signal::SIGKILL);
-            }
+            stop(pid, Signal::SIGKILL);
+            return Err(error);
+        }
+        // The wrapper installs its `TERM` trap and puts the command in the
+        // group before it records `ready`. Answering earlier would let a
+        // cancel that follows `start` land before the trap exists: the
+        // signal would kill the wrapper itself and no exit receipt would
+        // ever be written.
+        if let Err(error) = await_ready(&ready) {
+            stop(pid, Signal::SIGKILL);
             return Err(error);
         }
         let path = |path: &Path| SdkValue::text(path.to_string_lossy().into_owned());
@@ -132,6 +160,34 @@ impl Launcher for ProcessLauncher {
             Ok(()) | Err(Errno::ESRCH) => Ok(()),
             Err(error) => Err(failed(error)),
         }
+    }
+}
+
+/// Waits for the wrapper's ready marker, so `start` answers only when a
+/// cancel can be recorded.
+fn await_ready(ready: &Path) -> Result<(), SdkRefusal> {
+    let end = Instant::now() + READY_WAIT;
+    loop {
+        if ready.is_file() {
+            return Ok(());
+        }
+        if Instant::now() >= end {
+            return Err(refused(
+                "Failed",
+                format!(
+                    "the launcher wrapper did not report ready within {} ms",
+                    READY_WAIT.as_millis()
+                ),
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+/// Ends the process group of a wrapper `start` will not hand out.
+fn stop(pid: u32, signal: Signal) {
+    if let Ok(raw) = i32::try_from(pid) {
+        let _ = killpg(Pid::from_raw(raw), signal);
     }
 }
 
