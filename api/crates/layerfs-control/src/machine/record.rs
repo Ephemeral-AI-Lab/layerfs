@@ -114,7 +114,9 @@ impl MachineRecord {
             return record;
         };
         let mode = record.exec_mode().unwrap_or(ExecMode::Worker);
-        let kernel = record.kernel_scope().unwrap_or(KernelScope::of_class(class));
+        let kernel = record
+            .kernel_scope()
+            .unwrap_or(KernelScope::of_class(class));
         let mut record = record;
         if record.field("isolation_class").is_none() {
             record = record.with("isolation_class", SdkValue::text(class.as_str()));
@@ -406,10 +408,7 @@ impl MachineRecord {
         let capability = super::capability_of(self);
         #[cfg(not(feature = "machine"))]
         let capability = SdkValue::map([
-            (
-                "schema_version",
-                SdkValue::Int(contract::SCHEMA_VERSION),
-            ),
+            ("schema_version", SdkValue::Int(contract::SCHEMA_VERSION)),
             (
                 "isolation",
                 SdkValue::opt_text(isolation.map(|class| class.as_str())),
@@ -430,7 +429,10 @@ impl MachineRecord {
             ("platform", SdkValue::text(kind.name())),
             ("backend", SdkValue::text(super::spec::backend_name(kind))),
             ("supports", super::platforms::supports(kind)),
-            ("schema_version", SdkValue::Int(contract::schema_version(&self.fields))),
+            (
+                "schema_version",
+                SdkValue::Int(contract::schema_version(&self.fields)),
+            ),
             (
                 "isolation_class",
                 SdkValue::opt_text(isolation.map(|class| class.as_str())),
@@ -457,28 +459,24 @@ impl MachineRecord {
             (
                 "health",
                 SdkValue::map([
-                    (
-                        "ok",
-                        SdkValue::Bool(matches!(state, "ready" | "running")),
-                    ),
+                    ("ok", SdkValue::Bool(matches!(state, "ready" | "running"))),
                     ("state", SdkValue::text(state)),
-                    (
-                        "reason",
-                        SdkValue::opt_text(error.clone()),
-                    ),
+                    ("reason", SdkValue::opt_text(error.clone())),
                 ]),
             ),
             (
                 "worker",
-                derived.worker.clone().unwrap_or_else(|| {
-                    SdkValue::map([("state", SdkValue::text("none"))])
-                }),
+                derived
+                    .worker
+                    .clone()
+                    .unwrap_or_else(|| SdkValue::map([("state", SdkValue::text("none"))])),
             ),
             (
                 "lease",
-                derived.lease.clone().unwrap_or_else(|| {
-                    SdkValue::map([("held", SdkValue::Bool(false))])
-                }),
+                derived
+                    .lease
+                    .clone()
+                    .unwrap_or_else(|| SdkValue::map([("held", SdkValue::Bool(false))])),
             ),
         ];
         for extra in [

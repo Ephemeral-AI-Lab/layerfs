@@ -240,10 +240,7 @@ impl SandboxRecord {
     pub fn with_contract(self) -> Self {
         let mut record = self;
         if record.fields.get("schema_version").is_none() {
-            record = record.with(
-                "schema_version",
-                SdkValue::Int(contract::SCHEMA_VERSION),
-            );
+            record = record.with("schema_version", SdkValue::Int(contract::SCHEMA_VERSION));
         }
         if record.fields.get("capacity").is_none() {
             record = record.with("capacity", Capacity::CONTRACT.to_sdk());
@@ -323,11 +320,11 @@ impl SandboxRecord {
             shown.push(("isolation".to_owned(), isolation_sdk(requested, effective)));
         }
         shown.push(("scheduling".to_owned(), scheduling_sdk(self.exec_mode())));
-        shown.push(("schema_version".to_owned(), SdkValue::Int(self.schema_version())));
         shown.push((
-            "capacity".to_owned(),
-            self.capacity_sdk(None),
+            "schema_version".to_owned(),
+            SdkValue::Int(self.schema_version()),
         ));
+        shown.push(("capacity".to_owned(), self.capacity_sdk(None)));
         shown.push(("state".to_owned(), SdkValue::text(self.state(false))));
         if let Some(op) = self.op() {
             shown.push((op::FIELD.to_owned(), op.to_sdk()));

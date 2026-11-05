@@ -25,9 +25,13 @@ pub(super) fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         None => Ok(Ok(SdkValue::Null)),
     };
     let (all, down, gone, running, recently_closed) = match listed {
-        Ok(Err(refusal)) if refusal.code == "NoSuchSandbox" => {
-            (Vec::new(), None, true, SdkValue::List(Vec::new()), SdkValue::List(Vec::new()))
-        }
+        Ok(Err(refusal)) if refusal.code == "NoSuchSandbox" => (
+            Vec::new(),
+            None,
+            true,
+            SdkValue::List(Vec::new()),
+            SdkValue::List(Vec::new()),
+        ),
         Ok(workspaces) => {
             let workspaces = workspaces?;
             let running = workspaces
@@ -62,8 +66,8 @@ pub(super) fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     // what this process measures for the Sandbox, when it owns it (#551
     // B8-157); otherwise the record's bounds only
     let directory = crate::common::home::paths::sandbox_dir(&home, name);
-    let measured = crate::sandbox::registry::live_at(&directory)
-        .map(|state| state.controls.measured());
+    let measured =
+        crate::sandbox::registry::live_at(&directory).map(|state| state.controls.measured());
     let shown = home::with_field(shown, "capacity", record.capacity_sdk(measured));
     let shown = home::with_field(shown, "state", SdkValue::text(record.state(gone)));
     let mut record = home::with_field(shown, "workspaces", SdkValue::List(items));

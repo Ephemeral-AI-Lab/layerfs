@@ -85,7 +85,9 @@ pub(crate) fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> 
 /// it: a read model asks it for its measured capacity, never opening or
 /// probing the Sandbox (#551 B8-157).
 pub(crate) fn live_at(directory: &std::path::Path) -> Option<Arc<SandboxState>> {
-    lock(&SANDBOXES).ok().and_then(|sandboxes| sandboxes.get(directory).cloned())
+    lock(&SANDBOXES)
+        .ok()
+        .and_then(|sandboxes| sandboxes.get(directory).cloned())
 }
 
 /// The Sandbox `args` name when its container still runs it: this

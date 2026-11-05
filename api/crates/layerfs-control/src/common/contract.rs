@@ -56,10 +56,7 @@ impl Capacity {
                 "per_store_quota",
                 SdkValue::Int(i64::from(self.per_store_quota)),
             ),
-            (
-                "in_flight_limit",
-                SdkValue::Int(i64::from(self.in_flight)),
-            ),
+            ("in_flight_limit", SdkValue::Int(i64::from(self.in_flight))),
             ("queue_limit", SdkValue::Int(i64::from(self.queue))),
         ])
     }
@@ -123,6 +120,8 @@ pub fn schema_version(value: &SdkValue) -> i64 {
 pub fn with_schema_version(value: SdkValue) -> SdkValue {
     match value.get("schema_version") {
         Some(_) => value,
-        None => crate::common::home::with_field(value, "schema_version", SdkValue::Int(SCHEMA_VERSION)),
+        None => {
+            crate::common::home::with_field(value, "schema_version", SdkValue::Int(SCHEMA_VERSION))
+        }
     }
 }

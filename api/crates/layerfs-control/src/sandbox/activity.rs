@@ -33,7 +33,10 @@ fn set(fields: &mut Vec<(String, SdkValue)>, field: &str, items: Vec<SdkValue>) 
 /// The folder's activity as the read model shows it: `running` and
 /// `recently_closed`, each a list, empty when nothing was recorded.
 pub fn read(directory: &Path) -> SdkValue {
-    let value = read_record(&file(directory)).ok().flatten().unwrap_or_default();
+    let value = read_record(&file(directory))
+        .ok()
+        .flatten()
+        .unwrap_or_default();
     SdkValue::map([
         ("running", SdkValue::List(items(&value, "running"))),
         (

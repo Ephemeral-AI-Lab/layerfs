@@ -567,9 +567,9 @@ fn a_machine_worker_state_that_disagrees_warns() {
     write_record(&paths::worker_record(&home, "dev"), &worker).unwrap();
     let report = doctor(&home).unwrap();
     let found = findings(&report);
-    let stale = found
-        .iter()
-        .find(|(_, _, name, message, _)| name == "dev" && message.contains("worker record remains"));
+    let stale = found.iter().find(|(_, _, name, message, _)| {
+        name == "dev" && message.contains("worker record remains")
+    });
     assert!(stale.is_some(), "{found:?}");
     std::fs::remove_dir_all(home).unwrap();
 }

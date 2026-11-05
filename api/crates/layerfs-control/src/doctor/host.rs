@@ -25,8 +25,11 @@ fn disk(home: &Path, findings: &mut Findings) {
     let shown = home.display().to_string();
     match nix::sys::statvfs::statvfs(home) {
         Ok(stat) => {
-            let free = u64::from(stat.blocks_available()) * stat.fragment_size();
-            if free < MIN_FREE {
+            // `blocks_available` is `u32` on macOS and `u64` on Linux; the
+            // widening conversion is explicit (as in the Store headroom
+            // checks) so neither platform's clippy flags a useless one.
+            let free = u128::from(stat.blocks_available()) * u128::from(stat.fragment_size());
+            if free < u128::from(MIN_FREE) {
                 findings.warning(
                     ("home", &shown),
                     format!(
@@ -206,9 +209,8 @@ fn providers(home: &Path, scanned: &Scanned, findings: &mut Findings) {
                 kind.name(),
                 probe.missing.join(", ")
             ),
-            format!(
-                "install the provider's tool, or move the Sandbox off it: `layerfs sandbox close <name>`, then `layerfs sandbox.create <project> <name> <machine>`"
-            ),
+            "install the provider's tool, or move the Sandbox off it: `layerfs sandbox close <name>`, then `layerfs sandbox.create <project> <name> <machine>`"
+                .to_owned(),
         );
     }
 }
@@ -251,11 +253,8 @@ fn workers(home: &Path, scanned: &Scanned, findings: &mut Findings) {
             .and_then(|record| record.get_int("forward_pid"))
             .filter(|pid| *pid > 0);
         if let Some(pid) = forward {
-            let alive = nix::sys::signal::kill(
-                nix::unistd::Pid::from_raw(pid as i32),
-                None,
-            )
-            .is_ok();
+            let alive =
+                nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), None).is_ok();
             if !alive {
                 findings.warning(
                     entity,

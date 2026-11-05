@@ -9,9 +9,7 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_control::common::contract::{Capacity, SCHEMA_VERSION};
 use layerfs_control::machine::record::MachineRecord;
 use layerfs_control::sandbox::record::SandboxRecord;
-use layerfs_sandbox::{
-    Backend, IdleStop, IsolationModel, MountDriver, CAPABILITY_SCHEMA_VERSION,
-};
+use layerfs_sandbox::{Backend, IdleStop, IsolationModel, MountDriver, CAPABILITY_SCHEMA_VERSION};
 use std::time::Duration;
 
 fn t(s: &str) -> SdkValue {
@@ -43,9 +41,15 @@ fn a_full_queue_is_capacity_with_the_contract_bounds() {
     let detail = refusal.detail;
     assert_eq!(detail.get_text("resource"), Some("store_calls"));
     assert_eq!(detail.get_text("store"), Some("shop"));
-    assert_eq!(detail.get_int("in_flight"), Some(i64::from(capacity.in_flight)));
+    assert_eq!(
+        detail.get_int("in_flight"),
+        Some(i64::from(capacity.in_flight))
+    );
     assert_eq!(detail.get_int("queued"), Some(i64::from(capacity.queue)));
-    assert_eq!(detail.get_int("queue_limit"), Some(i64::from(capacity.queue)));
+    assert_eq!(
+        detail.get_int("queue_limit"),
+        Some(i64::from(capacity.queue))
+    );
     assert_eq!(
         detail.get_int("in_flight_limit"),
         Some(i64::from(capacity.in_flight))
@@ -55,8 +59,12 @@ fn a_full_queue_is_capacity_with_the_contract_bounds() {
         Some(i64::from(capacity.per_store_quota))
     );
     assert_eq!(detail.get_int("waited_ms"), Some(5));
-    assert_eq!(detail.get_bool("retryable"), true);
-    assert!(refusal.message.contains("queue bound"), "{}", refusal.message);
+    assert!(detail.get_bool("retryable"));
+    assert!(
+        refusal.message.contains("queue bound"),
+        "{}",
+        refusal.message
+    );
 
     // the recorded contract is the same shape a read model answers
     let value = capacity.measured(2, 1);
@@ -85,10 +93,7 @@ fn old_records_have_an_explicit_migration_path() {
         migrated.to_record().get_int("schema_version"),
         Some(SCHEMA_VERSION)
     );
-    assert_eq!(
-        migrated.to_record().get_text("isolation_class"),
-        Some("vm")
-    );
+    assert_eq!(migrated.to_record().get_text("isolation_class"), Some("vm"));
 
     let old = SandboxRecord::from_record(
         "sb",

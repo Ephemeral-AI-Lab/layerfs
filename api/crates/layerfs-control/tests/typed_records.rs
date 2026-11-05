@@ -200,9 +200,11 @@ mod machines {
             keys(&shown),
             [
                 "name",
+                "kind",
                 "platform",
                 "backend",
                 "supports",
+                "schema_version",
                 "isolation_class",
                 "exec_mode",
                 "kernel",
@@ -214,6 +216,10 @@ mod machines {
                 "sandboxes",
                 "isolation",
                 "scheduling",
+                "capability",
+                "health",
+                "worker",
+                "lease",
                 "image",
                 "nested",
                 "error"
@@ -261,9 +267,11 @@ mod machines {
             keys(&shown),
             [
                 "name",
+                "kind",
                 "platform",
                 "backend",
                 "supports",
+                "schema_version",
                 "isolation_class",
                 "exec_mode",
                 "kernel",
@@ -275,6 +283,10 @@ mod machines {
                 "sandboxes",
                 "isolation",
                 "scheduling",
+                "capability",
+                "health",
+                "worker",
+                "lease",
                 "docker"
             ]
         );
