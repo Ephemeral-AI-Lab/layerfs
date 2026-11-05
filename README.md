@@ -29,6 +29,11 @@
   <a href="https://discord.gg/8mmAMCDc2"><img src="https://img.shields.io/badge/Discord-join-5865F2.svg?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
+> [!NOTE]
+> LayerFS 2.0.0 development happens on the
+> [`layerfs_v2_0_0`](https://github.com/Ephemeral-AI-Lab/layerfs/tree/layerfs_v2_0_0) branch.
+> Check there for the latest 2.0.0 work.
+
 https://github.com/user-attachments/assets/70c25887-86a1-4d81-bd78-571cf1c09a18
 
 > **Status:** [LayerFS 1.1.0](https://github.com/Ephemeral-AI-Lab/layerfs/releases/tag/v1.1.0),
