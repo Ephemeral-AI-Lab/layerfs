@@ -8,13 +8,52 @@
 use crate::common::outcome::{failed, refused};
 use layerfs_bridge::control::SdkRefusal;
 use std::fs::{File, OpenOptions};
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 /// How long a Store or Sandbox lock waits for its holder.
 pub const WAIT: Duration = Duration::from_secs(120);
 const PAUSE: Duration = Duration::from_millis(5);
+
+/// What an entity lock file says without taking it (#551 B8-156): whether
+/// an exclusive holder has it now, and when it was last written. A probe
+/// opens the file read-only and never creates or truncates it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LeaseProbe {
+    /// Whether another process holds the lock now.
+    pub held: bool,
+    /// The file's modification time, milliseconds since the epoch.
+    pub since: Option<i64>,
+}
+
+/// Probes the entity lock file `path`: `None` when it does not exist, else
+/// whether it is held. A shared `flock` that an exclusive holder refuses is
+/// the probe; it is released at once, so nothing is waited for.
+pub fn probe(path: &Path) -> Option<LeaseProbe> {
+    let metadata = std::fs::symlink_metadata(path).ok()?;
+    if !metadata.is_file() {
+        return None;
+    }
+    let since = i64::try_from(metadata.mtime())
+        .ok()
+        .and_then(|seconds| seconds.checked_mul(1000))
+        .and_then(|ms| ms.checked_add(i64::from(metadata.mtime_nsec() / 1_000_000)));
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .ok()?;
+    let held = match crate::common::home::flock::try_lock(&file, false) {
+        Ok(true) => {
+            crate::common::home::flock::unlock(&file);
+            false
+        }
+        Ok(false) => true,
+        Err(_) => true,
+    };
+    Some(LeaseProbe { held, since })
+}
 
 /// A held entity lock; dropping it releases it.
 #[derive(Debug)]

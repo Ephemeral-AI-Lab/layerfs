@@ -45,7 +45,8 @@ pub use postgres_url::PostgresUrl;
 pub use runtime::{LaunchFailure, Runtime, Sandbox};
 pub use types::{
     Bind, CommandIdentity, ContainerId, DockerRecord, ErrorDiagnostic, ExecExit, ExecId,
-    ExecInspection, ExecRequest, Image, IsolationModel, LaunchPhase, LaunchRequest, LocalRecord,
-    MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities, ProviderLaunchOptions,
-    RuntimeError, SandboxId, SandboxInspection, SandboxRecord, SearchPathPolicy, WireFailure,
+    ExecInspection, ExecMode, ExecRequest, IdleStop, Image, IsolationClass, IsolationModel, KernelScope,
+    LaunchPhase, LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, PendingRequest,
+    ProviderCapabilities, ProviderLaunchOptions, RuntimeError, SandboxId, SandboxInspection,
+    SandboxRecord, SearchPathPolicy, SnapshotCapability, WireFailure, CAPABILITY_SCHEMA_VERSION,
 };

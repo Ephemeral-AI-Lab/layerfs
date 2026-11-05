@@ -1,4 +1,6 @@
 //! Actual ordinary Sandbox lifecycle and its Workspaces, with exact logical and kernel readiness.
+#[doc(hidden)]
+pub mod activity;
 mod close;
 mod create;
 pub(crate) mod deploy;

@@ -104,7 +104,11 @@ fn a_sandbox_shows_its_record() {
     use layerfs_control::sandbox::record::SandboxRecord;
     let text = r#"{"name":"t1","project":"shop/api","machine":"native","created":3,"id":"t1","platform":"macos","runtime":"native","image":null,"backend":"native","route":"nfs"}"#;
     // its state is derived, never stored (#536 H4), and shown last
-    let shown = text.replacen('}', r#","state":"running"}"#, 1);
+    let shown = text.replacen(
+        '}',
+        r#","requested_isolation":"process","effective_isolation":"process","isolation":{"class":"process","requested":"process","effective":"process","kernel":"shared","strength":"weak"},"scheduling":{"worker":true,"long_lived":true,"exec_mode":"worker"},"schema_version":1,"capacity":{"schema_version":1,"per_store_quota":4,"in_flight_limit":8,"queue_limit":16,"in_flight":0,"queued":0},"state":"running"}"#,
+        1,
+    );
     let record = SandboxRecord::from_record("t1", value(text));
     assert_eq!(print(&record.to_sdk(View::List)), shown);
     assert_eq!(print(&record.to_sdk(View::Full)), shown);
@@ -119,6 +123,48 @@ fn a_sandbox_shows_its_record() {
     assert_eq!(versioned.machine(), "native");
     assert_eq!(record.project(), Some("shop/api"));
     assert_eq!(record.id(), Some("t1"));
+}
+
+#[test]
+fn a_sandbox_shows_its_requested_and_effective_isolation() {
+    use layerfs_control::sandbox::record::SandboxRecord;
+    // #551 B0-149: the create keeps both; the read model shows both and
+    // the effective class's kernel and strength.
+    let record = SandboxRecord::from_record(
+        "t",
+        value(
+            r#"{"name":"t","project":"shop/api","machine":"docker","id":"t","platform":"docker","backend":"docker","route":"fuse","requested_isolation":"process","effective_isolation":"container","exec_mode":"worker"}"#,
+        ),
+    );
+    assert_eq!(
+        record.requested_isolation().map(|c| c.as_str()),
+        Some("process")
+    );
+    assert_eq!(
+        record.effective_isolation().map(|c| c.as_str()),
+        Some("container")
+    );
+    let shown = record.to_sdk(View::List);
+    assert_eq!(shown.get_text("requested_isolation"), Some("process"));
+    assert_eq!(shown.get_text("effective_isolation"), Some("container"));
+    let isolation = shown.get("isolation").unwrap();
+    assert_eq!(isolation.get_text("class"), Some("container"));
+    assert_eq!(isolation.get_text("requested"), Some("process"));
+    assert_eq!(isolation.get_text("effective"), Some("container"));
+    assert_eq!(isolation.get_text("kernel"), Some("shared"));
+    assert_eq!(isolation.get_text("strength"), Some("medium"));
+    assert_eq!(
+        print(shown.get("scheduling").unwrap()),
+        r#"{"worker":true,"long_lived":true,"exec_mode":"worker"}"#
+    );
+    // a record written before the contract derives both classes from what
+    // it already records, so an old home still answers
+    let old = SandboxRecord::from_record(
+        "old",
+        value(r#"{"name":"old","platform":"lima","backend":"namespaces"}"#),
+    );
+    assert_eq!(old.requested_isolation().map(|c| c.as_str()), Some("vm"));
+    assert_eq!(old.effective_isolation().map(|c| c.as_str()), Some("vm"));
 }
 
 #[cfg(feature = "machine")]
@@ -147,6 +193,7 @@ mod machines {
             live: Some(("stopped".into(), Some("its probe did not answer".into()))),
             stores: vec!["shop".into()],
             sandboxes: vec!["t1".into()],
+            ..Default::default()
         };
         let shown = record.to_sdk(View::List, &derived).unwrap();
         assert_eq!(
@@ -156,12 +203,17 @@ mod machines {
                 "platform",
                 "backend",
                 "supports",
+                "isolation_class",
+                "exec_mode",
+                "kernel",
                 "state",
                 "cpus",
                 "memory",
                 "disk",
                 "stores",
                 "sandboxes",
+                "isolation",
+                "scheduling",
                 "image",
                 "nested",
                 "error"
@@ -174,6 +226,19 @@ mod machines {
         assert_eq!(print(shown.get("stores").unwrap()), r#"["shop"]"#);
         assert_eq!(print(shown.get("sandboxes").unwrap()), r#"["t1"]"#);
         assert_eq!(shown.get("nested"), Some(&SdkValue::Bool(true)));
+        // #551 B0-144/B0-146: the machine contract is in the read model,
+        // and a VM is `vm` with a separate kernel behind our worker.
+        assert_eq!(shown.get_text("isolation_class"), Some("vm"));
+        assert_eq!(shown.get_text("exec_mode"), Some("worker"));
+        assert_eq!(shown.get_text("kernel"), Some("separate"));
+        let isolation = shown.get("isolation").unwrap();
+        assert_eq!(isolation.get_text("class"), Some("vm"));
+        assert_eq!(isolation.get_text("kernel"), Some("separate"));
+        assert_eq!(isolation.get_text("strength"), Some("strong"));
+        assert_eq!(
+            print(shown.get("scheduling").unwrap()),
+            r#"{"worker":true,"long_lived":true,"exec_mode":"worker"}"#
+        );
         assert_eq!(record.state(Some("missing")).unwrap(), "missing");
         assert_eq!(record.state(None).unwrap(), "running");
         // without a live answer the record's state and error show
@@ -199,16 +264,23 @@ mod machines {
                 "platform",
                 "backend",
                 "supports",
+                "isolation_class",
+                "exec_mode",
+                "kernel",
                 "state",
                 "cpus",
                 "memory",
                 "disk",
                 "stores",
                 "sandboxes",
+                "isolation",
+                "scheduling",
                 "docker"
             ]
         );
         assert_eq!(shown.get_text("state"), Some("ready"));
+        assert_eq!(shown.get_text("isolation_class"), Some("container"));
+        assert_eq!(shown.get_text("kernel"), Some("shared"));
         assert_eq!(shown.get("cpus"), Some(&SdkValue::Null));
         let vm = MachineRecord::from_record("vm", value(r#"{"platform":"lima"}"#));
         assert_eq!(vm.state(None).unwrap(), "stopped");
@@ -359,6 +431,6 @@ fn a_sandbox_state_is_derived_from_its_record_and_intent() {
     let shown = sandbox_with(true, Some(("sandbox.close", 0, true))).to_sdk(View::List);
     assert_eq!(
         print(&shown),
-        r#"{"name":"b","id":"b","state":"unresolved","op":{"id":"op-00000000000000cc","name":"sandbox.close","phase":"stop","started":4,"uncertain":true}}"#
+        r#"{"name":"b","id":"b","scheduling":{"worker":true,"long_lived":true,"exec_mode":"worker"},"schema_version":1,"capacity":{"schema_version":1,"per_store_quota":4,"in_flight_limit":8,"queue_limit":16,"in_flight":0,"queued":0},"state":"unresolved","op":{"id":"op-00000000000000cc","name":"sandbox.close","phase":"stop","started":4,"uncertain":true}}"#
     );
 }

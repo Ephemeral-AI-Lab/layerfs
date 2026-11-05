@@ -53,12 +53,18 @@ pub(crate) fn exec(args: &SdkValue) -> Outcome {
         Some(directory) => directory.to_owned(),
         None => state.directory(path)?,
     };
-    let (code, stdout, stderr) = run(
+    // Visible to the Sandbox read model while it runs (#551 B8-158).
+    let running = crate::sandbox::activity::started(&state.directory, &directory, command);
+    let result = run(
         &state,
         &directory,
         vec!["bash".into(), "-c".into(), command.into()],
         args.get_bool("spool"),
-    )?;
+    );
+    if let Some(token) = running {
+        crate::sandbox::activity::finished(&state.directory, &token);
+    }
+    let (code, stdout, stderr) = result?;
     let mut streams = crate::sandbox::output::fields(stdout, stderr)?.into_iter();
     let mut result = vec![
         ("kind", SdkValue::Text(format!("exit:{code}"))),

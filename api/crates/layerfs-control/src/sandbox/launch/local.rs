@@ -213,7 +213,7 @@ fn start_named(
         directory: directory.to_owned(),
         runtime: Some(sandbox),
         identity,
-        controls: crate::daemon::pool::Controls::new(control, dial),
+        controls: crate::daemon::pool::Controls::new(control, dial, format!("{name} ({id})")),
         mounts: Default::default(),
     };
     let recorded = (|| {
