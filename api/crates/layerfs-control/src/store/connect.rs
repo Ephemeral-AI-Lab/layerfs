@@ -2,7 +2,9 @@
 //! database as a Store in the fixed `layerfs` schema, `store disconnect`
 //! forgets it (its data stays). The record keeps the URL without a password
 //! and the password as a reference (`env:NAME` or `file:/path`), resolved on
-//! each call; the full URL is never written down.
+//! each call; the full URL is never written down. A live Store is never
+//! object storage (#552): a bucket URL is refused before any effect;
+//! buckets hold snapshots and backups only.
 use crate::common::context::Context;
 use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused, Outcome};
@@ -83,6 +85,18 @@ fn query(rest: &str) -> Vec<(String, String)> {
             (decode(name), decode(value))
         })
         .collect()
+}
+
+/// The scheme of a URL that names object storage (#552): a snapshot may
+/// go there, a live Store may not. PostgreSQL is the only live remote
+/// Store; SQLite lives on the machine that owns its file.
+fn object_storage(url: &str) -> Option<&str> {
+    let (scheme, _) = url.split_once("://")?;
+    matches!(
+        scheme.to_ascii_lowercase().as_str(),
+        "s3" | "s3a" | "s3n" | "r2" | "minio" | "gs" | "gcs" | "az" | "azure" | "http" | "https"
+    )
+    .then_some(scheme)
 }
 
 /// Refuses a URL that holds a password, in its user part or as any
@@ -184,6 +198,19 @@ fn unclaimed(
 /// and the record writes only.
 fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
     let given = args.get_text("url").unwrap_or("");
+    // object storage is backup and transfer only (#552): never a live Store,
+    // and refused before the URL is parsed, any server is dialled or a
+    // record is written
+    if let Some(scheme) = object_storage(given) {
+        return Err(refused(
+            "InvalidInput",
+            format!(
+                "Store {name} cannot be live on object storage ({scheme}://): object storage is \
+                 backup and transfer only; a live Store is SQLite on its machine or PostgreSQL \
+                 (`postgresql://…`)"
+            ),
+        ));
+    }
     refuse_password(given)?;
     let sync = args.get_text("synchronous_commit").unwrap_or("off");
     if !matches!(
