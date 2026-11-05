@@ -1,4 +1,5 @@
 //! `layerfs help [family [call]]`, from the call table.
+use crate::output;
 use layerfs_api::{Arg, Call, Kind};
 use std::process::ExitCode;
 
@@ -47,40 +48,38 @@ fn option(arg: &Arg) -> String {
 pub fn print(topic: &[&str]) -> ExitCode {
     match topic {
         [] => {
-            print!("{}", crate::banner::banner());
-            println!("layerfs <family> <call> <arguments> [--options] [--text]");
-            println!();
+            let mut text = format!(
+                "{}layerfs <family> <call> <arguments> [--options] [--text]\n\n",
+                crate::banner::banner()
+            );
             for family in layerfs_api::families() {
                 let calls: Vec<&str> = family.calls().iter().map(|c| c.call).collect();
-                println!("  {:<10} {}", family.name, calls.join(", "));
+                text.push_str(&format!("  {:<10} {}\n", family.name, calls.join(", ")));
             }
-            println!();
-            println!("  doctor     report what is wrong in the home, changing nothing [--text]");
-            println!("  import-env write this environment's 1.1.0 settings as records, once");
-            println!("  worker     serve this machine's worker (inside a machine)");
-            println!("  help       this help; `layerfs help <family> [<call>]` for more");
-            println!();
-            println!("The home is LAYERFS_HOME, else ~/.layerfs. Exit 0: done; 2: wrong command line; 125: refused.");
-            ExitCode::SUCCESS
+            text.push_str(concat!(
+                "\n  doctor     report what is wrong in the home, changing nothing [--text]\n",
+                "  import-env write this environment's 1.1.0 settings as records, once\n",
+                "  worker     serve this machine's worker (inside a machine)\n",
+                "  help       this help; `layerfs help <family> [<call>]` for more\n\n",
+                "The home is LAYERFS_HOME, else ~/.layerfs. Exit 0: done; 2: wrong command line; 125: refused.\n",
+            ));
+            output::print(&text)
         }
+        ["doctor"] => output::print(concat!(
+            "layerfs doctor [--text]\n",
+            "    report what is wrong in the home, changing nothing; exit 0 whenever the report is made (`ok` says whether it is clean)\n",
+        )),
         [family] if layerfs_api::families().iter().any(|f| f.name == *family) => {
-            for call in layerfs_api::calls()
-                .into_iter()
-                .filter(|c| c.family == *family)
-            {
-                println!("{}\n    {}", usage(call), call.help);
-            }
-            ExitCode::SUCCESS
+            let calls = layerfs_api::calls();
+            let shown = calls.into_iter().filter(|c| c.family == *family);
+            output::print(&shown.map(described).collect::<String>())
         }
         [family, name] => {
             match layerfs_api::calls()
                 .into_iter()
                 .find(|c| c.family == *family && c.call == *name)
             {
-                Some(call) => {
-                    println!("{}\n    {}", usage(call), call.help);
-                    ExitCode::SUCCESS
-                }
+                Some(call) => output::print(&described(call)),
                 None => unknown(topic),
             }
         }
@@ -88,10 +87,15 @@ pub fn print(topic: &[&str]) -> ExitCode {
     }
 }
 
+/// A call's usage line and its one-line help.
+fn described(call: &Call) -> String {
+    format!("{}\n    {}\n", usage(call), call.help)
+}
+
 fn unknown(topic: &[&str]) -> ExitCode {
-    eprintln!(
+    output::diagnostic(&format!(
         "layerfs: no help for `{}`; `layerfs help` lists the families",
         topic.join(" ")
-    );
+    ));
     ExitCode::from(crate::run::USAGE)
 }
