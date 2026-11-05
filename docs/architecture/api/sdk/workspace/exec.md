@@ -37,7 +37,7 @@ layerfs workspace exec <ws> <command> [--stream] [--message TEXT]
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
 | `ws` | Text | `<sandbox>:<path>` or `<sandbox>:<name>` from [workspace.mount](mount.md) | [`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/names.rs) `WorkspaceRef` |
-| `command` | Text | run as `bash -c <command>` as the Sandbox's command identity, `HOME` its scratch folder, in the Workspace directory | [`sandbox/exec.rs`](../../../../../api/crates/layerfs-control/src/sandbox/exec.rs) |
+| `command` | Text | run as `bash -c <command>` as the Sandbox's command identity, `HOME` its scratch folder (on `native`, `RUSTUP_HOME`, `CARGO_HOME` and `GIT_CONFIG_GLOBAL` default to the caller's when present; override in the caller's environment or the command), in the Workspace directory | [`sandbox/exec.rs`](../../../../../api/crates/layerfs-control/src/sandbox/exec.rs), [`host_process/exec.rs`](../../../../../connect/crates/layerfs-sandbox/src/backend/host_process/exec.rs) |
 
 ## Options
 

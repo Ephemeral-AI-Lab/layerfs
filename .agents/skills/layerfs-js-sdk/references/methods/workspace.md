@@ -130,6 +130,7 @@ tests, `f67d5a9f6f`, `771823d728`, `94671c974c`, `37f1bbd2b9`):
 
 **Limits**
 
+- `HOME` is the Sandbox's scratch directory (`/tmp` in a container, `<sandbox>/tmp` on `native`). On macOS `native`, `RUSTUP_HOME` (`~/.rustup`), `CARGO_HOME` (`~/.cargo`) and `GIT_CONFIG_GLOBAL` (`~/.gitconfig`, else `$XDG_CONFIG_HOME/git/config` or `~/.config/git/config`) are passed through from the caller's environment or real `HOME` when present; set them in the caller's environment or inline in the command (`CARGO_HOME=/path …`) to override.
 - No timeout: put `timeout 110` inside the command.
 - It waits until everything holding its output has ended, background jobs
   included. Start a server, probe it and stop it in **one** call, with its
