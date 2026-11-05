@@ -1,21 +1,16 @@
 //! Direct Workspace calls (#535 G4, phase 6) with stand-ins only: no VM,
 //! container or daemon runs. A stand-in worker answers `sandbox.create`
 //! with its daemon's endpoint and keys, `workspace.exec` and
-//! `sandbox.close`, and refuses everything else; a stand-in `ssh` runs as
-//! the forward (`layerfs_machine::forward`) until it is ended.
+//! `sandbox.close`, and refuses everything else.
 //!
-//! What it proves: on `ssh` the create records the forward (address, pid,
-//! start and boot) in the home's record and the keys in `control.json`
-//! (0600), never in the answer; mount, commit, unmount, status and
-//! `sandbox.get`'s list never reach the worker (with no daemon behind the
-//! forward they are refused `Unavailable`); exec goes to the worker with
-//! the directory its home record names; close tells the worker the
-//! Workspaces the home holds and ends the forward. On `docker` the daemon's
-//! published port is recorded as it is, with no forward process; on
+//! What it proves: a Sandbox on an `ssh` machine is refused `Unsupported`
+//! (ssh is disabled by product policy, layerfs-project#7) before the worker
+//! is asked; on `docker` the daemon's published port is recorded as it is,
+//! with no forward process, and Workspace calls dial it from here; on
 //! `microsandbox`, whose adapter forwards nothing, every call goes through
 //! the worker as before. What it does not prove: a real daemon answering
-//! through a real forward (`sandbox_direct_live.rs` dials a host daemon).
-//! One test, because it sets the process's PATH.
+//! (`sandbox_direct_live.rs` dials a host daemon). One test, because it
+//! sets the process's environment.
 #![cfg(all(unix, feature = "machine"))]
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_api::worker::{read_frame, write_frame};
@@ -190,50 +185,10 @@ fn ops(log: &Log) -> Vec<String> {
         .collect()
 }
 
-fn runs(pid: i64) -> bool {
-    std::process::Command::new("kill")
-        .args(["-0", &pid.to_string()])
-        .status()
-        .unwrap()
-        .success()
-}
-
-/// A Workspace record `{ id, name, branch, path, namespace, created }` in
-/// Sandbox `sandbox`'s home folder.
-fn workspace_record(home: &Path, sandbox: &str, name: &str, path: &str) {
-    write_record(
-        &paths::sandbox_dir(home, sandbox)
-            .join("workspace")
-            .join(format!("{}.json", "ab".repeat(32))),
-        &SdkValue::map([
-            ("v", SdkValue::Int(1)),
-            ("id", t(&"ab".repeat(32))),
-            ("name", t(name)),
-            ("branch", t("dev")),
-            ("path", t(path)),
-            ("namespace", SdkValue::Int(1)),
-            ("created", SdkValue::Int(1)),
-        ]),
-    )
-    .unwrap();
-}
-
 #[test]
-fn workspace_calls_reach_a_forwarded_sandbox_s_daemon_directly() {
+fn ssh_is_refused_and_docker_records_its_published_port() {
     let cache = tempdir("cache");
     std::env::set_var("XDG_CACHE_HOME", &cache);
-    // the stand-in `ssh`: `-V` ends at once; a forward runs until ended
-    let bin = tempdir("bin");
-    let ssh = bin.join("ssh");
-    std::fs::write(
-        &ssh,
-        "#!/bin/sh\n[ \"$1\" = -V ] && exit 0\ntrap 'kill $! 2>/dev/null; exit 0' TERM\nsleep 60 &\nwait\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(&ssh, std::fs::Permissions::from_mode(0o755)).unwrap();
-    std::process::Command::new(&ssh).arg("-V").output().unwrap();
-    std::env::set_var("PATH", format!("{}:/bin:/usr/bin", bin.display()));
-
     let home = tempdir("home");
     home::open(&home).unwrap();
     // nothing listens at the daemon's endpoint in the "machine"
@@ -241,6 +196,9 @@ fn workspace_calls_reach_a_forwarded_sandbox_s_daemon_directly() {
         .unwrap()
         .local_addr()
         .unwrap();
+
+    // ssh is disabled by product policy (layerfs-project#7): a Sandbox on
+    // it is refused before the worker is asked
     let (address, log) = worker(gone);
     machine(
         &home,
@@ -257,9 +215,7 @@ fn workspace_calls_reach_a_forwarded_sandbox_s_daemon_directly() {
         address,
         "shop",
     );
-
-    // create: the forward and the keys are recorded here, never answered
-    let made = call(
+    let (code, message) = call(
         &home,
         "sandbox.create",
         &[
@@ -268,132 +224,10 @@ fn workspace_calls_reach_a_forwarded_sandbox_s_daemon_directly() {
             ("machine", t("box")),
         ],
     )
-    .unwrap();
-    let shown = layerfs_api::json::print(&made);
-    assert!(
-        !shown.contains("secret") && !shown.contains("forward"),
-        "{shown}"
-    );
-    assert_eq!(made.get_text("state"), Some("running"), "{made:?}");
-    let dir = paths::sandbox_dir(&home, "t1");
-    let record = read_record(&dir.join("record.json")).unwrap().unwrap();
-    let forward = record
-        .get("daemon")
-        .and_then(|d| d.get("forward"))
-        .cloned()
-        .unwrap();
-    let pid = forward.get_int("pid").expect("the forward's pid");
-    assert!(runs(pid), "the forward runs");
-    assert!(forward.get_text("pid_start").is_some(), "{forward:?}");
-    let forwarded: SocketAddr = forward.get_text("address").unwrap().parse().unwrap();
-    assert!(forwarded.ip().is_loopback());
-    assert_ne!(
-        forwarded.port(),
-        gone.port(),
-        "ssh carries it to another port"
-    );
-    let keys = dir.join("control.json");
-    let mode = std::fs::metadata(&keys).unwrap().permissions().mode() & 0o777;
-    assert_eq!(mode, 0o600);
-    let keys = read_record(&keys).unwrap().unwrap();
-    assert_eq!(keys.get("secret"), Some(&SdkValue::Bytes(vec![1; 32])));
-    assert_eq!(
-        keys.get_text("endpoint"),
-        Some(forwarded.to_string().as_str())
-    );
-    assert_eq!(ops(&log), ["sandbox.create"]);
-
-    // only side Branches are mounted: main is refused before any dial
-    let (code, message) = call(
-        &home,
-        "workspace.mount",
-        &[("sandbox", t("t1")), ("branch", t("main"))],
-    )
     .unwrap_err();
-    assert_eq!(code, "InvalidInput", "{message}");
-    assert!(
-        message.contains("not a Branch") && message.contains("branch.fork"),
-        "{message}"
-    );
-
-    // mount, status, commit, unmount and get's list dial the daemon from
-    // here: none reaches the worker; nothing answers behind the forward
-    let mounted = call(
-        &home,
-        "workspace.mount",
-        &[("sandbox", t("t1")), ("branch", t("dev"))],
-    );
-    assert_eq!(mounted.unwrap_err().0, "Unavailable");
-    workspace_record(&home, "t1", "one", "/w/one");
-    for name in ["workspace.status", "workspace.commit", "workspace.unmount"] {
-        let (code, message) = call(&home, name, &[("ws", t("t1:one"))]).unwrap_err();
-        assert_eq!(code, "Unavailable", "{name}: {message}");
-        assert!(message.contains("sandbox close t1"), "{message}");
-    }
-    let got = call(&home, "sandbox.get", &[("name", t("t1"))]).unwrap();
-    assert!(got.get_text("down_reason").is_some(), "{got:?}");
-    assert_eq!(
-        ops(&log),
-        ["sandbox.create"],
-        "no Workspace call reached the worker"
-    );
-
-    // exec runs through the Sandbox's runtime, in its worker, in the
-    // directory its home record names; one not recorded is refused here
-    let ran = call(
-        &home,
-        "workspace.exec",
-        &[("ws", t("t1:one")), ("command", t("true"))],
-    )
-    .unwrap();
-    assert_eq!(ran.get_text("kind"), Some("exit:0"), "{ran:?}");
-    let (code, _) = call(
-        &home,
-        "workspace.exec",
-        &[("ws", t("t1:two")), ("command", t("true"))],
-    )
-    .unwrap_err();
-    assert_eq!(code, "NotMounted");
-    {
-        let log = log.lock().unwrap();
-        assert_eq!(log.len(), 2, "{log:?}");
-        assert_eq!(log[1].0, "workspace.exec");
-        assert_eq!(log[1].1.get_text("directory"), Some("/w/one"));
-    }
-
-    // a stopped machine (no worker recorded) is refused before any dial,
-    // naming the call that starts it
-    let recorded = read_record(&paths::worker_record(&home, "box"))
-        .unwrap()
-        .unwrap();
-    std::fs::remove_file(paths::worker_record(&home, "box")).unwrap();
-    let (code, message) = call(&home, "workspace.status", &[("ws", t("t1:one"))]).unwrap_err();
-    assert_eq!(code, "Unavailable", "{message}");
-    assert!(message.contains("layerfs machine start box"), "{message}");
-    write_record(&paths::worker_record(&home, "box"), &recorded).unwrap();
-
-    // close: the worker is told what the home holds (the daemon does not
-    // answer, so every recorded Workspace); the forward and the folder go
-    call(
-        &home,
-        "sandbox.close",
-        &[("name", t("t1")), ("force", SdkValue::Bool(true))],
-    )
-    .unwrap();
-    {
-        let log = log.lock().unwrap();
-        assert_eq!(log[2].0, "sandbox.close");
-        assert_eq!(
-            log[2].1.get("held"),
-            Some(&SdkValue::List(vec![t("/w/one")]))
-        );
-    }
-    assert!(!dir.exists(), "the folder went");
-    let until = std::time::Instant::now() + Duration::from_secs(5);
-    while runs(pid) && std::time::Instant::now() < until {
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    assert!(!runs(pid), "the forward was ended");
+    assert_eq!(code, "Unsupported", "{message}");
+    assert!(message.contains("ssh is permanently disabled"), "{message}");
+    assert!(ops(&log).is_empty(), "{:?}", ops(&log));
 
     // docker: its Sandbox publishes the daemon's port on this host's
     // loopback, which is recorded as it is, with no forward process
@@ -460,6 +294,5 @@ fn workspace_calls_reach_a_forwarded_sandbox_s_daemon_directly() {
     call(&home, "sandbox.close", &[("name", t("m1"))]).unwrap();
 
     std::fs::remove_dir_all(&home).unwrap();
-    std::fs::remove_dir_all(&bin).unwrap();
     std::fs::remove_dir_all(&cache).unwrap();
 }

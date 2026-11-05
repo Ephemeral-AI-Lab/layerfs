@@ -152,6 +152,19 @@ pub(crate) fn exchange(
                             rest = &rest[sent..];
                         }
                         Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                        // the write's own timeout: the peer took nothing
+                        Err(e)
+                            if matches!(
+                                e.kind(),
+                                io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                            ) =>
+                        {
+                            return Err(uncertain(format!(
+                                "send stalled: {} of {n} bytes moved in {} ms",
+                                n - rest.len(),
+                                started.elapsed().as_millis()
+                            )))
+                        }
                         Err(e) => {
                             return early_refusal(writer, &e)
                                 .ok_or_else(|| uncertain(format!("send: {e}")))
