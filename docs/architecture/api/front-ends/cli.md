@@ -36,6 +36,11 @@ layerfs <family> <call> <positionals...> [--options] [switches]
                             close_idle(0); print result or refusal
 ```
 
+Every word must be UTF-8: `main.rs` reads the command line with `args_os`,
+and a word that is not UTF-8 is exit 2 (`layerfs: argument <n> is not valid
+UTF-8: "<escaped>"`) before anything runs. A path that is not UTF-8 cannot be
+named on the command line, because the calls take text.
+
 `parse` reads one call's words against its table entry
 ([`parse.rs`](../../../../api/crates/layerfs-cli/src/parse.rs)):
 
@@ -51,7 +56,12 @@ layerfs <family> <call> <positionals...> [--options] [switches]
 | a function option (`on_progress`, `stdout`, `stderr`) | never an option | replaced by `--progress` and `--stream` |
 | any other `--x` | exit 2 | `unknown option` |
 
-Content read from stdin or a file is text when it is UTF-8, else bytes.
+Content read from stdin or a file is text when it is UTF-8, else bytes
+(JSON must be UTF-8: other bytes are exit 2). stdin is read to its end only
+when a content or JSON positional needs it, and not at all when `--from` is
+given; a stdin that is closed or empty is empty content, so `file write`
+writes an empty file and `file apply` is exit 2 (empty is not JSON). A
+`--from` file that cannot be read is exit 2.
 Values are only shaped here; the library checks them again
 ([`check.rs`](../../../../api/crates/layerfs-control/src/calls/check.rs)),
 so a value the shell accepts can still be refused `InvalidInput`.
@@ -77,6 +87,8 @@ layerfs help                  banner (TTY only), usage line, every family
 layerfs help <family>         each call's usage line and help text
 layerfs help <family> <call>  one call
 layerfs <family> <call> -h    the same as the line above
+layerfs help doctor           doctor's usage line and one line of help
+layerfs doctor -h             the same (also --help); exit 0
 ```
 
 The usage line is built from the entry
@@ -85,7 +97,9 @@ required positionals as `<name>`, optional ones as `[<name>]`, each option as
 `[--name <name>]` (a `Bool` as `[--name]`, `on_progress` as `[--progress]`,
 `stdout`/`stderr` left out), and `[--from <file>] (content from stdin)`
 when a positional is content or JSON. The one-line text is the entry's
-`help`. An unknown topic is exit 2. The banner
+`help`. An unknown topic is exit 2; `import-env` and `worker` have no help
+topic (a word after either is read as a family name, so `import-env --help`
+is exit 2). The banner
 ([`banner.rs`](../../../../api/crates/layerfs-cli/src/banner.rs)) prints
 only when stdout is a terminal; `NO_COLOR` turns its colours off.
 `help` and `--version` need no home.
@@ -98,8 +112,14 @@ only when stdout is a terminal; `NO_COLOR` turns its colours off.
 | success with `--text` | a result's `text` field as is; a list of records as an aligned table of their scalar fields (upper-case headers, nested values left out); else `key  value` lines | 0 | `readable`, `table` |
 | refusal | `{"code","message","detail"}` on stderr | 125 | `refusal` |
 | wrong command line | `layerfs: <message>` on stderr | 2 | [`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs) `wrong` |
-| stdout closed while printing | nothing more | 125 | `print` |
-| `doctor` | the report as JSON, or with `--text` a count line and one finding per entry with its `fix` | 0 whatever it finds | `findings` |
+| stdout cannot be written while printing (reader gone, disk full) | nothing more; the call was already made and its effects stay | 125 | `print`; help and `--version` print the same way |
+| `doctor` | the report as JSON, or with `--text` a count line and one finding per entry with its `fix` | 0 whatever it finds, by design (`ok` says whether the home is clean) | `findings` |
+
+A stdout that is closed before the process starts (`>&-`) is not an error:
+the Rust runtime reopens it on `/dev/null`, so the call is made, nothing is
+shown and the exit is 0. A stderr that cannot be written loses its line
+(`output::diagnostic`) and the exit code stays the outcome's own, 2 or 125.
+No path of the CLI panics on a closed or failing standard stream.
 
 After every table call, before printing, the command runs
 `layerfs_api::close_idle(Duration::ZERO)`: the Stores the call opened are
@@ -119,6 +139,13 @@ With `--stream` the result JSON is not printed. The exit code is the
 result's `exit_code` when it fits 0 to 255, 1 when it does not, 0 when the
 result has none; 125 still means a refusal. Without `--stream`, exec
 output stays in the result JSON and the exit is 0.
+
+So with `--stream` a command that exits 2 or 125 has the same exit as a
+wrong command line or a refusal. What tells them apart is stderr: a wrong
+command line is one `layerfs: <message>` line and no output, a refusal is
+one `{"code",...}` JSON line, and the command's own output is whatever it
+wrote. A stdout whose reader has gone does not change the exit: the stream
+sink ignores write errors and the command's code is returned.
 
 `layerfs worker` is the machine's worker, outside the table
 ([`worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs)). It reads
