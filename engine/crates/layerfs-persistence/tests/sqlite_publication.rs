@@ -56,15 +56,12 @@ fn unit(pack_id: i64, objects: usize) -> Publication {
     }
 }
 #[test]
-fn wal_full_settings_and_unavailable_engine_are_explicit() {
+fn wal_full_settings_are_explicit() {
     let t = Temp::new("durable-profile");
     let path = t.join("db");
-    let c = PersistenceConfig::sqlite(&path);
-    assert_eq!(
-        SqliteHandles::create(c, StoragePolicy::frozen_default(), &config()).err(),
-        Some(PersistenceError::BackendUnavailable)
-    );
-    assert!(!path.exists());
+    // A SQLite handle always has an engine on macOS and Linux: the old
+    // `BackendUnavailable` case selected a fake PostgreSQL backend, which
+    // `SqliteHandles` no longer has (#535).
     let h = create(&path);
     let p = h.profile();
     assert_eq!(p.identity, "sqlite-wal-full-v2");
