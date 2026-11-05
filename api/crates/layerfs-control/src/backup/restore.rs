@@ -3,6 +3,7 @@ use super::family::{hex, write_link};
 use super::progress::Shown;
 use super::record::{BucketRecord, StoreLink};
 use crate::common::context::Context;
+use crate::common::home::flock::{try_lock, unlock};
 use crate::common::home::lease;
 use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused, Outcome};
@@ -11,6 +12,8 @@ use crate::store::record::{StoreKind, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_store_backup::backup as remote;
 use layerfs_store_backup::bucket::pieces;
+use std::fs::{File, OpenOptions};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -71,7 +74,8 @@ pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         .transfer(context, || {
             remote::load(driver.as_ref(), &file, &staged, cursor)
         })
-        .map_err(|failure| refused("Failed", failure.to_string()))?;
+        // the cause alone: what the load left is in `staging`, removed below
+        .map_err(|failure| refused("Failed", failure.cause))?;
     let record = match (&existing, &identity) {
         (Some(record), Some(identity)) => {
             if loaded.binding != identity.binding {
@@ -156,22 +160,62 @@ pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 /// A restore's own download folder, `store/.restore-<random>/` (hidden from
 /// the Store names, and on the home's filesystem so the install is one
 /// rename); removed with whatever it still holds when the restore ends.
-struct Staging(std::path::PathBuf);
+/// The restore holds an `flock` on the folder's `lock` file throughout, so
+/// a folder whose lock can be taken belongs to a restore that ended without
+/// removing it (killed): the next restore removes it.
+struct Staging(std::path::PathBuf, File);
 
 impl Staging {
     fn make(home: &Path) -> Result<Self> {
         let random = crate::sandbox::registry::random()?;
-        let dir = home
-            .join("store")
-            .join(format!(".restore-{}", pieces::hex(&random[..12])));
+        let parent = home.join("store");
+        let dir = parent.join(format!(".restore-{}", pieces::hex(&random[..12])));
+        // under the home lock no folder is between its creation and its lock
+        let _lock = home::lock::take(home)?;
+        sweep(&parent);
         home::private_dir(&dir)?;
-        Ok(Self(dir))
+        let lock = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(dir.join("lock"))
+            .map_err(failed)?;
+        if !try_lock(&lock, true).map_err(failed)? {
+            return Err(failed("a new restore folder's lock is held"));
+        }
+        Ok(Self(dir, lock))
     }
 }
 
 impl Drop for Staging {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
+        unlock(&self.1);
+    }
+}
+
+/// Removes the restore folders under `parent` whose restore has ended: their
+/// lock can be taken. A folder without a lock file is left alone.
+fn sweep(parent: &Path) {
+    let Ok(entries) = std::fs::read_dir(parent) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if !entry.file_name().to_string_lossy().starts_with(".restore-") {
+            continue;
+        }
+        let dir = entry.path();
+        let Ok(lock) = OpenOptions::new()
+            .write(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(dir.join("lock"))
+        else {
+            continue;
+        };
+        if try_lock(&lock, true).unwrap_or(false) {
+            let _ = std::fs::remove_dir_all(&dir);
+            unlock(&lock);
+        }
     }
 }
 

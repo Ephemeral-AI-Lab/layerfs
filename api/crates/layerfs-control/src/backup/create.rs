@@ -3,6 +3,7 @@ use super::family::{hex, save_link};
 use super::progress::Shown;
 use super::record::{remote_error, BucketRecord, StoreLink};
 use crate::common::context::Context;
+use crate::common::home::flock::{try_lock, unlock};
 use crate::common::home::lease;
 use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused, Outcome};
@@ -64,6 +65,7 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let local_steps = matches!(executor, Executor::Local);
     let executor = std::cell::RefCell::new(executor);
     let _lease = lease::hold(&home, store)?;
+    let _creating = Creating::take(&home, store)?;
     let mut shown = Shown::new();
     shown.phase(context, "check");
     check(driver.as_ref(), &object, expected, &home_id)?;
@@ -150,6 +152,38 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         ("sha256", hex(&moved.sha256)),
         ("heads", heads.as_ref().map(hex).unwrap_or_default()),
     ]))
+}
+
+/// One create of a Store at a time in a home, since each stages its snapshot
+/// at the same path: an `flock` on `store/<s>/backup.lock`, taken without
+/// waiting and held until the create ends (a killed create's goes with it).
+struct Creating(std::fs::File);
+
+impl Creating {
+    fn take(home: &Path, store: &str) -> Result<Self> {
+        use std::os::unix::fs::OpenOptionsExt;
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(paths::store_dir(home, store).join("backup.lock"))
+            .map_err(failed)?;
+        if !try_lock(&file, true).map_err(failed)? {
+            return Err(refused(
+                "Busy",
+                format!("another backup.create of Store {store} is running; nothing was changed"),
+            ));
+        }
+        Ok(Self(file))
+    }
+}
+
+impl Drop for Creating {
+    fn drop(&mut self) {
+        unlock(&self.0);
+    }
 }
 
 /// One `store.file` step on the Store's machine: its name and arguments.
