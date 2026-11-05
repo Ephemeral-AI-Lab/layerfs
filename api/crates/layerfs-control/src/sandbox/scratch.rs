@@ -203,15 +203,44 @@ pub enum Cleaned {
     Malformed,
 }
 
+/// One scratch root a pass planned or removed, with the record that owns
+/// it: an operator report names the Sandbox, not only a path.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Owned {
+    sandbox: String,
+    root: PathBuf,
+}
+
+impl Owned {
+    /// The root `root` of Sandbox `sandbox`.
+    pub fn new(sandbox: &str, root: PathBuf) -> Self {
+        Self {
+            sandbox: sandbox.to_owned(),
+            root,
+        }
+    }
+
+    /// The record's name, as its folder holds it.
+    pub fn sandbox(&self) -> &str {
+        &self.sandbox
+    }
+
+    /// Its absolute scratch root.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+}
+
 /// What one [`sweep`] did.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Report {
-    /// The roots a dry run would delete, in record-name order.
-    pub planned: Vec<PathBuf>,
-    /// The roots an apply pass deleted.
-    pub deleted: Vec<PathBuf>,
+    /// The roots a dry run would delete, in record-name order, with the
+    /// record that owns each.
+    pub planned: Vec<Owned>,
+    /// The roots an apply pass deleted, with the record that owned each.
+    pub deleted: Vec<Owned>,
     /// The roots it kept, and why.
-    pub kept: Vec<(PathBuf, Kept)>,
+    pub kept: Vec<(Owned, Kept)>,
 }
 
 /// Whether one sweep should delete (it may) or apply (it does).
@@ -337,7 +366,9 @@ pub fn sweep(home: &Path, machine: &str, mode: Mode) -> Result<Report, SdkRefusa
             // a malformed ownership is never guessed at
             Ok(None) => continue,
             Err(_) => {
-                report.kept.push((dir.join(name), Kept::Malformed));
+                report
+                    .kept
+                    .push((Owned::new(name, dir.join(name)), Kept::Malformed));
                 continue;
             }
         };
@@ -346,7 +377,7 @@ pub fn sweep(home: &Path, machine: &str, mode: Mode) -> Result<Report, SdkRefusa
             continue;
         }
         if let Some(why) = keep(home, &root, record.state(false), Owner::Sweep) {
-            report.kept.push((root, why));
+            report.kept.push((Owned::new(name, root), why));
             continue;
         }
         if removing == MAX_SWEEP {
@@ -354,7 +385,7 @@ pub fn sweep(home: &Path, machine: &str, mode: Mode) -> Result<Report, SdkRefusa
         }
         removing += 1;
         match mode {
-            Mode::DryRun => report.planned.push(root),
+            Mode::DryRun => report.planned.push(Owned::new(name, root)),
             Mode::Apply => {
                 // the generation may have moved since the plan: re-read
                 let now = SandboxRecord::read(home, name)?;
@@ -363,11 +394,11 @@ pub fn sweep(home: &Path, machine: &str, mode: Mode) -> Result<Report, SdkRefusa
                     None => None,
                 };
                 if current.map(|current| current.generation()) != Some(scratch.generation()) {
-                    report.kept.push((root, Kept::Stale));
+                    report.kept.push((Owned::new(name, root), Kept::Stale));
                     continue;
                 }
                 remove_root(&root)?;
-                report.deleted.push(root);
+                report.deleted.push(Owned::new(name, root));
             }
         }
     }

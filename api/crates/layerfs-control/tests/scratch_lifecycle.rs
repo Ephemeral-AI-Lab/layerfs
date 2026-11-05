@@ -6,7 +6,7 @@
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::common::json::print;
 use layerfs_control::sandbox::record::SandboxRecord;
-use layerfs_control::sandbox::scratch::{self, Cleaned, Kept, Mode, Owner, Scratch};
+use layerfs_control::sandbox::scratch::{self, Cleaned, Kept, Mode, Owned, Owner, Scratch};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -279,7 +279,10 @@ fn an_unresolved_sandbox_is_not_swept_but_an_explicit_close_cleans_it() {
     let inside = root.join("commands-left-this");
     let report = scratch::sweep(&home, "native", Mode::Apply).unwrap();
     assert!(report.deleted.is_empty());
-    assert_eq!(report.kept, vec![(root.clone(), Kept::Unresolved)]);
+    assert_eq!(
+        report.kept,
+        vec![(Owned::new("b", root.clone()), Kept::Unresolved)]
+    );
     assert!(
         inside.is_file(),
         "an automatic pass keeps unresolved scratch"
@@ -299,7 +302,10 @@ fn a_running_sandbox_keeps_its_scratch_during_a_sweep() {
     let home = fresh_home();
     let root = running(&home, "b", "native", 4);
     let report = scratch::sweep(&home, "native", Mode::Apply).unwrap();
-    assert_eq!(report.kept, vec![(root.clone(), Kept::Live)]);
+    assert_eq!(
+        report.kept,
+        vec![(Owned::new("b", root.clone()), Kept::Live)]
+    );
     assert!(root.join("commands-left-this").is_file());
 }
 
@@ -309,7 +315,7 @@ fn a_settled_gone_record_is_swept_and_nothing_else_is_deleted() {
     seed_bystanders(&home);
     let root = gone(&home, "b", "native", 9);
     let report = scratch::sweep(&home, "native", Mode::Apply).unwrap();
-    assert_eq!(report.deleted, vec![root.clone()]);
+    assert_eq!(report.deleted, vec![Owned::new("b", root.clone())]);
     assert!(!root.exists());
     bystanders(&home);
 }
@@ -322,7 +328,10 @@ fn dry_run_lists_exactly_what_apply_deletes() {
     let live = running(&home, "c", "native", 3);
     let stuck = unresolved(&home, "d", "native", 4);
     let dry = scratch::sweep(&home, "native", Mode::DryRun).unwrap();
-    assert_eq!(dry.planned, vec![a.clone(), b.clone()]);
+    assert_eq!(
+        dry.planned,
+        vec![Owned::new("a", a.clone()), Owned::new("b", b.clone())]
+    );
     assert!(dry.deleted.is_empty());
     for path in [&a, &b, &live, &stuck] {
         assert!(
@@ -349,7 +358,7 @@ fn a_sweep_is_keyed_by_machine_never_by_isolation_class() {
     );
     assert!(root.join("commands-left-this").is_file());
     let mine = scratch::sweep(&home, "dev", Mode::Apply).unwrap();
-    assert_eq!(mine.deleted, vec![root.clone()]);
+    assert_eq!(mine.deleted, vec![Owned::new("b", root.clone())]);
     assert!(!root.exists());
 }
 
@@ -386,7 +395,7 @@ fn a_sweep_reaches_a_settled_record_past_more_than_a_batch_of_unrelated_ones() {
     }
     let mine = gone(&home, "zzz", "native", 2);
     let report = scratch::sweep(&home, "native", Mode::Apply).unwrap();
-    assert_eq!(report.deleted, vec![mine.clone()]);
+    assert_eq!(report.deleted, vec![Owned::new("zzz", mine.clone())]);
     assert!(!mine.exists());
     for root in others {
         assert!(
@@ -413,6 +422,7 @@ fn a_pass_is_bounded_and_the_next_pass_reaches_the_next_batch() {
         .deleted
         .into_iter()
         .chain(second.deleted)
+        .map(|owned| owned.root().to_path_buf())
         .filter(|root| root.exists())
         .collect();
     assert!(

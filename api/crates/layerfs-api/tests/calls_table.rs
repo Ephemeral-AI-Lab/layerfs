@@ -1,4 +1,4 @@
-//! The call table and its dispatcher (#533 step 2): 61 calls in nine
+//! The call table and its dispatcher (#533 step 2): 62 calls in nine
 //! families, arguments checked before any effect, one test per family that
 //! a valid call reaches its family function and a wrong one is refused.
 use layerfs_api::{families, json, keys, size, Call, Kind};
@@ -51,9 +51,9 @@ fn code(name: &str, args: SdkValue) -> String {
 }
 
 #[test]
-fn the_table_has_nine_families_and_61_calls() {
+fn the_table_has_nine_families_and_62_calls() {
     let all: Vec<&Call> = layerfs_api::calls();
-    assert_eq!(all.len(), 61);
+    assert_eq!(all.len(), 62);
     // each family holds only its own calls, and has at least one
     for family in families() {
         assert!(!family.calls().is_empty(), "{}", family.name);
@@ -66,7 +66,7 @@ fn the_table_has_nine_families_and_61_calls() {
     let mut names: Vec<_> = all.iter().map(|c| c.name()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 61, "call names are unique");
+    assert_eq!(names.len(), 62, "call names are unique");
     // an optional positional is only ever followed by optional ones (D7)
     for c in &all {
         let first_optional = c.args.iter().position(|a| a.optional);
@@ -75,7 +75,7 @@ fn the_table_has_nine_families_and_61_calls() {
         }
     }
     let counts: Vec<usize> = families().iter().map(|f| f.calls().len()).collect();
-    assert_eq!(counts, [4, 6, 3, 14, 4, 5, 11, 9, 5]);
+    assert_eq!(counts, [4, 6, 3, 14, 5, 5, 11, 9, 5]);
 }
 
 #[test]
@@ -209,6 +209,17 @@ fn sandbox_family() {
         map(&[("name", t("tests")), ("force", SdkValue::Bool(true))]),
     );
     assert!(!reached.starts_with("InvalidInput"), "{reached}");
+    // the operator scratch pass (#549): a machine, and `--dry-run` to list
+    // exactly what a real pass deletes
+    assert!(code("sandbox.scratch", map(&[])).contains("`machine` is required"));
+    let scratch = layerfs_api::find("sandbox.scratch").unwrap();
+    let options: Vec<_> = scratch.options.iter().map(|o| (o.name, o.kind)).collect();
+    assert_eq!(options, [("dry_run", Kind::Bool)]);
+    let reached = code(
+        "sandbox.scratch",
+        map(&[("machine", t("native")), ("dry_run", SdkValue::Bool(true))]),
+    );
+    assert!(reached.starts_with("ok "), "{reached}");
 }
 
 #[test]

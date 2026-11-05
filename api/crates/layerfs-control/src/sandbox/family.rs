@@ -20,6 +20,7 @@
 //! the worker takes the resolved URL (#535 phase 5a). Each call is in its
 //! own file (`create`, `list`, `get`, `close`), the route of a host
 //! operation in `route.rs`, and the `workspace` calls in `workspace/calls.rs`.
+use super::clean;
 use super::close::close;
 use super::create::create;
 use super::get::get;
@@ -51,6 +52,7 @@ pub fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcom
         "list" => list(&context.home, args),
         "get" => get(context, args),
         "close" => close(context, args),
+        "scratch" => clean::scratch(context, args),
         _ => Err(refused("InvalidInput", format!("no call sandbox.{call}"))),
     }
 }

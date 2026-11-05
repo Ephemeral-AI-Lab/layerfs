@@ -15,7 +15,7 @@ as nine families of functions:
 | `branch` | `list`, `get`, `fork`, `merge`, `publish`, `diff` |
 | `commit` | `list`, `get`, `diff` |
 | `file` | `read`, `stat`, `list`, `glob`, `grep`, `blame`, `diff`, `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |
-| `sandbox` | `create`, `list`, `get`, `close` |
+| `sandbox` | `create`, `list`, `get`, `close`, `scratch` |
 | `workspace` | `mount`, `exec`, `commit`, `unmount`, `status` |
 | `machine` | `list`, `get`, `status`, `create`, `connect`, `remove`, `disconnect`, `update` |
 | `store` | `list`, `get`, `status`, `create`, `connect`, `move`, `remove`, `disconnect` |

@@ -1,4 +1,5 @@
 //! Actual ordinary Sandbox lifecycle and its Workspaces, with exact logical and kernel readiness.
+mod clean;
 mod close;
 mod create;
 pub(crate) mod deploy;

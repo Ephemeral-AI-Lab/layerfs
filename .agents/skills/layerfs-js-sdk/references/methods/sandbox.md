@@ -11,6 +11,7 @@ sandbox.create(project, name, machine?, { image })
 sandbox.list(project?, { page_size, page_pos })
 sandbox.get(name, { page_size, page_pos })
 sandbox.close(name, { force })
+sandbox.scratch(machine, { dry_run })
 ```
 
 A Sandbox is named (unique in the home), bound to one project when created, and
@@ -179,6 +180,47 @@ of it runs.
   creating process lives, otherwise the record goes and the name is free
   (`{ closed, was }`, `was` being `closed` or `unresolved`; for an unresolved
   create, `left` says a Sandbox may remain on its machine).
+
+## `sandbox.scratch`
+
+`sandbox.scratch(machine, { dry_run })` — shell
+`layerfs sandbox scratch <machine> [--dry-run]`
+
+One bounded pass over the scratch this home's settled Sandbox records own on
+`machine` (#549). A Sandbox's scratch is its runtime's `tmp`, recorded as
+`scratch: { root, createdAt, generation }`; the pass may remove a root only
+when the record is settled (`gone`), the root is that Sandbox's own, and the
+record still carries the generation the plan was made with. `running`,
+`creating` and `closing` records are kept, and an `unresolved` one is kept
+too: its outcome is unknown, so only the explicit `sandbox.close` that clears
+its intent may remove it.
+
+| Arg | Meaning |
+| --- | --- |
+| `machine` | The machine whose settled scratch this pass may clean; another machine's records are left for that machine's pass |
+| `dry_run` | List what a real pass deletes; change nothing |
+
+**Returns:** `{ machine, dry_run, planned, deleted, kept }`. `planned` and
+`deleted` are `[{ sandbox, root }, …]` in record-name order; `kept` is
+`[{ sandbox, root, why }, …]` with `why` in `no_scratch`, `outside_home`,
+`not_scratch`, `live`, `unresolved`, `stale_generation` or `malformed`.
+`dry_run` lists exactly the roots a real pass deletes and deletes nothing.
+
+- A pass is bounded (at most 64 roots) and keyed by `machine`, never by
+  isolation class.
+- The host's `/tmp`, `/private/tmp`, `/var/tmp`, a Store and a Workspace are
+  hard exclusions, as is any path outside the home; a symlinked root is not
+  followed.
+- `sandbox.close` runs the same pass for the closing record's machine, and a
+  cleaner failure never changes a successful close. Run this call from cron
+  or launchd for a scheduled sweep; LayerFS schedules nothing itself.
+- A machine name with no records plans nothing and deletes nothing.
+
+```js
+const dry = await layerfs.sandbox.scratch("native", { dry_run: true });
+// { machine: "native", dry_run: true, planned: [{ sandbox, root }, …], deleted: [], kept: […] }
+const real = await layerfs.sandbox.scratch("native");   // deletes the same set
+```
 
 ## Sandbox lifetime
 

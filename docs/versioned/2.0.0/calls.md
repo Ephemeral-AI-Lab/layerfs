@@ -177,7 +177,7 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 {"kind":"Committed","branch":"agent","head":"1271…","commit":{…,"message":"batch",…}}
 ```
 
-### `sandbox` (4)
+### `sandbox` (5)
 
 | Call | Positionals | Options | Does |
 | --- | --- | --- | --- |
@@ -185,6 +185,7 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
 | `list` | `[project]` | `page_size`, `page_pos` | every Sandbox in the home, or one project's |
 | `get` | `name` | `page_size`, `page_pos` | a Sandbox and its Workspaces |
 | `close` | `name` | `force` | stops a Sandbox |
+| `scratch` | `machine` | `dry_run` | one bounded pass over a machine's settled Sandbox scratch: lists (`dry_run`) or deletes exactly the roots a real run deletes |
 
 - `create` answers the Sandbox's record: `name`, `project`, `machine`,
   `created`, `id` (the Sandbox's name, as its machine knows it),
@@ -243,6 +244,21 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   (`{closed, was}`, `was` being `closed` or `unresolved`; for
   `unresolved`, `left` says a Sandbox may remain on its machine). A Sandbox the layout 3 conversion found ended is closed this
   way too, with `was: "closed"` ([the home](home.md#a-layout-2-home)).
+- `scratch` is the operator's pass over a machine's settled Sandbox scratch
+  (#549). Each Sandbox's runtime `tmp` is recorded as `scratch: { root,
+  createdAt, generation }`; a pass may remove a root only when the record is
+  settled (`Closed` or `Lost`), the root is that Sandbox's own, and the
+  record still carries the generation the plan was made with. It answers
+  `{ machine, dry_run, planned, deleted, kept }`: `planned` and `deleted` are
+  `[{ sandbox, root }, …]` in record-name order, `kept` is
+  `[{ sandbox, root, why }, …]` with `why` in `no_scratch`, `outside_home`,
+  `not_scratch`, `live`, `unresolved`, `stale_generation` or `malformed`.
+  `dry_run` deletes nothing and lists exactly the roots the real run deletes.
+  A pass is bounded (64 roots) and keyed by `machine`, never by isolation
+  class: another machine's settled scratch waits for that machine's pass. The
+  host's `/tmp`, a Store and a Workspace are hard exclusions. `sandbox.close`
+  runs the same pass for the closing record's machine; run `sandbox.scratch`
+  from cron or launchd for a scheduled sweep.
 - Not run for this manual. See
   [limitations](limitations.md#not-built-refused-as-unsupported).
 
