@@ -130,9 +130,13 @@ fn full() -> Stdio {
 /// The standard-stream sinks every write to which fails, by name: a pipe
 /// whose reader has gone, and on Linux a full device.
 pub fn failing_sinks(tag: &str) -> Vec<(&'static str, Stdio)> {
-    let mut sinks = vec![("broken pipe", broken_pipe(tag))];
+    let sinks = vec![("broken pipe", broken_pipe(tag))];
     #[cfg(target_os = "linux")]
-    sinks.push(("/dev/full", full()));
+    let sinks = {
+        let mut sinks = sinks;
+        sinks.push(("/dev/full", full()));
+        sinks
+    };
     sinks
 }
 
