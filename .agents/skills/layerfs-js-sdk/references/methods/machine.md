@@ -47,16 +47,50 @@ included, shows its live state as `machine status` reads it (`running`,
 
 Each machine also carries `supports` (`sqlite`, `postgresql_sandbox`,
 `reason`). `machine.platforms()` (`layerfs machine platforms`) answers each
-platform on this host: backend, kernel route, where Store calls run, whether
-a PostgreSQL Sandbox runs and why not, `ready`, `missing`, `version` and the
-options `machine.create` takes (the rows of `connect/SUPPORT.json`). Neither
-call starts a machine.
+platform on this host: backend, kernel route, the isolation class it provides
+(`isolation_class`) with its `exec_mode` and `kernel_scope`, where Store calls
+run, whether a PostgreSQL Sandbox runs and why not, `ready`, `missing`,
+`version` and the options `machine.create` takes (the rows of
+`connect/SUPPORT.json`). Neither call starts a machine.
 
 `machine.get(name)` is the record:
 
 ```json
-{"name":"native","platform":"native","backend":"native","state":"ready","cpus":null,"memory":null,"disk":null,"stores":["shop"],"sandboxes":[]}
+{"name":"native","kind":"process","platform":"native","backend":"native","isolation_class":"process","exec_mode":"worker","kernel":"shared","schema_version":1,"state":"ready","cpus":null,"memory":null,"disk":null,"stores":["shop"],"sandboxes":[],"isolation":{"class":"process","requested":"process","effective":"process","kernel":"shared","strength":"weak"},"scheduling":{"worker":true,"long_lived":true,"exec_mode":"worker"},"capability":{"schema_version":1,"isolation":"process","kernel":"shared","strength":"weak","provider":"native","backend":"native","mount_driver":"loopback-nfs","idle_stop":"ours","snapshot":null,"notes":"Sandboxes run as this user's processes, served over loopback NFS","record_schema_version":1},"worker":{"state":"none"},"lease":{"held":false},"health":{"ok":true,"state":"ready","reason":null}}
 ```
+
+`kind` is the isolation class only (#551), the same word as
+`isolation_class`. `schema_version` is the record's contract version (1);
+a record written before #551 reads 1 through the document's fallbacks and
+is migrated only by a write. `capability` is the backend's typed
+declaration, also `schema_version` 1: its class, kernel, strength word,
+provider and backend names, `mount_driver` (`fuse`, `loopback-nfs`,
+`shared-fs` or `none`), `idle_stop` (`ours`, `provider` or `none`), a
+`snapshot` object or `null`, and its notes. `worker` is what `worker.json`
+records (`state`: `running`, `recorded` or `none`; `address`, `started`,
+`forward_pid`), read without dialing; `lease` is the machine's
+`start.lock` (`held`, its `path`, `since`), probed without taking it; and
+`health` is `{ ok, state, reason }`, `ok` for `ready` or `running`.
+
+The `machine.list` and `machine.get` live probes share a **2 s** budget
+(#551 B8-159), so a slow provider answers `unknown` with its reason instead
+of holding the call. Neither call starts a machine, and neither writes the
+home.
+
+A machine's `isolation_class` is the boundary its platform provides on this
+host (#551 B0-144): `process` (a host process or namespaces), `container`
+(the host kernel, docker), `vm` (its own kernel: any VM or microVM) or
+`remote` (an ssh host), weakest first. `kernel` is `shared`, `separate` or
+`separate-host`; `exec_mode` is `worker`, or `remote-exec` for a provider
+that runs each command through its own API. The `isolation` object repeats
+the class with its `kernel` and the capability matrix's `strength` word
+(`weak`, `medium`, `strong`, `network`); a machine has no separate request,
+so its `requested` equals its class. `scheduling` says whether work runs
+through our worker (`worker`, false for `remote-exec`), its `long_lived`
+(true for a machine that keeps its state between calls, as every machine
+does today) and its `exec_mode`. A Sandbox that asks for a class is satisfied
+by that class or a stronger one and never by a weaker one; see
+[sandbox](sandbox.md).
 
 `machine.status(name)` is the live state; a stopped VM answers without being
 started:

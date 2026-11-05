@@ -10,10 +10,12 @@ use crate::common::outcome::{refused, Outcome, View};
 use crate::sandbox::route::on_machine;
 use crate::store::record::StoreRef;
 use crate::store::resolve;
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_sandbox::{ExecMode, IsolationClass};
 
-/// `sandbox.create(project, name, machine?, { image })`: with no `machine`,
-/// a sqlite Store's machine, or `native` for a PostgreSQL Store (#536 §10).
+/// `sandbox.create(project, name, machine?, { image, isolation })`: with
+/// no `machine`, a sqlite Store's machine; a PostgreSQL Store defaults to
+/// `docker` (`container`) and `process` is opt-in (#551 B0-147).
 pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let project = args.get_text("project").unwrap_or("");
@@ -31,19 +33,62 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let _lock = home::lock::take(&home)?;
     let target = resolve::target(&home, project)?;
     target.record.unblocked()?;
-    let machine = match (named, &target.store_ref) {
-        (Some(machine), _) => machine.to_owned(),
-        (None, StoreRef::Sqlite { .. }) => target.store_ref.machine()?.to_owned(),
-        (None, _) => "native".to_owned(),
+    // the isolation the caller asks for (#551 B0-147); `None` means it
+    // follows the machine it named, or the default below
+    let asked = match args.get_text("isolation").filter(|value| !value.is_empty()) {
+        Some(name) => Some(IsolationClass::parse(name).ok_or_else(|| {
+            refused(
+                "InvalidInput",
+                format!(
+                    "isolation is one of {}, not {name}",
+                    IsolationClass::ALL
+                        .iter()
+                        .map(|class| class.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            )
+        })?),
+        None => None,
+    };
+    let (machine, wanted) = match (named, &target.store_ref) {
+        (Some(machine), _) => (machine.to_owned(), asked),
+        (None, StoreRef::Sqlite { .. }) => (target.store_ref.machine()?.to_owned(), asked),
+        // a PostgreSQL Store is on no machine: the default is `docker`
+        // where the host has it, and `process` is only ever opt-in
+        (None, _) => {
+            let wanted = asked.unwrap_or(IsolationClass::Container);
+            let machine = match wanted {
+                IsolationClass::Container => "docker",
+                IsolationClass::Process => "native",
+                IsolationClass::Vm | IsolationClass::Remote => {
+                    return Err(unavailable(
+                        wanted,
+                        None,
+                        format!(
+                            "isolation {wanted} needs a machine; name one (`machine list` shows the machines)"
+                        ),
+                    ))
+                }
+            };
+            (machine.to_owned(), Some(wanted))
+        }
     };
     let machine = machine.as_str();
     // refused too while the machine is being removed
+    #[cfg(feature = "machine")]
+    let machine_record = Some(crate::machine::machine_of(&home, machine)?);
+    #[cfg(not(feature = "machine"))]
+    let machine_record = crate::machine::record::MachineRecord::read(&home, machine)?;
     #[cfg(feature = "machine")]
     {
         // where a Sandbox of this Store's kind may run is the support
         // table's answer, word for word (#535 §7.3)
         use layerfs_machine::{sandbox_allowed, HostOs};
-        let platform = crate::machine::machine_of(&home, machine)?.platform()?;
+        let platform = machine_record
+            .as_ref()
+            .expect("machine_of read the record")
+            .platform()?;
         sandbox_allowed(platform, HostOs::current(), target.store_ref.kind()).map_err(
             |reason| {
                 refused(
@@ -59,9 +104,48 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         )?;
     }
     #[cfg(not(feature = "machine"))]
-    if crate::machine::record::MachineRecord::read(&home, machine)?.is_none() {
+    if machine_record.is_none() {
         return Err(refused("NotFound", format!("no machine named {machine}")));
     }
+    // the class the machine actually provides (#551 B0-148); the caller can
+    // ask for it explicitly or let it follow the machine it named
+    let available = machine_record
+        .as_ref()
+        .and_then(|record| record.isolation_class());
+    let Some(effective) = available else {
+        return Err(unavailable(
+            wanted.unwrap_or(IsolationClass::Process),
+            None,
+            format!("machine {machine} provides no Sandbox isolation on this host"),
+        ));
+    };
+    let requested = wanted.unwrap_or(effective);
+    if !effective.satisfies(requested) {
+        let fix = match requested {
+            IsolationClass::Process => {
+                "name a process machine (`machine list`) or pass isolation: \"process\"".to_owned()
+            }
+            IsolationClass::Container => {
+                "use a docker machine (`machine update docker ...`) or pass isolation: \"process\""
+                    .to_owned()
+            }
+            IsolationClass::Vm => {
+                "create a VM machine (`machine create ...`) and name it".to_owned()
+            }
+            IsolationClass::Remote => {
+                "connect an ssh machine (`machine connect ...`) and name it".to_owned()
+            }
+        };
+        return Err(unavailable(
+            requested,
+            Some(effective),
+            format!("machine {machine} provides {effective} isolation, not {requested}; {fix}"),
+        ));
+    }
+    let mode = machine_record
+        .as_ref()
+        .and_then(|record| record.exec_mode())
+        .unwrap_or(ExecMode::Worker);
     // a PostgreSQL Store is on no machine: its daemon dials the server from
     // wherever it runs (G3), and the create's reach check proves it can
     if let StoreRef::Sqlite { .. } = target.store_ref {
@@ -82,7 +166,7 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     }
     let op = Op::begin("sandbox.create", "claim", SdkValue::Null)?;
     home::private_dir(&dir)?;
-    let record = SandboxRecord::creating(name, project, machine, &op);
+    let record = SandboxRecord::creating(name, project, machine, requested, effective, mode, &op);
     let claimed = record::lock(&home, name).and_then(|_sandbox| record.write(&home));
     if let Err(refusal) = claimed {
         // the folder this call made holds no record: the name stays free
@@ -135,6 +219,25 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             Err(refusal)
         }
     }
+}
+
+/// A requested isolation the machine cannot provide (#551 B0-148): the
+/// code is always `Unavailable`, and the detail carries both classes so a
+/// caller never has to parse the message. Never a downgraded Sandbox.
+fn unavailable(
+    requested: IsolationClass,
+    available: Option<IsolationClass>,
+    message: String,
+) -> SdkRefusal {
+    let mut refusal = refused("Unavailable", message);
+    refusal.detail = SdkValue::map([
+        ("requested", SdkValue::text(requested.as_str())),
+        (
+            "available",
+            SdkValue::opt_text(available.map(|class| class.as_str())),
+        ),
+    ]);
+    refusal
 }
 
 /// Removes a Sandbox's folder; one its own side removed already is gone.

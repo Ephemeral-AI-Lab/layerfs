@@ -305,6 +305,93 @@ fn each_problem_gives_one_finding_naming_its_fix() {
     std::fs::remove_dir_all(home).unwrap();
 }
 
+/// #551 B10-179: an old or hand-edited record whose request is stronger
+/// than what its machine provides is one warning, naming the call that
+/// recreates it; the doctor writes nothing.
+#[test]
+fn a_sandbox_asking_for_more_isolation_than_its_machine_warns() {
+    let home = new_home("isolation");
+    home::open(&home).unwrap();
+    let docker = SdkValue::map([("name", t("docker")), ("platform", t("docker"))]);
+    write_entity(&paths::machine_record(&home, "docker"), &docker).unwrap();
+    store(
+        &home,
+        "pg",
+        vec![
+            ("name", t("pg")),
+            ("kind", t("postgresql")),
+            ("url", t("postgres://u@127.0.0.1:1/db")),
+        ],
+    );
+    let project = SdkValue::map([("name", t("app"))]);
+    write_entity(&paths::project_record(&home, "pg", "app"), &project).unwrap();
+    let sandbox = SdkValue::map([
+        ("name", t("t")),
+        ("project", t("pg/app")),
+        ("machine", t("docker")),
+        ("id", t("t")),
+        ("requested_isolation", t("vm")),
+        ("effective_isolation", t("container")),
+    ]);
+    write_entity(&paths::sandbox_record(&home, "t"), &sandbox).unwrap();
+    let before = tree(&home);
+    let report = doctor(&home).unwrap();
+    assert_eq!(before, tree(&home), "the doctor wrote in the home");
+    let found = findings(&report);
+    assert_eq!(found.len(), 1, "{found:?}");
+    let (severity, kind, name, message, fix) = &found[0];
+    assert_eq!(severity, "warning", "{found:?}");
+    assert_eq!(
+        (kind.as_str(), name.as_str()),
+        ("sandbox", "t"),
+        "{found:?}"
+    );
+    assert!(
+        message.contains("requested vm isolation, but machine docker provides container"),
+        "{message}"
+    );
+    assert!(
+        fix.contains("`layerfs sandbox close t`")
+            && fix.contains("`layerfs sandbox.create pg/app t <machine>`"),
+        "{fix}"
+    );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// #551 B10-178: a machine record that declares a class its platform does
+/// not provide on this host is one warning; the read model derives the
+/// class, so only a record that disagrees warns.
+#[cfg(feature = "machine")]
+#[test]
+fn a_machine_record_that_declares_another_class_warns() {
+    let home = new_home("declared");
+    home::open(&home).unwrap();
+    let docker = SdkValue::map([
+        ("name", t("docker")),
+        ("platform", t("docker")),
+        ("isolation_class", t("process")),
+    ]);
+    write_entity(&paths::machine_record(&home, "docker"), &docker).unwrap();
+    let before = tree(&home);
+    let report = doctor(&home).unwrap();
+    assert_eq!(before, tree(&home), "the doctor wrote in the home");
+    let found = findings(&report);
+    assert_eq!(found.len(), 1, "{found:?}");
+    let (severity, kind, name, message, fix) = &found[0];
+    assert_eq!(severity, "warning", "{found:?}");
+    assert_eq!(
+        (kind.as_str(), name.as_str()),
+        ("machine", "docker"),
+        "{found:?}"
+    );
+    assert!(
+        message.contains("declares process isolation, but docker provides container"),
+        "{message}"
+    );
+    assert!(fix.contains("repair"), "{fix}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
 #[test]
 fn a_layout_2_home_reports_what_refuses_its_conversion_and_converts_nothing() {
     let home = new_home("layout2");
@@ -346,5 +433,143 @@ fn a_layout_2_home_reports_what_refuses_its_conversion_and_converts_nothing() {
     assert_eq!(found[1].0, "warning");
     assert!(found[1].3.contains("layout 2"), "{found:#?}");
     assert!(stale.exists());
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// #551 B10-171: a declared Docker socket that is not there is an error
+/// naming the call that records the right one.
+#[test]
+fn a_declared_docker_socket_that_is_not_there_is_an_error() {
+    let home = new_home("docker-socket");
+    home::open(&home).unwrap();
+    let docker = SdkValue::map([
+        ("name", t("docker")),
+        ("platform", t("docker")),
+        ("docker", t("/no/such/docker.sock")),
+    ]);
+    write_entity(&paths::machine_record(&home, "docker"), &docker).unwrap();
+    let before = tree(&home);
+    let report = doctor(&home).unwrap();
+    assert_eq!(before, tree(&home), "the doctor wrote in the home");
+    let found = findings(&report);
+    assert_eq!(found.len(), 1, "{found:?}");
+    let (severity, kind, name, message, fix) = &found[0];
+    assert_eq!(severity, "error", "{found:?}");
+    assert_eq!((kind.as_str(), name.as_str()), ("machine", "docker"));
+    assert!(message.contains("/no/such/docker.sock"), "{message}");
+    assert!(fix.contains("machine update docker --docker"), "{fix}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// #551 B10-173: a Sandbox image that is a file must exist.
+#[test]
+fn a_sandbox_image_file_that_is_missing_is_an_error() {
+    let home = new_home("image");
+    home::open(&home).unwrap();
+    store(&home, "shop", sqlite("shop", "native"));
+    write_entity(
+        &paths::project_record(&home, "shop", "api"),
+        &SdkValue::map([("name", t("api"))]),
+    )
+    .unwrap();
+    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
+    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    let sandbox = SdkValue::map([
+        ("name", t("img")),
+        ("project", t("shop/api")),
+        ("machine", t("native")),
+        ("id", t("img")),
+        ("image", t("/no/such/image.tar")),
+    ]);
+    write_entity(&paths::sandbox_record(&home, "img"), &sandbox).unwrap();
+    let report = doctor(&home).unwrap();
+    let found = findings(&report);
+    assert_eq!(found.len(), 1, "{found:?}");
+    let (severity, kind, name, message, fix) = &found[0];
+    assert_eq!(severity, "error", "{found:?}");
+    assert_eq!((kind.as_str(), name.as_str()), ("sandbox", "img"));
+    assert!(message.contains("/no/such/image.tar"), "{message}");
+    assert!(fix.contains("sandbox.create"), "{fix}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// #551 B10-174: a recorded process Sandbox on a host that lacks the mount
+/// driver is one warning, naming FUSE.
+#[cfg(feature = "machine")]
+#[test]
+fn a_process_sandbox_without_its_mount_driver_warns() {
+    let missing = layerfs_machine::native_missing(layerfs_machine::HostOs::current());
+    if missing.is_empty() {
+        return; // this host has every driver LayerFS can check
+    }
+    let home = new_home("driver");
+    home::open(&home).unwrap();
+    store(&home, "shop", sqlite("shop", "native"));
+    write_entity(
+        &paths::project_record(&home, "shop", "api"),
+        &SdkValue::map([("name", t("api"))]),
+    )
+    .unwrap();
+    let native = SdkValue::map([("name", t("native")), ("platform", t("native"))]);
+    write_entity(&paths::machine_record(&home, "native"), &native).unwrap();
+    let sandbox = SdkValue::map([
+        ("name", t("proc")),
+        ("project", t("shop/api")),
+        ("machine", t("native")),
+        ("id", t("proc")),
+        ("requested_isolation", t("process")),
+        ("effective_isolation", t("process")),
+    ]);
+    write_entity(&paths::sandbox_record(&home, "proc"), &sandbox).unwrap();
+    let report = doctor(&home).unwrap();
+    let found = findings(&report);
+    let driver = found
+        .iter()
+        .find(|(_, kind, _, message, _)| kind == "home" && message.contains("mount driver"));
+    let (severity, _, _, message, fix) = driver.unwrap_or_else(|| panic!("{found:?}"));
+    assert_eq!(severity, "warning", "{found:?}");
+    assert!(message.contains("host:"), "{message}");
+    assert!(fix.contains("FUSE"), "{fix}");
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+/// #551 B10-176: a machine recorded running with no worker record is a
+/// warning naming `machine start`; a stopped machine that left one is a
+/// warning too.
+#[test]
+fn a_machine_worker_state_that_disagrees_warns() {
+    let home = new_home("worker");
+    home::open(&home).unwrap();
+    let docker = SdkValue::map([
+        ("name", t("docker")),
+        ("platform", t("docker")),
+        ("state", t("running")),
+    ]);
+    write_entity(&paths::machine_record(&home, "docker"), &docker).unwrap();
+    let report = doctor(&home).unwrap();
+    let found = findings(&report);
+    let missing = found
+        .iter()
+        .find(|(_, _, name, message, _)| name == "docker" && message.contains("no worker record"));
+    let (severity, _, _, message, fix) = missing.unwrap_or_else(|| panic!("{found:?}"));
+    assert_eq!(severity, "warning", "{found:?}");
+    assert!(message.contains("no worker record"), "{message}");
+    assert!(fix.contains("machine start docker"), "{fix}");
+
+    // a stopped machine that left its worker record
+    let dev = SdkValue::map([
+        ("name", t("dev")),
+        ("platform", t("lima")),
+        ("state", t("stopped")),
+    ]);
+    write_entity(&paths::machine_record(&home, "dev"), &dev).unwrap();
+    let worker = SdkValue::map([("address", t("127.0.0.1:1")), ("secret", t("k"))]);
+    write_record(&paths::worker_record(&home, "dev"), &worker).unwrap();
+    let report = doctor(&home).unwrap();
+    let found = findings(&report);
+    let stale = found.iter().find(|(_, _, name, message, _)| {
+        name == "dev" && message.contains("worker record remains")
+    });
+    assert!(stale.is_some(), "{found:?}");
     std::fs::remove_dir_all(home).unwrap();
 }

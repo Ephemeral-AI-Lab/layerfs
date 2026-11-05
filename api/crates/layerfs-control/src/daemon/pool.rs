@@ -11,6 +11,7 @@
 //! has and callers take turns on them, each waiting at most [`LEND_WAIT`]
 //! before it is refused `Busy`. Opening a connection is not an attempt
 //! of any operation: nothing is sent before the connection is ready.
+use crate::common::contract::Capacity;
 use crate::common::outcome::{failed, refused};
 use crate::internal::Control;
 use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
@@ -144,6 +145,8 @@ struct Pool {
     /// Most connections this Sandbox keeps: [`CONNECTIONS`], or fewer once
     /// the daemon admitted no more.
     limit: usize,
+    /// Callers waiting for a connection now (#551 B8-160).
+    waiting: usize,
 }
 
 /// A Sandbox's connections.
@@ -151,6 +154,8 @@ pub(crate) struct Controls {
     pool: Mutex<Pool>,
     freed: Condvar,
     dial: Dial,
+    /// The Store this daemon serves, named in a `Capacity` refusal.
+    store: String,
 }
 
 /// One connection lent for one call's exchanges.
@@ -160,21 +165,34 @@ pub(crate) struct Lease<'a> {
 }
 
 impl Controls {
-    /// The connections of a Sandbox whose first connection is `first`.
-    pub(crate) fn new(first: Control, dial: Dial) -> Self {
+    /// The connections of a Sandbox whose first connection is `first`,
+    /// serving `store` (named in a `Capacity` refusal).
+    pub(crate) fn new(first: Control, dial: Dial, store: impl Into<String>) -> Self {
         Self {
             pool: Mutex::new(Pool {
                 idle: vec![first],
                 open: 1,
                 limit: CONNECTIONS,
+                waiting: 0,
             }),
             freed: Condvar::new(),
             dial,
+            store: store.into(),
         }
     }
 
     /// A connection for one call, and how long the call waited for it.
     pub(crate) fn lend(&self) -> Result<(Lease<'_>, Duration), SdkRefusal> {
+        self.lend_within(LEND_WAIT)
+    }
+
+    /// A connection for one call that may wait at most `budget`; a full
+    /// queue or an exhausted budget is refused `Capacity`, naming the Store,
+    /// its in-flight count and the queue bound (#551 B8-160, B8-161).
+    pub(crate) fn lend_within(
+        &self,
+        budget: Duration,
+    ) -> Result<(Lease<'_>, Duration), SdkRefusal> {
         let started = Instant::now();
         let poisoned = || refused("Failed", "binding state poisoned");
         let mut pool = self.pool.lock().map_err(|_| poisoned())?;
@@ -206,23 +224,48 @@ impl Controls {
                     }
                 }
             }
-            let remaining = LEND_WAIT.saturating_sub(started.elapsed());
-            if remaining.is_zero() {
-                return Err(refused(
-                    "Busy",
-                    format!(
-                        "all {} of this process's connections to the Sandbox stayed in use for {}s; nothing was attempted",
-                        pool.open,
-                        LEND_WAIT.as_secs()
-                    ),
+            let in_flight = (pool.open - pool.idle.len()) as u32;
+            let queued = u32::try_from(pool.waiting).unwrap_or(u32::MAX);
+            // A full queue is a refusal before any wait (#551 B8-160).
+            if pool.waiting >= Capacity::CONTRACT.queue as usize {
+                return Err(Capacity::CONTRACT.refusal(
+                    &self.store,
+                    in_flight,
+                    queued,
+                    started.elapsed(),
                 ));
             }
-            pool = self
+            let remaining = budget.saturating_sub(started.elapsed());
+            if remaining.is_zero() {
+                // queue time is inside the caller's read budget (#551 B8-161)
+                return Err(Capacity::CONTRACT.refusal(
+                    &self.store,
+                    in_flight,
+                    queued,
+                    started.elapsed(),
+                ));
+            }
+            pool.waiting += 1;
+            let mut waited = self
                 .freed
                 .wait_timeout(pool, remaining)
                 .map_err(|_| poisoned())?
                 .0;
+            waited.waiting -= 1;
+            pool = waited;
         }
+    }
+
+    /// This Store's measured capacity (#551 B8-157, B8-160): calls in flight
+    /// through this process's connections and callers waiting now.
+    pub(crate) fn measured(&self) -> (u32, u32) {
+        let Ok(pool) = self.pool.lock() else {
+            return (0, 0);
+        };
+        (
+            u32::try_from(pool.open.saturating_sub(pool.idle.len())).unwrap_or(u32::MAX),
+            u32::try_from(pool.waiting).unwrap_or(u32::MAX),
+        )
     }
 
     fn lease(&self, control: Control) -> Lease<'_> {

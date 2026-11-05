@@ -42,10 +42,12 @@ layerfs sandbox create shop/api build-1 native
 
 ## `sandbox.create`
 
-`sandbox.create(project, name, machine?, { image })`
+`sandbox.create(project, name, machine?, { image, isolation })`
 
-With no `machine`, the Sandbox runs on its sqlite Store's machine, or on
-`native` for a PostgreSQL Store.
+With no `machine`, the Sandbox runs on its sqlite Store's machine. A
+PostgreSQL Store is on no machine: the default is `docker` (`container`)
+where the host provides it, and `process` is only ever opt-in, with
+`isolation: "process"` (#551 B0-147).
 
 Starts a Sandbox, binds it to the project and returns its record when it is
 ready.
@@ -56,6 +58,7 @@ ready.
 | `name` | 1–63 lowercase letters, digits, `_ . -`; unique in the home |
 | `machine` | Where it runs. For a sqlite Store it must be the machine the Store is on (`store.get` names it) |
 | `image` | An image digest, where the machine allows one; on `docker` it overrides the machine's image and the bundle's default |
+| `isolation` | `process`, `container`, `vm` or `remote`: the class the caller asks for. Without `machine`, a PostgreSQL Store takes only `container` (the default) and `process`; a named machine must provide that class or a stronger one (#551 B0-144, B0-148) |
 
 **What runs where in this build** (from source):
 
@@ -68,10 +71,23 @@ ready.
 | PostgreSQL Store, a platform the support table allows (`native`, `docker`, ssh) | where that machine runs Sandboxes (rows above). This process resolves the password and rewrites a loopback host for the machine (`docker`: `host.docker.internal`; ssh refuses a loopback URL); the create first checks, from that machine, that the server answers with the Store's schema binding. The daemon needs the `postgresql` build |
 | PostgreSQL Store, a platform the table refuses (`lima`, `apple-container`, `microsandbox`, `firecracker`) | `Unsupported` with the support table's reason (`machine.platforms`) |
 
-**Returns:** the Sandbox's record: `{ name, project, machine, created, id,
-platform, runtime, image, backend, route, state: "running" }`. `name` is what
-you pass to every other call; `id` is the same name, as its machine knows it;
-`route` is the kernel route (`fuse`, or `nfs` on macOS `native`).
+**Returns:** the Sandbox's record: `{ name, schema_version, project, machine,
+created, id, platform, runtime, image, backend, route, requested_isolation,
+effective_isolation, isolation, scheduling, capacity, state: "running" }`.
+`schema_version` is the record's contract version (1; an old record reads 1
+through the fallbacks its type documents), and `capacity` is the per-Store
+contract that read models also report: `{ schema_version, per_store_quota,
+in_flight_limit, queue_limit, in_flight, queued }` (#551 B0-151). `name` is
+what you pass to every other call; `id` is the same name, as its machine
+knows it; `route` is the kernel route (`fuse`, or `nfs` on macOS `native`).
+
+`requested_isolation` is the class the create asked for and
+`effective_isolation` the one the Sandbox runs behind (#551 B0-149);
+`isolation` repeats both with the `kernel` scope and the `strength` word
+(`weak`, `medium`, `strong`, `network`), and `scheduling` says whether its
+work runs through our worker (`worker`), that it is `long_lived` and its
+`exec_mode`. A record written before #551 derives both classes from its
+platform and backend names, so an old home still answers.
 
 **State and intent** (#536 §7): a Sandbox's record stores facts and, while a
 `sandbox.create` or `sandbox.close` runs, one `op` intent; `state` is derived
@@ -97,9 +113,11 @@ the `op`) and `layerfs sandbox close <name>`, the call that clears it.
 | `Exists` | A Sandbox with that name is recorded in the home (even one that closed itself) | Pick another name, or `sandbox.close(name)` first to drop the old record |
 | `NotFound` | No machine of that name, or no such Store | Check `machine.list`, `project.get` |
 | `Unsupported` | The machine is not the sqlite Store's (message names the Store's machine), the support table refuses the platform for the Store's kind, or the PostgreSQL URL cannot be rewritten for the machine (a loopback URL on ssh; `sslmode=verify-full` with a rewrite) | Use the Store's machine, `store.pull` / `store.push` the Store, or give the Store a URL the machine can dial |
+| `Unavailable` | The machine provides a weaker class than `isolation` asked for; `detail.requested` and `detail.available` name both, and the message says how to reach the stronger one | Name a machine that provides it, or ask for a class this machine provides. A create never downgrades a class |
+| `Unavailable` | `isolation` names `vm` or `remote` and no `machine` was named (a PostgreSQL Store's default names none) | Name a machine of that class (`machine list`) |
 | `Unavailable` | The machine cannot reach the PostgreSQL server, or reaches a server holding another Store (message names the host tried) | Make the server reachable from that machine |
 | `Unavailable` | The daemon bundle is missing | Report it; the home's owner installs the bundle |
-| `InvalidInput` | A bad name or project, or the name `native` or `docker` (they name the built-in machines) | Fix the call |
+| `InvalidInput` | A bad name or project, the name `native` or `docker` (they name the built-in machines), or an `isolation` that is not `process`, `container`, `vm` or `remote` | Fix the call |
 | `Failed` | Starting it failed; its record is removed | Stop and report the message |
 | `Unknown` | The machine's answer was lost: a Sandbox may or may not have started. The record keeps its `op`, marked `uncertain` (`state: "unresolved"`) | Stop and report; don't create it again. `sandbox.close(name)` clears it (a Sandbox it left on its machine is not recorded) |
 
@@ -111,9 +129,10 @@ Every Sandbox record in the home, or one project's, one page at a time:
 `{ items: [record, …], next_page_pos }` (`page_size` 1–1000, default 50;
 `next_page_pos` is `null` after the last page). Each item carries its
 derived `state` and, while it has one, its `op` (`{ id, name, phase,
-started, uncertain }`). It reads the home's records only; it does not ask
-the daemons whether they still run (a Sandbox whose daemon ended reads
-`running` here).
+started, uncertain }`) and its `capacity` bounds (`in_flight` and `queued`
+are 0 here; `get` measures them). It reads the home's records only; it
+does not ask the daemons whether they still run (a Sandbox whose daemon
+ended reads `running` here).
 
 ## `sandbox.get`
 
@@ -129,7 +148,21 @@ named it, else `<sandbox>:<path>`: pass it to the `workspace` calls), `name`
 (or `null`), `path`, and the daemon's `workspace`, `namespace`, `branch`,
 `base`, `base_layer`, `root`, `activity`, `mounted`, `directory` (the same
 path), `head_moved_since_mount`, `dirty` (`{ inodes, entries }` or `null`),
-`pending_merge` and `revision`. Not checked live.
+`pending_merge` and `revision`; `branch` is the Branch its Workspace
+record names (#551 B8-158). The answer also carries `capacity` (the
+per-Store contract plus `in_flight`/`queued` measured by the process that
+owns the Sandbox), `running_command` (the first running entry, `null` when
+none), `running` (up to 8 `{ token, path, command, started }`) and
+`recently_closed` (up to 16 `{ name, path, branch, closed }`), recorded
+where the command or unmount ran. Not checked live, except the one daemon
+list read, which waits at most 5 s including its queue time
+(#551 B8-159).
+
+The read model is bounded: `machine` probes share 2 s and a Sandbox read
+waits 5 s for a control connection. A full per-Store queue is refused
+`Capacity` with `detail { resource: "store_calls", store, in_flight,
+queued, queue_limit, in_flight_limit, waited_ms, retryable: true }`, not
+`Busy`; the queue time is inside the same 5 s.
 
 `sandbox.list` and `sandbox.get` never start a machine (#535 P4). When the
 Sandbox's machine is down, `get` answers its record with `workspaces: []` and

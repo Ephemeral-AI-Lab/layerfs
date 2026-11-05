@@ -3,6 +3,7 @@ use super::record::{MachineDerived, MachineRecord};
 use super::spec::{self as record, refusal};
 use super::status::home_id;
 use crate::common::context::Context;
+use crate::common::contract;
 use crate::common::home::paths;
 use crate::common::outcome::{failed, Outcome, View};
 use crate::inventory::{sandboxes_on, stores_on};
@@ -15,8 +16,9 @@ use std::time::{Duration, Instant};
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// How long `machine.list` and `machine.get` wait for their live probes, all
-/// together. A probe that has not answered by then is `unknown`.
-const PROBE: Duration = Duration::from_secs(10);
+/// together (#551 B8-159). A probe that has not answered by then is
+/// `unknown`; the read budget is [`contract::PROBE_BUDGET_MS`].
+const PROBE: Duration = Duration::from_millis(contract::PROBE_BUDGET_MS);
 
 /// A machine's live state and, when it could not be read, why.
 type Live = Option<(String, Option<String>)>;
@@ -72,12 +74,65 @@ pub(super) fn live(home: &Path, records: &[MachineRecord]) -> Result<Vec<Live>> 
 }
 
 pub(super) fn summary(home: &Path, record: &MachineRecord, live: Live) -> Result<SdkValue> {
+    let state = record
+        .state(live.as_ref().map(|(state, _)| state.as_str()))?
+        .to_owned();
     let derived = MachineDerived {
         live,
         stores: stores_on(home, record.name())?,
         sandboxes: sandboxes_on(home, record.name())?,
+        worker: Some(worker(home, record.name(), &state)),
+        lease: Some(lease(home, record.name())),
     };
     record.to_sdk(View::Full, &derived)
+}
+
+/// The machine's worker as its `worker.json` records it (#551 B8-156): the
+/// address, when it started and its forward, and whether the machine's
+/// derived state says it runs. It never dials the worker.
+fn worker(home: &Path, name: &str, state: &str) -> SdkValue {
+    let Ok(recorded) = crate::common::home::read_record(&paths::worker_record(home, name)) else {
+        return SdkValue::map([("state", SdkValue::text("none"))]);
+    };
+    let Some(recorded) = recorded else {
+        return SdkValue::map([("state", SdkValue::text("none"))]);
+    };
+    let runs = matches!(state, "ready" | "running");
+    SdkValue::map([
+        (
+            "state",
+            SdkValue::text(if runs { "running" } else { "recorded" }),
+        ),
+        (
+            "address",
+            SdkValue::opt_text(recorded.get_text("address").map(str::to_owned)),
+        ),
+        (
+            "started",
+            recorded.get("started").cloned().unwrap_or_default(),
+        ),
+        (
+            "forward_pid",
+            recorded.get("forward_pid").cloned().unwrap_or_default(),
+        ),
+        (
+            "path",
+            SdkValue::text(paths::worker_record(home, name).display().to_string()),
+        ),
+    ])
+}
+
+/// The machine's `start.lock` lease, probed without taking it (#551 B8-156).
+fn lease(home: &Path, name: &str) -> SdkValue {
+    let path = paths::machine_dir(home, name).join("start.lock");
+    match crate::common::home::entity_lock::probe(&path) {
+        Some(lease) => SdkValue::map([
+            ("held", SdkValue::Bool(lease.held)),
+            ("path", SdkValue::text(path.display().to_string())),
+            ("since", lease.since.map_or(SdkValue::Null, SdkValue::Int)),
+        ]),
+        None => SdkValue::map([("held", SdkValue::Bool(false))]),
+    }
 }
 
 /// `machine.list()`: every machine with its live state and what it

@@ -527,7 +527,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
         directory,
         runtime,
         identity: recorded_identity(&value),
-        controls: crate::daemon::pool::Controls::new(control, dial),
+        controls: crate::daemon::pool::Controls::new(control, dial, format!("{project} ({id})")),
         mounts: Default::default(),
     });
     refresh(&state)?;

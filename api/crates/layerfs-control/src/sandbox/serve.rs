@@ -298,7 +298,7 @@ fn start_claimed(
         directory: directory.to_owned(),
         runtime: Some(runtime),
         identity,
-        controls: crate::daemon::pool::Controls::new(control, dial),
+        controls: crate::daemon::pool::Controls::new(control, dial, format!("{name} ({id})")),
         mounts: Default::default(),
     });
     // a started container that cannot be recorded is left running: its

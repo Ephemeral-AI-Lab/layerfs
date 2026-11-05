@@ -12,6 +12,11 @@
 //! its process group and reaped (finding 2), and the host's secret check
 //! counts a `Denied` reply, or an accept that never answers (its 2 s
 //! limit), as no worker (finding 6).
+//!
+//! #551 B8-159 replaced the old 10 s status probe with the read model's
+//! `PROBE_BUDGET_MS` of 2 s, so the late `limactl` is now cut off at 2 s and
+//! the list must return within that budget; the test asserts that bound
+//! rather than waiting for the stand-in's 40 s sleep.
 #![cfg(feature = "machine")]
 use layerfs_api::home::{paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
@@ -166,9 +171,11 @@ fn list_and_get_answer_the_live_state() {
     let slow = listed(&list, "slow");
     assert_eq!(slow.get_text("state"), Some("unknown"), "{slow:?}");
     let why = slow.get_text("error").unwrap_or("");
-    assert!(why.contains("did not answer within 10 s"), "{why}");
+    // #551 B8-159: the list's probe budget is 2 s, not the old 10 s status
+    // wait; the late probe is reported within it and its command is killed.
+    assert!(why.contains("did not answer within 2 s"), "{why}");
     assert!(
-        took >= Duration::from_secs(9) && took < Duration::from_secs(20),
+        took >= Duration::from_millis(1900) && took < Duration::from_secs(5),
         "the list waited {took:?}"
     );
     assert_eq!(listed(&list, "native").get_text("state"), Some("ready"));
@@ -209,7 +216,9 @@ fn list_and_get_answer_the_live_state() {
     assert_eq!(got.get_text("state"), Some("stopped"));
 
     // a worker that refuses the secret, and one that never answers it, are
-    // no worker; the silent one costs the host its 2 s limit, no more
+    // no worker; inside the 2 s read budget the silent check keeps back a
+    // reserve so this read still answers, while machine.status, the
+    // unbounded probe, keeps the full 2 s limit.
     for name in ["deny", "mute"] {
         recorded_running(&home, name);
     }

@@ -109,7 +109,9 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     }
     let fields = fields.into_iter().map(|(n, v)| (n.to_owned(), v));
     let op = Op::begin(CREATE, "create", SdkValue::Null)?;
-    let record = MachineRecord::from_record(&name, SdkValue::Map(fields.collect())).with_op(&op);
+    let record = MachineRecord::from_record(&name, SdkValue::Map(fields.collect()))
+        .with_contract()
+        .with_op(&op);
     // claim the name under the lock; the VM is made outside it
     let spec = {
         let _lock = lock::take(&home)?;

@@ -7,6 +7,8 @@
 #[cfg(feature = "machine")]
 mod bundle;
 #[cfg(feature = "machine")]
+mod capability;
+#[cfg(feature = "machine")]
 mod connect;
 #[cfg(feature = "machine")]
 mod create;
@@ -37,6 +39,8 @@ pub mod worker;
 #[cfg(feature = "machine")]
 pub(crate) use bundle::bundle;
 #[cfg(feature = "machine")]
+pub(crate) use capability::of as capability_of;
+#[cfg(feature = "machine")]
 pub use connect::connect;
 #[cfg(feature = "machine")]
 pub use create::create;
@@ -57,7 +61,7 @@ pub use remove::{disconnect, remove};
 #[cfg(feature = "machine")]
 pub use spec::{ensure_built_ins, machine_of, vm_name};
 #[cfg(feature = "machine")]
-pub(crate) use spec::{refusal as machine_refusal, spec as machine_spec};
+pub(crate) use spec::{refusal as machine_refusal, spec as machine_spec, tools as machine_tools};
 #[cfg(feature = "machine")]
 pub use status::status;
 #[cfg(feature = "machine")]

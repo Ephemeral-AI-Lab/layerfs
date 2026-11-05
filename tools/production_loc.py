@@ -15,10 +15,10 @@ keeps tests inside src/.
 Rust crates are assigned by name to core, engine, connect or api in every
 layout: the call surface layerfs-api, the management library layerfs-control
 and the front ends layerfs-cli, layerfs-node and layerfs-python are api
-crates wherever they sit, and layerfs-sandbox, layerfs-machine and
-layerfs-store-backup are connect crates wherever they sit,
-so a pre-move tree counts them under connect too. Unknown historical crates
-remain counted in core.
+crates wherever they sit, and layerfs-sandbox, layerfs-machine,
+layerfs-store-backup and layerfs-provider-doks are connect crates wherever
+they sit, so a pre-move tree counts them under connect too. Unknown historical
+crates remain counted in core.
 
 The `api` scope also holds the published JavaScript (#428): the src/ JavaScript of
 each package under api/ (api/agent is @layerfs/agent, api/cli is @layerfs/cli,
@@ -379,6 +379,9 @@ CONNECT_CRATES = {
     "layerfs-sandbox",
     "layerfs-machine",
     "layerfs-store-backup",
+    # The DOKS provider adapter (#554) reaches a machine through the public
+    # machine API; by name it stays connect in every layout.
+    "layerfs-provider-doks",
     # The name layerfs-store-backup had before move 1.6: a pre-move tree
     # counts it under connect too.
     "layerfs-remote-storage",

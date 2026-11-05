@@ -187,17 +187,42 @@ pub(crate) fn answers(endpoint: Option<&crate::spec::Endpoint>) -> bool {
     endpoint.is_some_and(|e| hello(e).unwrap_or(false))
 }
 
+/// How much of its deadline a bounded probe keeps back for the provider's
+/// answer to reach `machine.list`/`get` before their own budget expires.
+/// Those wait 2 s, then keep 200 ms to stop a late probe's command; the
+/// extra 100 ms is scheduling room.
+const PROBE_RESERVE: Duration = Duration::from_millis(300);
+
+/// The answer limit for the worker's secret: 2 s for `machine.status`, and
+/// for a bounded read model (`machine.list`/`get`) the time its probe has
+/// left, less [`PROBE_RESERVE`], so a silent worker is still judged *no
+/// worker* inside the read's budget rather than making the probe late.
+fn secret_wait() -> Duration {
+    let limit = Duration::from_secs(2);
+    match tool::remaining() {
+        Some(left) => left.saturating_sub(PROBE_RESERVE).min(limit),
+        None => limit,
+    }
+}
+
 /// The worker protocol's first step only: the secret as one frame (a 4-byte
-/// big-endian length, then JSON), answered `{"ready":true}` within 2 s; the
-/// connection then closes with no request. A bare connection is not enough:
-/// an `ssh -L` or Lima port forward accepts on the host while no worker
-/// listens in the guest.
+/// big-endian length, then JSON), answered `{"ready":true}` within the
+/// secret limit; the connection then closes with no request. A bare
+/// connection is not enough: an `ssh -L` or Lima port forward accepts on the
+/// host while no worker listens in the guest.
 fn hello(endpoint: &Endpoint) -> std::io::Result<bool> {
     use std::io::{Read, Write};
-    let wait = Some(Duration::from_secs(2));
-    let mut stream = TcpStream::connect_timeout(&endpoint.address, Duration::from_secs(1))?;
-    stream.set_read_timeout(wait)?;
-    stream.set_write_timeout(wait)?;
+    let wait = secret_wait();
+    if wait.is_zero() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "the bounded probe's budget is spent",
+        ));
+    }
+    let mut stream =
+        TcpStream::connect_timeout(&endpoint.address, wait.min(Duration::from_secs(1)))?;
+    stream.set_read_timeout(Some(wait))?;
+    stream.set_write_timeout(Some(wait))?;
     let secret = endpoint.secret.replace('\\', "\\\\").replace('"', "\\\"");
     let hello = format!("{{\"secret\":\"{secret}\"}}");
     let mut frame = (hello.len() as u32).to_be_bytes().to_vec();
