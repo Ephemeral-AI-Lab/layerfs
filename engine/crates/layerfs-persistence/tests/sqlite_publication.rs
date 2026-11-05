@@ -103,8 +103,9 @@ fn wal_full_settings_and_unavailable_engine_are_explicit() {
         .unwrap();
     // #327 dropped workspace_stage and added store_totals; #352 added binding_hint;
     // #353 added layer_lineage, commit_lineage, absorbed and reach; #355
-    // added merge_operation and merge_record; #364 added file_digest.
-    assert_eq!(names, 20);
+    // added merge_operation and merge_record; #364 added file_digest; the
+    // incremental change export added change_log and change_state.
+    assert_eq!(names, 22);
 }
 #[test]
 fn final_body_multirow_locators_and_first_wins_have_one_atomic_ack() {

@@ -16,7 +16,7 @@ pub(crate) mod metadata_values;
 pub(crate) mod objects_read;
 pub(crate) mod objects_selection;
 pub(crate) mod prepared;
-mod profile;
+pub(crate) mod profile;
 pub(crate) mod publish;
 pub(crate) mod query;
 pub(crate) mod reclamation;
