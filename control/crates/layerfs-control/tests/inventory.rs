@@ -9,11 +9,16 @@ use layerfs_control::common::json::parse;
 use layerfs_control::inventory;
 use layerfs_control::store::record::StoreRecord;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
+/// One home per call: parallel tests can read the same clock value (macOS
+/// gives microseconds), so a counter keeps their homes apart.
 fn tempdir() -> PathBuf {
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
     let dir = std::env::temp_dir().join(format!(
-        "layerfs-inventory-{}-{}",
+        "layerfs-inventory-{}-{}-{}",
         std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
