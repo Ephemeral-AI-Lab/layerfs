@@ -33,6 +33,10 @@ exists. The platform-specific mechanics below are retained reference only.
 | `firecracker` | existing records only | disabled | no new Sandboxes | retained `limactl` adapter |
 | `ssh` | existing records only | disabled | no new Sandboxes | retained `ssh` adapter |
 
+- In the `namespaces` backend each `workspace.exec` command gets a fresh
+  empty network namespace: no host NICs or routes, `lo` down, no network.
+  The daemon and the worker stay on the host's loopback; a command that
+  needs network needs a later policy, not the host stack.
 - "Platform" is only a machine's kind. A caller never chooses how a
   Sandbox runs; the kind decides.
 - `machine list` answers every machine, each with `supports` (`sqlite`,
