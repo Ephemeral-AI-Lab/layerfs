@@ -23,7 +23,8 @@ pub(crate) const READY: Duration = Duration::from_secs(60);
 const PREPARE: &str = r#"set -e
 umask 022
 mkdir -p "$1/store" "$1/sandbox" /layerfs/state
-chmod 755 "$1" "$1/store" "$1/sandbox"
+chmod 701 "$1"
+chmod 700 "$1/store" "$1/sandbox"
 chmod 700 /layerfs/state
 mount -o remount,rw /proc/sys 2>/dev/null || true
 echo 0 > /proc/sys/user/max_user_namespaces

@@ -1,11 +1,14 @@
 //! The exec stage: one command inside a running Sandbox. The helper joins the
 //! Sandbox's cgroup first (after entering the Sandbox's mount namespace this
 //! host path no longer resolves), opens the three namespace handles, then
-//! enters them. Its child is created inside the Sandbox's PID namespace, runs
-//! as the requested uid:gid and inherits no-new-privs, so file capabilities
-//! and setuid bits cannot raise it again.
+//! enters them. It then creates a new, empty network namespace for the rest of
+//! this stage: the command has no interface into this host's network, so it
+//! reaches no host service, the worker's control port included. Its child is
+//! created inside the Sandbox's PID namespace, runs as the requested uid:gid
+//! and inherits no-new-privs, so file capabilities and setuid bits cannot
+//! raise it again.
 use nix::{
-    sched::{setns, CloneFlags},
+    sched::{setns, unshare, CloneFlags},
     sys::prctl::set_no_new_privs,
 };
 use std::{
@@ -35,6 +38,17 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
     join(&run.cgroup)?;
     let namespaces = Namespaces::open(run.init)?;
     namespaces.enter()?;
+    // the command's own network namespace, empty: the command inherits
+    // no interface of this host, so it reaches no host service -- the
+    // worker's control port included. `lo` stays down; a command that
+    // needs loopback must be given one by a later stage, never this
+    // host's stack.
+    if let Err(error) = unshare(CloneFlags::CLONE_NEWNET) {
+        // a setup failure must never look like the command's exit code
+        fail(&format!(
+            "creating the command's network namespace: {error}"
+        ));
+    }
     set_no_new_privs().map_err(|error| format!("setting no-new-privs: {error}"))?;
     let (program, rest) = run.arguments.split_first().ok_or("no command")?;
     let mut command = Command::new(program);
