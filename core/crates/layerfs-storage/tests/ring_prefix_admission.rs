@@ -179,3 +179,51 @@ fn an_init_of_similar_files_in_one_save_admits_only_full_winners() {
     assert_eq!(depth(&outcome), 1, "{outcome:?}");
     assert_eq!(ring_ids(&metadata), vec![objects[0].id(), next.id()]);
 }
+
+#[test]
+fn a_winner_admitted_in_a_save_is_never_proposed_back_to_that_save() {
+    // Two similar files A and B, each with a new version per Commit at a new
+    // path. B's first version is a delta on A's, inside one Save, so B starts
+    // with no ring entry of its own.
+    let a = |v: usize| version(8 * 1024, v);
+    let b = |v: usize| {
+        let mut raw = version(8 * 1024, v);
+        raw[6_000 + v] ^= 0x33;
+        raw
+    };
+    let metadata = store();
+    let first = [object(&a(0), None), object(&b(0), None)];
+    let storage = Storage::new(metadata.clone()).unwrap();
+    let save = storage.begin_save().unwrap();
+    for object in &first {
+        save.accept(object.clone()).unwrap();
+    }
+    save.finish().unwrap();
+    assert_eq!(ring_ids(&metadata), vec![first[0].id()]);
+    // Second Commit: A's next version is admitted (its proposal is from the
+    // first Save). B's proposal would be that pending admission; it is answered
+    // by A's first version instead, so both are depth one and the Save seals no
+    // early pack.
+    let second = [object(&a(1), None), object(&b(1), None)];
+    let storage = Storage::new(metadata.clone()).unwrap();
+    let save = storage.begin_save().unwrap();
+    for object in &second {
+        save.accept(object.clone()).unwrap();
+    }
+    let outcome = save.finish().unwrap();
+    let depths = outcome.delta.whole_file_depths;
+    assert_eq!(
+        (depths[1], depths[2..].iter().sum::<u64>()),
+        (2, 0),
+        "{outcome:?}"
+    );
+    assert_eq!(outcome.packs, 1, "{outcome:?}");
+    // Both second versions joined the ring, so B's own lineage starts here.
+    assert_eq!(
+        ring_ids(&metadata),
+        vec![first[0].id(), second[0].id(), second[1].id()]
+    );
+    let mut all = first.to_vec();
+    all.extend(second);
+    assert_reads_back(&metadata, &all);
+}

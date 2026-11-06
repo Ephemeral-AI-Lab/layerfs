@@ -461,7 +461,7 @@ pub fn select(
             None => {
                 let sig = prehashed.unwrap_or_else(|| signature(raw));
                 input.candidates.ensure_loaded(input.connection)?;
-                let found = input.candidates.find(id, &sig);
+                let found = input.candidates.propose(id, &sig);
                 match found {
                     Some(id) => match probe(input, id, role)? {
                         true => {
@@ -558,11 +558,12 @@ pub fn select(
             // new path finds this one rather than the first (#88). Proposals of
             // this Save's own objects (an Init of similar files) admit nothing: a
             // pending PREFIX winner would otherwise be proposed and sealed early,
-            // and the ring would fill with intermediate versions. An object whose
-            // declared base was used never enters the ring.
+            // and the ring would fill with intermediate versions. A winner this
+            // Save admits is never proposed back to it (`Candidates::propose`).
+            // An object whose declared base was used never enters the ring.
             input.candidates.ensure_loaded(input.connection)?;
             if input.candidates.admitted_before_save(proposal) {
-                input.candidates.insert(id, sig);
+                input.candidates.admit(id, sig, proposal);
             }
         }
         Ok(prefix)
