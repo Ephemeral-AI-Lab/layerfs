@@ -15,11 +15,11 @@ use layerfs_content::{
     object::inode_leaf::encode_inode_value,
     ContentError, ContentResult, EditRecordChange, EditRecordExpected, FinalizedConsumer, ObjectId,
 };
-use layerfs_overlay::{DirectoryEntry, Inode, InodeKind, PAGE_ROWS};
+use layerfs_overlay::{DirectoryEntry, Inode, InodeKind, PAGE_ROWS, RECORD_ROWS};
 use layerfs_telemetry::timer::{Active, TimingScope};
 use std::time::Instant;
 
-/// The changes of one guarded job: at most PAGE_ROWS of them, flushed strictly
+/// The changes of one guarded job: at most RECORD_ROWS of them, flushed strictly
 /// ordered by kind and then serial, and always before the next captured page
 /// is requested. Never a namespace-sized collection.
 #[derive(Default)]
@@ -38,7 +38,7 @@ impl Writer {
         shared: &Shared<'_, P>,
         rows: usize,
     ) -> ContentResult<()> {
-        if self.len() + rows > PAGE_ROWS {
+        if self.len() + rows > RECORD_ROWS {
             self.flush(shared)?;
         }
         Ok(())

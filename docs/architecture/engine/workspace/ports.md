@@ -45,7 +45,7 @@ content or Store I/O.
 | --- | --- | --- |
 | `OverlayRead` | `inode(source, serial)` | The local inode row, or none |
 | | `directory_entry(source, parent, name)` | The local name row (bound or whiteout), or none |
-| | `directory_entries(source, parent, after)` | One `DirectoryEntryWindow`: active and captured rows, at most 64 each |
+| | `directory_entries(source, parent, after)` | One `DirectoryEntryWindow`: active and captured rows, at most `PAGE_ROWS` (1,024) each |
 | | `cell(source, serial, generation, offset)` | One cell at an exact generation |
 | | `read(source, serial, offset, length)` | The local layers of one read window, or none (wholly inherited) |
 | `OverlayJobs` | `namespace(job)` | One `JobOutcome`: evaluation and its single publication in the same job |
@@ -80,7 +80,7 @@ keeps changing. A `CapturedReader` fixes the root and installed floor.
 | `OverlayCapturedNamespace` | `captured_inode_page`, `captured_directory_entry_page`, `captured_directory_entries`, `captured_directory_entry` | Replayable pages of captured changes, not a merged namespace | [`captured_namespace.rs`](../../../../engine/crates/layerfs-workspace/src/ports/captured_namespace.rs) |
 | | `captured_symlink` | A captured symlink target | same |
 | | `keep_live_row` | Keeps an mtime-only inode's live row past install | same |
-| | `captured_digests`, `captured_predecessors` | Whole-content digests and rename predecessors, at most 64 serials | same |
+| | `captured_digests`, `captured_predecessors` | Whole-content digests and rename predecessors, at most `PAGE_ROWS` (1,024) serials | same |
 
 An empty page ends a sequence. Replaying a sealed page is reading, not
 retrying a failed operation. How Commit uses these is in
@@ -93,7 +93,7 @@ retrying a failed operation. How Commit uses these is in
 | `OverlayFileRead` | `file_read(FileRead, offset, length)` | Read through an open descriptor; works after the last name is gone | [`files.rs`](../../../../engine/crates/layerfs-workspace/src/ports/files.rs) |
 | | `captured_read(reader, serial, offset, length)` | Read the sealed bytes at the capture's own root | same |
 | `FileLengths` | `file_length(id)`, `file_lengths(ids)` | Store metadata for a content root; no payload fallback | [`lengths.rs`](../../../../engine/crates/layerfs-workspace/src/ports/lengths.rs) |
-| `FileDigests` | `record_file_digests`, `file_roots` | BLAKE3 of a file's bytes to its saved root; `FILE_DIGEST_WINDOW` = 64 rows per call | [`digests.rs`](../../../../engine/crates/layerfs-workspace/src/ports/digests.rs) |
+| `FileDigests` | `record_file_digests`, `file_roots` | BLAKE3 of a file's bytes to its saved root; `FILE_DIGEST_WINDOW` = 1,024 rows per call, equal to `PAGE_ROWS` | [`digests.rs`](../../../../engine/crates/layerfs-workspace/src/ports/digests.rs) |
 
 The caller of a descriptor or captured read keeps its token until every
 consumer of the bytes has finished.

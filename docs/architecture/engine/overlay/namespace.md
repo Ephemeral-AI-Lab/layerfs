@@ -72,7 +72,7 @@ one compound job (Overlay::apply)
 | --- | --- | --- |
 | `name(parent, name)` | `NAME_LAYERS` | `NameLayers`: the active row and the latest lower row, in one seek |
 | `directory_entry` | `DIRECTORY_ENTRY_LOOKUP` | Final local row; a whiteout differs from "no row" |
-| `source_directory_entries` | `SOURCE_NAMES`, `SOURCE_NAMES_KINDS` | `DirectoryEntryWindow`: at most `PAGE_ROWS` (64) names of one parent, active and captured, with kinds of their local inodes |
+| `source_directory_entries` | `SOURCE_NAMES`, `SOURCE_NAMES_KINDS` | `DirectoryEntryWindow`: at most `PAGE_ROWS` (1,024) names of one parent, active and captured, with kinds of their local inodes |
 
 A `Binding` is `Bound { serial, inherited }` or `Removed { inherited }`;
 for `Removed`, a lower local row decides before the caller's base fact.

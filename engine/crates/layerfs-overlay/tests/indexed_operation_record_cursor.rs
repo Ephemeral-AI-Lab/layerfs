@@ -79,7 +79,7 @@ fn sealed_pass_preserves_all_records_across_windows_and_exact_prefixes() {
         let sql =
             db.diagnostics().since(&before).statements[StatementKind::OperationRecord as usize];
         assert_eq!(keys.len(), expected);
-        assert!(keys.capacity() <= PAGE_ROWS);
+        assert!(keys.capacity() <= RECORD_ROWS);
         assert_eq!((sql.attempts, sql.executions), (1, 1));
         assert_eq!(sql.rows_returned, expected as u64);
         assert_eq!(sql.returned_blob_bytes, (expected * 32) as u64);

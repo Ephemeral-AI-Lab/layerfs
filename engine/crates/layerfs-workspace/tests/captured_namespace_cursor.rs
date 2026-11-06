@@ -7,12 +7,15 @@ mod oracle;
 mod producer;
 use harness::Bench;
 use layerfs_content::filesystem::FilesystemUpdateCounters;
-use layerfs_overlay::DirectoryEntry;
+use layerfs_overlay::{DirectoryEntry, PAGE_ROWS, RECORD_ROWS};
 use layerfs_workspace::CapturedNamespaceWork;
 use producer::{build_over, evidence, Call, Drive, Log, Recording, CALLS, FRESH, HEADER, VALUE};
 use std::collections::{BTreeMap, BTreeSet};
 
-const WINDOW: usize = 64;
+/// One namespace page: the overlay's `PAGE_ROWS`.
+const WINDOW: usize = PAGE_ROWS;
+/// One sealed-record window and one content classification window.
+const KEYS: usize = RECORD_ROWS;
 /// One parent's captured names in binary order, whiteouts as None.
 type Rows = Vec<(Vec<u8>, Option<u64>)>;
 
@@ -125,7 +128,9 @@ fn every_cursor_pass_and_point_answers_the_same_sealed_rows() {
     // More than two full windows of names in one directory, then the longest
     // names the format allows and names that differ only after 253 bytes.
     let mut created = BTreeMap::<Vec<u8>, u64>::new();
-    let mut names: Vec<String> = (0..140).map(|index| format!("n{index:03}")).collect();
+    let mut names: Vec<String> = (0..2 * WINDOW + 12)
+        .map(|index| format!("n{index:04}"))
+        .collect();
     let prefix = "p".repeat(253);
     names.push("L".repeat(255));
     names.push(prefix.clone());
@@ -196,7 +201,7 @@ fn every_cursor_pass_and_point_answers_the_same_sealed_rows() {
 
     // The sealed record passes: bounded ordered windows over the same keys.
     for window in &log.key_windows {
-        assert!(window.keys.len() <= WINDOW);
+        assert!(window.keys.len() <= KEYS);
         let mut last = window.after;
         for key in &window.keys {
             assert!(last.is_none_or(|last| last < *key));
@@ -296,18 +301,15 @@ fn bulk(tag: &str, files: u64) -> Counted {
     assert_eq!(work.files_constructed, files, "{tag}");
     assert_eq!(work.headers_written, 2, "{tag}");
     // Every full window, then the one short page that ends the pass.
-    assert_eq!(work.inode_pages, (files + 2) / 64 + 1, "{tag}");
-    assert_eq!(work.entry_pages, (files + 1) / 64 + 1, "{tag}");
+    assert_eq!(work.inode_pages, (files + 2) / WINDOW as u64 + 1, "{tag}");
+    assert_eq!(work.entry_pages, (files + 1) / WINDOW as u64 + 1, "{tag}");
     let (calls, largest) = {
         let log = recording.log.borrow();
         (log.counts.clone(), log.largest_page)
     };
     let content = built.content;
     // Content classifies in windows of the same bound, whatever the change.
-    assert!(
-        content.validation.peak_window_rows <= WINDOW as u64,
-        "{tag}"
-    );
+    assert!(content.validation.peak_window_rows <= KEYS as u64, "{tag}");
     built.release(&b);
     let counted = Counted {
         work,
@@ -333,7 +335,7 @@ fn work_grows_linearly_with_the_change_and_pages_stay_bounded() {
     // exceeds it, so some of its answers are displaced and read again; it
     // is held to the same ceilings per row as the others.
     const POINTS: u64 = 1024;
-    let sizes = [40, 160, 640, 1600];
+    let sizes = [40, 160, 640, 2600];
     let runs: Vec<Counted> = sizes
         .iter()
         .map(|files| bulk(&format!("cc-bulk-{files}"), *files))
@@ -342,7 +344,7 @@ fn work_grows_linearly_with_the_change_and_pages_stay_bounded() {
         assert!(run.largest <= WINDOW);
         assert!(run.work.largest_page <= WINDOW as u64);
     }
-    assert_eq!(runs[2].work.largest_page, WINDOW as u64);
+    assert_eq!(runs[3].work.largest_page, WINDOW as u64);
     for run in &runs {
         let rows = run.work.inode_rows + run.work.entry_rows;
         for (name, count) in counters(&run.work) {
@@ -359,13 +361,15 @@ fn work_grows_linearly_with_the_change_and_pages_stay_bounded() {
         }
     }
     assert!(runs[3].work.inode_rows > POINTS);
-    // Growth between the two sizes that both exceed one page and fit the
-    // window of point answers, so that each reads a sealed record once. A
-    // change within one page is cheaper per row, and one beyond the window
-    // of answers reads its displaced answers again, so neither is a baseline.
+    // Growth between the two sizes that both exceed one sealed-record window
+    // and fit the window of point answers, so that each reads a sealed record
+    // once. A change within one record window is cheaper per row, and one
+    // beyond the window of answers reads its displaced answers again, so
+    // neither is a baseline. (A namespace page, 1,024 rows, is as wide as
+    // the window of answers, so it cannot be the threshold here.)
     for pair in runs[1..3].windows(2) {
         let (small, big) = (&pair[0], &pair[1]);
-        assert!(small.work.inode_rows > WINDOW as u64 && big.work.inode_rows <= POINTS);
+        assert!(small.work.inode_rows > KEYS as u64 && big.work.inode_rows <= POINTS);
         for ((name, less), (_, more)) in counters(&small.work).into_iter().zip(counters(&big.work))
         {
             assert!(
