@@ -18,6 +18,7 @@ pub mod lifecycle;
 mod list;
 #[doc(hidden)]
 pub mod output;
+mod reclaim;
 #[doc(hidden)]
 pub mod record;
 pub(crate) mod recorded;
