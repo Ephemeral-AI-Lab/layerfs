@@ -26,7 +26,7 @@ const READ_AHEAD: u64 = 8 * 1024 * 1024;
 /// read and the one fetched ahead, so a fetch never evicts the window it
 /// fetched. Read-ahead fetches only when the reader has passed the previous
 /// window, so it never holds more than these two windows per reader (owner
-/// cap: 16 MiB).
+/// cap: 16 MiB); an allowance follows at most one stream per two windows.
 const READ_AHEAD_CACHE: usize = 2 * READ_AHEAD as usize;
 /// Most chunks one read-ahead demand names: within [`DEMAND_IDS`] and, at
 /// the largest chunk, within [`DEMAND_BYTES`]. A window with more extents is
@@ -54,13 +54,47 @@ struct Page {
     level: u8,
 }
 
-/// The last base read of this client: a read of the same content that starts
-/// where it ended is sequential. `until` is how far it has read.
+/// One followed stream: a read of content `root` that starts at `next`
+/// continues it. `until` is how far it has fetched.
 #[derive(Clone, Copy)]
 struct Ahead {
     root: ObjectId,
     next: u64,
     until: u64,
+}
+
+/// The sequential streams one cache allowance follows, least recently read
+/// first. They live with the cache, not with a client: the daemon gives each
+/// kernel request its own operation client, so a stream must outlive the
+/// client that read it (layerfs-project #97). At most allowance / two
+/// windows are followed, so every followed stream's two windows fit the
+/// allowance together; another read takes the least recently read slot.
+#[derive(Default)]
+pub(crate) struct Streams(Vec<Ahead>);
+impl Streams {
+    /// Records a read of `start..end` of `root` and returns how far its
+    /// stream had fetched when it continues one.
+    fn follow(&mut self, root: ObjectId, start: u64, end: u64, most: usize) -> Option<u64> {
+        let found = self
+            .0
+            .iter()
+            .position(|last| last.root == root && last.next == start);
+        let until = found.map(|index| self.0.remove(index).until);
+        self.0.push(Ahead {
+            root,
+            next: end,
+            until: until.unwrap_or(end).max(end),
+        });
+        let excess = self.0.len().saturating_sub(most.max(1));
+        self.0.drain(..excess);
+        until
+    }
+    /// The latest read's stream has fetched up to `until`.
+    fn fetched(&mut self, until: u64) {
+        if let Some(last) = self.0.last_mut() {
+            last.until = last.until.max(until);
+        }
+    }
 }
 
 /// Bounded cumulative object observations; no hidden namespace inventory.
@@ -107,8 +141,6 @@ pub struct CanonicalClient {
     lengths: Option<Arc<dyn crate::FileLengths + Send + Sync>>,
     /// Answers only from the cache: no upstream demand is ever made.
     resident: bool,
-    /// One slot: the read-ahead state of the latest base read.
-    ahead: std::sync::Mutex<Option<Ahead>>,
 }
 /// The upstream of a memory-only client. It is never asked.
 struct NoUpstream;
@@ -131,7 +163,6 @@ impl CanonicalClient {
             cache,
             lengths: None,
             resident: true,
-            ahead: std::sync::Mutex::new(None),
         }
     }
     /// Selects a cache allowance. A large object can bypass cache without refusal.
@@ -167,7 +198,6 @@ impl CanonicalClient {
             cache,
             lengths,
             resident: false,
-            ahead: std::sync::Mutex::new(None),
         }
     }
     /// The length provider's own answer, asked every time: nothing is
@@ -226,12 +256,11 @@ impl CanonicalClient {
     }
     /// What a base read of `start..end` of chunked content `root` (of
     /// `length` bytes) should fetch ahead, if anything. A read that continues
-    /// the previous one and passes what was already fetched ahead fetches
-    /// the rest of its own range and up to [`READ_AHEAD`] bytes past it
-    /// ([`Self::read_ahead`]), so the windows after it are served from the
-    /// cache; any other read fetches nothing ahead. Only one stream is
-    /// followed: another read restarts the detection, and what is fetched
-    /// ahead is cached like any other object, within the allowance.
+    /// a followed stream ([`Streams`]) and passes what it already fetched
+    /// fetches the rest of its own range and up to [`READ_AHEAD`] bytes past
+    /// it ([`Self::read_ahead`]), so the windows after it are served from the
+    /// cache; any other read fetches nothing ahead and starts a stream. What
+    /// is fetched ahead is cached like any other object, within the allowance.
     pub(crate) fn read_through(
         &self,
         root: ObjectId,
@@ -242,31 +271,22 @@ impl CanonicalClient {
         if self.resident {
             return None;
         }
-        let Ok(mut slot) = self.ahead.lock() else {
+        let mut state = self.state().ok()?;
+        let capacity = state.cache.capacity();
+        if capacity < READ_AHEAD_CACHE {
             return None;
-        };
-        let read = match *slot {
-            Some(last) if last.root == root && last.next == start => Some(last.until),
-            _ => None,
-        };
-        let ahead = match read {
-            Some(until) if end > until && self.read_ahead_fits() => {
-                let through = end.saturating_add(READ_AHEAD).min(length).max(end);
-                // At most one window of the read itself: a larger read
-                // fetches the rest of its own range on demand.
-                Some(until.max(start).max(end.saturating_sub(READ_AHEAD))..through)
-            }
-            _ => None,
-        };
-        *slot = Some(Ahead {
-            root,
-            next: end,
-            until: ahead
-                .as_ref()
-                .map_or(end, |range| range.end)
-                .max(read.unwrap_or(end)),
-        });
-        ahead
+        }
+        let until = state
+            .streams
+            .follow(root, start, end, capacity / READ_AHEAD_CACHE)?;
+        if end <= until {
+            return None;
+        }
+        let through = end.saturating_add(READ_AHEAD).min(length).max(end);
+        state.streams.fetched(through);
+        // At most one window of the read itself: a larger read fetches the
+        // rest of its own range on demand.
+        Some(until.max(start).max(end.saturating_sub(READ_AHEAD))..through)
     }
     /// Places the chunks of `range` of chunked content `state` that the
     /// cache lacks in the cache, demanded in one upstream batch. The mapping
@@ -422,10 +442,6 @@ impl CanonicalClient {
                 .saturating_add(value.len() as u64);
         }
         Ok(())
-    }
-    fn read_ahead_fits(&self) -> bool {
-        self.state()
-            .is_ok_and(|state| state.cache.capacity() >= READ_AHEAD_CACHE)
     }
     /// Whether this client answers from memory only.
     pub(crate) const fn is_resident(&self) -> bool {
