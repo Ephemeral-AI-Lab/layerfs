@@ -73,6 +73,13 @@ const EMPTY: u64 = u64::MAX;
 const EMPTY32: u32 = u32::MAX;
 /// Persisted width of one signature: eight folded hashes.
 const SIGNATURE_BYTES: usize = 32;
+/// PREFIX winners one Save may admit (#88).
+///
+/// Owner: the Save, through the ring it borrows. Bound: this many pairs of
+/// identities, about 64 KiB of live map beside [`INDEX_BYTES`]. Lifetime: one
+/// Save; cleared at the next Save's start and with the ring. A cross-Save lineage
+/// advances one admission per file per Commit, so the bound is far above it.
+pub const ADMITTED_PER_SAVE: usize = 1_024;
 
 #[derive(Clone, Copy)]
 struct Entry {
@@ -95,6 +102,13 @@ pub struct Candidates {
     flushed: u64,
     /// True when the slots do not reflect the persisted table.
     needs_load: bool,
+    /// Highest `stamp` admitted before the current Save began, once known: the
+    /// entries a Save may treat as published by an earlier one (#88).
+    save_floor: Option<u64>,
+    /// PREFIX winners this Save admitted, each with the earlier-Save proposal it
+    /// was stored against: at most [`ADMITTED_PER_SAVE`] entries, cleared at each
+    /// Save's start.
+    admitted: std::collections::BTreeMap<ObjectId, ObjectId>,
 }
 
 /// Reported as its occupancy, never as its slots.
@@ -110,6 +124,7 @@ impl std::fmt::Debug for Candidates {
             .field("stamp", &self.stamp)
             .field("flushed", &self.flushed)
             .field("needs_load", &self.needs_load)
+            .field("save_floor", &self.save_floor)
             .finish()
     }
 }
@@ -223,6 +238,8 @@ impl Candidates {
             stamp: 0,
             flushed: 0,
             needs_load: true,
+            save_floor: None,
+            admitted: std::collections::BTreeMap::new(),
         })
     }
 
@@ -283,6 +300,7 @@ impl Candidates {
     }
 
     fn clear(&mut self) {
+        self.admitted.clear();
         self.slots.fill(None);
         self.references.fill(NO_ENTRY);
         self.next = 0;
@@ -318,7 +336,62 @@ impl Candidates {
         self.next = (self.stamp % SLOTS as u64) as usize;
         self.flushed = self.stamp;
         self.needs_load = false;
+        // A Save that loads the ring loads it before admitting anything, so
+        // every entry read here was admitted by an earlier Save.
+        self.save_floor.get_or_insert(self.stamp);
         Ok(())
+    }
+
+    /// Marks the start of a Save: every entry the ring holds now was admitted by
+    /// an earlier one. An unloaded ring takes its floor when it is read.
+    pub fn begin_save(&mut self) {
+        self.save_floor = (!self.needs_load).then_some(self.stamp);
+        self.admitted.clear();
+    }
+
+    /// The base this index proposes for `signature`, excluding `target_id`.
+    ///
+    /// [`Self::find`]'s winner, except that a PREFIX winner this Save admitted
+    /// is answered by the earlier-Save proposal it was stored against: a Save
+    /// never proposes an object it may still hold unpublished, so admission adds
+    /// no early seal to the Save that admits (#88).
+    pub fn propose(&self, target_id: ObjectId, signature: &[u64; 8]) -> Option<ObjectId> {
+        let found = self.find(target_id, signature)?;
+        Some(self.admitted.get(&found).copied().unwrap_or(found))
+    }
+
+    /// Admits a PREFIX winner stored against `proposal`, an entry an earlier
+    /// Save admitted (see [`Self::admitted_before_save`]).
+    ///
+    /// Past [`ADMITTED_PER_SAVE`] admissions in one Save, further winners are not
+    /// admitted: the next version then finds the older entry, as before #88.
+    pub fn admit(&mut self, id: ObjectId, signature: [u64; 8], proposal: ObjectId) {
+        if self.admitted.len() >= ADMITTED_PER_SAVE {
+            return;
+        }
+        self.admitted.insert(id, proposal);
+        self.insert(id, signature);
+    }
+
+    /// True when `id` holds a slot admitted before the current Save began.
+    ///
+    /// Such an entry names an object an earlier Save published, never one this
+    /// Save still holds, so admitting what was stored against it can never make
+    /// a later selection of this Save propose an unpublished object (#88).
+    pub fn admitted_before_save(&self, id: ObjectId) -> bool {
+        let Some(floor) = self.save_floor else {
+            return false;
+        };
+        if self.stamp == 0 {
+            return false;
+        }
+        let last = slot_of(self.stamp);
+        self.slots.iter().enumerate().any(|(slot, entry)| {
+            let back = ((last + SLOTS - slot) % SLOTS) as u64;
+            entry.is_some_and(|entry| entry.id == id)
+                && back < self.stamp
+                && self.stamp - back <= floor
+        })
     }
 
     /// Records one admitted object.

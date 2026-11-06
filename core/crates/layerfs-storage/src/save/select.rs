@@ -44,7 +44,7 @@ impl State<'_> {
             // its fallback needs it (#352 record 034, S1-b).
             let mut proposed = match self.candidates.needs_load() {
                 true => None,
-                false => self.candidates.find(object.id(), &sig),
+                false => self.candidates.propose(object.id(), &sig),
             };
             // A proposal this Save still holds would be sealed and published
             // below before selection may use it. When no PREFIX record can beat

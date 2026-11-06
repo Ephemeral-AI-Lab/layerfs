@@ -362,9 +362,11 @@ pub fn prepare_full(
 ///
 /// `advisory` is the caller's bounded, explicitly declared candidate list in
 /// preference order. A `WHOLE_FILE` object considers that list first and falls
-/// back to the admitted-FULL winner cache only when no listed candidate is
-/// acquired. A `CHUNK` object considers the first eligible listed candidate and
-/// never the cache: its correspondence is already known by the caller.
+/// back to the winner cache only when no listed candidate is acquired. The cache
+/// admits every FULL winner and every PREFIX winner whose base it proposed from
+/// an earlier Save (#88).
+/// A `CHUNK` object considers the first eligible listed candidate and never the
+/// cache: its correspondence is already known by the caller.
 ///
 /// `id` is the canonical bytes' identity, which the caller already holds on the
 /// finalized object it is admitting. Deriving it here instead would re-hash the
@@ -435,6 +437,10 @@ pub fn select(
         return Ok(full);
     }
     let raw = raw_payload(canonical, role)?;
+    // The ring's proposal and the payload's signature when the similarity ring
+    // proposed the candidate: such an object that wins as PREFIX may join the
+    // ring itself (#88).
+    let mut from_ring: Option<(ObjectId, [u64; 8])> = None;
     let candidate = match role {
         // The caller already knows the correspondence, so exactly the first
         // supplied candidate is considered - but only after the same eligibility
@@ -455,10 +461,13 @@ pub fn select(
             None => {
                 let sig = prehashed.unwrap_or_else(|| signature(raw));
                 input.candidates.ensure_loaded(input.connection)?;
-                let found = input.candidates.find(id, &sig);
+                let found = input.candidates.propose(id, &sig);
                 match found {
                     Some(id) => match probe(input, id, role)? {
-                        true => Some(id),
+                        true => {
+                            from_ring = Some((id, sig));
+                            Some(id)
+                        }
                         false => None,
                     },
                     None => None,
@@ -543,6 +552,20 @@ pub fn select(
         );
         input.counters.note_depth(role, depth);
         input.counters.prefix_selected = input.counters.prefix_selected.saturating_add(1);
+        if let (Some((proposal, sig)), PackLane::WholeFile) = (from_ring, lane) {
+            // A PREFIX winner the ring proposed a base for joins the ring when
+            // that proposal came from an earlier Save, so the next version at a
+            // new path finds this one rather than the first (#88). Proposals of
+            // this Save's own objects (an Init of similar files) admit nothing: a
+            // pending PREFIX winner would otherwise be proposed and sealed early,
+            // and the ring would fill with intermediate versions. A winner this
+            // Save admits is never proposed back to it (`Candidates::propose`).
+            // An object whose declared base was used never enters the ring.
+            input.candidates.ensure_loaded(input.connection)?;
+            if input.candidates.admitted_before_save(proposal) {
+                input.candidates.admit(id, sig, proposal);
+            }
+        }
         Ok(prefix)
     } else {
         input.counters.full_losses = input.counters.full_losses.saturating_add(1);
