@@ -8,7 +8,8 @@ use layerfs_content::{AuthenticatedObjects, ContentError, ObjectId};
 use layerfs_daemon::{
     bootstrap::open_store,
     store::{
-        BindError, BindPhase, BindRequest, BoundWorkspace, PortError, ReadAdmissionError, Store,
+        BindError, BindIntent, BindPhase, BindRequest, BoundWorkspace, PortError,
+        ReadAdmissionError, Store,
     },
     Owner, OwnerConfig,
 };
@@ -206,8 +207,11 @@ fn bounded_bind_batches_lengths_cache_and_original_failure() {
             .err()
             .unwrap();
         assert_eq!(duplicate.phase, BindPhase::Snapshot);
-        assert_eq!(duplicate.request.workspace, first.identity());
-        assert_eq!(duplicate.request.branch, fixture.branch);
+        let BindIntent::Id(request) = &duplicate.request else {
+            panic!("a bind by identity returns that request: {duplicate:?}");
+        };
+        assert_eq!(request.workspace, first.identity());
+        assert_eq!(request.branch, fixture.branch);
         assert!(
             matches!(&duplicate.error,
                 BindError::Read(cause) if matches!(cause.as_ref(),
