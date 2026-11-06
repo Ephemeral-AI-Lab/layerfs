@@ -23,7 +23,7 @@ pub use backend::sqlite::storage::merge_records::{
     MergeRecords, MergeRecordsWork, MergeScratch, BUFFER_BYTES, MERGE_LEASE, RESIDENT_BYTES,
 };
 pub use config::{
-    PersistenceConfig, PostgresSelection, SqliteAcquisitionSchema, SqlitePackLayout,
+    PersistenceConfig, PostgresCheck, PostgresSelection, SqliteAcquisitionSchema, SqlitePackLayout,
     SqlitePersistenceProfile, SynchronousCommit,
 };
 pub use history::HistoryProvider;

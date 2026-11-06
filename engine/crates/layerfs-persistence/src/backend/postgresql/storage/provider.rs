@@ -33,12 +33,17 @@ impl PostgresStorage {
     }
     /// The server's reported version.
     pub fn server_version(&self) -> &str {
-        &self.session.server_version
+        self.session.server_version.get().map_or("", String::as_str)
     }
 }
 
 impl PackPersistence for PostgresStorage {
+    /// The frozen policy the open's check read (#63), with no round trip;
+    /// read in a transaction only by a session opened without one.
     fn policy(&self) -> Result<StoragePolicy, PersistenceError> {
+        if let Some(policy) = self.session.policy.get() {
+            return Ok(*policy);
+        }
         self.session.run(false, |tx| metadata::policy::read(tx))
     }
     fn locate(

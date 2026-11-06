@@ -70,6 +70,7 @@ fn wal_full_settings_and_unavailable_engine_are_explicit() {
             schema: "unused".to_owned(),
             synchronous_commit: SynchronousCommit::Off,
             lock_timeout_ms: 0,
+            check: Default::default(),
         });
         assert_eq!(
             Handles::open_writable(&selection, b"binding", [0; 32]).err(),

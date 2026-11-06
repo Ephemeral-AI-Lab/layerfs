@@ -14,7 +14,7 @@ use crate::backend::{
     records::BackendError,
     Engine,
 };
-use crate::{HistoryProvider, PostgresSelection, SqlWork};
+use crate::{HistoryProvider, PostgresCheck, PostgresSelection, SqlWork};
 use layerfs_history::{CatalogId, HistoryCatalogConfig};
 use layerfs_storage::{port::PersistenceError, StoragePolicy};
 use std::sync::Arc;
@@ -56,7 +56,14 @@ impl PostgresHandles {
         session.run_as(Mode::Stage, |tx| {
             schema::create(tx, policy, history, catalog_id)
         })?;
-        Self::validated(session, &history.binding_key, history.cursor_key)
+        // Init's open checks the whole contract, whatever the selection says.
+        Self::validated(
+            session,
+            PostgresCheck::Full,
+            Some(&history.binding_key),
+            history.cursor_key,
+        )
+        .map(|(_, handles)| handles)
     }
 
     /// Opens validated authority for reads and writes.
@@ -75,6 +82,18 @@ impl PostgresHandles {
         cursor_key: [u8; 32],
     ) -> Result<Self, PersistenceError> {
         Self::open(selection, binding, cursor_key, false)
+    }
+
+    /// Opens one read-only session under the binding the schema records,
+    /// returned for the caller to compare with its own (a Sandbox's reach
+    /// check, #65): `selection.check` checks everything else, as an open
+    /// does, in the same one round trip.
+    pub fn attach_read_only(
+        selection: &PostgresSelection,
+        cursor_key: [u8; 32],
+    ) -> Result<(Vec<u8>, Self), PersistenceError> {
+        let session = Arc::new(Session::connect(selection, false)?);
+        Self::validated(session, selection.check, None, cursor_key)
     }
 
     /// The binding key recorded in the schema `selection.schema`, read in one
@@ -96,21 +115,29 @@ impl PostgresHandles {
         }
         CatalogId::derive(binding).map_err(|_| PersistenceError::Malformed)?;
         let session = Arc::new(Session::connect(selection, writable)?);
-        Self::validated(session, binding, cursor_key)
+        Self::validated(session, selection.check, Some(binding), cursor_key)
+            .map(|(_, handles)| handles)
     }
 
+    /// Handles over `session` once `check` passed; the session keeps the
+    /// policy and server version it read. With `binding` the recorded one
+    /// must equal it; without, the recorded one is returned.
     fn validated(
         session: Arc<Session>,
-        binding: &[u8],
+        check: PostgresCheck,
+        binding: Option<&[u8]>,
         cursor_key: [u8; 32],
-    ) -> Result<Self, PersistenceError> {
+    ) -> Result<(Vec<u8>, Self), PersistenceError> {
         if cursor_key == [0; 32] {
             return Err(PersistenceError::Malformed);
         }
-        let catalog_id = CatalogId::derive(binding).map_err(|_| PersistenceError::Malformed)?;
-        let (incarnation, tables) = session
-            .run::<_, BackendError>(false, |tx| schema::validate(tx, catalog_id, binding))?;
-        Ok(Self {
+        let checked = schema::check(&session, check, binding)?;
+        let catalog_id =
+            CatalogId::derive(&checked.binding).map_err(|_| PersistenceError::Malformed)?;
+        let _ = session.policy.set(checked.policy);
+        let _ = session.server_version.set(checked.server_version);
+        let (incarnation, tables) = (checked.incarnation, checked.acquisition);
+        Ok((checked.binding, Self {
             storage: Arc::new(PostgresStorage {
                 session: session.clone(),
             }),
@@ -121,7 +148,7 @@ impl PostgresHandles {
                 incarnation,
                 cursor_key,
             },
-        })
+        }))
     }
 
     /// Refuses every queued and later call with `Closed`; see [`SqliteHandles::close`].
