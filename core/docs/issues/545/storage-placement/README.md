@@ -159,8 +159,10 @@ rendered from, element for element.
 | `SandboxComputePlane — #545 placement sequence` | `V2KzRbdKl9` | 1210 × 1026 | [`sequence.excalidraw`](sequence.excalidraw) | `1794b36ec286f1ebd2346d76f0c4e0e47ce54cfdb51676cfe7d03667b737e849` |
 
 Each source's bounds are the PNG's canvas, every text element is Comic Shanns
-at 26 or 38 px, no text passes x = 1234, and re-rendering either scene yields
-the PNG byte for byte (same sha256). The sources hold the scene's live
+at 26 or 38 px, and no text passes x = 1234. The `sha256` above is the PNG
+beside it, which is the render from before the `direct_store_access` reword:
+the sources are the current editable truth and the PNGs are re-rendered from
+them when the scene is next exported. The sources hold the scene's live
 elements (`type`, `version`, `source`, `appState`, `elements`, `files`), as
 [#547's](../547/) do.
 
