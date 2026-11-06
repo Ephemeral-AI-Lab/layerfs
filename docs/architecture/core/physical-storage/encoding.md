@@ -141,7 +141,7 @@ Inode leaves and inode-table branches have their own metadata grammar
 | Leaf record | ≤ 8,192 bytes (`METADATA_RECORD_LIMIT`) | [`pool/leaf.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/leaf.rs) |
 | Inode-table branch | Tag 0 is the canonical page; tag 1 is a program against the predecessor branch. Kept only when shorter. | [`pool/branch.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/branch.rs), [`delta/branch.rs`](../../../../core/crates/layerfs-storage/src/encoding/delta/branch.rs) |
 | Chain budgets | depth 8; 65,536 canonical and 139,281 encoded bytes | [`store/policy.rs`](../../../../core/crates/layerfs-storage/src/store/policy.rs) |
-| Read | Rebuild the body from the chain, look up all ordinals in one call, rebuild the leaf, check its id. | [`pool/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/read.rs) |
+| Read | Rebuild the body from the chain, look up all ordinals in one call, rebuild the leaf, check its id. A demand of several leaves rebuilds the bodies of the next ones ahead (`prepare_leaves`: at most 128 leaves, 1 MiB of bodies and the 7,182 values the reader retains) and looks up all their ordinals in one call, so a demand costs one value lookup per window instead of one per leaf (layerfs-project #95). Each leaf is still rebuilt and checked by its own id. | [`pool/read.rs`](../../../../core/crates/layerfs-storage/src/encoding/pool/read.rs), [`read/objects.rs`](../../../../core/crates/layerfs-storage/src/read/objects.rs) |
 
 The locator's role decides how tag 0 and 1 are read, so a Store written before
 branch deltas reads unchanged.
