@@ -27,6 +27,7 @@ for the front ends ([`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs)).
 | [Table](table.md) | `layerfs.table`, keys, scopes and checks. |
 | [SDK](../sdk/README.md) | Every family and every call, one page per call (moved out of this component). |
 | [Errors](errors.md) | The error catalog and uncertain outcomes. |
+| [Events](events.md) | Progress events and `workspace.exec` output: which calls take `on_progress`, payloads, ordering, what completion means, what is not run, open decisions. |
 
 ## The picture
 
@@ -74,7 +75,7 @@ control side of each family in [Control: Families](../control/families.md).
 | Arguments | positionals in table order, then options; each has a snake_case name and a `Kind` | [`calls/table.rs`](../../../../api/crates/layerfs-control/src/calls/table.rs) |
 | Checks | every argument checked against the entry before any effect | [`calls/check.rs`](../../../../api/crates/layerfs-control/src/calls/check.rs) |
 | Scope | an optional folder scope guards and rewrites arguments before any effect | [`calls/scope.rs`](../../../../api/crates/layerfs-control/src/calls/scope.rs) |
-| Events | one stream per call: `{progress}`, worker events, `{stream, bytes}` of `workspace.exec` | [`common/context.rs`](../../../../api/crates/layerfs-control/src/common/context.rs) |
+| Events | one stream per call: `{progress}`, worker events, `{stream, bytes}` of `workspace.exec` | [Events](events.md), [`common/context.rs`](../../../../api/crates/layerfs-control/src/common/context.rs) |
 | Results | a value with snake_case keys, or a refusal `{code, message, detail}` | [`calls/keys.rs`](../../../../api/crates/layerfs-control/src/calls/keys.rs), [`common/outcome.rs`](../../../../api/crates/layerfs-control/src/common/outcome.rs) |
 | Home | explicit, else `LAYERFS_HOME`, else `~/.layerfs`; must be absolute | [`calls/dispatch.rs`](../../../../api/crates/layerfs-control/src/calls/dispatch.rs) `home` |
 
