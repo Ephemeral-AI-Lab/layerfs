@@ -362,9 +362,10 @@ pub fn prepare_full(
 ///
 /// `advisory` is the caller's bounded, explicitly declared candidate list in
 /// preference order. A `WHOLE_FILE` object considers that list first and falls
-/// back to the admitted-FULL winner cache only when no listed candidate is
-/// acquired. A `CHUNK` object considers the first eligible listed candidate and
-/// never the cache: its correspondence is already known by the caller.
+/// back to the winner cache only when no listed candidate is acquired. The cache
+/// admits every FULL winner and every PREFIX winner whose base it proposed (#88).
+/// A `CHUNK` object considers the first eligible listed candidate and never the
+/// cache: its correspondence is already known by the caller.
 ///
 /// `id` is the canonical bytes' identity, which the caller already holds on the
 /// finalized object it is admitting. Deriving it here instead would re-hash the
@@ -435,6 +436,9 @@ pub fn select(
         return Ok(full);
     }
     let raw = raw_payload(canonical, role)?;
+    // The payload's signature when the similarity ring proposed the candidate:
+    // such an object that wins as PREFIX joins the ring itself (#88).
+    let mut from_ring: Option<[u64; 8]> = None;
     let candidate = match role {
         // The caller already knows the correspondence, so exactly the first
         // supplied candidate is considered - but only after the same eligibility
@@ -458,7 +462,10 @@ pub fn select(
                 let found = input.candidates.find(id, &sig);
                 match found {
                     Some(id) => match probe(input, id, role)? {
-                        true => Some(id),
+                        true => {
+                            from_ring = Some(sig);
+                            Some(id)
+                        }
                         false => None,
                     },
                     None => None,
@@ -543,6 +550,13 @@ pub fn select(
         );
         input.counters.note_depth(role, depth);
         input.counters.prefix_selected = input.counters.prefix_selected.saturating_add(1);
+        if let (Some(sig), PackLane::WholeFile) = (from_ring, lane) {
+            // A ring-proposed PREFIX winner is admitted like a FULL winner, so the
+            // next similar file finds this version rather than the first (#88).
+            // An object whose declared base was used never enters the ring.
+            input.candidates.ensure_loaded(input.connection)?;
+            input.candidates.insert(id, sig);
+        }
         Ok(prefix)
     } else {
         input.counters.full_losses = input.counters.full_losses.saturating_add(1);
