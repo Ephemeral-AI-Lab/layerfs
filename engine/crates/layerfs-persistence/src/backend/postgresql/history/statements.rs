@@ -23,6 +23,9 @@ pub(crate) fn qualified(key: &str) -> Option<&'static str> {
         "branch_snapshot" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/branch_snapshot.sql"
         )),
+        "branch_snapshot_named" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/branch_snapshot_named.sql"
+        )),
         _ => None,
     }
 }

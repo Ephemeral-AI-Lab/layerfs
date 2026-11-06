@@ -191,9 +191,11 @@ fn postgresql_open_costs_on_the_wire() {
         row("host create (attach + project lookup)", &wire);
         drop(attached);
 
-        // #64: the caller's side of a mount (and a status) of a forwarded
-        // Sandbox, as a new CLI process runs it now: one light-checked
-        // session finds the project and the Branch (id and head) by name
+        // #64 option A: the caller's side of a mount of a forwarded Sandbox
+        // before option B (and of a status still): one light-checked session
+        // finds the project and the Branch (id and head) by name. Since
+        // option B a mount's caller reads nothing; its daemon finds the
+        // Branch with its snapshot in one statement (row below).
         let (_, attached) = PostgresHandles::attach_read_only(&light, CURSOR).unwrap();
         let project = attached
             .history
@@ -205,7 +207,10 @@ fn postgresql_open_costs_on_the_wire() {
             .branch_named(project.id, &HistoryName::new("work").unwrap())
             .unwrap();
         assert!(branch.is_some());
-        row("host mount (held session: project + Branch)", &wire);
+        row(
+            "host mount, option A (held session: project + Branch)",
+            &wire,
+        );
         drop(attached);
 
         // the same mount as it ran before #64: a Store service open (its
@@ -291,6 +296,41 @@ fn postgresql_open_costs_on_the_wire() {
             .unwrap();
         assert!(found.is_some());
         row("control lookup (project by name)", &wire);
+        // #64 option B: what the daemon's named bind reads in place of the
+        // caller's lookups, on a reader already open: the project, the
+        // Branch and its snapshot in one statement
+        let named = opened
+            .store
+            .published(|h| {
+                h.branch_snapshot_named(
+                    &HistoryName::new("demo").unwrap(),
+                    &HistoryName::new("work").unwrap(),
+                )
+            })
+            .unwrap();
+        assert!(matches!(named, layerfs_history::NamedSnapshot::Found(_)));
+        row("daemon named snapshot (open reader, cold)", &wire);
+        let missing = opened
+            .store
+            .published(|h| {
+                h.branch_snapshot_named(
+                    &HistoryName::new("demo").unwrap(),
+                    &HistoryName::new("ghost").unwrap(),
+                )
+            })
+            .unwrap();
+        assert_eq!(missing, layerfs_history::NamedSnapshot::NoBranch);
+        let missing = opened
+            .store
+            .published(|h| {
+                h.branch_snapshot_named(
+                    &HistoryName::new("ghost").unwrap(),
+                    &HistoryName::new("work").unwrap(),
+                )
+            })
+            .unwrap();
+        assert_eq!(missing, layerfs_history::NamedSnapshot::NoStack);
+        row("daemon named snapshot misses (warm, two)", &wire);
         // #64: the second mount took the first one's idle reader
         let reuse = opened.store.reuse_work();
         assert_eq!((reuse.readers_opened, reuse.readers_reused), (1, 1));

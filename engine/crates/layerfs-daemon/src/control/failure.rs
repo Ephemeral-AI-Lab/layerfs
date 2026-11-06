@@ -70,6 +70,14 @@ impl Failure {
                     BindError::MissingBranch(id) => {
                         (ControlCode::Missing, None, format!("Branch {id} missing"))
                     }
+                    BindError::NoSuchProject(name) => (
+                        ControlCode::Missing,
+                        None,
+                        format!("project {name} missing"),
+                    ),
+                    BindError::NoSuchBranch(name) => {
+                        (ControlCode::Missing, None, format!("Branch {name} missing"))
+                    }
                     BindError::Owner(error) => (owner(error), None, owner_detail(error)),
 
                     BindError::Content { error, provider } => (

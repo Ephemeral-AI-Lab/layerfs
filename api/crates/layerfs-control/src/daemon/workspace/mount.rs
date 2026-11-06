@@ -74,7 +74,25 @@ impl WorkspaceApi<'_> {
         workspace: WorkspaceId,
         branch: BranchId,
     ) -> Result<MountedWorkspace, Box<MountFailure>> {
-        let bound = self.bind(workspace, branch).map_err(|failure| {
+        let bound = self.bind(workspace, branch);
+        self.attached(bound)
+    }
+    /// [`Self::mount`] of Branch `branch` of project `project`, which the
+    /// daemon finds by name (#64): the caller reads no Store.
+    pub fn mount_named(
+        &mut self,
+        workspace: WorkspaceId,
+        (project, branch): (&str, &str),
+    ) -> Result<MountedWorkspace, Box<MountFailure>> {
+        let bound = self.bind_named(workspace, project, branch);
+        self.attached(bound)
+    }
+    /// The attach step of a mount whose bind answered `bound`.
+    fn attached(
+        &mut self,
+        bound: Result<BoundWorkspace, Box<OperationFailure>>,
+    ) -> Result<MountedWorkspace, Box<MountFailure>> {
+        let bound = bound.map_err(|failure| {
             Box::new(MountFailure {
                 bound: None,
                 failure,

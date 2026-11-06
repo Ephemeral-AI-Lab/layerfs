@@ -58,8 +58,9 @@ pub(crate) fn store_call(
 /// is a PostgreSQL Store this process holds no Store service of: read on
 /// the process's held read session (#64), under the Store's lease as
 /// [`store_call`] takes it. A per-call caller (a new CLI process each
-/// time) then opens one light-checked connection for a mount or a status
-/// instead of a Store service's writer and control reader. `None` for a
+/// time) then opens one light-checked connection for a status instead of a
+/// Store service's writer and control reader (a mount reads none: its
+/// daemon finds the Branch). `None` for a
 /// sqlite Store and for one whose Store service this process already holds
 /// open: [`store_call`] reads it there, opening nothing.
 pub(crate) fn held_branch(

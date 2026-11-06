@@ -56,6 +56,18 @@ impl HistoryCatalogConfig {
     }
 }
 
+/// A Branch snapshot found by its stack's name and its own
+/// ([`HistoryCatalog::branch_snapshot_named`]).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum NamedSnapshot {
+    /// No stack has that name.
+    NoStack,
+    /// The stack has no Branch of that name.
+    NoBranch,
+    /// The Branch's coherent snapshot.
+    Found(Box<BranchSnapshot>),
+}
+
 /// Every semantic history operation, portable over its provider.
 pub trait HistoryCatalog: Send + Sync {
     /// Identity this catalog was created or opened with.
@@ -102,6 +114,26 @@ pub trait HistoryCatalog: Send + Sync {
 
     /// One coherent Branch snapshot with its resolved roots.
     fn branch_snapshot(&self, id: BranchId) -> HistoryResult<Option<BranchSnapshot>>;
+
+    /// The snapshot of Branch `branch` of the stack named `stack`, both found
+    /// through their name indexes. A provider answers in one statement; this
+    /// default reads the stack, the Branch and the snapshot one after another.
+    fn branch_snapshot_named(
+        &self,
+        stack: &HistoryName,
+        branch: &HistoryName,
+    ) -> HistoryResult<NamedSnapshot> {
+        let Some(found) = self.layer_stack_named(stack)? else {
+            return Ok(NamedSnapshot::NoStack);
+        };
+        let Some(record) = self.branch_named(found.id, branch)? else {
+            return Ok(NamedSnapshot::NoBranch);
+        };
+        Ok(match self.branch_snapshot(record.id)? {
+            Some(snapshot) => NamedSnapshot::Found(Box::new(snapshot)),
+            None => NamedSnapshot::NoBranch,
+        })
+    }
 
     /// Branches of one stack in name order.
     fn branches(&self, stack: LayerStackId, page: &Page)

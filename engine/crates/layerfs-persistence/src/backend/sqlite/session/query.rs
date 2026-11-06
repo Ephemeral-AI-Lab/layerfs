@@ -36,6 +36,9 @@ pub(crate) fn history(key: &str) -> Result<&'static str, BackendError> {
         "branch_snapshot" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/branch_snapshot.sql"
         )),
+        "branch_snapshot_named" => Ok(include_str!(
+            "../../../../sql/sqlite/queries/history/branch_snapshot_named.sql"
+        )),
         "lineage_parent" => Ok(include_str!(
             "../../../../sql/sqlite/queries/history/lineage_parent.sql"
         )),

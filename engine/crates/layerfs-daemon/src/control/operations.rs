@@ -5,17 +5,20 @@ use super::{
     Failure, Service, Success,
 };
 use crate::store::{
-    BindPhase, BindRequest, BoundWorkspace, CapturedConstruction, CommitError, CommitFailure,
-    CommitOptions, CommitSuccess,
+    BindError, BindIntent, BindPhase, BindRequest, BoundWorkspace, CapturedConstruction,
+    CommitError, CommitFailure, CommitOptions, CommitSuccess, NamedBindRequest,
 };
 use layerfs_bridge::control::{
     Activity, ConflictReport, ControlCode, MergedCommit, Reply, Request, WorkspaceToken,
 };
 use layerfs_content::filesystem::FilesystemRootId;
 use layerfs_content::merge::{Conflict, ConflictKind};
-use layerfs_history::{BranchId, BranchSnapshot, WorkspaceId};
+use layerfs_history::BranchSnapshot;
 use layerfs_overlay::Capture;
 use layerfs_storage::Save;
+use layerfs_store_service::history::lookup::{
+    no_branch as missing_branch, no_project as missing_project,
+};
 use std::sync::Arc;
 /// The reply of a Commit with a known result.
 fn committed(commit: &CommitSuccess) -> Reply {
@@ -95,9 +98,25 @@ impl Service {
             )),
             Request::Mount { workspace, branch } => {
                 crate::telemetry::timed("sandbox.mount.bind", |timing| {
-                    self.mount(*workspace, *branch, timing)
+                    let request = BindRequest {
+                        workspace: *workspace,
+                        branch: *branch,
+                    };
+                    self.mount(BindIntent::Id(request), timing)
                 })
             }
+            Request::MountNamed {
+                workspace,
+                project,
+                branch,
+            } => crate::telemetry::timed("sandbox.mount.bind", |timing| {
+                let request = NamedBindRequest {
+                    workspace: *workspace,
+                    project: project.clone(),
+                    branch: branch.clone(),
+                };
+                self.mount(BindIntent::Named(request), timing)
+            }),
             Request::Status(token) => self.status(*token),
             Request::Cleanup(token) => self.cleanup(*token),
             Request::Commit(control) => self.commit(control.token, |workspace| {
@@ -121,12 +140,15 @@ impl Service {
             ),
         }
     }
+    /// Binds one new Workspace of the Branch `intent` selects. A named bind
+    /// whose project or Branch does not exist is answered with the Store
+    /// service lookup's refusal (#64), after its admission is withdrawn.
     pub(crate) fn mount(
         &self,
-        workspace: WorkspaceId,
-        branch: BranchId,
+        intent: BindIntent,
         timing: &layerfs_telemetry::timer::TimingScope<'_, layerfs_telemetry::timer::Active>,
     ) -> Result<Success, Failure> {
+        let workspace = intent.workspace();
         {
             let mut entries = self.entries.lock().map_err(|_| Failure::Poisoned)?;
             if entries.contains_key(&workspace) {
@@ -154,20 +176,31 @@ impl Service {
             }
             entries.insert(workspace, Entry::Binding);
         }
-        let bound = match crate::telemetry::phase(timing, "store.bind", || {
-            self.store
-                .bind(self.owner.clone(), BindRequest { workspace, branch })
+        let bound = match crate::telemetry::phase(timing, "store.bind", || match intent {
+            BindIntent::Id(request) => self.store.bind(self.owner.clone(), request),
+            BindIntent::Named(request) => self.store.bind_named(self.owner.clone(), request),
         }) {
             Ok(value) => value,
             Err(value) => {
                 let phase = value.phase;
+                let missing = match &value.error {
+                    BindError::NoSuchProject(name) => Some(missing_project(name)),
+                    BindError::NoSuchBranch(name) => Some(missing_branch(name)),
+                    _ => None,
+                };
                 let failure = Failure::Bind(Box::new(value));
+                let mut withdrawn = false;
                 if phase != BindPhase::Open || !failure.uncertain() {
                     // The original bind proves no local ownership was created.
                     // If the registry is poisoned, its retained entry stays put.
                     if let Ok(mut entries) = self.entries.lock() {
                         entries.remove(&workspace);
+                        withdrawn = true;
                     }
+                }
+                // a lookup refusal is the answer only once nothing stays admitted
+                if let (Some(refusal), true) = (missing, withdrawn && !failure.uncertain()) {
+                    return Ok(Success::reply(Reply::SdkRefused(refusal)));
                 }
                 return Err(failure);
             }
