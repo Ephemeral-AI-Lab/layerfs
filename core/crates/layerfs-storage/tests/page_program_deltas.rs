@@ -54,13 +54,44 @@ fn storage(policy: StoragePolicy) -> (Arc<metadata::MemoryMetadata>, Storage) {
     (metadata, storage)
 }
 
+thread_local! {
+    /// Wall nanoseconds spent inside Saves on this test's thread (DIAGNOSTIC,
+    /// INELIGIBLE: a timing, never a speed claim).
+    static SAVE_NS: std::cell::Cell<u128> = const { std::cell::Cell::new(0) };
+}
+
 /// Saves what a writer emitted, advisory predecessors and references included.
 fn save(storage: &Storage, emitted: Emitted) -> WriteOutcome {
+    let started = std::time::Instant::now();
     let save = storage.begin_save().unwrap();
     for object in emitted.0 {
         save.accept(object).unwrap();
     }
-    save.finish().unwrap()
+    let outcome = save.finish().unwrap();
+    SAVE_NS.with(|total| total.set(total.get() + started.elapsed().as_nanos()));
+    outcome
+}
+
+/// Save wall time on this thread since the last call (DIAGNOSTIC, INELIGIBLE).
+fn take_save_ms() -> f64 {
+    SAVE_NS.with(|total| total.replace(0)) as f64 / 1e6
+}
+
+/// A whole-file read's program-page work from a fresh reader (DIAGNOSTIC).
+fn read_cost(storage: &Storage, root: ObjectId) -> String {
+    let reader = storage.reader().unwrap();
+    let mut out = Vec::new();
+    scope(|scope| layerfs_content::read_all(&reader, root, &mut out, scope.child("read")));
+    let pool = reader.pooled_read_counters();
+    format!(
+        "page reads {} edges {} applies {} decoded canonical {} B record {} B max depth {}",
+        pool.page_requests,
+        pool.page_chain_edges,
+        pool.page_delta_applies,
+        pool.program_chain_canonical,
+        pool.program_chain_encoded,
+        pool.program_max_depth
+    )
 }
 
 fn scope<T>(
@@ -218,12 +249,19 @@ fn directory_pages_take_programs_re_base_at_the_cap_and_read_back() {
 #[test]
 fn directory_programs_cut_metadata_and_an_old_store_still_reads() {
     let (metadata, old) = storage(StoragePolicy::default().with_metadata_depth(0));
+    take_save_ms();
     let (old_versions, old_outcomes) = directory_history(&old);
+    let whole_ms = take_save_ms();
     for outcome in &old_outcomes {
         assert_eq!(outcome.delta.directory.delta_branches, 0);
     }
     let (_, new) = storage(StoragePolicy::default());
     let (_, new_outcomes) = directory_history(&new);
+    let program_ms = take_save_ms();
+    println!(
+        "DIAGNOSTIC directory Save wall (INELIGIBLE, 21 Saves): whole pages {whole_ms:.1} ms, \
+         programs {program_ms:.1} ms"
+    );
     let whole: u64 = old_outcomes.iter().map(|o| o.metadata_bytes).sum();
     let programs: u64 = new_outcomes.iter().map(|o| o.metadata_bytes).sum();
     println!(
@@ -359,7 +397,9 @@ fn extent_history(storage: &Storage) -> (Vec<(ObjectId, Vec<u8>)>, Vec<WriteOutc
 #[test]
 fn edited_extent_pages_take_programs_against_the_positional_base_and_read_back() {
     let (_, store) = storage(StoragePolicy::default());
+    take_save_ms();
     let (versions, outcomes) = extent_history(&store);
+    let program_ms = take_save_ms();
     for (step, outcome) in outcomes.iter().enumerate() {
         let pages = outcome.delta.extent;
         assert!(pages.delta_branches >= 1, "step {step}: {pages:?}");
@@ -368,7 +408,21 @@ fn edited_extent_pages_take_programs_against_the_positional_base_and_read_back()
         assert!(read_file(&store, *root) == *bytes, "version {root:?}");
     }
     let (_, whole) = storage(StoragePolicy::default().with_metadata_depth(0));
-    let (_, whole_outcomes) = extent_history(&whole);
+    let (whole_versions, whole_outcomes) = extent_history(&whole);
+    let whole_ms = take_save_ms();
+    println!(
+        "DIAGNOSTIC extent Save wall (INELIGIBLE, 6 Saves incl. the 6 MiB file): whole pages \
+         {whole_ms:.1} ms, programs {program_ms:.1} ms"
+    );
+    let last = versions.last().unwrap().0;
+    println!(
+        "DIAGNOSTIC extent full read, programs: {}",
+        read_cost(&store, last)
+    );
+    println!(
+        "DIAGNOSTIC extent full read, whole pages: {}",
+        read_cost(&whole, whole_versions.last().unwrap().0)
+    );
     for (step, (program, plain)) in outcomes.iter().zip(&whole_outcomes).enumerate() {
         println!(
             "DIAGNOSTIC extent edit {step}: metadata whole pages {} B, programs {} B; pages {:?}",
