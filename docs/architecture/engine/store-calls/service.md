@@ -130,8 +130,9 @@ reader opens, so no operation runs on it and none is retried. A control
 reader opened at first use is that operation's one attempt: a failure is
 returned to it and the next use opens again. With shared readers a daemon
 holds at most the writer, its lane connection (opened in the first Commit),
-the control reader (in practice opened by the first Commit, which reads the
-published tree through it), one reader per mounted Workspace and
+the control reader (opened by the first call that
+reads through it; a Commit validates through its Workspace's reader, #95),
+one reader per mounted Workspace and
 `IDLE_READERS` = 4 idle ones. A fresh daemon's first mount therefore opens
 its reader: the writer is then its only connection, and it serves no
 Workspace reads (its admission is the one writer's, and a read's unknown

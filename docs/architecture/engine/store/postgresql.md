@@ -125,7 +125,7 @@ live and retired, as on SQLite
 | `Stage` | `READ COMMITTED` + `synchronous_commit` | no | schema create, merge records | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
 | `Publish` | `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | `FOR UPDATE` after the pack bodies, unless nested in the held lane | one Save publication wave, up to 16 MiB − 1 (`publication_bytes`; SQLite keeps 4 MiB − 1) | same |
 | `Immutable` | none; autocommit statements | no | locates, pack reads, inode values | same |
-| `Statement` | none; exactly one autocommit statement (a second is refused before it is sent) | no | `branch_snapshot`, `file_roots` (`digest_roots`, one statement for up to `FILE_DIGEST_WINDOW` = 1,024 contents) | same |
+| `Statement` | none; exactly one autocommit statement (a second is refused before it is sent) | no | `branch_snapshot`, `commit` and `layer` by id (a Commit's `logical.known`, #95), `file_roots` (`digest_roots`, one statement for up to `FILE_DIGEST_WINDOW` = 1,024 contents) | same |
 
 A single PostgreSQL statement sees one snapshot, so `Statement` reads a Branch
 and the rows it resolves to coherently without `BEGIN`/`COMMIT`. Statements run
