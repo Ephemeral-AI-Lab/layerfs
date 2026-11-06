@@ -49,6 +49,7 @@ pub struct Status {
 /// the VM exists removes what it made; once it exists, the error has
 /// `vm_exists` and the VM is kept for inspection. `Unknown` keeps everything.
 pub fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
+    new_work(spec)?;
     spec.validate()?;
     worker::check_bundle(bundle)?;
     if spec.kind.profile().how == How::Connected {
@@ -61,6 +62,7 @@ pub fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
 /// and its forward. Nothing is created on the host but `/layerfs/bundle`,
 /// `/layerfs/state` and the data root's folders.
 pub fn connect(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
+    new_work(spec)?;
     spec.validate()?;
     worker::check_bundle(bundle)?;
     if spec.kind.profile().how != How::Connected {
@@ -73,6 +75,7 @@ pub fn connect(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineError> {
 /// runs) and waits until the worker is ready. `None`: the machine's calls
 /// run in the caller's process and there is nothing to start.
 pub fn start(spec: &Spec, bundle: &Bundle) -> Result<Option<Running>, MachineError> {
+    new_work(spec)?;
     spec.validate()?;
     if spec.kind.route(HostOs::current()) == Route::InProcess {
         return Ok(None);
@@ -116,6 +119,7 @@ pub fn status_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineEr
 /// and `sandbox create` use on `docker` when no image is named. Refused for
 /// any other platform.
 pub fn load_image(spec: &Spec, archive: &Path) -> Result<String, MachineError> {
+    new_work(spec)?;
     spec.validate()?;
     if spec.kind != crate::platform::Platform::Docker {
         return Err(refused(spec, "loads no Docker image"));
@@ -158,6 +162,7 @@ pub fn reach(spec: &Spec, url: &str) -> Result<String, MachineError> {
 /// forward cannot reach) refuse `Unsupported`; their Workspace calls stay
 /// on the worker. One attempt: a forward that ends at once is `Failed`.
 pub fn forward(spec: &Spec, guest_port: u16) -> Result<Forward, MachineError> {
+    new_work(spec)?;
     spec.validate()?;
     if guest_port == 0 {
         return Err(MachineError::new(
@@ -185,12 +190,14 @@ pub fn copy_in(
     entry: Option<&str>,
     destination: &str,
 ) -> Result<(), MachineError> {
+    new_work(spec)?;
     spec.validate()?;
     guest_of(spec)?.copy_in(&spec.tools, dir, entry, None, destination)
 }
 
 /// Streams one guest file of a running machine to a new 0600 host file.
 pub fn copy_out(spec: &Spec, source: &str, file: &Path) -> Result<(), MachineError> {
+    new_work(spec)?;
     spec.validate()?;
     guest_of(spec)?.copy_out(&spec.tools, source, file)
 }
@@ -230,5 +237,13 @@ pub(crate) fn with_worker(
         free_disk,
         tool_version,
         down_reason,
+    }
+}
+
+/// New work is refused before tools, bundle reads, or platform effects.
+fn new_work(spec: &Spec) -> Result<(), MachineError> {
+    match layerfs_sandbox::platform_policy::disabled_reason(spec.kind.name()) {
+        Some(reason) => Err(MachineError::new(Code::Unsupported, reason)),
+        None => Ok(()),
     }
 }

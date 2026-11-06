@@ -46,7 +46,7 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `on_progress` | Function | none | called with `{ phase }`: `download`, `install` | [`backup/family.rs`](../../../../../api/crates/layerfs-control/src/backup/family.rs) `progress` |
+| `on_progress` | Function | none | called with `{ phase, done, total, pieces }`: `check`, `download` (with bytes, and pieces when the file is stored as pieces), `verify`, `install`; see [Progress](README.md#progress) | [`backup/progress.rs`](../../../../../api/crates/layerfs-control/src/backup/progress.rs) `Shown` |
 
 ## Returns
 
@@ -70,7 +70,9 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
    locks: replaceable? (on native, no op, idle, heads == link's heads,
                         no -wal/-shm)                --> else refuse
    hold its lease
- download into store/.restore-<random>/ <--------- pieces / manifest
+ home lock: remove folders of ended restores,
+   make store/.restore-<random>/, lock it
+ download into it <------------------------------ pieces / manifest
    checked; binding must match an existing Store's
  read the file's projects (own connection, closed)
  home lock (+ Store lock when replacing):
@@ -79,6 +81,12 @@ layerfs backup restore <store> <bucket> [<file>] [--progress]
  write the link; rebuild project records
  staging folder removed in every case
 ```
+
+The restore holds an `flock` on its folder's `lock` file until it ends. A
+restore killed mid-download leaves its folder and partial file; the next
+restore in the home takes that lock, so it knows the owner is gone, and
+removes the folder. A folder whose lock is held, or that has no lock file,
+is left alone.
 
 | Case | What happens | Source |
 | --- | --- | --- |

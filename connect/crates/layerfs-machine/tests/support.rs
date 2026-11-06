@@ -6,6 +6,7 @@ use layerfs_machine::{
     platforms, sandbox_allowed, support, support_json, Backend, CallSite, HostOs, KernelRoute,
     Platform, StoreKind,
 };
+use layerfs_sandbox::platform_policy::disabled_reason;
 use std::path::PathBuf;
 
 fn committed() -> PathBuf {
@@ -56,14 +57,22 @@ fn postgresql_sandboxes_run_on_every_platform_with_a_backend() {
         assert_eq!(allowed(Platform::Microsandbox, host), Ok(()), "{host:?}");
     }
     for host in HostOs::NAMED {
-        assert_eq!(allowed(Platform::Ssh, host), Ok(()), "{host:?}");
+        assert_eq!(
+            allowed(Platform::Ssh, host),
+            Err(disabled_reason("ssh").unwrap()),
+            "{host:?}"
+        );
     }
     for platform in [
         Platform::Lima,
         Platform::AppleContainer,
         Platform::Firecracker,
     ] {
-        assert_eq!(allowed(platform, HostOs::Macos), Ok(()), "{platform:?}");
+        assert_eq!(
+            allowed(platform, HostOs::Macos),
+            disabled_reason(platform.name()).map_or(Ok(()), Err),
+            "{platform:?}"
+        );
     }
     assert_eq!(
         allowed(Platform::Native, HostOs::Windows),
@@ -79,7 +88,11 @@ fn postgresql_sandboxes_run_on_every_platform_with_a_backend() {
     );
     for platform in Platform::ALL {
         let sqlite = sandbox_allowed(platform, HostOs::Macos, StoreKind::Sqlite);
-        assert_eq!(sqlite, Ok(()), "{platform:?}");
+        assert_eq!(
+            sqlite,
+            disabled_reason(platform.name()).map_or(Ok(()), Err),
+            "{platform:?}"
+        );
     }
 }
 

@@ -49,8 +49,9 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Builder<'_,
     /// `stored` is the immutable base record of a live base inode and None for
     /// a fresh one; `reuse` is a saved root holding a fresh file's exact
     /// bytes; `predecessor` is the file a rename put a fresh file in place
-    /// of. Base roots are kept except a file's constructed content and
-    /// the patched metadata; the supplied count is derived again by Content.
+    /// of, or the base file at its path (#88). Base roots are kept except a
+    /// file's constructed content and the patched metadata; the supplied
+    /// count is derived again by Content.
     #[allow(clippy::too_many_arguments)]
     pub fn value(
         &self,

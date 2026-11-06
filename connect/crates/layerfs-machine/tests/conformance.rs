@@ -36,6 +36,7 @@ use layerfs_machine::{
     Forward, HostOs, How, KernelRoute, MachineError, OptKind, Platform, Route, Spec, SshSpec,
     StoreKind,
 };
+use layerfs_sandbox::platform_policy::disabled_reason;
 use layerfs_sandbox::MountDriver;
 use standin::Scratch;
 use std::collections::BTreeSet;
@@ -82,8 +83,17 @@ fn each_profile_is_its_support_rows_on_every_host() {
             let at = format!("{platform:?} on {host:?}");
             assert_eq!((row.platform, row.host), (platform, host), "{at}");
             assert_eq!(row.how, profile.how, "{at}");
-            assert_eq!(row.options, profile.options, "{at}");
-            let on_host = profile.hosts.contains(&host);
+            assert_eq!(
+                row.options,
+                if disabled_reason(platform.name()).is_some() {
+                    &[][..]
+                } else {
+                    profile.options
+                },
+                "{at}"
+            );
+            let on_host =
+                profile.hosts.contains(&host) && disabled_reason(platform.name()).is_none();
             if on_host {
                 assert_eq!(row.backend, platform.backend(host), "{at}");
                 assert_eq!(row.kernel, platform.kernel(host), "{at}");
@@ -115,7 +125,11 @@ fn each_profile_is_its_support_rows_on_every_host() {
                     format!("{}; {}", profile.description, backend.description()),
                     "{at}"
                 ),
-                None => assert_eq!(row.description, profile.description, "{at}"),
+                None => assert_eq!(
+                    row.description,
+                    disabled_reason(platform.name()).unwrap_or(profile.description),
+                    "{at}"
+                ),
             }
         }
     }
@@ -328,6 +342,15 @@ fn each_lifecycle_call_runs_through_the_tool_or_gives_the_fixed_refusal() {
             let log = scratch.log();
             let tools = standin::read(&scratch.path("tools.log"));
             let at = format!("{platform:?} {call:?}: {outcome:?}\n{log}");
+            if matches!(call, Call::Create | Call::Connect | Call::Start) {
+                if let Some(reason) = disabled_reason(platform.name()) {
+                    let error = outcome.unwrap_err();
+                    assert_eq!(error.code, Code::Unsupported, "{at}");
+                    assert_eq!(error.message, reason, "{at}");
+                    assert!(log.is_empty(), "disabled platform ran a tool: {at}");
+                    continue;
+                }
+            }
             if let Some(why) = refusal(profile.how, call) {
                 let error = outcome.expect_err(&at);
                 assert_eq!(error.code, Code::InvalidInput, "{at}");
@@ -728,6 +751,13 @@ fn each_platform_forwards_a_daemon_port_as_it_declares() {
         let log = scratch.log();
         let tools = standin::read(&scratch.path("tools.log"));
         let at = format!("{platform:?}: {outcome:?}\n{log}");
+        if let Some(reason) = disabled_reason(platform.name()) {
+            let error = outcome.unwrap_err();
+            assert_eq!(error.code, Code::Unsupported);
+            assert_eq!(error.message, reason);
+            assert!(log.is_empty());
+            continue;
+        }
         match daemon_port(&spec) {
             DaemonPort::Shared => {
                 let shared = Forward {

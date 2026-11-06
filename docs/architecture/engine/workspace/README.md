@@ -125,7 +125,7 @@ the tree, which keeps the per-tool-call pattern cheap.
 | --- | --- | --- |
 | One write operation | `WRITE_WINDOW` = 128 KiB; larger writes arrive as several operations | [`operations/types.rs`](../../../../engine/crates/layerfs-workspace/src/operations/types.rs), [`file/write.rs`](../../../../engine/crates/layerfs-workspace/src/operations/file/write.rs) |
 | One read request | `READ_WINDOW` = 128 KiB | [`file/read.rs`](../../../../engine/crates/layerfs-workspace/src/operations/file/read.rs) |
-| One listing window | `PAGE_ROWS` = 64 names, whiteouts included; a continuation resumes | [`namespace/list.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/list.rs) |
+| One listing window | `PAGE_ROWS` = 1,024 names, whiteouts included; a continuation resumes | [`namespace/list.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/list.rs) |
 | Total files, names, edits or Workspace size | No cap: windows bound one request, not the file or the flow | [`operations/types.rs`](../../../../engine/crates/layerfs-workspace/src/operations/types.rs) |
 | Largest file offset | `i64::MAX`; past it `Refusal::TooLarge` (EFBIG) | [`file/write.rs`](../../../../engine/crates/layerfs-workspace/src/operations/file/write.rs) |
 | Name length | 255 bytes | [`namespace/list.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/list.rs) |
@@ -163,7 +163,7 @@ feature, and carry no `#[cfg(target_os)]` or `#[ignore]`.
 
 - **`namespace_view.rs`** lists 200 names while mutating and resuming, and
   checks each persistent name appears once. It creates 3,000 names in one
-  directory and checks every listing window holds at most 64 names and that
+  directory and checks every listing window holds at most `PAGE_ROWS` names and that
   3,001 serials took three allocator calls. It captures, mutates, installs
   and checks that the later changes survive.
   `cargo +1.85.1 test --locked -p layerfs-workspace --test namespace_view`

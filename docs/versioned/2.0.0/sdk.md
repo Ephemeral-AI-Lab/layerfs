@@ -33,7 +33,7 @@ const { ws } = await layerfs.workspace.mount("tests", "agent", { name: "build" }
 const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", folder: "/web", branch: "agent" } });
 ```
 
-- Node 20 or later. The package is an ES module.
+- Node 22 or later. The package is an ES module.
 - The default export and the named exports `project`, `branch`, `commit`,
   `file`, `sandbox`, `workspace`, `machine`, `store` and `backup` use the
   default home (`LAYERFS_HOME`, else `~/.layerfs`).
@@ -58,11 +58,18 @@ const lfs = layerfs.client({ home: "/data/lfs", scope: { project: "shop/web", fo
   Store this process holds open with no call running, which drops its
   leases; it answers how many it closed. A process calls it before it
   exits, so it leaves no stale lease; a later call opens its Store again.
-- The native addon is looked for beside the package (`layerfs.node`), at a
-  worktree build bundle's root, then beside its crate
-  (`engine/crates/layerfs-node/layerfs.node`). Build it with
+- The native addon is the `layerfs.node` beside the package's `src`, or the
+  file `LAYERFS_NATIVE` names; nothing else is looked at, and a missing one
+  is an error naming the platform and how to build it. Build it with
   `npm --prefix api run build:native` (Cargo `+1.85.1`, `--offline
-  --locked --release`; `-- --debug` for a dev build).
+  --locked --release`; `-- --debug` for a dev build), which writes it beside
+  the package.
+- Whole numbers are exact: a `bigint` is sent as its digits, and a result is a
+  `number` when it is a safe integer and a `bigint` otherwise. A `number`
+  beyond ±(2^53 - 1), `NaN`, a `Map`, a `Set`, a typed array other than
+  `Uint8Array` or text with a lone surrogate is refused (`InvalidInput`)
+  before the call. The package needs Node 22, is MIT licensed, and ships
+  generated typings (`index.d.ts`).
 
 ## Python
 

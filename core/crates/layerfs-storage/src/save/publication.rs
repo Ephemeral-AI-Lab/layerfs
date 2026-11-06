@@ -271,8 +271,7 @@ impl State<'_> {
                 }
             }
         }
-        let ids: Vec<_> = batch.objects.iter().map(|l| l.object_id).collect();
-        self.storage.source.invalidate(&ids);
+        self.storage.source.published(batch, &lost)?;
         for row in &batch.objects {
             if lost.contains(&row.object_id) {
                 self.outcome.reused += 1;

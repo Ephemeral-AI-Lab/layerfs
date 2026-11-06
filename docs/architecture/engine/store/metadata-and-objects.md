@@ -90,6 +90,10 @@ group, so a selected group is read without the rest of the pack
 ([`units_read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/units_read.rs)).
 PostgreSQL reads ranges of the `EXTERNAL` body with `substring`
 ([`postgresql/objects/read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/read.rs)).
+Its first statement returns the descriptor with the first 256 KiB of the body,
+and it takes packs up to that size whole (`whole_pack_bytes`), so such a pack
+costs one statement. `read_packs` is one statement too: the server returns the
+bodies only when every id is present and their total is within the read budget.
 All of these run without `BEGIN` because the rows they read never change once
 visible ([SQLite: Sessions](sqlite.md#sessions)).
 
@@ -99,7 +103,8 @@ visible ([SQLite: Sessions](sqlite.md#sessions)).
  publish(Publication { packs, objects, inode_values, signatures,
                        release_ordinals })
    validate (no SQL)                       publication.rs
-     rows <= 8 191; canonical and physical bytes <= 4 MiB - 1
+     rows <= 8 191; canonical and physical bytes <= publication_bytes
+       (SQLite 4 MiB - 1, PostgreSQL 16 MiB - 1)
        (a single payload pack with one object is exempt)
      pack ids unique and > 0; length 32..=SINGLETON_PACK_LIMIT;
        metadata packs <= 256 KiB; key = hash(body); header lane = domain

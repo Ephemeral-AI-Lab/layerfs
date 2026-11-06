@@ -26,6 +26,7 @@ const COMMIT: &str = "lineage_commit";
 const LAYER: &str = "lineage_layer";
 const LAYERS_ABOVE: &str = "lineage_layers_above";
 const COMMIT_AT: &str = "lineage_commit_at";
+const PARENT: &str = "lineage_parent";
 const INSERT_COMMIT: &str = "lineage_insert_commit";
 const INSERT_LAYER: &str = "lineage_insert_layer";
 const MERGES: &str = "lineage_merges";
@@ -159,12 +160,23 @@ pub(crate) fn record_parents(
 ) -> HistoryResult<()> {
     let (run, depth, mut newest) = match parent {
         Some(parent) => {
-            let line = commit_line(tx, parent)?;
+            // The parent's line and whether its run already continues past
+            // it, in one statement.
+            let (line, continued) = one(tx, PARENT, [parent.as_slice()], |row| {
+                Ok((
+                    CommitLine {
+                        run: required(commit_column(row, 0)?, "Commit run")?,
+                        depth: cell(row, 1)?,
+                        newest: cell(row, 2)?,
+                        stack: required(stack_column(row, 3)?, "LayerStack identity")?,
+                        parent: commit_column(row, 4)?,
+                    },
+                    cell::<i64>(row, 5)? != 0,
+                ))
+            })?
+            .ok_or(HistoryError::Missing(Missing::Commit))?;
             // A run is a path: a second child of `parent` starts its own.
-            let run = match commit_at(tx, line.run, line.depth + 1)? {
-                Some(_) => id,
-                None => line.run,
-            };
+            let run = if continued { id } else { line.run };
             (run, line.depth + 1, line.newest)
         }
         None => (id, 1, layer_line(tx, base_layer)?.height),

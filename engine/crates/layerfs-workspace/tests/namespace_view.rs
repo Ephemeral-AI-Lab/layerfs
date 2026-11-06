@@ -10,6 +10,7 @@ use layerfs_content::filesystem::{
 };
 use layerfs_content::object::inode_leaf::{InodeKind, InodeMetadata, InodeValue};
 use layerfs_content::ObjectId;
+use layerfs_overlay::PAGE_ROWS;
 use layerfs_workspace::{Refusal, WorkspaceError};
 use std::collections::BTreeSet;
 
@@ -17,12 +18,16 @@ use std::collections::BTreeSet;
 fn enumeration_returns_every_persistent_name_once_across_mutation_and_resume() {
     let b = Bench::new("enumerate");
     let dir = b.applied(mkdir(1, "many"), T1).unwrap().serial;
-    for n in 0..200 {
-        b.applied(create(dir, &format!("n{n:03}")), T1);
+    // Three windows and a short fourth; `unvisited` and `renamed` lie past
+    // the first window.
+    let names = 3 * PAGE_ROWS + 8;
+    let (unvisited, renamed) = (PAGE_ROWS + 36, PAGE_ROWS + 86);
+    for n in 0..names {
+        b.applied(create(dir, &format!("n{n:04}")), T1);
     }
     let page = |after: Option<&[u8]>| b.window(|view| view.list(&b.overlay, dir, after)).unwrap();
     let first = page(None);
-    assert_eq!((first.entries.len(), first.visited), (64, 64));
+    assert_eq!((first.entries.len(), first.visited), (PAGE_ROWS, PAGE_ROWS));
     let mut seen: Vec<String> = first
         .entries
         .iter()
@@ -30,20 +35,25 @@ fn enumeration_returns_every_persistent_name_once_across_mutation_and_resume() {
         .collect();
     // A reply consumed only up to its tenth entry resumes exactly after it.
     let partial = page(Some(first.entries[9].0.as_slice()));
-    assert_eq!(partial.entries[..54], first.entries[10..]);
-    assert_eq!(partial.entries[54].0, b"n064");
+    assert_eq!(partial.entries[..PAGE_ROWS - 10], first.entries[10..]);
+    assert_eq!(
+        partial.entries[PAGE_ROWS - 10].0,
+        format!("n{PAGE_ROWS:04}").into_bytes()
+    );
 
     // Between windows: remove a returned name and an unvisited one, create
     // names before and after the cursor, and rename an unvisited name.
-    b.applied(unlink(dir, "n010"), T2);
-    b.applied(unlink(dir, "n100"), T2);
-    b.applied(create(dir, "n005-late"), T2);
+    let (gone, moved) = (format!("n{unvisited:04}"), format!("n{renamed:04}"));
+    let moved_to = format!("{moved}-renamed");
+    b.applied(unlink(dir, "n0010"), T2);
+    b.applied(unlink(dir, &gone), T2);
+    b.applied(create(dir, "n0005-late"), T2);
     b.applied(create(dir, "zz-late"), T2);
-    b.applied(rename((dir, "n150"), (dir, "n150-renamed"), true, None), T2);
+    b.applied(rename((dir, &moved), (dir, &moved_to), true, None), T2);
     let mut after = first.continuation.clone();
     while let Some(cursor) = after {
         let next = page(Some(&cursor));
-        assert!(next.visited <= 64);
+        assert!(next.visited <= PAGE_ROWS);
         seen.extend(
             next.entries
                 .iter()
@@ -53,24 +63,24 @@ fn enumeration_returns_every_persistent_name_once_across_mutation_and_resume() {
     }
     let unique: BTreeSet<&String> = seen.iter().collect();
     assert_eq!(unique.len(), seen.len(), "no name is returned twice");
-    for n in 0..200 {
-        let persistent = format!("n{n:03}");
-        let expected = !matches!(n, 100 | 150);
+    for n in 0..names {
+        let persistent = format!("n{n:04}");
+        let expected = n != unvisited && n != renamed;
         assert_eq!(seen.contains(&persistent), expected, "{persistent}");
     }
-    assert!(seen.contains(&"zz-late".to_string()) && seen.contains(&"n150-renamed".to_string()));
+    assert!(seen.contains(&"zz-late".to_string()) && seen.contains(&moved_to));
     assert!(
-        !seen.contains(&"n005-late".to_string()),
+        !seen.contains(&"n0005-late".to_string()),
         "behind the cursor"
     );
     // A fresh enumeration is the exact current membership, in byte order.
     let (all, widest) = b.list(dir);
-    assert_eq!(all.len(), 200);
-    assert!(widest <= 64);
+    assert_eq!(all.len(), names);
+    assert!(widest <= PAGE_ROWS);
     assert!(all
         .windows(2)
         .all(|pair| pair[0].0.as_bytes() < pair[1].0.as_bytes()));
-    assert!(all.iter().all(|(name, _)| name != "n010" && name != "n100"));
+    assert!(all.iter().all(|(name, _)| name != "n0010" && *name != gone));
 }
 
 #[test]
@@ -96,7 +106,7 @@ fn name_and_inode_counts_have_no_cap_and_every_window_stays_bounded() {
     );
     let (all, widest) = b.list(dir);
     assert_eq!(all.len(), FILES);
-    assert_eq!(widest, 64);
+    assert_eq!(widest, PAGE_ROWS);
     let serials: BTreeSet<u64> = all.iter().map(|(_, serial)| *serial).collect();
     assert_eq!(serials.len(), FILES, "every inode has its own serial");
     assert_eq!(b.refused(rmdir(1, "wide")), Refusal::NotEmpty);

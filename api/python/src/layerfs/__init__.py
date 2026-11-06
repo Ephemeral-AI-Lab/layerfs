@@ -4,13 +4,13 @@ table, synchronous; ``layerfs.aio`` has the same calls as coroutines (O19).
     import layerfs
     layerfs.store.create("shop")
     layerfs.project.init("shop/api", "/src/api", on_progress=print)
-    lfs = layerfs.client(home="/data/lfs", scope={"folder": "/web", "branch": "agent"})
+    lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/api", "folder": "/web", "branch": "agent"})
 """
 
 from . import _native
 from ._client import FAMILIES, TABLE, Client, client
 from ._errors import LayerFSError
-from ._values import decode
+from ._values import decode, path_text
 
 
 def doctor(home=None):
@@ -19,7 +19,7 @@ def doctor(home=None):
     ``{"ok": ..., "findings": [{"severity", "entity": {"kind", "name"},
     "message", "fix"}]}``; ``ok`` is false when a finding is an error.
     Outside the call table."""
-    answer = decode(_native.doctor(None if home is None else str(home)))
+    answer = decode(_native.doctor(path_text(home)))
     refused = answer.get("refused")
     if refused is not None:
         raise LayerFSError(refused["code"], refused["message"], refused.get("detail"))

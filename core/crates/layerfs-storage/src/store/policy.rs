@@ -55,6 +55,9 @@ pub const WAVE_CANONICAL_BYTES_LIMIT: u64 = TRANSACTION_CANONICAL_BYTES_LIMIT;
 pub const TRANSACTION_ROW_LIMIT: u64 = 8_191;
 /// Canonical bytes submitted in one open transaction.
 pub const TRANSACTION_CANONICAL_BYTES_LIMIT: u64 = 4 * 1024 * 1024 - 1;
+/// Largest publication a provider may select
+/// ([`crate::port::PackPersistence::publication_bytes`]): 16 MiB less one byte.
+pub const PUBLICATION_BYTES_MAX: u64 = 16 * 1024 * 1024 - 1;
 /// Sealed physical bytes per ordinary atomic publication, charged separately.
 pub const TRANSACTION_PHYSICAL_BYTES_LIMIT: u64 = TRANSACTION_CANONICAL_BYTES_LIMIT;
 /// Canonical bytes one group may hold before its lane seals it.
@@ -347,6 +350,24 @@ impl StorageCapacities {
             transaction_bytes: TRANSACTION_CANONICAL_BYTES_LIMIT,
             transaction_physical_bytes: TRANSACTION_PHYSICAL_BYTES_LIMIT,
             read_objects: READ_OBJECT_LIMIT,
+        })
+    }
+
+    /// The same capacities with a provider's publication size
+    /// ([`crate::port::PackPersistence::publication_bytes`]) as the wave and
+    /// transaction byte bounds. A size below the shared bound or above
+    /// [`PUBLICATION_BYTES_MAX`] is refused.
+    pub fn with_publication_bytes(self, bytes: u64) -> StorageResult<Self> {
+        if !(TRANSACTION_CANONICAL_BYTES_LIMIT..=PUBLICATION_BYTES_MAX).contains(&bytes) {
+            return Err(StorageError::UnsupportedPolicy {
+                field: "publication_bytes",
+            });
+        }
+        Ok(Self {
+            batch_bytes: bytes,
+            transaction_bytes: bytes,
+            transaction_physical_bytes: bytes,
+            ..self
         })
     }
 

@@ -99,7 +99,9 @@ inputs, an optional Commit last (D7).
    file.*                       --> project must match; every path inside
                                     folder; branch/commit names composed
    branch list/get/fork/        --> project must match; names composed as
-   merge/publish                    "<ns>.<name>"; list filtered to ns
+   merge/publish                    "<ns>.<name>"; list filtered to ns;
+                                    fork from_commit and publish commit
+                                    like file.* commit (below)
    workspace.mount              --> only "main", mounted as "<ns>.main"
    workspace.exec               --> command prefixed: cd '.<folder>' && ...
    workspace commit/unmount/    --> unchanged
@@ -112,12 +114,34 @@ inputs, an optional Commit last (D7).
                                 sandbox
 ```
 
-A folder scope (O32) is a client option of every front end; it guards calls
-and is not filesystem isolation: a command can still `cd` anywhere in the
-mounted tree ([`scope.rs`](../../../../api/crates/layerfs-control/src/calls/scope.rs)).
-A 66-character hex Commit id is left as it is; a Branch name without a scope
-`branch` is refused. A scoped `branch.get` answer is renamed back relative to
-the namespace in the dispatcher ([`dispatch.rs`](../../../../api/crates/layerfs-control/src/calls/dispatch.rs)).
+A folder scope (O32) is a client option of every front end; it guards the
+arguments of a call, not processes: `workspace.exec` is only a `cd` prefix,
+and a command can still reach anywhere in the mounted tree
+([`scope.rs`](../../../../api/crates/layerfs-control/src/calls/scope.rs)).
+A scoped `branch.get` answer is renamed back relative to the namespace in
+the dispatcher ([`dispatch.rs`](../../../../api/crates/layerfs-control/src/calls/dispatch.rs)).
+
+A Branch reference is a Branch name, composed as `<ns>.<name>`, or a
+66-character hex id, left as it is. `file` calls apply this to `branch`,
+`commit`, `left_*` and `right_*`; `branch.fork` to `from_commit`
+(`from_branch` and `name` are composed) and `branch.publish` to `commit`.
+Any other value is treated as a Branch name and composed into the namespace;
+the Store then decides whether that Branch exists (`InvalidInput`,
+`NoSuchBranch`). A name that cannot be composed, or a scope without `branch`,
+is `out of scope: branch` before any effect. Tests:
+[`scope_references.rs`](../../../../api/crates/layerfs-api/tests/scope_references.rs).
+
+Not confined; the owner has not decided whether they should be:
+
+| Gap | What happens today |
+| --- | --- |
+| Commit and Layer ids | a 66-character hex id passes as given wherever a reference is taken, so a scoped client can read or fork from a Commit or Layer of any Branch of its project if it knows the id (the Store resolves it by identity; reading another project through an id is not verified) |
+| An id in `branch` | a 66-character hex id placed in a `file` call's `branch` field is accepted as a Commit id |
+| `workspace.*` Branches | `Scope::owns` checks only that the Sandbox belongs to the scope's project; the Branch a Workspace was mounted on is not checked, so `workspace.commit` on a Workspace of a Branch outside the namespace writes to that Branch |
+| Scope without `branch` | the option is optional, but every `file` and `branch` call has a `branch` argument and is refused (`out of scope: branch`); only `workspace.exec`, `commit`, `unmount` and `status` pass, so it is of little use |
+
+The scope's nature, not a gap: it checks call arguments only. It does not
+confine the process `workspace.exec` starts.
 
 ## Checks
 

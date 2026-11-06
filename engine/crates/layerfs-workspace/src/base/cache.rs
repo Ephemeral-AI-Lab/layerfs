@@ -387,6 +387,9 @@ impl Cache {
     pub(crate) fn charged(&self) -> usize {
         self.charged
     }
+    pub(crate) fn capacity(&self) -> usize {
+        self.capacity
+    }
     pub(crate) fn entries(&self) -> usize {
         self.objects.len()
     }

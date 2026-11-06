@@ -47,9 +47,12 @@ fn home_with_a_named_workspace(tag: &str) -> PathBuf {
     let record = read_record(&native)
         .unwrap()
         .unwrap_or_else(|| SdkValue::map([("name", t("native")), ("platform", t("native"))]));
+    // a recorded daemon must be a file (6deb7f6995); this one never runs
+    let daemon = home.join("daemon-never-run");
+    std::fs::write(&daemon, b"").unwrap();
     write_record(
         &native,
-        &home::with_field(record, "daemon", t("/nonexistent")),
+        &home::with_field(record, "daemon", t(&daemon.display().to_string())),
     )
     .unwrap();
     write_record(

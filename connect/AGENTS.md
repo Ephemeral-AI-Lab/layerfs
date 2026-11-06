@@ -39,7 +39,9 @@ trait, registry, factory or service locator. Adding a platform is one new
 folder under `platforms/`, one `Platform` variant and one `adapter()` arm;
 adding a backend is one folder under `backend/`, one `Backend` variant and one
 arm. Every refusal of a platform, host or Store combination comes from the one
-support table (`layerfs-machine` `support.rs`); `SUPPORT.json` is generated
+support table (`layerfs-machine` `support.rs`), which consumes the shared permanent restrictions in
+`layerfs-sandbox/src/platform_policy.rs` (also available without machine
+adapters); `SUPPORT.json` is generated
 from it and a test compares them.
 
 ## Rules that stay

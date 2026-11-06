@@ -185,12 +185,11 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
             assert!(message.ends_with(reason), "{message}");
         }
     }
-    // ssh runs PostgreSQL Sandboxes (5a), but cannot dial the caller's
-    // loopback: `reach` refuses before any machine is started (#535 §7.4)
+    // SSH is disabled by product policy before any reach or startup.
     let (code, message) = create("box");
     assert_eq!(code, "Unsupported", "{message}");
     assert!(
-        message.ends_with("an ssh machine cannot reach the caller's loopback"),
+        message == layerfs_sandbox::platform_policy::SSH_DISABLED,
         "{message}"
     );
     let (code, message) = call(

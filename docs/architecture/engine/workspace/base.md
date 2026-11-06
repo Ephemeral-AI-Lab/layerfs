@@ -106,7 +106,8 @@ through ([`client.rs`](../../../../engine/crates/layerfs-workspace/src/base/clie
 | --- | --- | --- |
 | File length | Asked of the owning length port, remembered in the cache; no payload classification fallback | [`client.rs`](../../../../engine/crates/layerfs-workspace/src/base/client.rs) |
 | `provided_length` | Always asks the port; Commit uses it to check a captured file | [`client.rs`](../../../../engine/crates/layerfs-workspace/src/base/client.rs) |
-| Sibling lengths | A lookup of a file also remembers the lengths of up to 128 files listed after it, in one demand | [`view.rs`](../../../../engine/crates/layerfs-workspace/src/base/view.rs) |
+| Sibling lengths | A lookup of a file whose length is not remembered (a Mutation's planning or `SourceView::lookup`) also remembers the lengths of up to 128 files listed after it, in one demand | [`view.rs`](../../../../engine/crates/layerfs-workspace/src/base/view.rs) |
+| Read-ahead | A base read of chunked content that starts where the client's previous read of that content ended, and passes what was read ahead, reads 2 MiB further in the same demand; the extra bytes are not written, their objects stay in the cache. One stream per client; a cache allowance under 8 MiB and a memory-only client never read ahead | [`client.rs`](../../../../engine/crates/layerfs-workspace/src/base/client.rs), [`view.rs`](../../../../engine/crates/layerfs-workspace/src/base/view.rs) |
 | Portable metadata | Decoded once per metadata root and kind, then remembered | [`client.rs`](../../../../engine/crates/layerfs-workspace/src/base/client.rs) |
 | Failure | Provider errors stay with the source; none is cached | [`client.rs`](../../../../engine/crates/layerfs-workspace/src/base/client.rs) |
 

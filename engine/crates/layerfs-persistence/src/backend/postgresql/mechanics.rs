@@ -17,14 +17,18 @@ use postgres::types::ToSql;
 
 impl HistoryStatements for Transaction<'_> {
     fn history(&self, key: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError> {
-        self.query(history::statements::statement(key)?, params)
+        match history::statements::qualified(key) {
+            Some(sql) => self.query(&sql.replace("{s}", self.schema), params),
+            None => self.query(history::statements::statement(key)?, params),
+        }
     }
     fn history_arrays(
         &self,
         key: &str,
         columns: Vec<Column>,
     ) -> Option<Result<Vec<Record>, BackendError>> {
-        let sql = history::statements::arrays(key)?;
+        // An array statement may name the schema (`{s}`) to run alone.
+        let sql = history::statements::arrays(key)?.replace("{s}", self.schema);
         let mut bytes = 0u64;
         let bound: Vec<Box<dyn ToSql + Sync>> = columns
             .into_iter()
@@ -43,7 +47,7 @@ impl HistoryStatements for Transaction<'_> {
             .collect();
         let refs: Vec<&(dyn ToSql + Sync)> = bound.iter().map(|b| b.as_ref()).collect();
         Some(
-            self.typed(sql, &refs, bytes)
+            self.typed(&sql, &refs, bytes)
                 .and_then(|found| found.iter().map(rows::record).collect()),
         )
     }
@@ -58,6 +62,9 @@ impl Mechanics for Transaction<'_> {
     }
     fn advance_allocation(&self, pack: i64, ordinal: i64) -> Result<(), BackendError> {
         metadata::writes::advance(self, pack, ordinal)
+    }
+    fn allocate(&self, packs: i64, ordinals: i64) -> Result<(i64, i64), BackendError> {
+        metadata::writes::allocate(self, packs, ordinals)
     }
     fn locate(
         &self,

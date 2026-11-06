@@ -1,7 +1,9 @@
 //! `backup.create`: a snapshot on the Store's machine, uploaded by this process.
-use super::family::{hex, progress, save_link};
+use super::family::{hex, save_link};
+use super::progress::Shown;
 use super::record::{remote_error, BucketRecord, StoreLink};
 use crate::common::context::Context;
+use crate::common::home::flock::{try_lock, unlock};
 use crate::common::home::lease;
 use crate::common::home::{self, paths};
 use crate::common::outcome::{failed, refused, Outcome};
@@ -63,8 +65,11 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let local_steps = matches!(executor, Executor::Local);
     let executor = std::cell::RefCell::new(executor);
     let _lease = lease::hold(&home, store)?;
+    let _creating = Creating::take(&home, store)?;
+    let mut shown = Shown::new();
+    shown.phase(context, "check");
     check(driver.as_ref(), &object, expected, &home_id)?;
-    progress(context, "snapshot");
+    shown.phase(context, "snapshot");
     let step = |op: &str, more: Vec<(&str, SdkValue)>| {
         let mut fields = vec![
             ("store", SdkValue::text(store)),
@@ -92,8 +97,11 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     };
     let result = (|| {
         if !local_steps {
-            progress(context, "send");
-            fetch_staged(&step, &local)?;
+            let total = staged.get_int("bytes").map(|n| n as u64);
+            shown.bytes(context, "send", 0, total);
+            fetch_staged(&step, &local, &mut |done| {
+                shown.bytes(context, "send", done, total)
+            })?;
             let (_, sha256) = pieces::sha256_file(&local, None).map_err(remote_error)?;
             if Some(pieces::hex(&sha256).as_str()) != staged.get_text("sha256") {
                 return Err(refused(
@@ -117,10 +125,14 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         if let Some(heads) = &heads {
             metadata.insert(remote::HEADS.to_owned(), pieces::hex(heads));
         }
-        progress(context, "upload");
+        shown.phase(context, "check");
         check(driver.as_ref(), &object, expected, &home_id)?;
-        let moved =
-            pieces::upload(driver.as_ref(), &object, &local, &metadata).map_err(remote_error)?;
+        // `hash`, then `upload` with its bytes and pieces
+        let moved = shown
+            .transfer(context, || {
+                pieces::upload(driver.as_ref(), &object, &local, &metadata)
+            })
+            .map_err(remote_error)?;
         Ok((moved, heads))
     })();
     if !local_steps {
@@ -142,11 +154,44 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     ]))
 }
 
+/// One create of a Store at a time in a home, since each stages its snapshot
+/// at the same path: an `flock` on `store/<s>/backup.lock`, taken without
+/// waiting and held until the create ends (a killed create's goes with it).
+struct Creating(std::fs::File);
+
+impl Creating {
+    fn take(home: &Path, store: &str) -> Result<Self> {
+        use std::os::unix::fs::OpenOptionsExt;
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(paths::store_dir(home, store).join("backup.lock"))
+            .map_err(failed)?;
+        if !try_lock(&file, true).map_err(failed)? {
+            return Err(refused(
+                "Busy",
+                format!("another backup.create of Store {store} is running; nothing was changed"),
+            ));
+        }
+        Ok(Self(file))
+    }
+}
+
+impl Drop for Creating {
+    fn drop(&mut self) {
+        unlock(&self.0);
+    }
+}
+
 /// One `store.file` step on the Store's machine: its name and arguments.
 type Step<'a> = dyn Fn(&str, Vec<(&str, SdkValue)>) -> Outcome + 'a;
 
-/// Copies the snapshot a worker staged to `local`, in pieces of [`CHUNK`].
-fn fetch_staged(step: &Step<'_>, local: &Path) -> Result<()> {
+/// Copies the snapshot a worker staged to `local`, in pieces of [`CHUNK`],
+/// telling `sent` the bytes copied after each.
+fn fetch_staged(step: &Step<'_>, local: &Path, sent: &mut dyn FnMut(u64)) -> Result<()> {
     let mut out = std::fs::File::create(local).map_err(failed)?;
     let mut offset = 0u64;
     loop {
@@ -163,6 +208,7 @@ fn fetch_staged(step: &Step<'_>, local: &Path) -> Result<()> {
         };
         std::io::Write::write_all(&mut out, bytes).map_err(failed)?;
         offset += bytes.len() as u64;
+        sent(offset);
         if (bytes.len() as u64) < CHUNK {
             return Ok(());
         }

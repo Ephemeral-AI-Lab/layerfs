@@ -104,8 +104,12 @@ counting at most 96 bytes per line (`MANIFEST_LINE` in
 | `Cell` publishes byte counts at most once per `INTERVAL` (250 ms); a new phase or piece count at once. | same |
 | `quiet` runs work with no progress (the manifest upload). | same |
 
-The API calls also report their own phases to the caller
-([`api/…/backup/create.rs`](../../../../api/crates/layerfs-control/src/backup/create.rs)).
+`backup.create` and `backup.restore` install their own `Progress` for the
+transfer thread instead of a `Cell`: it keeps each phase's exact last count
+and every piece count, and the calling thread sends them with the call's
+own phases (`check`, `snapshot`, `send`)
+([`api/…/backup/progress.rs`](../../../../api/crates/layerfs-control/src/backup/progress.rs);
+[SDK: backup progress](../../api/sdk/backup/README.md#progress)).
 
 ## Related
 

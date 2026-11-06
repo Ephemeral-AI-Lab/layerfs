@@ -62,7 +62,10 @@ macro_rules! scalars {
             blob_requested_bytes,
             blob_read_bytes,
             blob_read_ns,
-            blob_close_calls
+            blob_close_calls,
+            round_trips,
+            prepares,
+            connects
         )
     };
 }

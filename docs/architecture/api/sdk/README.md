@@ -92,6 +92,9 @@ arguments in JavaScript, Python and the `layerfs` command.
 | Names | snake_case, the table's own | snake_case | `-` for `_` |
 | Content / JSON positionals | string, `Uint8Array`/`Buffer`, object | `str`, `bytes`, dict/list | stdin, or `--from FILE` |
 | Sizes | `8589934592` or `"8G"` | same | `8G` |
+| Whole numbers | exact: a `bigint` is sent as written; a result is a `number` when a safe integer, else a `bigint`; an unsafe `number`, `NaN`, `Map`, `Set` or lone surrogate is refused before the call ([Node](../front-ends/node.md#values)) | `int` | — |
+| Bytes | `Buffer` / `Uint8Array` ↔ `{ "base64": … }`; a one-key map with that key is read as bytes | `bytes` | — |
+| Types | `index.d.ts`, generated from the table; results are loose (`Result`) | — | — |
 | Answer | a Promise of a plain object | a dict (a coroutine in `layerfs.aio`) | one JSON line on stdout |
 | Progress | `on_progress: (e) => …` | `on_progress=fn` | `--progress` (JSON lines on stderr) |
 | Exec output | `stdout`, `stderr` functions, or `stream: true` | the same | `--stream` |
@@ -100,8 +103,15 @@ arguments in JavaScript, Python and the `layerfs` command.
 A folder scope `{ project, folder, branch? }` binds a client to one project:
 it allows only the `file` calls, `branch` list, get, fork, merge and
 publish, and the `workspace` calls; paths must lie under `folder` and
-Branch names become `<branch>.<name>`. A scope guards calls; it is not
-filesystem isolation
+Branch names become `<branch>.<name>`. A scope guards the arguments of a
+call, not processes or the filesystem: `workspace.exec` under a scope only
+prefixes the command with `cd '.<folder>' &&`, and the command can still
+reach anywhere in the mounted tree. `branch` is optional in the option but
+every `file` and `branch` call needs it (without it they are refused, see
+[Scopes](../call-table/table.md#scopes)); a Commit id is not confined to the
+namespace; the Branch of a Workspace is not checked. These gaps wait for an
+owner decision and are listed under
+[Scopes](../call-table/table.md#scopes)
 ([`calls/scope.rs`](../../../../api/crates/layerfs-control/src/calls/scope.rs)).
 Every function is generated from the call table
 ([`calls/table.rs`](../../../../api/crates/layerfs-control/src/calls/table.rs));

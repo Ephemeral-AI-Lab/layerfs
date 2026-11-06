@@ -44,7 +44,8 @@ are dropped. The construction policy is the Store's
  CapturedNamespace::construct                         construction/driver.rs
   1 bind     reader engine == route engine; base rebound to reader.root()
   2 begin    CONTEXT record (unsealed)
-  3 names    pass over captured names  --> HEADER per changed parent
+  3 names    pass over captured names  --> HEADER per changed parent;
+             same-path base files of names bound over a lower binding
   4 values   pass over captured inodes --> VALUE, FRESH; changed files built
   5 seal     CONTEXT record with totals
   6 update   Cursor over sealed records --> Content
@@ -55,7 +56,7 @@ are dropped. The construction policy is the Store's
 | Inode row | Value built | Content entry point | Source |
 | --- | --- | --- | --- |
 | Fresh file, bytes already saved | Reuses the saved root (#364) | none | [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
-| Fresh file | New file root from captured runs; a rename predecessor is offered as delta base | `construct_runs_with_predecessor` | [`owner.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
+| Fresh file | New file root from captured runs; a rename predecessor, else the base file at the same path (#88), is offered as delta base: positionally to chunks, whole to a whole-file result | `construct_runs_with_predecessor` | [`owner.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
 | Changed base file | Indexed edits over the retained `FileView` | `apply_indexed_edits_view_backed` | [`owner.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
 | Fresh symlink | Target from the capture | `emit_symlink` | [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
 | Fresh directory | Page built by Content from its header | streamed update | [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
@@ -84,10 +85,10 @@ the next.
 
 | Rule | Value | Source |
 | --- | --- | --- |
-| Changes per guarded job | At most `PAGE_ROWS` = 64, ordered by kind then serial | [`normalize.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/normalize.rs) |
-| Cursor windows held | 16 per record kind, each at most 64 rows | [`cursor.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/cursor.rs) |
+| Changes per guarded job | At most `RECORD_ROWS` = 64 (the operation-record window), ordered by kind then serial | [`normalize.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/normalize.rs) |
+| Cursor windows held | 16 per record kind, each at most `PAGE_ROWS` (1,024) rows | [`cursor.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/cursor.rs) |
 | Second attempt in the same scope | Refused by the existing `CONTEXT` record | [`normalize.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/normalize.rs) |
-| Digest rows per Store call | `FILE_DIGEST_WINDOW` = 64 | [`digests.rs`](../../../../engine/crates/layerfs-workspace/src/ports/digests.rs) |
+| Digest rows per Store call | `FILE_DIGEST_WINDOW` = 1,024, one captured inode page: one `file_roots` and one `record_file_digests` call per page of up to 1,024 new files | [`digests.rs`](../../../../engine/crates/layerfs-workspace/src/ports/digests.rs) |
 
 Records live in the Workspace's overlay file as operation records
 ([Overlay: Operation records](../overlay/operation-records.md)). No

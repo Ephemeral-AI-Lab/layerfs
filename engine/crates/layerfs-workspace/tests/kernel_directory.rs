@@ -8,7 +8,7 @@ use layerfs_content::{
     },
     object::inode_leaf::InodeKind,
 };
-use layerfs_overlay::{KernelDirectory, KernelMount, OverlayError};
+use layerfs_overlay::{KernelDirectory, KernelMount, OverlayError, PAGE_ROWS};
 use layerfs_workspace::{
     CanonicalCache, CanonicalClient, KernelDirectoryBatch, KernelDirectoryWindow,
     KernelReadDecision, KernelReadOperation, VisitFacts,
@@ -100,8 +100,8 @@ fn empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies()
     let mut objects = FilesystemObjects::new(store, &mut sink);
     let updates = [DirectoryUpdate {
         parent: 1,
-        changes: (0..130)
-            .map(|n| (common::name(&format!("!{n:03}")), Some(2)))
+        changes: (0..2 * PAGE_ROWS + 2)
+            .map(|n| (common::name(&format!("!{n:04}")), Some(2)))
             .collect(),
     }];
     let next = update_filesystem(
@@ -124,8 +124,8 @@ fn empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies()
     b.workspace
         .install_prepared_base(&b.overlay, prepared)
         .unwrap();
-    for n in 0..130 {
-        b.applied(unlink(1, &format!("!{n:03}")), T1);
+    for n in 0..2 * PAGE_ROWS + 2 {
+        b.applied(unlink(1, &format!("!{n:04}")), T1);
     }
     let local = b.applied(create(1, "zz-local"), T2).unwrap().serial;
     let mount = b.overlay.create_kernel_mount(1).unwrap();
@@ -140,7 +140,7 @@ fn empty_whiteout_pages_continue_and_only_accepted_names_become_resume_cookies()
         // request and still offers the reply's offsets.
         let window = visit(&b, directory, 2, after.take()).unwrap();
         assert!(window.listing.is_none() && window.offer.is_some());
-        assert!(window.page.local.active.len() <= 64);
+        assert!(window.page.local.active.len() <= PAGE_ROWS);
         let batch = batch(&b, window);
         if turn < 2 {
             assert!(batch.entries.is_empty());

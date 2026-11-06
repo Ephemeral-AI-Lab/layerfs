@@ -127,7 +127,7 @@ decision in the result's `lww` list. Never list source files. Details:
 ## The three front ends
 
 ```js
-// Node 20+, ES module
+// Node 22+, ES module
 import layerfs, { LayerFSError } from "layerfs";
 const text = (await layerfs.file.read("shop/api", "work", "/README.md")).text;
 ```

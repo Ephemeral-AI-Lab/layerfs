@@ -264,7 +264,8 @@ shell command, not a call of the table.
 - It fills only fields that are not recorded yet, and keeps the rest.
 - It never writes a secret.
 - It never makes a VM or connects an ssh host. For those settings it
-  answers the `machine create` or `machine connect` command to run.
+  answers the enabled `machine create` command to run. Firecracker and SSH
+  settings are reported as ignored with their permanent policy reason.
 - Its answer lists `written`, `kept`, `commands` and `ignored`, by setting
   name. Each run is also appended to `log/import-env.jsonl`.
 
@@ -278,7 +279,7 @@ shell command, not a call of the table.
 | `LAYERFS_SANDBOX` or `LAYERFS_PLACEMENT` = `docker`, `local` | the machine `docker` for each Store with no machine recorded (and `LAYERFS_VOLUME` as its volume) |
 | `LAYERFS_SANDBOX` or `LAYERFS_PLACEMENT` = `native`, `mac`, `linux`, `namespaces` | the machine `native` for each Store with no machine recorded |
 | `LAYERFS_SANDBOX` = `vm:<kind>` (with `LAYERFS_VM_CPUS`, `_MEMORY`, `_STORE_SIZE`, `_IMAGE`) | answered: `layerfs machine create <kind> <kind> …` |
-| `LAYERFS_SSH_HOST` (with `_USER`, `_PORT`, `_IDENTITY` or `_KEY`, `_KNOWN_HOSTS`, `_STORE`) | answered: `layerfs machine connect ssh <host> …` |
+| `LAYERFS_SSH_HOST` (with `_USER`, `_PORT`, `_IDENTITY` or `_KEY`, `_KNOWN_HOSTS`, `_STORE`) | ignored: SSH is permanently disabled; no connection command is suggested |
 | `LAYERFS_STORE_POSTGRESQL` | ignored: a secret; run `store connect <name> <url> --password env:NAME` |
 | `LAYERFS_STORE_POLICY` | ignored: Init uses the default policy |
 | `LAYERFS_LOCAL_DIR` | ignored: native Sandboxes live under `machine/native/run/` |

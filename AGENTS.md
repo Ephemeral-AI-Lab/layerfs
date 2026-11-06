@@ -198,6 +198,15 @@ remains a separate MEMORY/OFF/EXCLUSIVE database file.
   daemon setup file. This supersedes #533 O3/G13 ("VMs and ssh later").
   See [#533](core/docs/issues/533/README.md), [#535](core/docs/issues/535/README.md)
   and the [proposal](core/docs/proposals/host-platform-connections.md).
+- **Platform restriction (owner 2026-11-06, layerfs-project#7): Firecracker
+  and SSH are permanently disabled for new product work on every host.**
+  Keep their adapters and records; do not delete or migrate resources.
+  Inspection and safe explicit cleanup remain available. No runtime setting
+  or feature flag may re-enable them; that requires a later explicit owner
+  decision and source change. This supersedes earlier platform enablements
+  without changing historical evidence. Native, Docker, Lima, Apple Container
+  and microsandbox retain their existing support rules. See the
+  [restriction contract](docs/architecture/connect/support-matrix/disabled-platforms.md).
 - **One global database, one writer, short holds (owner decision 2026-10-18).**
   All committed state lives in one SQLite Store file; no sharding, second
   database, concurrent-writer engine or objects outside it. Writes go one at a

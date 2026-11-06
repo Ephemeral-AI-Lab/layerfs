@@ -1,20 +1,23 @@
-//! MinIO: one bucket on an S3-compatible server, path-style, plain HTTP in
-//! this phase. Objects up to 50 TiB; one PUT up to 5 TiB; multipart parts of
-//! 5 MiB–5 GiB, at most 10,000.
+//! MinIO: one bucket on an S3-compatible server, path-style, over HTTP or,
+//! with the `tls` feature, HTTPS. Objects up to 50 TiB; one PUT up to 5 TiB;
+//! multipart parts of 5 MiB–5 GiB, at most 10,000, so one upload carries at
+//! most 48.83 TiB.
 use crate::bucket::credentials::CredentialRef;
 use crate::bucket::error::RemoteError;
 use crate::bucket::limits::Limits;
-use crate::bucket::s3_api::{S3Client, S3Config};
+use crate::bucket::s3_api::{S3Client, S3Config, MAX_PART, MAX_PARTS};
 use std::time::Duration;
 
 const TIB: u64 = 1024 * 1024 * 1024 * 1024;
 /// Multipart part size unless settings choose another.
 pub const DEFAULT_PART_SIZE: u64 = 64 * 1024 * 1024;
 
-/// What MinIO allows. A file above 50 TiB goes up as 5 TiB pieces.
+/// What MinIO allows. A file above what one multipart upload carries
+/// (10,000 parts of 5 GiB, below MinIO's 50 TiB object limit) goes up as
+/// 5 TiB pieces.
 pub fn limits() -> Limits {
     Limits {
-        max_file: 50 * TIB,
+        max_file: (50 * TIB).min(MAX_PARTS * MAX_PART),
         max_request: 5 * TIB,
         piece_size: 5 * TIB,
     }

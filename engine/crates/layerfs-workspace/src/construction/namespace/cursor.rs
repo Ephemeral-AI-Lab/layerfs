@@ -10,11 +10,11 @@ use layerfs_content::{
     object::inode_leaf::{decode_inode_value, InodeValue},
     ContentError, ContentResult,
 };
-use layerfs_overlay::{CapturedReader, DirectoryEntry, PAGE_ROWS};
+use layerfs_overlay::{CapturedReader, DirectoryEntry, PAGE_ROWS, RECORD_ROWS};
 use std::{cell::RefCell, time::Instant};
 
 /// Windows of sealed answers each Cursor holds per record kind. A window is
-/// at most PAGE_ROWS rows of one key-ordered range and answers every serial
+/// at most RECORD_ROWS rows of one key-ordered range and answers every serial
 /// in that range, absence included, so a sweep in serial order reads each
 /// sealed record once and a point near a recent one reads nothing. Held only
 /// by this Cursor, whatever the size of the change.
@@ -70,7 +70,7 @@ fn fresh_rank(raw: &[u8]) -> ContentResult<usize> {
 }
 /// Every pass and point answers the same sealed rows: headers, values and
 /// fresh ranks from this attempt's records, names from the retained reader.
-/// One window of at most PAGE_ROWS rows is read per job, and at most WINDOWS
+/// One window of at most RECORD_ROWS rows is read per job, and at most WINDOWS
 /// of them per kind are held, whatever the size of the change.
 pub(crate) struct Cursor<'s, 'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> {
     provider: &'a P,
@@ -134,7 +134,7 @@ impl<'s, 'a, P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Cur
             .shared
             .borrow_mut()
             .entries_after(kind, after.map(|serial| key(kind, serial).key))?;
-        if entries.len() > PAGE_ROWS || (entries.is_empty() && !ended) {
+        if entries.len() > RECORD_ROWS || (entries.is_empty() && !ended) {
             return Err(self.fail(ContentError::InvalidRecord(
                 "captured namespace record window",
             )));
@@ -442,7 +442,7 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> StreamedRow
             &mut self.shared.borrow_mut().work.fresh_points,
             serials.len() as u64,
         );
-        if serials.len() > PAGE_ROWS {
+        if serials.len() > RECORD_ROWS {
             return Err(self.fail(ContentError::InvalidRecord(
                 "captured namespace point window",
             )));

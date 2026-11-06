@@ -25,9 +25,10 @@ if (result.status !== 0) process.exit(result.status ?? 1);
 const artifact = join(target, profile, `liblayerfs_node.${suffix}`);
 const output = process.env.LAYERFS_NATIVE_OUTPUT
   ? resolve(root, process.env.LAYERFS_NATIVE_OUTPUT)
-  : fileURLToPath(new URL("../crates/layerfs-node/layerfs.node", import.meta.url));
+  : fileURLToPath(new URL("../node/layerfs.node", import.meta.url));
 mkdirSync(dirname(output), { recursive: true });
 const staged = `${output}.${process.pid}.new`;
 copyFileSync(artifact, staged);
 renameSync(staged, output);
 console.log(`Built ${process.platform}/${process.arch}: ${output}`);
+if (process.env.LAYERFS_NATIVE_OUTPUT) console.log(`The package loads it only when LAYERFS_NATIVE=${output}`);

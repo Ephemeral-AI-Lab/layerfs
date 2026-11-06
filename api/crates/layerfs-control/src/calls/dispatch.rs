@@ -63,6 +63,7 @@ pub fn call_scoped(
         args = scope.apply(name, args)?;
     }
     let home = home(home_path)?;
+    super::platform_policy::check(&home, name, &args)?;
     let id = crate::common::home::open(&home)
         .inspect_err(|refusal| crate::common::home::note_failure(&home, refusal))?
         .id;

@@ -503,7 +503,7 @@ fn a_1_1_0_environment_becomes_records_once() {
     assert_eq!(shop.get_text("volume"), Some("lfs-shop"));
     let bucket = read(paths::bucket_record(&home, "remote"));
     assert_eq!(bucket.get_text("key"), Some("env:LAYERFS_REMOTE"));
-    // no secret reaches the home; ssh is a command to run, not a record
+    // No secret reaches the home; disabled SSH is reported, never connected.
     for secret in ["secret-access", "secret-key", "pw@db"] {
         assert!(!printed.contains(secret), "{printed}");
         assert!(snapshot(&home)
@@ -511,7 +511,7 @@ fn a_1_1_0_environment_becomes_records_once() {
             .all(|(_, bytes)| !String::from_utf8_lossy(bytes).contains(secret)));
     }
     assert!(
-        printed.contains("layerfs machine connect ssh ec2.example --user ubuntu"),
+        printed.contains(layerfs_sandbox::platform_policy::SSH_DISABLED),
         "{printed}"
     );
     assert!(!paths::machine_record(&home, "ssh").exists());

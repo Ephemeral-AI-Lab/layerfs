@@ -31,14 +31,38 @@ impl PostgresStorage {
             ),
         }
     }
+    /// Whether this idle session can still serve (#64): it was not
+    /// quarantined and its connection answers an empty query within 5 s (one
+    /// round trip, counted). A session that does not is never handed to a
+    /// mount; its caller drops it and opens a new one. This check runs
+    /// before any operation uses the session, so no operation is retried.
+    pub fn usable(&self) -> bool {
+        let Ok(mut state) = self.session.state.lock() else {
+            return false;
+        };
+        if state.quarantined {
+            return false;
+        }
+        state.work.round_trips += 1;
+        let alive = state.client.is_valid(std::time::Duration::from_secs(5));
+        if alive.is_err() {
+            state.quarantined = true;
+        }
+        alive.is_ok()
+    }
     /// The server's reported version.
     pub fn server_version(&self) -> &str {
-        &self.session.server_version
+        self.session.server_version.get().map_or("", String::as_str)
     }
 }
 
 impl PackPersistence for PostgresStorage {
+    /// The frozen policy the open's check read (#63), with no round trip;
+    /// read in a transaction only by a session opened without one.
     fn policy(&self) -> Result<StoragePolicy, PersistenceError> {
+        if let Some(policy) = self.session.policy.get() {
+            return Ok(*policy);
+        }
         self.session.run(false, |tx| metadata::policy::read(tx))
     }
     fn locate(
@@ -93,6 +117,17 @@ impl PackPersistence for PostgresStorage {
         self.session
             .run(true, |tx| metadata::allocation::reserve(tx, request))
     }
+    /// Every ranged read is a round trip, so a pack up to the pack limit is
+    /// taken whole in one statement and kept for the next demands.
+    fn whole_pack_bytes(&self) -> usize {
+        layerfs_storage::policy::PACK_LIMIT
+    }
+    /// Each statement is a round trip and a publication costs about seven
+    /// of them whatever its size, so PostgreSQL publishes up to 16 MiB at
+    /// once (owner decision, layerfs-project #61); SQLite keeps 4 MiB.
+    fn publication_bytes(&self) -> u64 {
+        layerfs_storage::policy::PUBLICATION_BYTES_MAX
+    }
     fn publication_pack_cost(
         &self,
         pack: &PublishedPack,
@@ -100,15 +135,10 @@ impl PackPersistence for PostgresStorage {
         Ok((1, pack.body.len() as u64))
     }
     fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError> {
-        publication::validate(batch)?;
-        if !batch.packs.is_empty() {
-            self.session
-                .run_as::<_, PersistenceError>(Mode::Stage, |tx| {
-                    objects::publish::packs(tx, &batch.packs).map_err(Into::into)
-                })?;
-        }
-        self.session.run(true, |tx| {
-            objects::publish::rows(tx, batch).map_err(PersistenceError::from)
-        })
+        publication::validate(batch, self.publication_bytes())?;
+        self.session
+            .run_as::<_, PersistenceError>(Mode::Publish, |tx| {
+                objects::publish::run(tx, batch).map_err(Into::into)
+            })
     }
 }

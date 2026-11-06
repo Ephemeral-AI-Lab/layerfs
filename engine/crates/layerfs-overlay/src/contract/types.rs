@@ -11,7 +11,15 @@ pub const RUN_BYTES: usize = 32 * 1024;
 /// Per-byte validity for a cell; a written zero remains distinguishable.
 pub const MASK_BYTES: usize = CELL_BYTES / 8;
 /// Maximum rows in one owner service window, not a total namespace limit.
-pub const PAGE_ROWS: usize = 64;
+/// The paged statements' `LIMIT` is this number (`page_limit!` in
+/// `database/statements.rs`). 1,024 since layerfs-project #69, so a Commit's
+/// construction asks the Store about one page of new files per call.
+pub const PAGE_ROWS: usize = 1024;
+/// Maximum rows in one operation-record window: a `get_many` key list and
+/// one key or entry page. It stays 64, the key window of the construction
+/// backing in core content (`filesystem/state/store.rs`) that these records
+/// serve, inside one `OPERATION_RECORD_BYTES` envelope.
+pub const RECORD_ROWS: usize = 64;
 /// Maximum bytes in one operation_record record, not a total operation limit.
 pub const OPERATION_RECORD_BYTES: usize = 65_536;
 /// Largest byte window of one write job; larger requests arrive as several.

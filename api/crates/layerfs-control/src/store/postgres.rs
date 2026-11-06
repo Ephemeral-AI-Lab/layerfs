@@ -156,8 +156,8 @@ fn binding(url: &str, schema: &str, sync: &str) -> Result<Vec<u8>, SdkRefusal> {
 /// The PostgreSQL Store a `sandbox.create` call's daemon opens (#506), or
 /// None when the call's Store is not one. The URL is the call's
 /// (`postgresql.url`) and goes only into the daemon's private config. The
-/// project must be in the schema; its home entry, which holds its Sandbox
-/// records, is made here (owner-only) the first time.
+/// caller's reach check found the project in the schema on its one session
+/// (#65; every route to `sandbox.create` runs it), so nothing is read here.
 pub(crate) fn sandbox_store(
     args: &SdkValue,
 ) -> Result<Option<layerfs_bridge::DaemonStore>, SdkRefusal> {
@@ -175,16 +175,6 @@ pub(crate) fn sandbox_store(
     // the caller resolved the URL and rewrote it for the Sandbox's machine
     // (#535 §7.4); the daemon dials the same server as this side
     let url = url(args)?.to_owned();
-    let name = text(args, "project")?;
-    let listed = stores::list_projects(args)?;
-    let found = matches!(&listed, SdkValue::List(items)
-        if items.iter().any(|p| p.get_text("name") == Some(name)));
-    if !found {
-        return Err(refused(
-            "NoSuchProject",
-            format!("no project {name} in the PostgreSQL Store's schema {schema}"),
-        ));
-    }
     Ok(Some(layerfs_bridge::DaemonStore::Postgres {
         url,
         schema,

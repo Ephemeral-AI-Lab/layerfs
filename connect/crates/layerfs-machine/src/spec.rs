@@ -82,6 +82,10 @@ pub struct Lasting {
     pub port: Option<u16>,
     /// `firecracker`: `n` of its `172.30.<n>.0/30` network (1 to 250).
     pub network: Option<u8>,
+    /// `apple-container`: its network's gateway, where the guest reaches
+    /// this host, read once when the machine starts (#66) and replaced by
+    /// every start; a Sandbox's PostgreSQL reach uses it with no lookup.
+    pub gateway: Option<std::net::Ipv4Addr>,
 }
 
 /// The sealed Linux bundle: `layerfs`, `layerfs-daemon`,

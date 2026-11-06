@@ -522,10 +522,16 @@ fn traced_calls_carry_sql_work_and_status_unmount_carry_opcodes() {
     let telemetry = layerfs_control::internal::take_telemetry(&mut control);
     assert_eq!(telemetry.len(), 1);
     let bind = &telemetry[0];
-    assert_eq!(width(bind, &["sql", "writer"]), 27);
-    assert_eq!(width(bind, &["sql", "readers"]), 27);
+    assert_eq!(width(bind, &["sql", "writer"]), 30);
+    assert_eq!(width(bind, &["sql", "readers"]), 30);
     // #367: and the request thread's own share of it.
-    assert_eq!(width(bind, &["sql", "call"]), 27);
+    assert_eq!(width(bind, &["sql", "call"]), 30);
+    // layerfs-project #62: the PostgreSQL wire counters are present; this
+    // fixture's Store is SQLite, which leaves them at zero.
+    for name in ["round_trips", "prepares", "connects"] {
+        assert_eq!(counter(bind, &["sql", "writer"], name), 0, "{name}");
+        assert_eq!(counter(bind, &["sql", "readers"], name), 0, "{name}");
+    }
     // Bind opens the Workspace's reader: its opening statements are this call's.
     assert!(counter(bind, &["sql", "readers"], "statements") > 0);
     assert!(bind.get("fuse").is_none(), "bind carries no opcode counts");

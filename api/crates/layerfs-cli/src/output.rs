@@ -13,7 +13,7 @@ pub fn refusal(refusal: &SdkRefusal) -> ExitCode {
         ("message", SdkValue::text(&refusal.message)),
         ("detail", refusal.detail.clone()),
     ]);
-    eprintln!("{}", json::print(&value));
+    diagnostic(&json::print(&value));
     ExitCode::from(REFUSED)
 }
 
@@ -58,8 +58,14 @@ pub fn findings(report: &SdkValue) -> ExitCode {
     print(&printed)
 }
 
+/// Writes one line to stderr. A stderr that is gone loses it and the exit
+/// code stays the outcome's own (`eprintln!` would panic).
+pub fn diagnostic(line: &str) {
+    let _ = writeln!(std::io::stderr().lock(), "{line}");
+}
+
 /// Writes `printed` to stdout.
-fn print(printed: &str) -> ExitCode {
+pub fn print(printed: &str) -> ExitCode {
     let mut out = std::io::stdout().lock();
     if out
         .write_all(printed.as_bytes())

@@ -64,5 +64,5 @@ pub use types::{
     DirectoryEntryChange, DirectoryEntryWindow, Generation, Inode, InodeKind, LocalRead,
     NameLayers, PayloadWrite, Publication, ReferenceRange, WorkspaceState, WriteClaims, CELL_BYTES,
     COMPOUND_DIRECTORY_ENTRIES, COMPOUND_INODES, MASK_BYTES, OPERATION_RECORD_BYTES, PAGE_ROWS,
-    READ_REFERENCES, READ_WINDOW, RUN_BYTES, WRITE_CLAIMS, WRITE_WINDOW,
+    READ_REFERENCES, READ_WINDOW, RECORD_ROWS, RUN_BYTES, WRITE_CLAIMS, WRITE_WINDOW,
 };

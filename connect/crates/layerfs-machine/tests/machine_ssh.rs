@@ -31,6 +31,7 @@ fn ssh_spec(scratch: &Scratch) -> Spec {
 }
 
 #[test]
+#[ignore = "retained adapter qualification; platform permanently disabled by layerfs-project#7"]
 fn connect_checks_the_host_key_kernel_and_data_root_before_setup() {
     let scratch = Scratch::new("ssh-connect");
     scratch.tool("ssh-keygen", KEYGEN);
@@ -74,6 +75,7 @@ esac"#,
 }
 
 #[test]
+#[ignore = "retained adapter qualification; platform permanently disabled by layerfs-project#7"]
 fn an_unknown_host_key_is_denied() {
     let scratch = Scratch::new("ssh-denied");
     scratch.tool("ssh-keygen", "exit 1");
@@ -87,6 +89,7 @@ fn an_unknown_host_key_is_denied() {
 }
 
 #[test]
+#[ignore = "retained adapter qualification; platform permanently disabled by layerfs-project#7"]
 fn a_host_that_is_not_linux_is_unsupported() {
     let scratch = Scratch::new("ssh-bsd");
     scratch.tool("ssh-keygen", KEYGEN);

@@ -7,19 +7,19 @@ use super::{
 };
 use crate::construction::outcome::nanos;
 use crate::{
-    FileDigestRow, OverlayCapturedNamespace, OverlayOperationRecords, WorkspaceResult,
+    BaseView, FileDigestRow, OverlayCapturedNamespace, OverlayOperationRecords, WorkspaceResult,
     FILE_DIGEST_WINDOW,
 };
 use layerfs_content::{
     filesystem::{FilesystemRead, PathName},
-    object::inode_leaf::encode_inode_value,
+    object::inode_leaf::{encode_inode_value, InodeKind as CanonicalKind},
     ContentError, ContentResult, EditRecordChange, EditRecordExpected, FinalizedConsumer, ObjectId,
 };
-use layerfs_overlay::{DirectoryEntry, Inode, InodeKind, PAGE_ROWS};
+use layerfs_overlay::{DirectoryEntry, Inode, InodeKind, PAGE_ROWS, RECORD_ROWS};
 use layerfs_telemetry::timer::{Active, TimingScope};
 use std::time::Instant;
 
-/// The changes of one guarded job: at most PAGE_ROWS of them, flushed strictly
+/// The changes of one guarded job: at most RECORD_ROWS of them, flushed strictly
 /// ordered by kind and then serial, and always before the next captured page
 /// is requested. Never a namespace-sized collection.
 #[derive(Default)]
@@ -38,7 +38,7 @@ impl Writer {
         shared: &Shared<'_, P>,
         rows: usize,
     ) -> ContentResult<()> {
-        if self.len() + rows > PAGE_ROWS {
+        if self.len() + rows > RECORD_ROWS {
             self.flush(shared)?;
         }
         Ok(())
@@ -84,6 +84,45 @@ pub(crate) fn seal<P: OverlayOperationRecords + ?Sized>(
     }])?;
     Ok(sealed)
 }
+/// Most same-path predecessors one attempt remembers: 16 bytes each, so at most
+/// 1 MiB. A name past the bound is not looked up and offers its file no base:
+/// the hint is advisory, and the bound keeps it from growing with the capture.
+const SAME_PATH_HINTS: usize = 65_536;
+/// The regular file the base tree holds at the path a fresh file now takes
+/// (#88). `rm f` then writing `f`, as `git checkout` does, replaces a file
+/// with no rename, so no predecessor is recorded; the file that held its name
+/// is the closest earlier version there is. Pairs of (serial, base serial),
+/// sorted by serial, the first name of a serial kept.
+pub(crate) struct SamePath(Vec<(u64, u64)>);
+impl SamePath {
+    fn of(&self, serial: u64) -> Option<u64> {
+        self.0
+            .binary_search_by_key(&serial, |(fresh, _)| *fresh)
+            .ok()
+            .map(|at| self.0[at].1)
+    }
+}
+/// The base serial of the regular file `parent` binds as `name` in the base,
+/// for a name the capture binds to `serial` over a binding the lower view
+/// held. A name the base does not bind, under a parent it does not hold as a
+/// directory, or bound to another kind or to `serial` itself offers nothing;
+/// any other base failure is the attempt's own.
+fn same_path<P: OverlayOperationRecords + ?Sized>(
+    shared: &Shared<'_, P>,
+    base: &BaseView,
+    parent: u64,
+    name: &PathName,
+    serial: u64,
+) -> ContentResult<Option<u64>> {
+    add(&mut shared.borrow_mut().work.same_path_lookups, 1);
+    match base.child(parent, name) {
+        Ok(found) if found.value.kind == CanonicalKind::RegularFile && found.serial != serial => {
+            Ok(Some(found.serial))
+        }
+        Ok(_) | Err(ContentError::PathNotFound) | Err(ContentError::WrongLogicalRole) => Ok(None),
+        Err(original) => Err(shared.borrow_mut().content(original)),
+    }
+}
 /// One original captured page: its failure is retained, its window is checked.
 fn page<P: OverlayOperationRecords + ?Sized, T>(
     shared: &Shared<'_, P>,
@@ -99,13 +138,17 @@ fn page<P: OverlayOperationRecords + ?Sized, T>(
 }
 /// One pass over every captured name: each parent's exact change count becomes
 /// its header unless the parent itself was created and removed in the capture.
+/// A name bound over one the lower view held also asks the base which file
+/// held it, for the values pass to offer as a delta base (`SamePath`).
 pub(crate) fn names<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized>(
     provider: &P,
     shared: &Shared<'_, P>,
     facts: Facts,
-) -> ContentResult<u64> {
+    base: &BaseView,
+) -> ContentResult<(u64, SamePath)> {
     let mut writer = Writer::default();
     let mut headers = 0_u64;
+    let mut hints = Vec::new();
     let mut after: Option<(u64, Vec<u8>)> = None;
     let mut open: Option<(u64, u64)> = None;
     loop {
@@ -120,8 +163,8 @@ pub(crate) fn names<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Siz
         for DirectoryEntry {
             parent,
             name,
-            serial: _,
-            inherited: _,
+            serial,
+            inherited,
         } in rows
         {
             let ordered = match &after {
@@ -132,8 +175,13 @@ pub(crate) fn names<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Siz
                 return Err(ContentError::InvalidRecord("captured name page order"));
             }
             // A name Content cannot represent ends the attempt with its error.
-            PathName::from_bytes(&name)?;
+            let path = PathName::from_bytes(&name)?;
             add(&mut shared.borrow_mut().work.entry_rows, 1);
+            if let (Some(serial), true) = (serial, inherited && hints.len() < SAME_PATH_HINTS) {
+                if let Some(held) = same_path(shared, base, parent, &path, serial)? {
+                    hints.push((serial, held));
+                }
+            }
             open = match open {
                 Some((current, changes)) if current == parent => Some((
                     current,
@@ -158,7 +206,10 @@ pub(crate) fn names<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Siz
         headers += header(provider, shared, facts, &mut writer, current, changes)?;
     }
     writer.flush(shared)?;
-    Ok(headers)
+    // Stable: a serial bound at two such names keeps the first, in name order.
+    hints.sort_by_key(|(serial, _)| *serial);
+    hints.dedup_by_key(|(serial, _)| *serial);
+    Ok((headers, SamePath(hints)))
 }
 /// One captured inode point decides the finished parent. Only a parent created
 /// above the floor and left with no link is dropped; a removed base directory
@@ -215,12 +266,15 @@ fn record_digests<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized
     Ok(())
 }
 /// One pass over every captured inode in serial order. A page's base records
-/// are one grouped demand; one file is under construction at a time.
+/// are one grouped demand; one file is under construction at a time. A fresh
+/// file is offered the predecessor a rename recorded, else the file the base
+/// held at its path (`same`).
 pub(crate) fn values<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized>(
     builder: &Builder<'_, '_, P>,
     consumer: &mut dyn FinalizedConsumer,
     timing: &TimingScope<'_, Active>,
     headers: u64,
+    same: &SamePath,
 ) -> ContentResult<Totals> {
     let (provider, shared, facts) = (builder.provider, builder.shared, builder.facts);
     let client = builder.base.client();
@@ -278,15 +332,14 @@ pub(crate) fn values<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Si
         if digests.len() != followed.len() {
             return Err(ContentError::InvalidRecord("captured digest page"));
         }
-        // The files a rename put in place of others, large enough to be
-        // chunked: their predecessors are offered as delta bases (#352 F-063).
-        let threshold = builder.policy.small_file_threshold_bytes();
+        // The files a rename may have put in place of others: their
+        // predecessors are offered as delta bases (#352 F-063), a small
+        // file's whole (#88) as a chunked file's chunks.
         let replacing: Vec<u64> = rows
             .iter()
             .filter(|inode| {
                 inode.kind == InodeKind::File
                     && inode.nlink != 0
-                    && inode.size >= threshold
                     && inode.serial != facts.root_serial
                     && facts.reader.created_above(inode.born)
             })
@@ -365,7 +418,11 @@ pub(crate) fn values<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Si
             };
             let predecessor = predecessors
                 .next_if(|(serial, _)| *serial == inode.serial)
-                .and_then(|(_, predecessor)| predecessor);
+                .and_then(|(_, predecessor)| predecessor)
+                .or_else(|| fresh.then(|| same.of(inode.serial)).flatten());
+            if predecessor.is_some() && inode.kind == InodeKind::File && reuse.is_none() {
+                add(&mut shared.borrow_mut().work.predecessors_offered, 1);
+            }
             let value =
                 builder.value(inode, record, fresh, reuse, predecessor, consumer, timing)?;
             // A root built from all of this file's bytes is recorded.

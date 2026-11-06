@@ -32,7 +32,8 @@ impl Storage {
         let source = Fetch::new(metadata);
         source.note(|c| c.policy += 1);
         let policy = source.metadata.policy()?.validated()?;
-        let capacities = StorageCapacities::from_policy(policy)?;
+        let capacities = StorageCapacities::from_policy(policy)?
+            .with_publication_bytes(source.metadata.publication_bytes())?;
         Ok(Self {
             source,
             work: crate::save::Work::default(),
@@ -56,7 +57,14 @@ impl Storage {
     }
     /// Creates an operation-owned authenticated reader with bounded caches.
     pub fn reader(&self) -> StorageResult<Reader<'_>> {
-        Reader::new(self)
+        Reader::new(self, false)
+    }
+    /// A reader that continues the latest Save's operation: besides its own
+    /// bounded caches it may read the metadata pack bodies that Save
+    /// published instead of fetching them back. Everything it returns is
+    /// authenticated as by [`Self::reader`].
+    pub fn reader_after_save(&self) -> StorageResult<Reader<'_>> {
+        Reader::new(self, true)
     }
     /// Bounded recent and cumulative save-stage wall observations.
     pub fn save_work(&self) -> crate::save::SaveHistory {

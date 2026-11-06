@@ -47,7 +47,7 @@ A bucket driver holds files by name. It knows nothing about Stores.
 | `Integrity` | bytes do not match their recorded size or sha256 | yes |
 | `Local` | a local file operation failed | — |
 | `Uncertain` | sent, outcome unknown; never resent | yes |
-| `PartsLeft { cause, upload, abort }` | a multipart upload failed and so did its abort | yes |
+| `PartsLeft { cause, upload, abort }` | a part failed and so did the abort: the object was not replaced, but parts may remain (a completion of unknown outcome whose abort fails is `Uncertain` instead) | yes |
 | `Unsupported` | not in this build (for example TLS) | no |
 
 ## Local folder
@@ -74,7 +74,10 @@ Source: [`local_folder/folder.rs`](../../../../connect/crates/layerfs-store-back
 | `credentials` | a `CredentialRef` |
 | `part_size` | multipart part size; `DEFAULT_PART_SIZE` is 64 MiB |
 
-Path-style requests; connect timeout 5 s, socket I/O timeout 60 s.
+Path-style requests; connect timeout 5 s, socket I/O timeout 60 s. Limits:
+one PUT up to 5 TiB; parts of 5 MiB–5 GiB, at most 10,000, so the largest
+single object is 48.83 TiB (`MAX_PARTS * MAX_PART`, below MinIO's 50 TiB
+object limit); a larger file goes up as 5 TiB pieces.
 Source: [`minio/provider.rs`](../../../../connect/crates/layerfs-store-backup/src/bucket/minio/provider.rs).
 
 ## R2
@@ -88,7 +91,9 @@ Source: [`minio/provider.rs`](../../../../connect/crates/layerfs-store-backup/sr
 | `bucket`, `prefix`, `credentials`, `part_size` | as MinIO |
 
 Connect timeout 10 s, socket I/O timeout 60 s. R2 needs the `tls` feature
-to connect. Source: [`r2/provider.rs`](../../../../connect/crates/layerfs-store-backup/src/bucket/r2/provider.rs).
+to connect. Limits: objects up to 4.995 TiB (a larger file goes up as
+4.995 TiB pieces); one request, and so one multipart part, up to 4.995 GiB:
+a `part_size` above that is refused `Invalid` before anything is sent. Source: [`r2/provider.rs`](../../../../connect/crates/layerfs-store-backup/src/bucket/r2/provider.rs).
 
 ## S3 API
 
@@ -97,13 +102,20 @@ to connect. Source: [`r2/provider.rs`](../../../../connect/crates/layerfs-store-
    span > limits.max_file ----------------------------> TooLarge
    span > part_size or > max_request -----> multipart:     multipart.rs
         create -> part 1..n (equal size, last smaller) -> complete
-        any failure -> abort (a new request) -> cause, or PartsLeft
+        part_size above limits.max_request -------------> Invalid
+        any failure -> abort (a new request) -> cause, or
+          PartsLeft (a part failed), or Uncertain (the completion's
+          outcome is unknown: the object may have been replaced)
    else -> one PUT, SHA-256 payload hash, x-amz-meta-* headers
 
  every request                                             http.rs
    take a kept connection (idle <= 10 s and quiet) or connect once
    failure before the first byte written ............ Unavailable
    failure after it ................................. Uncertain (no resend)
+   body send reset or closed by the server, with a 4xx
+   reply already sent (a key without write access) ... Refused, definite
+   each read or write: io_timeout (60 s); a request body buffer
+   (256 KiB) that takes longer than io_timeout to send ... Uncertain
    reply read to its exact end -> connection kept (at most 4)
 ```
 

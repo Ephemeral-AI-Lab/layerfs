@@ -239,7 +239,7 @@ fn each_problem_gives_one_finding_naming_its_fix() {
             "store",
             "s2",
             "machine ghost",
-            "machine create ghost",
+            "restore machine ghost's record for inspection and explicit cleanup",
         ),
         (
             "error",
@@ -302,6 +302,9 @@ fn each_problem_gives_one_finding_naming_its_fix() {
         assert!(x.contains(fix), "{kind} {name}: {x}");
     }
     assert_eq!(found.len(), expect.len(), "{found:#?}");
+    assert!(found
+        .iter()
+        .all(|finding| !finding.4.contains("machine connect")));
     std::fs::remove_dir_all(home).unwrap();
 }
 

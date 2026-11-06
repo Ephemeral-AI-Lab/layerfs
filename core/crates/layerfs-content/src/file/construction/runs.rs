@@ -2,7 +2,7 @@
 use crate::file::{
     cdc::MAXIMUM_CHUNK_BYTES,
     chunk_runs::ChunkRuns,
-    construct_bytes,
+    construct_bytes_with_predecessor,
     mapping::{self, Aligner, PredecessorBase},
     ConstructedFile, FileContent,
 };
@@ -70,13 +70,15 @@ pub fn construct_runs(
 /// version of the file as the delta-base correspondence of its new chunks.
 ///
 /// `base` is a file this one replaced, such as the target of a rename that put
-/// it in place. Each new chunk is offered the base payload its byte range
-/// corresponds to, through the same alignment an edit uses, re-anchored at
-/// every chunk equal to a base payload. The base is read only when the result
-/// is chunked: its root once, then its mapping pages as the alignment walks
-/// forward, never a payload. A whole-file base offers nothing. The hints are
-/// advisory, so the constructed root is byte for byte the one `construct_runs`
-/// returns; with no base this is `construct_runs`.
+/// it in place or the file the base tree held at the same path. Each new chunk
+/// is offered the base payload its byte range corresponds to, through the same
+/// alignment an edit uses, re-anchored at every chunk equal to a base payload.
+/// For a chunked result the base is read: its root once, then its mapping pages
+/// as the alignment walks forward, never a payload, and a whole-file base offers
+/// no chunk anything. A whole-file result is offered the base root as its
+/// explicit predecessor without any read (#88), as `construct_bytes_with_predecessor`
+/// does. The hints are advisory, so the constructed root is byte for byte the one
+/// `construct_runs` returns; with no base this is `construct_runs`.
 pub fn construct_runs_with_predecessor(
     policy: ConstructionPolicy,
     capacities: &ConstructionCapacities,
@@ -86,6 +88,7 @@ pub fn construct_runs_with_predecessor(
     scope: TimingScope<'_>,
 ) -> ContentResult<RunConstruction> {
     policy.validated()?;
+    let offered = base;
     scope.run(|active| {
         let mut hints = Hints {
             base,
@@ -138,10 +141,12 @@ pub fn construct_runs_with_predecessor(
             }
         }
         if !chunked {
-            let file = construct_bytes(
+            // A small result takes the earlier version whole as its base.
+            let file = construct_bytes_with_predecessor(
                 policy,
                 capacities,
                 &prefix,
+                offered,
                 consumer,
                 active.child("content.runs.small"),
             )?;

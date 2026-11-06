@@ -18,5 +18,6 @@ pub trait FileDigests {
     fn file_roots(&self, contents: &[([u8; 32], u64)]) -> WorkspaceResult<Vec<Option<[u8; 32]>>>;
 }
 
-/// Rows per call, the Store's own window.
-pub const FILE_DIGEST_WINDOW: usize = 64;
+/// Rows per call, the Store's own window (the history contract's
+/// `FILE_DIGEST_WINDOW`), equal to one overlay page.
+pub const FILE_DIGEST_WINDOW: usize = 1024;

@@ -4,8 +4,14 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Adds an existing Linux host reached over ssh as a machine: checks its host
-key, copies the sealed bundle in and starts its worker.
+Firecracker and SSH are **permanently disabled for new work**. Their code
+and records remain for inspection and explicit cleanup. See the
+[platform restriction](../../../connect/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
+the source change required for re-enabling. Descriptions of their adapter
+mechanics below are retained implementation details, not selectable features.
+
+This retained call always refuses `Unsupported` after argument validation and
+before home creation or platform effects. The adapter code below is disabled.
 
 | | |
 | --- | --- |
@@ -40,7 +46,7 @@ layerfs machine connect <name> <host> [--user U] [--port N] \
 | `name` | Name | `MachineName::parse`; not built in; not taken | [`machine/create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs) `new_name` |
 | `host` | Text | the ssh host name or address | [`machine/connect.rs`](../../../../../api/crates/layerfs-control/src/machine/connect.rs) |
 
-`ssh` is supported from macOS, Linux and Windows hosts
+`ssh` is disabled on macOS, Linux, Windows and every other host
 ([`SUPPORT.json`](../../../../../connect/SUPPORT.json)); see the
 [ssh platform page](../../../connect/machines/platforms/ssh.md).
 
@@ -54,7 +60,7 @@ layerfs machine connect <name> <host> [--user U] [--port N] \
 | `known_hosts` | Text | `$HOME/.ssh/known_hosts` | copied into `machine/<name>/known_hosts`; the host key is checked strictly against it | [`machine/connect.rs`](../../../../../api/crates/layerfs-control/src/machine/connect.rs) |
 | `root` | Text | `/layerfs/data` | the data root on the host for Stores | [`spec.rs`](../../../../../connect/crates/layerfs-machine/src/spec.rs) `DATA` |
 
-## Returns
+## Retained success result (unreachable while disabled)
 
 The machine's summary with `platform: "ssh"`, `state: "running"` and its
 `ssh` settings; see [machine.get](get.md#returns) and
@@ -99,7 +105,7 @@ See the [routing table](../../routing/routing-table.md).
 
 ## Examples
 
-Not run; written from the call table.
+Refusal examples: every call below returns the fixed SSH `Unsupported` reason.
 
 ```js
 await layerfs.machine.connect("box", "build.example.org", { user: "lfs", identity: "/home/me/.ssh/id_ed25519" });
