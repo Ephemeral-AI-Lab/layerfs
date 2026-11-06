@@ -117,6 +117,11 @@ impl PackPersistence for PostgresStorage {
         self.session
             .run(true, |tx| metadata::allocation::reserve(tx, request))
     }
+    /// Every ranged read is a round trip, so a pack up to the pack limit is
+    /// taken whole in one statement and kept for the next demands.
+    fn whole_pack_bytes(&self) -> usize {
+        layerfs_storage::policy::PACK_LIMIT
+    }
     fn publication_pack_cost(
         &self,
         pack: &PublishedPack,
@@ -125,14 +130,9 @@ impl PackPersistence for PostgresStorage {
     }
     fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError> {
         publication::validate(batch)?;
-        if !batch.packs.is_empty() {
-            self.session
-                .run_as::<_, PersistenceError>(Mode::Stage, |tx| {
-                    objects::publish::packs(tx, &batch.packs).map_err(Into::into)
-                })?;
-        }
-        self.session.run(true, |tx| {
-            objects::publish::rows(tx, batch).map_err(PersistenceError::from)
-        })
+        self.session
+            .run_as::<_, PersistenceError>(Mode::Publish, |tx| {
+                objects::publish::run(tx, batch).map_err(Into::into)
+            })
     }
 }

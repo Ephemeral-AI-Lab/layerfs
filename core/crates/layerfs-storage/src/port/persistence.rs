@@ -130,6 +130,13 @@ pub trait PackPersistence: Send + Sync {
     fn signatures(&self, out: &mut Vec<SignatureRow>) -> Result<(), PersistenceError>;
     /// Allocates one block of pack ids and/or pooled ordinals.
     fn reserve(&self, request: Reserve) -> Result<Reserved, PersistenceError>;
+    /// Largest pack a localized acquisition takes whole and keeps for later
+    /// demands. A provider whose every ranged read is a network round trip
+    /// raises it to the pack limit; the default takes only packs no larger
+    /// than their control prefix. Bounded caches still bound what is kept.
+    fn whole_pack_bytes(&self) -> usize {
+        super::PACK_READ_PREFIX_BYTES
+    }
     /// Prospective physical rows and submitted bytes for one immutable pack.
     /// Monolithic providers use one row and the original body-byte charge.
     /// Providers with unit fanout return its exact cost before publication.

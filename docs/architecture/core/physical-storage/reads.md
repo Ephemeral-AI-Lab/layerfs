@@ -54,8 +54,14 @@ A `Reader` (from `Storage::reader`) serves one operation and implements
 
 | Cache | Bound | Release | Source |
 | --- | --- | --- | --- |
-| `LocatorCache` (positive) | 4,096 entries | second-chance victim selection; explicit invalidation after publication | [`locator_cache.rs`](../../../../core/crates/layerfs-storage/src/read/locator_cache.rs) |
+| `LocatorCache` (positive) | 4,096 entries | second-chance victim selection; after a publication the locations the Save won are kept (they are the Store's winners) and lost ones are invalidated and located again | [`locator_cache.rs`](../../../../core/crates/layerfs-storage/src/read/locator_cache.rs), [`fetch.rs`](../../../../core/crates/layerfs-storage/src/read/fetch.rs) |
+| Published bodies and values | 2 MiB of metadata pack bodies (the published `Arc`s), 512 KiB of pooled inode values | the next Save clears them; oldest first at the bound | [`fetch.rs`](../../../../core/crates/layerfs-storage/src/read/fetch.rs) |
 | Absent set (negative) | 4,096 ids | cleared at the start of each demand, and cleared whole at its bound | [`fetch.rs`](../../../../core/crates/layerfs-storage/src/read/fetch.rs) |
+
+Only a reader from `Storage::reader_after_save` reads the published bodies and
+values: it continues the latest Save's operation (a Commit's logical count and
+binding hints, layerfs-project #68). Every other reader acquires every body it
+needs. Everything either returns is authenticated the same way.
 
 `base_location` drops a negative mark before it asks again. A base named by a
 stored record is always stored, and another writer may have published it after
@@ -68,6 +74,13 @@ the mark was taken (F-036).
 | `read_scoped_pack` | `acquire_groups`: the groups a demand needs | Whole: length and SHA-256 checked. Units: framing checked, bytes not hashed; each used object is authenticated by its id. | [`fetch.rs`](../../../../core/crates/layerfs-storage/src/read/fetch.rs), [`port/read_scoped.rs`](../../../../core/crates/layerfs-storage/src/port/read_scoped.rs) |
 | `read_packs` | whole metadata packs and payload packs by id | length and SHA-256 checked by `PersistedPack::authenticate`, then header, declared length and domain | same, [`port/read_pack.rs`](../../../../core/crates/layerfs-storage/src/port/read_pack.rs) |
 | `read_pack_selection` | strict selected reads: the whole pack is scanned and hashed, only chosen ranges are kept | SHA-256 over every byte | [`port/read_selection.rs`](../../../../core/crates/layerfs-storage/src/port/read_selection.rs) |
+
+When the provider takes packs whole (`whole_pack_bytes` above the control
+prefix, as PostgreSQL does), a demand reads its uncached packs that are no
+larger than that and fit the 2 MiB pack cache together in one `read_packs`
+call, if there are at least two, before acquiring groups
+([`Fetch::whole_packs`](../../../../core/crates/layerfs-storage/src/read/fetch.rs));
+the demand's kept packs are reserved first so the read does not evict them.
 
 The reply must match the plan: the same descriptor, the same choice (whole or
 ranges) and the same extents, else `Integrity("selected strategy/extent reply")`.
@@ -86,7 +99,7 @@ sees the pack's control area and directory, then chooses before body I/O:
 | Choice | When | Diagnostics counter |
 | --- | --- | --- |
 | Whole | singleton lane | `whole_due_singleton` |
-| Whole | pack length ≤ 4,120 bytes (`PACK_READ_PREFIX_BYTES`) | `whole_due_small` |
+| Whole | pack length ≤ the provider's `whole_pack_bytes`: 4,120 bytes (`PACK_READ_PREFIX_BYTES`) by default, the 256 KiB pack limit on PostgreSQL, where each ranged read is a round trip | `whole_due_small` |
 | Whole | wanted groups cover at least half the pack, or need more than 4 ranges | `whole_due_density` |
 | Whole | this owner already kept another group of the pack | `whole_due_reuse` |
 | Ranges | otherwise; adjacent groups coalesce into one range | `range_selected` |

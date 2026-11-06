@@ -14,7 +14,10 @@ use layerfs_history::records::{
 };
 
 use super::query::{self, Context, Cursor, Range};
-use super::rows::{branch_row, many, one, sql};
+use super::rows::{branch_row, commit_row, many, one, sql, stack_row};
+use crate::backend::records::{Record as Row, Value};
+use layerfs_content::ObjectId;
+use layerfs_history::records::{CommitRecord, LayerStackRecord};
 
 const BRANCH_BY_ID: &str = "branch_branch_by_id";
 
@@ -47,20 +50,82 @@ pub(crate) fn branch_named(
     )
 }
 
-/// Reads one coherent Branch snapshot with every root it resolves to.
+/// One Branch row with the rows its snapshot resolves to, read by one
+/// statement: its LayerStack, its base Layer's root and its head Commit.
+/// Each part stays undecoded until a caller checks it, in its own order.
+pub(crate) struct SnapshotRows {
+    pub(crate) branch: BranchRecord,
+    row: Row,
+}
+
+impl SnapshotRows {
+    fn part(&self, columns: std::ops::Range<usize>) -> Option<Row> {
+        match self.row.cells.get(columns.start) {
+            None | Some(Value::Null) => None,
+            Some(_) => Some(Row {
+                cells: self.row.cells[columns].to_vec(),
+            }),
+        }
+    }
+    /// The Branch's LayerStack, when its row exists.
+    pub(crate) fn stack(&self) -> HistoryResult<Option<LayerStackRecord>> {
+        self.part(6..11).as_ref().map(stack_row).transpose()
+    }
+    /// The root of the Branch's base Layer, when its row exists.
+    pub(crate) fn base_root(&self) -> HistoryResult<Option<ObjectId>> {
+        self.part(11..12)
+            .map(|row| super::rows::object(&row, 0))
+            .transpose()
+    }
+    /// The Branch's head Commit, when it has one and its row exists.
+    pub(crate) fn head(&self) -> HistoryResult<Option<CommitRecord>> {
+        self.part(12..29).as_ref().map(commit_row).transpose()
+    }
+}
+
+const SNAPSHOT: &str = "branch_snapshot";
+
+/// Reads one Branch and the rows its snapshot resolves to in one statement.
+pub(crate) fn snapshot_rows(
+    tx: &Transaction<'_>,
+    id: BranchId,
+) -> HistoryResult<Option<SnapshotRows>> {
+    let mut rows = tx.query(SNAPSHOT, [id.as_slice()])?;
+    if rows.len() > 1 {
+        return Err(HistoryError::Integrity("catalog row count"));
+    }
+    let Some(row) = rows.pop() else {
+        return Ok(None);
+    };
+    if row.cells.len() != 29 {
+        return Err(HistoryError::Integrity("catalog row"));
+    }
+    Ok(Some(SnapshotRows {
+        branch: branch_row(&row)?,
+        row,
+    }))
+}
+
+/// Reads one coherent Branch snapshot with every root it resolves to, in
+/// one statement.
 pub(crate) fn branch_snapshot(
     tx: &Transaction<'_>,
     id: BranchId,
 ) -> HistoryResult<Option<BranchSnapshot>> {
-    let Some(record) = branch(tx, id)? else {
+    let Some(rows) = snapshot_rows(tx, id)? else {
         return Ok(None);
     };
-    let stack = super::layerstack::layer_stack(tx, record.stack)?
+    let stack = rows
+        .stack()?
         .ok_or(HistoryError::Integrity("Branch LayerStack"))?;
-    let base_root = super::layerstack::layer_root(tx, record.base_layer)?;
+    let base_root = rows
+        .base_root()?
+        .ok_or(HistoryError::Missing(Missing::Layer))?;
+    let record = rows.branch.clone();
     let head_root = match record.head_commit {
-        Some(head) => {
-            let commit = super::commit::commit(tx, head)?
+        Some(_) => {
+            let commit = rows
+                .head()?
                 .ok_or(HistoryError::Integrity("Branch head Commit"))?;
             if commit.base_layer != record.base_layer || commit.stack != record.stack {
                 return Err(HistoryError::Integrity("Branch head ancestry"));

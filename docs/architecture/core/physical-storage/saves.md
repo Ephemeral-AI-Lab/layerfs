@@ -52,6 +52,16 @@ One wave ([`wave.rs`](../../../../core/crates/layerfs-storage/src/save/wave.rs))
 | New object | Check every reference is stored, pending or sealed (else `MissingDependency`), select a representation ([Encoding](encoding.md#full-and-delta-encoding)) and add the record to its lane's open group. |
 | Flush | Write signature-ring changes, then publish every ready pack. |
 
+A whole-file object whose ring proposal is still held by this Save (pending
+or sealed, not published) would first seal and publish it, so selection can
+charge the winner's chain. When no PREFIX record can be narrower than the
+object's FULL record (`delta::record::prefix_cannot_win`: the PREFIX adds the
+32-byte base id and a zstd frame of at least 14 bytes), the proposal is dropped
+instead: selection would answer FULL whatever the base. The FULL record is
+prepared once and handed to selection. Before this, 1,000 similar 23-byte
+files cost 1,000 publications and 1,000 one-object packs; now one wave
+(layerfs-project #67).
+
 A Storage handle runs one Save at a time: a second `begin_save` while one is
 open fails with `Integrity("one save per storage handle")`. Separate handles
 may save concurrently ([`store/handle.rs`](../../../../core/crates/layerfs-storage/src/store/handle.rs),

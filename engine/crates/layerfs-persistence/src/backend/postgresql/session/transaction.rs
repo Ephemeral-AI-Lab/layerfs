@@ -21,14 +21,27 @@ pub(crate) enum Mode {
     Write,
     /// A write of new immutable rows only (pack bodies), without the lane.
     Stage,
+    /// One publication: pack bodies first, without the lane, then the lane
+    /// row ([`Transaction::lane`]) and the rows that reference them, all in
+    /// one transaction.
+    Publish,
     /// Reads of immutable rows only, each statement on its own (autocommit):
     /// no `BEGIN`/`COMMIT` round trips. Statements name the schema.
     Immutable,
+    /// Exactly one read statement on its own (autocommit). One PostgreSQL
+    /// statement sees one snapshot, so it may read mutable rows (a Branch
+    /// and the roots it resolves to) coherently without `BEGIN`/`COMMIT`.
+    /// A second statement is refused before it is sent.
+    Statement,
 }
 
 pub(crate) struct Transaction<'a> {
     state: RefCell<&'a mut State>,
     uncertain: Cell<bool>,
+    /// `Mode::Statement`: whether its one statement was already sent.
+    single: Option<Cell<bool>>,
+    /// `Mode::Publish` outside a held lane: the lane row is still to lock.
+    lane: Cell<bool>,
     /// The Store's checked schema, for statements that name it.
     pub(crate) schema: &'a str,
 }
@@ -44,8 +57,17 @@ impl Transaction<'_> {
         })
     }
 
+    /// Refuses a second statement in a `Mode::Statement` body.
+    fn admit(&self) -> Result<(), BackendError> {
+        match &self.single {
+            Some(sent) if sent.replace(true) => Err(BackendError::Integrity),
+            _ => Ok(()),
+        }
+    }
+
     /// One statement with engine-neutral parameters and owned results.
     pub(crate) fn query(&self, sql: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError> {
+        self.admit()?;
         let start = Instant::now();
         let mut state = self.state.borrow_mut();
         let statement = state.statement(sql);
@@ -83,6 +105,7 @@ impl Transaction<'_> {
         params: &[&(dyn ToSql + Sync)],
         bytes: u64,
     ) -> Result<Vec<Row>, BackendError> {
+        self.admit()?;
         let start = Instant::now();
         let mut state = self.state.borrow_mut();
         let statement = state.statement(sql);
@@ -107,14 +130,15 @@ impl Transaction<'_> {
         types: &[Type],
         rows: impl FnOnce(&mut BinaryCopyInWriter<'_>) -> Result<(), postgres::Error>,
     ) -> Result<u64, BackendError> {
+        self.admit()?;
         let start = Instant::now();
         let mut state = self.state.borrow_mut();
         let result = (|| {
-            // Its own prepare, the start (CopyInResponse) and the finish;
-            // the rows stream between them without waiting.
-            state.work.prepares += 1;
-            state.work.round_trips += 3;
-            let writer = state.client.copy_in(sql)?;
+            // The cached prepare (counted once per connection), the start
+            // (CopyInResponse) and the finish; the rows stream between them.
+            let statement = state.statement(sql)?;
+            state.work.round_trips += 2;
+            let writer = state.client.copy_in(&statement)?;
             let mut writer = BinaryCopyInWriter::new(writer, types);
             rows(&mut writer)?;
             writer.finish()
@@ -125,8 +149,18 @@ impl Transaction<'_> {
         self.checked(result)
     }
 
+    /// Waits for and locks the Store's lane row, once, in a `Mode::Publish`
+    /// transaction that is not already inside this thread's held lane.
+    pub(crate) fn lane(&self) -> Result<(), BackendError> {
+        if self.lane.replace(false) {
+            self.query(super::profile::Settings::LANE_ROW, Vec::new())?;
+        }
+        Ok(())
+    }
+
     /// A script of statements without parameters (schema creation).
     pub(crate) fn batch(&self, sql: &str) -> Result<(), BackendError> {
+        self.admit()?;
         let mut state = self.state.borrow_mut();
         let result = state.client.batch_execute(sql);
         state.work.statements += 1;
@@ -155,12 +189,21 @@ impl Session {
         self.run_as(Mode::Immutable, body)
     }
 
+    /// One read statement on its own snapshot, with no `BEGIN`/`COMMIT`
+    /// round trips; its SQL names the schema.
+    pub(crate) fn read_statement<T, E: From<BackendError> + OutcomeError>(
+        &self,
+        body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+    ) -> Result<T, E> {
+        self.run_as(Mode::Statement, body)
+    }
+
     pub(crate) fn run_as<T, E: From<BackendError> + OutcomeError>(
         &self,
         mode: Mode,
         body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
     ) -> Result<T, E> {
-        if !matches!(mode, Mode::Read | Mode::Immutable) && !self.writable {
+        if !matches!(mode, Mode::Read | Mode::Immutable | Mode::Statement) && !self.writable {
             return Err(BackendError::ReadOnly.into());
         }
         let start = Instant::now();
@@ -182,8 +225,10 @@ impl Session {
             Mode::Read => self.settings.read_begin(),
             Mode::Write => self.settings.write_begin(!turn.nested),
             Mode::Stage => self.settings.write_begin(false),
-            Mode::Immutable => {
-                let result = immutable(state, &self.settings.schema, body);
+            Mode::Publish => self.settings.publish_begin(),
+            Mode::Immutable | Mode::Statement => {
+                let single = (mode == Mode::Statement).then(|| Cell::new(false));
+                let result = immutable(state, &self.settings.schema, single, body);
                 state.work.transaction_ns += start.elapsed().as_nanos() as u64;
                 return result;
             }
@@ -208,6 +253,8 @@ impl Session {
                 let tx = Transaction {
                     state: RefCell::new(&mut *state),
                     uncertain: Cell::new(false),
+                    single: None,
+                    lane: Cell::new(mode == Mode::Publish && !turn.nested),
                     schema,
                 };
                 let result = body(&tx);
@@ -265,12 +312,15 @@ impl Session {
 fn immutable<T, E: From<BackendError> + OutcomeError>(
     state: &mut State,
     schema: &str,
+    single: Option<Cell<bool>>,
     body: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
 ) -> Result<T, E> {
     let (result, uncertain) = {
         let tx = Transaction {
             state: RefCell::new(&mut *state),
             uncertain: Cell::new(false),
+            single,
+            lane: Cell::new(false),
             schema,
         };
         let result = body(&tx);

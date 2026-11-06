@@ -4,7 +4,8 @@ use crate::{
     encoding::{
         delta::{
             candidates::signature,
-            select::{select, SelectInput},
+            record::prefix_cannot_win,
+            select::{prepare_full, select, SelectInput},
         },
         raw_payload,
     },
@@ -35,15 +36,37 @@ impl State<'_> {
         self.packer
             .flush_if_contains(&advisory, &mut self.next_pack, self.pack_end)?;
         let mut physical_candidates = advisory.clone();
+        let mut full = None;
         let sig = if PackLane::for_role(object.role()) == PackLane::WholeFile {
             let sig = signature(raw_payload(object.canonical(), object.role())?);
             // An unloaded ring means this Save has inserted nothing, so what it
             // would propose is no object pending here; selection loads it if
             // its fallback needs it (#352 record 034, S1-b).
-            let proposed = match self.candidates.needs_load() {
+            let mut proposed = match self.candidates.needs_load() {
                 true => None,
                 false => self.candidates.find(object.id(), &sig),
             };
+            // A proposal this Save still holds would be sealed and published
+            // below before selection may use it. When no PREFIX record can beat
+            // the payload's FULL record, selection answers FULL whatever the
+            // base, so the proposal is dropped instead of publishing one wave
+            // per similar file (layerfs-project #67). The FULL record is
+            // prepared once and handed to selection.
+            if proposed
+                .is_some_and(|id| self.packer.pending(id) || self.packer.location(id).is_some())
+            {
+                let record = prepare_full(
+                    object.canonical(),
+                    object.role(),
+                    &self.storage.capacities(),
+                    &mut self.compression,
+                    &mut self.profile,
+                )?;
+                if prefix_cannot_win(record.lane, record.record.len()) {
+                    proposed = None;
+                }
+                full = Some(record);
+            }
             let mut needed = advisory.clone();
             needed.extend(proposed);
             physical_candidates.extend(proposed);
@@ -88,6 +111,7 @@ impl State<'_> {
             chain: &mut self.chain,
             chain_total: &mut self.chain_total,
             signature: sig,
+            full,
             counters: &mut self.delta,
             profile: &mut self.profile,
         };

@@ -9,12 +9,15 @@ use std::cell::RefCell;
 pub struct Reader<'a> {
     storage: &'a Storage,
     state: RefCell<(Decoder, ReadState)>,
+    /// Continues the latest Save's operation (see [`Storage::reader_after_save`]).
+    after_save: bool,
 }
 impl<'a> Reader<'a> {
-    pub(crate) fn new(storage: &'a Storage) -> StorageResult<Self> {
+    pub(crate) fn new(storage: &'a Storage, after_save: bool) -> StorageResult<Self> {
         Ok(Self {
             storage,
             state: RefCell::new((Decoder::new()?, ReadState::new())),
+            after_save,
         })
     }
     /// Actual pooled reconstruction work across this operation’s read demands.
@@ -23,6 +26,9 @@ impl<'a> Reader<'a> {
     }
     /// Reconstructs and authenticates a bounded demand, in demand order.
     pub fn read_objects(&self, ids: &[ObjectId]) -> StorageResult<Vec<Vec<u8>>> {
+        let _serve = self
+            .after_save
+            .then(|| self.storage.source.serving_published());
         let (workspace, state) = &mut *self.state.borrow_mut();
         state.read(
             workspace,
