@@ -21,8 +21,16 @@ const CURSOR: [u8; 32] = [43; 32];
 struct Wire {
     connections: AtomicU64,
     round_trips: AtomicU64,
+    /// The server side of every proxied connection, for [`Wire::cut`].
+    servers: std::sync::Mutex<Vec<TcpStream>>,
 }
 impl Wire {
+    /// Ends every connection made so far, as a server restart would.
+    fn cut(&self) {
+        for server in self.servers.lock().unwrap().drain(..) {
+            let _ = server.shutdown(std::net::Shutdown::Both);
+        }
+    }
     fn take(&self) -> (u64, u64) {
         (
             self.connections.swap(0, Ordering::SeqCst),
@@ -42,6 +50,10 @@ fn proxy(upstream: String, wire: Arc<Wire>) -> u16 {
                 return;
             };
             wire.connections.fetch_add(1, Ordering::SeqCst);
+            wire.servers
+                .lock()
+                .unwrap()
+                .push(server.try_clone().unwrap());
             // 1: the client spoke last, 2: the server did
             let last = Arc::new(AtomicU8::new(0));
             for (mut from, mut to, side) in [
@@ -204,12 +216,26 @@ fn postgresql_open_costs_on_the_wire() {
         opened.store.mount_reader(ws(2)).unwrap();
         row("mount reader open (second)", &wire);
         opened.store.close_reader(ws(2)).unwrap();
+        settle();
+        wire.take();
         let found = opened
             .store
             .published(|h| h.layer_stack_named(&HistoryName::new("demo").unwrap()))
             .unwrap();
         assert!(found.is_some());
         row("control lookup (project by name)", &wire);
+        // #64: the second mount took the first one's idle reader
+        let reuse = opened.store.reuse_work();
+        assert_eq!((reuse.readers_opened, reuse.readers_reused), (1, 1));
+        // an idle reader whose connection ended (the proxy cuts every
+        // connection) is dropped at the next mount, which opens a new one
+        wire.cut();
+        settle();
+        wire.take();
+        opened.store.mount_reader(ws(3)).unwrap();
+        row("mount after the idle reader's connection ended", &wire);
+        let reuse = opened.store.reuse_work();
+        assert_eq!((reuse.readers_opened, reuse.readers_reused), (2, 1));
         drop(opened);
         rows
     });

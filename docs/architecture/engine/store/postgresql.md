@@ -55,7 +55,7 @@ the selection's `PostgresCheck` says (#63):
 | Check | Reads | Opened with it |
 | --- | --- | --- |
 | `Full` (default) | one `REPEATABLE READ` snapshot: the exact table set (19 tables, or 22 with acquisition) and the live column definition from `information_schema`, compared with the recorded source and definition; then the `history_meta` and policy rows and `server_version` | Init (`PostgresHandles::create`, always), Store connect and the host's Store service |
-| `Light` | one autocommit statement: the `history_meta` and policy rows, the recorded source's length, the three acquisition tables by name (`to_regclass`) and `server_version`; no `information_schema` scan | a session whose selection asks for it (`with_check`), and `attach_read_only` |
+| `Light` | one autocommit statement: the `history_meta` and policy rows, the recorded source's length, the three acquisition tables by name (`to_regclass`) and `server_version`; no `information_schema` scan | a Sandbox daemon's writer and every Workspace and control reader (#64), and a selection that asks for it (`with_check`), and `attach_read_only` |
 
 Both refuse a wrong binding, catalog id, incarnation, identity format or
 schema version (`Integrity`), and a policy row that does not validate

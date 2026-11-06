@@ -108,8 +108,49 @@ impl Store {
             return Err(StorageError::Integrity("Store reader capacity or policy"));
         }
         let counts = Arc::new(Counts::default());
+        let readers = ReadSet::new(
+            Some(control),
+            factory,
+            counts.clone(),
+            (workspace_capacity, policy, false),
+        );
+        Self::with_readers(writer, history, (readers, counts, policy), cache_bytes, reservations)
+    }
+    /// [`Self::new`] with shared readers (#64), as a PostgreSQL Store opens:
+    /// no control reader opens until its first use, and every Workspace's
+    /// reader comes from and returns to the idle readers
+    /// ([`super::read_service::IDLE_READERS`]), so a mount after an unmount
+    /// opens no connection.
+    pub fn with_shared_readers(
+        writer: Arc<dyn PackPersistence>,
+        history: Arc<dyn HistoryCatalog>,
+        factory: ReaderFactory,
+        cache_bytes: usize,
+        reservations: ReservationBlocks,
+        workspace_capacity: usize,
+    ) -> StorageResult<Self> {
+        let reservations = reservations.validate()?;
+        let policy = writer.policy()?.validated()?;
+        if workspace_capacity == 0 {
+            return Err(StorageError::Integrity("Store reader capacity or policy"));
+        }
+        let counts = Arc::new(Counts::default());
+        let readers = ReadSet::new(
+            None,
+            factory,
+            counts.clone(),
+            (workspace_capacity, policy, true),
+        );
+        Self::with_readers(writer, history, (readers, counts, policy), cache_bytes, reservations)
+    }
+    fn with_readers(
+        writer: Arc<dyn PackPersistence>,
+        history: Arc<dyn HistoryCatalog>,
+        (readers, counts, policy): (Arc<ReadSet>, Arc<Counts>, StoragePolicy),
+        cache_bytes: usize,
+        reservations: ReservationBlocks,
+    ) -> StorageResult<Self> {
         let cache = Arc::new(CanonicalCache::new(cache_bytes));
-        let readers = ReadSet::new(control, factory, counts.clone(), workspace_capacity, policy);
         Ok(Self {
             writer,
             history,
@@ -189,10 +230,7 @@ impl Store {
         &self,
         lookup: impl FnOnce(&dyn HistoryCatalog) -> layerfs_history::HistoryResult<T>,
     ) -> Result<T, Arc<PortError>> {
-        self.readers
-            .session(None)
-            .map_err(|error| Arc::new(PortError::ReadAdmission(error)))?
-            .published(lookup)
+        self.readers.control()?.published(lookup)
     }
     /// Adds one finished Save's selection counts to the daemon's totals.
     pub fn note_save(&self, saved: &WriteOutcome) {

@@ -15,6 +15,7 @@ pub struct StoreReader {
     pub(super) storage: Storage,
     pub(super) history: Arc<dyn HistoryCatalog>,
     closed: Option<Box<dyn FnOnce() + Send>>,
+    usable: Option<Box<dyn Fn() -> bool + Send + Sync>>,
 }
 impl StoreReader {
     pub fn new(storage: Storage, history: Arc<dyn HistoryCatalog>) -> Self {
@@ -22,7 +23,17 @@ impl StoreReader {
             storage,
             history,
             closed: None,
+            usable: None,
         }
+    }
+    /// Says whether an idle reader can still serve before a mount takes it:
+    /// a PostgreSQL reader whose connection closed or was quarantined cannot.
+    pub fn with_usable(mut self, usable: impl Fn() -> bool + Send + Sync + 'static) -> Self {
+        self.usable = Some(Box::new(usable));
+        self
+    }
+    pub(super) fn usable(&self) -> bool {
+        self.usable.as_ref().is_none_or(|usable| usable())
     }
     pub fn on_close(mut self, closed: impl FnOnce() + Send + 'static) -> Self {
         self.closed = Some(Box::new(closed));
