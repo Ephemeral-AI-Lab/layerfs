@@ -96,7 +96,7 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
     // B5 (#548): a running exec holds a lease on the Sandbox record; a
     // close refuses while it is live, and its expiry marks the Sandbox
     // Lost instead of killing it blindly.
-    let _lease = (call == "exec")
+    let lease = (call == "exec")
         .then(|| ExecLease::begin(&home, &ws.sandbox))
         .transpose()?;
     // a status starts no machine (P4)
@@ -106,7 +106,15 @@ pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outc
             reach(context, &record, op, more, false).unwrap_or_else(|Unreached(why)| Err(why))
         }
         _ => on_machine(context, &record, op, more),
-    }?;
+    };
+    // B5: an `Unknown` exec may still be running. Keep its lease until the
+    // deadline instead of releasing it and letting a close kill the command.
+    if let (Some(lease), Err(refusal)) = (lease, &out) {
+        if refusal.code == "Unknown" {
+            lease.abandon();
+        }
+    }
+    let out = out?;
     if call == "exec" {
         // the command's output as events too, for front ends that stream
         for stream in ["stdout", "stderr"] {

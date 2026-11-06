@@ -76,6 +76,21 @@ impl ExecLease {
             heartbeat,
         })
     }
+
+    /// Stops the heartbeat but leaves the lease in the record: a call whose
+    /// outcome is `Unknown` may still have a command running, so a later
+    /// close must not treat the Sandbox as free. The lease expires at its
+    /// deadline, and the Sandbox becomes `Lost` then.
+    pub fn abandon(mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(wake) = self.wake.take() {
+            let _ = wake.send(());
+        }
+        if let Some(heartbeat) = self.heartbeat.take() {
+            let _ = heartbeat.join();
+        }
+        std::mem::forget(self);
+    }
 }
 
 impl Drop for ExecLease {
