@@ -157,6 +157,10 @@ side: one read window per stream, one write window and counters
          definite        --> advance(Failed), dispose, release
 ```
 
+On PostgreSQL, the release of the last operation also empties the acquisition
+tables, so the Store's size right after Init does not depend on autovacuum
+([Store: PostgreSQL](../store/postgresql.md#acquisition)).
+
 | Stream | Ordered by | Used by |
 | --- | --- | --- |
 | `directories` | position | scan |
