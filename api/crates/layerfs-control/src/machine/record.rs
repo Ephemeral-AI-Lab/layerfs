@@ -127,7 +127,35 @@ impl MachineRecord {
         if record.field("kernel").is_none() {
             record = record.with("kernel", SdkValue::text(kernel.as_str()));
         }
+        // #551 B0-150, B0-152: the backend and the one fact a placement
+        // decision reads are record facts once the machine exists. Written
+        // from the backend's typed capability on the host that makes the
+        // machine; a read model or a placement elsewhere answers from the
+        // record, never from the host it runs on.
+        #[cfg(feature = "machine")]
+        {
+            if let Some(backend) = record.platform_backend() {
+                if record.field("backend").is_none() {
+                    record = record.with("backend", SdkValue::text(backend.stored_name()));
+                }
+                if record.field("direct_store_access").is_none() {
+                    record = record.with(
+                        "direct_store_access",
+                        SdkValue::Bool(backend.capabilities().direct_store_access),
+                    );
+                }
+            }
+        }
         record
+    }
+
+    /// The backend this record's platform runs on the host that writes it,
+    /// when this build names one (#551 B0-150). Used only to write the
+    /// record; nothing reads it back through the host.
+    #[cfg(feature = "machine")]
+    fn platform_backend(&self) -> Option<layerfs_machine::Backend> {
+        let kind = layerfs_machine::Platform::parse(self.platform_name()?)?;
+        kind.backend(layerfs_machine::HostOs::current())
     }
 
     /// The platform's declared class, for a record written before #551.
@@ -197,6 +225,49 @@ impl MachineRecord {
     /// The platform's name, as written (`platform()` parses it).
     pub fn platform_name(&self) -> Option<&str> {
         self.fields.get_text("platform")
+    }
+
+    /// The backend the machine's record declares (#551 B0-150), a fact of
+    /// the record rather than of the host reading it; `None` for a record
+    /// written before the field.
+    pub fn backend_name(&self) -> Option<&str> {
+        self.fields.get_text("backend")
+    }
+
+    /// Whether the backend the record declares keeps a sqlite Store's file
+    /// (#551 B0-150, #552): the typed `direct_store_access` of the
+    /// capability that owns the fact, written when the machine was made.
+    ///
+    /// A record written before the field (or by a build without the machine
+    /// adapters) reads through its platform's declared backend, the same
+    /// typed capability and the same answer on every host. A platform this
+    /// build does not name has no fallback: an ephemeral/remote backend that
+    /// declares no capability gets `None`, and a caller that must not guess
+    /// (placement) refuses instead of defaulting to "the machine keeps its
+    /// Store". `None` is also the malformed field's answer.
+    pub fn direct_store_access(&self) -> Option<bool> {
+        match self.field("direct_store_access") {
+            Some(SdkValue::Bool(direct)) => return Some(*direct),
+            Some(_) => return None,
+            None => {}
+        }
+        #[cfg(unix)]
+        {
+            let backend = match self.platform_name()? {
+                "docker" => layerfs_sandbox::Backend::Docker,
+                "native" => layerfs_sandbox::Backend::HostProcess,
+                // each of these runs Linux namespaces in its guest
+                "apple-container" | "microsandbox" | "lima" | "firecracker" | "ssh" => {
+                    layerfs_sandbox::Backend::Namespaces
+                }
+                _ => return None,
+            };
+            Some(backend.capabilities().direct_store_access)
+        }
+        #[cfg(not(unix))]
+        {
+            None
+        }
     }
 
     /// The state a create, connect, start or stop recorded (`running`,
@@ -427,7 +498,16 @@ impl MachineRecord {
                 SdkValue::opt_text(isolation.map(|class| class.as_str())),
             ),
             ("platform", SdkValue::text(kind.name())),
-            ("backend", SdkValue::text(super::spec::backend_name(kind))),
+            // #551 B0-150: the record's own backend, the same on every
+            // host; only a record written before the field falls back to
+            // this host's platform row, and only for display
+            (
+                "backend",
+                SdkValue::text(
+                    self.backend_name()
+                        .unwrap_or_else(|| super::spec::backend_name(kind)),
+                ),
+            ),
             ("supports", super::platforms::supports(kind)),
             (
                 "schema_version",

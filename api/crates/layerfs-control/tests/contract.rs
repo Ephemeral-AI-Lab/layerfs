@@ -158,6 +158,9 @@ fn every_backend_declares_a_typed_capability() {
             IsolationModel::HostProcess => "process",
             IsolationModel::MicroVm => "vm",
             IsolationModel::RemoteCloud => "remote",
+            // the declaration is non_exhaustive: a class added later is
+            // not one this test can name, and the contract requires none
+            _ => panic!("unexpected isolation model for {}", backend.stored_name()),
         };
         assert_eq!(class.as_str(), expected);
     }

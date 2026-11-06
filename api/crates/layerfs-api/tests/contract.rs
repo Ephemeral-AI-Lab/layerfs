@@ -248,6 +248,14 @@ fn acceptance_86_read_models_and_doctor_capability() {
         matches!(mount, "fuse" | "loopback-nfs" | "shared-fs" | "none"),
         "unexpected mount driver {mount}: {machine:?}"
     );
+    // #552: the typed `direct_store_access` is in the read model too, the
+    // one fact placement reads; every backend this build names reaches a
+    // Store's file directly
+    assert_eq!(
+        capability.get("direct_store_access"),
+        Some(&SdkValue::Bool(true)),
+        "{machine:?}"
+    );
 
     sandbox_record(
         &home,

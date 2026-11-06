@@ -4,6 +4,10 @@
 //! worker, how an idle Sandbox stops, and whether it can snapshot. The
 //! `schema_version` versions the declaration itself; a consumer reads it
 //! before relying on a field and never guesses an absent one.
+//!
+//! Every type here that the contract promises to grow is `#[non_exhaustive]`:
+//! a consumer names the variants it knows and the fields it knows, and a
+//! later declaration adds more without breaking it.
 use super::{IsolationClass, KernelScope};
 
 /// The backend-capability schema this build writes (#551 B0-152). A backend
@@ -11,6 +15,7 @@ use super::{IsolationClass, KernelScope};
 pub const CAPABILITY_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct ProviderCapabilities {
     /// The capability schema this declaration follows (#551 B0-152).
     pub schema_version: u32,
@@ -30,6 +35,7 @@ pub struct ProviderCapabilities {
 
 /// Who ends an idle Sandbox (#551 B0-145).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum IdleStop {
     /// Our worker or daemon ends it.
     Ours,
@@ -60,6 +66,7 @@ pub struct SnapshotCapability {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum IsolationModel {
     Container,
     HostProcess,
@@ -67,6 +74,7 @@ pub enum IsolationModel {
     RemoteCloud,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum MountDriver {
     Fuse,
     LoopbackNfs,

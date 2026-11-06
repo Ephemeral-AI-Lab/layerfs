@@ -255,6 +255,54 @@ mod machines {
     }
 
     #[test]
+    fn a_capability_answers_from_the_record_not_the_host() {
+        // #551 B0-150: the record names the backend and whether the backend
+        // reaches a Store's file directly. The read model and placement read
+        // that one fact, so the same record answers the same on every host
+        // and an old record that declares nothing does not guess.
+        let declared = MachineRecord::from_record(
+            "dev",
+            value(
+                r#"{"name":"dev","platform":"native","backend":"namespaces","direct_store_access":true}"#,
+            ),
+        );
+        let shown = declared
+            .to_sdk(View::Full, &MachineDerived::default())
+            .unwrap();
+        let capability = shown.get("capability").unwrap();
+        assert_eq!(capability.get_text("backend"), Some("namespaces"));
+        assert_eq!(
+            capability.get("direct_store_access"),
+            Some(&SdkValue::Bool(true))
+        );
+        assert_eq!(capability.get_int("schema_version"), Some(1));
+
+        // a record written before the field reads through its platform's
+        // declared backend, the same typed capability and the same answer on
+        // every host
+        let old = MachineRecord::from_record("old", value(r#"{"name":"old","platform":"docker"}"#));
+        let shown = old.to_sdk(View::Full, &MachineDerived::default()).unwrap();
+        let capability = shown.get("capability").unwrap();
+        assert_eq!(
+            capability.get("direct_store_access"),
+            Some(&SdkValue::Bool(true))
+        );
+
+        // a malformed field is not a capability: the read model says so
+        let broken = MachineRecord::from_record(
+            "broken",
+            value(r#"{"name":"broken","platform":"docker","direct_store_access":"yes"}"#),
+        );
+        let shown = broken
+            .to_sdk(View::Full, &MachineDerived::default())
+            .unwrap();
+        assert_eq!(
+            shown.get("capability").unwrap().get("direct_store_access"),
+            Some(&SdkValue::Null)
+        );
+    }
+
+    #[test]
     fn a_built_in_machine_is_ready_and_unsized() {
         let record = MachineRecord::from_record(
             "docker",

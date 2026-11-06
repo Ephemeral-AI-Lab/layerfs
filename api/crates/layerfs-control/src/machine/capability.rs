@@ -1,9 +1,16 @@
 //! The backend capability a machine declares (#551 B0-145, B0-152): its
 //! isolation class and kernel, its mount driver, its notes, how an idle
-//! Sandbox stops and whether it snapshots. Built from the machine's
-//! platform and the backend behind it, never from a provider-name branch in
-//! a read model; a build without the machine feature has no adapters and
-//! reports only the record's own class.
+//! Sandbox stops, whether it can snapshot and whether it reaches a Store's
+//! file directly. Built from the machine's record — its platform and the
+//! backend the record names — never from a provider-name branch in a read
+//! model; a build without the machine feature reports the contract fields
+//! without the adapters.
+//!
+//! `direct_store_access` is the one owner of "can a sqlite Store live on
+//! this machine" (#552): it is the typed `ProviderCapabilities` field,
+//! written into the record when the machine is made, exposed here and read
+//! by placement. A record written before the field has none, and placement
+//! refuses rather than defaulting.
 use super::record::MachineRecord;
 use crate::common::contract;
 use layerfs_bridge::control::SdkValue;
@@ -15,7 +22,15 @@ pub fn of(record: &MachineRecord) -> SdkValue {
     let class = record.isolation_class();
     let kernel = record.kernel_scope();
     let kind = record.platform().ok();
-    let backend = kind.and_then(|kind| kind.backend(HostOs::current()));
+    // The backend the record names is the fact; parse it by its stored name
+    // so the capability below is the same on every host. Only a record
+    // written before `backend` falls back to this host's platform row, and
+    // only for display: placement reads the record's own
+    // `direct_store_access` and never this fallback.
+    let backend = match record.backend_name() {
+        Some(name) => Backend::parse(name),
+        None => kind.and_then(|kind| kind.backend(HostOs::current())),
+    };
     let declared = backend.map(Backend::capabilities);
     let strength = class.map(|class| class.strength()).unwrap_or("unknown");
     let notes = kind.map(|kind| kind.profile().description).unwrap_or("");
@@ -45,10 +60,21 @@ pub fn of(record: &MachineRecord) -> SdkValue {
         ("provider", SdkValue::opt_text(kind.map(|kind| kind.name()))),
         (
             "backend",
-            SdkValue::opt_text(backend.map(|backend| backend.stored_name())),
+            SdkValue::opt_text(
+                record
+                    .backend_name()
+                    .or_else(|| backend.map(|backend| backend.stored_name())),
+            ),
         ),
         ("mount_driver", SdkValue::text(mount_driver)),
         ("idle_stop", SdkValue::text(idle_stop.as_str())),
+        (
+            "direct_store_access",
+            match record.direct_store_access() {
+                Some(direct) => SdkValue::Bool(direct),
+                None => SdkValue::Null,
+            },
+        ),
         (
             "snapshot",
             match snapshot {

@@ -189,6 +189,9 @@ fn route(driver: MountDriver) -> Option<&'static str> {
         MountDriver::Fuse => Some("fuse"),
         MountDriver::LoopbackNfs => Some("nfs"),
         MountDriver::SharedFs | MountDriver::None => None,
+        // the declaration is non_exhaustive: a driver added later has no
+        // row in this build's SUPPORT.json
+        _ => None,
     }
 }
 

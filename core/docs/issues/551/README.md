@@ -130,6 +130,11 @@ An old record is **read** through explicit fallbacks, never rewritten:
   the build's contract; `schema_version` reads `1`.
 - An explicit write migrates: `MachineRecord::with_contract` and
   `SandboxRecord::with_contract` add the missing fields (and are tested).
+- A machine record written by this build also carries `backend`: the stored
+  name of the backend its platform runs (`docker`, `native`, `namespaces`).
+  The read model answers from it, never from the host reading the record, so
+  one record gives one answer on every host. An old record falls back to the
+  host's platform row **for display only**.
 - `doctor` does not rewrite; the read-model `schema_version: 1` is how a
   caller sees that the record was read through the fallback.
 
@@ -141,12 +146,33 @@ An old record is **read** through explicit fallbacks, never rewritten:
 (`Ours`, `Provider`, `None`), `snapshot: Option<SnapshotCapability>`, plus
 its existing name, image, search-path, limits and direct-access flags.
 `machine.get`/`machine.list` show it as `capability`, with the class,
-kernel, strength word, provider, backend, mount driver, idle stop, snapshot,
-notes and its schema version. Every field is snake_case.
+kernel, strength word, provider, backend, mount driver, idle stop,
+`direct_store_access`, snapshot, notes and its schema version. Every field is
+snake_case. The capability schema version is `1`; a consumer reads
+`schema_version` before relying on a field and never guesses an absent one.
+
+`ProviderCapabilities`, `IdleStop`, `IsolationModel` and `MountDriver` are
+`#[non_exhaustive]`: the contract promises growth, and a consumer names the
+variants and fields it knows instead of matching exhaustively.
 
 The adapters are thin: `backend/docker|host_process|namespaces/adapter.rs`
 construct the declaration; `machine/capability.rs` reads it; no read model
 names a provider.
+
+### 4.2.1 One owner for "a Store can live here" (B0-150, #552)
+
+`direct_store_access` is the one owner of whether a machine can hold a
+sqlite Store's file. `MachineRecord::with_contract` writes it (with
+`backend`) from the backend's typed capability when the machine is made, so
+the fact is the record's, not the host's. `machine/capability.rs` exposes it
+in the read model, and #552's placement (`common/place.rs`) reads the same
+field through `MachineRecord::direct_store_access`.
+
+A record written before the field reads through its platform's declared
+backend (typed capability on both sides, same answer on every host); a
+platform this build does not name has no fallback, so an ephemeral/remote
+backend that declares no capability is refused by placement rather than
+defaulted to "the machine keeps its Store".
 
 ### 4.3 Requested/effective (B0-144/146/147/148/149, prior head)
 
