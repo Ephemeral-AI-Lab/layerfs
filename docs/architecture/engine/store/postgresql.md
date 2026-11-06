@@ -77,8 +77,8 @@ session keeps the frozen policy and the server version the check read, so
  | lane: Mutex<Option<Client>>   second connection, opened on   |
  |                               first hold_lane                |
  | settings: schema, synchronous_commit, lock_timeout_ms        |
- | connector: Config + the process's one TLS connector          |
- |            (sslmode from the connection string, as given)    |
+ | connector: Config + the process's one TLS connector, or none |
+ |            for sslmode=disable (sslmode as given)            |
  +--------------------------------------------------------------+
 ```
 
@@ -108,7 +108,10 @@ more round trip per connection on a server without TLS. On a loopback or
 private network route (a server on the same host, a Docker network) give
 `sslmode=disable` to skip it; on any other route give `require` or
 `verify-full`. The TLS connector, which loads the system's trust roots, is
-built once per process. The Store
+built once per process, at the first connection whose `sslmode` may
+negotiate TLS; a connection string with `sslmode=disable` never builds it
+(#96). On Linux the build costs a process about 40–70 ms, and every Sandbox
+create starts a new daemon process. The Store
 service reports the writer session and every Workspace reader session,
 live and retired, as on SQLite
 ([`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs)).
