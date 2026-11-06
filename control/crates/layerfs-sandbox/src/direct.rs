@@ -19,7 +19,6 @@ use crate::registry::{self, SandboxState, SANDBOXES};
 use crate::unmount_guard;
 use crate::{dispatch, files};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
 use layerfs_home::helpers;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{refused, Outcome};
@@ -321,11 +320,8 @@ pub fn args(
 
 /// `sandbox.get`'s Workspace list of forwarded Sandbox `record`: a daemon
 /// that cannot be reached is [`Unreached`], which the get reports as down.
-pub fn list(
-    context: &mut Context<'_>,
-    record: &SandboxRecord,
-) -> std::result::Result<Outcome, Unreached> {
-    match list_workspaces(context, record) {
+pub fn list(home: &Path, record: &SandboxRecord) -> std::result::Result<Outcome, Unreached> {
+    match list_workspaces(home, record) {
         Err(refusal) if refusal.code == "Unavailable" => Err(Unreached(refusal)),
         other => Ok(other),
     }
@@ -333,8 +329,8 @@ pub fn list(
 
 /// `sandbox.list_workspaces` on forwarded Sandbox `record` in this process,
 /// under the Store's lease (the Sandbox half of `workspace::direct::call`).
-fn list_workspaces(context: &mut Context<'_>, record: &SandboxRecord) -> Outcome {
-    let home = context.home.clone();
+fn list_workspaces(home: &Path, record: &SandboxRecord) -> Outcome {
+    let home = home.to_path_buf();
     let target = resolve::target(&home, record.project().unwrap_or(""))?;
     let _lease = lease::hold(&home, &target.store)?;
     dispatch::call(

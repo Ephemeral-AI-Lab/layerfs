@@ -1,8 +1,8 @@
 //! `machine.connect`: connect an ssh host as a machine.
+use crate::calls::table::Kind::{Int, Name, Text};
+use crate::calls::table::{a, call, opt, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::{Int, Name, Text};
-use layerfs_control::calls::table::{a, call, opt, Call};
-use layerfs_control::calls::Context;
 use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
@@ -24,7 +24,7 @@ pub(crate) const CALL: Call = call(
 /// Runs `machine.connect`.
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::machine::connect(context, args)
+    layerfs_control::machine::connect(&context.home, args)
 }
 
 /// Without the `machine` feature (the guest worker's build) it is

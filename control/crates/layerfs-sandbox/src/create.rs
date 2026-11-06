@@ -5,17 +5,18 @@ use super::direct;
 use super::record::{self, SandboxRecord};
 use crate::route::on_machine;
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{refused, Outcome, View};
 use layerfs_store::record::StoreRef;
 use layerfs_store::resolve;
+use std::path::Path;
 
 /// `sandbox.create(project, name, machine?, { image })`: with no `machine`,
 /// a sqlite Store's machine, or `native` for a PostgreSQL Store (#536 §10).
-pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let home = context.home.clone();
+pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+    let home = home.to_path_buf();
     let project = args.get_text("project").unwrap_or("");
     let name = args.get_text("name").unwrap_or("");
     let named = args.get_text("machine").filter(|m| !m.is_empty());
@@ -100,7 +101,8 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         more.push(("image", SdkValue::text(image)));
     }
     let started = on_machine(
-        context,
+        &home,
+        events,
         &record,
         "sandbox.create",
         more,

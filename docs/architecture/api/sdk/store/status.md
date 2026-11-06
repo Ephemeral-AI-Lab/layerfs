@@ -11,7 +11,7 @@ file (sqlite) or its server (PostgreSQL), changing nothing.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`store/status.rs`](../../../../../api/crates/layerfs-api/src/store/status.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `status` ([`status.rs`](../../../../../control/crates/layerfs-store/src/status.rs)) |
+| Implemented in | `layerfs_store::sqlite::family::status` → `status` ([`status.rs`](../../../../../control/crates/layerfs-store/src/status.rs)) |
 | Runs in | the caller's process; a `store.file` `stat` in the machine's worker for a sqlite Store that is not local; one connection to the server for PostgreSQL |
 
 ## Signature
@@ -71,7 +71,7 @@ None.
 | `server` | map | PostgreSQL: one connection's result; `schemas` maps `layerfs` to its size, null when the schema is missing | [`store/postgres.rs`](../../../../../control/crates/layerfs-store/src/postgresql/open.rs) `status`, [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs) `status` |
 
 Result keys are snake_case in every front end, so `serverVersion` arrives
-as `server_version` ([`calls/keys.rs`](../../../../../control/crates/layerfs-control/src/calls/keys.rs)).
+as `server_version` ([`calls/keys.rs`](../../../../../api/crates/layerfs-api/src/calls/keys.rs)).
 A PostgreSQL Store is never `down`: an unreachable server shows in `server`.
 
 ## Where it runs
@@ -102,7 +102,7 @@ See the [routing table](../../../control/routing/routing-table.md).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad name; a record whose `kind` is not `sqlite` or `postgresql`; a folder-scoped client | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | a bad name; a record whose `kind` is not `sqlite` or `postgresql`; a folder-scoped client | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `NotFound` | no Store of that name | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) |
 | `Unavailable` | a 1.1.0 Store whose machine is not known (`layerfs import-env` fixes it) | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `StoreRef::machine` |
 | `Failed` | the record or lease folder cannot be read | no | [`home/records.rs`](../../../../../control/crates/layerfs-home/src/home/records.rs) |

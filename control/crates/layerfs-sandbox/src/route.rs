@@ -5,7 +5,7 @@
 use super::deploy::{self, Deploy, Side};
 use super::record::SandboxRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_machine::worker::Unreached;
@@ -209,13 +209,15 @@ pub type Local = fn(&str, SdkValue) -> Outcome;
 /// Runs host Sandbox operation `op` for Sandbox `record` on its machine,
 /// refused `Unavailable` naming `layerfs machine start` when it is down.
 pub fn on_machine(
-    context: &mut Context<'_>,
+    home: &Path,
+    events: &mut Events<'_>,
     record: &SandboxRecord,
     op: &str,
     more: Vec<(&str, SdkValue)>,
     local: Local,
 ) -> Outcome {
-    reach(context, record, op, more, true, local).unwrap_or_else(|Unreached(refusal)| Err(refusal))
+    reach(home, events, record, op, more, true, local)
+        .unwrap_or_else(|Unreached(refusal)| Err(refusal))
 }
 
 /// [`on_machine`], answering [`Unreached`] when the machine's worker was
@@ -223,7 +225,8 @@ pub fn on_machine(
 /// `load_image` says whether the call may load the docker machine's
 /// default image (a get or status call does not, P4).
 pub fn reach(
-    context: &mut Context<'_>,
+    home: &Path,
+    events: &mut Events<'_>,
     record: &SandboxRecord,
     op: &str,
     more: Vec<(&str, SdkValue)>,
@@ -232,7 +235,8 @@ pub fn reach(
 ) -> std::result::Result<Outcome, Unreached> {
     let mut unreached = None;
     let outcome = host_op(
-        context,
+        home,
+        events,
         (record, op),
         more,
         (load_image, local),
@@ -247,13 +251,14 @@ pub fn reach(
 /// [`reach`]'s operation; a request that was not sent leaves its
 /// [`Unreached`] in `unreached`.
 fn host_op(
-    context: &mut Context<'_>,
+    home: &Path,
+    events: &mut Events<'_>,
     (record, op): (&SandboxRecord, &str),
     more: Vec<(&str, SdkValue)>,
     (load_image, local): (bool, Local),
     unreached: &mut Option<Unreached>,
 ) -> Outcome {
-    let home = context.home.clone();
+    let home = home.to_path_buf();
     let machine = record.machine();
     let project = record.project().unwrap_or("");
     let target = resolve::target(&home, project)?;
@@ -328,7 +333,7 @@ fn host_op(
                 return local(op, args);
             }
             let out = local(op, args)?;
-            let out = drain(out, &mut |event| context.event(event));
+            let out = drain(out, &mut |event| events.event(event));
             closed(op, opened.as_deref(), &out);
             out
         }
@@ -360,7 +365,7 @@ fn host_op(
             ));
             let request =
                 SdkValue::Map(fields.into_iter().map(|(n, v)| (n.to_owned(), v)).collect());
-            match worker.attempt("sandbox.host", request, &mut |event| context.event(event)) {
+            match worker.attempt("sandbox.host", request, &mut |event| events.event(event)) {
                 Ok(outcome) => outcome,
                 Err(Unreached(refusal)) => {
                     *unreached = Some(Unreached(refusal.clone()));

@@ -11,7 +11,7 @@ home alone.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`store/get.rs`](../../../../../api/crates/layerfs-api/src/store/get.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `public(record_of(..), View::Full)` ([`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs)) |
+| Implemented in | `layerfs_store::sqlite::family::get` → `public(record_of(..), View::Full)` ([`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs)) |
 | Runs in | the caller's process; nothing else is contacted |
 
 ## Signature
@@ -100,7 +100,7 @@ is contacted. See the [routing table](../../../control/routing/routing-table.md)
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad Store name; the client has a folder scope | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | a bad Store name; the client has a folder scope | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `NotFound` | no Store record of that name | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) `StoreRecord::of` |
 | `Failed` | the record cannot be read, is not JSON, or is not a map | no | [`home/records.rs`](../../../../../control/crates/layerfs-home/src/home/records.rs) |
 

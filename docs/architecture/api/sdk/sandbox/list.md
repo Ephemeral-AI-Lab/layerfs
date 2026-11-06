@@ -11,7 +11,7 @@ time, from the home's records alone.
 | --- | --- |
 | Family | [sandbox](README.md) |
 | Library entry | [`sandbox/list.rs`](../../../../../api/crates/layerfs-api/src/sandbox/list.rs) |
-| Implemented in | `layerfs_sandbox::family::sandbox` → `list::list` ([`list.rs`](../../../../../control/crates/layerfs-sandbox/src/list.rs)) |
+| Implemented in | `layerfs_sandbox::family::list` → `list::list` ([`list.rs`](../../../../../control/crates/layerfs-sandbox/src/list.rs)) |
 | Runs in | the caller's process; reads `sandbox/<name>/record.json` only |
 
 ## Signature
@@ -46,7 +46,7 @@ layerfs sandbox list [<project>] [--page-size <n>] [--page-pos <n>]
 | `page_pos` | Int | 0 | a negative value counts as 0 | `family.rs` `page` |
 
 Under a folder scope the call is refused `InvalidInput`
-([`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs)).
+([`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
 
 ## Returns
 
@@ -86,8 +86,8 @@ any Store kind or platform. See the
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | `project` not `<store>/<project>`; wrong kind of a paging option; folder scope | no | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs) |
-| the home's refusal | the home cannot be opened or migrated | no | [`calls/dispatch.rs`](../../../../../control/crates/layerfs-control/src/calls/dispatch.rs) |
+| `InvalidInput` | `project` not `<store>/<project>`; wrong kind of a paging option; folder scope | no | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs) |
+| the home's refusal | the home cannot be opened or migrated | no | [`calls/dispatch.rs`](../../../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
 
 A list never clears an intent and has no uncertain outcome.
 

@@ -11,7 +11,7 @@ Store, the Store's kind and machine, and when it was recorded.
 | --- | --- |
 | Family | [project](README.md) |
 | Library entry | [`project/get.rs`](../../../../../api/crates/layerfs-api/src/project/get.rs) |
-| Implemented in | `layerfs_control::project::family::run` → `"get"` arm ([`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs)), `store::resolve::target` ([`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs)) |
+| Implemented in | `layerfs_store::project::family::get` ([`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs)), `store::resolve::target` ([`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs)) |
 | Runs in | the caller's process, reading home records only |
 
 ## Signature
@@ -36,7 +36,7 @@ layerfs project get <project>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<name>`, checked by `names::project` before dispatch | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
+| `project` | Project | `<store>/<name>`, checked by `names::project` before dispatch | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs), [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 
 ## Options
 
@@ -80,7 +80,7 @@ project. See the [routing table](../../../control/routing/routing-table.md).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | `project` is not `<store>/<name>` with valid names | no | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs) |
+| `InvalidInput` | `project` is not `<store>/<name>` with valid names | no | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs) |
 | `NoSuchStore` | no record for the Store | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `NoSuchProject` | no `record.json` for the project, including the entry a failed local Init keeps | no | `store/resolve.rs` |
 

@@ -12,7 +12,7 @@ calls take.
 | --- | --- |
 | Family | [workspace](README.md) |
 | Library entry | [`workspace/mount.rs`](../../../../../api/crates/layerfs-api/src/workspace/mount.rs) |
-| Implemented in | `layerfs_sandbox::workspace::calls::workspace` → host operation `workspace.mount` → `workspace::serve::mount` ([`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)) |
+| Implemented in | `layerfs_sandbox::workspace::calls::mount` → host operation `workspace.mount` → `workspace::serve::mount` ([`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)) |
 | Runs in | the caller's process, the Sandbox's machine (here or its worker) and the Sandbox's daemon |
 
 ## Signature
@@ -93,7 +93,7 @@ process's one held read session for that Store, not a Store service (#65,
 at most one connection per process, reused by later calls within 60 s. See the [routing table](../../../control/routing/routing-table.md)
 and the [daemon channel](../../../control/routing/daemon-channel.md). Under a folder
 scope only `main` is accepted and is mounted as the Branch `<ns>.main`
-([`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs)).
+([`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
 
 ## Errors
 

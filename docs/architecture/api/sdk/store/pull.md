@@ -12,7 +12,7 @@ swapped.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`store/pull.rs`](../../../../../api/crates/layerfs-api/src/store/pull.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `transfer::phases::pull` ([`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs)) |
+| Implemented in | `layerfs_control::store::pull` → `transfer::phases::pull` ([`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs)) |
 | Runs in | the caller's process (records, locks, `op`, the bytes in transit); the source steps in the source machine's worker as `store.file`, the target steps here on `native` |
 
 ## Signature

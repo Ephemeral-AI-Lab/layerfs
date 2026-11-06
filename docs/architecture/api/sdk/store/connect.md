@@ -12,7 +12,7 @@ become this home's project records.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`store/connect.rs`](../../../../../api/crates/layerfs-api/src/store/connect.rs) |
-| Implemented in | `layerfs_control::store::connect::run(.., "connect", ..)` ([`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs)) |
+| Implemented in | `layerfs_store::postgresql::connect::connect` ([`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs)) |
 | Runs in | the caller's process, which dials the server; needs a build with the `postgresql` feature |
 
 ## Signature

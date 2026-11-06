@@ -63,7 +63,7 @@ The [Doctor](doctor.md) reads the same records and changes nothing.
 
 | Folder | What it owns | Source |
 | --- | --- | --- |
-| `calls/` | Table shape, argument checks, folder scope, snake_case keys, the one dispatcher | [`calls/`](../../../../control/crates/layerfs-control/src/calls) |
+| `calls/` | Table shape, argument checks, folder scope, snake_case keys, the one dispatcher | [`calls/`](../../../../api/crates/layerfs-api/src/calls) |
 | `layerfs-home` | Its own crate, knowing no entity (layerfs-project#103): `layerfs.json`, record files, the home lock, entity locks (`home/`); names, the `op` intent, outcomes, secrets, the call trace, JSON, the process identity records name, the general helpers and, until #107 moves it to `layerfs-api`, a running call's `Context` | [`layerfs-home/src/`](../../../../control/crates/layerfs-home/src) |
 | `migrate/` | Opening the home: its conversions from 1.1.0 and layout 2, and `import-env`; above the entities because they read every entity's old layout | [`migrate/`](../../../../control/crates/layerfs-control/src/migrate) |
 | `inventory.rs` | Reads by name and the relationships no record stores | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
@@ -92,10 +92,10 @@ buckets.
 
 | Rule | Enforced by |
 | --- | --- |
-| A call's arguments are checked against the table before any effect | [`calls/check.rs`](../../../../control/crates/layerfs-control/src/calls/check.rs) |
-| A folder scope checks call arguments, not processes: `workspace.exec` is a `cd` prefix, not confinement; Commit and Layer ids and a Workspace's Branch are not confined ([open gaps](../../api/call-table/table.md#scopes)) | [`calls/scope.rs`](../../../../control/crates/layerfs-control/src/calls/scope.rs) |
-| Every call opens (creates or converts) its home first | [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs), [`migrate/open.rs`](../../../../control/crates/layerfs-control/src/migrate/open.rs) |
-| LayerFS reads `LAYERFS_*` settings only and names no plugin; `HOME` and `XDG_CACHE_HOME` are read only as fallback folders | [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) (`LAYERFS_HOME`, else `~/.layerfs`), [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs) (`LAYERFS_TRACE`), [`deploy.rs`](../../../../control/crates/layerfs-sandbox/src/deploy.rs) (bundle cache) |
+| A call's arguments are checked against the table before any effect | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
+| A folder scope checks call arguments, not processes: `workspace.exec` is a `cd` prefix, not confinement; Commit and Layer ids and a Workspace's Branch are not confined ([open gaps](../../api/call-table/table.md#scopes)) | [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) |
+| Every call opens (creates or converts) its home first | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs), [`migrate/open.rs`](../../../../control/crates/layerfs-control/src/migrate/open.rs) |
+| LayerFS reads `LAYERFS_*` settings only and names no plugin; `HOME` and `XDG_CACHE_HOME` are read only as fallback folders | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) (`LAYERFS_HOME`, else `~/.layerfs`), [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs) (`LAYERFS_TRACE`), [`deploy.rs`](../../../../control/crates/layerfs-sandbox/src/deploy.rs) (bundle cache) |
 | Records never hold a PostgreSQL password: the URL is stored without it and the password as `env:NAME` or `file:/path`, resolved per call | [`postgresql/connect.rs`](../../../../control/crates/layerfs-store/src/postgresql/connect.rs) (`refuse_password`), [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) |
 | Bucket records hold a key reference, never a secret | [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
 | A record is replaced whole by one rename; files 0600, folders 0700 | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) |
@@ -113,7 +113,7 @@ buckets.
 | Home of a newer layout | `Unsupported` | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) |
 | Unreadable `layerfs.json`, or layout below 2 | `Failed` | [`home/layout.rs`](../../../../control/crates/layerfs-home/src/home/layout.rs) |
 | Layout 2 home with anything live | `InUse`, `detail.related` | [`migrate/v2.rs`](../../../../control/crates/layerfs-control/src/migrate/v2.rs) |
-| Relative `LAYERFS_HOME` | `InvalidInput` | [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) |
+| Relative `LAYERFS_HOME` | `InvalidInput` | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
 | Home lock, Store lock, Sandbox lock wait | 120 s, then `Unavailable` (a readiness wait, not a retry) | [`home/lock.rs`](../../../../control/crates/layerfs-home/src/home/lock.rs), [`home/entity_lock.rs`](../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
 | Machine `start.lock` wait | 600 s | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | Removing, stopping or changing a machine that holds Stores or Sandboxes | `InUse`, `detail.related` | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |

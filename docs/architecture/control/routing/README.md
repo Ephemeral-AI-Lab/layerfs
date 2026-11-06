@@ -10,7 +10,7 @@ Where each call runs: in the caller's process, in a machine's worker, or in a Sa
 | --- | --- |
 | Layer | [Control](../README.md) |
 | Crates | `layerfs-control`, `layerfs-cli` |
-| Source | [`control/crates/layerfs-control/src/calls`](../../../../control/crates/layerfs-control/src/calls), [`daemon`](../../../../control/crates/layerfs-sandbox/src/daemon), [`api/crates/layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs), [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs), [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs) |
+| Source | [`api/crates/layerfs-api/src/calls`](../../../../api/crates/layerfs-api/src/calls), [`daemon`](../../../../control/crates/layerfs-sandbox/src/daemon), [`api/crates/layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs), [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs), [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs) |
 | Uses | [Control: Network](../network/README.md), [Engine: Daemon](../../engine/daemon/README.md) |
 | Used by | [Management](../management/README.md) |
 | Flows | [A call, end to end](../../flows/call.md), [A Workspace session](../../flows/workspace.md) |
@@ -81,7 +81,7 @@ serves until `machine.stop` ends it
 | A worker gets one attempt per call; nothing is resent. A lost answer after the request was sent is `Unknown`. | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `send_once`, `answer`, `lost` |
 | No call starts a machine except `machine.start`; an unreached worker is `Unavailable` naming it. | `place.rs` `recorded`, `stopped` (#535 D11) |
 | A guest worker never reads the caller's home: each request carries the records it needs. | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) `with_home`; `sandbox/route.rs` `host_op` |
-| LayerFS reads `LAYERFS_*` settings only (`LAYERFS_HOME`, `LAYERFS_WORKER_LISTEN`, `LAYERFS_WORKER_SECRET`, `LAYERFS_DAEMON_HOST`, …) and names no plugin. | [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) `home`, [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
+| LayerFS reads `LAYERFS_*` settings only (`LAYERFS_HOME`, `LAYERFS_WORKER_LISTEN`, `LAYERFS_WORKER_SECRET`, `LAYERFS_DAEMON_HOST`, …) and names no plugin. | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home`, [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
 
 ## Limits and failures
 

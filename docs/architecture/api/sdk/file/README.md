@@ -30,7 +30,7 @@ Fourteen calls, in help order
 ([`file/mod.rs`](../../../../../api/crates/layerfs-api/src/file/mod.rs)):
 seven reads at a Branch or Commit, then seven writes that each make one
 Commit on the named Branch, through a private Workspace bound to it. Each
-runs `layerfs_control::store::calls::run`.
+runs its own function of `layerfs_store::calls` (`file_<call>`).
 Every call takes `project` (Project) first; `branch` and `commit` are Name.
 
 | Call | Arguments after `project` | Options | Returns | Store method |
@@ -82,7 +82,7 @@ A read reply is bounded by `REPLY_BUDGET` (48 KiB); `truncated`,
 
 | Code | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad argument, change or page; a path outside a folder scope (`out of scope: path`) | [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs), [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
+| `InvalidInput` | a bad argument, change or page; a path outside a folder scope (`out of scope: path`) | [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs), [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
 | `NoSuchStore`, `NoSuchProject`, `NoSuchBranch`, `NoSuchCommit` | a missing Store, project, Branch or Commit | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `NoSuchPath`, `NotFile`, `NotDirectory`, `IsDirectory`, `Exists` | a path of the wrong kind or missing | [`read/snapshot.rs`](../../../../../engine/crates/layerfs-store-service/src/read/snapshot.rs), [`write/mutation.rs`](../../../../../engine/crates/layerfs-store-service/src/write/mutation.rs) |
 | `Binary` | `read` or `edit` of a file that is not text | [`read/window.rs`](../../../../../engine/crates/layerfs-store-service/src/read/window.rs), [`write/edit.rs`](../../../../../engine/crates/layerfs-store-service/src/write/edit.rs) |

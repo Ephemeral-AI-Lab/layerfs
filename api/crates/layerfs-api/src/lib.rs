@@ -1,9 +1,10 @@
 //! The SDK's public surface: the call table, one file per call under its
 //! family (`<family>/<call>.rs`: the call's entry and the function that runs
-//! it), each family's calls listed in its `mod.rs`. Every call runs in the management
-//! library `layerfs-control`, which also holds the call machinery (argument
-//! checks, folder scope, the one dispatcher); its public paths are
-//! re-exported here for the front ends. The `branch`, `commit` and `file`
+//! it, one call of a control crate), each family's calls listed in its
+//! `mod.rs`, and the call machinery in `calls/` (argument checks, folder
+//! scope, the one dispatcher; layerfs-project#107). Only this crate speaks
+//! the SDK; the control crates' public paths the front ends use are
+//! re-exported here. The `branch`, `commit` and `file`
 //! calls reach the Store engine's SDK facade (layerfs-store-service
 //! `methods/`) in the caller's process, the only route for Store calls
 //! (#352 F-020).
@@ -12,6 +13,7 @@
 
 mod backup;
 mod branch;
+pub mod calls;
 mod commit;
 mod file;
 mod machine;
@@ -20,12 +22,12 @@ mod sandbox;
 mod store;
 mod workspace;
 
+use calls as machinery;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls as machinery;
 use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
-pub use layerfs_control::calls::{
+pub use calls::{
     home, json, keys, size, Arg, Call, CallRef, Calls, Context, Families, Family, Kind, Run, Scope,
 };
 pub use layerfs_home::names;
@@ -120,7 +122,7 @@ pub fn table_json() -> String {
 }
 
 /// Runs the call `name` (`family.call`) once with named `args`; see
-/// `layerfs_control::calls::call`.
+/// [`calls::call`].
 pub fn call(
     home: Option<&Path>,
     name: &str,

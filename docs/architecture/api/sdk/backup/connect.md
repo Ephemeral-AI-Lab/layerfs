@@ -11,7 +11,7 @@ bucket answers with the given key.
 | --- | --- |
 | Family | [backup](README.md) |
 | Library entry | [`backup/connect.rs`](../../../../../api/crates/layerfs-api/src/backup/connect.rs) |
-| Implemented in | `layerfs_control::backup::family::run` → `connect` ([`backup/family.rs`](../../../../../control/crates/layerfs-store/src/backup/family.rs)) |
+| Implemented in | `layerfs_store::backup::family::connect` → `connect` ([`backup/family.rs`](../../../../../control/crates/layerfs-store/src/backup/family.rs)) |
 | Runs in | the caller's process; it lists the bucket over the network |
 
 ## Signature
@@ -53,7 +53,7 @@ The prefix may be empty; a URL with no bucket is `InvalidInput`.
 | --- | --- | --- | --- | --- |
 | `key` | Text | `env:LAYERFS_BUCKET_<NAME>` (name upper-cased, `-` and `.` as `_`) | `env:LAYERFS_<UPPER_DIGITS_>` reads `<prefix>_ACCESS_KEY` and `<prefix>_SECRET_KEY`; `file:/absolute/path` must not be readable by group or others | [`bucket/credentials.rs`](../../../../../control/crates/layerfs-bucket/src/bucket/credentials.rs) `CredentialRef` |
 | `region` | Text | `us-east-1` | MinIO only; r2 records `auto` | [`backup/record.rs`](../../../../../control/crates/layerfs-store/src/backup/record.rs) |
-| `part_size` | Size | 64 MiB (`DEFAULT_PART_SIZE`) | bytes, or text with `K`, `M`, `G`, made whole bytes before dispatch | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`bucket/minio/provider.rs`](../../../../../control/crates/layerfs-bucket/src/bucket/minio/provider.rs) |
+| `part_size` | Size | 64 MiB (`DEFAULT_PART_SIZE`) | bytes, or text with `K`, `M`, `G`, made whole bytes before dispatch | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs), [`bucket/minio/provider.rs`](../../../../../control/crates/layerfs-bucket/src/bucket/minio/provider.rs) |
 
 The key is a reference, never a secret: only the reference is written.
 

@@ -1,8 +1,8 @@
 //! `file.apply`: apply a list of changes; one Commit.
+use crate::calls::table::Kind::{Json, Name, Project};
+use crate::calls::table::{a, call, Call, MESSAGE};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::{Json, Name, Project};
-use layerfs_control::calls::table::{a, call, Call, MESSAGE};
-use layerfs_control::calls::Context;
 use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
@@ -17,5 +17,6 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `file.apply`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::store::calls::run(context, "file", "apply", args)
+    let (home, events) = context.parts();
+    layerfs_store::calls::file_apply(home, events, args)
 }

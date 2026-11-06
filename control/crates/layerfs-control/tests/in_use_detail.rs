@@ -2,9 +2,9 @@
 //! `detail.related` with `{kind, name}` entries (#536 §10b refusal detail):
 //! the project's Sandboxes, and another process's lease on the Store.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 fn t(s: &str) -> SdkValue {
     SdkValue::text(s)
@@ -29,15 +29,9 @@ fn related(refusal: &SdkRefusal) -> Vec<(String, String)> {
         .collect()
 }
 
-fn refused(
-    home: &Path,
-    run: fn(&mut Context<'_>, &str, &SdkValue) -> layerfs_home::outcome::Outcome,
-    call: &str,
-    args: SdkValue,
-) -> SdkRefusal {
-    let mut events = |_| {};
-    let mut context = Context::new(home.to_owned(), &mut events);
-    run(&mut context, call, &args).unwrap_err()
+fn refused(run: impl FnOnce(&mut Events<'_>) -> layerfs_home::outcome::Outcome) -> SdkRefusal {
+    let mut sink = |_| {};
+    run(&mut Events::new(&mut sink)).unwrap_err()
 }
 
 #[test]
@@ -60,12 +54,8 @@ fn project_remove_names_the_project_s_sandboxes() {
         ]);
         write_record(&paths::sandbox_record(&home, name), &sandbox).unwrap();
     }
-    let refusal = refused(
-        &home,
-        layerfs_control::project::family::run,
-        "remove",
-        SdkValue::map([("project", t("shop/api"))]),
-    );
+    let args = SdkValue::map([("project", t("shop/api"))]);
+    let refusal = refused(|events| layerfs_control::project::remove(&home, events, &args));
     assert_eq!(refusal.code, "InUse", "{refusal:?}");
     let sandbox = |n: &str| ("sandbox".to_owned(), n.to_owned());
     assert_eq!(related(&refusal), [sandbox("sa"), sandbox("sb")]);
@@ -90,12 +80,8 @@ fn store_disconnect_names_another_process_s_lease() {
         "1\n",
     )
     .unwrap();
-    let refusal = refused(
-        &home,
-        layerfs_control::store::connect::run,
-        "disconnect",
-        SdkValue::map([("name", t("g"))]),
-    );
+    let args = SdkValue::map([("name", t("g"))]);
+    let refusal = refused(|_| layerfs_control::store::disconnect(&home, &args));
     let _ = holder.kill();
     let _ = holder.wait();
     assert_eq!(refusal.code, "InUse", "{refusal:?}");

@@ -11,21 +11,22 @@ How control implements each call family.
 | Component | [Control](README.md) |
 | Source | [`control/crates/layerfs-control/src/machine`](../../../../control/crates/layerfs-machine/src), [`control/crates/layerfs-control/src/store`](../../../../control/crates/layerfs-store/src), [`project`](../../../../control/crates/layerfs-store/src/project), [`control/crates/layerfs-control/src/sandbox`](../../../../control/crates/layerfs-sandbox/src), [`control/crates/layerfs-control/src/workspace`](../../../../control/crates/layerfs-sandbox/src/workspace), [`backup`](../../../../control/crates/layerfs-store/src/backup) |
 
-Every family function takes the running call's `Context` (its home and
-its event stream) and the checked arguments, and answers one `Outcome`
-([`context.rs`](../../../../control/crates/layerfs-home/src/context.rs),
+Every family function takes the home, the call's `Events` when it emits
+(its event stream; layerfs-project#107) and the checked arguments, and
+answers one `Outcome`
+([`events.rs`](../../../../control/crates/layerfs-home/src/events.rs),
 [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs)). The call table's entries
 name these functions ([Table](../../api/call-table/table.md)).
 
 ```text
  table entry          control function                       folder
  machine.*        --> machine::{list,get,create,...}         machine/
- store.*          --> store::family::run / connect::run      store/
- branch|commit|file.* --> store::calls::run                  store/
- project.*        --> project::family::run                   project/
- sandbox.*        --> sandbox::family::sandbox               sandbox/
- workspace.*      --> workspace::calls::workspace            workspace/
- backup.*         --> backup::family::run                    backup/
+ store.*          --> sqlite::family::<call> / connect::<call> store/
+ branch|commit|file.* --> store::calls::<family>_<call>      store/
+ project.*        --> project::family::<call>                project/
+ sandbox.*        --> sandbox::family::<call>                sandbox/
+ workspace.*      --> workspace::calls::<call>               workspace/
+ backup.*         --> backup::family::<call>                 backup/
 ```
 
 The multi-step operations share one shape, the `op` intent

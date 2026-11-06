@@ -11,7 +11,7 @@ use crate::sqlite::transfer::resolve::retired;
 use crate::sqlite::transfer::steps::CHUNK;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::home::{self, with_field};
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{refused, Outcome};
@@ -20,14 +20,20 @@ use std::path::Path;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// `store.push`: the Store's file from `native` to machine `to`.
-pub fn push(context: &mut Context<'_>, name: &str, to: &str, related: Related) -> Outcome {
+pub fn push(
+    home: &Path,
+    events: &mut Events<'_>,
+    name: &str,
+    to: &str,
+    related: Related,
+) -> Outcome {
     layerfs_home::names::MachineName::parse(to)?;
-    transfer(context, name, Some(to), related)
+    transfer(home, events, name, Some(to), related)
 }
 
 /// `store.pull`: the Store's file from its machine to `native`.
-pub fn pull(context: &mut Context<'_>, name: &str, related: Related) -> Outcome {
-    transfer(context, name, None, related)
+pub fn pull(home: &Path, events: &mut Events<'_>, name: &str, related: Related) -> Outcome {
+    transfer(home, events, name, None, related)
 }
 
 /// Where the Store goes from and to: a push (`to` named) from `native`, a
@@ -43,18 +49,19 @@ fn sides(home: &Path, record: &StoreRecord, to: Option<&str>) -> Result<(String,
 }
 
 fn transfer(
-    context: &mut Context<'_>,
+    home: &Path,
+    events: &mut Events<'_>,
     name: &str,
     target: Option<&str>,
     related: Related,
 ) -> Outcome {
-    let home = context.home.clone();
+    let home = home.to_path_buf();
     let call = match target {
         Some(_) => "store.push",
         None => "store.pull",
     };
     let mut written = None;
-    let result = run(context, name, target, call, &mut written, related);
+    let result = run(&home, events, name, target, call, &mut written, related);
     if let (Err((phase, refusal)), Some(op)) = (&result, &written) {
         // past install both copies exist: a record phase that failed (its
         // lock wait expired, say) leaves the outcome open; a certain install
@@ -73,18 +80,19 @@ fn transfer(
 
 /// The check phase, then the rest once `op` is written into `written`.
 fn run(
-    context: &mut Context<'_>,
+    home: &Path,
+    events: &mut Events<'_>,
     name: &str,
     target: Option<&str>,
     call: &str,
     written: &mut Option<Op>,
     related: Related,
 ) -> Phased<SdkValue> {
-    let home = context.home.clone();
+    let home = home.to_path_buf();
     // check, before `op` and outside the locks: the Store's side, both
     // machines, the target's file and its free disk; the side again under
     // the locks, where `op` is written
-    progress(context, "check", None);
+    progress(events, "check", None);
     // first the copy an ended push or pull left, which this call clears
     at("check", super::resolve::resolve(&home, name, related))?;
     let record = at("check", record_of(&home, name))?;
@@ -109,7 +117,8 @@ fn run(
     let op = written.insert(op);
     let _lease = at("check", settle(&home, name, related))?;
     phases(
-        context,
+        &home,
+        events,
         op,
         name,
         (&from, &mut source),
@@ -181,26 +190,28 @@ fn at<T>(phase: &'static str, result: Result<T>) -> Phased<T> {
 /// Enters `phase`: shown as progress (with `bytes` done and total while
 /// sending) and written to the record's `op`.
 fn enter(
-    context: &mut Context<'_>,
+    home: &Path,
+    events: &mut Events<'_>,
     op: &mut Op,
     name: &str,
     phase: &'static str,
     bytes: Option<(u64, u64)>,
 ) -> Phased<()> {
-    progress(context, phase, bytes);
-    let home = context.home.clone();
+    progress(events, phase, bytes);
+    let home = home.to_path_buf();
     at(phase, advance(&home, name, op, phase))
 }
 
 fn phases(
-    context: &mut Context<'_>,
+    home: &Path,
+    events: &mut Events<'_>,
     op: &mut Op,
     name: &str,
     (from, source): (&str, &mut Executor),
     (to, target): (&str, &mut Executor),
 ) -> Phased<SdkValue> {
-    let home = context.home.clone();
-    enter(context, op, name, "snapshot", None)?;
+    let home = home.to_path_buf();
+    enter(&home, events, op, name, "snapshot", None)?;
     let snapshot = at(
         "snapshot",
         step(&home, source, "snapshot", of_store(name, vec![])),
@@ -208,7 +219,7 @@ fn phases(
     let total = snapshot.get_int("bytes").unwrap_or(0) as u64;
     // send, in pieces through this process
     let mut offset = 0u64;
-    enter(context, op, name, "send", Some((0, total)))?;
+    enter(&home, events, op, name, "send", Some((0, total)))?;
     loop {
         let piece = at(
             "send",
@@ -249,13 +260,13 @@ fn phases(
             ),
         )?;
         offset += len;
-        progress(context, "send", Some((offset, total)));
+        progress(events, "send", Some((offset, total)));
         if len < CHUNK {
             break;
         }
     }
     // verify, install
-    enter(context, op, name, "verify", None)?;
+    enter(&home, events, op, name, "verify", None)?;
     let digest: Vec<(&str, SdkValue)> = ["bytes", "sha256", "heads"]
         .into_iter()
         .map(|field| (field, snapshot.get(field).cloned().unwrap_or_default()))
@@ -269,7 +280,7 @@ fn phases(
     // both copies, so the intent is written uncertain before it (H4–H6); the
     // next push or pull deletes the copy the record does not name
     *op = op.clone().as_uncertain();
-    enter(context, op, name, "install", None)?;
+    enter(&home, events, op, name, "install", None)?;
     at(
         "install",
         step(&home, target, "install", of_store(name, vec![])),
@@ -278,7 +289,7 @@ fn phases(
     // that the source's copy is not yet retired and keeps `op`, certain, at
     // retire while it is: a retire that does not finish leaves a Store in
     // use on `to` and a copy the next push or pull deletes first
-    enter(context, op, name, "record", None)?;
+    enter(&home, events, op, name, "record", None)?;
     let last = SdkValue::map([
         ("call", SdkValue::text(op.name())),
         ("from", SdkValue::text(from)),
@@ -306,7 +317,7 @@ fn phases(
     // retire the source's copy: `native`'s file (its folder holds the
     // home's records), or the Store's whole folder under a worker's root,
     // with the project entries a worker keeps there
-    progress(context, "retire", None);
+    progress(events, "retire", None);
     let retire = match source {
         Executor::Local => "retire",
         Executor::Worker(_) => "remove",

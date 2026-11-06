@@ -12,7 +12,7 @@ process running that project's Workspace daemon, ready for
 | --- | --- |
 | Family | [sandbox](README.md) |
 | Library entry | [`sandbox/create.rs`](../../../../../api/crates/layerfs-api/src/sandbox/create.rs) |
-| Implemented in | `layerfs_sandbox::family::sandbox` → `create::create` ([`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs)), then `serve::create` on the machine ([`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs)) |
+| Implemented in | `layerfs_sandbox::family::create` → `create::create` ([`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs)), then `serve::create` on the machine ([`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs)) |
 | Runs in | the caller's process (records, locks), then the caller's process for a local machine or the machine's worker (`sandbox.host`) |
 
 ## Signature
@@ -38,7 +38,7 @@ layerfs sandbox create <project> <name> [<machine>] [--image <image>]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>`; the Store and project must exist (`NoSuchStore`, `NoSuchProject`) | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
+| `project` | Project | `<store>/<project>`; the Store and project must exist (`NoSuchStore`, `NoSuchProject`) | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs), [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `name` | Name | 1–63 lowercase letters, digits, `_ . -`, starting and ending with a letter or digit; not a Windows device name; not `native` or `docker`; unique across the home | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs), [`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs) |
 | `machine` | Name, optional | default: a sqlite Store's machine, else `native` (PostgreSQL Store). A sqlite Store's Sandbox must run on the Store's machine; the support table's `sandbox_allowed` must accept the platform and Store kind | [`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs) |
 
@@ -49,7 +49,7 @@ layerfs sandbox create <project> <name> [<machine>] [--image <image>]
 | `image` | Text | the machine record's image; on `docker` with none, the bundle's Sandbox image, loaded once | travels in the deploy settings, not as a top-level argument. On `docker` it must be a local image digest `sha256:<64 hex>`; on other machines only a digest is used | [`deploy.rs`](../../../../../control/crates/layerfs-sandbox/src/deploy.rs), [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) `start` |
 
 Under a folder scope the call is refused `InvalidInput` (`out of scope:
-sandbox.create`) ([`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs)).
+sandbox.create`) ([`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
 
 ## Returns
 

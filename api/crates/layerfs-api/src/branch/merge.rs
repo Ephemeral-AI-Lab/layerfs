@@ -1,8 +1,8 @@
 //! `branch.merge`: merge two Branches into a new one.
+use crate::calls::table::Kind::{Json, Name, Project};
+use crate::calls::table::{a, call, opt, Call, MESSAGE};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::{Json, Name, Project};
-use layerfs_control::calls::table::{a, call, opt, Call, MESSAGE};
-use layerfs_control::calls::Context;
 use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
@@ -22,5 +22,6 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `branch.merge`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::store::calls::run(context, "branch", "merge", args)
+    let (home, events) = context.parts();
+    layerfs_store::calls::branch_merge(home, events, args)
 }

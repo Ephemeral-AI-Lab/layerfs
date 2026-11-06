@@ -11,7 +11,7 @@ may be `main`), with line hunks unless asked for paths only.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/diff.rs`](../../../../../api/crates/layerfs-api/src/branch/diff.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → Store method `branch.diff_branches` ([`methods/branch/diff_branches.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/diff_branches.rs), [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs)) |
+| Implemented in | `layerfs_store::calls::branch_diff` → Store method `branch.diff_branches` ([`methods/branch/diff_branches.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/diff_branches.rs), [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -90,7 +90,7 @@ scope (`out of scope: history`).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a side is not a Branch or `main`; bad paging; a folder-scoped client | no | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | a side is not a Branch or `main`; bad paging; a folder-scoped client | no | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `NoSuchBranch` | a side is missing | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`call.rs`](../../../../../control/crates/layerfs-store/src/call.rs) |
 | `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |

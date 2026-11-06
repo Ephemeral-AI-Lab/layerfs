@@ -15,7 +15,7 @@ use crate::resolve;
 use crate::sqlite::family::progress;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, Outcome, View};
 use std::path::Path;
@@ -43,30 +43,21 @@ fn summary(home: &Path, store: &str, name: &str, record: &StoreRecord, view: Vie
     project.to_sdk(view, record)
 }
 
-/// Runs one `project` call.
-pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue, related: Related) -> Outcome {
-    let home = context.home.clone();
-    match call {
-        "list" => list(&home, args),
-        "get" => {
-            let project = args.get_text("project").unwrap_or("");
-            let target = resolve::target(&home, project)?;
-            Ok(summary(
-                &home,
-                &target.store,
-                &target.project,
-                &target.record,
-                View::Full,
-            ))
-        }
-        "init" => init(context, args),
-        "remove" => remove(context, args.get_text("project").unwrap_or(""), related),
-        _ => Err(refused("InvalidInput", format!("no call project.{call}"))),
-    }
+/// `project.get(project)`: one project's record.
+pub fn get(home: &Path, args: &SdkValue) -> Outcome {
+    let project = args.get_text("project").unwrap_or("");
+    let target = resolve::target(home, project)?;
+    Ok(summary(
+        home,
+        &target.store,
+        &target.project,
+        &target.record,
+        View::Full,
+    ))
 }
 
 /// `project.list(store?, { page_size, page_pos })`, by Store then name.
-fn list(home: &Path, args: &SdkValue) -> Outcome {
+pub fn list(home: &Path, args: &SdkValue) -> Outcome {
     let stores = match args.get_text("store") {
         Some(store) => {
             layerfs_home::names::StoreName::parse(store)?;
@@ -122,8 +113,8 @@ fn host_args(home: &Path, store: &str, more: Vec<(&str, SdkValue)>) -> SdkValue 
 /// is a push's (#536 §10b), `{ phase, done, total }`: `check`, `send`
 /// (bytes, to a worker only), `install` (Init adds the folder to the
 /// Store) and `record` (the home's project record), whatever the route.
-fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let home = context.home.clone();
+pub fn init(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+    let home = home.to_path_buf();
     let project = args.get_text("project").unwrap_or("");
     let (store, name) = split(project)?;
     layerfs_home::names::ProjectName::parse(name)?;
@@ -141,11 +132,11 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         )
     })?;
     record.unblocked()?;
-    progress(context, "check", None);
+    progress(events, "check", None);
     let timeout = args.get_int("timeout").unwrap_or(INIT_TIMEOUT_MS);
     let store_ref = record.store_ref()?;
     if let StoreRef::Postgres { .. } = store_ref {
-        return init_postgresql(context, store, name, folder, timeout, &record);
+        return init_postgresql(&home, events, store, name, folder, timeout, &record);
     }
     // Init runs where the Store's calls run (H11)
     if let Executor::Worker(worker) = place::plan(&home, store_ref)? {
@@ -156,7 +147,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             folder,
             timeout,
         };
-        return init_on_worker(context, worker, call);
+        return init_on_worker(&home, events, worker, call);
     }
     let _lease = lease::hold(&home, store)?;
     let call = host_args(
@@ -168,10 +159,10 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             ("timeoutMs", SdkValue::Int(timeout)),
         ],
     );
-    progress(context, "install", None);
+    progress(events, "install", None);
     let added = crate::identity::add_project(&call)?;
     // the project's record keeps when it was made
-    progress(context, "record", None);
+    progress(events, "record", None);
     {
         let _lock = layerfs_home::home::lock::take(&home)?;
         if let Some(project) = ProjectRecord::read(&home, store, name)? {
@@ -206,12 +197,13 @@ struct InitCall<'a> {
 /// record (`project list` does not show a project whose outcome is not
 /// known; the Store may hold it).
 fn init_on_worker(
-    context: &mut Context<'_>,
+    home: &Path,
+    events: &mut Events<'_>,
     mut worker: crate::place::Worker,
     call: InitCall<'_>,
 ) -> Outcome {
     use crate::project::send;
-    let home = context.home.clone();
+    let home = home.to_path_buf();
     let InitCall {
         store,
         name,
@@ -236,7 +228,7 @@ fn init_on_worker(
     send::room(&mut worker, &copy, total)?;
     // the lease is taken under the Store's lock with the record read there
     let (lease, record) = lease::claim(&home, store)?;
-    send::send(context, &mut worker, &copy, total)?;
+    send::send(events, &mut worker, &copy, total)?;
     let request = SdkValue::map([
         ("store", SdkValue::text(store)),
         ("name", SdkValue::text(name)),
@@ -244,8 +236,8 @@ fn init_on_worker(
         ("timeoutMs", SdkValue::Int(timeout)),
         ("store_record", record.to_record().clone()),
     ]);
-    progress(context, "install", None);
-    let added = worker.call("project.init", request, &mut |event| context.event(event));
+    progress(events, "install", None);
+    let added = worker.call("project.init", request, &mut |event| events.event(event));
     drop(lease);
     let added = added.map_err(|mut refusal| {
         if refusal.code == "Unknown" {
@@ -258,7 +250,7 @@ fn init_on_worker(
         refusal
     })?;
     let stack = added.get("stack").cloned().unwrap_or_default();
-    progress(context, "record", None);
+    progress(events, "record", None);
     {
         let _lock = layerfs_home::home::lock::take(&home)?;
         ProjectRecord::initialised(store, name, stack).write(&home)?;
@@ -276,14 +268,15 @@ fn init_on_worker(
 /// runs in this process against the schema; the project's record names its
 /// LayerStack, as `store.connect` writes it for the projects it finds.
 fn init_postgresql(
-    context: &mut Context<'_>,
+    home: &Path,
+    events: &mut Events<'_>,
     store: &str,
     name: &str,
     folder: &str,
     timeout: i64,
     record: &StoreRecord,
 ) -> Outcome {
-    let home = context.home.clone();
+    let home = home.to_path_buf();
     let path = paths::project_record(&home, store, name);
     if path.exists() {
         return Err(refused(
@@ -304,10 +297,10 @@ fn init_postgresql(
     );
     // this process uses the Store meanwhile, as a sqlite Init does
     let _lease = lease::hold(&home, store)?;
-    progress(context, "install", None);
+    progress(events, "install", None);
     let added = crate::project::postgres_init::add_project(&call)?;
     let stack = added.get("stack").cloned().unwrap_or_default();
-    progress(context, "record", None);
+    progress(events, "record", None);
     ProjectRecord::initialised(store, name, stack).write(&home)?;
     let mut out = summary(&home, store, name, record, View::Full);
     for field in ["layer", "root"] {
@@ -321,8 +314,9 @@ fn init_postgresql(
 /// `project.remove(project)`: drops the project's Layers, Branches and
 /// Commits from its Store in one write, then its record. Its Sandboxes must
 /// be closed first; the other projects stay.
-fn remove(context: &mut Context<'_>, project: &str, related: Related) -> Outcome {
-    let home = context.home.clone();
+pub fn remove(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Related) -> Outcome {
+    let project = args.get_text("project").unwrap_or("");
+    let home = home.to_path_buf();
     let target = resolve::target(&home, project)?;
     target.record.unblocked()?;
     (related.can_remove_project)(&home, project)?;
@@ -346,7 +340,7 @@ fn remove(context: &mut Context<'_>, project: &str, related: Related) -> Outcome
             let mut fields = vec![("store".to_owned(), SdkValue::text(&target.store))];
             fields.extend(args.into_iter().map(|(n, v)| (n.to_owned(), v)));
             worker.call("project.remove", SdkValue::Map(fields), &mut |e| {
-                context.event(e)
+                events.event(e)
             })?
         }
     };

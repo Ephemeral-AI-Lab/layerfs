@@ -9,7 +9,7 @@ use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup as remote;
 use layerfs_bucket::bucket::pieces;
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::home::flock::{try_lock, unlock};
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -26,8 +26,8 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// its projects runs). The download, its checks and the read of its
 /// projects happen before the home lock; the lock covers the re-checks, the
 /// install and the record writes only.
-pub fn restore(context: &mut Context<'_>, args: &SdkValue, related: Related) -> Outcome {
-    let home = context.home.clone();
+pub fn restore(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Related) -> Outcome {
+    let home = home.to_path_buf();
     let store = args.get_text("store").unwrap_or("");
     layerfs_home::names::StoreName::parse(store)?;
     let bucket = args.get_text("bucket").unwrap_or("");
@@ -67,12 +67,12 @@ pub fn restore(context: &mut Context<'_>, args: &SdkValue, related: Related) -> 
         None => layerfs_home::helpers::random()?,
     };
     let mut shown = Shown::new();
-    shown.phase(context, "check");
+    shown.phase(events, "check");
     let staging = Staging::make(&home)?;
     let staged = staging.0.join(remote::STORE_FILE);
     // `download` with its bytes and pieces, `verify`, then `install`
     let loaded = shown
-        .transfer(context, || {
+        .transfer(events, || {
             remote::load(driver.as_ref(), &file, &staged, cursor)
         })
         // the cause alone: what the load left is in `staging`, removed below
@@ -93,7 +93,7 @@ pub fn restore(context: &mut Context<'_>, args: &SdkValue, related: Related) -> 
         _ => StoreRecord::restored(store, &loaded.binding, &cursor),
     };
     let found = projects_in(&home, store, &record, &staged)?;
-    shown.phase(context, "install");
+    shown.phase(events, "install");
     let _lock = home::lock::take(&home)?;
     // a Store replaced here is checked and replaced under its lock, which
     // the link below takes again

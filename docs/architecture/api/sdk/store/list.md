@@ -11,7 +11,7 @@ its projects and its current state.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`store/list.rs`](../../../../../api/crates/layerfs-api/src/store/list.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `list` ([`list.rs`](../../../../../control/crates/layerfs-store/src/list.rs)) |
+| Implemented in | `layerfs_store::sqlite::family::list` → `list` ([`list.rs`](../../../../../control/crates/layerfs-store/src/list.rs)) |
 | Runs in | the caller's process; one `store.file` `stat` in a machine's worker per sqlite Store that is not local |
 
 ## Signature
@@ -36,7 +36,7 @@ layerfs store list
 ## Arguments
 
 None. A positional is refused `InvalidInput` by the argument check
-([`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs)).
+([`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs)).
 
 ## Options
 
@@ -106,7 +106,7 @@ It starts no machine, takes no lock and changes nothing. See the
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | the client has a folder scope (`out of scope: store.list`) | no | [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | the client has a folder scope (`out of scope: store.list`) | no | [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `Failed` | a Store record or lease folder cannot be read, or a record is not a map | no | [`home/records.rs`](../../../../../control/crates/layerfs-home/src/home/records.rs), [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) |
 
 A machine that does not answer is not an error: its Stores are `down`.

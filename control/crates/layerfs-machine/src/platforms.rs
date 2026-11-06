@@ -4,14 +4,14 @@
 //! per-machine `supports` of `machine.list` and `machine.get` (P3).
 use super::spec as record;
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::context::Context;
 use layerfs_home::outcome::Outcome;
 use layerfs_platform::{self as adapters, HostOs, Platform, Probe, SupportRow, Supports};
+use std::path::Path;
 
 /// `machine.platforms()`: `{ host, platforms: [row] }`.
-pub fn platforms(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
+pub fn platforms(home: &Path, _args: &SdkValue) -> Outcome {
     let host = HostOs::current();
-    let tools = record::tools(&context.home)?;
+    let tools = record::tools(home)?;
     let rows = adapters::platforms(host)
         .iter()
         .map(|row| row_value(row, adapters::probe(row.platform, &tools)))

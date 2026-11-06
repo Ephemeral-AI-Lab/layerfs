@@ -25,8 +25,9 @@ behalf of the engine:
 - `crates/layerfs-control`: what spans entities (#536; moved here from
   `api/crates` by #101 D-2): the worker server, `inventory`, `doctor`,
   `migrate`, and the machine, Store, project and backup calls with the
-  `Related` reads they need from other entities; until #107 also the call
-  machinery (`calls/`).
+  `Related` reads they need from other entities. The call machinery
+  (`calls/`) and `Context` are `layerfs-api`'s (#107): control functions
+  take the home and, when they emit, `layerfs-home`'s `Events`.
 - `crates/layerfs-platform` (was `layerfs-machine`): *where* Sandboxes can
   run. One folder per platform under `src/platforms/` (`native`, `docker`,
   `apple_container`, `microsandbox`, `lima`, `firecracker`, `ssh`). Host

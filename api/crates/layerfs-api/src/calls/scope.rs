@@ -253,7 +253,7 @@ impl Scope {
             return Err(out("sandbox"));
         }
         // one read of the Sandbox's record (layout 3, #536 §5)
-        match crate::inventory::sandbox(home, sandbox)? {
+        match layerfs_control::inventory::sandbox(home, sandbox)? {
             Some(record) if record.project() == Some(self.project.as_str()) => Ok(()),
             _ => Err(out("sandbox")),
         }

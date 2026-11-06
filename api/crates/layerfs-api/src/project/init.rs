@@ -1,8 +1,8 @@
 //! `project.init`: import a host folder as a new project into an existing Store.
+use crate::calls::table::Kind::{Int, Project, Text};
+use crate::calls::table::{a, call, opt, Call, PROGRESS};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::{Int, Project, Text};
-use layerfs_control::calls::table::{a, call, opt, Call, PROGRESS};
-use layerfs_control::calls::Context;
 use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
@@ -17,5 +17,6 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `project.init`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::project::family::run(context, "init", args)
+    let (home, events) = context.parts();
+    layerfs_store::project::family::init(home, events, args)
 }

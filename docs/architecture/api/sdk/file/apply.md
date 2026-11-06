@@ -10,7 +10,7 @@ Applies a list of changes (write, edit, mkdir, chmod, rm, cp, mv) on a Branch as
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/apply.rs`](../../../../../api/crates/layerfs-api/src/file/apply.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → `file`, Store method `fs.apply` ([`methods/file/apply.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/apply.rs)); each change's snake_case fields are renamed (`changes`) |
+| Implemented in | `layerfs_store::calls::file_apply` → `file`, Store method `fs.apply` ([`methods/file/apply.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/apply.rs)); each change's snake_case fields are renamed (`changes`) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -53,7 +53,7 @@ Control renames `old`/`new` to `oldText`/`newText`, `from_path`/`to_path`
 to `from`/`to`, and bytes `content` to `bytes`. A change that uses the
 Store's own names (`from`, `to`, `oldText`, `newText`, `bytes`) is refused,
 so a folder scope can check every path field
-([`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs)).
+([`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
 
 ## Options
 
@@ -104,7 +104,7 @@ mounted or shared. See the [routing table](../../../control/routing/routing-tabl
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | `changes` not a list of records; a Store field name in a change; a bad path or mode; a path outside a folder scope | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | `changes` not a list of records; a Store field name in a change; a bad path or mode; a path outside a folder scope | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `ReadOnly` | `branch` is `main`; `main` changes only through [branch.publish](../branch/publish.md) | no | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `NoSuchStore`, `NoSuchProject`, `NoSuchBranch` | not recorded, or no such Branch | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `Conflict` | the Branch's head moved since the call bound it and a changed path conflicts; nothing committed (`detail.branch`, `head`, `conflicts`) | no | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |

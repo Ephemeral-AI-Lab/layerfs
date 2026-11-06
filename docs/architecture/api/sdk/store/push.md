@@ -11,7 +11,7 @@ for byte, so its projects are served from that machine afterwards.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`store/push.rs`](../../../../../api/crates/layerfs-api/src/store/push.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `transfer::phases::push` ([`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs)) |
+| Implemented in | `layerfs_control::store::push` → `transfer::phases::push` ([`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs)) |
 | Runs in | the caller's process (records, locks, `op`, the bytes in transit); the source steps run here on `native`, the target steps in the target machine's worker as `store.file` |
 
 ## Signature
@@ -99,7 +99,7 @@ Every refusal's message starts `store push, <phase>:` and carries
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad names; a PostgreSQL Store; the Store is not on `native`; `machine` is `native`; a folder-scoped client | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_push`, [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | bad names; a PostgreSQL Store; the Store is not on `native`; `machine` is `native`; a folder-scoped client | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_push`, [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `NotFound` | no such Store or machine; no Store file at snapshot | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs), [`sqlite/transfer/steps.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/steps.rs) |
 | `InUse` | a live process holds the Store, or a Sandbox of one of its projects is recorded (`detail.related`) | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `store_idle`, [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) `settle` |
 | `Busy` / `Unresolved` | another operation runs on the Store / an earlier one's outcome is unknown | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `blocks` |

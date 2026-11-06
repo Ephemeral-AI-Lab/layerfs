@@ -4,8 +4,9 @@
 use crate::call::store_call;
 use crate::resolve::target;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::outcome::{refused, Outcome};
+use std::path::Path;
 
 /// The argument a scoped `branch.list` carries to its family: the Branch
 /// namespace, which only a scope sets (the table has no such argument).
@@ -32,9 +33,15 @@ fn text<'a>(args: &'a SdkValue, name: &str) -> &'a str {
 }
 
 /// Runs Store method `op` with `fields` on the call's project.
-fn on_project(context: &mut Context<'_>, args: &SdkValue, op: &str, fields: Fields) -> Outcome {
-    let target = target(&context.home, text(args, "project"))?;
-    store_call(context, &target, op, fields)
+fn on_project(
+    home: &Path,
+    events: &mut Events<'_>,
+    args: &SdkValue,
+    op: &str,
+    fields: Fields,
+) -> Outcome {
+    let target = target(home, text(args, "project"))?;
+    store_call(home, events, &target, op, fields)
 }
 
 const PAGE: [(&str, &str); 2] = [("page_size", "pageSize"), ("page_pos", "pagePos")];
@@ -60,23 +67,91 @@ fn at(args: &SdkValue) -> Fields {
     take(args, &[("branch", "branch"), ("commit", "commit")])
 }
 
+/// One public function per call of the three families, each running that
+/// call of [`run`]: `$fn` runs `$family.$call`.
+macro_rules! calls {
+    ($($(#[$doc:meta])* $fn:ident => $family:literal, $call:literal;)*) => {
+        $(
+            $(#[$doc])*
+            pub fn $fn(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+                run(home, events, $family, $call, args)
+            }
+        )*
+    };
+}
+
+calls! {
+    /// `branch.diff`: the changes between two Branches.
+    branch_diff => "branch", "diff";
+    /// `branch.fork`: a new Branch from a Branch or a Commit.
+    branch_fork => "branch", "fork";
+    /// `branch.get`: one Branch.
+    branch_get => "branch", "get";
+    /// `branch.list`: one page of the project's Branches.
+    branch_list => "branch", "list";
+    /// `branch.merge`: two Branches merged into a new one.
+    branch_merge => "branch", "merge";
+    /// `branch.publish`: a Branch moved to a Commit.
+    branch_publish => "branch", "publish";
+    /// `commit.diff`: the changes between two Commits.
+    commit_diff => "commit", "diff";
+    /// `commit.get`: one Commit of a Branch.
+    commit_get => "commit", "get";
+    /// `commit.list`: one page of a Branch's Commits.
+    commit_list => "commit", "list";
+    /// `file.apply`: several changes as one Commit.
+    file_apply => "file", "apply";
+    /// `file.blame`: the Commit of each line of a file.
+    file_blame => "file", "blame";
+    /// `file.cp`: a file copied, as one Commit.
+    file_cp => "file", "cp";
+    /// `file.diff`: the changes between two files.
+    file_diff => "file", "diff";
+    /// `file.edit`: one text replaced in a file, as one Commit.
+    file_edit => "file", "edit";
+    /// `file.glob`: the paths a pattern matches.
+    file_glob => "file", "glob";
+    /// `file.grep`: the lines a pattern matches.
+    file_grep => "file", "grep";
+    /// `file.list`: one page of a folder's entries.
+    file_list => "file", "list";
+    /// `file.mkdir`: a folder made, as one Commit.
+    file_mkdir => "file", "mkdir";
+    /// `file.mv`: a file moved, as one Commit.
+    file_mv => "file", "mv";
+    /// `file.read`: a file's text or bytes.
+    file_read => "file", "read";
+    /// `file.rm`: a file or folder removed, as one Commit.
+    file_rm => "file", "rm";
+    /// `file.stat`: one path's metadata.
+    file_stat => "file", "stat";
+    /// `file.write`: a file written, as one Commit.
+    file_write => "file", "write";
+}
+
 /// Runs one call of the three families.
-pub fn run(context: &mut Context<'_>, family: &str, call: &str, args: &SdkValue) -> Outcome {
+fn run(home: &Path, events: &mut Events<'_>, family: &str, call: &str, args: &SdkValue) -> Outcome {
     match (family, call) {
         ("branch", "list") => match args.get_text(NAMESPACE) {
-            Some(namespace) => branches_in(context, args, namespace),
-            None => on_project(context, args, "project.list_branches", take(args, &PAGE)),
+            Some(namespace) => branches_in(home, events, args, namespace),
+            None => on_project(
+                home,
+                events,
+                args,
+                "project.list_branches",
+                take(args, &PAGE),
+            ),
         },
         ("branch", "get") => {
             let fields = take(args, &[("branch", "name")]);
-            let page = on_project(context, args, "project.list_branches", fields)?;
+            let page = on_project(home, events, args, "project.list_branches", fields)?;
             first(page, "NoSuchBranch", "Branch", text(args, "branch"))
         }
         ("branch", "fork") => {
             let from = arg(args, "from_commit").or_else(|| arg(args, "from_branch"));
             let mut fields = take(args, &[("name", "name")]);
             fields.extend(from.map(|from| ("from".to_owned(), from)));
-            on_project(context, args, "branch.fork", fields)
+            on_project(home, events, args, "branch.fork", fields)
         }
         ("branch", "merge") => {
             let fields = take(
@@ -89,10 +164,11 @@ pub fn run(context: &mut Context<'_>, family: &str, call: &str, args: &SdkValue)
                     ("units", "units"),
                 ],
             );
-            on_project(context, args, "branch.merge", fields)
+            on_project(home, events, args, "branch.merge", fields)
         }
         ("branch", "publish") => on_project(
-            context,
+            home,
+            events,
             args,
             "branch.publish",
             take(args, &[("branch", "branch"), ("commit", "commit")]),
@@ -100,20 +176,20 @@ pub fn run(context: &mut Context<'_>, family: &str, call: &str, args: &SdkValue)
         ("branch", "diff") => {
             let mut fields = take(args, &[("from_branch", "from"), ("to_branch", "to")]);
             fields.extend(diff_options(args));
-            on_project(context, args, "branch.diff_branches", fields)
+            on_project(home, events, args, "branch.diff_branches", fields)
         }
         ("commit", "list") => {
             let mut fields = take(args, &[("branch", "branch")]);
             fields.extend(take(args, &PAGE));
-            on_project(context, args, "branch.list_commits", fields)
+            on_project(home, events, args, "branch.list_commits", fields)
         }
-        ("commit", "get") => commit_get(context, args),
+        ("commit", "get") => find_commit(home, events, args),
         ("commit", "diff") => {
             let mut fields = take(args, &[("from_commit", "from"), ("to_commit", "to")]);
             fields.extend(diff_options(args));
-            on_project(context, args, "branch.diff_commits", fields)
+            on_project(home, events, args, "branch.diff_commits", fields)
         }
-        ("file", _) => file(context, call, args),
+        ("file", _) => file(home, events, call, args),
         _ => Err(refused("InvalidInput", format!("no call {family}.{call}"))),
     }
 }
@@ -151,8 +227,8 @@ fn page_of(page: &SdkValue, pos: i64) -> Result<(Vec<SdkValue>, Option<i64>), Sd
 
 /// `commit.get`: the Commit, found by paging the Branch's Commits newest
 /// first, each page from where the last one ended, to the end.
-fn commit_get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let target = target(&context.home, text(args, "project"))?;
+fn find_commit(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+    let target = target(home, text(args, "project"))?;
     let wanted = text(args, "commit");
     let mut pos = 0i64;
     loop {
@@ -161,7 +237,7 @@ fn commit_get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
             ("pageSize".to_owned(), SdkValue::Int(1000)),
             ("pagePos".to_owned(), SdkValue::Int(pos)),
         ];
-        let page = store_call(context, &target, "branch.list_commits", fields)?;
+        let page = store_call(home, events, &target, "branch.list_commits", fields)?;
         let (items, next) = page_of(&page, pos)?;
         let found = items.into_iter().find(|item| {
             item.get_text("id")
@@ -186,7 +262,7 @@ fn commit_get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 /// relative to the namespace, one page (`page_size`, `page_pos`) of them.
 /// The project's Branches are read page by page to the end, or until the
 /// page is full; only the requested page is kept.
-fn branches_in(context: &mut Context<'_>, args: &SdkValue, namespace: &str) -> Outcome {
+fn branches_in(home: &Path, events: &mut Events<'_>, args: &SdkValue, namespace: &str) -> Outcome {
     let size = args.get_int("page_size").unwrap_or(50);
     let skip = args.get_int("page_pos").unwrap_or(0);
     if !(1..=1000).contains(&size) || skip < 0 {
@@ -195,7 +271,7 @@ fn branches_in(context: &mut Context<'_>, args: &SdkValue, namespace: &str) -> O
             "page_size is in 1..=1000 and page_pos is not negative",
         ));
     }
-    let target = target(&context.home, text(args, "project"))?;
+    let target = target(home, text(args, "project"))?;
     let prefix = format!("{namespace}.");
     let (mut pos, mut seen, mut kept, mut more) = (0i64, 0i64, Vec::new(), false);
     'pages: loop {
@@ -203,7 +279,7 @@ fn branches_in(context: &mut Context<'_>, args: &SdkValue, namespace: &str) -> O
             ("pageSize".to_owned(), SdkValue::Int(1000)),
             ("pagePos".to_owned(), SdkValue::Int(pos)),
         ];
-        let page = store_call(context, &target, "project.list_branches", fields)?;
+        let page = store_call(home, events, &target, "project.list_branches", fields)?;
         let (items, next) = page_of(&page, pos)?;
         for item in items {
             let Some(name) = item.get_text("name").and_then(|n| n.strip_prefix(&prefix)) else {
@@ -237,7 +313,7 @@ fn branches_in(context: &mut Context<'_>, args: &SdkValue, namespace: &str) -> O
 }
 
 /// One `file` call.
-fn file(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
+fn file(home: &Path, events: &mut Events<'_>, call: &str, args: &SdkValue) -> Outcome {
     let path = [("path", "path")];
     let message = [("message", "message")];
     let (op, fields): (&str, Fields) = match call {
@@ -351,7 +427,7 @@ fn file(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
         }
         _ => return Err(refused("InvalidInput", format!("no call file.{call}"))),
     };
-    on_project(context, args, op, fields)
+    on_project(home, events, args, op, fields)
 }
 
 fn renamed(name: &str) -> &str {

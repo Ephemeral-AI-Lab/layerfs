@@ -10,7 +10,7 @@ Makes a new, empty sqlite Store on `native`, ready for `project.init`.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`store/create.rs`](../../../../../api/crates/layerfs-api/src/store/create.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `create` ([`sqlite/create.rs`](../../../../../control/crates/layerfs-store/src/sqlite/create.rs)) |
+| Implemented in | `layerfs_store::sqlite::family::create` → `create` ([`sqlite/create.rs`](../../../../../control/crates/layerfs-store/src/sqlite/create.rs)) |
 | Runs in | the caller's process, always; the file goes to `store/<name>/store.sqlite` under the home |
 
 ## Signature
@@ -100,7 +100,7 @@ create it and then [push](push.md) it. See the
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad Store name; a folder-scoped client | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | a bad Store name; a folder-scoped client | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `Exists` | a Store record of that name exists, or a file is already at the target | no | [`sqlite/create.rs`](../../../../../control/crates/layerfs-store/src/sqlite/create.rs), [`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs) `make_empty` |
 | `Unavailable` | another process held the home lock or the Store's lock for 120 s | no | [`home/lock.rs`](../../../../../control/crates/layerfs-home/src/home/lock.rs) |
 | `Failed` | the empty Store could not be made or written (`Store create: …`), or the record write failed | no | [`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs) |

@@ -12,7 +12,7 @@ paths.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/merge.rs`](../../../../../api/crates/layerfs-api/src/branch/merge.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → Store method `branch.merge` ([`methods/branch/merge.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/merge.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) `merge`) |
+| Implemented in | `layerfs_store::calls::branch_merge` → Store method `branch.merge` ([`methods/branch/merge.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/merge.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) `merge`) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -45,7 +45,7 @@ layerfs branch merge <store>/<project> <name> <a> <b> [--message TEXT] [--units 
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `message` | Text | none | the merge Commit's message | [`calls/table.rs`](../../../../../control/crates/layerfs-control/src/calls/table.rs) `MESSAGE` |
+| `message` | Text | none | the merge Commit's message | [`calls/table.rs`](../../../../../api/crates/layerfs-api/src/calls/table.rs) `MESSAGE` |
 | `units` | Json | none | a list; each a glob pattern or `{ name, patterns: [..] }`. A unit both sides changed comes whole from the later write (`a` on a tie); overlapping units belong to the first listed | [`history/units.rs`](../../../../../engine/crates/layerfs-store-service/src/history/units.rs) |
 
 ## Returns

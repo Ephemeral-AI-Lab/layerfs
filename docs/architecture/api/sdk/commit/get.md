@@ -11,7 +11,7 @@ eight characters.
 | --- | --- |
 | Family | [commit](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/commit/get.rs`](../../../../../api/crates/layerfs-api/src/commit/get.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → `commit_get`, which pages Store method `branch.list_commits` ([`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs)) |
+| Implemented in | `layerfs_store::calls::commit_get` → `find_commit`, which pages Store method `branch.list_commits` ([`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs)) |
 | Runs in | control's loop in the caller's process; each page where the Store's calls run |
 
 ## Signature
@@ -37,7 +37,7 @@ layerfs commit get <store>/<project> <branch> <commit>
 | --- | --- | --- | --- |
 | `project` | Project | `<store>/<project>` | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `branch` | Name | the Branch whose history holds the Commit; not `main` | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `commit` | Name | a full id, or a prefix of 8 or more characters | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) `commit_get` |
+| `commit` | Name | a full id, or a prefix of 8 or more characters | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) `find_commit` |
 
 ## Options
 
@@ -71,7 +71,7 @@ Refused under a folder scope. See the
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad project; a folder-scoped client | no | [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | a bad project; a folder-scoped client | no | [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `NoSuchBranch` | no such Branch, or `main` | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `NoSuchCommit` | not on this Branch's history | no | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
 | `Failed` | a page made no progress | no | same, `page_of` |

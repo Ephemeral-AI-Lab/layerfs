@@ -2,9 +2,8 @@
 //! `store.get` leave a stale lease and `log/leases.jsonl` as they were and
 //! take no lock, while their answers still ignore the dead holder.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::store::family::run;
-use layerfs_home::context::Context;
 use layerfs_home::home::{paths, private_dir, write_entity};
+use layerfs_store::sqlite::family::{get, list, status};
 use std::collections::BTreeMap;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
@@ -28,12 +27,6 @@ fn tree(dir: &Path) -> BTreeMap<PathBuf, (u64, i64, i64, u32)> {
     found
 }
 
-fn call(home: &Path, name: &str, args: SdkValue) -> SdkValue {
-    let mut events = |_| {};
-    let mut context = Context::new(home.to_owned(), &mut events);
-    run(&mut context, name, &args).unwrap()
-}
-
 #[test]
 fn a_stale_lease_survives_every_store_read_and_is_ignored() {
     let home = std::env::temp_dir().join(format!("layerfs-store-reads-{}", std::process::id()));
@@ -51,9 +44,9 @@ fn a_stale_lease_survives_every_store_read_and_is_ignored() {
     let named = SdkValue::map([("name", SdkValue::text("s"))]);
 
     let before = tree(&home);
-    let status = call(&home, "status", named.clone());
-    let list = call(&home, "list", SdkValue::map([]));
-    let get = call(&home, "get", named);
+    let status = status(&home, &named).unwrap();
+    let list = list(&home).unwrap();
+    let get = get(&home, &named).unwrap();
     assert_eq!(before, tree(&home), "a read changed the home");
     assert!(stale.exists());
     assert!(!home.join("log/leases.jsonl").exists());

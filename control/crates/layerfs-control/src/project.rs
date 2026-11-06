@@ -1,14 +1,13 @@
-//! The `project` calls, with the check `project.remove` makes
-//! (layerfs-project#105).
+//! The `project` call that checks who uses a project, `project.remove`
+//! (layerfs-project#105); the other `project` calls are `layerfs-store`'s
+//! own.
+use layerfs_bridge::control::SdkValue;
+use layerfs_home::events::Events;
+use layerfs_home::outcome::Outcome;
+use std::path::Path;
 
-/// The `project` family.
-pub mod family {
-    use layerfs_bridge::control::SdkValue;
-    use layerfs_home::context::Context;
-    use layerfs_home::outcome::Outcome;
-
-    /// Runs one `project` call.
-    pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
-        layerfs_store::project::family::run(context, call, args, crate::store::RELATED)
-    }
+/// `project.remove`: a project's history dropped from its Store, once its
+/// Sandboxes are closed.
+pub fn remove(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+    layerfs_store::project::family::remove(home, events, args, crate::store::RELATED)
 }

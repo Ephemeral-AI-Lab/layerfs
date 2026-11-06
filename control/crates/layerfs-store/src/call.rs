@@ -11,19 +11,20 @@ use crate::place::{plan, Executor};
 use crate::record::{StoreRecord, StoreRef};
 use crate::resolve::Target;
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
 /// Runs Store method `op` with `args` on the Store of `target`.
 pub fn store_call(
-    context: &mut Context<'_>,
+    home: &Path,
+    events: &mut Events<'_>,
     target: &Target,
     op: &str,
     args: Vec<(String, SdkValue)>,
 ) -> Outcome {
-    let home = context.home.clone();
+    let home = home.to_path_buf();
     target.record.unblocked()?;
     // the lease is taken under the Store's lock with the record read there:
     // a move or remove that started since `target` was read refuses it
@@ -48,7 +49,7 @@ pub fn store_call(
             let _lease = lease;
             let request =
                 SdkValue::map([("op", SdkValue::text(op)), ("args", SdkValue::Map(fields))]);
-            worker.call("store.call", request, &mut |event| context.event(event))
+            worker.call("store.call", request, &mut |event| events.event(event))
         }
     }
 }

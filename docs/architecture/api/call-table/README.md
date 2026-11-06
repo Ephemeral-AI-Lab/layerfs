@@ -10,7 +10,7 @@ The nine call families and the one dispatcher every front end goes through.
 | --- | --- |
 | Layer | [API](../README.md) |
 | Crates | `layerfs-api` |
-| Source | [`api/crates/layerfs-api/src`](../../../../api/crates/layerfs-api/src), [`layerfs-control/src/calls`](../../../../control/crates/layerfs-control/src/calls) |
+| Source | [`api/crates/layerfs-api/src`](../../../../api/crates/layerfs-api/src), [`layerfs-api/src/calls`](../../../../api/crates/layerfs-api/src/calls) |
 | Uses | [Management](../../control/management/README.md) |
 | Used by | [Front ends](../front-ends/README.md) |
 | Flows | [A call, end to end](../../flows/call.md) |
@@ -41,19 +41,21 @@ for the front ends ([`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs)).
  layerfs_api::call / call_scoped(home, scope, name, args, events)
      |
      v
- dispatcher  calls/dispatch.rs  (layerfs-control)
+ dispatcher  calls/dispatch.rs  (layerfs-api)
    find --> check --> scope.apply --> home --> scope.owns
      |
      v
  Call.run  (layerfs-api/src/<family>/<call>.rs)
      |
-     +--> project::family::run           project.*
-     +--> store::calls::run              branch.*, commit.*, file.*
-     +--> sandbox::family::sandbox       sandbox.*
-     +--> workspace::calls::workspace    workspace.*
+     |   one direct call per op, no op name passed (layerfs-project#107)
+     +--> project::family::<call>        project.*  (remove: control)
+     +--> store::calls::<family>_<call>  branch.*, commit.*, file.*
+     +--> sandbox::family::<call>        sandbox.*
+     +--> workspace::calls::<call>       workspace.*
      +--> machine::<call>                machine.*
-     +--> store::family::run / connect   store.*
-     +--> backup::family::run            backup.*
+     +--> sqlite::family::<call> /       store.*  (remove, push, pull,
+          postgresql::connect::connect             disconnect: control)
+     +--> backup::family::<call>         backup.*  (restore: control)
      |
      v
  route: in process | machine's worker | Sandbox daemon
@@ -71,12 +73,12 @@ control side of each family in [Control: Families](../../control/management/fami
 | Part | What a caller can rely on | Source |
 | --- | --- | --- |
 | Families | `project`, `branch`, `commit`, `file`, `sandbox`, `workspace`, `machine`, `store`, `backup`: 61 calls, listed in help order | [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs) `families` |
-| Arguments | positionals in table order, then options; each has a snake_case name and a `Kind` | [`calls/table.rs`](../../../../control/crates/layerfs-control/src/calls/table.rs) |
-| Checks | every argument checked against the entry before any effect | [`calls/check.rs`](../../../../control/crates/layerfs-control/src/calls/check.rs) |
-| Scope | an optional folder scope guards and rewrites arguments before any effect | [`calls/scope.rs`](../../../../control/crates/layerfs-control/src/calls/scope.rs) |
-| Events | one stream per call: `{progress}`, worker events, `{stream, bytes}` of `workspace.exec` | [`context.rs`](../../../../control/crates/layerfs-home/src/context.rs) |
-| Results | a value with snake_case keys, or a refusal `{code, message, detail}` | [`calls/keys.rs`](../../../../control/crates/layerfs-control/src/calls/keys.rs), [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs) |
-| Home | explicit, else `LAYERFS_HOME`, else `~/.layerfs`; must be absolute | [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) `home` |
+| Arguments | positionals in table order, then options; each has a snake_case name and a `Kind` | [`calls/table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs) |
+| Checks | every argument checked against the entry before any effect | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
+| Scope | an optional folder scope guards and rewrites arguments before any effect | [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) |
+| Events | one stream per call: `{progress}`, worker events, `{stream, bytes}` of `workspace.exec` | [`events.rs`](../../../../control/crates/layerfs-home/src/events.rs) |
+| Results | a value with snake_case keys, or a refusal `{code, message, detail}` | [`calls/keys.rs`](../../../../api/crates/layerfs-api/src/calls/keys.rs), [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs) |
+| Home | explicit, else `LAYERFS_HOME`, else `~/.layerfs`; must be absolute | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home` |
 
 Details: [Table](table.md) for kinds, keys, scopes and checks;
 [Errors](errors.md) for codes.
@@ -85,10 +87,10 @@ Details: [Table](table.md) for kinds, keys, scopes and checks;
 
 | Rule | Enforced by |
 | --- | --- |
-| Every front end uses the same table and dispatcher. | The CLI calls `layerfs_api::call_scoped` ([`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs)); Node and Python call `call_json`, which calls the same `call_scoped` ([`calls/text.rs`](../../../../control/crates/layerfs-control/src/calls/text.rs)); the guest worker serves host operations, not table calls. |
+| Every front end uses the same table and dispatcher. | The CLI calls `layerfs_api::call_scoped` ([`run.rs`](../../../../api/crates/layerfs-cli/src/run.rs)); Node and Python call `call_json`, which calls the same `call_scoped` ([`calls/text.rs`](../../../../api/crates/layerfs-api/src/calls/text.rs)); the guest worker serves host operations, not table calls. |
 | A call's name and arguments match across JS, Python and the CLI. | All three build from `Call` values: Node `table`, Python `TABLE` from `table_json`; the CLI parser and help read `layerfs_api::calls()`. |
 | One file per call under its family, and nothing else in `src/`. | `the_source_is_one_file_per_call_under_its_family` in [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) |
-| A call runs once; the dispatcher retries nothing. | [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) |
+| A call runs once; the dispatcher retries nothing. | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
 | Functions (`on_progress`, exec sinks) never cross into the library. | `check.rs` refuses a `Function` argument |
 | Store calls run in the caller's process or the Store's worker; the daemon serves none. | [Routing table](../../control/routing/routing-table.md) |
 
@@ -100,8 +102,8 @@ Details: [Table](table.md) for kinds, keys, scopes and checks;
 | `commit.get` | pages the Branch's Commits 1000 at a time to the end; an id prefix of 8 or more characters matches | `store/calls.rs` `commit_get` |
 | A list page that does not move on | `Failed` "a list made no progress"; not asked again | `store/calls.rs` `page_of` |
 | Worker frame | 512 MiB; larger is `TooLarge`, nothing sent | [`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs) |
-| Unknown call, unknown or ill-kinded argument, missing positional | `InvalidInput` before any effect | [`calls/check.rs`](../../../../control/crates/layerfs-control/src/calls/check.rs), [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) |
-| A call outside a folder scope | `InvalidInput` `out of scope: …` before any effect | [`calls/scope.rs`](../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| Unknown call, unknown or ill-kinded argument, missing positional | `InvalidInput` before any effect | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs), [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
+| A call outside a folder scope | `InvalidInput` `out of scope: …` before any effect | [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `machine.*` in a build without the `machine` feature | `Unsupported` before any effect | e.g. [`machine/create.rs`](../../../../api/crates/layerfs-api/src/machine/create.rs) |
 
 ## Demonstration

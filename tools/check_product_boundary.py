@@ -156,20 +156,22 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-persistence",
         "layerfs-telemetry",
     },
-    # The SDK call surface (#536): the call table over the control crates
-    # (#101: layerfs-api may call any control crate).
+    # The SDK call surface (#536): the call table and its call machinery
+    # over the control crates (#101: layerfs-api may call any control crate;
+    # #107: the machinery reads the platform policy from the isolation
+    # driver).
     "layerfs-api": {
         "layerfs-control",
         "layerfs-home",
         "layerfs-machine",
         "layerfs-store",
         "layerfs-sandbox",
+        "layerfs-isolation",
         "layerfs-bridge",
     },
     # What spans the control entities (#536, #101): the worker server,
-    # inventory, doctor, migrate (which reads the old backup layout) and the
-    # calls that pass Related; until #107 the call machinery, which reads the
-    # platform policy from the isolation driver.
+    # inventory, doctor, migrate (which reads the old backup layout and the
+    # platform policy) and the calls that pass Related.
     "layerfs-control": {
         "layerfs-bridge",
         "layerfs-project",
@@ -413,14 +415,15 @@ def component_violations(path, source):
         return [(1, "retired host-mediated transport path; use direct Store or native control")]
     # #536: management moved into layerfs-control by entity, and the 1.1
     # host/operator paths were deleted. Owner D15 (2026-11-04): the call
-    # surface is lib.rs plus one folder per call family, one file per call;
-    # its call machinery (calls/) lives in layerfs-control.
+    # surface is lib.rs plus one folder per call family, one file per call.
+    # layerfs-project#107: the call machinery (calls/) moved back from
+    # layerfs-control to layerfs-api, which alone speaks the SDK.
     moved = {
         "layerfs-api": tuple(
             f"/src/{part}/"
-            for part in ("host", "family", "home", "worker", "fs", "base", "operator", "calls")
+            for part in ("host", "family", "home", "worker", "fs", "base", "operator")
         ),
-        "layerfs-control": ("/src/host/", "/src/operator/"),
+        "layerfs-control": ("/src/host/", "/src/operator/", "/src/calls/"),
         "layerfs-store-service": ("/src/remote/",),
     }
     if any(part in path.as_posix() for part in moved.get(name, ())):

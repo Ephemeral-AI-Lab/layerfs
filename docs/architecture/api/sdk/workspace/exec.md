@@ -12,7 +12,7 @@ does not commit.
 | --- | --- |
 | Family | [workspace](README.md) |
 | Library entry | [`workspace/exec.rs`](../../../../../api/crates/layerfs-api/src/workspace/exec.rs) |
-| Implemented in | `layerfs_sandbox::workspace::calls::workspace` → host operation `workspace.exec` → `sandbox::exec::exec` ([`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs)) |
+| Implemented in | `layerfs_sandbox::workspace::calls::exec` → host operation `workspace.exec` → `sandbox::exec::exec` ([`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs)) |
 | Runs in | the Sandbox's runtime on its machine (here, or through its worker); never the daemon |
 
 ## Signature
@@ -45,7 +45,7 @@ layerfs workspace exec <ws> <command> [--stream] [--message TEXT]
 | --- | --- | --- | --- | --- |
 | `message` | Text | none | echoed in the answer; no Commit is made | [`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs) |
 | `stream` | Bool | false | JS and Python: pass output to this process's stdout and stderr (when no functions are given); CLI `--stream` | [`node/src/index.js`](../../../../../api/node/src/index.js) |
-| `stdout`, `stderr` | Function | none | called with each stream's text (bytes when not UTF-8); never reach the library | same, [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs) |
+| `stdout`, `stderr` | Function | none | called with each stream's text (bytes when not UTF-8); never reach the library | same, [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs) |
 
 ## Returns
 

@@ -29,8 +29,10 @@ The `store` calls.
 
 Nine calls, in help order
 ([`store/mod.rs`](../../../../../api/crates/layerfs-api/src/store/mod.rs)).
-`connect` and `disconnect` run `store::connect::run` (PostgreSQL); the
-others run `store::family::run` (sqlite, and the reads of both kinds).
+`connect` and `disconnect` run `layerfs_store::postgresql::connect`
+(PostgreSQL); the others run `layerfs_store::sqlite::family` (sqlite, and
+the reads of both kinds); `remove`, `push`, `pull` and `disconnect` go
+through `layerfs_control::store` for their in-use check.
 A Store is the one database file or schema that holds every project's
 history ([glossary](../../../glossary.md)).
 
@@ -64,7 +66,7 @@ Sources: [`list.rs`](../../../../../control/crates/layerfs-store/src/list.rs),
 | `password` | Text | a reference, `env:NAME` or `file:/path`, resolved on each call and never written down | [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
 | `synchronous_commit` | Text | `off` (default), `local`, `remote_write`, `on` or `remote_apply` | [`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs) |
 | `machine` | Name | `push` target; `pull` always brings the Store to `native` | [`sqlite/transfer/phases.rs`](../../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
-| `on_progress` | Function | `PROGRESS`; events `{ progress: { phase, done, total } }` | [`calls/table.rs`](../../../../../control/crates/layerfs-control/src/calls/table.rs) |
+| `on_progress` | Function | `PROGRESS`; events `{ progress: { phase, done, total } }` | [`calls/table.rs`](../../../../../api/crates/layerfs-api/src/calls/table.rs) |
 
 ```text
  store.push / store.pull: one pass of phases, each written to `op` first

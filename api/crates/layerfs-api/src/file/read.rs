@@ -1,8 +1,8 @@
 //! `file.read`: read a file.
+use crate::calls::table::Kind::{Int, Name, Project, Text};
+use crate::calls::table::{a, call, opt, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::{Int, Name, Project, Text};
-use layerfs_control::calls::table::{a, call, opt, Call};
-use layerfs_control::calls::Context;
 use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
@@ -22,5 +22,6 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `file.read`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::store::calls::run(context, "file", "read", args)
+    let (home, events) = context.parts();
+    layerfs_store::calls::file_read(home, events, args)
 }

@@ -6,15 +6,15 @@ use super::spec::{self as record, refusal, update as update_record};
 use super::status::home_id;
 use crate::Related;
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::context::Context;
 use layerfs_home::home::{self, lock, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_platform::{self as adapters, Platform};
+use std::path::Path;
 
 /// `machine.connect(name, host, { user, port, identity, known_hosts, root })`.
-pub fn connect(context: &mut Context<'_>, args: &SdkValue, related: Related) -> Outcome {
-    let home = context.home.clone();
+pub fn connect(home: &Path, args: &SdkValue, related: Related) -> Outcome {
+    let home = home.to_path_buf();
     let name = args.get_text("name").unwrap_or("").to_owned();
     let host = args.get_text("host").unwrap_or("");
     let known_hosts = match args.get_text("known_hosts") {

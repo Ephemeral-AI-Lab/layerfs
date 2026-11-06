@@ -30,7 +30,8 @@ The `branch` calls.
 
 Six calls, in help order
 ([`branch/mod.rs`](../../../../../api/crates/layerfs-api/src/branch/mod.rs)).
-Each entry runs `layerfs_control::store::calls::run`, which names one Store
+Each entry runs its own function of `layerfs_store::calls` (`branch_<call>`),
+which names one Store
 method of the engine's SDK facade
 ([`methods/dispatch.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/dispatch.rs)).
 Result keys are snake_case after the dispatcher.
@@ -64,14 +65,14 @@ and [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/r
 
 - `PAGE` is `page_size` and `page_pos`; `DIFF` adds `paths_only` (Bool)
   and `cursor` (Text); `MESSAGE` is `message` (Text)
-  ([`calls/table.rs`](../../../../../control/crates/layerfs-control/src/calls/table.rs)).
+  ([`calls/table.rs`](../../../../../api/crates/layerfs-api/src/calls/table.rs)).
 - The Store's paging takes `pageSize` in 1..=1000, default 50
   ([`operator/args.rs`](../../../../../engine/crates/layerfs-store-service/src/operator/args.rs)).
 - `units` is a list of patterns, each a bare pattern or
   `{ name, patterns }` ([`methods/branch/merge.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/merge.rs)).
 - Under a folder scope, Branch names are composed as `<namespace>.<name>`
   and `branch.diff` is refused as history
-  ([`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs)).
+  ([`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
   A scoped `branch.list` pages through every Branch with `pageSize` 1000 and
   keeps only the namespace's, named relative to it.
 
@@ -79,7 +80,7 @@ and [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/r
 
 | Code | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad argument; an empty or out-of-range page | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
+| `InvalidInput` | a bad argument; an empty or out-of-range page | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs), [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
 | `NoSuchStore`, `NoSuchProject` | the project's Store or project is missing | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `NoSuchBranch`, `NoSuchCommit`, `NotFound` | a named Branch, Commit or Layer is missing | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs), [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
 | `ReservedName`, `NameTaken` | `fork` or `merge` to `main` or to an existing name | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |

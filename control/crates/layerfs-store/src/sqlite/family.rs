@@ -14,20 +14,15 @@
 //! A phase a crash would leave unknown (a push's or pull's install and
 //! record, a remove's remove) is written uncertain before it starts; a new
 //! push or pull first deletes the copy such an ended one left. This file
-//! dispatches and holds the steps the calls share; each call is in its own
-//! file (`list`, `status`, `create`, `remove`, `transfer/phases` for push
+//! holds each call's entry and the steps the calls share; each call's body
+//! is in its own file (`list`, `status`, `create`, `remove`, `transfer/phases` for push
 //! and pull).
 use crate::lease;
-use crate::list::list;
 use crate::place::Executor;
 use crate::record::{self, StoreDerived, StoreRecord, StoreState};
-use crate::sqlite::create::create;
-use crate::sqlite::remove::remove;
-use crate::sqlite::transfer::phases::{pull, push};
-use crate::status::status;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{failed, refused, Outcome, View};
@@ -50,25 +45,51 @@ pub fn public(home: &Path, record: &StoreRecord, view: View, state: Option<Store
     record.to_sdk(view, &derived)
 }
 
-/// Runs one sqlite `store` call.
-pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue, related: Related) -> Outcome {
-    let home = context.home.clone();
+/// `store.list`: every Store, from the home's records.
+pub fn list(home: &Path) -> Outcome {
+    crate::list::list(home)
+}
+
+/// `store.get`: a Store's record.
+pub fn get(home: &Path, args: &SdkValue) -> Outcome {
     let name = args.get_text("name").unwrap_or("");
-    match call {
-        "list" => list(&home),
-        "get" => public(&home, &record_of(&home, name)?, View::Full, None),
-        "status" => status(&home, name),
-        "create" => create(&home, name),
-        "remove" => remove(&home, name, related),
-        "push" => push(
-            context,
-            name,
-            args.get_text("machine").unwrap_or(""),
-            related,
-        ),
-        "pull" => pull(context, name, related),
-        _ => Err(refused("InvalidInput", format!("no call store.{call}"))),
-    }
+    public(home, &record_of(home, name)?, View::Full, None)
+}
+
+/// `store.status`: a Store's state.
+pub fn status(home: &Path, args: &SdkValue) -> Outcome {
+    crate::status::status(home, args.get_text("name").unwrap_or(""))
+}
+
+/// `store.create`: an empty sqlite Store on native.
+pub fn create(home: &Path, args: &SdkValue) -> Outcome {
+    crate::sqlite::create::create(home, args.get_text("name").unwrap_or(""))
+}
+
+/// `store.remove`: a Store no Sandbox uses, with its file.
+pub fn remove(home: &Path, args: &SdkValue, related: Related) -> Outcome {
+    crate::sqlite::remove::remove(home, args.get_text("name").unwrap_or(""), related)
+}
+
+/// `store.push`: a sqlite Store from native to a machine.
+pub fn push(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Related) -> Outcome {
+    crate::sqlite::transfer::phases::push(
+        home,
+        events,
+        args.get_text("name").unwrap_or(""),
+        args.get_text("machine").unwrap_or(""),
+        related,
+    )
+}
+
+/// `store.pull`: a sqlite Store from its machine to native.
+pub fn pull(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Related) -> Outcome {
+    crate::sqlite::transfer::phases::pull(
+        home,
+        events,
+        args.get_text("name").unwrap_or(""),
+        related,
+    )
 }
 
 /// One step on the machine that holds a Store's file.
@@ -177,13 +198,13 @@ pub fn ended(
 
 /// `{ phase, done, total }` (#536 §10b): `done` and `total` are bytes
 /// while bytes are sent (`bytes`), and null in every other phase.
-pub fn progress(context: &mut Context<'_>, phase: &str, bytes: Option<(u64, u64)>) {
+pub fn progress(events: &mut Events<'_>, phase: &str, bytes: Option<(u64, u64)>) {
     let count = |n: u64| SdkValue::Int(n as i64);
     let (done, total) = match bytes {
         Some((done, total)) => (count(done), count(total)),
         None => (SdkValue::Null, SdkValue::Null),
     };
-    context.progress(SdkValue::map([
+    events.progress(SdkValue::map([
         ("phase", SdkValue::text(phase)),
         ("done", done),
         ("total", total),

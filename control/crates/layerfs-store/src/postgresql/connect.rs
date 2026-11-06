@@ -8,7 +8,6 @@ use crate::record::url;
 use crate::record::{StoreKind, StoreRecord};
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_home::secrets::{parts, resolve};
@@ -37,15 +36,18 @@ pub fn selection_at(record: &StoreRecord, url: String) -> SdkValue {
     ])
 }
 
-/// Runs `store.connect` or `store.disconnect`.
-pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue, related: Related) -> Outcome {
-    let home = context.home.clone();
+/// `store.connect`: attach a PostgreSQL database as a Store.
+pub fn connect(home: &Path, args: &SdkValue) -> Outcome {
     let name = args.get_text("name").unwrap_or("");
     layerfs_home::names::StoreName::parse(name)?;
-    match call {
-        "connect" => connect(&home, name, args),
-        _ => disconnect(&home, name, related),
-    }
+    connect_named(home, name, args)
+}
+
+/// `store.disconnect`: forget a PostgreSQL Store; its data stays.
+pub fn disconnect(home: &Path, args: &SdkValue, related: Related) -> Outcome {
+    let name = args.get_text("name").unwrap_or("");
+    layerfs_home::names::StoreName::parse(name)?;
+    disconnect_named(home, name, related)
 }
 
 /// `text` with its `%XX` escapes decoded; a malformed escape stays as is.
@@ -184,7 +186,7 @@ fn unclaimed(
 /// refusal of its input comes before any effect. The server's schema and
 /// projects are read before the home lock; the lock covers the re-checks
 /// and the record writes only.
-fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
+fn connect_named(home: &Path, name: &str, args: &SdkValue) -> Outcome {
     let given = args.get_text("url").unwrap_or("");
     refuse_password(given)?;
     let sync = args.get_text("synchronous_commit").unwrap_or("off");
@@ -263,7 +265,7 @@ fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
 }
 
 /// `store.disconnect(name)`: forgets a PostgreSQL Store; its data stays.
-fn disconnect(home: &Path, name: &str, related: Related) -> Outcome {
+fn disconnect_named(home: &Path, name: &str, related: Related) -> Outcome {
     layerfs_home::names::StoreName::parse(name)?;
     let _lock = home::lock::take(home)?;
     let _store = crate::record::lock(home, name)?;

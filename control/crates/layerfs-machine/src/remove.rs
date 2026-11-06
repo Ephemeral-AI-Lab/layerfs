@@ -4,7 +4,6 @@ use super::spec::{self as record, refusal};
 use super::status::home_id;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
 use layerfs_home::home::{lock, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -20,8 +19,8 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// one's unresolved intent. A refused delete puts the record back as it
 /// was; one whose outcome is unknown keeps its `op`, uncertain, with the
 /// `error`, and is logged.
-fn take_down(context: &mut Context<'_>, args: &SdkValue, ssh: bool, related: Related) -> Outcome {
-    let home = context.home.clone();
+fn take_down(home: &Path, args: &SdkValue, ssh: bool, related: Related) -> Outcome {
+    let home = home.to_path_buf();
     let name = args.get_text("name").unwrap_or("");
     MachineRecord::of(&home, name)?.not_running()?;
     let _start = super::endpoint::start_lock(&home, name)?;
@@ -91,11 +90,11 @@ fn removable(
 }
 
 /// `machine.remove(name)`: deletes a VM and its disk.
-pub fn remove(context: &mut Context<'_>, args: &SdkValue, related: Related) -> Outcome {
-    take_down(context, args, false, related)
+pub fn remove(home: &Path, args: &SdkValue, related: Related) -> Outcome {
+    take_down(home, args, false, related)
 }
 
 /// `machine.disconnect(name)`: forgets an ssh host; its data root stays.
-pub fn disconnect(context: &mut Context<'_>, args: &SdkValue, related: Related) -> Outcome {
-    take_down(context, args, true, related)
+pub fn disconnect(home: &Path, args: &SdkValue, related: Related) -> Outcome {
+    take_down(home, args, true, related)
 }

@@ -112,9 +112,9 @@ every `file` and `branch` call needs it (without it they are refused, see
 namespace; the Branch of a Workspace is not checked. These gaps wait for an
 owner decision and are listed under
 [Scopes](../call-table/table.md#scopes)
-([`calls/scope.rs`](../../../../control/crates/layerfs-control/src/calls/scope.rs)).
+([`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs)).
 Every function is generated from the call table
-([`calls/table.rs`](../../../../control/crates/layerfs-control/src/calls/table.rs));
+([`calls/table.rs`](../../../../api/crates/layerfs-api/src/calls/table.rs));
 see [Front ends](../front-ends/README.md).
 
 ## Answers and errors

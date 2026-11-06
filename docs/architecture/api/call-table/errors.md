@@ -9,7 +9,7 @@ The error catalog and uncertain outcomes.
 | | |
 | --- | --- |
 | Component | [Call table](README.md) |
-| Source | [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs), [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs), [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`calls/text.rs`](../../../../control/crates/layerfs-control/src/calls/text.rs), [`store-service history/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/history/lookup.rs), [`store-service write/mutation.rs`](../../../../engine/crates/layerfs-store-service/src/write/mutation.rs) |
+| Source | [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs), [`lib.rs`](../../../../api/crates/layerfs-api/src/lib.rs), [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`calls/text.rs`](../../../../api/crates/layerfs-api/src/calls/text.rs), [`store-service history/lookup.rs`](../../../../engine/crates/layerfs-store-service/src/history/lookup.rs), [`store-service write/mutation.rs`](../../../../engine/crates/layerfs-store-service/src/write/mutation.rs) |
 
 Every call answers `Outcome = Result<SdkValue, SdkRefusal>`
 ([`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs)).
@@ -38,7 +38,7 @@ Store engine's refusals that pass through Store calls.
 
 | Code | Meaning | Raised in (examples) |
 | --- | --- | --- |
-| `InvalidInput` | the request is wrong for this call or name; nothing happened. Also every folder-scope refusal (`out of scope: …`) | [`calls/check.rs`](../../../../control/crates/layerfs-control/src/calls/check.rs), [`calls/scope.rs`](../../../../control/crates/layerfs-control/src/calls/scope.rs), [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) |
+| `InvalidInput` | the request is wrong for this call or name; nothing happened. Also every folder-scope refusal (`out of scope: …`) | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs), [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs), [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) |
 | `NotFound` | no machine, bucket or Store of that name, for a call that names it directly | [`record.rs`](../../../../control/crates/layerfs-machine/src/record.rs), [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
 | `NoSuchStore`, `NoSuchProject` | the Store or project of a `<store>/<project>` argument is missing | [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `NoSuchBranch`, `NoSuchCommit` | no such Branch, or no such Commit on it | [`calls.rs`](../../../../control/crates/layerfs-store/src/calls.rs), `history/lookup.rs` |
@@ -112,14 +112,14 @@ Init ends ([`project/family.rs`](../../../../control/crates/layerfs-store/src/pr
 ## Refusals
 
 Refusals that come before any effect, in the order a call meets them
-([`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs)):
+([`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs)):
 
 | Step | Refusal | Source |
 | --- | --- | --- |
-| 1. JSON front ends parse arguments and scope | `InvalidInput` (bad JSON) | [`calls/text.rs`](../../../../control/crates/layerfs-control/src/calls/text.rs) |
+| 1. JSON front ends parse arguments and scope | `InvalidInput` (bad JSON) | [`calls/text.rs`](../../../../api/crates/layerfs-api/src/calls/text.rs) |
 | 2. Find `family.call` | `InvalidInput` "no call named …" | `table::find` |
-| 3. Check arguments | `InvalidInput`: not named fields, unknown argument, a function crossing in, missing positional, wrong kind, bad size | [`calls/check.rs`](../../../../control/crates/layerfs-control/src/calls/check.rs) |
-| 4. Apply folder scope | `InvalidInput` `out of scope: history`, `path`, `branch`, `project` or the call's name | [`calls/scope.rs`](../../../../control/crates/layerfs-control/src/calls/scope.rs) `apply` |
+| 3. Check arguments | `InvalidInput`: not named fields, unknown argument, a function crossing in, missing positional, wrong kind, bad size | [`calls/check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs) |
+| 4. Apply folder scope | `InvalidInput` `out of scope: history`, `path`, `branch`, `project` or the call's name | [`calls/scope.rs`](../../../../api/crates/layerfs-api/src/calls/scope.rs) `apply` |
 | 5. Resolve the home | `InvalidInput`: not absolute, or neither `LAYERFS_HOME` nor `HOME` set | `dispatch::home` |
 | 6. Open the home | the home's refusal (layout, migration, lock), also noted by `note_failure` | [`migrate/open.rs`](../../../../control/crates/layerfs-control/src/migrate/open.rs) |
 | 7. Scope owns the Sandbox | `InvalidInput` `out of scope: sandbox` | `Scope::owns` |

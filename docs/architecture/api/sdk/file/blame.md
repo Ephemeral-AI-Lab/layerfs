@@ -10,7 +10,7 @@ Shows, for each line of a file, the Commit that last changed it, walking first p
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/blame.rs`](../../../../../api/crates/layerfs-api/src/file/blame.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → `file`, Store method `fs.blame` ([`methods/file/blame.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/blame.rs)); `from_line` becomes `fromLine` |
+| Implemented in | `layerfs_store::calls::file_blame` → `file`, Store method `fs.blame` ([`methods/file/blame.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/blame.rs)); `from_line` becomes `fromLine` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -93,7 +93,7 @@ worker (`store.call`), with nothing started. See the
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad project, path or option; a path outside a folder scope (`out of scope: path`) | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | a bad project, path or option; a path outside a folder scope (`out of scope: path`) | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `NoSuchStore`, `NoSuchProject` | the Store or project is not recorded | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `NoSuchBranch`, `NoSuchCommit`, `NotFound` | the Branch, Commit or Layer is missing | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`call.rs`](../../../../../control/crates/layerfs-store/src/call.rs) |

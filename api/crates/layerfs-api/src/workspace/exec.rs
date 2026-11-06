@@ -1,8 +1,8 @@
 //! `workspace.exec`: run one bash command in a Workspace.
+use crate::calls::table::Kind::{Bool, Function, Text};
+use crate::calls::table::{a, call, opt, Call, MESSAGE};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::{Bool, Function, Text};
-use layerfs_control::calls::table::{a, call, opt, Call, MESSAGE};
-use layerfs_control::calls::Context;
 use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
@@ -22,5 +22,6 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `workspace.exec`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_sandbox::workspace::calls::workspace(context, "exec", args)
+    let (home, events) = context.parts();
+    layerfs_sandbox::workspace::calls::exec(home, events, args)
 }

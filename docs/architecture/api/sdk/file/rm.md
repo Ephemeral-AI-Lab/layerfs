@@ -10,7 +10,7 @@ Removes a path on a Branch, a folder with everything in it, as one Commit.
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/rm.rs`](../../../../../api/crates/layerfs-api/src/file/rm.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → `file`, Store method `fs.rm` ([`methods/file/rm.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/rm.rs)) |
+| Implemented in | `layerfs_store::calls::file_rm` → `file`, Store method `fs.rm` ([`methods/file/rm.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/rm.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -87,7 +87,7 @@ mounted or shared. See the [routing table](../../../control/routing/routing-tabl
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | `rm /`; a bad project, path, mode or option; a path outside a folder scope | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | `rm /`; a bad project, path, mode or option; a path outside a folder scope | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `ReadOnly` | `branch` is `main`; `main` changes only through [branch.publish](../branch/publish.md) | no | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `NoSuchStore`, `NoSuchProject`, `NoSuchBranch` | not recorded, or no such Branch | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `Conflict` | the Branch's head moved since the call bound it and a changed path conflicts; nothing committed (`detail.branch`, `head`, `conflicts`) | no | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |

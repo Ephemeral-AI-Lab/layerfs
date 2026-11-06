@@ -9,7 +9,7 @@ Where each call runs.
 | | |
 | --- | --- |
 | Component | [Routing and workers](README.md) |
-| Source | [`control/crates/layerfs-control/src/calls`](../../../../control/crates/layerfs-control/src/calls), [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs), [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs), [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`call.rs`](../../../../control/crates/layerfs-store/src/call.rs), [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
+| Source | [`api/crates/layerfs-api/src/calls`](../../../../api/crates/layerfs-api/src/calls), [`resolve.rs`](../../../../control/crates/layerfs-store/src/resolve.rs), [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs), [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`call.rs`](../../../../control/crates/layerfs-store/src/call.rs), [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
 
 ## By Store kind
 

@@ -10,7 +10,7 @@ Lists a project's Branches, `main` first, one page at a time.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/list.rs`](../../../../../api/crates/layerfs-api/src/branch/list.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → Store method `project.list_branches` ([`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
+| Implemented in | `layerfs_store::calls::branch_list` → Store method `project.list_branches` ([`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
 | Runs in | the caller's process for PostgreSQL and for sqlite on `native`; else the Store's machine worker (`store.call`) |
 
 ## Signature
@@ -65,7 +65,7 @@ layerfs branch list <store>/<project> [--page-size N] [--page-pos N]
 | `has_more`, `next_page_pos` | bool, int or null | paging | same |
 
 A page also ends early at the 48 KiB reply budget. Keys arrive snake_case
-([`calls/keys.rs`](../../../../../control/crates/layerfs-control/src/calls/keys.rs)).
+([`calls/keys.rs`](../../../../../api/crates/layerfs-api/src/calls/keys.rs)).
 
 ## Where it runs
 
@@ -87,7 +87,7 @@ A read: it never takes the publication lane. A stopped machine is
 | Folder-scoped client | Behaviour | Source |
 | --- | --- | --- |
 | scope with `branch: <ns>` | only Branches named `<ns>.<x>`, shown as `<x>`; read 1000 at a time and paged here | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) `branches_in` |
-| scope without `branch` | `InvalidInput` "out of scope: branch" | [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| scope without `branch` | `InvalidInput` "out of scope: branch" | [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 
 ## Errors
 

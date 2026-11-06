@@ -11,7 +11,7 @@ whether it and the Store linked to it changed since their last transfer.
 | --- | --- |
 | Family | [backup](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/backup/list.rs`](../../../../../api/crates/layerfs-api/src/backup/list.rs) |
-| Implemented in | `layerfs_control::backup::family::run` → `list` ([`backup/list.rs`](../../../../../control/crates/layerfs-store/src/backup/list.rs)) |
+| Implemented in | `layerfs_store::backup::family::list` → `list` ([`backup/list.rs`](../../../../../control/crates/layerfs-store/src/backup/list.rs)) |
 | Runs in | the caller's process; one listing per bucket; heads read from Store files on `native` |
 
 ## Signature

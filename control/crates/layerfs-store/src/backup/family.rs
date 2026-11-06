@@ -5,40 +5,29 @@
 //! bytes go through the caller's process: machines never hold bucket keys.
 //! Objects are `<prefix>/<file>/store.sqlite` (whole or a manifest) plus its
 //! pieces. LayerFS never deletes a bucket object.
-//! This file dispatches, connects and disconnects buckets and keeps the
+//! This file lists backups, connects and disconnects buckets and keeps the
 //! links; `list`, `create` and `restore` are in their own files.
-use super::create::create;
-use super::list::list;
+pub use super::create::create;
 use super::record::{remote_error, BucketRecord, StoreLink};
-use super::restore::restore;
+pub use super::restore::restore;
 use crate::record::StoreRecord;
-use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup as remote;
 use layerfs_bucket::bucket::pieces;
-use layerfs_home::context::Context;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome, View};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// Runs one `backup` call.
-pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue, related: Related) -> Outcome {
-    let home = context.home.clone();
-    match call {
-        "connect" => connect(&home, args),
-        "disconnect" => disconnect(&home, args.get_text("name").unwrap_or("")),
-        "list" => list(&home, args.get_text("bucket")),
-        "create" => create(context, args),
-        "restore" => restore(context, args, related),
-        _ => Err(refused("InvalidInput", format!("no call backup.{call}"))),
-    }
+/// `backup.list`: the backups in a bucket, or in every bucket.
+pub fn list(home: &Path, args: &SdkValue) -> Outcome {
+    super::list::list(home, args.get_text("bucket"))
 }
 
 /// `backup.connect(name, url, { key, region, part_size })`: one listing
 /// proves the bucket answers with this key before it is recorded.
-fn connect(home: &Path, args: &SdkValue) -> Outcome {
+pub fn connect(home: &Path, args: &SdkValue) -> Outcome {
     let name = args.get_text("name").unwrap_or("");
     layerfs_home::names::BucketName::parse(name)?;
     let record = BucketRecord::from_url(name, args.get_text("url").unwrap_or(""), args)?;
@@ -56,8 +45,10 @@ fn connect(home: &Path, args: &SdkValue) -> Outcome {
     Ok(record.to_sdk(View::Full))
 }
 
-/// Forgets a bucket and every Store's link to it; its objects stay.
-fn disconnect(home: &Path, name: &str) -> Outcome {
+/// `backup.disconnect(name)`: forgets a bucket and every Store's link to
+/// it; its objects stay.
+pub fn disconnect(home: &Path, args: &SdkValue) -> Outcome {
+    let name = args.get_text("name").unwrap_or("");
     BucketRecord::of(home, name)?;
     let _lock = home::lock::take(home)?;
     let mut unlinked = Vec::new();

@@ -29,9 +29,10 @@ The `project` calls.
 
 Four calls, in help order
 ([`project/mod.rs`](../../../../../api/crates/layerfs-api/src/project/mod.rs)).
-Every entry runs `layerfs_control::project::family::run`. Result keys are
+Every entry runs its own function of `layerfs_store::project::family`;
+`project.remove` runs `layerfs_control::project::remove`. Result keys are
 snake_case after the dispatcher's
-[`keys::snake`](../../../../../control/crates/layerfs-control/src/calls/keys.rs).
+[`keys::snake`](../../../../../api/crates/layerfs-api/src/calls/keys.rs).
 
 | Call | Arguments | Options | Returns | Where it runs |
 | --- | --- | --- | --- | --- |
@@ -50,10 +51,10 @@ The summary is `ProjectRecord::to_sdk`
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>`, checked by `names::project` before dispatch | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs) |
+| `project` | Project | `<store>/<project>`, checked by `names::project` before dispatch | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs) |
 | `folder` | Text | an absolute path on the caller's host | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) |
 | `timeout` | Int | Init time limit in ms, sent as `timeoutMs`; default `INIT_TIMEOUT_MS` = 3,600,000 (one hour) | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) |
-| `on_progress` | Function | the shared `PROGRESS` option; the front end strips it, so it never reaches the library | [`calls/table.rs`](../../../../../control/crates/layerfs-control/src/calls/table.rs) |
+| `on_progress` | Function | the shared `PROGRESS` option; the front end strips it, so it never reaches the library | [`calls/table.rs`](../../../../../api/crates/layerfs-api/src/calls/table.rs) |
 | `page_size`, `page_pos` | Int | the shared `PAGE` set; `list` clamps `page_size` to 1..=1000 (default 50) and `page_pos` to 0 or more | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) |
 
 `init` reports `{ progress: { phase, done, total } }` with the phases

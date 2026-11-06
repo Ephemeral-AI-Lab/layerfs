@@ -5,11 +5,13 @@
 Read [repository instructions](../AGENTS.md) first. This layer holds the
 public surface:
 
-- `crates/layerfs-api`: the SDK call surface: the call table, argument
-  checks, scopes and the JSON text form; one route per call into
-  `layerfs-control`. It depends only on the control crates
+- `crates/layerfs-api`: the SDK call surface and the only crate that
+  speaks the SDK (layerfs-project#107): the call table, argument checks,
+  scopes, the dispatcher and the JSON text form; each call is one direct
+  call of a control crate's function. It depends only on the control crates
   (`layerfs-control`, `layerfs-home`, `layerfs-machine`, `layerfs-store`,
-  `layerfs-sandbox`) and `layerfs-bridge` and re-exports
+  `layerfs-sandbox`, and `layerfs-isolation` for the platform policy) and
+  `layerfs-bridge` and re-exports
   what the front ends use (#536). The
   management library `layerfs-control` it calls is a control crate
   (`control/crates/layerfs-control`; layerfs-project#101 D-2 supersedes
@@ -47,9 +49,10 @@ flags, per-commit LOC and the Disposable-only profile. Preserve the existing
 unsafe-code boundaries; do not add test hooks or inline tests to production src.
 Do not add a call, argument or result name in JavaScript: change the call's
 entry in `crates/layerfs-api/src/<family>/<call>.rs` and the package follows.
-`layerfs-api/src` holds only `lib.rs` and one folder per family: its
-`mod.rs` (the family's calls in help order) and one file per call (its table
-entry and the function that runs it, a call into `layerfs-control`); the call
-machinery (checks, scope, dispatcher) is `layerfs-control/src/calls/`. A
+`layerfs-api/src` holds only `lib.rs`, the call machinery `calls/` (table
+shape, checks, scope, keys, dispatcher, `Context`; layerfs-project#107) and
+one folder per family: its `mod.rs` (the family's calls in help order) and
+one file per call (its table entry and the function that runs it: one call
+of a control crate's per-op function, never an op name as a string). A
 test pins this shape (`tests/calls_table.rs`). CI reports and does not gate a
 push.

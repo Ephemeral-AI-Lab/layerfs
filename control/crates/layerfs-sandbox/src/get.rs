@@ -3,16 +3,17 @@ use super::direct;
 use super::family::{page, sandbox_of};
 use crate::route::reach;
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_home::outcome::{Outcome, View};
 use layerfs_machine::worker::Unreached;
+use std::path::Path;
 
 /// `sandbox.get(name, { page_size, page_pos })`: its record with its
 /// derived `state`, its `op` when it has one (H6), and one page of its
 /// Workspaces. Reading never clears an intent.
-pub fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let home = context.home.clone();
+pub fn get(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+    let home = home.to_path_buf();
     let name = args.get_text("name").unwrap_or("");
     let record = sandbox_of(&home, name)?;
     // a Sandbox with no id has no daemon to ask; a get starts no machine
@@ -20,9 +21,10 @@ pub fn get(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     // and why
     let listed = match record.id() {
         // one reached directly lists its daemon's Workspaces from here (#535 G4)
-        Some(_) if direct::forwarded(&record) => direct::list(context, &record),
+        Some(_) if direct::forwarded(&record) => direct::list(&home, &record),
         Some(_) => reach(
-            context,
+            &home,
+            events,
             &record,
             "sandbox.list_workspaces",
             vec![],

@@ -20,14 +20,13 @@
 //! the worker takes the resolved URL (#535 phase 5a). Each call is in its
 //! own file (`create`, `list`, `get`, `close`), the route of a host
 //! operation in `route.rs`, and the `workspace` calls in `workspace/calls.rs`.
-use super::close::close;
-use super::create::create;
-use super::get::get;
-use super::list::list;
+pub use super::close::close;
+pub use super::create::create;
+pub use super::get::get;
+pub use super::list::list;
 use super::record::SandboxRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
-use layerfs_home::outcome::{refused, Outcome};
+use layerfs_home::outcome::refused;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -41,17 +40,6 @@ pub fn sandbox_of(home: &Path, name: &str) -> Result<SandboxRecord> {
             format!("no Sandbox named {name}; `sandbox.create(project, name, machine)` starts one"),
         )
     })
-}
-
-/// Runs one `sandbox` call.
-pub fn sandbox(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
-    match call {
-        "create" => create(context, args),
-        "list" => list(&context.home, args),
-        "get" => get(context, args),
-        "close" => close(context, args),
-        _ => Err(refused("InvalidInput", format!("no call sandbox.{call}"))),
-    }
 }
 
 /// One page of `items` (`page_size`, default 50, 1 to 1000; `page_pos`)

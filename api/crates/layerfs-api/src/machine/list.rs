@@ -1,7 +1,7 @@
 //! `machine.list`: every machine, with what it supports.
+use crate::calls::table::{call, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::{call, Call};
-use layerfs_control::calls::Context;
 use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
@@ -17,7 +17,7 @@ pub(crate) const CALL: Call = call(
 /// Runs `machine.list`.
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::machine::list(context, args)
+    layerfs_control::machine::list(&context.home, args)
 }
 
 /// Without the `machine` feature (the guest worker's build) it is

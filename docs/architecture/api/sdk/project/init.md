@@ -11,7 +11,7 @@ existing Store: the project's first Layer and its hidden first Branch.
 | --- | --- |
 | Family | [project](README.md) |
 | Library entry | [`project/init.rs`](../../../../../api/crates/layerfs-api/src/project/init.rs) |
-| Implemented in | `layerfs_control::project::family::run` → `init` ([`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs)), then `store::identity::add_project` ([`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs)) or `project::postgres_init::add_project` ([`project/postgres_init.rs`](../../../../../control/crates/layerfs-store/src/project/postgres_init.rs)) |
+| Implemented in | `layerfs_store::project::family::init` → `init` ([`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs)), then `store::identity::add_project` ([`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs)) or `project::postgres_init::add_project` ([`project/postgres_init.rs`](../../../../../control/crates/layerfs-store/src/project/postgres_init.rs)) |
 | Runs in | where the Store's calls run: the caller's process, or the Store's machine worker (sqlite on a non-local machine). No Sandbox daemon. |
 
 ## Signature
@@ -37,7 +37,7 @@ layerfs project init <project> <folder> [--timeout <timeout>] [--progress]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<name>`; both parts 1–63 of `a-z 0-9 _ . -`, starting and ending with a letter or digit, not a Windows device name. The Store must have a record in the home (`store.create` or `store.connect`). | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
+| `project` | Project | `<store>/<name>`; both parts 1–63 of `a-z 0-9 _ . -`, starting and ending with a letter or digit, not a Windows device name. The Store must have a record in the home (`store.create` or `store.connect`). | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs), [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 | `folder` | Text | an absolute path on the caller's host; read whole, with no Git-ignore filtering | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs) `init` |
 
 ## Options
@@ -45,7 +45,7 @@ layerfs project init <project> <folder> [--timeout <timeout>] [--progress]
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
 | `timeout` | Int | 3,600,000 (`INIT_TIMEOUT_MS`, one hour) | Init's deadline in ms, sent as `timeoutMs`; must be positive, else `InvalidInput`. Checked where the add runs (on the worker route, after the copy is sent). | [`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs), [`project/init.rs`](../../../../../control/crates/layerfs-store/src/project/init.rs) `deadline` |
-| `on_progress` | Function | none | receives `{ phase, done, total }`; the CLI's `--progress` prints the same as JSON lines on stderr | [`calls/table.rs`](../../../../../control/crates/layerfs-control/src/calls/table.rs) `PROGRESS`, [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` |
+| `on_progress` | Function | none | receives `{ phase, done, total }`; the CLI's `--progress` prints the same as JSON lines on stderr | [`calls/table.rs`](../../../../../api/crates/layerfs-api/src/calls/table.rs) `PROGRESS`, [`sqlite/family.rs`](../../../../../control/crates/layerfs-store/src/sqlite/family.rs) `progress` |
 
 Progress phases, in order: `check`, `send` (worker route only; `done` and
 `total` in bytes), `install`, `record`. The other phases carry `null` counts.

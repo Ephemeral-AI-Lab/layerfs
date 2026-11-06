@@ -70,7 +70,7 @@ Sources of the answers:
 
 | Name | Kind | Rule |
 | --- | --- | --- |
-| `memory`, `disk` | Size | bytes as a number, or text with `K`, `M`, `G` (powers of 1024), turned into bytes by `check::size` ([`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs)) |
+| `memory`, `disk` | Size | bytes as a number, or text with `K`, `M`, `G` (powers of 1024), turned into bytes by `check::size` ([`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs)) |
 | `platform` | Name | a platform of the support table; `machine.platforms` lists what this host and build support |
 | `image`, `docker`, `wsl`, `daemon` | Text | `update` records them on the machine; `wsl` is a Windows host's setting; `daemon` is an absolute path |
 | `cpus`, `memory` on `update` | Int, Size | resizing a VM; refused while Sandboxes run on it, and "not built yet" for some platforms |

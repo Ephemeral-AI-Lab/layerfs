@@ -17,7 +17,7 @@ use crate::sqlite::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::filesystem::symlink::SymlinkTarget;
 use layerfs_content::PathName;
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::outcome::refused;
 use layerfs_machine::worker::Unreached;
 use layerfs_project::SourceRefusal;
@@ -226,7 +226,7 @@ pub fn room(worker: &mut Worker, copy: &Copy<'_>, total: u64) -> Result<()> {
 }
 
 struct Sender<'s, 'c, 'p> {
-    context: &'s mut Context<'c>,
+    events: &'s mut Events<'c>,
     worker: &'s mut Worker,
     copy: &'s Copy<'p>,
     /// The part being filled.
@@ -273,7 +273,7 @@ impl Sender<'_, '_, '_> {
         };
         self.sent += std::mem::take(&mut self.pending);
         let done = Some((self.sent, self.total));
-        crate::sqlite::family::progress(self.context, "send", done);
+        crate::sqlite::family::progress(self.events, "send", done);
         Ok(())
     }
 
@@ -376,14 +376,14 @@ fn same(a: &Metadata, b: &Metadata) -> bool {
 /// discards the copy (one request) and answers the failure; a lost answer
 /// is `Unknown`, naming the copy it may leave.
 pub fn send(
-    context: &mut Context<'_>,
+    events: &mut Events<'_>,
     worker: &mut Worker,
     copy: &Copy<'_>,
     total: u64,
 ) -> Result<()> {
-    crate::sqlite::family::progress(context, "send", Some((0, total)));
+    crate::sqlite::family::progress(events, "send", Some((0, total)));
     let mut sender = Sender {
-        context,
+        events,
         worker,
         copy,
         part: Vec::new(),

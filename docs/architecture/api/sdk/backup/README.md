@@ -31,7 +31,8 @@ The `backup` calls.
 
 Five calls, in help order
 ([`backup/mod.rs`](../../../../../api/crates/layerfs-api/src/backup/mod.rs)).
-Each runs `layerfs_control::backup::family::run`
+Each runs its own function of `layerfs_store::backup::family`
+(`backup.restore`: `layerfs_control::backup::restore`)
 ([`backup/family.rs`](../../../../../control/crates/layerfs-store/src/backup/family.rs)).
 A bucket is an r2 or MinIO bucket and prefix, recorded by name; each Store
 keeps one link per bucket in its record.

@@ -7,9 +7,8 @@
 //! the call's one event stream (O22), which carries `workspace.exec`'s
 //! output and the progress of `project.init`, `store.push`, `store.pull`, `backup.create`
 //! and `backup.restore`. Result keys are snake_case in every front end.
-use super::{check, table, table::Family};
+use super::{check, table, table::Family, Context};
 use layerfs_bridge::control::SdkValue;
-pub use layerfs_home::context::Context;
 use layerfs_home::outcome::{refused, Outcome};
 use std::path::{Path, PathBuf};
 
@@ -64,8 +63,8 @@ pub fn call_scoped(
     }
     let home = home(home_path)?;
     super::platform_policy::check(&home, name, &args)?;
-    let id = crate::migrate::open(&home)
-        .inspect_err(|refusal| crate::migrate::note_failure(&home, refusal))?
+    let id = layerfs_control::migrate::open(&home)
+        .inspect_err(|refusal| layerfs_control::migrate::note_failure(&home, refusal))?
         .id;
     // `machine/native/` and `machine/docker/` exist from the first call;
     // checked once per process for each home (R6)

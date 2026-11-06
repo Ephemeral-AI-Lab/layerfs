@@ -10,7 +10,7 @@
 //! succeeded when it returns its result, never before.
 use layerfs_bridge::control::SdkValue;
 use layerfs_bucket::bucket::progress::{observe, Progress, INTERVAL};
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -109,17 +109,17 @@ impl Shown {
         Self::default()
     }
 
-    fn send(&mut self, context: &mut Context<'_>, update: Update) {
+    fn send(&mut self, events: &mut Events<'_>, update: Update) {
         if self.last != Some(update) {
-            context.progress(update.to_sdk());
+            events.progress(update.to_sdk());
             self.last = Some(update);
         }
     }
 
     /// Enters `phase` of the call's own, which moves no bytes.
-    pub fn phase(&mut self, context: &mut Context<'_>, phase: &'static str) {
+    pub fn phase(&mut self, events: &mut Events<'_>, phase: &'static str) {
         self.send(
-            context,
+            events,
             Update {
                 phase,
                 ..Update::default()
@@ -130,13 +130,13 @@ impl Shown {
     /// `done` of `total` bytes of the call's own `phase` have moved.
     pub fn bytes(
         &mut self,
-        context: &mut Context<'_>,
+        events: &mut Events<'_>,
         phase: &'static str,
         done: u64,
         total: Option<u64>,
     ) {
         self.send(
-            context,
+            events,
             Update {
                 phase,
                 done: Some(done),
@@ -152,7 +152,7 @@ impl Shown {
     /// it ends. A panic in `work` is resumed here. Nothing is retried.
     pub fn transfer<T: Send>(
         &mut self,
-        context: &mut Context<'_>,
+        events: &mut Events<'_>,
         work: impl FnOnce() -> T + Send,
     ) -> T {
         let recorder = Arc::new(Recorder::default());
@@ -166,11 +166,11 @@ impl Shown {
             });
             while let Err(RecvTimeoutError::Timeout) = ended.recv_timeout(INTERVAL) {
                 for update in recorder.take() {
-                    self.send(context, update);
+                    self.send(events, update);
                 }
             }
             for update in recorder.take() {
-                self.send(context, update);
+                self.send(events, update);
             }
             worker
                 .join()

@@ -3,9 +3,13 @@
 //! [`crate::inventory`]. The Store calls proper (`branch`, `commit`, `file`)
 //! and the rest are `layerfs-store`'s own.
 use crate::inventory;
+use layerfs_bridge::control::SdkValue;
+use layerfs_home::events::Events;
+use layerfs_home::outcome::Outcome;
 use layerfs_store::Related;
+use std::path::Path;
 
-pub use layerfs_store::{calls, close_idle};
+pub use layerfs_store::close_idle;
 
 /// Who uses a Store or a project, read from the Sandbox records.
 pub const RELATED: Related = Related {
@@ -13,26 +17,22 @@ pub const RELATED: Related = Related {
     can_remove_project: inventory::can_remove_project,
 };
 
-/// The sqlite `store` calls.
-pub mod family {
-    use layerfs_bridge::control::SdkValue;
-    use layerfs_home::context::Context;
-    use layerfs_home::outcome::Outcome;
-
-    /// Runs one sqlite `store` call.
-    pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
-        layerfs_store::sqlite::family::run(context, call, args, super::RELATED)
-    }
+/// `store.remove`: a sqlite Store no Sandbox uses, with its file.
+pub fn remove(home: &Path, args: &SdkValue) -> Outcome {
+    layerfs_store::sqlite::family::remove(home, args, RELATED)
 }
 
-/// The PostgreSQL `store.connect` and `store.disconnect` calls.
-pub mod connect {
-    use layerfs_bridge::control::SdkValue;
-    use layerfs_home::context::Context;
-    use layerfs_home::outcome::Outcome;
+/// `store.push`: a sqlite Store from native to a machine.
+pub fn push(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+    layerfs_store::sqlite::family::push(home, events, args, RELATED)
+}
 
-    /// Runs `store.connect` or `store.disconnect`.
-    pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
-        layerfs_store::postgresql::connect::run(context, call, args, super::RELATED)
-    }
+/// `store.pull`: a sqlite Store from its machine to native.
+pub fn pull(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+    layerfs_store::sqlite::family::pull(home, events, args, RELATED)
+}
+
+/// `store.disconnect`: forget a PostgreSQL Store; its data stays.
+pub fn disconnect(home: &Path, args: &SdkValue) -> Outcome {
+    layerfs_store::postgresql::connect::disconnect(home, args, RELATED)
 }

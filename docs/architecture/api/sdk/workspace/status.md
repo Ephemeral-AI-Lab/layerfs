@@ -11,7 +11,7 @@ mount, what it is doing, and how many changes it holds, changing nothing.
 | --- | --- |
 | Family | [workspace](README.md) |
 | Library entry | [`workspace/status.rs`](../../../../../api/crates/layerfs-api/src/workspace/status.rs) |
-| Implemented in | `layerfs_sandbox::workspace::calls::workspace` → host operation `backend.daemon.workspace.status` → `workspace::serve::status` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)) |
+| Implemented in | `layerfs_sandbox::workspace::calls::status` → host operation `backend.daemon.workspace.status` → `workspace::serve::status` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs)) |
 | Runs in | the Sandbox's daemon (status, reads no Store) and one head read on the Store's own route |
 
 ## Signature

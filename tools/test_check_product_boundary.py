@@ -100,15 +100,17 @@ class ProductBoundaryTests(unittest.TestCase):
             "api/crates/layerfs-api/src/host/sync.rs",
             "api/crates/layerfs-api/src/family/stores.rs",
             "api/crates/layerfs-api/src/fs/read.rs",
-            "api/crates/layerfs-api/src/calls/table.rs",
+            "control/crates/layerfs-control/src/calls/table.rs",
             "control/crates/layerfs-control/src/host/sync.rs",
             "control/crates/layerfs-control/src/operator/mod.rs",
             "engine/crates/layerfs-store-service/src/remote/push.rs",
         ):
             findings = violations(Path(relative), "pub use std::io::Read;")
             self.assertTrue(any("retired by #536" in message for _, message in findings), relative)
-        clean = violations(Path("api/crates/layerfs-api/src/store/push.rs"), "pub use std::io::Read;")
-        self.assertFalse(any("retired by #536" in message for _, message in clean))
+        # layerfs-project#107: the call machinery lives in layerfs-api again
+        for relative in ("api/crates/layerfs-api/src/store/push.rs", "api/crates/layerfs-api/src/calls/table.rs"):
+            clean = violations(Path(relative), "pub use std::io::Read;")
+            self.assertFalse(any("retired by #536" in message for _, message in clean), relative)
 
     def test_d11_idle_stop_and_on_demand_start_cannot_return(self):
         for relative in (

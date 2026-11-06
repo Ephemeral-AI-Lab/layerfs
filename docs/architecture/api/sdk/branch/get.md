@@ -10,7 +10,7 @@ Shows one Branch (or `main`): its base Layer and its head Commit.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/get.rs`](../../../../../api/crates/layerfs-api/src/branch/get.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → Store method `project.list_branches` with `name` ([`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs)) |
+| Implemented in | `layerfs_store::calls::branch_get` → Store method `project.list_branches` with `name` ([`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -71,7 +71,7 @@ Under a folder scope `branch` is composed as `<ns>.<branch>`.
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad project or name; out of scope | no | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs) |
+| `InvalidInput` | a bad project or name; out of scope | no | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs) |
 | `NoSuchStore`, `NoSuchProject` | the Store or project is not recorded | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `NoSuchBranch` | no Branch of that name | no | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |
 | `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`record.rs`](../../../../../control/crates/layerfs-store/src/record.rs) |

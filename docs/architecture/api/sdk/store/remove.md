@@ -11,7 +11,7 @@ It is also the call that clears an unresolved operation on the Store.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/store/remove.rs`](../../../../../api/crates/layerfs-api/src/store/remove.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `remove` ([`sqlite/remove.rs`](../../../../../control/crates/layerfs-store/src/sqlite/remove.rs)) |
+| Implemented in | `layerfs_control::store::remove` → `remove` ([`sqlite/remove.rs`](../../../../../control/crates/layerfs-store/src/sqlite/remove.rs)) |
 | Runs in | the caller's process; the step `remove` in the machine's worker when the file is not under the home |
 
 ## Signature

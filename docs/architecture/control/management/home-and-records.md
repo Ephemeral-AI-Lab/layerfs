@@ -14,7 +14,7 @@ The LayerFS home and its records.
 ## Home layout
 
 The home is `LAYERFS_HOME`, else `~/.layerfs`; it must be absolute
-([`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs)).
+([`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs)).
 Layout 3, from [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs):
 
 ```text

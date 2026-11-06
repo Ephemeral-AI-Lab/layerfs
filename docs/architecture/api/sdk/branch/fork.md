@@ -11,7 +11,7 @@ a given Commit. It writes metadata only and copies no files.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/fork.rs`](../../../../../api/crates/layerfs-api/src/branch/fork.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → Store method `branch.fork` ([`methods/branch/fork.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/fork.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) `fork`) |
+| Implemented in | `layerfs_store::calls::branch_fork` → Store method `branch.fork` ([`methods/branch/fork.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/fork.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) `fork`) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

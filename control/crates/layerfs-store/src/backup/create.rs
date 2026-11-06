@@ -9,7 +9,7 @@ use crate::sqlite::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup as remote;
 use layerfs_bucket::bucket::{pieces, Driver, Metadata};
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::home::flock::{try_lock, unlock};
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -38,8 +38,8 @@ fn expected(record: &StoreRecord, bucket: &str, file: &str) -> remote::Expected 
 /// process for `native`); this process uploads it with its sha256, heads,
 /// binding and `layerfs-exported-from`. A worker's snapshot comes here in
 /// pieces first: the worker never sees the key.
-pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let home = context.home.clone();
+pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+    let home = home.to_path_buf();
     let store = args.get_text("store").unwrap_or("");
     let bucket = args.get_text("bucket").unwrap_or("");
     let file = args.get_text("file").unwrap_or(store).to_owned();
@@ -67,9 +67,9 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let _lease = lease::hold(&home, store)?;
     let _creating = Creating::take(&home, store)?;
     let mut shown = Shown::new();
-    shown.phase(context, "check");
+    shown.phase(events, "check");
     check(driver.as_ref(), &object, expected, &home_id)?;
-    shown.phase(context, "snapshot");
+    shown.phase(events, "snapshot");
     let step = |op: &str, more: Vec<(&str, SdkValue)>| {
         let mut fields = vec![
             ("store", SdkValue::text(store)),
@@ -98,9 +98,9 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let result = (|| {
         if !local_steps {
             let total = staged.get_int("bytes").map(|n| n as u64);
-            shown.bytes(context, "send", 0, total);
+            shown.bytes(events, "send", 0, total);
             fetch_staged(&step, &local, &mut |done| {
-                shown.bytes(context, "send", done, total)
+                shown.bytes(events, "send", done, total)
             })?;
             let (_, sha256) = pieces::sha256_file(&local, None).map_err(remote_error)?;
             if Some(pieces::hex(&sha256).as_str()) != staged.get_text("sha256") {
@@ -125,11 +125,11 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         if let Some(heads) = &heads {
             metadata.insert(remote::HEADS.to_owned(), pieces::hex(heads));
         }
-        shown.phase(context, "check");
+        shown.phase(events, "check");
         check(driver.as_ref(), &object, expected, &home_id)?;
         // `hash`, then `upload` with its bytes and pieces
         let moved = shown
-            .transfer(context, || {
+            .transfer(events, || {
                 pieces::upload(driver.as_ref(), &object, &local, &metadata)
             })
             .map_err(remote_error)?;

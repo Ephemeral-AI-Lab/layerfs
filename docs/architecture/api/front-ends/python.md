@@ -29,7 +29,7 @@ api/crates/layerfs-python (cdylib "_native", PyO3 0.30, abi3-py310)
 | --- | --- | --- |
 | Interpreter | released (`py.detach`) for the whole library call, so other Python threads run | [`call.rs`](../../../../api/crates/layerfs-python/src/call.rs) |
 | Events | each event re-takes the interpreter to call `on_event` with JSON text; an exception it raises is written as unraisable and the call goes on | `call.rs` |
-| Answer | JSON text `{ value }` or `{ refused: { code, message, detail } }` | [`calls/text.rs`](../../../../control/crates/layerfs-control/src/calls/text.rs) |
+| Answer | JSON text `{ value }` or `{ refused: { code, message, detail } }` | [`calls/text.rs`](../../../../api/crates/layerfs-api/src/calls/text.rs) |
 | Features | `machine` by default; `postgresql` and `tls` only when built with them | [`Cargo.toml`](../../../../api/crates/layerfs-python/Cargo.toml) |
 | Linking | `pyo3-build-config` gives `-undefined dynamic_lookup` on macOS, so a plain Cargo build links like maturin | `Cargo.toml` |
 

@@ -11,7 +11,7 @@ schema keep every byte; [store.connect](connect.md) can record it again.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/store/disconnect.rs`](../../../../../api/crates/layerfs-api/src/store/disconnect.rs) |
-| Implemented in | `layerfs_control::store::connect::run` → `disconnect` ([`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs)) |
+| Implemented in | `layerfs_control::store::disconnect` → `disconnect` ([`postgresql/connect.rs`](../../../../../control/crates/layerfs-store/src/postgresql/connect.rs)) |
 | Runs in | the caller's process; no server is contacted |
 
 ## Signature

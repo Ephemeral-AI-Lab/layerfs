@@ -11,7 +11,7 @@ bucket is deleted.
 | --- | --- |
 | Family | [backup](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/backup/disconnect.rs`](../../../../../api/crates/layerfs-api/src/backup/disconnect.rs) |
-| Implemented in | `layerfs_control::backup::family::run` → `disconnect` ([`backup/family.rs`](../../../../../control/crates/layerfs-store/src/backup/family.rs)) |
+| Implemented in | `layerfs_store::backup::family::disconnect` → `disconnect` ([`backup/family.rs`](../../../../../control/crates/layerfs-store/src/backup/family.rs)) |
 | Runs in | the caller's process; the bucket is not contacted |
 
 ## Signature

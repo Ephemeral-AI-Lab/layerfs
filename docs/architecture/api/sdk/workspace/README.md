@@ -31,7 +31,7 @@ The `workspace` calls.
 
 Five calls, in help order
 ([`workspace/mod.rs`](../../../../../api/crates/layerfs-api/src/workspace/mod.rs)).
-Each runs `layerfs_sandbox::workspace::calls::workspace`. A Workspace is
+Each runs its own function of `layerfs_sandbox::workspace::calls`. A Workspace is
 named `ws`: `<sandbox>:<path>`, or `<sandbox>:<name>` when its mount named
 it ([`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs)).
 
@@ -59,10 +59,10 @@ After the call, `exec` also sends its `stdout` and `stderr` as
 | `name` | Name | unique among the Sandbox's mounted Workspaces | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `ws` | Text | parsed by `WorkspaceRef::parse`; a name is resolved to its path on the Sandbox's side | [`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
 | `command` | Text | run as `bash -c` in the Workspace directory by the Sandbox runtime | [`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs) |
-| `message` | Text | the shared `MESSAGE` option | [`calls/table.rs`](../../../../../control/crates/layerfs-control/src/calls/table.rs) |
+| `message` | Text | the shared `MESSAGE` option | [`calls/table.rs`](../../../../../api/crates/layerfs-api/src/calls/table.rs) |
 | `force` (commit) | Bool | publish over a moved head instead of merging | [`workspace/calls.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
 | `discard`, `force` (unmount) | Bool | drop uncommitted changes; abort the connection | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
-| `stream`, `stdout`, `stderr` | Bool, Function | front-end options; the functions never reach the library | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs) |
+| `stream`, `stdout`, `stderr` | Bool, Function | front-end options; the functions never reach the library | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs) |
 
 A Sandbox holds at most `WORKSPACES` = 16 Workspaces; inline exec output
 is at most `INLINE` = 1 MiB per stream
@@ -70,7 +70,7 @@ is at most `INLINE` = 1 MiB per stream
 [`output.rs`](../../../../../control/crates/layerfs-sandbox/src/output.rs)).
 Under a folder scope, `mount` takes only `main`, mounted as
 `<namespace>.main`, and `exec` runs `cd '<folder>' && <command>`
-([`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs)).
+([`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
 
 ## Errors
 

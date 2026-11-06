@@ -11,7 +11,7 @@ overwrite a copy this home did not last write there.
 | --- | --- |
 | Family | [backup](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/backup/create.rs`](../../../../../api/crates/layerfs-api/src/backup/create.rs) |
-| Implemented in | `layerfs_control::backup::family::run` → `create` ([`backup/create.rs`](../../../../../control/crates/layerfs-store/src/backup/create.rs)) |
+| Implemented in | `layerfs_store::backup::family::create` → `create` ([`backup/create.rs`](../../../../../control/crates/layerfs-store/src/backup/create.rs)) |
 | Runs in | the snapshot on the Store's machine (here for `native`, else `store.file` in its worker); the upload in the caller's process |
 
 ## Signature

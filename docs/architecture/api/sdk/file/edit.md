@@ -10,7 +10,7 @@ Replaces exactly one occurrence of a text in a file on a Branch, as one Commit.
 | --- | --- |
 | Family | [file](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/file/edit.rs`](../../../../../api/crates/layerfs-api/src/file/edit.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → `file`, Store method `fs.edit` ([`methods/file/edit.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/edit.rs)); `old`, `new` become `oldText`, `newText` |
+| Implemented in | `layerfs_store::calls::file_edit` → `file`, Store method `fs.edit` ([`methods/file/edit.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/file/edit.rs)); `old`, `new` become `oldText`, `newText` |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -93,7 +93,7 @@ mounted or shared. See the [routing table](../../../control/routing/routing-tabl
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad project, path, mode or option; a path outside a folder scope | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | a bad project, path, mode or option; a path outside a folder scope | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `ReadOnly` | `branch` is `main`; `main` changes only through [branch.publish](../branch/publish.md) | no | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `NoSuchStore`, `NoSuchProject`, `NoSuchBranch` | not recorded, or no such Branch | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `Conflict` | the Branch's head moved since the call bound it and a changed path conflicts; nothing committed (`detail.branch`, `head`, `conflicts`) | no | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |

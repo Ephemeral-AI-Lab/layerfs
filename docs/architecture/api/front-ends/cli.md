@@ -63,7 +63,7 @@ given; a stdin that is closed or empty is empty content, so `file write`
 writes an empty file and `file apply` is exit 2 (empty is not JSON). A
 `--from` file that cannot be read is exit 2.
 Values are only shaped here; the library checks them again
-([`check.rs`](../../../../control/crates/layerfs-control/src/calls/check.rs)),
+([`check.rs`](../../../../api/crates/layerfs-api/src/calls/check.rs)),
 so a value the shell accepts can still be refused `InvalidInput`.
 
 | Switch | Calls | Effect |

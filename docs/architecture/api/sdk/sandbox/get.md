@@ -11,7 +11,7 @@ its daemon holds, without starting anything.
 | --- | --- |
 | Family | [sandbox](README.md) |
 | Library entry | [`sandbox/get.rs`](../../../../../api/crates/layerfs-api/src/sandbox/get.rs) |
-| Implemented in | `layerfs_sandbox::family::sandbox` → `get::get` ([`get.rs`](../../../../../control/crates/layerfs-sandbox/src/get.rs)) |
+| Implemented in | `layerfs_sandbox::family::get` → `get::get` ([`get.rs`](../../../../../control/crates/layerfs-sandbox/src/get.rs)) |
 | Runs in | the caller's process; the Workspace list comes from the Sandbox daemon, dialed from here (forwarded or local) or from the machine's worker |
 
 ## Signature
@@ -96,7 +96,7 @@ an intent. See the [routing table](../../../control/routing/routing-table.md) an
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad name; folder scope | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | bad name; folder scope | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `NoSuchSandbox` | no record of that name | no | [`family.rs`](../../../../../control/crates/layerfs-sandbox/src/family.rs) |
 | `Busy`, `StaleSandbox` | a forwarded daemon admits no connection in time; a saved daemon is not `ControlReady` | no | [`daemon/pool.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
 | `Unknown` | **the worker's answer was lost after the request was sent; harmless for a read, but the answer is missing** | **yes (no effect expected)** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |

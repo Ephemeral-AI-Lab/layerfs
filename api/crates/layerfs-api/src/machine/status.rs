@@ -1,8 +1,8 @@
 //! `machine.status`: a machine's live state, free disk and tool version.
+use crate::calls::table::Kind::Name;
+use crate::calls::table::{a, call, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::Name;
-use layerfs_control::calls::table::{a, call, Call};
-use layerfs_control::calls::Context;
 use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
@@ -18,7 +18,7 @@ pub(crate) const CALL: Call = call(
 /// Runs `machine.status`.
 #[cfg(feature = "machine")]
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::machine::status(context, args)
+    layerfs_control::machine::status(&context.home, args)
 }
 
 /// Without the `machine` feature (the guest worker's build) it is

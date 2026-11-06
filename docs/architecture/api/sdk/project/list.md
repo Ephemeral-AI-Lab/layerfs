@@ -11,7 +11,7 @@ or for one Store, without opening any Store.
 | --- | --- |
 | Family | [project](README.md) |
 | Library entry | [`project/list.rs`](../../../../../api/crates/layerfs-api/src/project/list.rs) |
-| Implemented in | `layerfs_control::project::family::run` → `list` ([`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs)) |
+| Implemented in | `layerfs_store::project::family::list` → `list` ([`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs)) |
 | Runs in | the caller's process, reading home records only |
 
 ## Signature

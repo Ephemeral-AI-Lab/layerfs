@@ -25,7 +25,7 @@ The `commit` calls.
 
 Three read-only calls, in help order
 ([`commit/mod.rs`](../../../../../api/crates/layerfs-api/src/commit/mod.rs)).
-Each runs `layerfs_control::store::calls::run`.
+Each runs its own function of `layerfs_store::calls` (`commit_<call>`).
 
 | Call | Arguments | Options | Returns | Store method |
 | --- | --- | --- | --- | --- |
@@ -70,7 +70,7 @@ read budget `REPLY_BUDGET` (48 KiB) and reports `has_more`
 
 | Code | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad argument or page; every `commit` call under a folder scope (`out of scope: history`) | [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | a bad argument or page; every `commit` call under a folder scope (`out of scope: history`) | [`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs) |
 | `NoSuchStore`, `NoSuchProject` | the Store or project is missing | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs) |
 | `NoSuchBranch` | the Branch is missing | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `NoSuchCommit` | `get` read every page and found no match | [`calls.rs`](../../../../../control/crates/layerfs-store/src/calls.rs) |

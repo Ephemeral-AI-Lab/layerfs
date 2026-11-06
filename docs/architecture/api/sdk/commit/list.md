@@ -11,7 +11,7 @@ Commit's message, parents and storage statistics.
 | --- | --- |
 | Family | [commit](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/commit/list.rs`](../../../../../api/crates/layerfs-api/src/commit/list.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → Store method `branch.list_commits` ([`methods/branch/list_commits.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/list_commits.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
+| Implemented in | `layerfs_store::calls::commit_list` → Store method `branch.list_commits` ([`methods/branch/list_commits.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/list_commits.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

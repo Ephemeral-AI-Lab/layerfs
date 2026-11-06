@@ -2,12 +2,11 @@
 //! the worker's server, `inventory` (the relationships no record stores),
 //! `doctor`, the home's conversions (`migrate`), and the machine, Store,
 //! project and backup calls with the reads they need from other entities
-//! (`Related`). Until #107 it also holds the call machinery (`calls`).
+//! (`Related`). The call machinery is `layerfs-api`'s (layerfs-project#107).
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
 pub mod backup;
-pub mod calls;
 pub mod doctor;
 #[doc(hidden)]
 pub mod inventory;

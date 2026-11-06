@@ -11,7 +11,7 @@ line hunks unless asked for paths only.
 | --- | --- |
 | Family | [commit](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/commit/diff.rs`](../../../../../api/crates/layerfs-api/src/commit/diff.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → Store method `branch.diff_commits` ([`methods/branch/diff_commits.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/diff_commits.rs), [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs)) |
+| Implemented in | `layerfs_store::calls::commit_diff` → Store method `branch.diff_commits` ([`methods/branch/diff_commits.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/branch/diff_commits.rs), [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature

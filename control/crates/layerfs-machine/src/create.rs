@@ -13,7 +13,7 @@ use super::spec::{self as record, machine_of, refusal, save_running, update as u
 use super::status::home_id;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::home::{self, lock, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -38,8 +38,8 @@ pub(super) fn new_name(home: &Path, name: &str) -> Result<()> {
 }
 
 /// `machine.create(name, platform, { cpus, memory, disk, image, nested, host })`.
-pub fn create(context: &mut Context<'_>, args: &SdkValue, related: Related) -> Outcome {
-    let home = context.home.clone();
+pub fn create(home: &Path, events: &mut Events<'_>, args: &SdkValue, related: Related) -> Outcome {
+    let home = home.to_path_buf();
     let name = args.get_text("name").unwrap_or("").to_owned();
     let platform = args.get_text("platform").unwrap_or("");
     let kind = Platform::parse(platform)
@@ -134,7 +134,7 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue, related: Related) -> O
             return Err(refusal);
         }
     };
-    context.progress(SdkValue::map([
+    events.progress(SdkValue::map([
         ("phase", SdkValue::text("create")),
         ("machine", SdkValue::text(&name)),
     ]));

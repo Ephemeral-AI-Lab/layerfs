@@ -11,7 +11,7 @@ use super::family::sandbox_of;
 use super::record::{self, SandboxRecord};
 use crate::route::on_machine;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_home::home;
 use layerfs_home::op::{Op, Standing};
 use layerfs_home::outcome::{refused, Outcome};
@@ -20,8 +20,8 @@ use std::path::Path;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// `sandbox.close(name, { force })`.
-pub fn close(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    let home = context.home.clone();
+pub fn close(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
+    let home = home.to_path_buf();
     let name = args.get_text("name").unwrap_or("");
     sandbox_of(&home, name)?;
     let force = matches!(args.get("force"), Some(SdkValue::Bool(true)));
@@ -64,7 +64,8 @@ pub fn close(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         }
     }
     let closed = on_machine(
-        context,
+        &home,
+        events,
         &record,
         "sandbox.close",
         more,

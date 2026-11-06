@@ -4,7 +4,6 @@ use super::spec::{self as record, refusal};
 use super::status::home_id;
 use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_home::context::Context;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, Outcome, View};
 use layerfs_platform as adapters;
@@ -93,8 +92,7 @@ pub(super) fn summary(
 
 /// `machine.list()`: every machine with its live state and what it
 /// supports; `machine.platforms` answers what could be created here.
-pub fn list(context: &mut Context<'_>, _args: &SdkValue, related: Related) -> Outcome {
-    let home = &context.home;
+pub fn list(home: &Path, _args: &SdkValue, related: Related) -> Outcome {
     let mut records = Vec::new();
     for name in paths::names(&home.join("machine")).map_err(failed)? {
         if let Some(record) = MachineRecord::read(home, &name)? {

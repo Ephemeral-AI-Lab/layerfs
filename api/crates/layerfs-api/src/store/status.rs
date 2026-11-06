@@ -1,8 +1,8 @@
 //! `store.status`: a Store's live state.
+use crate::calls::table::Kind::Name;
+use crate::calls::table::{a, call, Call};
+use crate::calls::Context;
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::calls::table::Kind::Name;
-use layerfs_control::calls::table::{a, call, Call};
-use layerfs_control::calls::Context;
 use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
@@ -17,5 +17,5 @@ pub(crate) const CALL: Call = call(
 
 /// Runs `store.status`.
 fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    layerfs_control::store::family::run(context, "status", args)
+    layerfs_store::sqlite::family::status(&context.home, args)
 }

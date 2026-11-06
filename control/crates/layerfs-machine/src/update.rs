@@ -3,18 +3,18 @@ use super::list::summary;
 use super::spec::machine_of;
 use crate::Related;
 use layerfs_bridge::control::SdkValue;
-use layerfs_home::context::Context;
 use layerfs_home::home::lock;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_platform::HostOs;
+use std::path::Path;
 
 /// `machine.update(name, { cpus, memory, image, docker, wsl, daemon })`
 /// (O11): the built-in machines' image, Docker socket, WSL distribution
 /// and the daemon their Sandboxes run (an absolute path to a file; it
 /// replaces what `import-env` recorded). Resizing a VM is refused while
 /// Sandboxes run on it.
-pub fn update(context: &mut Context<'_>, args: &SdkValue, related: Related) -> Outcome {
-    let home = context.home.clone();
+pub fn update(home: &Path, args: &SdkValue, related: Related) -> Outcome {
+    let home = home.to_path_buf();
     let name = args.get_text("name").unwrap_or("");
     let _lock = lock::take(&home)?;
     let record = machine_of(&home, name)?;

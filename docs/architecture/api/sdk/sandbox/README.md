@@ -27,7 +27,7 @@ The `sandbox` calls.
 
 Four calls, in help order
 ([`sandbox/mod.rs`](../../../../../api/crates/layerfs-api/src/sandbox/mod.rs)).
-Each runs `layerfs_sandbox::family::sandbox`
+Each runs its own function of `layerfs_sandbox::family`
 ([`family.rs`](../../../../../control/crates/layerfs-sandbox/src/family.rs)).
 A Sandbox runs one project's Workspace daemon on a machine; its name is
 unique across the home.

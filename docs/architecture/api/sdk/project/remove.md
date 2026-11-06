@@ -12,7 +12,7 @@ Store's other projects stay.
 | --- | --- |
 | Family | [project](README.md) |
 | Library entry | [`project/remove.rs`](../../../../../api/crates/layerfs-api/src/project/remove.rs) |
-| Implemented in | `layerfs_control::project::family::run` → `remove` ([`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs)), then `store::identity::remove_project` ([`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs)) |
+| Implemented in | `layerfs_control::project::remove` → `remove` ([`project/family.rs`](../../../../../control/crates/layerfs-store/src/project/family.rs)), then `store::identity::remove_project` ([`identity.rs`](../../../../../control/crates/layerfs-store/src/identity.rs)) |
 | Runs in | the caller's process, or the worker op `project.remove` on the Store's machine (sqlite on a non-local machine). Never a Sandbox daemon. |
 
 ## Signature
@@ -37,7 +37,7 @@ layerfs project remove <project>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<name>`; Store and project records must exist; no Sandbox of the project may be recorded | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_project` |
+| `project` | Project | `<store>/<name>`; Store and project records must exist; no Sandbox of the project may be recorded | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs), [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_project` |
 
 ## Options
 
@@ -92,7 +92,7 @@ other daemons and SDK processes keep reading meanwhile. See the
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | `project` is not `<store>/<name>` with valid names | no | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs) |
+| `InvalidInput` | `project` is not `<store>/<name>` with valid names | no | [`calls/check.rs`](../../../../../api/crates/layerfs-api/src/calls/check.rs) |
 | `NoSuchStore`, `NoSuchProject` | a record is missing; `NoSuchProject` also when the Store holds no LayerStack of that name | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs), `store/identity.rs` |
 | `InUse` | a Sandbox of the project is recorded; `detail.related` lists each `{ kind: "sandbox", name }` | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) |
 | `Busy`, `Unresolved` | the Store's record holds another operation's intent | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |

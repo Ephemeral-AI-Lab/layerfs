@@ -12,7 +12,7 @@ its record removed; it is also the call that clears an uncertain
 | --- | --- |
 | Family | [sandbox](README.md) |
 | Library entry | [`sandbox/close.rs`](../../../../../api/crates/layerfs-api/src/sandbox/close.rs) |
-| Implemented in | `layerfs_sandbox::family::sandbox` → `close::close` ([`close.rs`](../../../../../control/crates/layerfs-sandbox/src/close.rs)), then `serve::close` on the machine ([`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs)) |
+| Implemented in | `layerfs_sandbox::family::close` → `close::close` ([`close.rs`](../../../../../control/crates/layerfs-sandbox/src/close.rs)), then `serve::close` on the machine ([`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs)) |
 | Runs in | the caller's process (records, locks), then the caller's process for a local machine or the machine's worker (`sandbox.host`) |
 
 ## Signature
@@ -46,7 +46,7 @@ layerfs sandbox close <name> [--force]
 | `force` | Bool | false | stop even with Workspaces mounted; their uncommitted changes and processes end with the Sandbox | [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) `close` |
 
 Under a folder scope the call is refused `InvalidInput`
-([`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs)).
+([`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
 
 ## Returns
 

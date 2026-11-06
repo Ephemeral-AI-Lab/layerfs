@@ -12,7 +12,7 @@ or restore through that bucket.
 | --- | --- |
 | Family | [backup](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/backup/restore.rs`](../../../../../api/crates/layerfs-api/src/backup/restore.rs) |
-| Implemented in | `layerfs_control::backup::family::run` → `restore` ([`backup/restore.rs`](../../../../../control/crates/layerfs-store/src/backup/restore.rs)), which calls `layerfs_bucket::backup::load` |
+| Implemented in | `layerfs_control::backup::restore` → `restore` ([`backup/restore.rs`](../../../../../control/crates/layerfs-store/src/backup/restore.rs)), which calls `layerfs_bucket::backup::load` |
 | Runs in | the caller's process, on `native`; no machine is reached |
 
 ## Signature

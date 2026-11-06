@@ -4,7 +4,7 @@
 //! exact count, and a failed transfer ending on what it moved.
 use layerfs_bridge::control::SdkValue;
 use layerfs_bucket::bucket::progress as bucket;
-use layerfs_home::context::Context;
+use layerfs_home::events::Events;
 use layerfs_store::backup::progress::Shown;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -32,8 +32,8 @@ fn seen(event: &SdkValue) -> Seen {
 fn transfer<T: Send>(work: impl FnOnce() -> T + Send) -> (T, Vec<Seen>) {
     let mut events = Vec::new();
     let mut sink = |event: SdkValue| events.push(seen(&event));
-    let mut context = Context::new(std::env::temp_dir(), &mut sink);
-    let value = Shown::new().transfer(&mut context, work);
+    let mut stream = Events::new(&mut sink);
+    let value = Shown::new().transfer(&mut stream, work);
     (value, events)
 }
 
@@ -91,9 +91,9 @@ fn counts_are_sent_while_the_transfer_runs() {
             during.push(seen(&event));
         }
     };
-    let mut context = Context::new(std::env::temp_dir(), &mut sink);
+    let mut stream = Events::new(&mut sink);
     let flag = ended.clone();
-    Shown::new().transfer(&mut context, move || {
+    Shown::new().transfer(&mut stream, move || {
         bucket::begin("upload", Some(3));
         for _ in 0..3 {
             bucket::add(1);
@@ -127,10 +127,10 @@ fn a_failed_transfer_ends_on_what_it_moved() {
 fn a_panic_in_the_transfer_is_resumed_after_its_updates() {
     let mut events = Vec::new();
     let mut sink = |event: SdkValue| events.push(seen(&event));
-    let mut context = Context::new(std::env::temp_dir(), &mut sink);
+    let mut stream = Events::new(&mut sink);
     let mut shown = Shown::new();
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        shown.transfer(&mut context, || {
+        shown.transfer(&mut stream, || {
             bucket::begin("download", Some(8));
             bucket::add(2);
             panic!("cut");
@@ -147,12 +147,12 @@ fn a_panic_in_the_transfer_is_resumed_after_its_updates() {
 fn the_calls_own_phases_carry_no_bytes_and_are_not_repeated() {
     let mut events = Vec::new();
     let mut sink = |event: SdkValue| events.push(seen(&event));
-    let mut context = Context::new(std::env::temp_dir(), &mut sink);
+    let mut stream = Events::new(&mut sink);
     let mut shown = Shown::new();
-    shown.phase(&mut context, "check");
-    shown.transfer(&mut context, || bucket::begin("install", None));
-    shown.phase(&mut context, "install");
-    shown.bytes(&mut context, "send", 8, None);
+    shown.phase(&mut stream, "check");
+    shown.transfer(&mut stream, || bucket::begin("install", None));
+    shown.phase(&mut stream, "install");
+    shown.bytes(&mut stream, "send", 8, None);
     let t = |s: &str| s.to_owned();
     assert_eq!(
         events,
