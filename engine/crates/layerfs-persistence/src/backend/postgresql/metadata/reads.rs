@@ -49,11 +49,22 @@ pub(crate) fn locate(
         .into_iter()
         .map(|id| id.as_bytes().to_vec())
         .collect();
+    let keys: Vec<i64> = ids
+        .iter()
+        .map(|id| ObjectId::from_bytes(id).map(|id| super::super::objects::publish::prefix(&id)))
+        .collect::<Result<_, _>>()
+        .map_err(|_| BackendError::Integrity)?;
+    // Each id finds its rows through the prefix index, then the full id is
+    // compared (#90); `OFFSET 0` keeps that a probe per id rather than a hash
+    // of the whole table.
     let sql = format!(
-        "SELECT o.object_id,o.role,o.canonical_length,o.group_number,o.record_number,p.pack_id,p.domain,p.digest,p.length FROM {s}.object_location o JOIN {s}.pack p ON p.pack_id=o.pack_id WHERE o.object_id = ANY($1::bytea[])",
+        "SELECT o.object_id,o.role::bigint,o.canonical_length::bigint,o.group_number::bigint,o.record_number::bigint,p.pack_id,p.domain,p.digest,p.length \
+         FROM unnest($1::bytea[],$2::bigint[]) k(i,k) CROSS JOIN LATERAL (SELECT * FROM {s}.object_location x \
+         WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=k.k AND x.object_id=k.i OFFSET 0) o \
+         JOIN {s}.pack p ON p.pack_id=o.pack_id",
         s = tx.schema
     );
-    let rows = tx.typed(&sql, &[&ids], ids.len() as u64 * 32)?;
+    let rows = tx.typed(&sql, &[&ids, &keys], ids.len() as u64 * 40)?;
     for row in rows {
         let r = super::super::session::rows::record(&row)?;
         out.push(location(&r)?);

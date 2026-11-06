@@ -5,6 +5,11 @@
 //! statement adds the locations, inode value blocks (#91), signatures and totals; the
 //! COMMIT acknowledges packs and rows together. A refused or failed step
 //! rolls the whole publication back; pack ids are never reused.
+//!
+//! A location is inserted when no row of its id exists (#90): the table has
+//! no unique key on the id, only a B-tree on its first eight bytes, and
+//! uniqueness holds because every location insert runs under the lane row.
+//! A signature must name a location of this publication or a stored one.
 use super::super::session::transaction::Transaction;
 use crate::backend::records::BackendError;
 use layerfs_content::ObjectId;
@@ -43,13 +48,18 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
 }
 
 /// Every row of one publication in one statement. Its sub-statements see
-/// one snapshot and touch distinct rows; the totals count only locations
-/// this statement inserted, and a signature may name one of them (foreign
-/// keys are checked when the statement ends).
+/// one snapshot, taken under the lane, and touch distinct rows; the totals
+/// count only locations this statement inserted, and a signature may name
+/// one of them. A NULL id row refuses the publication: a block's ordinals
+/// were already stored, or a signature names no location. `OFFSET 0` keeps
+/// each location probe a correlated index lookup: without it the planner
+/// may hash the whole table, computing the prefix of every row, under the
+/// lane.
 const ROWS: &str = "WITH ins AS (\
 INSERT INTO object_location(object_id,role,canonical_length,pack_id,group_number,record_number) \
-SELECT * FROM unnest($1::bytea[],$2::bigint[],$3::bigint[],$4::bigint[],$5::bigint[],$6::bigint[]) \
-ON CONFLICT(object_id) DO NOTHING RETURNING object_id,canonical_length), \
+SELECT n.i,n.r,n.l,n.p,n.g,n.c FROM unnest($1::bytea[],$2::bigint[],$3::bigint[],$4::bigint[],$5::bigint[],$6::bigint[],$19::bigint[]) n(i,r,l,p,g,c,k) \
+WHERE NOT EXISTS (SELECT 1 FROM object_location x WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=n.k AND x.object_id=n.i OFFSET 0) \
+RETURNING object_id,canonical_length), \
 added AS (SELECT coalesce(sum(canonical_length),0)::bigint AS n FROM ins), \
 totals AS (UPDATE store_totals SET canonical=store_totals.canonical+added.n,stored=store_totals.stored+$7::bigint,metadata=store_totals.metadata+$8::bigint \
 FROM added WHERE store_totals.id=1 AND (added.n<>0 OR $7::bigint<>0 OR $8::bigint<>0)), \
@@ -63,10 +73,23 @@ SELECT * FROM unnest($14::bigint[],$15::bigint[],$16::bytea[],$17::bytea[]) \
 ON CONFLICT(slot) DO UPDATE SET stamp=excluded.stamp,object_id=excluded.object_id,signature=excluded.signature \
 WHERE excluded.stamp>=content_signature.stamp) \
 SELECT object_id FROM ins \
-UNION ALL SELECT NULL::bytea WHERE (SELECT count(*) FROM values_)<>cardinality($9::bigint[])";
+UNION ALL SELECT NULL::bytea WHERE (SELECT count(*) FROM values_)<>cardinality($9::bigint[]) \
+UNION ALL SELECT NULL::bytea WHERE EXISTS (SELECT 1 FROM unnest($16::bytea[],$20::bigint[]) s(i,k) \
+WHERE NOT EXISTS (SELECT 1 FROM unnest($1::bytea[]) b(i) WHERE b.i=s.i) \
+AND NOT EXISTS (SELECT 1 FROM object_location x WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=s.k AND x.object_id=s.i OFFSET 0))";
+
+/// The index key of an object id: its first eight bytes as a signed
+/// big-endian `bigint`, as the schema's `object_location_prefix` computes it.
+pub(crate) fn prefix(id: &ObjectId) -> i64 {
+    let mut head = [0_u8; 8];
+    head.copy_from_slice(&id.as_bytes()[..8]);
+    i64::from_be_bytes(head)
+}
 
 pub(crate) fn rows(tx: &Transaction<'_>, batch: &Publication) -> Result<Published, BackendError> {
+    // Ids are distinct: `storage::publication` refuses a repeated one.
     let objects = &batch.objects;
+    let keys: Vec<i64> = objects.iter().map(|o| prefix(&o.object_id)).collect();
     let ids: Vec<&[u8]> = objects
         .iter()
         .map(|o| o.object_id.as_bytes().as_slice())
@@ -107,6 +130,7 @@ pub(crate) fn rows(tx: &Transaction<'_>, batch: &Publication) -> Result<Publishe
         .map(|r| r.object_id.as_bytes().as_slice())
         .collect();
     let digests: Vec<&[u8]> = signatures.iter().map(|r| r.signature.as_slice()).collect();
+    let signed_keys: Vec<i64> = signatures.iter().map(|r| prefix(&r.object_id)).collect();
     let bytes = objects.len() as u64 * 72
         + values.iter().map(|b| b.body.len() as u64 + 16).sum::<u64>()
         + signatures.len() as u64 * 80
@@ -115,12 +139,31 @@ pub(crate) fn rows(tx: &Transaction<'_>, batch: &Publication) -> Result<Publishe
     for row in tx.typed(
         ROWS,
         &[
-            &ids, &roles, &lengths, &packs, &groups, &records, &stored, &metadata, &ordinals,
-            &bodies, &first, &count, &release, &slots, &stamps, &signed, &digests, &lasts,
+            &ids,
+            &roles,
+            &lengths,
+            &packs,
+            &groups,
+            &records,
+            &stored,
+            &metadata,
+            &ordinals,
+            &bodies,
+            &first,
+            &count,
+            &release,
+            &slots,
+            &stamps,
+            &signed,
+            &digests,
+            &lasts,
+            &keys,
+            &signed_keys,
         ],
         bytes,
     )? {
-        // A NULL id: a block's ordinals were already stored; nothing commits.
+        // A NULL id: a block's ordinals were already stored, or a signature
+        // names no location; nothing commits.
         let id: Option<Vec<u8>> = row.try_get(0).map_err(|_| BackendError::Integrity)?;
         let id = id.ok_or(BackendError::Integrity)?;
         inserted.insert(ObjectId::from_bytes(&id).map_err(|_| BackendError::Integrity)?);

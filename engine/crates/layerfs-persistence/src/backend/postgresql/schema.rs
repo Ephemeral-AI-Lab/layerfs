@@ -25,8 +25,9 @@ const ACQUISITION: &str = include_str!("../../../sql/postgresql/acquisition.sql"
 /// The acquisition tables, in name order.
 const ACQUISITION_TABLES: [&str; 3] = ["init_entry", "init_host_file", "init_operation"];
 /// The engine-scoped schema version in `store_policy` and `history_meta`.
-/// Version 2 (#91) keeps inode values and binding hints in append-only
-/// blocks; a version 1 schema is refused at open, never converted.
+/// Version 2 keeps inode values and binding hints in append-only blocks
+/// (#91) and object locations in narrow rows under an 8-byte-prefix index
+/// (#90); a version 1 schema is refused at open, never converted.
 pub(crate) const SCHEMA_VERSION: i64 = 2;
 /// Every table of one Store schema.
 pub(crate) const TABLES: [&str; 19] = [
