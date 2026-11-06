@@ -388,6 +388,9 @@ fn replace_chunked(
         None => super::state::State::Memory(super::state::Memory::default()),
     };
     let mut objects = crate::file::edit::tree::EditObjects::new(reader, consumer, pages, state);
+    // Every page the result publishes is offered the base's page at its level
+    // and logical start (#92); the edit has already read the paths it changed.
+    objects.set_page_hints(base);
     let mut aligner = crate::file::mapping::Aligner::new(base);
     // Result position minus base position after the edits applied so far.
     let mut shift = 0_i128;

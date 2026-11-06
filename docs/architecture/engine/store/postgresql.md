@@ -23,10 +23,10 @@ Without it, selecting a PostgreSQL Store fails `BackendUnavailable`.
  +--------------------------------------------------------------+
  | schema <selection.schema>      (one Store; [a-z_][a-z0-9_]*) |
  |  store_lane (id=1)   <-- the row every writer locks          |
- |  store_policy, pack, object_location, inode_value,           |
+ |  store_policy, pack, object_location, inode_value_block,     |
  |  content_signature, store_totals                             |
  |  history_meta, layer_stack, layer, "commit", branch,         |
- |  scope_allocator, binding_hint                               |
+ |  scope_allocator, binding_hint_block                         |
  |  layer_lineage, commit_lineage, absorbed, reach, file_digest |
  |  init_operation, init_entry, init_host_file   (if created)   |
  +--------------------------------------------------------------+
@@ -40,10 +40,13 @@ Without it, selecting a PostgreSQL Store fails `BackendUnavailable`.
 | Types | `bigint` for integers, `bytea` for BLOBs | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
 | Name order | history names `COLLATE "C"`, so paging matches SQLite byte order | same |
 | Pack bodies | one `bytea` per pack, `STORAGE EXTERNAL` (uncompressed, out of line) for ranged `substring` reads | same |
-| Pack units | absent: group rows are a SQLite physical layout | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+| Pack units | absent: group rows are a SQLite physical layout. Explicit 8,100-byte `PLAIN` chunk rows were measured and not taken (#90): one chunk per page and a partly filled page per pack tail made D10's packs 44.0 MB, against 43.2 MB with `EXTERNAL` |
+| Object locations | narrow rows (#90): `pack_id bigint`, `canonical_length integer`, `role`, `group_number`, `record_number` `smallint`, then `object_id bytea STORAGE PLAIN`; no unique key on the id but a B-tree `object_location_prefix` on its first eight bytes as a signed big-endian `bigint`, with the full id compared in the heap. A location is inserted only when its id is absent (`INSERT … WHERE NOT EXISTS`), which is unique because every location insert holds the lane; the lost-race and Collision read-back are unchanged. A signature must name a location of its publication or a stored one, checked in the same statement (the foreign key needed a unique key). D10: 9.70 → 5.82 MB | [`publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish.rs), [`reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs) |
+| No TOAST for short values | every bounded `bytea`/`text` column of `object_location`, `content_signature`, `file_digest`, `layer_stack`, `branch`, `scope_allocator`, `layer_lineage`, `commit_lineage`, `absorbed` and the acquisition tables is `STORAGE PLAIN`, so those tables have no TOAST relation (8 KiB each); `pack`, `layer`, `commit`, `history_meta` and `reach` keep one for their unbounded columns | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
+| Blocks | `inode_value_block.body` and `binding_hint_block.body` are `bytea STORAGE PLAIN` in the `CREATE TABLE` (PostgreSQL 16 or newer): two 4,000-byte rows per 8 KiB page, never TOASTed or compressed, and no TOAST table | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
 | Lane | `store_lane`, one row | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
 | Merge records | temporary tables of the writer connection | [`merge_records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/merge_records.rs) |
-| Schema version | `SCHEMA_VERSION = 1`, engine-scoped | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+| Schema version | `SCHEMA_VERSION = 2` (#91: inode value and binding hint blocks; #90: narrow locations, no short-value TOAST), engine-scoped; a version 1 schema is refused at open (`Integrity`), never converted | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
 
 `PostgresHandles::create` checks `pg_namespace` and refuses an existing
 schema (`Refused "schema exists"`) before writing. It then creates the

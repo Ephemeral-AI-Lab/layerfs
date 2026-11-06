@@ -6,6 +6,7 @@ mod align;
 mod build;
 mod codec;
 mod extents;
+mod hints;
 mod predecessor;
 mod read;
 mod repeated;
@@ -20,6 +21,7 @@ pub use codec::{
     ChunkIdentity, CHUNK_MAGIC, FILE_STATE_CANONICAL_BYTES,
 };
 pub use extents::{Extent, ExtentCursor};
+pub use hints::{page_at, PageHints, PAGE_HINT_BRANCH_READS};
 pub use predecessor::PredecessorBase;
 pub(crate) use predecessor::PredecessorCursor;
 pub use read::{

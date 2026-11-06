@@ -6,8 +6,8 @@ use crate::backend::records::BackendError;
 
 pub(crate) fn statement(key: &str) -> Result<&'static str, BackendError> {
     match key {
-        "hint_insert_binding" => Ok(include_str!(
-            "../../../../sql/postgresql/queries/history/hint_insert_binding.sql"
+        "hint_insert_block" => Ok(include_str!(
+            "../../../../sql/postgresql/queries/history/hint_insert_block.sql"
         )),
         "statistics_totals" => Ok(include_str!(
             "../../../../sql/postgresql/queries/history/statistics_totals.sql"
@@ -42,8 +42,8 @@ pub(crate) fn qualified(key: &str) -> Option<&'static str> {
 /// The array form of a per-row statement, where one exists.
 pub(crate) fn arrays(key: &str) -> Option<&'static str> {
     match key {
-        "hint_insert_bindings" => Some(include_str!(
-            "../../../../sql/postgresql/queries/history/hint_insert_bindings.sql"
+        "hint_insert_blocks" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/hint_insert_blocks.sql"
         )),
         "digest_insert_rows" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/digest_insert_rows.sql"

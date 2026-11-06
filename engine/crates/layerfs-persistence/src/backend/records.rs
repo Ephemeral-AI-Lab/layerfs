@@ -120,14 +120,24 @@ pub(crate) enum BackendError {
     ReadOnly,
     Capacity,
     Integrity,
+    /// A SQLite Store of schema version 1 (before #91): refused at open with
+    /// the offline conversion named, never misread.
+    SchemaVersion1,
     Unknown,
 }
+/// The refusal a schema version 1 SQLite Store gets at open.
+pub(crate) const SCHEMA_VERSION_1: &str =
+    "schema version 1 Store (one row per inode value and binding hint, before #91): \
+convert a closed copy offline with tools/store_blocks.py migrate";
 impl From<BackendError> for layerfs_storage::port::PersistenceError {
     fn from(e: BackendError) -> Self {
         match e {
             BackendError::Unknown => Self::Uncertain,
             BackendError::Busy => Self::Busy,
             BackendError::Integrity => Self::Malformed,
+            BackendError::SchemaVersion1 => Self::Refused {
+                status: SCHEMA_VERSION_1.to_owned(),
+            },
             _ => Self::Refused {
                 status: format!("{e:?}"),
             },
@@ -145,6 +155,7 @@ impl From<BackendError> for layerfs_history::HistoryError {
             BackendError::ReadOnly => Self::ContinuityUnavailable,
             BackendError::Capacity => Self::Capacity("persistence"),
             BackendError::Integrity => Self::Integrity("persistence"),
+            BackendError::SchemaVersion1 => Self::Integrity(SCHEMA_VERSION_1),
             BackendError::Unknown => Self::UnknownOutcome,
         }
     }

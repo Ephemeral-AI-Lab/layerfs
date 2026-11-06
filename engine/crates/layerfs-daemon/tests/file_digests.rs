@@ -1,7 +1,10 @@
 //! #364 item 2 (b): a captured Commit records the Store digest of each fresh
 //! file the overlay followed from creation, and a fresh file whose digest and
 //! length a saved root already has reuses that object: its own row, serial
-//! and metadata stay (owner decision, object reuse only).
+//! and metadata stay (owner decision, object reuse only). The Store keeps
+//! digests only of chunked files, at or above the small-file threshold
+//! (#91): a smaller file is one whole-file object, which a rebuild finds by
+//! its identity, so it is built again and stores nothing new.
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod support;
@@ -158,6 +161,8 @@ fn commit(workspace: &BoundWorkspace) -> (CommitSuccess, CapturedNamespaceWork) 
     let work = done.namespace.as_ref().unwrap().work.unwrap();
     (done, work)
 }
+/// The frozen default small-file threshold: the first chunked length.
+const CHUNKED: usize = 131_072;
 fn bytes(tag: u8, length: usize) -> Vec<u8> {
     (0..length).map(|at| tag ^ (at % 251) as u8).collect()
 }
@@ -216,30 +221,38 @@ impl Setup {
 #[test]
 fn a_commit_records_digests_of_followed_fresh_files_only() {
     let s = setup("file-digests");
-    put(&s.workspace, "appended", 0o644, b"hello digest");
+    let large = bytes(6, CHUNKED);
+    put(&s.workspace, "appended", 0o644, &large);
+    put(&s.workspace, "small", 0o644, b"hello digest");
     // Rewritten at offset 0 after its first bytes: not followed.
-    let rewritten = create(&s.workspace, "rewritten", 0o644);
-    write(&s.workspace, rewritten, 0, b"other bytes");
+    let mut other = bytes(7, CHUNKED + 1);
+    let rewritten = put(&s.workspace, "rewritten", 0o644, &other);
     write(&s.workspace, rewritten, 0, b"O");
+    other[0] = b'O';
     let (done, work) = commit(&s.workspace);
-    assert_eq!(work.digests_recorded, 1);
+    // Both followed files are offered; the Store keeps the chunked one.
+    assert_eq!(work.digests_recorded, 2);
     let appended = committed(&s.store, &s.workspace, "appended").1.content_root;
     let digest = |bytes: &[u8]| *blake3::hash(bytes).as_bytes();
     let roots = s
         .store
         .history()
-        .file_roots(&[(digest(b"hello digest"), 12), (digest(b"Other bytes"), 11)])
+        .file_roots(&[
+            (digest(&large), large.len() as u64),
+            (digest(&other), other.len() as u64),
+            (digest(b"hello digest"), 12),
+        ])
         .unwrap();
-    assert_eq!(roots[0], Some(appended.to_bytes()));
-    assert_eq!(roots[1], None);
+    assert_eq!(roots, vec![Some(appended.to_bytes()), None, None]);
     drop(done);
     s.finish();
 }
 
 /// A clean relink over files a Commit built: the directory and every file
-/// are removed and written again, and one copy lands at a new path. A file
-/// whose bytes a saved root holds reuses that object and keeps its own
-/// serial and metadata; every other file takes the full path.
+/// are removed and written again, and one copy lands at a new path. A
+/// chunked file whose bytes a saved root holds reuses that object and keeps
+/// its own serial and metadata; every other file takes the full path, where
+/// a small file with the same bytes builds the same object again.
 #[test]
 fn a_relinked_file_with_saved_bytes_reuses_the_object() {
     let s = setup("file-digests-relink");
@@ -247,7 +260,7 @@ fn a_relinked_file_with_saved_bytes_reuses_the_object() {
     mkdir(w, "nm");
     let cases = [
         ("nm/same", 0o644, bytes(1, 300_000)),
-        ("nm/mode", 0o644, bytes(2, 5_000)),
+        ("nm/mode", 0o644, bytes(2, 200_000)),
         ("nm/byte", 0o644, bytes(3, 5_000)),
         ("nm/linked", 0o644, bytes(4, 5_000)),
         ("top", 0o755, bytes(5, 70_000)),
@@ -283,10 +296,8 @@ fn a_relinked_file_with_saved_bytes_reuses_the_object() {
     mkdir(w, "elsewhere");
     put(w, "elsewhere/copy", 0o644, &cases[4].2);
     let (second, work) = commit(w);
-    assert_eq!(
-        work.files_reused, 4,
-        "nm/same, nm/mode, top, elsewhere/copy"
-    );
+    // top and elsewhere/copy are small: built again, the same object.
+    assert_eq!(work.files_reused, 2, "nm/same, nm/mode");
     let after: Vec<(u64, InodeValue)> = cases
         .iter()
         .map(|(path, _, _)| committed(&s.store, w, path))
@@ -321,7 +332,7 @@ fn a_relinked_file_with_saved_bytes_reuses_the_object() {
 #[test]
 fn a_recorded_root_the_store_does_not_hold_is_not_reused() {
     let s = setup("file-digests-missing");
-    let data = bytes(9, 40_000);
+    let data = bytes(9, CHUNKED + 40_000);
     let digest = *blake3::hash(&data).as_bytes();
     s.store
         .history()

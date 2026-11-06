@@ -131,7 +131,7 @@ Inode leaves and inode-table branches have their own metadata grammar
  pooled leaf physical body:  prefix || (serial, ordinal) * rows
  record:  0 | body                                  (POOLED_FULL_TAG)
           1 | base id | out_len | count | program   (POOLED_DELTA_TAG)
- ordinal ---> inode_value row (73 bytes), stored by the Store
+ ordinal ---> inode value (73 bytes), stored by the Store (in blocks, #91)
 ```
 
 | Part | Rule | Source |

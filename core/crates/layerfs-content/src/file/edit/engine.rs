@@ -23,6 +23,10 @@ pub(super) struct Engine<'a> {
     pub committing: bool,
     pub file_state_attempted: bool,
     started: bool,
+    /// The file state this edit started from: each committed mapping page is
+    /// offered that tree's page at its level and logical start as its advisory
+    /// delta base (#92). Never part of an identity.
+    hints: Option<crate::file::mapping::FileState>,
 }
 pub(super) fn key(id: EditRef, offset: u32) -> ContentResult<EditRecordKey> {
     Ok(EditRecordKey {
@@ -67,6 +71,40 @@ impl<'a> Engine<'a> {
             committing: false,
             file_state_attempted: false,
             started: false,
+            hints: None,
+        }
+    }
+    /// Offers every committed page the page of `base` at the same level and
+    /// logical start as its advisory delta base (#92).
+    pub fn set_page_hints(&mut self, base: crate::file::mapping::FileState) {
+        self.hints = Some(base);
+    }
+    /// `object` with the positional base page for a page at `level` starting at
+    /// `start`, read lazily through this edit's page memo, unless it already
+    /// carries a predecessor or the base page is the object itself.
+    fn hinted(
+        &mut self,
+        object: FinalizedObject,
+        level: u8,
+        start: u64,
+    ) -> ContentResult<FinalizedObject> {
+        let Some(base) = self.hints else {
+            return Ok(object);
+        };
+        if !object.predecessors().is_empty() {
+            return Ok(object);
+        }
+        let found =
+            crate::file::mapping::page_at(&base, level, start, &mut |id, root| {
+                self.read_page(id, root)
+            })?;
+        match found {
+            Some(hint) if hint != object.id() => {
+                let mut predecessors = crate::object::AdvisoryPredecessors::new();
+                predecessors.push(hint, crate::object::PredecessorProvenance::OriginalBase)?;
+                Ok(object.with_predecessors(predecessors))
+            }
+            _ => Ok(object),
         }
     }
     /// One stored mapping page's canonical bytes, through this operation's page
@@ -346,9 +384,9 @@ impl<'a> Engine<'a> {
     }
     pub fn commit(&mut self, summary: Summary) -> ContentResult<ObjectId> {
         self.committing = true;
-        self.commit_node(summary, true)
+        self.commit_node(summary, true, 0)
     }
-    fn commit_node(&mut self, summary: Summary, root: bool) -> ContentResult<ObjectId> {
+    fn commit_node(&mut self, summary: Summary, root: bool, start: u64) -> ContentResult<ObjectId> {
         if let EditRef::Stored(id) = summary.id {
             return Ok(id);
         }
@@ -389,6 +427,9 @@ impl<'a> Engine<'a> {
             let mut before_bytes = 0;
             let mut before_extents = 0;
             for child in children {
+                let child_start = start
+                    .checked_add(before_bytes)
+                    .ok_or(ContentError::LengthOverflow)?;
                 let id = self.commit_node(
                     Summary {
                         id: child.child_object_id,
@@ -403,6 +444,7 @@ impl<'a> Engine<'a> {
                         level: level.checked_sub(1).ok_or(ContentError::WrongLogicalRole)?,
                     },
                     false,
+                    child_start,
                 )?;
                 if matches!(child.child_object_id, EditRef::Page(expected) if expected != id) {
                     return Err(ContentError::IdentityMismatch);
@@ -440,6 +482,7 @@ impl<'a> Engine<'a> {
         if !accepted {
             self.state
                 .apply(vec![change(emitted, None, Some(vec![0]))])?;
+            let object = self.hinted(object, summary.level, start)?;
             self.consumer.accept(object)?;
             self.counters.nodes_created = self.counters.nodes_created.saturating_add(1);
         }

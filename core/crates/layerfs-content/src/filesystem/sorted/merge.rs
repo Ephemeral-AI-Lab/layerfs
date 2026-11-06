@@ -84,6 +84,10 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
             .collect::<Vec<_>>();
         let split = crate::filesystem::sorted::format::nearest_half(&widths);
         let mut right = self.page(page.level)?;
+        // Both halves keep the stored page they came from as a delta hint (#92):
+        // the left half is its prefix, the right half its suffix.
+        let hint = page.origin.or(page.hint);
+        right.hint = hint;
         for entry in page.entries.drain(split..) {
             // The row leaves this page and lands in `right`, whose own running
             // total `append_entry` maintains.
@@ -91,6 +95,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
             self.append_entry(&mut right, entry)?;
         }
         page.origin = None;
+        page.hint = hint;
         let left = std::mem::replace(page, right);
         self.node(left).map(Some)
     }
@@ -108,7 +113,9 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
         if left.level != right.level {
             return Err(ContentError::WrongLogicalRole);
         }
+        let hint = left.origin.or(left.hint).or(right.origin).or(right.hint);
         left.origin = None;
+        left.hint = hint;
         if left.level == 0 {
             for entry in right.entries {
                 if let Some(node) = self.push(&mut left, entry)? {
@@ -117,6 +124,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
             }
         } else {
             let mut page = self.page(left.level)?;
+            page.hint = hint;
             let mut pending = None;
             let level = left.level - 1;
             for entry in left.entries.into_iter().chain(right.entries) {

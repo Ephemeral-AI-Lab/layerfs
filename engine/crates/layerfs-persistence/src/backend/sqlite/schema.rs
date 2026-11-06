@@ -85,14 +85,14 @@ pub(crate) fn check(
     let actual: Vec<String> = rows.iter().map(|r| r.get(0)).collect::<Result<_, _>>()?;
     let mut expected = vec![
         "absorbed",
-        "binding_hint",
+        "binding_hint_block",
         "branch",
         "commit",
         "commit_lineage",
         "content_signature",
         "file_digest",
         "history_meta",
-        "inode_value",
+        "inode_value_block",
         "layer",
         "layer_lineage",
         "layer_stack",
@@ -144,7 +144,7 @@ impl super::session::connection::Session {
   })?;
         Ok(())
     }
-    /// Adds the `binding_hint` table (#352 `49499abac`) to a Store written
+    /// Adds the binding hint table (#352 `49499abac`, blocks since #91) to a Store written
     /// before it existed, then records the current schema: an additive
     /// migration (REBUILD.md kind 2). Only a Store whose recorded schema is
     /// exactly the earlier one, and whose live schema still matches what it
@@ -154,7 +154,7 @@ impl super::session::connection::Session {
     pub(crate) fn add_binding_hints(&self) -> Result<(), BackendError> {
         self.run::<_, BackendError>(true, |tx| {
             let present = tx.query(
-                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='binding_hint'",
+                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='binding_hint_block'",
                 vec![],
             )?;
             if !present.is_empty() {
@@ -174,7 +174,7 @@ impl super::session::connection::Session {
                 .replacen(SCRATCH, "", 1)
                 .replacen(LINEAGE, "", 1);
             let table = HISTORY
-                .find("CREATE TABLE binding_hint (")
+                .find("CREATE TABLE binding_hint_block (")
                 .and_then(|start| Some((start, start + HISTORY[start..].find(";\n")? + 2)))
                 .map(|(start, end)| &HISTORY[start..end])
                 .ok_or(BackendError::Integrity)?;
@@ -307,7 +307,7 @@ impl super::session::connection::Session {
         &self,
         catalog_id: layerfs_history::CatalogId,
         binding: &[u8],
-    ) -> Result<u64, BackendError> {
+    ) -> Result<(u64, u64), BackendError> {
         self.run::<_,BackendError>(false,|tx| {
    let selection=(self.layout,self.acquisition);
    check(tx.connection,tx.work,selection)?;
@@ -315,7 +315,9 @@ impl super::session::connection::Session {
    let r=rows.first().filter(|_|rows.len()==1).ok_or(BackendError::Integrity)?;
    let incarnation:i64=r.get(1)?;
    if r.get::<Vec<u8>>(0)?!=catalog_id.as_slice() || r.get::<Vec<u8>>(2)?!=binding || incarnation<=0 || r.get::<i64>(3)?!=3 || r.get::<i64>(4)?!=self.schema_version() || r.get::<String>(5)?!=source(selection) || r.get::<String>(6)?!=definition(tx.connection,tx.work)? {return Err(BackendError::Integrity);}
-   Ok(incarnation as u64)
+   let floor=tx.query("SELECT small_file_threshold_bytes FROM store_policy WHERE id=1",vec![])?;
+   let floor=u64::try_from(floor.first().ok_or(BackendError::Integrity)?.get::<i64>(0)?).map_err(|_|BackendError::Integrity)?;
+   Ok((incarnation as u64, floor))
   })
     }
 }
