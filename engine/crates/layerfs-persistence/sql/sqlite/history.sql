@@ -141,12 +141,12 @@ CREATE TABLE scope_allocator (
     authority_id BLOB NOT NULL CHECK (length(authority_id) = 32)
 ) STRICT, WITHOUT ROWID;
 
-CREATE TABLE binding_hint (
-    child INTEGER NOT NULL CHECK (child != 0),
-    parent INTEGER NOT NULL CHECK (parent != 0),
-    name BLOB NOT NULL CHECK (length(name) BETWEEN 1 AND 255),
-    PRIMARY KEY (child, parent, name)
-) STRICT, WITHOUT ROWID;
+CREATE TABLE binding_hint_block (
+    grp INTEGER NOT NULL CHECK (grp >= 0),
+    seq INTEGER NOT NULL CHECK (seq >= 1),
+    body BLOB NOT NULL CHECK (length(body) BETWEEN 9 AND 4000),
+    PRIMARY KEY (grp, seq)
+) STRICT;
 
 CREATE UNIQUE INDEX layer_stack_names ON layer_stack(name);
 CREATE UNIQUE INDEX layer_identity ON layer(layer_stack_id, layer_id);

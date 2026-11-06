@@ -120,7 +120,8 @@ destructor.
 
 - Filesystem trees, runtime adapters and cloud placement are later scope. Payload
   DELTA chains and pooled metadata are implemented.
-- Inode values are rows of `inode_value` (ordinal, 73 value bytes). The earlier
+- Inode values are stored per ordinal through `PackPersistence` (73 value bytes);
+  the engine keeps them in append-only blocks since its schema version 2 (#91). The earlier
   value-group catalogue and v6 value packs are no longer written or read; a
   Store that has them is refused at open.
 - The retained index window boundary (131,072 entries) and its cold-start replay

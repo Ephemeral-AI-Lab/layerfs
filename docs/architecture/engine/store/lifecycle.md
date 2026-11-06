@@ -44,8 +44,8 @@ only by creating it ([PostgreSQL](postgresql.md)).
 | --- | --- | --- | --- |
 | `PersistenceConfig.path` | host-local file | Never a network endpoint. | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs) |
 | `sqlite_profile` | `Durable`, `Disposable` | Selected before open; never from failure or environment. | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs) |
-| `sqlite_pack_layout` | `Monolithic` (16), `GroupRows` (17), `GroupRowsIndexed` (18) | Creation only; open reads the stored version. | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs) |
-| `sqlite_acquisition` | `Absent` (+0), `Tables` (+6) | Creation only; schema versions 22–24 carry Init's tables. | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs) |
+| `sqlite_pack_layout` | `Monolithic` (36), `GroupRows` (37), `GroupRowsIndexed` (38) | Creation only; open reads the stored version. | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs) |
+| `sqlite_acquisition` | `Absent` (+0), `Tables` (+6) | Creation only; schema versions 42–44 carry Init's tables. Versions 36–44 are schema version 2 (#91, blocks); the version 1 Stores 16–18 and 22–24 are refused at open, never converted. | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs) |
 | `PostgresSelection.url` | libpq string or URL | Redacted by `Debug`. | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs) |
 | `PostgresSelection.schema` | `[a-z_][a-z0-9_]*`, at most 63 bytes, not `pg_*` | Checked by `Settings::new`. | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs) |
 | `synchronous_commit` | `Off` (default), `Local`, `RemoteWrite`, `On`, `RemoteApply` | `SET LOCAL` per write. | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs) |
@@ -62,8 +62,8 @@ Every product caller overrides it with
 SqliteHandles::create(config, policy,     SqliteHandles::open(config, ..)
                       history)              platform is macOS or Linux?
   platform is macOS or Linux?               Session::connect(writable)
-  policy and catalog config valid?            user_version in 16..=18
-  create_new(path)                            or 22..=24, else Integrity
+  policy and catalog config valid?            user_version in 36..=38
+  create_new(path)                            or 42..=44, else Integrity
     (an existing file refuses)              writable only:
   Session::connect(create)                    add_binding_hints
   Session::initialize: schema scripts,        add_lineage (+ backfill)

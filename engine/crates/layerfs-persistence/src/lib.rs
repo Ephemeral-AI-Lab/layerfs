@@ -38,5 +38,6 @@ pub use store::postgresql::{
 pub use store::seal::SealedStore;
 pub use store::selection::{Handles, StoreFile, StoreSelection};
 
+mod blocks;
 mod metadata;
 mod objects;

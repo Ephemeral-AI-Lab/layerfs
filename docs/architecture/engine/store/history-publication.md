@@ -38,7 +38,7 @@ The entities are defined in [Core: History model](../../core/history-model/READM
 | `commit_branch` | Check the expected head and base; insert or verify the Commit; advance the Branch head | moved head: `HeadMoved`, unless `force` with the same base; candidate equals current root: `UpToDate` | [`commit.rs`](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
 | `add_layer` | Publish a Branch head Commit as a new Layer on the stack head; record how many Layers it overwrote | Branch moved: `HeadMoved`; stack moved: `StackMoved`; Commit base differs: `BaseMismatch`; same root: `NoChanges` | [`layerstack.rs`](../../../../engine/crates/layerfs-persistence/src/history/layerstack.rs) |
 | `reserve_inodes` | Consume a half-open inode range for a scope; advance `scope_allocator.highwater` | past `i64::MAX`: `Capacity` | [`allocation.rs`](../../../../engine/crates/layerfs-persistence/src/history/allocation.rs) |
-| `record_bindings`, `record_file_digests` | Insert name hints and file digests (array form on PostgreSQL) | — | [`hints.rs`](../../../../engine/crates/layerfs-persistence/src/history/hints.rs), [`digests.rs`](../../../../engine/crates/layerfs-persistence/src/history/digests.rs) |
+| `record_bindings`, `record_file_digests` | Append name-hint blocks; insert file digests of chunked files only, at or above `small_file_threshold_bytes` (array form on PostgreSQL) | — | [`hints.rs`](../../../../engine/crates/layerfs-persistence/src/history/hints.rs), [`digests.rs`](../../../../engine/crates/layerfs-persistence/src/history/digests.rs) |
 
 A Commit id is derived from its root, parent, base Layer, second parent and
 metadata. A Commit whose identical row exists is verified, not inserted
