@@ -454,3 +454,51 @@ fn a_reconstruction_offered_its_earlier_version_hints_every_page_by_position() {
     assert_eq!(outcome.delta.extent.delta_branches, 0);
     let _ = construct_bytes;
 }
+
+/// The fs-storage-quick Q3 shape: a ten-name directory whose every name is
+/// renamed over in every Commit, so every row's serial changes. A program of
+/// short copies saves little on such a page, and the whole page compresses
+/// better in its group, so the page is stored whole and the Store holds no more
+/// metadata than one that writes no program at all.
+#[test]
+fn a_small_directory_whose_every_row_changed_stays_whole() {
+    let history = |store: &Storage| {
+        let names: Vec<PathName> = (0..10)
+            .map(|i| PathName::new(&format!("f{i:03}.txt")).unwrap())
+            .collect();
+        let (mut root, first) = directory_commit(
+            store,
+            None,
+            names
+                .iter()
+                .enumerate()
+                .map(|(i, name)| (name.clone(), Some(100 + i as u64)))
+                .collect(),
+        );
+        let mut outcomes = vec![first];
+        for round in 1..=12_u64 {
+            let changes = names
+                .iter()
+                .enumerate()
+                .map(|(i, name)| (name.clone(), Some(100 + round * 26 + i as u64)))
+                .collect();
+            let (next, outcome) = directory_commit(store, Some(root), changes);
+            root = next;
+            outcomes.push(outcome);
+        }
+        outcomes
+    };
+    let (_, new) = storage(StoragePolicy::default());
+    let (_, old) = storage(StoragePolicy::default().with_metadata_depth(0));
+    let programs = history(&new);
+    let whole = history(&old);
+    let mut total = BranchCounters::default();
+    for outcome in &programs {
+        total.accumulate(&outcome.delta.directory);
+    }
+    assert_eq!(total.delta_branches, 0, "{total:?}");
+    let programs: u64 = programs.iter().map(|o| o.metadata_bytes).sum();
+    let whole: u64 = whole.iter().map(|o| o.metadata_bytes).sum();
+    println!("DIAGNOSTIC renamed-over small directory: whole {whole} B, programs {programs} B");
+    assert!(programs <= whole + 16 * 13, "{programs} vs {whole}");
+}

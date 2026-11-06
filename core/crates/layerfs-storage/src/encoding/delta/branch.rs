@@ -11,8 +11,9 @@
 //! limits restarts at depth one instead of storing the page whole. The root must
 //! fit the budgets in the same way. Exactly one trial runs, with the pooled
 //! producer and its match budget; the program is kept only when it is shorter
-//! than the whole record. Every refusal stores the page whole, which is what
-//! every Store before this form holds.
+//! than the whole record, and for a directory page only when it saves at least a
+//! quarter of it (`worth`). Every refusal stores the page whole, which
+//! is what every Store before this form holds.
 
 use layerfs_content::{ObjectId, ObjectRole};
 
@@ -150,7 +151,7 @@ fn trial(
     let Some(program) = program? else {
         return Ok(None);
     };
-    if program.len() >= full.record.len() {
+    if !worth(role, program.len(), full.record.len()) {
         return Ok(None);
     }
     let branch = counters(input.counters, role);
@@ -186,6 +187,26 @@ fn acquire(
     );
     SaveProfile::charge(&mut input.profile.resolve.acquire_ns, started);
     base
+}
+
+/// True when a program of `program` bytes is kept over the whole record of
+/// `whole` bytes.
+///
+/// An inode-table branch or an extent page keeps any shorter program: its rows
+/// are mostly object identities, which no group compression shortens, so the
+/// uncompressed comparison is the stored one. A directory page keeps a program
+/// only when it saves at least a quarter of the whole record (#92): both forms
+/// are compressed inside the same ordinary group, and on a small directory whose
+/// rows all changed (every name renamed over) the whole page's names compress
+/// better than a program of short copies and literals that is only marginally
+/// shorter, so the program would store more bytes and still lengthen the chain.
+fn worth(role: ObjectRole, program: usize, whole: usize) -> bool {
+    match role {
+        ObjectRole::DirectoryLeaf | ObjectRole::DirectoryBranch => {
+            program.saturating_mul(4) <= whole.saturating_mul(3)
+        }
+        _ => program < whole,
+    }
 }
 
 /// True when `chain` with this page on it stays within the metadata budgets.
