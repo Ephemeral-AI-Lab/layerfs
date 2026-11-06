@@ -85,6 +85,40 @@ fn save(storage: &Storage, files: &[Vec<u8>]) -> ObjectId {
     last.unwrap()
 }
 
+/// One Save of `files`; its outcome.
+fn save_all(engine: &Engine<'_>, files: &[Vec<u8>]) -> Outcome {
+    let save = engine.storage.begin_save().unwrap();
+    for file in files {
+        Timing::disabled("construct", |scope| {
+            construct_bytes(
+                engine.storage.policy().construction(),
+                &engine.storage.policy().construction().capacities(),
+                file,
+                &mut save.sink(),
+                scope.child("content"),
+            )
+        })
+        .0
+        .unwrap();
+    }
+    let outcome = save.finish().unwrap();
+    Outcome {
+        packs: outcome.packs,
+        stored_bytes: outcome.stored_bytes,
+        full_records: outcome.full_records,
+        prefix_records: outcome.prefix_records,
+    }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+struct Outcome {
+    packs: u64,
+    stored_bytes: u64,
+    full_records: u64,
+    prefix_records: u64,
+}
+
 /// Counter delta of one call.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct Delta {
@@ -209,6 +243,27 @@ fn run(engine: &Engine<'_>, branch: BranchId) -> Vec<(&'static str, Delta)> {
     let large = [bytes(7, 8 << 20)];
     let (_, delta) = engine.measure("save 8 MiB", || save(&engine.storage, &large));
     out.push(("save 8 MiB", delta));
+    // Similar 23-byte files, each a delta candidate of the last (#67): no
+    // PREFIX record can beat their FULL record, so none seals and publishes
+    // the one before it.
+    let similar: Vec<_> = (0..1000)
+        .map(|n| format!("round trip file {n:06}\n").into_bytes())
+        .collect();
+    let (outcome, delta) = engine.measure("save 1000 similar files", || save_all(engine, &similar));
+    eprintln!("STORAGE {} similar 23 B: {outcome:?}", engine.label);
+    assert_eq!((outcome.full_records, outcome.prefix_records), (1000, 0));
+    assert!(outcome.packs <= 2, "{outcome:?}");
+    out.push(("save 1000 similar files", delta));
+    // Similar 200-byte files, where a PREFIX record can win: reported only.
+    let header = "x".repeat(180);
+    let similar: Vec<_> = (0..200)
+        .map(|n| format!("{header} similar {n:06}\n").into_bytes())
+        .collect();
+    let (outcome, delta) = engine.measure("save 200 similar 200 B files", || {
+        save_all(engine, &similar)
+    });
+    eprintln!("STORAGE {} similar 200 B: {outcome:?}", engine.label);
+    out.push(("save 200 similar 200 B files", delta));
     let (_, delta) = engine.measure("lane + head + commit_branch", || commit(hundred));
     out.push(("lane + head + commit_branch", delta));
     let (_, delta) = engine.measure("snapshot + 1 file save", || {
@@ -259,6 +314,13 @@ fn commit_store_calls_are_counted_on_both_engines() {
     };
     let pg_counts = run(&pg_engine, branch_id(1));
     assert_eq!(sqlite_counts.len(), pg_counts.len());
+    // One Save of 1,000 similar 23-byte files: one publication, not 1,000.
+    let similar = pg_counts
+        .iter()
+        .find(|(p, _)| *p == "save 1000 similar files")
+        .unwrap()
+        .1;
+    assert!(similar.transactions <= 3, "{similar:?}");
     let pg = |phase: &str| pg_counts.iter().find(|(p, _)| *p == phase).unwrap().1;
     // #67: a Branch snapshot is one statement outside any transaction.
     let snapshot = pg("branch_snapshot");

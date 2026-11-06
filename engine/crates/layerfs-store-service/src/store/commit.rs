@@ -235,6 +235,17 @@ impl BoundWorkspace {
                         root,
                     )
                 })?;
+                // The candidate is validated and its install prepared before
+                // the lane: they read only immutable published objects. Only
+                // an in-lane merge step, which changes the candidate, is
+                // validated again inside the lane (layerfs-project #67).
+                retained.phase = CommitPhase::Validate;
+                let early_target = if merge.is_some() { &current } else { &snapshot };
+                let early = phase(timing, "validate", || {
+                    self.validate_candidate(early_target, root, capture, &original_base)
+                })?;
+                let early = (Self::target_key(early_target, root), early);
+                retained.phase = CommitPhase::Finish;
                 let lane = phase(timing, "lane", || {
                     self.store
                         .history
@@ -297,10 +308,10 @@ impl BoundWorkspace {
                         (now, stepped, true, logical)
                     }
                 };
-                Ok((root, candidate, current, moved, logical, lane))
+                Ok((root, candidate, current, moved, logical, lane, early))
             })();
             retained.storage = Some(super::producer::since(storage.diagnostics(), before));
-            let (candidate, ours, current, moved, logical, lane) = built?;
+            let (candidate, ours, current, moved, logical, lane, early) = built?;
             if candidate != ours {
                 replaced = Some((ours.0, candidate.0));
             }
@@ -360,27 +371,13 @@ impl BoundWorkspace {
             retained.phase = CommitPhase::Validate;
             let mut next = target.clone();
             next.effective_root = candidate.0;
-            retained.prepared = Some(phase(timing, "validate", || {
-                let ports = self.store.ports(snapshot.scope);
-                let client = ports.client();
-                let checked =
-                    checked_base(client.clone(), &next).map_err(|error| CommitError::Content {
-                        error,
-                        provider: ports
-                            .failure()
-                            .unwrap_or_else(|error| Some(Arc::new(error))),
-                    })?;
-                if checked.root().root_inode() != original_base.root().root_inode() {
-                    return Err(CommitError::Context(
-                        "candidate changes root inode identity",
-                    ));
-                }
-                self.workspace
-                    .scoped(client)
-                    .map_err(CommitError::Workspace)?
-                    .prepare_base_install(capture, candidate)
-                    .map_err(CommitError::Workspace)
-            })?);
+            retained.prepared = Some(if early.0 == Self::target_key(target, candidate) {
+                early.1
+            } else {
+                phase(timing, "validate.lane", || {
+                    self.validate_candidate(target, candidate, capture, &original_base)
+                })?
+            });
             let pending = if conflicted {
                 // Nothing is published: the history binding follows the head
                 // merged with, and the merge stays the local base.
@@ -451,6 +448,51 @@ impl BoundWorkspace {
             namespace: None,
             replaced,
         })
+    }
+
+    /// Checks the candidate root as the next base of `target` and prepares
+    /// its local install; reads only immutable published objects.
+    fn validate_candidate(
+        &self,
+        target: &BranchSnapshot,
+        candidate: FilesystemRootId,
+        capture: Capture,
+        original_base: &layerfs_workspace::BaseView,
+    ) -> Result<layerfs_workspace::PreparedBase, CommitError> {
+        let mut next = target.clone();
+        next.effective_root = candidate.0;
+        let ports = self.store.ports(target.scope);
+        let client = ports.client();
+        let checked =
+            checked_base(client.clone(), &next).map_err(|error| CommitError::Content {
+                error,
+                provider: ports
+                    .failure()
+                    .unwrap_or_else(|error| Some(Arc::new(error))),
+            })?;
+        if checked.root().root_inode() != original_base.root().root_inode() {
+            return Err(CommitError::Context(
+                "candidate changes root inode identity",
+            ));
+        }
+        self.workspace
+            .scoped(client)
+            .map_err(CommitError::Workspace)?
+            .prepare_base_install(capture, candidate)
+            .map_err(CommitError::Workspace)
+    }
+
+    /// What a validation depends on: the target's head, base, root, scope
+    /// and profile, and the candidate.
+    fn target_key(target: &BranchSnapshot, candidate: FilesystemRootId) -> impl PartialEq + use<> {
+        (
+            target.branch.head_commit,
+            target.branch.base_layer,
+            target.effective_root,
+            target.scope,
+            target.profile,
+            candidate,
+        )
     }
 
     /// Logical size of `after`, from `before`'s known size and the change

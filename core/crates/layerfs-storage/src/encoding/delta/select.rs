@@ -316,6 +316,9 @@ pub struct SelectInput<'a> {
     /// the same question; `None` means the selection computes it itself, which is
     /// what every caller that does not ask does.
     pub signature: Option<[u64; 8]>,
+    /// The payload's FULL record when the caller already prepared it with
+    /// [`prepare_full`]; `None` means the selection prepares it.
+    pub full: Option<EncodedRecord>,
     /// Selection outcomes.
     pub counters: &'a mut DeltaCounters,
     /// Nanosecond cost split of the operation this selection belongs to.
@@ -324,6 +327,23 @@ pub struct SelectInput<'a> {
     /// so a charge can be taken after a call returns even while another field of
     /// this struct is still lent to it.
     pub profile: &'a mut SaveProfile,
+}
+
+/// The FULL record of one payload object, charged to the profile once,
+/// whether selection or its caller prepares it.
+pub fn prepare_full(
+    canonical: &[u8],
+    role: ObjectRole,
+    capacities: &StorageCapacities,
+    encode: &mut CompressionWorkspace,
+    profile: &mut SaveProfile,
+) -> StorageResult<EncodedRecord> {
+    let started = Instant::now();
+    let full = encode_full(canonical, role, capacities, encode, profile);
+    SaveProfile::charge(&mut profile.full_ns, started);
+    let full = full?;
+    note_stored(profile, &full);
+    Ok(full)
 }
 
 /// Chooses the physical representation of one canonical object.
@@ -385,11 +405,10 @@ pub fn select(
     // caller may have computed it to ask the winner cache a question before this
     // selection ran, and the cache is exactly what consumes it here.
     let prehashed = input.signature;
-    let started = Instant::now();
-    let full = encode_full(canonical, role, input.capacities, encode, input.profile);
-    SaveProfile::charge(&mut input.profile.full_ns, started);
-    let full = full?;
-    note_stored(input.profile, &full);
+    let full = match input.full.take() {
+        Some(full) => full,
+        None => prepare_full(canonical, role, input.capacities, encode, input.profile)?,
+    };
     input.counters.prepared_full = input.counters.prepared_full.saturating_add(1);
     let lane = full.lane;
     let depth_cap = input.capacities.delta_depth_for_role(role);
@@ -418,6 +437,9 @@ pub fn select(
         },
         _ => match acquisition(input, role, advisory, depth_cap)? {
             Some(id) => Some(id),
+            // A payload no PREFIX record can beat asks the ring nothing: the
+            // answer is FULL, as a trial would find (`prefix_cannot_win`).
+            None if super::record::prefix_cannot_win(lane, full.record.len()) => None,
             None => {
                 let sig = prehashed.unwrap_or_else(|| signature(raw));
                 input.candidates.ensure_loaded(input.connection)?;

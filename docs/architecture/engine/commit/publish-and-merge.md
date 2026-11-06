@@ -28,10 +28,11 @@ is a telemetry child named below.
  merge (if moved) --------------------------> merge into same Save
  logical.known, finish, logical.count, bindings
                  ---------------------------> Save::finish, hints
+ validate        checked_base, prepare_base_install (before the lane)
  lane            ---------------------------------------------> HOLD
  head.lane       ---------------------------> branch_snapshot      |
  merge.lane, finish.lane (if moved again, <= 1,024 serials)        |
- validate        checked_base, prepare_base_install                |
+ validate.lane   only when the in-lane merge changed the candidate |
  publish         ---------------------------> commit_branch (1 tx) |
  drop(lane)      ---------------------------------------------> FREE
  install         ------> install job (base write lock)
@@ -45,7 +46,7 @@ is a telemetry child named below.
 | Construct | `Construct` | Workspace lock per job only | [Construction](construction.md) |
 | Head read, merge, then `Save::finish`, logical size, binding hints | `Construct`, then `Finish` | none (work that grows with the Commit stays outside the lane) | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
 | Lane, head re-read, in-lane merge | `Finish` | publication lane | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs) |
-| `checked_base`, `prepare_base_install` | `Validate` | publication lane | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs) |
+| `checked_base`, `prepare_base_install` | `Validate` | none (before the lane); again in the lane only after an in-lane merge step | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`bind.rs`](../../../../engine/crates/layerfs-store-service/src/store/bind.rs) |
 | `commit_branch` | `Publish` | lane; one history write transaction | [`commit.rs` (persistence)](../../../../engine/crates/layerfs-persistence/src/history/commit.rs) |
 | Install | `Install` | Workspace lock and base write lock, one job | [Install](install.md) |
 

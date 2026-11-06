@@ -227,3 +227,32 @@ fn a_frame_beyond_the_profiles_window_is_refused() {
         largest
     );
 }
+
+/// layerfs-project #67: no PREFIX frame is shorter than the fewest bytes the
+/// selector assumes when it skips a delta base no PREFIX record could beat:
+/// tiny and repeated payloads against identical and unrelated bases.
+#[test]
+fn no_prefix_frame_is_shorter_than_its_declared_minimum() {
+    use layerfs_storage::encoding::delta::record::PREFIX_FRAME_MIN;
+    let capacities = capacities(131_072);
+    let profile = CodecProfile::whole_file(&capacities);
+    let mut workspace = CompressionWorkspace::new().expect("encode workspace");
+    let mut shortest = usize::MAX;
+    for length in [1usize, 2, 7, 23, 64, 200, 4096] {
+        let raw: Vec<u8> = (0..length).map(|n| (n % 3) as u8).collect();
+        for base in [
+            raw.clone(),
+            vec![0u8; length],
+            support::noise(length.max(1)),
+        ] {
+            let frame = workspace
+                .compress_prefix(profile, &raw, &base)
+                .expect("a prefix frame");
+            shortest = shortest.min(frame.len());
+        }
+    }
+    assert!(
+        shortest >= PREFIX_FRAME_MIN,
+        "{shortest} < {PREFIX_FRAME_MIN}"
+    );
+}

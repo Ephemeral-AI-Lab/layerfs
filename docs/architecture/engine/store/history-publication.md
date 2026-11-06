@@ -102,11 +102,12 @@ scope stay. An unknown stack is `Missing(LayerStack)`. Source:
  read head (branch_snapshot)                           -    read
  head moved?  merge candidate with head (two-stage)    -
  Save.finish; logical count; record binding hints      -    short writes
+ validate: prepare the Workspace base install          -    reads
  history.publish_lane()  ---------------------------> HELD
  re-read head (unless forced or conflicted)            |    read
    moved again? merge only what landed in between,     |    short writes
-   finish that step's Save; count; hints               |
- validate: prepare the Workspace base install          |
+   finish that step's Save; count; hints;              |
+   validate the new candidate                          |
  commit_branch: head check, insert, advance            |    1 write tx
  drop(lane)  <---------------------------------------- free
  install the new base
@@ -127,8 +128,9 @@ alone, with no `BEGIN`/`COMMIT`; on SQLite in one read transaction.
 `ON CONFLICT DO NOTHING` (an existing identity is then verified), records its
 lineage from one parent-line statement (`lineage_parent.sql`) and advances
 the Branch. On PostgreSQL the lane holds about 10 round trips for an unmoved
-Commit (lane `BEGIN`, head read, `commit_branch`'s 7, `ROLLBACK`), down from 21
-(layerfs-project #67).
+Commit (lane `BEGIN`, head read, `commit_branch`'s 7, `ROLLBACK`), down from
+22–38: the head read and `commit_branch` shrank, and validation now runs
+before the lane (layerfs-project #67).
 
 Work inside the lane that grows with tree size, history or Branch count is a
 defect by owner rule. `commit_branch`, `fork`, `merge_branch` and `add_layer`
