@@ -55,6 +55,11 @@ impl Drop for Running {
     }
 }
 
+/// Whether this process holds the Store at `path` open now.
+pub(crate) fn holds(path: &std::path::Path) -> bool {
+    (OPEN.lock().unwrap_or_else(|e| e.into_inner())).contains_key(path)
+}
+
 /// Opens the Store `args` name (`storePath`) in this process if it is not
 /// open yet, `lease` held while it stays open: Store methods and the host
 /// Sandbox code that reads a Branch through it both find it. Its path.

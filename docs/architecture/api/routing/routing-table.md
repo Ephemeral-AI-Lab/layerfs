@@ -123,7 +123,9 @@ on `ssh` and `lima` an `ssh -L` carries the daemon's port to this host, and a
 `docker` Sandbox publishes its daemon's port on the host's loopback
 ([`sandbox/direct.rs`](../../../../api/crates/layerfs-control/src/sandbox/direct.rs)).
 The daemon itself serves no Store calls: a Branch lookup or head read for a
-mount or status goes the Store's own route above. How a call reaches the
+mount or status goes the Store's own route above; for a PostgreSQL Store,
+on the caller's held read session (one light-checked connection, no Store
+service, #64). How a call reaches the
 daemon is in [Daemon channel](daemon-channel.md).
 
 ## Related

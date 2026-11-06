@@ -132,7 +132,11 @@ returned to it and the next use opens again. With shared readers a daemon
 holds at most the writer, its lane connection (opened in the first Commit),
 the control reader (in practice opened by the first Commit, which reads the
 published tree through it), one reader per mounted Workspace and
-`IDLE_READERS` = 4 idle ones.
+`IDLE_READERS` = 4 idle ones. A fresh daemon's first mount therefore opens
+its reader: the writer is then its only connection, and it serves no
+Workspace reads (its admission is the one writer's, and a read's unknown
+outcome would quarantine it). Opening a reader at readiness instead would
+be an eager connection, which needs the owner's approval (#64).
 
 All SDK published-history lookups (`Store::published`) go through session 0,
 the read-only control session, so they never queue behind a Commit that holds

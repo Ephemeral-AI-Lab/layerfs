@@ -1,9 +1,11 @@
 //! A PostgreSQL Store's host read session (#65): the one read-only session
 //! a process holds for a Sandbox's host operations on a PostgreSQL Store.
 //! A create's reach check reads the schema's binding and finds the project
-//! on it; a mount finds its Branch and a status its head on it. The full
-//! Store service (writer, control reader, overlay template) opens only for
-//! Store calls ([`super::open`]).
+//! on it; a mount finds its Branch and a status its head on it, on every
+//! route: through a machine's worker, in this process, and straight to a
+//! forwarded Sandbox's daemon (#64, [`branch`]). The full Store service
+//! (writer, control reader, overlay template) opens only for Store calls
+//! ([`super::open`]).
 //!
 //! It opens with the light check (#63) under the binding the schema
 //! records, keyed by the Store's path and the URL it dials, when a call
@@ -193,24 +195,61 @@ pub(crate) fn reach(
 pub(crate) fn branch_id(args: &SdkValue, name: &str) -> Result<layerfs_history::BranchId> {
     #[cfg(feature = "postgresql")]
     {
-        use layerfs_store_service::history::lookup;
-        let handles = held_of(args)?;
-        let project = args
-            .get_text("project")
-            .ok_or_else(|| lookup::invalid("missing text argument `project`".to_owned()))?;
-        let stack = lookup::project_in(project, |wanted| {
-            (handles.history.layer_stack_named(wanted)).map_err(lookup::history)
+        let project = args.get_text("project").ok_or_else(|| {
+            layerfs_store_service::history::lookup::invalid(
+                "missing text argument `project`".to_owned(),
+            )
         })?;
-        let branch = lookup::branch_in(name, |wanted| {
-            (handles.history.branch_named(stack.id, wanted)).map_err(lookup::history)
-        })?;
-        Ok(branch.id)
+        Ok(branch_on(&*held_of(args)?, project, name)?.id)
     }
     #[cfg(not(feature = "postgresql"))]
     {
         let _ = (args, name);
         Err(unbuilt())
     }
+}
+
+/// The id and head of Branch `name` of project `project`, read on this
+/// process's held session of the PostgreSQL Store `record` keyed by `key`,
+/// dialled with `postgresql` (#64: a forwarded Sandbox's mount and status
+/// read here, not through a Store service): one light-checked connection
+/// at most, and none when this process already holds a usable one. The
+/// refusals are the Store service's lookup's.
+pub(crate) fn branch(
+    key: &Path,
+    record: &StoreRecord,
+    postgresql: &SdkValue,
+    (project, name): (&str, &str),
+) -> Result<(layerfs_history::BranchId, Option<layerfs_history::CommitId>)> {
+    #[cfg(feature = "postgresql")]
+    {
+        let handles =
+            held::session(key, record, postgresql)?.ok_or_else(|| another(record.name()))?;
+        let branch = branch_on(&handles, project, name)?;
+        Ok((branch.id, branch.head_commit))
+    }
+    #[cfg(not(feature = "postgresql"))]
+    {
+        let _ = (key, record, postgresql, project, name);
+        Err(unbuilt())
+    }
+}
+
+/// Branch `name` of project `project`, found on `handles` by name: the
+/// project, then the Branch, one indexed read each.
+#[cfg(feature = "postgresql")]
+fn branch_on(
+    handles: &layerfs_persistence::PostgresHandles,
+    project: &str,
+    name: &str,
+) -> Result<layerfs_history::BranchRecord> {
+    use layerfs_store_service::history::lookup;
+    let stack = lookup::project_in(project, |wanted| {
+        (handles.history.layer_stack_named(wanted)).map_err(lookup::history)
+    })?;
+    lookup::branch_in(name, |wanted| {
+        (handles.history.branch_named(stack.id, wanted)).map_err(lookup::history)
+    })
 }
 
 /// The newest Commit of `branch`, read on the held session; `None` when it

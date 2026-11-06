@@ -5,7 +5,10 @@
 //! `LAYERFS_TEST_POSTGRES_URL` with `sslmode=disable`; NOT_RUN without it.
 #![cfg(feature = "postgresql")]
 use layerfs_history::records::StackInitialization;
-use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, HistoryName, LayerStackId, Page};
+use layerfs_history::{
+    BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,
+    LayerStackId, Page,
+};
 use layerfs_persistence::{PostgresCheck, PostgresHandles, PostgresSelection};
 use layerfs_storage::{ReservationBlocks, StoragePolicy};
 use layerfs_store_service::bootstrap::open_store_observed;
@@ -138,6 +141,21 @@ fn postgresql_open_costs_on_the_wire() {
                 genesis_root: id(3),
             })
             .unwrap();
+        // a Branch to mount (#64)
+        let demo = created
+            .history
+            .layer_stack_named(&HistoryName::new("demo").unwrap())
+            .unwrap()
+            .unwrap();
+        created
+            .history
+            .fork(&ForkRequest {
+                stack: demo.id,
+                branch: BranchId::from_authority([8; 16]),
+                name: HistoryName::new("work").unwrap(),
+                source: ForkSource::Layer(demo.head_layer),
+            })
+            .unwrap();
         drop(created);
         settle();
         wire.take();
@@ -172,6 +190,51 @@ fn postgresql_open_costs_on_the_wire() {
         assert!(project.is_some());
         row("host create (attach + project lookup)", &wire);
         drop(attached);
+
+        // #64: the caller's side of a mount (and a status) of a forwarded
+        // Sandbox, as a new CLI process runs it now: one light-checked
+        // session finds the project and the Branch (id and head) by name
+        let (_, attached) = PostgresHandles::attach_read_only(&light, CURSOR).unwrap();
+        let project = attached
+            .history
+            .layer_stack_named(&HistoryName::new("demo").unwrap())
+            .unwrap()
+            .unwrap();
+        let branch = attached
+            .history
+            .branch_named(project.id, &HistoryName::new("work").unwrap())
+            .unwrap();
+        assert!(branch.is_some());
+        row("host mount (held session: project + Branch)", &wire);
+        drop(attached);
+
+        // the same mount as it ran before #64: a Store service open (its
+        // fully checked writer), then `project.list_branches` by name on its
+        // control reader, opened at that first read
+        let opened = open_store_observed(
+            layerfs_persistence::StoreSelection::Postgres(selection.clone()),
+            BINDING,
+            CURSOR,
+            4,
+            64 * 1024,
+            ReservationBlocks::default(),
+        )
+        .unwrap();
+        // two reads, as the Store service's lookups make them
+        let stack = opened
+            .store
+            .published(|h| h.layer_stack_named(&HistoryName::new("demo").unwrap()))
+            .unwrap()
+            .unwrap();
+        let found = opened
+            .store
+            .published(|h| h.branch_named(stack.id, &HistoryName::new("work").unwrap()))
+            .unwrap();
+        assert!(found.is_some());
+        row("host mount before #64 (Store open + Branch)", &wire);
+        drop(opened);
+        settle();
+        wire.take();
 
         // the host side of a PostgreSQL sandbox.create, as it ran before
         // #65: the reach check's binding read, a Store open, the project list
