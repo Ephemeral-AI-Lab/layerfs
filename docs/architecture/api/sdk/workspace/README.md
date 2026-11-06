@@ -116,9 +116,10 @@ again. See
 Mount, commit, unmount and status reach the Sandbox's daemon; `exec` goes
 through the Sandbox's runtime on its machine and the daemon runs no
 command ([`exec.rs`](../../../../../control/crates/layerfs-sandbox/src/exec.rs)).
-The daemon serves no Store calls: a Branch lookup or head read for a mount
-or status takes the Store's own route
-([`direct.rs`](../../../../../control/crates/layerfs-sandbox/src/direct.rs)).
+The daemon serves no Store calls. A mount's caller reads no Store: the
+daemon finds the Branch by name as it binds (#64). A status's head read
+takes the Store's own route
+([`workspace/direct.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/direct.rs)).
 See the [routing table](../../../control/routing/routing-table.md) and the
 [daemon channel](../../../control/routing/daemon-channel.md).
 

@@ -265,9 +265,9 @@ impl<'c, 's, 'b> Classifier<'c, 's, 'b> {
                     .kind
             }
         };
-        // A regular file may carry several bindings and a symlink's single
-        // binding is the reducer's derived count; only a directory can close a
-        // cycle, so only a directory's bindings are topology evidence.
+        // Regular files and symlinks may carry several bindings; the reducer
+        // derives their exact counts. Only a directory can close a cycle, so
+        // only a directory's bindings are topology evidence.
         if kind != InodeKind::Directory {
             return Ok(());
         }

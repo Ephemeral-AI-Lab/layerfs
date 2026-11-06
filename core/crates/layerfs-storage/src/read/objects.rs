@@ -5,7 +5,7 @@ use crate::{
     encoding::{
         codec::DecompressionWorkspace,
         delta::read::{BodyCaches, ChainCounters, Resolver},
-        pool::PoolReader,
+        pool::{read::PooledCaches, PoolReader},
         GroupCache,
     },
     error::{StorageError, StorageResult},
@@ -110,6 +110,7 @@ impl ReadState {
             });
         }
         source.begin_demand();
+        self.pool.forget_prepared();
         source.locate(ids)?;
         let roots = ids
             .iter()
@@ -131,11 +132,6 @@ impl ReadState {
                 actual: bytes as u64,
             });
         }
-        let located: Vec<i64> = roots.iter().map(|row| row.pack_id).collect();
-        source.whole_packs(&located, &mut self.packs)?;
-        let prefetch =
-            prefetch::chains(source, &roots, &mut self.packs, workspace, &mut self.groups)?;
-        self.prefetch_pool.accumulate(prefetch);
         let mut counters = ChainCounters::default();
         // Output slots preserve demand order, including repeated identities.
         // Only the bounded root worklist is scheduled by physical location.
@@ -145,39 +141,78 @@ impl ReadState {
             (row.pack_id, row.group_number, row.record_number)
         });
         let mut out = vec![Vec::new(); ids.len()];
-        let mut from = 0;
-        while from < order.len() {
-            let id = roots[order[from]].pack_id;
-            let end = from
-                + order[from..]
+        // A demand whose packs pass the pack cache's bound is served one
+        // cohort of packs at a time, each within the bound, so a pack it
+        // acquires stays cached until its objects are resolved (#97).
+        let mut start = 0;
+        while start < order.len() {
+            let end = start + source.cohort(order[start..].iter().map(|p| roots[*p].pack_id));
+            let cohort: Vec<_> = order[start..end].iter().map(|p| roots[*p]).collect();
+            let located: Vec<i64> = cohort.iter().map(|row| row.pack_id).collect();
+            source.whole_packs(&located, &mut self.packs)?;
+            let prefetch = prefetch::chains(
+                source,
+                &cohort,
+                &mut self.packs,
+                workspace,
+                &mut self.groups,
+            )?;
+            self.prefetch_pool.accumulate(prefetch);
+            let mut from = start;
+            while from < end {
+                let id = roots[order[from]].pack_id;
+                let next = from
+                    + order[from..end]
+                        .iter()
+                        .take_while(|position| roots[**position].pack_id == id)
+                        .count();
+                let needed: Vec<_> = order[from..next]
                     .iter()
-                    .take_while(|position| roots[**position].pack_id == id)
-                    .count();
-            let needed: Vec<_> = order[from..end]
-                .iter()
-                .map(|position| roots[*position].group_number)
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect();
-            self.packs.acquire_groups(source, id, &needed)?;
-            for &position in &order[from..end] {
-                let root = roots[position];
-                let (canonical, _) = Resolver::new(
-                    source,
-                    i64::MAX,
-                    capacities,
-                    BodyCaches {
-                        packs: &mut self.packs,
-                        pool: &mut self.pool,
-                    },
-                    &mut self.groups,
-                    workspace,
-                    &mut counters,
-                )
-                .resolve_at(root)?;
-                out[position] = canonical;
+                    .map(|position| roots[*position].group_number)
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect();
+                self.packs.acquire_groups(source, id, &needed)?;
+                for (at, &position) in order[from..next].iter().enumerate() {
+                    let root = roots[position];
+                    // The pooled leaves from here on are rebuilt ahead and their
+                    // stored values looked up together, a bounded window at a
+                    // time (#95); their packs are this cohort's, kept cached.
+                    if root.role == layerfs_content::ObjectRole::InodeLeaf
+                        && !self.pool.is_prepared(&root.object_id)
+                    {
+                        let ahead: Vec<_> =
+                            order[from + at..end].iter().map(|p| roots[*p]).collect();
+                        self.pool.prepare_leaves(
+                            source,
+                            capacities,
+                            i64::MAX,
+                            workspace,
+                            &ahead,
+                            Some(PooledCaches {
+                                encoded: &mut self.packs,
+                                decoded: &mut self.groups,
+                            }),
+                        )?;
+                    }
+                    let (canonical, _) = Resolver::new(
+                        source,
+                        i64::MAX,
+                        capacities,
+                        BodyCaches {
+                            packs: &mut self.packs,
+                            pool: &mut self.pool,
+                        },
+                        &mut self.groups,
+                        workspace,
+                        &mut counters,
+                    )
+                    .resolve_at(root)?;
+                    out[position] = canonical;
+                }
+                from = next;
             }
-            from = end;
+            start = end;
         }
         Ok(out)
     }

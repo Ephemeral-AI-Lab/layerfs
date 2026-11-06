@@ -15,9 +15,11 @@ pub type ReaderFactory = Arc<dyn Fn(usize) -> StorageResult<StoreReader> + Send 
 /// cost. On SQLite a mounted Workspace's reader still opens at mount and
 /// closes at unmount; a Store opened with shared readers (PostgreSQL, #64)
 /// keeps every Workspace's healthy reader here, so a mount after an unmount
-/// opens no connection. At most this many stay idle: with the writer, its
-/// lane connection, the control reader and one per mounted Workspace, they
-/// bound a daemon's PostgreSQL connections.
+/// opens no connection, and one idle reader opens after the daemon reported
+/// ready ([`ReadSet::prefill`]), so its first mount opens none either. At
+/// most this many stay idle: with the writer, its lane connection, the
+/// control reader and one per mounted Workspace, they bound a daemon's
+/// PostgreSQL connections.
 pub const IDLE_READERS: usize = 4;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReadAdmissionError {
@@ -66,6 +68,8 @@ pub(super) struct ReadSet {
     shared: bool,
     /// Serializes the one open of a control reader not opened at start.
     opening_control: Mutex<()>,
+    /// The one idle reader opened after readiness was claimed (#64).
+    prefill_claimed: std::sync::atomic::AtomicBool,
 }
 impl ReadSet {
     /// `control`, when given, is the control reader opened at start; without
@@ -95,7 +99,61 @@ impl ReadSet {
             policy,
             shared,
             opening_control: Mutex::new(()),
+            prefill_claimed: std::sync::atomic::AtomicBool::new(false),
         })
+    }
+    /// Opens one idle reader ahead of the first mount (#64, owner decision
+    /// 2026-11-06: one eager reader, opened after the daemon reported
+    /// ready, never before). Only shared readers (PostgreSQL) are kept
+    /// idle; `None` without them, on any call after the first, and when an
+    /// idle reader is already there. It is one attempt: a failure is
+    /// counted and returned to the caller to record, nothing is kept and
+    /// nothing opens it again; the first mount then opens its own reader.
+    /// The reader joins the idle readers under their cap
+    /// ([`IDLE_READERS`]); a mount that comes first opens its own.
+    pub fn prefill(&self) -> Option<StorageResult<()>> {
+        if !self.shared || self.prefill_claimed.swap(true, Ordering::SeqCst) {
+            return None;
+        }
+        let index = {
+            let mut state = match self.state.lock() {
+                Ok(state) => state,
+                Err(_) => return Some(Err(StorageError::Integrity("reader set poisoned"))),
+            };
+            if state.stopping || !state.idle.is_empty() {
+                return None;
+            }
+            let index = state.next;
+            match index.checked_add(1) {
+                Some(next) => state.next = next,
+                None => return Some(Err(StorageError::Integrity("reader identity exhausted"))),
+            }
+            index
+        };
+        let opened =
+            (self.factory)(index).and_then(|reader| match reader.storage.policy() == self.policy {
+                true => Ok(reader),
+                false => Err(StorageError::Integrity("idle reader policy")),
+            });
+        let reader = match opened {
+            Ok(reader) => reader,
+            Err(error) => {
+                self.counts.prefill_failures.fetch_add(1, Ordering::Relaxed);
+                return Some(Err(error));
+            }
+        };
+        let mut state = match self.state.lock() {
+            Ok(state) => state,
+            Err(_) => return Some(Err(StorageError::Integrity("reader set poisoned"))),
+        };
+        // a reader the set cannot keep closes with its drop
+        if !state.stopping && state.idle.len() < IDLE_READERS {
+            state.idle.push((index, reader));
+            self.counts
+                .readers_prefilled
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        Some(Ok(()))
     }
     /// Opens `workspace`'s reader; a `pooled` (SDK private) Workspace takes
     /// an idle one first and gives it back at close.

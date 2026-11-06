@@ -443,19 +443,17 @@ fn bind_the_symlink_again(
 }
 
 #[test]
-fn a_base_resident_symlink_cannot_gain_a_second_parent() {
-    // R4: the base binds `holder`, so the update names two stored directories
-    // and the symlink's derived count of three is what refuses it. The fixture
-    // used to leave `holder` unbound; that statement is pinned just below.
+fn a_base_resident_symlink_can_share_one_serial_between_three_names() {
+    // Both named parents are stored, reachable directories. The final count
+    // comes from all three names, not the caller's inode value.
     let (mut session, link, holder) = symlink_tree(true);
-    let outcome = bind_the_symlink_again(&mut session, link, holder);
-    assert!(
-        matches!(
-            outcome,
-            Err(ContentError::InvalidRecord("multiple parents"))
-        ),
-        "a stored symlink bound again must be refused: {outcome:?}"
-    );
+    bind_the_symlink_again(&mut session, link, holder).expect("symlink aliases");
+    let mut read = session.read().unwrap();
+    for path in ["link", "second", "holder/third"] {
+        let resolved = read.resolve(&LogicalPath::new(path).unwrap()).unwrap();
+        assert_eq!(resolved.serial, link);
+        assert_eq!(resolved.value.namespace_ref_count, 3);
+    }
 }
 
 #[test]
@@ -1072,10 +1070,9 @@ fn a_stored_directory_moved_only_into_a_dropped_directory_is_refused() {
 }
 
 #[test]
-fn a_stored_symlink_bound_again_inside_a_dropped_directory_has_two_parents() {
-    // A symlink is not topology evidence. A binding stated in a dropped
-    // directory is still counted, so the symlink's derived count is two and the
-    // reducer refuses it; the dropped directory builds no page.
+fn a_stored_symlink_cannot_gain_a_binding_inside_a_dropped_directory() {
+    // An unreachable name must never inflate a shared symlink's count. Refuse
+    // the binding before any page of its dropped parent is constructed.
     let (mut session, link, _holder) = symlink_tree(true);
     let dead = session.allocate();
     let before = session.store.len();
@@ -1093,9 +1090,9 @@ fn a_stored_symlink_bound_again_inside_a_dropped_directory_has_two_parents() {
     assert!(
         matches!(
             outcome,
-            Err(ContentError::InvalidRecord("multiple parents"))
+            Err(ContentError::InvalidRecord("binding in dropped directory"))
         ),
-        "a second binding inside a dropped directory is a second parent: {outcome:?}"
+        "a binding inside a dropped directory must be refused: {outcome:?}"
     );
     assert_eq!(session.store.len(), before, "nothing was offered");
 }

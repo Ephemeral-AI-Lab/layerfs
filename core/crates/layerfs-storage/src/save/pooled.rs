@@ -33,14 +33,20 @@ struct Base {
     chain_encoded: u64,
 }
 
-/// Candidate filter of one value: eight bytes of each of its two digests.
+/// Candidate filter of one value: a 64-bit mix of all 73 bytes. A filter of
+/// only some bytes let two values that differ elsewhere (the same content and
+/// mode with another mtime) share one memo entry, so the second one's later
+/// copies in the same Save each took a new ordinal (#91).
 fn fingerprint(value: &[u8; INODE_VALUE_BYTES]) -> u64 {
-    let word = |from: usize| {
-        let mut bytes = [0_u8; 8];
-        bytes.copy_from_slice(&value[from..from + 8]);
-        u64::from_le_bytes(bytes)
-    };
-    word(INODE_VALUE_BYTES - 64) ^ word(INODE_VALUE_BYTES - 32).rotate_left(29) ^ word(0)
+    value
+        .chunks(8)
+        .fold(0x9e37_79b9_7f4a_7c15_u64, |hash, chunk| {
+            let mut word = [0_u8; 8];
+            word[..chunk.len()].copy_from_slice(chunk);
+            (hash ^ u64::from_le_bytes(word))
+                .wrapping_mul(0x0000_0100_0000_01b3)
+                .rotate_left(29)
+        })
 }
 
 impl State<'_> {

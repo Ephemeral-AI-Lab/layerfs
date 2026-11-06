@@ -74,7 +74,12 @@ None.
 ```
 
 A read: it is answered while a `sandbox.create` or `close` holds the
-Sandbox, and it starts no machine (P4). See the
+Sandbox, and it starts no machine (P4). The daemon's `Status` reads no
+Store; the head is read by the caller. For a PostgreSQL Store that read
+runs on the process's held read session (one light-checked connection per
+process, no Store service; [`postgresql/reader.rs`](../../../../../control/crates/layerfs-store/src/postgresql/reader.rs)).
+Unlike a mount, whose daemon finds the Branch by name (#64), a status still
+opens that connection in a new CLI process. See the
 [routing table](../../../control/routing/routing-table.md).
 
 ## Errors

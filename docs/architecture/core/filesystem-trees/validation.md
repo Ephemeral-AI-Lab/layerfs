@@ -37,7 +37,7 @@ Validation, qualification and limits of a tree.
 | Root inode not a directory, bound by a name, or declared new on update | `InvalidRecord("root inode kind" / "root directory binding" / "root inode allocation")` | `check_root_invariants` in [`validate.rs`](../../../../core/crates/layerfs-content/src/filesystem/validate.rs) |
 | A directory placed twice in one batch | refused before any object is offered | [`validate.rs`](../../../../core/crates/layerfs-content/src/filesystem/validate.rs) |
 | A cycle, or a walk ending at an allocated, unbound directory | refused | [`validate/cycles.rs`](../../../../core/crates/layerfs-content/src/filesystem/validate/cycles.rs) |
-| A directory or symlink whose derived count is not 1 | refused by the reducer | [`references/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/reduce.rs) |
+| A non-root directory whose derived count is not 1 | refused by the reducer | [`references/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/reduce.rs) |
 | Unsorted or duplicate change rows | `NonCanonicalOrdering` | [`input.rs`](../../../../core/crates/layerfs-content/src/filesystem/input.rs), [`sorted/merge.rs`](../../../../core/crates/layerfs-content/src/filesystem/sorted/merge.rs) |
 
 Validation is incremental: on an update it reads the affected bindings and

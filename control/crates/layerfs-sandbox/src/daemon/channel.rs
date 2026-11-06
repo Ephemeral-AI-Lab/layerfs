@@ -273,6 +273,13 @@ fn matches_reply(request: &Request, reply: &Reply) -> bool {
             token.workspace == *workspace && binding.branch.id == *branch
         }
         (
+            Request::MountNamed {
+                workspace, branch, ..
+            },
+            Reply::Bound { token, binding },
+        ) => token.workspace == *workspace && binding.branch.name.as_str() == branch,
+        (Request::MountNamed { .. }, Reply::SdkRefused(_)) => true,
+        (
             Request::Commit(_),
             Reply::Committed(_) | Reply::MergeCommitted(_) | Reply::Conflict(_),
         ) => true,

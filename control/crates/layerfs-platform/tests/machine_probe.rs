@@ -145,3 +145,39 @@ fn native_names_only_linux_host_facts() {
     assert!(native_missing(HostOs::Macos).is_empty());
     assert!(nested_missing(HostOs::Linux).is_empty());
 }
+
+/// A provider call is answered when its command ends, not at the next
+/// fixed 20 ms poll step (#66): a stand-in that exits at once is seen well
+/// inside one step. Prints the median of each stand-in's probes (one
+/// provider call each) with the host's load; only the quick one is judged.
+#[test]
+fn a_provider_call_ends_when_its_command_does() {
+    let scratch = Scratch::new("probe-latency");
+    let tools = scratch.tools();
+    let median = |body: &str| {
+        scratch.tool("msb", body);
+        let mut ms: Vec<f64> = (0..9)
+            .map(|_| {
+                let started = std::time::Instant::now();
+                let found = probe(Platform::Microsandbox, &tools);
+                assert_eq!(found.version.as_deref(), Some("msb 0.7.8"));
+                started.elapsed().as_secs_f64() * 1e3
+            })
+            .collect();
+        ms.sort_by(f64::total_cmp);
+        ms[ms.len() / 2]
+    };
+    if disabled_reason("microsandbox").is_some() {
+        return;
+    }
+    let quick = median("echo 'msb 0.7.8'");
+    let slow = median("sleep 0.026; echo 'msb 0.7.8'");
+    let load = std::process::Command::new("uptime")
+        .output()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned())
+        .unwrap_or_default();
+    println!(
+        "PROVIDER_CALL {{\"quick_ms\":{quick:.2},\"sleep26_ms\":{slow:.2},\"uptime\":{load:?}}}"
+    );
+    assert!(quick < 20.0, "a quick provider call took {quick:.2} ms");
+}

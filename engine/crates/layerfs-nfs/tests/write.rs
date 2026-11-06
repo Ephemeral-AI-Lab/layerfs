@@ -276,6 +276,98 @@ fn every_changing_procedure_and_its_statuses() {
 }
 
 #[test]
+fn symlink_link_handles_preserve_opaque_targets_through_commit_and_fresh_view() {
+    let base = temp("symlink-links");
+    let tree = base.join("tree");
+    source(&tree);
+    let rig = rig::Rig::new(&tree, &base.join("rig"), Duration::from_secs(30));
+    let server = rig.export(TcpListener::bind("127.0.0.1:0").unwrap(), UID, GID, false);
+    let mut c = Client::connect(server.local_addr(), UID, GID);
+    let root = c.mnt("/");
+    let (inherited, inherited_attr) = c.lookup(&root, b"link").unwrap();
+    let inherited_alias = c.link(&inherited, &root, b"inherited-alias").unwrap();
+    assert_eq!(
+        (inherited_alias.fileid, inherited_alias.nlink),
+        (inherited_attr.fileid, 2)
+    );
+    assert_eq!(c.readlink(&inherited).unwrap(), b"src/lib.rs");
+    let target = b"../missing/\xff";
+    let fresh = c.symlink(&root, b"opaque", target).unwrap();
+    let separate = c.symlink(&root, b"distinct", target).unwrap();
+    assert_ne!(separate.attr.fileid, fresh.attr.fileid);
+    // NFS LINK takes a filehandle, so source-path symlink following is impossible.
+    let linked = c.link(&fresh.handle, &root, b"opaque-alias").unwrap();
+    assert_eq!(
+        (linked.kind, linked.fileid, linked.nlink),
+        (5, fresh.attr.fileid, 2)
+    );
+    let (alias, alias_attr) = c.lookup(&root, b"opaque-alias").unwrap();
+    assert_eq!(alias_attr.fileid, fresh.attr.fileid);
+    assert_eq!(c.readlink(&alias).unwrap(), target);
+    assert_eq!(c.readlink(&fresh.handle).unwrap(), target);
+    let (directory, _) = c.lookup(&root, b"docs").unwrap();
+    assert_eq!(
+        c.link(&directory, &root, b"directory-alias").map(|_| ()),
+        Err(PERM)
+    );
+    assert!(rig.commit().history.is_some());
+    let view = rig.view([78; 32]);
+    let viewer = rig.serve_view(TcpListener::bind("127.0.0.1:0").unwrap(), &view, UID, GID);
+    let mut v = Client::connect(viewer.local_addr(), UID, GID);
+    let view_root = v.mnt("/");
+    for (name, alias_name, expected) in [
+        (
+            b"link".as_slice(),
+            b"inherited-alias".as_slice(),
+            b"src/lib.rs".as_slice(),
+        ),
+        (
+            b"opaque".as_slice(),
+            b"opaque-alias".as_slice(),
+            target.as_slice(),
+        ),
+    ] {
+        let (a, a_attr) = v.lookup(&view_root, name).unwrap();
+        let (b, b_attr) = v.lookup(&view_root, alias_name).unwrap();
+        assert_eq!(
+            (a_attr.kind, a_attr.fileid, a_attr.nlink),
+            (5, b_attr.fileid, 2)
+        );
+        assert_eq!(b_attr.nlink, 2);
+        assert_eq!(v.readlink(&a).unwrap(), expected);
+        assert_eq!(v.readlink(&b).unwrap(), expected);
+    }
+    drop(v);
+    assert_eq!(viewer.stop().retained, 0);
+    rig.close_view(view);
+    c.remove(&root, b"opaque").unwrap();
+    assert_eq!(c.getattr(&alias).unwrap().nlink, 1);
+    assert_eq!(c.readlink(&alias).unwrap(), target);
+    c.remove(&root, b"opaque-alias").unwrap();
+    assert_eq!(c.getattr(&alias), Err(STALE));
+    assert!(rig.commit().history.is_some());
+    let view = rig.view([79; 32]);
+    let viewer = rig.serve_view(TcpListener::bind("127.0.0.1:0").unwrap(), &view, UID, GID);
+    let mut v = Client::connect(viewer.local_addr(), UID, GID);
+    let view_root = v.mnt("/");
+    assert_eq!(v.lookup(&view_root, b"opaque").map(|_| ()), Err(NOENT));
+    assert_eq!(
+        v.lookup(&view_root, b"opaque-alias").map(|_| ()),
+        Err(NOENT)
+    );
+    let (distinct, attr) = v.lookup(&view_root, b"distinct").unwrap();
+    assert_eq!(attr.nlink, 1);
+    assert_eq!(v.readlink(&distinct).unwrap(), target);
+    drop(v);
+    assert_eq!(viewer.stop().retained, 0);
+    rig.close_view(view);
+    drop(c);
+    let (_, outstanding) = rig.stop(server.stop());
+    assert_eq!(outstanding, 0);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn silly_renames_stay_out_of_the_workspace() {
     let base = temp("silly");
     let tree = base.join("tree");

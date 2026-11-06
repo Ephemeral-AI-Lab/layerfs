@@ -194,6 +194,20 @@ impl ReadSession {
                 .map_err(PortError::History)
         })
     }
+    /// The snapshot of a Branch found by its project's name and its own,
+    /// in one read (#64).
+    pub fn snapshot_named(
+        &self,
+        project: &layerfs_history::HistoryName,
+        branch: &layerfs_history::HistoryName,
+    ) -> Result<layerfs_history::NamedSnapshot, Arc<PortError>> {
+        self.attempt(|handle, _, _| {
+            handle
+                .history
+                .branch_snapshot_named(project, branch)
+                .map_err(PortError::History)
+        })
+    }
     /// One lookup in this reader's read-only history.
     pub fn published<T>(
         &self,

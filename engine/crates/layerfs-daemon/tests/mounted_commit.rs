@@ -39,7 +39,7 @@ use rig::{
 };
 use std::{
     fs::{self, OpenOptions},
-    os::unix::process::CommandExt,
+    os::unix::{ffi::OsStrExt, fs::MetadataExt, process::CommandExt},
     process::{Command, Stdio},
 };
 
@@ -336,6 +336,139 @@ fn r5_1_external_bash_changes_of_every_kind_are_committed_and_read_back_on_a_fre
         before.len(),
         &moved[..moved.len().min(8)]
     );
+}
+
+#[test]
+fn symlink_hardlinks_keep_inode_target_and_count_after_commit_and_remount() {
+    let rig = Rig::built("symlink-hardlinks", |root| {
+        fs::write(
+            root.join("target"),
+            b"target remains a distinct regular inode",
+        )
+        .unwrap();
+        std::os::unix::fs::symlink("target", root.join("inherited")).unwrap();
+        std::os::unix::fs::symlink("target", root.join("distinct")).unwrap();
+    });
+    let first = rig.mount(1);
+    let mount = root(&first);
+    let base_inodes = model::inode_numbers(mount);
+    // LINK uses flags=0 explicitly: the source inode, not its existing target.
+    assert_eq!(
+        unsafe {
+            libc::linkat(
+                libc::AT_FDCWD,
+                mutating::c(&mount.join("inherited")).as_ptr(),
+                libc::AT_FDCWD,
+                mutating::c(&mount.join("inherited-alias")).as_ptr(),
+                0,
+            )
+        },
+        0,
+        "linkat: {}",
+        std::io::Error::last_os_error()
+    );
+    // The fresh dangling inode is linked by an unregistered external process.
+    passed(
+        &bash_in(
+            COMMAND,
+            mount,
+            r#"
+set -euo pipefail
+ln -s $'../missing/\xff' opaque
+ln -P opaque opaque-alias
+"#,
+        ),
+        "link symlink inodes",
+    );
+    let check = |mount: &std::path::Path| {
+        for (name, alias, target) in [
+            ("inherited", "inherited-alias", b"target".as_slice()),
+            ("opaque", "opaque-alias", b"../missing/\xff".as_slice()),
+        ] {
+            let a = fs::symlink_metadata(mount.join(name)).unwrap();
+            let b = fs::symlink_metadata(mount.join(alias)).unwrap();
+            assert!(a.file_type().is_symlink() && b.file_type().is_symlink());
+            assert_eq!(a.ino(), b.ino());
+            assert_eq!((a.nlink(), b.nlink()), (2, 2));
+            for path in [name, alias] {
+                assert_eq!(
+                    fs::read_link(mount.join(path))
+                        .unwrap()
+                        .as_os_str()
+                        .as_bytes(),
+                    target
+                );
+            }
+        }
+        assert_eq!(
+            fs::symlink_metadata(mount.join("target")).unwrap().nlink(),
+            1
+        );
+        assert_ne!(
+            fs::symlink_metadata(mount.join("distinct")).unwrap().ino(),
+            fs::symlink_metadata(mount.join("inherited")).unwrap().ino()
+        );
+    };
+    check(mount);
+    let expected = host(mount);
+    let live_inodes = model::inode_numbers(mount);
+    let committed = model::committed_view(&expected, &live_inodes, &rig.base, &base_inodes);
+    let record = rig.committed(first.token, "symlink aliases");
+    assert_same(
+        &committed,
+        &rig.published(record.root),
+        "symlink canonical root",
+    );
+    rig.unmount(&first);
+    let fresh = rig.mount(2);
+    let mount = root(&fresh);
+    check(mount);
+    assert_same(&committed, &host(mount), "symlink fresh mount");
+    passed(
+        &bash_in(COMMAND, mount, "rm opaque"),
+        "unlink one symlink name",
+    );
+    assert_eq!(
+        fs::symlink_metadata(mount.join("opaque-alias"))
+            .unwrap()
+            .nlink(),
+        1
+    );
+    assert_eq!(
+        fs::read_link(mount.join("opaque-alias"))
+            .unwrap()
+            .as_os_str()
+            .as_bytes(),
+        b"../missing/\xff"
+    );
+    passed(
+        &bash_in(COMMAND, mount, "rm opaque-alias"),
+        "unlink last symlink name",
+    );
+    let final_tree = host(mount);
+    let final_record = rig.committed(fresh.token, "last symlink alias removed");
+    assert_same(
+        &final_tree,
+        &rig.published(final_record.root),
+        "symlink last unlink canonical root",
+    );
+    rig.unmount(&fresh);
+    let last = rig.mount(3);
+    assert_same(
+        &final_tree,
+        &host(root(&last)),
+        "symlink last unlink fresh mount",
+    );
+    for path in ["opaque", "opaque-alias"] {
+        assert_eq!(
+            fs::symlink_metadata(root(&last).join(path))
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::NotFound
+        );
+    }
+    rig.unmount(&last);
+    rig.finish();
 }
 
 /// R5-2, the mounted part. The stale unchanged candidate over a moved head

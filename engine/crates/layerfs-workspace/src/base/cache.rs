@@ -13,6 +13,8 @@ pub(crate) struct State {
     /// Derived child-directory counts of base directories, by content root.
     pub(crate) counts: crate::base::links::DirectoryCounts,
     pub(crate) work: crate::ClientWork,
+    /// Sequential read streams its clients follow, for read-ahead.
+    pub(crate) streams: crate::base::client::Streams,
 }
 
 /// One bounded immutable cache allowance shared by operation-scoped providers.
@@ -40,6 +42,7 @@ impl CanonicalCache {
             state: Mutex::new(State {
                 cache: Cache::new(bytes),
                 counts: Default::default(),
+                streams: Default::default(),
                 work: crate::ClientWork::default(),
             }),
             decoded: layerfs_content::filesystem::decoded::DecodedPages::new(decoded),

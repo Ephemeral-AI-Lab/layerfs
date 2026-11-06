@@ -34,9 +34,7 @@ pub fn call(
     let _lease = lease::hold(&home, &target.store)?;
     let args = args(&home, record, &target, more);
     match op {
-        "workspace.mount" => serve::mount_with(&args, &mut |branch| {
-            Ok(branch_of(&home, events, &target, branch)?.0)
-        }),
+        "workspace.mount" => serve::mount(&args),
         "workspace.commit" => serve::commit(&serve::by_name(args)?),
         "workspace.unmount" => serve::unmount(&serve::by_name(args)?),
         "backend.daemon.workspace.status" => {
@@ -53,14 +51,18 @@ pub fn call(
     }
 }
 
-/// The id and head of Branch `name` of `target`'s project, read through
-/// the Store's own route (in this process, or its machine's worker).
+/// The id and head of Branch `name` of `target`'s project (a status's),
+/// read through the Store's own route (in this process, or its machine's
+/// worker); a PostgreSQL Store's on this process's held read session.
 fn branch_of(
     home: &Path,
     events: &mut Events<'_>,
     target: &Target,
     name: &str,
 ) -> Result<(BranchId, Option<CommitId>)> {
+    if let Some(found) = layerfs_store::call::held_branch(home, target, name)? {
+        return Ok(found);
+    }
     let listed = store_call(
         home,
         events,

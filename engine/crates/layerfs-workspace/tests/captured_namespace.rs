@@ -131,6 +131,56 @@ fn new_files_directories_and_symlinks_are_constructed() {
 }
 
 #[test]
+fn captured_symlink_aliases_keep_targets_counts_and_last_unlink() {
+    let b = Bench::new("cn-symlink-aliases");
+    let mut d = Drive::new(&b);
+    d.link("symlink", "inherited-alias");
+    let opaque = d.symlink("opaque", b"../missing/\xff");
+    d.link("opaque", "cache/opaque-alias");
+    let same_target = d.symlink("distinct", b"../missing/\xff");
+    assert_ne!(opaque, same_target, "equal targets do not merge inodes");
+    let built = d.build("symlink aliases");
+    assert_eq!(
+        built.walked.serial("symlink"),
+        built.walked.serial("inherited-alias")
+    );
+    assert_eq!(
+        built.walked.serial("opaque"),
+        built.walked.serial("cache/opaque-alias")
+    );
+    for serial in [3, opaque] {
+        assert_eq!(
+            value(&b.fixture.store, built.root, serial).namespace_ref_count,
+            2
+        );
+    }
+    assert_eq!(
+        value(&b.fixture.store, built.root, same_target).namespace_ref_count,
+        1
+    );
+    assert_eq!(
+        value(&b.fixture.store, built.root, 3).content_root,
+        value(&b.fixture.store, b.fixture.root, 3).content_root
+    );
+    // build() independently walks every readlink target as well as aliases.
+    // Installing completes the capture before the next incremental capture.
+    built.install(&b);
+    d.remove("opaque");
+    let surviving = d.build("one symlink name");
+    assert_eq!(
+        value(&b.fixture.store, surviving.root, opaque).namespace_ref_count,
+        1
+    );
+    assert_eq!(surviving.walked.serial("cache/opaque-alias"), opaque);
+    surviving.install(&b);
+    d.remove("cache/opaque-alias");
+    let deleted = d.build("last symlink name");
+    assert!(absent(&b.fixture.store, deleted.root, opaque));
+    assert_eq!(deleted.walked.serial("distinct"), same_target);
+    deleted.release(&b);
+}
+
+#[test]
 fn deleted_files_directories_and_symlinks_leave_the_result() {
     let b = Bench::new("cn-deleted");
     let mut d = Drive::new(&b);

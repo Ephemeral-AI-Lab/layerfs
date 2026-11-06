@@ -20,6 +20,9 @@
 //! canonical, stored and metadata bytes, record kinds, and the process's
 //! resident high-water mark so far.
 //!
+//! The cold reads also print `RESIDENT <json>`: the resident set when the
+//! read starts and the process's resident peak during it.
+//!
 //! Run with `--test-threads=1 --nocapture` so the two Stores' timings do not
 //! overlap. Cache state: the Commits run on one Store opened once (a warm
 //! process, as a daemon serving one Workspace is); the reads reopen the Store
@@ -448,6 +451,10 @@ impl Run {
         self.commit(&opened, &workspace, "commit.second_one_file", |m| {
             m.write("/f100/f7", b"changed once\n", None).unwrap();
         });
+        // fs-bench-quick C09's base: zeros, which dedup to a few chunks.
+        self.commit(&opened, &workspace, "commit.zeros_64mib", |m| {
+            m.write("/big/zeros.bin", &vec![0; BIG], None).unwrap();
+        });
         opened.close(Some(workspace));
 
         // Cold reads: a new Store open and a new mount-bound Workspace.
@@ -462,16 +469,31 @@ impl Run {
                 assert_eq!(stat.logical_len, tiny(n).len() as u64);
             }
         });
-        self.scenario(&opened, "read.sequential_random_64mib", || {
-            let serial = m.resolve("/big/random.bin").unwrap().serial;
-            let mut offset = 0usize;
-            while offset < BIG {
-                let piece = m.read(serial, offset as u64, READ).unwrap();
-                assert_eq!(piece, big[offset..offset + piece.len()], "at {offset}");
-                assert!(!piece.is_empty());
-                offset += piece.len();
-            }
-        });
+        for (name, path, bytes) in [
+            ("read.sequential_random_64mib", "/big/random.bin", &big),
+            (
+                "read.sequential_zeros_64mib",
+                "/big/zeros.bin",
+                &vec![0; BIG],
+            ),
+        ] {
+            let rss = resident_reset();
+            self.scenario(&opened, name, || {
+                let serial = m.resolve(path).unwrap().serial;
+                let mut offset = 0usize;
+                while offset < BIG {
+                    let piece = m.read(serial, offset as u64, READ).unwrap();
+                    assert_eq!(piece, bytes[offset..offset + piece.len()], "at {offset}");
+                    assert!(!piece.is_empty());
+                    offset += piece.len();
+                }
+            });
+            println!(
+                "RESIDENT {{\"backend\":\"{}\",\"scenario\":\"{name}\",\"rss_before_kb\":{rss},\"vm_hwm_kb\":{}}}",
+                self.backend,
+                vm_hwm_kb(),
+            );
+        }
         m.finish().unwrap();
         opened.close(Some(workspace));
     }
@@ -575,13 +597,28 @@ fn work_json(w: &SqlWork) -> String {
 }
 
 /// This process's resident high-water mark so far (`VmHWM`), in KiB: a
-/// lifetime peak, never one phase's own.
+/// lifetime peak, or the peak since the last [`resident_reset`].
 fn vm_hwm_kb() -> String {
     std::fs::read_to_string("/proc/self/status")
         .ok()
         .and_then(|text| {
             text.lines()
                 .find_map(|line| line.strip_prefix("VmHWM:"))
+                .and_then(|rest| rest.split_whitespace().next().map(str::to_owned))
+        })
+        .unwrap_or_else(|| "null".to_owned())
+}
+
+/// Resets this process's resident high-water mark to its current resident
+/// set (Linux `clear_refs` 5), so the next `VmHWM` is one phase's own peak;
+/// returns the resident set (`VmRSS`, KiB) at the reset.
+fn resident_reset() -> String {
+    let _ = std::fs::write("/proc/self/clear_refs", "5");
+    std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|text| {
+            text.lines()
+                .find_map(|line| line.strip_prefix("VmRSS:"))
                 .and_then(|rest| rest.split_whitespace().next().map(str::to_owned))
         })
         .unwrap_or_else(|| "null".to_owned())

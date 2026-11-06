@@ -7,4 +7,7 @@ pub struct HistoryProvider {
     pub(crate) catalog_id: CatalogId,
     pub(crate) incarnation: u64,
     pub(crate) cursor_key: [u8; 32],
+    /// The Store's small-file threshold: only files at or above it (the
+    /// chunked ones) keep a file digest (#91).
+    pub(crate) digest_floor: u64,
 }

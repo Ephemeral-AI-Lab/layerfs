@@ -4,7 +4,8 @@
 //! form (a move, two content edits and a mode change), for a build with the
 //! inline form to merge against. The output is
 //! checked in at `tests/fixtures/merge-forms-root.sqlite` on the branch that
-//! carries #360.
+//! carries #360, and converted to schema version 2 (#91, inode value and
+//! binding hint blocks) with `tools/store_blocks.py migrate`.
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod installed;

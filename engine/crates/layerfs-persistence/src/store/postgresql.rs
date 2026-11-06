@@ -134,6 +134,7 @@ impl PostgresHandles {
         let checked = schema::check(&session, check, binding)?;
         let catalog_id =
             CatalogId::derive(&checked.binding).map_err(|_| PersistenceError::Malformed)?;
+        let digest_floor = checked.policy.small_file_threshold_bytes();
         let _ = session.policy.set(checked.policy);
         let _ = session.server_version.set(checked.server_version);
         let (incarnation, tables) = (checked.incarnation, checked.acquisition);
@@ -149,6 +150,7 @@ impl PostgresHandles {
                     catalog_id,
                     incarnation,
                     cursor_key,
+                    digest_floor,
                 },
             },
         ))

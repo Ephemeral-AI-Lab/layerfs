@@ -5,7 +5,10 @@
 //! `LAYERFS_TEST_POSTGRES_URL` with `sslmode=disable`; NOT_RUN without it.
 #![cfg(feature = "postgresql")]
 use layerfs_history::records::StackInitialization;
-use layerfs_history::{HistoryCatalog, HistoryCatalogConfig, HistoryName, LayerStackId, Page};
+use layerfs_history::{
+    BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,
+    LayerStackId, Page,
+};
 use layerfs_persistence::{PostgresCheck, PostgresHandles, PostgresSelection};
 use layerfs_storage::{ReservationBlocks, StoragePolicy};
 use layerfs_store_service::bootstrap::open_store_observed;
@@ -21,6 +24,8 @@ const CURSOR: [u8; 32] = [43; 32];
 struct Wire {
     connections: AtomicU64,
     round_trips: AtomicU64,
+    /// While set, a new connection is closed at once (no server reached).
+    refuse: std::sync::atomic::AtomicBool,
     /// The server side of every proxied connection, for [`Wire::cut`].
     servers: std::sync::Mutex<Vec<TcpStream>>,
 }
@@ -46,6 +51,10 @@ fn proxy(upstream: String, wire: Arc<Wire>) -> u16 {
     std::thread::spawn(move || {
         for client in listener.incoming() {
             let Ok(client) = client else { return };
+            if wire.refuse.load(Ordering::SeqCst) {
+                let _ = client.shutdown(std::net::Shutdown::Both);
+                continue;
+            }
             let Ok(server) = TcpStream::connect(&upstream) else {
                 return;
             };
@@ -138,6 +147,21 @@ fn postgresql_open_costs_on_the_wire() {
                 genesis_root: id(3),
             })
             .unwrap();
+        // a Branch to mount (#64)
+        let demo = created
+            .history
+            .layer_stack_named(&HistoryName::new("demo").unwrap())
+            .unwrap()
+            .unwrap();
+        created
+            .history
+            .fork(&ForkRequest {
+                stack: demo.id,
+                branch: BranchId::from_authority([8; 16]),
+                name: HistoryName::new("work").unwrap(),
+                source: ForkSource::Layer(demo.head_layer),
+            })
+            .unwrap();
         drop(created);
         settle();
         wire.take();
@@ -172,6 +196,56 @@ fn postgresql_open_costs_on_the_wire() {
         assert!(project.is_some());
         row("host create (attach + project lookup)", &wire);
         drop(attached);
+
+        // #64 option A: the caller's side of a mount of a forwarded Sandbox
+        // before option B (and of a status still): one light-checked session
+        // finds the project and the Branch (id and head) by name. Since
+        // option B a mount's caller reads nothing; its daemon finds the
+        // Branch with its snapshot in one statement (row below).
+        let (_, attached) = PostgresHandles::attach_read_only(&light, CURSOR).unwrap();
+        let project = attached
+            .history
+            .layer_stack_named(&HistoryName::new("demo").unwrap())
+            .unwrap()
+            .unwrap();
+        let branch = attached
+            .history
+            .branch_named(project.id, &HistoryName::new("work").unwrap())
+            .unwrap();
+        assert!(branch.is_some());
+        row(
+            "host mount, option A (held session: project + Branch)",
+            &wire,
+        );
+        drop(attached);
+
+        // the same mount as it ran before #64: a Store service open (its
+        // fully checked writer), then `project.list_branches` by name on its
+        // control reader, opened at that first read
+        let opened = open_store_observed(
+            layerfs_persistence::StoreSelection::Postgres(selection.clone()),
+            BINDING,
+            CURSOR,
+            4,
+            64 * 1024,
+            ReservationBlocks::default(),
+        )
+        .unwrap();
+        // two reads, as the Store service's lookups make them
+        let stack = opened
+            .store
+            .published(|h| h.layer_stack_named(&HistoryName::new("demo").unwrap()))
+            .unwrap()
+            .unwrap();
+        let found = opened
+            .store
+            .published(|h| h.branch_named(stack.id, &HistoryName::new("work").unwrap()))
+            .unwrap();
+        assert!(found.is_some());
+        row("host mount before #64 (Store open + Branch)", &wire);
+        drop(opened);
+        settle();
+        wire.take();
 
         // the host side of a PostgreSQL sandbox.create, as it ran before
         // #65: the reach check's binding read, a Store open, the project list
@@ -228,6 +302,41 @@ fn postgresql_open_costs_on_the_wire() {
             .unwrap();
         assert!(found.is_some());
         row("control lookup (project by name)", &wire);
+        // #64 option B: what the daemon's named bind reads in place of the
+        // caller's lookups, on a reader already open: the project, the
+        // Branch and its snapshot in one statement
+        let named = opened
+            .store
+            .published(|h| {
+                h.branch_snapshot_named(
+                    &HistoryName::new("demo").unwrap(),
+                    &HistoryName::new("work").unwrap(),
+                )
+            })
+            .unwrap();
+        assert!(matches!(named, layerfs_history::NamedSnapshot::Found(_)));
+        row("daemon named snapshot (open reader, cold)", &wire);
+        let missing = opened
+            .store
+            .published(|h| {
+                h.branch_snapshot_named(
+                    &HistoryName::new("demo").unwrap(),
+                    &HistoryName::new("ghost").unwrap(),
+                )
+            })
+            .unwrap();
+        assert_eq!(missing, layerfs_history::NamedSnapshot::NoBranch);
+        let missing = opened
+            .store
+            .published(|h| {
+                h.branch_snapshot_named(
+                    &HistoryName::new("ghost").unwrap(),
+                    &HistoryName::new("work").unwrap(),
+                )
+            })
+            .unwrap();
+        assert_eq!(missing, layerfs_history::NamedSnapshot::NoStack);
+        row("daemon named snapshot misses (warm, two)", &wire);
         // #64: the second mount took the first one's idle reader
         let reuse = opened.store.reuse_work();
         assert_eq!((reuse.readers_opened, reuse.readers_reused), (1, 1));
@@ -240,6 +349,65 @@ fn postgresql_open_costs_on_the_wire() {
         row("mount after the idle reader's connection ended", &wire);
         let reuse = opened.store.reuse_work();
         assert_eq!((reuse.readers_opened, reuse.readers_reused), (2, 1));
+        drop(opened);
+        settle();
+        wire.take();
+
+        // #64 eager reader: a daemon opens one idle reader after it reported
+        // ready (on a thread of its own), once; its first mount takes it
+        let opened = open_store_observed(
+            layerfs_persistence::StoreSelection::Postgres(light.clone()),
+            BINDING,
+            CURSOR,
+            4,
+            64 * 1024,
+            ReservationBlocks::default(),
+        )
+        .unwrap();
+        row("daemon Store open (eager reader daemon)", &wire);
+        assert!(matches!(opened.store.prefill_reader(), Some(Ok(()))));
+        row("idle reader after readiness", &wire);
+        assert!(opened.store.prefill_reader().is_none(), "opened once");
+        opened.store.mount_reader(ws(4)).unwrap();
+        row("first mount after readiness (takes the idle reader)", &wire);
+        let reuse = opened.store.reuse_work();
+        assert_eq!(
+            (
+                reuse.readers_opened,
+                reuse.readers_reused,
+                reuse.readers_prefilled,
+                reuse.prefill_failures
+            ),
+            (0, 1, 1, 0)
+        );
+        // an idle reader that cannot open is one counted failure; the first
+        // mount then opens its own and nothing opens it again
+        drop(opened);
+        settle();
+        wire.take();
+        let opened = open_store_observed(
+            layerfs_persistence::StoreSelection::Postgres(light.clone()),
+            BINDING,
+            CURSOR,
+            4,
+            64 * 1024,
+            ReservationBlocks::default(),
+        )
+        .unwrap();
+        wire.refuse.store(true, Ordering::SeqCst);
+        assert!(matches!(opened.store.prefill_reader(), Some(Err(_))));
+        wire.refuse.store(false, Ordering::SeqCst);
+        assert!(opened.store.prefill_reader().is_none(), "never tried again");
+        opened.store.mount_reader(ws(5)).unwrap();
+        let reuse = opened.store.reuse_work();
+        assert_eq!(
+            (
+                reuse.readers_opened,
+                reuse.readers_prefilled,
+                reuse.prefill_failures
+            ),
+            (1, 0, 1)
+        );
         drop(opened);
         rows
     });

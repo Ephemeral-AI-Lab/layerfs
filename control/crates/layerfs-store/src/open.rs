@@ -90,6 +90,11 @@ impl Drop for Running {
     }
 }
 
+/// Whether this process holds the Store at `path` open now.
+pub(crate) fn holds(path: &Path) -> bool {
+    (OPEN.lock().unwrap_or_else(|e| e.into_inner())).contains_key(path)
+}
+
 /// Starts an idle checkpoint on `entry` when it is the last user here: no
 /// call and no other checkpoint running. Its open arguments.
 fn settle(entry: &mut Entry) -> Option<SdkValue> {

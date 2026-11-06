@@ -62,20 +62,50 @@ signature ring is an upsert by slot that keeps the newer stamp
 ## Values
 
 ```text
- inode_value
- +-----------+------------------------------+
- | ordinal   | value (73 bytes)             |   one row per ordinal,
- | 1..2^32-1 |                              |   INSERT only, never updated
- +-----------+------------------------------+
- read: ascending distinct ordinals -> JSON runs [[first,last],..]
-       -> one statement: json_each JOIN inode_value BETWEEN first AND last
+ inode_value_block (#91, schema version 2)
+ +---------------+--------------+------------------------------------+
+ | first_ordinal | last_ordinal | body (<= 4,000 bytes, PLAIN)       |  one row per block of
+ | 1..2^32-1     | first+0..254 | values of first..=last, CRC32C     |  consecutive ordinals,
+ +---------------+--------------+------------------------------------+  INSERT only
+ read: ascending distinct ordinals -> runs [[first,last],..]
+       -> one statement: per run, the last block starting at or before it
+          and every block from there to its end; decode, pick asked ordinals
 ```
 
 `inode_values(ordinals)` requires ascending, distinct, nonzero ordinals (at
-most 4 096) and refuses a reply that names an ordinal not asked. A second
-INSERT of an ordinal fails its transaction. Sources:
+most 4 096) and refuses a reply that names an ordinal not asked. A block whose
+ordinals a stored block already holds is not inserted, and the publication
+fails: a stored value is never replaced. Sources:
 [`values.rs`](../../../../engine/crates/layerfs-persistence/src/metadata/values.rs),
-[`sqlite/metadata/values.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/metadata/values.rs).
+[`sqlite/metadata/values.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/metadata/values.rs),
+[`postgresql/metadata/reads.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/metadata/reads.rs).
+
+### Inode value and binding hint blocks
+
+Schema version 2 (#91) keeps inode values and binding hints in append-only,
+immutable blocks instead of one row each, so a database row's fixed cost
+(SQLite cell and index entry; PostgreSQL's 28-byte tuple header and line
+pointer plus a B-tree entry) is paid per block of about 100 entries. The
+encoding is field packing only, with no compression: each entry expands back
+to its exact canonical bytes, so no object identity depends on it
+([`blocks/`](../../../../engine/crates/layerfs-persistence/src/blocks/mod.rs)).
+Every body ends with a CRC32C of the bytes before it, checked on every
+decode; a block that fails it fails the read.
+
+| Block | Key | Body |
+| --- | --- | --- |
+| Inode values | `first_ordinal`; ordinals inside implicit (`last_ordinal` kept for the overlap check) | format, count, a table of the distinct mode words, then per entry the value's byte 0 as tag, a LEB128 reference count, the 32-byte content root and either the 32-byte attribute root (root form) or a mode-table index, the mtime seconds as a zig-zag LEB128 difference from the previous inline entry and the four nanosecond bytes (inline form); any other 73 bytes are stored whole under tag `0xff` ([`values.rs`](../../../../engine/crates/layerfs-persistence/src/blocks/values.rs)) |
+| Binding hints | `(grp, seq)`: `grp = child >> 6`, `seq` the next of its group | format, LEB128 count, then per entry in `(child, parent, name)` order the child's LEB128 difference from the previous entry's, the parent's zig-zag LEB128 difference, the shared name-prefix length and the rest of the name ([`hints.rs`](../../../../engine/crates/layerfs-persistence/src/blocks/hints.rs)) |
+
+A Save's publication encodes its values into blocks before its statement:
+a new block starts at a gap in the ordinals or when the current one would pass
+4,000 bytes or 255 entries. One write of binding hints appends one or more
+blocks per group it touches, numbered under the write lane; a reader takes
+every block of the child's group, merges them and drops repeats (a binding
+recorded twice is kept twice on disk). Rows are never updated or deleted
+(gap design R6). The diagnostic decoder
+[`tools/store_blocks.py`](../../../../tools/store_blocks.py) reads both
+from a closed SQLite copy or from exported PostgreSQL rows for attribution.
 
 ## Object reads
 
@@ -85,7 +115,7 @@ INSERT of an ordinal fails its transaction. Sources:
 | `read_pack_selection(id, plan)` | `read_immutable` | exact offset and length BLOB reads planned by core | [`selection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/selection.rs) |
 | `read_scoped_pack(id, plan)` | `read_immutable` | as above, for acquisition | same |
 
-On layouts 17 and 18 a pack is a `control` row plus one `pack_unit` row per
+On layouts 37 and 38 a pack is a `control` row plus one `pack_unit` row per
 group, so a selected group is read without the rest of the pack
 ([`units_read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/units_read.rs)).
 PostgreSQL reads ranges of the `EXTERNAL` body with `substring`
@@ -114,7 +144,8 @@ visible ([SQLite: Sessions](sqlite.md#sessions)).
      INSERT pack (or control + pack_unit rows)
      INSERT object_location ... ON CONFLICT DO NOTHING RETURNING
      UPDATE store_totals (only when bytes were added)
-     INSERT inode_value
+     INSERT inode_value_block ... WHERE no stored block overlaps
+       RETURNING (a missing row fails the publication)
      give back the ordinal tail (release_ordinals)
      UPSERT content_signature
    -> Published { lost }   objects another publication registered first

@@ -150,8 +150,7 @@ pub fn refusals(root: &Path) {
         chown(&file, None, Some(Gid::from_raw(1))).unwrap_err(),
         Errno::EPERM
     );
-    // A hard link to a symlink is not permitted; to a directory the kernel
-    // itself refuses.
+    // The kernel refuses directory hard links; symlink inodes are linkable.
     let link = |from: &str, flags| {
         check(unsafe {
             libc::linkat(
@@ -163,7 +162,6 @@ pub fn refusals(root: &Path) {
             )
         } as libc::c_long)
     };
-    assert_eq!(link("broken", 0).unwrap_err(), Errno::EPERM);
     assert_eq!(link("empty", 0).unwrap_err(), Errno::EPERM);
     // Exchange renames are not implemented.
     assert_eq!(

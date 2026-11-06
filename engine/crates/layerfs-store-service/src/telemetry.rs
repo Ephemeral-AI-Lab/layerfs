@@ -39,6 +39,27 @@ thread_local! {
     static SQL_PROBE: RefCell<Option<SqlProbe>> = const { RefCell::new(None) };
     /// Each finished phase's SQL work, in finishing order.
     static PHASE_SQL: RefCell<Vec<(&'static str, SqlWork)>> = const { RefCell::new(Vec::new()) };
+    /// The caller's phase boundary observer, while it marks phases.
+    static PHASE_MARK: RefCell<Option<PhaseMark>> = const { RefCell::new(None) };
+}
+
+/// Told each phase's name at its start (`false`) and end (`true`), such as
+/// a measurement that reads server-side statement counters per phase.
+pub type PhaseMark = Box<dyn Fn(&'static str, bool)>;
+
+/// While this thread records ([`Recording`]), every [`phase`] it runs calls
+/// `mark` at its start and end, outside the phase's own SQL probe reads.
+/// Marking never changes an operation's result. `None` stops it.
+pub fn mark_phases(mark: Option<PhaseMark>) {
+    PHASE_MARK.set(mark);
+}
+
+fn mark_phase(name: &'static str, end: bool) {
+    PHASE_MARK.with_borrow(|mark| {
+        if let Some(mark) = mark {
+            mark(name, end);
+        }
+    });
 }
 
 /// Reads the counters a caller attributes to phases, such as its Store's
@@ -164,10 +185,17 @@ pub fn phase<T, E>(
             .then(|| (FINISHED.with_borrow(Vec::len), WaitMark::now()));
         // Attributed while the thread records, even past the timing tree's
         // node bound, which stops recording late phases of large Commits.
-        let sql = recording().then(probe).flatten();
+        let recorded = recording();
+        if recorded {
+            mark_phase(name, false);
+        }
+        let sql = recorded.then(probe).flatten();
         let result = operation();
         if let (Some(before), Some(after)) = (sql, sql.and_then(|_| probe())) {
             PHASE_SQL.with_borrow_mut(|done| done.push((name, after.since(&before))));
+        }
+        if recorded {
+            mark_phase(name, true);
         }
         if let Some((mark, waited)) = mark {
             let inner =

@@ -5,7 +5,7 @@ mod support;
 use layerfs_content::AuthenticatedObjects;
 use layerfs_daemon::{
     bootstrap::open_store_observed,
-    store::{BindError, BindRequest, PortError, ReaderFactory, Store, StoreReader},
+    store::{BindError, BindIntent, BindRequest, PortError, ReaderFactory, Store, StoreReader},
     Owner, OwnerConfig,
 };
 use layerfs_history::*;
@@ -124,8 +124,11 @@ fn a_failed_bind_closes_its_healthy_reader_and_returns_the_original_request() {
         .bind(owner.client(), input.clone())
         .err()
         .unwrap();
-    assert_eq!(failure.request.branch, input.branch);
-    assert_eq!(failure.request.workspace, input.workspace);
+    let BindIntent::Id(returned) = &failure.request else {
+        panic!("a bind by identity returns that request: {failure:?}");
+    };
+    assert_eq!(returned.branch, input.branch);
+    assert_eq!(returned.workspace, input.workspace);
     assert!(matches!(failure.error, BindError::MissingBranch(branch) if branch == input.branch));
     assert_eq!(opened.store.read_handles(), 1);
     assert_eq!(opened.diagnostics().unwrap().readers.len(), 2);

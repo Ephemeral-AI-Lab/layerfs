@@ -116,6 +116,7 @@ with the fixed text of [Adapter](adapter.md#the-sealed-adapter)):
 | VM size | at least 1 CPU, 256M memory, 1G disk | `Spec::validate` |
 | Names | a letter or digit, then `[A-Za-z0-9._-]`, at most 63 | `plain_name` in [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs) |
 | Provider call deadlines | `CALL` 30 s, `CREATE` 120 s, `BOOT` 300 s | [`setup/vm.rs`](../../../../control/crates/layerfs-platform/src/setup/vm.rs) |
+| Exit checks of a host command | every 1 ms at first, growing with its run (an eighth of it) to every 20 ms; the deadline and the kill are unchanged (#66) | `wait_for` in [`setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs) |
 | Guest command and copy | `EXEC` 60 s, `COPY` 600 s | [`setup/guest.rs`](../../../../control/crates/layerfs-platform/src/setup/guest.rs) |
 | Worker readiness | at most `READY` 60 s; a worker that ends is reported with its log's end | [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
 | Bundle | lacks `layerfs`, `layerfs-daemon` or `layerfs-sandbox-helper`: `InvalidInput`, `missing: bundle:<name>`; hash not hex: `InvalidInput` | `check_bundle` |

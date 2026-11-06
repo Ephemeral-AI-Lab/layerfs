@@ -24,6 +24,7 @@ use crate::object::{
 };
 use crate::policy::ConstructionCapacities;
 
+use super::hints::PageHints;
 use super::predecessor::PredecessorCursor;
 
 /// Facts established while building; no root reread is required afterwards.
@@ -69,6 +70,13 @@ pub struct ExtentBuilder {
     pub(super) flush_at: usize,
     pub(super) build: MappingBuild,
     peak_pending: usize,
+    /// Pages of an earlier version of the file, offered positionally as each
+    /// emitted page's advisory delta base (#92). Never part of an identity.
+    hints: Option<PageHints>,
+    /// Logical bytes of the pages already emitted at each level, which is the
+    /// start of the next page that level emits: a level's pages leave the
+    /// builder in logical order.
+    pub(super) starts: Vec<u64>,
 }
 
 impl ExtentBuilder {
@@ -80,7 +88,30 @@ impl ExtentBuilder {
             flush_at,
             build: MappingBuild::default(),
             peak_pending: 0,
+            hints: None,
+            starts: Vec::new(),
         }
+    }
+
+    /// Offers every page this builder emits the page of `hints` at the same
+    /// level and logical start as its advisory delta base (#92). The emitted
+    /// canonical pages are unchanged.
+    pub(crate) fn set_page_hints(&mut self, hints: PageHints) {
+        self.hints = Some(hints);
+    }
+
+    /// Advances `level`'s emitted extent by `pages` pages of `bytes` each and
+    /// returns the start of the first of them.
+    pub(super) fn advance(&mut self, level: usize, pages: u64, bytes: u64) -> ContentResult<u64> {
+        while self.starts.len() <= level {
+            self.starts.push(0);
+        }
+        let start = self.starts[level];
+        let span = pages
+            .checked_mul(bytes)
+            .ok_or(ContentError::LengthOverflow)?;
+        self.starts[level] = add(start, span)?;
+        Ok(start)
     }
 
     /// Logical bytes offered so far.
@@ -310,7 +341,12 @@ impl ExtentBuilder {
                 }
             }
         };
-        emit_node(consumer, &node, &mut self.build, root)
+        let start = self.advance(level, 1, node.logical_len())?;
+        let hint = self
+            .hints
+            .as_ref()
+            .and_then(|hints| hints.at(level as u8, start));
+        emit_node(consumer, &node, &mut self.build, root, hint)
     }
 
     fn push_summary(&mut self, level: usize, summary: NodeSummary) -> ContentResult<()> {
@@ -355,6 +391,9 @@ pub(crate) fn build_streaming_with_predecessor<R: Read>(
 ) -> ContentResult<MappingBuild> {
     let mut builder = ExtentBuilder::new(capacities);
     let mut predecessor = predecessor;
+    if let Some(cursor) = predecessor.as_mut() {
+        builder.set_page_hints(cursor.page_hints()?);
+    }
     let scanned = FastCdc::new().scan(source, |chunk| {
         let start = builder.logical_len();
         let hint = match predecessor.as_mut() {
@@ -382,6 +421,7 @@ pub fn emit_empty_leaf(
         },
         build,
         true,
+        None,
     )
 }
 
@@ -404,11 +444,14 @@ pub fn emit_file_state(
     Ok(id)
 }
 
+/// Emits one mapping page; `hint` is the stored page offered as its advisory
+/// delta base (#92), which never changes the page's identity.
 pub(super) fn emit_node(
     consumer: &mut dyn FinalizedConsumer,
     node: &ExtentNode,
     build: &mut MappingBuild,
     root: bool,
+    hint: Option<ObjectId>,
 ) -> ContentResult<NodeSummary> {
     if node.level() > MAX_LEVEL {
         return Err(ContentError::MappingDepthExceeded);
@@ -417,8 +460,13 @@ pub(super) fn emit_node(
         ExtentNode::Leaf { .. } => ObjectRole::ExtentLeaf,
         ExtentNode::Branch { .. } => ObjectRole::ExtentBranch,
     };
-    let object =
+    let mut object =
         FinalizedObject::new(role, encode_node(node, root)?)?.with_references(node.references());
+    if let Some(hint) = hint.filter(|hint| *hint != object.id()) {
+        let mut predecessors = AdvisoryPredecessors::new();
+        predecessors.push(hint, PredecessorProvenance::OriginalBase)?;
+        object = object.with_predecessors(predecessors);
+    }
     let summary = NodeSummary {
         id: object.id(),
         bytes: node.logical_len(),

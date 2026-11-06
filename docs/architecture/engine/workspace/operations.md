@@ -38,7 +38,7 @@ driver.
 | `Operation` | POSIX call | Effect published in one transaction | Source |
 | --- | --- | --- | --- |
 | `Create`, `Mkdir`, `Symlink` | creat, mkdir, symlink | New inode (reserved serial), parent entry and counts, symlink cell | [`create.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/create.rs) |
-| `Link` | link | `nlink + 1`, new parent entry; files only | [`create.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/create.rs) |
+| `Link` | link | `nlink + 1`, new parent entry; regular files and symlinks | [`create.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/create.rs) |
 | `Unlink`, `Rmdir` | unlink, rmdir | Whiteout or removed row, inode `nlink - 1` (directory to 0), parent counts | [`remove.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/remove.rs) |
 | `Rename` | rename, renameat2 no-replace | Unbind source, bind destination, dereference a replaced inode, parent counts | [`rename.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/rename.rs) |
 | `SetAttributes`, `SetOpenAttributes` | chmod, utimens, truncate | One inode row | [`attributes.rs`](../../../../engine/crates/layerfs-workspace/src/operations/attributes.rs) |
@@ -51,6 +51,13 @@ driver.
 | Rename of one inode onto another name of itself | `Unchanged`, as POSIX requires | [`rename.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/rename.rs) |
 | A file renamed over a file | Records `predecessor`, offered to Commit as a delta base | [`rename.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/rename.rs) |
 | Parent counts | `entries` and `subdirs` move in the same row as the binding; leaving range is an error, never clamped | [`mutation/eval.rs`](../../../../engine/crates/layerfs-workspace/src/mutation/eval.rs) |
+
+`Link` binds the selected inode serial without following a symlink target.
+Aliases share the same serial, opaque target bytes and link count. Removing one
+name preserves the other; removing the last name drops the inode from the
+committed namespace. Directory links remain refused. The operating system or
+client decides whether a pathname operation selects the symlink inode or follows
+its target before it reaches this operation.
 
 ### Listing
 
