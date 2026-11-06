@@ -28,15 +28,13 @@ impl Startup {
     pub fn connect(
         &mut self,
         endpoint: SocketAddr,
-        host: Option<&str>,
         wait: Duration,
         secret: &[u8; 32],
         peer: [u8; 32],
         existing: bool,
     ) -> Result<DaemonStatus, SandboxCause> {
         self.phase = SandboxPhase::Connect;
-        let address = super::create::connect_address(endpoint, host).map_err(SandboxCause::Io)?;
-        let stream = TcpStream::connect_timeout(&address, wait).map_err(SandboxCause::Io)?;
+        let stream = TcpStream::connect_timeout(&endpoint, wait).map_err(SandboxCause::Io)?;
         stream
             .set_read_timeout(Some(wait))
             .map_err(SandboxCause::Io)?;

@@ -17,8 +17,8 @@ pub fn call(op: &str, args: SdkValue) -> Outcome {
             let directory = crate::files::sandbox_dir(&args)?;
             listed(daemon_backend(op, args)?, &directory)
         }
-        "sandbox.create" => crate::serve::create(&args),
-        "sandbox.close" => crate::serve::close(&args),
+        "sandbox.create" => crate::lifecycle::create(&args),
+        "sandbox.close" => crate::lifecycle::close(&args),
         _ => Err(refused("UnknownMethod", format!("no operation {op}"))),
     }
 }

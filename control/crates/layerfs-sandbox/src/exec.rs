@@ -13,7 +13,7 @@ use layerfs_home::outcome::Outcome;
 
 /// One command to its end: exit code, stdout, stderr. `spool` sends every
 /// non-empty stream to its file instead of keeping it inline. Its home is
-/// the Sandbox's scratch directory (`/tmp` in a container), since the
+/// the Sandbox's scratch directory, since the
 /// command identity has no account there.
 fn run(
     state: &SandboxState,

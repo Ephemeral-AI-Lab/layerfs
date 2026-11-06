@@ -13,6 +13,6 @@ mod provider;
 #[cfg(unix)]
 pub use create::SandboxApi;
 #[cfg(unix)]
-pub use create::{connect_address, SandboxCause, SandboxPhase};
+pub use create::{SandboxCause, SandboxPhase};
 #[cfg(unix)]
 pub use provider::{ProviderCreate, ProviderFailure, ProviderSandbox};

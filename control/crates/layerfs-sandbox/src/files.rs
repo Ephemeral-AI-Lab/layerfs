@@ -88,15 +88,9 @@ pub fn save_sandbox(
         ("container", SdkValue::text(runtime.identity().to_string())),
     ];
     match runtime {
-        Sandbox::Docker(runtime) => {
-            let record = runtime.request();
-            fields.extend([
-                ("docker", SdkValue::text(helpers::text(deploy, "docker")?)),
-                ("image", SdkValue::text(&record.image)),
-                ("volume", SdkValue::opt_text(record.store_volume.clone())),
-                ("labels", label_values(&record.labels)),
-            ]);
-        }
+        // nothing here launches one any more (D-8); the variant goes with
+        // the backend's folder
+        Sandbox::Docker(_) => return Err(refused("Unsupported", "the docker backend is retired")),
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Sandbox::HostProcess(runtime) => {
             let record = runtime
@@ -220,20 +214,19 @@ pub fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     let project = helpers::text(args, "project")?;
     // a Sandbox in a machine whose daemon's port is forwarded here (#535
     // G4): only its forward is checked; its runtime is the machine's
-    let (runtime, endpoint, host) = match crate::direct::forward_of(&value) {
+    let (runtime, endpoint) = match crate::direct::forward_of(&value) {
         Some(address) => {
             crate::direct::check(&home(args)?, id, &value)?;
-            (None, address, None)
+            (None, address)
         }
         None => {
-            let (runtime, host) = observed(args, id, &value)?;
+            let runtime = observed(args, id, &value)?;
             let endpoint = runtime.endpoint().map_err(failed)?;
-            (Some(runtime), endpoint, host)
+            (Some(runtime), endpoint)
         }
     };
     let dial = crate::daemon::pool::Dial {
         endpoint,
-        host,
         secret: layerfs_home::secrets::key(&keys, "secret")?,
         peer: layerfs_home::secrets::key(&keys, "peer")?,
         instance: layerfs_home::secrets::key(&keys, "instance")?,
@@ -256,21 +249,17 @@ pub fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     refresh(&state)?;
     Ok(state)
 }
-/// The runtime a Sandbox record's `daemon` names, observed running once,
-/// and the host this process dials its daemon at.
-fn observed(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(Box<Sandbox>, Option<String>)> {
+/// The runtime a Sandbox record's `daemon` names, observed running once;
+/// its daemon listens on this kernel's loopback.
+fn observed(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Box<Sandbox>> {
     let container = helpers::text(value, "container")?;
-    let recorded = recorded(args, id, value)?;
-    // a local daemon listens on this kernel's loopback; no other host reaches it
-    let host = None;
-    let runtime = recorded.reopen().map_err(|failure| {
+    recorded(args, id, value)?.reopen().map_err(|failure| {
         if failure.container_gone() || failure.container_stopped() {
             gone(id, container, failure.container_stopped())
         } else {
             failed(failure)
         }
-    })?;
-    Ok((runtime, host))
+    })
 }
 /// The command identity a Sandbox record names: a native Sandbox's is the
 /// user who started it (`uid`, `gid`); every other runs as 501:20.

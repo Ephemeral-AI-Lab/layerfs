@@ -12,7 +12,7 @@
 //! before it is refused `Busy`. Opening a connection is not an attempt
 //! of any operation: nothing is sent before the connection is ready.
 use crate::internal::Control;
-use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
+use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal};
 use layerfs_bridge::duplex::initiate_observed;
 use layerfs_home::outcome::{failed, refused};
 use std::net::SocketAddr;
@@ -21,28 +21,14 @@ use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 /// Most control connections one process keeps to one Sandbox. A Sandbox this
-/// binding creates admits [`crate::serve::DAEMON_CONNECTIONS`]; the rest
+/// binding creates admits [`crate::lifecycle::DAEMON_CONNECTIONS`]; the rest
 /// stay for other processes.
 pub const CONNECTIONS: usize = 6;
-
-/// The host this process dials for a daemon's loopback-published port:
-/// `deploy.daemonHost` (the client's `daemonHost`, else LAYERFS_DAEMON_HOST),
-/// for a client in a container that does not share the Docker host's
-/// loopback. `None` dials 127.0.0.1 as published.
-pub fn daemon_host(args: &SdkValue) -> Option<String> {
-    args.get("deploy")
-        .and_then(|deploy| deploy.get_text("daemonHost"))
-        .filter(|host| !host.is_empty())
-        .map(str::to_owned)
-}
 
 /// How to open another connection to the same daemon instance.
 #[derive(Clone)]
 pub struct Dial {
     pub endpoint: SocketAddr,
-    /// Host to dial instead of the endpoint's loopback address
-    /// ([`daemon_host`]); `None` dials the endpoint.
-    pub host: Option<String>,
     pub secret: [u8; 32],
     pub peer: [u8; 32],
     pub instance: [u8; 32],
@@ -98,7 +84,7 @@ impl Dial {
                         format!(
                             "the Sandbox's daemon admitted no connection for {}s: other processes hold all {} of its connections",
                             wait.as_secs(),
-                            crate::serve::DAEMON_CONNECTIONS
+                            crate::lifecycle::DAEMON_CONNECTIONS
                         ),
                     ))
                 }
@@ -109,9 +95,7 @@ impl Dial {
 
     /// One authenticated connection, checked to reach the same daemon.
     pub fn open(&self) -> Result<Control, SdkRefusal> {
-        let address =
-            crate::connect_address(self.endpoint, self.host.as_deref()).map_err(failed)?;
-        let stream = std::net::TcpStream::connect_timeout(&address, Duration::from_secs(10))
+        let stream = std::net::TcpStream::connect_timeout(&self.endpoint, Duration::from_secs(10))
             .map_err(failed)?;
         stream
             .set_read_timeout(Some(Duration::from_secs(10)))

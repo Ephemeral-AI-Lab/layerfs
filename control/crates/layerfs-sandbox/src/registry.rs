@@ -2,8 +2,8 @@
 //! project itself is only its home entry, so a project removed there can be
 //! initialized again without a restart.
 //!
-//! A Sandbox is one container and its daemon (or, with the local runtime,
-//! one daemon process: `runtime`), known by its name. Its runtime runs
+//! A Sandbox is one daemon process (`runtime`: native, or namespaces with
+//! its init stage), known by its name. Its runtime runs
 //! commands directly; its control connections (`pool`) each carry one
 //! exchange at a time, and concurrent calls take separate connections.
 use crate::MountedWorkspace;
@@ -24,8 +24,7 @@ pub struct Mount {
 pub struct SandboxState {
     pub id: String,
     pub project: String,
-    /// Its container's name, `<prefix><id>` (a local Sandbox's directory
-    /// name).
+    /// Its runtime name, `<prefix><id>` (its directory's name).
     pub name: String,
     /// Its folder, `<root>/sandbox/<id>/`.
     pub directory: std::path::PathBuf,
@@ -60,10 +59,10 @@ pub fn sandbox(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
     }
 }
 
-/// The Sandbox `args` name when its container still runs it: this
-/// process's state, checked with one Engine inspection, or reopened from its
-/// records (which inspects too). A container found gone or stopped (an idle
-/// Sandbox's daemon ends itself, #373) is the refusal of
+/// The Sandbox `args` name when its daemon still runs: this process's
+/// state, checked with one inspection, or reopened from its records (which
+/// inspects too). A daemon found gone or stopped (an idle Sandbox's daemon
+/// ends itself, #373) is the refusal of
 /// `discovery::gone`, and this process forgets the state.
 pub fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
     let directory = crate::files::sandbox_dir(args)?;

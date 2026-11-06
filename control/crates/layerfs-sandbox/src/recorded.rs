@@ -20,10 +20,9 @@ use std::path::PathBuf;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
-/// A Sandbox whose container no longer runs it: the Engine no longer has the
-/// container, or has it stopped (it closed when idle, or Docker restarted),
-/// which lost its daemon and every mount in it. Only its records, and a
-/// stopped container, hold its number; the next mount reclaims them.
+/// A Sandbox whose daemon no longer runs: its process is gone, or stopped
+/// (it closed when idle), which lost every mount in it. Only its records
+/// hold its name; the next mount reclaims them.
 pub fn gone(id: &str, container: &str, stopped: bool) -> SdkRefusal {
     let state = if stopped { "stopped" } else { "gone" };
     SdkRefusal {

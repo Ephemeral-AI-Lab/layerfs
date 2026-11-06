@@ -11,8 +11,8 @@
 //! it in place of the path, [`by_name`]).
 use crate::daemon::values;
 use crate::internal::workspace;
+use crate::lifecycle::{operation, WORKSPACES};
 use crate::registry::{sandbox, sandbox_live, Mount};
-use crate::serve::{operation, WORKSPACES};
 use crate::OperationCause;
 use crate::Unmounted;
 use layerfs_bridge::control::{CommitControl, Reply, SdkRefusal, SdkValue};

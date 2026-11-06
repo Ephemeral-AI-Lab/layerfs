@@ -1,4 +1,4 @@
-//! Runtime startup uses the same authenticated connection and Store installation as Docker.
+//! Runtime startup: one launch, one authenticated connection and the Store's installation, the same for every backend.
 use super::{connection::Startup, SandboxApi, SandboxCause, SandboxPhase};
 use crate::internal::Control;
 use layerfs_bridge::{
@@ -89,9 +89,8 @@ impl SandboxApi {
         Self { runtime }
     }
     /// Creates a new daemon on the PostgreSQL Store its setup selects
-    /// (#506): no Store file, volume or install; it starts ready. A Docker
-    /// launch that mounts no Store volume opens one, and so do a native
-    /// (macOS) daemon process and a namespaces root with no bind (#535 §7.4).
+    /// (#506): no Store file, bind or install; it starts ready: a native
+    /// (macOS) daemon process, or a namespaces root with no bind (#535 §7.4).
     pub fn create_provider_postgres(
         &self,
         request: ProviderCreate,
@@ -199,13 +198,8 @@ impl SandboxApi {
                 .expect("launched")
                 .endpoint()
                 .map_err(SandboxCause::Runtime)?;
-            let connect_host = match &request.launch.options {
-                ProviderLaunchOptions::Docker { connect_host, .. } => connect_host.as_deref(),
-                _ => None,
-            };
             progress.connect(
                 endpoint,
-                connect_host,
                 request.launch.startup_timeout,
                 &request.controller_private,
                 request.daemon_peer,
@@ -333,13 +327,8 @@ impl SandboxApi {
                 .expect("launched")
                 .endpoint()
                 .map_err(SandboxCause::Runtime)?;
-            let connect_host = match &request.launch.options {
-                ProviderLaunchOptions::Docker { connect_host, .. } => connect_host.as_deref(),
-                _ => None,
-            };
             let mut status = progress.connect(
                 endpoint,
-                connect_host,
                 request.launch.startup_timeout,
                 &request.controller_private,
                 request.daemon_peer,

@@ -5,26 +5,6 @@ use layerfs_bridge::duplex::ChannelError;
 use layerfs_sandbox_backend::Runtime;
 use std::{io, sync::Arc};
 
-/// The address to dial for a daemon `endpoint` observed on the Docker host's
-/// loopback: the endpoint itself, or the port on `host` (one resolution, its
-/// first address; nothing is tried twice).
-pub fn connect_address(
-    endpoint: std::net::SocketAddr,
-    host: Option<&str>,
-) -> io::Result<std::net::SocketAddr> {
-    let Some(host) = host else {
-        return Ok(endpoint);
-    };
-    std::net::ToSocketAddrs::to_socket_addrs(&(host, endpoint.port()))?
-        .next()
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("daemon host {host} has no address"),
-            )
-        })
-}
-
 /// Concrete boundary reached by one original lifecycle operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SandboxPhase {

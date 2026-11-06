@@ -35,6 +35,8 @@ pub mod files;
 mod get;
 #[doc(hidden)]
 pub mod launch;
+#[doc(hidden)]
+pub mod lifecycle;
 mod list;
 #[doc(hidden)]
 pub mod output;
@@ -49,12 +51,10 @@ pub mod route;
 #[doc(hidden)]
 pub mod runtime;
 #[doc(hidden)]
-pub mod serve;
-#[doc(hidden)]
 pub mod unmount_guard;
 #[cfg(unix)]
 pub use launch::SandboxApi;
 #[cfg(unix)]
-pub use launch::{connect_address, SandboxCause, SandboxPhase};
-#[cfg(unix)]
 pub use launch::{ProviderCreate, ProviderFailure, ProviderSandbox};
+#[cfg(unix)]
+pub use launch::{SandboxCause, SandboxPhase};

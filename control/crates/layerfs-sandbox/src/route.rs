@@ -2,7 +2,7 @@
 //! sent to its machine's worker with the records it needs, and run there
 //! (`in_worker`); the host arguments both sides build, and spooled output
 //! streamed back as events.
-use super::deploy::{self, Deploy, Side};
+use super::deploy::{self, Side};
 use super::record::SandboxRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::events::Events;
@@ -18,63 +18,53 @@ use std::path::{Path, PathBuf};
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// The host Sandbox operations' arguments for project `<store>/<project>`,
-/// plus `more`, run as `how` says; a PostgreSQL Store's `postgresql` is
-/// the one the caller resolved and reached ([`reached`]).
+/// plus `more`, run with the deploy `settings` [`deploy::resolve`] gave; a
+/// PostgreSQL Store's `postgresql` is the one the caller resolved and
+/// reached ([`reached`]).
 fn host_args(
     home: &Path,
     (store, project, record): (&str, &str, &StoreRecord),
     (kind, postgresql): (StoreKind, Option<SdkValue>),
-    how: Deploy,
+    settings: Vec<(String, SdkValue)>,
     more: Vec<(&str, SdkValue)>,
 ) -> Result<SdkValue> {
     let prefix = SdkValue::text(format!(
         "lfs-{}-",
         &layerfs_home::home::opened(home)?.id[..8]
     ));
-    let deploy = match how {
-        Deploy::Docker(SdkValue::Map(mut settings)) => {
-            settings.push(("sandbox".to_owned(), SdkValue::text("docker")));
-            settings.push(("containerPrefix".to_owned(), prefix));
-            SdkValue::Map(settings)
-        }
-        Deploy::Docker(_) => return Err(refused("InvalidInput", "docker settings are a map")),
-        Deploy::Native(settings) => {
-            let backend = if cfg!(target_os = "macos") {
-                "native"
-            } else {
-                "namespaces"
-            };
-            // the local runtime's root: this user's, traversable (0755), as
-            // the runtime requires; one directory per Sandbox beside the
-            // image cache it shares
-            let local = paths::run_root(home);
-            {
-                use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-                std::fs::DirBuilder::new()
-                    .recursive(true)
-                    .mode(0o755)
-                    .create(&local)
-                    .map_err(failed)?;
-                std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o755))
-                    .map_err(failed)?;
-            }
-            // namespaces commands run as another identity: the home's folders
-            // above the root must let them pass (a macOS native command does not)
-            if backend == "namespaces" {
-                home::traversable(home, &local)?;
-            }
-            let mut fields = vec![
-                ("sandbox".to_owned(), SdkValue::text(backend)),
-                (
-                    "localDir".to_owned(),
-                    SdkValue::text(local.display().to_string()),
-                ),
-                ("containerPrefix".to_owned(), prefix),
-            ];
-            fields.extend(settings);
-            SdkValue::Map(fields)
-        }
+    let backend = if cfg!(target_os = "macos") {
+        "native"
+    } else {
+        "namespaces"
     };
+    // the local runtime's root: this user's, traversable (0755), as
+    // the runtime requires; one directory per Sandbox beside the
+    // image cache it shares
+    let local = paths::run_root(home);
+    {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o755)
+            .create(&local)
+            .map_err(failed)?;
+        std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o755)).map_err(failed)?;
+    }
+    // namespaces commands run as another identity: the home's folders
+    // above the root must let them pass (a macOS native command does not)
+    if backend == "namespaces" {
+        home::traversable(home, &local)?;
+    }
+    let mut deploy = vec![
+        ("sandbox".to_owned(), SdkValue::text(backend)),
+        (
+            "localDir".to_owned(),
+            SdkValue::text(local.display().to_string()),
+        ),
+        ("containerPrefix".to_owned(), prefix),
+    ];
+    deploy.extend(settings);
+    let deploy = SdkValue::Map(deploy);
     let mut fields = vec![
         ("home", SdkValue::text(home.display().to_string())),
         ("store", SdkValue::text(store)),
@@ -293,7 +283,7 @@ fn host_op(
                 )?;
             }
             let held = postgresql.is_some();
-            let how = deploy::resolve(&Side::Home(&home), &target.store, &choice)?;
+            let how = deploy::resolve(&Side::Home(&home), &choice)?;
             let args = host_args(
                 &home,
                 (&target.store, &target.project, &target.record),
@@ -438,7 +428,7 @@ pub fn in_worker(
         _ => Vec::new(),
     };
     let choice = args.get("deploy").cloned().unwrap_or_default();
-    let how = deploy::resolve(&Side::Worker(root), store, &choice)?;
+    let how = deploy::resolve(&Side::Worker(root), &choice)?;
     let postgresql = match kind {
         StoreKind::Postgresql => Some(args.get("postgresql").cloned().ok_or_else(|| {
             refused(

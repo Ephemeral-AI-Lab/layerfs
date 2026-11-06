@@ -1,24 +1,23 @@
 //! Native and namespaces Sandboxes (`deploy.sandbox` `native` on macOS or
 //! `namespaces` on Linux, LAYERFS_SANDBOX): the project's daemon runs as a
-//! process of this user instead of in a container. Native isolates nothing
+//! process on this kernel. Native isolates nothing
 //! beyond the caller's own sandbox; namespaces adds Linux namespaces and a
 //! cgroup. Linux starts no native Sandbox (#533 O27): `native` there is
 //! refused before any effect.
 //!
 //! Each Sandbox gets a directory `<deploy.localDir>/<prefix><name>` (the
 //! machine's `machine/native/run/`, beside the image cache the namespaces
-//! backend keeps there) with what a container held at fixed paths: its setup
-//! (`/layerfs-local/config`), overlay template (`/layerfs-local/overlay`) and
-//! Workspace mounts (`/workspaces`). The daemon opens the installed Store
-//! where this process opens it (`storePath`), so the daemon setup and the
-//! Store's locator name that path instead of `/layerfs-store`. The daemon
+//! backend keeps there) holding its setup, overlay template and Workspace
+//! mounts. The daemon opens the installed Store where this process opens it
+//! (`storePath`), so the daemon setup and the Store's locator name that
+//! path. The daemon
 //! listens on 127.0.0.1 only. macOS serves loopback NFS as this user; Linux
 //! namespaces keep the root FUSE daemon and nonroot commands (501:20) from
-//! #402. Start, failure and reclaim follow the Docker route: one attempt,
+//! #402. Start, failure and reclaim: one attempt,
 //! `Unknown` while the outcome is open, and a failed start's daemon stopped
 //! and its directory deleted, each once.
+use crate::lifecycle::OpenedStore;
 use crate::registry::{SandboxState, SANDBOXES};
-use crate::serve::OpenedStore;
 use crate::{ProviderCreate, SandboxApi};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::{DaemonStore, KernelRoute};
@@ -32,7 +31,7 @@ use std::sync::Arc;
 /// Starts the Sandbox the call names as a native (macOS) or namespaces
 /// (Linux) daemon. Linux refuses `native` and requires root before any
 /// effect. Called by
-/// [`crate::serve::start`] under its folder's guard, with the
+/// [`crate::lifecycle::start`] under its folder's guard, with the
 /// project's installed Store file or its PostgreSQL Store already read. A
 /// namespaces root binds a sqlite Store's file and nothing for a PostgreSQL
 /// Store, whose daemon dials the server (#535 §7.4).
@@ -94,7 +93,7 @@ fn start_named(
     (runtime, backend, executable, store): (Runtime, crate::runtime::Backend, PathBuf, String),
 ) -> Result<Arc<SandboxState>, SdkRefusal> {
     let name = text(args, "project")?;
-    let sandbox_name = crate::serve::sandbox_name(args, id)?;
+    let sandbox_name = crate::lifecycle::sandbox_name(args, id)?;
     let paths = runtime.native_paths(&sandbox_name).map_err(failed)?;
     let path_text = |path: &Path| {
         path.to_str()
@@ -124,13 +123,12 @@ fn start_named(
         }
         OpenedStore::Postgres(selected) => (None, *selected),
     };
-    let mut setup = crate::serve::setup(daemon.private, controller.public, daemon_store, route);
+    let mut setup = crate::lifecycle::setup(daemon.private, controller.public, daemon_store, route);
     // macOS uses the caller; Linux keeps #402's separate nonroot identity.
     #[cfg(target_os = "macos")]
     {
         (setup.command_uid, setup.command_gid) = crate::files::user();
     }
-    setup.listen = "127.0.0.1:0".into();
     setup.overlay = path_text(&paths.overlay)?;
     setup.mounts = path_text(&paths.mounts)?;
     let identity = CommandIdentity {
@@ -143,7 +141,7 @@ fn start_named(
         _ => String::new(),
     };
     let store = layerfs_store::identity::shared_store(args)?;
-    let labels = crate::serve::labels(name, store.as_deref(), id);
+    let labels = crate::lifecycle::labels(name, store.as_deref(), id);
     let api = SandboxApi::with_runtime(Arc::new(runtime));
     let options = launch_options(backend, identity, args)?;
     let request = ProviderCreate {
@@ -152,7 +150,7 @@ fn start_named(
             daemon_executable: executable,
             daemon_config: Vec::new(),
             labels,
-            startup_timeout: crate::serve::STARTUP,
+            startup_timeout: crate::lifecycle::STARTUP,
             options,
         },
         setup,
@@ -193,7 +191,6 @@ fn start_named(
     };
     let dial = crate::daemon::pool::Dial {
         endpoint,
-        host: None,
         secret: controller.private,
         peer: daemon.public,
         instance,
@@ -328,7 +325,7 @@ pub fn directory(
                 ),
             )
         })?;
-    let name = crate::serve::sandbox_name(args, id)?;
+    let name = crate::lifecycle::sandbox_name(args, id)?;
     let plain = |path: &Path| {
         !path
             .components()
@@ -420,7 +417,7 @@ fn abandon(id: &str, mut cause: String, sandbox: Option<Box<Sandbox>>) -> SdkRef
     let mut log = None;
     let mut left = None;
     if let Some(mut sandbox) = sandbox {
-        match sandbox.log_tail(crate::serve::LOG_LINES, crate::serve::LOG_BYTES) {
+        match sandbox.log_tail(crate::lifecycle::LOG_LINES, crate::lifecycle::LOG_BYTES) {
             Ok(bytes) => {
                 let text = String::from_utf8_lossy(&bytes).trim_end().to_owned();
                 cause = format!("{cause}; its daemon's last log lines:\n{text}");
