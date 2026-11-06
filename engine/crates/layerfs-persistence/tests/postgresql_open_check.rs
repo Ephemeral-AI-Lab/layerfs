@@ -147,6 +147,19 @@ fn only_the_full_check_reads_the_live_definition() {
     schema.sql(&format!("ALTER TABLE {s}.reach ADD COLUMN extra bigint"));
     assert!(schema.open(PostgresCheck::Full, BINDING).is_err());
     schema.open(PostgresCheck::Light, BINDING).unwrap();
+    // a version 1 wide location column (#90 narrowed `role` to smallint):
+    // only the full check sees the type
+    schema.sql(&format!(
+        "ALTER TABLE {s}.reach DROP COLUMN extra; \
+         ALTER TABLE {s}.object_location ALTER COLUMN role TYPE bigint"
+    ));
+    assert!(schema.open(PostgresCheck::Full, BINDING).is_err());
+    schema.open(PostgresCheck::Light, BINDING).unwrap();
+    schema.sql(&format!(
+        "ALTER TABLE {s}.object_location ALTER COLUMN role TYPE smallint; \
+         ALTER TABLE {s}.reach ADD COLUMN extra bigint"
+    ));
+    schema.open(PostgresCheck::Light, BINDING).unwrap();
     // an acquisition table gone: the full check sees the table set, the
     // light one the three names, so both refuse
     schema.sql(&format!(
