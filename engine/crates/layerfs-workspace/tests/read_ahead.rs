@@ -150,3 +150,32 @@ fn a_cache_under_two_windows_reads_without_fetching_ahead() {
     assert!(demands.iter().all(|(ids, _)| *ids <= 32), "{demands:?}");
     assert!(cache.diagnostics().unwrap().charged_cache_bytes < 2 * WINDOW);
 }
+
+#[test]
+fn a_client_per_request_still_reads_ahead() {
+    // The daemon gives each kernel request its own operation client over the
+    // Store's one cache; the stream lives with the cache.
+    let f = fixture_with(noise(LARGE));
+    let (base, recording, cache) = open(&f, 64 * MIB);
+    let mut offset = 0;
+    while offset < LARGE {
+        let client = Arc::new(CanonicalClient::with_cache(
+            Arc::new(recording.clone()),
+            Some(Arc::new(f.store.clone())),
+            cache.clone(),
+        ));
+        let piece = read(&base.with_client(client), 8, offset as u64, READ);
+        assert_eq!(piece, f.bytes[offset..offset + piece.len()], "at {offset}");
+        offset += piece.len();
+    }
+    let demands = recording.demands.lock().unwrap().clone();
+    let windows = demands
+        .iter()
+        .filter(|(_, bytes)| *bytes > WINDOW / 2)
+        .count();
+    assert_eq!(windows, LARGE.div_ceil(WINDOW), "{demands:?}");
+    assert!(
+        demands.len() <= 3 * LARGE.div_ceil(WINDOW) + 4,
+        "{demands:?}"
+    );
+}
