@@ -30,6 +30,20 @@ impl Sandbox {
         stdout: &mut (dyn Write + Send),
         stderr: &mut (dyn Write + Send),
     ) -> Result<ExecExit, Box<WireFailure>> {
+        self.run_reporting(request, stdout, stderr, None)
+    }
+
+    /// [`Self::run`] with its child reported as alive: every `liveness.every`
+    /// while this command's own process lives, and no longer once it has
+    /// exited (a zombie is not alive). The observer runs beside the streams,
+    /// so it delays neither them nor the command.
+    pub fn run_reporting(
+        &self,
+        request: &ExecRequest,
+        stdout: &mut (dyn Write + Send),
+        stderr: &mut (dyn Write + Send),
+        liveness: Option<crate::Liveness<'_>>,
+    ) -> Result<ExecExit, Box<WireFailure>> {
         check(request).map_err(|cause| self.failure(cause))?;
         self.endpoint()?;
         let mut command = Command::new(&request.arguments[0]);
@@ -75,12 +89,24 @@ impl Sandbox {
         };
         let out = child.stdout.take();
         let err = child.stderr.take();
+        // the child is reported while it lives, beside the streams, and the
+        // reports stop as soon as it has exited (the leader is not reaped
+        // before the wait below, so a zombie is observed and not alive)
+        let (stop, wait) = std::sync::mpsc::channel();
         let copied = std::thread::scope(|scope| {
+            let watching = liveness.map(|liveness| {
+                scope
+                    .spawn(move || crate::local::process::watch_while_alive(leader, liveness, wait))
+            });
             let errors = scope.spawn(move || streams::copy(err, stderr));
             let outs = streams::copy(out, stdout);
             let errs = errors
                 .join()
                 .unwrap_or_else(|_| Err(io::Error::other("stderr copy panicked")));
+            drop(stop);
+            if let Some(watching) = watching {
+                let _ = watching.join();
+            }
             Ok::<_, io::Error>((outs?, errs?))
         });
         // the pipes are closed here either way; the exit is still waited for

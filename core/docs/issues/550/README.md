@@ -20,14 +20,21 @@ Two frames then report while the operation runs:
 - `{ progress: { seq, op, phase, ... } }` is the operation advancing. The
   worker sends a `start` and a `done` phase around every operation, and the
   operation's own path adds its progress: each `Context::progress` value
-  (`project.init`, `backup.create`, ...) and every chunk of a long command's
-  output. A command's output reports through `sandbox/runtime.rs`'s
-  `Reporting` sink (kept to the spool, reported at most every 500 ms), so a
-  long build is visibly progressing and is not mistaken for a wedged one.
-  The `start` and `done` frames are the worker's own bookkeeping: they are
-  marked `worker: true`, they bound the wait, and they are not forwarded to
-  the caller's event stream, so a worker call sees the same events as a
-  local call.
+  (`project.init`, `backup.create`, ...), every chunk of a long command's
+  output, and the command's own live child. A command's output reports
+  through `sandbox/runtime.rs`'s `Reporting` sink (kept to the spool,
+  reported at most every 500 ms), so a long build is visibly progressing and
+  is not mistaken for a wedged one. A command that writes nothing still has
+  a process: `Sandbox::run_reporting` observes it (a local process's id and
+  start time; a Docker Exec's `Running` inspection) and reports
+  `{ progress: { seq, op, phase: "running", pid } }` every 5 s while it is
+  alive. A zombie is not alive, and neither is a process that has exited
+  while a descendant still holds its pipes, so the reports stop with the
+  process the command started.
+  The `start`, `done` and `running` frames are the worker's own
+  bookkeeping: they are marked `worker: true`, they bound the wait, and they
+  are not forwarded to the caller's event stream, so a worker call sees the
+  same events as a local call.
 
 The two are carried on the one connection, in order, and never duplicate
 each other: there is one claim frame, one beat emitter (#556's) and one
@@ -45,12 +52,22 @@ its end, and its effects (a Commit, a mount, a written record) stay
 observable.
 
 This is not an operation-duration deadline: a 60 s operation that reports
-progress completes, and a long command keeps its whole duration; only an
-operation that shows no progress for the window is bounded. An operation
-that is silent for the whole window (a command that writes nothing and
-reports no phase) is indistinguishable from a wedged one and is `Unknown`;
-it is not killed -- it may still finish, and its effects stay observable.
-An operation that can be long and silent reports a phase or output.
+progress completes, and a long command keeps its whole duration. A quiet
+`sleep 60` or a build with no output is no longer silent: its live child is
+reported every 5 s (`RUNNING`, well inside `PROGRESS_WAIT`), so the caller
+keeps waiting and the exec lease it holds is not dropped under a running
+command (#566). The bound comes back when the child does not: an operation
+that never claims, that claims and never starts a command, or whose command
+has exited (a zombie is not alive; a descendant holding the pipes does not
+count) sends no more running frames and is `Unknown` within `PROGRESS_WAIT`.
+It is not killed -- it may still finish, and its effects stay observable.
+
+Liveness is not progress. A process that is alive but wedged inside cannot
+be told apart from a slow one, so it holds the call; only its end (or a
+caller's own deadline) bounds it. That is the narrower guarantee this
+protocol makes: the worker keeps a live child's lease and never claims to
+bound a genuinely long operation. An operation that can be long and silent
+but runs no child still reports a phase or output.
 
 The frame-level wait is still #556's: a frame is bounded as a whole (its
 length, every read, and its body at 64 KiB/s minimum), and an expiring wait
@@ -74,9 +91,23 @@ operation-progress wait:
   request, and the operation still finishes and records its result.
 - `a_long_operation_that_reports_progress_completes` -- a 60 s operation
   under the real windows completes: no blanket operation-duration deadline.
+- `a_quiet_command_that_keeps_its_process_alive_completes` -- a command
+  that writes nothing reports only `phase: "running"` every 100 ms for 1 s;
+  it completes under a 250 ms progress window, and those frames are not
+  forwarded as the caller's events.
+- `a_live_process_that_stops_reporting_is_unknown_in_bounded_time` -- three
+  running frames, then nothing: the operation becomes `Unknown` within the
+  window even though it once reported.
 - `the_worker_claims_and_reports_progress_before_its_answer` -- the real
   worker's frames: one claim, `start` and `done` progress in increasing
   `seq`, then the value.
+
+`connect/crates/layerfs-sandbox/tests/local_liveness.rs` (macOS, a stand-in
+native daemon) proves the producer the client test stands in for: a quiet
+`/bin/sleep 1` reports its live process at least five times and completes;
+`/bin/sh -c '/bin/sleep 2 & exit 0'` sends no report while its shell is
+already a zombie and the operation is still blocked on the descendant's
+pipes.
 
 The `Reporting` sink has no inline unit test: this repository's
 `tools/check_product_boundary.py` forbids test attributes in product source,
@@ -91,7 +122,9 @@ and a large answer that keeps arriving. `worker_hello`, `worker_frames`,
 cargo 1.90, on this branch (`CARGO_TARGET_DIR=/tmp/layerfs-target`):
 
 - `cargo test -p layerfs-control --test worker_progress -- --test-threads=1`
-  -- 7 passed (64 s; the 60 s case is the long one)
+  -- 9 passed (65.86 s; the 60 s case is the long one)
+- `cargo test -p layerfs-sandbox --test local_liveness -- --test-threads=1`
+  -- 2 passed (3.61 s, macOS native)
 - `cargo test -p layerfs-control --test worker_liveness --test worker_hello --test worker_frames --test worker_lifecycle --test worker_trace --test doctor`
   -- 3 + 7 + 5 + 1 + 1 + 4 passed
 - `cargo check -p layerfs-control --tests` -- exit 0
@@ -101,10 +134,13 @@ cargo 1.90, on this branch (`CARGO_TARGET_DIR=/tmp/layerfs-target`):
 - [x] **a dead worker never leaves a call hanging** -- a worker that stops
   answering its secret is `Unavailable`; one that answers then stops is
   `Unknown` within `CLAIM_WAIT`; a claimed operation that stops progressing
-  is `Unknown` within `PROGRESS_WAIT`. Nothing is resent.
-- [x] **heartbeat while an operation runs** -- the progress frames are the
-  operation's own heartbeat and the caller times them; #556's liveness beat
-  stays, and the caller never lets it refresh the operation wait.
+  or whose child is no longer alive is `Unknown` within `PROGRESS_WAIT`.
+  Nothing is resent.
+- [x] **a live child keeps the operation's lease** -- a quiet command's
+  process is progress (`phase: "running"`, every 5 s), so a `sleep 60` or a
+  silent build is not cut off and its exec lease is not released; a beat
+  still never refreshes the wait, and a live but wedged process is not
+  claimed to be bounded.
 
 ## Merge note
 

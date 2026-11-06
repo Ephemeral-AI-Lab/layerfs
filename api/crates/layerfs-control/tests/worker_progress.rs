@@ -104,6 +104,22 @@ fn progress(stream: &mut TcpStream, seq: u64) {
     );
 }
 
+/// The worker's own observation that a command's child is alive: progress
+/// enough to refresh the wait, and not forwarded as an operation event.
+fn running(stream: &mut TcpStream, seq: u64) {
+    let _ = write_frame(
+        stream,
+        &SdkValue::map([(
+            "progress",
+            SdkValue::map([
+                ("seq", SdkValue::Int(seq as i64)),
+                ("phase", SdkValue::text("running")),
+                ("worker", SdkValue::Bool(true)),
+            ]),
+        )]),
+    );
+}
+
 /// A liveness beat: the worker is alive, not that the operation advanced.
 fn beat(stream: &mut TcpStream) {
     let _ = write_frame(stream, &SdkValue::map([("beat", SdkValue::Bool(true))]));
@@ -202,6 +218,71 @@ fn progress_refreshes_the_wait() {
         seen.iter().any(|event| event.get("progress").is_some()),
         "{seen:?}"
     );
+}
+
+#[test]
+fn a_quiet_command_that_keeps_its_process_alive_completes() {
+    let (endpoint, connections) = stand_in(|stream| {
+        claimed(stream);
+        // a command that writes nothing: only its live child reports, longer
+        // than the shortened progress wait, and every frame still arrives
+        // inside it
+        for i in 0..10 {
+            std::thread::sleep(Duration::from_millis(100));
+            running(stream, i);
+        }
+        answer(stream, "quiet");
+    });
+    let started = Instant::now();
+    let mut seen = Vec::new();
+    let outcome = worker::call_with(
+        &endpoint,
+        "workspace.exec",
+        SdkValue::Null,
+        &mut |event| seen.push(event),
+        windows(500, 250),
+    );
+    assert_eq!(outcome.unwrap(), SdkValue::text("quiet"));
+    assert!(
+        started.elapsed() >= Duration::from_millis(1000),
+        "{:?}",
+        started.elapsed()
+    );
+    // the worker's own liveness frames bound the wait but are not the
+    // operation's events, so a worker call sees what a local call sees
+    assert!(seen.is_empty(), "{seen:?}");
+    assert_eq!(connections.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_live_process_that_stops_reporting_is_unknown_in_bounded_time() {
+    let (endpoint, connections) = stand_in(|stream| {
+        claimed(stream);
+        // the child is alive, then it is gone and the operation does not
+        // return: the wait must expire even though frames once arrived
+        for i in 0..3 {
+            std::thread::sleep(Duration::from_millis(100));
+            running(stream, i);
+        }
+        std::thread::sleep(Duration::from_secs(2));
+        answer(stream, "late");
+    });
+    let started = Instant::now();
+    let refusal = worker::call_with(
+        &endpoint,
+        "workspace.exec",
+        SdkValue::Null,
+        &mut |_| {},
+        windows(500, 250),
+    )
+    .unwrap_err();
+    let waited = started.elapsed();
+    assert_eq!(refusal.code, "Unknown", "{refusal:?}");
+    assert!(refusal.message.contains("no progress"), "{refusal:?}");
+    assert!(refusal.detail.get_bool("claimed"), "{refusal:?}");
+    assert!(waited < Duration::from_millis(1800), "{waited:?}");
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!(connections.load(Ordering::SeqCst), 1);
 }
 
 #[test]

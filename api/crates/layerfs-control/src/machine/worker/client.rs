@@ -3,6 +3,7 @@ use super::frame::{
     frame_bytes, is_liveness_timeout, read_frame_within_wait, write_frame, MAX_FRAME, MAX_HELLO,
 };
 use super::hello::Hello;
+use super::protocol::{CLAIM_WAIT, CONNECT, HELLO_WAIT, PING_WAIT, PROGRESS_WAIT, SEND_WAIT};
 use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::io::Write;
@@ -17,37 +18,6 @@ pub struct Endpoint {
     /// The worker's secret.
     pub secret: String,
 }
-
-const CONNECT: Duration = Duration::from_secs(10);
-
-/// How long the caller waits for the worker to answer its secret: the whole
-/// hello frame, not each socket read (a peer that trickles bytes cannot
-/// stretch it).
-pub const HELLO_WAIT: Duration = Duration::from_secs(10);
-
-/// How long the caller waits for a worker that read its request to claim it
-/// (`{ claimed: true }`). A worker that stops before claiming is dead: the
-/// call is `Unknown` within this wait.
-pub const CLAIM_WAIT: Duration = Duration::from_secs(10);
-
-/// How long the caller waits for the next sign that a claimed operation is
-/// advancing: a `progress` or an `event` frame refreshes it. A liveness
-/// `beat` does not: it says the worker process is alive, not that its
-/// operation advances, so a worker that keeps beating while its operation
-/// never returns is `Unknown` within this wait. It bounds no operation: one
-/// that reports progress keeps its whole duration.
-pub const PROGRESS_WAIT: Duration = Duration::from_secs(30);
-
-/// How often a worker beats while it runs an operation.
-pub const HEARTBEAT: Duration = Duration::from_secs(2);
-
-/// How long a ping waits for its answer, each frame of it.
-pub const PING_WAIT: Duration = Duration::from_secs(10);
-
-/// How long a socket write may make no progress. It bounds the connection,
-/// never the operation: a worker that stopped reading is `Unavailable` or
-/// `Unknown` within this wait, and a slow but live one keeps going.
-pub const SEND_WAIT: Duration = Duration::from_secs(60);
 
 /// What one call waits for: the claim after its request, and then each sign
 /// of operation progress. [`Default`] is [`CLAIM_WAIT`] and
@@ -269,8 +239,12 @@ pub fn hello(endpoint: &Endpoint) -> Result<Hello, SdkRefusal> {
 /// ping). Without it, after the request is sent the worker has
 /// [`CLAIM_WAIT`] to claim it and then each sign of operation progress has
 /// [`PROGRESS_WAIT`]: a `progress` or `event` frame refreshes that wait, a
-/// liveness `beat` does not. A wait that runs out is `Unknown`, because the
-/// request was sent and may have run; it is never resent. Each frame is
+/// liveness `beat` does not. A command's live child is such a `progress`
+/// frame (`phase: "running"`), so a quiet `sleep` or build keeps the wait
+/// while its process lives; an operation whose child is gone reports
+/// nothing more and is `Unknown` within [`PROGRESS_WAIT`]. A wait that runs
+/// out is `Unknown`, because the request was sent and may have run; it is
+/// never resent. Each frame is
 /// bounded as a whole: its length and every read within the wait, and its
 /// body within the wait or its length at a minimum rate, so a peer that
 /// trickles a frame cannot stretch a wait. A wait that expires writes one

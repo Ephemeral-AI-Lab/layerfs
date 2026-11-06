@@ -204,12 +204,28 @@ impl Sandbox {
         stdout: &mut (dyn Write + Send),
         stderr: &mut (dyn Write + Send),
     ) -> Result<ExecExit, Box<WireFailure>> {
+        self.run_reporting(request, stdout, stderr, None)
+    }
+
+    /// [`Self::run`] with the command's own process reported as alive while it
+    /// lives: a quiet command (`sleep`, a build with no output) is still
+    /// progressing, and a process that exited (even when a descendant holds
+    /// its pipes) stops the reports.
+    pub fn run_reporting(
+        &self,
+        request: &ExecRequest,
+        stdout: &mut (dyn Write + Send),
+        stderr: &mut (dyn Write + Send),
+        liveness: Option<crate::Liveness<'_>>,
+    ) -> Result<ExecExit, Box<WireFailure>> {
         match self {
-            Self::Docker(sandbox) => docker::run_command(sandbox, request, stdout, stderr),
+            Self::Docker(sandbox) => {
+                docker::run_command_reporting(sandbox, request, stdout, stderr, liveness)
+            }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Self::HostProcess(sandbox) => sandbox.run(request, stdout, stderr),
+            Self::HostProcess(sandbox) => sandbox.run_reporting(request, stdout, stderr, liveness),
             #[cfg(target_os = "linux")]
-            Self::Namespaces(sandbox) => sandbox.run(request, stdout, stderr),
+            Self::Namespaces(sandbox) => sandbox.run_reporting(request, stdout, stderr, liveness),
         }
     }
 

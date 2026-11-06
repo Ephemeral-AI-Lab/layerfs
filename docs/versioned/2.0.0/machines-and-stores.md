@@ -230,8 +230,11 @@ layerfs machine create host1 lima --nested
   (`{ claimed: true, op }`), reports operation progress
   (`{ progress: { seq, op, phase, ... } }`) before and after the operation
   and from its own path while it runs (a phase, a chunk of a command's
-  output), and beats (`{ beat: true }`) every 2 s while it runs. The
-  worker's own `start` and `done` progress frames carry `worker: true`: they
+  output), reports a command's live child (`phase: "running"`, with its
+  `pid`, every 5 s while the process the command started is alive), and
+  beats (`{ beat: true }`) every 2 s while it runs. The
+  worker's own `start`, `done` and `running` progress frames carry
+  `worker: true`: they
   bound the wait and are not passed to the caller's event stream, so the
   events a caller sees are the operation's own, as on a local call. The
   caller bounds its waiting, never the operation: 10 s for the claim, 30 s
@@ -254,12 +257,20 @@ layerfs machine create host1 lima --nested
   worker is refused before the request is sent instead of leaving a call to
   time out.
 - Progress is not a duration deadline. A long command keeps its whole
-  duration as long as it reports progress (a command's output reports at
-  most every 500 ms), and a 60 s operation that progresses completes. Only
-  an operation that shows no progress for the whole window is `Unknown`,
-  which is the case #550 item 1 names. An operation that is long and silent
-  must report a phase or its output; that is the contract the worker's
-  operation path keeps.
+  duration as long as it reports progress: its output (at most every
+  500 ms) or its live child (every 5 s). A quiet `sleep 60`, or a build
+  that prints nothing, is therefore live rather than silent, and a 60 s
+  operation that progresses completes. The child's life is the source of
+  that bound: a process that has exited (a zombie is not alive) stops the
+  running frames even when a descendant still holds its pipes, so the 30 s
+  window applies again. An operation with no live child — never claimed, or
+  claimed and its process gone or never started — is `Unknown` in bounded
+  time, which is the case #550 item 1 names. Liveness is not progress: a
+  process that stays alive while wedged inside cannot be told apart from a
+  slow one, so it holds the call; only its end (or a caller's own deadline)
+  bounds it. That is the narrower guarantee this protocol makes, and a
+  long operation that runs no child still reports a phase or its output,
+  as the worker's operation path does.
 - A worker holds a Store's lease for as long as it keeps the Store open,
   and closes its own open copy before a push, pull, retire or remove reads or
   deletes the file.

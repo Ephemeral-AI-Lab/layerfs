@@ -22,19 +22,26 @@
 //! operation advanced and refreshes the caller's wait; `{ beat: true }` says
 //! the worker process is alive and never refreshes it, so a worker that
 //! keeps beating while its operation never returns is `Unknown` within
-//! `PROGRESS_WAIT` instead of holding the call open. A frame is bounded as a
-//! whole: its length and every read within the wait, and its body within the
+//! `PROGRESS_WAIT` instead of holding the call open. A running command adds
+//! one progress source of its own: the worker reports its child while that
+//! process is alive (`phase: "running"`, every [`RUNNING`]), so a quiet
+//! `sleep` or build keeps its caller's wait while its process lives, and an
+//! operation whose child is gone (or never started) stops reporting and is
+//! bounded by `PROGRESS_WAIT` again. Liveness is not progress: a process
+//! that is alive but wedged is not distinguishable from a slow one. A frame
+//! is bounded as a whole: its length and every read within the wait, and its
+//! body within the
 //! wait or its length at a minimum rate, so a peer that trickles a frame
 //! cannot stretch a wait. A wait that expires writes one `layerfs worker:
 //! liveness timeout:` line to stderr.
 mod client;
 mod frame;
 mod hello;
+mod protocol;
 mod server;
 
 pub use client::{
     call, call_with, hello, ping, request, send, send_with, Endpoint, Unreached, Windows,
-    CLAIM_WAIT, HEARTBEAT, HELLO_WAIT, PING_WAIT, PROGRESS_WAIT, SEND_WAIT,
 };
 pub use frame::{
     frame_bytes, read_frame, read_frame_within, read_frame_within_wait, write_frame, MAX_FRAME,
@@ -43,4 +50,8 @@ pub use frame::{
 #[cfg(feature = "machine")]
 pub(crate) use hello::sealed_hash;
 pub use hello::{is_mismatch, replace_with, Hello, PROTOCOL};
-pub use server::{serve, Served, REQUEST_WAIT};
+pub use protocol::{
+    CLAIM_WAIT, CONNECT, HEARTBEAT, HELLO_WAIT, PING_WAIT, PROGRESS_WAIT, REQUEST_WAIT, RUNNING,
+    SEND_WAIT,
+};
+pub use server::{serve, Served};

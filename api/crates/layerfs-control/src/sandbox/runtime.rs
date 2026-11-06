@@ -7,6 +7,7 @@
 //! names its platform (#529), recorded beside the runtime; every later call
 //! follows the record, not the caller's deployment.
 use crate::common::outcome::{failed, refused};
+use crate::machine::worker::RUNNING;
 use crate::sandbox::output::Spool;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 #[cfg(target_os = "linux")]
@@ -263,8 +264,33 @@ pub(crate) fn run(
         directory: directory.to_owned(),
         stdin: false,
     };
+    // a command whose process is alive is progressing, even when it writes
+    // nothing: a `sleep` or a quiet build keeps its caller's wait fresh. It
+    // is the worker's own observation, so it refreshes the wait and is not
+    // forwarded as an operation event; it stops with the process.
+    let mut running = |pid: Option<u32>| {
+        let Ok(mut slot) = progress.lock() else {
+            return;
+        };
+        let Some(report) = slot.as_mut() else {
+            return;
+        };
+        let mut fields = vec![
+            ("phase".to_owned(), SdkValue::text("running")),
+            ("worker".to_owned(), SdkValue::Bool(true)),
+        ];
+        if let Some(pid) = pid {
+            fields.push(("pid".to_owned(), SdkValue::Int(i64::from(pid))));
+        }
+        report(SdkValue::map([("progress", SdkValue::Map(fields))]));
+    };
+    let reporting = progress.lock().is_ok_and(|slot| slot.is_some());
+    let liveness = reporting.then_some(layerfs_sandbox::Liveness {
+        every: RUNNING,
+        report: &mut running,
+    });
     let exit = runtime
-        .run(&request, &mut stdout, &mut stderr)
+        .run_reporting(&request, &mut stdout, &mut stderr, liveness)
         .map_err(failed)?;
     Ok((exit.code, stdout.into_spool(), stderr.into_spool()))
 }

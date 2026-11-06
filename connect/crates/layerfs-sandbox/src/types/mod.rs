@@ -11,7 +11,7 @@ mod request;
 mod transfer;
 pub use bind::Bind;
 pub use capabilities::{IsolationModel, MountDriver, ProviderCapabilities, SearchPathPolicy};
-pub use execution::{CommandIdentity, ExecInspection};
+pub use execution::{CommandIdentity, ExecInspection, Liveness};
 #[cfg(unix)]
 pub(crate) use failure::STOPPED;
 pub use failure::{ErrorDiagnostic, RuntimeError, WireFailure};

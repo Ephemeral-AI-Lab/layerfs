@@ -54,10 +54,10 @@ SLOW = {
     # Worker frame-level liveness: the death, trickled-answer and
     # large-answer proofs, measured 12.91 s on the macOS host, 2026-11-06.
     ("layerfs-control", "worker_liveness"): 12.91,
-    # Worker operation progress: claim, progress (including the 60 s case)
-    # and beat-is-not-progress proofs, measured 64.07 s on the macOS host,
-    # 2026-11-06.
-    ("layerfs-control", "worker_progress"): 64.07,
+    # Worker operation progress: claim, progress (including the 60 s case),
+    # a quiet command's live child and beat-is-not-progress proofs, measured
+    # 65.86 s on the macOS host, 2026-11-06.
+    ("layerfs-control", "worker_progress"): 65.86,
     # Linux functional run at the relocated tree, 2026-10-27.
     ("layerfs-persistence", "writer_admission"): 9.74,
     ("layerfs-store-service", "scale_lineage_cap"): 24.3,

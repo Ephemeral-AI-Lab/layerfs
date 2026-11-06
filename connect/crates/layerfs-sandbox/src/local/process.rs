@@ -6,6 +6,7 @@
 pub(crate) use super::os::{boot, stat};
 use nix::{sys::signal::Signal, unistd::Pid};
 use std::io;
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 
 /// One started process: its id, its start time in clock ticks since boot
 /// (`/proc/<pid>/stat` field 22) and the boot it started in
@@ -82,4 +83,26 @@ pub(crate) fn pid(id: u32) -> io::Result<Pid> {
     i32::try_from(id)
         .map(Pid::from_raw)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "process id width"))
+}
+
+/// Reports `liveness` every `every` while `leader` is alive, until `stop`
+/// receives or disconnects. A zombie is not alive, so a child that exited
+/// (even when a descendant still holds its pipes) ends the reports at once.
+pub(crate) fn watch_while_alive(
+    leader: LocalProcess,
+    liveness: crate::Liveness<'_>,
+    stop: Receiver<()>,
+) {
+    let crate::Liveness { every, report } = liveness;
+    loop {
+        match stop.recv_timeout(every) {
+            Ok(()) | Err(RecvTimeoutError::Disconnected) => return,
+            Err(RecvTimeoutError::Timeout) => {
+                if !leader.alive() {
+                    return;
+                }
+                report(Some(leader.pid));
+            }
+        }
+    }
 }

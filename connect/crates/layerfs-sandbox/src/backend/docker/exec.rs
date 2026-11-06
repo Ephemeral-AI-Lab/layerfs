@@ -2,7 +2,7 @@
 //! acknowledged runtime custody, one structurally decoded inspection that
 //! keeps no Arguments, and the provider's noninteractive run over them with
 //! streamed output and exact failure custody.
-use super::{Docker, ProviderFailure, Sandbox};
+use super::{Docker, ExecHandle, ProviderFailure, Sandbox};
 use crate::json::quoted;
 use crate::json::{once, Json};
 pub use crate::ExecRequest;
@@ -265,11 +265,15 @@ fn failure(container: ContainerId, cause: ProviderFailure) -> Box<WireFailure> {
     outer.cause = RuntimeError::Docker(Box::new(cause));
     outer
 }
-pub(crate) fn run(
+/// One Exec with its own process reported as alive: every
+/// `liveness.every` the Engine's inspection says it runs, and no longer once
+/// it has exited. The observer runs beside the command's streams.
+pub(crate) fn run_reporting(
     sandbox: &Sandbox,
     request: &ExecRequest,
     mut stdout: &mut (dyn Write + Send),
     mut stderr: &mut (dyn Write + Send),
+    liveness: Option<crate::Liveness<'_>>,
 ) -> Result<ExecExit, Box<WireFailure>> {
     if request.stdin {
         return Err(
@@ -288,7 +292,22 @@ pub(crate) fn run(
         .map_err(|f| failure(id, ProviderFailure::ExecSplit(f)))?;
     // Stdin was disabled in the creation request; dropping it sends no cancellation.
     drop(input);
-    let progress = match output.copy_to(&mut stdout, &mut stderr) {
+    // the attached stream can stay silent while the Exec runs: its process is
+    // reported while the Engine says it runs, and not after it has exited
+    let (stop, wait) = std::sync::mpsc::channel();
+    let copied = std::thread::scope(|scope| {
+        let watching = liveness.map(|liveness| {
+            let handle = &handle;
+            scope.spawn(move || watch_exec(handle, liveness, wait))
+        });
+        let copied = output.copy_to(&mut stdout, &mut stderr);
+        drop(stop);
+        if let Some(watching) = watching {
+            let _ = watching.join();
+        }
+        copied
+    });
+    let progress = match copied {
         Ok(progress) => progress,
         Err(f) => {
             return Err(failure(
@@ -326,4 +345,24 @@ pub(crate) fn run(
         stdout_bytes: progress.stdout,
         stderr_bytes: progress.stderr,
     })
+}
+
+/// Reports one running Exec's process while the Engine inspection says it
+/// runs, until `stop` or the first inspection that does not. An inspection
+/// failure ends the reports; it never ends the command.
+fn watch_exec(
+    handle: &ExecHandle,
+    liveness: crate::Liveness<'_>,
+    stop: std::sync::mpsc::Receiver<()>,
+) {
+    let crate::Liveness { every, report } = liveness;
+    loop {
+        match stop.recv_timeout(every) {
+            Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => match handle.inspect() {
+                Ok(inspection) if inspection.running => report(inspection.pid),
+                _ => return,
+            },
+        }
+    }
 }

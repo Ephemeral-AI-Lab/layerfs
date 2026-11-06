@@ -8,11 +8,14 @@
 //! read with at most [`REQUEST_WAIT`] between bytes. Once it is read, the
 //! worker claims it (`{ claimed: true, op }`) and then reports operation
 //! progress (`{ progress: { seq, op, phase, ... } }`) before and after the
-//! operation, and from its own path while it runs (a phase, a chunk of a
-//! command's output). It also beats (`{ beat: true }`) every [`HEARTBEAT`]
+//! operation, and from its own path while it runs: a phase, a chunk of a
+//! command's output, and a command's live child (`phase: "running"`, every
+//! 5 s, `RUNNING`). It also beats (`{ beat: true }`) every [`HEARTBEAT`]
 //! while the operation runs: the beat says the process is alive, progress
 //! says the operation is advancing, and the caller times the operation on
-//! the latter only. `worker.ping` answers who it is;
+//! the latter only. A quiet command is progress while its process lives; a
+//! command whose process is gone stops reporting, and the caller's progress
+//! wait bounds it again. `worker.ping` answers who it is;
 //! `store.call`, `store.file`, `sandbox.host`, `project.stage`,
 //! `project.init` and `project.remove` run one operation on this machine,
 //! with `home` set to the worker's own root (the machine's data disk),
@@ -23,9 +26,9 @@
 //! A request may carry `home_id`, the caller's home id: the root is not a
 //! home and has no id of its own (O33), so host code that asks for one
 //! gets the caller's, and the root is never converted or written as a home.
-use super::client::{HEARTBEAT, HELLO_WAIT, SEND_WAIT};
 use super::frame::{read_frame, read_frame_within_wait, write_frame, MAX_HELLO};
 use super::hello::Hello;
+use super::protocol::{HEARTBEAT, HELLO_WAIT, REQUEST_WAIT, SEND_WAIT};
 use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::net::{TcpListener, TcpStream};
@@ -33,9 +36,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
-
-/// The longest the worker waits for the next byte of a request.
-pub const REQUEST_WAIT: Duration = Duration::from_secs(30);
 
 /// What a worker served before it stopped.
 #[derive(Debug, Default)]

@@ -4,6 +4,7 @@
 //! the helper's own pipes; nothing of this process's environment but the
 //! search path reaches it, and no stdin is offered.
 use super::sandbox::Sandbox;
+use crate::local::process::LocalProcess;
 use crate::local::search::search_path;
 use crate::local::streams;
 use crate::ExecExit;
@@ -26,6 +27,19 @@ impl Sandbox {
         request: &ExecRequest,
         stdout: &mut (dyn Write + Send),
         stderr: &mut (dyn Write + Send),
+    ) -> Result<ExecExit, Box<WireFailure>> {
+        self.run_reporting(request, stdout, stderr, None)
+    }
+
+    /// [`Self::run`] with its helper, whose life is the command's, reported as
+    /// alive every `liveness.every` until it has exited (a zombie is not
+    /// alive). The observer runs beside the streams.
+    pub fn run_reporting(
+        &self,
+        request: &ExecRequest,
+        stdout: &mut (dyn Write + Send),
+        stderr: &mut (dyn Write + Send),
+        liveness: Option<crate::Liveness<'_>>,
     ) -> Result<ExecExit, Box<WireFailure>> {
         check(request).map_err(|cause| self.failure(cause))?;
         let init = self
@@ -65,14 +79,26 @@ impl Sandbox {
             failure
         })?;
         let pid = child.id();
+        // the helper's life is the command's: report it while it lives, and
+        // stop once it has exited even if a descendant still holds the pipes
+        let leader = LocalProcess::observe(pid).ok();
         let out = child.stdout.take();
         let err = child.stderr.take();
+        let (stop, wait) = std::sync::mpsc::channel();
         let copied = std::thread::scope(|scope| {
+            let watching = liveness.zip(leader).map(|(liveness, leader)| {
+                scope
+                    .spawn(move || crate::local::process::watch_while_alive(leader, liveness, wait))
+            });
             let errors = scope.spawn(move || streams::copy(err, stderr));
             let outs = streams::copy(out, stdout);
             let errs = errors
                 .join()
                 .unwrap_or_else(|_| Err(io::Error::other("stderr copy panicked")));
+            drop(stop);
+            if let Some(watching) = watching {
+                let _ = watching.join();
+            }
             Ok::<_, io::Error>((outs?, errs?))
         });
         // the pipes are closed here either way; the exit is still waited for

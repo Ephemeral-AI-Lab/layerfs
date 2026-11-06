@@ -2,6 +2,7 @@
 #[cfg(unix)]
 use super::RuntimeError;
 use super::{ContainerId, ExecId};
+use std::time::Duration;
 /// Explicit nonroot identity for ordinary commands.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CommandIdentity {
@@ -39,4 +40,16 @@ impl ExecInspection {
             self.exit_code
         }
     }
+}
+
+/// Where a running command reports that its process is still alive, and how
+/// often. This is a liveness source, never an operation duration: a caller
+/// that forwards it as progress keeps waiting while the process lives, and a
+/// process that has exited (including a zombie) stops the reports.
+pub struct Liveness<'a> {
+    /// How often the process is observed. A report is at most this late.
+    pub every: Duration,
+    /// Called while that process is alive, with its id when the backend knows
+    /// one. It never blocks the command: the observer runs beside the streams.
+    pub report: &'a mut (dyn FnMut(Option<u32>) + Send),
 }

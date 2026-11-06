@@ -16,7 +16,7 @@ mod topology;
 mod upload;
 pub(crate) use adapter::ADAPTER;
 pub use client::Docker;
-pub(crate) use exec::run as run_command;
+pub(crate) use exec::run_reporting as run_command_reporting;
 pub use exec::{ExecCreateFailure, ExecCreated, ExecRequest};
 pub use failure::ProviderFailure;
 pub use listener::{ListenerFailure, ListenerObservation};
