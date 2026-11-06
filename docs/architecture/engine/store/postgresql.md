@@ -102,6 +102,17 @@ counters (zero on SQLite):
 A connection's handshake (TCP, the SSL probe of `sslmode=prefer`, startup
 and authentication) is one `connects`, not part of `round_trips`.
 
+Each statement waits for its reply before the next is sent; nothing is
+pipelined. The session uses the synchronous `postgres` client, which does not
+expose the `tokio_postgres` client inside it, so pipelining independent
+statements would mean rewriting the session layer on `tokio-postgres` with
+its own runtime. That was left out of layerfs-project #95; it reduced round
+trips by batching instead (a Commit validates through its Workspace's reader,
+reads a Commit or Layer by id in one statement, and difference walks read
+the pages they expand in batched demands). A fresh daemon's first Commit
+still opens the lazy lane connection (owner decision 2026-11-06: every
+Commit holds the lane; the connection is not opened eagerly).
+
 The connection string's `sslmode` is used exactly as given; nothing changes
 it. The driver's default, `prefer`, sends an SSLRequest first and costs one
 more round trip per connection on a server without TLS. On a loopback or
