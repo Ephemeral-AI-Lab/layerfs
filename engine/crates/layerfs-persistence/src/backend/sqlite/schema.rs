@@ -307,7 +307,7 @@ impl super::session::connection::Session {
         &self,
         catalog_id: layerfs_history::CatalogId,
         binding: &[u8],
-    ) -> Result<u64, BackendError> {
+    ) -> Result<(u64, u64), BackendError> {
         self.run::<_,BackendError>(false,|tx| {
    let selection=(self.layout,self.acquisition);
    check(tx.connection,tx.work,selection)?;
@@ -315,7 +315,9 @@ impl super::session::connection::Session {
    let r=rows.first().filter(|_|rows.len()==1).ok_or(BackendError::Integrity)?;
    let incarnation:i64=r.get(1)?;
    if r.get::<Vec<u8>>(0)?!=catalog_id.as_slice() || r.get::<Vec<u8>>(2)?!=binding || incarnation<=0 || r.get::<i64>(3)?!=3 || r.get::<i64>(4)?!=self.schema_version() || r.get::<String>(5)?!=source(selection) || r.get::<String>(6)?!=definition(tx.connection,tx.work)? {return Err(BackendError::Integrity);}
-   Ok(incarnation as u64)
+   let floor=tx.query("SELECT small_file_threshold_bytes FROM store_policy WHERE id=1",vec![])?;
+   let floor=u64::try_from(floor.first().ok_or(BackendError::Integrity)?.get::<i64>(0)?).map_err(|_|BackendError::Integrity)?;
+   Ok((incarnation as u64, floor))
   })
     }
 }

@@ -101,7 +101,7 @@ impl SqliteHandles {
             return Err(PersistenceError::Malformed);
         }
         let catalog_id = CatalogId::derive(binding).map_err(|_| PersistenceError::Malformed)?;
-        let incarnation = session.validate(catalog_id, binding)?;
+        let (incarnation, digest_floor) = session.validate(catalog_id, binding)?;
         let storage = Arc::new(StorageProvider {
             session: session.clone(),
         });
@@ -113,6 +113,7 @@ impl SqliteHandles {
                 catalog_id,
                 incarnation,
                 cursor_key,
+                digest_floor,
             },
         })
     }

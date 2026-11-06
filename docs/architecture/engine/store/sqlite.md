@@ -59,7 +59,7 @@ The SQLite backend.
 | `binding_hint_block` | `(grp, seq)` | One write's name bindings of saved trees for the 64 serials of group `grp` (`child >> 6`), in a block of at most 4,000 bytes (#91) | same |
 | `layer_lineage`, `commit_lineage`, `absorbed`, `reach` | see file | Ancestry without walking history | [`lineage.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/lineage.sql) |
 | `merge_operation`, `merge_record` | `operation`; `(operation, kind, key)` | One merge's spilled build records | [`merge_scratch.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/merge_scratch.sql) |
-| `file_digest` | `(digest, length)` | Saved file root by content digest | [`file_digest.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/file_digest.sql) |
+| `file_digest` | `(digest, length)` | Saved file root by content digest, chunked files only (length at or above `small_file_threshold_bytes`) | [`file_digest.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/file_digest.sql) |
 | `init_*` | operation-prefixed | Init's acquisition working state | [`acquisition/schema.sql`](../../../../engine/crates/layerfs-persistence/sql/sqlite/acquisition/schema.sql) |
 
 Every table is `STRICT`; history keys are `WITHOUT ROWID` blobs whose first

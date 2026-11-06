@@ -17,10 +17,10 @@ impl HistoryCatalog for HistoryProvider {
         self.read(|tx| hints::of(tx, child))
     }
     fn record_file_digests(&self, rows: &[layerfs_history::FileDigest]) -> HistoryResult<()> {
-        self.write(|tx| super::digests::record(tx, rows))
+        self.write(|tx| super::digests::record(tx, rows, self.digest_floor))
     }
     fn file_roots(&self, contents: &[([u8; 32], u64)]) -> HistoryResult<Vec<Option<[u8; 32]>>> {
-        self.read_statement(|tx| super::digests::roots(tx, contents))
+        super::digests::roots(self, contents)
     }
     fn catalog_id(&self) -> CatalogId {
         self.catalog_id
