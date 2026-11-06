@@ -171,29 +171,54 @@ The last line is the no-fallback rule in one place: **four policy outcomes and o
 failure outcome**, and `DeltaCounters` counts them separately so a receipt can say
 *why* FULL was chosen.
 
-**Three roles take a payload delta base, and inode-table branches take a
-metadata program.** `select()` returns early for the other ten tree roles, and
-since #360 item 3 (2026-10-19) hands an `InodeBranch` to `delta::branch`:
+**Three roles take a payload delta base, and five page roles take a metadata
+program.** `select()` returns early for the ten tree roles. Since #360 item 3
+(2026-10-19) it hands an `InodeBranch` to `delta::branch`, and since
+layerfs-project #92 it hands directory and extent pages there as well
+(`pool::branch::is_program_role`):
 
 ```rust
 ObjectRole::ExtentLeaf | ExtentBranch | FileState
 | DirectoryLeaf | DirectoryBranch | InodeBranch
 | FilesystemRoot | AttributeLeaf | AttributeBranch | Symlink
     => encode_full(...)            // stored whole ...
-       InodeBranch => branch::select(...)  // ... or COPY/INSERT vs predecessor
+       InodeBranch | DirectoryLeaf | DirectoryBranch
+       | ExtentLeaf | ExtentBranch
+           => branch::select(...)  // ... or COPY/INSERT vs predecessor
 
 ObjectRole::InodeLeaf => Err(...)  // pooled lane, handled by select_pooled
 ```
 
-Tree pages carry an `UnchangedPrefix` predecessor from `sorted/page.rs`. Only
-the inode branch consumes it: one trial of the pooled COPY/INSERT producer
-against that predecessor, under the metadata depth cap (8) and chain budgets
-(64 KiB canonical, 139 KiB encoded record bytes), kept only when shorter than the
-whole record. Every other tree role still discards it. The branch record is
-`0 | canonical page` (whole, the only form before item 3) or
-`1 | base id | output length | count | program`, read under the `InodeBranch`
-role by `pool::branch`. Branch counts are kept apart from the payload counts
-(`DeltaCounters::branch`), so they never move the whole-file delta hit rate.
+Directory and inode pages carry the predecessor `sorted/page.rs` sets: the page
+they replace, or, after a split or merge, the stored page they were split from or
+merged into (`Page::hint`, #92). Extent pages carry a **positional** predecessor:
+the stored page of the earlier version at the same level whose logical range
+holds the new page's first byte (`file/mapping/hints.rs`). An edit offers it
+from the file state it started from, lazily through its own page memo
+(`file/edit/engine.rs`); a complete reconstruction offered the earlier version
+(rename-over, recreate at path) collects that version's branch levels once, at
+most 64 branch pages, for the streaming builder (`file/mapping/build.rs`). A leaf
+is never read for a hint. A program page consumes its first predecessor of its
+own role: one trial of the pooled COPY/INSERT producer, under the metadata depth
+cap (8) and chain budgets (64 KiB canonical, 139 KiB encoded record bytes), kept
+only when shorter than the whole record; a chain at those limits re-bases onto
+its root (#89). `FileState`, `FilesystemRoot`, attribute pages and symlinks still
+discard their predecessor. A program page's record is `0 | canonical page`
+(whole) or `1 | base id | output length | count | program`, read under the
+locator's role by `pool::branch`, so a chain never crosses roles and every read
+of a page reconstructs at most nine records. Counts are kept apart from the
+payload counts (`DeltaCounters::branch`, `::directory`, `::extent`), so they never
+move the whole-file delta hit rate.
+
+**Format (#92).** Directory and extent programs are a record-grammar change, so
+every ordinary pack is now written at framing version 26
+(`VERSION_ORDINARY_PAGES`, the sized v24 layout byte for byte). A 2.0 reader,
+which accepts tag one for inode-table branches only, refuses a v26 pack by
+version rather than failing inside a decode; this reader reads v9, v19, v24 and
+v26. Migration: none is needed for existing Stores. Their v24 packs read
+unchanged, and new Saves append v26 packs whose programs may name v24 pages as
+bases. A Store that a #92 build has written to cannot be opened for reading by a
+2.0 build. Going back means exporting from a #92 build, not a downgrade in place.
 See [§13.6](#136-what-is-not-established).
 
 ### 12.6 The funnel
@@ -412,11 +437,12 @@ chains are *dense*, that is when most chunks have been modified at some point.
 
 Recorded as `unknown` rather than guessed:
 
-- **The `UnchangedPrefix` predecessor on tree pages is inert, except for inode
-  branches.** `sorted/page.rs` sets it; since #360 item 3 an `InodeBranch` takes
-  a COPY/INSERT program against it (§12.5). For every other tree role nothing
-  consumes it (`select()` discards it, and `placement.rs` never reads
-  predecessors). Bounded, deduplicated and harmless — but not acted on there.
+- **The predecessor on tree pages is inert, except for program pages.**
+  `sorted/page.rs` and the extent hints set it; inode-table branches (#360
+  item 3) and directory and extent pages (#92) take a COPY/INSERT program
+  against it (§12.5). For `FileState`, `FilesystemRoot`, attribute pages and
+  symlinks nothing consumes it (`select()` discards it, and `placement.rs` never
+  reads predecessors).
 - **Whether delta is worth its read cost.** [§12.5](#125-delta--one-trial-complete-cost-comparison)
   describes the mechanism; the storage it recovers and the read work it adds are
   measurement questions. [`09-delta-hints.md`](09-delta-hints.md) states the test.

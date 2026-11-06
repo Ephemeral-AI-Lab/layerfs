@@ -130,7 +130,10 @@ impl ExtentBuilder {
         self.extend(level, entry, tail as usize)?;
         if pages != 0 {
             let node = uniform_node(entry, level)?;
-            let summary = emit_node(consumer, &node, &mut self.build, false)?;
+            // One canonical page stands for `pages` pages of this level; it is
+            // offered no positional base.
+            self.advance(level, pages, node.logical_len())?;
+            let summary = emit_node(consumer, &node, &mut self.build, false, None)?;
             self.repeat(level + 1, Entry::Child(summary), pages, consumer)?;
         }
         Ok(())

@@ -11,7 +11,8 @@ use layerfs_storage::pack::layout::{
     body_area_offset, directory_entry_len, directory_group_views, group_view, parse_header,
     sized_body_offset, PackLane, PACK_MAGIC, TIGHT_GROUPS, USED_OFFSET, VERSION_CHUNK,
     VERSION_CHUNK_SIZED, VERSION_CHUNK_STORED, VERSION_CHUNK_TIGHT, VERSION_ORDINARY,
-    VERSION_ORDINARY_SIZED, VERSION_ORDINARY_TIGHT, VERSION_SINGLETON, VERSION_SINGLETON_STORED,
+    VERSION_ORDINARY_PAGES, VERSION_ORDINARY_SIZED, VERSION_ORDINARY_TIGHT, VERSION_SINGLETON,
+    VERSION_SINGLETON_STORED,
     VERSION_WHOLE_FILE, VERSION_WHOLE_FILE_GROUPED, VERSION_WHOLE_FILE_SIZED,
     VERSION_WHOLE_FILE_STORED, VERSION_WHOLE_FILE_TIGHT,
 };
@@ -31,7 +32,7 @@ fn pack_of(lane: PackLane, version: u32, groups: u32, body: usize) -> Vec<u8> {
         | (PackLane::Ordinary, VERSION_ORDINARY_TIGHT)
         | (PackLane::Chunk, VERSION_CHUNK_TIGHT) => body_area_offset(lane) + body,
         (PackLane::WholeFile, VERSION_WHOLE_FILE_SIZED)
-        | (PackLane::Ordinary, VERSION_ORDINARY_SIZED)
+        | (PackLane::Ordinary, VERSION_ORDINARY_SIZED | VERSION_ORDINARY_PAGES)
         | (PackLane::Chunk, VERSION_CHUNK_SIZED) => sized_body_offset(lane, groups as usize) + body,
         (PackLane::WholeFile, _) => 24 + 4 * 256 + body,
         (PackLane::Ordinary | PackLane::Chunk, _) => 24 + 16 * 256 + body,
@@ -143,6 +144,7 @@ fn every_implemented_framing_is_recognized_by_its_own_version() {
         (VERSION_ORDINARY, PackLane::Ordinary),
         (VERSION_ORDINARY_TIGHT, PackLane::Ordinary),
         (VERSION_ORDINARY_SIZED, PackLane::Ordinary),
+        (VERSION_ORDINARY_PAGES, PackLane::Ordinary),
         (VERSION_CHUNK, PackLane::Chunk),
         (VERSION_CHUNK_STORED, PackLane::Chunk),
         (VERSION_CHUNK_TIGHT, PackLane::Chunk),
@@ -353,7 +355,7 @@ fn written_packs_size_their_directory_to_their_groups() {
 
     let mut workspace = CompressionWorkspace::new().expect("encode workspace");
     for (lane, version) in [
-        (PackLane::Ordinary, VERSION_ORDINARY_SIZED),
+        (PackLane::Ordinary, VERSION_ORDINARY_PAGES),
         (PackLane::Chunk, VERSION_CHUNK_SIZED),
         (PackLane::WholeFile, VERSION_WHOLE_FILE_SIZED),
     ] {

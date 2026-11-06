@@ -355,7 +355,14 @@ impl PoolReader {
                 return Err(StorageError::Integrity("group body length"));
             }
             let record = crate::encoding::decode::framed_record(&body, location.record_number)?;
-            if record.len() > METADATA_RECORD_LIMIT {
+            // A whole program page is its tag and a canonical page that may itself
+            // reach the metadata record limit (#92).
+            let limit = if crate::encoding::pool::branch::is_program_role(location.role) {
+                crate::encoding::pool::branch::PAGE_RECORD_LIMIT
+            } else {
+                METADATA_RECORD_LIMIT
+            };
+            if record.len() > limit {
                 return Err(StorageError::Integrity("pooled record limit"));
             }
             Ok(record.to_vec())
