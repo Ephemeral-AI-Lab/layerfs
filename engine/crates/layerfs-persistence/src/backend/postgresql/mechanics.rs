@@ -27,7 +27,8 @@ impl HistoryStatements for Transaction<'_> {
         key: &str,
         columns: Vec<Column>,
     ) -> Option<Result<Vec<Record>, BackendError>> {
-        let sql = history::statements::arrays(key)?;
+        // An array statement may name the schema (`{s}`) to run alone.
+        let sql = history::statements::arrays(key)?.replace("{s}", self.schema);
         let mut bytes = 0u64;
         let bound: Vec<Box<dyn ToSql + Sync>> = columns
             .into_iter()
@@ -46,7 +47,7 @@ impl HistoryStatements for Transaction<'_> {
             .collect();
         let refs: Vec<&(dyn ToSql + Sync)> = bound.iter().map(|b| b.as_ref()).collect();
         Some(
-            self.typed(sql, &refs, bytes)
+            self.typed(&sql, &refs, bytes)
                 .and_then(|found| found.iter().map(rows::record).collect()),
         )
     }

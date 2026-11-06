@@ -41,7 +41,8 @@ impl HistoryProvider {
     }
     /// One read statement in its own snapshot. On PostgreSQL it runs alone,
     /// without `BEGIN`/`COMMIT` round trips, and its text names the schema; a
-    /// second statement is refused. SQLite runs it in one read transaction.
+    /// second statement is refused. SQLite runs it in one read transaction,
+    /// where a body may fall back to several statements (`digests::roots`).
     pub(crate) fn read_statement<T>(
         &self,
         f: impl FnOnce(&Transaction<'_>) -> HistoryResult<T>,
