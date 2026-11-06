@@ -12,7 +12,6 @@
 //! A live lease blocks a close (`LeaseActive`); it is never a reason to
 //! kill. An expired lease moves the record to `Lost`, which `sandbox get`
 //! shows; a later close reclaims the record without touching a runtime.
-use crate::common::home;
 use crate::common::op::Standing;
 use crate::common::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -36,7 +35,7 @@ pub const EXEC_LEASE_MS: i64 = 15 * 60 * 1000;
 
 /// One active exec lease.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ExecLease {
+pub struct LeaseRecord {
     /// The lease's identity, `lease-<16 hex>`.
     pub id: String,
     /// When it expires, in Unix milliseconds.
@@ -53,14 +52,14 @@ pub fn generation_of(record: &SdkValue) -> u64 {
 }
 
 /// The exec leases `record` holds.
-pub fn leases_of(record: &SdkValue) -> Vec<ExecLease> {
+pub fn leases_of(record: &SdkValue) -> Vec<LeaseRecord> {
     let Some(SdkValue::List(items)) = record.get(LEASES) else {
         return Vec::new();
     };
     items
         .iter()
         .filter_map(|item| {
-            Some(ExecLease {
+            Some(LeaseRecord {
                 id: item.get_text("id")?.to_owned(),
                 deadline: item.get_int("deadline")?,
             })
@@ -72,7 +71,7 @@ pub fn leases_of(record: &SdkValue) -> Vec<ExecLease> {
 pub fn with_lease(record: SdkValue, id: &str, deadline: i64) -> SdkValue {
     let mut leases = leases_of(&record);
     leases.retain(|lease| lease.id != id);
-    leases.push(ExecLease {
+    leases.push(LeaseRecord {
         id: id.to_owned(),
         deadline,
     });
@@ -87,12 +86,12 @@ pub fn with_lease(record: SdkValue, id: &str, deadline: i64) -> SdkValue {
             })
             .collect(),
     );
-    home::with_field(record, LEASES, list)
+    with_field(record, LEASES, list)
 }
 
 /// `record` without lease `id`.
 pub fn without_lease(record: SdkValue, id: &str) -> SdkValue {
-    let leases: Vec<ExecLease> = leases_of(&record)
+    let leases: Vec<LeaseRecord> = leases_of(&record)
         .into_iter()
         .filter(|lease| lease.id != id)
         .collect();
@@ -110,7 +109,7 @@ pub fn without_lease(record: SdkValue, id: &str) -> SdkValue {
             })
             .collect(),
     );
-    home::with_field(record, LEASES, list)
+    with_field(record, LEASES, list)
 }
 
 /// `record` with every exec lease removed.
@@ -120,7 +119,7 @@ pub fn without_leases(record: SdkValue) -> SdkValue {
 
 /// `record` with its last activity set from the monotonic clock.
 pub fn with_activity(record: SdkValue, monotonic_ms: i64) -> SdkValue {
-    home::with_field(record, LAST_ACTIVITY, SdkValue::Int(monotonic_ms))
+    with_field(record, LAST_ACTIVITY, SdkValue::Int(monotonic_ms))
 }
 
 /// `record` marked `Lost`: no intent, no lease, `reason` recorded, and the
@@ -128,8 +127,8 @@ pub fn with_activity(record: SdkValue, monotonic_ms: i64) -> SdkValue {
 pub fn with_lost(record: SdkValue, reason: &str, monotonic_ms: i64) -> SdkValue {
     let record = without_field(record, crate::common::op::FIELD);
     let record = without_leases(record);
-    let record = home::with_field(record, LOST, SdkValue::Bool(true));
-    let record = home::with_field(record, CLOSE_REASON, SdkValue::text(reason));
+    let record = with_field(record, LOST, SdkValue::Bool(true));
+    let record = with_field(record, CLOSE_REASON, SdkValue::text(reason));
     with_activity(record, monotonic_ms)
 }
 
@@ -173,15 +172,13 @@ pub enum SandboxState {
     /// Its runtime ended without a close: an expired lease or a provider
     /// that no longer has it.
     Lost,
-    /// A create failed and its record was kept with the failure.
-    Failed,
     /// An operation's outcome is not known: a gone owner left it uncertain.
     Unresolved,
 }
 
 impl SandboxState {
     /// Every state, in lifecycle order.
-    pub const ALL: [SandboxState; 10] = [
+    pub const ALL: [SandboxState; 9] = [
         Self::Creating,
         Self::Provisioning,
         Self::Starting,
@@ -190,7 +187,6 @@ impl SandboxState {
         Self::Draining,
         Self::Closed,
         Self::Lost,
-        Self::Failed,
         Self::Unresolved,
     ];
 
@@ -205,7 +201,6 @@ impl SandboxState {
             Self::Draining => "draining",
             Self::Closed => "closed",
             Self::Lost => "lost",
-            Self::Failed => "failed",
             Self::Unresolved => "unresolved",
         }
     }
@@ -223,7 +218,8 @@ impl SandboxState {
             "draining" | "closing" => Some(Self::Draining),
             "closed" | "gone" => Some(Self::Closed),
             "lost" => Some(Self::Lost),
-            "failed" => Some(Self::Failed),
+            // `failed` is a machine record's state, not a Sandbox's: no
+            // Sandbox path writes it, so it names no Sandbox state.
             "unresolved" | "unknown" => Some(Self::Unresolved),
             _ => None,
         }
@@ -369,6 +365,7 @@ pub enum CloseRefusal {
 }
 
 /// What the close protocol says to do next.
+#[must_use]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CloseDecision {
     /// Win the generation CAS and enter `Draining`.
@@ -440,7 +437,7 @@ pub fn stale_generation(name: &str, expected: u64, current: u64) -> SdkRefusal {
 }
 
 /// The refusal of a close while an exec lease is live.
-pub fn lease_active(name: &str, leases: &[ExecLease]) -> SdkRefusal {
+pub fn lease_active(name: &str, leases: &[LeaseRecord]) -> SdkRefusal {
     let ids: Vec<SdkValue> = leases
         .iter()
         .map(|lease| SdkValue::text(&lease.id))
@@ -540,6 +537,7 @@ impl ReclaimPolicy {
 }
 
 /// What automatic reclamation may do.
+#[must_use]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReclaimDecision {
     /// Delete the stopped runtime and its folder.
@@ -643,4 +641,19 @@ fn flag(name: &str, default: bool) -> bool {
         ),
         Err(_) => default,
     }
+}
+
+/// `record` with `field` set to `value`, added when absent. A pure record
+/// edit kept beside the transitions: the lifecycle reads and writes record
+/// fields, but knows no home, Store or filesystem.
+fn with_field(record: SdkValue, field: &str, value: SdkValue) -> SdkValue {
+    let mut fields = match record {
+        SdkValue::Map(fields) => fields,
+        _ => Vec::new(),
+    };
+    match fields.iter_mut().find(|(name, _)| name == field) {
+        Some((_, slot)) => *slot = value,
+        None => fields.push((field.to_owned(), value)),
+    }
+    SdkValue::Map(fields)
 }

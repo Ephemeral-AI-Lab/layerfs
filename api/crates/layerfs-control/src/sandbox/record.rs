@@ -198,7 +198,7 @@ impl SandboxRecord {
     }
 
     /// The exec leases that have not expired at `now`.
-    pub(crate) fn live_leases(&self, now: i64) -> Vec<lifecycle::ExecLease> {
+    pub(crate) fn live_leases(&self, now: i64) -> Vec<lifecycle::LeaseRecord> {
         lifecycle::leases_of(&self.fields)
             .into_iter()
             .filter(|lease| lease.deadline > now)
@@ -206,7 +206,7 @@ impl SandboxRecord {
     }
 
     /// The exec leases that expired at or before `now`.
-    pub(crate) fn expired_leases(&self, now: i64) -> Vec<lifecycle::ExecLease> {
+    pub(crate) fn expired_leases(&self, now: i64) -> Vec<lifecycle::LeaseRecord> {
         lifecycle::leases_of(&self.fields)
             .into_iter()
             .filter(|lease| lease.deadline <= now)

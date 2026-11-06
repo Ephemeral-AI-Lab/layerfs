@@ -65,10 +65,10 @@ environment failure, not a B5 regression; it needs a lock-capable filesystem
 
 What the selections cover, box by box:
 
-- **Ten explicit Sandbox states** — `SandboxState` in
+- **Nine explicit Sandbox states** — `SandboxState` in
   `api/crates/layerfs-control/src/sandbox/lifecycle.rs` is one
   `#[non_exhaustive]` enum: `Creating`, `Provisioning`, `Starting`, `Ready`,
-  `Busy`, `Draining`, `Closed`, `Lost`, `Failed`, `Unresolved`. Its one
+  `Busy`, `Draining`, `Closed`, `Lost`, `Unresolved`. Its one
   mapping, `sandbox_state`, derives the state from the record, its `op`
   standing/name/phase and its live leases; `SandboxRecord::state` returns
   the enum and `sandbox.get` / `sandbox.list` only serialize it under the
@@ -76,15 +76,13 @@ What the selections cover, box by box:
   written before layout 3 that still carries one is read through the same
   enum (`running`/`ready`, `gone`/`closed`, `closing`/`draining`,
   `unknown`/`unresolved`). `every_sandbox_state_is_explicit_and_reachable`
-  covers all ten variants and their precedence;
+  covers all nine variants and their precedence;
   `old_records_default_to_the_derived_enum` covers the default and the old
   names; `sandbox_get_and_list_serialize_the_explicit_states` shows every
-  state through `sandbox.list` and six through `sandbox.get`, with the
-  record's existing keys unchanged. `Failed` is the one state no current
-  control write persists: a create that fails certainly removes its record,
-  so `failed` is read from a record that carries the explicit state (as a
-  pre-layout-3 record or a kept-failure record does). Making a failed create
-  keep its record is a separate behavior change.
+  state through `sandbox.list` and five through `sandbox.get`, with the
+  record's existing keys unchanged. `failed` is deliberately not a Sandbox
+  state: that name belongs to a machine record, and no Sandbox path writes
+  it, so a legacy record carrying it derives from its facts instead.
 
 - **Draining by CAS on `generation`** — `close.rs` writes `generation + 1`
   and the `sandbox.close` intent under the home and Sandbox locks;

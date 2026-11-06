@@ -5,7 +5,7 @@ use layerfs_bridge::control::SdkValue;
 use layerfs_control::common::json::parse;
 use layerfs_control::common::outcome::View;
 use layerfs_control::sandbox::lifecycle::{
-    self, CloseDecision, CloseEvent, CloseRefusal, CloseState, ExecLease, ReclaimBackend,
+    self, CloseDecision, CloseEvent, CloseRefusal, CloseState, LeaseRecord, ReclaimBackend,
     ReclaimDecision, ReclaimKey, ReclaimPolicy, SandboxFacts, SandboxState,
 };
 use layerfs_control::sandbox::record::SandboxRecord;
@@ -152,7 +152,7 @@ fn a_generation_and_its_lease_are_record_facts() {
     let record = lifecycle::with_lease(record, "lease-1", 1_000);
     assert_eq!(
         lifecycle::leases_of(&record),
-        vec![ExecLease {
+        vec![LeaseRecord {
             id: "lease-1".to_owned(),
             deadline: 1_000,
         }]
@@ -254,7 +254,6 @@ fn every_sandbox_state_is_explicit_and_reachable() {
             "draining",
             "closed",
             "lost",
-            "failed",
             "unresolved",
         ]
     );
@@ -297,10 +296,6 @@ fn every_sandbox_state_is_explicit_and_reachable() {
             facts(None, true, false, close("draining"), false, true, 0),
         ),
         (
-            S::Failed,
-            facts(Some(S::Failed), false, false, None, false, true, 0),
-        ),
-        (
             S::Unresolved,
             facts(None, false, true, close("draining"), false, true, 0),
         ),
@@ -340,10 +335,6 @@ fn every_sandbox_state_is_explicit_and_reachable() {
             0
         )),
         S::Draining
-    );
-    assert_eq!(
-        lifecycle::sandbox_state(facts(Some(S::Failed), false, false, None, true, true, 1)),
-        S::Failed
     );
     // the machine's answer that it no longer runs is Closed, whatever the
     // leases say
@@ -389,7 +380,6 @@ fn old_records_default_to_the_derived_enum() {
         ("gone", S::Closed),
         ("closed", S::Closed),
         ("lost", S::Lost),
-        ("failed", S::Failed),
         ("unknown", S::Unresolved),
         ("unresolved", S::Unresolved),
     ] {

@@ -265,11 +265,6 @@ fn sandbox_get_and_list_serialize_the_explicit_states() {
             String::new(),
         ),
         (
-            "failed",
-            String::from(r#","state":"failed""#),
-            String::new(),
-        ),
-        (
             "unresolved",
             String::new(),
             op("sandbox.create", "start", dead, true),
@@ -286,7 +281,7 @@ fn sandbox_get_and_list_serialize_the_explicit_states() {
         .unwrap();
     }
 
-    // Every one of the ten states is serialized under the existing `state`
+    // Every one of the nine states is serialized under the existing `state`
     // key, with the record's other keys unchanged.
     let states = [
         ("creating", "creating"),
@@ -297,7 +292,6 @@ fn sandbox_get_and_list_serialize_the_explicit_states() {
         ("draining", "draining"),
         ("closed", "closed"),
         ("lost", "lost"),
-        ("failed", "failed"),
         ("unresolved", "unresolved"),
     ];
     let list = call(&home, "sandbox.list", &[]).unwrap();
