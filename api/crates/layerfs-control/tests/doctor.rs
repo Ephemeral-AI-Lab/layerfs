@@ -219,14 +219,16 @@ fn each_problem_gives_one_finding_naming_its_fix() {
     ]);
     write_entity(&paths::machine_record(&home, "unsure"), &unsure).unwrap();
     store(&home, "s8", sqlite("s8", "unsure"));
-    // a Store on a machine whose record declares no capability at all
-    let silent = SdkValue::map([
-        ("name", t("silent")),
-        ("platform", t("ssh")),
-        ("backend", t("namespaces")),
+    // a Store on a machine whose platform declares no backend this build
+    // knows and whose record declares no capability at all (an ephemeral
+    // provider's record)
+    let unlisted = SdkValue::map([
+        ("name", t("unlisted")),
+        ("platform", t("doks")),
+        ("backend", t("doks")),
     ]);
-    write_entity(&paths::machine_record(&home, "silent"), &silent).unwrap();
-    store(&home, "s9", sqlite("s9", "silent"));
+    write_entity(&paths::machine_record(&home, "unlisted"), &unlisted).unwrap();
+    store(&home, "s9", sqlite("s9", "unlisted"));
     // a built-in machine whose recorded daemon is not there
     let native = SdkValue::map([
         ("name", t("native")),

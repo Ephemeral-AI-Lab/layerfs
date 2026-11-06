@@ -219,13 +219,15 @@ pub(crate) struct MachinePlacement {
 /// backend's typed `direct_store_access`, written into the record when the
 /// machine is made (#551 B0-150), says whether *this* machine keeps a sqlite
 /// Store's file. Present and `true` is [`StoreHome::Machine`]; present and
-/// `false` is [`StoreHome::Remote`]. Present and anything else is refused
-/// `InvalidInput`. Absent is [`StoreHome::Unknown`] and placement refuses
-/// it: an old record, or an ephemeral/remote backend that did not declare
-/// the capability, must never default to "the machine keeps its Store". A
-/// machine with no record at all is `Machine`: the step that resolves the
-/// machine refuses `NotFound`, and the guest worker's build writes no
-/// built-in records at all.
+/// `false` is [`StoreHome::Remote`]; present and anything else is refused
+/// `InvalidInput`. A record written before the field reads through its
+/// platform's declared backend, the same typed capability and the same
+/// answer on every host. A platform that names no backend this build knows
+/// has no fallback: an ephemeral/remote backend that declares no capability
+/// is [`StoreHome::Unknown`] and placement refuses it, never defaulting to
+/// "the machine keeps its Store". A machine with no record at all is
+/// `Machine`: the step that resolves the machine refuses `NotFound`, and the
+/// guest worker's build writes no built-in records at all.
 ///
 /// The record is the only fact, and the decision never asks the platform
 /// support table or the host it runs on: the same record must get the same
@@ -245,29 +247,41 @@ pub(crate) fn placement(home: &Path, machine: &str) -> Result<MachinePlacement> 
         Some(backend) => SdkValue::text(backend),
         None => SdkValue::Null,
     };
-    let (store_home, reason) = match record.field(DIRECT_STORE_ACCESS) {
-        Some(SdkValue::Bool(true)) => (StoreHome::Machine, None),
-        Some(SdkValue::Bool(false)) => (
+    let declared = record.field(DIRECT_STORE_ACCESS).is_some();
+    let (store_home, reason) = match record.direct_store_access() {
+        Some(true) => (StoreHome::Machine, None),
+        Some(false) => (
             StoreHome::Remote,
-            Some(format!(
-                "its record says {DIRECT_STORE_ACCESS} is false: the backend keeps no disk of \
-                 ours, so a Store there would stop with its instances"
-            )),
+            Some(if declared {
+                format!(
+                    "its record says {DIRECT_STORE_ACCESS} is false: the backend keeps no disk \
+                     of ours, so a Store there would stop with its instances"
+                )
+            } else {
+                format!(
+                    "its platform's declared backend keeps no disk of ours, so a Store there \
+                     would stop with its instances"
+                )
+            }),
         ),
-        Some(_) => {
+        // a value that is neither true nor false is malformed, not "does
+        // not say"
+        None if declared => {
             return Err(refused(
                 "InvalidInput",
                 format!("machine {machine}'s record `{DIRECT_STORE_ACCESS}` is not true or false"),
             ))
         }
-        // the capability is unknown: fail closed. This is an old record, or
-        // an ephemeral/remote backend that did not declare it, and neither
-        // may be read as a machine that keeps its Store.
+        // the capability is unknown: this is a record whose platform names
+        // no backend this build knows — an ephemeral/remote backend that
+        // did not declare the capability. Fail closed rather than assuming
+        // the machine keeps its Store.
         None => (
             StoreHome::Unknown,
             Some(format!(
-                "its record declares no {DIRECT_STORE_ACCESS}: the backend capability is the \
-                 only fact, so the placement is refused rather than assuming the machine keeps it"
+                "its record declares no {DIRECT_STORE_ACCESS}, and its platform names no backend \
+                 this build knows: the backend capability is the only fact, so the placement is \
+                 refused rather than assuming the machine keeps it"
             )),
         ),
     };

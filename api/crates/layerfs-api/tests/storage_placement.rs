@@ -72,10 +72,7 @@ fn home_with_platform(
         ("created".to_owned(), SdkValue::Int(1)),
     ];
     if let Some(direct) = dev_direct_store_access {
-        fields.push((
-            "direct_store_access".to_owned(),
-            SdkValue::Bool(direct),
-        ));
+        fields.push(("direct_store_access".to_owned(), SdkValue::Bool(direct)));
     }
     write_record(&paths::machine_record(&home, "dev"), &SdkValue::Map(fields)).unwrap();
     home
@@ -83,12 +80,7 @@ fn home_with_platform(
 
 /// [`home_with_platform`] on an ssh host, whose backend is `namespaces`.
 fn home_with(store: SdkValue, dev_direct_store_access: Option<bool>) -> PathBuf {
-    home_with_platform(
-        store,
-        dev_direct_store_access,
-        "ssh",
-        "namespaces",
-    )
+    home_with_platform(store, dev_direct_store_access, "docker", "docker")
 }
 
 fn call(
@@ -120,11 +112,10 @@ fn assert_placement_detail(detail: &SdkValue, message: &str) {
     let reason = detail.get_text("reason").expect("a reason");
     assert!(reason.contains("direct_store_access"), "{reason}");
     assert!(message.contains(reason), "{message}");
-    // the backend is the record's own `backend` field (`ssh` is
-    // namespaces), so the detail is the same on every host and in both
-    // builds
-    assert_eq!(detail.get_text("backend"), Some("namespaces"), "{detail:?}");
-    assert!(message.contains("backend namespaces"), "{message}");
+    // the backend is the record's own `backend` field, so the detail is the
+    // same on every host and in both builds
+    assert!(detail.get_text("backend").is_some(), "{detail:?}");
+    assert!(message.contains("backend "), "{message}");
 }
 
 #[test]
@@ -165,7 +156,7 @@ fn a_sqlite_store_on_its_owning_machine_is_admitted() {
     // file directly: placement admits the create, and it goes on to the
     // Store's own machine rule (a Sandbox of a native Store may not run on
     // dev), never to StoragePlacement and with no Sandbox folder made.
-    let home = home_with_platform(sqlite_record("native"), Some(true), "ssh", "namespaces");
+    let home = home_with_platform(sqlite_record("native"), Some(true), "docker", "docker");
     let refused = create_on_dev(&home).unwrap_err();
     assert_ne!(refused.0, "StoragePlacement", "{}", refused.2);
     assert!(!refused.2.contains("cannot be placed"), "{}", refused.2);
@@ -311,10 +302,11 @@ fn a_pull_from_a_machine_that_keeps_no_disk_stays_the_way_off() {
 
 #[test]
 fn a_machine_record_without_direct_store_access_is_refused() {
-    // the capability is absent: an old record, or an ephemeral/remote
-    // backend that did not declare it. Placement must fail closed, not
-    // default to Machine; nothing is dialled, written or claimed.
-    let home = home_with_platform(sqlite_record("native"), None, "lima", "namespaces");
+    // the capability is absent and the platform names no backend this build
+    // knows: an ephemeral/remote backend that did not declare it. Placement
+    // must fail closed, not default to Machine; nothing is dialled, written
+    // or claimed.
+    let home = home_with_platform(sqlite_record("native"), None, "ephemeral", "namespaces");
     let (code, detail, message) = call(
         &home,
         "store.push",
@@ -323,7 +315,10 @@ fn a_machine_record_without_direct_store_access_is_refused() {
     .unwrap_err();
     assert_eq!(code, "StoragePlacement", "{message}");
     assert_placement_detail(&detail, &message);
-    assert!(message.contains("cannot be placed on machine dev"), "{message}");
+    assert!(
+        message.contains("cannot be placed on machine dev"),
+        "{message}"
+    );
 
     // the same absent fact refuses sandbox.create before any side effect
     let (code, _, message) = create_on_dev(&home).unwrap_err();
@@ -332,6 +327,26 @@ fn a_machine_record_without_direct_store_access_is_refused() {
         !paths::sandbox_dir(&home, "box").exists(),
         "the refused create left a Sandbox folder"
     );
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn a_pre_field_record_on_a_known_backend_reads_through_its_platform() {
+    // a record written before #551's field, on a platform this build names
+    // (`lima` is its guest's namespaces): the platform's declared backend
+    // answers, so the push goes on to dial the machine's worker
+    // (`Unavailable`) and is never refused by placement. This is a read
+    // fallback from the same typed capability, not a default.
+    let home = home_with_platform(sqlite_record("native"), None, "lima", "namespaces");
+    let refused = call(
+        &home,
+        "store.push",
+        SdkValue::map([("name", t("shop")), ("machine", t("dev"))]),
+    )
+    .unwrap_err();
+    assert_ne!(refused.0, "StoragePlacement", "{}", refused.2);
+    assert!(!refused.2.contains("cannot be placed"), "{}", refused.2);
+    assert_eq!(refused.0, "Unavailable", "{}", refused.2);
     std::fs::remove_dir_all(home).unwrap();
 }
 
@@ -361,8 +376,8 @@ fn a_machine_record_with_an_invalid_direct_store_access_is_refused() {
         &paths::machine_record(&home, "dev"),
         &SdkValue::map([
             ("name", t("dev")),
-            ("platform", t("ssh")),
-            ("backend", t("namespaces")),
+            ("platform", t("docker")),
+            ("backend", t("docker")),
             ("created", SdkValue::Int(1)),
             ("direct_store_access", t("yes")),
         ]),
