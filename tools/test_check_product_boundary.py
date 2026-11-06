@@ -175,6 +175,16 @@ class ProductBoundaryTests(unittest.TestCase):
         )
         darwin = Path("control/crates/layerfs-sandbox-backend/src/local/os/macos/darwin.rs")
         self.assertFalse(unsafe_violations(darwin, "fn f() { unsafe { libc::proc_listallpids(); } }"))
+        # the second audited file: the namespaces command filter (D-8)
+        seccomp = Path("control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs")
+        self.assertFalse(unsafe_violations(seccomp, "fn f() { unsafe { libc::prctl(22, 2, p); } }"))
+        for sibling in ("local/os/linux/mounts.rs", "local/os/linux/process.rs", "bin/layerfs-sandbox-helper/exec.rs"):
+            with self.subTest(sibling=sibling):
+                path = Path("control/crates/layerfs-sandbox-backend/src") / sibling
+                self.assertTrue(unsafe_violations(path, "fn f() { unsafe { libc::prctl(22, 2, p); } }"))
+        # the audited file of one crate is no allowance in another
+        other = Path("control/crates/layerfs-sandbox/src/local/os/linux/seccomp.rs")
+        self.assertTrue(unsafe_violations(other, "fn f() { unsafe { call(); } }"))
         self.assertTrue(
             unsafe_violations(
                 Path("control/crates/layerfs-sandbox-backend/src/backend/os/macos/mounts.rs"),

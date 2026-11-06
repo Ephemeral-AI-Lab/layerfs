@@ -116,7 +116,7 @@ pub fn status_within(spec: &Spec, deadline: Instant) -> Result<Status, MachineEr
 
 /// Loads the docker-archive `archive` into the `docker` machine's Engine
 /// and answers the image id Docker reports (#535 P5): what `machine start`
-/// and `sandbox create` use on `docker` when no image is named. Refused for
+/// uses on `docker` for the worker container when no image is named. Refused for
 /// any other platform.
 pub fn load_image(spec: &Spec, archive: &Path) -> Result<String, MachineError> {
     new_work(spec)?;
@@ -154,10 +154,10 @@ pub fn reach(spec: &Spec, url: &str) -> Result<String, MachineError> {
 /// `127.0.0.1:<guest_port>` with nothing to close; `ssh` and `lima` start a
 /// detached `ssh -N -L 127.0.0.1:<free port>:127.0.0.1:<guest_port>` (lima
 /// through its own `ssh.config`, as its template forwards no other guest
-/// port) and answer its pid, which [`forward_close`] ends. `docker` refuses
-/// `InvalidInput`: each docker Sandbox publishes its daemon's port on the
-/// host's loopback itself, and that is its endpoint. `apple-container`,
-/// `microsandbox` (ports are published only at create) and `firecracker`
+/// port) and answer its pid, which [`forward_close`] ends. `docker` (its
+/// worker container's ports are published only at start, D-8),
+/// `apple-container`, `microsandbox` (ports are published only at create)
+/// and `firecracker`
 /// (its daemons listen on the microVM's loopback, which its Lima host's
 /// forward cannot reach) refuse `Unsupported`; their Workspace calls stay
 /// on the worker. One attempt: a forward that ends at once is `Failed`.

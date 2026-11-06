@@ -220,7 +220,7 @@ fn the_other_platforms_refuse_before_any_tool_runs() {
             continue;
         }
         let (code, why) = match kind {
-            Platform::Docker => (Code::InvalidInput, "each docker Sandbox publishes its daemon's port on the host's loopback when it is created, and that published address is its endpoint"),
+            Platform::Docker => (Code::Unsupported, "Docker publishes a container's ports only when it starts, so a Sandbox daemon's port in the worker container cannot be published later; its Workspace calls go through the worker"),
             Platform::AppleContainer => (Code::Unsupported, "the container CLI publishes a port only when the machine's container is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),
             Platform::Microsandbox => (Code::Unsupported, "msb publishes a port only when the machine's sandbox is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),
             _ => (Code::Unsupported, "its Sandbox daemons listen on the microVM's loopback, which a forward through the Lima host cannot reach (it reaches only the microVM's tap address); its Workspace calls go through the worker"),

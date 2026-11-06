@@ -1,4 +1,5 @@
-//! `docker`'s adapter: the built-in machine on Docker's kernel.
+//! `docker`'s adapter: the built-in machine on Docker's kernel, whose worker
+//! container runs `namespaces` Sandboxes (D-8).
 use super::{guest, start, status, stop};
 use crate::adapter::{refused, Adapter};
 use crate::error::{Code, MachineError};
@@ -10,11 +11,15 @@ use crate::setup::guest::Guest;
 use crate::setup::{tool, Status};
 use crate::spec::{Bundle, Forward, Running, Spec, Tools};
 
-/// Why `forward` is not where a docker Sandbox's daemon address comes from:
-/// the Sandbox's container publishes it (`PortBindings`, host IP
-/// `127.0.0.1`, an Engine-chosen port; `layerfs-sandbox-backend`'s
-/// `backend/docker/create.rs`), and its recorded endpoint is that address.
-const FORWARD: &str = "each docker Sandbox publishes its daemon's port on the host's loopback when it is created, and that published address is its endpoint";
+/// Why a Sandbox daemon's port is not forwarded: the worker container's
+/// port is published when it starts (`docker run -p`), which is the only
+/// way Docker publishes one, so a later daemon's port cannot be (D-8).
+const FORWARD: &str = "Docker publishes a container's ports only when it starts, so a Sandbox daemon's port in the worker container cannot be published later; its Workspace calls go through the worker";
+
+/// The name the worker container, and the Sandboxes in it, reach the
+/// host's loopback by: Docker Desktop's, and on a Linux Engine the
+/// `--add-host` the worker is started with.
+pub(crate) const DESKTOP_HOST: &str = "host.docker.internal";
 
 pub(crate) struct Docker;
 pub(crate) static ADAPTER: Docker = Docker;
@@ -65,13 +70,9 @@ impl Adapter for Docker {
         Err(refused(spec, "has no ssh host"))
     }
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
-        dial(
-            spec,
-            url,
-            Loopback::Alias(layerfs_sandbox_backend::docker::DESKTOP_HOST),
-        )
+        dial(spec, url, Loopback::Alias(DESKTOP_HOST))
     }
     fn forward(&self, spec: &Spec, _guest_port: u16) -> Result<Forward, MachineError> {
-        Err(refuse(spec, Code::InvalidInput, FORWARD))
+        Err(refuse(spec, Code::Unsupported, FORWARD))
     }
 }

@@ -8,8 +8,9 @@
 //! `helper_spec.rs` and `postgres_url.rs` are the shared formats. The
 //! kernels Sandboxes run on live in the
 //! `layerfs-platform` crate (host only).
-// unsafe only in local/os/macos/darwin.rs: macOS process facts come
-// from proc_pidinfo, a system call (`ps` is setuid, which Seatbelt refuses)
+// unsafe only in local/os/macos/darwin.rs (macOS process facts come from
+// proc_pidinfo, a system call: `ps` is setuid, which Seatbelt refuses) and
+// local/os/linux/seccomp.rs (the namespaces command filter's two prctl calls)
 #![deny(unsafe_code)]
 #[cfg(unix)]
 mod backend;

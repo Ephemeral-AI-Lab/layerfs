@@ -39,44 +39,31 @@ pub enum Side<'a> {
     Worker(&'a Path),
 }
 
-/// What machine `machine`'s record chooses for a Sandbox of a Store
-/// (`postgresql` or sqlite), read by the caller: `backend` (`docker` or
-/// `local`), the image (the call's `image`, else the record's; on `docker`
-/// with neither, the bundle's image loaded once, P5), and for `local` the
-/// machine's own image archive (`image_archive`,
-/// or an `image` that names a file); for a sqlite Store on `docker`, the
-/// docker worker's data volume.
-pub fn choose(
-    home: &Path,
-    machine: &str,
-    image: Option<&str>,
-    postgresql: bool,
-    load: bool,
-) -> Result<SdkValue> {
+/// What machine `machine`'s record chooses for a Sandbox, read by the
+/// caller: `backend` `local` (a daemon process: native, or namespaces in a
+/// Linux kernel, the docker machine's worker container's included, D-8),
+/// the image digest (the call's `image`, else the record's) and the
+/// machine's own image archive (`image_archive`, or an `image` that names a
+/// file). On `docker` the record's image is its worker container's Docker
+/// image, which names no image of the bundle's archive, so only the call's
+/// is taken; the bundle's archive is the only one, and the choice names
+/// the `docker` platform its Sandboxes keep showing.
+pub fn choose(home: &Path, machine: &str, image: Option<&str>) -> Result<SdkValue> {
     let record = MachineRecord::read(home, machine)?
         .unwrap_or_else(|| MachineRecord::from_record(machine, SdkValue::Null));
-    let named = image.or(record.image());
-    let mut fields = Vec::new();
-    if machine == "docker" {
-        // a call that starts nothing loads no image either (P4)
-        let image = match (named, load) {
-            (Some(image), _) => Some(image.to_owned()),
-            (None, true) => Some(docker_default(home)?),
-            (None, false) => None,
-        };
-        fields.push(("backend", SdkValue::text("docker")));
-        if let Some(image) = image {
-            fields.push(("image", SdkValue::Text(image)));
-        }
-        if !postgresql {
-            let volume = format!("{}-data", docker_vm(home, &record)?);
-            fields.push(("data_volume", SdkValue::Text(volume)));
-        }
+    let docker = machine == "docker";
+    let named = if docker {
+        image
     } else {
-        fields.push(("backend", SdkValue::text("local")));
-        if let Some(digest) = named.filter(|i| is_digest(i)) {
-            fields.push(("image", SdkValue::text(digest)));
-        }
+        image.or(record.image())
+    };
+    let mut fields = vec![("backend", SdkValue::text("local"))];
+    if let Some(digest) = named.filter(|i| is_digest(i)) {
+        fields.push(("image", SdkValue::text(digest)));
+    }
+    if docker {
+        fields.push(("platform", SdkValue::text("docker")));
+    } else {
         let archive = record
             .text("image_archive")
             .or(record.image().filter(|i| i.starts_with('/')));
@@ -106,6 +93,10 @@ pub fn resolve(side: &Side<'_>, store: &str, choice: &SdkValue) -> Result<Deploy
         if let Some(digest) = choice.get_text("image").filter(|i| is_digest(i)) {
             fields.push(("image".to_owned(), SdkValue::text(digest)));
         }
+    }
+    // the platform the machine implies for its Sandboxes (`docker`, D-8)
+    if let Some(platform) = choice.get_text("platform") {
+        fields.push(("platform".to_owned(), SdkValue::text(platform)));
     }
     Ok(Deploy::Native(fields))
 }
@@ -236,38 +227,6 @@ fn beside_self(name: &str) -> Result<PathBuf> {
     Ok(std::env::current_exe()
         .map_err(failed)?
         .with_file_name(name))
-}
-
-/// The docker machine's worker container name.
-#[cfg(feature = "machine")]
-fn docker_vm(home: &Path, record: &MachineRecord) -> Result<String> {
-    Ok(match record.text("vm_name") {
-        Some(name) => name.to_owned(),
-        None => layerfs_machine::vm_name(&layerfs_home::home::opened(home)?.id, "docker"),
-    })
-}
-
-#[cfg(not(feature = "machine"))]
-fn docker_vm(_: &Path, _: &MachineRecord) -> Result<String> {
-    Err(refused(
-        "Unsupported",
-        "a docker machine's worker is reached from a host build",
-    ))
-}
-
-/// The docker machine's image when none is named: the bundle's Sandbox
-/// image, loaded into Docker once (P5).
-#[cfg(feature = "machine")]
-fn docker_default(home: &Path) -> Result<String> {
-    layerfs_machine::docker_default(home)
-}
-
-#[cfg(not(feature = "machine"))]
-fn docker_default(_: &Path) -> Result<String> {
-    Err(refused(
-        "InvalidInput",
-        "the docker machine names no Sandbox image; `layerfs machine update docker --image sha256:<digest>`",
-    ))
 }
 
 /// The sealed bundle's Linux daemon.

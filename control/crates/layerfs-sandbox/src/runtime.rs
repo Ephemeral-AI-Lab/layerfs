@@ -120,16 +120,21 @@ pub const PLATFORMS: [&str; 8] = [
 ];
 
 /// The platform a `sandbox.create` call names (`platform`), checked against
-/// the backend its deployment selects before any effect: `docker` is a
-/// Docker container; `mac` a native daemon on macOS; `linux` a namespaces
-/// daemon on Linux (a native one is refused at start, #533 O27); a VM
-/// provider a namespaces daemon in the project's VM, which is Linux. The agent chooses which platforms a home
+/// the backend its deployment (`deploy`) selects before any effect:
+/// `docker` a namespaces daemon in the docker machine's worker container
+/// (D-8, which its deployment names as its `platform`); `mac` a native
+/// daemon on macOS; `linux` a namespaces daemon on Linux (a native one is
+/// refused at start, #533 O27); a VM provider a namespaces daemon in the
+/// project's VM, which is Linux. The agent chooses which platforms a home
 /// allows and maps each to its deployment; this refuses a call whose two
 /// facts disagree. A call that names none (an older caller) records the
-/// one its backend implies.
-pub fn platform(args: &SdkValue, backend: Option<Backend>) -> Result<String, SdkRefusal> {
+/// one its deployment implies.
+pub fn platform(args: &SdkValue, deploy: &SdkValue) -> Result<String, SdkRefusal> {
+    let backend = backend(deploy)?;
+    let docker_machine = deploy.get_text("platform") == Some("docker");
     let implied = match backend {
         None => "docker",
+        Some(Backend::Namespaces) if docker_machine => "docker",
         Some(_) if cfg!(target_os = "macos") => "mac",
         Some(_) => "linux",
     };

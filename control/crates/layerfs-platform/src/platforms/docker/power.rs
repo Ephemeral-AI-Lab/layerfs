@@ -1,4 +1,10 @@
-//! `docker` power: start and stop the worker container.
+//! `docker` power: start and stop the worker container. It is privileged,
+//! in a cgroup namespace of its own, so its worker runs `namespaces`
+//! Sandboxes inside it (D-8): root, `/dev/fuse`, a writable cgroup v2 tree
+//! with `cgroup.kill`, and its runtime root on the data volume, which can
+//! hold an overlay's upper layer. It never sets `user.max_user_namespaces`,
+//! which would change the whole Docker host: every Sandbox command runs
+//! under the filter that refuses a user namespace instead.
 use super::cli::docker;
 use super::network::published_port;
 use super::unix::{guest, inspect, run};
@@ -13,12 +19,14 @@ const LOAD: Duration = Duration::from_secs(300);
 
 /// The label that marks a container as a machine's worker.
 const ROLE: &str = "layerfs.role=machine-worker";
-/// The Engine's socket as the Engine's kernel sees it (inside Docker
-/// Desktop's VM, or the Linux host), which the worker's Sandbox backend
-/// uses; a Mac's own socket path means nothing there.
-const VM_DOCKER: &str = "/var/run/docker.sock";
-/// The container's main process waits (bounded) for its secret, then becomes the worker.
-const ENTRY: &str = r#"i=0
+/// The container's main process makes the data volume's folders as a VM
+/// guest's preparation does (`setup::worker`, without its user-namespace
+/// limit), waits (bounded) for its secret, then becomes the worker.
+const ENTRY: &str = r#"set -e
+umask 022
+mkdir -p /layerfs/data/store /layerfs/data/sandbox
+chmod 755 /layerfs/data /layerfs/data/store /layerfs/data/sandbox
+i=0
 while [ ! -s /layerfs/state/secret ]; do i=$((i+1)); [ $i -le 600 ] || exit 1; sleep 0.1; done
 exec /layerfs/bundle/layerfs worker"#;
 
@@ -50,16 +58,11 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
     }
     let bundle_mount = format!("{}:/layerfs/bundle:ro", bundle.dir.display());
     let volume = format!("{}-data:{DATA}", spec.vm_name);
-    let socket = format!("{VM_DOCKER}:{VM_DOCKER}");
     let bundle_label = format!("layerfs.bundle={}", bundle.hash);
     let secret_file = format!("LAYERFS_WORKER_SECRET={STATE}/secret");
     let tmpfs = format!("{STATE}:mode=0700");
-    // On a Linux Engine the worker shares the host's network: it listens on
-    // a host loopback port and dials its Sandboxes' loopback-published
-    // daemon ports as published (`LAYERFS_WORKER_HOST_NETWORK`; the
-    // bridge gateway `host.docker.internal` names does not reach a port
-    // published on 127.0.0.1, terminal pass lane K3). Docker Desktop's
-    // worker publishes its port and dials `host.docker.internal`.
+    // On a Linux Engine the worker shares the host's network and listens on
+    // a host loopback port. Docker Desktop's worker publishes its port.
     let host_network = cfg!(target_os = "linux");
     let port = if host_network { tool::free_port()? } else { 0 };
     let listen = match host_network {
@@ -70,6 +73,7 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
     #[rustfmt::skip]
     let mut args = vec![
         "run", "-d", "--pull", "never", "--name", &spec.vm_name, "--init",
+        "--privileged", "--cgroupns", "private",
         "--label", ROLE, "--label", &bundle_label,
     ];
     if host_network {
@@ -80,14 +84,13 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
         #[rustfmt::skip]
         args.extend([
             "--network", "host", "--add-host", "host.docker.internal:host-gateway",
-            "-e", "LAYERFS_WORKER_HOST_NETWORK=1",
         ]);
     } else {
         args.extend(["-p", &publish]);
     }
     #[rustfmt::skip]
     args.extend([
-        "-v", &socket, "-v", &volume, "-v", &bundle_mount, "--tmpfs", &tmpfs,
+        "-v", &volume, "-v", &bundle_mount, "--tmpfs", &tmpfs,
         "-e", &listen, "-e", &secret_file, "--entrypoint", "sh", image, "-c", ENTRY,
     ]);
     run(spec, &args, "starting the worker container")?.answer("starting the worker container")?;
@@ -140,8 +143,9 @@ pub(crate) fn stop(spec: &Spec) -> Result<(), MachineError> {
 
 /// Loads the docker-archive `archive` (the bundle's Sandbox image) into the
 /// Engine once and answers the image id Docker reports, `sha256:<64 hex>`:
-/// the image of the worker container and of Sandboxes when the docker
-/// machine names none (#535 P5). One attempt; the caller records the id.
+/// the image of the worker container when the docker machine names none
+/// (#535 P5). Its Sandboxes unpack the bundle's archive themselves. One
+/// attempt; the caller records the id.
 pub(crate) fn load_image(spec: &Spec, archive: &Path) -> Result<String, MachineError> {
     let file = archive.to_str().ok_or_else(|| {
         MachineError::new(

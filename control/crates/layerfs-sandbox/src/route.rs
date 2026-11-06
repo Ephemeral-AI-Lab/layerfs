@@ -216,32 +216,21 @@ pub fn on_machine(
     more: Vec<(&str, SdkValue)>,
     local: Local,
 ) -> Outcome {
-    reach(home, events, record, op, more, true, local)
-        .unwrap_or_else(|Unreached(refusal)| Err(refusal))
+    reach(home, events, record, op, more, local).unwrap_or_else(|Unreached(refusal)| Err(refusal))
 }
 
 /// [`on_machine`], answering [`Unreached`] when the machine's worker was
-/// not reached and nothing was sent (nothing starts it, #535 D11);
-/// `load_image` says whether the call may load the docker machine's
-/// default image (a get or status call does not, P4).
+/// not reached and nothing was sent (nothing starts it, #535 D11).
 pub fn reach(
     home: &Path,
     events: &mut Events<'_>,
     record: &SandboxRecord,
     op: &str,
     more: Vec<(&str, SdkValue)>,
-    load_image: bool,
     local: Local,
 ) -> std::result::Result<Outcome, Unreached> {
     let mut unreached = None;
-    let outcome = host_op(
-        home,
-        events,
-        (record, op),
-        more,
-        (load_image, local),
-        &mut unreached,
-    );
+    let outcome = host_op(home, events, (record, op), more, local, &mut unreached);
     match unreached {
         Some(unreached) => Err(unreached),
         None => Ok(outcome),
@@ -255,7 +244,7 @@ fn host_op(
     events: &mut Events<'_>,
     (record, op): (&SandboxRecord, &str),
     more: Vec<(&str, SdkValue)>,
-    (load_image, local): (bool, Local),
+    local: Local,
     unreached: &mut Option<Unreached>,
 ) -> Outcome {
     let home = home.to_path_buf();
@@ -291,13 +280,7 @@ fn host_op(
     let executor = place::on_machine(&home, machine)?;
     // what the machine's record chooses; the side that runs the call
     // resolves the rest
-    let choice = deploy::choose(
-        &home,
-        machine,
-        image.as_deref(),
-        postgresql.is_some(),
-        load_image,
-    )?;
+    let choice = deploy::choose(&home, machine, image.as_deref())?;
     match executor {
         Executor::Local => {
             let key = store_path(&home, &target.store, &target.record, kind);

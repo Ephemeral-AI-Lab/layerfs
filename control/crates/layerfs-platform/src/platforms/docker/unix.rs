@@ -1,7 +1,7 @@
 //! `docker` on macOS and Linux: one worker container, `<vm_name>`, started
-//! detached (the port of `docker/macos.js`). It mounts Docker's own socket, the Store
-//! volume `<vm_name>-data` at `/layerfs/data` and the bundle read-only; never
-//! the host home. Its worker listens behind a secret on a port published to
+//! detached and privileged (the port of `docker/macos.js`; D-8). It mounts the
+//! Store volume `<vm_name>-data` at `/layerfs/data` and the bundle read-only;
+//! never the host home or Docker's socket. Its worker listens behind a secret on a port published to
 //! the host's loopback only. The secret is written into a private tmpfs after
 //! the container starts, so it is in no command line and no container config.
 use super::cli::{docker, engine_version};

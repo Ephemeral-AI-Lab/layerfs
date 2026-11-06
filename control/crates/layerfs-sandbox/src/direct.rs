@@ -2,8 +2,7 @@
 //! `sandbox.create` that ran in a machine's worker answers the daemon's
 //! endpoint in the machine and its control keys (`control`). Where the
 //! machine's adapter carries that port to this host (`layerfs_machine::platform::
-//! forward`: an `ssh -L` on `ssh` and `lima`), and on `docker`, whose
-//! Sandboxes publish their daemon's port on the host's loopback, the caller
+//! forward`: an `ssh -L` on `ssh` and `lima`), the caller
 //! keeps the keys in the home's `sandbox/<name>/control.json` (0600) and the
 //! forward in its record's `daemon.forward`. The home's folder then serves
 //! the Sandbox like `native`'s: `workspace.mount`, `commit`, `unmount`,
@@ -52,7 +51,7 @@ pub fn forwarded(record: &SandboxRecord) -> bool {
 /// machine is stopped (it records no worker: nothing starts it, #535 D11),
 /// and when the process that forwards its daemon's port has ended, matched
 /// by id, start time and boot (never by id alone). A port nothing carries
-/// (docker's) has no process to check.
+/// has no process to check.
 pub fn check(home: &Path, id: &str, daemon: &SdkValue) -> Result<()> {
     let Some(forward) = daemon.get(FORWARD) else {
         return Ok(());
@@ -135,8 +134,8 @@ pub struct Opened {
 
 /// Opens the direct route to the daemon of Sandbox `record`, which its
 /// machine's worker started and answered (`started`, with `control`):
-/// a forward of its port where its machine's adapter makes one, docker's
-/// published port as it is, else nothing (the worker route). Run before the
+/// a forward of its port where its machine's adapter makes one, else
+/// nothing (the worker route; `docker` among them, D-8). Run before the
 /// home and Sandbox locks are taken; [`save`] records it under them.
 pub fn open(home: &Path, record: &SandboxRecord, started: &SdkValue) -> Opened {
     let mut opened = Opened {
@@ -230,13 +229,8 @@ fn carried(
     machine: &str,
     endpoint: SocketAddr,
 ) -> Result<Option<(SocketAddr, Option<u32>)>> {
-    use layerfs_machine::platform::{Code, Platform};
+    use layerfs_machine::platform::Code;
     let record = layerfs_machine::record::MachineRecord::of(home, machine)?;
-    // a docker Sandbox publishes its daemon's port on the host's loopback,
-    // which this host reaches as it is (macOS through Docker Desktop)
-    if record.platform()? == Platform::Docker {
-        return Ok(Some((endpoint, None)));
-    }
     let spec = layerfs_machine::machine_spec(home, &layerfs_home::home::opened(home)?.id, &record)?;
     match layerfs_machine::platform::forward(&spec, endpoint.port()) {
         Ok(forward) => Ok(Some((forward.address, forward.pid))),

@@ -426,7 +426,7 @@ pub fn create(args: &SdkValue) -> Outcome {
     let deploy = args
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "missing `deploy`"))?;
-    let platform = crate::runtime::platform(args, crate::runtime::backend(deploy)?)?;
+    let platform = crate::runtime::platform(args, deploy)?;
     // a PostgreSQL Store's URL is the call's
     let store = match layerfs_store::postgresql::open::sandbox_store(args)? {
         Some(selected) => OpenedStore::Postgres(Box::new(selected)),

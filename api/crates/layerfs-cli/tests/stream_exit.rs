@@ -116,8 +116,9 @@ fn exec(command: &str) -> SdkValue {
     )])
 }
 
-/// A home with docker machine `docker`, Sandbox `d1` and its Workspace
-/// `one`, whose exec goes to the stand-in worker.
+/// A home with docker machine `docker` and Sandbox `d1`, whose Workspace
+/// calls go to the stand-in worker (a docker Sandbox runs in namespaces in
+/// the worker container and is reached through it, D-8).
 fn home_with_workspace(tag: &str) -> PathBuf {
     let home = tempdir(&format!("stream-{tag}"));
     home::open(&home).unwrap();
@@ -157,21 +158,6 @@ fn home_with_workspace(tag: &str) -> PathBuf {
     ]);
     layerfs_api::call(Some(&home), "sandbox.create", args, &mut |_| {})
         .unwrap_or_else(|r| panic!("sandbox.create: {} {}", r.code, r.message));
-    write_record(
-        &paths::sandbox_dir(&home, "d1")
-            .join("workspace")
-            .join(format!("{}.json", "ab".repeat(32))),
-        &SdkValue::map([
-            ("v", SdkValue::Int(1)),
-            ("id", t(&"ab".repeat(32))),
-            ("name", t("one")),
-            ("branch", t("dev")),
-            ("path", t("/w/one")),
-            ("namespace", SdkValue::Int(1)),
-            ("created", SdkValue::Int(1)),
-        ]),
-    )
-    .unwrap();
     home
 }
 
@@ -218,8 +204,8 @@ fn with_stream_a_command_exit_of_2_or_125_looks_like_usage_or_refusal() {
     let (two, ..) = exec_in(&home, "d1:one", "exit 2", &["--stream"]);
     let (usage, _, usage_err) = exec_in(&home, "d1:one", "exit 2", &["--stream", "--bogus"]);
     assert_eq!((two, usage), (Some(2), Some(2)));
-    // a Workspace the Sandbox does not have is refused
-    let (refused, _, refusal) = exec_in(&home, "d1:two", "true", &["--stream"]);
+    // a Sandbox the home does not have is refused
+    let (refused, _, refusal) = exec_in(&home, "nosuch:two", "true", &["--stream"]);
     let (command, _, command_err) = exec_in(&home, "d1:one", "exit 125", &["--stream"]);
     assert_eq!((refused, command), (Some(125), Some(125)));
     // ... told apart only by what is on stderr

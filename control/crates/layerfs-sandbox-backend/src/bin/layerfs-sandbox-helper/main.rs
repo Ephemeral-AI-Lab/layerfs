@@ -8,7 +8,9 @@
 //! - `init-inner --spec <file>`: builds the private root, pivots to it, starts
 //!   `layerfs-daemon` as root and reaps, as an init process does.
 //! - `exec …`: enters a running Sandbox's namespaces, becomes the requested
-//!   nonroot identity with no-new-privs and runs one command.
+//!   nonroot identity with no-new-privs and runs one command under the
+//!   filter that refuses it a user namespace (the library's audited
+//!   `local/os/linux/seccomp.rs`).
 #![deny(unsafe_code)]
 
 #[cfg(target_os = "linux")]

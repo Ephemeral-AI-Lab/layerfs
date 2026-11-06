@@ -28,7 +28,6 @@ pub fn get(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome {
             &record,
             "sandbox.list_workspaces",
             vec![],
-            false,
             crate::dispatch::call,
         ),
         None => Ok(Ok(SdkValue::Null)),

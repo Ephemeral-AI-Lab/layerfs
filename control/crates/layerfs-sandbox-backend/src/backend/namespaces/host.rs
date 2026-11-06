@@ -1,6 +1,6 @@
 //! What this host must provide before a namespace Sandbox may start, and the
 //! two host facts its lifecycle reads: whether user namespaces are blocked
-//! and which cgroup a process is in. Every condition is checked before any
+//! (host-wide, or by the command filter) and which cgroup a process is in. Every condition is checked before any
 //! effect; a host that cannot meet them is refused, never quietly given a
 //! weaker Sandbox.
 use crate::RuntimeError;
@@ -26,27 +26,39 @@ pub(crate) fn require_root() -> Result<(), RuntimeError> {
 
 /// Refuses to start when a command could create a user namespace: it would
 /// hold its own copy of the Workspace mount, outside the daemon's unmount.
-/// The block is host-wide (`user.max_user_namespaces = 0`), set by whoever
-/// owns the VM; this runtime never sets it.
+/// Every command runs under the filter that refuses one
+/// (`local::deny_user_namespaces`, D-8), so a kernel that can apply it is
+/// accepted; so is a host that blocks user namespaces host-wide
+/// (`user.max_user_namespaces = 0`, which a VM guest sets at start). This
+/// runtime never sets the limit: on the docker machine it would change the
+/// whole Docker host. A filter that cannot be installed later fails its
+/// command; no command runs without it.
 pub(crate) fn require_user_namespaces_blocked() -> Result<(), RuntimeError> {
-    let text = fs::read_to_string(MAX_USER_NAMESPACES).map_err(|_| {
-        RuntimeError::Unsupported(
-            "the namespaces Sandbox runtime cannot read /proc/sys/user/max_user_namespaces, so it \
-             cannot prove that user namespaces are blocked",
-        )
-    })?;
-    match text.trim().parse::<u64>() {
-        Ok(0) => Ok(()),
-        Ok(_) => Err(RuntimeError::Unsupported(
-            "user namespaces are not blocked; a command could unshare one and keep its own copy of \
-             the Workspace mount. Set user.max_user_namespaces=0 in the project's VM before a \
-             namespaces Sandbox starts",
-        )),
-        Err(_) => Err(RuntimeError::Unsupported(
-            "the namespaces Sandbox runtime cannot parse /proc/sys/user/max_user_namespaces, so it \
-             cannot prove that user namespaces are blocked",
-        )),
+    let limit = fs::read_to_string(MAX_USER_NAMESPACES).ok();
+    if limit.and_then(|text| text.trim().parse::<u64>().ok()) == Some(0) || filter_available() {
+        return Ok(());
     }
+    Err(RuntimeError::Unsupported(
+        "user namespaces are not blocked: user.max_user_namespaces is not 0 and this kernel cannot \
+         apply the seccomp filter that refuses them to every command (its \
+         /proc/sys/kernel/seccomp/actions_avail lacks allow, errno or kill_process), so a command \
+         could unshare one and keep its own copy of the Workspace mount",
+    ))
+}
+
+/// The seccomp actions this kernel offers to a filter.
+const SECCOMP_ACTIONS: &str = "/proc/sys/kernel/seccomp/actions_avail";
+
+/// Whether this kernel can apply the command filter: it offers every action
+/// the filter returns.
+fn filter_available() -> bool {
+    let Ok(text) = fs::read_to_string(SECCOMP_ACTIONS) else {
+        return false;
+    };
+    let offered: Vec<&str> = text.split_whitespace().collect();
+    ["allow", "errno", "kill_process"]
+        .iter()
+        .all(|action| offered.contains(action))
 }
 
 /// The unified cgroup v2 hierarchy, which ends a Sandbox as a whole.

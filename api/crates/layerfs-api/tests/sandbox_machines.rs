@@ -9,11 +9,13 @@
 //!   password, to a database with no `layerfs` schema; one is left behind),
 //!   LAYERFS_TEST_PG_PASSWORD, LAYERFS_TEST_DAEMON (a host daemon built with
 //!   `postgresql`); the docker half also LAYERFS_TEST_IMAGE (a local image
-//!   digest) and LAYERFS_BUNDLE (a sealed Linux bundle whose daemon has
-//!   `postgresql`). macOS reaches a loopback server from the container as
-//!   `host.docker.internal`.
+//!   digest, the worker container's) and LAYERFS_BUNDLE (a sealed Linux
+//!   bundle whose daemon has `postgresql`). macOS reaches a loopback server
+//!   from the container as `host.docker.internal`.
 //! - a sqlite Store pushed to the docker machine and its Sandbox, through the
-//!   docker worker on macOS: LAYERFS_TEST_IMAGE and LAYERFS_BUNDLE. The test
+//!   docker worker: LAYERFS_TEST_IMAGE and LAYERFS_BUNDLE. The Sandbox runs
+//!   in namespaces inside the privileged worker container and shows
+//!   `backend: "namespaces"` with `platform: "docker"` (D-8). The test
 //!   removes its worker container and data volume.
 //!
 //! A test whose settings are missing says NOT_RUN and passes.
@@ -424,7 +426,19 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
                 ("machine", t("docker")),
             ],
         );
-        assert_eq!(created.get_text("runtime"), Some("docker"), "{created:?}");
+        // namespaces in the docker machine's worker container, which keeps
+        // showing the docker platform (D-8)
+        assert_eq!(
+            created.get_text("runtime"),
+            Some("namespaces"),
+            "{created:?}"
+        );
+        assert_eq!(
+            created.get_text("backend"),
+            Some("namespaces"),
+            "{created:?}"
+        );
+        assert_eq!(created.get_text("platform"), Some("docker"), "{created:?}");
         work(&home, "shop/app", "t", "on-docker", "docker.txt");
         ok(&home, "sandbox.close", &[("name", t("t"))]);
     });

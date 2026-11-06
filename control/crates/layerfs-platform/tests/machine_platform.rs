@@ -38,8 +38,8 @@ fn backends_follow_the_kind_and_host() {
     );
     assert_eq!(Platform::Native.backend(HostOs::Windows), None);
     for host in [HostOs::Linux, HostOs::Macos, HostOs::Windows] {
-        assert_eq!(Platform::Docker.backend(host), Some(Backend::Docker));
         for kind in [
+            Platform::Docker,
             Platform::AppleContainer,
             Platform::Microsandbox,
             Platform::Lima,

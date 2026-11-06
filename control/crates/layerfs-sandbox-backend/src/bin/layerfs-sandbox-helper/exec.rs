@@ -3,7 +3,9 @@
 //! host path no longer resolves), opens the three namespace handles, then
 //! enters them. Its child is created inside the Sandbox's PID namespace, runs
 //! as the requested uid:gid and inherits no-new-privs, so file capabilities
-//! and setuid bits cannot raise it again.
+//! and setuid bits cannot raise it again. Just before exec it installs the
+//! filter that refuses it a user namespace (`local::deny_user_namespaces`,
+//! D-8); a command whose filter cannot be installed never starts.
 use nix::{
     sched::{setns, CloneFlags},
     sys::prctl::set_no_new_privs,
@@ -44,6 +46,7 @@ pub(super) fn run(arguments: &[OsString]) -> Result<i32, String> {
         .gid(run.gid)
         .current_dir(&run.directory)
         .process_group(0);
+    layerfs_sandbox_backend::local::deny_user_namespaces(&mut command);
     let mut child = match command.spawn() {
         Ok(child) => child,
         // the command never started: this stage's own failure, which must

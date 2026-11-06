@@ -15,6 +15,8 @@ pub(crate) mod streams;
 pub use create::{Local, LocalCreateFailure, LocalPaths, LocalPhase};
 #[cfg(target_os = "linux")]
 pub(crate) use os_impl::linux as os;
+#[cfg(target_os = "linux")]
+pub use os_impl::linux::seccomp::deny_user_namespaces;
 #[cfg(target_os = "macos")]
 pub(crate) use os_impl::macos as os;
 pub use process::LocalProcess;

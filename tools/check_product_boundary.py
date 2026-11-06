@@ -17,14 +17,15 @@ UNSAFE = re.compile(r"\bunsafe\b")
 
 # Crates whose `unsafe` surface is bounded. layerfs-storage keeps one audited
 # FFI module (encoding/codec.rs); Persistence has the owner-authorized macOS
-# seal file-control module; Isolation reads macOS process facts through
-# proc_pidinfo in local/os/macos/darwin.rs. Their siblings stay unsafe-free. The
-# comment in a lint name (`unsafe_code`) is not the bare word, so attr lines
-# never trip the scan once comments are stripped.
+# seal file-control module; the Sandbox backend reads macOS process facts
+# through proc_pidinfo in local/os/macos/darwin.rs and installs the namespaces
+# command filter (two prctl calls, D-8) in local/os/linux/seccomp.rs. Their
+# siblings stay unsafe-free. The comment in a lint name (`unsafe_code`) is not
+# the bare word, so attr lines never trip the scan once comments are stripped.
 UNSAFE_AUDITED_MODULE = {
-    "layerfs-storage": "src/encoding/codec.rs",
-    "layerfs-persistence": "src/backend/sqlite/lifecycle/file_control.rs",
-    "layerfs-sandbox-backend": "src/local/os/macos/darwin.rs",
+    "layerfs-storage": ("src/encoding/codec.rs",),
+    "layerfs-persistence": ("src/backend/sqlite/lifecycle/file_control.rs",),
+    "layerfs-sandbox-backend": ("src/local/os/macos/darwin.rs", "src/local/os/linux/seccomp.rs"),
 }
 UNSAFE_FREE_CRATES = (
     "layerfs-content",
@@ -478,7 +479,7 @@ def unsafe_violations(path, source):
         return found
     relative = Path(*path.parts[path.parts.index("src") :])
     code = "\n".join(line.split("//", 1)[0] for line in source.splitlines())
-    if UNSAFE.search(code) and (crate in UNSAFE_FREE_CRATES or str(relative) != UNSAFE_AUDITED_MODULE[crate]):
+    if UNSAFE.search(code) and (crate in UNSAFE_FREE_CRATES or str(relative) not in UNSAFE_AUDITED_MODULE[crate]):
         found.append((1, "unsafe outside the audited module boundary; see core/AGENTS.md"))
     if relative == Path("src/lib.rs") and UNSAFE_ROOT_ATTR[crate] not in source:
         found.append((1, f"crate root must declare {UNSAFE_ROOT_ATTR[crate]}"))

@@ -17,12 +17,12 @@
         {
           "platform": "docker",
           "how": "built_in",
-          "backend": "docker",
+          "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
           "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [],
-          "description": "Docker's kernel (Docker Desktop's VM, or the Linux host); Sandboxes run in Docker containers"
+          "description": "Docker's kernel (Docker Desktop's VM, or the Linux host); Sandboxes run in Linux namespaces and a cgroup"
         },
         {
           "platform": "apple-container",
@@ -92,12 +92,12 @@
         {
           "platform": "docker",
           "how": "built_in",
-          "backend": "docker",
+          "backend": "namespaces",
           "kernel": "fuse",
           "sqlite": "worker",
           "postgresql": { "store_calls": "in_process", "sandbox": true, "reason": null },
           "options": [],
-          "description": "Docker's kernel (Docker Desktop's VM, or the Linux host); Sandboxes run in Docker containers"
+          "description": "Docker's kernel (Docker Desktop's VM, or the Linux host); Sandboxes run in Linux namespaces and a cgroup"
         },
         {
           "platform": "apple-container",

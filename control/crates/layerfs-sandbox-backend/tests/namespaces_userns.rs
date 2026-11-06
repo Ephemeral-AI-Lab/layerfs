@@ -1,59 +1,94 @@
-//! The user-namespace block is a precondition, not a setting: the namespace
-//! runtime refuses to start while a command could create a user namespace and
-//! hold its own copy of the Workspace mount.
-//!
-//! This test opens the host limit for its own duration and restores it, so it
-//! runs in its own binary (no Sandbox runs beside it) and only as root in the
-//! VM or CI host that owns this kernel.
-#![cfg(target_os = "linux")]
-use layerfs_sandbox_backend::{namespaces::NamespaceProvider, RuntimeError};
-use std::{fs, os::unix::fs::PermissionsExt, path::Path, path::PathBuf};
+//! The user-namespace block of a namespaces Sandbox's commands (D-8,
+//! layerfs-project#111): every command runs under the filter
+//! `local::deny_user_namespaces` installs, so it cannot create a user
+//! namespace and keep its own copy of a Workspace mount, whatever the host's
+//! `user.max_user_namespaces` says. Nothing here needs root or a Sandbox:
+//! the test runs its own binary again as the filtered command (whose test
+//! harness starts threads, which `clone3`'s `ENOSYS` sends to `clone`), and
+//! that command reports how many filters it runs under and what each call
+//! answered.
+#[cfg(target_os = "linux")]
+mod linux {
+    use nix::libc;
+    use std::process::Command;
 
-/// The kernel's limit on user namespaces.
-const LIMIT: &str = "/proc/sys/user/max_user_namespaces";
+    /// Set in the child: run [`probe`] instead of the test.
+    const CHILD: &str = "LAYERFS_TEST_SECCOMP_CHILD";
 
-/// Restores the limit however the test ends.
-struct Restore(String);
+    /// `clone3` with no argument structure, and the errno it answered.
+    fn bare_clone3() -> (libc::c_long, Option<i32>) {
+        // SAFETY: a null, zero-sized argument the kernel refuses (EFAULT or
+        // EINVAL) or the filter refuses first (ENOSYS); nothing is created
+        #[allow(unsafe_code)]
+        let answered = unsafe { libc::syscall(libc::SYS_clone3, 0usize, 0usize) };
+        (answered, std::io::Error::last_os_error().raw_os_error())
+    }
 
-impl Drop for Restore {
-    fn drop(&mut self) {
-        let _ = fs::write(LIMIT, &self.0);
+    /// How many seccomp filters this process runs under (Linux 5.9 and
+    /// later report it).
+    fn filters() -> u32 {
+        let status = std::fs::read_to_string("/proc/self/status").unwrap();
+        (status.lines())
+            .find_map(|line| line.strip_prefix("Seccomp_filters:"))
+            .and_then(|count| count.trim().parse().ok())
+            .expect("this kernel reports Seccomp_filters")
+    }
+
+    /// The child's part: the filters it runs under, then each call's errno,
+    /// `0` for a call that succeeded.
+    fn probe() {
+        let newuser = match nix::sched::unshare(nix::sched::CloneFlags::CLONE_NEWUSER) {
+            Ok(()) => 0,
+            Err(errno) => errno as i32,
+        };
+        let clone3 = match bare_clone3() {
+            (0, _) => 0,
+            (_, errno) => errno.unwrap_or(-1),
+        };
+        println!("filters={} newuser={newuser} clone3={clone3}", filters());
+    }
+
+    #[test]
+    fn a_filtered_command_cannot_create_a_user_namespace() {
+        if std::env::var_os(CHILD).is_some() {
+            probe();
+            return;
+        }
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "linux::a_filtered_command_cannot_create_a_user_namespace",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(CHILD, "1");
+        layerfs_sandbox_backend::local::deny_user_namespaces(&mut command);
+        let out = command.output().unwrap();
+        let said = String::from_utf8_lossy(&out.stdout);
+        assert!(out.status.success(), "{out:?}");
+        // the harness may print the test's name on the same line first
+        let line = said
+            .lines()
+            .find_map(|line| line.find("filters=").map(|at| &line[at..]))
+            .unwrap_or_else(|| panic!("the child printed no probe: {said}"));
+        // one filter more than this process runs under (a container's own
+        // filter, if any, gives the same answers; this one is proven there)
+        assert_eq!(
+            line,
+            format!(
+                "filters={} newuser={} clone3={}",
+                filters() + 1,
+                libc::EPERM,
+                libc::ENOSYS
+            ),
+            "{said}"
+        );
     }
 }
 
-fn root(name: &str) -> PathBuf {
-    let root =
-        std::env::temp_dir().join(format!("layerfs-namespaces-{name}-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(&root).unwrap();
-    fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).unwrap();
-    root
-}
-
+#[cfg(not(target_os = "linux"))]
 #[test]
-fn an_open_user_namespace_limit_is_refused_before_any_effect() {
-    if !nix::unistd::Uid::effective().is_root() {
-        eprintln!("SKIPPED namespaces user-namespace refusal: not root");
-        return;
-    }
-    let previous = fs::read_to_string(LIMIT).unwrap().trim().to_owned();
-    let restore = Restore(previous.clone());
-    let root = root("userns");
-    // open the limit: a Sandbox must not start, and nothing may be made
-    fs::write(LIMIT, "1\n").unwrap();
-    let error = NamespaceProvider::new(&root).unwrap_err();
-    assert!(
-        matches!(&error, RuntimeError::Unsupported(message)
-            if message.contains("user namespaces are not blocked")),
-        "{error}"
-    );
-    assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
-    // block it again: the same root is accepted, given the other host facts
-    fs::write(LIMIT, &previous).unwrap();
-    if previous == "0" && Path::new("/dev/fuse").exists() {
-        assert!(NamespaceProvider::new(&root).is_ok());
-    }
-    drop(restore);
-    assert_eq!(fs::read_to_string(LIMIT).unwrap().trim(), previous);
-    let _ = fs::remove_dir_all(&root);
+fn the_user_namespace_filter_is_linux_only() {
+    eprintln!("SKIPPED namespaces user-namespace filter: seccomp is Linux only");
 }

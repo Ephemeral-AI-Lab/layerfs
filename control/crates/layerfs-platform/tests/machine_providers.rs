@@ -293,7 +293,7 @@ fn a_bundle_without_its_binaries_is_refused_before_any_effect() {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
-fn docker_on_macos_and_linux_starts_one_worker_container_without_the_home() {
+fn docker_on_macos_and_linux_starts_one_privileged_worker_container_without_the_home() {
     let scratch = Scratch::new("docker-macos");
     scratch.tool(
         "docker",
@@ -316,9 +316,9 @@ esac"#,
     let log = scratch.log();
     let run = line(&log, "docker -H unix:///var/run/docker.sock run");
     for part in [
-        "-d --pull never --name lfs-dev --init",
+        // it runs namespaces Sandboxes inside itself (D-8)
+        "-d --pull never --name lfs-dev --init --privileged --cgroupns private",
         "--label layerfs.role=machine-worker --label layerfs.bundle=0123abcd",
-        "-v /var/run/docker.sock:/var/run/docker.sock",
         "-v lfs-dev-data:/layerfs/data",
         &format!("-v {}:/layerfs/bundle:ro", bundle.dir.display()),
         "--tmpfs /layerfs/state:mode=0700",
@@ -331,7 +331,7 @@ esac"#,
         // a Linux Engine's worker shares the host's network, listens on a
         // host loopback port and is given the name `reach` uses (#535 §7.4)
         assert!(
-            run.contains("--network host --add-host host.docker.internal:host-gateway -e LAYERFS_WORKER_HOST_NETWORK=1"),
+            run.contains("--network host --add-host host.docker.internal:host-gateway -v "),
             "{run}"
         );
         assert!(run.contains("-e LAYERFS_WORKER_LISTEN=127.0.0.1:"), "{run}");
@@ -346,9 +346,17 @@ esac"#,
     }
     assert_eq!(
         run.matches(" -v ").count(),
-        3,
-        "socket, data volume and bundle only: {run}"
+        2,
+        "data volume and bundle only, never Docker's socket: {run}"
     );
+    assert!(!run.contains("docker.sock:"), "{run}");
+    // its folders are made as a VM guest's are, and the host's user
+    // namespace limit is left alone: the command filter blocks them
+    assert!(
+        log.contains("mkdir -p /layerfs/data/store /layerfs/data/sandbox"),
+        "{log}"
+    );
+    assert!(!log.contains("max_user_namespaces"), "{log}");
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]

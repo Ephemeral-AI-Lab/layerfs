@@ -80,7 +80,7 @@ pub fn save_sandbox(
         .get("deploy")
         .ok_or_else(|| refused("InvalidInput", "deploy"))?;
     // the platform the call named, checked by `create` before any effect (#529)
-    let platform = crate::runtime::platform(args, crate::runtime::backend(deploy)?)?;
+    let platform = crate::runtime::platform(args, deploy)?;
     let runtime = state.runtime()?;
     let mut fields = vec![
         ("platform", SdkValue::text(platform)),

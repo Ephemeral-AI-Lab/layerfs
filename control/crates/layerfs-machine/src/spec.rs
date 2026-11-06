@@ -235,13 +235,9 @@ pub fn refusal(error: MachineError) -> SdkRefusal {
     refusal
 }
 
-/// The backend a machine's Sandboxes run on, on this host.
+/// The backend a machine's Sandboxes run on, on this host, as records
+/// store it (`native` for `host_process`, G6).
 pub fn backend_name(kind: Platform) -> &'static str {
-    use layerfs_platform::Backend;
-    match kind.backend(HostOs::current()) {
-        Some(Backend::HostProcess) => "native",
-        Some(Backend::Namespaces) => "namespaces",
-        Some(Backend::Docker) => "docker",
-        None => "-",
-    }
+    kind.backend(HostOs::current())
+        .map_or("-", layerfs_platform::Backend::stored_name)
 }

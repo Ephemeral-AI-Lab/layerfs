@@ -181,7 +181,6 @@ pub fn status(home: &Path, events: &mut Events<'_>, args: &SdkValue) -> Outcome 
         &at.record,
         op,
         at.more,
-        false,
         crate::workspace::dispatch::call,
     )
     .unwrap_or_else(|Unreached(why)| Err(why))

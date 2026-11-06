@@ -207,7 +207,9 @@ fn each_backends_mount_driver_serves_its_support_rows_kernel_route() {
         assert_eq!(route(backend.capabilities().mount_driver), kernel, "{at}");
         assert!(row.description.ends_with(backend.description()), "{at}");
     }
-    for backend in Backend::ALL {
+    // the docker backend no platform runs since D-8 (layerfs-project#111)
+    // until its folder is deleted
+    for backend in Backend::ALL.into_iter().filter(|b| *b != Backend::Docker) {
         let named = rows
             .iter()
             .any(|r| r.backend.as_deref() == Some(backend.stored_name()));
