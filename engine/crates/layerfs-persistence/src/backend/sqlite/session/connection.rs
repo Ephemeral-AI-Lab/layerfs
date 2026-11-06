@@ -202,6 +202,7 @@ impl Session {
             let acquisition = match stored {
                 36..=38 => crate::SqliteAcquisitionSchema::Absent,
                 42..=44 => crate::SqliteAcquisitionSchema::Tables,
+                16..=18 | 22..=24 => return Err(BackendError::SchemaVersion1),
                 _ => return Err(BackendError::Integrity),
             };
             let layout = match stored - acquisition.version_offset() {

@@ -73,9 +73,15 @@ Inode values and binding hints live in append-only blocks since schema
 version 2 (#91; `inode_value_block`, `binding_hint_block`, see
 [metadata and objects](../../../docs/architecture/engine/store/metadata-and-objects.md#inode-value-and-binding-hint-blocks)):
 SQLite schema versions 36 to 38 (42 to 44 with the acquisition tables) and
-PostgreSQL `SCHEMA_VERSION` 2. A schema version 1 Store (SQLite 16 to 18 and
-22 to 24, PostgreSQL 1) is refused at open and never converted; its data
-stays readable by a 2.0 release built before #91.
+PostgreSQL `SCHEMA_VERSION` 2, which also holds PostgreSQL object locations in
+narrow rows under an 8-byte-prefix index (#90). A schema version 1 Store is
+refused at open and never converted in place: SQLite 16 to 18 and 22 to 24
+with `Refused` naming the offline conversion, PostgreSQL 1 as `Malformed`.
+Converting a SQLite Store is optional: `tools/store_blocks.py migrate
+<closed v1 copy> <new file>` writes a schema version 2 copy (checked,
+`integrity_check`, vacuumed) and leaves the source untouched; without it the
+Store stays readable by a 2.0 release built before #91. A PostgreSQL schema
+version 1 Store has no conversion tool.
 
 The twelve logical tables are `pack`; `store_policy`, `object_location`,
 `inode_value`, `content_signature`; and `history_meta`,
