@@ -321,7 +321,7 @@ impl Candidates {
         Ok(())
     }
 
-    /// Records one admitted FULL winner.
+    /// Records one admitted object.
     pub fn insert(&mut self, id: ObjectId, signature: [u64; 8]) {
         if signature[0] == EMPTY {
             return;
@@ -390,11 +390,16 @@ impl Candidates {
     /// Best cached candidate for `signature`, excluding `target_id`.
     ///
     /// The winner is the entry sharing at least two signature hashes with the
-    /// highest overlap; ties break on the smaller identity, so the choice is
-    /// deterministic and independent of insertion order.
+    /// highest overlap; ties break on the newer entry (#88), so of several
+    /// versions of one content the latest admitted is proposed. The choice is
+    /// deterministic for one insertion order, which the persisted stamps keep
+    /// across a reload. Each reference slot already names the newest entry
+    /// holding its hash, so an older version is reached only through a hash
+    /// no newer version holds.
     pub fn find(&self, target_id: ObjectId, signature: &[u64; 8]) -> Option<ObjectId> {
         let query = fold(signature);
-        let mut best: Option<(usize, ObjectId)> = None;
+        // (overlap, age, identity): age 0 is the entry inserted last.
+        let mut best: Option<(usize, usize, ObjectId)> = None;
         for hash in query.iter().copied().filter(|hash| *hash != EMPTY32) {
             let reference = self.references[hash as usize & (REFERENCES - 1)];
             if reference == NO_ENTRY {
@@ -410,14 +415,15 @@ impl Candidates {
                 .iter()
                 .filter(|hash| **hash != EMPTY32 && entry.signature.contains(hash))
                 .count();
+            let age = self.next.wrapping_sub(1).wrapping_sub(reference as usize) & (SLOTS - 1);
             if overlap >= 2
-                && best.is_none_or(|(count, id)| {
-                    overlap > count || (overlap == count && entry.id < id)
+                && best.is_none_or(|(count, newest, _)| {
+                    overlap > count || (overlap == count && age < newest)
                 })
             {
-                best = Some((overlap, entry.id));
+                best = Some((overlap, age, entry.id));
             }
         }
-        best.map(|(_, id)| id)
+        best.map(|(_, _, id)| id)
     }
 }

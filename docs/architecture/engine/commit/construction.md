@@ -44,7 +44,8 @@ are dropped. The construction policy is the Store's
  CapturedNamespace::construct                         construction/driver.rs
   1 bind     reader engine == route engine; base rebound to reader.root()
   2 begin    CONTEXT record (unsealed)
-  3 names    pass over captured names  --> HEADER per changed parent
+  3 names    pass over captured names  --> HEADER per changed parent;
+             same-path base files of names bound over a lower binding
   4 values   pass over captured inodes --> VALUE, FRESH; changed files built
   5 seal     CONTEXT record with totals
   6 update   Cursor over sealed records --> Content
@@ -55,7 +56,7 @@ are dropped. The construction policy is the Store's
 | Inode row | Value built | Content entry point | Source |
 | --- | --- | --- | --- |
 | Fresh file, bytes already saved | Reuses the saved root (#364) | none | [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
-| Fresh file | New file root from captured runs; a rename predecessor is offered as delta base | `construct_runs_with_predecessor` | [`owner.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
+| Fresh file | New file root from captured runs; a rename predecessor, else the base file at the same path (#88), is offered as delta base: positionally to chunks, whole to a whole-file result | `construct_runs_with_predecessor` | [`owner.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
 | Changed base file | Indexed edits over the retained `FileView` | `apply_indexed_edits_view_backed` | [`owner.rs`](../../../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
 | Fresh symlink | Target from the capture | `emit_symlink` | [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
 | Fresh directory | Page built by Content from its header | streamed update | [`inodes.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/inodes.rs) |
