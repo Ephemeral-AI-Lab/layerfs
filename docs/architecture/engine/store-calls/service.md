@@ -161,6 +161,7 @@ How Workspace writes use it is in [Workspace: Mutation](../workspace/mutation.md
 | `Store::logical_size(node)` | A Commit's `meta.statistics.logical` or a Layer's `logical`, read from history; used as the known size when a merge counts its new logical size. | [`store/statistics.rs`](../../../../engine/crates/layerfs-store-service/src/store/statistics.rs) |
 | `Store::work`, `reuse_work`, `read_work`, `save_counters`, `merge_record_work` | Demand, reuse, read-session, Save and merge-record counters. | [`store/open.rs`](../../../../engine/crates/layerfs-store-service/src/store/open.rs) |
 | `SqlSessions::totals` | Writer and reader SQL work, summed under one registry turn. | [`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs) |
+| `telemetry::attribute_sql`, `phase_sql` | While a thread records, each `phase` (Commit's `capture`, `construct`, `finish`, `logical.count`, `bindings`, `lane`, `head.lane`, `validate`, `publish`, …) reads the caller's SQL probe before and after; `phase_sql` returns each phase's inclusive difference. Independent of the timing tree's node bound. Used by the round-trip count test ([`postgresql_round_trips.rs`](../../../../engine/crates/layerfs-store-service/tests/postgresql_round_trips.rs)). | [`telemetry.rs`](../../../../engine/crates/layerfs-store-service/src/telemetry.rs) |
 
 These counters are observations; they are not performance claims.
 
