@@ -349,13 +349,10 @@ pub fn reclaim(args: &SdkValue, container: &str, stopped: bool) -> Outcome {
         ));
     }
     if stopped {
-        match crate::recorded::recorded(args, id, &value)?
+        crate::recorded::recorded(args, id, &value)?
             .stopped()
             .delete()
-        {
-            Err(failure) if !failure.container_gone() => return Err(failed(failure)),
-            _ => {}
-        }
+            .map_err(failed)?;
     }
     lock(&SANDBOXES)?.remove(&directory);
     std::fs::remove_dir_all(&directory).map_err(failed)?;

@@ -50,6 +50,15 @@ that must run on the machine's kernel: sqlite Store calls (`store.call`,
 | 4 | `ready`: reads `/proc/net/tcp` in the guest and connects from the host. A worker that ends meanwhile is `Failed` with its log's last 8 lines. | [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
 | 5 | Records are written by the API layer, not here. | [`calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs) |
 
+The `docker` machine does steps 2 and 3 in its own container start
+([Machines: Docker](../machines/platforms/docker.md)): the bundle is mounted
+read-only at `/layerfs/bundle`, and the container's entry script makes
+`/layerfs/data/{store,sandbox}` (0755) as `prepare` does. It never writes
+`user.max_user_namespaces`, which would change the whole Docker host; the
+namespaces Sandboxes it runs rely on the command filter instead
+([Sandboxes: Native and namespaces](../sandboxes/native-and-namespaces.md#no-user-namespaces)).
+Step 4 (`ready`) is shared.
+
 `check_bundle` refuses a bundle without `layerfs`, `layerfs-daemon` and
 `layerfs-sandbox-helper`, or whose hash is not hex. The worker serves until
 `machine.stop`; it has no idle stop (#535 D11).

@@ -4,15 +4,15 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-Starts a named Sandbox for one project on a machine: a container or daemon
-process running that project's Workspace daemon, ready for
+Starts a named Sandbox for one project on a machine: a daemon process
+(in its own namespaces on Linux) running that project's Workspace daemon, ready for
 [`workspace.mount`](../workspace/mount.md).
 
 | | |
 | --- | --- |
 | Family | [sandbox](README.md) |
 | Library entry | [`sandbox/create.rs`](../../../../../api/crates/layerfs-api/src/sandbox/create.rs) |
-| Implemented in | `layerfs_sandbox::family::create` → `create::create` ([`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs)), then `serve::create` on the machine ([`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs)) |
+| Implemented in | `layerfs_sandbox::family::create` → `create::create` ([`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs)), then `lifecycle::create` on the machine ([`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs)) |
 | Runs in | the caller's process (records, locks), then the caller's process for a local machine or the machine's worker (`sandbox.host`) |
 
 ## Signature
@@ -46,7 +46,7 @@ layerfs sandbox create <project> <name> [<machine>] [--image <image>]
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `image` | Text | the machine record's image; on `docker` with none, the bundle's Sandbox image, loaded once | travels in the deploy settings, not as a top-level argument. On `docker` it must be a local image digest `sha256:<64 hex>`; on other machines only a digest is used | [`deploy.rs`](../../../../../control/crates/layerfs-sandbox/src/deploy.rs), [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) `start` |
+| `image` | Text | the machine record's image (not on `docker`, whose record's image is its worker container's); else the bundle's Sandbox image archive | travels in the deploy settings, not as a top-level argument. Only a digest `sha256:<64 hex>` is used; it names an image the Sandbox image archive holds (on `docker`, the bundle's `sandbox-image.tar` in the worker, as on a VM) | [`deploy.rs`](../../../../../control/crates/layerfs-sandbox/src/deploy.rs), [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `start` |
 
 Under a folder scope the call is refused `InvalidInput` (`out of scope:
 sandbox.create`) ([`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/calls/scope.rs)).
@@ -66,9 +66,9 @@ sandbox.create`) ([`calls/scope.rs`](../../../../../api/crates/layerfs-api/src/c
 | `name`, `project`, `machine` | text | as claimed |
 | `created` | int | claim time, ms since the epoch |
 | `id` | text | the name the machine knows the Sandbox by (its name) |
-| `platform` | text | `docker`, `mac` or `linux`, implied by the backend ([`runtime.rs`](../../../../../control/crates/layerfs-sandbox/src/runtime.rs) `platform`) |
-| `runtime`, `backend` | text | `docker`, `native` (macOS host process) or `namespaces` (Linux) |
-| `image` | text | the container's image, the namespaces root's digest, or `local` |
+| `platform` | text | `docker` (the docker machine, D-8), `mac` or `linux`, implied by the deployment ([`runtime.rs`](../../../../../control/crates/layerfs-sandbox/src/runtime.rs) `platform`) |
+| `runtime`, `backend` | text | `native` (macOS host process) or `namespaces` (Linux, including the `docker` machine's worker container) |
+| `image` | text | the namespaces root's digest, or `local` |
 | `route` | text | the kernel route: `nfs` for a macOS host process, else `fuse` ([`files.rs`](../../../../../control/crates/layerfs-sandbox/src/files.rs) `route`) |
 | `state` | text | `running` once recorded ([`record.rs`](../../../../../control/crates/layerfs-sandbox/src/record.rs) `state`) |
 | `forward_failed` | text | why the caller could not reach the daemon directly; its Workspace calls then go through the worker |
@@ -87,11 +87,11 @@ The record hides `v`, `runtime_id` and `daemon`
   3 op phase -> start (Sandbox lock only)
   4 route::on_machine(record, "sandbox.create", [image])
        |
-       +-- Executor::Local --> dispatch::call --> serve::create (here)
+       +-- Executor::Local --> dispatch::call --> lifecycle::create (here)
        +-- Executor::Worker -> "sandbox.host" --> worker: in_worker
-                                 --> serve::create, answer + keys
-  5 direct::open: forward the daemon port (ssh, lima) or use
-    docker's published port, before any lock
+                                 --> lifecycle::create, answer + keys
+  5 direct::open: forward the daemon port (ssh, lima), before any
+    lock; elsewhere (docker among them) calls stay on the worker
   6 home + Sandbox lock: record.started(answer), drop op, one write
 ```
 
@@ -99,7 +99,7 @@ The record hides `v`, `runtime_id` and `daemon`
 | --- | --- | --- | --- |
 | `native`, macOS host | caller's process | daemon host process, loopback NFS | [`launch/local.rs`](../../../../../control/crates/layerfs-sandbox/src/launch/local.rs) |
 | `native`, Linux host | caller's process | namespaces, FUSE | `launch/local.rs` |
-| `docker` | the docker machine's worker, every host | container; daemon port published on loopback | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs), [`deploy.rs`](../../../../../control/crates/layerfs-sandbox/src/deploy.rs) |
+| `docker` | the docker machine's worker, every host | namespaces, FUSE, inside the worker container (D-8); no direct route | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs), [`deploy.rs`](../../../../../control/crates/layerfs-sandbox/src/deploy.rs) |
 | any other machine | that machine's worker | the guest's own `native` | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) `in_worker` |
 
 For a PostgreSQL Store the caller resolves the password and sends the URL
@@ -130,15 +130,15 @@ Nothing starts a stopped machine. See the
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad name, `native`/`docker`, malformed image digest, folder scope | no | [`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs), [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) |
+| `InvalidInput` | bad name, `native`/`docker`, malformed image digest, folder scope | no | [`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs), [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
 | `NoSuchStore`, `NoSuchProject`, `NotFound` | missing Store, project or machine | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs), `create.rs` |
-| `NoStore` | the project has no installed Store | no | `serve.rs` `installed` |
-| `Exists` | the name is taken in the home, or the machine already records a started Sandbox there | no | `create.rs`, `serve.rs` |
+| `NoStore` | the project has no installed Store | no | `lifecycle.rs` `installed` |
+| `Exists` | the name is taken in the home, or the machine already records a started Sandbox there | no | `create.rs`, `lifecycle.rs` |
 | `Unsupported` | platform cannot run this Store kind; sqlite Store on another machine; no image archive in the bundle | no | `create.rs`, [`deploy.rs`](../../../../../control/crates/layerfs-sandbox/src/deploy.rs) |
 | `Busy`, `Unresolved` | the Store holds an `op` (push, pull, remove) | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
 | `Unavailable` | worker not recorded or not answering (nothing sent); a lock held too long; PostgreSQL server not reached | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs), [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
-| `Failed` | the start failed and every effect is known: the container was stopped and deleted, `detail {container, removed, log}` | no | `serve.rs` `abandon` |
-| `Unknown` | **the worker's answer was lost; or the start's effect on the Store volume or Engine is unknown; or it started but could not be recorded** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), `serve.rs` `abandon`, `unrecorded` |
+| `Failed` | the start failed and every effect is known: the Sandbox was stopped and deleted, `detail {container, removed, log}` | no | `lifecycle.rs` `abandon` |
+| `Unknown` | **the worker's answer was lost; or the start's effect is unknown; or it started but could not be recorded** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), `lifecycle.rs` `abandon`, `unrecorded` |
 
 After `Unknown` the record keeps its `op` with `uncertain: true`, a line
 goes to `log/uncertain.jsonl`, and the state is `unresolved`. Read

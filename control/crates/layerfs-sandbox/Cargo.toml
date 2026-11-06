@@ -14,7 +14,7 @@ layerfs-project = { path = "../../../engine/crates/layerfs-project" }
 layerfs-home = { path = "../layerfs-home" }
 layerfs-machine = { path = "../layerfs-machine" }
 layerfs-store = { path = "../layerfs-store" }
-# How a Sandbox runs on its machine's kernel: docker, native, namespaces.
+# How a Sandbox runs on its machine's kernel: native or namespaces.
 layerfs-sandbox-backend = { path = "../layerfs-sandbox-backend" }
 libc = "=0.2.189"
 

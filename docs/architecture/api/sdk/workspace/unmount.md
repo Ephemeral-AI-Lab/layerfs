@@ -96,7 +96,7 @@ answers `Busy` while a process still holds the mount. See the
 | `Busy` | another unmount of it is in progress; a process holds the mount; another control operation runs; a `sandbox.create`/`close` holds the Sandbox | no | [`unmount_guard.rs`](../../../../../control/crates/layerfs-sandbox/src/unmount_guard.rs), [`control/registry.rs`](../../../../../engine/crates/layerfs-daemon/src/control/registry.rs) |
 | other daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
 | `Unavailable` | the worker is not recorded or does not answer | no | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
-| `Failed` | **a daemon exchange failed; `attempted` says whether teardown may have begun** | **maybe** | [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) |
+| `Failed` | **a daemon exchange failed; `attempted` says whether teardown may have begun** | **maybe** | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
 | `Unknown` | **the worker's answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After an uncertain unmount**, call `workspace.unmount` again: a recorded

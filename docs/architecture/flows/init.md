@@ -102,7 +102,7 @@ The live add neither seals nor installs. `store.create` runs
 tables and seals it. Sandbox daemons then open that Store file directly:
 every product Sandbox start sets `DaemonStore::Sqlite { install: Some(..) }`,
 so the daemon opens the existing Store and the one-time install stream is not
-sent ([`serve.rs`](../../../control/crates/layerfs-sandbox/src/serve.rs),
+sent ([`lifecycle.rs`](../../../control/crates/layerfs-sandbox/src/lifecycle.rs),
 [`launch/local.rs`](../../../control/crates/layerfs-sandbox/src/launch/local.rs),
 [`store.rs` (bridge)](../../../engine/crates/layerfs-bridge/src/store.rs) `opens_existing`).
 Seal and the install stream are described in

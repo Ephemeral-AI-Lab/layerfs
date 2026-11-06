@@ -56,7 +56,7 @@ reads the rows.
 | Question | Answered by | Values | Source |
 | --- | --- | --- | --- |
 | Is the platform on this host? | `host_refusal` | `None`, or the fixed refusal text | [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) |
-| Which Sandbox backend runs there? | `SupportRow::backend` | `docker`, `native`, `namespaces` or none | [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) |
+| Which Sandbox backend runs there? | `SupportRow::backend` | `native`, `namespaces` or none (`docker` runs `namespaces` in its worker container, D-8) | [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) |
 | Which kernel route do its daemons serve? | `SupportRow::kernel` | `fuse`, `nfs` or none | same |
 | Where do a sqlite Store's calls run? | `SupportRow::sqlite` | `in_process`, `worker` or none | same |
 | Where do a PostgreSQL Store's calls run? | `PostgresqlSupport::store_calls` | always `in_process` (#533 G2) | same |

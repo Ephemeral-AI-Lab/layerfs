@@ -591,13 +591,11 @@ fn a_record_reopens_the_exact_sandbox_and_nothing_else() {
         refused.cause
     );
 
-    // a Docker record is refused rather than reinterpreting it
-    let foreign = SandboxRecord::Docker(layerfs_sandbox_backend::DockerRecord {
-        image: "sha256:0".to_owned(),
-        store_volume: Some("volume".to_owned()),
-        port: 30421,
-        labels: Vec::new(),
-    });
+    // a native record of the same facts is refused rather than reinterpreted
+    let SandboxRecord::Namespaces(namespace) = &record else {
+        panic!("a namespaces Sandbox wrote {record:?}");
+    };
+    let foreign = SandboxRecord::Local(namespace.local.clone());
     assert!(reopened_provider.reopen(id, &foreign).is_err());
 
     // a stopped Sandbox admits only its one Delete

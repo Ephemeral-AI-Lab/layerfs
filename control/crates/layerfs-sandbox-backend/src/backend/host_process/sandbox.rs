@@ -316,11 +316,8 @@ impl Sandbox {
             status: None,
             cause,
             fence_error: None,
-            observed_exec: None,
             observed_container: None,
             requested_container: Some(self.id),
-            requested_exec: None,
-            error_body: None,
         })
     }
 }

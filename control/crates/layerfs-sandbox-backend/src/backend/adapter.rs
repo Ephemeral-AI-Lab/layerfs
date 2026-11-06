@@ -4,7 +4,7 @@
 //! `ADAPTER`: what is fixed per backend (its stored name, description and
 //! capabilities). Launch and reopen stay on the providers the public
 //! `Runtime` enum holds; `LaunchRequest` binds arrive in a later phase.
-use super::{docker, host_process, namespaces, Backend};
+use super::{host_process, namespaces, Backend};
 use crate::ProviderCapabilities;
 
 /// What is fixed for one Sandbox backend.
@@ -21,7 +21,6 @@ pub(crate) trait BackendAdapter: Sync {
 /// The backend's adapter: the one match over backends.
 pub(crate) fn adapter(backend: Backend) -> &'static dyn BackendAdapter {
     match backend {
-        Backend::Docker => &docker::ADAPTER,
         Backend::HostProcess => &host_process::ADAPTER,
         Backend::Namespaces => &namespaces::ADAPTER,
     }

@@ -14,7 +14,9 @@ Local-process Sandboxes: native and namespaces.
 Both backends start the daemon as a process on the machine's own kernel.
 `host_process` (stored `"native"`, macOS) isolates nothing: the machine is
 the boundary. `namespaces` (Linux) is the same local lifecycle with mount,
-PID and IPC namespaces and a cgroup added.
+PID and IPC namespaces and a cgroup added. It runs in every VM and `ssh`
+guest, on `native` Linux, and in the `docker` machine's worker container
+([Docker machine Sandboxes](docker.md)).
 
 ## Local process plumbing
 
@@ -43,7 +45,7 @@ PID and IPC namespaces and a cgroup added.
 | Root | Absolute, owned by this user, not group or other writable, `o+x`. `Local::new` also needs every ancestor `o+x` (commands run as another identity); `Local::native` does not (a macOS home is 0750). | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs) |
 | Process identity | `LocalProcess { pid, start, boot }`: all three must match to count as alive; a zombie is not alive; a record without a boot is never signalled. | [`local/process.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/process.rs) |
 | Search path | Linux: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`. macOS: this process's `PATH`, else that plus `/opt/homebrew/bin`. | [`local/search.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/search.rs) |
-| OS facts | `local/os/linux` (`/proc`, `mountinfo`, lazy `MNT_DETACH`) or `local/os/macos` (`proc_pidinfo`, `mount`, `umount -f`). The macOS file is the crate's only `unsafe`. | [`local/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/mod.rs), [`lib.rs`](../../../../control/crates/layerfs-sandbox-backend/src/lib.rs) |
+| OS facts | `local/os/linux` (`/proc`, `mountinfo`, lazy `MNT_DETACH`, and the command filter in `seccomp.rs`) or `local/os/macos` (`proc_pidinfo`, `mount`, `umount -f`). `macos/darwin.rs` and `linux/seccomp.rs` are the crate's only `unsafe`. | [`local/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/mod.rs), [`lib.rs`](../../../../control/crates/layerfs-sandbox-backend/src/lib.rs) |
 
 `HostProcessProvider::launch` accepts only `ProviderLaunchOptions::Local`
 whose command identity is this process's own uid and gid, and no `PATH` in
@@ -51,8 +53,8 @@ the environment ([`host_process/provider.rs`](../../../../control/crates/layerfs
 
 ## Process groups
 
-A container's processes end with it. A local Sandbox's would outlive it,
-so each command leads its own process group and the Sandbox names it.
+A native Sandbox's processes would outlive it, so each command leads its
+own process group and the Sandbox names it.
 
 ```text
  run(request)
@@ -82,14 +84,12 @@ so each command leads its own process group and the Sandbox names it.
 | Wait ends | `TimedOut`. Nothing is retried. | same |
 | Command streams | Two pipes, each copied to its sink in 8 KiB windows; the count is what the sink accepted. | [`local/streams.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/streams.rs) |
 
-The Docker backend reads the same marker from the container's log stream
-([Docker](docker.md#containers)).
-
 ## Namespaces
 
 ```text
  NamespaceProvider::launch_with_binds          (as root in the machine)
-   host checks: root, user.max_user_namespaces = 0, cgroup v2,
+   host checks: root, user namespaces blocked (max_user_namespaces = 0,
+                or the seccomp filter's actions offered), cgroup v2,
                 /dev/fuse, overlay upper dir usable
    rootfs::ensure: unpack the docker-archive once per image digest
    prepare: Local parts + bin/layerfs-daemon, bin/layerfs-sandbox-helper
@@ -114,15 +114,28 @@ The Docker backend reads the same marker from the container's log stream
 | `HelperSpec` | One 0600 file of absolute paths: root, sandbox, daemon, config, cgroup, lower, upper, work, and `bind=<rw\|ro>\t<host>\t<guest>` lines. No secret: the helper never reads the setup. | [`helper_spec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/helper_spec.rs) |
 | `Bind` | A sqlite Store's directory, read-write at its own path, so SQLite's WAL and the writers' lock see one inode. None for a PostgreSQL Store. A bind may not hold the runtime root or the Sandbox directory. | [`types/bind.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/bind.rs), `check_bind` in [`namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs) |
 | Image | A `docker save` archive named by its config digest; compressed layers are refused; unpacked once per digest and shared read-only. | [`rootfs/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/mod.rs) |
-| Commands | `helper exec --init <pid> --cgroup <dir> --uid --gid --cwd -- <argv>`: joins the cgroup, enters the namespaces, becomes uid:gid with no capabilities and no-new-privs. | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`bin/…/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
+| Commands | `helper exec --init <pid> --cgroup <dir> --uid --gid --cwd -- <argv>`: joins the cgroup, enters the namespaces, becomes uid:gid with no capabilities and no-new-privs, and just before exec installs the seccomp filter that refuses a user namespace (below). | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`bin/…/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
 | End | One write to `cgroup.kill` ends everything the Sandbox started, whatever session it left. `track` is a no-op here. | [`namespaces/cgroup.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/cgroup.rs), [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs) |
 | Delete | Removes the cgroup and directory after a known stop; a populated cgroup is refused. The shared Store is never touched. | [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs) |
 
 A host that cannot meet a check is refused before any effect, never given
 a weaker Sandbox ([`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs)).
-The machine setup sets `user.max_user_namespaces=0` in every VM guest
-([Network: Workers](../network/workers.md#worker-setup)); this runtime only
-checks it.
+
+### No user namespaces
+
+A command that made a user namespace could hold its own copy of a
+Workspace mount, outside the daemon's unmount. Two things stop it:
+
+| Guard | What | Source |
+| --- | --- | --- |
+| Command filter | Every command runs under a seccomp filter `helper exec` installs after setting no-new-privs: `unshare` and `clone` with `CLONE_NEWUSER` answer `EPERM`, `clone3` answers `ENOSYS` (the C library falls back to `clone`), everything else is allowed. A foreign ABI (i386 on x86_64, arm on aarch64) is filtered by its own numbers, x32 by the native ones; an unknown ABI is killed. A filter that cannot be installed fails the command. | [`local/os/linux/seccomp.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs) |
+| Host check | Before launch, either `user.max_user_namespaces=0` or `/proc/sys/kernel/seccomp/actions_avail` listing `allow`, `errno` and `kill_process`; else `Unsupported`. | [`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs) |
+
+The machine setup still sets `user.max_user_namespaces=0` in every VM guest
+([Network: Workers](../network/workers.md#worker-setup)). The `docker`
+machine's worker never sets it, since it would change the whole Docker
+host; there the filter alone blocks user namespaces. This runtime never
+sets the limit.
 
 ## Related
 
@@ -133,4 +146,4 @@ checks it.
 
 ---
 
-← [Sandboxes: Docker](docker.md) · [Up: Sandboxes](README.md) · [Sandboxes: Commands and streams](commands-and-streams.md) →
+← [Sandboxes: Docker machine Sandboxes](docker.md) · [Up: Sandboxes](README.md) · [Sandboxes: Commands and streams](commands-and-streams.md) →

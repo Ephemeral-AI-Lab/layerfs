@@ -57,7 +57,7 @@ Records in `machine/<name>/`, adapters from `layerfs-platform`
 | `create` | claims the name with `op` `machine.create`, makes the VM outside the home lock, records `running`, `failed` or an uncertain `op` | `op`, `start.lock` | [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) |
 | `connect` | an ssh host; host key checked strictly; `op` `machine.connect` | `op` | [`connect.rs`](../../../../control/crates/layerfs-machine/src/connect.rs) |
 | `remove`, `disconnect` | delete a VM and its disk, or forget an ssh host (its root stays); `InUse` while it holds Stores, Sandboxes or hosted machines | `op`, `start.lock` | [`remove.rs`](../../../../control/crates/layerfs-machine/src/remove.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
-| `update` | resize a VM, or set a built-in machine's image, Docker socket, `wsl` setting or daemon; `InUse` while Sandboxes run | home lock | [`update.rs`](../../../../control/crates/layerfs-machine/src/update.rs) |
+| `update` | resize a VM, or set a built-in machine's image (on `docker`, its worker container's image), Docker socket, `wsl` setting or daemon; `InUse` while Sandboxes run | home lock | [`update.rs`](../../../../control/crates/layerfs-machine/src/update.rs) |
 
 `machine/worker/` holds the worker client and server; see
 [Workers](../routing/workers.md).
@@ -123,14 +123,14 @@ A lost answer is `Unknown` and the home gains no project record.
 | --- | --- | --- |
 | `create` | claims the name under the home lock with `op` `sandbox.create`, starts the Sandbox on its machine (its sqlite Store's machine, else `native`), records the result and drops the `op` in one write | [`create.rs`](../../../../control/crates/layerfs-sandbox/src/create.rs) |
 | `list`, `get` | Sandbox records with derived state; `get` adds one page of Workspaces | [`list.rs`](../../../../control/crates/layerfs-sandbox/src/list.rs), [`get.rs`](../../../../control/crates/layerfs-sandbox/src/get.rs) |
-| `close` | records `op` `sandbox.close`, stops the runtime, removes the record; `MountsActive` without `force`; clears an unresolved create | [`close.rs`](../../../../control/crates/layerfs-sandbox/src/close.rs) |
+| `close` | records `op` `sandbox.close`, stops the runtime, removes the record; `MountsActive` without `force`; clears an unresolved create. A Sandbox recorded under the retired docker backend is only forgotten: its record is removed and the answer names its container for `docker rm <name>` (every other call on it is `Unsupported`, D-8) | [`close.rs`](../../../../control/crates/layerfs-sandbox/src/close.rs) |
 
 Host operations run through `route::on_machine`: in this process when the
 machine is local, else as a worker `sandbox.host` request carrying the
 Store and project records ([`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs)). For a
 PostgreSQL Store this process resolves the password and the create checks
 the server is reachable from the machine first. Where this host reaches a
-Sandbox's daemon (`ssh`, `lima`, `docker`), the keys go to
+Sandbox's daemon (`ssh`, `lima`), the keys go to
 `sandbox/<name>/control.json` ([`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs)).
 
 ## workspace

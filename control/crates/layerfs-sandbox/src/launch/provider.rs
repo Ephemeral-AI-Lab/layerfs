@@ -95,19 +95,10 @@ impl SandboxApi {
         &self,
         request: ProviderCreate,
     ) -> Result<ProviderSandbox, Box<ProviderFailure>> {
-        let no_volume = matches!(
-            &request.launch.options,
-            ProviderLaunchOptions::Docker {
-                store_volume: None,
-                ..
-            } | ProviderLaunchOptions::Local { .. }
-                | ProviderLaunchOptions::Namespaces { .. }
-        );
         if !matches!(
             request.setup.store,
             layerfs_bridge::DaemonStore::Postgres { .. }
-        ) || !no_volume
-        {
+        ) {
             return Err(Box::new(ProviderFailure {
                 request,
                 phase: SandboxPhase::Validate,
@@ -150,23 +141,18 @@ impl SandboxApi {
             }
             let mut launch = request.launch.clone();
             launch.daemon_config = request.setup.encode().map_err(SandboxCause::Setup)?;
-            let local_identity = match &launch.options {
-                ProviderLaunchOptions::Local {
-                    command_identity, ..
-                }
-                | ProviderLaunchOptions::Namespaces {
-                    command_identity, ..
-                } => Some(command_identity),
-                ProviderLaunchOptions::Docker { .. } => None,
-            };
-            if let Some(command_identity) = local_identity {
-                if (command_identity.uid, command_identity.gid)
-                    != (request.setup.command_uid, request.setup.command_gid)
-                {
-                    return Err(SandboxCause::Setup(ControlError(
-                        "provider topology/identity",
-                    )));
-                }
+            let (ProviderLaunchOptions::Local {
+                command_identity, ..
+            }
+            | ProviderLaunchOptions::Namespaces {
+                command_identity, ..
+            }) = &launch.options;
+            if (command_identity.uid, command_identity.gid)
+                != (request.setup.command_uid, request.setup.command_gid)
+            {
+                return Err(SandboxCause::Setup(ControlError(
+                    "provider topology/identity",
+                )));
             }
             if launch.startup_timeout.is_zero()
                 || public_key(&request.controller_private).map_err(SandboxCause::Channel)?
@@ -266,23 +252,18 @@ impl SandboxApi {
             }
             let mut launch = request.launch.clone();
             launch.daemon_config = request.setup.encode().map_err(SandboxCause::Setup)?;
-            let local_identity = match &launch.options {
-                ProviderLaunchOptions::Local {
-                    command_identity, ..
-                }
-                | ProviderLaunchOptions::Namespaces {
-                    command_identity, ..
-                } => Some(command_identity),
-                ProviderLaunchOptions::Docker { .. } => None,
-            };
-            if let Some(command_identity) = local_identity {
-                if (command_identity.uid, command_identity.gid)
-                    != (request.setup.command_uid, request.setup.command_gid)
-                {
-                    return Err(SandboxCause::Setup(ControlError(
-                        "provider topology/identity",
-                    )));
-                }
+            let (ProviderLaunchOptions::Local {
+                command_identity, ..
+            }
+            | ProviderLaunchOptions::Namespaces {
+                command_identity, ..
+            }) = &launch.options;
+            if (command_identity.uid, command_identity.gid)
+                != (request.setup.command_uid, request.setup.command_gid)
+            {
+                return Err(SandboxCause::Setup(ControlError(
+                    "provider topology/identity",
+                )));
             }
             if launch.startup_timeout.is_zero()
                 || public_key(&request.controller_private).map_err(SandboxCause::Channel)?

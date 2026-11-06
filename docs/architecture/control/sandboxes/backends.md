@@ -19,7 +19,6 @@ The sealed BackendAdapter and the backend kinds.
         v
  adapter(backend) -> &'static dyn BackendAdapter   one exhaustive match
         |
-        +-- Backend::Docker      => &docker::ADAPTER        (DockerBackend)
         +-- Backend::HostProcess => &host_process::ADAPTER  (HostProcessBackend)
         +-- Backend::Namespaces  => &namespaces::ADAPTER    (NamespacesBackend)
 
@@ -41,8 +40,8 @@ two public enums in [`runtime.rs`](../../../../control/crates/layerfs-sandbox-ba
 
 | Enum | Variants | Methods |
 | --- | --- | --- |
-| `Runtime` (one deployment's choice) | `Docker(DockerProvider)`; `HostProcess(HostProcessProvider)` (macOS); `Namespaces(NamespaceProvider)` (Linux) | `backend`, `capabilities`, `local_directory`, `native_paths`, `launch`, `launch_with_binds`, `reopen`, `reopen_stopped` |
-| `Sandbox` (the launched owner) | `Docker(docker::Sandbox)`; `HostProcess(host_process::Sandbox)` (macOS and Linux); `Namespaces(Box<namespaces::Sandbox>)` (Linux) | `backend`, `identity`, `endpoint`, `run`, `track`, `log_tail`, `inspect`, `stop`, `delete`, `scratch_directory`, `local_record`, `record` |
+| `Runtime` (one deployment's choice) | `HostProcess(HostProcessProvider)` (macOS); `Namespaces(NamespaceProvider)` (Linux) | `backend`, `capabilities`, `local_directory`, `native_paths`, `launch`, `launch_with_binds`, `reopen`, `reopen_stopped` |
+| `Sandbox` (the launched owner) | `HostProcess(host_process::Sandbox)` (macOS and Linux); `Namespaces(Box<namespaces::Sandbox>)` (Linux) | `backend`, `identity`, `endpoint`, `run`, `track`, `log_tail`, `inspect`, `stop`, `delete`, `scratch_directory`, `local_record`, `record` |
 
 On Linux, `Sandbox::HostProcess` exists only to reopen, stop and delete a
 native Sandbox recorded before 2.0; Linux has no native provider (#533 O27,
@@ -50,21 +49,25 @@ native Sandbox recorded before 2.0; Linux has no native provider (#533 O27,
 
 ## Backend kinds
 
-| | `Docker` | `HostProcess` | `Namespaces` |
-| --- | --- | --- | --- |
-| Description | "Sandboxes run in Docker containers" | "Sandboxes run as this user's processes, served over loopback NFS" | "Sandboxes run in Linux namespaces and a cgroup" |
-| `capabilities.name` | `docker` | `native-macos` | `namespaces-linux` |
-| `isolation` | `Container` | `HostProcess` | `MicroVm` (the VM holding the kernel is the boundary) |
-| `mount_driver` | `Fuse` | `LoopbackNfs` | `Fuse` |
-| `requires_image` | yes | no | yes |
-| `search_path_policy` | `FixedContainer` | `InheritHost` | `FixedContainer` |
-| `supports_resource_limits` | no | no | no |
-| `direct_store_access` | yes | yes | yes |
-| Launch options | `ProviderLaunchOptions::Docker` | `::Local` | `::Namespaces` |
-| Store reaches the daemon as | a volume, volume folder or host folder at `/layerfs-store` | the host's own files | a `Bind` of the Store's directory |
-| Process boundary | the container | process groups named in `groups/` | cgroup v2 directory |
-| Builds and runs on | any Unix host | macOS (launch) | Linux |
-| Topic | [Docker](docker.md) | [Native and namespaces](native-and-namespaces.md) | [Native and namespaces](native-and-namespaces.md) |
+There are two backends. The docker backend (one Docker container per
+Sandbox) was retired by D-8; the `docker` machine now runs `Namespaces` in
+its worker container ([Docker machine Sandboxes](docker.md)).
+
+| | `HostProcess` | `Namespaces` |
+| --- | --- | --- |
+| Description | "Sandboxes run as this user's processes, served over loopback NFS" | "Sandboxes run in Linux namespaces and a cgroup" |
+| `capabilities.name` | `native-macos` | `namespaces-linux` |
+| `isolation` | `HostProcess` | `MicroVm` (in a VM, the VM holding the kernel is the boundary) |
+| `mount_driver` | `LoopbackNfs` | `Fuse` |
+| `requires_image` | no | yes |
+| `search_path_policy` | `InheritHost` | `FixedContainer` |
+| `supports_resource_limits` | no | no |
+| `direct_store_access` | yes | yes |
+| Launch options | `ProviderLaunchOptions::Local` | `::Namespaces` |
+| Store reaches the daemon as | the host's own files | a `Bind` of the Store's directory |
+| Process boundary | process groups named in `groups/` | cgroup v2 directory |
+| Builds and runs on | macOS (launch) | Linux: every VM and `ssh` guest, `native` on Linux, and the `docker` machine's worker container |
+| Topic | [Native and namespaces](native-and-namespaces.md) | [Native and namespaces](native-and-namespaces.md) |
 
 Capabilities "describe support, not qualification"
 ([`capabilities.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/capabilities.rs)).
@@ -76,7 +79,6 @@ every `SUPPORT.json` row that names the backend
 
 ```text
  record / listing / SUPPORT.json        Rust
-   "docker"      <---- stored_name ----  Backend::Docker
    "native"      <---- stored_name ----  Backend::HostProcess   (G6)
    "namespaces"  <---- stored_name ----  Backend::Namespaces
                  ----- Backend::parse -->
@@ -85,12 +87,17 @@ every `SUPPORT.json` row that names the backend
 | Rule | Source |
 | --- | --- |
 | Stored and displayed values do not follow internal renames: `HostProcess` is `"native"` (#535 G6). | [`host_process/adapter.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/adapter.rs) |
-| `Backend::parse` finds the variant whose `stored_name` matches; `Backend::ALL` lists `[Docker, HostProcess, Namespaces]`. | [`kind.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/kind.rs) |
+| `Backend::parse` finds the variant whose `stored_name` matches; `Backend::ALL` lists `[HostProcess, Namespaces]`. | [`kind.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/kind.rs) |
 | Names round-trip and are unique. | `stored_names_parse_back_and_do_not_follow_the_rust_names` ([`runtime_enum.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/runtime_enum.rs)), `each_stored_name_round_trips_and_is_unique` ([`conformance.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/conformance.rs)) |
-| The record variant names the backend too: `SandboxRecord::Docker`, `::Local` (native), `::Namespaces`. | [`types/options.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/options.rs) |
+| The record variant names the backend too: `SandboxRecord::Local` (native), `::Namespaces`. | [`types/options.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/options.rs) |
 
 `capabilities.name` (`native-macos`, `namespaces-linux`) is a different
 string from the stored name and is not what records store.
+
+A record stored with `"docker"` was written by the retired docker backend.
+Every call on it is refused `Unsupported` with a message to recreate the
+Sandbox, except `sandbox.close`, which forgets it
+([Docker machine Sandboxes](docker.md#sandboxes-recorded-under-the-docker-backend)).
 
 ## Related
 
@@ -100,4 +107,4 @@ string from the stored name and is not what records store.
 
 ---
 
-← [Control: Sandboxes](README.md) · [Up: Sandboxes](README.md) · [Sandboxes: Docker](docker.md) →
+← [Control: Sandboxes](README.md) · [Up: Sandboxes](README.md) · [Sandboxes: Docker machine Sandboxes](docker.md) →

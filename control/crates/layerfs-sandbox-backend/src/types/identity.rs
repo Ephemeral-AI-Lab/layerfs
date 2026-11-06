@@ -59,26 +59,3 @@ impl fmt::Display for ContainerId {
         f.write_str(self.as_str())
     }
 }
-/// Exact acknowledged runtime Exec identity, independent of filesystem ownership.
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
-pub struct ExecId(EngineId);
-impl ExecId {
-    /// Validates a full acknowledged runtime identity.
-    pub fn parse(value: &str) -> Result<Self, RuntimeError> {
-        EngineId::parse(value).map(Self)
-    }
-    /// Exact runtime path component.
-    pub fn as_str(&self) -> &str {
-        self.0.text()
-    }
-}
-impl fmt::Debug for ExecId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("ExecId").field(&self.as_str()).finish()
-    }
-}
-impl fmt::Display for ExecId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}

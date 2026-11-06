@@ -88,9 +88,6 @@ pub fn save_sandbox(
         ("container", SdkValue::text(runtime.identity().to_string())),
     ];
     match runtime {
-        // nothing here launches one any more (D-8); the variant goes with
-        // the backend's folder
-        Sandbox::Docker(_) => return Err(refused("Unsupported", "the docker backend is retired")),
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Sandbox::HostProcess(runtime) => {
             let record = runtime
@@ -157,7 +154,8 @@ pub fn route(runtime: &Sandbox) -> &'static str {
     match runtime {
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Sandbox::HostProcess(_) => "nfs",
-        _ => "fuse",
+        #[cfg(target_os = "linux")]
+        Sandbox::Namespaces(_) => "fuse",
     }
 }
 /// The fields a local Sandbox record keeps: its directory, its daemon or init
@@ -254,8 +252,8 @@ pub fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
 fn observed(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Box<Sandbox>> {
     let container = helpers::text(value, "container")?;
     recorded(args, id, value)?.reopen().map_err(|failure| {
-        if failure.container_gone() || failure.container_stopped() {
-            gone(id, container, failure.container_stopped())
+        if failure.container_stopped() {
+            gone(id, container, true)
         } else {
             failed(failure)
         }

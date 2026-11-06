@@ -1,8 +1,9 @@
 //! Ordinary runtime operations, separate from filesystem admission and data ownership.
 //!
-//! `backend/` holds one folder per Sandbox backend (`docker`, `host_process`,
-//! `namespaces`), named as `LAYERFS_SANDBOX` names them. `docker_engine/` is
-//! the Docker Engine HTTP client. `runtime.rs` matches over the backends'
+//! `backend/` holds one folder per Sandbox backend (`host_process`,
+//! `namespaces`), named as `LAYERFS_SANDBOX` names them; the docker backend
+//! and its Engine client are retired (D-8, layerfs-project#111: the docker
+//! machine runs namespaces Sandboxes). `runtime.rs` matches over the backends'
 //! providers and Sandboxes; `backend/adapter.rs` is the one match for what is
 //! fixed per backend (G2); `types/` holds what they share; `json/`,
 //! `helper_spec.rs` and `postgres_url.rs` are the shared formats. The
@@ -17,20 +18,15 @@ mod backend;
 #[cfg(unix)]
 pub use backend::Backend;
 #[cfg(unix)]
-mod docker_engine;
-#[cfg(unix)]
 mod helper_spec;
 #[cfg(unix)]
 pub mod json;
 pub mod platform_policy;
 #[cfg(unix)]
 mod postgres_url;
-#[cfg(unix)]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod runtime;
 mod types;
-#[cfg(unix)]
-pub use backend::docker::{self, Docker, DockerProvider};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use backend::host_process;
 #[cfg(target_os = "linux")]
@@ -43,11 +39,11 @@ pub use backend::host_process::HostProcessProvider;
 pub use helper_spec::HelperSpec;
 #[cfg(unix)]
 pub use postgres_url::PostgresUrl;
-#[cfg(unix)]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use runtime::{LaunchFailure, Runtime, Sandbox};
 pub use types::{
-    Bind, CommandIdentity, ContainerId, DockerRecord, ErrorDiagnostic, ExecExit, ExecId,
-    ExecInspection, ExecRequest, Image, IsolationModel, LaunchPhase, LaunchRequest, LocalRecord,
-    MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities, ProviderLaunchOptions,
-    RuntimeError, SandboxId, SandboxInspection, SandboxRecord, SearchPathPolicy, WireFailure,
+    Bind, CommandIdentity, ContainerId, ExecExit, ExecRequest, Image, IsolationModel, LaunchPhase,
+    LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, PendingRequest, ProviderCapabilities,
+    ProviderLaunchOptions, RuntimeError, SandboxId, SandboxInspection, SandboxRecord,
+    SearchPathPolicy, WireFailure,
 };

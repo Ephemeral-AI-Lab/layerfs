@@ -5,10 +5,9 @@
 //! The runtime is Linux only, and so are these tests.
 #![cfg(target_os = "linux")]
 use layerfs_sandbox_backend::{
-    docker::ExecRequest,
     host_process::Sandbox,
     local::{Local, LocalPhase, LocalProcess},
-    CommandIdentity, RuntimeError,
+    CommandIdentity, ExecRequest, RuntimeError,
 };
 use std::{
     fs,
@@ -329,14 +328,12 @@ fn a_daemon_that_ends_is_the_stopped_observation_and_only_its_delete_remains() {
         }
     };
     assert!(failure.container_stopped(), "{failure:?}");
-    assert!(!failure.container_gone());
     // Stopped can be observed before the child is reapable. Keep observing
     // through its owner so try_wait reaps it once all its threads have ended.
     let deadline = Instant::now() + WAIT;
     let stat = loop {
         let failure = sandbox.endpoint().unwrap_err();
         assert!(failure.container_stopped(), "{failure:?}");
-        assert!(!failure.container_gone());
         let stat = fs::read_to_string(format!("/proc/{}/stat", process.pid));
         if stat.as_ref().map_or(true, |stat| !stat.contains(") Z ")) || Instant::now() >= deadline {
             break stat;

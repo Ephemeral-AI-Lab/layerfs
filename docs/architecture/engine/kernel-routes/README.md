@@ -76,10 +76,10 @@ The route for each platform comes from the `kernel` field of
 | Host | Platform | `backend` | `kernel` |
 | --- | --- | --- | --- |
 | macos | native | `native` | `"nfs"` |
-| macos | docker | `docker` | `"fuse"` |
+| macos | docker | `namespaces` | `"fuse"` |
 | macos | apple-container, microsandbox, lima, firecracker, ssh | `namespaces` | `"fuse"` |
 | linux | native, microsandbox, ssh | `namespaces` | `"fuse"` |
-| linux | docker | `docker` | `"fuse"` |
+| linux | docker | `namespaces` | `"fuse"` |
 | linux | apple-container, lima, firecracker | `null` | `null` (unsupported on this host) |
 | windows | microsandbox, ssh | `namespaces` | `"fuse"` |
 | windows | native, docker, apple-container, lima, firecracker | `null` | `null` (unsupported on this host) |

@@ -39,7 +39,7 @@ backend · kernel · sqlite call site · PostgreSQL Sandbox; "—" is `null`.
 | Platform | How | macOS | Linux | Windows |
 | --- | --- | --- | --- | --- |
 | `native` | built_in | native · nfs · in_process · yes | namespaces · fuse · in_process · yes | — · — · worker · no |
-| `docker` | built_in | docker · fuse · worker · yes | docker · fuse · worker · yes | — · — · — · no |
+| `docker` | built_in | namespaces · fuse · worker · yes | namespaces · fuse · worker · yes | — · — · — · no |
 | `apple-container` | created | namespaces · fuse · worker · yes | — · — · — · no | — · — · — · no |
 | `microsandbox` | created | namespaces · fuse · worker · yes | namespaces · fuse · worker · yes | namespaces · fuse · worker · yes |
 | `lima` | created | namespaces · fuse · worker · yes | — · — · — · no | — · — · — · no |

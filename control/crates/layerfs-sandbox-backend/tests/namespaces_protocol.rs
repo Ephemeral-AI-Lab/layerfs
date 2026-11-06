@@ -2,8 +2,7 @@
 //! recorded facts a reopen reads, and the refusals that keep one runtime's
 //! records from another. Nothing here starts a process.
 use layerfs_sandbox_backend::{
-    Bind, DockerRecord, HelperSpec, Image, LocalRecord, NamespaceRecord, RuntimeError,
-    SandboxRecord,
+    Bind, HelperSpec, Image, LocalRecord, NamespaceRecord, RuntimeError, SandboxRecord,
 };
 use std::path::{Path, PathBuf};
 
@@ -216,17 +215,7 @@ fn a_namespaces_record_is_its_own_variant_and_keeps_the_local_facts() {
         Some(image().as_str())
     );
     assert!(record.local().is_none());
-    assert!(record.docker().is_none());
     // the native record of the same facts stays a native record
     let native = SandboxRecord::Local(local);
     assert!(native.namespaces().is_none());
-    // a Docker record written before this backend existed still reads as Docker
-    let docker = SandboxRecord::Docker(DockerRecord {
-        image: "sha256:0".to_owned(),
-        store_volume: Some("volume".to_owned()),
-        port: 30421,
-        labels: Vec::new(),
-    });
-    assert!(docker.namespaces().is_none());
-    assert!(docker.local().is_none());
 }

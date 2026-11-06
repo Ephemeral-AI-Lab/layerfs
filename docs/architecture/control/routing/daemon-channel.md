@@ -44,8 +44,8 @@ side of the channel is in [Engine: Daemon](../../engine/daemon/README.md).
 | Part | What it is | Source |
 | --- | --- | --- |
 | `Control` | one sequential authenticated connection; numbers its calls; once an exchange fails it is quarantined and refuses every later call before sending | [`daemon/channel.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/channel.rs) |
-| `Dial` | how to open another connection to the same daemon instance: endpoint, optional dial host, secret, peer key, instance | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
-| `Controls` | the Sandbox's pool: up to `CONNECTIONS` (6) per process; the daemon admits `DAEMON_CONNECTIONS` (8), leaving the rest to other processes | `daemon/pool.rs`, [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs) |
+| `Dial` | how to open another connection to the same daemon instance: endpoint, secret, peer key, instance | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
+| `Controls` | the Sandbox's pool: up to `CONNECTIONS` (6) per process; the daemon admits `DAEMON_CONNECTIONS` (8), leaving the rest to other processes | `daemon/pool.rs`, [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
 | `Lease` | one connection lent for one call's exchanges, returned on drop | `daemon/pool.rs` |
 | `Traced` | a lease whose requests travel as traced observations while the thread traces; its wait is the call's queue time | [`daemon/trace.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/trace.rs) |
 
@@ -56,15 +56,11 @@ pool lowers its limit to what it has and callers take turns. The first
 connection a process opens waits up to `ADMISSION_WAIT` (60 s) to be admitted;
 opening a connection sends only Hello, so it attempts no operation.
 
-`LAYERFS_DAEMON_HOST` (or the deploy setting `daemonHost`) names the host to
-dial a daemon's loopback-published port from a client in a container that
-does not share the Docker host's loopback (`pool::daemon_host`).
-
 ## Workspace calls
 
 ```text
  workspace call (control)            host Sandbox code      daemon
-   |                                 (serve.rs, files.rs)
+   |                                 (lifecycle.rs, files.rs)
    | mount(sandbox, branch, name?)        |
    |------------------------------------->| reads no Store (#64)
    |                                      | lend Control
@@ -112,7 +108,7 @@ is `Capacity`.
 | --- | --- | --- | --- |
 | Daemon refusal (`Reply::Refused`) | its `ControlCode` as the code: `Busy`, `HeadMoved`, `Missing`, `Capacity`, `Invalid`, `Failed` or `Unknown`; `detail.phase` | yes, except code `Unknown` | [`daemon/failure.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/failure.rs), [`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `refusal`, [`control_types.rs`](../../../../engine/crates/layerfs-bridge/src/control_types.rs) |
 | Request larger than one control record, before sending | `TooLarge` | yes: not sent | [`daemon/call.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/call.rs) |
-| Transport or protocol failure (`OperationCause::Exchange`) | `Failed`, its message the failure's debug text with `phase` and `attempted` | no when `attempted` is true | [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs) `operation` |
+| Transport or protocol failure (`OperationCause::Exchange`) | `Failed`, its message the failure's debug text with `phase` and `attempted` | no when `attempted` is true | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `operation` |
 | Terminal step stopped after effects (`Retained`) | `Failed`; the daemon keeps custody | partly | `daemon/failure.rs` |
 | Reply of the wrong kind (`Unexpected`) | `Failed` | not established from source | `daemon/failure.rs` |
 | No free connection in 60 s | `Busy`, "nothing was attempted" | yes | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
@@ -121,7 +117,7 @@ is `Capacity`.
 | Unmount with uncommitted changes | `Dirty` with `changed`, `pendingMerge` | yes | `values.rs` `unmounted` |
 
 A lost daemon reply after the request was sent reaches the caller as
-`Failed`, not `Unknown`: `serve::operation` turns every non-refusal exchange
+`Failed`, not `Unknown`: `lifecycle::operation` turns every non-refusal exchange
 failure into `Failed`, so the uncertainty shows only in the message's
 `attempted: true`. No step is retried, rebound or re-attached on the
 caller's behalf; a quarantined connection is closed and a later call may

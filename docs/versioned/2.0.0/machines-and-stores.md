@@ -15,7 +15,7 @@ a copy of a sqlite Store in a bucket.
 ## Machines
 
 Firecracker and SSH are permanently disabled for new work. Their records and
-adapter code remain; see [disabled platforms](../../architecture/connect/support-matrix/disabled-platforms.md).
+adapter code remain; see [disabled platforms](../../architecture/control/support-matrix/disabled-platforms.md).
 Create, connect, start, update, new Sandbox/Workspace work and transfers involving
 them return `Unsupported` before platform effects. Machine inspection shows
 recorded state and the disabled reason without probing or starting them. Explicit
@@ -26,7 +26,7 @@ exists. The platform-specific mechanics below are retained reference only.
 | Kind | How many | Made by | Sandboxes run as | Tool |
 | --- | --- | --- | --- | --- |
 | `native` | one, built in | — | macOS: host processes with a loopback NFS mount. Linux: namespaces (needs root). Windows: none; `native` holds only records (O5) | — |
-| `docker` | one, built in | — | Docker containers on the image `machine update docker --image` records, else the bundle's Sandbox image, loaded into Docker once (#535 P5); see Routes | `docker` |
+| `docker` | one, built in | — | namespaces inside its worker container (D-8), rooted in the bundle's Sandbox image. The image `machine update docker --image` records, else the bundle's Sandbox image loaded into Docker once (#535 P5), is the worker container's; see Routes | `docker` |
 | `apple-container` | many | `machine create` | namespaces inside the VM | `container` |
 | `microsandbox` | many | `machine create` | namespaces inside the VM | `msb` |
 | `lima` | many | `machine create` | namespaces inside the VM | `limactl` |
@@ -72,7 +72,9 @@ layerfs machine create host1 lima --nested
   `layerfs-352-runtime:node24-https-apt-20261024` (config digest
   `sha256:afa1ef9c…f38e`: Node 24, Rust 1.85.1, the SQLite headers,
   Chromium and Selenium), sealed into the bundle as `sandbox-image.tar`.
-  `--image` (and `machine update native|docker --image`) chooses another.
+  `--image` (and `machine update native --image`) chooses another. On
+  `docker` the recorded `image` is only its worker container's image; its
+  Sandboxes' root is the bundle's `sandbox-image.tar` (D-8).
   The image is not published yet; a build places it with the bundle.
 - `nested` is for `lima` only: a VM able to host Firecracker machines.
   `firecracker` requires `host`, a `lima` machine made with `--nested`. The
@@ -230,19 +232,25 @@ layerfs machine create host1 lima --nested
   and closes its own open copy before a push, pull, retire or remove reads or
   deletes the file.
 - One process can use Stores on several machines at once.
-- A Sandbox on `docker` is a container on the docker machine's image. On
-  macOS and Linux the docker worker (a container on that image) starts it
-  beside itself, mounting only its Store's folder of the worker's data
-  volume. A PostgreSQL Store's Sandbox starts the same way as a sqlite
-  Store's on that machine; it binds no Store file.
+- A Sandbox on `docker` runs the `namespaces` backend inside the docker
+  machine's worker container, as a Sandbox in a VM does (D-8,
+  layerfs-project#111). The worker container is privileged, in a cgroup
+  namespace of its own, and mounts only its data volume and the bundle
+  (never the Docker Engine socket). A Sandbox's root is the bundle's
+  `sandbox-image.tar`; `--image sha256:<64 hex>` names a digest that
+  archive must hold. Its record keeps `platform: "docker"` and shows
+  `backend: "namespaces"`. A PostgreSQL Store's Sandbox starts the same way
+  as a sqlite Store's on that machine; it binds no Store file. A Sandbox
+  recorded under the retired docker backend (one container per Sandbox) is
+  refused `Unsupported` with a message to recreate it; `sandbox close`
+  forgets it and names its container for `docker rm`.
 - Every machine other than `native` is reached through its worker, `docker`
   on Linux included (its sqlite Stores live in a Docker volume). Checked in
   the terminal pass on a Linux VM.
 - Workspace calls skip the worker where the caller reaches the Sandbox's
   daemon (#535 G4). On `ssh` and `lima`, `sandbox.create` (through the
   worker) answers the daemon's port and keys, and the caller forwards the
-  port to its own loopback (`ssh -L`). On `docker` the Sandbox publishes
-  the port on the host's loopback and the caller dials it as it is. The
+  port to its own loopback (`ssh -L`). The
   keys go to the home's `sandbox/<name>/control.json` (0600), the forward
   to its record. `workspace.mount`, `commit`, `unmount`, `status` and
   `sandbox.get`'s Workspace list then go from the caller straight to the
@@ -252,7 +260,9 @@ layerfs machine create host1 lima --nested
   worker: the command runs through the Sandbox's runtime in the machine,
   and the caller sends the directory its record names. `sandbox.create`
   and `sandbox.close` go through the worker; a close ends the forward.
-  `apple-container`, `microsandbox` and `firecracker` forward nothing:
+  `docker` (its worker container's ports are published only when it
+  starts), `apple-container`, `microsandbox` and `firecracker` forward
+  nothing:
   every call goes through the worker. A forward that failed at create
   leaves the Sandbox on the worker route (`forward_failed` in the answer).
   On a stopped machine these calls are `Unavailable`, naming `machine
@@ -427,8 +437,8 @@ layerfs project init pg-main/load ./load
   and Linux), `docker`, `lima`, `apple-container` and `microsandbox` (the daemon and the worker are built with `postgresql`),
   started where the machine starts Sandboxes. The caller
   resolves the password and rewrites a loopback host for the machine
-  (`docker`: `host.docker.internal`, given to the containers on a Linux
-  Engine as its `host-gateway`; ssh refuses a loopback URL); the URL
+  (`docker`: `host.docker.internal`, given to the worker container on a
+  Linux Engine as its `host-gateway`; ssh refuses a loopback URL); the URL
   travels only in that one request. `sandbox create` first checks, from
   the machine, that the server answers with the Store's schema binding.
   The server always runs off the machine (on this host or elsewhere);

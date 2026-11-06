@@ -90,7 +90,7 @@ opens that connection in a new CLI process. See the
 | `NoSuchSandbox`, `NotMounted` | no such Sandbox or Workspace | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `Unavailable` | the machine is stopped or its worker gone | no | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) `reach` |
 | daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) |
-| `Failed` | a daemon exchange failed | read-only | [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) |
+| `Failed` | a daemon exchange failed | read-only | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
 | `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 `workspace.status` is the read to make after an uncertain

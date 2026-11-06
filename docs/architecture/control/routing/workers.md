@@ -114,7 +114,7 @@ without a request; `machine.start` and doctor use it
 | Step | What happens | Source |
 | --- | --- | --- |
 | Find the bundle | `bundle()` reads `bundle.json`; none is `Unsupported` naming `tools/linux_bundle.py` | [`bundle.rs`](../../../../control/crates/layerfs-machine/src/bundle.rs), [`deploy.rs`](../../../../control/crates/layerfs-sandbox/src/deploy.rs) `bundle_dir` |
-| Start | the machine adapter starts the machine and its worker from the bundle; a `docker` machine with no image uses the bundle's default image | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) `start` |
+| Start | the machine adapter starts the machine and its worker from the bundle; a `docker` machine with no image runs its worker container from the bundle's image, loaded into Docker once | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) `start` |
 | Record | `worker.json` is written under the home lock; the machine's state becomes `running` | [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `save_running` |
 | Check | the new worker's hello is compared; a stale bundle is refused (see below) | `endpoint.rs` `start` |
 | Serve | `layerfs worker` reads its two settings, binds, makes its root `0701` and serves | [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs), `server.rs` `serve` |

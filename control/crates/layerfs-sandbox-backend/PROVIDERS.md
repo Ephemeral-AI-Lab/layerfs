@@ -11,36 +11,49 @@ folder holds its `ADAPTER`, reached through one exhaustive `adapter(Backend)`
 match, and `Backend::{stored_name, parse, description, capabilities}` read it.
 Stored names do not follow the Rust names: `HostProcess` is `"native"` (G6).
 
+There are two backends: `namespaces` (every Linux kernel: VMs, `native` on
+Linux and the `docker` machine's worker container) and `host_process`
+(macOS). The docker backend (one Docker container per Sandbox), its Engine
+HTTP client `src/docker_engine/` and `examples/engine_streams.rs` were
+deleted by owner decision D-8 (layerfs-project#111): the `docker` platform
+now runs `namespaces` inside its worker container, as a VM's worker does.
+`Backend::Docker`, `Runtime::Docker`, `Sandbox::Docker`, `DockerRecord`,
+`SandboxRecord::Docker`, `ProviderLaunchOptions::Docker`, `ExecId`,
+`ExecInspection`, `ErrorDiagnostic`, `RuntimeError::{Docker, Http}`,
+`WireFailure::{observed_exec, requested_exec, error_body}`,
+`WireFailure::container_gone` and the Engine-only `ExecRequest::check` went
+with it. A Sandbox recorded under the docker backend is
+refused by the caller (`layerfs-sandbox`) with a message to recreate it;
+`sandbox.close` only forgets it.
+
 Each backend has one folder under `src/backend/` (named `platform/` until
-#533 step 5), named as `LAYERFS_SANDBOX` names it: `docker/`, `native/` (with
+#533 step 5), named as `LAYERFS_SANDBOX` names it: `native/` (with
 its OS facts in `native/linux/` and `native/macos/`) and `namespaces/`
 (Linux). The modules are
 private: callers use the crate root and one public module per backend,
-`layerfs_sandbox_backend::docker`, `::native` and `::namespaces` (#527 step
+`layerfs_sandbox_backend::native` and `::namespaces` (#527 step
 9b; they were under the crate's `backend` module). The root re-exports `Runtime`,
-`Sandbox`, `LaunchFailure`, the shared types, `Docker`, the three providers
-(`DockerProvider`, `NativeMacosProvider` on macOS, `NamespaceProvider` on
+`Sandbox`, `LaunchFailure`, the shared types, the providers
+(`NativeMacosProvider` on macOS, `NamespaceProvider` on
 Linux) and `HelperSpec`. `NativeLinuxProvider` and `Runtime::LinuxNative`
 were removed in 2.0 (#533 O27).
 
 The same file names hold the same roles in every backend: `provider.rs` (what
 `Runtime` holds), `create.rs` (start one Sandbox), `sandbox.rs` (a running
-Sandbox: stop, delete, inspect) and `exec.rs` (one command); `listener.rs` and
-`streams.rs` match between Docker and native. Docker's Engine HTTP client is
-`src/docker_engine/` (`http`, `socket`, `body`, `mux`, `version`), at the
-crate root since #533 step 5 so the host-only `machine/` layer can use it. Native reads its
+Sandbox: stop, delete, inspect) and `exec.rs` (one command); the listener
+and streams are the shared local ones. Native reads its
 OS facts through the alias `os` (`native/linux/` or `native/macos/`). Every
 backend's `run` returns the shared `ExecExit` (native's `LocalExit` is gone),
-and the `DockerInstance`, `NativeLinuxInstance` and `NativeMacosInstance`
+and the `NativeLinuxInstance` and `NativeMacosInstance`
 aliases are removed (#527 step 9c).
 
 - `Runtime` is one deployment's selection and is kept for every Sandbox it
-  starts: `Docker(DockerProvider)` (the default), `MacosNative(NativeMacosProvider)`
+  starts: `MacosNative(NativeMacosProvider)`
   (macOS only) and `Namespaces(NamespaceProvider)` (Linux only).
   `Runtime::{local_directory, native_paths, launch, reopen, reopen_stopped}`
   dispatch to them; `Runtime::backend` names the backend and
   `Runtime::capabilities` reads its adapter.
-- `Sandbox` is what `Runtime::launch`/`reopen` return: `Docker(docker::Sandbox)`,
+- `Sandbox` is what `Runtime::launch`/`reopen` return:
   `Native(native::Sandbox)` or `Namespaces(Box<namespaces::Sandbox>)`, with
   `identity`, `endpoint`, `run`, `track`, `log_tail`, `inspect`, `stop`,
   `delete`, `scratch_directory`, `local_record` and `record`.
@@ -50,15 +63,14 @@ aliases are removed (#527 step 9c).
 `src/runtime.rs`. The inputs and observations every backend shares are in
 the crate's private `types/` and re-exported at the root:
 `LaunchRequest`, `LaunchPhase`, `ProviderLaunchOptions`, `LocalRecord`,
-`NamespaceRecord`, `DockerRecord`, `SandboxRecord`, `ExecExit`,
+`NamespaceRecord`, `SandboxRecord`, `ExecExit`,
 `SandboxInspection` and `ProviderCapabilities` (#527 step 9a; they were under
-the crate's `provider` module). `types/` depends on no backend except through
-`RuntimeError::Docker`; the conversions between `DockerRecord` and Docker's
-`SandboxRequest` are Docker's own. The runtime layer has no daemon control
+the crate's `provider` module). The runtime layer has no daemon control
 dependency. `HelperSpec` (`src/helper_spec.rs`)
 is the namespace helper's line format; it is compiled and tested on every
 Unix platform, while only the helper that reads it is Linux only. `src/json/`
-streams the Engine's replies and the namespace backend's image manifests.
+is a small streaming JSON reader (the namespace backend's image manifests)
+and the string quoting `SUPPORT.json` is written with.
 
 ## Machines
 
@@ -68,29 +80,6 @@ for the `Backend` enum, the shared types and `json`. See that crate's
 `src/lib.rs` for the kind-to-backend table and the `create`, `connect`,
 `start`, `stop`, `remove` and `status` calls, and `control/AGENTS.md` for
 the layer.
-
-## Docker
-
-`Runtime::Docker(DockerProvider::new(docker))` adapts the existing Engine client
-and `SandboxRequest`. It shares its lifecycle admission, API 1.48–1.54
-negotiation cache, streamed private archive, logs, exact deployment inspection,
-and explicit stop/delete. Call `runtime.launch(LaunchRequest { .. })` with the
-executable, private configuration, name, explicit startup wait, and
-`ProviderLaunchOptions::Docker { image, store_volume, port, connect_host }`;
-Docker validates the immutable image digest, existing volume name (a
-PostgreSQL Store's Sandbox gives none and mounts none, #506), port,
-connect_host format and labels before any Engine effect. The runtime does not
-decode daemon configuration or perform authentication.
-
-`Sandbox::run` streams stdout/stderr to caller sinks with bounded windows and
-returns `ExecExit` only after one inspection knows the root process exit. It
-rejects `stdin=true` before effects: interactive users keep the existing
-concrete `create_exec/start/into_parts` stream API. EOF alone is not an exit and
-no automatic poll follows an unknown exit. `track` needs no host registration
-because container teardown owns descendants; scratch is `/tmp` and
-`local_record()` is absent. `inspect` checks the recorded deployment but neither
-adopts it nor changes lifecycle admission; unknown PID/exit/storage fields stay
-absent.
 
 ## Native
 
@@ -113,7 +102,7 @@ before 2.0. Only the platform facts differ:
 The provider validates the command identity, the environment it is given and
 the daemon executable, then starts one daemon in a private directory. The
 kernel route travels in the daemon setup the caller sends (`nfs` for a
-host_process daemon, `fuse` for namespaces and docker); the daemon refuses
+host_process daemon, `fuse` for namespaces); the daemon refuses
 at startup any route other than `fuse` or `nfs` (only `nfs` on macOS). Launch preserves the original single-attempt
 process lifecycle and partial owner on failure. `inspect` reports exact process
 liveness; unknown exit/storage facts stay absent. Records remain the Node
@@ -125,8 +114,9 @@ ownership.
 `Runtime::Namespaces(NamespaceProvider::new(root))` is the same local root and
 daemon control as the native runtime, with each Sandbox's daemon in its own mount,
 PID and IPC namespaces and its own cgroup v2 directory. The VM that holds this
-kernel is the boundary (one per Store); the namespaces keep Sandboxes on one
-Store out of each other.
+kernel is the boundary (one per Store; on the `docker` machine, its worker
+container on Docker's kernel); the namespaces keep Sandboxes on one Store out
+of each other.
 
 - `namespaces/create.rs` makes the Sandbox's private directory, copies
   the daemon to `<directory>/bin/layerfs-daemon` (0755), writes the setup (0600)
@@ -138,21 +128,28 @@ Store out of each other.
   reopen by the recorded process plus its cgroup membership.
 - `namespaces/exec.rs` runs one command through the helper's exec stage.
 - `src/bin/layerfs-sandbox-helper` performs the calls that act on the calling
-  process, so the product crate stays `unsafe`-free: the init stage creates the
+  process: the init stage creates the
   namespaces, joins the cgroup and starts the inner stage (PID 1), which mounts
   the private root (the VM's userland read-only, a private `/proc`, `/dev`,
   `/dev/pts`, `/dev/shm`, `/tmp`, plus the Sandbox's directory and the Store's
   directory at their own paths), pivots, starts the daemon and reaps; the exec
   stage enters the namespaces, sets no-new-privs and runs the command as the
-  requested uid:gid (its own exit is a signal, never a command's status).
+  requested uid:gid under the seccomp filter that refuses it a user namespace
+  (`local::deny_user_namespaces`, in the audited
+  `src/local/os/linux/seccomp.rs`; its own exit is a signal, never a
+  command's status). A filter that cannot be installed fails the command.
 
 Preconditions are checked before any effect and refused with the existing
 `RuntimeError::Unsupported`, never replaced by a weaker Sandbox: root, the
-unified cgroup v2 hierarchy (and `cgroup.kill`), `/dev/fuse`, and
-`user.max_user_namespaces=0` — without the last one a command could unshare a
+unified cgroup v2 hierarchy (and `cgroup.kill`), `/dev/fuse`, and user
+namespaces blocked — `user.max_user_namespaces=0`, or a kernel whose
+`/proc/sys/kernel/seccomp/actions_avail` offers the command filter's actions
+(`allow`, `errno`, `kill_process`). Without that a command could unshare a
 user namespace and hold its own copy of the Workspace mount. The runtime never
-sets that limit itself. There is no image: the private root binds the VM's own
-userland, so the Sandbox runs the daemon and libraries the VM already has.
+sets the limit itself; a VM guest's setup does, and the `docker` machine's
+worker never does (it would change the whole Docker host). The private root is
+an overlay on an image unpacked once per digest from a `docker save` archive
+(`namespaces/rootfs/`).
 `ProviderLaunchOptions::Namespaces { command_identity, environment, image,
 archive }` with `Runtime::launch_with_binds` binds a sqlite Store file's
 directory in (`Bind::store`), or nothing for a PostgreSQL Store; `SandboxRecord::Namespaces`
@@ -168,17 +165,13 @@ do (#527 D6).
 
 ## Failure and records
 
-A `LaunchFailure` retains the acknowledged `Sandbox`, when any. Its cause may be
-`RuntimeError::Docker(Box<docker::ProviderFailure>)`: match the typed variant for
-the original Create/Upload/Start/Listener receipt, partial IDs, upload work and
-pending source bytes. Upload is within existing `LaunchPhase::Create`; inspect
-the typed cause to distinguish it. A partially decoded Create ID is never
-adopted, and retaining a handle permits an explicit later observation, never a
-replay of creation or Start.
+A `LaunchFailure` retains the acknowledged `Sandbox`, when any. Retaining a
+handle permits an explicit later observation, never a replay of creation or
+start.
 
 `Runtime::reopen(id, &SandboxRecord)` validates the exact existing deployment or
 process and endpoint without starting it; `reopen_stopped` requires the caller's
 prior exact stopped observation and admits only non-forcing Delete. Both accept
-`SandboxRecord`, which represents `LocalRecord`, `Namespaces(LocalRecord)` or
-`DockerRecord`; each runtime refuses another runtime's record before effects. `Sandbox::record()` exposes the persisted deployment facts. No disk
-format changes occur: a record without a `runtime` field is Docker's.
+`SandboxRecord`, which represents `LocalRecord` or `Namespaces(LocalRecord)`;
+each runtime refuses another runtime's record before effects.
+`Sandbox::record()` exposes the persisted deployment facts.

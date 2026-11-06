@@ -11,15 +11,15 @@ mod request;
 mod transfer;
 pub use bind::Bind;
 pub use capabilities::{IsolationModel, MountDriver, ProviderCapabilities, SearchPathPolicy};
-pub use execution::{CommandIdentity, ExecInspection};
+pub use execution::CommandIdentity;
 #[cfg(unix)]
 pub(crate) use failure::STOPPED;
-pub use failure::{ErrorDiagnostic, RuntimeError, WireFailure};
-pub use identity::{ContainerId, ExecId};
+pub use failure::{RuntimeError, WireFailure};
+pub use identity::ContainerId;
 pub use image::Image;
 pub use options::{
-    DockerRecord, ExecExit, LaunchPhase, LaunchRequest, LocalRecord, NamespaceRecord,
-    ProviderLaunchOptions, SandboxInspection, SandboxRecord,
+    ExecExit, LaunchPhase, LaunchRequest, LocalRecord, NamespaceRecord, ProviderLaunchOptions,
+    SandboxInspection, SandboxRecord,
 };
 pub use request::ExecRequest;
 pub use transfer::PendingRequest;

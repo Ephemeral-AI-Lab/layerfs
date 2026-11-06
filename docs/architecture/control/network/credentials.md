@@ -58,8 +58,6 @@ written down.
    v
  daemon setup bytes (LaunchRequest.daemon_config, at most 8192 bytes)
    |
-   +-- docker ------> tar entry layerfs-local/config/daemon.setup, 0600,
-   |                  dirs 0700, PUT /containers/<id>/archive
    +-- native ------> <sandbox>/config/daemon.setup, 0600, in a 0700 dir,
    +-- namespaces --> created O_NOFOLLOW | O_CLOEXEC, create_new
    v
@@ -71,7 +69,7 @@ written down.
 | 1 | The `postgresql` field of one `sandbox.host` request to the machine's worker; not on `native`, where the call runs in the caller. | `reached`, `on_machine` path in [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) |
 | 2 | The worker drops `url` and `password` from the Store record it was sent and keeps only a thin record. | `in_worker` in [`route.rs`](../../../../control/crates/layerfs-sandbox/src/route.rs) |
 | 3 | `DaemonStore::Postgres { url, … }` in the daemon setup. | `sandbox_store` in [`store/postgres.rs`](../../../../control/crates/layerfs-store/src/postgresql/open.rs), [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |
-| 4 | The setup file: 0600 in a 0700 directory, written once. | `prepare` in [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs) and [`backend/namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs); `upload` in [`backend/docker/upload.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/upload.rs) |
+| 4 | The setup file: 0600 in a 0700 directory, written once. | `prepare` in [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs) and [`backend/namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs) |
 
 The worker's reach check, before the launch, reads the schema's binding and
 finds the project on one session to the server with the rewritten URL (the
@@ -90,17 +88,17 @@ the machine and the host it tried, never the URL (`reach_check` in
 | `Debug` of a parsed URL | `PostgresUrl` has no `Debug`. | [`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs) |
 | Reach and forward errors | Messages name the platform, machine and reason only. | [`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs) |
 | Worker trace | A connection trace records the worker's address, the operation and timing. | `send` in [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
-| Container command line | The daemon runs `--config /layerfs-local/config/daemon.setup`; the setup is not in `Env` or `Cmd`. | `encode` in [`backend/docker/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/create.rs) |
+| Daemon command line and environment | The daemon runs `<daemon> --config <setup file>`; the setup is not in its arguments or environment. | `Local::create` in [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs) |
 | Namespaces init spec | `HelperSpec` names only paths, the cgroup and binds; the helper never reads the setup file. | [`helper_spec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/helper_spec.rs) |
 
 The setup file lives as long as the Sandbox: it is inside the Sandbox's
-directory or container and goes with `delete`.
+directory and goes with `delete`.
 
 ## Related
 
 - [Reach](reach.md): the rewrite applied to the resolved URL.
 - [Workers](workers.md): the one request that carries it.
-- [Sandboxes: Native and namespaces](../sandboxes/native-and-namespaces.md) and [Sandboxes: Docker](../sandboxes/docker.md): where the setup file is written.
+- [Sandboxes: Native and namespaces](../sandboxes/native-and-namespaces.md): where the setup file is written.
 - [Engine: Store, PostgreSQL](../../engine/store/postgresql.md): what the daemon opens.
 
 ---

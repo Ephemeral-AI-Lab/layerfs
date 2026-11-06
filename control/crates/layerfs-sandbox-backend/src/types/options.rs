@@ -46,13 +46,6 @@ pub enum ProviderLaunchOptions {
         image: crate::Image,
         archive: PathBuf,
     },
-    Docker {
-        image: String,
-        /// The Store volume; None mounts none (a PostgreSQL Store, #506).
-        store_volume: Option<String>,
-        port: u16,
-        connect_host: Option<String>,
-    },
 }
 /// Persisted physical facts supplied by the record owner; no filesystem discovery here.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -82,15 +75,6 @@ impl NamespaceRecord {
         &self.image
     }
 }
-/// Persisted deployment facts for a Docker container; no filesystem discovery here.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DockerRecord {
-    pub image: String,
-    /// None for a PostgreSQL Store's Sandbox, which mounts no volume (#506).
-    pub store_volume: Option<String>,
-    pub port: u16,
-    pub labels: Vec<(String, String)>,
-}
 /// Recorded runtime identity and deployment facts for reopen.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SandboxRecord {
@@ -100,7 +84,6 @@ pub enum SandboxRecord {
     /// plus the image digest its root is an overlay of. The variant itself
     /// names the backend, so a record is never reopened by another one.
     Namespaces(NamespaceRecord),
-    Docker(DockerRecord),
 }
 impl SandboxRecord {
     pub fn local(&self) -> Option<&LocalRecord> {
@@ -115,12 +98,6 @@ impl SandboxRecord {
             _ => None,
         }
     }
-    pub fn docker(&self) -> Option<&DockerRecord> {
-        match self {
-            Self::Docker(record) => Some(record),
-            _ => None,
-        }
-    }
 }
 impl From<LocalRecord> for SandboxRecord {
     fn from(record: LocalRecord) -> Self {
@@ -132,20 +109,10 @@ impl From<&LocalRecord> for SandboxRecord {
         Self::Local(record.clone())
     }
 }
-impl From<DockerRecord> for SandboxRecord {
-    fn from(record: DockerRecord) -> Self {
-        Self::Docker(record)
-    }
-}
-impl From<&DockerRecord> for SandboxRecord {
-    fn from(record: &DockerRecord) -> Self {
-        Self::Docker(record.clone())
-    }
-}
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ExecExit {
     pub code: i32,
-    /// Docker may not expose a process id after exit.
+    /// None when no process id is known after exit.
     pub pid: Option<u32>,
     pub stdout_bytes: u64,
     pub stderr_bytes: u64,

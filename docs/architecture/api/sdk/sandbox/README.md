@@ -74,7 +74,7 @@ Sandbox may run for its Store kind is the support table's
 | `NotFound` | no machine of that name | [`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs) |
 | `Exists` | the Sandbox name is taken | [`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs) |
 | `Unsupported` | the machine cannot run a Sandbox of this Store kind, or the sqlite Store is on another machine | [`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs) |
-| `MountsActive` | `close` without `force` while Workspaces are mounted | [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) |
+| `MountsActive` | `close` without `force` while Workspaces are mounted | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
 | `Busy`, `Unresolved` | another live operation holds the Sandbox or its Store; a gone owner's uncertain `op` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
 | `Unavailable` | the machine's worker is not recorded or does not answer; a PostgreSQL server the machine cannot reach | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs), [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
 | `Unknown` | **uncertain:** the machine's answer to `create` or `close` was lost | [`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs), [`close.rs`](../../../../../control/crates/layerfs-sandbox/src/close.rs) |
@@ -115,17 +115,17 @@ machine start (P4): a machine that is down answers the record with
 Not run; written from the call table.
 
 ```js
-await layerfs.sandbox.create("shop/api", "tests", "docker", { image: "ubuntu:24.04" });
+await layerfs.sandbox.create("shop/api", "tests", "docker");
 await layerfs.sandbox.close("tests", { force: true });
 ```
 
 ```python
-layerfs.sandbox.create("shop/api", "tests", "docker", image="ubuntu:24.04")
+layerfs.sandbox.create("shop/api", "tests", "docker")
 layerfs.sandbox.close("tests", force=True)
 ```
 
 ```console
-$ layerfs sandbox create shop/api tests docker --image ubuntu:24.04
+$ layerfs sandbox create shop/api tests docker
 $ layerfs sandbox close tests --force
 ```
 

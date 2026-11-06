@@ -81,18 +81,15 @@ daemon port: <why>".
 
 | Platform | Error | Why | Source |
 | --- | --- | --- | --- |
-| `docker` | `InvalidInput` | Each docker Sandbox publishes its daemon's port on the host's loopback when it is created (`PortBindings`, host IP `127.0.0.1`, Engine-chosen port); that published address is its endpoint. | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs), [`backend/docker/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/create.rs) |
+| `docker` | `Unsupported` | Docker publishes a container's ports only when it starts, so a Sandbox daemon's port in the worker container cannot be published later (D-8). | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
 | `apple-container` | `Unsupported` | The `container` CLI publishes a port only when the machine's container is created. | [`apple_container/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
 | `microsandbox` | `Unsupported` | `msb` publishes a port only when the machine's sandbox is created. | [`microsandbox/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/microsandbox/adapter.rs) |
 | `firecracker` | `Unsupported` | Its daemons listen on the microVM's loopback, which a forward through the Lima host cannot reach (it reaches only the microVM's tap address). | [`firecracker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/firecracker/adapter.rs) |
 
-`docker` is `InvalidInput`, not `Unsupported`: a direct address exists,
-it just does not come from `forward`.
-
 ## Related
 
 - [Workers](workers.md): the route Workspace calls take when there is no forward.
-- [Sandboxes: Docker](../sandboxes/docker.md): the loopback-published daemon port.
+- [Sandboxes: Docker machine Sandboxes](../sandboxes/docker.md): why a docker Sandbox has no direct route.
 - [Machines: Adapter](../machines/adapter.md): the `Adapter::forward` method.
 - [Control: Routing and workers](../routing/README.md) and [the daemon channel](../routing/daemon-channel.md): who dials the forwarded address.
 

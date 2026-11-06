@@ -79,12 +79,8 @@ pub fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
     };
     if let Err(failure) = runtime.endpoint() {
         lock(&SANDBOXES)?.remove(&directory);
-        return Err(if failure.container_gone() || failure.container_stopped() {
-            crate::recorded::gone(
-                &state.id,
-                &runtime.identity().to_string(),
-                failure.container_stopped(),
-            )
+        return Err(if failure.container_stopped() {
+            crate::recorded::gone(&state.id, &runtime.identity().to_string(), true)
         } else {
             layerfs_home::outcome::failed(failure)
         });

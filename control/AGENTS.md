@@ -34,8 +34,11 @@ behalf of the engine:
   builds only.
 - `crates/layerfs-sandbox-backend` (was `layerfs-isolation`, D-9; before
   #101 `layerfs-sandbox`): *how* a Sandbox runs on that machine's kernel.
-  One folder per backend under `src/backend/` (`docker`, `host_process`,
+  One folder per backend under `src/backend/` (`host_process`,
   `namespaces`), over the shared local-process plumbing in `src/local/`.
+  The docker backend and its Engine client were retired by D-8
+  (layerfs-project#111): the `docker` platform runs `namespaces` in its
+  worker container.
   Host and guest builds. Its `layerfs-sandbox-helper` binary keeps its name.
 - `crates/layerfs-bucket` (was `layerfs-store-backup`): *how* a Store is
   backed up to a bucket (`src/backup/` and `src/bucket/<provider>/`).
@@ -102,5 +105,6 @@ and [checks and completion rules](../engine/AGENTS.md#checks-and-completion):
 production files at most 999 lines, `lib.rs`/`mod.rs` at most 200 lines of
 declarations and re-exports, no tests or fixtures in `src/`, bounded test
 commands, locked dependencies, per-commit production LOC and the
-Disposable-only profile. The unsafe allowance stays the one macOS file the
-guard names.
+Disposable-only profile. The unsafe allowance stays the two files the
+guard names: the macOS `local/os/macos/darwin.rs` and the Linux
+`local/os/linux/seccomp.rs` of `layerfs-sandbox-backend`.

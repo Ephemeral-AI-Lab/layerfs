@@ -116,12 +116,14 @@ secret guards it on every bind address.
 | `workspace.mount` | direct when forwarded, else the machine | yes; a mount never starts a Sandbox | [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/serve.rs) |
 | `workspace.exec` | always the machine (`bash -c` through the Sandbox runtime) | yes | `workspace/calls.rs`, [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs) |
 | `workspace.commit`, `workspace.unmount` | direct when forwarded, else the machine | yes | `workspace/calls.rs` |
-| `workspace.status` | direct when forwarded, else `reach` without loading an image; an unreached worker is the refusal | yes | `workspace/calls.rs` (`reach(..., false)`) |
+| `workspace.status` | direct when forwarded, else `reach`; an unreached worker is the refusal | yes | `workspace/calls.rs` (`reach`) |
 
 A Sandbox is forwarded when its record's `daemon.forward` holds an address:
-on `ssh` and `lima` an `ssh -L` carries the daemon's port to this host, and a
-`docker` Sandbox publishes its daemon's port on the host's loopback
+on `ssh` and `lima` an `ssh -L` carries the daemon's port to this host
 ([`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs)).
+A `docker` Sandbox is never forwarded: it runs in the docker machine's
+worker container, whose ports Docker publishes only when it starts, so its
+calls go through the worker (D-8).
 The daemon itself serves no Store calls. A mount's caller reads no Store:
 the daemon finds the Branch by name as it binds (#64). A status's head read
 goes the Store's own route above; for a PostgreSQL Store, on the caller's

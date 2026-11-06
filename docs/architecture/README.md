@@ -70,7 +70,7 @@ enforces it.
 |  | [Routing and workers](control/routing/README.md) | Where each call runs: in the caller's process, in a machine's worker, or in a Sandbox daemon. |
 |  | [Machines](control/machines/README.md) | Where Sandboxes run: one adapter per platform that probes, creates, starts, stops and removes a machine. |
 |  | [Network](control/network/README.md) | How callers, workers and daemons reach each other: worker setup, PostgreSQL reach and port forwards. |
-|  | [Sandboxes](control/sandboxes/README.md) | How a Sandbox runs on a machine's kernel: the docker, native and namespaces backends, commands and streams. |
+|  | [Sandboxes](control/sandboxes/README.md) | How a Sandbox runs on a machine's kernel: the native and namespaces backends, commands and streams. |
 |  | [Backups](control/backups/README.md) | Whole-Store backup to a bucket and restore, over bucket drivers that know nothing about Stores. |
 | [API](api/README.md) | [Call table](api/call-table/README.md) | The nine call families and the one dispatcher every front end goes through. |
 |  | [SDK](api/sdk/README.md) | Every call a program can make: 61 calls in nine families, one page per call. |

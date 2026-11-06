@@ -89,7 +89,7 @@ The home lock is held only to write the records, never while the VM boots.
 | Platform | What start does | Source |
 | --- | --- | --- |
 | `native` | nothing; answers at once | [`power.rs`](../../../../../control/crates/layerfs-machine/src/power.rs) |
-| `docker` | runs the worker container (`--pull never`) from the recorded image, else the bundle's image loaded once | [`image.rs`](../../../../../control/crates/layerfs-machine/src/image.rs), [`platforms/docker/power.rs`](../../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
+| `docker` | runs the privileged worker container (`--pull never`) from the recorded image, else the bundle's image loaded once; the worker runs namespaces Sandboxes inside it, rooted in the bundle's `sandbox-image.tar` (D-8) | [`image.rs`](../../../../../control/crates/layerfs-machine/src/image.rs), [`platforms/docker/power.rs`](../../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
 | `lima`, `apple-container`, `microsandbox` | boots the VM if stopped, then sets up and starts the worker | [`platforms/`](../../../../../control/crates/layerfs-platform/src/platforms) |
 | `firecracker` | starts its Lima host first, then the microVM | `endpoint.rs` `host_first` |
 | `ssh` | starts the worker and its `ssh -L` forward | [`platforms/ssh/power.rs`](../../../../../control/crates/layerfs-platform/src/platforms/ssh/power.rs) |

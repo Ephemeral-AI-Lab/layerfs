@@ -55,12 +55,13 @@ describe retained mechanics; `SUPPORT.json` decides availability.
   `ssh -N -L 127.0.0.1:<free port>:127.0.0.1:<guest port>`
   (`setup/forward.rs`, the worker forward's code; lima through its own
   `ssh.config`, as its template forwards no guest port but the worker's)
-  and answer its pid. `docker` refuses `InvalidInput`: each docker Sandbox
-  publishes its daemon's port on the host's loopback itself, and that is
-  its endpoint. `apple-container` and `microsandbox` (ports are published
-  only at create) and `firecracker` (its daemons listen on the microVM's
-  loopback; the Lima host's forward reaches only its tap address) refuse
-  `Unsupported`, and their Workspace calls stay on the worker.
+  and answer its pid. `docker` (its worker container's ports are
+  published only when it starts, so a Sandbox daemon's port in it cannot
+  be published later; D-8), `apple-container` and `microsandbox` (ports
+  are published only at create) and `firecracker` (its daemons listen on
+  the microVM's loopback; the Lima host's forward reaches only its tap
+  address) refuse `Unsupported`, and their Workspace calls stay on the
+  worker.
 - `layerfs-platform/src/support.rs` is the one support table:
   platform × host × Store kind → supported, or a refusal with its reason.
   It consumes the fixed restrictions in `layerfs-sandbox-backend/src/platform_policy.rs`,
@@ -69,13 +70,20 @@ describe retained mechanics; `SUPPORT.json` decides availability.
   and `adapter.rs` its `ADAPTER` (the guard keeps both out of `mod.rs`);
   `observe.rs`, `create.rs` (create and remove), `power.rs` (start and
   stop); ssh has `connect.rs` (connect and disconnect) instead of
-  `create.rs`. `network.rs` holds the docker worker's published port.
+  `create.rs`. `network.rs` reads the docker worker's published port
+  (macOS). The `docker` worker container is privileged and runs
+  `namespaces` Sandboxes inside it, as a VM's worker does (D-8); it mounts
+  its data volume and the bundle, never the Docker Engine socket.
 - `layerfs-sandbox-backend/src/backend/<b>/` is one Sandbox backend, with its
   `ADAPTER` (stored name, description, capabilities) in `adapter.rs`,
   reached through the sealed `BackendAdapter`'s one `adapter()` match in
   `backend/adapter.rs`; `src/local/` is the shared "daemon as a local
-  process" plumbing that `host_process` and `namespaces` build on. The
-  backend Rust name `host_process` is stored and shown as `"native"`.
+  process" plumbing that `host_process` and `namespaces` build on. There
+  are two backends: `namespaces` (every Linux kernel: VMs, `native` on
+  Linux and the `docker` machine's worker container) and `host_process`
+  (macOS). The backend Rust name `host_process` is stored and shown as
+  `"native"`. The docker backend (one container per Sandbox, over its own
+  Engine HTTP client) was retired by D-8 (layerfs-project#111).
 
 ## SUPPORT.json
 
@@ -93,8 +101,8 @@ per platform, the same rows `machine.platforms` returns for the running
 host without its live fields (`ready`, `missing`, `version`):
 
 - `platform`, `how` (`built_in`, `created`, `connected`);
-- `backend`: the Sandbox backend's stored name (`docker`, `native`,
-  `namespaces`), or `null` when there is none or the platform is not on
+- `backend`: the Sandbox backend's stored name (`native` or
+  `namespaces`; `docker` rows say `namespaces` since D-8), or `null` when there is none or the platform is not on
   that host;
 - `kernel`: the kernel route (`fuse`, `nfs`) or `null`;
 - `sqlite`: where a sqlite Store's calls run (`in_process` or `worker`), or

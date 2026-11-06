@@ -74,7 +74,7 @@ for what a diagram or table cannot say.
 | Platform | How | Made by | Its kernel | Folder |
 | --- | --- | --- | --- | --- |
 | `native` | built in | nothing: the host itself | this host | [`native/`](../../../../control/crates/layerfs-platform/src/platforms/native) |
-| `docker` | built in | nothing: one worker container on Docker's kernel | Docker Desktop's VM or the Linux host | [`docker/`](../../../../control/crates/layerfs-platform/src/platforms/docker) |
+| `docker` | built in | nothing: one privileged worker container on Docker's kernel, which runs namespaces Sandboxes (D-8) | Docker Desktop's VM or the Linux host | [`docker/`](../../../../control/crates/layerfs-platform/src/platforms/docker) |
 | `apple-container` | created | `container run` | an Apple container VM | [`apple_container/`](../../../../control/crates/layerfs-platform/src/platforms/apple_container) |
 | `microsandbox` | created | `msb create` | a libkrun microVM | [`microsandbox/`](../../../../control/crates/layerfs-platform/src/platforms/microsandbox) |
 | `lima` | created | `limactl create` from a template | a Lima `vz` VM | [`lima/`](../../../../control/crates/layerfs-platform/src/platforms/lima) |
@@ -104,8 +104,8 @@ with the fixed text of [Adapter](adapter.md#the-sealed-adapter)):
 | A spec is checked before any effect. | every call in [`setup/calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs) starts with `spec.validate()` |
 | A failure after the VM exists keeps it. | `MachineError::kept` / `vm_exists` in [`error.rs`](../../../../control/crates/layerfs-platform/src/error.rs); each `create.rs` removes only what it made when nothing exists under the name |
 | One attempt; a readiness wait is not a retry. | `worker::ready`, `forward::open` (`ExitOnForwardFailure`, one `ssh`) |
-| No guest mounts the host home. | Lima `mounts: []`; docker mounts the socket, volume and bundle only; apple-container and microsandbox mount only their data volume |
-| Each guest blocks user namespaces but LayerFS's own. | `PREPARE` in [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) writes `user.max_user_namespaces=0` and reads it back |
+| No guest mounts the host home. | Lima `mounts: []`; docker mounts its data volume and the bundle only (never the Engine socket); apple-container and microsandbox mount only their data volume |
+| No Sandbox command can create a user namespace. | Every VM and ssh guest: `PREPARE` in [`setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) writes `user.max_user_namespaces=0` and reads it back. Every namespaces command, in any guest: the seccomp filter in [`seccomp.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs). The `docker` worker never writes the sysctl (it would change the whole Docker host) and relies on the filter |
 
 ## Limits and failures
 

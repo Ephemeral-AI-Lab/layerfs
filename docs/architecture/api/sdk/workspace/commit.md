@@ -101,7 +101,7 @@ the Store's lane. See the [routing table](../../../control/routing/routing-table
 | `Unknown`, phase `admission` | **an earlier Commit's install was uncertain or failed; the daemon keeps that custody and refuses new Commits** | **yes (the earlier one)** | [`control/registry.rs`](../../../../../engine/crates/layerfs-daemon/src/control/registry.rs) `idle` |
 | other daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `refusal` |
 | `Unavailable` | the worker is not recorded or does not answer | no | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
-| `Failed` | **a daemon exchange failed; `attempted` in the message says whether it may have published** | **maybe** | [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) `operation` |
+| `Failed` | **a daemon exchange failed; `attempted` in the message says whether it may have published** | **maybe** | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `operation` |
 | `Unknown` | **the worker's answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After an uncertain Commit**, read [commit.list](../commit/list.md) for the

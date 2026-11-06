@@ -165,7 +165,7 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\nmod init;"))
 
     def test_sandbox_active_edges_and_unsafe_boundary(self):
-        path = Path("control/crates/layerfs-sandbox-backend/src/docker_engine/http.rs")
+        path = Path("control/crates/layerfs-sandbox-backend/src/runtime.rs")
         self.assertTrue(unsafe_violations(path, "unsafe fn signal_pid() {}"))
         self.assertFalse(
             unsafe_violations(Path("control/crates/layerfs-sandbox-backend/src/lib.rs"), "#![deny(unsafe_code)]")

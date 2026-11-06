@@ -206,12 +206,17 @@ $ printf '%s' '[{"op":"write","path":"/b.txt","content":"b\\n"},{"op":"mkdir","p
   close <name>`, the call that clears it.
 - A sqlite project's Sandbox runs on the machine that holds its Store;
   another machine is `Unsupported`, naming the Store's machine.
-- On `docker`, the image is `image`, else the one `machine update docker
-  --image` recorded, else the sealed bundle's `sandbox-image.tar`, loaded
-  into Docker once and recorded on the docker machine as `loaded_image`
-  (`{id, bundle}`; another bundle's image is loaded again). The docker
-  worker's own container runs the same default. A bundle without the
-  archive is `Unsupported`, naming it (#535 P5).
+- On `docker` a Sandbox runs `namespaces` in the docker machine's worker
+  container (D-8). Its root comes from the sealed bundle's
+  `sandbox-image.tar` in the worker; `image` (a `sha256:` digest) names an
+  image that archive must hold, as on a VM. The worker container's own
+  image is the one `machine update docker --image` recorded, else that
+  archive, loaded into Docker once and recorded on the docker machine as
+  `loaded_image` (`{id, bundle}`; another bundle's image is loaded again).
+  A bundle without the archive is `Unsupported`, naming it (#535 P5).
+  A Sandbox recorded under the retired docker backend is refused
+  `Unsupported`, asking to recreate it; `sandbox close` forgets it and
+  names its container for `docker rm`.
 - `list` and `get` page: `list` its Sandboxes, `get` the Sandbox's
   `workspaces` (`page_size` 1 to 1000, default 50; `page_pos`), with
   `next_page_pos`, `null` after the last page. Both show each Sandbox's
@@ -283,9 +288,10 @@ form.
   it is `Unavailable`, naming `machine start`. `mount`, `exec`, `commit`
   and `unmount` on a stopped machine are refused the same way, as Store
   calls are; nothing starts a machine but `machine start` (#535 D11).
-- On `ssh`, `lima` and `docker`, `mount`, `commit`, `unmount` and
+- On `ssh` and `lima`, `mount`, `commit`, `unmount` and
   `status` go from the caller straight to the Sandbox's daemon (#535 G4);
-  `exec` goes through the machine's worker. See machines-and-stores.md,
+  `exec` goes through the machine's worker. On `docker` every call goes
+  through its worker (D-8). See machines-and-stores.md,
   Routes.
 - Not run for this manual.
 
@@ -309,7 +315,7 @@ Run:
 
 ```console
 $ layerfs machine list
-{"machines":[{"name":"docker","platform":"docker","backend":"docker","state":"ready","cpus":null,"memory":null,"disk":null,"supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","state":"ready",…,"stores":["shop"],"sandboxes":[]}]}
+{"machines":[{"name":"docker","platform":"docker","backend":"namespaces","state":"ready","cpus":null,"memory":null,"disk":null,"supports":{"sqlite":true,"postgresql_sandbox":true,"reason":null},"stores":[],"sandboxes":[]},{"name":"native","platform":"native","backend":"native","state":"ready",…,"stores":["shop"],"sandboxes":[]}]}
 
 $ layerfs machine platforms
 {"host":"macos","platforms":[{"platform":"native","how":"built_in","backend":"native","kernel":"nfs","sqlite":"in_process","postgresql":{"store_calls":"in_process","sandbox":true,"reason":null},"ready":true,"missing":[],"version":null,"options":[],"description":"…"},…,{"platform":"lima","how":"created","backend":"namespaces","kernel":"fuse","sqlite":"worker","postgresql":{"store_calls":"in_process","sandbox":true,"reason":null},"ready":true,"missing":[],"version":"limactl version 2.2.1","options":[{"name":"cpus","kind":"int"},…],"description":"…"},…]}

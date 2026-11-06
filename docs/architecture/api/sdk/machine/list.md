@@ -57,7 +57,7 @@ None. The machine calls take no paging: every machine is in one answer.
 | --- | --- | --- |
 | `name` | text | the machine's name (its folder) |
 | `platform` | text | `native`, `docker`, `apple-container`, `microsandbox`, `lima`, `firecracker` or `ssh` |
-| `backend` | text | the Sandbox backend on this host: `native`, `namespaces`, `docker`, or `-` for none ([`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `backend_name`) |
+| `backend` | text | the Sandbox backend on this host: `native`, `namespaces` (also on `docker`), or `-` for none ([`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `backend_name`) |
 | `supports` | map | the platform's support row on this host: `sqlite` (bool), `postgresql_sandbox` (bool), `reason` (text or null) ([`platforms.rs`](../../../../../control/crates/layerfs-machine/src/platforms.rs) `supports`) |
 | `state` | text | see the state table below |
 | `cpus`, `memory`, `disk` | int or null | the recorded size; bytes for `memory` and `disk`; null on a built-in or ssh machine |

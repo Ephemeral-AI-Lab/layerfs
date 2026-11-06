@@ -330,8 +330,8 @@ fn numbered(home: &Path, plan: &mut Plan) -> Result<Vec<Numbered>> {
     Ok(found)
 }
 
-/// Whether a numbered Sandbox's runtime runs: its container or daemon
-/// process observed once. A local one must be in the home's old local root.
+/// Whether a numbered Sandbox's runtime runs: its daemon process observed
+/// once. A local one must be in the home's old local root.
 fn probe(home: &Path, entry: &Numbered) -> Found {
     let recorded = match unchecked(&entry.id, &entry.record) {
         Ok(recorded) => recorded,
@@ -342,7 +342,7 @@ fn probe(home: &Path, entry: &Numbered) -> Found {
     }
     match recorded.reopen() {
         Ok(_) => Found::Running,
-        Err(failure) if failure.container_gone() || failure.container_stopped() => Found::Ended,
+        Err(failure) if failure.container_stopped() => Found::Ended,
         Err(failure) => Found::Unknown(format!("{failure:?}")),
     }
 }
@@ -375,25 +375,17 @@ fn inside(home: &Path, recorded: &Recorded) -> std::result::Result<(), String> {
 /// Deletes an ended numbered Sandbox's stopped runtime, once, and its folder.
 fn reclaim(entry: &Numbered) -> Result<()> {
     let recorded = unchecked(&entry.id, &entry.record)?;
-    let stopped = match recorded.reopen() {
+    match recorded.reopen() {
         Ok(_) => {
             return Err(refused(
                 "InUse",
                 format!("Sandbox {}#{} runs again", entry.project, entry.id),
             ))
         }
-        Err(failure) if failure.container_gone() || failure.container_stopped() => {
-            failure.container_stopped()
-        }
+        Err(failure) if failure.container_stopped() => {}
         Err(failure) => return Err(failed(failure)),
-    };
-    if stopped {
-        if let Err(failure) = unchecked(&entry.id, &entry.record)?.stopped().delete() {
-            if !failure.container_gone() {
-                return Err(failed(failure));
-            }
-        }
     }
+    (unchecked(&entry.id, &entry.record)?.stopped().delete()).map_err(failed)?;
     match std::fs::remove_dir_all(&entry.dir) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(failed(error)),
         _ => Ok(()),

@@ -64,7 +64,7 @@ None.
 | `host` | text | the host this build runs on | [`platform.rs`](../../../../../control/crates/layerfs-platform/src/platform.rs) `HostOs` |
 | `platform` | text | the name `machine create` takes | `Profile.name` |
 | `how` | text | `built_in` (`native`, `docker`), `created`, or `connected` (`ssh`) | `How` |
-| `backend` | text or null | `native`, `namespaces` or `docker`; null when the platform is not on this host | [`support.rs`](../../../../../control/crates/layerfs-platform/src/support.rs) |
+| `backend` | text or null | `native` or `namespaces` (also on `docker`, D-8); null when the platform is not on this host | [`support.rs`](../../../../../control/crates/layerfs-platform/src/support.rs) |
 | `kernel` | text or null | the kernel route its Sandboxes' daemons serve: `fuse` or `nfs` | `support.rs` |
 | `sqlite` | text or null | where a sqlite Store's calls run: `in_process` or `worker`; null when not on this host | `support.rs` |
 | `postgresql` | map | `store_calls` (always `in_process`), `sandbox` (bool), `reason` (why not) | `support.rs` |
@@ -81,7 +81,7 @@ The rows without the live fields are
 | Platform | `how` | macOS | Linux | Windows | `options` |
 | --- | --- | --- | --- | --- | --- |
 | [`native`](../../../control/machines/platforms/native.md) | built_in | native, nfs | namespaces, fuse | records only | — |
-| [`docker`](../../../control/machines/platforms/docker.md) | built_in | docker, fuse | docker, fuse | not designed | — |
+| [`docker`](../../../control/machines/platforms/docker.md) | built_in | namespaces, fuse | namespaces, fuse | not designed | — |
 | [`apple-container`](../../../control/machines/platforms/apple-container.md) | created | namespaces, fuse | — | — | `cpus`, `memory`, `disk`, `image` |
 | [`microsandbox`](../../../control/machines/platforms/microsandbox.md) | created | namespaces, fuse | namespaces, fuse | namespaces, fuse | `cpus`, `memory`, `disk`, `image` |
 | [`lima`](../../../control/machines/platforms/lima.md) | created | namespaces, fuse | — | — | `cpus`, `memory`, `disk`, `image`, `nested` |

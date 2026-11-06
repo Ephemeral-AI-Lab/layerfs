@@ -79,7 +79,7 @@ A machine's lifecycle, and which calls each platform takes:
 | `guest` | refused | yes (macOS, Linux) | `container exec` | `msb exec` | Lima ssh | via Lima host | ssh |
 | `host_identity` | refused | refused | refused | refused | refused | refused | yes |
 | `reach` | as given | `host.docker.internal` | gateway lookup | `host.microsandbox.internal` | `192.168.5.2` | `192.168.5.2` | loopback refused |
-| `forward` | port as it is | `InvalidInput` | `Unsupported` | `Unsupported` | `ssh -L` | `Unsupported` | `ssh -L` |
+| `forward` | port as it is | `Unsupported` | `Unsupported` | `Unsupported` | `ssh -L` | `Unsupported` | `ssh -L` |
 
 A refusal from `adapter::refused` is `InvalidInput`, "the <platform>
 machine <name> <why>", raised before any tool runs:

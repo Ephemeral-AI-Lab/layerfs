@@ -178,7 +178,6 @@ pub fn platform(args: &SdkValue, deploy: &SdkValue) -> Result<String, SdkRefusal
 /// A running Sandbox's `runtime`, as its record names it.
 pub fn kind(runtime: &Sandbox) -> &'static str {
     match runtime {
-        Sandbox::Docker(_) => "docker",
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         Sandbox::HostProcess(_) => NATIVE,
         #[cfg(target_os = "linux")]

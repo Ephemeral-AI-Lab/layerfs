@@ -111,7 +111,7 @@ scope only `main` is accepted and is mounted as the Branch `<ns>.main`
 | `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox | no | [`record.rs`](../../../../../control/crates/layerfs-sandbox/src/record.rs) `free` |
 | `Unavailable` | the machine's worker is not recorded or does not answer | no | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
 | daemon refusal codes | the daemon refused before effect; its own code and `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/values.rs) `refusal` |
-| `Failed` | **a daemon exchange failed; the message carries the `OperationFailure`, whose `attempted` says whether the mount may have taken effect** | **maybe** | [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs) `operation` |
+| `Failed` | **a daemon exchange failed; the message carries the `OperationFailure`, whose `attempted` says whether the mount may have taken effect** | **maybe** | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `operation` |
 | `Unknown` | **the worker's answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After an uncertain mount**, read [sandbox.get](../sandbox/get.md) for the

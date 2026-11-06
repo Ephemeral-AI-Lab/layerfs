@@ -14,7 +14,10 @@ const DEVICES: [&str; 22] = [
 ];
 
 /// The built-in machines' names, which `machine create` and `connect` and
-/// `sandbox create` refuse as new names.
+/// `sandbox create` refuse as new names. `docker` names the docker machine
+/// (its worker container), not a Sandbox backend: since D-8
+/// (layerfs-project#111) its Sandboxes run in namespaces, and the name stays
+/// so existing homes keep their machine record.
 pub const BUILT_IN: [&str; 2] = ["native", "docker"];
 
 /// `name` as one machine, Store, bucket, project or Sandbox name, or why not.

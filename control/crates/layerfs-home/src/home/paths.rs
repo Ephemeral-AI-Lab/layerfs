@@ -77,7 +77,10 @@ pub fn workspace_dir(home: &Path, sandbox: &str) -> PathBuf {
 
 /// `machine/native/run/`: the local Sandbox backends' runtime root (0755),
 /// one directory per Sandbox beside the image cache the namespaces backend
-/// keeps there (`images/`), in the home and under a worker's root.
+/// keeps there (`images/`), in the home and under a worker's root. The
+/// `native` folder name predates the namespaces backend; the docker
+/// machine's worker uses the same path under its root since D-8
+/// (layerfs-project#111), so the name is kept rather than moved.
 pub fn run_root(root: &Path) -> PathBuf {
     machine_dir(root, "native").join("run")
 }

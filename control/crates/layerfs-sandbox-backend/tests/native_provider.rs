@@ -3,7 +3,7 @@
 #![cfg(target_os = "macos")]
 use layerfs_sandbox_backend::host_process::HostProcessProvider as NativeProvider;
 use layerfs_sandbox_backend::{
-    CommandIdentity, DockerRecord, LaunchPhase, LaunchRequest, ProviderLaunchOptions, Runtime,
+    CommandIdentity, Image, LaunchPhase, LaunchRequest, ProviderLaunchOptions, Runtime,
     SandboxRecord,
 };
 use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
@@ -48,16 +48,15 @@ fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
     let id = sandbox.identity();
     let local_record = sandbox.local_record().unwrap();
     let record = sandbox.record().unwrap();
-    assert_eq!(record, SandboxRecord::Local(local_record));
+    assert_eq!(record, SandboxRecord::Local(local_record.clone()));
     assert!(sandbox.inspect().unwrap().running);
     let reopened = provider.reopen(id, &record).unwrap();
     assert_eq!(reopened.identity(), id);
     assert_eq!(reopened.endpoint().unwrap(), sandbox.endpoint().unwrap());
-    let foreign = SandboxRecord::Docker(DockerRecord {
-        image: format!("sha256:{}", "a".repeat(64)),
-        store_volume: Some("lfs-foreign".into()),
-        port: 30421,
-        labels: vec![],
+    // another backend's record of the same facts is refused before any effect
+    let foreign = SandboxRecord::Namespaces(layerfs_sandbox_backend::NamespaceRecord {
+        local: local_record.clone(),
+        image: Image::parse(&format!("sha256:{}", "a".repeat(64))).unwrap(),
     });
     assert!(!provider.reopen(id, &foreign).err().unwrap().attempted);
     drop(reopened);
@@ -83,11 +82,11 @@ fn runtime_preserves_partial_launch_owner_and_reopens_the_exact_process() {
         LaunchPhase::Validate
     );
     let mut wrong_options = request("wrong-options");
-    wrong_options.options = ProviderLaunchOptions::Docker {
-        image: format!("sha256:{}", "b".repeat(64)),
-        store_volume: Some("lfs-foreign".into()),
-        port: 30421,
-        connect_host: None,
+    wrong_options.options = ProviderLaunchOptions::Namespaces {
+        command_identity: CommandIdentity { uid: 501, gid: 20 },
+        environment: vec![],
+        image: Image::parse(&format!("sha256:{}", "b".repeat(64))).unwrap(),
+        archive: "/does-not-exist/image.tar".into(),
     };
     assert_eq!(
         provider.launch(wrong_options).err().unwrap().phase,

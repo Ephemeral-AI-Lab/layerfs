@@ -1,8 +1,7 @@
 //! The Sandbox backend conformance kit (#536 §11 step 9): checks every
 //! backend passes, run over `Backend::ALL`, so a new backend is covered as
-//! soon as it is a variant. No Docker Engine or root is needed: a docker
-//! runtime names a socket that does not exist, and only the lifecycle a
-//! backend can run as this user on this host runs.
+//! soon as it is a variant. No root is needed: only the lifecycle a backend
+//! can run as this user on this host runs.
 //!
 //! Per backend it checks:
 //! - its stored name round-trips (`stored_name`, `parse`) and is unique;
@@ -25,11 +24,10 @@
 #![cfg(unix)]
 #[path = "support/support_json.rs"]
 mod support_json;
-use layerfs_sandbox_backend::docker::{Docker, DockerProvider};
 use layerfs_sandbox_backend::{
-    Backend, Bind, CommandIdentity, ContainerId, DockerRecord, HelperSpec, Image, LaunchPhase,
-    LaunchRequest, LocalRecord, MountDriver, NamespaceRecord, ProviderLaunchOptions, Runtime,
-    RuntimeError, SandboxRecord,
+    Backend, Bind, CommandIdentity, ContainerId, HelperSpec, Image, LaunchPhase, LaunchRequest,
+    LocalRecord, MountDriver, NamespaceRecord, ProviderLaunchOptions, Runtime, RuntimeError,
+    SandboxRecord,
 };
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -42,8 +40,8 @@ use std::time::Duration;
 /// Whether a backend binds host directories into a Sandbox's root.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Binds {
-    /// It takes its Store otherwise (a volume, or the host's own files) and
-    /// refuses a bind before any effect.
+    /// It takes its Store otherwise (the host's own files) and refuses a
+    /// bind before any effect.
     Refused,
     /// The binds travel to its init stage in the helper spec.
     Accepted,
@@ -51,7 +49,7 @@ enum Binds {
 
 fn binds(backend: Backend) -> Binds {
     match backend {
-        Backend::Docker | Backend::HostProcess => Binds::Refused,
+        Backend::HostProcess => Binds::Refused,
         Backend::Namespaces => Binds::Accepted,
     }
 }
@@ -63,12 +61,6 @@ fn options(backend: Backend) -> ProviderLaunchOptions {
         gid: nix::unistd::Gid::effective().as_raw(),
     };
     match backend {
-        Backend::Docker => ProviderLaunchOptions::Docker {
-            image: format!("sha256:{}", "a".repeat(64)),
-            store_volume: None,
-            port: 30421,
-            connect_host: None,
-        },
         Backend::HostProcess => ProviderLaunchOptions::Local {
             command_identity,
             environment: Vec::new(),
@@ -93,12 +85,6 @@ fn record(backend: Backend) -> SandboxRecord {
         labels: Vec::new(),
     };
     match backend {
-        Backend::Docker => SandboxRecord::Docker(DockerRecord {
-            image: format!("sha256:{}", "a".repeat(64)),
-            store_volume: Some("lfs-kit".into()),
-            port: 30421,
-            labels: Vec::new(),
-        }),
         Backend::HostProcess => SandboxRecord::Local(local),
         Backend::Namespaces => SandboxRecord::Namespaces(NamespaceRecord {
             local,
@@ -110,7 +96,6 @@ fn record(backend: Backend) -> SandboxRecord {
 /// The backend a record names.
 fn record_backend(record: &SandboxRecord) -> Backend {
     match record {
-        SandboxRecord::Docker(_) => Backend::Docker,
         SandboxRecord::Local(_) => Backend::HostProcess,
         SandboxRecord::Namespaces(_) => Backend::Namespaces,
     }
@@ -121,10 +106,6 @@ fn record_backend(record: &SandboxRecord) -> Backend {
 /// hold it is refused, `Unsupported`, before any effect).
 fn runtime(backend: Backend, root: &Path) -> Option<Result<Runtime, RuntimeError>> {
     match backend {
-        Backend::Docker => {
-            let docker = Docker::new("/does-not-exist/docker.sock", Duration::from_secs(1));
-            Some(docker.map(|docker| Runtime::Docker(DockerProvider::new(docker))))
-        }
         #[cfg(target_os = "macos")]
         Backend::HostProcess => {
             Some(layerfs_sandbox_backend::HostProcessProvider::new(root).map(Runtime::HostProcess))
@@ -143,17 +124,12 @@ fn runtime(backend: Backend, root: &Path) -> Option<Result<Runtime, RuntimeError
 enum Lifecycle {
     /// All of it, as this user, with a stand-in daemon.
     Runs,
-    /// None: the service it launches through is absent (the kit's docker
-    /// runtime names a socket that does not exist), so a launch fails and
-    /// keeps no owner.
-    ServiceAbsent,
     /// None: it needs root and a prepared kernel (live checks run it).
     NeedsRoot,
 }
 
 fn lifecycle(backend: Backend) -> Lifecycle {
     match backend {
-        Backend::Docker => Lifecycle::ServiceAbsent,
         Backend::HostProcess => Lifecycle::Runs,
         Backend::Namespaces => Lifecycle::NeedsRoot,
     }
@@ -207,9 +183,7 @@ fn each_backends_mount_driver_serves_its_support_rows_kernel_route() {
         assert_eq!(route(backend.capabilities().mount_driver), kernel, "{at}");
         assert!(row.description.ends_with(backend.description()), "{at}");
     }
-    // the docker backend no platform runs since D-8 (layerfs-project#111)
-    // until its folder is deleted
-    for backend in Backend::ALL.into_iter().filter(|b| *b != Backend::Docker) {
+    for backend in Backend::ALL {
         let named = rows
             .iter()
             .any(|r| r.backend.as_deref() == Some(backend.stored_name()));
@@ -441,17 +415,6 @@ fn each_backend_runs_the_lifecycle_it_can_run_here() {
         match lifecycle(backend) {
             Lifecycle::Runs => {}
             Lifecycle::NeedsRoot => continue,
-            Lifecycle::ServiceAbsent => {
-                let failure = runtime
-                    .launch_with_binds(request(backend, &daemon, "life-1"), Vec::new())
-                    .unwrap_err();
-                assert!(failure.instance.is_none(), "{backend:?}: {failure:?}");
-                assert!(
-                    !matches!(failure.cause, RuntimeError::Unsupported(_)),
-                    "{backend:?} refused a plain launch: {failure:?}"
-                );
-                continue;
-            }
         }
         let mut sandbox = runtime
             .launch_with_binds(request(backend, &daemon, "life-1"), Vec::new())

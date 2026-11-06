@@ -1,117 +1,89 @@
-# Docker
+# Docker machine Sandboxes
 
-[Architecture](../../README.md) › [Control](../README.md) › [Sandboxes](README.md) › Docker
+[Architecture](../../README.md) › [Control](../README.md) › [Sandboxes](README.md) › Docker machine Sandboxes
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
-The Docker backend and its Engine client.
+How Sandboxes run on the `docker` machine, and what became of the docker
+backend.
 
 | | |
 | --- | --- |
 | Component | [Sandboxes](README.md) |
-| Source | [`control/crates/layerfs-sandbox-backend/src/docker_engine`](../../../../control/crates/layerfs-sandbox-backend/src/docker_engine), [`control/crates/layerfs-sandbox-backend/src/backend/docker`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker) |
+| Source | [`control/crates/layerfs-platform/src/platforms/docker`](../../../../control/crates/layerfs-platform/src/platforms/docker), [`control/crates/layerfs-sandbox-backend/src/backend/namespaces`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces), [`control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs) |
 
-One container per Sandbox. `DockerProvider::launch` creates it, uploads
-the daemon and its setup, starts it and waits for its listener line;
-`docker::Sandbox` owns it until one stop and one delete.
+There is no docker backend. Owner decision D-8 (layerfs-project#111)
+retired it: the `docker` machine runs `namespaces` Sandboxes inside its
+worker container, as a Linux VM's worker does. The backend's one
+container per Sandbox, its Docker Engine HTTP client (`docker_engine/`)
+and its per-Sandbox published daemon ports are deleted.
 
-## Docker Engine client
+## The picture
 
 ```text
- Docker { socket, control_wait, deadline, container_name, kept, minor }
-   |
-   | first request: GET /version (unversioned, once) -> minor in 48..=54
-   v
- one exchange = one connection attempt on the Engine's Unix socket
-   Mode::Close    metadata (create, inspect, stop, delete, logs, archive)
-   Mode::Keep     Exec create and inspect, on one kept idle connection
-   Mode::Upgrade  Exec start: the hijacked duplex stream
-        |
-        v
- body.rs  Fixed(n) | Chunked | Close | Hijacked   exact framing
- mux.rs   8-byte header: [stream 0..3, 0, 0, 0, length u32 BE]
+ caller --sandbox.host--> docker machine's worker container
+                          (privileged, --cgroupns private, --init)
+                            |
+                            | namespaces backend, as in a VM
+                            v
+                          Sandbox: layerfs-daemon in its own mount, PID
+                          and IPC namespaces and cgroup; root unpacked
+                          from /layerfs/bundle/sandbox-image.tar
+                            |
+                            v
+                          commands: helper exec, under the filter that
+                          refuses a user namespace
 ```
 
-| Part | What | Source |
+| Fact | Value | Source |
 | --- | --- | --- |
-| `Docker::new` | An absolute socket path and a non-zero control wait; nothing is dialed. | [`http.rs`](../../../../control/crates/layerfs-sandbox-backend/src/docker_engine/http.rs) |
-| Version | API 1.48 (Engine 28.0) to 1.54. The daemon's version, capped at 1.54, read once and shared by clones; older is refused before the request; an unreadable answer uses 1.54. | [`version.rs`](../../../../control/crates/layerfs-sandbox-backend/src/docker_engine/version.rs) |
-| Socket | One nonblocking connect; readiness waits use `poll`. Control waits never apply to command streams. | [`socket.rs`](../../../../control/crates/layerfs-sandbox-backend/src/docker_engine/socket.rs) |
-| Kept connection | One idle keep-alive connection for Exec create and inspect, used only while idle (30 s, `KEPT_IDLE`) and quiet; returned only after its body was read to the framed end. A failure on it is that request's failure, never resent. | [`http.rs`](../../../../control/crates/layerfs-sandbox-backend/src/docker_engine/http.rs) |
-| Failures | `WireFailure` keeps whether the request was attempted, header and body bytes sent, the HTTP status, the requested and observed container and exec ids, and a bounded error-body prefix. | [`types/failure.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/failure.rs) |
+| Backend | `namespaces`. A docker-machine Sandbox shows `backend: "namespaces"` and `runtime: "namespaces"`. | [`docker/profile.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/profile.rs) |
+| Platform | `docker`, stored, shown and accepted as before. The deployment names the platform its Sandboxes keep. | [`deploy.rs`](../../../../control/crates/layerfs-sandbox/src/deploy.rs) `choose`, [`runtime.rs`](../../../../control/crates/layerfs-sandbox/src/runtime.rs) `platform` |
+| Where it runs | Inside the worker container, which is root, has `/dev/fuse`, a writable cgroup v2 tree with `cgroup.kill`, and its runtime root on the `<vm>-data` volume. | [`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
+| Sandbox root | The bundle's `sandbox-image.tar` in the worker (`/layerfs/bundle/sandbox-image.tar`). A `sandbox.create --image sha256:...` names a digest that archive must hold, as on a VM. | `deploy.rs` `choose` |
+| Machine `image` | Only the worker container's Docker image (the record's `image`, else the bundle image loaded into Docker once, `loaded_image`, #535 P5); never a Sandbox's root. | `docker/power.rs` `start`, `load_image` |
+| Route | Every Sandbox and Workspace call goes through the worker (`sandbox.host`), as on `apple-container`, `microsandbox` and `firecracker`. There is no direct route to a docker Sandbox's daemon. | [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs), [Forwards](../network/forwards.md#platforms-that-refuse) |
+| Forward | `Unsupported`: Docker publishes a container's ports only when it starts, so a daemon's port in the worker container cannot be published later. | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
+| Loopback PostgreSQL | `reach` rewrites a loopback host to `host.docker.internal` (`DESKTOP_HOST` in the platform's docker folder). | `docker/adapter.rs`, [Reach](../network/reach.md) |
 
-`WireFailure::container_stopped` and `container_gone` let the caller tell
-"the exact container exists but is not running" from "the Engine says no
-such container" without guessing.
+## User namespaces
 
-## Containers
+A namespaces Sandbox needs that no command can create a user namespace: one
+could hold its own copy of a Workspace mount, outside the daemon's unmount.
+A VM guest blocks them machine-wide with `user.max_user_namespaces=0`. The
+docker worker never writes that sysctl, since it would change the whole
+Docker host or Docker Desktop VM. A filter on each command does it instead.
 
-```text
- DockerProvider::launch(LaunchRequest)                   provider.rs
-   Validate  options are Docker; image sha256:<64 hex>; port != 0;
-             setup 1..=8192 bytes; startup wait > 0; open the executable
-   Create    POST /containers/create[?name=<name>]       create.rs
-   (upload)  PUT /containers/<id>/archive  tar:          upload.rs
-               layerfs-local/ config/ overlay/  0700
-               workspaces/                      0755
-               layerfs-local/config/daemon.setup  0600
-               usr/local/bin/layerfs-daemon       0755
-   Start     POST /containers/<id>/start                 create.rs
-   Listener  GET /containers/<id>/logs?follow=true  until
-             "LAYERFS_DAEMON_LISTEN <addr>"              listener.rs
- any failure after Create: LaunchFailure { phase, instance: Some(owner) }
-```
-
-The container create body (`SandboxRequest::encode` in
-[`create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/create.rs)):
-
-| Field | Value |
+| Rule | Source |
 | --- | --- |
-| `Image` | the immutable `sha256:` digest |
-| `User`, `Entrypoint`, `Cmd` | `0:0`, `/usr/local/bin/layerfs-daemon`, `--config /layerfs-local/config/daemon.setup` |
-| `HostConfig.Init` | true: the Engine's init is PID 1 and reaps what commands leave |
-| `RestartPolicy`, `LogConfig` | `no`; `json-file`, 10m × 2 |
-| Privilege | not privileged; `CapAdd: CAP_SYS_ADMIN`; device `/dev/fuse`; `no-new-privileges=true`, `apparmor=unconfined` |
-| `SecurityOpt` seccomp | allow all but user-namespace creation (`unshare`/`clone` with `CLONE_NEWUSER` give `EPERM`; `clone3` gives `ENOSYS`) ([`topology.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/topology.rs)) |
-| `ExtraHosts` (Linux only) | `host.docker.internal:host-gateway`, for [Reach](../network/reach.md) |
-| `Mounts` | the Store at `/layerfs-store`: a volume (`NoCopy`), a volume folder (`Subpath`) or a host folder (bind); none for a PostgreSQL Store |
-| `PortBindings` | `<port>/tcp` on `127.0.0.1`, Engine-chosen host port |
+| `layerfs-sandbox-helper exec` installs a seccomp filter just before exec, after setting no-new-privs. | [`seccomp.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/os/linux/seccomp.rs), [`bin/…/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
+| `unshare` and `clone` with `CLONE_NEWUSER` answer `EPERM`; `clone3` answers `ENOSYS` (the C library falls back to `clone`); every other call is allowed. | same |
+| A foreign ABI (i386 on x86_64, arm on aarch64) is filtered by its own numbers, x32 by the native ones; an unknown ABI is killed. | same |
+| If the filter cannot be installed, the command fails. No command runs without it, and no weaker Sandbox is given. | same |
+| The filter applies to every namespaces Sandbox command, in a VM too. | same |
 
-The Store's path inside is `/layerfs-store/global/store.sqlite` for a whole
-volume, else `/layerfs-store/store.sqlite` (`store_locator` in
-[`sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/sandbox.rs)).
-The Store volume is borrowed: `delete` sends `DELETE
-/containers/<id>?force=false&v=false` and never removes it.
+The namespaces host check accepts either `user.max_user_namespaces=0` or a
+kernel whose `/proc/sys/kernel/seccomp/actions_avail` lists `allow`,
+`errno` and `kill_process`
+([`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs)).
 
-`endpoint` inspects the container and answers the published loopback
-address ([`endpoint.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/endpoint.rs)).
-That address is why `machine::forward` refuses on `docker`
-([Forwards](../network/forwards.md#platforms-that-refuse)). `reopen` starts
-nothing: it checks the container's user, entrypoint, command, `Tty`,
-labels, privilege, security options, capabilities, devices, init, restart
-and log settings, and its Store mount against the record
-([`topology.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/topology.rs)).
+## Sandboxes recorded under the docker backend
 
-## Labels and naming
+A record whose `backend` or `runtime` is `"docker"`, or a docker-machine
+record with no `runtime`, was written by the retired backend.
 
-| Item | Rule | Source |
-| --- | --- | --- |
-| Container name | `<prefix><id>`; prefix `deploy.containerPrefix`, else `layerfs-`. Engine rule: an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128. A name another container holds fails the create; it is never replaced or adopted. | `sandbox_name` in [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs), `naming` in [`http.rs`](../../../../control/crates/layerfs-sandbox-backend/src/docker_engine/http.rs) |
-| Labels set by the API | `layerfs.role=sandbox`, `layerfs.project=<project>`, `layerfs.sandbox=<id>`, and `layerfs.store=<store>` for a shared Store. | `labels` in [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs) |
-| Label text | Each key once; key and value 1 to 128 of `[A-Za-z0-9_.-]`. | `SandboxRequest::check` in [`sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/sandbox.rs) |
-| Reopen | The container must carry every recorded label with its value; the image may add others. | `config` in [`topology.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/topology.rs) |
-| Volume name | 1 to 128, alphanumeric first, then `[A-Za-z0-9_.-]`. | `volume_name` in [`sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/sandbox.rs) |
-
-The machine's own worker container is labelled `layerfs.role=machine-worker`
-([`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs)),
-so the two kinds of container are told apart.
+| Call | Answer |
+| --- | --- |
+| `sandbox.close` | Forgets it: removes the record and answers the container's name, for the user to remove by hand (`docker rm <name>`). |
+| Any other call | `Unsupported`, with a message to recreate the Sandbox. |
+| Home migration of a layout-2 docker Sandbox | Reported as unable to be checked: there is no Engine client to probe its container. |
 
 ## Related
 
-- [Commands and streams](commands-and-streams.md): Exec create, start and inspect on this client.
-- [Backends](backends.md): where Docker sits among the backends.
-- [Machines: Docker](../machines/platforms/docker.md): the docker machine and its worker container.
-- [Network: Credentials](../network/credentials.md): the private setup file.
+- [Machines: Docker](../machines/platforms/docker.md): the worker container.
+- [Native and namespaces](native-and-namespaces.md): the namespaces lifecycle the worker runs.
+- [Backends](backends.md): the two backends left.
+- [Network: Forwards](../network/forwards.md) and [Network: Reach](../network/reach.md).
 
 ---
 

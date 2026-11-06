@@ -49,8 +49,8 @@ Store engine's refusals that pass through Store calls.
 | `Busy` | another operation runs on the entity (`detail {entity, phase, op}`), or no daemon connection came free | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs) |
 | `Unresolved` | an earlier operation on the entity ended with its outcome unknown and its process is gone | `layerfs-home` `op.rs` |
 | `Conflict`, `HeadMoved` | a merge or Commit conflict, or the Branch head moved; for `backup.restore`, the Store changed since its last backup | [`daemon/values.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/values.rs), `history/lookup.rs` |
-| `Dirty`, `MountsActive` | unmount with uncommitted changes; `sandbox.close` while Workspaces are mounted | `daemon/values.rs`, [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs) |
-| `Capacity` | no room: a full Sandbox (16 Workspaces), a full disk (`detail {needed, free}`), a bounded engine limit | `sandbox/serve.rs`, [`sqlite/transfer/phases.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
+| `Dirty`, `MountsActive` | unmount with uncommitted changes; `sandbox.close` while Workspaces are mounted | `daemon/values.rs`, [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
+| `Capacity` | no room: a full Sandbox (16 Workspaces), a full disk (`detail {needed, free}`), a bounded engine limit | `sandbox/lifecycle.rs`, [`sqlite/transfer/phases.rs`](../../../../control/crates/layerfs-store/src/sqlite/transfer/phases.rs) |
 | `TooLarge` | a worker frame or daemon control record would be too large; nothing was sent | [`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs), [`daemon/call.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/call.rs) |
 | `Unsupported` | not possible on this host or not built (`detail.missing` names tools) | [`bundle.rs`](../../../../control/crates/layerfs-machine/src/bundle.rs), `machine/create.rs` |
 | `Unavailable`, `Denied` | a server, bucket, worker or host cannot be reached, or refused the login or secret | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs), [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
@@ -93,7 +93,7 @@ The 2.0.0 manual keeps a reader's version of this table in
 | `Unknown` | may have happened. Every call is one attempt; nothing is resent. Read state with `list`, `get` or `status` before acting again. | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `lost`, `answer`; [`store_service.rs`](../../../../engine/crates/layerfs-store-service/src/store_service.rs) `retain`; [`backup/record.rs`](../../../../control/crates/layerfs-store/src/backup/record.rs) |
 | `Unresolved` | an earlier `Unknown` on this entity stands; this call did nothing | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) `blocks` |
 | daemon `Unknown` | a Workspace operation's outcome is uncertain at the daemon | [`control_types.rs`](../../../../engine/crates/layerfs-bridge/src/control_types.rs) `ControlCode::Unknown` |
-| `Failed` after a daemon exchange with `attempted: true` | uncertain, though the code is `Failed`: a lost daemon reply is not mapped to `Unknown` | [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs) `operation` |
+| `Failed` after a daemon exchange with `attempted: true` | uncertain, though the code is `Failed`: a lost daemon reply is not mapped to `Unknown` | [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) `operation` |
 | `Busy` | known: nothing was attempted | `layerfs-home` `op.rs`, `daemon/pool.rs` |
 | `Unavailable`, `Denied`, `TooLarge` from a worker | known: the request was not sent | `worker/client.rs` (`Unreached`) |
 

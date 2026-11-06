@@ -66,7 +66,7 @@ After the call, `exec` also sends its `stdout` and `stderr` as
 
 A Sandbox holds at most `WORKSPACES` = 16 Workspaces; inline exec output
 is at most `INLINE` = 1 MiB per stream
-([`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs),
+([`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs),
 [`output.rs`](../../../../../control/crates/layerfs-sandbox/src/output.rs)).
 Under a folder scope, `mount` takes only `main`, mounted as
 `<namespace>.main`, and `exec` runs `cd '<folder>' && <command>`
@@ -87,7 +87,7 @@ Under a folder scope, `mount` takes only `main`, mounted as
 | `TooLarge` | a request over one control record | [`daemon/call.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/call.rs) |
 | `Unavailable` | the machine's worker is not recorded or does not answer | [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
 | `Unknown` | **uncertain:** the worker's answer was lost after the request was sent | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
-| `Failed` | a daemon exchange that failed; the message carries the original `OperationFailure`, whose `attempted` flag says the request may have had effects (**may be uncertain**) | [`serve.rs`](../../../../../control/crates/layerfs-sandbox/src/serve.rs), [`daemon/failure.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/failure.rs) |
+| `Failed` | a daemon exchange that failed; the message carries the original `OperationFailure`, whose `attempted` flag says the request may have had effects (**may be uncertain**) | [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs), [`daemon/failure.rs`](../../../../../control/crates/layerfs-sandbox/src/daemon/failure.rs) |
 
 A daemon control refusal keeps its own code (`values::refusal`); any other
 daemon exchange failure becomes `Failed`. A lost answer does not undo a

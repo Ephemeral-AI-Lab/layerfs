@@ -1,7 +1,5 @@
-//! Provider-independent ordinary command metadata and validation.
+//! Provider-independent ordinary command metadata; each backend checks it.
 use crate::CommandIdentity;
-#[cfg(unix)]
-use crate::RuntimeError;
 use std::fmt;
 /// Caller-owned ordinary command metadata. No hidden shell/classifier/preparation.
 #[derive(Clone)]
@@ -21,31 +19,5 @@ impl fmt::Debug for ExecRequest {
             .field("directory", &self.directory)
             .field("stdin", &self.stdin)
             .finish()
-    }
-}
-impl ExecRequest {
-    #[cfg(unix)]
-    pub(crate) fn check(&self) -> Result<(), RuntimeError> {
-        self.identity.check()?;
-        if self.arguments.is_empty()
-            || self.arguments[0].is_empty()
-            || !std::path::Path::new(&self.directory).is_absolute()
-            || self
-                .arguments
-                .iter()
-                .chain(&self.environment)
-                .chain(std::iter::once(&self.directory))
-                .any(|v| v.as_bytes().contains(&0))
-        {
-            return Err(RuntimeError::Protocol("ordinary command fields"));
-        }
-        if self
-            .environment
-            .iter()
-            .any(|v| !v.contains('=') || v.starts_with('='))
-        {
-            return Err(RuntimeError::Protocol("ordinary environment field"));
-        }
-        Ok(())
     }
 }

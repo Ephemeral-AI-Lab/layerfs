@@ -81,7 +81,7 @@ serves until `machine.stop` ends it
 | A worker gets one attempt per call; nothing is resent. A lost answer after the request was sent is `Unknown`. | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `send_once`, `answer`, `lost` |
 | No call starts a machine except `machine.start`; an unreached worker is `Unavailable` naming it. | `place.rs` `recorded`, `stopped` (#535 D11) |
 | A guest worker never reads the caller's home: each request carries the records it needs. | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) `with_home`; `sandbox/route.rs` `host_op` |
-| LayerFS reads `LAYERFS_*` settings only (`LAYERFS_HOME`, `LAYERFS_WORKER_LISTEN`, `LAYERFS_WORKER_SECRET`, `LAYERFS_DAEMON_HOST`, …) and names no plugin. | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home`, [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
+| LayerFS reads `LAYERFS_*` settings only (`LAYERFS_HOME`, `LAYERFS_WORKER_LISTEN`, `LAYERFS_WORKER_SECRET`, …) and names no plugin. | [`calls/dispatch.rs`](../../../../api/crates/layerfs-api/src/calls/dispatch.rs) `home`, [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
 
 ## Limits and failures
 
@@ -93,7 +93,7 @@ serves until `machine.stop` ends it
 | Worker connect and secret-answer waits | 10 s each (`CONNECT`, `HELLO_WAIT`), then `Unavailable` | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | Worker wait between request bytes | 30 s (`REQUEST_WAIT`) | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
 | Machine with no `worker.json` | `Unavailable`: "start it with `layerfs machine start`" | [`place.rs`](../../../../control/crates/layerfs-store/src/place.rs) |
-| Daemon connections per process per Sandbox | 6 (`CONNECTIONS`); the daemon admits 8 (`DAEMON_CONNECTIONS`) | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs), [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs) |
+| Daemon connections per process per Sandbox | 6 (`CONNECTIONS`); the daemon admits 8 (`DAEMON_CONNECTIONS`) | [`daemon/pool.rs`](../../../../control/crates/layerfs-sandbox/src/daemon/pool.rs), [`lifecycle.rs`](../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
 | Wait for a free daemon connection | 60 s (`LEND_WAIT`), then `Busy`; nothing attempted | `daemon/pool.rs` |
 
 ## Demonstration

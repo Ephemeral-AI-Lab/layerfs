@@ -84,7 +84,7 @@ Each platform's values, from its `profile.rs`:
 | Platform | `tool` | `hosts` | `backend` | `kernel` | `executor` | `worker_bind` |
 | --- | --- | --- | --- | --- | --- | --- |
 | `native` | none | all three | macOS `HostProcess`, Linux `Namespaces`, else none | macOS `Nfs`, Linux `Fuse`, else none | `Worker` on Windows, else `Local` | `0.0.0.0` (unused) |
-| `docker` | `docker` | macOS, Linux | `Docker` | `Fuse` | `Worker` | `0.0.0.0` |
+| `docker` | `docker` | macOS, Linux | `Namespaces` (in the worker container, D-8) | `Fuse` | `Worker` | `0.0.0.0` |
 | `apple-container` | `container` | macOS | `Namespaces` | `Fuse` | `Worker` | `0.0.0.0` |
 | `microsandbox` | `msb` | all three | `Namespaces` | `Fuse` | `Worker` | `0.0.0.0` |
 | `lima` | `limactl` | macOS | `Namespaces` | `Fuse` | `Worker` | `127.0.0.1` |
@@ -96,7 +96,7 @@ loopback (Lima's port forward, `ssh -L`) and every interface where the
 forward arrives on the guest's network (a published port, firecracker's tap
 address). The worker's secret guards it either way. The `backend` function
 answers even on a host the platform is not on (`docker` on Windows answers
-`Docker`); the [support table](../support-matrix/table.md) hides it there.
+`Namespaces`); the [support table](../support-matrix/table.md) hides it there.
 
 ## Options
 
@@ -170,7 +170,7 @@ the record's `os_image` or, on `docker` only, from `image`.
 
 - [Adapter](adapter.md): what each platform does with a `Spec`.
 - [Support matrix: Table](../support-matrix/table.md): the rows built from profiles.
-- [Sandboxes: Backends](../sandboxes/backends.md): `Docker`, `HostProcess`, `Namespaces`.
+- [Sandboxes: Backends](../sandboxes/backends.md): `HostProcess`, `Namespaces`.
 - [Network: Workers](../network/workers.md): the worker an `Endpoint` names.
 - [Control: Management](../management/README.md): where records become a `Spec`.
 - [Glossary](../../glossary.md).

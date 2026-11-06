@@ -10,15 +10,13 @@ pub enum Backend {
     HostProcess,
     /// Linux namespaces and a cgroup.
     Namespaces,
-    /// Docker containers.
-    Docker,
 }
 
 impl Backend {
-    pub const ALL: [Backend; 3] = [Backend::Docker, Backend::HostProcess, Backend::Namespaces];
+    pub const ALL: [Backend; 2] = [Backend::HostProcess, Backend::Namespaces];
 
-    /// The value records and listings store and show: `"docker"`,
-    /// `"native"` (for `HostProcess`, G6) or `"namespaces"`.
+    /// The value records and listings store and show: `"native"` (for
+    /// `HostProcess`, G6) or `"namespaces"`.
     pub fn stored_name(self) -> &'static str {
         adapter(self).stored_name()
     }

@@ -132,19 +132,15 @@ Commands are written from source and were not run while writing this page.
 | --- | --- | --- |
 | [`home_layout.rs`](../../../../control/crates/layerfs-control/tests/home_layout.rs) | `layerfs-control` | A missing home is `Empty` and `detect` writes nothing; `ensure` writes layout 3 and a 32-hex id; a 1.1.0 home is `Old` and not written by `ensure`; a newer or broken layout is refused. |
 | [`typed_records.rs`](../../../../control/crates/layerfs-control/tests/typed_records.rs) | `layerfs-control` | Each typed record's `to_sdk` keeps its result keys byte for byte, shows no secrets, reads past `"v": 1`; Store and Sandbox states (busy, unresolved, down, idle, in use) are derived from the record and its intent. |
-| [`sandbox_operations.rs`](../../../../control/crates/layerfs-control/tests/sandbox_operations.rs) | `layerfs-control` | `SandboxApi::create_provider_file` against a scripted Docker Engine peer (no real Docker): a matching project keeps one Hello and does not reinstall; a mismatched one is refused before any deployment or control effect. |
 
 ```text
 cargo +1.85.1 test --locked -p layerfs-control --test home_layout
 cargo +1.85.1 test --locked -p layerfs-control --test typed_records
-cargo +1.85.1 test --locked -p layerfs-control --test sandbox_operations
 ```
 
-All three run on a Unix host with no Docker, root or environment
-variable. `sandbox_operations.rs` is `#![cfg(unix)]` and includes the
-Engine peer from
-[`layerfs-sandbox-backend/tests/support/engine.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/support/engine.rs).
-Part of `typed_records.rs` is `#[cfg(feature = "machine")]`; add
+Both run on a Unix host with no Docker, root or environment
+variable. The scripted Docker Engine peer test of Sandbox creation
+(`sandbox_operations.rs`) went with the docker backend (D-8). Part of `typed_records.rs` is `#[cfg(feature = "machine")]`; add
 `--features machine` to run it. Related tests in the same crate:
 [`op_intent.rs`](../../../../control/crates/layerfs-control/tests/op_intent.rs)
 (the intent and entity lock) and

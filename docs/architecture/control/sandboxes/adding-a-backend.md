@@ -59,14 +59,14 @@ The `profile.rs` of each platform that uses the backend names it in
 | 6 | Map the platforms that use it (`Profile::backend`) and their rows in the support table. | [`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs), [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) | `SUPPORT.json` comparison test |
 | 7 | Map its stored name in the API's Sandbox records and launch (`ProviderCreate` options). | [`control/crates/layerfs-control/src/sandbox`](../../../../control/crates/layerfs-sandbox/src) | Not established from source in full; follow the compiler from `Runtime`. |
 
-Rules each backend keeps, from the existing three:
+Rules each backend keeps, from the existing two:
 
 | Rule | Where it shows |
 | --- | --- |
 | One attempt per operation; `*_attempted` flags refuse a second stop, delete or upload. | each `sandbox.rs` |
 | A launch failure after an effect returns the owner (`LaunchFailure::instance`) for one stop and delete. | `provider.rs` |
 | The daemon setup is private (0600) and never in `Debug`, argv, env or labels. | [Network: Credentials](../network/credentials.md) |
-| Commands run as the nonroot `CommandIdentity`, cannot create a user namespace, and end with the Sandbox. | [Native and namespaces](native-and-namespaces.md), [Docker](docker.md) |
+| Commands run as the nonroot `CommandIdentity`, cannot create a user namespace, and end with the Sandbox. | [Native and namespaces](native-and-namespaces.md#no-user-namespaces) |
 | `run` streams to sinks and reports the root's exit; it never treats end of stream as exit. | [Commands and streams](commands-and-streams.md) |
 | The daemon announces `LAYERFS_DAEMON_LISTEN <loopback addr>`; the backend waits for it once. | [`local/listener.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/listener.rs) |
 
@@ -80,9 +80,9 @@ declarations ([control guide](../../../../control/AGENTS.md)).
 | [`conformance.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/conformance.rs) | Runs over `Backend::ALL`: stored name round-trips and is unique; capabilities match the kernel route of every `SUPPORT.json` row that names it; bind refusal or carriage through `HelperSpec`; the runtime on this host refuses other backends' options and records; the lifecycle it can run here. Its exhaustive matches (`binds`, `options`, `record`, `runtime`, `lifecycle`) do not compile until the backend states its answers. | `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test conformance` |
 | [`runtime_enum.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/runtime_enum.rs) | Stored names in order and parse-back; each backend's capabilities; binds refused where the backend does not bind. Update its expected lists. | `cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test runtime_enum` |
 | [`machine` conformance](../../../../control/crates/layerfs-platform/tests/conformance.rs) | Profiles against `support.rs` and `SUPPORT.json`. | `cargo +1.85.1 test --locked -p layerfs-platform --test conformance` |
-| A lifecycle test of its own | Like [`native_provider.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/native_provider.rs) (stub daemon script) or [`docker_provider.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/docker_provider.rs) (scripted Engine peer), gated with `#[cfg(target_os = ...)]` for where it runs. | per test |
+| A lifecycle test of its own | Like [`native_provider.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/native_provider.rs) (stub daemon script) or [`namespaces_lifecycle.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/namespaces_lifecycle.rs) (root on Linux), gated with `#[cfg(target_os = ...)]` for where it runs. | per test |
 
-The kits use stand-ins and need no Docker Engine, VM, ssh host or root;
+The kits use stand-ins and need no Docker, VM, ssh host or root;
 platforms themselves run them in the terminal pass ([`control/README.md`](../../../../control/README.md)).
 
 ## Related
