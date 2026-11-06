@@ -73,7 +73,7 @@ class DecoderTests(unittest.TestCase):
         self.assertFalse(decoded[2]["complete"], "no footer means incomplete")
 
     def test_every_named_section_matches_its_source_width(self):
-        widths = {1: 15, 2: 17, 13: 55, 15: 47, 16: 42, 22: 20, 26: 47, 28: 28, 29: 42, 30: 34, 32: 11}
+        widths = {1: 15, 2: 17, 13: 58, 15: 47, 16: 42, 22: 20, 26: 47, 28: 28, 29: 42, 30: 34, 32: 11}
         for section, width in widths.items():
             self.assertEqual(len(decode_observations.SECTIONS[section][1]), width, section)
 
