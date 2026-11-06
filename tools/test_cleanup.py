@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import cleanup
 from cleanup_discover import discover
-from cleanup_docker import guard as guard_container
+from cleanup_docker import guard as guard_container, identity as container_identity, retire, same as same_container
 from cleanup_retirement import retirement_open_files
 from cleanup_archive import archive
 from cleanup_state import Refused, ensure_idle, ensure_volume_idle, git, inventory, same_volume
@@ -336,6 +336,66 @@ class CleanupTests(unittest.TestCase):
         }
         with self.assertRaises(Refused):
             guard_container(info, {}, {"protected_volumes": ["pinned"]})
+
+    def exited_container(self, mounts):
+        return {
+            "Id": "exact",
+            "Name": "/build",
+            "Created": "created",
+            "Image": "sha256:image",
+            "Config": {"Env": ["A=1"]},
+            "Mounts": mounts,
+            "State": {"Status": "exited", "Running": False, "StartedAt": "s", "FinishedAt": "f"},
+        }
+
+    def test_container_mount_order_is_not_an_identity_change(self):
+        cargo = {"Type": "volume", "Name": "cargo", "Source": "/v/cargo", "Destination": "/cargo-home"}
+        work = {"Type": "bind", "Source": "/src", "Destination": "/work", "RW": False}
+        target = {"Type": "volume", "Name": "target", "Source": "/v/target", "Destination": "/target"}
+        planned = self.exited_container([cargo, work, target])
+        recorded = container_identity(planned)
+        # A plan written before Mounts were sorted keeps Docker's order.
+        legacy = {**recorded, "Mounts": [cargo, work, target]}
+        current = self.exited_container([target, cargo, work])
+        self.assertTrue(same_container(legacy, container_identity(current)))
+        self.assertEqual(recorded, container_identity(current))
+        for identity in (recorded, legacy):
+            with (
+                patch("cleanup_docker.inspect", return_value=current),
+                patch("cleanup_docker.run", side_effect=RuntimeError("capture reached")) as operation,
+            ):
+                # Reaching the first Docker capture command proves the identity check passed.
+                with self.assertRaisesRegex(RuntimeError, "capture reached"):
+                    retire({"name": "exact", "identity": identity}, {}, self.output, "P", lambda *a, **k: None)
+                operation.assert_called_once_with(["docker", "diff", "exact"])
+            for record in self.output.iterdir():
+                for path in record.iterdir():
+                    path.unlink()
+                record.rmdir()
+
+    def test_container_mount_set_change_refuses_before_capture(self):
+        cargo = {"Type": "volume", "Name": "cargo", "Source": "/v/cargo", "Destination": "/cargo-home"}
+        work = {"Type": "bind", "Source": "/src", "Destination": "/work", "RW": False}
+        recorded = container_identity(self.exited_container([cargo, work]))
+        changed = [
+            self.exited_container([cargo, {**work, "Source": "/other"}]),
+            self.exited_container([cargo]),
+            {**self.exited_container([work, cargo]), "Image": "sha256:other"},
+            {
+                **self.exited_container([work, cargo]),
+                "State": {**self.exited_container([])["State"], "Status": "created"},
+            },
+        ]
+        for current in changed:
+            self.assertFalse(same_container(recorded, container_identity(current)))
+            with (
+                patch("cleanup_docker.inspect", return_value=current),
+                patch("cleanup_docker.run") as operation,
+            ):
+                with self.assertRaisesRegex(Refused, "identity or execution state changed"):
+                    retire({"name": "exact", "identity": recorded}, {}, self.output, "P", lambda *a, **k: None)
+                operation.assert_not_called()
+        self.assertEqual(list(self.output.iterdir()), [])
 
     def test_caches_discovery_keeps_helpers_and_active_profile(self):
         tree = self.root / "linked"
