@@ -194,15 +194,25 @@ pub(crate) fn reaper() {
 }
 
 /// Closes every Store unused for at least `idle` with no call running;
-/// returns how many.
+/// returns how many. An idle checkpoint running on one ends first.
 pub fn close_idle(idle: Duration) -> usize {
+    let unused = |entry: &Entry| entry.calls == 0 && entry.last.elapsed() >= idle;
     let stale: Vec<Entry> = {
         let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
+        // An idle checkpoint on a Store to close (one statement, started
+        // when its last call returned) ends first, never skipping the
+        // Store: a process that closes its Stores before it exits (the CLI,
+        // `close_idle(ZERO)`) must still close each one, so SQLite folds the
+        // write-ahead log in at that close, as before #86.
+        while open
+            .values()
+            .any(|entry| unused(entry) && entry.settling > 0)
+        {
+            open = SETTLED.wait(open).unwrap_or_else(|e| e.into_inner());
+        }
         let names: Vec<PathBuf> = open
             .iter()
-            .filter(|(_, entry)| {
-                entry.calls == 0 && entry.settling == 0 && entry.last.elapsed() >= idle
-            })
+            .filter(|(_, entry)| unused(entry))
             .map(|(path, _)| path.clone())
             .collect();
         names.iter().filter_map(|path| open.remove(path)).collect()
