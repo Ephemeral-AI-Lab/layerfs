@@ -6,8 +6,10 @@
 //! (one on a machine behind a worker, whose old worker it does not ask); a
 //! Sandbox create in flight; an earlier create whose outcome is unknown
 //! (`create.intent`); a live Store lease; a live Store move or remove
-//! (`in_progress`); a live machine removal (`removing`). Otherwise, in one
-//! pass:
+//! (`in_progress`); a live machine removal (`removing`). A Sandbox of the
+//! retired docker backend (D-8) is neither: it is forgotten, as
+//! `sandbox close` forgets it, with a note naming its container to remove.
+//! Otherwise, in one pass:
 //!
 //! 1. write: each Sandbox record from `machine/<m>/sandbox/<name>/` to
 //!    `sandbox/<name>/record.json` in layout 3's form, with no `state` or
@@ -34,7 +36,7 @@ use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{failed, refused};
 use layerfs_machine::record::MachineRecord;
 use layerfs_sandbox::record::SandboxRecord;
-use layerfs_sandbox::recorded::{unchecked, Recorded};
+use layerfs_sandbox::recorded::{retired_record, unchecked, Recorded};
 use layerfs_store::lease;
 use layerfs_store::record::StoreRecord;
 use std::path::{Path, PathBuf};
@@ -188,6 +190,18 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
             let at = numbered
                 .iter()
                 .position(|n| n.project == project && n.id == id);
+            // the retired docker backend's Sandbox is forgotten, as a close
+            // forgets it (D-8): this build never reopens or deletes it
+            let kept = at.filter(|at| retired_record(&numbered[*at].record));
+            let home_retired = record.retired_container(home)?;
+            if kept.is_some() || home_retired.is_some() {
+                let entry = kept.map(|at| numbered.remove(at));
+                let daemon = entry.as_ref().and_then(|e| e.record.get_text("name"));
+                let container = daemon.map(str::to_owned).or(home_retired);
+                plan.notes
+                    .push(forgotten(&name, &container.unwrap_or_default()));
+                continue;
+            }
             let Some(at) = at else {
                 plan.live("sandbox", &name, format!("runs on machine {machine}, whose worker this build does not ask; close it with the build that started it (`layerfs sandbox close {name}`)"));
                 continue;
@@ -208,6 +222,11 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
     // numbered Sandboxes no Sandbox record names (an earlier bundle's)
     for entry in numbered {
         let name = format!("{}#{}", entry.project, entry.id);
+        if retired_record(&entry.record) {
+            let container = entry.record.get_text("name").unwrap_or("");
+            plan.notes.push(forgotten(&name, container));
+            continue;
+        }
         match probe(home, &entry) {
             Found::Running => plan.live("sandbox", &name, "runs with no Sandbox record; stop it with the build that started it".to_owned()),
             Found::Unknown(why) => plan.live("sandbox", &name, format!("has no Sandbox record and cannot be checked ({why}); remove it by hand, then its folder {}", entry.dir.display())),
@@ -264,6 +283,17 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
         }
     }
     Ok(plan)
+}
+
+/// The note for Sandbox `name`, recorded under the retired docker backend,
+/// which the conversion forgets: its records go with the layout 2 paths
+/// and its container `container` is left for the user to remove.
+fn forgotten(name: &str, container: &str) -> String {
+    format!(
+        "Sandbox {name}: forgotten, as `sandbox close` forgets it: it ran on the docker Sandbox \
+         backend, which this build no longer runs (D-8); `docker rm -f {container}` removes its \
+         container and `layerfs sandbox create` makes it again"
+    )
 }
 
 /// The live process a layout 2 Sandbox record names as creating it: a 2.0

@@ -159,7 +159,8 @@ pub fn start(
 /// starts the Sandbox the call names on the call's image (`deploy.image`)
 /// and waits for its daemon: `{ sandbox, name, image, platform, runtime,
 /// route, runtime_id }`. A folder that already records a started Sandbox
-/// is `Exists`. `deploy.sandbox` names its backend, `native` or
+/// is `Exists`; one the retired docker backend recorded is forgotten first
+/// (D-8). `deploy.sandbox` names its backend, `native` or
 /// `namespaces`; a native one's `image` is `local`. `platform` (#529) is
 /// checked against that backend and recorded.
 /// The only call that starts a Sandbox. Failures are `Failed` or
@@ -179,14 +180,23 @@ pub fn create(args: &SdkValue) -> Outcome {
     layerfs_home::home::private_dir(&directory)?;
     let made = (|| {
         let _guard = layerfs_store::project::discovery::guard(&directory)?;
-        if crate::files::started(&directory)?.is_some() {
-            return Err(refused(
-                "Exists",
-                format!(
-                    "a Sandbox is recorded at {} on this machine; `sandbox.close` closes it",
-                    directory.display()
-                ),
-            ));
+        let recorded = crate::files::started(&directory)?;
+        // a record of the retired docker backend is forgotten, as a close
+        // forgets it, so its name is free again (D-8): nothing it named runs
+        match recorded {
+            Some(retired) if crate::recorded::retired_record(&retired) => {
+                discard(&directory, &retired)?;
+            }
+            Some(_) => {
+                return Err(refused(
+                    "Exists",
+                    format!(
+                        "a Sandbox is recorded at {} on this machine; `sandbox.close` closes it",
+                        directory.display()
+                    ),
+                ));
+            }
+            None => {}
         }
         start(args, &directory, store)
     })();
@@ -310,9 +320,8 @@ pub fn close(args: &SdkValue) -> Outcome {
 /// the user to remove (`docker rm -f`); nothing else is touched.
 fn forget(id: &str, directory: &Path, recorded: &SdkValue) -> Outcome {
     let _guard = layerfs_store::project::discovery::guard(directory)?;
-    lock(&SANDBOXES)?.remove(directory);
+    let container = discard(directory, recorded)?;
     std::fs::remove_dir_all(directory).map_err(failed)?;
-    let container = recorded.get_text("name").unwrap_or("").to_owned();
     Ok(SdkValue::map([
         ("kind", SdkValue::text("Forgotten")),
         ("sandbox", SdkValue::text(id)),
@@ -322,6 +331,26 @@ fn forget(id: &str, directory: &Path, recorded: &SdkValue) -> Outcome {
             SdkValue::text(format!("docker rm -f {container}")),
         ),
     ]))
+}
+
+/// Removes what folder `directory` holds of a Sandbox the retired docker
+/// backend recorded (`recorded`, its daemon record), under the folder's
+/// guard, whose turn file stays; answers the container's name.
+fn discard(directory: &Path, recorded: &SdkValue) -> Result<String, SdkRefusal> {
+    lock(&SANDBOXES)?.remove(directory);
+    for entry in std::fs::read_dir(directory).map_err(failed)? {
+        let entry = entry.map_err(failed)?;
+        if entry.file_name() == layerfs_store::project::discovery::TURN {
+            continue;
+        }
+        let path = entry.path();
+        match entry.file_type().map_err(failed)?.is_dir() {
+            true => std::fs::remove_dir_all(&path),
+            false => std::fs::remove_file(&path),
+        }
+        .map_err(failed)?;
+    }
+    Ok(recorded.get_text("name").unwrap_or("").to_owned())
 }
 
 /// Seconds a closing Sandbox's daemon has to exit before it is killed.

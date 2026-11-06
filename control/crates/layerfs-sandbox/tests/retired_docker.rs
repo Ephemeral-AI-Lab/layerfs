@@ -101,3 +101,52 @@ fn close_forgets_a_retired_docker_sandbox_and_names_its_container() {
         .is_none());
     std::fs::remove_dir_all(root).unwrap();
 }
+
+/// A create of the same name on the worker forgets the retired record, as
+/// a close does, instead of answering `Exists` (D-8: a home whose close
+/// could not reach the worker must not leave the name stuck). The create
+/// then fails on its own inputs (no `deploy.localDir`), after the record
+/// is gone; nothing is launched.
+#[test]
+fn a_create_of_the_same_name_forgets_a_retired_docker_record() {
+    let root = root("create");
+    docker_record(&root, None);
+    write_record(
+        &paths::store_record(&root, "pg"),
+        &SdkValue::map([
+            ("name", t("pg")),
+            ("kind", t("postgresql")),
+            ("schema", t("shop")),
+            ("synchronous_commit", t("off")),
+            ("binding", SdkValue::Bytes(vec![7; 16])),
+            ("cursor", SdkValue::Bytes(vec![8; 32])),
+        ]),
+    )
+    .unwrap();
+    let backend = if cfg!(target_os = "macos") {
+        "native"
+    } else {
+        "namespaces"
+    };
+    let args = SdkValue::map([
+        ("home", t(&root.display().to_string())),
+        ("sandbox", t("old")),
+        ("project", t("api")),
+        ("store", t("pg")),
+        (
+            "postgresql",
+            SdkValue::map([("url", t("postgresql://127.0.0.1:1/none"))]),
+        ),
+        ("deploy", SdkValue::map([("sandbox", t(backend))])),
+    ]);
+    let refusal = layerfs_sandbox::lifecycle::create(&args).unwrap_err();
+    assert_ne!(refusal.code, "Exists", "{}", refusal.message);
+    assert!(
+        matches!(refusal.code.as_str(), "InvalidInput" | "Unsupported"),
+        "{}: {}",
+        refusal.code,
+        refusal.message
+    );
+    assert!(!paths::sandbox_record(&root, "old").exists());
+    std::fs::remove_dir_all(root).unwrap();
+}

@@ -133,12 +133,12 @@ Nothing starts a stopped machine. See the
 | `InvalidInput` | bad name, `native`/`docker`, malformed image digest, folder scope | no | [`create.rs`](../../../../../control/crates/layerfs-sandbox/src/create.rs), [`lifecycle.rs`](../../../../../control/crates/layerfs-sandbox/src/lifecycle.rs) |
 | `NoSuchStore`, `NoSuchProject`, `NotFound` | missing Store, project or machine | no | [`resolve.rs`](../../../../../control/crates/layerfs-store/src/resolve.rs), `create.rs` |
 | `NoStore` | the project has no installed Store | no | `lifecycle.rs` `installed` |
-| `Exists` | the name is taken in the home, or the machine already records a started Sandbox there | no | `create.rs`, `lifecycle.rs` |
+| `Exists` | the name is taken in the home, or the machine already records a started Sandbox there (a record of the retired docker backend is forgotten instead, as `sandbox.close` forgets it, D-8) | no | `create.rs`, `lifecycle.rs` |
 | `Unsupported` | platform cannot run this Store kind; sqlite Store on another machine; no image archive in the bundle | no | `create.rs`, [`deploy.rs`](../../../../../control/crates/layerfs-sandbox/src/deploy.rs) |
 | `Busy`, `Unresolved` | the Store holds an `op` (push, pull, remove) | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
 | `Unavailable` | worker not recorded or not answering (nothing sent); a lock held too long; PostgreSQL server not reached | no | [`place.rs`](../../../../../control/crates/layerfs-store/src/place.rs), [`route.rs`](../../../../../control/crates/layerfs-sandbox/src/route.rs) |
-| `Failed` | the start failed and every effect is known: the Sandbox was stopped and deleted, `detail {container, removed, log}` | no | `lifecycle.rs` `abandon` |
-| `Unknown` | **the worker's answer was lost; or the start's effect is unknown; or it started but could not be recorded** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), `lifecycle.rs` `abandon`, `unrecorded` |
+| `Failed` | the start failed and every effect is known: the Sandbox was stopped and deleted, `detail {container, removed, log}` | no | [`launch/local.rs`](../../../../../control/crates/layerfs-sandbox/src/launch/local.rs) `abandon` |
+| `Unknown` | **the worker's answer was lost; or the start's effect is unknown; or it started but could not be recorded** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), `launch/local.rs` `abandon` (its cleanup failed) |
 
 After `Unknown` the record keeps its `op` with `uncertain: true`, a line
 goes to `log/uncertain.jsonl`, and the state is `unresolved`. Read

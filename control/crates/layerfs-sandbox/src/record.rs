@@ -174,7 +174,11 @@ impl SandboxRecord {
         Ok(Some(match kept {
             Some(name) => name,
             None => {
-                let id = layerfs_home::home::opened(home)?.id;
+                // a layout 2 home is read by its conversion before it opens
+                let id = match layerfs_home::home::layout::detect(home) {
+                    Ok(layerfs_home::home::layout::Layout::Previous(file)) => file.id,
+                    _ => layerfs_home::home::opened(home)?.id,
+                };
                 format!("lfs-{}-{}", &id[..8.min(id.len())], self.name)
             }
         }))

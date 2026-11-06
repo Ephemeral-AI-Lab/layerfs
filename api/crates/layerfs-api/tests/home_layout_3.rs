@@ -196,7 +196,12 @@ fn numbered(home: &Path, process: LocalProcess) {
         ("port", SdkValue::Int(1)),
         ("labels", SdkValue::List(Vec::new())),
     ]);
-    let folder = paths::project_dir(home, "shop", "app").join("sandboxes/1");
+    numbered_record(home, "1", record);
+}
+
+/// Writes `record` as layout 2 numbered Sandbox `id` of `shop/app`.
+fn numbered_record(home: &Path, id: &str, record: SdkValue) {
+    let folder = paths::project_dir(home, "shop", "app").join(format!("sandboxes/{id}"));
     dir_at(&folder);
     let bytes = Answer {
         id: 1,
@@ -549,5 +554,73 @@ fn a_layout_2_machine_removal_refuses_while_its_remover_lives_and_leaves_no_inte
     assert!(record.get("removing").is_none(), "{record:?}");
     assert!(record.get("state").is_none(), "{record:?}");
     assert_eq!(record.get_text("platform"), Some("lima"));
+    std::fs::remove_dir_all(&home).unwrap();
+}
+
+/// D-8 (layerfs-project#111): a layout 2 home holding Sandboxes of the
+/// retired docker backend converts. Each is forgotten, as `sandbox close`
+/// forgets it (a record that names it and its numbered state, or numbered
+/// state alone), with a note naming its container to remove; nothing is
+/// reopened, stopped or deleted, and the call that converted it answers.
+#[test]
+fn a_layout_2_home_with_retired_docker_sandboxes_converts_and_forgets_them() {
+    let dock = sandbox(
+        "dock",
+        "docker",
+        &[
+            ("id", t("2")),
+            ("runtime", t("docker")),
+            ("backend", t("docker")),
+        ],
+    );
+    let home = home_with("docker", &[("dock", dock)]);
+    downgrade(&home);
+    // as the docker backend recorded them: no `runtime`, the container's
+    // name, id and Engine image
+    for (id, name) in [("2", "lfs-x-shop.app-2"), ("3", "lfs-x-shop.app-3")] {
+        let record = SdkValue::map([
+            ("platform", t("docker")),
+            ("name", t(name)),
+            ("container", t(&"c".repeat(64))),
+            ("image", t(&format!("sha256:{}", "d".repeat(64)))),
+        ]);
+        numbered_record(&home, id, record);
+    }
+    assert!(matches!(home::detect(&home).unwrap(), Layout::Previous(_)));
+
+    let listed = call(&home, "sandbox.list", &[]).unwrap();
+    assert_eq!(listed.get("items"), Some(&SdkValue::List(Vec::new())));
+    let Layout::Current(file) = home::detect(&home).unwrap() else {
+        panic!("not converted")
+    };
+    assert_eq!(file.layout, LAYOUT_VERSION);
+    let report = read_record(&paths::log_dir(&home).join("migration-2.json"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(report.get("reclaimed"), Some(&SdkValue::List(Vec::new())));
+    assert_eq!(report.get("sandboxes"), Some(&SdkValue::List(Vec::new())));
+    let notes = match report.get("notes") {
+        Some(SdkValue::List(notes)) => (notes.iter())
+            .filter_map(|n| match n {
+                SdkValue::Text(text) => Some(text.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        other => panic!("{other:?}"),
+    };
+    for (name, container) in [
+        ("dock", "lfs-x-shop.app-2"),
+        ("shop/app#3", "lfs-x-shop.app-3"),
+    ] {
+        assert!(
+            notes
+                .iter()
+                .any(|n| n.starts_with(&format!("Sandbox {name}: forgotten"))
+                    && n.contains(&format!("`docker rm -f {container}`"))),
+            "{name}: {notes:?}"
+        );
+    }
+    assert!(!paths::sandbox_dir(&home, "dock").exists());
+    only_layout_3(&home);
     std::fs::remove_dir_all(&home).unwrap();
 }
