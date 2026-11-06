@@ -51,7 +51,12 @@ fn postgresql_record() -> SdkValue {
 /// Family 2 machine a provider with no worker and no disk of ours records,
 /// `true` is a machine that keeps it, and `None` leaves the field out — a
 /// record that does not say, which is the compatible `Machine` answer.
-fn home_with_platform(store: SdkValue, dev_keeps_a_store: Option<bool>, platform: &str) -> PathBuf {
+fn home_with_platform(
+    store: SdkValue,
+    dev_direct_store_access: Option<bool>,
+    platform: &str,
+    backend: &str,
+) -> PathBuf {
     let home = tempdir("home");
     home::open(&home).unwrap();
     write_record(&paths::store_record(&home, "shop"), &store).unwrap();
@@ -63,19 +68,27 @@ fn home_with_platform(store: SdkValue, dev_keeps_a_store: Option<bool>, platform
     let mut fields: Vec<(String, SdkValue)> = vec![
         ("name".to_owned(), t("dev")),
         ("platform".to_owned(), t(platform)),
+        ("backend".to_owned(), t(backend)),
         ("created".to_owned(), SdkValue::Int(1)),
     ];
-    if let Some(kept) = dev_keeps_a_store {
-        fields.push(("local_sqlite".to_owned(), SdkValue::Bool(kept)));
+    if let Some(direct) = dev_direct_store_access {
+        fields.push((
+            "direct_store_access".to_owned(),
+            SdkValue::Bool(direct),
+        ));
     }
     write_record(&paths::machine_record(&home, "dev"), &SdkValue::Map(fields)).unwrap();
     home
 }
 
-/// [`home_with_platform`] on an ssh host, which this build names on every
-/// host.
-fn home_with(store: SdkValue, dev_keeps_a_store: Option<bool>) -> PathBuf {
-    home_with_platform(store, dev_keeps_a_store, "ssh")
+/// [`home_with_platform`] on an ssh host, whose backend is `namespaces`.
+fn home_with(store: SdkValue, dev_direct_store_access: Option<bool>) -> PathBuf {
+    home_with_platform(
+        store,
+        dev_direct_store_access,
+        "ssh",
+        "namespaces",
+    )
 }
 
 fn call(
@@ -105,10 +118,11 @@ fn assert_placement_detail(detail: &SdkValue, message: &str) {
     assert_eq!(detail.get_text("store"), Some("shop"), "{detail:?}");
     assert_eq!(detail.get_text("machine"), Some("dev"), "{detail:?}");
     let reason = detail.get_text("reason").expect("a reason");
-    assert!(reason.contains("local_sqlite"), "{reason}");
+    assert!(reason.contains("direct_store_access"), "{reason}");
     assert!(message.contains(reason), "{message}");
-    // the backend is the record's platform (`ssh` is namespaces), so the
-    // detail is the same on every host and in both builds
+    // the backend is the record's own `backend` field (`ssh` is
+    // namespaces), so the detail is the same on every host and in both
+    // builds
     assert_eq!(detail.get_text("backend"), Some("namespaces"), "{detail:?}");
     assert!(message.contains("backend namespaces"), "{message}");
 }
@@ -147,11 +161,11 @@ fn a_postgresql_store_is_never_refused_by_placement() {
 
 #[test]
 fn a_sqlite_store_on_its_owning_machine_is_admitted() {
-    // `local_sqlite: true` is a machine that keeps the file: placement
-    // admits the create, and it goes on to the Store's own machine rule (a
-    // Sandbox of a native Store may not run on dev), never to
-    // StoragePlacement and with no Sandbox folder made.
-    let home = home_with_platform(sqlite_record("native"), Some(true), "ssh");
+    // `direct_store_access: true` is a machine whose backend reaches the
+    // file directly: placement admits the create, and it goes on to the
+    // Store's own machine rule (a Sandbox of a native Store may not run on
+    // dev), never to StoragePlacement and with no Sandbox folder made.
+    let home = home_with_platform(sqlite_record("native"), Some(true), "ssh", "namespaces");
     let refused = create_on_dev(&home).unwrap_err();
     assert_ne!(refused.0, "StoragePlacement", "{}", refused.2);
     assert!(!refused.2.contains("cannot be placed"), "{}", refused.2);
@@ -296,30 +310,36 @@ fn a_pull_from_a_machine_that_keeps_no_disk_stays_the_way_off() {
 }
 
 #[test]
-fn a_machine_record_without_local_sqlite_is_allowed() {
-    // the field is absent: the machine keeps its Store, the compatible
-    // answer for every platform this build names. `lima` is the platform
-    // whose row had no sqlite route on Linux, which is the host the old
-    // fallback refused; the record alone now allows it on every host. The
-    // push goes on to dial the machine's worker, which is not recorded
-    // (`Unavailable`); it is never refused by placement.
-    let home = home_with_platform(sqlite_record("native"), None, "lima");
-    let refused = call(
+fn a_machine_record_without_direct_store_access_is_refused() {
+    // the capability is absent: an old record, or an ephemeral/remote
+    // backend that did not declare it. Placement must fail closed, not
+    // default to Machine; nothing is dialled, written or claimed.
+    let home = home_with_platform(sqlite_record("native"), None, "lima", "namespaces");
+    let (code, detail, message) = call(
         &home,
         "store.push",
         SdkValue::map([("name", t("shop")), ("machine", t("dev"))]),
     )
     .unwrap_err();
-    assert_ne!(refused.0, "StoragePlacement", "{}", refused.2);
-    assert!(!refused.2.contains("cannot be placed"), "{}", refused.2);
-    assert_eq!(refused.0, "Unavailable", "{}", refused.2);
+    assert_eq!(code, "StoragePlacement", "{message}");
+    assert_placement_detail(&detail, &message);
+    assert!(message.contains("cannot be placed on machine dev"), "{message}");
+
+    // the same absent fact refuses sandbox.create before any side effect
+    let (code, _, message) = create_on_dev(&home).unwrap_err();
+    assert_eq!(code, "StoragePlacement", "{message}");
+    assert!(
+        !paths::sandbox_dir(&home, "box").exists(),
+        "the refused create left a Sandbox folder"
+    );
     std::fs::remove_dir_all(home).unwrap();
 }
 
 #[test]
 fn a_machine_record_that_says_it_keeps_a_store_is_allowed() {
-    // `local_sqlite: true`: the machine keeps the file, so placement lets
-    // the push go on to its worker (not recorded here: `Unavailable`).
+    // `direct_store_access: true`: the backend reaches the file directly,
+    // so placement lets the push go on to its worker (not recorded here:
+    // `Unavailable`).
     let home = home_with(sqlite_record("native"), Some(true));
     let refused = call(
         &home,
@@ -334,7 +354,7 @@ fn a_machine_record_that_says_it_keeps_a_store_is_allowed() {
 }
 
 #[test]
-fn a_machine_record_with_an_invalid_local_sqlite_is_refused() {
+fn a_machine_record_with_an_invalid_direct_store_access_is_refused() {
     // anything other than `true`/`false` is malformed, not "does not say"
     let home = home_with(sqlite_record("native"), None);
     write_record(
@@ -342,13 +362,34 @@ fn a_machine_record_with_an_invalid_local_sqlite_is_refused() {
         &SdkValue::map([
             ("name", t("dev")),
             ("platform", t("ssh")),
+            ("backend", t("namespaces")),
             ("created", SdkValue::Int(1)),
-            ("local_sqlite", t("yes")),
+            ("direct_store_access", t("yes")),
         ]),
     )
     .unwrap();
     let refused = create_on_dev(&home).unwrap_err();
     assert_eq!(refused.0, "InvalidInput", "{}", refused.2);
-    assert!(refused.2.contains("local_sqlite"), "{}", refused.2);
+    assert!(refused.2.contains("direct_store_access"), "{}", refused.2);
+    std::fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn the_record_alone_decides_on_every_host() {
+    // `native` resolves to `host_process` on macOS and `namespaces` on
+    // Linux, and both declarations say a Store's file is reached directly
+    // on this host. The record overrides that: it says `namespaces` and
+    // `direct_store_access: false`, so the refusal is the record's and the
+    // platform support row on the host cannot change it.
+    let home = home_with_platform(sqlite_record("native"), Some(false), "native", "namespaces");
+    let (code, detail, message) = create_on_dev(&home).unwrap_err();
+    assert_eq!(code, "StoragePlacement", "{message}");
+    assert_eq!(detail.get_text("backend"), Some("namespaces"), "{detail:?}");
+    assert!(
+        detail
+            .get_text("reason")
+            .is_some_and(|reason| reason.contains("direct_store_access")),
+        "{detail:?}"
+    );
     std::fs::remove_dir_all(home).unwrap();
 }

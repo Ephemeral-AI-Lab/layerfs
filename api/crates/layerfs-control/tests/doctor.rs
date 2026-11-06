@@ -205,18 +205,28 @@ fn each_problem_gives_one_finding_naming_its_fix() {
     let ephemeral = SdkValue::map([
         ("name", t("ephemeral")),
         ("platform", t("ssh")),
-        ("local_sqlite", SdkValue::Bool(false)),
+        ("backend", t("namespaces")),
+        ("direct_store_access", SdkValue::Bool(false)),
     ]);
     write_entity(&paths::machine_record(&home, "ephemeral"), &ephemeral).unwrap();
     store(&home, "s7", sqlite("s7", "ephemeral"));
-    // a Store on a machine whose record cannot say whether it keeps one
+    // a Store on a machine whose record's capability cannot be read
     let unsure = SdkValue::map([
         ("name", t("unsure")),
         ("platform", t("ssh")),
-        ("local_sqlite", t("yes")),
+        ("backend", t("namespaces")),
+        ("direct_store_access", t("yes")),
     ]);
     write_entity(&paths::machine_record(&home, "unsure"), &unsure).unwrap();
     store(&home, "s8", sqlite("s8", "unsure"));
+    // a Store on a machine whose record declares no capability at all
+    let silent = SdkValue::map([
+        ("name", t("silent")),
+        ("platform", t("ssh")),
+        ("backend", t("namespaces")),
+    ]);
+    write_entity(&paths::machine_record(&home, "silent"), &silent).unwrap();
+    store(&home, "s9", sqlite("s9", "silent"));
     // a built-in machine whose recorded daemon is not there
     let native = SdkValue::map([
         ("name", t("native")),
@@ -310,8 +320,15 @@ fn each_problem_gives_one_finding_naming_its_fix() {
             "error",
             "store",
             "s8",
-            "cannot say whether it keeps a Store",
+            "direct_store_access cannot be read",
             "repair",
+        ),
+        (
+            "error",
+            "store",
+            "s9",
+            "declares no direct_store_access",
+            "declares the backend capability",
         ),
         (
             "warning",

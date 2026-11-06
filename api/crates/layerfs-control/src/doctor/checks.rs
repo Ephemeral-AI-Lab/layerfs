@@ -56,9 +56,11 @@ pub(super) fn check(
                         format!("no call reaches it: restore machine {machine}'s record for inspection and explicit cleanup, or delete {} by hand", paths::store_dir(home, name).display()),
                     );
                 }
-                // the record's own fact: a machine that keeps no disk of ours
-                // cannot hold this Store, and a malformed field would refuse
-                // every placement
+                // the record's own fact: the typed `direct_store_access` the
+                // backend declared when the machine was made. A machine that
+                // keeps no disk of ours cannot hold this Store; a record that
+                // declares none is refused by placement too, so it is worth
+                // saying here; a malformed field refuses every placement.
                 match crate::common::place::placement(home, machine) {
                     Ok(placement)
                         if placement.home == crate::common::place::StoreHome::Remote =>
@@ -66,10 +68,24 @@ pub(super) fn check(
                         findings.error(
                             entity,
                             format!(
-                                "Store {name} is on machine {machine}, which keeps no disk of ours: its record says local_sqlite is false"
+                                "Store {name} is on machine {machine}, which keeps no disk of ours: its record says direct_store_access is false"
                             ),
                             format!(
                                 "`layerfs store pull {name}` moves it back to native, or repair {} by hand",
+                                paths::machine_record(home, machine).display()
+                            ),
+                        );
+                    }
+                    Ok(placement)
+                        if placement.home == crate::common::place::StoreHome::Unknown =>
+                    {
+                        findings.error(
+                            entity,
+                            format!(
+                                "Store {name} is on machine {machine}, whose record declares no direct_store_access: placement refuses it rather than guessing"
+                            ),
+                            format!(
+                                "make the machine again so its record declares the backend capability, or repair {} by hand",
                                 paths::machine_record(home, machine).display()
                             ),
                         );
@@ -78,7 +94,7 @@ pub(super) fn check(
                     Err(refusal) => findings.error(
                         entity,
                         format!(
-                            "Store {name} is on machine {machine}, whose record cannot say whether it keeps a Store: {}",
+                            "Store {name} is on machine {machine}, whose record's direct_store_access cannot be read: {}",
                             refusal.message
                         ),
                         format!(

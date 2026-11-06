@@ -11,7 +11,10 @@
 //! (#545 B0-150, B7-223): [`require_store_home`] refuses `StoragePlacement`
 //! for a Store whose file the machine does not keep, and both placement
 //! paths — `sandbox.create` and `store.push` — ask it before they reach
-//! anything. A PostgreSQL Store is on no machine and is never refused.
+//! anything. The machine record's `direct_store_access`, the typed backend
+//! capability's one owner of the fact, is the only input: an absent or
+//! unknown capability fails closed. A PostgreSQL Store is on no machine and
+//! is never refused.
 use crate::common::outcome::{refused, Outcome};
 use crate::machine::record::MachineRecord;
 use crate::machine::worker::{self, Endpoint, Unreached};
@@ -186,40 +189,47 @@ pub(crate) enum StoreHome {
     Machine,
     /// The machine keeps no Store of ours: no worker, no local file.
     Remote,
+    /// The record declares no `direct_store_access`: an old record, or a
+    /// backend this build does not know. Never guessed from a platform.
+    Unknown,
 }
 
-/// The machine record field a Family 2 backend writes when it creates or
-/// connects its machine (#545 §Provider model): whether the machine keeps a
-/// sqlite Store's file. It is the only fact this policy reads. No platform
-/// this build names writes it, and a record that leaves it out is a machine
-/// that keeps its Store.
-const LOCAL_SQLITE: &str = "local_sqlite";
+/// The machine record field the typed backend capability owns (#551
+/// B0-150): whether the machine's backend reaches a sqlite Store's file
+/// directly. It is the one owner of "a Store can live here": the record
+/// carries it from the backend's `ProviderCapabilities`, `machine.get`
+/// exposes it, and this policy reads it. The record is the only fact, so the
+/// same record answers the same on every host.
+const DIRECT_STORE_ACCESS: &str = "direct_store_access";
 
 /// A machine's store home, the backend a refusal names, and why the machine
 /// keeps no Store when it does not.
 pub(crate) struct MachinePlacement {
     pub(crate) home: StoreHome,
-    /// The machine's backend as its record's platform names it (`docker`,
-    /// `native`, `namespaces`); `Null` when the record names no platform this
-    /// build knows, or the machine has no record. A record fact, so it is the
-    /// same on every host.
+    /// The backend the machine's record names (`docker`, `native`,
+    /// `namespaces`); `Null` when the record names none, or the machine has
+    /// no record. A record fact, so it is the same on every host.
     pub(crate) backend: SdkValue,
-    /// Why the machine keeps no Store of ours; `None` when it does.
+    /// Why the machine keeps no Store of ours, or why the record does not
+    /// say; `None` when it keeps one.
     pub(crate) reason: Option<String>,
 }
 
-/// Machine `machine`'s store home, from the machine record alone: its
-/// `local_sqlite` field says whether *this* machine keeps a sqlite Store's
-/// file. Present and `true` is [`StoreHome::Machine`]; present and `false` is
-/// [`StoreHome::Remote`]; absent is [`StoreHome::Machine`] — a backend that
-/// did not say keeps its Store, the compatible answer for every platform this
-/// build names. Present and anything else is refused `InvalidInput`. A
-/// machine with no record at all is also `Machine`: the step that resolves
-/// the machine refuses `NotFound`.
+/// Machine `machine`'s store home, from the machine record alone: the
+/// backend's typed `direct_store_access`, written into the record when the
+/// machine is made (#551 B0-150), says whether *this* machine keeps a sqlite
+/// Store's file. Present and `true` is [`StoreHome::Machine`]; present and
+/// `false` is [`StoreHome::Remote`]. Present and anything else is refused
+/// `InvalidInput`. Absent is [`StoreHome::Unknown`] and placement refuses
+/// it: an old record, or an ephemeral/remote backend that did not declare
+/// the capability, must never default to "the machine keeps its Store". A
+/// machine with no record at all is `Machine`: the step that resolves the
+/// machine refuses `NotFound`, and the guest worker's build writes no
+/// built-in records at all.
 ///
 /// The record is the only fact, and the decision never asks the platform
 /// support table or the host it runs on: the same record must get the same
-/// answer on every host.
+/// answer on every host, and an unknown capability fails closed.
 pub(crate) fn placement(home: &Path, machine: &str) -> Result<MachinePlacement> {
     let Some(record) = MachineRecord::read(home, machine)? else {
         // a machine with no record keeps its Store as far as this guard can
@@ -231,26 +241,35 @@ pub(crate) fn placement(home: &Path, machine: &str) -> Result<MachinePlacement> 
             reason: None,
         });
     };
-    let backend = backend(&record);
-    let (store_home, reason) = match record.field(LOCAL_SQLITE) {
+    let backend = match record.backend_name() {
+        Some(backend) => SdkValue::text(backend),
+        None => SdkValue::Null,
+    };
+    let (store_home, reason) = match record.field(DIRECT_STORE_ACCESS) {
         Some(SdkValue::Bool(true)) => (StoreHome::Machine, None),
         Some(SdkValue::Bool(false)) => (
             StoreHome::Remote,
             Some(format!(
-                "its record says {LOCAL_SQLITE} is false: the backend keeps no disk of \
+                "its record says {DIRECT_STORE_ACCESS} is false: the backend keeps no disk of \
                  ours, so a Store there would stop with its instances"
             )),
         ),
         Some(_) => {
             return Err(refused(
                 "InvalidInput",
-                format!("machine {machine}'s record `{LOCAL_SQLITE}` is not true or false"),
+                format!("machine {machine}'s record `{DIRECT_STORE_ACCESS}` is not true or false"),
             ))
         }
-        // not written: the machine keeps its Store. This is the compatible
-        // answer for every platform this build names; only a Family 2
-        // backend that writes `local_sqlite: false` changes the decision.
-        None => (StoreHome::Machine, None),
+        // the capability is unknown: fail closed. This is an old record, or
+        // an ephemeral/remote backend that did not declare it, and neither
+        // may be read as a machine that keeps its Store.
+        None => (
+            StoreHome::Unknown,
+            Some(format!(
+                "its record declares no {DIRECT_STORE_ACCESS}: the backend capability is the \
+                 only fact, so the placement is refused rather than assuming the machine keeps it"
+            )),
+        ),
     };
     Ok(MachinePlacement {
         home: store_home,
@@ -259,26 +278,14 @@ pub(crate) fn placement(home: &Path, machine: &str) -> Result<MachinePlacement> 
     })
 }
 
-/// The machine's backend from its record's platform name alone, or `Null`
-/// when the record names no platform this build knows. A pure record fact:
-/// no support table and no host.
-fn backend(record: &MachineRecord) -> SdkValue {
-    match record.platform_name() {
-        Some("docker") => SdkValue::text("docker"),
-        Some("native") => SdkValue::text("native"),
-        Some("apple-container" | "firecracker" | "lima" | "microsandbox" | "ssh") => {
-            SdkValue::text("namespaces")
-        }
-        _ => SdkValue::Null,
-    }
-}
-
 /// Refuses `StoragePlacement` unless a sqlite Store may be placed on machine
-/// `machine` (#545 B0-150, B7-223): its file must stay on a machine that
-/// keeps it, so a Family 2 machine — ephemeral, no worker, no disk of ours —
-/// is refused instead of silently routing the Store there. A PostgreSQL
-/// Store is on no machine (G3) and is never refused. Nothing is dialled,
-/// started or written: this decides on facts, before the side effect.
+/// `machine` (#545 B0-150, B7-223): its file must stay on a machine whose
+/// backend reaches it directly — Family 1 — and a Family 2 machine
+/// (ephemeral, no worker, no disk of ours), or one whose record does not
+/// declare the capability, is refused instead of silently routing the Store
+/// there. A PostgreSQL Store is on no machine (G3) and is never refused.
+/// Nothing is dialled, started or written: this decides on facts, before the
+/// side effect.
 pub(crate) fn require_store_home(home: &Path, store: &StoreRef, machine: &str) -> Result<()> {
     let StoreRef::Sqlite { name, .. } = store else {
         return Ok(());
@@ -300,8 +307,8 @@ pub(crate) fn require_store_home(home: &Path, store: &StoreRef, machine: &str) -
         "StoragePlacement",
         format!(
             "Store {name} cannot be placed on machine {machine}{named}: {reason}; keep the \
-             Store's file on a machine that holds it, or use a PostgreSQL Store \
-             (`layerfs store connect {name}`)"
+             Store's file on a machine whose backend reaches it directly, or use a PostgreSQL \
+             Store (`layerfs store connect {name}`)"
         ),
     );
     refusal.detail = SdkValue::map([
