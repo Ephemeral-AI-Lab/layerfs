@@ -16,7 +16,15 @@
 //!    or inside the Store home; `NotFound` for missing parent; `Exists` for
 //!    existing file/symlink; `NotEmpty` for non-empty directory; allowed
 //!    export into an existing empty directory) and live `prepare` / `export` /
-//!    `finalize` progress.
+//!    `finalize` progress;
+//! 5. Symlink names that share one inode (hard-linked aliases after #580) and
+//!    names that only share a target: each name is its own exported entry with
+//!    the original target and its own `symlinks` count, an absolute target
+//!    outside the tree is never followed, and no hard-link identity is asserted
+//!    because the contract promises none;
+//! 6. A schema version 1 SQLite Store (before #91) is refused at the Store
+//!    open: no `prepare` event, no staging directory, an existing empty
+//!    destination and the source Store left untouched.
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_api::worker;
 use layerfs_bridge::control::SdkValue;
@@ -77,6 +85,21 @@ fn big_bytes() -> Vec<u8> {
         .collect()
 }
 
+/// Sets only an entry's modification time, without following a symlink.
+fn set_mtime(p: &Path, sec: i64, nsec: i64) {
+    use nix::sys::stat::{utimensat, UtimensatFlags};
+    use nix::sys::time::TimeSpec;
+    let ts = TimeSpec::new(sec, nsec as _);
+    utimensat(
+        nix::fcntl::AT_FDCWD,
+        p,
+        &TimeSpec::UTIME_OMIT,
+        &ts,
+        UtimensatFlags::NoFollowSymlink,
+    )
+    .unwrap();
+}
+
 /// Builds a rich source folder and sets deterministic permissions and
 /// nanosecond modification times on every entry, root last.
 fn populate_sample(folder: &Path) -> Vec<u8> {
@@ -109,19 +132,6 @@ fn populate_sample(folder: &Path) -> Vec<u8> {
     std::fs::write(folder.join("readonly/sub/locked.txt"), "locked content\n").unwrap();
 
     // Set explicit nanosecond mtimes before closing readonly/sub
-    let set_mtime = |p: &Path, sec: i64, nsec: i64| {
-        use nix::sys::stat::{utimensat, UtimensatFlags};
-        use nix::sys::time::TimeSpec;
-        let ts = TimeSpec::new(sec, nsec as _);
-        utimensat(
-            nix::fcntl::AT_FDCWD,
-            p,
-            &TimeSpec::UTIME_OMIT,
-            &ts,
-            UtimensatFlags::NoFollowSymlink,
-        )
-        .unwrap();
-    };
     set_mtime(&folder.join("README.md"), 1_700_000_100, 111_222_333);
     set_mtime(&folder.join("run.sh"), 1_700_000_200, 444_555_666);
     set_mtime(&folder.join("link_to_bin"), 1_700_000_300, 777_888_999);
@@ -319,6 +329,241 @@ fn export_fidelity_progress_and_empty_destination_on_local_sqlite() {
     unlock_readonly(&source);
     unlock_readonly(&dest);
     unlock_readonly(&empty_dest);
+    for d in [home, source, out_parent] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+/// Several names may bind one symlink inode inside a Workspace (#580); export
+/// walks directory bindings, so each name becomes its own destination entry
+/// with the original target and its own `symlinks` count. Two names that only
+/// share a target string (and so a canonical symlink content root) must not be
+/// collapsed into one entry either. The contract promises no hard-link
+/// identity on the caller's filesystem, so identity is deliberately not
+/// asserted: `rel_a` and `rel_alias` are one inode in the source and are not
+/// required to be one inode in the destination.
+#[test]
+fn symlink_aliases_keep_targets_and_never_follow_outside_staging() {
+    let outside = tempdir("sym-outside");
+    std::fs::write(outside.join("keep.txt"), "keep it\n").unwrap();
+
+    let source = tempdir("sym-src");
+    std::fs::write(source.join("target.txt"), "target\n").unwrap();
+    std::os::unix::fs::symlink("target.txt", source.join("rel_a")).unwrap();
+    // A second name for the same symlink inode: `linkat` without
+    // `AT_SYMLINK_FOLLOW` links the symlink itself on both Linux and macOS.
+    nix::unistd::linkat(
+        nix::fcntl::AT_FDCWD,
+        &source.join("rel_a"),
+        nix::fcntl::AT_FDCWD,
+        &source.join("rel_alias"),
+        nix::fcntl::AtFlags::empty(),
+    )
+    .unwrap();
+    // A separate symlink inode with the same target.
+    std::os::unix::fs::symlink("target.txt", source.join("rel_dup")).unwrap();
+    // The fixture really is one symlink inode under two names, never a
+    // followed link to `target.txt`.
+    let shared = std::fs::symlink_metadata(source.join("rel_a")).unwrap();
+    let alias = std::fs::symlink_metadata(source.join("rel_alias")).unwrap();
+    assert_eq!(shared.ino(), alias.ino(), "fixture: one symlink inode");
+    assert_eq!(shared.nlink(), 2, "fixture: two names for that inode");
+    // An absolute target outside the tree: never followed into staging.
+    std::os::unix::fs::symlink(outside.join("keep.txt"), source.join("rel_outside")).unwrap();
+    // One mtime on the shared symlink inode; both exported names carry it.
+    set_mtime(&source.join("rel_a"), 1_700_000_700, 246_813_579);
+    set_mtime(&source, 1_700_000_800, 135_792_468);
+
+    let home = private_home("sym-home");
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/app")),
+            ("folder", t(&source.display().to_string())),
+        ],
+    );
+
+    let out_parent = tempdir("sym-out");
+    let dest = out_parent.join("exported");
+    let res = ok(
+        &home,
+        "project.export",
+        &[
+            ("project", t("shop/app")),
+            ("destination", t(&dest.display().to_string())),
+        ],
+    );
+    assert_eq!(res.get_int("files"), Some(1));
+    assert_eq!(res.get_int("directories"), Some(0));
+    assert_eq!(res.get_int("symlinks"), Some(4));
+    assert_eq!(res.get_int("bytes"), Some(7));
+
+    for name in ["rel_a", "rel_alias", "rel_dup"] {
+        let path = dest.join(name);
+        assert!(
+            std::fs::symlink_metadata(&path)
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "{name} must stay a symlink"
+        );
+        assert_eq!(
+            std::fs::read_link(&path).unwrap(),
+            Path::new("target.txt"),
+            "{name} must keep its original target"
+        );
+    }
+    assert_eq!(
+        std::fs::read_link(dest.join("rel_outside")).unwrap(),
+        outside.join("keep.txt"),
+        "an absolute target is preserved verbatim, never followed"
+    );
+    assert_eq!(
+        std::fs::read_dir(&dest).unwrap().count(),
+        5,
+        "every name is its own entry: one file and four symlinks"
+    );
+    for name in ["rel_a", "rel_alias"] {
+        let meta = std::fs::symlink_metadata(dest.join(name)).unwrap();
+        assert_eq!(
+            (meta.mtime(), meta.mtime_nsec()),
+            (1_700_000_700, 246_813_579),
+            "{name} keeps the shared symlink inode's mtime"
+        );
+    }
+
+    assert_same_tree(&source, &dest);
+    // Nothing was written through the absolute link, inside or outside staging.
+    assert_eq!(
+        std::fs::read_to_string(outside.join("keep.txt")).unwrap(),
+        "keep it\n"
+    );
+    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 1);
+
+    for d in [home, source, outside, out_parent] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+/// Offset of the SQLite header's 4-byte big-endian `user_version` field.
+const USER_VERSION_OFFSET: u64 = 60;
+
+/// Reads a closed SQLite file's `user_version` from its header.
+fn read_user_version(path: &Path) -> u32 {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path).unwrap();
+    let mut magic = [0u8; 16];
+    file.read_exact(&mut magic).unwrap();
+    assert!(magic.starts_with(b"SQLite format 3\0"), "{path:?}");
+    file.seek(SeekFrom::Start(USER_VERSION_OFFSET)).unwrap();
+    let mut bytes = [0u8; 4];
+    file.read_exact(&mut bytes).unwrap();
+    u32::from_be_bytes(bytes)
+}
+
+/// Rewrites a closed SQLite file's `user_version`, the field the Store open
+/// reads to choose the schema. This crate has no `rusqlite` dev-dependency (it
+/// could not be added without a lockfile change), so the test patches the
+/// header field directly; the caller asserts the value it wrote back through
+/// [`read_user_version`], and a Store the open did not recognise as version 1
+/// would let the export succeed and fail this test.
+fn write_user_version(path: &Path, version: u32) {
+    use std::io::{Seek, SeekFrom, Write};
+    let mut file = std::fs::OpenOptions::new().write(true).open(path).unwrap();
+    file.seek(SeekFrom::Start(USER_VERSION_OFFSET)).unwrap();
+    file.write_all(&version.to_be_bytes()).unwrap();
+    file.sync_all().unwrap();
+}
+
+/// A schema version 1 SQLite Store (one row per inode value and binding hint,
+/// before #91) is refused by the same Store open every export route uses. The
+/// refusal therefore arrives before `prepare` and before any staging directory
+/// exists: the caller's already-present empty destination stays as it was and
+/// the source Store is not touched.
+#[test]
+fn schema_version_1_store_is_refused_before_prepare_and_keeps_destination() {
+    let home = private_home("v1-home");
+    ok(&home, "store.create", &[("name", t("shop"))]);
+    let source = tempdir("v1-src");
+    std::fs::write(source.join("a.txt"), "hello\n").unwrap();
+    ok(
+        &home,
+        "project.init",
+        &[
+            ("project", t("shop/app")),
+            ("folder", t(&source.display().to_string())),
+        ],
+    );
+
+    // Rewrite the Store's own format version while this process holds no
+    // callable handle on it: `project.init` releases the Store when it returns.
+    let store_file = paths::store_file(&home, "shop");
+    let current = read_user_version(&store_file);
+    assert!(
+        (36..=44).contains(&current),
+        "expected a schema version 2 Store, read user_version {current}"
+    );
+    write_user_version(&store_file, 22);
+    assert_eq!(read_user_version(&store_file), 22);
+    let store_bytes = std::fs::metadata(&store_file).unwrap().len();
+
+    // An existing empty destination is allowed in general, so it proves the
+    // refusal came from the Store format rather than from the destination.
+    let out_parent = tempdir("v1-out");
+    let dest = out_parent.join("exported");
+    std::fs::create_dir(&dest).unwrap();
+
+    let mut events = Vec::new();
+    let refusal = call_with_events(
+        &home,
+        "project.export",
+        &[
+            ("project", t("shop/app")),
+            ("destination", t(&dest.display().to_string())),
+        ],
+        &mut |e| events.push(e),
+    );
+    let (code, message) = match refusal {
+        Err(refusal) => refusal,
+        Ok(_) => {
+            panic!("fixture: the user_version rewrite did not reach the Store this call opened")
+        }
+    };
+    assert_eq!(code, "Failed", "{message}");
+    assert!(
+        message.contains("schema version 1"),
+        "refusal must name the Store format: {message}"
+    );
+    assert!(
+        message.contains("tools/store_blocks.py migrate"),
+        "refusal must name the offline conversion: {message}"
+    );
+
+    assert!(
+        events.is_empty(),
+        "no progress, so no `prepare`, before the Store opens: {events:?}"
+    );
+    assert!(dest.is_dir(), "the existing empty destination is preserved");
+    assert_eq!(
+        std::fs::read_dir(&dest).unwrap().count(),
+        0,
+        "nothing may be written into the existing destination"
+    );
+    let entries: Vec<_> = std::fs::read_dir(&out_parent)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        entries,
+        vec!["exported"],
+        "no staging directory was created"
+    );
+
+    assert_eq!(read_user_version(&store_file), 22, "source Store untouched");
+    assert_eq!(std::fs::metadata(&store_file).unwrap().len(), store_bytes);
+
     for d in [home, source, out_parent] {
         let _ = std::fs::remove_dir_all(d);
     }

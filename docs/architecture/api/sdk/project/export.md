@@ -111,6 +111,24 @@ makes no automatic retry. Unsupported routes are refused before destination
 creation. Local and remote PostgreSQL connections use the same logical snapshot
 and fidelity contract as SQLite.
 
+### Store format prerequisite
+
+Every route above opens the installed Store through the same format check, so
+export reads only what this build's persistence layer accepts. A **schema
+version 1 SQLite Store** (`user_version` 16–18 or 22–24: one row per inode value
+and binding hint, before #91) is refused `Failed` at that open, and the refusal
+names the offline conversion `tools/store_blocks.py migrate` for a **closed
+copy** of the database. A **PostgreSQL schema version 1 Store** is refused at
+open as well — `Integrity` at the PostgreSQL backend, never converted — and it
+surfaces here as `Failed`; that SQLite tool is not a PostgreSQL migration path.
+Export does not convert, migrate or fall back to another reader, and it creates
+no `prepare` event and no staging directory when this check fails. See [Store
+lifecycle](../../../engine/store/lifecycle.md#open-and-handles), the [SQLite
+Store](../../../engine/store/sqlite.md#schema) and the [PostgreSQL
+Store](../../../engine/store/postgresql.md#schema) format references. A Store
+written by an older LayerFS that this build refuses therefore needs the offline
+step first, not another export attempt.
+
 ## Progress and completion
 
 SDK callbacks receive the payload. With `--progress`, CLI stderr carries one
@@ -175,11 +193,13 @@ A successful call returns snake_case fields:
 | `Conflict` | host names collide; no silent overwrite |
 | `Busy`, `Unresolved` | Store admission is held by a running or unresolved operation |
 | `Unavailable`, `Unsupported` | required worker unavailable, or route/filesystem/feature unsupported |
-| `Capacity`, `Failed` | local write or metadata failure; staging is cleaned up |
+| `Capacity`, `Failed` | local write or metadata failure, or a Store whose format this build does not read (see [Store format prerequisite](#store-format-prerequisite)); staging is cleaned up |
 | `Unknown` / `Unavailable` | worker stream disconnect; cleanup local staging, preserve source, do not replay |
 
 Export reads source history only; a lost worker reply does not create a source
 mutation or an uncertain write intent. None of these events authorizes a resend.
+A Store-format refusal happens at open, before `prepare`: it leaves an existing
+destination exactly as it was and creates no staging directory.
 
 ## Examples
 
