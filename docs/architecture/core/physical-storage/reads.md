@@ -75,12 +75,20 @@ the mark was taken (F-036).
 | `read_packs` | whole metadata packs and payload packs by id | length and SHA-256 checked by `PersistedPack::authenticate`, then header, declared length and domain | same, [`port/read_pack.rs`](../../../../core/crates/layerfs-storage/src/port/read_pack.rs) |
 | `read_pack_selection` | strict selected reads: the whole pack is scanned and hashed, only chosen ranges are kept | SHA-256 over every byte | [`port/read_selection.rs`](../../../../core/crates/layerfs-storage/src/port/read_selection.rs) |
 
+A demand is served one cohort of packs at a time, in physical order: as many
+of its packs as fit the 2 MiB pack cache together by their located lengths
+(at least one; [`Fetch::cohort`](../../../../core/crates/layerfs-storage/src/read/fetch.rs)).
+Each cohort is prefetched and resolved before the next is acquired, so a pack
+a large demand acquires (a base read-ahead window, layerfs-project #97) stays
+cached until its objects are resolved and is not acquired a second time. A
+demand within the bound is one cohort.
+
 When the provider takes packs whole (`whole_pack_bytes` above the control
-prefix, as PostgreSQL does), a demand reads its uncached packs that are no
+prefix, as PostgreSQL does), each cohort reads its uncached packs that are no
 larger than that and fit the 2 MiB pack cache together in one `read_packs`
 call, if there are at least two, before acquiring groups
 ([`Fetch::whole_packs`](../../../../core/crates/layerfs-storage/src/read/fetch.rs));
-the demand's kept packs are reserved first so the read does not evict them.
+the cohort's kept packs are reserved first so the read does not evict them.
 
 The reply must match the plan: the same descriptor, the same choice (whole or
 ranges) and the same extents, else `Integrity("selected strategy/extent reply")`.
@@ -88,8 +96,8 @@ A provider that does not implement a selected read returns
 `BackendUnavailable`; there is no fallback to a whole read.
 
 Prefetch ([`prefetch.rs`](../../../../core/crates/layerfs-storage/src/read/prefetch.rs))
-walks every root's chain one level at a time, pack by pack, before any object is
-decoded. Discovery and decoding share the operation's pack and group caches.
+walks every root's chain of a cohort one level at a time, pack by pack, before
+any of its objects is decoded. Discovery and decoding share the operation's pack and group caches.
 
 ## Read units
 
