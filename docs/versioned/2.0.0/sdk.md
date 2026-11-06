@@ -86,7 +86,7 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
 ```
 
 - Python 3.10 or later (abi3). The native module is `layerfs._native`,
-  built by PyO3 from `engine/crates/layerfs-python`.
+  built by PyO3 from `api/crates/layerfs-python`.
 - Calls are synchronous (O19). `layerfs.aio` has the same families and
   calls as coroutines; each runs the synchronous call on a thread, and the
   native call releases the interpreter. Its function options run on the
@@ -110,9 +110,11 @@ lfs = layerfs.client(home="/data/lfs", scope={"project": "shop/web", "folder": "
 - `layerfs.close()` is Node's `close()`: it closes this process's open
   Stores, dropping their leases, and returns how many.
 - Build: `cd api/python && maturin build --locked` (maturin 1.9.6 or a
-  later 1.x, as `pyproject.toml` requires since `2793ee114c`). Only a macOS
-  arm64 wheel was built on this branch; the Linux x64 and arm64 glibc
-  wheels (O20) are `NOT_RUN`.
+  later 1.x, as `pyproject.toml` requires since `2793ee114c`); `--release`
+  for the wheel to install. A macOS arm64 wheel and a Linux x64 glibc wheel
+  were built and installed on this branch; the Linux arm64 wheel (O20) is
+  `NOT_RUN`. The installed artifacts were qualified in
+  [artifact-qualification-2.0.0.md](../../general/artifact-qualification-2.0.0.md).
 
 ```python
 import asyncio
