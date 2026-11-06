@@ -55,11 +55,12 @@ pub(crate) fn locate(
         .collect::<Result<_, _>>()
         .map_err(|_| BackendError::Integrity)?;
     // Each id finds its rows through the prefix index, then the full id is
-    // compared (#90).
+    // compared (#90); `OFFSET 0` keeps that a probe per id rather than a hash
+    // of the whole table.
     let sql = format!(
         "SELECT o.object_id,o.role::bigint,o.canonical_length::bigint,o.group_number::bigint,o.record_number::bigint,p.pack_id,p.domain,p.digest,p.length \
-         FROM unnest($1::bytea[],$2::bigint[]) k(i,k) JOIN {s}.object_location o \
-         ON ('x'||encode(substring(o.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=k.k AND o.object_id=k.i \
+         FROM unnest($1::bytea[],$2::bigint[]) k(i,k) CROSS JOIN LATERAL (SELECT * FROM {s}.object_location x \
+         WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=k.k AND x.object_id=k.i OFFSET 0) o \
          JOIN {s}.pack p ON p.pack_id=o.pack_id",
         s = tx.schema
     );

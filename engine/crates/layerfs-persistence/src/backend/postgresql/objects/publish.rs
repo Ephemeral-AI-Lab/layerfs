@@ -51,11 +51,14 @@ pub(crate) fn run(tx: &Transaction<'_>, batch: &Publication) -> Result<Published
 /// one snapshot, taken under the lane, and touch distinct rows; the totals
 /// count only locations this statement inserted, and a signature may name
 /// one of them. A NULL id row refuses the publication: a block's ordinals
-/// were already stored, or a signature names no location.
+/// were already stored, or a signature names no location. `OFFSET 0` keeps
+/// each location probe a correlated index lookup: without it the planner
+/// may hash the whole table, computing the prefix of every row, under the
+/// lane.
 const ROWS: &str = "WITH ins AS (\
 INSERT INTO object_location(object_id,role,canonical_length,pack_id,group_number,record_number) \
 SELECT n.i,n.r,n.l,n.p,n.g,n.c FROM unnest($1::bytea[],$2::bigint[],$3::bigint[],$4::bigint[],$5::bigint[],$6::bigint[],$19::bigint[]) n(i,r,l,p,g,c,k) \
-WHERE NOT EXISTS (SELECT 1 FROM object_location x WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=n.k AND x.object_id=n.i) \
+WHERE NOT EXISTS (SELECT 1 FROM object_location x WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=n.k AND x.object_id=n.i OFFSET 0) \
 RETURNING object_id,canonical_length), \
 added AS (SELECT coalesce(sum(canonical_length),0)::bigint AS n FROM ins), \
 totals AS (UPDATE store_totals SET canonical=store_totals.canonical+added.n,stored=store_totals.stored+$7::bigint,metadata=store_totals.metadata+$8::bigint \
@@ -73,7 +76,7 @@ SELECT object_id FROM ins \
 UNION ALL SELECT NULL::bytea WHERE (SELECT count(*) FROM values_)<>cardinality($9::bigint[]) \
 UNION ALL SELECT NULL::bytea WHERE EXISTS (SELECT 1 FROM unnest($16::bytea[],$20::bigint[]) s(i,k) \
 WHERE NOT EXISTS (SELECT 1 FROM unnest($1::bytea[]) b(i) WHERE b.i=s.i) \
-AND NOT EXISTS (SELECT 1 FROM object_location x WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=s.k AND x.object_id=s.i))";
+AND NOT EXISTS (SELECT 1 FROM object_location x WHERE ('x'||encode(substring(x.object_id FROM 1 FOR 8),'hex'))::bit(64)::bigint=s.k AND x.object_id=s.i OFFSET 0))";
 
 /// The index key of an object id: its first eight bytes as a signed
 /// big-endian `bigint`, as the schema's `object_location_prefix` computes it.
