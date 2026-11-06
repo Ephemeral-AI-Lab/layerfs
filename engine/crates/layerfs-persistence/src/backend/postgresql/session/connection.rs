@@ -47,9 +47,13 @@ impl State {
 /// built; every connection is then refused as before.
 fn tls() -> Result<MakeTlsConnector, BackendError> {
     static TLS: OnceLock<Option<MakeTlsConnector>> = OnceLock::new();
-    TLS.get_or_init(|| native_tls::TlsConnector::new().ok().map(MakeTlsConnector::new))
-        .clone()
-        .ok_or(BackendError::Integrity)
+    TLS.get_or_init(|| {
+        native_tls::TlsConnector::new()
+            .ok()
+            .map(MakeTlsConnector::new)
+    })
+    .clone()
+    .ok_or(BackendError::Integrity)
 }
 
 /// Connects new clients for this session's selection; TLS follows the
@@ -65,7 +69,10 @@ pub(crate) struct Connector {
 impl Connector {
     pub(crate) fn new(selection: &PostgresSelection) -> Result<Self, BackendError> {
         let config = Config::from_str(&selection.url).map_err(|_| BackendError::Integrity)?;
-        Ok(Self { config, tls: tls()? })
+        Ok(Self {
+            config,
+            tls: tls()?,
+        })
     }
     /// One new client, with the driver's own error (for a status read).
     pub(crate) fn connect_raw(&self) -> Result<Client, postgres::Error> {

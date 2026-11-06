@@ -137,18 +137,21 @@ impl PostgresHandles {
         let _ = session.policy.set(checked.policy);
         let _ = session.server_version.set(checked.server_version);
         let (incarnation, tables) = (checked.incarnation, checked.acquisition);
-        Ok((checked.binding, Self {
-            storage: Arc::new(PostgresStorage {
-                session: session.clone(),
-            }),
-            acquisition: PostgresAcquisition::new(session.clone(), tables),
-            history: HistoryProvider {
-                engine: Engine::Postgres(session),
-                catalog_id,
-                incarnation,
-                cursor_key,
+        Ok((
+            checked.binding,
+            Self {
+                storage: Arc::new(PostgresStorage {
+                    session: session.clone(),
+                }),
+                acquisition: PostgresAcquisition::new(session.clone(), tables),
+                history: HistoryProvider {
+                    engine: Engine::Postgres(session),
+                    catalog_id,
+                    incarnation,
+                    cursor_key,
+                },
             },
-        }))
+        ))
     }
 
     /// Refuses every queued and later call with `Closed`; see [`SqliteHandles::close`].

@@ -147,25 +147,25 @@ fn reach_check(
         .unwrap_or_default();
     let reached =
         crate::store::reader::reach(key, store, postgresql, project).map_err(|refusal| {
-        let name = store.name();
-        let message = match (refusal.code.as_str(), hint) {
-            ("Unsupported", _) => {
-                return refused(
-                    "Unsupported",
-                    format!(
-                        "{who} cannot check PostgreSQL Store {name}'s server: {}",
-                        refusal.message
-                    ),
-                )
-            }
-            (_, Some(hint)) => format!("{}; {hint}", refusal.message),
-            (_, None) => refusal.message,
-        };
-        refused(
-            "Unavailable",
-            format!("{who} cannot reach PostgreSQL Store {name}'s server at {host}: {message}"),
-        )
-    })?;
+            let name = store.name();
+            let message = match (refusal.code.as_str(), hint) {
+                ("Unsupported", _) => {
+                    return refused(
+                        "Unsupported",
+                        format!(
+                            "{who} cannot check PostgreSQL Store {name}'s server: {}",
+                            refusal.message
+                        ),
+                    )
+                }
+                (_, Some(hint)) => format!("{}; {hint}", refusal.message),
+                (_, None) => refusal.message,
+            };
+            refused(
+                "Unavailable",
+                format!("{who} cannot reach PostgreSQL Store {name}'s server at {host}: {message}"),
+            )
+        })?;
     match reached {
         Ok(true) => Ok(()),
         Ok(false) => Err(refused(

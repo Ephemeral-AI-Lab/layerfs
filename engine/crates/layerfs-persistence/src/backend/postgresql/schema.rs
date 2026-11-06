@@ -15,9 +15,9 @@
 use super::session::{connection::Session, transaction::Transaction};
 use crate::backend::records::{BackendError, Param};
 use crate::PostgresCheck;
-use postgres::SimpleQueryRow;
 use layerfs_history::{CatalogId, HistoryCatalogConfig};
 use layerfs_storage::{port::PersistenceError, StoragePolicy};
+use postgres::SimpleQueryRow;
 
 pub(crate) const SCHEMA: &str = include_str!("../../../sql/postgresql/schema.sql");
 /// Init's acquisition tables, created after [`SCHEMA`] in a new schema.
@@ -212,8 +212,7 @@ pub(crate) fn check(
     };
     let at = 2; // the meta columns follow the two check columns
     let recorded = unhex(text(&row, at + 2)?)?;
-    let catalog_id =
-        CatalogId::derive(&recorded).map_err(|_| PersistenceError::Malformed)?;
+    let catalog_id = CatalogId::derive(&recorded).map_err(|_| PersistenceError::Malformed)?;
     let incarnation = int(&row, at + 1)?;
     if unhex(text(&row, at)?)? != catalog_id.as_slice()
         || binding.is_some_and(|b| b != recorded)
@@ -224,8 +223,7 @@ pub(crate) fn check(
         return Err(BackendError::Integrity.into());
     }
     let byte = |i| u8::try_from(int(&row, at + i)?).map_err(|_| BackendError::Integrity);
-    let threshold =
-        u64::try_from(int(&row, at + 6)?).map_err(|_| BackendError::Integrity)?;
+    let threshold = u64::try_from(int(&row, at + 6)?).map_err(|_| BackendError::Integrity)?;
     if int(&row, at + 10)? != SCHEMA_VERSION {
         return Err(PersistenceError::Malformed);
     }
@@ -244,7 +242,8 @@ pub(crate) fn check(
 
 const TABLE_NAMES: &str = "SELECT table_name::text FROM information_schema.tables \
      WHERE table_schema = current_schema() AND table_type = 'BASE TABLE' ORDER BY table_name";
-const COLUMNS: &str = "SELECT table_name::text, column_name::text, data_type::text, is_nullable::text \
+const COLUMNS: &str =
+    "SELECT table_name::text, column_name::text, data_type::text, is_nullable::text \
      FROM information_schema.columns WHERE table_schema = current_schema() \
      ORDER BY table_name, ordinal_position";
 

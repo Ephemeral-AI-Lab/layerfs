@@ -114,7 +114,13 @@ impl Store {
             counts.clone(),
             (workspace_capacity, policy, false),
         );
-        Self::with_readers(writer, history, (readers, counts, policy), cache_bytes, reservations)
+        Self::with_readers(
+            writer,
+            history,
+            (readers, counts, policy),
+            cache_bytes,
+            reservations,
+        )
     }
     /// [`Self::new`] with shared readers (#64), as a PostgreSQL Store opens:
     /// no control reader opens until its first use, and every Workspace's
@@ -141,7 +147,13 @@ impl Store {
             counts.clone(),
             (workspace_capacity, policy, true),
         );
-        Self::with_readers(writer, history, (readers, counts, policy), cache_bytes, reservations)
+        Self::with_readers(
+            writer,
+            history,
+            (readers, counts, policy),
+            cache_bytes,
+            reservations,
+        )
     }
     fn with_readers(
         writer: Arc<dyn PackPersistence>,

@@ -57,7 +57,11 @@ fn proxy(upstream: String, wire: Arc<Wire>) -> u16 {
             // 1: the client spoke last, 2: the server did
             let last = Arc::new(AtomicU8::new(0));
             for (mut from, mut to, side) in [
-                (client.try_clone().unwrap(), server.try_clone().unwrap(), 1u8),
+                (
+                    client.try_clone().unwrap(),
+                    server.try_clone().unwrap(),
+                    1u8,
+                ),
                 (server, client, 2u8),
             ] {
                 let (wire, last) = (wire.clone(), last.clone());

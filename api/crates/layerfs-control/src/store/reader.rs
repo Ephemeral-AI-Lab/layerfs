@@ -44,7 +44,10 @@ mod held {
 
     fn key(key: &Path, postgresql: &SdkValue) -> Result<Key> {
         let probe = SdkValue::map([("postgresql", postgresql.clone())]);
-        Ok((key.to_path_buf(), crate::store::postgres::url(&probe)?.to_owned()))
+        Ok((
+            key.to_path_buf(),
+            crate::store::postgres::url(&probe)?.to_owned(),
+        ))
     }
 
     /// A new session dialled with `postgresql`; `Ok(None)` when the schema
@@ -58,11 +61,13 @@ mod held {
         // record without a full identity is refused after, unless its
         // binding already differs (the cursor key pages nothing here)
         let identity = crate::store::identity::identity_in(record);
-        let cursor = identity.as_ref().map_or([1; 32], |identity| identity.cursor_key);
+        let cursor = identity
+            .as_ref()
+            .map_or([1; 32], |identity| identity.cursor_key);
         let selection =
             crate::store::postgres::selection(url, &schema, &sync).with_check(PostgresCheck::Light);
-        let (binding, handles) = PostgresHandles::attach_read_only(&selection, cursor)
-            .map_err(|error| {
+        let (binding, handles) =
+            PostgresHandles::attach_read_only(&selection, cursor).map_err(|error| {
                 crate::store::postgres::no_session(&error).unwrap_or_else(|| {
                     refused("Failed", format!("reading schema {schema}: {error}"))
                 })
@@ -239,10 +244,14 @@ pub(crate) fn head(
 fn held_of(args: &SdkValue) -> Result<std::sync::Arc<layerfs_persistence::PostgresHandles>> {
     let key = PathBuf::from(args.get_text("storePath").unwrap_or(""));
     let store = args.get_text("store").unwrap_or("");
-    let record = StoreRecord::from_record(store, args.get("store_record").cloned().unwrap_or_default());
-    let postgresql = args
-        .get("postgresql")
-        .ok_or_else(|| refused("InvalidInput", "a PostgreSQL Sandbox call carries its server's resolved postgresql value"))?;
+    let record =
+        StoreRecord::from_record(store, args.get("store_record").cloned().unwrap_or_default());
+    let postgresql = args.get("postgresql").ok_or_else(|| {
+        refused(
+            "InvalidInput",
+            "a PostgreSQL Sandbox call carries its server's resolved postgresql value",
+        )
+    })?;
     held::session(&key, &record, postgresql)?.ok_or_else(|| another(store))
 }
 

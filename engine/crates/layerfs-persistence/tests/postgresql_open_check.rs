@@ -102,9 +102,14 @@ fn both_checks_refuse_a_changed_incarnation_or_schema_version() {
          DROP CONSTRAINT history_meta_identity_format_check; \
          ALTER TABLE {s}.store_policy DROP CONSTRAINT store_policy_schema_version_check"
     ));
-    schema.sql(&format!("UPDATE {s}.history_meta SET catalog_incarnation=0"));
+    schema.sql(&format!(
+        "UPDATE {s}.history_meta SET catalog_incarnation=0"
+    ));
     for check in CHECKS {
-        assert!(schema.open(check, BINDING).is_err(), "{check:?}: incarnation");
+        assert!(
+            schema.open(check, BINDING).is_err(),
+            "{check:?}: incarnation"
+        );
     }
     schema.sql(&format!(
         "UPDATE {s}.history_meta SET catalog_incarnation=3, schema_version=2"

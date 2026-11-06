@@ -147,7 +147,11 @@ fn apple_container_uses_the_gateway_its_start_recorded() {
     for (url, want) in loopback_urls().iter().zip(rewritten("192.168.65.1")) {
         assert_eq!(machine::reach(&spec, url), Ok(want));
     }
-    assert_eq!(scratch.log(), "", "no container inspect with a recorded gateway");
+    assert_eq!(
+        scratch.log(),
+        "",
+        "no container inspect with a recorded gateway"
+    );
     spec.state.gateway = None;
     let outcome = machine::reach(&spec, &loopback_urls()[0]);
     assert_eq!(outcome, Ok(rewritten("192.168.64.1")[0].clone()));
