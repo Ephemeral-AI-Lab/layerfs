@@ -39,9 +39,10 @@ fn run(
 /// A foreground result is `kind`, `exitCode`, `stdout`, `stderr`, `message`
 /// and `truncated` (always false: no output is cut). A stream over the
 /// inline window (1 MiB), or any non-empty stream with `spool`, is null
-/// here and spooled; the result then also names its `output`, read with
-/// `workspace.exec_output` and closed with `sandbox.exec_release`, and the
-/// `stdoutBytes` and `stderrBytes` sizes. A `directory` from a caller that
+/// here and spooled; the result then also names its `output`, which the
+/// host route (`route::drain`) reads back with `output::page` and closes with
+/// `output::release` (neither is a table call), and the `stdoutBytes` and
+/// `stderrBytes` sizes. A `directory` from a caller that
 /// keeps the Workspace's record (#535 G4) is the one the command runs in.
 pub(crate) fn exec(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;

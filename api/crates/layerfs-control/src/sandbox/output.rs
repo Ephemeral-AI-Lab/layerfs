@@ -4,11 +4,11 @@
 //! streams both fit carries them inline as it always did. A stream that grows
 //! past that spills, kept bytes first, to an unlinked file in the host temp
 //! directory (or every non-empty stream does, when the caller asks to spool).
-//! The result then names the spooled output, which `execOutput` reads back
-//! into the caller's page of at most [`PAGE`] bytes until
-//! `workspace.exec_release` closes it. The Sandbox backend reads the command's stream only as fast as
-//! this sink takes it (an 8 KiB window), so a slow disk holds the command
-//! back. No total is capped: a spooled stream is bounded by free space.
+//! The result then names the spooled output, which [`page`] reads back into
+//! the caller's page of at most [`PAGE`] bytes until [`release`] closes it
+//! (the host route's `drain` is their caller; neither is a table call). The
+//! Sandbox backend reads the command's stream only as fast as this sink takes
+//! it (an 8 KiB window), so a slow disk holds the command back. No total is capped: a spooled stream is bounded by free space.
 use crate::common::outcome::{failed, refused, Outcome};
 use crate::sandbox::registry::{lock, text};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 /// Bytes per stream a result carries inline.
 pub(crate) const INLINE: usize = 1 << 20;
-/// Largest page `execOutput` fills.
+/// Largest page [`page`] fills.
 const PAGE: usize = 1 << 20;
 /// Write buffer of a spooled stream.
 const BUFFER: usize = 64 * 1024;
@@ -151,7 +151,7 @@ pub(crate) fn fields(
     Ok(shown)
 }
 
-/// `execOutput({ output, stream, offset }, page)`: fills `page` (1..=1 MiB,
+/// `page({ output, stream, offset }, page)`: fills `page` (1..=1 MiB,
 /// the caller's reused window) with the spooled stream's bytes from `offset`
 /// and answers how many it wrote and whether they end the stream. Reading
 /// into the caller's buffer leaves no per-page allocation behind on either
@@ -191,7 +191,7 @@ pub fn page(args: &SdkValue, page: &mut [u8]) -> Outcome {
     ]))
 }
 
-/// `workspace.exec_release({ output })`: closes a spooled output's files.
+/// `release({ output })`: closes a spooled output's files.
 pub(crate) fn release(args: &SdkValue) -> Outcome {
     let id = text(args, "output")?;
     let released = lock(outputs())?.remove(id).is_some();
