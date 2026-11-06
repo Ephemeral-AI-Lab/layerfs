@@ -11,7 +11,7 @@ or for one Store, without opening any Store.
 | --- | --- |
 | Family | [project](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/project/list.rs`](../../../../../api/crates/layerfs-api/src/project/list.rs) |
-| Implemented in | `layerfs_control::project::family::run` → `list` ([`project/family.rs`](../../../../../api/crates/layerfs-control/src/project/family.rs)) |
+| Implemented in | `layerfs_control::project::family::run` → `list` ([`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs)) |
 | Runs in | the caller's process, reading home records only |
 
 ## Signature
@@ -36,7 +36,7 @@ layerfs project list [<store>] [--page-size <page-size>] [--page-pos <page-pos>]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `store` (optional) | Name | a Store name (`StoreName::parse`); its record must exist, else `NotFound`. Omitted: every Store folder in the home. | [`project/family.rs`](../../../../../api/crates/layerfs-control/src/project/family.rs) `list` |
+| `store` (optional) | Name | a Store name (`StoreName::parse`); its record must exist, else `NotFound`. Omitted: every Store folder in the home. | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) `list` |
 
 ## Options
 
@@ -62,7 +62,7 @@ layerfs project list [<store>] [--page-size <page-size>] [--page-pos <page-pos>]
 
 There is no `has_more` field here, unlike the Store-backed lists. The
 summary is `ProjectRecord::to_sdk`
-([`project/record.rs`](../../../../../api/crates/layerfs-control/src/project/record.rs)).
+([`project/record.rs`](../../../../../control/crates/layerfs-control/src/project/record.rs)).
 
 ## Where it runs
 
@@ -80,13 +80,13 @@ Store file or daemon is involved, on any Store kind or platform. A Store
 folder without a readable record is skipped. A project folder is listed even
 when its `record.json` is missing (for example, the entry a failed local
 [`project.init`](init.md) keeps): it then shows `created: null`. See the
-[routing table](../../routing/routing-table.md).
+[routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | `store` is not a valid Store name | no | [`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/names.rs) |
+| `InvalidInput` | `store` is not a valid Store name | no | [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs) |
 | `NotFound` | `store` names a Store with no record | no | `project/family.rs` |
 | `Failed` | a home folder cannot be read | no | `project/family.rs` (`failed`) |
 
@@ -113,7 +113,7 @@ layerfs project list shop --page-size 20
 
 - Before: [`project.init`](init.md), or `store.connect`, which records the projects a Store holds.
 - After: [`project.get`](get.md), [`branch.list`](../branch/list.md).
-- [Control: home and records](../../control/home-and-records.md), [Control: families](../../control/families.md#project).
+- [Management: home and records](../../../control/management/home-and-records.md), [Control: families](../../../control/management/families.md#project).
 
 ---
 

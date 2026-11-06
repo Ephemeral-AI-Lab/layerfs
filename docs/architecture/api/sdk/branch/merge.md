@@ -36,16 +36,16 @@ layerfs branch merge <store>/<project> <name> <a> <b> [--message TEXT] [--units 
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
 | `name` | Name | the new Branch; not `main`, not taken | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
-| `a` | Name | the left side ("ours"), sent as `branch`; may be `main` | [`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) |
+| `a` | Name | the left side ("ours"), sent as `branch`; may be `main` | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
 | `b` | Name | the right side ("theirs"), sent as `with`; may be `main`; not equal to `a` | same |
 
 ## Options
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `message` | Text | none | the merge Commit's message | [`calls/table.rs`](../../../../../api/crates/layerfs-control/src/calls/table.rs) `MESSAGE` |
+| `message` | Text | none | the merge Commit's message | [`calls/table.rs`](../../../../../control/crates/layerfs-control/src/calls/table.rs) `MESSAGE` |
 | `units` | Json | none | a list; each a glob pattern or `{ name, patterns: [..] }`. A unit both sides changed comes whole from the later write (`a` on a tie); overlapping units belong to the first listed | [`history/units.rs`](../../../../../engine/crates/layerfs-store-service/src/history/units.rs) |
 
 ## Returns
@@ -85,7 +85,7 @@ layerfs branch merge <store>/<project> <name> <a> <b> [--message TEXT] [--units 
 Only the final `merge_branch` holds the publication lane; the merge work
 happens before it. The merge Commit's base Layer is `main`'s when either
 side is `main`, else `a`'s base. See the
-[routing table](../../routing/routing-table.md). Under a folder scope
+[routing table](../../../control/routing/routing-table.md). Under a folder scope
 `name`, `a` and `b` are composed as `<ns>.<x>`.
 
 ## Errors
@@ -98,9 +98,9 @@ side is `main`, else `a`'s base. See the
 | `NoMergeBase` | the sides share no history | no | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `Conflict` | conflicting paths; nothing created; `detail` has `sources`, `merge_base`, `conflicts`, `lww`, `units` and the truncation flags | no | same |
 | `HeadMoved` | the catalog moved under the publish | no | same, [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../api/crates/layerfs-control/src/store/call.rs) |
+| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
 | `Failed` | a Store without merge scratch (`BackendUnavailable`); other failures | no | [`store/open.rs`](../../../../../engine/crates/layerfs-store-service/src/store/open.rs) |
-| `Unknown` | **the worker's answer was lost, or the publish outcome is unknown** | **yes** | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **the worker's answer was lost, or the publish outcome is unknown** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
 
 **After `Unknown`**, read [branch.get](get.md) for `name` before merging
 again.

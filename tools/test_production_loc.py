@@ -68,26 +68,41 @@ class CounterTests(unittest.TestCase):
         shutil.move(self.root / "engine/crates/layerfs-api", self.root / "api/crates/layerfs-api")
         self.assertEqual(production_loc.scan(self.root), after)
 
-    def test_connect_crates_count_as_connect_in_every_layout(self):
+    def test_control_crates_count_as_control_in_every_layout(self):
         import shutil
 
         write(self.root, "engine/crates/layerfs-daemon/src/lib.rs", "pub fn value() {}\n")
         write(self.root, "engine/crates/layerfs-sandbox/src/lib.rs", "pub fn value() {}\npub fn other() {}\n")
+        write(self.root, "api/crates/layerfs-control/src/lib.rs", "pub fn value() {}\n")
         before = production_loc.scan(self.root)
-        # Classified by name: the pre-move tree counts layerfs-sandbox as connect.
-        self.assertEqual(before["scopes"]["connect"]["crates"], {"layerfs-sandbox": 2})
+        # Classified by name: the pre-move tree counts layerfs-sandbox and
+        # layerfs-control as control.
+        self.assertEqual(before["scopes"]["control"]["crates"], {"layerfs-sandbox": 2, "layerfs-control": 1})
         self.assertEqual(before["scopes"]["engine"]["crates"], {"layerfs-daemon": 1})
         (self.root / "connect/crates").mkdir(parents=True)
         shutil.move(self.root / "engine/crates/layerfs-sandbox", self.root / "connect/crates/layerfs-sandbox")
-        after = production_loc.scan(self.root)
-        self.assertEqual(before, after)
-        for name in ("layerfs-sandbox", "layerfs-machine", "layerfs-store-backup"):
-            self.assertEqual(production_loc.crate_layer(name), "connect")
+        self.assertEqual(production_loc.scan(self.root), before)
+        # #101: connect/ became control/ and layerfs-control moved into it.
+        shutil.move(self.root / "connect", self.root / "control")
+        shutil.move(self.root / "api/crates/layerfs-control", self.root / "control/crates/layerfs-control")
+        self.assertEqual(production_loc.scan(self.root), before)
+        for name in (
+            "layerfs-home",
+            "layerfs-machine",
+            "layerfs-platform",
+            "layerfs-store",
+            "layerfs-bucket",
+            "layerfs-sandbox",
+            "layerfs-isolation",
+            "layerfs-control",
+            "layerfs-store-backup",
+        ):
+            self.assertEqual(production_loc.crate_layer(name), "control")
 
-    def test_library_and_front_ends_are_api_crates_and_nfs_is_engine(self):
-        # #533 step 2: the NFS export; the library, binary, binding and PyO3 module.
+    def test_front_ends_are_api_crates_and_nfs_is_engine(self):
+        # #533 step 2: the NFS export; the call surface, binary, binding and PyO3 module.
         self.assertEqual(production_loc.crate_layer("layerfs-nfs"), "engine")
-        for name in ("layerfs-api", "layerfs-control", "layerfs-cli", "layerfs-node", "layerfs-python"):
+        for name in ("layerfs-api", "layerfs-cli", "layerfs-node", "layerfs-python"):
             self.assertEqual(production_loc.crate_layer(name), "api")
 
     def test_api_regrouping_keeps_every_crate_and_count(self):

@@ -13,7 +13,7 @@ arguments in JavaScript, Python and the `layerfs` command.
 | Layer | [API](../README.md) |
 | Crates | `layerfs-api`, `layerfs-control` |
 | Source | [`api/crates/layerfs-api/src`](../../../../api/crates/layerfs-api/src) |
-| Uses | [Call table](../call-table/README.md), [Control](../control/README.md), [Routing and workers](../routing/README.md) |
+| Uses | [Call table](../call-table/README.md), [Management](../../control/management/README.md), [Routing and workers](../../control/routing/README.md) |
 | Used by | [Front ends](../front-ends/README.md) |
 
 ## Families
@@ -112,9 +112,9 @@ every `file` and `branch` call needs it (without it they are refused, see
 namespace; the Branch of a Workspace is not checked. These gaps wait for an
 owner decision and are listed under
 [Scopes](../call-table/table.md#scopes)
-([`calls/scope.rs`](../../../../api/crates/layerfs-control/src/calls/scope.rs)).
+([`calls/scope.rs`](../../../../control/crates/layerfs-control/src/calls/scope.rs)).
 Every function is generated from the call table
-([`calls/table.rs`](../../../../api/crates/layerfs-control/src/calls/table.rs));
+([`calls/table.rs`](../../../../control/crates/layerfs-control/src/calls/table.rs));
 see [Front ends](../front-ends/README.md).
 
 ## Answers and errors
@@ -166,9 +166,9 @@ A stopped machine is never started by a call other than
 [machine.start](machine/start.md): its calls are `Unavailable`. A
 PostgreSQL Store's calls always run in the caller's process, and its
 password reference is resolved only there. See the
-[routing table](../routing/routing-table.md),
-[workers](../routing/workers.md) and the
-[daemon channel](../routing/daemon-channel.md).
+[routing table](../../control/routing/routing-table.md),
+[workers](../../control/routing/workers.md) and the
+[daemon channel](../../control/routing/daemon-channel.md).
 
 ## How to read a call page
 

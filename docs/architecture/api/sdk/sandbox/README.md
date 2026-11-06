@@ -9,7 +9,7 @@ The `sandbox` calls.
 | | |
 | --- | --- |
 | Component | [Call table](../../call-table/README.md) |
-| Source | [`api/crates/layerfs-api/src/sandbox`](../../../../../api/crates/layerfs-api/src/sandbox), [`api/crates/layerfs-control/src/sandbox`](../../../../../api/crates/layerfs-control/src/sandbox) |
+| Source | [`api/crates/layerfs-api/src/sandbox`](../../../../../api/crates/layerfs-api/src/sandbox), [`control/crates/layerfs-control/src/sandbox`](../../../../../control/crates/layerfs-control/src/sandbox) |
 
 ## Calls
 
@@ -28,7 +28,7 @@ The `sandbox` calls.
 Four calls, in help order
 ([`sandbox/mod.rs`](../../../../../api/crates/layerfs-api/src/sandbox/mod.rs)).
 Each runs `layerfs_control::sandbox::family::sandbox`
-([`family.rs`](../../../../../api/crates/layerfs-control/src/sandbox/family.rs)).
+([`family.rs`](../../../../../control/crates/layerfs-control/src/sandbox/family.rs)).
 A Sandbox runs one project's Workspace daemon on a machine; its name is
 unique across the home.
 
@@ -40,24 +40,24 @@ unique across the home.
 | [`close`](close.md) | `name` (Name) | `force` (Bool) | `{ kind: "Closed", sandbox, unknown, closed }`, or `{ closed, was_gone: true }`, or `{ closed, was, left? }` for a record with no id | its machine: here or `sandbox.host` in the worker |
 
 The record is `SandboxRecord::to_sdk`
-([`record.rs`](../../../../../api/crates/layerfs-control/src/sandbox/record.rs)):
+([`record.rs`](../../../../../control/crates/layerfs-control/src/sandbox/record.rs)):
 its stored fields except `v`, `runtime_id` and `daemon`, plus the derived
 `state` and, while an operation holds it, `op` as
 `{ id, name, phase, started, uncertain }`
-([`common/op.rs`](../../../../../api/crates/layerfs-control/src/common/op.rs)).
+([`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs)).
 Each Workspace in `get` carries `ws` (`<sandbox>:<name>` or
 `<sandbox>:<path>`), `name` and `path`
-([`get.rs`](../../../../../api/crates/layerfs-control/src/sandbox/get.rs)).
+([`get.rs`](../../../../../control/crates/layerfs-control/src/sandbox/get.rs)).
 
 ## Arguments and options
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | a Sandbox name; `native` and `docker` are refused (they name built-in machines) | [`create.rs`](../../../../../api/crates/layerfs-control/src/sandbox/create.rs) |
-| `machine` | Name | default: a sqlite Store's machine, else `native`; a sqlite Store's Sandbox must run on the Store's machine | [`create.rs`](../../../../../api/crates/layerfs-control/src/sandbox/create.rs) |
-| `image` | Text | travels in the deploy settings, not as a top-level argument | [`route.rs`](../../../../../api/crates/layerfs-control/src/sandbox/route.rs) |
-| `page_size`, `page_pos` | Int | `PAGE`; clamped to 1..=1000 (default 50) and 0 or more | [`family.rs`](../../../../../api/crates/layerfs-control/src/sandbox/family.rs) |
-| `force` | Bool | `close` stops the Sandbox even with Workspaces mounted | [`close.rs`](../../../../../api/crates/layerfs-control/src/sandbox/close.rs) |
+| `name` | Name | a Sandbox name; `native` and `docker` are refused (they name built-in machines) | [`create.rs`](../../../../../control/crates/layerfs-control/src/sandbox/create.rs) |
+| `machine` | Name | default: a sqlite Store's machine, else `native`; a sqlite Store's Sandbox must run on the Store's machine | [`create.rs`](../../../../../control/crates/layerfs-control/src/sandbox/create.rs) |
+| `image` | Text | travels in the deploy settings, not as a top-level argument | [`route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
+| `page_size`, `page_pos` | Int | `PAGE`; clamped to 1..=1000 (default 50) and 0 or more | [`family.rs`](../../../../../control/crates/layerfs-control/src/sandbox/family.rs) |
+| `force` | Bool | `close` stops the Sandbox even with Workspaces mounted | [`close.rs`](../../../../../control/crates/layerfs-control/src/sandbox/close.rs) |
 
 `create` claims the name under the home lock with an `op` intent
 (`sandbox.create`, phases `claim`, `start`); `close` records
@@ -69,15 +69,15 @@ Sandbox may run for its Store kind is the support table's
 
 | Code | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad name, or `native`/`docker` as a Sandbox name | [`create.rs`](../../../../../api/crates/layerfs-control/src/sandbox/create.rs) |
-| `NoSuchStore`, `NoSuchProject`, `NoSuchSandbox` | a missing Store, project or Sandbox | [`family.rs`](../../../../../api/crates/layerfs-control/src/sandbox/family.rs) |
-| `NotFound` | no machine of that name | [`create.rs`](../../../../../api/crates/layerfs-control/src/sandbox/create.rs) |
-| `Exists` | the Sandbox name is taken | [`create.rs`](../../../../../api/crates/layerfs-control/src/sandbox/create.rs) |
-| `Unsupported` | the machine cannot run a Sandbox of this Store kind, or the sqlite Store is on another machine | [`create.rs`](../../../../../api/crates/layerfs-control/src/sandbox/create.rs) |
-| `MountsActive` | `close` without `force` while Workspaces are mounted | [`serve.rs`](../../../../../api/crates/layerfs-control/src/sandbox/serve.rs) |
-| `Busy`, `Unresolved` | another live operation holds the Sandbox or its Store; a gone owner's uncertain `op` | [`common/op.rs`](../../../../../api/crates/layerfs-control/src/common/op.rs) |
-| `Unavailable` | the machine's worker is not recorded or does not answer; a PostgreSQL server the machine cannot reach | [`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs), [`route.rs`](../../../../../api/crates/layerfs-control/src/sandbox/route.rs) |
-| `Unknown` | **uncertain:** the machine's answer to `create` or `close` was lost | [`create.rs`](../../../../../api/crates/layerfs-control/src/sandbox/create.rs), [`close.rs`](../../../../../api/crates/layerfs-control/src/sandbox/close.rs) |
+| `InvalidInput` | a bad name, or `native`/`docker` as a Sandbox name | [`create.rs`](../../../../../control/crates/layerfs-control/src/sandbox/create.rs) |
+| `NoSuchStore`, `NoSuchProject`, `NoSuchSandbox` | a missing Store, project or Sandbox | [`family.rs`](../../../../../control/crates/layerfs-control/src/sandbox/family.rs) |
+| `NotFound` | no machine of that name | [`create.rs`](../../../../../control/crates/layerfs-control/src/sandbox/create.rs) |
+| `Exists` | the Sandbox name is taken | [`create.rs`](../../../../../control/crates/layerfs-control/src/sandbox/create.rs) |
+| `Unsupported` | the machine cannot run a Sandbox of this Store kind, or the sqlite Store is on another machine | [`create.rs`](../../../../../control/crates/layerfs-control/src/sandbox/create.rs) |
+| `MountsActive` | `close` without `force` while Workspaces are mounted | [`serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
+| `Busy`, `Unresolved` | another live operation holds the Sandbox or its Store; a gone owner's uncertain `op` | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs) |
+| `Unavailable` | the machine's worker is not recorded or does not answer; a PostgreSQL server the machine cannot reach | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs), [`route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
+| `Unknown` | **uncertain:** the machine's answer to `create` or `close` was lost | [`create.rs`](../../../../../control/crates/layerfs-control/src/sandbox/create.rs), [`close.rs`](../../../../../control/crates/layerfs-control/src/sandbox/close.rs) |
 
 After `Unknown` the record keeps its `op` with `uncertain: true` and a line
 goes to `log/uncertain.jsonl`; later calls on the Sandbox are refused
@@ -101,14 +101,14 @@ it). See [error kinds](../../call-table/errors.md#error-kinds) and
  sandbox.list -------------------------> home records only
 ```
 
-[`route.rs`](../../../../../api/crates/layerfs-control/src/sandbox/route.rs)
+[`route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs)
 sends the records a guest needs with the request; a guest never reads the
 home. For a PostgreSQL Store the caller resolves the password and sends the
 URL only in that request, never in a record. `get` uses `reach` with no
 machine start (P4): a machine that is down answers the record with
 `workspaces: []` and `down_reason`. See the
-[routing table](../../routing/routing-table.md) and
-[daemon channel](../../routing/daemon-channel.md).
+[routing table](../../../control/routing/routing-table.md) and
+[daemon channel](../../../control/routing/daemon-channel.md).
 
 ## Example
 
@@ -132,8 +132,8 @@ $ layerfs sandbox close tests --force
 ## Related
 
 - [workspace family](../workspace/README.md): the calls on a Sandbox's Workspaces.
-- [Control: Families](../../control/families.md) and [Routing table](../../routing/routing-table.md).
-- [Connect: Sandboxes](../../../connect/sandboxes/README.md) and [Connect: Machines](../../../connect/machines/README.md).
+- [Control: Families](../../../control/management/families.md) and [Routing table](../../../control/routing/routing-table.md).
+- [Control: Sandboxes](../../../control/sandboxes/README.md) and [Control: Machines](../../../control/machines/README.md).
 - [A Workspace session](../../../flows/workspace.md).
 
 ---

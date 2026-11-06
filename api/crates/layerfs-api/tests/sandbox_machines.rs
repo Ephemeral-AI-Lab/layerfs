@@ -171,10 +171,10 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     // stopped machine is refused naming its start; elsewhere the support
     // table's reason, word for word (#535 §7.3)
     let (code, message) = create("dev");
-    match layerfs_machine::sandbox_allowed(
-        layerfs_machine::Platform::Lima,
-        layerfs_machine::HostOs::current(),
-        layerfs_machine::StoreKind::Postgresql,
+    match layerfs_platform::sandbox_allowed(
+        layerfs_platform::Platform::Lima,
+        layerfs_platform::HostOs::current(),
+        layerfs_platform::StoreKind::Postgresql,
     ) {
         Ok(()) => {
             assert_eq!(code, "Unavailable", "{message}");
@@ -189,7 +189,7 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     let (code, message) = create("box");
     assert_eq!(code, "Unsupported", "{message}");
     assert!(
-        message == layerfs_sandbox::platform_policy::SSH_DISABLED,
+        message == layerfs_isolation::platform_policy::SSH_DISABLED,
         "{message}"
     );
     let (code, message) = call(
@@ -217,7 +217,7 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
 /// platform, a sqlite Store on each and one PostgreSQL Store, all records.
 #[test]
 fn every_platform_refusal_is_the_support_table_s() {
-    use layerfs_machine::{sandbox_allowed, HostOs, Platform, StoreKind};
+    use layerfs_platform::{sandbox_allowed, HostOs, Platform, StoreKind};
     let home = tempdir("support");
     home::open(&home).unwrap();
     ok(&home, "machine.list", &[]);

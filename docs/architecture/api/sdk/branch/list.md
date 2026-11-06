@@ -10,7 +10,7 @@ Lists a project's Branches, `main` first, one page at a time.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/list.rs`](../../../../../api/crates/layerfs-api/src/branch/list.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → Store method `project.list_branches` ([`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
+| Implemented in | `layerfs_control::store::calls::run` → Store method `project.list_branches` ([`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs), [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs)) |
 | Runs in | the caller's process for PostgreSQL and for sqlite on `native`; else the Store's machine worker (`store.call`) |
 
 ## Signature
@@ -35,7 +35,7 @@ layerfs branch list <store>/<project> [--page-size N] [--page-pos N]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>`; both records must exist | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>`; both records must exist | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
 
 ## Options
 
@@ -65,7 +65,7 @@ layerfs branch list <store>/<project> [--page-size N] [--page-pos N]
 | `has_more`, `next_page_pos` | bool, int or null | paging | same |
 
 A page also ends early at the 48 KiB reply budget. Keys arrive snake_case
-([`calls/keys.rs`](../../../../../api/crates/layerfs-control/src/calls/keys.rs)).
+([`calls/keys.rs`](../../../../../control/crates/layerfs-control/src/calls/keys.rs)).
 
 ## Where it runs
 
@@ -82,23 +82,23 @@ A page also ends early at the 48 KiB reply budget. Keys arrive snake_case
 
 A read: it never takes the publication lane. A stopped machine is
 `Unavailable`; nothing is started. See the
-[routing table](../../routing/routing-table.md).
+[routing table](../../../control/routing/routing-table.md).
 
 | Folder-scoped client | Behaviour | Source |
 | --- | --- | --- |
-| scope with `branch: <ns>` | only Branches named `<ns>.<x>`, shown as `<x>`; read 1000 at a time and paged here | [`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) `branches_in` |
-| scope without `branch` | `InvalidInput` "out of scope: branch" | [`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs) |
+| scope with `branch: <ns>` | only Branches named `<ns>.<x>`, shown as `<x>`; read 1000 at a time and paged here | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) `branches_in` |
+| scope without `branch` | `InvalidInput` "out of scope: branch" | [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
 | `InvalidInput` | a bad project; `page_size` outside 1..=1000; out of scope | no | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
-| `NoSuchStore`, `NoSuchProject` | the Store or project is not recorded | no | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
-| `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`store/record.rs`](../../../../../api/crates/layerfs-control/src/store/record.rs) |
-| `Unavailable` | the machine's worker is not recorded or does not answer; an unreachable PostgreSQL server | no | [`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs) |
-| `Failed` | a scoped list made no progress | no | [`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `NoSuchStore`, `NoSuchProject` | the Store or project is not recorded | no | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
+| `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) |
+| `Unavailable` | the machine's worker is not recorded or does not answer; an unreachable PostgreSQL server | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
+| `Failed` | a scoped list made no progress | no | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
 
 ## Examples
 

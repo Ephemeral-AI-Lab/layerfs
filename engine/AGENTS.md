@@ -14,13 +14,14 @@ product mental model or campaign-specific benchmark procedures.
   (`layerfs-cli`, `layerfs-node`, `layerfs-python`) are API crates under
   `api/crates`; see the [API guide](../api/AGENTS.md). No engine crate may
   depend on them. Since #535 (owner, 2026-11-03, D1, D4) Sandbox and network
-  code leave the engine for the [connect layer](../connect/AGENTS.md):
-  `layerfs-sandbox`, the machine layer (`layerfs-machine`) and remote
-  storage (renamed `layerfs-store-backup`, with `layerfs-store-service`'s
-  `remote/`) moved to `connect/crates` in #535 phase 1. The engine keeps
+  code leave the engine for the connect layer, renamed the
+  [control layer](../control/AGENTS.md) by layerfs-project#101 (D-6):
+  the Sandbox runtime (now `layerfs-isolation`), the machine layer (now
+  `layerfs-platform`) and remote storage (now `layerfs-bucket`, with
+  `layerfs-store-service`'s `remote/`) moved out in #535 phase 1. The engine keeps
   persistence (SQLite and PostgreSQL, D2), the daemon, the overlay,
   Workspaces and the kernel routes (FUSE and NFS as peers over
-  `layerfs-mount-ports`, D3). No engine crate may depend on a connect crate.
+  `layerfs-mount-ports`, D3). No engine crate may depend on a control crate.
 - `layerfs-store-service` owns the SDK Store calls in `src/methods/` (#536
   H3): the method table (`methods::call`), its argument reader and one file
   per `file.*`/`branch.*` call. `read`, `write` and `history` know no SDK

@@ -12,7 +12,7 @@ Store's other projects stay.
 | --- | --- |
 | Family | [project](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/project/remove.rs`](../../../../../api/crates/layerfs-api/src/project/remove.rs) |
-| Implemented in | `layerfs_control::project::family::run` → `remove` ([`project/family.rs`](../../../../../api/crates/layerfs-control/src/project/family.rs)), then `store::identity::remove_project` ([`store/identity.rs`](../../../../../api/crates/layerfs-control/src/store/identity.rs)) |
+| Implemented in | `layerfs_control::project::family::run` → `remove` ([`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs)), then `store::identity::remove_project` ([`store/identity.rs`](../../../../../control/crates/layerfs-control/src/store/identity.rs)) |
 | Runs in | the caller's process, or the worker op `project.remove` on the Store's machine (sqlite on a non-local machine). Never a Sandbox daemon. |
 
 ## Signature
@@ -37,7 +37,7 @@ layerfs project remove <project>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<name>`; Store and project records must exist; no Sandbox of the project may be recorded | [`calls/check.rs`](../../../../../api/crates/layerfs-control/src/calls/check.rs), [`inventory.rs`](../../../../../api/crates/layerfs-control/src/inventory.rs) `can_remove_project` |
+| `project` | Project | `<store>/<name>`; Store and project records must exist; no Sandbox of the project may be recorded | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_project` |
 
 ## Options
 
@@ -81,25 +81,25 @@ None.
 | sqlite | any other machine, and `native` on Windows | that machine's worker; the caller holds the lease meanwhile |
 
 The Store-side work is in
-[`store/identity.rs`](../../../../../api/crates/layerfs-control/src/store/identity.rs)
+[`store/identity.rs`](../../../../../control/crates/layerfs-control/src/store/identity.rs)
 `remove_project`; the worker op is in
-[`machine/worker/server.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/server.rs).
+[`machine/worker/server.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/server.rs).
 The lookup and the removal both go through the Store's open service, so
 other daemons and SDK processes keep reading meanwhile. See the
-[routing table](../../routing/routing-table.md).
+[routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | `project` is not `<store>/<name>` with valid names | no | [`calls/check.rs`](../../../../../api/crates/layerfs-control/src/calls/check.rs) |
-| `NoSuchStore`, `NoSuchProject` | a record is missing; `NoSuchProject` also when the Store holds no LayerStack of that name | no | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs), `store/identity.rs` |
-| `InUse` | a Sandbox of the project is recorded; `detail.related` lists each `{ kind: "sandbox", name }` | no | [`inventory.rs`](../../../../../api/crates/layerfs-control/src/inventory.rs) |
-| `Busy`, `Unresolved` | the Store's record holds another operation's intent | no | [`common/op.rs`](../../../../../api/crates/layerfs-control/src/common/op.rs) |
-| `Unsupported` | a PostgreSQL Store; or the kernel guard refuses the Store's filesystem when the Store is opened | no | `project/family.rs`, [`store/service.rs`](../../../../../api/crates/layerfs-control/src/store/service.rs) |
-| `Unavailable` | worker route: no worker recorded, or not reached | no | [`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs) |
+| `InvalidInput` | `project` is not `<store>/<name>` with valid names | no | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs) |
+| `NoSuchStore`, `NoSuchProject` | a record is missing; `NoSuchProject` also when the Store holds no LayerStack of that name | no | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs), `store/identity.rs` |
+| `InUse` | a Sandbox of the project is recorded; `detail.related` lists each `{ kind: "sandbox", name }` | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) |
+| `Busy`, `Unresolved` | the Store's record holds another operation's intent | no | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs) |
+| `Unsupported` | a PostgreSQL Store; or the kernel guard refuses the Store's filesystem when the Store is opened | no | `project/family.rs`, [`store/service.rs`](../../../../../control/crates/layerfs-control/src/store/service.rs) |
+| `Unavailable` | worker route: no worker recorded, or not reached | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
 | `Failed` | **the Store write failed, its outcome included**: `remove_layerstack` errors are all `Failed` | **may be** | `store/identity.rs` `remove_project` |
-| `Unknown` | **worker route: the answer was lost** | **yes** | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **worker route: the answer was lost** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
 
 After **`Failed` or `Unknown`** the caller's home entry is kept (it is
 removed only after success), so `project.get` still answers. Read the
@@ -127,7 +127,7 @@ layerfs project remove shop/api
 
 - Before: close the project's Sandboxes (`sandbox.close`); [`project.get`](get.md).
 - After: [`project.list`](list.md); `store.remove` to drop the whole Store.
-- [Store: history publication, removal](../../../engine/store/history-publication.md#removal); [Control: families](../../control/families.md#project).
+- [Store: history publication, removal](../../../engine/store/history-publication.md#removal); [Control: families](../../../control/management/families.md#project).
 
 ---
 

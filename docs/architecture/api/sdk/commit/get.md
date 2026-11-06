@@ -11,7 +11,7 @@ eight characters.
 | --- | --- |
 | Family | [commit](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/commit/get.rs`](../../../../../api/crates/layerfs-api/src/commit/get.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → `commit_get`, which pages Store method `branch.list_commits` ([`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs)) |
+| Implemented in | `layerfs_control::store::calls::run` → `commit_get`, which pages Store method `branch.list_commits` ([`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs)) |
 | Runs in | control's loop in the caller's process; each page where the Store's calls run |
 
 ## Signature
@@ -35,9 +35,9 @@ layerfs commit get <store>/<project> <branch> <commit>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
 | `branch` | Name | the Branch whose history holds the Commit; not `main` | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `commit` | Name | a full id, or a prefix of 8 or more characters | [`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) `commit_get` |
+| `commit` | Name | a full id, or a prefix of 8 or more characters | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) `commit_get` |
 
 ## Options
 
@@ -65,18 +65,18 @@ One `commit` value, the same shape as an item of
 Each page is one Store call with its own lease claim; the walk grows with
 the Branch's history. A prefix matching several Commits answers the newest.
 Refused under a folder scope. See the
-[routing table](../../routing/routing-table.md).
+[routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad project; a folder-scoped client | no | [`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | a bad project; a folder-scoped client | no | [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
 | `NoSuchBranch` | no such Branch, or `main` | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `NoSuchCommit` | not on this Branch's history | no | [`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) |
+| `NoSuchCommit` | not on this Branch's history | no | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
 | `Failed` | a page made no progress | no | same, `page_of` |
-| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../api/crates/layerfs-control/src/store/call.rs) |
-| `Unknown` | a worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
+| `Unknown` | a worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
 
 ## Examples
 

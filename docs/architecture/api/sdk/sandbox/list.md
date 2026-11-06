@@ -11,7 +11,7 @@ time, from the home's records alone.
 | --- | --- |
 | Family | [sandbox](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/sandbox/list.rs`](../../../../../api/crates/layerfs-api/src/sandbox/list.rs) |
-| Implemented in | `layerfs_control::sandbox::family::sandbox` → `list::list` ([`sandbox/list.rs`](../../../../../api/crates/layerfs-control/src/sandbox/list.rs)) |
+| Implemented in | `layerfs_control::sandbox::family::sandbox` → `list::list` ([`sandbox/list.rs`](../../../../../control/crates/layerfs-control/src/sandbox/list.rs)) |
 | Runs in | the caller's process; reads `sandbox/<name>/record.json` only |
 
 ## Signature
@@ -36,17 +36,17 @@ layerfs sandbox list [<project>] [--page-size <n>] [--page-pos <n>]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project, optional | `<store>/<project>`; keeps only records whose `project` matches. A project with no Sandboxes, or none recorded, gives an empty page | [`sandbox/list.rs`](../../../../../api/crates/layerfs-control/src/sandbox/list.rs) |
+| `project` | Project, optional | `<store>/<project>`; keeps only records whose `project` matches. A project with no Sandboxes, or none recorded, gives an empty page | [`sandbox/list.rs`](../../../../../control/crates/layerfs-control/src/sandbox/list.rs) |
 
 ## Options
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `page_size` | Int | 50 | clamped to 1..=1000 | [`sandbox/family.rs`](../../../../../api/crates/layerfs-control/src/sandbox/family.rs) `page` |
+| `page_size` | Int | 50 | clamped to 1..=1000 | [`sandbox/family.rs`](../../../../../control/crates/layerfs-control/src/sandbox/family.rs) `page` |
 | `page_pos` | Int | 0 | a negative value counts as 0 | `family.rs` `page` |
 
 Under a folder scope the call is refused `InvalidInput`
-([`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs)).
+([`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs)).
 
 ## Returns
 
@@ -61,8 +61,8 @@ Under a folder scope the call is refused `InvalidInput`
 | Field | Kind | Meaning |
 | --- | --- | --- |
 | `items` | list | one page of records, each `SandboxRecord::to_sdk(View::List)`: the stored fields but `v`, `runtime_id`, `daemon` |
-| `items[].state` | text | `creating`, `closing`, `unresolved`, `gone` or `running`, derived from the record and its `op`; never asks a machine ([`record.rs`](../../../../../api/crates/layerfs-control/src/sandbox/record.rs) `state`) |
-| `items[].op` | map | the in-flight or uncertain intent, when the record holds one ([`common/op.rs`](../../../../../api/crates/layerfs-control/src/common/op.rs) `to_sdk`) |
+| `items[].state` | text | `creating`, `closing`, `unresolved`, `gone` or `running`, derived from the record and its `op`; never asks a machine ([`record.rs`](../../../../../control/crates/layerfs-control/src/sandbox/record.rs) `state`) |
+| `items[].op` | map | the in-flight or uncertain intent, when the record holds one ([`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs) `to_sdk`) |
 | `next_page_pos` | int or null | pass back as `page_pos`; null after the last page |
 
 `list` reads no worker and no daemon, so `state` is `running` for any
@@ -80,14 +80,14 @@ asks the machine.
 
 No route decision is made: no machine, worker or daemon is contacted, for
 any Store kind or platform. See the
-[routing table](../../routing/routing-table.md).
+[routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | `project` not `<store>/<project>`; wrong kind of a paging option; folder scope | no | [`calls/check.rs`](../../../../../api/crates/layerfs-control/src/calls/check.rs) |
-| the home's refusal | the home cannot be opened or migrated | no | [`calls/dispatch.rs`](../../../../../api/crates/layerfs-control/src/calls/dispatch.rs) |
+| `InvalidInput` | `project` not `<store>/<project>`; wrong kind of a paging option; folder scope | no | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs) |
+| the home's refusal | the home cannot be opened or migrated | no | [`calls/dispatch.rs`](../../../../../control/crates/layerfs-control/src/calls/dispatch.rs) |
 
 A list never clears an intent and has no uncertain outcome.
 
@@ -111,7 +111,7 @@ $ layerfs sandbox list shop/api --text
 
 - Before: [`sandbox.create`](create.md).
 - After: [`sandbox.get`](get.md) for live Workspaces, [`sandbox.close`](close.md).
-- [Control: Home and records](../../control/home-and-records.md), [Connect: Sandboxes](../../../connect/sandboxes/README.md).
+- [Control: Home and records](../../../control/management/home-and-records.md), [Control: Sandboxes](../../../control/sandboxes/README.md).
 
 ---
 

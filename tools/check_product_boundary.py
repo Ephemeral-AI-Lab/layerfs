@@ -17,14 +17,14 @@ UNSAFE = re.compile(r"\bunsafe\b")
 
 # Crates whose `unsafe` surface is bounded. layerfs-storage keeps one audited
 # FFI module (encoding/codec.rs); Persistence has the owner-authorized macOS
-# seal file-control module; Sandbox reads macOS process facts through
+# seal file-control module; Isolation reads macOS process facts through
 # proc_pidinfo in local/os/macos/darwin.rs. Their siblings stay unsafe-free. The
 # comment in a lint name (`unsafe_code`) is not the bare word, so attr lines
 # never trip the scan once comments are stripped.
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
     "layerfs-persistence": "src/backend/sqlite/lifecycle/file_control.rs",
-    "layerfs-sandbox": "src/local/os/macos/darwin.rs",
+    "layerfs-isolation": "src/local/os/macos/darwin.rs",
 }
 UNSAFE_FREE_CRATES = (
     "layerfs-content",
@@ -33,7 +33,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-overlay",
     "layerfs-workspace",
     "layerfs-store-service",
-    "layerfs-store-backup",
+    "layerfs-bucket",
     "layerfs-mount-ports",
     "layerfs-fuse",
     "layerfs-nfs",
@@ -42,7 +42,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-control",
     "layerfs-bridge",
     "layerfs-cli",
-    "layerfs-machine",
+    "layerfs-platform",
 )
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
@@ -53,7 +53,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-overlay": "#![forbid(unsafe_code)]",
     "layerfs-workspace": "#![forbid(unsafe_code)]",
     "layerfs-store-service": "#![forbid(unsafe_code)]",
-    "layerfs-store-backup": "#![forbid(unsafe_code)]",
+    "layerfs-bucket": "#![forbid(unsafe_code)]",
     "layerfs-mount-ports": "#![forbid(unsafe_code)]",
     "layerfs-fuse": "#![forbid(unsafe_code)]",
     "layerfs-nfs": "#![forbid(unsafe_code)]",
@@ -61,9 +61,9 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-api": "#![forbid(unsafe_code)]",
     "layerfs-control": "#![forbid(unsafe_code)]",
     "layerfs-bridge": "#![forbid(unsafe_code)]",
-    "layerfs-sandbox": "#![deny(unsafe_code)]",
+    "layerfs-isolation": "#![deny(unsafe_code)]",
     "layerfs-cli": "#![forbid(unsafe_code)]",
-    "layerfs-machine": "#![forbid(unsafe_code)]",
+    "layerfs-platform": "#![forbid(unsafe_code)]",
 }
 
 
@@ -76,7 +76,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-bridge",
         "layerfs-history",
         "layerfs-persistence",
-        "layerfs-sandbox",
+        "layerfs-isolation",
         "layerfs-storage",
         "layerfs-store-service",
         "layerfs-telemetry",
@@ -105,7 +105,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-mount-ports",
     },
     # Whole-file remote drivers; they know nothing about Stores.
-    "layerfs-store-backup": {
+    "layerfs-bucket": {
         # bucket/ knows nothing about Stores; backup/ is the whole-Store copy.
         "layerfs-store-service",
         "layerfs-persistence",
@@ -130,7 +130,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-history",
         "layerfs-persistence",
         "layerfs-telemetry",
-        "layerfs-store-backup",
+        "layerfs-bucket",
     },
     # Concrete Store open/install belongs to application composition. The
     # provider-independent daemon store/ subtree has a narrower source boundary.
@@ -160,23 +160,25 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-telemetry",
         "layerfs-bridge",
         "layerfs-project",
-        "layerfs-sandbox",
-        "layerfs-machine",
+        "layerfs-isolation",
+        "layerfs-platform",
         "layerfs-store-service",
-        "layerfs-store-backup",
+        "layerfs-bucket",
     },
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
-    "layerfs-sandbox": set(),
-    # The machine layer (#535 1.2): uses the Backend enum, shared types and
+    # The drivers (#101 D-5): isolation (was layerfs-sandbox), platform (was
+    # layerfs-machine) and bucket (was layerfs-store-backup).
+    "layerfs-isolation": set(),
+    # The platform driver (#535 1.2): uses the Backend enum, shared types and
     # json; the bridge's KernelRoute and StoreKind name its support table (B).
-    "layerfs-machine": {"layerfs-sandbox", "layerfs-bridge"},
+    "layerfs-platform": {"layerfs-isolation", "layerfs-bridge"},
     # The 2.0 front ends (#533): thin layers over the library's call table.
     "layerfs-cli": {"layerfs-api", "layerfs-bridge"},
     "layerfs-python": {"layerfs-api", "layerfs-bridge"},
 }
 DOMAIN_CRATES = {"layerfs-content", "layerfs-storage", "layerfs-history"}
-LAYER_ORDER = ("core", "engine", "connect", "api")
-CORE, ENGINE, CONNECT, API = LAYER_ORDER
+LAYER_ORDER = ("core", "engine", "control", "api")
+CORE, ENGINE, CONTROL, API = LAYER_ORDER
 LAYER = {
     "layerfs-content": CORE,
     "layerfs-history": CORE,
@@ -192,16 +194,15 @@ LAYER = {
     "layerfs-project": ENGINE,
     "layerfs-store-service": ENGINE,
     "layerfs-workspace": ENGINE,
-    # The connect layer (#535): machine/network reach. layerfs-sandbox moved
-    # in phase 1; layerfs-machine and layerfs-store-backup follow there.
-    "layerfs-sandbox": CONNECT,
-    "layerfs-machine": CONNECT,
-    "layerfs-store-backup": CONNECT,
-    # The public surface under api/crates: the call surface, the management
-    # library under it (#536) and the 2.0 front ends (#533), the `layerfs`
-    # binary, the Node binding and the PyO3 module.
+    # The control layer (#535 connect, renamed control by #101 D-6): the
+    # drivers and the management library (D-2 moved it out of api/).
+    "layerfs-isolation": CONTROL,
+    "layerfs-platform": CONTROL,
+    "layerfs-bucket": CONTROL,
+    "layerfs-control": CONTROL,
+    # The public surface under api/crates: the call surface and the 2.0 front
+    # ends (#533), the `layerfs` binary, the Node binding and the PyO3 module.
     "layerfs-api": API,
-    "layerfs-control": API,
     "layerfs-cli": API,
     "layerfs-node": API,
     "layerfs-python": API,
@@ -216,7 +217,7 @@ def layer_violations(name, dependency, kind):
     return []
 
 
-CRATE_ROOTS = ("core/crates", "engine/crates", "connect/crates", "api/crates", "api")
+CRATE_ROOTS = ("core/crates", "engine/crates", "control/crates", "api/crates", "api")
 
 
 def crate_directories(root):
@@ -261,6 +262,8 @@ ENGINES_AND_CLUSTER2 = {
     "layerfs-bridge",
     "layerfs-sandbox",
     "layerfs-machine",
+    "layerfs-isolation",
+    "layerfs-platform",
     "layerfs-server",
     "layerfs-sdk",
     "layerfs-api",

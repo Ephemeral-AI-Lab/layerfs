@@ -9,7 +9,7 @@ The `file` calls.
 | | |
 | --- | --- |
 | Component | [Call table](../../call-table/README.md) |
-| Source | [`api/crates/layerfs-api/src/file`](../../../../../api/crates/layerfs-api/src/file), [`api/crates/layerfs-control/src/store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs), [`engine/crates/layerfs-store-service/src/methods/file`](../../../../../engine/crates/layerfs-store-service/src/methods/file) |
+| Source | [`api/crates/layerfs-api/src/file`](../../../../../api/crates/layerfs-api/src/file), [`control/crates/layerfs-control/src/store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs), [`engine/crates/layerfs-store-service/src/methods/file`](../../../../../engine/crates/layerfs-store-service/src/methods/file) |
 
 ## Calls
 
@@ -72,7 +72,7 @@ A `changes` item is `{ op, path, from_path, to_path, content, old, new,
 mode }` with `op` one of `write`, `edit`, `mkdir`, `chmod`, `rm`, `cp`,
 `mv`. The Store's own names (`from`, `to`, `oldText`, `newText`, `bytes`)
 are refused in a change, so the folder scope checks every path field
-([`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs),
+([`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs),
 [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs)).
 A read reply is bounded by `REPLY_BUDGET` (48 KiB); `truncated`,
 `next_line` and `has_more` say where to go on
@@ -82,15 +82,15 @@ A read reply is bounded by `REPLY_BUDGET` (48 KiB); `truncated`,
 
 | Code | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad argument, change or page; a path outside a folder scope (`out of scope: path`) | [`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs), [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
-| `NoSuchStore`, `NoSuchProject`, `NoSuchBranch`, `NoSuchCommit` | a missing Store, project, Branch or Commit | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
+| `InvalidInput` | a bad argument, change or page; a path outside a folder scope (`out of scope: path`) | [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs), [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
+| `NoSuchStore`, `NoSuchProject`, `NoSuchBranch`, `NoSuchCommit` | a missing Store, project, Branch or Commit | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `NoSuchPath`, `NotFile`, `NotDirectory`, `IsDirectory`, `Exists` | a path of the wrong kind or missing | [`read/snapshot.rs`](../../../../../engine/crates/layerfs-store-service/src/read/snapshot.rs), [`write/mutation.rs`](../../../../../engine/crates/layerfs-store-service/src/write/mutation.rs) |
 | `Binary` | `read` or `edit` of a file that is not text | [`read/window.rs`](../../../../../engine/crates/layerfs-store-service/src/read/window.rs), [`write/edit.rs`](../../../../../engine/crates/layerfs-store-service/src/write/edit.rs) |
 | `NoMatch`, `AmbiguousMatch` | `edit` finds the old text 0 or more than 1 times (`detail.matches`) | [`write/edit.rs`](../../../../../engine/crates/layerfs-store-service/src/write/edit.rs) |
 | `ReadOnly` | a write to `main`, which changes only through `branch.publish` | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `Conflict` | the head moved and paths conflict; nothing was committed | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
-| `Busy`, `Unresolved`, `Unavailable` | the Store's `op`, or its worker not reached | [`common/op.rs`](../../../../../api/crates/layerfs-control/src/common/op.rs), [`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs) |
-| `Unknown` | **uncertain:** a worker's answer was lost, or the Store reported an unknown outcome | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
+| `Busy`, `Unresolved`, `Unavailable` | the Store's `op`, or its worker not reached | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs), [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
+| `Unknown` | **uncertain:** a worker's answer was lost, or the Store reported an unknown outcome | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 
 After an `Unknown` write the Commit may exist. Read the Branch head with
 `branch.get` or `commit.list` before writing again. See
@@ -111,12 +111,12 @@ After an `Unknown` write the Commit may exist. Read the Branch head with
 ```
 
 The route is the same for every Store call
-([`store/call.rs`](../../../../../api/crates/layerfs-control/src/store/call.rs),
-[`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs)):
+([`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs),
+[`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs)):
 a sqlite Store runs locally when its machine's platform executes locally
 on this host (`native`, except on Windows). Writes go through the Store's
 one writer; no Workspace daemon serves them. See the
-[routing table](../../routing/routing-table.md).
+[routing table](../../../control/routing/routing-table.md).
 
 ## Example
 
@@ -141,7 +141,7 @@ $ layerfs file read shop/api agent /README.md --start-line 1
 
 - [Table](../../call-table/table.md) and [Errors](../../call-table/errors.md).
 - [branch family](../branch/README.md) and [commit family](../commit/README.md).
-- [Routing table](../../routing/routing-table.md).
+- [Routing table](../../../control/routing/routing-table.md).
 - [Engine: Store calls](../../../engine/store-calls/README.md): [reads](../../../engine/store-calls/reads.md), [writes](../../../engine/store-calls/writes.md), [SDK facade](../../../engine/store-calls/sdk-facade.md).
 
 ---

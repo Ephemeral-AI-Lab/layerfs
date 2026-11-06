@@ -37,14 +37,14 @@ layerfs branch diff <store>/<project> <from_branch> <to_branch> \
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
 | `from_branch`, `to_branch` | Name | a Branch or `main` each (a Commit id is `InvalidInput`: use [commit.diff](../commit/diff.md)); sent as `from`, `to` | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs) `diff_branches` |
 
 ## Options
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `paths_only` | Bool | false | sent as `hunks = !paths_only` | [`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) `diff_options` |
+| `paths_only` | Bool | false | sent as `hunks = !paths_only` | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) `diff_options` |
 | `page_size` | Int | 50 | 1..=1000 | [`methods/args.rs`](../../../../../engine/crates/layerfs-store-service/src/methods/args.rs) |
 | `page_pos` | Int | 0 | offset from the last page's `next_page_pos` | same |
 | `cursor` | Text | none | the last page's `next_cursor` (a path); resumes after it | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs) |
@@ -83,17 +83,17 @@ A directory whose only change is in its children is not listed.
 ```
 
 A read on the read-only session; no lane. See the
-[routing table](../../routing/routing-table.md). Refused under a folder
+[routing table](../../../control/routing/routing-table.md). Refused under a folder
 scope (`out of scope: history`).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a side is not a Branch or `main`; bad paging; a folder-scoped client | no | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs) |
+| `InvalidInput` | a side is not a Branch or `main`; bad paging; a folder-scoped client | no | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
 | `NoSuchBranch` | a side is missing | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../api/crates/layerfs-control/src/store/call.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
 
 ## Examples
 

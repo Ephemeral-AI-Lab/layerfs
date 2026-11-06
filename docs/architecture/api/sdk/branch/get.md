@@ -10,7 +10,7 @@ Shows one Branch (or `main`): its base Layer and its head Commit.
 | --- | --- |
 | Family | [branch](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/branch/get.rs`](../../../../../api/crates/layerfs-api/src/branch/get.rs) |
-| Implemented in | `layerfs_control::store::calls::run` → Store method `project.list_branches` with `name` ([`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs)) |
+| Implemented in | `layerfs_control::store::calls::run` → Store method `project.list_branches` with `name` ([`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs)) |
 | Runs in | the caller's process for PostgreSQL and sqlite on `native`; else the Store's machine worker |
 
 ## Signature
@@ -34,8 +34,8 @@ layerfs branch get <store>/<project> <branch>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
-| `branch` | Name | a Branch name, or `main`; sent as `name` | [`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) |
+| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
+| `branch` | Name | a Branch name, or `main`; sent as `name` | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
 
 ## Options
 
@@ -52,7 +52,7 @@ One item of [branch.list](list.md#returns):
 
 The Store looks the name up in its name index, never by listing every
 Branch; control then answers the item whose `name` (or `id`) matches
-([`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) `first`).
+([`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) `first`).
 
 ## Where it runs
 
@@ -64,19 +64,19 @@ Branch; control then answers the item whose `name` (or `id`) matches
  first(page, "NoSuchBranch") over the answer
 ```
 
-A read; no lane. See the [routing table](../../routing/routing-table.md).
+A read; no lane. See the [routing table](../../../control/routing/routing-table.md).
 Under a folder scope `branch` is composed as `<ns>.<branch>`.
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad project or name; out of scope | no | [`calls/check.rs`](../../../../../api/crates/layerfs-control/src/calls/check.rs) |
-| `NoSuchStore`, `NoSuchProject` | the Store or project is not recorded | no | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
-| `NoSuchBranch` | no Branch of that name | no | [`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) |
-| `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`store/record.rs`](../../../../../api/crates/layerfs-control/src/store/record.rs) |
-| `Unavailable` | the worker or server does not answer | no | [`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `InvalidInput` | a bad project or name; out of scope | no | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs) |
+| `NoSuchStore`, `NoSuchProject` | the Store or project is not recorded | no | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
+| `NoSuchBranch` | no Branch of that name | no | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
+| `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) |
+| `Unavailable` | the worker or server does not answer | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
 
 `branch.get` is the read to make after an uncertain
 [fork](fork.md), [merge](merge.md) or [publish](publish.md).

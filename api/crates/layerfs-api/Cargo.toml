@@ -9,7 +9,7 @@ license.workspace = true
 [dependencies]
 layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 # The management library every call runs in (#536).
-layerfs-control = { path = "../layerfs-control" }
+layerfs-control = { path = "../../../control/crates/layerfs-control" }
 
 [features]
 # PostgreSQL Stores (#506, #533): open, attach, create and Init.
@@ -34,7 +34,7 @@ layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
 layerfs-project = { path = "../../../engine/crates/layerfs-project" }
-layerfs-sandbox = { path = "../../../connect/crates/layerfs-sandbox" }
-layerfs-machine = { path = "../../../connect/crates/layerfs-machine" }
+layerfs-isolation = { path = "../../../control/crates/layerfs-isolation" }
+layerfs-platform = { path = "../../../control/crates/layerfs-platform" }
 layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
-layerfs-store-backup = { path = "../../../connect/crates/layerfs-store-backup" }
+layerfs-bucket = { path = "../../../control/crates/layerfs-bucket" }

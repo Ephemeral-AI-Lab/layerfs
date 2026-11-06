@@ -6,7 +6,7 @@
 
 Firecracker and SSH are **permanently disabled for new work**. Their code
 and records remain for inspection and explicit cleanup. See the
-[platform restriction](../../../connect/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
+[platform restriction](../../../control/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
 the source change required for re-enabling. Descriptions of their adapter
 mechanics below are retained implementation details, not selectable features.
 
@@ -17,7 +17,7 @@ starts its worker, so Stores and Sandboxes can be placed on it.
 | --- | --- |
 | Family | [machine](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/machine/create.rs`](../../../../../api/crates/layerfs-api/src/machine/create.rs) |
-| Implemented in | `layerfs_control::machine::create` ([`machine/create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs)), then `layerfs_machine::create` ([`setup/calls.rs`](../../../../../connect/crates/layerfs-machine/src/setup/calls.rs)) |
+| Implemented in | `layerfs_control::machine::create` ([`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs)), then `layerfs_platform::create` ([`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs)) |
 | Runs in | the caller's process (host build with the `machine` feature); the provider's CLI makes the VM |
 
 ## Signature
@@ -44,19 +44,19 @@ layerfs machine create <name> <platform> [--cpus N] [--memory SIZE] \
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | `MachineName::parse`; not `native` or `docker`; not taken | [`machine/create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs) `new_name` |
-| `platform` | Name | an enabled created platform: `apple-container`, `microsandbox`, `lima` | [`platform.rs`](../../../../../connect/crates/layerfs-machine/src/platform.rs) `created` |
+| `name` | Name | `MachineName::parse`; not `native` or `docker`; not taken | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) `new_name` |
+| `platform` | Name | an enabled created platform: `apple-container`, `microsandbox`, `lima` | [`platform.rs`](../../../../../control/crates/layerfs-platform/src/platform.rs) `created` |
 
 Which platform this host may create comes from the support table
-([`support.rs`](../../../../../connect/crates/layerfs-machine/src/support.rs),
-[`connect/SUPPORT.json`](../../../../../connect/SUPPORT.json)):
+([`support.rs`](../../../../../control/crates/layerfs-platform/src/support.rs),
+[`control/SUPPORT.json`](../../../../../control/SUPPORT.json)):
 
 | Platform | macOS | Linux | Windows | Options | Page |
 | --- | --- | --- | --- | --- | --- |
-| `apple-container` | yes | no | no | cpus, memory, disk, image | [apple-container](../../../connect/machines/platforms/apple-container.md) |
-| `microsandbox` | yes | yes | yes | cpus, memory, disk, image | [microsandbox](../../../connect/machines/platforms/microsandbox.md) |
-| `lima` | yes | no | no | cpus, memory, disk, image, nested | [lima](../../../connect/machines/platforms/lima.md) |
-| `firecracker` | disabled | disabled | disabled | none selectable | [firecracker](../../../connect/machines/platforms/firecracker.md) |
+| `apple-container` | yes | no | no | cpus, memory, disk, image | [apple-container](../../../control/machines/platforms/apple-container.md) |
+| `microsandbox` | yes | yes | yes | cpus, memory, disk, image | [microsandbox](../../../control/machines/platforms/microsandbox.md) |
+| `lima` | yes | no | no | cpus, memory, disk, image, nested | [lima](../../../control/machines/platforms/lima.md) |
+| `firecracker` | disabled | disabled | disabled | none selectable | [firecracker](../../../control/machines/platforms/firecracker.md) |
 
 `native` and `docker` are built in; `ssh` and
 [machine.connect](connect.md) are permanently disabled.
@@ -65,15 +65,15 @@ Which platform this host may create comes from the support table
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `cpus` | Int | 2 | the VM's CPUs | [`machine/spec.rs`](../../../../../api/crates/layerfs-control/src/machine/spec.rs) `DEFAULT_CPUS` |
+| `cpus` | Int | 2 | the VM's CPUs | [`machine/spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `DEFAULT_CPUS` |
 | `memory` | Size | 4 GiB | bytes, or `K`/`M`/`G` text (powers of 1024) | same, `DEFAULT_MEMORY` |
 | `disk` | Size | 20 GiB | the data disk mounted at `/layerfs/data` | same, `DEFAULT_DISK` |
-| `image` | Text | none | recorded as given; see below | [`machine/spec.rs`](../../../../../api/crates/layerfs-control/src/machine/spec.rs) `spec` |
-| `nested` | Bool | false | `lima` only: a VM that can host `firecracker` | [`machine/create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs) |
+| `image` | Text | none | recorded as given; see below | [`machine/spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `spec` |
+| `nested` | Bool | false | `lima` only: a VM that can host `firecracker` | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) |
 | `host` | Name | none | `firecracker` only, and required: a `lima` machine made with `nested` | same |
 
 `image` means two things. The platform profiles declare it as the VM's own
-system image ([`options.rs`](../../../../../connect/crates/layerfs-machine/src/options.rs)
+system image ([`options.rs`](../../../../../control/crates/layerfs-platform/src/options.rs)
 `IMAGE`; `apple-container` and `microsandbox` boot `Spec::os_image`, default
 `debian:trixie-slim` for apple-container). Control does not pass it that
 way: `machine::spec` turns an `image` that starts with `/` into
@@ -110,7 +110,7 @@ on [machine.list](list.md#returns). The record also keeps `vm_name`
  home lock: new_name, host check, write record with op "create"
  progress { phase: "create", machine }
  start lock (a machine start waits)
- layerfs_machine::create ----------------------->  VM + data disk
+ layerfs_platform::create ----------------------->  VM + data disk
                                                    copy bundle, start
                                                    worker, forward,
                                                    wait for its secret
@@ -119,25 +119,25 @@ on [machine.list](list.md#returns). The record also keeps `vm_name`
 
 | Outcome of the adapter | Record afterwards | Source |
 | --- | --- | --- |
-| running | `state: running`, `op` dropped, `worker.json` written | [`machine/create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs) `finish` |
+| running | `state: running`, `op` dropped, `worker.json` written | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) `finish` |
 | failed before the VM existed | the machine folder is removed | same |
 | failed after (`detail.vm_exists: true`) | `state: failed` with `error`; VM kept for inspection | same |
 | `Unknown` | everything kept; `op` uncertain with `error`; logged to `log/uncertain.jsonl` | same |
 
 The home lock covers the claim and the record writes only, never the boot.
-See the [routing table](../../routing/routing-table.md).
+See the [routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad name; a built-in name; unknown platform; a built-in or `ssh` platform; `nested` off lima; firecracker without `host` or with a host that is not a nested lima; a folder-scoped client | no | [`machine/create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs) |
+| `InvalidInput` | bad name; a built-in name; unknown platform; a built-in or `ssh` platform; `nested` off lima; firecracker without `host` or with a host that is not a nested lima; a folder-scoped client | no | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) |
 | `Exists` | a machine of that name exists | no | same, `new_name` |
-| `NotFound` | `host` names no machine | no | [`machine/record.rs`](../../../../../api/crates/layerfs-control/src/machine/record.rs) |
-| `Busy` / `Unresolved` | `host` is held by another operation | no | [`machine/spec.rs`](../../../../../api/crates/layerfs-control/src/machine/spec.rs) `machine_of` |
-| `Unsupported` | the platform is not supported on this host; its tool is missing (`detail.missing`); no sealed bundle; a build without the `machine` feature | no | same, [`machine/bundle.rs`](../../../../../api/crates/layerfs-control/src/machine/bundle.rs) |
-| `Unavailable`, `Denied`, `Failed` | the provider refused or failed; `detail.vm_exists` says whether the VM is kept | no | [`error.rs`](../../../../../connect/crates/layerfs-machine/src/error.rs) |
-| `Unknown` | **the provider timed out or its answer was lost** | **yes** | [`machine/create.rs`](../../../../../api/crates/layerfs-control/src/machine/create.rs) `finish` |
+| `NotFound` | `host` names no machine | no | [`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) |
+| `Busy` / `Unresolved` | `host` is held by another operation | no | [`machine/spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `machine_of` |
+| `Unsupported` | the platform is not supported on this host; its tool is missing (`detail.missing`); no sealed bundle; a build without the `machine` feature | no | same, [`machine/bundle.rs`](../../../../../control/crates/layerfs-control/src/machine/bundle.rs) |
+| `Unavailable`, `Denied`, `Failed` | the provider refused or failed; `detail.vm_exists` says whether the VM is kept | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
+| `Unknown` | **the provider timed out or its answer was lost** | **yes** | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) `finish` |
 
 **After `Unknown`**, read [machine.status](status.md) (its `op` and
 `error`) and the provider's own listing; clear the machine with
@@ -165,9 +165,9 @@ layerfs.machine.create("mvm", "microsandbox", memory="2G")
   what is missing). After: [store.push](../store/push.md),
   [sandbox.create](../sandbox/create.md), [machine.stop](stop.md),
   [machine.start](start.md), [machine.update](update.md).
-- [Connect: machines](../../../connect/machines/README.md),
-  [adapter](../../../connect/machines/adapter.md),
-  [support matrix](../../../connect/support-matrix/README.md).
+- [Control: machines](../../../control/machines/README.md),
+  [adapter](../../../control/machines/adapter.md),
+  [support matrix](../../../control/support-matrix/README.md).
 
 ---
 

@@ -29,7 +29,7 @@ these crates depend on `layerfs-history` (from their `Cargo.toml`):
 [Project Init](../../engine/project-init/README.md) (`layerfs-project`),
 [Daemon](../../engine/daemon/README.md) (`layerfs-daemon`, `layerfs-bridge`),
 [Kernel routes](../../engine/kernel-routes/README.md) (`layerfs-nfs`),
-[Control](../../api/control/README.md) (`layerfs-control`) and
+[Management](../../control/management/README.md) (`layerfs-control`) and
 [Call table](../../api/call-table/README.md) (`layerfs-api`).
 
 ## Topics

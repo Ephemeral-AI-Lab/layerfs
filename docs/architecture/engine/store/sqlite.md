@@ -123,7 +123,7 @@ it. Source: [`lane.rs`](../../../../engine/crates/layerfs-persistence/src/backen
 SQLite cannot open a WAL file read-only without a `-shm`. It reads in one
 transaction and closes; a busy Store is reported, never waited on. The heads
 change exactly when history changes, so the digest identifies a backup copy
-([Connect: Backups](../../connect/backups/README.md)).
+([Control: Backups](../../control/backups/README.md)).
 
 ## Acquisition
 

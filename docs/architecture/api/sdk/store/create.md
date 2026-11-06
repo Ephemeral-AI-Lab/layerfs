@@ -10,7 +10,7 @@ Makes a new, empty sqlite Store on `native`, ready for `project.init`.
 | --- | --- |
 | Family | [store](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/store/create.rs`](../../../../../api/crates/layerfs-api/src/store/create.rs) |
-| Implemented in | `layerfs_control::store::family::run` → `create` ([`store/create.rs`](../../../../../api/crates/layerfs-control/src/store/create.rs)) |
+| Implemented in | `layerfs_control::store::family::run` → `create` ([`store/create.rs`](../../../../../control/crates/layerfs-control/src/store/create.rs)) |
 | Runs in | the caller's process, always; the file goes to `store/<name>/store.sqlite` under the home |
 
 ## Signature
@@ -36,7 +36,7 @@ layerfs store create <name>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | a new Store name (`StoreName::parse`); no Store record of that name may exist, of either kind | [`create.rs`](../../../../../api/crates/layerfs-control/src/store/create.rs), [`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/names.rs) |
+| `name` | Name | a new Store name (`StoreName::parse`); no Store record of that name may exist, of either kind | [`create.rs`](../../../../../control/crates/layerfs-control/src/store/create.rs), [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs) |
 
 ## Options
 
@@ -60,12 +60,12 @@ Store is attached with [store.connect](connect.md) instead.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `name`, `kind` | text | the new Store | [`identity.rs`](../../../../../api/crates/layerfs-control/src/store/identity.rs) `save_record` |
-| `machine` | text | always `native` | [`record.rs`](../../../../../api/crates/layerfs-control/src/store/record.rs) `created_on_native` |
+| `name`, `kind` | text | the new Store | [`identity.rs`](../../../../../control/crates/layerfs-control/src/store/identity.rs) `save_record` |
+| `machine` | text | always `native` | [`record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) `created_on_native` |
 | `profile` | text | always `disposable` | same |
 | `created` | int | milliseconds since the Unix epoch | same |
-| `sqlite` | text | the SQLite version of the sealed empty file | [`identity.rs`](../../../../../api/crates/layerfs-control/src/store/identity.rs) `make_empty` |
-| `projects` | list | empty | [`family.rs`](../../../../../api/crates/layerfs-control/src/store/family.rs) `public` |
+| `sqlite` | text | the SQLite version of the sealed empty file | [`identity.rs`](../../../../../control/crates/layerfs-control/src/store/identity.rs) `make_empty` |
+| `projects` | list | empty | [`family.rs`](../../../../../control/crates/layerfs-control/src/store/family.rs) `public` |
 
 The record also holds a random binding and cursor key, which are never
 shown. The answer is the same shape as [store.get](get.md).
@@ -89,21 +89,21 @@ shown. The answer is the same shape as [store.get](get.md).
 
 | Store kind | Where | Source |
 | --- | --- | --- |
-| sqlite | this process, under the home, on `native` | [`create.rs`](../../../../../api/crates/layerfs-control/src/store/create.rs) |
+| sqlite | this process, under the home, on `native` | [`create.rs`](../../../../../control/crates/layerfs-control/src/store/create.rs) |
 | PostgreSQL | not made by this call: use [store.connect](connect.md) | [`create.rs`](../../../../../api/crates/layerfs-api/src/store/create.rs) |
 
 No worker or machine is involved; to place the Store on another machine,
 create it and then [push](push.md) it. See the
-[routing table](../../routing/routing-table.md).
+[routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad Store name; a folder-scoped client | no | [`common/names.rs`](../../../../../api/crates/layerfs-control/src/common/names.rs), [`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs) |
-| `Exists` | a Store record of that name exists, or a file is already at the target | no | [`create.rs`](../../../../../api/crates/layerfs-control/src/store/create.rs), [`identity.rs`](../../../../../api/crates/layerfs-control/src/store/identity.rs) `make_empty` |
-| `Unavailable` | another process held the home lock or the Store's lock for 120 s | no | [`common/home/lock.rs`](../../../../../api/crates/layerfs-control/src/common/home/lock.rs) |
-| `Failed` | the empty Store could not be made or written (`Store create: …`), or the record write failed | no | [`identity.rs`](../../../../../api/crates/layerfs-control/src/store/identity.rs) |
+| `InvalidInput` | a bad Store name; a folder-scoped client | no | [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `Exists` | a Store record of that name exists, or a file is already at the target | no | [`create.rs`](../../../../../control/crates/layerfs-control/src/store/create.rs), [`identity.rs`](../../../../../control/crates/layerfs-control/src/store/identity.rs) `make_empty` |
+| `Unavailable` | another process held the home lock or the Store's lock for 120 s | no | [`common/home/lock.rs`](../../../../../control/crates/layerfs-control/src/common/home/lock.rs) |
+| `Failed` | the empty Store could not be made or written (`Store create: …`), or the record write failed | no | [`identity.rs`](../../../../../control/crates/layerfs-control/src/store/identity.rs) |
 
 A failure before the record is written removes the call's own
 `store/<name>/` folder.
@@ -133,7 +133,7 @@ layerfs store create shop
   [backup.create](../backup/create.md).
 - [Engine: Store lifecycle](../../../engine/store/lifecycle.md),
   [Engine: SQLite](../../../engine/store/sqlite.md),
-  [Control: Home and records](../../control/home-and-records.md).
+  [Control: Home and records](../../../control/management/home-and-records.md).
 
 ---
 

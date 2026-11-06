@@ -12,7 +12,7 @@ The one global Store: SQLite and PostgreSQL backends side by side, one writer, s
 | Crates | `layerfs-persistence` |
 | Source | [`engine/crates/layerfs-persistence/src/store`](../../../../engine/crates/layerfs-persistence/src/store), [`engine/crates/layerfs-persistence/src/backend`](../../../../engine/crates/layerfs-persistence/src/backend), [`engine/crates/layerfs-persistence/src/history`](../../../../engine/crates/layerfs-persistence/src/history), [`engine/crates/layerfs-persistence/sql`](../../../../engine/crates/layerfs-persistence/sql) |
 | Uses | [Core: Physical storage](../../core/physical-storage/README.md), [Core: History model](../../core/history-model/README.md) |
-| Used by | [Store calls](../store-calls/README.md), [Project Init](../project-init/README.md), [Commit](../commit/README.md), [Connect: Backups](../../connect/backups/README.md) |
+| Used by | [Store calls](../store-calls/README.md), [Project Init](../project-init/README.md), [Commit](../commit/README.md), [Control: Backups](../../control/backups/README.md) |
 | Flows | [A Commit](../../flows/commit.md), [Project Init](../../flows/init.md), [A call, end to end](../../flows/call.md) |
 
 ## Topics
@@ -143,7 +143,7 @@ Folded into these pages. Matched by title, so check each one before relying on i
 - [`core/docs/architecture/62-atomic-history-publication.md`](../../../../core/docs/architecture/62-atomic-history-publication.md): covered in [History publication](history-publication.md).
 - [`core/docs/architecture/83-store-concurrency-model.md`](../../../../core/docs/architecture/83-store-concurrency-model.md): covered in [Backends](backends.md) and [History publication](history-publication.md#the-publish-lane).
 - [`core/docs/architecture/84-global-sqlite-store.md`](../../../../core/docs/architecture/84-global-sqlite-store.md): covered in [SQLite](sqlite.md).
-- [`core/docs/architecture/86-remote-store-files.md`](../../../../core/docs/architecture/86-remote-store-files.md): the snapshot and heads digest are covered in [SQLite](sqlite.md#heads-and-snapshots); push and pull are in [Connect: Backups](../../connect/backups/README.md).
+- [`core/docs/architecture/86-remote-store-files.md`](../../../../core/docs/architecture/86-remote-store-files.md): the snapshot and heads digest are covered in [SQLite](sqlite.md#heads-and-snapshots); push and pull are in [Control: Backups](../../control/backups/README.md).
 - [`docs/versioned/2.0.0/stores.md`](../../../versioned/2.0.0/stores.md): the user manual for Store kinds; the design is covered in [Lifecycle](lifecycle.md), [SQLite](sqlite.md) and [PostgreSQL](postgresql.md).
 
 ---

@@ -36,7 +36,7 @@ layerfs branch publish <store>/<project> <branch> [<commit>]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
 | `branch` | Name | a Branch; `main` is `NoSuchBranch` | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) `branch` |
 | `commit` | Name, optional | a 66-hex Commit id (a Layer id is `InvalidInput`); default the Branch's head | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 
@@ -76,7 +76,7 @@ None.
 ```
 
 The expected heads make the publish a compare-and-set. See the
-[routing table](../../routing/routing-table.md). Under a folder scope
+[routing table](../../../control/routing/routing-table.md). Under a folder scope
 `branch` is composed as `<ns>.<branch>` and `commit` is checked like any
 Commit or Branch reference (a 66-character hex id stays as given; any other
 value is treated as a Branch name and composed into the namespace, and the
@@ -93,8 +93,8 @@ a scope without `branch`, is refused before any effect); see
 | `NoCommit` | the Branch has no saved Commit | no | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `HeadMoved` | `main`'s head or the Branch's base moved since they were read | no | same |
 | `NotInHistory` | the Commit is not on the Branch's history | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../api/crates/layerfs-control/src/store/call.rs) |
-| `Unknown` | **the worker's answer was lost, or the add's outcome is unknown** | **yes** | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
+| `Unknown` | **the worker's answer was lost, or the add's outcome is unknown** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
 
 **After `Unknown`**, read [branch.get](get.md) for `main`: its `base` is the
 head Layer. Publishing the same Commit again answers `UpToDate` if it

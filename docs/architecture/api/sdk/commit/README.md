@@ -9,7 +9,7 @@ The `commit` calls.
 | | |
 | --- | --- |
 | Component | [Call table](../../call-table/README.md) |
-| Source | [`api/crates/layerfs-api/src/commit`](../../../../../api/crates/layerfs-api/src/commit), [`api/crates/layerfs-control/src/store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs), [`engine/crates/layerfs-store-service/src/methods/branch`](../../../../../engine/crates/layerfs-store-service/src/methods/branch) |
+| Source | [`api/crates/layerfs-api/src/commit`](../../../../../api/crates/layerfs-api/src/commit), [`control/crates/layerfs-control/src/store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs), [`engine/crates/layerfs-store-service/src/methods/branch`](../../../../../engine/crates/layerfs-store-service/src/methods/branch) |
 
 ## Calls
 
@@ -70,14 +70,14 @@ read budget `REPLY_BUDGET` (48 KiB) and reports `has_more`
 
 | Code | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad argument or page; every `commit` call under a folder scope (`out of scope: history`) | [`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs) |
-| `NoSuchStore`, `NoSuchProject` | the Store or project is missing | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
+| `InvalidInput` | a bad argument or page; every `commit` call under a folder scope (`out of scope: history`) | [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| `NoSuchStore`, `NoSuchProject` | the Store or project is missing | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
 | `NoSuchBranch` | the Branch is missing | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `NoSuchCommit` | `get` read every page and found no match | [`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) |
-| `Failed` | a page position that does not move on | [`store/calls.rs`](../../../../../api/crates/layerfs-control/src/store/calls.rs) |
-| `Busy`, `Unresolved` | the Store's record holds another operation's `op` | [`common/op.rs`](../../../../../api/crates/layerfs-control/src/common/op.rs) |
-| `Unavailable` | the Store's worker is not recorded or does not answer | [`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs) |
-| `Unknown` | **uncertain:** a worker's answer was lost | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `NoSuchCommit` | `get` read every page and found no match | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
+| `Failed` | a page position that does not move on | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
+| `Busy`, `Unresolved` | the Store's record holds another operation's `op` | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs) |
+| `Unavailable` | the Store's worker is not recorded or does not answer | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
+| `Unknown` | **uncertain:** a worker's answer was lost | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
 
 These calls only read, so an `Unknown` here leaves no Store change behind.
 LayerFS does not resend it. See
@@ -90,11 +90,11 @@ Like every Store call: `store_call` claims the Store's lease, then runs the
 Store method in the caller's process for a PostgreSQL Store or a sqlite
 Store whose machine executes locally (`native`, except on Windows), else
 sends `store.call` to that machine's worker
-([`store/call.rs`](../../../../../api/crates/layerfs-control/src/store/call.rs),
-[`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs)).
+([`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs),
+[`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs)).
 `commit.get` sends one `branch.list_commits` per page, each on that route.
 No daemon serves these calls. See the
-[routing table](../../routing/routing-table.md).
+[routing table](../../../control/routing/routing-table.md).
 
 ## Example
 
@@ -119,7 +119,7 @@ $ layerfs commit get shop/api agent 71e889e6
 
 - [Table](../../call-table/table.md) and [Errors](../../call-table/errors.md).
 - [branch family](../branch/README.md) and [file family](../file/README.md).
-- [Routing table](../../routing/routing-table.md).
+- [Routing table](../../../control/routing/routing-table.md).
 - [Engine: Store calls](../../../engine/store-calls/README.md), [reads](../../../engine/store-calls/reads.md).
 
 ---

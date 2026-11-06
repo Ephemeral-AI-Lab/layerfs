@@ -147,7 +147,7 @@ While such rows remain, a later add into the same Store is refused `Busy`.
 The port offers `abandoned` and `discard_abandoned` to remove rows of an
 operation whose owner is fenced
 ([`contract.rs`](../../../../core/crates/layerfs-storage/src/port/acquisition/contract.rs));
-no caller in `api/` or `connect/` uses them. Every case is reported once;
+no caller in `api/` or `control/` uses them. Every case is reported once;
 nothing is resent.
 
 ## Related
@@ -156,7 +156,7 @@ nothing is resent.
 - [Store: Lifecycle](../store/lifecycle.md): open, handles and seal.
 - [Store: SQLite](../store/sqlite.md), [Store: PostgreSQL](../store/postgresql.md): the backends a live add opens.
 - [Daemon: Startup](../daemon/startup.md), [Daemon: Bridge](../daemon/bridge.md): the receiving side of install.
-- [API: Control](../../api/control/README.md): `store.create` and `project.init`.
+- [Control: Management](../../control/management/README.md): `store.create` and `project.init`.
 - [Flow: Project Init](../../flows/init.md)
 
 ---

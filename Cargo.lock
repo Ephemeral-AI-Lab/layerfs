@@ -704,16 +704,16 @@ name = "layerfs-api"
 version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
+ "layerfs-bucket",
  "layerfs-content",
  "layerfs-control",
  "layerfs-history",
- "layerfs-machine",
+ "layerfs-isolation",
  "layerfs-overlay",
  "layerfs-persistence",
+ "layerfs-platform",
  "layerfs-project",
- "layerfs-sandbox",
  "layerfs-storage",
- "layerfs-store-backup",
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
@@ -727,6 +727,18 @@ dependencies = [
  "layerfs-content",
  "layerfs-history",
  "snow",
+]
+
+[[package]]
+name = "layerfs-bucket"
+version = "2.0.0"
+dependencies = [
+ "layerfs-persistence",
+ "layerfs-storage",
+ "layerfs-store-service",
+ "native-tls",
+ "nix",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -750,17 +762,17 @@ name = "layerfs-control"
 version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
+ "layerfs-bucket",
  "layerfs-content",
  "layerfs-daemon",
  "layerfs-fuse",
  "layerfs-history",
- "layerfs-machine",
+ "layerfs-isolation",
  "layerfs-overlay",
  "layerfs-persistence",
+ "layerfs-platform",
  "layerfs-project",
- "layerfs-sandbox",
  "layerfs-storage",
- "layerfs-store-backup",
  "layerfs-store-service",
  "layerfs-telemetry",
  "layerfs-workspace",
@@ -811,11 +823,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "layerfs-machine"
+name = "layerfs-isolation"
 version = "2.0.0"
 dependencies = [
- "layerfs-bridge",
- "layerfs-sandbox",
  "nix",
 ]
 
@@ -883,6 +893,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-platform"
+version = "2.0.0"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-isolation",
+ "nix",
+]
+
+[[package]]
 name = "layerfs-project"
 version = "2.0.0"
 dependencies = [
@@ -907,13 +926,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "layerfs-sandbox"
-version = "2.0.0"
-dependencies = [
- "nix",
-]
-
-[[package]]
 name = "layerfs-storage"
 version = "2.0.0"
 dependencies = [
@@ -922,18 +934,6 @@ dependencies = [
  "layerfs-telemetry",
  "sha2 0.11.0",
  "zstd-sys",
-]
-
-[[package]]
-name = "layerfs-store-backup"
-version = "2.0.0"
-dependencies = [
- "layerfs-persistence",
- "layerfs-storage",
- "layerfs-store-service",
- "native-tls",
- "nix",
- "sha2 0.11.0",
 ]
 
 [[package]]

@@ -173,7 +173,7 @@ installer (Project Init side)              daemon (one install per process)
 - [Control calls](control-calls.md): what each request does.
 - [Operator: Installs](operator.md#installs): the daemon side of provisioning.
 - [Project Init: Seal and install](../project-init/seal-and-install.md): the installer side.
-- [API: Routing and workers](../../api/routing/README.md): the controller side of the channel.
+- [Control: Routing and workers](../../control/routing/README.md): the controller side of the channel.
 - [Glossary](../../glossary.md).
 
 ---

@@ -6,7 +6,7 @@
 
 Firecracker and SSH are **permanently disabled for new work**. Their code
 and records remain for inspection and explicit cleanup. See the
-[platform restriction](../../../connect/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
+[platform restriction](../../../control/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
 the source change required for re-enabling. Descriptions of their adapter
 mechanics below are retained implementation details, not selectable features.
 
@@ -19,7 +19,7 @@ call that starts a machine (#535 D11).
 | --- | --- |
 | Family | [machine](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/machine/start.rs`](../../../../../api/crates/layerfs-api/src/machine/start.rs) |
-| Implemented in | [`layerfs_control::machine::start`](../../../../../api/crates/layerfs-control/src/machine/power.rs), through [`endpoint::running`](../../../../../api/crates/layerfs-control/src/machine/endpoint.rs) |
+| Implemented in | [`layerfs_control::machine::start`](../../../../../control/crates/layerfs-control/src/machine/power.rs), through [`endpoint::running`](../../../../../control/crates/layerfs-control/src/machine/endpoint.rs) |
 | Runs in | the caller's process (host build with the `machine` feature); it starts the worker inside the machine |
 
 ## Signature
@@ -43,7 +43,7 @@ layerfs machine start <name>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | an existing machine not held by an `op` | [`spec.rs`](../../../../../api/crates/layerfs-control/src/machine/spec.rs) `machine_of` |
+| `name` | Name | an existing machine not held by an `op` | [`spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `machine_of` |
 
 ## Options
 
@@ -71,7 +71,7 @@ caller's process                                 machine
  worker answers now? (another process started it) --> get
  spec + sealed Linux bundle
  docker with no image? --> load bundle's sandbox-image.tar once
- layerfs-machine start(spec, bundle) ------------> boot VM / container
+ layerfs-platform start(spec, bundle) ------------> boot VM / container
                                                    copy bundle once per
                                                    hash, image archive,
                                                    start `layerfs worker`
@@ -83,34 +83,34 @@ caller's process                                 machine
 
 `start.lock` is taken before the home lock and is shared with `create`,
 `stop` and `remove`, so a start never runs beside them on the same machine
-([`endpoint.rs`](../../../../../api/crates/layerfs-control/src/machine/endpoint.rs)).
+([`endpoint.rs`](../../../../../control/crates/layerfs-control/src/machine/endpoint.rs)).
 The home lock is held only to write the records, never while the VM boots.
 
 | Platform | What start does | Source |
 | --- | --- | --- |
-| `native` | nothing; answers at once | [`power.rs`](../../../../../api/crates/layerfs-control/src/machine/power.rs) |
-| `docker` | runs the worker container (`--pull never`) from the recorded image, else the bundle's image loaded once | [`image.rs`](../../../../../api/crates/layerfs-control/src/machine/image.rs), [`docker/power.rs`](../../../../../connect/crates/layerfs-machine/src/platforms/docker/power.rs) |
-| `lima`, `apple-container`, `microsandbox` | boots the VM if stopped, then sets up and starts the worker | [`platforms/`](../../../../../connect/crates/layerfs-machine/src/platforms) |
+| `native` | nothing; answers at once | [`power.rs`](../../../../../control/crates/layerfs-control/src/machine/power.rs) |
+| `docker` | runs the worker container (`--pull never`) from the recorded image, else the bundle's image loaded once | [`image.rs`](../../../../../control/crates/layerfs-control/src/machine/image.rs), [`docker/power.rs`](../../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs) |
+| `lima`, `apple-container`, `microsandbox` | boots the VM if stopped, then sets up and starts the worker | [`platforms/`](../../../../../control/crates/layerfs-platform/src/platforms) |
 | `firecracker` | starts its Lima host first, then the microVM | `endpoint.rs` `host_first` |
-| `ssh` | starts the worker and its `ssh -L` forward | [`ssh/power.rs`](../../../../../connect/crates/layerfs-machine/src/platforms/ssh/power.rs) |
+| `ssh` | starts the worker and its `ssh -L` forward | [`ssh/power.rs`](../../../../../control/crates/layerfs-platform/src/platforms/ssh/power.rs) |
 
 Every other call on a stopped machine is refused `Unavailable`, naming
-`layerfs machine start` ([`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs)).
-See [workers](../../routing/workers.md#lifecycle) and the
-[routing table](../../routing/routing-table.md).
+`layerfs machine start` ([`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs)).
+See [workers](../../../control/routing/workers.md#lifecycle) and the
+[routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput`, `NotFound` | bad name; no such machine | no | [`record.rs`](../../../../../api/crates/layerfs-control/src/machine/record.rs) `of` |
-| `Busy`, `Unresolved` | a create, connect, remove or disconnect holds it (or its firecracker host) | no | [`common/op.rs`](../../../../../api/crates/layerfs-control/src/common/op.rs) `blocks` |
-| `Unavailable` | `start.lock` held by another process for 600 s; nothing changed | no | [`entity_lock.rs`](../../../../../api/crates/layerfs-control/src/common/home/entity_lock.rs) |
-| `Unavailable` | the started worker is of another build: the bundle is older than this build (`detail.worker`, `expected`, `bundle`) | no: the machine runs and is recorded | [`worker/hello.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/hello.rs) `stale_bundle` |
-| `Unsupported` | no sealed Linux bundle (`detail.missing: ["bundle:<dir>"]`); docker with no image and no `sandbox-image.tar`; a build without the `machine` feature | no | [`bundle.rs`](../../../../../api/crates/layerfs-control/src/machine/bundle.rs), `image.rs` |
-| `NotFound` | the provider holds no VM of that name | no | [`setup/vm.rs`](../../../../../connect/crates/layerfs-machine/src/setup/vm.rs) |
-| `Unavailable`, `Denied`, `Failed` | the provider or guest did not answer; ssh refused the login or key; a step failed once | no | [`error.rs`](../../../../../connect/crates/layerfs-machine/src/error.rs) |
-| `Unknown` | **a provider command timed out or its answer was lost: the VM or worker may be up with no `worker.json` written.** Read `machine status` first; a new `machine start` is a new call, not a replay | **yes** | [`setup/tool.rs`](../../../../../connect/crates/layerfs-machine/src/setup/tool.rs) |
+| `InvalidInput`, `NotFound` | bad name; no such machine | no | [`record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `of` |
+| `Busy`, `Unresolved` | a create, connect, remove or disconnect holds it (or its firecracker host) | no | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs) `blocks` |
+| `Unavailable` | `start.lock` held by another process for 600 s; nothing changed | no | [`entity_lock.rs`](../../../../../control/crates/layerfs-control/src/common/home/entity_lock.rs) |
+| `Unavailable` | the started worker is of another build: the bundle is older than this build (`detail.worker`, `expected`, `bundle`) | no: the machine runs and is recorded | [`worker/hello.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/hello.rs) `stale_bundle` |
+| `Unsupported` | no sealed Linux bundle (`detail.missing: ["bundle:<dir>"]`); docker with no image and no `sandbox-image.tar`; a build without the `machine` feature | no | [`bundle.rs`](../../../../../control/crates/layerfs-control/src/machine/bundle.rs), `image.rs` |
+| `NotFound` | the provider holds no VM of that name | no | [`setup/vm.rs`](../../../../../control/crates/layerfs-platform/src/setup/vm.rs) |
+| `Unavailable`, `Denied`, `Failed` | the provider or guest did not answer; ssh refused the login or key; a step failed once | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
+| `Unknown` | **a provider command timed out or its answer was lost: the VM or worker may be up with no `worker.json` written.** Read `machine status` first; a new `machine start` is a new call, not a replay | **yes** | [`setup/tool.rs`](../../../../../control/crates/layerfs-platform/src/setup/tool.rs) |
 
 ## Examples
 
@@ -133,9 +133,9 @@ $ layerfs machine start docker
 - Before: [`machine.create`](create.md), [`machine.connect`](connect.md) or
   [`machine.stop`](stop.md). After: Store, project and Sandbox calls on the
   machine; [`machine.stop`](stop.md).
-- [Workers](../../routing/workers.md),
-  [Connect: Machines](../../../connect/machines/README.md),
-  [Connect: Network](../../../connect/network/README.md).
+- [Workers](../../../control/routing/workers.md),
+  [Control: Machines](../../../control/machines/README.md),
+  [Control: Network](../../../control/network/README.md).
 
 ---
 

@@ -37,7 +37,7 @@ layerfs commit diff <store>/<project> <from_commit> <to_commit> \
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../api/crates/layerfs-control/src/store/resolve.rs) |
+| `project` | Project | `<store>/<project>` | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
 | `from_commit`, `to_commit` | Name | each must resolve to a saved Commit of the project (a Branch or Layer is `InvalidInput`); sent as `from`, `to` | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs) `diff_commits` |
 
 The two Commits may be on different Branches of the same project.
@@ -74,7 +74,7 @@ only the sides differ (`commit` and `root` instead of `ref`, `label` and
 ```
 
 A read; no lane. Refused under a folder scope (`out of scope: history`).
-See the [routing table](../../routing/routing-table.md).
+See the [routing table](../../../control/routing/routing-table.md).
 
 ## Errors
 
@@ -82,8 +82,8 @@ See the [routing table](../../routing/routing-table.md).
 | --- | --- | --- | --- |
 | `InvalidInput` | a side is not a saved Commit; bad paging; a folder-scoped client | no | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs) |
 | `NoSuchCommit` | a Commit is missing | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
-| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../api/crates/layerfs-control/src/store/call.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/client.rs) |
+| `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
 
 ## Examples
 
