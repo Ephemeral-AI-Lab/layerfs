@@ -44,7 +44,7 @@ and its per-Sandbox published daemon ports are deleted.
 | Machine `image` | Only the worker container's Docker image (the record's `image`, else the bundle image loaded into Docker once, `loaded_image`, #535 P5); never a Sandbox's root. | `docker/power.rs` `start`, `load_image` |
 | Route | Every Sandbox and Workspace call goes through the worker (`sandbox.host`), as on `apple-container`, `microsandbox` and `firecracker`. There is no direct route to a docker Sandbox's daemon. | [`direct.rs`](../../../../control/crates/layerfs-sandbox/src/direct.rs), [Forwards](../network/forwards.md#platforms-that-refuse) |
 | Forward | `Unsupported`: Docker publishes a container's ports only when it starts, so a daemon's port in the worker container cannot be published later. | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs) |
-| Loopback PostgreSQL | `reach` rewrites a loopback host to `host.docker.internal` (`DESKTOP_HOST` in the platform's docker folder). | `docker/adapter.rs`, [Reach](../network/reach.md) |
+| Loopback PostgreSQL | On Docker Desktop `reach` rewrites a loopback host to the address the running worker resolves `host.docker.internal` to (the Sandbox image's root cannot resolve the name); on a Linux Engine the URL is dialled as given, the network being the host's. | `docker/adapter.rs`, [Reach](../network/reach.md) |
 
 ## User namespaces
 

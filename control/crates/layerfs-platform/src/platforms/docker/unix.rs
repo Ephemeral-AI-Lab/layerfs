@@ -13,6 +13,10 @@ use crate::spec::Spec;
 use std::time::Duration;
 
 const CALL: Duration = Duration::from_secs(30);
+/// The name the worker container reaches the host's loopback by: Docker
+/// Desktop's DNS answers it, and on a Linux Engine the worker's
+/// `--add-host` entry. Its Sandboxes are given the address ([`host_address`]).
+const DESKTOP_HOST: &str = "host.docker.internal";
 pub(super) fn run(spec: &Spec, args: &[&str], what: &str) -> Result<tool::Output, MachineError> {
     tool::run(docker(spec, args)?, None, CALL, what)
 }
@@ -39,6 +43,30 @@ pub(super) fn inspect(spec: &Spec) -> Result<Option<(String, String)>, MachineEr
     let line = out.stdout.trim();
     let (state, role) = line.split_once('\t').unwrap_or((line, ""));
     Ok(Some((state.to_owned(), role.to_owned())))
+}
+
+/// The IPv4 address the worker container resolves `host.docker.internal`
+/// to (`getent ahostsv4`: Docker Desktop's DNS, or a Linux Engine's
+/// `--add-host` entry). A Sandbox daemon runs in the Sandbox image's root,
+/// which resolves neither, so it dials the address (D-8, as lima's). Read
+/// from the running worker; refused `Unavailable` otherwise.
+pub(crate) fn host_address(spec: &Spec) -> Result<String, MachineError> {
+    let out = run(
+        spec,
+        &["exec", &spec.vm_name, "getent", "ahostsv4", DESKTOP_HOST],
+        "resolving the worker's host address",
+    )?;
+    let first = out.stdout.split_whitespace().next();
+    let found = first.filter(|text| out.ok() && text.parse::<std::net::Ipv4Addr>().is_ok());
+    found.map(str::to_owned).ok_or_else(|| {
+        MachineError::new(
+            Code::Unavailable,
+            format!(
+                "the docker machine {}'s worker container resolves {DESKTOP_HOST} to no IPv4 address, so its Sandboxes cannot reach this host's loopback; it must be running",
+                spec.name
+            ),
+        )
+    })
 }
 
 pub(crate) fn guest(spec: &Spec) -> Result<Guest, MachineError> {

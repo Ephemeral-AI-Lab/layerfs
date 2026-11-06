@@ -417,7 +417,10 @@ enum Loopback {
 fn loopback(spec: &Spec) -> Loopback {
     match spec.kind {
         Platform::Native => Loopback::Shared,
-        Platform::Docker => Loopback::Alias("host.docker.internal".into()),
+        // a Linux Engine's worker shares the host's network; Docker
+        // Desktop's resolves `host.docker.internal` (`reach_specs`; D-8)
+        Platform::Docker if cfg!(target_os = "linux") => Loopback::Shared,
+        Platform::Docker => Loopback::Alias("192.168.65.254".into()),
         Platform::Lima => Loopback::Alias("192.168.5.2".into()),
         // the Lima host's own host address, through its masquerade
         Platform::Firecracker => Loopback::Alias("192.168.5.2".into()),
@@ -467,6 +470,12 @@ fn reach_specs(scratch: &Scratch, platform: Platform) -> Vec<Spec> {
         scratch.tool(
             "container",
             r#"echo '[{"status":{"state":"running","networks":[{"ipv4Gateway":"192.168.64.1"}]}}]'"#,
+        );
+    }
+    if platform == Platform::Docker {
+        scratch.tool(
+            "docker",
+            r#"printf '192.168.65.254  host.docker.internal\n'"#,
         );
     }
     let mut with_network = valid_spec(scratch, platform);

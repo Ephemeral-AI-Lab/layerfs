@@ -1,6 +1,6 @@
 //! `docker`'s adapter: the built-in machine on Docker's kernel, whose worker
 //! container runs `namespaces` Sandboxes (D-8).
-use super::{guest, start, status, stop};
+use super::{guest, host_address, start, status, stop};
 use crate::adapter::{refused, Adapter};
 use crate::error::{Code, MachineError};
 use crate::platform::{ExecutorKind, HostOs, Platform};
@@ -15,11 +15,6 @@ use crate::spec::{Bundle, Forward, Running, Spec, Tools};
 /// port is published when it starts (`docker run -p`), which is the only
 /// way Docker publishes one, so a later daemon's port cannot be (D-8).
 const FORWARD: &str = "Docker publishes a container's ports only when it starts, so a Sandbox daemon's port in the worker container cannot be published later; its Workspace calls go through the worker";
-
-/// The name the worker container, and the Sandboxes in it, reach the
-/// host's loopback by: Docker Desktop's, and on a Linux Engine the
-/// `--add-host` the worker is started with.
-pub(crate) const DESKTOP_HOST: &str = "host.docker.internal";
 
 pub(crate) struct Docker;
 pub(crate) static ADAPTER: Docker = Docker;
@@ -69,8 +64,17 @@ impl Adapter for Docker {
     fn host_identity(&self, spec: &Spec) -> Result<String, MachineError> {
         Err(refused(spec, "has no ssh host"))
     }
+    /// On a Linux Engine the worker shares the host's network, and its
+    /// `namespaces` Sandboxes share the worker's (D-8), so a loopback URL is
+    /// dialled as given. Elsewhere (Docker Desktop) a loopback URL becomes
+    /// the address the running worker container resolves
+    /// `host.docker.internal` to: a Sandbox image's root cannot resolve
+    /// the name.
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
-        dial(spec, url, Loopback::Alias(DESKTOP_HOST))
+        if cfg!(target_os = "linux") {
+            return dial(spec, url, Loopback::Shared);
+        }
+        dial(spec, url, Loopback::Lookup(&|| host_address(spec)))
     }
     fn forward(&self, spec: &Spec, _guest_port: u16) -> Result<Forward, MachineError> {
         Err(refuse(spec, Code::Unsupported, FORWARD))

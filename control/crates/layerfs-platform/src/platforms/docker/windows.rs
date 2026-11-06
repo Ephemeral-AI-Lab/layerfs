@@ -34,3 +34,7 @@ pub(crate) fn status(spec: &Spec) -> Result<Status, MachineError> {
 pub(crate) fn load_image(spec: &Spec, _archive: &std::path::Path) -> Result<String, MachineError> {
     Err(unsupported(spec))
 }
+
+pub(crate) fn host_address(spec: &Spec) -> Result<String, MachineError> {
+    Err(unsupported(spec))
+}

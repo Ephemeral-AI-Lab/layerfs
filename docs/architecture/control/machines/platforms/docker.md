@@ -108,9 +108,13 @@ to the worker container on every host (#535 G8).
 | linux | `true` | `null` |
 | windows | `false` | "docker through WSL2 is not designed yet" |
 
-`reach` rewrites a loopback host to `host.docker.internal` (`DESKTOP_HOST`
-in [`docker/adapter.rs`](../../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs)).
-On Linux the worker resolves that name through `--add-host … host-gateway`. Other hosts are dialled as given;
+`reach` ([`docker/adapter.rs`](../../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs))
+on Docker Desktop rewrites a loopback host to the address the running
+worker resolves `host.docker.internal` to (`getent ahostsv4` in the worker,
+`host_address` in `docker/unix.rs`): a Sandbox daemon runs in the Sandbox
+image's root, which cannot resolve the name (D-8). On a Linux Engine the
+worker, and so its Sandboxes, use the host's network, and a loopback URL is
+dialled as given. Other hosts are dialled as given;
 see [Network: Reach](../../network/reach.md) for the refusals.
 
 ## Options

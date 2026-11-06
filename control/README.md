@@ -37,9 +37,11 @@ describe retained mechanics; `SUPPORT.json` decides availability.
 - `layerfs-platform/src/reach.rs` is `reach` (the call `machine::reach`):
   the PostgreSQL Store URL a Sandbox daemon on the machine dials. Each
   adapter names how its machine reaches the caller's loopback: `native`
-  shares it; `docker` (`host.docker.internal`) and `lima`
+  shares it, and so does `docker` on a Linux Engine (its worker uses the
+  host's network); `docker` on Docker Desktop (the address its running
+  worker resolves `host.docker.internal` to, D-8) and `lima`
   (`192.168.5.2`, the address of `host.lima.internal`) rewrite a loopback
-  host to their alias, and so do
+  host to that address, and so do
   `apple-container` (its network's gateway from `container inspect`),
   `microsandbox` (`host.microsandbox.internal`; machines get
   `--net public,private,host`) and `firecracker` (`192.168.5.2`, through the Lima

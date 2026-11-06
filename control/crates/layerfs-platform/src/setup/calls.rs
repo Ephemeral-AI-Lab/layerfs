@@ -137,7 +137,9 @@ pub fn host_identity(spec: &Spec) -> Result<String, MachineError> {
 
 /// The PostgreSQL Store URL a Sandbox daemon on `spec`'s machine dials for
 /// `url` (#535 §7.3): `native` uses it as given; a loopback host becomes the
-/// machine's host alias (`docker`: `host.docker.internal`, `lima` and
+/// machine's host alias (`docker`: on Docker Desktop the address its running
+/// worker container resolves `host.docker.internal` to, on a Linux Engine
+/// the URL as given; `lima` and
 /// `firecracker`: `192.168.5.2`, `microsandbox`: `host.microsandbox.internal`,
 /// `apple-container`: its network's gateway) or is refused (`ssh`); G7
 /// receipts; a rewrite is refused when the URL asks for

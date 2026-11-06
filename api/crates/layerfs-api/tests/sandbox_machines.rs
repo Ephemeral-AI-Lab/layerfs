@@ -307,7 +307,7 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
     };
     let home = tempdir("pg");
     let folder = source("pg-src");
-    home::open(&home).unwrap();
+    let id = home::open(&home).unwrap().id;
     home::import_env(&home, &[("LAYERFS_DAEMON".to_owned(), daemon)]).unwrap();
     ok(
         &home,
@@ -343,17 +343,25 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
             "machine.update",
             &[("name", t("docker")), ("image", t(&image))],
         );
-        ok(
-            &home,
-            "sandbox.create",
-            &[
-                ("project", t("pg/app")),
-                ("name", t("d")),
-                ("machine", t("docker")),
-            ],
-        );
-        work(&home, "pg/app", "d", "on-docker", "docker.txt");
-        ok(&home, "sandbox.close", &[("name", t("d"))]);
+        let outcome = std::panic::catch_unwind(|| {
+            // only `machine.start` starts a machine (D11)
+            ok(&home, "machine.start", &[("name", t("docker"))]);
+            ok(
+                &home,
+                "sandbox.create",
+                &[
+                    ("project", t("pg/app")),
+                    ("name", t("d")),
+                    ("machine", t("docker")),
+                ],
+            );
+            work(&home, "pg/app", "d", "on-docker", "docker.txt");
+            ok(&home, "sandbox.close", &[("name", t("d"))]);
+        });
+        remove_worker(&id);
+        if let Err(panic) = outcome {
+            std::panic::resume_unwind(panic);
+        }
     } else {
         eprintln!("NOT_RUN (docker half): LAYERFS_TEST_IMAGE / LAYERFS_BUNDLE unset");
     }
@@ -371,6 +379,19 @@ fn a_postgresql_store_s_sandboxes_on_native_and_docker() {
     }
     std::fs::remove_dir_all(&home).unwrap();
     std::fs::remove_dir_all(&folder).unwrap();
+}
+
+/// Removes the docker worker container and data volume of the home `id`,
+/// whatever its test did.
+fn remove_worker(id: &str) {
+    let worker = format!("lfs-{}-docker", &id[..8]);
+    let volume = format!("{worker}-data");
+    for args in [
+        ["rm", "-f", worker.as_str()],
+        ["volume", "rm", volume.as_str()],
+    ] {
+        let _ = std::process::Command::new("docker").args(args).output();
+    }
 }
 
 #[cfg(feature = "postgresql")]
@@ -410,13 +431,15 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
             ("folder", t(&folder.display().to_string())),
         ],
     );
-    let moved = ok(
-        &home,
-        "store.push",
-        &[("name", t("shop")), ("machine", t("docker"))],
-    );
-    assert_eq!(moved.get_text("to"), Some("docker"), "{moved:?}");
     let outcome = std::panic::catch_unwind(|| {
+        // only `machine.start` starts a machine (D11)
+        ok(&home, "machine.start", &[("name", t("docker"))]);
+        let moved = ok(
+            &home,
+            "store.push",
+            &[("name", t("shop")), ("machine", t("docker"))],
+        );
+        assert_eq!(moved.get_text("to"), Some("docker"), "{moved:?}");
         let created = ok(
             &home,
             "sandbox.create",
@@ -442,15 +465,7 @@ fn a_sqlite_store_s_sandbox_on_the_docker_machine() {
         work(&home, "shop/app", "t", "on-docker", "docker.txt");
         ok(&home, "sandbox.close", &[("name", t("t"))]);
     });
-    // this test's own worker container and its data volume, whatever happened
-    let worker = format!("lfs-{}-docker", &id[..8]);
-    let volume = format!("{worker}-data");
-    for args in [
-        ["rm", "-f", worker.as_str()],
-        ["volume", "rm", volume.as_str()],
-    ] {
-        let _ = std::process::Command::new("docker").args(args).output();
-    }
+    remove_worker(&id);
     let _ = std::fs::remove_dir_all(&home);
     let _ = std::fs::remove_dir_all(&folder);
     if let Err(panic) = outcome {

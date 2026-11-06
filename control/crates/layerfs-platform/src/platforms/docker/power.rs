@@ -77,10 +77,9 @@ pub(crate) fn start(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErro
         "--label", ROLE, "--label", &bundle_label,
     ];
     if host_network {
-        // a Linux Engine has no `host.docker.internal` of its own: the name
-        // `reach` gives a loopback PostgreSQL server (#535 §7.4) resolves to
-        // the bridge's gateway, the host, for the worker's Store calls and
-        // its Sandboxes' reach check
+        // a Linux Engine has no `host.docker.internal` of its own: a Store
+        // URL that names it resolves to the bridge's gateway, the host; a
+        // loopback URL is dialled as given, the network being the host's
         #[rustfmt::skip]
         args.extend([
             "--network", "host", "--add-host", "host.docker.internal:host-gateway",

@@ -3,7 +3,8 @@
 //! is refused naming what is missing; a rewrite is refused for
 //! `sslmode=verify-full`; every other host is dialled as given. No message
 //! holds the URL's password. Only apple-container's stand-in `container`
-//! runs, and only for a loopback URL (it reads the network's gateway).
+//! and docker's stand-in `docker` run, and only for a loopback URL (they
+//! read the network's gateway, and what the worker resolves its host to).
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
@@ -16,11 +17,18 @@ const SECRET: &str = "s3cr3t-pw";
 /// as `container` 1.6.1 prints it (G7 receipt `ac-inspect.json`, cut).
 const RUNNING: &str = r#"echo '[{"status":{"state":"running","networks":[{"network":"default","ipv4Address":"192.168.64.10/24","ipv4Gateway":"192.168.64.1"}]}}]'"#;
 
+/// `getent ahostsv4 host.docker.internal` in a Docker Desktop worker
+/// container (D-8 live receipt): its DNS answers the name.
+const RESOLVED: &str = r#"printf '192.168.65.254  STREAM host.docker.internal\n192.168.65.254  DGRAM  \n192.168.65.254  RAW    \n'"#;
+
 /// `kind`'s spec as `standin` makes it; a firecracker one gets its nested
 /// lima host and, when given, its network number.
 fn spec(scratch: &Scratch, kind: Platform, network: Option<u8>) -> Spec {
     if kind == Platform::AppleContainer {
         scratch.tool("container", RUNNING);
+    }
+    if kind == Platform::Docker {
+        scratch.tool("docker", RESOLVED);
     }
     let mut spec = scratch.spec(kind);
     if kind == Platform::Firecracker {
@@ -65,7 +73,9 @@ fn each_platform_rewrites_or_refuses_a_loopback_host() {
         let spec = spec(&scratch, kind, Some(7));
         let alias = match kind {
             Platform::Native => Some("unchanged"),
-            Platform::Docker => Some("host.docker.internal"),
+            // a Linux Engine's worker shares the host's network (D-8)
+            Platform::Docker if cfg!(target_os = "linux") => Some("unchanged"),
+            Platform::Docker => Some("192.168.65.254"),
             Platform::Lima => Some("192.168.5.2"),
             Platform::AppleContainer => Some("192.168.64.1"),
             Platform::Microsandbox => Some("host.microsandbox.internal"),
@@ -180,7 +190,11 @@ fn every_other_host_is_dialled_as_given_everywhere() {
 fn a_rewrite_is_refused_for_verify_full() {
     let scratch = Scratch::new("reach-tls");
     let url = format!("postgres://lfs:{SECRET}@localhost:5432/layerfs?sslmode=verify-full");
-    for kind in [Platform::Docker, Platform::Lima] {
+    let rewriting: &[Platform] = match cfg!(target_os = "linux") {
+        true => &[Platform::Lima],
+        false => &[Platform::Docker, Platform::Lima],
+    };
+    for &kind in rewriting {
         let (code, message) = refused(machine::reach(&spec(&scratch, kind, Some(2)), &url));
         assert_eq!(code, Code::Unsupported);
         assert!(message.contains("sslmode=verify-full"), "{message}");
@@ -193,15 +207,16 @@ fn a_rewrite_is_refused_for_verify_full() {
     // verify-ca does not check the host name
     let ca = url.replace("verify-full", "verify-ca");
     assert_eq!(
-        machine::reach(&spec(&scratch, Platform::Docker, None), &ca),
-        Ok(ca.replace("localhost", "host.docker.internal"))
+        machine::reach(&spec(&scratch, Platform::Lima, None), &ca),
+        Ok(ca.replace("localhost", "192.168.5.2"))
     );
 }
 
 #[test]
 fn a_url_reach_cannot_read_is_refused_off_native() {
     let scratch = Scratch::new("reach-unread");
-    let docker = spec(&scratch, Platform::Docker, None);
+    // lima rewrites a loopback host on every host OS
+    let lima = spec(&scratch, Platform::Lima, None);
     let native = spec(&scratch, Platform::Native, None);
     for (url, code, why) in [
         (
@@ -236,7 +251,7 @@ fn a_url_reach_cannot_read_is_refused_off_native() {
             "host or hostaddr parameter",
         ),
     ] {
-        let (got, message) = refused(machine::reach(&docker, &url));
+        let (got, message) = refused(machine::reach(&lima, &url));
         assert_eq!(got, code, "{message}");
         assert!(message.contains(why), "{message}");
         assert_eq!(machine::reach(&native, &url).as_ref(), Ok(&url));
@@ -251,4 +266,40 @@ fn an_invalid_spec_is_refused_before_the_url_is_read() {
     let (code, message) = refused(machine::reach(&spec, &loopback_urls()[0]));
     assert_eq!(code, Code::InvalidInput);
     assert!(message.contains("not a plain name"), "{message}");
+}
+
+/// D-8: a docker Sandbox runs in the Sandbox image's root, which cannot
+/// resolve `host.docker.internal`, so a loopback URL gets the address the
+/// running worker container resolves the name to. Only a loopback URL
+/// reads it; a stopped worker, or one resolving no IPv4 address, is refused
+/// `Unavailable` and puts nothing in the URL.
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn docker_reads_its_worker_s_host_address_only_for_a_loopback_url() {
+    let scratch = Scratch::new("reach-docker");
+    let spec = spec(&scratch, Platform::Docker, None);
+    let remote = format!("postgres://lfs:{SECRET}@db.example.com:5432/layerfs");
+    assert_eq!(machine::reach(&spec, &remote), Ok(remote.clone()));
+    assert_eq!(scratch.log(), "", "a remote URL reads nothing");
+    let outcome = machine::reach(&spec, &loopback_urls()[1]);
+    assert_eq!(outcome, Ok(rewritten("192.168.65.254")[1].clone()));
+    assert_eq!(
+        scratch.log(),
+        "docker -H unix:///var/run/docker.sock exec lfs-dev getent ahostsv4 host.docker.internal\n"
+    );
+    // a worker that is not running resolves nothing
+    scratch.tool(
+        "docker",
+        r#"echo "Error response from daemon: container lfs-dev is not running" >&2; exit 1"#,
+    );
+    let (code, message) = refused(machine::reach(&spec, &loopback_urls()[0]));
+    assert_eq!(code, Code::Unavailable);
+    assert!(message.contains("must be running"), "{message}");
+    // an unresolved name (getent exits 2), or an answer that is not an
+    // IPv4 address, is not put in the URL
+    for body in ["exit 2", r#"echo 'evil/x@y STREAM host.docker.internal'"#] {
+        scratch.tool("docker", body);
+        let (code, _) = refused(machine::reach(&spec, &loopback_urls()[0]));
+        assert_eq!(code, Code::Unavailable);
+    }
 }
