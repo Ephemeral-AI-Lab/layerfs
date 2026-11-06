@@ -16,7 +16,7 @@ product mental model or campaign-specific benchmark procedures.
   depend on them. Since #535 (owner, 2026-11-03, D1, D4) Sandbox and network
   code leave the engine for the connect layer, renamed the
   [control layer](../control/AGENTS.md) by layerfs-project#101 (D-6):
-  the Sandbox runtime (now `layerfs-isolation`), the machine layer (now
+  the Sandbox runtime (now `layerfs-sandbox-backend`), the machine layer (now
   `layerfs-platform`) and remote storage (now `layerfs-bucket`, with
   `layerfs-store-service`'s `remote/`) moved out in #535 phase 1. The engine keeps
   persistence (SQLite and PostgreSQL, D2), the daemon, the overlay,

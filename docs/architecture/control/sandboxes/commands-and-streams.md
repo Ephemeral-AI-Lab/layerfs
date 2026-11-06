@@ -9,7 +9,7 @@ Running a command and returning its streams and status.
 | | |
 | --- | --- |
 | Component | [Sandboxes](README.md) |
-| Source | [`control/crates/layerfs-isolation/src/runtime.rs`](../../../../control/crates/layerfs-isolation/src/runtime.rs), [`control/crates/layerfs-isolation/src/types`](../../../../control/crates/layerfs-isolation/src/types), [`backend/docker/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/exec.rs), [`backend/docker/streams.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/streams.rs), [`backend/host_process/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/host_process/exec.rs), [`backend/namespaces/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/namespaces/exec.rs) |
+| Source | [`control/crates/layerfs-sandbox-backend/src/runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs), [`control/crates/layerfs-sandbox-backend/src/types`](../../../../control/crates/layerfs-sandbox-backend/src/types), [`backend/docker/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/exec.rs), [`backend/docker/streams.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/streams.rs), [`backend/host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs), [`backend/namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs) |
 
 The Sandbox owns command launch, streams and exit status. The daemon
 serves the Workspace's files and supervises no command; a command reaches
@@ -36,16 +36,16 @@ the Workspace through ordinary file calls on the mount.
 
 | Field check | Rule | Source |
 | --- | --- | --- |
-| Identity | uid and gid non-zero, else `Protocol("nonroot command uid/gid")`. | [`types/execution.rs`](../../../../control/crates/layerfs-isolation/src/types/execution.rs) |
-| Arguments | At least one, first non-empty, no NUL. No shell is added by the runtime; `bash -c` comes from the API. | [`types/request.rs`](../../../../control/crates/layerfs-isolation/src/types/request.rs) |
-| Environment | `NAME=value`, not starting with `=`, no NUL. Nothing else of the runtime's environment reaches the command but `PATH` (local backends). | same; [`host_process/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/host_process/exec.rs) |
+| Identity | uid and gid non-zero, else `Protocol("nonroot command uid/gid")`. | [`types/execution.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/execution.rs) |
+| Arguments | At least one, first non-empty, no NUL. No shell is added by the runtime; `bash -c` comes from the API. | [`types/request.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/request.rs) |
+| Environment | `NAME=value`, not starting with `=`, no NUL. Nothing else of the runtime's environment reaches the command but `PATH` (local backends). | same; [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs) |
 | Directory | Absolute, no NUL. | same |
-| Stdin | Local backends refuse it (`Unsupported`); Docker `run` refuses it, while the Docker Exec API itself supports it (see the example below). | [`host_process/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/host_process/exec.rs), [`docker/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/exec.rs) |
+| Stdin | Local backends refuse it (`Unsupported`); Docker `run` refuses it, while the Docker Exec API itself supports it (see the example below). | [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs), [`docker/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/exec.rs) |
 | Timeout | None. A command runs until it ends. | each `exec.rs` |
 
 Docker's steps, each attempted once
-([`exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/exec.rs),
-[`streams.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/streams.rs)):
+([`exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/exec.rs),
+[`streams.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/streams.rs)):
 
 | Step | Request | Connection |
 | --- | --- | --- |
@@ -75,9 +75,9 @@ Docker's steps, each attempted once
 
 | Rule | Source |
 | --- | --- |
-| Counts are what each sink accepted (`ExecExit::stdout_bytes`, `stderr_bytes`), not what was queued. | [`local/streams.rs`](../../../../control/crates/layerfs-isolation/src/local/streams.rs), `OutputProgress` in [`streams.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/streams.rs) |
-| A sink failure closes the command's pipes, still waits for its exit, and returns the sink's error. | [`host_process/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/host_process/exec.rs), [`namespaces/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/namespaces/exec.rs) |
-| End of stream is transport completion only, never the exit. | `copy_to` in [`streams.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/streams.rs) |
+| Counts are what each sink accepted (`ExecExit::stdout_bytes`, `stderr_bytes`), not what was queued. | [`local/streams.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/streams.rs), `OutputProgress` in [`streams.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/streams.rs) |
+| A sink failure closes the command's pipes, still waits for its exit, and returns the sink's error. | [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs), [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs) |
+| End of stream is transport completion only, never the exit. | `copy_to` in [`streams.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/streams.rs) |
 | No output is cut: a stream over the 1 MiB inline window is spooled (`truncated` is always false). | `INLINE` in [`output.rs`](../../../../control/crates/layerfs-sandbox/src/output.rs), [`exec.rs`](../../../../control/crates/layerfs-sandbox/src/exec.rs) |
 | The API also emits the output as `stdout` / `stderr` events after the call, for front ends that stream. | [`workspace/calls.rs`](../../../../control/crates/layerfs-sandbox/src/workspace/calls.rs) |
 
@@ -85,12 +85,12 @@ Docker's steps, each attempted once
 
 | Backend | `ExecExit.code` | `pid` | Source |
 | --- | --- | --- | --- |
-| Docker | `ExecInspection::known_root_exit`: the inspected exit code, only when not running. Unknown is `ExecExitUnknown`, keeping the handle; nothing is polled or replayed. | the Engine's, diagnostic only, maybe `None` | [`docker/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/exec.rs), [`types/execution.rs`](../../../../control/crates/layerfs-isolation/src/types/execution.rs) |
-| HostProcess | the exit code, or 128 + signal | the spawned pid | [`host_process/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/host_process/exec.rs) |
-| Namespaces | the helper's exit code, which is the command's code or 128 + its signal; 125 is the helper's own failure; a helper ended by a signal is a failure, not an exit code | the helper's pid | [`namespaces/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/namespaces/exec.rs), [`bin/…/main.rs`](../../../../control/crates/layerfs-isolation/src/bin/layerfs-sandbox-helper/main.rs) |
+| Docker | `ExecInspection::known_root_exit`: the inspected exit code, only when not running. Unknown is `ExecExitUnknown`, keeping the handle; nothing is polled or replayed. | the Engine's, diagnostic only, maybe `None` | [`docker/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/exec.rs), [`types/execution.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/execution.rs) |
+| HostProcess | the exit code, or 128 + signal | the spawned pid | [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs) |
+| Namespaces | the helper's exit code, which is the command's code or 128 + its signal; 125 is the helper's own failure; a helper ended by a signal is a failure, not an exit code | the helper's pid | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`bin/…/main.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/main.rs) |
 
 The exit is the root process's. Descendants, open descriptors and the
-filesystem drain are separate facts ([`execution.rs`](../../../../control/crates/layerfs-isolation/src/types/execution.rs));
+filesystem drain are separate facts ([`execution.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/execution.rs));
 a command's exit does not prove its children ended. Docker has no
 per-Exec cancellation: `ExecHandle::cancel` refuses `Unsupported` before any
 effect.
@@ -116,7 +116,7 @@ effect.
 | `stop` twice | refused | refused | refused |
 | `delete` before a known stop | refused | refused | refused |
 | `delete` | `DELETE /containers/<id>?force=false&v=false`; the Store volume stays | kill groups if not yet, detach mounts, remove the directory | refuse while the cgroup holds a process; remove cgroup and directory |
-| Source | [`docker/sandbox.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/sandbox.rs) | [`host_process/sandbox.rs`](../../../../control/crates/layerfs-isolation/src/backend/host_process/sandbox.rs) | [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-isolation/src/backend/namespaces/sandbox.rs) |
+| Source | [`docker/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/sandbox.rs) | [`host_process/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/sandbox.rs) | [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs) |
 
 Neither stop nor delete is retried. On `Drop` a local owner only reaps a
 daemon or init stage that already exited; a running one is left for `stop`.

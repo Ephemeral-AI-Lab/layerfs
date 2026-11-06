@@ -187,7 +187,7 @@ fn a_lease_names_its_process_so_a_reused_or_group_pid_never_holds() {
         .spawn()
         .unwrap();
     let pid = child.id();
-    let seen = layerfs_isolation::local::LocalProcess::observe(pid).unwrap();
+    let seen = layerfs_sandbox_backend::local::LocalProcess::observe(pid).unwrap();
     let boot = seen.boot.unwrap();
     let lease = dir.join(pid.to_string());
     std::fs::write(&lease, format!("1 {} {boot:032x}\n", seen.start)).unwrap();
@@ -199,7 +199,7 @@ fn a_lease_names_its_process_so_a_reused_or_group_pid_never_holds() {
     // this process's own lease records its start time
     let mine = lease::hold(&home, "shop").unwrap();
     let text = std::fs::read_to_string(dir.join(std::process::id().to_string())).unwrap();
-    let me = layerfs_isolation::local::LocalProcess::observe(std::process::id()).unwrap();
+    let me = layerfs_sandbox_backend::local::LocalProcess::observe(std::process::id()).unwrap();
     assert!(text.contains(&me.start.to_string()), "{text}");
     drop(mine);
     let _ = child.kill();

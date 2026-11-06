@@ -85,7 +85,7 @@ jobs:
 
   # Windows runs the Linux build through WSL2 or a VM (#527 D2); this lane only
   # reports whether the crates gated for Windows still compile there. Today
-  # that is layerfs-isolation (its shared types; the backends are Unix only).
+  # that is layerfs-sandbox-backend (its shared types; the backends are Unix only).
   # layerfs-node stays outside CI, and layerfs-api cannot build for Windows
   # yet (layerfs-store-service is Unix only).
   windows-build:
@@ -96,7 +96,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - run: rustup toolchain install 1.85.1 --profile minimal --component clippy
-      - run: cargo +1.85.1 clippy --manifest-path Cargo.toml --locked -p layerfs-isolation -- -D warnings
+      - run: cargo +1.85.1 clippy --manifest-path Cargo.toml --locked -p layerfs-sandbox-backend -- -D warnings
 
   test:
     runs-on: ubuntu-24.04

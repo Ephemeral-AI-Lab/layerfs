@@ -2,11 +2,11 @@
 //! refusal the check gives is the row's reason. `LAYERFS_BLESS_SUPPORT=1`
 //! writes the file from the table instead of comparing.
 #![cfg(unix)]
-use layerfs_isolation::platform_policy::disabled_reason;
 use layerfs_platform::{
     platforms, sandbox_allowed, support, support_json, Backend, CallSite, HostOs, KernelRoute,
     Platform, StoreKind,
 };
+use layerfs_sandbox_backend::platform_policy::disabled_reason;
 use std::path::PathBuf;
 
 fn committed() -> PathBuf {

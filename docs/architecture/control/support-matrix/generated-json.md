@@ -13,7 +13,7 @@ for what a diagram or table cannot say.
 | | |
 | --- | --- |
 | Component | [Support matrix](README.md) |
-| Source | [`control/SUPPORT.json`](../../../../control/SUPPORT.json), [`control/crates/layerfs-platform/tests/support.rs`](../../../../control/crates/layerfs-platform/tests/support.rs), `support_json()` in [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs), [`layerfs-isolation/tests/support/support_json.rs`](../../../../control/crates/layerfs-isolation/tests/support/support_json.rs) |
+| Source | [`control/SUPPORT.json`](../../../../control/SUPPORT.json), [`control/crates/layerfs-platform/tests/support.rs`](../../../../control/crates/layerfs-platform/tests/support.rs), `support_json()` in [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs), [`layerfs-sandbox-backend/tests/support/support_json.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/support/support_json.rs) |
 
 ## SUPPORT.json
 
@@ -40,7 +40,7 @@ for what a diagram or table cannot say.
 
 | Property | Value | Source |
 | --- | --- | --- |
-| Producer | `support_json()`, a hand-written renderer: fixed key order, fixed indentation, strings quoted by `layerfs_isolation::json::quoted` | [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) |
+| Producer | `support_json()`, a hand-written renderer: fixed key order, fixed indentation, strings quoted by `layerfs_sandbox_backend::json::quoted` | [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) |
 | Hosts | `macos`, `linux`, `windows` (`HostOs::NAMED`); `other` is never written | [`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs) |
 | Rows | `platforms(host)` for each host | `support.rs` |
 | Live fields | none: `ready`, `missing` and `version` are added only by `machine.platforms` | [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs) |
@@ -77,17 +77,17 @@ writes the path `CARGO_MANIFEST_DIR/../../SUPPORT.json`, which is
 | --- | --- | --- | --- |
 | `support_json_is_the_rendered_table` | The committed file against `support_json()`, as whole strings | fails: "control/SUPPORT.json differs from support.rs; rerun this test with LAYERFS_BLESS_SUPPORT=1" | [`tests/support.rs`](../../../../control/crates/layerfs-platform/tests/support.rs) |
 | `each_platform_row_in_support_json_is_its_table_row` | The committed file, parsed back row by row, against `platforms(host)`: every field and the host set | names the platform, host and field | [`tests/conformance.rs`](../../../../control/crates/layerfs-platform/tests/conformance.rs) |
-| `layerfs-isolation` conformance | Each backend's capabilities against the kernel routes the file lists | names the backend | [`layerfs-isolation/tests/conformance.rs`](../../../../control/crates/layerfs-isolation/tests/conformance.rs) |
+| `layerfs-sandbox-backend` conformance | Each backend's capabilities against the kernel routes the file lists | names the backend | [`layerfs-sandbox-backend/tests/conformance.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/conformance.rs) |
 
 The two conformance kits read the committed file through
-`support_json.rs`, a small reader built on `layerfs_isolation::json::Json`,
+`support_json.rs`, a small reader built on `layerfs_sandbox_backend::json::Json`,
 so they check what callers and these pages read, not only the Rust table.
 The commands, not run while writing this page:
 
 ```text
 cargo +1.85.1 test --locked -p layerfs-platform --test support
 cargo +1.85.1 test --locked -p layerfs-platform --test conformance
-cargo +1.85.1 test --locked -p layerfs-isolation --test conformance
+cargo +1.85.1 test --locked -p layerfs-sandbox-backend --test conformance
 ```
 
 All three are `#![cfg(unix)]` and need no Docker, VM, ssh host or root.

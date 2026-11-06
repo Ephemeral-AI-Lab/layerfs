@@ -7,7 +7,7 @@ use layerfs_bridge::{
     duplex::{public_key, ChannelWork},
     provision::StoreManifest,
 };
-use layerfs_isolation::{
+use layerfs_sandbox_backend::{
     Bind, CommandIdentity, LaunchRequest, ProviderLaunchOptions, Runtime, Sandbox,
 };
 use std::{fmt, sync::Arc};
@@ -131,7 +131,7 @@ impl SandboxApi {
                 self.runtime
                     .local_directory(&request.launch.name)
                     .map_err(|cause| {
-                        SandboxCause::Runtime(layerfs_isolation::WireFailure::local(cause))
+                        SandboxCause::Runtime(layerfs_sandbox_backend::WireFailure::local(cause))
                     })?
             {
                 if std::path::Path::new(&request.setup.overlay)
@@ -184,10 +184,10 @@ impl SandboxApi {
                 Ok(owner) => Box::new(owner),
                 Err(mut failure) => {
                     progress.phase = match failure.phase {
-                        layerfs_isolation::LaunchPhase::Validate => SandboxPhase::Validate,
-                        layerfs_isolation::LaunchPhase::Create => SandboxPhase::Create,
-                        layerfs_isolation::LaunchPhase::Start => SandboxPhase::Start,
-                        layerfs_isolation::LaunchPhase::Listener => SandboxPhase::Listener,
+                        layerfs_sandbox_backend::LaunchPhase::Validate => SandboxPhase::Validate,
+                        layerfs_sandbox_backend::LaunchPhase::Create => SandboxPhase::Create,
+                        layerfs_sandbox_backend::LaunchPhase::Start => SandboxPhase::Start,
+                        layerfs_sandbox_backend::LaunchPhase::Listener => SandboxPhase::Listener,
                     };
                     launched = failure.instance.take();
                     return Err(SandboxCause::Provider(failure));
@@ -252,7 +252,7 @@ impl SandboxApi {
                 self.runtime
                     .local_directory(&request.launch.name)
                     .map_err(|cause| {
-                        SandboxCause::Runtime(layerfs_isolation::WireFailure::local(cause))
+                        SandboxCause::Runtime(layerfs_sandbox_backend::WireFailure::local(cause))
                     })?
             {
                 if std::path::Path::new(&request.setup.overlay)
@@ -318,10 +318,10 @@ impl SandboxApi {
                 Ok(owner) => Box::new(owner),
                 Err(mut failure) => {
                     progress.phase = match failure.phase {
-                        layerfs_isolation::LaunchPhase::Validate => SandboxPhase::Validate,
-                        layerfs_isolation::LaunchPhase::Create => SandboxPhase::Create,
-                        layerfs_isolation::LaunchPhase::Start => SandboxPhase::Start,
-                        layerfs_isolation::LaunchPhase::Listener => SandboxPhase::Listener,
+                        layerfs_sandbox_backend::LaunchPhase::Validate => SandboxPhase::Validate,
+                        layerfs_sandbox_backend::LaunchPhase::Create => SandboxPhase::Create,
+                        layerfs_sandbox_backend::LaunchPhase::Start => SandboxPhase::Start,
+                        layerfs_sandbox_backend::LaunchPhase::Listener => SandboxPhase::Listener,
                     };
                     launched = failure.instance.take();
                     return Err(SandboxCause::Provider(failure));
@@ -401,7 +401,9 @@ fn binds(
             layerfs_bridge::DaemonStore::Sqlite { locator, .. },
         ) => Bind::store(std::path::Path::new(locator))
             .map(|bind| vec![bind])
-            .map_err(|cause| SandboxCause::Runtime(layerfs_isolation::WireFailure::local(cause))),
+            .map_err(|cause| {
+                SandboxCause::Runtime(layerfs_sandbox_backend::WireFailure::local(cause))
+            }),
         _ => Ok(Vec::new()),
     }
 }

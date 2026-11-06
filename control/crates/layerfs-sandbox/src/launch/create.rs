@@ -2,7 +2,7 @@
 use crate::{internal::Control, OperationFailure};
 use layerfs_bridge::control::{ControlError, DaemonStatus, HelloRequest, Reply, Request};
 use layerfs_bridge::duplex::ChannelError;
-use layerfs_isolation::Runtime;
+use layerfs_sandbox_backend::Runtime;
 use std::{io, sync::Arc};
 
 /// The address to dial for a daemon `endpoint` observed on the Docker host's
@@ -66,9 +66,9 @@ pub enum SandboxCause {
     /// Local config or correlated startup validation.
     Setup(ControlError),
     /// Original Engine transfer, no replay.
-    Runtime(Box<layerfs_isolation::WireFailure>),
+    Runtime(Box<layerfs_sandbox_backend::WireFailure>),
     /// Original provider launch cause; partial runtime ownership is retained separately.
-    Provider(Box<layerfs_isolation::LaunchFailure>),
+    Provider(Box<layerfs_sandbox_backend::LaunchFailure>),
     /// Original authentication failure; handshake work remains in the receipt.
     Channel(ChannelError),
     /// Original correlated daemon control exchange/refusal.

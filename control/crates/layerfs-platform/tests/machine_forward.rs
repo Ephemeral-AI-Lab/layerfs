@@ -11,8 +11,8 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_isolation::platform_policy::disabled_reason;
 use layerfs_platform::{self as machine, Code, Forward, Platform, Spec};
+use layerfs_sandbox_backend::platform_policy::disabled_reason;
 use standin::Scratch;
 use std::net::SocketAddr;
 use std::process::Command;

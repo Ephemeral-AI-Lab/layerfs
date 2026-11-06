@@ -140,7 +140,7 @@ fn docker(side: &Side<'_>, store: &str, choice: &SdkValue) -> Result<SdkValue> {
             if std::env::var("LAYERFS_WORKER_HOST_NETWORK").as_deref() != Ok("1") {
                 fields.push((
                     "daemonHost",
-                    SdkValue::text(layerfs_isolation::docker::DESKTOP_HOST),
+                    SdkValue::text(layerfs_sandbox_backend::docker::DESKTOP_HOST),
                 ));
             }
             "/var/run/docker.sock".to_owned()

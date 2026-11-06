@@ -12,7 +12,7 @@
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::{lock, log_line, now_ms, paths, read_record, with_field, write_entity};
 use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_isolation::platform_policy::disabled_reason;
+use layerfs_sandbox_backend::platform_policy::disabled_reason;
 use layerfs_store::record::{kind_of, StoreKind};
 use std::path::Path;
 

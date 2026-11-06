@@ -9,7 +9,7 @@ The Docker backend and its Engine client.
 | | |
 | --- | --- |
 | Component | [Sandboxes](README.md) |
-| Source | [`control/crates/layerfs-isolation/src/docker_engine`](../../../../control/crates/layerfs-isolation/src/docker_engine), [`control/crates/layerfs-isolation/src/backend/docker`](../../../../control/crates/layerfs-isolation/src/backend/docker) |
+| Source | [`control/crates/layerfs-sandbox-backend/src/docker_engine`](../../../../control/crates/layerfs-sandbox-backend/src/docker_engine), [`control/crates/layerfs-sandbox-backend/src/backend/docker`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker) |
 
 One container per Sandbox. `DockerProvider::launch` creates it, uploads
 the daemon and its setup, starts it and waits for its listener line;
@@ -34,11 +34,11 @@ the daemon and its setup, starts it and waits for its listener line;
 
 | Part | What | Source |
 | --- | --- | --- |
-| `Docker::new` | An absolute socket path and a non-zero control wait; nothing is dialed. | [`http.rs`](../../../../control/crates/layerfs-isolation/src/docker_engine/http.rs) |
-| Version | API 1.48 (Engine 28.0) to 1.54. The daemon's version, capped at 1.54, read once and shared by clones; older is refused before the request; an unreadable answer uses 1.54. | [`version.rs`](../../../../control/crates/layerfs-isolation/src/docker_engine/version.rs) |
-| Socket | One nonblocking connect; readiness waits use `poll`. Control waits never apply to command streams. | [`socket.rs`](../../../../control/crates/layerfs-isolation/src/docker_engine/socket.rs) |
-| Kept connection | One idle keep-alive connection for Exec create and inspect, used only while idle (30 s, `KEPT_IDLE`) and quiet; returned only after its body was read to the framed end. A failure on it is that request's failure, never resent. | [`http.rs`](../../../../control/crates/layerfs-isolation/src/docker_engine/http.rs) |
-| Failures | `WireFailure` keeps whether the request was attempted, header and body bytes sent, the HTTP status, the requested and observed container and exec ids, and a bounded error-body prefix. | [`types/failure.rs`](../../../../control/crates/layerfs-isolation/src/types/failure.rs) |
+| `Docker::new` | An absolute socket path and a non-zero control wait; nothing is dialed. | [`http.rs`](../../../../control/crates/layerfs-sandbox-backend/src/docker_engine/http.rs) |
+| Version | API 1.48 (Engine 28.0) to 1.54. The daemon's version, capped at 1.54, read once and shared by clones; older is refused before the request; an unreadable answer uses 1.54. | [`version.rs`](../../../../control/crates/layerfs-sandbox-backend/src/docker_engine/version.rs) |
+| Socket | One nonblocking connect; readiness waits use `poll`. Control waits never apply to command streams. | [`socket.rs`](../../../../control/crates/layerfs-sandbox-backend/src/docker_engine/socket.rs) |
+| Kept connection | One idle keep-alive connection for Exec create and inspect, used only while idle (30 s, `KEPT_IDLE`) and quiet; returned only after its body was read to the framed end. A failure on it is that request's failure, never resent. | [`http.rs`](../../../../control/crates/layerfs-sandbox-backend/src/docker_engine/http.rs) |
+| Failures | `WireFailure` keeps whether the request was attempted, header and body bytes sent, the HTTP status, the requested and observed container and exec ids, and a bounded error-body prefix. | [`types/failure.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/failure.rs) |
 
 `WireFailure::container_stopped` and `container_gone` let the caller tell
 "the exact container exists but is not running" from "the Engine says no
@@ -63,7 +63,7 @@ such container" without guessing.
 ```
 
 The container create body (`SandboxRequest::encode` in
-[`create.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/create.rs)):
+[`create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/create.rs)):
 
 | Field | Value |
 | --- | --- |
@@ -72,35 +72,35 @@ The container create body (`SandboxRequest::encode` in
 | `HostConfig.Init` | true: the Engine's init is PID 1 and reaps what commands leave |
 | `RestartPolicy`, `LogConfig` | `no`; `json-file`, 10m × 2 |
 | Privilege | not privileged; `CapAdd: CAP_SYS_ADMIN`; device `/dev/fuse`; `no-new-privileges=true`, `apparmor=unconfined` |
-| `SecurityOpt` seccomp | allow all but user-namespace creation (`unshare`/`clone` with `CLONE_NEWUSER` give `EPERM`; `clone3` gives `ENOSYS`) ([`topology.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/topology.rs)) |
+| `SecurityOpt` seccomp | allow all but user-namespace creation (`unshare`/`clone` with `CLONE_NEWUSER` give `EPERM`; `clone3` gives `ENOSYS`) ([`topology.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/topology.rs)) |
 | `ExtraHosts` (Linux only) | `host.docker.internal:host-gateway`, for [Reach](../network/reach.md) |
 | `Mounts` | the Store at `/layerfs-store`: a volume (`NoCopy`), a volume folder (`Subpath`) or a host folder (bind); none for a PostgreSQL Store |
 | `PortBindings` | `<port>/tcp` on `127.0.0.1`, Engine-chosen host port |
 
 The Store's path inside is `/layerfs-store/global/store.sqlite` for a whole
 volume, else `/layerfs-store/store.sqlite` (`store_locator` in
-[`sandbox.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/sandbox.rs)).
+[`sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/sandbox.rs)).
 The Store volume is borrowed: `delete` sends `DELETE
 /containers/<id>?force=false&v=false` and never removes it.
 
 `endpoint` inspects the container and answers the published loopback
-address ([`endpoint.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/endpoint.rs)).
+address ([`endpoint.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/endpoint.rs)).
 That address is why `machine::forward` refuses on `docker`
 ([Forwards](../network/forwards.md#platforms-that-refuse)). `reopen` starts
 nothing: it checks the container's user, entrypoint, command, `Tty`,
 labels, privilege, security options, capabilities, devices, init, restart
 and log settings, and its Store mount against the record
-([`topology.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/topology.rs)).
+([`topology.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/topology.rs)).
 
 ## Labels and naming
 
 | Item | Rule | Source |
 | --- | --- | --- |
-| Container name | `<prefix><id>`; prefix `deploy.containerPrefix`, else `layerfs-`. Engine rule: an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128. A name another container holds fails the create; it is never replaced or adopted. | `sandbox_name` in [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs), `naming` in [`http.rs`](../../../../control/crates/layerfs-isolation/src/docker_engine/http.rs) |
+| Container name | `<prefix><id>`; prefix `deploy.containerPrefix`, else `layerfs-`. Engine rule: an ASCII letter or digit, then letters, digits, `_`, `.`, `-`, at most 128. A name another container holds fails the create; it is never replaced or adopted. | `sandbox_name` in [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs), `naming` in [`http.rs`](../../../../control/crates/layerfs-sandbox-backend/src/docker_engine/http.rs) |
 | Labels set by the API | `layerfs.role=sandbox`, `layerfs.project=<project>`, `layerfs.sandbox=<id>`, and `layerfs.store=<store>` for a shared Store. | `labels` in [`serve.rs`](../../../../control/crates/layerfs-sandbox/src/serve.rs) |
-| Label text | Each key once; key and value 1 to 128 of `[A-Za-z0-9_.-]`. | `SandboxRequest::check` in [`sandbox.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/sandbox.rs) |
-| Reopen | The container must carry every recorded label with its value; the image may add others. | `config` in [`topology.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/topology.rs) |
-| Volume name | 1 to 128, alphanumeric first, then `[A-Za-z0-9_.-]`. | `volume_name` in [`sandbox.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/sandbox.rs) |
+| Label text | Each key once; key and value 1 to 128 of `[A-Za-z0-9_.-]`. | `SandboxRequest::check` in [`sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/sandbox.rs) |
+| Reopen | The container must carry every recorded label with its value; the image may add others. | `config` in [`topology.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/topology.rs) |
+| Volume name | 1 to 128, alphanumeric first, then `[A-Za-z0-9_.-]`. | `volume_name` in [`sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/sandbox.rs) |
 
 The machine's own worker container is labelled `layerfs.role=machine-worker`
 ([`docker/power.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/power.rs)),

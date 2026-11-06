@@ -2,7 +2,7 @@
 //! forward): its id, kernel start time and boot, so a reused id does not
 //! keep a record alive (moved from the Store leases, layerfs-project#103).
 use layerfs_bridge::control::SdkValue;
-use layerfs_isolation::local::LocalProcess;
+use layerfs_sandbox_backend::local::LocalProcess;
 use std::sync::OnceLock;
 
 /// This process as leases name it, read once; `None` where the kernel does

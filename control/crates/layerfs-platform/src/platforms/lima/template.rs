@@ -44,6 +44,6 @@ pub(crate) fn template(spec: &Spec, port: u16) -> String {
 
 fn quote(text: &str) -> String {
     let mut out = Vec::new();
-    layerfs_isolation::json::quoted(&mut out, text).expect("writing to a Vec");
+    layerfs_sandbox_backend::json::quoted(&mut out, text).expect("writing to a Vec");
     String::from_utf8(out).expect("JSON text is UTF-8")
 }

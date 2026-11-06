@@ -5,7 +5,7 @@
 use crate::options::OptSpec;
 use crate::platforms::{apple_container, docker, firecracker, lima, microsandbox, native, ssh};
 pub use layerfs_bridge::KernelRoute;
-use layerfs_isolation::Backend;
+use layerfs_sandbox_backend::Backend;
 use std::net::Ipv4Addr;
 
 /// Which kernel Sandboxes run on.

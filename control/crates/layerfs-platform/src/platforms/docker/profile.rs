@@ -1,6 +1,6 @@
 //! `docker`'s profile. Docker through WSL2 (Windows) is not designed.
 use crate::platform::{fuse, worker, HostOs, How, Profile};
-use layerfs_isolation::Backend;
+use layerfs_sandbox_backend::Backend;
 use std::net::Ipv4Addr;
 
 pub(crate) const PROFILE: Profile = Profile {

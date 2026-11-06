@@ -1,7 +1,7 @@
 //! Disabled platform policy through the shared public call dispatcher.
 use layerfs_api::{call, json};
 use layerfs_bridge::control::SdkValue;
-use layerfs_isolation::platform_policy::disabled_reason;
+use layerfs_sandbox_backend::platform_policy::disabled_reason;
 use std::collections::BTreeMap;
 use std::net::TcpListener;
 use std::path::Path;

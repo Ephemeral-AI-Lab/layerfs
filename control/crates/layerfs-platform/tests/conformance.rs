@@ -29,15 +29,15 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-#[path = "../../layerfs-isolation/tests/support/support_json.rs"]
+#[path = "../../layerfs-sandbox-backend/tests/support/support_json.rs"]
 mod support_json;
-use layerfs_isolation::platform_policy::disabled_reason;
-use layerfs_isolation::MountDriver;
 use layerfs_platform::{
     self as machine, platforms, sandbox_allowed, support, Backend, CallSite, Code, ExecutorKind,
     Forward, HostOs, How, KernelRoute, MachineError, OptKind, Platform, Route, Spec, SshSpec,
     StoreKind,
 };
+use layerfs_sandbox_backend::platform_policy::disabled_reason;
+use layerfs_sandbox_backend::MountDriver;
 use standin::Scratch;
 use std::collections::BTreeSet;
 

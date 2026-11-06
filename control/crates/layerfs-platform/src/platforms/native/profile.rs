@@ -1,6 +1,6 @@
 //! `native`'s profile.
 use crate::platform::{ExecutorKind, HostOs, How, KernelRoute, Profile, ANY_HOST};
-use layerfs_isolation::Backend;
+use layerfs_sandbox_backend::Backend;
 use std::net::Ipv4Addr;
 
 pub(crate) const PROFILE: Profile = Profile {

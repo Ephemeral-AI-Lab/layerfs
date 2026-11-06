@@ -8,7 +8,7 @@
 //! of it.
 use crate::error::{Code, MachineError};
 use crate::spec::Spec;
-use layerfs_isolation::PostgresUrl;
+use layerfs_sandbox_backend::PostgresUrl;
 
 /// How a machine reaches the caller's loopback.
 pub(crate) enum Loopback<'a> {

@@ -165,19 +165,23 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertFalse(unsafe_violations(root, "#![forbid(unsafe_code)]\nmod init;"))
 
     def test_sandbox_active_edges_and_unsafe_boundary(self):
-        path = Path("control/crates/layerfs-isolation/src/docker_engine/http.rs")
+        path = Path("control/crates/layerfs-sandbox-backend/src/docker_engine/http.rs")
         self.assertTrue(unsafe_violations(path, "unsafe fn signal_pid() {}"))
-        self.assertFalse(unsafe_violations(Path("control/crates/layerfs-isolation/src/lib.rs"), "#![deny(unsafe_code)]"))
-        self.assertTrue(unsafe_violations(Path("control/crates/layerfs-isolation/src/lib.rs"), "#![forbid(unsafe_code)]"))
-        darwin = Path("control/crates/layerfs-isolation/src/local/os/macos/darwin.rs")
+        self.assertFalse(
+            unsafe_violations(Path("control/crates/layerfs-sandbox-backend/src/lib.rs"), "#![deny(unsafe_code)]")
+        )
+        self.assertTrue(
+            unsafe_violations(Path("control/crates/layerfs-sandbox-backend/src/lib.rs"), "#![forbid(unsafe_code)]")
+        )
+        darwin = Path("control/crates/layerfs-sandbox-backend/src/local/os/macos/darwin.rs")
         self.assertFalse(unsafe_violations(darwin, "fn f() { unsafe { libc::proc_listallpids(); } }"))
         self.assertTrue(
             unsafe_violations(
-                Path("control/crates/layerfs-isolation/src/backend/os/macos/mounts.rs"),
+                Path("control/crates/layerfs-sandbox-backend/src/backend/os/macos/mounts.rs"),
                 "fn f() { unsafe { call(); } }",
             )
         )
-        prefix = '[package]\nname="layerfs-isolation"\n[dependencies]\n'
+        prefix = '[package]\nname="layerfs-sandbox-backend"\n[dependencies]\n'
         for dependency in (
             "layerfs-api-core",
             "layerfs-server",
@@ -196,21 +200,21 @@ class ProductBoundaryTests(unittest.TestCase):
         # core < engine < control < api (#535, #101 D-6): an engine crate
         # reaching a control crate is an upward edge, production or dev.
         prefix = '[package]\nname="layerfs-daemon"\n[dependencies]\n'
-        findings = dependency_violations(prefix + 'layerfs-isolation={path="../layerfs-isolation"}')
+        findings = dependency_violations(prefix + 'layerfs-sandbox-backend={path="../layerfs-sandbox-backend"}')
         self.assertTrue(any("upward" in message for _, message in findings), findings)
         dev = '[package]\nname="layerfs-daemon"\n[dev-dependencies]\n'
-        findings = dependency_violations(dev + 'layerfs-isolation={path="../layerfs-isolation"}')
+        findings = dependency_violations(dev + 'layerfs-sandbox-backend={path="../layerfs-sandbox-backend"}')
         self.assertTrue(any("upward" in message for _, message in findings), findings)
         self.assertTrue(
-            violations(Path("engine/crates/layerfs-daemon/src/commands.rs"), "use layerfs_isolation::Sandbox;")
+            violations(Path("engine/crates/layerfs-daemon/src/commands.rs"), "use layerfs_sandbox_backend::Sandbox;")
         )
         # A control crate may depend on engine and core crates, and on
         # control siblings inside its allowlist.
-        self.assertFalse(layer_violations("layerfs-isolation", "layerfs-daemon", "dependencies"))
-        self.assertFalse(layer_violations("layerfs-isolation", "layerfs-content", "dev-dependencies"))
+        self.assertFalse(layer_violations("layerfs-sandbox-backend", "layerfs-daemon", "dependencies"))
+        self.assertFalse(layer_violations("layerfs-sandbox-backend", "layerfs-content", "dev-dependencies"))
         self.assertFalse(
             dependency_violations(
-                '[package]\nname="layerfs-platform"\n[dependencies]\nlayerfs-isolation={path="../layerfs-isolation"}'
+                '[package]\nname="layerfs-platform"\n[dependencies]\nlayerfs-sandbox-backend={path="../layerfs-sandbox-backend"}'
             )
         )
         machine_up = '[package]\nname="layerfs-daemon"\n[dependencies]\n'
@@ -236,11 +240,16 @@ class ProductBoundaryTests(unittest.TestCase):
             )
         )
         self.assertTrue(
-            any("upward" in message for _, message in layer_violations("layerfs-isolation", "layerfs-api", "dependencies"))
+            any(
+                "upward" in message
+                for _, message in layer_violations("layerfs-sandbox-backend", "layerfs-api", "dependencies")
+            )
         )
         # D-2: the management library is a control crate under layerfs-api.
         self.assertTrue(
-            any("upward" in message for _, message in layer_violations("layerfs-control", "layerfs-api", "dependencies"))
+            any(
+                "upward" in message for _, message in layer_violations("layerfs-control", "layerfs-api", "dependencies")
+            )
         )
         self.assertFalse(layer_violations("layerfs-api", "layerfs-control", "dependencies"))
 
@@ -279,7 +288,9 @@ class ProductBoundaryTests(unittest.TestCase):
         self.assertTrue(dependency_violations(control + 'layerfs-api={path="../layerfs-api"}'))
         self.assertTrue(unsafe_violations(Path("control/crates/layerfs-control/src/lib.rs"), "pub mod home;"))
         self.assertFalse(
-            unsafe_violations(Path("control/crates/layerfs-control/src/lib.rs"), "#![forbid(unsafe_code)]\npub mod home;")
+            unsafe_violations(
+                Path("control/crates/layerfs-control/src/lib.rs"), "#![forbid(unsafe_code)]\npub mod home;"
+            )
         )
 
     def test_daemon_direct_store_and_control_edges_without_host_runtime(self):
@@ -306,7 +317,7 @@ class ProductBoundaryTests(unittest.TestCase):
         prefix = '[package]\nname="layerfs-store-service"\n[dependencies]\n'
         for dependency in ("layerfs-persistence", "layerfs-workspace", "layerfs-overlay", "layerfs-bridge"):
             self.assertFalse(dependency_violations(prefix + f'{dependency}={{path="../{dependency}"}}'))
-        for dependency in ("layerfs-daemon", "layerfs-api", "layerfs-fuse", "layerfs-isolation"):
+        for dependency in ("layerfs-daemon", "layerfs-api", "layerfs-fuse", "layerfs-sandbox-backend"):
             self.assertTrue(dependency_violations(prefix + f'{dependency}={{path="../{dependency}"}}'))
         for package in ("layerfs-control", "layerfs-daemon"):
             source = f'[package]\nname="{package}"\n[dependencies]\nlayerfs-store-service={{path="../layerfs-store-service"}}\n'

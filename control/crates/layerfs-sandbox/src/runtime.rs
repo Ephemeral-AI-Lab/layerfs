@@ -3,16 +3,16 @@
 //! (root FUSE daemon, nonroot commands). Linux starts no native Sandbox
 //! (#533 O27); a native record written there before 2.0 is still reopened
 //! by its record. All use the same authenticated daemon control pipeline
-//! and the same concrete `layerfs_isolation::Sandbox` handle. A Sandbox also
+//! and the same concrete `layerfs_sandbox_backend::Sandbox` handle. A Sandbox also
 //! names its platform (#529), recorded beside the runtime; every later call
 //! follows the record, not the caller's deployment.
 use crate::output::Spool;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{failed, refused};
 #[cfg(target_os = "linux")]
-use layerfs_isolation::Image;
-use layerfs_isolation::SandboxRecord;
-use layerfs_isolation::{CommandIdentity, Sandbox};
+use layerfs_sandbox_backend::Image;
+use layerfs_sandbox_backend::SandboxRecord;
+use layerfs_sandbox_backend::{CommandIdentity, Sandbox};
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
 
@@ -224,10 +224,13 @@ pub fn namespaces_image(deploy: &SdkValue) -> Result<(Image, PathBuf), SdkRefusa
         Some(digest) => {
             let image = Image::parse(digest)
                 .map_err(|error| refused("InvalidInput", format!("deploy.image: {error}")))?;
-            layerfs_isolation::namespaces::rootfs::holds(&archive, &image).map_err(in_archive)?;
+            layerfs_sandbox_backend::namespaces::rootfs::holds(&archive, &image)
+                .map_err(in_archive)?;
             image
         }
-        None => layerfs_isolation::namespaces::rootfs::image_of(&archive).map_err(in_archive)?,
+        None => {
+            layerfs_sandbox_backend::namespaces::rootfs::image_of(&archive).map_err(in_archive)?
+        }
     };
     Ok((image, archive))
 }
@@ -250,7 +253,7 @@ pub fn run(
     spool: bool,
 ) -> Result<(i32, Spool, Spool), SdkRefusal> {
     let (mut stdout, mut stderr) = (Spool::new(spool), Spool::new(spool));
-    let request = layerfs_isolation::ExecRequest {
+    let request = layerfs_sandbox_backend::ExecRequest {
         identity,
         arguments,
         environment,

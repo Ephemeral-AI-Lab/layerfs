@@ -3,7 +3,7 @@
 //! `exec` runs `bash -c <command>` as the Sandbox's command identity in the
 //! Workspace directory and returns the exit code and output when it ends; the
 //! daemon is not involved. A local Sandbox
-//! (`layerfs_isolation::Sandbox::HostProcess`) runs the same commands as
+//! (`layerfs_sandbox_backend::Sandbox::HostProcess`) runs the same commands as
 //! processes of this kernel.
 use crate::output::Spool;
 use crate::registry::{sandbox, SandboxState};

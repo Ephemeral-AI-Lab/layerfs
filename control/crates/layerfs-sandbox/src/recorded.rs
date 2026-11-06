@@ -7,12 +7,12 @@ use crate::runtime::NATIVE;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers;
 use layerfs_home::outcome::{failed, refused};
-use layerfs_isolation::docker::{Docker, DockerProvider, SandboxRequest};
+use layerfs_sandbox_backend::docker::{Docker, DockerProvider, SandboxRequest};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use layerfs_isolation::host_process;
-use layerfs_isolation::local::LocalProcess;
-use layerfs_isolation::{ContainerId, Sandbox, WireFailure};
-use layerfs_isolation::{LocalRecord, SandboxRecord};
+use layerfs_sandbox_backend::host_process;
+use layerfs_sandbox_backend::local::LocalProcess;
+use layerfs_sandbox_backend::{ContainerId, Sandbox, WireFailure};
+use layerfs_sandbox_backend::{LocalRecord, SandboxRecord};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -81,7 +81,7 @@ pub enum Recorded {
         labels: Vec<(String, String)>,
     },
     #[cfg(target_os = "linux")]
-    Namespaces(layerfs_isolation::Runtime, ContainerId, SandboxRecord),
+    Namespaces(layerfs_sandbox_backend::Runtime, ContainerId, SandboxRecord),
 }
 /// Reads Sandbox `id`'s record's runtime.
 /// The record alone decides (#529): a caller's deployment backend is not
@@ -231,7 +231,7 @@ fn namespaces(
     value: &SdkValue,
 ) -> Result<Recorded> {
     let image =
-        layerfs_isolation::Image::parse(helpers::text(value, "image")?).map_err(|error| {
+        layerfs_sandbox_backend::Image::parse(helpers::text(value, "image")?).map_err(|error| {
             refused(
                 "InvalidInput",
                 format!(
@@ -240,11 +240,11 @@ fn namespaces(
                 ),
             )
         })?;
-    let record = layerfs_isolation::NamespaceRecord { local, image };
+    let record = layerfs_sandbox_backend::NamespaceRecord { local, image };
     let root = (directory.parent())
         .ok_or_else(|| refused("InvalidInput", "namespaces Sandbox directory"))?;
     let provider =
-        layerfs_isolation::namespaces::NamespaceProvider::new(root).map_err(|error| {
+        layerfs_sandbox_backend::namespaces::NamespaceProvider::new(root).map_err(|error| {
             refused(
                 "Unsupported",
                 format!(
@@ -254,7 +254,7 @@ fn namespaces(
             )
         })?;
     Ok(Recorded::Namespaces(
-        layerfs_isolation::Runtime::Namespaces(provider),
+        layerfs_sandbox_backend::Runtime::Namespaces(provider),
         ContainerId::parse(helpers::text(value, "container")?).map_err(failed)?,
         SandboxRecord::Namespaces(record),
     ))

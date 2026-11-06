@@ -12,7 +12,7 @@ use crate::spec::{Bundle, Forward, Running, Spec, Tools};
 
 /// Why `forward` is not where a docker Sandbox's daemon address comes from:
 /// the Sandbox's container publishes it (`PortBindings`, host IP
-/// `127.0.0.1`, an Engine-chosen port; `layerfs-isolation`'s
+/// `127.0.0.1`, an Engine-chosen port; `layerfs-sandbox-backend`'s
 /// `backend/docker/create.rs`), and its recorded endpoint is that address.
 const FORWARD: &str = "each docker Sandbox publishes its daemon's port on the host's loopback when it is created, and that published address is its endpoint";
 
@@ -68,7 +68,7 @@ impl Adapter for Docker {
         dial(
             spec,
             url,
-            Loopback::Alias(layerfs_isolation::docker::DESKTOP_HOST),
+            Loopback::Alias(layerfs_sandbox_backend::docker::DESKTOP_HOST),
         )
     }
     fn forward(&self, spec: &Spec, _guest_port: u16) -> Result<Forward, MachineError> {

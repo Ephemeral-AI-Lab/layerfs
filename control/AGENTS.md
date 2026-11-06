@@ -32,11 +32,11 @@ behalf of the engine:
   run. One folder per platform under `src/platforms/` (`native`, `docker`,
   `apple_container`, `microsandbox`, `lima`, `firecracker`, `ssh`). Host
   builds only.
-- `crates/layerfs-isolation` (was `layerfs-sandbox`): *how* a Sandbox runs
-  on that machine's kernel. One folder per backend under `src/backend/`
-  (`docker`, `host_process`, `namespaces`), over the shared local-process
-  plumbing in `src/local/`. Host and guest builds. Its
-  `layerfs-sandbox-helper` binary keeps its name.
+- `crates/layerfs-sandbox-backend` (was `layerfs-isolation`, D-9; before
+  #101 `layerfs-sandbox`): *how* a Sandbox runs on that machine's kernel.
+  One folder per backend under `src/backend/` (`docker`, `host_process`,
+  `namespaces`), over the shared local-process plumbing in `src/local/`.
+  Host and guest builds. Its `layerfs-sandbox-helper` binary keeps its name.
 - `crates/layerfs-bucket` (was `layerfs-store-backup`): *how* a Store is
   backed up to a bucket (`src/backup/` and `src/bucket/<provider>/`).
 
@@ -54,15 +54,15 @@ design and the [compute plane 2.0 spec](../core/docs/proposals/compute-plane-2.0
   unknown crates fail closed. `api/` depends on control, never the reverse.
 - Inside control: `layerfs-control ──► layerfs-sandbox ──► layerfs-store
   ──► layerfs-machine ──► layerfs-home`; `layerfs-sandbox ──►
-  layerfs-isolation`; `layerfs-store ──► layerfs-bucket`. Edges that skip
+  layerfs-sandbox-backend`; `layerfs-store ──► layerfs-bucket`. Edges that skip
   down the chain are allowed (`layerfs-control` and `layerfs-sandbox` reach
   `layerfs-machine` and `layerfs-store` directly, and `layerfs-control`
   reads the old backup layout through `layerfs-bucket` in `migrate`);
   nothing points up. `layerfs-machine
   ──► layerfs-platform` only through its optional `machine` feature, which
   `layerfs-control` and `layerfs-api` pass through; `layerfs-home ──►
-  layerfs-isolation` (the process identity records name); `layerfs-platform ──►
-  layerfs-isolation ──► layerfs-bridge`; `layerfs-bucket ──►
+  layerfs-sandbox-backend` (the process identity records name); `layerfs-platform ──►
+  layerfs-sandbox-backend ──► layerfs-bridge`; `layerfs-bucket ──►
   layerfs-store-service, layerfs-persistence, layerfs-storage`.
 - Drivers take every input as arguments, know nothing of the home and write
   no records (#101 rule 6).
@@ -77,7 +77,7 @@ folder under `platforms/`, one `Platform` variant and one `adapter()` arm;
 adding a backend is one folder under `backend/`, one `Backend` variant and one
 arm. Every refusal of a platform, host or Store combination comes from the one
 support table (`layerfs-platform` `support.rs`), which consumes the shared permanent restrictions in
-`layerfs-isolation/src/platform_policy.rs` (also available without machine
+`layerfs-sandbox-backend/src/platform_policy.rs` (also available without machine
 adapters); `SUPPORT.json` is generated
 from it and a test compares them.
 

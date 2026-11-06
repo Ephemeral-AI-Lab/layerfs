@@ -86,9 +86,9 @@ pub fn into_connection(control: Control) -> Connection {
 pub fn split_provider(
     sandbox: crate::ProviderSandbox,
 ) -> (
-    Box<layerfs_isolation::Sandbox>,
+    Box<layerfs_sandbox_backend::Sandbox>,
     Control,
-    layerfs_isolation::CommandIdentity,
+    layerfs_sandbox_backend::CommandIdentity,
 ) {
     (sandbox.runtime, sandbox.control, sandbox.command_identity)
 }

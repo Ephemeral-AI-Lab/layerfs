@@ -149,7 +149,7 @@ fn reach_check(
     hint: Option<&str>,
 ) -> Result<()> {
     let url = postgresql.get_text("url").unwrap_or("");
-    let host = layerfs_isolation::PostgresUrl::parse(url)
+    let host = layerfs_sandbox_backend::PostgresUrl::parse(url)
         .map(|url| url.host().to_owned())
         .unwrap_or_default();
     let reached = layerfs_store::postgresql::reader::reach(key, store, postgresql, project)

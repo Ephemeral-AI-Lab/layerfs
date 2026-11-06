@@ -3,7 +3,7 @@
 //! with anything live is refused `InUse`, naming each, and left as it was.
 use layerfs_api::home::{self, paths, read_record, write_record, Layout, LAYOUT_VERSION};
 use layerfs_bridge::control::{Answer, Reply, SdkValue};
-use layerfs_isolation::local::LocalProcess;
+use layerfs_sandbox_backend::local::LocalProcess;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};

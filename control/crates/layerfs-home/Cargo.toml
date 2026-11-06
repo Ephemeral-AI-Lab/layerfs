@@ -9,6 +9,6 @@ license.workspace = true
 [dependencies]
 layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 # This process as a record names it (pid, kernel start time, boot).
-layerfs-isolation = { path = "../layerfs-isolation" }
+layerfs-sandbox-backend = { path = "../layerfs-sandbox-backend" }
 libc = "=0.2.189"
 nix = { version = "=0.31.3", default-features = false, features = ["fs", "user", "signal"] }

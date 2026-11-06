@@ -16,9 +16,9 @@ Rust crates are assigned by name to core, engine, control or api in every
 layout: the call surface layerfs-api and the front ends layerfs-cli,
 layerfs-node and layerfs-python are api crates wherever they sit; the control
 crates (layerfs-home, layerfs-machine, layerfs-platform, layerfs-store,
-layerfs-bucket, layerfs-sandbox, layerfs-isolation and layerfs-control, and
-the driver names before the control split, layerfs-store-backup and
-layerfs-remote-storage) are control crates wherever they sit, so a pre-move
+layerfs-bucket, layerfs-sandbox, layerfs-sandbox-backend and
+layerfs-control, and the earlier driver names layerfs-isolation,
+layerfs-store-backup and layerfs-remote-storage) are control crates wherever they sit, so a pre-move
 tree counts them under control too (the `control` scope was `connect`, and
 layerfs-control was an api crate, before #101). Unknown historical crates
 remain counted in core.
@@ -421,11 +421,13 @@ CONTROL_CRATES = {
     "layerfs-store",
     "layerfs-bucket",
     "layerfs-sandbox",
-    "layerfs-isolation",
+    "layerfs-sandbox-backend",
     "layerfs-control",
-    # The driver names before #101 (layerfs-platform was layerfs-machine,
-    # layerfs-isolation was layerfs-sandbox, layerfs-bucket was
-    # layerfs-store-backup) and before move 1.6 (layerfs-remote-storage).
+    # Earlier driver names: before #101 layerfs-platform was layerfs-machine,
+    # layerfs-sandbox-backend was layerfs-sandbox and layerfs-bucket was
+    # layerfs-store-backup; from #101 D-5 to D-9 layerfs-sandbox-backend was
+    # layerfs-isolation; before move 1.6 there was layerfs-remote-storage.
+    "layerfs-isolation",
     "layerfs-store-backup",
     "layerfs-remote-storage",
 }

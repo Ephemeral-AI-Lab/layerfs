@@ -15,7 +15,7 @@ depends on `control/`.
 | --- | --- | --- |
 | `layerfs-control` | *Which* machines, Stores, projects, Sandboxes and backups exist, and how is each call carried out? | entity: `src/<entity>/` |
 | `layerfs-platform` | *Where* can Sandboxes run? | platform: `src/platforms/<platform>/` |
-| `layerfs-isolation` | *How* does a Sandbox run on that machine's kernel? | backend: `src/backend/<backend>/` |
+| `layerfs-sandbox-backend` | *How* does a Sandbox run on that machine's kernel? | backend: `src/backend/<backend>/` |
 | `layerfs-bucket` | *How* is a Store backed up to a bucket? | provider: `src/bucket/<provider>/` |
 
 Firecracker and SSH are **permanently disabled for new product work**. Their
@@ -63,14 +63,14 @@ describe retained mechanics; `SUPPORT.json` decides availability.
   `Unsupported`, and their Workspace calls stay on the worker.
 - `layerfs-platform/src/support.rs` is the one support table:
   platform × host × Store kind → supported, or a refusal with its reason.
-  It consumes the fixed restrictions in `layerfs-isolation/src/platform_policy.rs`,
+  It consumes the fixed restrictions in `layerfs-sandbox-backend/src/platform_policy.rs`,
   also used by the API dispatcher in builds without machine adapters.
 - `layerfs-platform/src/platforms/<p>/`: `profile.rs` holds its `PROFILE`
   and `adapter.rs` its `ADAPTER` (the guard keeps both out of `mod.rs`);
   `observe.rs`, `create.rs` (create and remove), `power.rs` (start and
   stop); ssh has `connect.rs` (connect and disconnect) instead of
   `create.rs`. `network.rs` holds the docker worker's published port.
-- `layerfs-isolation/src/backend/<b>/` is one Sandbox backend, with its
+- `layerfs-sandbox-backend/src/backend/<b>/` is one Sandbox backend, with its
   `ADAPTER` (stored name, description, capabilities) in `adapter.rs`,
   reached through the sealed `BackendAdapter`'s one `adapter()` match in
   `backend/adapter.rs`; `src/local/` is the shared "daemon as a local
@@ -137,5 +137,5 @@ binds, the runtime this host has and the lifecycle it can run here. A new
 variant is covered automatically; the kits' exhaustive matches (`loopback`,
 `daemon_port`; `binds`, `options`, `record`, `runtime`, `lifecycle`) do not
 compile until it declares its answers. Run them with `cargo +1.85.1 test --locked -p
-layerfs-platform --test conformance` and `-p layerfs-isolation --test
+layerfs-platform --test conformance` and `-p layerfs-sandbox-backend --test
 conformance`; real platforms run them in the terminal pass.

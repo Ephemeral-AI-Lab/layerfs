@@ -10,7 +10,7 @@ use crate::MountedWorkspace;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
 use layerfs_home::helpers::lock;
 use layerfs_home::outcome::refused;
-use layerfs_isolation::CommandIdentity;
+use layerfs_sandbox_backend::CommandIdentity;
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock, Mutex};
 
@@ -32,7 +32,7 @@ pub struct SandboxState {
     /// Its runtime, observed where it runs; `None` for a Sandbox this
     /// process reaches only through its daemon's forwarded port (#535 G4),
     /// whose runtime is in its machine.
-    pub runtime: Option<Box<layerfs_isolation::Sandbox>>,
+    pub runtime: Option<Box<layerfs_sandbox_backend::Sandbox>>,
     pub identity: CommandIdentity,
     pub controls: crate::daemon::pool::Controls,
     pub mounts: Mutex<BTreeMap<String, Mount>>,
@@ -96,7 +96,7 @@ pub fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefusal> {
 impl SandboxState {
     /// Its runtime; a forwarded Sandbox's is its machine's, which this
     /// process does not run (its commands go through the worker).
-    pub fn runtime(&self) -> Result<&layerfs_isolation::Sandbox, SdkRefusal> {
+    pub fn runtime(&self) -> Result<&layerfs_sandbox_backend::Sandbox, SdkRefusal> {
         self.runtime.as_deref().ok_or_else(|| {
             refused(
                 "Failed",

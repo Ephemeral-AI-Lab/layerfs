@@ -143,7 +143,7 @@ cargo +1.85.1 test --locked -p layerfs-control --test sandbox_operations
 All three run on a Unix host with no Docker, root or environment
 variable. `sandbox_operations.rs` is `#![cfg(unix)]` and includes the
 Engine peer from
-[`layerfs-isolation/tests/support/engine.rs`](../../../../control/crates/layerfs-isolation/tests/support/engine.rs).
+[`layerfs-sandbox-backend/tests/support/engine.rs`](../../../../control/crates/layerfs-sandbox-backend/tests/support/engine.rs).
 Part of `typed_records.rs` is `#[cfg(feature = "machine")]`; add
 `--features machine` to run it. Related tests in the same crate:
 [`op_intent.rs`](../../../../control/crates/layerfs-control/tests/op_intent.rs)

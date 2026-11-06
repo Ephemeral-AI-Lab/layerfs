@@ -9,7 +9,7 @@ Local-process Sandboxes: native and namespaces.
 | | |
 | --- | --- |
 | Component | [Sandboxes](README.md) |
-| Source | [`control/crates/layerfs-isolation/src/local`](../../../../control/crates/layerfs-isolation/src/local), [`control/crates/layerfs-isolation/src/backend/host_process`](../../../../control/crates/layerfs-isolation/src/backend/host_process), [`control/crates/layerfs-isolation/src/backend/namespaces`](../../../../control/crates/layerfs-isolation/src/backend/namespaces), [`control/crates/layerfs-isolation/src/bin/layerfs-sandbox-helper`](../../../../control/crates/layerfs-isolation/src/bin/layerfs-sandbox-helper), [`control/crates/layerfs-isolation/src/helper_spec.rs`](../../../../control/crates/layerfs-isolation/src/helper_spec.rs) |
+| Source | [`control/crates/layerfs-sandbox-backend/src/local`](../../../../control/crates/layerfs-sandbox-backend/src/local), [`control/crates/layerfs-sandbox-backend/src/backend/host_process`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process), [`control/crates/layerfs-sandbox-backend/src/backend/namespaces`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces), [`control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper), [`control/crates/layerfs-sandbox-backend/src/helper_spec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/helper_spec.rs) |
 
 Both backends start the daemon as a process on the machine's own kernel.
 `host_process` (stored `"native"`, macOS) isolates nothing: the machine is
@@ -29,7 +29,7 @@ PID and IPC namespaces and a cgroup added.
    bin/  root/  upper/  work/  spec   namespaces only (below)
 ```
 
-`Local::create` ([`local/create.rs`](../../../../control/crates/layerfs-isolation/src/local/create.rs)):
+`Local::create` ([`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs)):
 
 | Phase (`LocalPhase`) | What | Failure keeps |
 | --- | --- | --- |
@@ -40,14 +40,14 @@ PID and IPC namespaces and a cgroup added.
 
 | Fact | Rule | Source |
 | --- | --- | --- |
-| Root | Absolute, owned by this user, not group or other writable, `o+x`. `Local::new` also needs every ancestor `o+x` (commands run as another identity); `Local::native` does not (a macOS home is 0750). | [`local/create.rs`](../../../../control/crates/layerfs-isolation/src/local/create.rs) |
-| Process identity | `LocalProcess { pid, start, boot }`: all three must match to count as alive; a zombie is not alive; a record without a boot is never signalled. | [`local/process.rs`](../../../../control/crates/layerfs-isolation/src/local/process.rs) |
-| Search path | Linux: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`. macOS: this process's `PATH`, else that plus `/opt/homebrew/bin`. | [`local/search.rs`](../../../../control/crates/layerfs-isolation/src/local/search.rs) |
-| OS facts | `local/os/linux` (`/proc`, `mountinfo`, lazy `MNT_DETACH`) or `local/os/macos` (`proc_pidinfo`, `mount`, `umount -f`). The macOS file is the crate's only `unsafe`. | [`local/mod.rs`](../../../../control/crates/layerfs-isolation/src/local/mod.rs), [`lib.rs`](../../../../control/crates/layerfs-isolation/src/lib.rs) |
+| Root | Absolute, owned by this user, not group or other writable, `o+x`. `Local::new` also needs every ancestor `o+x` (commands run as another identity); `Local::native` does not (a macOS home is 0750). | [`local/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/create.rs) |
+| Process identity | `LocalProcess { pid, start, boot }`: all three must match to count as alive; a zombie is not alive; a record without a boot is never signalled. | [`local/process.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/process.rs) |
+| Search path | Linux: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`. macOS: this process's `PATH`, else that plus `/opt/homebrew/bin`. | [`local/search.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/search.rs) |
+| OS facts | `local/os/linux` (`/proc`, `mountinfo`, lazy `MNT_DETACH`) or `local/os/macos` (`proc_pidinfo`, `mount`, `umount -f`). The macOS file is the crate's only `unsafe`. | [`local/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/mod.rs), [`lib.rs`](../../../../control/crates/layerfs-sandbox-backend/src/lib.rs) |
 
 `HostProcessProvider::launch` accepts only `ProviderLaunchOptions::Local`
 whose command identity is this process's own uid and gid, and no `PATH` in
-the environment ([`host_process/provider.rs`](../../../../control/crates/layerfs-isolation/src/backend/host_process/provider.rs)).
+the environment ([`host_process/provider.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/provider.rs)).
 
 ## Process groups
 
@@ -69,18 +69,18 @@ so each command leads its own process group and the Sandbox names it.
 
 | Rule | Source |
 | --- | --- |
-| A group is named before anything waits on its leader; failing to name it kills it at once. | [`host_process/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/host_process/exec.rs) |
-| A process that leaves its group (`setsid`) is followed only when named with `Sandbox::track(pid, start_time)`. | [`local/groups.rs`](../../../../control/crates/layerfs-isolation/src/local/groups.rs) |
-| Groups of another boot are not signalled: they ended with that boot. | `end` in [`local/groups.rs`](../../../../control/crates/layerfs-isolation/src/local/groups.rs) |
+| A group is named before anything waits on its leader; failing to name it kills it at once. | [`host_process/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/host_process/exec.rs) |
+| A process that leaves its group (`setsid`) is followed only when named with `Sandbox::track(pid, start_time)`. | [`local/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/groups.rs) |
+| Groups of another boot are not signalled: they ended with that boot. | `end` in [`local/groups.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/groups.rs) |
 
 ## Listener and streams
 
 | Item | Rule | Source |
 | --- | --- | --- |
-| Startup line | `LAYERFS_DAEMON_LISTEN ` then a loopback socket address with a non-zero port; a line longer than 256 bytes is not the marker; a non-loopback address is `Protocol`. Looks every 10 ms. | [`local/listener.rs`](../../../../control/crates/layerfs-isolation/src/local/listener.rs) |
+| Startup line | `LAYERFS_DAEMON_LISTEN ` then a loopback socket address with a non-zero port; a line longer than 256 bytes is not the marker; a non-loopback address is `Protocol`. Looks every 10 ms. | [`local/listener.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/listener.rs) |
 | Daemon exits first | `Protocol("local daemon exited before its listener line")`. | same |
 | Wait ends | `TimedOut`. Nothing is retried. | same |
-| Command streams | Two pipes, each copied to its sink in 8 KiB windows; the count is what the sink accepted. | [`local/streams.rs`](../../../../control/crates/layerfs-isolation/src/local/streams.rs) |
+| Command streams | Two pipes, each copied to its sink in 8 KiB windows; the count is what the sink accepted. | [`local/streams.rs`](../../../../control/crates/layerfs-sandbox-backend/src/local/streams.rs) |
 
 The Docker backend reads the same marker from the container's log stream
 ([Docker](docker.md#containers)).
@@ -111,15 +111,15 @@ The Docker backend reads the same marker from the container's log stream
 
 | Item | What | Source |
 | --- | --- | --- |
-| `HelperSpec` | One 0600 file of absolute paths: root, sandbox, daemon, config, cgroup, lower, upper, work, and `bind=<rw\|ro>\t<host>\t<guest>` lines. No secret: the helper never reads the setup. | [`helper_spec.rs`](../../../../control/crates/layerfs-isolation/src/helper_spec.rs) |
-| `Bind` | A sqlite Store's directory, read-write at its own path, so SQLite's WAL and the writers' lock see one inode. None for a PostgreSQL Store. A bind may not hold the runtime root or the Sandbox directory. | [`types/bind.rs`](../../../../control/crates/layerfs-isolation/src/types/bind.rs), `check_bind` in [`namespaces/create.rs`](../../../../control/crates/layerfs-isolation/src/backend/namespaces/create.rs) |
-| Image | A `docker save` archive named by its config digest; compressed layers are refused; unpacked once per digest and shared read-only. | [`rootfs/mod.rs`](../../../../control/crates/layerfs-isolation/src/backend/namespaces/rootfs/mod.rs) |
-| Commands | `helper exec --init <pid> --cgroup <dir> --uid --gid --cwd -- <argv>`: joins the cgroup, enters the namespaces, becomes uid:gid with no capabilities and no-new-privs. | [`namespaces/exec.rs`](../../../../control/crates/layerfs-isolation/src/backend/namespaces/exec.rs), [`bin/…/exec.rs`](../../../../control/crates/layerfs-isolation/src/bin/layerfs-sandbox-helper/exec.rs) |
-| End | One write to `cgroup.kill` ends everything the Sandbox started, whatever session it left. `track` is a no-op here. | [`namespaces/cgroup.rs`](../../../../control/crates/layerfs-isolation/src/backend/namespaces/cgroup.rs), [`runtime.rs`](../../../../control/crates/layerfs-isolation/src/runtime.rs) |
-| Delete | Removes the cgroup and directory after a known stop; a populated cgroup is refused. The shared Store is never touched. | [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-isolation/src/backend/namespaces/sandbox.rs) |
+| `HelperSpec` | One 0600 file of absolute paths: root, sandbox, daemon, config, cgroup, lower, upper, work, and `bind=<rw\|ro>\t<host>\t<guest>` lines. No secret: the helper never reads the setup. | [`helper_spec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/helper_spec.rs) |
+| `Bind` | A sqlite Store's directory, read-write at its own path, so SQLite's WAL and the writers' lock see one inode. None for a PostgreSQL Store. A bind may not hold the runtime root or the Sandbox directory. | [`types/bind.rs`](../../../../control/crates/layerfs-sandbox-backend/src/types/bind.rs), `check_bind` in [`namespaces/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/create.rs) |
+| Image | A `docker save` archive named by its config digest; compressed layers are refused; unpacked once per digest and shared read-only. | [`rootfs/mod.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/rootfs/mod.rs) |
+| Commands | `helper exec --init <pid> --cgroup <dir> --uid --gid --cwd -- <argv>`: joins the cgroup, enters the namespaces, becomes uid:gid with no capabilities and no-new-privs. | [`namespaces/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/exec.rs), [`bin/…/exec.rs`](../../../../control/crates/layerfs-sandbox-backend/src/bin/layerfs-sandbox-helper/exec.rs) |
+| End | One write to `cgroup.kill` ends everything the Sandbox started, whatever session it left. `track` is a no-op here. | [`namespaces/cgroup.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/cgroup.rs), [`runtime.rs`](../../../../control/crates/layerfs-sandbox-backend/src/runtime.rs) |
+| Delete | Removes the cgroup and directory after a known stop; a populated cgroup is refused. The shared Store is never touched. | [`namespaces/sandbox.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/sandbox.rs) |
 
 A host that cannot meet a check is refused before any effect, never given
-a weaker Sandbox ([`namespaces/host.rs`](../../../../control/crates/layerfs-isolation/src/backend/namespaces/host.rs)).
+a weaker Sandbox ([`namespaces/host.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/namespaces/host.rs)).
 The machine setup sets `user.max_user_namespaces=0` in every VM guest
 ([Network: Workers](../network/workers.md#worker-setup)); this runtime only
 checks it.

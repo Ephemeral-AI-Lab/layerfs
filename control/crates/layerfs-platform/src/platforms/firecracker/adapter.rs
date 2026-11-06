@@ -11,7 +11,7 @@ use crate::setup::Status;
 use crate::spec::{Bundle, Forward, Running, Spec, Tools};
 
 /// Why a Sandbox daemon's port is not forwarded: a daemon listens on the
-/// microVM's loopback (`layerfs-isolation`'s local listener takes only a
+/// microVM's loopback (`layerfs-sandbox-backend`'s local listener takes only a
 /// loopback address), and the worker's forward is an `ssh -L` to the Lima
 /// host, which reaches the microVM only at its tap address, where only the
 /// worker listens (`worker_bind` 0.0.0.0). Reaching the microVM's loopback

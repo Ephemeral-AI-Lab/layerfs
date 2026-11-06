@@ -24,7 +24,7 @@ UNSAFE = re.compile(r"\bunsafe\b")
 UNSAFE_AUDITED_MODULE = {
     "layerfs-storage": "src/encoding/codec.rs",
     "layerfs-persistence": "src/backend/sqlite/lifecycle/file_control.rs",
-    "layerfs-isolation": "src/local/os/macos/darwin.rs",
+    "layerfs-sandbox-backend": "src/local/os/macos/darwin.rs",
 }
 UNSAFE_FREE_CRATES = (
     "layerfs-content",
@@ -65,7 +65,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-api": "#![forbid(unsafe_code)]",
     "layerfs-control": "#![forbid(unsafe_code)]",
     "layerfs-bridge": "#![forbid(unsafe_code)]",
-    "layerfs-isolation": "#![deny(unsafe_code)]",
+    "layerfs-sandbox-backend": "#![deny(unsafe_code)]",
     "layerfs-cli": "#![forbid(unsafe_code)]",
     "layerfs-platform": "#![forbid(unsafe_code)]",
     "layerfs-home": "#![forbid(unsafe_code)]",
@@ -84,7 +84,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-bridge",
         "layerfs-history",
         "layerfs-persistence",
-        "layerfs-isolation",
+        "layerfs-sandbox-backend",
         "layerfs-storage",
         "layerfs-store-service",
         "layerfs-telemetry",
@@ -147,7 +147,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-workspace",
         "layerfs-store-service",
         "layerfs-mount-ports",
-    "layerfs-fuse",
+        "layerfs-fuse",
         "layerfs-nfs",
         "layerfs-bridge",
         "layerfs-content",
@@ -158,7 +158,7 @@ ALLOWED_DEPENDENCIES = {
     },
     # The SDK call surface (#536): the call table and its call machinery
     # over the control crates (#101: layerfs-api may call any control crate;
-    # #107: the machinery reads the platform policy from the isolation
+    # #107: the machinery reads the platform policy from the Sandbox
     # driver).
     "layerfs-api": {
         "layerfs-control",
@@ -166,7 +166,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-machine",
         "layerfs-store",
         "layerfs-sandbox",
-        "layerfs-isolation",
+        "layerfs-sandbox-backend",
         "layerfs-bridge",
     },
     # What spans the control entities (#536, #101): the worker server,
@@ -180,12 +180,12 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-machine",
         "layerfs-store",
         "layerfs-sandbox",
-        "layerfs-isolation",
+        "layerfs-sandbox-backend",
         "layerfs-bucket",
     },
-    # The home and its records (#103): knows no entity. The isolation driver
+    # The home and its records (#103): knows no entity. The Sandbox driver
     # names this process (pid, kernel start time, boot) for an op's owner.
-    "layerfs-home": {"layerfs-bridge", "layerfs-isolation"},
+    "layerfs-home": {"layerfs-bridge", "layerfs-sandbox-backend"},
     # Machine records, lifecycle and the worker client (#104), over the
     # platform driver (host builds only, through its `machine` feature).
     "layerfs-machine": {"layerfs-bridge", "layerfs-home", "layerfs-platform"},
@@ -204,7 +204,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-machine",
         "layerfs-bucket",
     },
-    # Sandboxes and their workspace/ module (#106), over the isolation driver.
+    # Sandboxes and their workspace/ module (#106), over the Sandbox driver.
     "layerfs-sandbox": {
         "layerfs-bridge",
         "layerfs-history",
@@ -213,15 +213,16 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-home",
         "layerfs-machine",
         "layerfs-store",
-        "layerfs-isolation",
+        "layerfs-sandbox-backend",
     },
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
-    # The drivers (#101 D-5): isolation (was layerfs-sandbox), platform (was
-    # layerfs-machine) and bucket (was layerfs-store-backup).
-    "layerfs-isolation": set(),
+    # The drivers (#101 D-5, D-9): sandbox-backend (was layerfs-isolation,
+    # before that layerfs-sandbox), platform (was layerfs-machine) and
+    # bucket (was layerfs-store-backup).
+    "layerfs-sandbox-backend": set(),
     # The platform driver (#535 1.2): uses the Backend enum, shared types and
     # json; the bridge's KernelRoute and StoreKind name its support table (B).
-    "layerfs-platform": {"layerfs-isolation", "layerfs-bridge"},
+    "layerfs-platform": {"layerfs-sandbox-backend", "layerfs-bridge"},
     # The 2.0 front ends (#533): thin layers over the library's call table.
     "layerfs-cli": {"layerfs-api", "layerfs-bridge"},
     "layerfs-python": {"layerfs-api", "layerfs-bridge"},
@@ -246,7 +247,7 @@ LAYER = {
     "layerfs-workspace": ENGINE,
     # The control layer (#535 connect, renamed control by #101 D-6): the
     # drivers and the management library (D-2 moved it out of api/).
-    "layerfs-isolation": CONTROL,
+    "layerfs-sandbox-backend": CONTROL,
     "layerfs-platform": CONTROL,
     "layerfs-bucket": CONTROL,
     "layerfs-control": CONTROL,
@@ -316,7 +317,7 @@ ENGINES_AND_CLUSTER2 = {
     "layerfs-bridge",
     "layerfs-sandbox",
     "layerfs-machine",
-    "layerfs-isolation",
+    "layerfs-sandbox-backend",
     "layerfs-platform",
     "layerfs-server",
     "layerfs-sdk",
@@ -420,8 +421,7 @@ def component_violations(path, source):
     # layerfs-control to layerfs-api, which alone speaks the SDK.
     moved = {
         "layerfs-api": tuple(
-            f"/src/{part}/"
-            for part in ("host", "family", "home", "worker", "fs", "base", "operator")
+            f"/src/{part}/" for part in ("host", "family", "home", "worker", "fs", "base", "operator")
         ),
         "layerfs-control": ("/src/host/", "/src/operator/", "/src/calls/"),
         "layerfs-store-service": ("/src/remote/",),

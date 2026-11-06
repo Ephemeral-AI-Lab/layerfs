@@ -10,7 +10,7 @@
 use layerfs_api::home::lease;
 use layerfs_api::home::{self, paths, read_record, write_record};
 use layerfs_bridge::control::SdkValue;
-use layerfs_isolation::local::LocalProcess;
+use layerfs_sandbox_backend::local::LocalProcess;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

@@ -8,9 +8,9 @@
 use crate::options::OptSpec;
 use crate::platform::{ExecutorKind, HostOs, How, KernelRoute, Platform};
 pub use layerfs_bridge::StoreKind;
-use layerfs_isolation::json::quoted;
-use layerfs_isolation::platform_policy::disabled_reason;
-use layerfs_isolation::Backend;
+use layerfs_sandbox_backend::json::quoted;
+use layerfs_sandbox_backend::platform_policy::disabled_reason;
+use layerfs_sandbox_backend::Backend;
 
 /// Where a Store's calls run for a machine.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

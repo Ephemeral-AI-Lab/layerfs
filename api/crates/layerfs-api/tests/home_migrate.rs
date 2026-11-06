@@ -511,7 +511,7 @@ fn a_1_1_0_environment_becomes_records_once() {
             .all(|(_, bytes)| !String::from_utf8_lossy(bytes).contains(secret)));
     }
     assert!(
-        printed.contains(layerfs_isolation::platform_policy::SSH_DISABLED),
+        printed.contains(layerfs_sandbox_backend::platform_policy::SSH_DISABLED),
         "{printed}"
     );
     assert!(!paths::machine_record(&home, "ssh").exists());

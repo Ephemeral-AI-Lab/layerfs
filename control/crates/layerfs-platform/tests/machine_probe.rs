@@ -2,8 +2,8 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_isolation::platform_policy::disabled_reason;
 use layerfs_platform::{native_missing, nested_missing, probe, HostOs, Platform, Tools};
+use layerfs_sandbox_backend::platform_policy::disabled_reason;
 use standin::Scratch;
 
 #[test]

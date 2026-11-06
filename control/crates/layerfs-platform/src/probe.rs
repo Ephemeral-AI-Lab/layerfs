@@ -23,7 +23,7 @@ const ANSWER: Duration = Duration::from_secs(10);
 
 /// Probes `kind` on this host.
 pub fn probe(kind: Platform, tools: &Tools) -> Probe {
-    if let Some(reason) = layerfs_isolation::platform_policy::disabled_reason(kind.name()) {
+    if let Some(reason) = layerfs_sandbox_backend::platform_policy::disabled_reason(kind.name()) {
         return Probe {
             kind,
             ready: false,

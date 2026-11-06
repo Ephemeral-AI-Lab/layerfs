@@ -16,7 +16,7 @@ layerfs-store = { path = "../../../control/crates/layerfs-store" }
 layerfs-sandbox = { path = "../../../control/crates/layerfs-sandbox" }
 # The permanent platform restrictions the call machinery checks before any
 # effect (`calls/platform_policy.rs`), in every build (layerfs-project#107).
-layerfs-isolation = { path = "../../../control/crates/layerfs-isolation" }
+layerfs-sandbox-backend = { path = "../../../control/crates/layerfs-sandbox-backend" }
 
 [features]
 # PostgreSQL Stores (#506, #533): open, attach, create and Init.

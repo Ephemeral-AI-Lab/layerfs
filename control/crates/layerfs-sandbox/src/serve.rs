@@ -22,9 +22,9 @@ use layerfs_bridge::provision::StoreManifest;
 use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_home::helpers::{lock, text};
 use layerfs_home::outcome::{failed, refused, Outcome};
-use layerfs_isolation::docker::{CreatePhase, Docker, DockerProvider};
-use layerfs_isolation::Runtime;
-use layerfs_isolation::{LaunchRequest, ProviderLaunchOptions};
+use layerfs_sandbox_backend::docker::{CreatePhase, Docker, DockerProvider};
+use layerfs_sandbox_backend::Runtime;
+use layerfs_sandbox_backend::{LaunchRequest, ProviderLaunchOptions};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -220,27 +220,29 @@ fn start_claimed(
     let daemon = layerfs_bridge::duplex::generate_keypair().map_err(failed)?;
     // the Store's path in the container follows where its folder comes from
     let mut manifest = None;
-    let daemon_store = match &opened {
-        OpenedStore::File(file) => {
-            let (project, installed) = &**file;
-            let source = store_volume.as_deref().unwrap_or_default();
-            let locator = layerfs_isolation::docker::store_locator(source).ok_or_else(|| {
-                refused(
+    let daemon_store =
+        match &opened {
+            OpenedStore::File(file) => {
+                let (project, installed) = &**file;
+                let source = store_volume.as_deref().unwrap_or_default();
+                let locator =
+                    layerfs_sandbox_backend::docker::store_locator(source).ok_or_else(|| {
+                        refused(
                     "InvalidInput",
                     format!("deploy.volume {source:?} is no volume, volume folder or host folder"),
                 )
-            })?;
-            let mut existing = project.manifest.clone();
-            existing.locator = locator.to_owned();
-            manifest = Some(existing.clone());
-            existing.daemon_sqlite = installed.daemon_sqlite.clone();
-            DaemonStore::Sqlite {
-                locator: locator.to_owned(),
-                install: Some(existing),
+                    })?;
+                let mut existing = project.manifest.clone();
+                existing.locator = locator.to_owned();
+                manifest = Some(existing.clone());
+                existing.daemon_sqlite = installed.daemon_sqlite.clone();
+                DaemonStore::Sqlite {
+                    locator: locator.to_owned(),
+                    install: Some(existing),
+                }
             }
-        }
-        OpenedStore::Postgres(selected) => (**selected).clone(),
-    };
+            OpenedStore::Postgres(selected) => (**selected).clone(),
+        };
     let daemon_setup = setup(
         daemon.private,
         controller.public,
@@ -336,13 +338,13 @@ fn settled(failure: &ProviderFailure) -> bool {
     // A Create the Engine refused (409: the container name is taken) made no container.
     let unknown_container = match &failure.cause {
         SandboxCause::Provider(launch) => match &launch.cause {
-            layerfs_isolation::RuntimeError::Docker(docker_failure) => {
+            layerfs_sandbox_backend::RuntimeError::Docker(docker_failure) => {
                 match docker_failure.as_ref() {
-                    layerfs_isolation::docker::ProviderFailure::Create(create) => {
+                    layerfs_sandbox_backend::docker::ProviderFailure::Create(create) => {
                         create.phase == CreatePhase::Create
                             && !matches!(
                                 create.transfer.cause,
-                                layerfs_isolation::RuntimeError::Http(409)
+                                layerfs_sandbox_backend::RuntimeError::Http(409)
                             )
                     }
                     _ => false,

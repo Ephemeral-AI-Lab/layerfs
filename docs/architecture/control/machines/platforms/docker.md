@@ -88,7 +88,7 @@ to the worker container on every host (#535 G8).
 | windows | `false` | "docker through WSL2 is not designed yet" |
 
 `reach` rewrites a loopback host to `host.docker.internal`
-(`layerfs_isolation::docker::DESKTOP_HOST`). On Linux the worker resolves that
+(`layerfs_sandbox_backend::docker::DESKTOP_HOST`). On Linux the worker resolves that
 name through `--add-host … host-gateway`. Other hosts are dialled as given;
 see [Network: Reach](../../network/reach.md) for the refusals.
 

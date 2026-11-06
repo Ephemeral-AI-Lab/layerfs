@@ -168,7 +168,7 @@ pub fn open(home: &Path, record: &SandboxRecord, started: &SdkValue) -> Opened {
     if let Some(pid) = forward.1 {
         fields.push(("pid", SdkValue::Int(i64::from(pid))));
         // the forward's identity, so a reused id is never taken for it
-        if let Ok(process) = layerfs_isolation::local::LocalProcess::observe(pid) {
+        if let Ok(process) = layerfs_sandbox_backend::local::LocalProcess::observe(pid) {
             fields.push(("pid_start", SdkValue::text(process.start.to_string())));
             if let Some(boot) = process.boot {
                 fields.push(("pid_boot", SdkValue::text(format!("{boot:032x}"))));

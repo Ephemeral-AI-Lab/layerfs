@@ -67,9 +67,9 @@ fn machines_over_records() {
     };
     assert_eq!(rows.len(), 7);
     for row in rows {
-        if let Some(reason) =
-            layerfs_isolation::platform_policy::disabled_reason(row.get_text("platform").unwrap())
-        {
+        if let Some(reason) = layerfs_sandbox_backend::platform_policy::disabled_reason(
+            row.get_text("platform").unwrap(),
+        ) {
             assert_eq!(row.get("ready"), Some(&SdkValue::Bool(false)));
             assert_eq!(row.get("backend"), Some(&SdkValue::Null));
             assert_eq!(row.get("kernel"), Some(&SdkValue::Null));

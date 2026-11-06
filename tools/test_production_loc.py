@@ -93,8 +93,9 @@ class CounterTests(unittest.TestCase):
             "layerfs-store",
             "layerfs-bucket",
             "layerfs-sandbox",
-            "layerfs-isolation",
+            "layerfs-sandbox-backend",
             "layerfs-control",
+            "layerfs-isolation",
             "layerfs-store-backup",
         ):
             self.assertEqual(production_loc.crate_layer(name), "control")

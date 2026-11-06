@@ -15,7 +15,7 @@ layerfs-home = { path = "../layerfs-home" }
 layerfs-machine = { path = "../layerfs-machine" }
 layerfs-store = { path = "../layerfs-store" }
 # How a Sandbox runs on its machine's kernel: docker, native, namespaces.
-layerfs-isolation = { path = "../layerfs-isolation" }
+layerfs-sandbox-backend = { path = "../layerfs-sandbox-backend" }
 libc = "=0.2.189"
 
 [features]

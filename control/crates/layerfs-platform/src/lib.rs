@@ -8,7 +8,7 @@
 //! platform (its `PROFILE` in `platforms/<p>/profile.rs`), read through
 //! [`Platform::profile`]; every refusal of a platform, host and Store kind
 //! comes from the one support table, `support.rs`. This file only declares. This layer uses only
-//! `layerfs-isolation`'s shared types, its `json`, and nothing of `backend/`;
+//! `layerfs-sandbox-backend`'s shared types, its `json`, and nothing of `backend/`;
 //! `backend/` never uses it.
 #![cfg(unix)]
 #![forbid(unsafe_code)]
@@ -24,8 +24,8 @@ mod setup;
 mod spec;
 mod support;
 pub use error::{Code, MachineError};
-pub use layerfs_isolation::platform_policy;
-pub use layerfs_isolation::Backend;
+pub use layerfs_sandbox_backend::platform_policy;
+pub use layerfs_sandbox_backend::Backend;
 pub use options::{OptKind, OptSpec};
 pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Route};
 pub use probe::{native_missing, nested_missing, probe, Probe};

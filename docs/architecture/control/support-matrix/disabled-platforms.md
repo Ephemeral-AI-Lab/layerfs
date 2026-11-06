@@ -8,8 +8,8 @@ Their adapters, platform variants, record readers and historical receipts remain
 There is no environment variable, feature flag or setting that enables them.
 
 The authoritative refusal strings are in
-[`platform_policy.rs`](../../../../control/crates/layerfs-isolation/src/platform_policy.rs).
-This shared `layerfs-isolation` module is available to both host builds and builds without
+[`platform_policy.rs`](../../../../control/crates/layerfs-sandbox-backend/src/platform_policy.rs).
+This shared `layerfs-sandbox-backend` module is available to both host builds and builds without
 machine adapters. The machine support table and readiness probe consume it;
 the public dispatcher checks it before opening a home or reaching a worker or
 daemon. Lower-level machine create, connect, start, forward and copy calls also

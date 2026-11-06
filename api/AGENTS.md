@@ -10,7 +10,7 @@ public surface:
   scopes, the dispatcher and the JSON text form; each call is one direct
   call of a control crate's function. It depends only on the control crates
   (`layerfs-control`, `layerfs-home`, `layerfs-machine`, `layerfs-store`,
-  `layerfs-sandbox`, and `layerfs-isolation` for the platform policy) and
+  `layerfs-sandbox`, and `layerfs-sandbox-backend` for the platform policy) and
   `layerfs-bridge` and re-exports
   what the front ends use (#536). The
   management library `layerfs-control` it calls is a control crate

@@ -709,13 +709,13 @@ dependencies = [
  "layerfs-control",
  "layerfs-history",
  "layerfs-home",
- "layerfs-isolation",
  "layerfs-machine",
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-platform",
  "layerfs-project",
  "layerfs-sandbox",
+ "layerfs-sandbox-backend",
  "layerfs-storage",
  "layerfs-store",
  "layerfs-store-service",
@@ -772,12 +772,12 @@ dependencies = [
  "layerfs-fuse",
  "layerfs-history",
  "layerfs-home",
- "layerfs-isolation",
  "layerfs-machine",
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-project",
  "layerfs-sandbox",
+ "layerfs-sandbox-backend",
  "layerfs-storage",
  "layerfs-store",
  "layerfs-store-service",
@@ -833,15 +833,8 @@ name = "layerfs-home"
 version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
- "layerfs-isolation",
+ "layerfs-sandbox-backend",
  "libc",
- "nix",
-]
-
-[[package]]
-name = "layerfs-isolation"
-version = "2.0.0"
-dependencies = [
  "nix",
 ]
 
@@ -922,7 +915,7 @@ name = "layerfs-platform"
 version = "2.0.0"
 dependencies = [
  "layerfs-bridge",
- "layerfs-isolation",
+ "layerfs-sandbox-backend",
  "nix",
 ]
 
@@ -957,12 +950,19 @@ dependencies = [
  "layerfs-bridge",
  "layerfs-history",
  "layerfs-home",
- "layerfs-isolation",
  "layerfs-machine",
  "layerfs-persistence",
  "layerfs-project",
+ "layerfs-sandbox-backend",
  "layerfs-store",
  "libc",
+]
+
+[[package]]
+name = "layerfs-sandbox-backend"
+version = "2.0.0"
+dependencies = [
+ "nix",
 ]
 
 [[package]]

@@ -24,8 +24,8 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::{DaemonStore, KernelRoute};
 use layerfs_home::helpers::{lock, text};
 use layerfs_home::outcome::{failed, refused};
-use layerfs_isolation::{CommandIdentity, Runtime, Sandbox};
-use layerfs_isolation::{LaunchRequest, ProviderLaunchOptions};
+use layerfs_sandbox_backend::{CommandIdentity, Runtime, Sandbox};
+use layerfs_sandbox_backend::{LaunchRequest, ProviderLaunchOptions};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
@@ -243,21 +243,22 @@ fn start_named(
 fn native_runtime(
     root: &str,
     _: crate::runtime::Backend,
-) -> Result<Runtime, layerfs_isolation::RuntimeError> {
-    layerfs_isolation::host_process::HostProcessProvider::new(root).map(Runtime::HostProcess)
+) -> Result<Runtime, layerfs_sandbox_backend::RuntimeError> {
+    layerfs_sandbox_backend::host_process::HostProcessProvider::new(root).map(Runtime::HostProcess)
 }
 
 #[cfg(target_os = "linux")]
 fn native_runtime(
     root: &str,
     backend: crate::runtime::Backend,
-) -> Result<Runtime, layerfs_isolation::RuntimeError> {
+) -> Result<Runtime, layerfs_sandbox_backend::RuntimeError> {
     match backend {
-        crate::runtime::Backend::HostProcess => Err(layerfs_isolation::RuntimeError::Unsupported(
-            crate::runtime::NATIVE_ON_LINUX,
-        )),
+        crate::runtime::Backend::HostProcess => Err(
+            layerfs_sandbox_backend::RuntimeError::Unsupported(crate::runtime::NATIVE_ON_LINUX),
+        ),
         crate::runtime::Backend::Namespaces => {
-            layerfs_isolation::namespaces::NamespaceProvider::new(root).map(Runtime::Namespaces)
+            layerfs_sandbox_backend::namespaces::NamespaceProvider::new(root)
+                .map(Runtime::Namespaces)
         }
     }
 }

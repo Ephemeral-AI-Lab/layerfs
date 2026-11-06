@@ -8,7 +8,7 @@ license.workspace = true
 
 [dependencies]
 layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
-layerfs-isolation = { path = "../layerfs-isolation" }
+layerfs-sandbox-backend = { path = "../layerfs-sandbox-backend" }
 nix = { version = "=0.31.3", features = [
     "poll",
     "socket",

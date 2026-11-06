@@ -1,8 +1,8 @@
 //! Facts read from provider and guest output: one string field of a JSON
 //! answer, free bytes from `df -kP`, and whether a port listens in
 //! `/proc/net/tcp`.
-use layerfs_isolation::json::Json;
-use layerfs_isolation::RuntimeError;
+use layerfs_sandbox_backend::json::Json;
+use layerfs_sandbox_backend::RuntimeError;
 use std::io::Read;
 
 /// The string at `path` in a JSON document; an array on the way stands for

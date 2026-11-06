@@ -3,8 +3,8 @@
 #![cfg(unix)]
 #[path = "support/standin.rs"]
 mod standin;
-use layerfs_isolation::platform_policy::disabled_reason;
 use layerfs_platform::{self as machine, Code, MachineError, Platform};
+use layerfs_sandbox_backend::platform_policy::disabled_reason;
 use standin::Scratch;
 
 fn refusal<T: std::fmt::Debug>(outcome: Result<T, MachineError>) -> String {

@@ -134,7 +134,7 @@ Facts read from provider and guest output, in
 | `df_free(stdout)` | the last line of `df -kP <path>` | free bytes | `worker::free_disk` (`Status::free_disk`) |
 | `listening(proc_net_tcp, port)` | `/proc/net/tcp` or `tcp6` text | whether a socket in state `0A` (listen) holds the port | `worker::ready` |
 
-`json_string` walks the answer with `layerfs_isolation::json::Json`, a
+`json_string` walks the answer with `layerfs_sandbox_backend::json::Json`, a
 streaming reader, skipping what it does not need; it builds no tree.
 
 ## Setup calls

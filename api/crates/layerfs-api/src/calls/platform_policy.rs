@@ -12,7 +12,7 @@ use std::path::Path;
 type Result = std::result::Result<(), SdkRefusal>;
 
 fn platform(name: &str) -> Result {
-    match layerfs_isolation::platform_policy::disabled_reason(name) {
+    match layerfs_sandbox_backend::platform_policy::disabled_reason(name) {
         Some(reason) => Err(refused("Unsupported", reason)),
         None => Ok(()),
     }

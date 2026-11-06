@@ -81,7 +81,7 @@ daemon port: <why>".
 
 | Platform | Error | Why | Source |
 | --- | --- | --- | --- |
-| `docker` | `InvalidInput` | Each docker Sandbox publishes its daemon's port on the host's loopback when it is created (`PortBindings`, host IP `127.0.0.1`, Engine-chosen port); that published address is its endpoint. | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs), [`backend/docker/create.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/create.rs) |
+| `docker` | `InvalidInput` | Each docker Sandbox publishes its daemon's port on the host's loopback when it is created (`PortBindings`, host IP `127.0.0.1`, Engine-chosen port); that published address is its endpoint. | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs), [`backend/docker/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/create.rs) |
 | `apple-container` | `Unsupported` | The `container` CLI publishes a port only when the machine's container is created. | [`apple_container/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/apple_container/adapter.rs) |
 | `microsandbox` | `Unsupported` | `msb` publishes a port only when the machine's sandbox is created. | [`microsandbox/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/microsandbox/adapter.rs) |
 | `firecracker` | `Unsupported` | Its daemons listen on the microVM's loopback, which a forward through the Lima host cannot reach (it reaches only the microVM's tap address). | [`firecracker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/firecracker/adapter.rs) |

@@ -242,7 +242,7 @@ pub(crate) fn with_worker(
 
 /// New work is refused before tools, bundle reads, or platform effects.
 fn new_work(spec: &Spec) -> Result<(), MachineError> {
-    match layerfs_isolation::platform_policy::disabled_reason(spec.kind.name()) {
+    match layerfs_sandbox_backend::platform_policy::disabled_reason(spec.kind.name()) {
         Some(reason) => Err(MachineError::new(Code::Unsupported, reason)),
         None => Ok(()),
     }

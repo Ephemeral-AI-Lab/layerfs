@@ -14,10 +14,10 @@ use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::helpers;
 use layerfs_home::home::{paths, read_record, write_entity};
 use layerfs_home::outcome::{failed, refused};
-use layerfs_isolation::LocalRecord;
+use layerfs_sandbox_backend::LocalRecord;
 #[cfg(target_os = "linux")]
-use layerfs_isolation::SandboxRecord;
-use layerfs_isolation::{CommandIdentity, Sandbox};
+use layerfs_sandbox_backend::SandboxRecord;
+use layerfs_sandbox_backend::{CommandIdentity, Sandbox};
 use layerfs_store::project::discovery::{home, private};
 use std::{
     fs,

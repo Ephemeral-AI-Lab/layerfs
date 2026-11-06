@@ -3,7 +3,7 @@
 //! and exec cases went with the test-only facade (#536 step 2).
 #![cfg(unix)]
 #[allow(dead_code)]
-#[path = "../../../../control/crates/layerfs-isolation/tests/support/engine.rs"]
+#[path = "../../../../control/crates/layerfs-sandbox-backend/tests/support/engine.rs"]
 mod engine;
 use engine::{fixed, frame, Peer};
 use layerfs_bridge::{
@@ -12,10 +12,10 @@ use layerfs_bridge::{
     duplex,
 };
 use layerfs_bridge::{DaemonStore, KernelRoute};
-use layerfs_isolation::docker::DockerProvider;
-use layerfs_isolation::Runtime;
-use layerfs_isolation::{LaunchRequest, ProviderLaunchOptions};
 use layerfs_sandbox::{ProviderCreate, ProviderSandbox, SandboxApi, SandboxPhase};
+use layerfs_sandbox_backend::docker::DockerProvider;
+use layerfs_sandbox_backend::Runtime;
+use layerfs_sandbox_backend::{LaunchRequest, ProviderLaunchOptions};
 use std::{
     fs,
     net::TcpListener,

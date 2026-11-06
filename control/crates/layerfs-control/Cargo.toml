@@ -13,7 +13,7 @@ layerfs-machine = { path = "../layerfs-machine" }
 layerfs-store = { path = "../layerfs-store" }
 layerfs-sandbox = { path = "../layerfs-sandbox" }
 layerfs-project = { path = "../../../engine/crates/layerfs-project" }
-layerfs-isolation = { path = "../layerfs-isolation" }
+layerfs-sandbox-backend = { path = "../layerfs-sandbox-backend" }
 layerfs-store-service = { path = "../../../engine/crates/layerfs-store-service" }
 # Store backup to a bucket (#535).
 layerfs-bucket = { path = "../layerfs-bucket" }

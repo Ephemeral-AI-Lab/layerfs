@@ -189,7 +189,7 @@ fn a_sandbox_runs_where_its_store_can_be_reached() {
     let (code, message) = create("box");
     assert_eq!(code, "Unsupported", "{message}");
     assert!(
-        message == layerfs_isolation::platform_policy::SSH_DISABLED,
+        message == layerfs_sandbox_backend::platform_policy::SSH_DISABLED,
         "{message}"
     );
     let (code, message) = call(

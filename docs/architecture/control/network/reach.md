@@ -9,7 +9,7 @@ How a Sandbox daemon reaches the caller's PostgreSQL server.
 | | |
 | --- | --- |
 | Component | [Network](README.md) |
-| Source | [`control/crates/layerfs-platform/src/reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs), [`control/crates/layerfs-isolation/src/postgres_url.rs`](../../../../control/crates/layerfs-isolation/src/postgres_url.rs), each platform's `adapter.rs` under [`platforms/`](../../../../control/crates/layerfs-platform/src/platforms) |
+| Source | [`control/crates/layerfs-platform/src/reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs), [`control/crates/layerfs-sandbox-backend/src/postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs), each platform's `adapter.rs` under [`platforms/`](../../../../control/crates/layerfs-platform/src/platforms) |
 
 A PostgreSQL Store's URL is written for the caller's host. A daemon on a
 machine may see the caller's loopback under another name, or not at all.
@@ -35,7 +35,7 @@ starts nothing.
 | Platform | `Loopback` | Loopback host becomes | Why | Source |
 | --- | --- | --- | --- | --- |
 | `native` | `Shared` | unchanged (the URL is not parsed) | The daemon shares the caller's loopback. | [`native/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/native/adapter.rs) |
-| `docker` | `Alias` | `host.docker.internal` | Docker Desktop's name; on Linux each Sandbox container gets `host.docker.internal:host-gateway`. | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs), [`backend/docker/create.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/create.rs) |
+| `docker` | `Alias` | `host.docker.internal` | Docker Desktop's name; on Linux each Sandbox container gets `host.docker.internal:host-gateway`. | [`docker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/docker/adapter.rs), [`backend/docker/create.rs`](../../../../control/crates/layerfs-sandbox-backend/src/backend/docker/create.rs) |
 | `lima` | `Alias` | `192.168.5.2` | The gateway of Lima's user-mode network. The address, not `host.lima.internal`: the Sandbox root has no such hosts entry. | [`lima/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/lima/adapter.rs) |
 | `firecracker` | `Alias` | `192.168.5.2` | The Lima host's own host address; the Lima host masquerades the microVM's traffic. | [`firecracker/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/firecracker/adapter.rs) |
 | `microsandbox` | `Alias` | `host.microsandbox.internal` | The guest's per-sandbox gateway; the machine is created with `--net public,private,host` so host egress is allowed. | [`microsandbox/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/microsandbox/adapter.rs), [`microsandbox/create.rs`](../../../../control/crates/layerfs-platform/src/platforms/microsandbox/create.rs) |
@@ -57,7 +57,7 @@ Notes from the receipts:
 
 | Part | Read as | Source |
 | --- | --- | --- |
-| scheme | everything before `://` | [`postgres_url.rs`](../../../../control/crates/layerfs-isolation/src/postgres_url.rs) |
+| scheme | everything before `://` | [`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs) |
 | userinfo | everything before the last `@` of the authority, password included; kept byte for byte | same |
 | host | `[v6]` without brackets, else before the last `:`; a host list `h1,h2` reads as one host and `dial` refuses it | same |
 | port | `:` then 1 to 5 digits, else the parse fails | same |

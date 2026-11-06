@@ -68,7 +68,7 @@ URL a daemon dials for a PostgreSQL Store. See the
 | One attempt per call: no retry, no replay. A request whose answer is lost is `Unknown`, never resent. | `send_once`, `answer`, `lost` in [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs); `tool::run` runs a host command once ([`tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs)) |
 | Readiness waits are waits, not retries. | `worker::ready` ([`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs)) |
 | A PostgreSQL password is resolved only in the caller and travels only in one worker request and the Sandbox's private daemon setup file. | [Credentials](credentials.md) |
-| No reach or forward message holds any part of a PostgreSQL URL. | `reach::refuse`; `PostgresUrl` has no `Debug` ([`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs), [`postgres_url.rs`](../../../../control/crates/layerfs-isolation/src/postgres_url.rs)) |
+| No reach or forward message holds any part of a PostgreSQL URL. | `reach::refuse`; `PostgresUrl` has no `Debug` ([`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs), [`postgres_url.rs`](../../../../control/crates/layerfs-sandbox-backend/src/postgres_url.rs)) |
 | A recorded helper pid is ended only while its command line still holds its marker. | `tool::alive`, `tool::end` ([`tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs)) |
 
 ## Limits and failures
