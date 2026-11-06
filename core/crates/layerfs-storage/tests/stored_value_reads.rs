@@ -257,3 +257,68 @@ fn one_handle_reads_any_number_of_leaves_at_one_lookup_each() {
     }
     assert_eq!(value_lookups(&metadata) as u64, LEAVES);
 }
+
+/// A leaf of `ROWS` files of one content and mode whose mtime differs from
+/// `mtime` only in its low bytes and nanoseconds by `bump`.
+fn inline_leaf(first_serial: u64, bump: u32) -> FinalizedObject {
+    use layerfs_content::{
+        filesystem::attributes::portable::PortableMetadata, inode_leaf::InodeMetadata,
+    };
+    let rows: Vec<_> = (0..ROWS)
+        .map(|row| InodeLeafRow {
+            serial: first_serial + row,
+            value: encode_inode_value(InodeValue {
+                kind: InodeKind::RegularFile,
+                namespace_ref_count: 1,
+                content_root: ObjectId::for_bytes(&row.to_be_bytes()),
+                metadata_root: InodeMetadata::Inline(PortableMetadata {
+                    mode: 0o644,
+                    mtime_seconds: 1_700_000_000 + i64::from(bump),
+                    mtime_nanoseconds: bump,
+                }),
+            }),
+        })
+        .collect();
+    let canonical = InodeLeaf {
+        subtree_bytes: rows.len() as u64 * LEAF_ROW_BYTES as u64,
+        rows,
+    }
+    .encode()
+    .unwrap();
+    FinalizedObject::new(ObjectRole::InodeLeaf, canonical).unwrap()
+}
+
+/// Values that differ only in mtime low bytes and nanoseconds are distinct
+/// values: each takes one ordinal in a Save, and each one's later copies in
+/// the same Save reuse it (#91; the memo once keyed on part of the value let
+/// the first such value hide the second, whose copies then each took one).
+#[test]
+fn one_save_stores_values_that_differ_only_in_mtime_once_each() {
+    let metadata = Arc::new(metadata::MemoryMetadata::default());
+    let store = Storage::new(metadata.clone()).unwrap();
+    let save = store.begin_save().unwrap();
+    let leaves = [
+        inline_leaf(1, 0),
+        inline_leaf(100, 1),
+        inline_leaf(200, 1),
+        inline_leaf(300, 0),
+    ];
+    for object in &leaves {
+        save.accept(object.clone()).unwrap();
+    }
+    let saved = save.finish().unwrap();
+    assert_eq!(saved.pool.new_values, 2 * ROWS);
+    assert_eq!(saved.pool.reused_values, 2 * ROWS);
+    assert_eq!(metadata.state.lock().unwrap().values.len() as u64, 2 * ROWS);
+    let ids: Vec<_> = leaves.iter().map(FinalizedObject::id).collect();
+    let canonical: Vec<_> = leaves.iter().map(|l| l.canonical().to_vec()).collect();
+    assert_eq!(
+        Storage::new(metadata)
+            .unwrap()
+            .reader()
+            .unwrap()
+            .read_objects(&ids)
+            .unwrap(),
+        canonical
+    );
+}
