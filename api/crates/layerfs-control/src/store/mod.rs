@@ -13,6 +13,7 @@ pub(crate) mod identity;
 mod list;
 pub(crate) mod open;
 pub(crate) mod postgres;
+pub(crate) mod reader;
 #[doc(hidden)]
 pub mod record;
 mod remove;

@@ -103,7 +103,17 @@ The record hides `v`, `runtime_id` and `daemon`
 | any other machine | that machine's worker | the guest's own `native` | [`sandbox/route.rs`](../../../../../api/crates/layerfs-control/src/sandbox/route.rs) `in_worker` |
 
 For a PostgreSQL Store the caller resolves the password and sends the URL
-only in this request; the side that launches runs a reach check first.
+only in this request; the side that launches runs a reach check first. The
+reach check reads the schema's binding and finds the project in one read
+session, the process's held host session for that Store (#65:
+[`store/reader.rs`](../../../../../api/crates/layerfs-control/src/store/reader.rs)),
+opened with the light check if none is held, so the host side of a create
+opens at most one PostgreSQL connection and no Store service. A project the
+schema does not hold is `NoSuchProject` there, before anything starts. The
+same session serves a mount's Branch lookup and a status's head; exec,
+Commit, unmount and close open none. The caller's Store lease covers each
+call; the session holds none and closes after 60 s unused, or when the Store
+is disconnected in that process.
 Nothing starts a stopped machine. See the
 [routing table](../../routing/routing-table.md).
 

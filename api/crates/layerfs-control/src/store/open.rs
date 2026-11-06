@@ -82,15 +82,23 @@ fn enter(args: &SdkValue, lease: Option<Lease>, calls: usize) -> Result<PathBuf,
                     _lease: lease,
                 },
             );
-            REAPER.call_once(|| {
-                std::thread::spawn(|| loop {
-                    std::thread::sleep(Duration::from_secs(5));
-                    close_idle(IDLE);
-                });
-            });
+            reaper();
         }
     }
     Ok(path)
+}
+
+/// Starts the reaper thread once per process: every 5 s it closes the open
+/// Stores and the PostgreSQL host sessions ([`super::reader`]) unused for
+/// [`IDLE`].
+pub(crate) fn reaper() {
+    REAPER.call_once(|| {
+        std::thread::spawn(|| loop {
+            std::thread::sleep(Duration::from_secs(5));
+            close_idle(IDLE);
+            super::reader::close_idle(IDLE);
+        });
+    });
 }
 
 /// Closes every Store unused for at least `idle` with no call running;
@@ -117,6 +125,7 @@ pub fn close_idle(idle: Duration) -> usize {
 /// move` and `store remove` need its file closed. A call running on it is
 /// `InUse`, and the Store stays open.
 pub(crate) fn close(path: &std::path::Path) -> Result<bool, SdkRefusal> {
+    super::reader::forget(path);
     let entry = {
         let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
         match open.get(path) {

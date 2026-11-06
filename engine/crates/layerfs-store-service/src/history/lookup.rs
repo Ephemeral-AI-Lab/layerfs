@@ -93,10 +93,21 @@ pub fn name(text: &str) -> Result<HistoryName, SdkRefusal> {
 
 /// The project's stack, by name.
 pub fn project(store: &Arc<Store>, wanted: &str) -> Result<LayerStackRecord, SdkRefusal> {
+    project_in(wanted, |name| {
+        store
+            .published(|h| h.layer_stack_named(name))
+            .map_err(published)
+    })
+}
+
+/// [`project`] through `find`, any reader of published history (a host's
+/// PostgreSQL read session, #65), with the same refusals.
+pub fn project_in(
+    wanted: &str,
+    find: impl FnOnce(&HistoryName) -> Result<Option<LayerStackRecord>, SdkRefusal>,
+) -> Result<LayerStackRecord, SdkRefusal> {
     let found = match HistoryName::new(wanted) {
-        Ok(name) => store
-            .published(|h| h.layer_stack_named(&name))
-            .map_err(published)?,
+        Ok(name) => find(&name)?,
         Err(_) => None,
     };
     found.ok_or_else(|| {
@@ -114,10 +125,20 @@ pub fn branch(
     stack: &LayerStackRecord,
     wanted: &str,
 ) -> Result<BranchRecord, SdkRefusal> {
+    branch_in(wanted, |name| {
+        store
+            .published(|h| h.branch_named(stack.id, name))
+            .map_err(published)
+    })
+}
+
+/// [`branch`] through `find`, with the same refusals.
+pub fn branch_in(
+    wanted: &str,
+    find: impl FnOnce(&HistoryName) -> Result<Option<BranchRecord>, SdkRefusal>,
+) -> Result<BranchRecord, SdkRefusal> {
     let found = match HistoryName::new(wanted) {
-        Ok(name) if wanted != super::MAIN => store
-            .published(|h| h.branch_named(stack.id, &name))
-            .map_err(published)?,
+        Ok(name) if wanted != super::MAIN => find(&name)?,
         _ => None,
     };
     found.ok_or_else(|| {
