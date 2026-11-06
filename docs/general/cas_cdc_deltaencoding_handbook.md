@@ -338,7 +338,7 @@ chunk the base payload covering its byte range:
 | Producer | Base offered | Source |
 | --- | --- | --- |
 | Localized edit of a file the base holds (#352 F-005) | the same file's base mapping, through the edit's `Aligner` | [edit apply](../../core/crates/layerfs-content/src/file/edit/apply.rs) |
-| Workspace Commit of a fresh file that a rename put in place of another (#352 F-063) | the replaced file, through the same `Aligner`, via `construct_runs_with_predecessor` | [run constructor](../../core/crates/layerfs-content/src/file/construction/runs.rs), [captured file](../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
+| Workspace Commit of a fresh file that a rename put in place of another (#352 F-063), or that took a path where the base held a file (#88) | the replaced file, through the same `Aligner`, via `construct_runs_with_predecessor` | [run constructor](../../core/crates/layerfs-content/src/file/construction/runs.rs), [captured file](../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
 | `construct_bytes_with_predecessor` with a caller's base | the supplied root, positionally | [byte constructor](../../core/crates/layerfs-content/src/file/construction/bytes.rs) |
 
 The F-063 route exists because git, editors and package managers save by
@@ -346,7 +346,28 @@ writing a new file and renaming it over the old one: the result is a new
 inode, so the edit route never sees it. The rename records the replaced file in
 the Workspace overlay (`fs_predecessor`); a chain of renames before one Commit
 ends at the file the base holds. A predecessor the base no longer holds offers
-nothing. Only fresh files at or above the chunking cutoff ask for one.
+nothing. Every fresh live file asks for one (#88; F-063 asked only at or above
+the chunking cutoff).
+
+A fresh file with no recorded predecessor is offered the regular file the base
+held at its path (#88): `rm f` then writing `f`, as `git checkout` does,
+replaces a file without a rename. Commit's names pass asks the base, for each
+captured name bound over a binding the lower view held, which file it bound
+there (one base name lookup per such name, at most 65,536 per Commit; past
+that a file gets no hint).
+
+**Whole-file results take the predecessor whole.** A result below the
+chunking cutoff has no chunks to align, so the constructor declares the base
+root itself as the object's explicit advisory predecessor
+(`AdvisoryPredecessors::explicit`, as the whole-file edit route does) without
+reading it. Storage probes it like any declared whole-file candidate: a base of
+another role (a file that shrank below the cutoff) or at the depth cap is
+ineligible and selection falls back to the similarity index. Before #88 such a
+file had no declared base and every version found the first stored version
+through the index, so each delta covered every edit since.
+
+The similarity index breaks an equal-overlap tie toward the newer entry
+(#88), so of several versions of one content the latest admitted is proposed.
 
 ```text
   prepare independent FULL/STORED alternative

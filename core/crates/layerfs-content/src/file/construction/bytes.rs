@@ -16,8 +16,8 @@ use layerfs_telemetry::timer::{Active, TimingScope};
 use crate::error::{ContentError, ContentResult};
 use crate::file::mapping::{self, FileState, MappingBuild, PredecessorBase};
 use crate::object::{
-    encode_bytes_object, AuthenticatedObjects, FinalizedConsumer, FinalizedObject, ObjectId,
-    ObjectRole,
+    encode_bytes_object, AdvisoryPredecessors, AuthenticatedObjects, FinalizedConsumer,
+    FinalizedObject, ObjectId, ObjectRole,
 };
 use crate::policy::{ConstructionCapacities, ConstructionPolicy, Representation};
 
@@ -218,11 +218,14 @@ pub fn construct_bytes(
 /// version as the positional delta-base correspondence for a chunked result.
 ///
 /// `base` is the earlier version's stored root together with the provider that
-/// serves it. It is consulted only when the result is chunked: a whole-file result
-/// is offered no chunk base, and a base that is itself a whole-file object offers
-/// nothing, because admitting a base across the representation transition is the
-/// deferred cross-role half and is not part of this design. With no base this is
-/// byte for byte `construct_bytes`.
+/// serves it. A chunked result consults it: each chunk is offered the base extent
+/// its byte range corresponds to, and a base that is itself a whole-file object
+/// offers no chunk anything, because admitting a base across the representation
+/// transition is the deferred cross-role half and is not part of this design. A
+/// whole-file result is offered the base root itself as its explicit predecessor
+/// without reading it, as a whole-file edit is (#88); Storage decides whether that
+/// root is a usable base of the same role. With no base this is byte for byte
+/// `construct_bytes`, and the constructed root never depends on the base.
 pub fn construct_bytes_with_predecessor(
     policy: ConstructionPolicy,
     capacities: &ConstructionCapacities,
@@ -251,9 +254,15 @@ fn construct_bytes_in(
             let canonical = construct
                 .child("content.encode")
                 .run(|_| encode_whole_file(capacities, bytes))?;
-            let object = construct
+            let mut object = construct
                 .child("content.identify")
                 .run(|_| FinalizedObject::new(ObjectRole::WholeFile, canonical))?;
+            // The earlier version is this object's delta base, exactly as a
+            // whole-file edit declares its view's root (#88). An identical
+            // version needs none: the object is already stored.
+            if let Some(base) = base.filter(|base| base.root() != object.id()) {
+                object = object.with_predecessors(AdvisoryPredecessors::explicit(base.root())?);
+            }
             let root = object.id();
             construct
                 .child("content.emit")

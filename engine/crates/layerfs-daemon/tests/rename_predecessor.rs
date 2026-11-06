@@ -2,6 +2,10 @@
 //! to its Commit as the delta base of its chunks. git, editors and package
 //! managers save by writing a new file and renaming it over the old one, so
 //! the result is a fresh inode with no base file of its own.
+//!
+//! #88: a small (whole-file) result takes the replaced file whole as its
+//! base, and a fresh file written where the base held a file, with no rename
+//! (`rm f` then writing `f`, as `git checkout` does), is offered that file.
 #[path = "support/installed_store.rs"]
 #[allow(dead_code)]
 mod support;
@@ -378,6 +382,104 @@ fn a_file_renamed_back_over_its_replacement_is_not_its_own_predecessor() {
     });
     let (done, _) = commit(w);
     assert_eq!(content(w, "a", LENGTH), data);
+    drop((base, done));
+    s.finish();
+}
+
+const SMALL: usize = 60 * 1024;
+
+/// Whole-file objects the Commit stored as PREFIX records and as FULL ones.
+fn whole_forms(done: &CommitSuccess) -> (u64, u64) {
+    let depths = &done.saved.delta.whole_file_depths;
+    (depths[1..].iter().sum(), depths[0])
+}
+
+/// #88: below the chunking cutoff the replaced file is the new file's base.
+#[test]
+fn a_small_file_saved_by_rename_over_deltas_against_the_replaced_file() {
+    let s = setup("predecessor-small-rename");
+    let w = &s.workspace;
+    mkdir(w, "repo");
+    let first = noise(15, SMALL);
+    put(w, "repo/config", 0o644, &first);
+    let (base, _) = commit(w);
+    let second = refreshed(&first, 0x5A);
+    save_over(w, "config.tmp", "repo/config", &second);
+    let (done, work) = commit(w);
+    assert_eq!(work.files_constructed, 1);
+    assert_eq!(work.predecessors_offered, 1);
+    assert_eq!(whole_forms(&done), (1, 0));
+    assert!(
+        done.saved.stored_bytes < (SMALL / 4) as u64,
+        "{} bytes stored for {SMALL}",
+        done.saved.stored_bytes
+    );
+    assert_eq!(content(w, "repo/config", SMALL), second);
+    let value = committed(&s.store, w, "repo/config").1;
+    assert_eq!(
+        value.content_root,
+        plain_root("predecessor-small-rename-plain", &second).content_root
+    );
+    drop((base, done));
+    s.finish();
+}
+
+/// #88: removing a file and writing it again offers the file the base held
+/// at that path, small or chunked; a name the base never bound asks nothing.
+#[test]
+fn a_file_removed_and_written_again_deltas_against_the_file_at_its_path() {
+    let s = setup("predecessor-same-path");
+    let w = &s.workspace;
+    mkdir(w, "src");
+    let small = noise(17, SMALL);
+    let large = noise(19, LENGTH);
+    put(w, "src/a", 0o644, &small);
+    put(w, "src/big", 0o644, &large);
+    let (base, _) = commit(w);
+    let (small_next, large_next) = (refreshed(&small, 0x21), refreshed(&large, 0x43));
+    for (path, data) in [("src/a", &small_next), ("src/big", &large_next)] {
+        named(w, path, |parent, name| Operation::Unlink { parent, name });
+        put(w, path, 0o644, data);
+    }
+    put(w, "src/new", 0o644, &noise(25, 1_000));
+    let (done, work) = commit(w);
+    assert_eq!(work.files_constructed, 3);
+    assert_eq!(work.same_path_lookups, 2);
+    assert_eq!(work.predecessors_offered, 2);
+    // "src/a" is a delta; "src/new" has no base and is FULL.
+    assert_eq!(whole_forms(&done), (1, 1));
+    let (prefix, full) = chunk_forms(&done);
+    assert!(prefix > 0 && full == 0, "prefix {prefix} full {full}");
+    assert_eq!(content(w, "src/a", SMALL), small_next);
+    assert_eq!(content(w, "src/big", LENGTH), large_next);
+    assert_eq!(
+        committed(&s.store, w, "src/a").1.content_root,
+        plain_root("predecessor-same-path-plain", &small_next).content_root
+    );
+    drop((base, done));
+    s.finish();
+}
+
+/// #88: a base directory replaced by a file, and a base file replaced by a
+/// directory, offer nothing and fail nothing. (`noise` seeds differ in their
+/// odd form: `seed | 1` is the generator state.)
+#[test]
+fn a_path_the_base_held_as_another_kind_offers_nothing() {
+    let s = setup("predecessor-same-path-kind");
+    let w = &s.workspace;
+    mkdir(w, "d");
+    put(w, "f", 0o644, &noise(21, SMALL));
+    let (base, _) = commit(w);
+    // A directory replaced by a file, and a file replaced by a directory.
+    named(w, "d", |parent, name| Operation::Rmdir { parent, name });
+    put(w, "d", 0o644, &noise(23, SMALL));
+    named(w, "f", |parent, name| Operation::Unlink { parent, name });
+    mkdir(w, "f");
+    let (done, work) = commit(w);
+    assert_eq!(work.same_path_lookups, 2);
+    assert_eq!(work.predecessors_offered, 0);
+    assert_eq!(whole_forms(&done), (0, 1));
+    assert_eq!(content(w, "d", SMALL), noise(23, SMALL));
     drop((base, done));
     s.finish();
 }

@@ -342,3 +342,51 @@ fn a_branched_base_mapping_is_walked_and_a_grown_result_stops_at_its_end() {
         "the appended tail must lie past the base's own mapping"
     );
 }
+
+/// #88: a whole-file result names the earlier version's root as its delta base,
+/// as a whole-file edit does, and reads nothing of it to do so.
+#[test]
+fn a_whole_file_result_declares_its_base_root_without_reading_it() {
+    let (base_store, base_root) = build(&patterned(20_000));
+    let mut edited = patterned(20_000);
+    edited[9_000..9_010].copy_from_slice(b"0123456789");
+    let counts = CountingProvider::new();
+    let counted = Counted {
+        store: &base_store,
+        counts: &counts,
+    };
+    let mut consumer = RecordingConsumer::new();
+    let constructed = disabled_scope(|scope| {
+        construct_bytes_with_predecessor(
+            policy(),
+            &policy().capacities(),
+            &edited,
+            Some(PredecessorBase::new(&counted, base_root)),
+            &mut consumer,
+            scope.child("content"),
+        )
+    })
+    .expect("construction succeeds");
+    assert_eq!(consumer.predecessors[&constructed.root], vec![base_root]);
+    assert!(counts.ids.borrow().is_empty(), "the base is not read");
+    // The hint never changes the result.
+    assert_eq!(constructed.root, build(&edited).1);
+}
+
+#[test]
+fn an_identical_whole_file_version_declares_nothing() {
+    let bytes = patterned(20_000);
+    let (base_store, base_root) = build(&bytes);
+    let (_, root, predecessors) = build_with_base(&bytes, &base_store, base_root);
+    assert_eq!(root, base_root);
+    assert!(predecessors[&root].is_empty());
+}
+
+/// A file that shrank below the cutoff still names its chunked base; Storage
+/// refuses a base of another role, so this is a hint and never a dependency.
+#[test]
+fn a_whole_file_result_declares_a_chunked_base_for_storage_to_judge() {
+    let (base_store, base_root) = build(&noise(400_000));
+    let (_, root, predecessors) = build_with_base(&patterned(1_000), &base_store, base_root);
+    assert_eq!(predecessors[&root], vec![base_root]);
+}

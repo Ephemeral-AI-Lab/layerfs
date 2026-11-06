@@ -274,3 +274,47 @@ fn short_repeated_tail_preserves_mixed_unflushed_extents() {
         actual.assert_children_precede_parents();
     }
 }
+
+/// #88: a small run construction offered a predecessor declares it whole,
+/// exactly as the byte constructor does, and returns the same root.
+#[test]
+fn a_small_run_construction_declares_its_predecessor() {
+    use layerfs_content::{construct_runs_with_predecessor, ObjectId, PredecessorBase};
+    struct Recording {
+        store: MemoryStore,
+        declared: Vec<(ObjectId, Vec<ObjectId>)>,
+    }
+    impl FinalizedConsumer for Recording {
+        fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
+            self.declared
+                .push((object.id(), object.predecessors().ids().collect()));
+            self.store.accept(object)
+        }
+    }
+    let policy = ConstructionPolicy::frozen_default();
+    let build = |prefix: usize, base: Option<PredecessorBase<'_>>| {
+        let mut consumer = Recording {
+            store: MemoryStore::new(),
+            declared: Vec::new(),
+        };
+        let root = disabled_scope(|scope| {
+            construct_runs_with_predecessor(
+                policy,
+                &policy.capacities(),
+                &mut Runs::mixed(prefix, 0, 0, 4096),
+                base,
+                &mut consumer,
+                scope.child("runs"),
+            )
+        })
+        .unwrap()
+        .file
+        .root;
+        (root, consumer)
+    };
+    let (base_root, base) = build(30_000, None);
+    let (root, consumer) = build(40_000, Some(PredecessorBase::new(&base.store, base_root)));
+    assert_ne!(root, base_root);
+    assert_eq!(consumer.declared, vec![(root, vec![base_root])]);
+    assert_eq!(root, build(40_000, None).0);
+}
