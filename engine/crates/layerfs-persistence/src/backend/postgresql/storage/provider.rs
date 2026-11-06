@@ -122,6 +122,12 @@ impl PackPersistence for PostgresStorage {
     fn whole_pack_bytes(&self) -> usize {
         layerfs_storage::policy::PACK_LIMIT
     }
+    /// Each statement is a round trip and a publication costs about seven
+    /// of them whatever its size, so PostgreSQL publishes up to 16 MiB at
+    /// once (owner decision, layerfs-project #61); SQLite keeps 4 MiB.
+    fn publication_bytes(&self) -> u64 {
+        layerfs_storage::policy::PUBLICATION_BYTES_MAX
+    }
     fn publication_pack_cost(
         &self,
         pack: &PublishedPack,
@@ -129,7 +135,7 @@ impl PackPersistence for PostgresStorage {
         Ok((1, pack.body.len() as u64))
     }
     fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError> {
-        publication::validate(batch)?;
+        publication::validate(batch, self.publication_bytes())?;
         self.session
             .run_as::<_, PersistenceError>(Mode::Publish, |tx| {
                 objects::publish::run(tx, batch).map_err(Into::into)

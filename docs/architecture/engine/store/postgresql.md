@@ -120,7 +120,7 @@ live and retired, as on SQLite
 | `Read` | `REPEATABLE READ READ ONLY` | no | history reads, policy, signatures | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs) |
 | `Write` | `READ COMMITTED` + `synchronous_commit` | `FOR UPDATE`, unless nested in the held lane | history writes, location rows, allocation | same |
 | `Stage` | `READ COMMITTED` + `synchronous_commit` | no | schema create, merge records | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
-| `Publish` | `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | `FOR UPDATE` after the pack bodies, unless nested in the held lane | one Save publication wave | same |
+| `Publish` | `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | `FOR UPDATE` after the pack bodies, unless nested in the held lane | one Save publication wave, up to 16 MiB − 1 (`publication_bytes`; SQLite keeps 4 MiB − 1) | same |
 | `Immutable` | none; autocommit statements | no | locates, pack reads, inode values | same |
 | `Statement` | none; exactly one autocommit statement (a second is refused before it is sent) | no | `branch_snapshot`, `file_roots` (`digest_roots`, one statement for up to `FILE_DIGEST_WINDOW` = 1,024 contents) | same |
 

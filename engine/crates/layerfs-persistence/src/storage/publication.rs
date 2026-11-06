@@ -8,7 +8,9 @@ pub(crate) fn publish(
 ) -> Result<Published, PersistenceError> {
     publish::run(tx, batch).map_err(Into::into)
 }
-pub(crate) fn validate(batch: &Publication) -> Result<(), PersistenceError> {
+/// Checks one publication against its provider's `publication_bytes` and
+/// the shared row bound.
+pub(crate) fn validate(batch: &Publication, bytes: u64) -> Result<(), PersistenceError> {
     let count = batch.packs.len()
         + batch.objects.len()
         + batch.inode_values.len()
@@ -32,10 +34,8 @@ pub(crate) fn validate(batch: &Publication) -> Result<(), PersistenceError> {
     let singleton = batch.objects.len() == 1
         && batch.packs.len() == 1
         && batch.packs[0].info.domain == PackDomain::Payload;
-    if (canonical_bytes > policy::TRANSACTION_CANONICAL_BYTES_LIMIT as usize
-        || physical_bytes > policy::TRANSACTION_PHYSICAL_BYTES_LIMIT as usize)
-        && !singleton
-    {
+    let bytes = usize::try_from(bytes).map_err(|_| PersistenceError::Malformed)?;
+    if (canonical_bytes > bytes || physical_bytes > bytes) && !singleton {
         return Err(PersistenceError::Malformed);
     }
     let mut packs = BTreeSet::new();

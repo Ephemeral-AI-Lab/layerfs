@@ -137,6 +137,16 @@ pub trait PackPersistence: Send + Sync {
     fn whole_pack_bytes(&self) -> usize {
         super::PACK_READ_PREFIX_BYTES
     }
+    /// Canonical bytes one preparation wave holds and one publication carries,
+    /// and the sealed bytes it publishes. The default is the shared
+    /// transaction bound, 4 MiB less one byte; a provider whose every
+    /// statement is a network round trip may take more, within
+    /// [`crate::policy::PUBLICATION_BYTES_MAX`], so fewer publications carry
+    /// the same Save. The Save holds up to this many bytes of pending objects
+    /// and sealed packs before it publishes them.
+    fn publication_bytes(&self) -> u64 {
+        crate::policy::TRANSACTION_CANONICAL_BYTES_LIMIT
+    }
     /// Prospective physical rows and submitted bytes for one immutable pack.
     /// Monolithic providers use one row and the original body-byte charge.
     /// Providers with unit fanout return its exact cost before publication.

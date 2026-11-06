@@ -32,7 +32,8 @@ impl Storage {
         let source = Fetch::new(metadata);
         source.note(|c| c.policy += 1);
         let policy = source.metadata.policy()?.validated()?;
-        let capacities = StorageCapacities::from_policy(policy)?;
+        let capacities = StorageCapacities::from_policy(policy)?
+            .with_publication_bytes(source.metadata.publication_bytes())?;
         Ok(Self {
             source,
             work: crate::save::Work::default(),

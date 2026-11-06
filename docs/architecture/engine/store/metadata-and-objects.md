@@ -103,7 +103,8 @@ visible ([SQLite: Sessions](sqlite.md#sessions)).
  publish(Publication { packs, objects, inode_values, signatures,
                        release_ordinals })
    validate (no SQL)                       publication.rs
-     rows <= 8 191; canonical and physical bytes <= 4 MiB - 1
+     rows <= 8 191; canonical and physical bytes <= publication_bytes
+       (SQLite 4 MiB - 1, PostgreSQL 16 MiB - 1)
        (a single payload pack with one object is exempt)
      pack ids unique and > 0; length 32..=SINGLETON_PACK_LIMIT;
        metadata packs <= 256 KiB; key = hash(body); header lane = domain

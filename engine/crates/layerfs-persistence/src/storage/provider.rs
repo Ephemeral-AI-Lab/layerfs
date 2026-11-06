@@ -120,7 +120,7 @@ impl PackPersistence for StorageProvider {
         }
     }
     fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError> {
-        publication::validate(batch)?;
+        publication::validate(batch, self.publication_bytes())?;
         if self.session.layout.uses_units() {
             crate::backend::sqlite::objects::unit_layout::validate_batch(batch)?;
         }
