@@ -195,15 +195,18 @@ impl Session {
                 .get::<i64>(0)?;
             // Versions 10 to 12 used the retired host acquisition schema and are refused.
             // Versions 1 to 6 kept inode values in pooled packs behind an
-            // ordinal catalogue. Such a Store is refused here, never misread.
+            // ordinal catalogue. Versions 16 to 18 and 22 to 24 (schema
+            // version 1) kept one row per inode value and binding hint;
+            // schema version 2 (#91) keeps them in blocks. Such a Store is
+            // refused here, never misread or converted.
             let acquisition = match stored {
-                16..=18 => crate::SqliteAcquisitionSchema::Absent,
-                22..=24 => crate::SqliteAcquisitionSchema::Tables,
+                36..=38 => crate::SqliteAcquisitionSchema::Absent,
+                42..=44 => crate::SqliteAcquisitionSchema::Tables,
                 _ => return Err(BackendError::Integrity),
             };
             let layout = match stored - acquisition.version_offset() {
-                16 => crate::SqlitePackLayout::Monolithic,
-                17 => crate::SqlitePackLayout::GroupRows,
+                36 => crate::SqlitePackLayout::Monolithic,
+                37 => crate::SqlitePackLayout::GroupRows,
                 _ => crate::SqlitePackLayout::GroupRowsIndexed,
             };
             (layout, acquisition)

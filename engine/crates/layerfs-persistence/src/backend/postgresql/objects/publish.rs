@@ -2,7 +2,7 @@
 //! first, by `COPY BINARY`, before the lane row is taken: their ids were
 //! reserved, so no other writer can touch those rows, and a slow body upload
 //! never holds the lane. The lane row is then locked and one data-modifying
-//! statement adds the locations, inode values, signatures and totals; the
+//! statement adds the locations, inode value blocks (#91), signatures and totals; the
 //! COMMIT acknowledges packs and rows together. A refused or failed step
 //! rolls the whole publication back; pack ids are never reused.
 use super::super::session::transaction::Transaction;
@@ -53,13 +53,17 @@ ON CONFLICT(object_id) DO NOTHING RETURNING object_id,canonical_length), \
 added AS (SELECT coalesce(sum(canonical_length),0)::bigint AS n FROM ins), \
 totals AS (UPDATE store_totals SET canonical=store_totals.canonical+added.n,stored=store_totals.stored+$7::bigint,metadata=store_totals.metadata+$8::bigint \
 FROM added WHERE store_totals.id=1 AND (added.n<>0 OR $7::bigint<>0 OR $8::bigint<>0)), \
-values_ AS (INSERT INTO inode_value(ordinal,value) SELECT * FROM unnest($9::bigint[],$10::bytea[])), \
+values_ AS (INSERT INTO inode_value_block(first_ordinal,last_ordinal,body) \
+SELECT n.f,n.l,n.b FROM unnest($9::bigint[],$18::bigint[],$10::bytea[]) n(f,l,b) WHERE NOT EXISTS (\
+SELECT 1 FROM inode_value_block x WHERE x.first_ordinal=(SELECT max(y.first_ordinal) FROM inode_value_block y \
+WHERE y.first_ordinal<=n.l) AND x.last_ordinal>=n.f) RETURNING first_ordinal), \
 released AS (UPDATE store_policy SET next_ordinal=$11::bigint WHERE $13::boolean AND id=1 AND next_ordinal=$11::bigint+$12::bigint), \
 signed AS (INSERT INTO content_signature(slot,stamp,object_id,signature) \
 SELECT * FROM unnest($14::bigint[],$15::bigint[],$16::bytea[],$17::bytea[]) \
 ON CONFLICT(slot) DO UPDATE SET stamp=excluded.stamp,object_id=excluded.object_id,signature=excluded.signature \
 WHERE excluded.stamp>=content_signature.stamp) \
-SELECT object_id FROM ins";
+SELECT object_id FROM ins \
+UNION ALL SELECT NULL::bytea WHERE (SELECT count(*) FROM values_)<>cardinality($9::bigint[])";
 
 pub(crate) fn rows(tx: &Transaction<'_>, batch: &Publication) -> Result<Published, BackendError> {
     let objects = &batch.objects;
@@ -86,9 +90,11 @@ pub(crate) fn rows(tx: &Transaction<'_>, batch: &Publication) -> Result<Publishe
         .iter()
         .map(|pack| pack.info.length as i64)
         .sum::<i64>();
-    let values = &batch.inode_values;
-    let ordinals: Vec<i64> = values.iter().map(|r| i64::from(r.ordinal)).collect();
-    let bodies: Vec<&[u8]> = values.iter().map(|r| r.value.as_slice()).collect();
+    // Blocks are encoded here, before the statement that holds the lane.
+    let values = crate::blocks::values::encode(&batch.inode_values)?;
+    let ordinals: Vec<i64> = values.iter().map(|b| i64::from(b.first)).collect();
+    let lasts: Vec<i64> = values.iter().map(|b| i64::from(b.last)).collect();
+    let bodies: Vec<&[u8]> = values.iter().map(|b| b.body.as_slice()).collect();
     let (release, first, count) = match batch.release_ordinals {
         Some((first, count)) => (true, i64::from(first), count as i64),
         None => (false, 0, 0),
@@ -101,18 +107,22 @@ pub(crate) fn rows(tx: &Transaction<'_>, batch: &Publication) -> Result<Publishe
         .map(|r| r.object_id.as_bytes().as_slice())
         .collect();
     let digests: Vec<&[u8]> = signatures.iter().map(|r| r.signature.as_slice()).collect();
-    let bytes =
-        objects.len() as u64 * 72 + values.len() as u64 * 81 + signatures.len() as u64 * 80 + 48;
+    let bytes = objects.len() as u64 * 72
+        + values.iter().map(|b| b.body.len() as u64 + 16).sum::<u64>()
+        + signatures.len() as u64 * 80
+        + 48;
     let mut inserted = BTreeSet::new();
     for row in tx.typed(
         ROWS,
         &[
             &ids, &roles, &lengths, &packs, &groups, &records, &stored, &metadata, &ordinals,
-            &bodies, &first, &count, &release, &slots, &stamps, &signed, &digests,
+            &bodies, &first, &count, &release, &slots, &stamps, &signed, &digests, &lasts,
         ],
         bytes,
     )? {
-        let id: Vec<u8> = row.try_get(0).map_err(|_| BackendError::Integrity)?;
+        // A NULL id: a block's ordinals were already stored; nothing commits.
+        let id: Option<Vec<u8>> = row.try_get(0).map_err(|_| BackendError::Integrity)?;
+        let id = id.ok_or(BackendError::Integrity)?;
         inserted.insert(ObjectId::from_bytes(&id).map_err(|_| BackendError::Integrity)?);
     }
     Ok(Published {

@@ -88,12 +88,15 @@ fn fresh_leaves_share_one_combined_reservation_and_deduplicate_values() {
         .unwrap();
     assert_eq!(allocator, 6);
     let ordinals = sql
-        .prepare("SELECT ordinal FROM inode_value ORDER BY ordinal")
+        .prepare("SELECT first_ordinal,last_ordinal FROM inode_value_block ORDER BY 1")
         .unwrap()
-        .query_map([], |r| r.get::<_, i64>(0))
+        .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))
         .unwrap()
         .collect::<Result<Vec<_>, _>>()
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .flat_map(|(first, last)| first..=last)
+        .collect::<Vec<_>>();
     assert_eq!(ordinals, vec![1, 2, 3, 4, 5]);
     let before = storage.diagnostics().ordinal_reservations;
     let duplicate = leaf(20, &[1, 2, 3, 4, 5]);
@@ -130,7 +133,11 @@ fn a_foreign_acknowledged_reservation_is_never_recycled_by_the_plan() {
     read(&storage, &objects);
     let sql = rusqlite::Connection::open(t.join("db")).unwrap();
     let first: i64 = sql
-        .query_row("SELECT min(ordinal) FROM inode_value", [], |r| r.get(0))
+        .query_row(
+            "SELECT min(first_ordinal) FROM inode_value_block",
+            [],
+            |r| r.get(0),
+        )
         .unwrap();
     assert_eq!(first, 8);
     let next: i64 = sql
@@ -215,7 +222,11 @@ fn initial_combined_reservation_is_busy_before_effect() {
         .unwrap();
     assert_eq!(first, 1, "Busy consumed no pack ids");
     let first: i64 = sql
-        .query_row("SELECT min(ordinal) FROM inode_value", [], |row| row.get(0))
+        .query_row(
+            "SELECT min(first_ordinal) FROM inode_value_block",
+            [],
+            |row| row.get(0),
+        )
         .unwrap();
     assert_eq!(first, 1, "Busy consumed no value ordinals");
     println!("SAVE_BLOCK_BUSY initial_attempts=2 busy_effect=0 later_explicit_save=complete first_pack=1 first_ordinal=1 child=released-and-joined");

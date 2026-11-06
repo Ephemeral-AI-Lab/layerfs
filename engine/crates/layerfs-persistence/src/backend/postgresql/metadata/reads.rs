@@ -82,27 +82,44 @@ fn location(r: &Record) -> Result<LocatedObject, BackendError> {
     })
 }
 
-/// Every stored value among ascending distinct ordinals, in ordinal order.
+/// Every stored value among ascending distinct ordinals, in ordinal order,
+/// in one statement that names the schema. Each run of consecutive ordinals
+/// seeks the last block starting at or before it and takes the blocks from
+/// there to its end; each block is returned once, in ordinal order.
 pub(crate) fn inode_values(
     tx: &Transaction<'_>,
     ordinals: &[u32],
     out: &mut Vec<InodeValueRow>,
 ) -> Result<(), PersistenceError> {
-    let ordinals: Vec<i64> = ordinals.iter().map(|o| i64::from(*o)).collect();
-    let sql = format!(
-        "SELECT ordinal,value FROM {}.inode_value WHERE ordinal = ANY($1::bigint[]) ORDER BY ordinal",
-        tx.schema
-    );
-    let rows = tx.typed(&sql, &[&ordinals], ordinals.len() as u64 * 8)?;
-    for row in rows {
-        let r = super::super::session::rows::record(&row)?;
-        let ordinal = u32::try_from(r.get::<i64>(0)?).map_err(|_| BackendError::Integrity)?;
-        let value = r
-            .get::<Vec<u8>>(1)?
-            .try_into()
-            .map_err(|_| BackendError::Integrity)?;
-        out.push(InodeValueRow { ordinal, value });
+    let (mut lows, mut highs) = (Vec::new(), Vec::new());
+    for &ordinal in ordinals {
+        match highs.last_mut() {
+            Some(high) if *high + 1 == i64::from(ordinal) => *high += 1,
+            _ => {
+                lows.push(i64::from(ordinal));
+                highs.push(i64::from(ordinal));
+            }
+        }
     }
+    let sql = format!(
+        "SELECT b.first_ordinal,b.last_ordinal,b.body FROM {s}.inode_value_block b WHERE b.first_ordinal IN (\
+         SELECT x.first_ordinal FROM unnest($1::bigint[],$2::bigint[]) r(lo,hi) JOIN {s}.inode_value_block x \
+         ON x.first_ordinal BETWEEN coalesce((SELECT max(y.first_ordinal) FROM {s}.inode_value_block y \
+         WHERE y.first_ordinal<=r.lo),0) AND r.hi) ORDER BY b.first_ordinal",
+        s = tx.schema
+    );
+    let rows = tx.typed(&sql, &[&lows, &highs], lows.len() as u64 * 16)?;
+    let ordinal = |v: i64| u32::try_from(v).map_err(|_| BackendError::Integrity);
+    crate::blocks::values::pick(
+        ordinals,
+        rows.iter().map(|row| {
+            let first: i64 = row.try_get(0).map_err(|_| BackendError::Integrity)?;
+            let last: i64 = row.try_get(1).map_err(|_| BackendError::Integrity)?;
+            let body: Vec<u8> = row.try_get(2).map_err(|_| BackendError::Integrity)?;
+            Ok((ordinal(first)?, ordinal(last)?, body))
+        }),
+        out,
+    )?;
     Ok(())
 }
 

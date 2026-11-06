@@ -85,14 +85,14 @@ pub(crate) fn check(
     let actual: Vec<String> = rows.iter().map(|r| r.get(0)).collect::<Result<_, _>>()?;
     let mut expected = vec![
         "absorbed",
-        "binding_hint",
+        "binding_hint_block",
         "branch",
         "commit",
         "commit_lineage",
         "content_signature",
         "file_digest",
         "history_meta",
-        "inode_value",
+        "inode_value_block",
         "layer",
         "layer_lineage",
         "layer_stack",
@@ -144,7 +144,7 @@ impl super::session::connection::Session {
   })?;
         Ok(())
     }
-    /// Adds the `binding_hint` table (#352 `49499abac`) to a Store written
+    /// Adds the binding hint table (#352 `49499abac`, blocks since #91) to a Store written
     /// before it existed, then records the current schema: an additive
     /// migration (REBUILD.md kind 2). Only a Store whose recorded schema is
     /// exactly the earlier one, and whose live schema still matches what it
@@ -154,7 +154,7 @@ impl super::session::connection::Session {
     pub(crate) fn add_binding_hints(&self) -> Result<(), BackendError> {
         self.run::<_, BackendError>(true, |tx| {
             let present = tx.query(
-                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='binding_hint'",
+                "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='binding_hint_block'",
                 vec![],
             )?;
             if !present.is_empty() {
@@ -174,7 +174,7 @@ impl super::session::connection::Session {
                 .replacen(SCRATCH, "", 1)
                 .replacen(LINEAGE, "", 1);
             let table = HISTORY
-                .find("CREATE TABLE binding_hint (")
+                .find("CREATE TABLE binding_hint_block (")
                 .and_then(|start| Some((start, start + HISTORY[start..].find(";\n")? + 2)))
                 .map(|(start, end)| &HISTORY[start..end])
                 .ok_or(BackendError::Integrity)?;

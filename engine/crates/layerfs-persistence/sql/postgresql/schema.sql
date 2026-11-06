@@ -4,7 +4,7 @@ CREATE TABLE store_lane (
 INSERT INTO store_lane (id) VALUES (1);
 CREATE TABLE store_policy (
  id bigint PRIMARY KEY CHECK (id = 1),
- schema_version bigint NOT NULL CHECK (schema_version = 1),
+ schema_version bigint NOT NULL CHECK (schema_version = 2),
  format_profile bigint NOT NULL CHECK (format_profile = 1),
  small_file_threshold_bytes bigint NOT NULL CHECK (small_file_threshold_bytes BETWEEN 131072 AND 1048576),
  whole_file_delta_max_depth bigint NOT NULL CHECK (whole_file_delta_max_depth BETWEEN 0 AND 50),
@@ -34,9 +34,11 @@ CREATE TABLE object_location (
  group_number bigint NOT NULL CHECK (group_number BETWEEN 0 AND 255),
  record_number bigint NOT NULL CHECK (record_number BETWEEN 0 AND 8190)
 );
-CREATE TABLE inode_value (
- ordinal bigint PRIMARY KEY CHECK (ordinal BETWEEN 1 AND 4294967295),
- value bytea NOT NULL CHECK (octet_length(value) = 73)
+CREATE TABLE inode_value_block (
+ first_ordinal bigint PRIMARY KEY CHECK (first_ordinal BETWEEN 1 AND 4294967295),
+ last_ordinal bigint NOT NULL
+  CHECK (last_ordinal BETWEEN first_ordinal AND 4294967295 AND last_ordinal - first_ordinal < 255),
+ body bytea STORAGE PLAIN NOT NULL CHECK (octet_length(body) BETWEEN 9 AND 4000)
 );
 CREATE TABLE content_signature (
  slot bigint PRIMARY KEY CHECK (slot BETWEEN 0 AND 8191),
@@ -65,7 +67,7 @@ CREATE TABLE history_meta (
  catalog_incarnation bigint NOT NULL CHECK (catalog_incarnation BETWEEN 1 AND 9223372036854775807),
  binding_key bytea NOT NULL CHECK (octet_length(binding_key) BETWEEN 1 AND 128),
  identity_format bigint NOT NULL CHECK (identity_format = 3),
- schema_version bigint NOT NULL CHECK (schema_version = 1),
+ schema_version bigint NOT NULL CHECK (schema_version = 2),
  schema_source text NOT NULL,
  schema_definition text NOT NULL
 );
@@ -163,11 +165,11 @@ CREATE TABLE scope_allocator (
  highwater bigint NOT NULL CHECK (highwater BETWEEN 0 AND 9223372036854775807),
  authority_id bytea NOT NULL CHECK (octet_length(authority_id) = 32)
 );
-CREATE TABLE binding_hint (
- child bigint NOT NULL CHECK (child != 0),
- parent bigint NOT NULL CHECK (parent != 0),
- name bytea NOT NULL CHECK (octet_length(name) BETWEEN 1 AND 255),
- PRIMARY KEY (child, parent, name)
+CREATE TABLE binding_hint_block (
+ grp bigint NOT NULL CHECK (grp >= 0),
+ seq bigint NOT NULL CHECK (seq >= 1),
+ body bytea STORAGE PLAIN NOT NULL CHECK (octet_length(body) BETWEEN 9 AND 4000),
+ PRIMARY KEY (grp, seq)
 );
 CREATE UNIQUE INDEX layer_stack_names ON layer_stack (name);
 CREATE UNIQUE INDEX layers_genesis ON layer (layer_stack_id) WHERE parent_layer_id IS NULL;

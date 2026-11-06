@@ -23,10 +23,10 @@ Without it, selecting a PostgreSQL Store fails `BackendUnavailable`.
  +--------------------------------------------------------------+
  | schema <selection.schema>      (one Store; [a-z_][a-z0-9_]*) |
  |  store_lane (id=1)   <-- the row every writer locks          |
- |  store_policy, pack, object_location, inode_value,           |
+ |  store_policy, pack, object_location, inode_value_block,     |
  |  content_signature, store_totals                             |
  |  history_meta, layer_stack, layer, "commit", branch,         |
- |  scope_allocator, binding_hint                               |
+ |  scope_allocator, binding_hint_block                         |
  |  layer_lineage, commit_lineage, absorbed, reach, file_digest |
  |  init_operation, init_entry, init_host_file   (if created)   |
  +--------------------------------------------------------------+
@@ -40,10 +40,11 @@ Without it, selecting a PostgreSQL Store fails `BackendUnavailable`.
 | Types | `bigint` for integers, `bytea` for BLOBs | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
 | Name order | history names `COLLATE "C"`, so paging matches SQLite byte order | same |
 | Pack bodies | one `bytea` per pack, `STORAGE EXTERNAL` (uncompressed, out of line) for ranged `substring` reads | same |
-| Pack units | absent: group rows are a SQLite physical layout | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+| Pack units | absent: group rows are a SQLite physical layout |
+| Blocks | `inode_value_block.body` and `binding_hint_block.body` are `bytea STORAGE PLAIN` in the `CREATE TABLE` (PostgreSQL 16 or newer): two 4,000-byte rows per 8 KiB page, never TOASTed or compressed, and no TOAST table | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
 | Lane | `store_lane`, one row | [`schema.sql`](../../../../engine/crates/layerfs-persistence/sql/postgresql/schema.sql) |
 | Merge records | temporary tables of the writer connection | [`merge_records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/merge_records.rs) |
-| Schema version | `SCHEMA_VERSION = 1`, engine-scoped | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
+| Schema version | `SCHEMA_VERSION = 2` (#91: inode value and binding hint blocks), engine-scoped; a version 1 schema is refused at open (`Integrity`), never converted | [`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs) |
 
 `PostgresHandles::create` checks `pg_namespace` and refuses an existing
 schema (`Refused "schema exists"`) before writing. It then creates the
