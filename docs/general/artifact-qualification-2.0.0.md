@@ -11,7 +11,7 @@ repeated. Anything not listed as RAN was not run.
 
 | Item | Value |
 | --- | --- |
-| Source | `ce9cd4144` = baseline `d4304741` (`layerfs_v2_0_0`) plus four open PRs (scope, cli, python, node); local integration branch, never pushed |
+| Source | `ce9cd4144` = baseline `d4304741` (`layerfs_v2_0_0`) plus four then-open PRs (scope, cli, python, node; since merged); local integration branch, never pushed. **Not the current base**: upstream changes made after `d4304741`, for example #577 (the Firecracker/SSH policy), are not in these artifacts, and the qualification was not repeated on a build of the current base |
 | Build script and package changes after the builds | `35bec0c97` (`build-native.mjs --features`), `254feec2d` (`prepack`); neither changes Rust code, so the three Rust artifacts are those of this source |
 | Host | Ubuntu 26.04.1 under WSL2, Linux 6.6.87.2-microsoft-standard-WSL2, x86_64, glibc 2.43 |
 | Toolchain | rustc/cargo 1.85.1 (`4eb161250`), Node v24.22.2, npm 11.19.1, Python 3.14.4, maturin 1.16.0 (`pyproject.toml` asks `>=1.9.6,<2.0`) |
@@ -56,7 +56,7 @@ Derived from the manifests and from what ran.
 | Node `layerfs` | `engines.node >=22`; `build-native.mjs` builds on macOS or Linux only, any CPU, no `CARGO_BUILD_TARGET`; one addon per package, no per-platform prebuilds | linux/x64, Node 24.22.2 |
 | Python `layerfs` | `requires-python >=3.10`, abi3 (one wheel for every CPython 3.10+); wheel tag follows the build host's glibc | cp310-abi3 wheel, Python 3.14.4, linux/x64 |
 | `layerfs` command | `publish = false`, no install script; Cargo 1.85.1 | linux/x64 |
-| Platforms a Sandbox can use (`connect/SUPPORT.json`, Linux host) | `native` (namespaces and FUSE, root), `docker`, `microsandbox`, `ssh`; `apple-container`, `lima`, `firecracker` are refused "runs on macOS hosts only" | none: no Sandbox was created (needs the daemon and the sealed Linux bundle) |
+| Platforms a Sandbox can use (`connect/SUPPORT.json`, Linux host) | `native` (namespaces and FUSE, root), `docker`, `microsandbox`; `apple-container` and `lima` are refused "runs on macOS hosts only"; `firecracker` and `ssh` are permanently disabled by product policy on the current base (see Machines; the artifacts here predate that policy) | none: no Sandbox was created (needs the daemon and the sealed Linux bundle) |
 
 Client versus execution route. The three artifacts are clients: they run the
 call in the calling process (sqlite on `native`, PostgreSQL over the network)
@@ -134,22 +134,22 @@ checked docs.
 
 ## Machines and `firecracker` / `ssh` (F13)
 
-`connect/SUPPORT.json` lists `firecracker` and `ssh` for macOS, Linux and
-Windows hosts. A search of `support.rs`, `lib.rs` and `layerfs-control/src/machine` for a
-switch that disables either finds none. Through
-every installed client (Node, Python, command) on this Linux host:
+**Corrected.** An earlier version of this section said both platforms stayed selectable. That was true of the
+tree these artifacts were built from (`ce9cd4144`, baseline `d4304741` plus four PRs) and is **not** true of the
+current base: the policy of layerfs-project#7 landed in `b919f50ea` ("permanently disable Firecracker and SSH
+without removing adapters", #577), which `d4304741` does not contain and `02133596a` and later do.
 
-- `machine.create fc1 firecracker`: `InvalidInput` "a firecracker machine
-  names its lima --nested host"; with `--host nolima --nested`: `InvalidInput`
-  "only a lima machine is nested". Both are argument checks: the platform is
-  accepted as a value, so it is selectable at the API level.
-- `machine.create l1 lima`: `Unsupported`, "lima runs on macOS hosts only".
-- `machine.connect box1 127.0.0.1 --user root` (ssh): `Unsupported`, "no sealed
-  Linux bundle at …/linux-x86_64"; it reaches the ssh adapter and stops on the
-  missing bundle, not on a disabled platform.
+Checked on a debug `layerfs` command built from the current base (`02133596a`), in an empty Disposable home:
 
-A real firecracker or ssh machine was not created (no Lima, no bundle, no
-host). Issue #7's "disabled as selectable" is not enforced at this source.
+- `machine platforms`: `firecracker` and `ssh` are `ready: false`, reason "permanently disabled by product policy
+  (layerfs-project#7)"; `lima` is `ready: false` ("lima runs on macOS hosts only").
+- `machine create demo ssh`, `machine create demo firecracker` and `machine connect demo example.invalid` each
+  answer `Unsupported` with that reason and exit 125. The machine list (`docker`, `native`) and the number of files
+  in the home are the same before and after, so the refusal comes before any effect.
+- `machine create demo lima`: `Unsupported`, "lima runs on macOS hosts only".
+
+Not checked: the same refusals through the Node and Python clients (they run the same call table), and on the
+release artifacts of the current base (these artifacts predate the policy).
 
 ## NOT RUN
 
@@ -174,8 +174,8 @@ host only.
 4. CI excludes `layerfs-node` and the JS and Python packages (owner decision
    2026-10-23) and builds no artifact; nothing guards the pack and install
    steps above.
-5. `firecracker` and `ssh` stay in `SUPPORT.json` and are accepted by
-   `machine.create` and `machine.connect` (above).
+5. `firecracker` and `ssh`: not a gap on the current base; the policy of layerfs-project#7 landed in `b919f50ea` (#577)
+   after the source of these artifacts (see Machines).
 6. Python missing-native import error is unclear (above); the Node loader
    message says "in the LayerFS repository", which does not help an
    installed-package user.
