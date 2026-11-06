@@ -326,9 +326,13 @@ winners: every independent winner, and every PREFIX winner whose base the index
 proposed from an entry an earlier Save admitted (#88), so the next version of a
 file at a new path finds the newest such version rather than the first. A
 proposal of the same Save's own objects admits nothing, so an Init of many
-similar files proposes, seals and records only independent winners, as before;
-an object stored against its declared base never enters the index. This allows proposals based on content similarity, not
-only on a caller's explicit predecessor identity.
+similar files proposes, seals and records only independent winners, as before.
+A winner a Save admits is never proposed back to that Save: the index answers
+it with the earlier-Save entry it was stored against, so no unpublished object
+is proposed and sealed early (`Candidates::propose`; at most 1,024 admissions
+per Save). An object stored against its declared base never enters the index.
+This allows proposals based on content similarity, not only on a caller's
+explicit predecessor identity.
 
 Chunk selection considers the first supplied advisory candidate under its
 eligibility checks (same role, located); a candidate whose chain is at the role's
@@ -366,8 +370,9 @@ chunking cutoff has no chunks to align, so the constructor declares the base
 root itself as the object's explicit advisory predecessor
 (`AdvisoryPredecessors::explicit`, as the whole-file edit route does) without
 reading it. Storage probes it like any declared whole-file candidate: a base of
-another role (a file that shrank below the cutoff) or at the depth cap is
-ineligible and selection falls back to the similarity index. Before #88 such a
+another role (a file that shrank below the cutoff) is ineligible and selection
+falls back to the similarity index; one at the depth cap is re-based onto its
+chain root (#89). Before #88 such a
 file had no declared base and every version found the first stored version
 through the index, so each delta covered every edit since.
 
