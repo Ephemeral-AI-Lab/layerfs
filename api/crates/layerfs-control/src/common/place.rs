@@ -258,10 +258,9 @@ pub(crate) fn placement(home: &Path, machine: &str) -> Result<MachinePlacement> 
                      of ours, so a Store there would stop with its instances"
                 )
             } else {
-                format!(
-                    "its platform's declared backend keeps no disk of ours, so a Store there \
-                     would stop with its instances"
-                )
+                "its platform's declared backend keeps no disk of ours, so a Store there \
+                 would stop with its instances"
+                    .to_owned()
             }),
         ),
         // a value that is neither true nor false is malformed, not "does
