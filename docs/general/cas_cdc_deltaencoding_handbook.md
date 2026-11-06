@@ -322,8 +322,13 @@ candidate for file-payload delta encoding.
 
 Whole-file selection considers declared advisory predecessors first. When no eligible advisory candidate
 is selected, it can consult the bounded content-signature index of admitted
-independent winners. This allows proposals based on content similarity, not only
-on a caller's explicit predecessor identity.
+winners: every independent winner, and every PREFIX winner whose base the index
+proposed from an entry an earlier Save admitted (#88), so the next version of a
+file at a new path finds the newest such version rather than the first. A
+proposal of the same Save's own objects admits nothing, so an Init of many
+similar files proposes, seals and records only independent winners, as before;
+an object stored against its declared base never enters the index. This allows proposals based on content similarity, not
+only on a caller's explicit predecessor identity.
 
 Chunk selection considers the first supplied advisory candidate under its
 eligibility checks (same role, located); a candidate whose chain is at the role's

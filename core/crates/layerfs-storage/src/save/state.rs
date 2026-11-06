@@ -165,10 +165,11 @@ impl<'a> State<'a> {
     pub(super) fn new(storage: &'a Storage) -> StorageResult<Self> {
         // The candidate ring loads at its first use, not here (#352 record
         // 034, S1-b; `Candidates::ensure_loaded`).
-        let candidates = storage
+        let mut candidates = storage
             .candidates
             .try_borrow_mut()
             .map_err(|_| crate::StorageError::Integrity("one save per storage handle"))?;
+        candidates.begin_save();
         let mut state = Self {
             storage,
             pending: PendingBatch::new(storage.capacities()),
