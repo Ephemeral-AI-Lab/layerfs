@@ -69,11 +69,14 @@ rebuilds it once ([`attributes/patch.rs`](../../../../core/crates/layerfs-conten
 | --- | --- |
 | A target is opaque bytes: at most 4,096, no NUL. No resolution, normalization or UTF-8 check. | [`symlink.rs`](../../../../core/crates/layerfs-content/src/filesystem/symlink.rs) |
 | Decode refuses wrong magic, version, role, nonzero flags, short or trailing bytes. | [`symlink.rs`](../../../../core/crates/layerfs-content/src/filesystem/symlink.rs) |
-| A symlink's count is exactly 1; its mode is exactly `0o777`. | [`InodeValue::validate`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs), [`attributes/portable.rs`](../../../../core/crates/layerfs-content/src/filesystem/attributes/portable.rs) |
+| A symlink's count is the number of reachable names, at least 1; its mode is exactly `0o777`. | [`InodeValue::validate`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs), [`attributes/portable.rs`](../../../../core/crates/layerfs-content/src/filesystem/attributes/portable.rs) |
 | Reading one is `FilesystemRead::readlink` or `readlink_inode`. | [`read.rs`](../../../../core/crates/layerfs-content/src/filesystem/read.rs) |
 
 Broken, absolute and external targets are stored as given; nothing follows
-them.
+them. Several names may share one symlink serial and target object. A relative
+target is interpreted by the client relative to the directory containing the
+name it follows; the stored target bytes are never rewritten when an alias is
+added or removed.
 
 ## Hard links
 
@@ -94,11 +97,20 @@ them.
 | A new inode | Count = bindings this operation retained for it; the value's own count is ignored | [`references/record.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/record.rs) |
 | An existing inode | Count = stored count + signed effect the merge observed; aliases outside the changed paths are not read | [`references/reduce.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/reduce.rs) |
 | A move | The addition is observed before the removal, so the count never passes through 0 | `observe` in [`update.rs`](../../../../core/crates/layerfs-content/src/filesystem/update.rs) |
-| A directory or symlink bound twice | Refused: only a regular file may have count above 1 | [`InodeValue::validate`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
+| A directory bound twice | Refused: only regular files and symlinks may have count above 1 | [`InodeValue::validate`](../../../../core/crates/layerfs-content/src/object/inode_leaf.rs) |
 | A directory reaches 0 | Its entries lose one reference each, recursively, a page at a time; the walk stops at an inode that still has an alias | [`references/release.rs`](../../../../core/crates/layerfs-content/src/filesystem/references/release.rs) |
 
 Equal bytes in two files do not make them hard links: a link is a shared
-serial, not a shared content root.
+serial, not a shared content root. This also applies to symlinks. Directory
+parentage remains singular, and bindings beneath a dropped fresh directory are
+rejected rather than counted as reachable aliases.
+
+The object encoding and database schema are unchanged. This widens the accepted
+meaning of a symlink reference count: older binaries can reject a tree containing
+multiply bound symlinks. Keep the CLI, daemon, worker and bundle source identities
+matched; this is not a mixed-version compatibility claim. Project Init and
+recursive copy still preserve native aliases only for regular files; this change
+adds inode-addressed Workspace links and their committed representation.
 
 ## References
 

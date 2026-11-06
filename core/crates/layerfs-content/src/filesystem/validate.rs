@@ -21,10 +21,10 @@
 //! resident grows with the base or with the whole change and no total is
 //! refused.
 //!
-//! A directory or symlink bound twice is not decided here in general: the
-//! reducer derives every touched inode's final count and refuses a non-file
-//! count above one. Only a directory placed twice inside one batch is refused
-//! before any object is offered.
+//! The reducer derives every touched inode's final count. Regular files and
+//! symlinks may have several bindings; directories require one parent. A
+//! directory placed twice inside one batch is refused before any object is
+//! offered.
 
 use std::collections::{BTreeMap, BTreeSet};
 
