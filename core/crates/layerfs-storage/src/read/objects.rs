@@ -5,7 +5,7 @@ use crate::{
     encoding::{
         codec::DecompressionWorkspace,
         delta::read::{BodyCaches, ChainCounters, Resolver},
-        pool::PoolReader,
+        pool::{read::PooledCaches, PoolReader},
         GroupCache,
     },
     error::{StorageError, StorageResult},
@@ -110,6 +110,7 @@ impl ReadState {
             });
         }
         source.begin_demand();
+        self.pool.forget_prepared();
         source.locate(ids)?;
         let roots = ids
             .iter()
@@ -172,8 +173,28 @@ impl ReadState {
                     .into_iter()
                     .collect();
                 self.packs.acquire_groups(source, id, &needed)?;
-                for &position in &order[from..next] {
+                for (at, &position) in order[from..next].iter().enumerate() {
                     let root = roots[position];
+                    // The pooled leaves from here on are rebuilt ahead and their
+                    // stored values looked up together, a bounded window at a
+                    // time (#95); their packs are this cohort's, kept cached.
+                    if root.role == layerfs_content::ObjectRole::InodeLeaf
+                        && !self.pool.is_prepared(&root.object_id)
+                    {
+                        let ahead: Vec<_> =
+                            order[from + at..end].iter().map(|p| roots[*p]).collect();
+                        self.pool.prepare_leaves(
+                            source,
+                            capacities,
+                            i64::MAX,
+                            workspace,
+                            &ahead,
+                            Some(PooledCaches {
+                                encoded: &mut self.packs,
+                                decoded: &mut self.groups,
+                            }),
+                        )?;
+                    }
                     let (canonical, _) = Resolver::new(
                         source,
                         i64::MAX,
