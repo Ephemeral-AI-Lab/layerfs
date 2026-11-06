@@ -111,33 +111,37 @@ pub enum SqlitePersistenceProfile {
 /// Explicit physical layout for a newly created embedded Store.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SqlitePackLayout {
-    /// Original schema1 complete pack BLOBs.
+    /// Complete pack BLOBs (schema version 36, or 42 with acquisition tables).
     #[default]
     Monolithic,
-    /// Schema2 complete encoded groups in independent immutable rows.
+    /// Complete encoded groups in independent immutable rows (37 or 43).
     GroupRows,
-    /// Schema3 group rows with a covering index for bounded mapping validation.
+    /// Group rows with a covering index for bounded mapping validation (38 or 44).
     GroupRowsIndexed,
 }
 impl SqlitePackLayout {
     pub(crate) const fn uses_units(self) -> bool {
         matches!(self, Self::GroupRows | Self::GroupRowsIndexed)
     }
+    /// The stored schema version of this layout without acquisition
+    /// tables. Versions 36 to 38 (42 to 44 with them) are schema version 2
+    /// (#91): inode values and binding hints in append-only blocks. The
+    /// version 1 layouts, 16 to 18 and 22 to 24, are refused at open.
     pub(crate) const fn version(self) -> i64 {
         match self {
-            Self::Monolithic => 16,
-            Self::GroupRows => 17,
-            Self::GroupRowsIndexed => 18,
+            Self::Monolithic => 36,
+            Self::GroupRows => 37,
+            Self::GroupRowsIndexed => 38,
         }
     }
 }
 /// Explicit creation-only selection of the initial-acquisition working tables.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SqliteAcquisitionSchema {
-    /// Schema versions 16 to 18: no acquisition tables; acquisition is unavailable.
+    /// Schema versions 36 to 38: no acquisition tables; acquisition is unavailable.
     #[default]
     Absent,
-    /// Schema versions 22 to 24: the same pack layouts with the acquisition tables.
+    /// Schema versions 42 to 44: the same pack layouts with the acquisition tables.
     Tables,
 }
 impl SqliteAcquisitionSchema {

@@ -112,13 +112,14 @@ fn both_checks_refuse_a_changed_incarnation_or_schema_version() {
         );
     }
     schema.sql(&format!(
-        "UPDATE {s}.history_meta SET catalog_incarnation=3, schema_version=2"
+        "UPDATE {s}.history_meta SET catalog_incarnation=3, schema_version=1"
     ));
     for check in CHECKS {
+        // a schema version 1 schema (rows, before #91's blocks) is refused
         assert!(schema.open(check, BINDING).is_err(), "{check:?}: version");
     }
     schema.sql(&format!(
-        "UPDATE {s}.history_meta SET schema_version=1, identity_format=2"
+        "UPDATE {s}.history_meta SET schema_version=2, identity_format=2"
     ));
     for check in CHECKS {
         assert!(schema.open(check, BINDING).is_err(), "{check:?}: format");
@@ -145,6 +146,19 @@ fn only_the_full_check_reads_the_live_definition() {
     let s = &schema.selection.schema;
     schema.sql(&format!("ALTER TABLE {s}.reach ADD COLUMN extra bigint"));
     assert!(schema.open(PostgresCheck::Full, BINDING).is_err());
+    schema.open(PostgresCheck::Light, BINDING).unwrap();
+    // a version 1 wide location column (#90 narrowed `role` to smallint):
+    // only the full check sees the type
+    schema.sql(&format!(
+        "ALTER TABLE {s}.reach DROP COLUMN extra; \
+         ALTER TABLE {s}.object_location ALTER COLUMN role TYPE bigint"
+    ));
+    assert!(schema.open(PostgresCheck::Full, BINDING).is_err());
+    schema.open(PostgresCheck::Light, BINDING).unwrap();
+    schema.sql(&format!(
+        "ALTER TABLE {s}.object_location ALTER COLUMN role TYPE smallint; \
+         ALTER TABLE {s}.reach ADD COLUMN extra bigint"
+    ));
     schema.open(PostgresCheck::Light, BINDING).unwrap();
     // an acquisition table gone: the full check sees the table set, the
     // light one the three names, so both refuse

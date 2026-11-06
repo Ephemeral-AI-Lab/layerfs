@@ -42,7 +42,8 @@ PostgreSQL unchanged except `hint_insert_binding` and `statistics_totals`.
   key order, each in one `REPEATABLE READ` snapshot after the owner check;
   writes take the lane like every write. A schema without the acquisition
   tables refuses every unit (`BackendUnavailable`). Both table sets are
-  schema version 1; the recorded schema source says which.
+  schema version 2 (#91); the recorded schema source says which. A schema
+  version 1 schema is refused at open.
 - **Transactions.** Reads are `REPEATABLE READ READ ONLY`; writes are `READ
   COMMITTED`, never SERIALIZABLE, with `SET LOCAL synchronous_commit` (default
   `off`) in the same round trip as `BEGIN`. Every write first locks the
@@ -55,7 +56,7 @@ PostgreSQL unchanged except `hint_insert_binding` and `statistics_totals`.
 - **Objects.** Pack bodies are whole `bytea` values stored `EXTERNAL`;
   ranged reads use `substring`. A publication copies its pack bodies with
   `COPY BINARY` in a write that does not wait for the lane, then adds
-  locations, values, signatures and totals in the short lane transaction. A
+  locations, inode value blocks, signatures and totals in the short lane transaction. A
   failed second step leaves unreferenced packs, never reused ids.
 - **Removing a project.** `HistoryCatalog::remove_layerstack` deletes one
   stack's Layers, Branches, Commits and lineage, and their logical bytes from
@@ -67,6 +68,20 @@ PostgreSQL unchanged except `hint_insert_binding` and `statistics_totals`.
 - **Not on PostgreSQL in this phase:** merge records (merges are refused),
   seal/snapshot/reclamation (no file), and the host SQLite cache #420 found
   necessary for one round trip per Commit.
+
+Inode values and binding hints live in append-only blocks since schema
+version 2 (#91; `inode_value_block`, `binding_hint_block`, see
+[metadata and objects](../../../docs/architecture/engine/store/metadata-and-objects.md#inode-value-and-binding-hint-blocks)):
+SQLite schema versions 36 to 38 (42 to 44 with the acquisition tables) and
+PostgreSQL `SCHEMA_VERSION` 2, which also holds PostgreSQL object locations in
+narrow rows under an 8-byte-prefix index (#90). A schema version 1 Store is
+refused at open and never converted in place: SQLite 16 to 18 and 22 to 24
+with `Refused` naming the offline conversion, PostgreSQL 1 as `Malformed`.
+Converting a SQLite Store is optional: `tools/store_blocks.py migrate
+<closed v1 copy> <new file>` writes a schema version 2 copy (checked,
+`integrity_check`, vacuumed) and leaves the source untouched; without it the
+Store stays readable by a 2.0 release built before #91. A PostgreSQL schema
+version 1 Store has no conversion tool.
 
 The twelve logical tables are `pack`; `store_policy`, `object_location`,
 `inode_value`, `content_signature`; and `history_meta`,
