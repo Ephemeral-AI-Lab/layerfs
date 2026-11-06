@@ -14,7 +14,7 @@ How control implements each call family.
 Every family function takes the running call's `Context` (its home and
 its event stream) and the checked arguments, and answers one `Outcome`
 ([`common/context.rs`](../../../../control/crates/layerfs-control/src/common/context.rs),
-[`common/outcome.rs`](../../../../control/crates/layerfs-control/src/common/outcome.rs)). The call table's entries
+[`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs)). The call table's entries
 name these functions ([Table](../../api/call-table/table.md)).
 
 ```text
@@ -48,15 +48,15 @@ Records in `machine/<name>/`, adapters from `layerfs-platform`
 
 | Call | Does | Intent / lock | Source |
 | --- | --- | --- | --- |
-| `list`, `get` | records with live probes and `supports`; start nothing | none | [`list.rs`](../../../../control/crates/layerfs-control/src/machine/list.rs), [`get.rs`](../../../../control/crates/layerfs-control/src/machine/get.rs) |
-| `platforms` | the support table rows for this host and build, each with its probe | none | [`platforms.rs`](../../../../control/crates/layerfs-control/src/machine/platforms.rs) |
-| `status` | live state, free disk, tool version | none | [`status.rs`](../../../../control/crates/layerfs-control/src/machine/status.rs) |
-| `start` | the only call that starts a machine: dials `worker.json`'s worker, else starts the VM and worker, waits for readiness, rewrites `worker.json` | `start.lock` | [`endpoint.rs`](../../../../control/crates/layerfs-control/src/machine/endpoint.rs), [`power.rs`](../../../../control/crates/layerfs-control/src/machine/power.rs) |
-| `stop` | stops worker and VM; disks and Stores stay; `InUse` while Sandboxes are recorded on it | `start.lock` | [`power.rs`](../../../../control/crates/layerfs-control/src/machine/power.rs) |
-| `create` | claims the name with `op` `machine.create`, makes the VM outside the home lock, records `running`, `failed` or an uncertain `op` | `op`, `start.lock` | [`create.rs`](../../../../control/crates/layerfs-control/src/machine/create.rs) |
-| `connect` | an ssh host; host key checked strictly; `op` `machine.connect` | `op` | [`connect.rs`](../../../../control/crates/layerfs-control/src/machine/connect.rs) |
-| `remove`, `disconnect` | delete a VM and its disk, or forget an ssh host (its root stays); `InUse` while it holds Stores, Sandboxes or hosted machines | `op`, `start.lock` | [`remove.rs`](../../../../control/crates/layerfs-control/src/machine/remove.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
-| `update` | resize a VM, or set a built-in machine's image, Docker socket, `wsl` setting or daemon; `InUse` while Sandboxes run | home lock | [`update.rs`](../../../../control/crates/layerfs-control/src/machine/update.rs) |
+| `list`, `get` | records with live probes and `supports`; start nothing | none | [`machine/list.rs`](../../../../control/crates/layerfs-control/src/machine/list.rs), [`machine/get.rs`](../../../../control/crates/layerfs-control/src/machine/get.rs) |
+| `platforms` | the support table rows for this host and build, each with its probe | none | [`machine/platforms.rs`](../../../../control/crates/layerfs-control/src/machine/platforms.rs) |
+| `status` | live state, free disk, tool version | none | [`machine/status.rs`](../../../../control/crates/layerfs-control/src/machine/status.rs) |
+| `start` | the only call that starts a machine: dials `worker.json`'s worker, else starts the VM and worker, waits for readiness, rewrites `worker.json` | `start.lock` | [`machine/endpoint.rs`](../../../../control/crates/layerfs-control/src/machine/endpoint.rs), [`machine/power.rs`](../../../../control/crates/layerfs-control/src/machine/power.rs) |
+| `stop` | stops worker and VM; disks and Stores stay; `InUse` while Sandboxes are recorded on it | `start.lock` | [`machine/power.rs`](../../../../control/crates/layerfs-control/src/machine/power.rs) |
+| `create` | claims the name with `op` `machine.create`, makes the VM outside the home lock, records `running`, `failed` or an uncertain `op` | `op`, `start.lock` | [`machine/create.rs`](../../../../control/crates/layerfs-control/src/machine/create.rs) |
+| `connect` | an ssh host; host key checked strictly; `op` `machine.connect` | `op` | [`machine/connect.rs`](../../../../control/crates/layerfs-control/src/machine/connect.rs) |
+| `remove`, `disconnect` | delete a VM and its disk, or forget an ssh host (its root stays); `InUse` while it holds Stores, Sandboxes or hosted machines | `op`, `start.lock` | [`machine/remove.rs`](../../../../control/crates/layerfs-control/src/machine/remove.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
+| `update` | resize a VM, or set a built-in machine's image, Docker socket, `wsl` setting or daemon; `InUse` while Sandboxes run | home lock | [`machine/update.rs`](../../../../control/crates/layerfs-control/src/machine/update.rs) |
 
 `machine/worker/` holds the worker client and server; see
 [Workers](../routing/workers.md).
@@ -65,11 +65,11 @@ Records in `machine/<name>/`, adapters from `layerfs-platform`
 
 | Call | Kind | Runs | Source |
 | --- | --- | --- | --- |
-| `list`, `get`, `status` | both | reads records and leases in this process; take no Store lock | [`list.rs`](../../../../control/crates/layerfs-control/src/store/list.rs), [`status.rs`](../../../../control/crates/layerfs-control/src/store/status.rs) |
-| `create` | sqlite | an empty Store on `native` | [`create.rs`](../../../../control/crates/layerfs-control/src/store/create.rs) |
-| `connect`, `disconnect` | PostgreSQL | record the database in schema `layerfs` with a password reference; forget it (data stays); `disconnect` is `InUse` while leased | [`connect.rs`](../../../../control/crates/layerfs-control/src/store/connect.rs) |
-| `push`, `pull` | sqlite | move the file `native` to a machine, or back; phases `check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire` | [`transfer/phases.rs`](../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) |
-| `remove` | sqlite | delete the file wherever it is, with its projects; a PostgreSQL Store is refused `InvalidInput` (use `disconnect`) | [`remove.rs`](../../../../control/crates/layerfs-control/src/store/remove.rs) |
+| `list`, `get`, `status` | both | reads records and leases in this process; take no Store lock | [`store/list.rs`](../../../../control/crates/layerfs-control/src/store/list.rs), [`store/status.rs`](../../../../control/crates/layerfs-control/src/store/status.rs) |
+| `create` | sqlite | an empty Store on `native` | [`store/create.rs`](../../../../control/crates/layerfs-control/src/store/create.rs) |
+| `connect`, `disconnect` | PostgreSQL | record the database in schema `layerfs` with a password reference; forget it (data stays); `disconnect` is `InUse` while leased | [`store/connect.rs`](../../../../control/crates/layerfs-control/src/store/connect.rs) |
+| `push`, `pull` | sqlite | move the file `native` to a machine, or back; phases `check`, `snapshot`, `send`, `verify`, `install`, `record`, `retire` | [`store/transfer/phases.rs`](../../../../control/crates/layerfs-control/src/store/transfer/phases.rs) |
+| `remove` | sqlite | delete the file wherever it is, with its projects; a PostgreSQL Store is refused `InvalidInput` (use `disconnect`) | [`store/remove.rs`](../../../../control/crates/layerfs-control/src/store/remove.rs) |
 
 ```text
  push / pull / remove
@@ -97,9 +97,9 @@ Store's size is its file.
 
 | Call | Does | Source |
 | --- | --- | --- |
-| `list`, `get` | project records, by Store then name | [`family.rs`](../../../../control/crates/layerfs-control/src/project/family.rs) |
-| `init` | adds a host folder as a new project to an existing Store, a live add through the Store's writer | [`family.rs`](../../../../control/crates/layerfs-control/src/project/family.rs) |
-| `remove` | drops the project's Layers, Branches and Commits in one write, then its record; its Sandboxes must be closed first | [`family.rs`](../../../../control/crates/layerfs-control/src/project/family.rs) |
+| `list`, `get` | project records, by Store then name | [`project/family.rs`](../../../../control/crates/layerfs-control/src/project/family.rs) |
+| `init` | adds a host folder as a new project to an existing Store, a live add through the Store's writer | [`project/family.rs`](../../../../control/crates/layerfs-control/src/project/family.rs) |
+| `remove` | drops the project's Layers, Branches and Commits in one write, then its record; its Sandboxes must be closed first | [`project/family.rs`](../../../../control/crates/layerfs-control/src/project/family.rs) |
 
 ```text
  project.init(project, folder)
@@ -120,17 +120,17 @@ A lost answer is `Unknown` and the home gains no project record.
 
 | Call | Does | Source |
 | --- | --- | --- |
-| `create` | claims the name under the home lock with `op` `sandbox.create`, starts the Sandbox on its machine (its sqlite Store's machine, else `native`), records the result and drops the `op` in one write | [`create.rs`](../../../../control/crates/layerfs-control/src/sandbox/create.rs) |
-| `list`, `get` | Sandbox records with derived state; `get` adds one page of Workspaces | [`list.rs`](../../../../control/crates/layerfs-control/src/sandbox/list.rs), [`get.rs`](../../../../control/crates/layerfs-control/src/sandbox/get.rs) |
-| `close` | records `op` `sandbox.close`, stops the runtime, removes the record; `MountsActive` without `force`; clears an unresolved create | [`close.rs`](../../../../control/crates/layerfs-control/src/sandbox/close.rs) |
+| `create` | claims the name under the home lock with `op` `sandbox.create`, starts the Sandbox on its machine (its sqlite Store's machine, else `native`), records the result and drops the `op` in one write | [`sandbox/create.rs`](../../../../control/crates/layerfs-control/src/sandbox/create.rs) |
+| `list`, `get` | Sandbox records with derived state; `get` adds one page of Workspaces | [`sandbox/list.rs`](../../../../control/crates/layerfs-control/src/sandbox/list.rs), [`sandbox/get.rs`](../../../../control/crates/layerfs-control/src/sandbox/get.rs) |
+| `close` | records `op` `sandbox.close`, stops the runtime, removes the record; `MountsActive` without `force`; clears an unresolved create | [`sandbox/close.rs`](../../../../control/crates/layerfs-control/src/sandbox/close.rs) |
 
 Host operations run through `route::on_machine`: in this process when the
 machine is local, else as a worker `sandbox.host` request carrying the
-Store and project records ([`route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs)). For a
+Store and project records ([`sandbox/route.rs`](../../../../control/crates/layerfs-control/src/sandbox/route.rs)). For a
 PostgreSQL Store this process resolves the password and the create checks
 the server is reachable from the machine first. Where this host reaches a
 Sandbox's daemon (`ssh`, `lima`, `docker`), the keys go to
-`sandbox/<name>/control.json` ([`direct.rs`](../../../../control/crates/layerfs-control/src/sandbox/direct.rs)).
+`sandbox/<name>/control.json` ([`sandbox/direct.rs`](../../../../control/crates/layerfs-control/src/sandbox/direct.rs)).
 
 ## workspace
 
@@ -159,11 +159,11 @@ The daemon serves no Store calls. See
 
 | Call | Does | Source |
 | --- | --- | --- |
-| `connect` | one listing proves the bucket answers with the key, then `backup/<bucket>/record.json` (a key reference) | [`family.rs`](../../../../control/crates/layerfs-control/src/backup/family.rs), [`record.rs`](../../../../control/crates/layerfs-control/src/backup/record.rs) |
-| `disconnect` | forgets the bucket and the Stores' links to it | [`family.rs`](../../../../control/crates/layerfs-control/src/backup/family.rs) |
-| `list` | every Store file on the connected buckets | [`list.rs`](../../../../control/crates/layerfs-control/src/backup/list.rs) |
-| `create` | the Store's machine stages a snapshot (`store.file`); this process uploads it; `Exists` if another home wrote the object | [`create.rs`](../../../../control/crates/layerfs-control/src/backup/create.rs) |
-| `restore` | downloads into `store/.restore-<random>/`, installs as a sqlite Store on `native`; `Conflict` if the Store changed since its last backup or restore, `InUse` while held | [`restore.rs`](../../../../control/crates/layerfs-control/src/backup/restore.rs) |
+| `connect` | one listing proves the bucket answers with the key, then `backup/<bucket>/record.json` (a key reference) | [`backup/family.rs`](../../../../control/crates/layerfs-control/src/backup/family.rs), [`backup/record.rs`](../../../../control/crates/layerfs-control/src/backup/record.rs) |
+| `disconnect` | forgets the bucket and the Stores' links to it | [`backup/family.rs`](../../../../control/crates/layerfs-control/src/backup/family.rs) |
+| `list` | every Store file on the connected buckets | [`backup/list.rs`](../../../../control/crates/layerfs-control/src/backup/list.rs) |
+| `create` | the Store's machine stages a snapshot (`store.file`); this process uploads it; `Exists` if another home wrote the object | [`backup/create.rs`](../../../../control/crates/layerfs-control/src/backup/create.rs) |
+| `restore` | downloads into `store/.restore-<random>/`, installs as a sqlite Store on `native`; `Conflict` if the Store changed since its last backup or restore, `InUse` while held | [`backup/restore.rs`](../../../../control/crates/layerfs-control/src/backup/restore.rs) |
 
 Bytes go through the caller's process: machines never hold bucket keys,
 and LayerFS never deletes a bucket object. See

@@ -11,16 +11,17 @@
 //! One whose effect is unknown is `Unknown`: the caller keeps the name's
 //! record as `unknown` until `sandbox.close` clears it. Nothing is retried
 //! on the caller's behalf.
-use crate::common::outcome::{failed, refused, Outcome};
 use crate::daemon::values;
 use crate::internal::split_provider;
-use crate::sandbox::registry::{lock, text, SandboxState, SANDBOXES};
+use crate::sandbox::registry::{SandboxState, SANDBOXES};
 use crate::sandbox::{ProviderCreate, ProviderFailure};
 use crate::{OperationFailure, SandboxApi, SandboxCause, SandboxPhase};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::daemon_setup::{DaemonLimits, DaemonSetup};
 use layerfs_bridge::provision::StoreManifest;
 use layerfs_bridge::{DaemonStore, KernelRoute};
+use layerfs_home::helpers::{lock, text};
+use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_isolation::docker::{CreatePhase, Docker, DockerProvider};
 use layerfs_isolation::Runtime;
 use layerfs_isolation::{LaunchRequest, ProviderLaunchOptions};
@@ -97,7 +98,7 @@ pub(crate) fn sandbox_name(args: &SdkValue, id: &str) -> Result<String, SdkRefus
         .and_then(|d| d.get_text("containerPrefix"))
         .filter(|prefix| !prefix.is_empty())
         .unwrap_or(PREFIX);
-    crate::common::names::SandboxName::parse(id)?;
+    layerfs_home::names::SandboxName::parse(id)?;
     Ok(format!("{prefix}{id}"))
 }
 
@@ -431,7 +432,7 @@ pub(crate) fn create(args: &SdkValue) -> Outcome {
         None => installed(args)?,
     };
     let directory = crate::sandbox::files::sandbox_dir(args)?;
-    crate::common::home::private_dir(&directory)?;
+    layerfs_home::home::private_dir(&directory)?;
     let made = (|| {
         let _guard = crate::sandbox::files::guard(&directory)?;
         if crate::sandbox::files::started(&directory)?.is_some() {

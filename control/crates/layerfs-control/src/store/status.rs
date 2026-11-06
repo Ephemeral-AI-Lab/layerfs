@@ -1,10 +1,10 @@
 //! `store.status`: who holds a Store, the operation on it, its size where it lives.
 use super::family::{fields_map, of_store, record_of, step};
-use crate::common::home::lease;
-use crate::common::outcome::Outcome;
+use crate::common::lease;
 use crate::common::place;
 use crate::store::record::StoreRef;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
 /// `store.status`: who holds it, the operation its record holds (`op`, as

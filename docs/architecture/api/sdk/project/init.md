@@ -10,7 +10,7 @@ existing Store: the project's first Layer and its hidden first Branch.
 | | |
 | --- | --- |
 | Family | [project](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/project/init.rs`](../../../../../api/crates/layerfs-api/src/project/init.rs) |
+| Library entry | [`project/init.rs`](../../../../../api/crates/layerfs-api/src/project/init.rs) |
 | Implemented in | `layerfs_control::project::family::run` → `init` ([`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs)), then `store::identity::add_project` ([`store/identity.rs`](../../../../../control/crates/layerfs-control/src/store/identity.rs)) or `project::postgres_init::add_project` ([`project/postgres_init.rs`](../../../../../control/crates/layerfs-control/src/project/postgres_init.rs)) |
 | Runs in | where the Store's calls run: the caller's process, or the Store's machine worker (sqlite on a non-local machine). No Sandbox daemon. |
 
@@ -37,7 +37,7 @@ layerfs project init <project> <folder> [--timeout <timeout>] [--progress]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<name>`; both parts 1–63 of `a-z 0-9 _ . -`, starting and ending with a letter or digit, not a Windows device name. The Store must have a record in the home (`store.create` or `store.connect`). | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs) |
+| `project` | Project | `<store>/<name>`; both parts 1–63 of `a-z 0-9 _ . -`, starting and ending with a letter or digit, not a Windows device name. The Store must have a record in the home (`store.create` or `store.connect`). | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 | `folder` | Text | an absolute path on the caller's host; read whole, with no Git-ignore filtering | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) `init` |
 
 ## Options
@@ -121,7 +121,7 @@ Store calls hide that Branch: they treat `main` as the line of Layers (see
 | --- | --- | --- | --- |
 | `InvalidInput` | bad `project`, relative `folder`, non-positive `timeout`; a source entry Init refuses (device, FIFO, socket, set-user-ID or sticky bits); worker route: the folder is missing or not a directory | no | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs), [`project/send.rs`](../../../../../control/crates/layerfs-control/src/project/send.rs), [`store/identity.rs`](../../../../../control/crates/layerfs-control/src/store/identity.rs) `add_failure` |
 | `NotFound` | no Store record of that name | no | `project/family.rs` |
-| `Busy`, `Unresolved` | the Store's record holds another operation's intent; `Busy` also when another add's working rows remain in the Store | no | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs), `add_failure` |
+| `Busy`, `Unresolved` | the Store's record holds another operation's intent; `Busy` also when another add's working rows remain in the Store | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), `add_failure` |
 | `Exists` | the project's record, entry or LayerStack name exists | no | `project/family.rs`, `store/identity.rs` |
 | `Capacity` | worker route: the machine's free disk is below the copy plus headroom | no | `project/send.rs` `room` |
 | `Unavailable` | worker route: no worker recorded, or not reached; nothing sent | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |

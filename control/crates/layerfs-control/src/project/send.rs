@@ -13,13 +13,13 @@
 //! answer is `Unknown`, naming the copy it may leave on the machine.
 use super::tree::{header, Record};
 use crate::common::context::Context;
-use crate::common::outcome::refused;
 use crate::common::place::Worker;
 use crate::machine::worker::Unreached;
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::filesystem::symlink::SymlinkTarget;
 use layerfs_content::PathName;
+use layerfs_home::outcome::refused;
 use layerfs_project::SourceRefusal;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, Metadata};
@@ -46,7 +46,7 @@ pub(crate) struct Copy<'a> {
 
 /// A fresh copy id: 16 hex digits.
 pub(crate) fn new_id() -> Result<String> {
-    let bytes = crate::sandbox::registry::random()?;
+    let bytes = layerfs_home::helpers::random()?;
     Ok(layerfs_bridge::sdk_values::hex(&bytes[..8]))
 }
 

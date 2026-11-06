@@ -1,10 +1,10 @@
 //! Opening the home: created when empty, converted once from 1.1.0
 //! (`v110.rs`) and from layout 2 (`v2.rs`) under the home lock, by the
 //! first call on that home.
-use crate::common::home::layout::{create, detect, write, HomeFile, Layout, PREVIOUS_LAYOUT};
-use crate::common::home::paths;
-use crate::common::home::records::{log_line, now_ms, write_record};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::layout::{create, detect, write, HomeFile, Layout, PREVIOUS_LAYOUT};
+use layerfs_home::home::paths;
+use layerfs_home::home::records::{log_line, now_ms, write_record};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -20,11 +20,11 @@ pub fn open(home: &Path) -> Result<HomeFile> {
 /// [`open`], with a 1.1.0 home's Docker volumes read from `volumes` (1.1.0's
 /// `volumes` setting; a rootless Docker keeps them elsewhere).
 pub fn open_from(home: &Path, volumes: &Path) -> Result<HomeFile> {
-    if crate::common::home::guest::is_root(home) {
-        return crate::common::home::guest::file(home);
+    if layerfs_home::home::guest::is_root(home) {
+        return layerfs_home::home::guest::file(home);
     }
     let file = ready(home, volumes)?;
-    crate::common::home::guest::opened(&file.id);
+    layerfs_home::home::guest::opened(&file.id);
     Ok(file)
 }
 
@@ -35,7 +35,7 @@ fn ready(home: &Path, volumes: &Path) -> Result<HomeFile> {
             Ok(file)
         }
         Layout::Empty | Layout::Old | Layout::Previous(_) => {
-            let _lock = crate::common::home::lock::take(home)?;
+            let _lock = layerfs_home::home::lock::take(home)?;
             match detect(home)? {
                 Layout::Current(file) => Ok(file),
                 Layout::Empty => create(home),

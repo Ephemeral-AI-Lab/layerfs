@@ -5,7 +5,7 @@
 //! or a byte transfer, except the start lock across the start it guards:
 //! the `op` intent keeps other operations out meanwhile. A wait for a
 //! holder is bounded and is a readiness wait, not a retry.
-use crate::common::outcome::{failed, refused};
+use crate::outcome::{failed, refused};
 use layerfs_bridge::control::SdkRefusal;
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
@@ -22,7 +22,7 @@ pub struct EntityLock(File);
 
 impl Drop for EntityLock {
     fn drop(&mut self) {
-        crate::common::home::flock::unlock(&self.0);
+        crate::home::flock::unlock(&self.0);
     }
 }
 
@@ -40,7 +40,7 @@ pub fn take(path: &Path, wait: Duration, held: &str) -> Result<EntityLock, SdkRe
         .open(path)
         .map_err(failed)?;
     let deadline = Instant::now() + wait;
-    while !crate::common::home::flock::try_lock(&file, true).map_err(failed)? {
+    while !crate::home::flock::try_lock(&file, true).map_err(failed)? {
         if Instant::now() >= deadline {
             return Err(refused(
                 "Unavailable",

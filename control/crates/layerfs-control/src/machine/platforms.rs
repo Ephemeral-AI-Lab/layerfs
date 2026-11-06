@@ -4,8 +4,8 @@
 //! per-machine `supports` of `machine.list` and `machine.get` (P3).
 use super::spec as record;
 use crate::common::context::Context;
-use crate::common::outcome::Outcome;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::outcome::Outcome;
 use layerfs_platform::{self as adapters, HostOs, Platform, Probe, SupportRow, Supports};
 
 /// `machine.platforms()`: `{ host, platforms: [row] }`.

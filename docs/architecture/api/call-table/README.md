@@ -75,7 +75,7 @@ control side of each family in [Control: Families](../../control/management/fami
 | Checks | every argument checked against the entry before any effect | [`calls/check.rs`](../../../../control/crates/layerfs-control/src/calls/check.rs) |
 | Scope | an optional folder scope guards and rewrites arguments before any effect | [`calls/scope.rs`](../../../../control/crates/layerfs-control/src/calls/scope.rs) |
 | Events | one stream per call: `{progress}`, worker events, `{stream, bytes}` of `workspace.exec` | [`common/context.rs`](../../../../control/crates/layerfs-control/src/common/context.rs) |
-| Results | a value with snake_case keys, or a refusal `{code, message, detail}` | [`calls/keys.rs`](../../../../control/crates/layerfs-control/src/calls/keys.rs), [`common/outcome.rs`](../../../../control/crates/layerfs-control/src/common/outcome.rs) |
+| Results | a value with snake_case keys, or a refusal `{code, message, detail}` | [`calls/keys.rs`](../../../../control/crates/layerfs-control/src/calls/keys.rs), [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs) |
 | Home | explicit, else `LAYERFS_HOME`, else `~/.layerfs`; must be absolute | [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) `home` |
 
 Details: [Table](table.md) for kinds, keys, scopes and checks;
@@ -99,9 +99,9 @@ Details: [Table](table.md) for kinds, keys, scopes and checks;
 | Page size of a list | `page_size` 1 to 1000, default 50, for `sandbox` lists and a scoped `branch.list`; other lists take the Store engine's page rules | [`sandbox/family.rs`](../../../../control/crates/layerfs-control/src/sandbox/family.rs) `page`, [`store/calls.rs`](../../../../control/crates/layerfs-control/src/store/calls.rs) `branches_in` |
 | `commit.get` | pages the Branch's Commits 1000 at a time to the end; an id prefix of 8 or more characters matches | `store/calls.rs` `commit_get` |
 | A list page that does not move on | `Failed` "a list made no progress"; not asked again | `store/calls.rs` `page_of` |
-| Worker frame | 512 MiB; larger is `TooLarge`, nothing sent | [`worker/frame.rs`](../../../../control/crates/layerfs-control/src/machine/worker/frame.rs) |
-| Unknown call, unknown or ill-kinded argument, missing positional | `InvalidInput` before any effect | [`check.rs`](../../../../control/crates/layerfs-control/src/calls/check.rs), [`dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) |
-| A call outside a folder scope | `InvalidInput` `out of scope: …` before any effect | [`scope.rs`](../../../../control/crates/layerfs-control/src/calls/scope.rs) |
+| Worker frame | 512 MiB; larger is `TooLarge`, nothing sent | [`machine/worker/frame.rs`](../../../../control/crates/layerfs-control/src/machine/worker/frame.rs) |
+| Unknown call, unknown or ill-kinded argument, missing positional | `InvalidInput` before any effect | [`calls/check.rs`](../../../../control/crates/layerfs-control/src/calls/check.rs), [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) |
+| A call outside a folder scope | `InvalidInput` `out of scope: …` before any effect | [`calls/scope.rs`](../../../../control/crates/layerfs-control/src/calls/scope.rs) |
 | `machine.*` in a build without the `machine` feature | `Unsupported` before any effect | e.g. [`machine/create.rs`](../../../../api/crates/layerfs-api/src/machine/create.rs) |
 
 ## Demonstration

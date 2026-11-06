@@ -6,11 +6,11 @@
 //! read, replace or delete the file close this process's open copy first
 //! (a worker keeps a Store open after its calls); a call running on it is
 //! `InUse`.
-use crate::common::home::paths;
-use crate::common::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup::heads::heads;
 use layerfs_bucket::bucket::pieces;
+use layerfs_home::home::paths;
+use layerfs_home::outcome::{failed, refused, Outcome};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -72,7 +72,7 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
     let store = args
         .get_text("store")
         .ok_or_else(|| refused("InvalidInput", "a Store step names its Store"))?;
-    crate::common::names::StoreName::parse(store)?;
+    layerfs_home::names::StoreName::parse(store)?;
     let file = paths::store_file(root, store);
     let incoming = with_suffix(&file, ".incoming");
     if matches!(op, "snapshot" | "install" | "retire" | "remove") {
@@ -147,7 +147,7 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
                     .map_err(|e| refused("Failed", format!("snapshot: {e}")))
             })?;
             let digest = digest(&staged)?;
-            Ok(crate::common::home::with_field(
+            Ok(layerfs_home::home::with_field(
                 digest,
                 "sqlite",
                 SdkValue::text(sealed.sqlite_version),
@@ -187,7 +187,7 @@ pub(crate) fn run(root: &Path, op: &str, args: &SdkValue) -> Outcome {
                     format!("a Store file is already at {}", file.display()),
                 ));
             }
-            crate::common::home::private_dir(&paths::store_dir(root, store))?;
+            layerfs_home::home::private_dir(&paths::store_dir(root, store))?;
             let mut handle = std::fs::OpenOptions::new()
                 .write(true)
                 .create(true)

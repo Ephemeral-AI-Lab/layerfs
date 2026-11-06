@@ -11,10 +11,10 @@
 //! moved or deleted. A file with a write-ahead log (a process stopped
 //! without closing it) is not placed: its log would not follow it.
 //! Anything not placed keeps its `volume` and is reported.
-use crate::common::home::paths;
-use crate::common::home::records::{private_dir, with_field, write_record};
 use layerfs_bridge::control::SdkValue;
 use layerfs_bucket::bucket::pieces;
+use layerfs_home::home::paths;
+use layerfs_home::home::records::{private_dir, with_field, write_record};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

@@ -2,9 +2,9 @@
 //! `project::postgres_init`): the installed Store's locator, Init's deadline
 //! and the worker's half of an Init on another machine. The 1.1 sealed
 //! `project.init` into a project volume is gone (#536 step 2).
-use crate::common::outcome::{refused, Outcome};
-use crate::sandbox::registry::text;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::helpers::text;
+use layerfs_home::outcome::{refused, Outcome};
 use std::time::{Duration, Instant};
 
 /// Where the daemon opens the installed Store inside its Sandbox.
@@ -38,7 +38,7 @@ pub(crate) fn deadline(args: &SdkValue) -> Result<Instant, layerfs_bridge::contr
 pub(crate) fn in_worker(args: &SdkValue) -> Outcome {
     let root = crate::sandbox::files::home(args)?;
     let store = text(args, "store")?;
-    crate::common::names::StoreName::parse(store)?;
+    layerfs_home::names::StoreName::parse(store)?;
     let staged = super::staged::folder(&root, super::staged::id(args)?);
     if !staged.is_dir() {
         return Err(refused(
@@ -46,13 +46,13 @@ pub(crate) fn in_worker(args: &SdkValue) -> Outcome {
             format!("no folder copy at {}", staged.display()),
         ));
     }
-    let args = crate::common::home::with_field(
+    let args = layerfs_home::home::with_field(
         args.clone(),
         "path",
         SdkValue::text(staged.display().to_string()),
     );
     let add = || {
-        let _lease = crate::common::home::lease::hold_locked(&root, store)?;
+        let _lease = crate::common::lease::hold_locked(&root, store)?;
         crate::store::identity::add_project(&args)
     };
     let added = add();

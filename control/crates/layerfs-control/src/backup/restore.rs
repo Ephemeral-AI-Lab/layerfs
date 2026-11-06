@@ -3,15 +3,15 @@ use super::family::{hex, write_link};
 use super::progress::Shown;
 use super::record::{BucketRecord, StoreLink};
 use crate::common::context::Context;
-use crate::common::home::flock::{try_lock, unlock};
-use crate::common::home::lease;
-use crate::common::home::{self, paths};
-use crate::common::outcome::{failed, refused, Outcome};
+use crate::common::lease;
 use crate::project::record::ProjectRecord;
 use crate::store::record::{StoreKind, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup as remote;
 use layerfs_bucket::bucket::pieces;
+use layerfs_home::home::flock::{try_lock, unlock};
+use layerfs_home::home::{self, paths};
+use layerfs_home::outcome::{failed, refused, Outcome};
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
@@ -28,7 +28,7 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let store = args.get_text("store").unwrap_or("");
-    crate::common::names::StoreName::parse(store)?;
+    layerfs_home::names::StoreName::parse(store)?;
     let bucket = args.get_text("bucket").unwrap_or("");
     let driver = BucketRecord::of(&home, bucket)?.driver()?;
     let existing = StoreRecord::read(&home, store)?;
@@ -63,7 +63,7 @@ pub(super) fn restore(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     };
     let cursor = match &identity {
         Some(identity) => identity.cursor_key,
-        None => crate::sandbox::registry::random()?,
+        None => layerfs_home::helpers::random()?,
     };
     let mut shown = Shown::new();
     shown.phase(context, "check");
@@ -167,7 +167,7 @@ struct Staging(std::path::PathBuf, File);
 
 impl Staging {
     fn make(home: &Path) -> Result<Self> {
-        let random = crate::sandbox::registry::random()?;
+        let random = layerfs_home::helpers::random()?;
         let parent = home.join("store");
         let dir = parent.join(format!(".restore-{}", pieces::hex(&random[..12])));
         // under the home lock no folder is between its creation and its lock

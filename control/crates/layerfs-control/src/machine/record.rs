@@ -6,10 +6,10 @@
 //! showed before. Built without the `machine` feature too (the guest
 //! worker reads its own `native` and `docker` records); the platform and
 //! the summary need the adapters.
-use crate::common::home::{self, paths, read_record, with_field, write_entity};
-use crate::common::op::{self, Op, Standing};
-use crate::common::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
+use layerfs_home::op::{self, Op, Standing};
+use layerfs_home::outcome::refused;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -47,7 +47,7 @@ impl MachineRecord {
     /// Machine `name`'s record as it is, whatever `op` it holds; a bad name
     /// is `InvalidInput`, none `NotFound`.
     pub fn of(home: &Path, name: &str) -> Result<Self> {
-        crate::common::names::MachineName::parse(name)?;
+        layerfs_home::names::MachineName::parse(name)?;
         Self::read(home, name)?
             .ok_or_else(|| refused("NotFound", format!("no machine named {name}")))
     }
@@ -293,7 +293,7 @@ impl MachineRecord {
     /// `error`, `ssh`).
     pub fn to_sdk(
         &self,
-        _view: crate::common::outcome::View,
+        _view: layerfs_home::outcome::View,
         derived: &MachineDerived,
     ) -> Result<SdkValue> {
         let kind = self.platform()?;

@@ -1,7 +1,7 @@
 //! The typed names (#536 §9.2): each kind is checked once with today's
 //! refusals and texts, and a project and a Workspace print as the calls
 //! write them.
-use layerfs_control::common::names::{
+use layerfs_home::names::{
     BucketName, MachineName, ProjectName, ProjectRef, SandboxName, StoreName, WorkspaceAt,
     WorkspaceName, WorkspaceRef,
 };

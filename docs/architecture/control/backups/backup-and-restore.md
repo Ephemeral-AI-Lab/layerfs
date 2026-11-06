@@ -65,7 +65,7 @@ check and the upload is not detected.
 
 | Function | Requests | Answers | Source |
 | --- | --- | --- | --- |
-| `check(driver, file)` | one `stat` | `Absent`, or `Present(Copy { file, bytes, modified, sha256, heads })` | [`copies.rs`](../../../../control/crates/layerfs-bucket/src/backup/copies.rs) |
+| `check(driver, file)` | one `stat` | `Absent`, or `Present(Copy { file, bytes, modified, sha256, heads })` | [`backup/copies.rs`](../../../../control/crates/layerfs-bucket/src/backup/copies.rs) |
 | `list_stores(driver)` | one `list("")`, plus at most 64 stats (`MAX_LIST_STATS`) where the listing lacks metadata | every `<file>/store.sqlite`, in name order; other files skipped | same |
 
 A copy stored as pieces whose metadata was not read is counted at the sum
@@ -82,7 +82,7 @@ link to report its state ([`api/…/backup/list.rs`](../../../../control/crates/
 
 The digest changes exactly when the history a restore would bring changes,
 and is equal on two machines with the same history
-([`heads.rs`](../../../../control/crates/layerfs-bucket/src/backup/heads.rs)).
+([`backup/heads.rs`](../../../../control/crates/layerfs-bucket/src/backup/heads.rs)).
 A backup records it as `layerfs-heads`; a restore reads it from the
 downloaded file. The API uses it to tell whether a Store changed since its
 last transfer (`replaceable` in
@@ -95,7 +95,7 @@ Two link formats exist:
 | Format | Where | Who reads it | Source |
 | --- | --- | --- | --- |
 | 2.0 `StoreLink` | the Store record's `backups.<bucket>`: `file`, `heads`, `last` (`op`, `at`, `bytes`, `sha256`) | `backup.create`, `backup.restore`, `backup.list` | [`api/…/backup/record.rs`](../../../../control/crates/layerfs-control/src/backup/record.rs) |
-| `remotes` file and `remote-state/<store>` (`Remotes`, `Provider`, `Transfer`) | the LayerFS home, text, 0600, staged and renamed | the home migration from 1.1.0 | [`backup/link.rs`](../../../../control/crates/layerfs-bucket/src/backup/link.rs), [`migrate/v110.rs`](../../../../control/crates/layerfs-control/src/common/home/migrate/v110.rs) |
+| `remotes` file and `remote-state/<store>` (`Remotes`, `Provider`, `Transfer`) | the LayerFS home, text, 0600, staged and renamed | the home migration from 1.1.0 | [`backup/link.rs`](../../../../control/crates/layerfs-bucket/src/backup/link.rs), [`migrate/v110.rs`](../../../../control/crates/layerfs-control/src/migrate/v110.rs) |
 
 In both, the bucket side is named by its `file`; the name need not be the
 Store's own (#509). Neither holds a secret: credentials are references.
@@ -126,11 +126,11 @@ push never overwrites a file this home did not move.
 
 | # | Check | Refusal | Source |
 | --- | --- | --- | --- |
-| 1 | The destination's filesystem passes the Store kernel guard; the installer is the daemons' user. | `PullFailure` cause | [`restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
+| 1 | The destination's filesystem passes the Store kernel guard; the installer is the daemons' user. | `PullFailure` cause | [`backup/restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
 | 2 | Load: no Store at the target. Pull: no `-wal` or `-shm` beside it (no opener holds it). | "a Store exists"; "the local Store … is open" | same |
 | 3 | The remote file exists and records `layerfs-binding`; a pull's expected binding matches. | "records no layerfs-binding; push it again"; "has another binding" | same |
-| 4 | Manifest, every piece and the whole file match their sha256. | `Integrity` | [`pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs) |
-| 5 | The bytes open as a Disposable Store with that binding and cursor key. | "the pulled Store does not open" | [`restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
+| 4 | Manifest, every piece and the whole file match their sha256. | `Integrity` | [`bucket/pieces.rs`](../../../../control/crates/layerfs-bucket/src/bucket/pieces.rs) |
+| 5 | The bytes open as a Disposable Store with that binding and cursor key. | "the pulled Store does not open" | [`backup/restore.rs`](../../../../control/crates/layerfs-bucket/src/backup/restore.rs) |
 | 6 | Closing it left no `-wal` or `-shm`. | "kept its -wal after closing" | same |
 | 7 | Load places it with a hard link, so a Store that appeared meanwhile is never replaced; pull renames over the target after checking again that no opener holds it. | link or rename error | same |
 

@@ -5,12 +5,13 @@
 //! Sandboxes), and the checks the calls that need them make. Layout 3
 //! keeps each Sandbox at `sandbox/<name>/`: a Sandbox by name is one read;
 //! only the relationships (by machine, Store or project) list `sandbox/*`.
-use crate::common::home::{lease, paths};
-use crate::common::outcome::{failed, refused};
+use crate::common::lease;
 use crate::machine::record::MachineRecord;
 use crate::sandbox::record::SandboxRecord;
 use crate::store::record::{Placement, StoreRecord, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::paths;
+use layerfs_home::outcome::{failed, refused};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

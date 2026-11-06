@@ -3,7 +3,7 @@
 //! conversion now (the conversion's own survey, read only: stale leases
 //! stay) and converts nothing.
 use super::report::Findings;
-use crate::common::home::layout_2_blockers;
+use crate::migrate::layout_2_blockers;
 use std::path::Path;
 
 /// The conversion's blockers as errors, and the conversion still to come.

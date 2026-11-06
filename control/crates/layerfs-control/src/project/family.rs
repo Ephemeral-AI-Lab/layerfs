@@ -8,15 +8,15 @@
 //! first (H11a). Records in the home list projects; `remove` drops one
 //! project's history from its Store.
 use crate::common::context::Context;
-use crate::common::home::lease;
-use crate::common::home::paths;
-use crate::common::outcome::{failed, refused, Outcome, View};
+use crate::common::lease;
 use crate::common::place::{self, Executor};
 use crate::project::record::ProjectRecord;
 use crate::store::family::progress;
 use crate::store::record::{StoreRecord, StoreRef};
 use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::paths;
+use layerfs_home::outcome::{failed, refused, Outcome, View};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -68,7 +68,7 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
 fn list(home: &Path, args: &SdkValue) -> Outcome {
     let stores = match args.get_text("store") {
         Some(store) => {
-            crate::common::names::StoreName::parse(store)?;
+            layerfs_home::names::StoreName::parse(store)?;
             if !paths::store_record(home, store).exists() {
                 return Err(refused("NotFound", format!("no Store named {store}")));
             }
@@ -125,7 +125,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let project = args.get_text("project").unwrap_or("");
     let (store, name) = split(project)?;
-    crate::common::names::ProjectName::parse(name)?;
+    layerfs_home::names::ProjectName::parse(name)?;
     let folder = args.get_text("folder").unwrap_or("");
     if !Path::new(folder).is_absolute() {
         return Err(refused(
@@ -172,7 +172,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     // the project's record keeps when it was made
     progress(context, "record", None);
     {
-        let _lock = crate::common::home::lock::take(&home)?;
+        let _lock = layerfs_home::home::lock::take(&home)?;
         if let Some(project) = ProjectRecord::read(&home, store, name)? {
             project.created_now().write(&home)?;
         }
@@ -180,7 +180,7 @@ fn init(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let mut out = summary(&home, store, name, &record, View::Full);
     for field in ["layer", "root"] {
         if let Some(value) = added.get(field) {
-            out = crate::common::home::with_field(out, field, value.clone());
+            out = layerfs_home::home::with_field(out, field, value.clone());
         }
     }
     Ok(out)
@@ -259,13 +259,13 @@ fn init_on_worker(
     let stack = added.get("stack").cloned().unwrap_or_default();
     progress(context, "record", None);
     {
-        let _lock = crate::common::home::lock::take(&home)?;
+        let _lock = layerfs_home::home::lock::take(&home)?;
         ProjectRecord::initialised(store, name, stack).write(&home)?;
     }
     let mut out = summary(&home, store, name, &record, View::Full);
     for field in ["layer", "root"] {
         if let Some(value) = added.get(field) {
-            out = crate::common::home::with_field(out, field, value.clone());
+            out = layerfs_home::home::with_field(out, field, value.clone());
         }
     }
     Ok(out)
@@ -311,7 +311,7 @@ fn init_postgresql(
     let mut out = summary(&home, store, name, record, View::Full);
     for field in ["layer", "root"] {
         if let Some(value) = added.get(field) {
-            out = crate::common::home::with_field(out, field, value.clone());
+            out = layerfs_home::home::with_field(out, field, value.clone());
         }
     }
     Ok(out)
@@ -353,7 +353,7 @@ fn remove(context: &mut Context<'_>, project: &str) -> Outcome {
     if entry.exists() {
         std::fs::remove_dir_all(&entry).map_err(failed)?;
     }
-    Ok(crate::common::home::with_field(
+    Ok(layerfs_home::home::with_field(
         removed,
         "project",
         SdkValue::text(project),

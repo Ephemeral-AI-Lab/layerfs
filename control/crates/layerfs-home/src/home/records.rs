@@ -2,8 +2,8 @@
 //! (0600 files, 0700 folders), replaced whole by a rename so a reader sees
 //! the old record or the new one, never a part. Bytes are written as
 //! `{"hex": "..."}` and read back as bytes, so a record keeps its types.
-use crate::common::json;
-use crate::common::outcome::{failed, refused};
+use crate::json;
+use crate::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::fs;
 use std::io::Write;

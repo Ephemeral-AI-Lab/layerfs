@@ -2,14 +2,14 @@
 //! for a Sandbox whose daemon this host reaches (#535 G4), straight to its
 //! daemon; an exec always runs through the Sandbox's runtime, in its machine.
 use crate::common::context::Context;
-use crate::common::home;
-use crate::common::names::{WorkspaceAt, WorkspaceName, WorkspaceRef};
-use crate::common::outcome::{refused, Outcome};
 use crate::machine::worker::Unreached;
 use crate::sandbox::direct;
 use crate::sandbox::family::sandbox_of;
 use crate::sandbox::route::{on_machine, reach};
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::home;
+use layerfs_home::names::{WorkspaceAt, WorkspaceName, WorkspaceRef};
+use layerfs_home::outcome::{refused, Outcome};
 
 /// Runs one `workspace` call.
 pub fn workspace(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {

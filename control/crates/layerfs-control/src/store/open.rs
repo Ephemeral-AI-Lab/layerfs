@@ -13,10 +13,10 @@
 //! a `store status` right after sees the truncated log. A checkpoint that
 //! cannot complete now (another process writing, a reader still in the log)
 //! is left for the idle close and never retried.
-use crate::common::home::lease::Lease;
-use crate::common::outcome::{refused, Outcome};
+use crate::common::lease::Lease;
 use crate::store::service as direct;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::{refused, Outcome};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex, Once};

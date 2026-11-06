@@ -9,7 +9,7 @@ The `file` calls.
 | | |
 | --- | --- |
 | Component | [Call table](../../call-table/README.md) |
-| Source | [`api/crates/layerfs-api/src/file`](../../../../../api/crates/layerfs-api/src/file), [`control/crates/layerfs-control/src/store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs), [`engine/crates/layerfs-store-service/src/methods/file`](../../../../../engine/crates/layerfs-store-service/src/methods/file) |
+| Source | [`api/crates/layerfs-api/src/file`](../../../../../api/crates/layerfs-api/src/file), [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs), [`engine/crates/layerfs-store-service/src/methods/file`](../../../../../engine/crates/layerfs-store-service/src/methods/file) |
 
 ## Calls
 
@@ -89,7 +89,7 @@ A read reply is bounded by `REPLY_BUDGET` (48 KiB); `truncated`,
 | `NoMatch`, `AmbiguousMatch` | `edit` finds the old text 0 or more than 1 times (`detail.matches`) | [`write/edit.rs`](../../../../../engine/crates/layerfs-store-service/src/write/edit.rs) |
 | `ReadOnly` | a write to `main`, which changes only through `branch.publish` | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `Conflict` | the head moved and paths conflict; nothing was committed | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
-| `Busy`, `Unresolved`, `Unavailable` | the Store's `op`, or its worker not reached | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs), [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
+| `Busy`, `Unresolved`, `Unavailable` | the Store's `op`, or its worker not reached | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
 | `Unknown` | **uncertain:** a worker's answer was lost, or the Store reported an unknown outcome | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 
 After an `Unknown` write the Commit may exist. Read the Branch head with

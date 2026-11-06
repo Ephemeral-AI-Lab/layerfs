@@ -5,12 +5,12 @@
 //! [`StoreKind`]; no caller compares a record's `kind` text, and no caller
 //! reads or writes a Store record's fields but through [`StoreRecord`].
 use crate::backup::record::StoreLink;
-use crate::common::home::entity_lock::{self, EntityLock};
-use crate::common::home::{self, paths, read_record, with_field, write_entity};
-use crate::common::op::{self, Op, Standing};
-use crate::common::outcome::{refused, View};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 pub(crate) use layerfs_bridge::StoreKind;
+use layerfs_home::home::entity_lock::{self, EntityLock};
+use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
+use layerfs_home::op::{self, Op, Standing};
+use layerfs_home::outcome::{refused, View};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -195,7 +195,7 @@ impl StoreRecord {
     /// Store `name`'s record; a bad name is `InvalidInput`, no record
     /// `NotFound`.
     pub(crate) fn of(home: &Path, name: &str) -> Result<Self> {
-        crate::common::names::StoreName::parse(name)?;
+        layerfs_home::names::StoreName::parse(name)?;
         Self::read(home, name)?.ok_or_else(|| refused("NotFound", format!("no Store named {name}")))
     }
 
@@ -452,4 +452,15 @@ pub(crate) fn clearing_call(op: &Op, name: &str) -> String {
         ("store.pull", _) => format!("store pull {name}"),
         _ => format!("store remove {name}"),
     }
+}
+
+/// The full URL of a PostgreSQL Store's record, its password resolved now.
+pub(crate) fn url(record: &StoreRecord) -> Result<String> {
+    let url = record.text("url").ok_or_else(|| {
+        refused(
+            "Failed",
+            format!("PostgreSQL Store {}'s record has no url", record.name()),
+        )
+    })?;
+    layerfs_home::secrets::with_password(url, record.text("password"))
 }

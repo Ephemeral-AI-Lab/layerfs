@@ -1,13 +1,6 @@
-//! What every entity uses (#536): typed names, call outcomes, the call
-//! trace, JSON text, the one in-flight intent, a running call's context and the home.
+//! What the entities here still share (#536): a running call's context,
+//! placement and Store leases. The home and its records are `layerfs-home`
+//! (layerfs-project#103).
 pub mod context;
-pub mod home;
-pub mod json;
-pub mod names;
-pub mod op;
-#[doc(hidden)]
-pub mod outcome;
+pub mod lease;
 pub(crate) mod place;
-pub(crate) mod secrets;
-#[doc(hidden)]
-pub mod trace;

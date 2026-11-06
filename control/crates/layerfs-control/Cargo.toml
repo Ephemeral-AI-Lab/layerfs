@@ -10,6 +10,7 @@ license.workspace = true
 layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
+layerfs-home = { path = "../layerfs-home" }
 layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }

@@ -6,13 +6,14 @@
 //! one daemon process: `runtime`), known by its name. Its runtime runs
 //! commands directly; its control connections (`pool`) each carry one
 //! exchange at a time, and concurrent calls take separate connections.
-use crate::common::outcome::refused;
 use crate::MountedWorkspace;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
 use layerfs_bridge::provision::StoreManifest;
+use layerfs_home::helpers::lock;
+use layerfs_home::outcome::refused;
 use layerfs_isolation::CommandIdentity;
 use std::collections::BTreeMap;
-use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
+use std::sync::{Arc, LazyLock, Mutex};
 
 /// One project, read from or saved to its home entry.
 pub(crate) struct Project {
@@ -49,19 +50,6 @@ pub(crate) struct SandboxState {
 /// This process's live Sandboxes, by their folder.
 pub(crate) static SANDBOXES: LazyLock<Mutex<BTreeMap<std::path::PathBuf, Arc<SandboxState>>>> =
     LazyLock::new(Default::default);
-
-/// A lock, refused when a holder panicked.
-pub(crate) fn lock<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, SdkRefusal> {
-    mutex
-        .lock()
-        .map_err(|_| refused("Failed", "binding state poisoned"))
-}
-
-/// A required text argument.
-pub(crate) fn text<'a>(args: &'a SdkValue, name: &str) -> Result<&'a str, SdkRefusal> {
-    args.get_text(name)
-        .ok_or_else(|| refused("InvalidInput", format!("missing text argument `{name}`")))
-}
 
 /// The Sandbox an operation names, with this process's mount and process
 /// tables as they stand: no daemon call (#352 F-029). A call that names a
@@ -108,7 +96,7 @@ pub(crate) fn sandbox_live(args: &SdkValue) -> Result<Arc<SandboxState>, SdkRefu
                 failure.container_stopped(),
             )
         } else {
-            crate::common::outcome::failed(failure)
+            layerfs_home::outcome::failed(failure)
         });
     }
     Ok(state)
@@ -160,11 +148,4 @@ impl SandboxState {
             .map(pick)
             .ok_or_else(|| refused("NotMounted", format!("{}:{path} is not mounted", self.id)))
     }
-}
-
-/// 32 fresh random bytes from the transport's key generator.
-pub(crate) fn random() -> Result<[u8; 32], SdkRefusal> {
-    layerfs_bridge::duplex::generate_keypair()
-        .map(|pair| pair.public)
-        .map_err(crate::common::outcome::failed)
 }

@@ -1,11 +1,11 @@
 //! `store.remove`: a sqlite Store deleted wherever it is, with its projects.
 use super::family::{advance, begin, ended, of_store, record_of, settle, step};
-use crate::common::home::{self, paths};
-use crate::common::op::{Op, Standing};
-use crate::common::outcome::{failed, refused, Outcome};
 use crate::common::place::{self, Executor};
 use crate::store::record::{self, StoreRef};
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::home::{self, paths};
+use layerfs_home::op::{Op, Standing};
+use layerfs_home::outcome::{failed, refused, Outcome};
 use std::path::Path;
 
 /// `store.remove`: deletes a sqlite Store wherever it is, with every project

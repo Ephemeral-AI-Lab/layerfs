@@ -4,12 +4,13 @@
 //! and the password as a reference (`env:NAME` or `file:/path`), resolved on
 //! each call; the full URL is never written down.
 use crate::common::context::Context;
-use crate::common::home::{self, paths};
-use crate::common::outcome::{failed, refused, Outcome};
-use crate::common::secrets::{parts, resolve, url};
 use crate::project::record::ProjectRecord;
+use crate::store::record::url;
 use crate::store::record::{StoreKind, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::{self, paths};
+use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_home::secrets::{parts, resolve};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -39,7 +40,7 @@ pub(crate) fn selection_at(record: &StoreRecord, url: String) -> SdkValue {
 pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
-    crate::common::names::StoreName::parse(name)?;
+    layerfs_home::names::StoreName::parse(name)?;
     match call {
         "connect" => connect(&home, name, args),
         _ => disconnect(&home, name),
@@ -214,8 +215,8 @@ fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
             schema: SCHEMA.to_owned(),
             synchronous_commit: sync.to_owned(),
         },
-        binding: crate::sandbox::registry::random()?.to_vec(),
-        cursor_key: crate::sandbox::registry::random()?,
+        binding: layerfs_home::helpers::random()?.to_vec(),
+        cursor_key: layerfs_home::helpers::random()?,
     };
     let binding = if crate::project::postgres_init::create_schema(&probe, &fresh)? {
         fresh.binding
@@ -262,7 +263,7 @@ fn connect(home: &Path, name: &str, args: &SdkValue) -> Outcome {
 
 /// `store.disconnect(name)`: forgets a PostgreSQL Store; its data stays.
 fn disconnect(home: &Path, name: &str) -> Outcome {
-    crate::common::names::StoreName::parse(name)?;
+    layerfs_home::names::StoreName::parse(name)?;
     let _lock = home::lock::take(home)?;
     let _store = crate::store::record::lock(home, name)?;
     let record = StoreRecord::read(home, name)?

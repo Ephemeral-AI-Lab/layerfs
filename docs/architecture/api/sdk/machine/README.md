@@ -58,13 +58,13 @@ state, cpus, memory, disk, stores, sandboxes, … }`
 | [`update`](update.md) | `name` | `cpus` (Int), `memory` (Size), `image`, `docker`, `wsl`, `daemon` (Text) | summary |
 
 Sources of the answers:
-[`list.rs`](../../../../../control/crates/layerfs-control/src/machine/list.rs),
-[`platforms.rs`](../../../../../control/crates/layerfs-control/src/machine/platforms.rs),
-[`status.rs`](../../../../../control/crates/layerfs-control/src/machine/status.rs),
-[`power.rs`](../../../../../control/crates/layerfs-control/src/machine/power.rs),
-[`create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs),
-[`remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs),
-[`update.rs`](../../../../../control/crates/layerfs-control/src/machine/update.rs).
+[`machine/list.rs`](../../../../../control/crates/layerfs-control/src/machine/list.rs),
+[`machine/platforms.rs`](../../../../../control/crates/layerfs-control/src/machine/platforms.rs),
+[`machine/status.rs`](../../../../../control/crates/layerfs-control/src/machine/status.rs),
+[`machine/power.rs`](../../../../../control/crates/layerfs-control/src/machine/power.rs),
+[`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs),
+[`machine/remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs),
+[`machine/update.rs`](../../../../../control/crates/layerfs-control/src/machine/update.rs).
 
 ## Arguments and options
 
@@ -83,15 +83,15 @@ show a probe that did not answer as `unknown`.
 
 | Code | When | Source |
 | --- | --- | --- |
-| `InvalidInput` | a bad name or option for this platform | [`create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs), [`update.rs`](../../../../../control/crates/layerfs-control/src/machine/update.rs) |
-| `NotFound` | no machine of that name | [`record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) |
-| `Exists` | the name, VM, disk or host is taken | [`create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs), [`connect.rs`](../../../../../control/crates/layerfs-control/src/machine/connect.rs) |
+| `InvalidInput` | a bad name or option for this platform | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs), [`machine/update.rs`](../../../../../control/crates/layerfs-control/src/machine/update.rs) |
+| `NotFound` | no machine of that name | [`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) |
+| `Exists` | the name, VM, disk or host is taken | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs), [`machine/connect.rs`](../../../../../control/crates/layerfs-control/src/machine/connect.rs) |
 | `InUse` | `stop`, `remove` or a resize while Sandboxes run (`detail.related`) | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) |
-| `Unsupported` | a platform this host or build lacks (`detail.missing`); every machine call in a build without the `machine` feature | [`spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs), [`api/…/machine/create.rs`](../../../../../api/crates/layerfs-api/src/machine/create.rs) |
+| `Unsupported` | a platform this host or build lacks (`detail.missing`); every machine call in a build without the `machine` feature | [`machine/spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs), [`api/…/machine/create.rs`](../../../../../api/crates/layerfs-api/src/machine/create.rs) |
 | `Unavailable`, `Denied` | a provider or guest that does not answer; an ssh host that refuses the login or host key | [`layerfs-platform` `error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
-| `Busy`, `Unresolved` | another operation's `op` on the machine | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs) |
-| `Failed` | it ran once and failed; a create that failed after its VM existed keeps it as `failed` | [`create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) |
-| `Unknown` | **uncertain:** the adapter timed out or lost its answer; everything made is kept, the `op` stays `uncertain` and is logged | [`create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs), [`remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs) |
+| `Busy`, `Unresolved` | another operation's `op` on the machine | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
+| `Failed` | it ran once and failed; a create that failed after its VM existed keeps it as `failed` | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) |
+| `Unknown` | **uncertain:** the adapter timed out or lost its answer; everything made is kept, the `op` stays `uncertain` and is logged | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs), [`machine/remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs) |
 
 An unresolved machine is shown by `machine status` and cleared by
 `machine remove` or `disconnect`. See

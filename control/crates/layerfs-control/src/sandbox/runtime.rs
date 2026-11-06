@@ -6,9 +6,9 @@
 //! and the same concrete `layerfs_isolation::Sandbox` handle. A Sandbox also
 //! names its platform (#529), recorded beside the runtime; every later call
 //! follows the record, not the caller's deployment.
-use crate::common::outcome::{failed, refused};
 use crate::sandbox::output::Spool;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::{failed, refused};
 #[cfg(target_os = "linux")]
 use layerfs_isolation::Image;
 use layerfs_isolation::SandboxRecord;

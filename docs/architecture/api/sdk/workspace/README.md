@@ -9,7 +9,7 @@ The `workspace` calls.
 | | |
 | --- | --- |
 | Component | [Call table](../../call-table/README.md) |
-| Source | [`api/crates/layerfs-api/src/workspace`](../../../../../api/crates/layerfs-api/src/workspace), [`control/crates/layerfs-control/src/workspace/calls.rs`](../../../../../control/crates/layerfs-control/src/workspace/calls.rs), [`control/crates/layerfs-control/src/daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) |
+| Source | [`api/crates/layerfs-api/src/workspace`](../../../../../api/crates/layerfs-api/src/workspace), [`workspace/calls.rs`](../../../../../control/crates/layerfs-control/src/workspace/calls.rs), [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) |
 
 ## Calls
 
@@ -33,7 +33,7 @@ Five calls, in help order
 ([`workspace/mod.rs`](../../../../../api/crates/layerfs-api/src/workspace/mod.rs)).
 Each runs `layerfs_control::workspace::calls::workspace`. A Workspace is
 named `ws`: `<sandbox>:<path>`, or `<sandbox>:<name>` when its mount named
-it ([`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs)).
+it ([`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs)).
 
 | Call | Arguments | Options | Returns | Host operation |
 | --- | --- | --- | --- | --- |
@@ -82,7 +82,7 @@ Under a folder scope, `mount` takes only `main`, mounted as
 | `NotMounted` | a `ws` whose path or name is not mounted | [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
 | `Conflict` | `commit` conflicts: markers are written, nothing is committed (`detail.conflicts`, `written`) | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) |
 | `Dirty` | `unmount` without `discard` while changes are uncommitted (`detail.changed`) | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) |
-| `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox (not for `status`); a daemon connection not lent in time | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs), [`daemon/pool.rs`](../../../../../control/crates/layerfs-control/src/daemon/pool.rs) |
+| `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox (not for `status`); a daemon connection not lent in time | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), [`daemon/pool.rs`](../../../../../control/crates/layerfs-control/src/daemon/pool.rs) |
 | `StaleSandbox` | a saved daemon that is not `ControlReady` | [`daemon/pool.rs`](../../../../../control/crates/layerfs-control/src/daemon/pool.rs) |
 | `TooLarge` | a request over one control record | [`daemon/call.rs`](../../../../../control/crates/layerfs-control/src/daemon/call.rs) |
 | `Unavailable` | the machine's worker is not recorded or does not answer | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |

@@ -3,8 +3,8 @@
 //! kind. Sizes become whole bytes. Front ends strip their functions
 //! (`on_progress`, exec sinks) before the call reaches the library.
 use super::table::{Call, Kind};
-use crate::common::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::refused;
 
 /// `args` as the call's checked fields, in the table's order.
 pub fn check(call: &Call, args: SdkValue) -> Result<Vec<(String, SdkValue)>, SdkRefusal> {
@@ -42,7 +42,7 @@ fn kind(call: &Call, name: &str, kind: Kind, value: SdkValue) -> Result<SdkValue
     let ok = match (&kind, &value) {
         (Kind::Name | Kind::Text, SdkValue::Text(_)) => true,
         (Kind::Project, SdkValue::Text(text)) => {
-            crate::common::names::project(text)
+            layerfs_home::names::project(text)
                 .map_err(|refusal| refused("InvalidInput", refusal))?;
             true
         }

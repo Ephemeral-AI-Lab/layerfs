@@ -13,13 +13,13 @@
 //! [`super::open::IDLE`] unused, and [`forget`] when the Store closes. A held session is checked with one empty query before a call
 //! uses it; one that does not answer is dropped and a new one opens, so no
 //! call runs on a broken connection and none is retried.
-#[cfg(feature = "postgresql")]
-use crate::common::outcome::failed;
-use crate::common::outcome::refused;
 use crate::store::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 #[cfg(feature = "postgresql")]
 use layerfs_history::HistoryCatalog as _;
+#[cfg(feature = "postgresql")]
+use layerfs_home::outcome::failed;
+use layerfs_home::outcome::refused;
 use std::path::Path;
 #[cfg(feature = "postgresql")]
 use std::path::PathBuf;

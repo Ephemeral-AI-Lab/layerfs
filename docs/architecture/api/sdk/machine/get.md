@@ -10,7 +10,7 @@ and Sandboxes. It starts nothing.
 | | |
 | --- | --- |
 | Family | [machine](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/machine/get.rs`](../../../../../api/crates/layerfs-api/src/machine/get.rs) |
+| Library entry | [`machine/get.rs`](../../../../../api/crates/layerfs-api/src/machine/get.rs) |
 | Implemented in | [`layerfs_control::machine::get`](../../../../../control/crates/layerfs-control/src/machine/get.rs) |
 | Runs in | the caller's process (host build with the `machine` feature) |
 
@@ -35,7 +35,7 @@ layerfs machine get <name> [--text]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | a machine name: 1–63 lowercase letters, digits, `_ . -`, starting and ending with a letter or digit | [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs) `MachineName` |
+| `name` | Name | a machine name: 1–63 lowercase letters, digits, `_ . -`, starting and ending with a letter or digit | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) `MachineName` |
 
 ## Options
 
@@ -52,7 +52,7 @@ None.
 The same summary as one item of [`machine.list`](list.md#returns); the
 field and `state` tables are there. `start`, `stop`, `create`, `connect`
 and `update` answer the same shape
-([`record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `to_sdk`).
+([`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `to_sdk`).
 
 ## Where it runs
 
@@ -73,10 +73,10 @@ All in the caller ([routing table](../../../control/routing/routing-table.md)).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | `name` is not a machine name | no | [`record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `of` |
+| `InvalidInput` | `name` is not a machine name | no | [`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `of` |
 | `NotFound` | no machine of that name | no | `record.rs` `of` |
 | `Failed` | the record names no known platform | no | `record.rs` `platform` |
-| `Unsupported` | a build without the `machine` feature | no | [`layerfs-api/src/machine/get.rs`](../../../../../api/crates/layerfs-api/src/machine/get.rs) |
+| `Unsupported` | a build without the `machine` feature | no | [`machine/get.rs`](../../../../../api/crates/layerfs-api/src/machine/get.rs) |
 
 A failed probe is not an error: `state` is `unknown` and `error` says why.
 

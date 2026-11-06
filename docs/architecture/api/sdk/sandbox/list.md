@@ -10,7 +10,7 @@ time, from the home's records alone.
 | | |
 | --- | --- |
 | Family | [sandbox](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/sandbox/list.rs`](../../../../../api/crates/layerfs-api/src/sandbox/list.rs) |
+| Library entry | [`sandbox/list.rs`](../../../../../api/crates/layerfs-api/src/sandbox/list.rs) |
 | Implemented in | `layerfs_control::sandbox::family::sandbox` → `list::list` ([`sandbox/list.rs`](../../../../../control/crates/layerfs-control/src/sandbox/list.rs)) |
 | Runs in | the caller's process; reads `sandbox/<name>/record.json` only |
 
@@ -61,8 +61,8 @@ Under a folder scope the call is refused `InvalidInput`
 | Field | Kind | Meaning |
 | --- | --- | --- |
 | `items` | list | one page of records, each `SandboxRecord::to_sdk(View::List)`: the stored fields but `v`, `runtime_id`, `daemon` |
-| `items[].state` | text | `creating`, `closing`, `unresolved`, `gone` or `running`, derived from the record and its `op`; never asks a machine ([`record.rs`](../../../../../control/crates/layerfs-control/src/sandbox/record.rs) `state`) |
-| `items[].op` | map | the in-flight or uncertain intent, when the record holds one ([`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs) `to_sdk`) |
+| `items[].state` | text | `creating`, `closing`, `unresolved`, `gone` or `running`, derived from the record and its `op`; never asks a machine ([`sandbox/record.rs`](../../../../../control/crates/layerfs-control/src/sandbox/record.rs) `state`) |
+| `items[].op` | map | the in-flight or uncertain intent, when the record holds one ([`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `to_sdk`) |
 | `next_page_pos` | int or null | pass back as `page_pos`; null after the last page |
 
 `list` reads no worker and no daemon, so `state` is `running` for any

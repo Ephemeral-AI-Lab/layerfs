@@ -6,14 +6,14 @@
 //! call, so a guest never reads the home; the worker finds the Store file
 //! under its own root.
 use crate::common::context::Context;
-use crate::common::home::lease;
-use crate::common::home::paths;
-use crate::common::outcome::Outcome;
+use crate::common::lease;
 use crate::common::place::{plan, Executor};
 use crate::store::open;
 use crate::store::record::{StoreRecord, StoreRef};
 use crate::store::resolve::Target;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::home::paths;
+use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
 /// Runs Store method `op` with `args` on the Store of `target`.
@@ -79,7 +79,7 @@ fn postgresql(
     mut fields: Vec<(String, SdkValue)>,
     lease: lease::Lease,
 ) -> Outcome {
-    let url = crate::common::secrets::url(&target.record)?;
+    let url = crate::store::record::url(&target.record)?;
     fields.push((
         "postgresql".to_owned(),
         SdkValue::map([("url", SdkValue::text(url))]),

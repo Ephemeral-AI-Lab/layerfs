@@ -2,13 +2,13 @@
 //! MinIO bucket and prefix with a key reference, never a secret, made from
 //! the URL `backup.connect` is given; and the driver it names. Also each
 //! Store's link to a bucket, which the Store's record holds.
-use crate::common::home::{self, paths, read_record, write_entity};
-use crate::common::outcome::{refused, View};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup::Provider;
 use layerfs_bucket::bucket::minio::{MinioSettings, DEFAULT_PART_SIZE};
 use layerfs_bucket::bucket::r2::R2Settings;
 use layerfs_bucket::bucket::{pieces, CredentialRef, Driver, RemoteError};
+use layerfs_home::home::{self, paths, read_record, write_entity};
+use layerfs_home::outcome::{refused, View};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -41,7 +41,7 @@ impl BucketRecord {
 
     /// Bucket `name`'s record; a bad name is `InvalidInput`, none `NotFound`.
     pub(crate) fn of(home: &Path, name: &str) -> Result<Self> {
-        crate::common::names::BucketName::parse(name)?;
+        layerfs_home::names::BucketName::parse(name)?;
         read_record(&paths::bucket_record(home, name))?
             .map(|value| Self::from_record(name, value))
             .ok_or_else(|| refused("NotFound", format!("no bucket named {name}")))

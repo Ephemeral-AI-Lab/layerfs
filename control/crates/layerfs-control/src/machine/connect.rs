@@ -5,10 +5,10 @@ use super::record::{MachineRecord, CONNECT};
 use super::spec::{self as record, refusal, update as update_record};
 use super::status::home_id;
 use crate::common::context::Context;
-use crate::common::home::{self, lock, paths};
-use crate::common::op::Op;
-use crate::common::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::home::{self, lock, paths};
+use layerfs_home::op::Op;
+use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_platform::{self as adapters, Platform};
 
 /// `machine.connect(name, host, { user, port, identity, known_hosts, root })`.

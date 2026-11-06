@@ -10,7 +10,7 @@ or for one Store, without opening any Store.
 | | |
 | --- | --- |
 | Family | [project](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/project/list.rs`](../../../../../api/crates/layerfs-api/src/project/list.rs) |
+| Library entry | [`project/list.rs`](../../../../../api/crates/layerfs-api/src/project/list.rs) |
 | Implemented in | `layerfs_control::project::family::run` → `list` ([`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs)) |
 | Runs in | the caller's process, reading home records only |
 
@@ -86,7 +86,7 @@ when its `record.json` is missing (for example, the entry a failed local
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | `store` is not a valid Store name | no | [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs) |
+| `InvalidInput` | `store` is not a valid Store name | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 | `NotFound` | `store` names a Store with no record | no | `project/family.rs` |
 | `Failed` | a home folder cannot be read | no | `project/family.rs` (`failed`) |
 

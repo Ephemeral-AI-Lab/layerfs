@@ -10,6 +10,7 @@ license.workspace = true
 layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 # The management library every call runs in (#536).
 layerfs-control = { path = "../../../control/crates/layerfs-control" }
+layerfs-home = { path = "../../../control/crates/layerfs-home" }
 
 [features]
 # PostgreSQL Stores (#506, #533): open, attach, create and Init.

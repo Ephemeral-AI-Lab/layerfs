@@ -2,9 +2,9 @@
 use super::list::summary;
 use super::spec::machine_of;
 use crate::common::context::Context;
-use crate::common::home::lock;
-use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::home::lock;
+use layerfs_home::outcome::{refused, Outcome};
 use layerfs_platform::HostOs;
 
 /// `machine.update(name, { cpus, memory, image, docker, wsl, daemon })`

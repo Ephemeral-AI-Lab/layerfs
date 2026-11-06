@@ -9,10 +9,10 @@
 //! own) and never writes a secret: for those it answers the command to run.
 //! Every name it read and what became of it is in the answer and in
 //! `log/import-env.jsonl`.
-use super::{lock, log_line, now_ms, paths, read_record, with_field, write_entity};
-use crate::common::outcome::{failed, refused, Outcome};
 use crate::store::record::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::{lock, log_line, now_ms, paths, read_record, with_field, write_entity};
+use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_isolation::platform_policy::disabled_reason;
 use std::path::Path;
 

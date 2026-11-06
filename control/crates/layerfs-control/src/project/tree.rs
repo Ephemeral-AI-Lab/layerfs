@@ -15,8 +15,8 @@
 //! This is what Init records of an entry (its kind, permission bits,
 //! modification time, a link's target and a file's bytes); owners,
 //! access times, extended attributes and hard links are not carried.
-use crate::common::outcome::refused;
 use layerfs_bridge::control::SdkRefusal;
+use layerfs_home::outcome::refused;
 
 /// One entry's record.
 #[derive(Debug, PartialEq, Eq)]

@@ -10,7 +10,7 @@ Store, the Store's kind and machine, and when it was recorded.
 | | |
 | --- | --- |
 | Family | [project](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/project/get.rs`](../../../../../api/crates/layerfs-api/src/project/get.rs) |
+| Library entry | [`project/get.rs`](../../../../../api/crates/layerfs-api/src/project/get.rs) |
 | Implemented in | `layerfs_control::project::family::run` → `"get"` arm ([`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs)), `store::resolve::target` ([`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs)) |
 | Runs in | the caller's process, reading home records only |
 
@@ -36,7 +36,7 @@ layerfs project get <project>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `project` | Project | `<store>/<name>`, checked by `names::project` before dispatch | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs) |
+| `project` | Project | `<store>/<name>`, checked by `names::project` before dispatch | [`calls/check.rs`](../../../../../control/crates/layerfs-control/src/calls/check.rs), [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 
 ## Options
 

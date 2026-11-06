@@ -5,8 +5,8 @@
 //! the root and the copy's id only; an entry's path stays inside its
 //! staging folder and goes through no link.
 use super::tree::{Reader, Record};
-use crate::common::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::{failed, refused, Outcome};
 use nix::sys::stat::{utimensat, UtimensatFlags};
 use nix::sys::time::TimeSpec;
 use std::ffi::OsStr;
@@ -45,7 +45,7 @@ pub(crate) fn run(root: &Path, args: &SdkValue) -> Outcome {
             let Some(SdkValue::Bytes(part)) = args.get("part") else {
                 return Err(refused("InvalidInput", "`part` must be bytes"));
             };
-            crate::common::home::private_dir(&dir)?;
+            layerfs_home::home::private_dir(&dir)?;
             let records = apply(&dir, part)?;
             Ok(SdkValue::map([("records", SdkValue::Int(records as i64))]))
         }

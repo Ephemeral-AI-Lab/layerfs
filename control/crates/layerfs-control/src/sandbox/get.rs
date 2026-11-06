@@ -2,11 +2,11 @@
 use super::direct;
 use super::family::{page, sandbox_of};
 use crate::common::context::Context;
-use crate::common::home;
-use crate::common::outcome::{Outcome, View};
 use crate::machine::worker::Unreached;
 use crate::sandbox::route::reach;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::home;
+use layerfs_home::outcome::{Outcome, View};
 
 /// `sandbox.get(name, { page_size, page_pos })`: its record with its
 /// derived `state`, its `op` when it has one (H6), and one page of its

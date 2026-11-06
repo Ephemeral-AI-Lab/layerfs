@@ -2,10 +2,10 @@
 //! §9.2): its name, its LayerStack (a PostgreSQL Store's) and when it was
 //! made. The record also holds the sqlite project's manifest, which
 //! `sandbox/files.rs` reads and writes with the rest kept.
-use crate::common::home::{now_ms, paths, read_record, with_field, write_entity};
-use crate::common::outcome::View;
 use crate::store::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::{now_ms, paths, read_record, with_field, write_entity};
+use layerfs_home::outcome::View;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

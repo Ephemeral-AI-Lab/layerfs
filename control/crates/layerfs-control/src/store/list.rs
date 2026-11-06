@@ -1,10 +1,10 @@
 //! `store.list` (#536 §10b): every Store with its state.
 use super::family::{of_store, public, step};
-use crate::common::home::lease;
-use crate::common::outcome::{Outcome, View};
+use crate::common::lease;
 use crate::common::place;
 use crate::store::record::StoreRef;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::{Outcome, View};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

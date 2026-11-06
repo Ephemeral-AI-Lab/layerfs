@@ -5,14 +5,14 @@
 use super::deploy::{self, Deploy, Side};
 use super::record::SandboxRecord;
 use crate::common::context::Context;
-use crate::common::home::{self, paths};
-use crate::common::outcome::{failed, refused, Outcome};
 use crate::common::place::{self, Executor};
 use crate::machine::worker::Unreached;
 use crate::project::record::ProjectRecord;
 use crate::store::record::{StoreKind, StoreRecord};
 use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::{self, paths};
+use layerfs_home::outcome::{failed, refused, Outcome};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -27,7 +27,7 @@ fn host_args(
     how: Deploy,
     more: Vec<(&str, SdkValue)>,
 ) -> Result<SdkValue> {
-    let prefix = SdkValue::text(format!("lfs-{}-", &home::open(home)?.id[..8]));
+    let prefix = SdkValue::text(format!("lfs-{}-", &crate::migrate::open(home)?.id[..8]));
     let deploy = match how {
         Deploy::Docker(SdkValue::Map(mut settings)) => {
             settings.push(("sandbox".to_owned(), SdkValue::text("docker")));
@@ -105,12 +105,12 @@ fn reached(
     machine: &str,
     record: &StoreRecord,
 ) -> Result<(SdkValue, Option<&'static str>)> {
-    let url = crate::common::secrets::url(record)?;
+    let url = crate::store::record::url(record)?;
     // a build without machines (the guest's) runs its own Sandboxes on the
     // machine it is, which shares its loopback
     #[cfg(feature = "machine")]
     let (url, hint) = {
-        let id = home::open(home)?.id;
+        let id = crate::migrate::open(home)?.id;
         let spec =
             crate::machine::machine_spec(home, &id, &crate::machine::machine_of(home, machine)?)?;
         let hint = (spec.kind == layerfs_platform::Platform::AppleContainer).then_some(
@@ -299,7 +299,7 @@ fn host_op(
             // (a create's reach check, a mount's Branch, a status's head)
             // runs on the process's one held read session, opened when one
             // is needed; exec, Commit, unmount and close open nothing.
-            let lease = crate::common::home::lease::hold(&home, &target.store)?;
+            let lease = crate::common::lease::hold(&home, &target.store)?;
             let (_lease, opened) = match held {
                 true => (Some(lease), None),
                 false => (None, Some(crate::store::open::hold(&args, Some(lease))?)),
@@ -377,8 +377,8 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     }
     let store = args.get_text("store").unwrap_or("");
     let project = args.get_text("project").unwrap_or("");
-    crate::common::names::StoreName::parse(store)?;
-    crate::common::names::ProjectName::parse(project)?;
+    layerfs_home::names::StoreName::parse(store)?;
+    layerfs_home::names::ProjectName::parse(project)?;
     // a PostgreSQL Store's URL and password reference stay with the caller:
     // the request's `postgresql` carries what this side dials (#535 §7.4)
     let sent = match args.get("store_record").cloned().unwrap_or_default() {

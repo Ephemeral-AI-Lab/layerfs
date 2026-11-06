@@ -3,7 +3,6 @@
 //! root is never converted or given an id of its own, even when it holds
 //! files a 1.1.0 home would.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::common::home;
 use layerfs_control::machine::worker::{self, Endpoint};
 use std::path::{Path, PathBuf};
 
@@ -83,14 +82,14 @@ fn a_worker_root_is_not_converted_and_uses_the_callers_home_id() {
 
     // a caller of a home sends its id; the Sandbox code gets past it
     let host = scratch.join("home");
-    let id = home::open(&host).unwrap().id;
+    let id = layerfs_control::migrate::open(&host).unwrap().id;
     let with = sandbox_call(&endpoint);
     if let Err((_, message)) = &with {
         assert!(!message.contains("home id"), "{message}");
     }
     untouched(&root);
     // opening the root answers the id of the home this thread works for
-    assert_eq!(home::open(&root).unwrap().id, id);
+    assert_eq!(layerfs_control::migrate::open(&root).unwrap().id, id);
     untouched(&root);
     std::fs::remove_dir_all(scratch).unwrap();
 }

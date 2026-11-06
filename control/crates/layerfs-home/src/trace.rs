@@ -5,12 +5,9 @@
 //!
 //! [`connection`] appends one line per connection to a machine's worker to
 //! the file `LAYERFS_TRACE` names (#535 phase 8 item 6).
-use crate::daemon::pool::{Controls, Lease};
-use crate::internal::{self, Control};
-use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_bridge::control::SdkValue;
 use std::cell::{Cell, RefCell};
 use std::io::Write;
-use std::ops::{Deref, DerefMut};
 use std::os::unix::fs::OpenOptionsExt;
 use std::time::{Duration, Instant};
 
@@ -62,12 +59,12 @@ pub fn run<T>(scope: Option<[u8; 32]>, work: impl FnOnce() -> T) -> (T, Vec<SdkV
 }
 
 /// True while this thread runs a traced call.
-pub(crate) fn traced() -> bool {
+pub fn traced() -> bool {
     SCOPE.get().is_some()
 }
 
 /// Keeps one telemetry value of an in-process call for its trace line.
-pub(crate) fn collect(value: SdkValue) {
+pub fn collect(value: SdkValue) {
     COLLECTED.with_borrow_mut(|collected| {
         if collected.len() < TELEMETRY {
             collected.push(value);
@@ -75,37 +72,14 @@ pub(crate) fn collect(value: SdkValue) {
     });
 }
 
-/// A Sandbox's control connection, traced while this thread is.
-pub(crate) struct Traced<'a>(Lease<'a>);
+/// The scope this thread's call is traced under, if it is.
+pub fn scope() -> Option<[u8; 32]> {
+    SCOPE.get()
+}
 
-/// Lends a control connection for one call's exchanges; the wait for it is
-/// the call's queue time.
-pub(crate) fn control(controls: &Controls) -> Result<Traced<'_>, SdkRefusal> {
-    let (mut lease, waited) = controls.lend()?;
+/// Adds `waited` to this thread's call's wait for a free control connection.
+pub fn add_waited(waited: Duration) {
     WAITED.set(WAITED.get() + waited);
-    internal::trace(&mut lease, SCOPE.get());
-    Ok(Traced(lease))
-}
-impl Drop for Traced<'_> {
-    fn drop(&mut self) {
-        let telemetry = internal::take_telemetry(&mut self.0);
-        internal::trace(&mut self.0, None);
-        COLLECTED.with_borrow_mut(|collected| {
-            let room = TELEMETRY.saturating_sub(collected.len());
-            collected.extend(telemetry.into_iter().take(room));
-        });
-    }
-}
-impl Deref for Traced<'_> {
-    type Target = Control;
-    fn deref(&self) -> &Control {
-        &self.0
-    }
-}
-impl DerefMut for Traced<'_> {
-    fn deref_mut(&mut self) -> &mut Control {
-        &mut self.0
-    }
 }
 
 /// Appends `{at, event: "worker.connection", op, worker, sent, ms}` to the
@@ -114,12 +88,12 @@ impl DerefMut for Traced<'_> {
 /// (`hello` for one that sent none) and `sent` whether the request went
 /// out. Unset, nothing is written; a trace that cannot be written changes
 /// no outcome.
-pub(crate) fn connection(worker: &str, op: &str, sent: bool, started: Instant) {
+pub fn connection(worker: &str, op: &str, sent: bool, started: Instant) {
     let Some(path) = std::env::var_os("LAYERFS_TRACE").filter(|path| !path.is_empty()) else {
         return;
     };
     let line = SdkValue::map([
-        ("at", SdkValue::Int(crate::common::home::now_ms())),
+        ("at", SdkValue::Int(crate::home::now_ms())),
         ("event", SdkValue::text("worker.connection")),
         ("op", SdkValue::text(op)),
         ("worker", SdkValue::text(worker)),
@@ -129,7 +103,7 @@ pub(crate) fn connection(worker: &str, op: &str, sent: bool, started: Instant) {
             SdkValue::Int(i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX)),
         ),
     ]);
-    let mut text = crate::common::json::print(&line);
+    let mut text = crate::json::print(&line);
     text.push('\n');
     let file = std::fs::OpenOptions::new()
         .append(true)

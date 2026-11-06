@@ -12,8 +12,8 @@
 //! owner's certain intent is ignored; a dead owner's uncertain intent
 //! blocks with `Unresolved`, naming the call that shows it and the call that
 //! clears it. Reading never clears an intent.
-use crate::common::home::{self, lease};
-use crate::common::outcome::refused;
+use crate::outcome::refused;
+use crate::{home, process};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -117,7 +117,7 @@ impl Op {
     /// Whether its owner is the process it names: by id, kernel start
     /// time and boot, so a reused id is not its owner.
     pub fn owner_alive(&self) -> bool {
-        (self.fields.get("owner")).is_some_and(lease::recorded_alive)
+        (self.fields.get("owner")).is_some_and(process::recorded_alive)
     }
 
     /// Whether this process owns it.
@@ -223,7 +223,7 @@ impl Op {
 
 /// This process as an intent's `owner`.
 fn owner() -> SdkValue {
-    let fields = lease::identity().into_iter();
+    let fields = process::identity().into_iter();
     SdkValue::Map(
         fields
             .map(|(name, value)| (name.to_owned(), value))
@@ -233,7 +233,7 @@ fn owner() -> SdkValue {
 
 /// A fresh `op-<16 hex>`.
 fn mint() -> Result<String, SdkRefusal> {
-    let bytes = crate::sandbox::registry::random()?;
+    let bytes = crate::helpers::random()?;
     let id = u64::from_be_bytes(bytes[..8].try_into().expect("eight bytes"));
     Ok(format!("op-{id:016x}"))
 }

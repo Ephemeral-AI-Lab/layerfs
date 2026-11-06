@@ -1,9 +1,9 @@
 //! The report: `{ ok, findings: [{ severity, entity: { kind, name },
 //! message, fix }] }`, `ok` false when any finding is an error.
-use crate::common::home::{detect, Layout};
-use crate::common::json;
-use crate::common::outcome::Outcome;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::{detect, Layout};
+use layerfs_home::json;
+use layerfs_home::outcome::Outcome;
 use std::path::{Path, PathBuf};
 
 /// How bad a finding is.

@@ -10,9 +10,9 @@ pub mod scope;
 pub mod table;
 mod text;
 
-pub use crate::common::json;
 pub use check::size;
 pub use dispatch::{call, call_scoped, home, Context};
+pub use layerfs_home::json;
 pub use scope::Scope;
 pub use table::{find, table_json, Arg, Call, CallRef, Calls, Families, Family, Kind, Run};
 pub use text::call_json;

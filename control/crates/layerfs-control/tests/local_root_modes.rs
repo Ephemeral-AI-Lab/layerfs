@@ -6,8 +6,8 @@
 //! more, is covered through `project.init` in layerfs-api's
 //! `project_family`.)
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::common::home;
 use layerfs_control::machine::worker;
+use layerfs_home::home;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

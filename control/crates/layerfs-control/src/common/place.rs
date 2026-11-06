@@ -6,10 +6,10 @@
 //! else in that machine's worker, `docker` on every host included (G8).
 //! A Sandbox's daemon reached directly (G4) is not an executor here: its
 //! Workspace calls take that route in `sandbox/direct.rs`.
-use crate::common::outcome::{refused, Outcome};
 use crate::machine::worker::{self, Endpoint, Unreached};
 use crate::store::record::StoreRef;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::{refused, Outcome};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -155,7 +155,7 @@ fn local(_: &Path, machine: &str) -> Result<bool> {
 /// `Unavailable` when it records none. A recorded worker that is gone
 /// fails when called.
 fn recorded(home: &Path, machine: &str) -> Result<Endpoint> {
-    let Some(worker) = crate::common::secrets::worker_secret(home, machine)? else {
+    let Some(worker) = layerfs_home::secrets::worker_secret(home, machine)? else {
         return Err(refused(
             "Unavailable",
             format!(

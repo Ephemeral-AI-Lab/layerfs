@@ -18,8 +18,8 @@
 use super::client::HELLO_WAIT;
 use super::frame::{read_frame, read_frame_within, write_frame, MAX_HELLO};
 use super::hello::Hello;
-use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::{refused, Outcome};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -50,8 +50,8 @@ pub fn serve(listener: TcpListener, secret: String, root: PathBuf) -> std::io::R
             .create(&root)?;
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o701))?;
     }
-    crate::common::home::guest::serve_root(&root);
-    crate::common::home::guest::retire_layout_2(&root);
+    layerfs_home::home::guest::serve_root(&root);
+    layerfs_home::home::guest::retire_layout_2(&root);
     let secret = Arc::new(secret);
     let root = Arc::new(root);
     // what it answers every secret with, read once
@@ -107,7 +107,7 @@ fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) ->
         _ => return false,
     };
     let _ = stream.set_read_timeout(None);
-    let _home = crate::common::home::guest::sent(request.get_text("home_id"));
+    let _home = layerfs_home::home::guest::sent(request.get_text("home_id"));
     let outcome = run(
         request.get_text("op").unwrap_or(""),
         request.get("args").cloned().unwrap_or_default(),
@@ -151,12 +151,12 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
             let store = inner
                 .get_text("store")
                 .ok_or_else(|| refused("InvalidInput", "a Store call names its Store"))?;
-            crate::common::names::StoreName::parse(store)?;
-            let file = crate::common::home::paths::store_file(root, store);
+            layerfs_home::names::StoreName::parse(store)?;
+            let file = layerfs_home::home::paths::store_file(root, store);
             // the worker holds the Store's lease under its root while it
             // keeps the Store open
-            let lease = crate::common::home::lease::hold_locked(root, store)?;
-            let inner = crate::common::home::with_field(
+            let lease = crate::common::lease::hold_locked(root, store)?;
+            let inner = layerfs_home::home::with_field(
                 inner,
                 "storePath",
                 SdkValue::text(file.display().to_string()),
@@ -199,12 +199,12 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
 fn with_home(args: SdkValue, root: &Path) -> SdkValue {
     let file = args
         .get_text("store")
-        .filter(|store| crate::common::names::StoreName::parse(store).is_ok())
-        .map(|store| crate::common::home::paths::store_file(root, store));
+        .filter(|store| layerfs_home::names::StoreName::parse(store).is_ok())
+        .map(|store| layerfs_home::home::paths::store_file(root, store));
     let text = SdkValue::text(root.display().to_string());
-    let args = crate::common::home::with_field(args, "home", text);
+    let args = layerfs_home::home::with_field(args, "home", text);
     match file {
-        Some(file) => crate::common::home::with_field(
+        Some(file) => layerfs_home::home::with_field(
             args,
             "storePath",
             SdkValue::text(file.display().to_string()),

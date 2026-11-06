@@ -2,7 +2,7 @@
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::calls::table::{call, Call};
 use layerfs_control::calls::Context;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::outcome::Outcome;
 
 /// Its table entry.
 pub(crate) const CALL: Call = call(
@@ -24,7 +24,7 @@ fn run(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
 /// refused before any effect.
 #[cfg(not(feature = "machine"))]
 fn run(_context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
-    Err(layerfs_control::common::outcome::refused(
+    Err(layerfs_home::outcome::refused(
         "Unsupported",
         "machine.platforms is not built yet (#533 step 6)",
     ))

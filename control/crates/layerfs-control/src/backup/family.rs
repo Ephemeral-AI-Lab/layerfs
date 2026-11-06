@@ -12,12 +12,12 @@ use super::list::list;
 use super::record::{remote_error, BucketRecord, StoreLink};
 use super::restore::restore;
 use crate::common::context::Context;
-use crate::common::home::{self, paths};
-use crate::common::outcome::{failed, refused, Outcome, View};
 use crate::store::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup as remote;
 use layerfs_bucket::bucket::pieces;
+use layerfs_home::home::{self, paths};
+use layerfs_home::outcome::{failed, refused, Outcome, View};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -39,7 +39,7 @@ pub fn run(context: &mut Context<'_>, call: &str, args: &SdkValue) -> Outcome {
 /// proves the bucket answers with this key before it is recorded.
 fn connect(home: &Path, args: &SdkValue) -> Outcome {
     let name = args.get_text("name").unwrap_or("");
-    crate::common::names::BucketName::parse(name)?;
+    layerfs_home::names::BucketName::parse(name)?;
     let record = BucketRecord::from_url(name, args.get_text("url").unwrap_or(""), args)?;
     // one listing proves the bucket answers with this key
     let driver = record.driver()?;

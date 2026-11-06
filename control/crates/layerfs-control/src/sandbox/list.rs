@@ -1,8 +1,8 @@
 //! `sandbox.list`: one page of the Sandbox records, each with its state.
 use super::family::page;
-use crate::common::outcome::{Outcome, View};
 use crate::inventory;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::outcome::{Outcome, View};
 use std::path::Path;
 
 /// `sandbox.list(project?, { page_size, page_pos })`: one page of the

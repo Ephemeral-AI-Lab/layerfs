@@ -8,10 +8,10 @@
 //! This process resolves from the home's records and the sealed bundle in
 //! the user cache (O16); a machine's worker from its own bundle folder (a
 //! guest never reads the home, H §7.7).
-use crate::common::home::paths;
-use crate::common::outcome::{failed, refused};
 use crate::machine::record::MachineRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::paths;
+use layerfs_home::outcome::{failed, refused};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -273,7 +273,7 @@ fn beside_self(name: &str) -> Result<PathBuf> {
 fn docker_vm(home: &Path, record: &MachineRecord) -> Result<String> {
     Ok(match record.text("vm_name") {
         Some(name) => name.to_owned(),
-        None => crate::machine::vm_name(&crate::common::home::open(home)?.id, "docker"),
+        None => crate::machine::vm_name(&crate::migrate::open(home)?.id, "docker"),
     })
 }
 

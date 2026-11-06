@@ -2,17 +2,16 @@
 use super::record::MachineRecord;
 use super::spec::{self as record, refusal};
 use crate::common::context::Context;
-use crate::common::home;
-use crate::common::outcome::Outcome;
 use crate::inventory::stores_on;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::Outcome;
 use layerfs_platform as adapters;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 pub(super) fn home_id(home: &Path) -> Result<String> {
-    Ok(home::open(home)?.id)
+    Ok(crate::migrate::open(home)?.id)
 }
 
 /// `machine.status(name)`: live state, free disk, the tool's version and

@@ -1,12 +1,12 @@
 //! `backup.list`: every Store file on the connected buckets with its state.
 use super::family::hex;
 use super::record::{remote_error, BucketRecord, StoreLink};
-use crate::common::home::paths;
-use crate::common::outcome::{failed, Outcome};
 use crate::store::record::{StoreKind, StoreRecord};
 use layerfs_bridge::control::SdkValue;
 use layerfs_bucket::backup as remote;
 use layerfs_bucket::bucket::pieces;
+use layerfs_home::home::paths;
+use layerfs_home::outcome::{failed, Outcome};
 use std::path::Path;
 
 /// Whether linked Store `store` changed since its link's last transfer: its

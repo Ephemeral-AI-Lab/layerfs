@@ -4,13 +4,13 @@
 use super::direct;
 use super::record::{self, SandboxRecord};
 use crate::common::context::Context;
-use crate::common::home::{self, paths};
-use crate::common::op::Op;
-use crate::common::outcome::{refused, Outcome, View};
 use crate::sandbox::route::on_machine;
 use crate::store::record::StoreRef;
 use crate::store::resolve;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::home::{self, paths};
+use layerfs_home::op::Op;
+use layerfs_home::outcome::{refused, Outcome, View};
 
 /// `sandbox.create(project, name, machine?, { image })`: with no `machine`,
 /// a sqlite Store's machine, or `native` for a PostgreSQL Store (#536 §10).
@@ -19,7 +19,7 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     let project = args.get_text("project").unwrap_or("");
     let name = args.get_text("name").unwrap_or("");
     let named = args.get_text("machine").filter(|m| !m.is_empty());
-    crate::common::names::SandboxName::parse(name)?;
+    layerfs_home::names::SandboxName::parse(name)?;
     if matches!(name, "native" | "docker") {
         return Err(refused(
             "InvalidInput",
@@ -143,7 +143,7 @@ pub(super) fn remove_folder(
 ) -> Result<(), layerfs_bridge::control::SdkRefusal> {
     match std::fs::remove_dir_all(dir) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-            Err(crate::common::outcome::failed(error))
+            Err(layerfs_home::outcome::failed(error))
         }
         _ => Ok(()),
     }

@@ -8,9 +8,9 @@ use super::endpoint::{running, start_lock};
 use super::spec::{self as record, machine_of, refusal};
 use super::status::home_id;
 use crate::common::context::Context;
-use crate::common::home::{lock, paths};
-use crate::common::outcome::{failed, Outcome};
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::home::{lock, paths};
+use layerfs_home::outcome::{failed, Outcome};
 use layerfs_platform::{self as adapters, Platform};
 
 /// `machine.start(name)`: the machine's worker answers its secret, or the

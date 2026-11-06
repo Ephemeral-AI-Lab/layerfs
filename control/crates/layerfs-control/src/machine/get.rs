@@ -2,8 +2,8 @@
 use super::list::{live, summary};
 use super::record::MachineRecord;
 use crate::common::context::Context;
-use crate::common::outcome::Outcome;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::outcome::Outcome;
 
 /// `machine.get(name)`: its record with its live state, Stores and
 /// Sandboxes. A read: answered while an `op` holds the machine too.

@@ -9,8 +9,8 @@
 //! and `backup.restore`. Result keys are snake_case in every front end.
 use super::{check, table, table::Family};
 pub use crate::common::context::Context;
-use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::outcome::{refused, Outcome};
 use std::path::{Path, PathBuf};
 
 /// The home a call uses: `explicit` when given, else `LAYERFS_HOME`, else
@@ -64,8 +64,8 @@ pub fn call_scoped(
     }
     let home = home(home_path)?;
     super::platform_policy::check(&home, name, &args)?;
-    let id = crate::common::home::open(&home)
-        .inspect_err(|refusal| crate::common::home::note_failure(&home, refusal))?
+    let id = crate::migrate::open(&home)
+        .inspect_err(|refusal| crate::migrate::note_failure(&home, refusal))?
         .id;
     // `machine/native/` and `machine/docker/` exist from the first call;
     // checked once per process for each home (R6)
@@ -88,7 +88,7 @@ pub fn call_scoped(
                 .and_then(|n| n.strip_prefix(&prefix))
                 .map(str::to_owned)
             {
-                Some(name) => crate::common::home::with_field(value, "name", SdkValue::Text(name)),
+                Some(name) => layerfs_home::home::with_field(value, "name", SdkValue::Text(name)),
                 None => value,
             }
         }

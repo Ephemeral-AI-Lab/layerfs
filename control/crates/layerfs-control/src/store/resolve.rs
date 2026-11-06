@@ -1,9 +1,9 @@
 //! The Store and project a call names, read from their records, and the
 //! checks every Store call makes on them first.
-use crate::common::outcome::refused;
 use crate::project::record::ProjectRecord;
 use crate::store::record::{StoreRecord, StoreRef};
 use layerfs_bridge::control::SdkRefusal;
+use layerfs_home::outcome::refused;
 use std::path::Path;
 
 /// The Store and project a call names, with their records.

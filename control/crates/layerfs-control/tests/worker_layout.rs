@@ -4,8 +4,8 @@
 //! bundle left (numbered Sandbox state, `machine/*/sandbox/`, old local
 //! Sandbox directories; the image cache kept under `machine/native/run/`).
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::common::home::{self, paths, read_record, write_record};
 use layerfs_control::machine::worker::{self, Endpoint};
+use layerfs_home::home::{self, paths, read_record, write_record};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -61,7 +61,7 @@ fn the_store_record_is_thin_and_written_only_when_it_changed() {
     let root = scratch.join("data");
     let endpoint = worker(&root);
     // the caller's home id travels with each request
-    home::open(&scratch.join("home")).unwrap();
+    layerfs_control::migrate::open(&scratch.join("home")).unwrap();
     let sent = SdkValue::map([
         ("name", SdkValue::text("shop")),
         ("kind", SdkValue::text("sqlite")),

@@ -10,12 +10,12 @@
 //! own with the same call and sides, so a crash meanwhile leaves the same
 //! copy to the call after it. The copy the record names is never touched,
 //! and nothing is deleted while another operation holds the Store.
-use crate::common::op::{Op, Standing};
-use crate::common::outcome::refused;
 use crate::common::place::{self, Executor};
 use crate::store::family::{begin, ended, of_store, record_of, step};
 use crate::store::record::{self, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::op::{Op, Standing};
+use layerfs_home::outcome::refused;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -125,11 +125,11 @@ pub(super) fn retired(home: &Path, name: &str, id: &str) -> Result<()> {
     let _store = record::lock(home, name)?;
     let mut now = record_of(home, name)?;
     if now.op().is_some_and(|held| held.id() == id) {
-        now = now.without(crate::common::op::FIELD);
+        now = now.without(layerfs_home::op::FIELD);
     }
     if let Some(last) = now.field("last_transfer").cloned() {
         if last.get("retired") == Some(&SdkValue::Bool(false)) {
-            let last = crate::common::home::with_field(last, "retired", SdkValue::Bool(true));
+            let last = layerfs_home::home::with_field(last, "retired", SdkValue::Bool(true));
             now = now.with("last_transfer", last);
         }
     }

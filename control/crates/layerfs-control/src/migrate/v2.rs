@@ -27,15 +27,16 @@
 //! A crash before the flip leaves a layout 2 home that converts again (each
 //! write is idempotent); after it, the next open finds the marker and
 //! finishes step 3 ([`finish`]).
-use crate::common::home::layout::{write, HomeFile, LAYOUT_VERSION};
-use crate::common::home::{lease, paths, read_record, with_field, write_entity, write_record};
-use crate::common::op::{self, Op};
-use crate::common::outcome::{failed, refused};
+use crate::common::lease;
 use crate::machine::record::MachineRecord;
 use crate::sandbox::record::SandboxRecord;
 use crate::sandbox::recorded::{unchecked, Recorded};
 use crate::store::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::layout::{write, HomeFile, LAYOUT_VERSION};
+use layerfs_home::home::{paths, read_record, with_field, write_entity, write_record};
+use layerfs_home::op::{self, Op};
+use layerfs_home::outcome::{failed, refused};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -133,7 +134,7 @@ pub(super) fn finish(home: &Path) -> Result<()> {
     if !marker.exists() {
         return Ok(());
     }
-    let _lock = crate::common::home::lock::take(home)?;
+    let _lock = layerfs_home::home::lock::take(home)?;
     if marker.exists() {
         clean(home)?;
         remove(&marker)?;
@@ -142,7 +143,7 @@ pub(super) fn finish(home: &Path) -> Result<()> {
 }
 
 fn now() -> i64 {
-    crate::common::home::now_ms()
+    layerfs_home::home::now_ms()
 }
 
 fn remove(path: &Path) -> Result<()> {
@@ -228,7 +229,9 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
         };
         match record.field("in_progress") {
             None => {}
-            Some(progress @ SdkValue::Map(_)) if lease::recorded_alive(progress) => {
+            Some(progress @ SdkValue::Map(_))
+                if layerfs_home::process::recorded_alive(progress) =>
+            {
                 let pid = progress.get_int("pid").unwrap_or(0);
                 plan.live(
                     "store",
@@ -251,7 +254,7 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
     for machine in names(&home.join("machine"))? {
         let record = MachineRecord::read(home, &machine)?;
         let removing = record.and_then(|r| r.field("removing").cloned());
-        if let Some(removing) = removing.filter(lease::recorded_alive) {
+        if let Some(removing) = removing.filter(layerfs_home::process::recorded_alive) {
             let pid = removing.get_int("pid").unwrap_or(0);
             plan.live(
                 "machine",
@@ -269,7 +272,8 @@ fn survey(home: &Path, holders: impl Fn(&Path, &str) -> Result<Vec<u32>>) -> Res
 fn creator(value: &SdkValue) -> Option<i64> {
     let pid = value.get_int("pid").filter(|pid| *pid > 0)?;
     let named = SdkValue::map([("pid", SdkValue::Int(pid))]);
-    (value.get_text("state") == Some("creating") && lease::recorded_alive(&named)).then_some(pid)
+    (value.get_text("state") == Some("creating") && layerfs_home::process::recorded_alive(&named))
+        .then_some(pid)
 }
 
 /// Layout 2 Sandbox record `value` in layout 3's form: no stored `state`

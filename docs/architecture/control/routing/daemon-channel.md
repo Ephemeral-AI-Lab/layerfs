@@ -9,7 +9,7 @@ How Workspace calls reach a daemon.
 | | |
 | --- | --- |
 | Component | [Routing and workers](README.md) |
-| Source | [`control/crates/layerfs-control/src/daemon`](../../../../control/crates/layerfs-control/src/daemon), [`sandbox/files.rs`](../../../../control/crates/layerfs-control/src/sandbox/files.rs), [`sandbox/registry.rs`](../../../../control/crates/layerfs-control/src/sandbox/registry.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-control/src/workspace/serve.rs), [`common/trace.rs`](../../../../control/crates/layerfs-control/src/common/trace.rs) |
+| Source | [`control/crates/layerfs-control/src/daemon`](../../../../control/crates/layerfs-control/src/daemon), [`sandbox/files.rs`](../../../../control/crates/layerfs-control/src/sandbox/files.rs), [`sandbox/registry.rs`](../../../../control/crates/layerfs-control/src/sandbox/registry.rs), [`workspace/serve.rs`](../../../../control/crates/layerfs-control/src/workspace/serve.rs), [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs) |
 
 The process that serves a Sandbox (the caller on `native` or for a forwarded
 Sandbox, else the machine's worker) holds that Sandbox's control connections
@@ -47,7 +47,7 @@ side of the channel is in [Engine: Daemon](../../engine/daemon/README.md).
 | `Dial` | how to open another connection to the same daemon instance: endpoint, optional dial host, secret, peer key, instance | [`daemon/pool.rs`](../../../../control/crates/layerfs-control/src/daemon/pool.rs) |
 | `Controls` | the Sandbox's pool: up to `CONNECTIONS` (6) per process; the daemon admits `DAEMON_CONNECTIONS` (8), leaving the rest to other processes | `daemon/pool.rs`, [`sandbox/serve.rs`](../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
 | `Lease` | one connection lent for one call's exchanges, returned on drop | `daemon/pool.rs` |
-| `Traced` | a lease whose requests travel as traced observations while the thread traces; its wait is the call's queue time | [`common/trace.rs`](../../../../control/crates/layerfs-control/src/common/trace.rs) |
+| `Traced` | a lease whose requests travel as traced observations while the thread traces; its wait is the call's queue time | [`daemon/trace.rs`](../../../../control/crates/layerfs-control/src/daemon/trace.rs) |
 
 The pool exists because the daemon serves each authenticated connection on
 its own worker: one shared connection made every call wait for the one before
@@ -82,7 +82,7 @@ does not share the Docker host's loopback (`pool::daemon_host`).
 
 | Call | Daemon requests | Answer shaped by | Source |
 | --- | --- | --- | --- |
-| `workspace.mount` | `Mount` (bind), then `Attach` (kernel Ready): two acknowledged steps; a failed attach leaves the Workspace bound | `values::mounted` | [`daemon/workspace/mount.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/mount.rs), [`recovery.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/recovery.rs) |
+| `workspace.mount` | `Mount` (bind), then `Attach` (kernel Ready): two acknowledged steps; a failed attach leaves the Workspace bound | `values::mounted` | [`daemon/workspace/mount.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/mount.rs), [`daemon/workspace/recovery.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/recovery.rs) |
 | `workspace.commit` | `Commit` | `values::commit`: Committed, Merged (with `merged`), or `Conflict` | [`daemon/workspace/commit.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/commit.rs), [`daemon/values.rs`](../../../../control/crates/layerfs-control/src/daemon/values.rs) |
 | `workspace.unmount` | `Unmount{token, discard}`, or `ForceUnmount` with `force` | `values::unmounted` (`Dirty` refusal) or `force_unmounted` | [`daemon/workspace/unmount.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/unmount.rs) |
 | `workspace.status` | `Status(token)`; the Branch head is read separately on the Store's route | `values::status` | [`daemon/workspace/status.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/status.rs) |
@@ -91,7 +91,7 @@ does not share the Docker host's loopback (`pool::daemon_host`).
 
 `Locate` and `Cleanup` are read-only observations for a caller whose
 acknowledgement was lost; they bind, attach and remove nothing
-([`recovery.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/recovery.rs)).
+([`daemon/workspace/recovery.rs`](../../../../control/crates/layerfs-control/src/daemon/workspace/recovery.rs)).
 Every Workspace record (`workspace/<id>.json`) and unmount guard lives in the
 serving side's Sandbox folder ([`workspace/serve.rs`](../../../../control/crates/layerfs-control/src/workspace/serve.rs),
 [`workspace/unmount_guard.rs`](../../../../control/crates/layerfs-control/src/workspace/unmount_guard.rs)).
@@ -110,7 +110,7 @@ is `Capacity`.
 
 | Failure | Becomes | Outcome known? | Source |
 | --- | --- | --- | --- |
-| Daemon refusal (`Reply::Refused`) | its `ControlCode` as the code: `Busy`, `HeadMoved`, `Missing`, `Capacity`, `Invalid`, `Failed` or `Unknown`; `detail.phase` | yes, except code `Unknown` | [`daemon/failure.rs`](../../../../control/crates/layerfs-control/src/daemon/failure.rs), [`values.rs`](../../../../control/crates/layerfs-control/src/daemon/values.rs) `refusal`, [`control_types.rs`](../../../../engine/crates/layerfs-bridge/src/control_types.rs) |
+| Daemon refusal (`Reply::Refused`) | its `ControlCode` as the code: `Busy`, `HeadMoved`, `Missing`, `Capacity`, `Invalid`, `Failed` or `Unknown`; `detail.phase` | yes, except code `Unknown` | [`daemon/failure.rs`](../../../../control/crates/layerfs-control/src/daemon/failure.rs), [`daemon/values.rs`](../../../../control/crates/layerfs-control/src/daemon/values.rs) `refusal`, [`control_types.rs`](../../../../engine/crates/layerfs-bridge/src/control_types.rs) |
 | Request larger than one control record, before sending | `TooLarge` | yes: not sent | [`daemon/call.rs`](../../../../control/crates/layerfs-control/src/daemon/call.rs) |
 | Transport or protocol failure (`OperationCause::Exchange`) | `Failed`, its message the failure's debug text with `phase` and `attempted` | no when `attempted` is true | [`sandbox/serve.rs`](../../../../control/crates/layerfs-control/src/sandbox/serve.rs) `operation` |
 | Terminal step stopped after effects (`Retained`) | `Failed`; the daemon keeps custody | partly | `daemon/failure.rs` |

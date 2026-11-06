@@ -10,11 +10,11 @@ use super::direct;
 use super::family::sandbox_of;
 use super::record::{self, SandboxRecord};
 use crate::common::context::Context;
-use crate::common::home;
-use crate::common::op::{Op, Standing};
-use crate::common::outcome::{refused, Outcome};
 use crate::sandbox::route::on_machine;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home;
+use layerfs_home::op::{Op, Standing};
+use layerfs_home::outcome::{refused, Outcome};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

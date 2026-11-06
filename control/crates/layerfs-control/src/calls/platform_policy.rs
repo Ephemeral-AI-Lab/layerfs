@@ -2,11 +2,11 @@
 //! dispatch. Read-only inspection and explicit teardown retain their routes.
 //! This also runs in builds without machine adapters, so a recorded worker or
 //! a forwarded daemon cannot bypass the product policy.
-use crate::common::outcome::refused;
 use crate::machine::record::MachineRecord;
 use crate::sandbox::record::SandboxRecord;
 use crate::store::record::{StoreKind, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::refused;
 use std::path::Path;
 
 type Result = std::result::Result<(), SdkRefusal>;
@@ -19,7 +19,7 @@ fn platform(name: &str) -> Result {
 }
 
 fn machine(home: &Path, name: &str) -> Result {
-    crate::common::names::MachineName::parse(name)?;
+    layerfs_home::names::MachineName::parse(name)?;
     if let Some(record) = MachineRecord::read(home, name)? {
         platform(record.platform_name().unwrap_or(""))?;
     }
@@ -27,7 +27,7 @@ fn machine(home: &Path, name: &str) -> Result {
 }
 
 fn store(home: &Path, name: &str) -> Result {
-    crate::common::names::StoreName::parse(name)?;
+    layerfs_home::names::StoreName::parse(name)?;
     if let Some(record) = StoreRecord::read(home, name)? {
         if record.store_ref()?.kind() == StoreKind::Sqlite {
             machine(home, record.store_ref()?.machine()?)?;
@@ -44,7 +44,7 @@ fn project(home: &Path, name: &str) -> Result {
 }
 
 fn sandbox(home: &Path, name: &str) -> Result {
-    crate::common::names::SandboxName::parse(name)?;
+    layerfs_home::names::SandboxName::parse(name)?;
     if let Some(record) = SandboxRecord::read(home, name)? {
         // A saved daemon still names its platform if the machine record is gone.
         platform(record.to_record().get_text("platform").unwrap_or(""))?;

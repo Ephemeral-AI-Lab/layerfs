@@ -16,8 +16,7 @@
 //! worker as before.
 use super::record::SandboxRecord;
 use crate::common::context::Context;
-use crate::common::home::{self, lease, paths};
-use crate::common::outcome::{refused, Outcome};
+use crate::common::lease;
 use crate::machine::worker::Unreached;
 use crate::sandbox::registry::{self, SandboxState, SANDBOXES};
 use crate::sandbox::{dispatch, files};
@@ -26,6 +25,9 @@ use crate::store::resolve::{self, Target};
 use crate::workspace::{serve, unmount_guard};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId};
+use layerfs_home::helpers;
+use layerfs_home::home::{self, paths};
+use layerfs_home::outcome::{refused, Outcome};
 use std::net::SocketAddr;
 use std::path::Path;
 
@@ -67,7 +69,7 @@ pub(crate) fn check(home: &Path, id: &str, daemon: &SdkValue) -> Result<()> {
             ),
         ));
     }
-    if forward.get_int("pid").is_none() || lease::recorded_alive(forward) {
+    if forward.get_int("pid").is_none() || layerfs_home::process::recorded_alive(forward) {
         return Ok(());
     }
     Err(refused(
@@ -119,7 +121,7 @@ pub(crate) fn unanswered(id: &str, daemon: &SdkValue, refusal: SdkRefusal) -> Sd
 /// `root`, with the daemon's endpoint in the machine and its control keys
 /// (`control`), which only the caller reads.
 pub(crate) fn with_keys(root: &Path, name: &str, out: SdkValue) -> Outcome {
-    let keys = crate::common::secrets::daemon_keys(&paths::sandbox_dir(root, name))?
+    let keys = layerfs_home::secrets::daemon_keys(&paths::sandbox_dir(root, name))?
         .ok_or_else(|| refused("Failed", format!("Sandbox {name} has no daemon keys")))?;
     Ok(home::with_field(out, "control", keys))
 }
@@ -215,7 +217,7 @@ pub(crate) fn save(home: &Path, record: SandboxRecord, opened: &Opened) -> Resul
     let (Some(keys), Some(daemon)) = (&opened.keys, &opened.daemon) else {
         return Ok(record);
     };
-    if let Err(refusal) = crate::common::secrets::save_daemon_keys(&record.dir(home), keys) {
+    if let Err(refusal) = layerfs_home::secrets::save_daemon_keys(&record.dir(home), keys) {
         end(home, record.machine(), daemon);
         return Err(refusal);
     }
@@ -238,7 +240,7 @@ fn carried(
     if record.platform()? == Platform::Docker {
         return Ok(Some((endpoint, None)));
     }
-    let spec = crate::machine::machine_spec(home, &home::open(home)?.id, &record)?;
+    let spec = crate::machine::machine_spec(home, &crate::migrate::open(home)?.id, &record)?;
     match layerfs_platform::forward(&spec, endpoint.port()) {
         Ok(forward) => Ok(Some((forward.address, forward.pid))),
         Err(error) if error.code == Code::Unsupported => Ok(None),
@@ -262,7 +264,7 @@ fn end(home: &Path, machine: &str, daemon: &SdkValue) {
     let Some(pid) = forward.get_int("pid").and_then(|p| u32::try_from(p).ok()) else {
         return;
     };
-    if !lease::recorded_alive(forward) {
+    if !layerfs_home::process::recorded_alive(forward) {
         return;
     }
     #[cfg(feature = "machine")]
@@ -270,8 +272,9 @@ fn end(home: &Path, machine: &str, daemon: &SdkValue) {
         let Some(address) = forward_of(daemon) else {
             return;
         };
-        let spec = crate::machine::record::MachineRecord::of(home, machine)
-            .and_then(|record| crate::machine::machine_spec(home, &home::open(home)?.id, &record));
+        let spec = crate::machine::record::MachineRecord::of(home, machine).and_then(|record| {
+            crate::machine::machine_spec(home, &crate::migrate::open(home)?.id, &record)
+        });
         if let Ok(spec) = spec {
             let forward = layerfs_platform::Forward {
                 address,
@@ -288,7 +291,7 @@ fn end(home: &Path, machine: &str, daemon: &SdkValue) {
 /// it and its forward is ended. Its folder is the caller's to remove.
 pub(crate) fn release(home: &Path, record: &SandboxRecord) {
     let dir = record.dir(home);
-    if let Ok(mut live) = registry::lock(&SANDBOXES) {
+    if let Ok(mut live) = helpers::lock(&SANDBOXES) {
         live.remove(&dir);
     }
     if let Some(daemon) = record.to_record().get("daemon") {
@@ -410,7 +413,7 @@ pub(crate) fn exec_directory(home: &Path, record: &SandboxRecord, at: &str) -> R
             format!("{}:{at} is not mounted", record.name()),
         ));
     };
-    let path = registry::text(&workspace, "path")?.to_owned();
+    let path = helpers::text(&workspace, "path")?.to_owned();
     unmount_guard::check_in(&dir, &path)?;
     Ok(path)
 }
@@ -424,13 +427,13 @@ pub(crate) fn held(home: &Path, record: &SandboxRecord) -> Result<Vec<String>> {
     let args = args(home, record, &target, vec![]);
     let Ok(state) = registry::sandbox_live(&args) else {
         return (files::workspaces(&record.dir(home))?.iter())
-            .map(|(_, workspace)| Ok(registry::text(workspace, "path")?.to_owned()))
+            .map(|(_, workspace)| Ok(helpers::text(workspace, "path")?.to_owned()))
             .collect();
     };
     let _guard = files::guard(&state.directory)?;
     let recoverable = unmount_guard::check_all(&state)?;
     files::refresh_except(&state, &recoverable)?;
-    let mounted = registry::lock(&state.mounts)?
+    let mounted = helpers::lock(&state.mounts)?
         .keys()
         .filter(|path| !recoverable.contains(path))
         .cloned()

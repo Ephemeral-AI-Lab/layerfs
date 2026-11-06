@@ -11,7 +11,7 @@
 //! On its first start from a layout 3 bundle (#536 H10), a worker deletes
 //! what an earlier bundle left under its root ([`retire_layout_2`]).
 use super::layout::{HomeFile, LAYOUT_VERSION};
-use crate::common::outcome::refused;
+use crate::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -25,7 +25,7 @@ thread_local! {
 }
 
 /// Marks `root` as a worker's root: opening it never writes it.
-pub(crate) fn serve_root(root: &Path) {
+pub fn serve_root(root: &Path) {
     let mut roots = ROOTS.lock().unwrap_or_else(|e| e.into_inner());
     if !roots.iter().any(|r| r == root) {
         roots.push(root.to_owned());
@@ -33,24 +33,24 @@ pub(crate) fn serve_root(root: &Path) {
 }
 
 /// Whether `path` is a root a worker of this process serves.
-pub(super) fn is_root(path: &Path) -> bool {
+pub fn is_root(path: &Path) -> bool {
     let roots = ROOTS.lock().unwrap_or_else(|e| e.into_inner());
     roots.iter().any(|r| r == path)
 }
 
 /// Notes `id` as the home this thread opened.
-pub(super) fn opened(id: &str) {
+pub fn opened(id: &str) {
     ID.with(|slot| *slot.borrow_mut() = Some(id.to_owned()));
 }
 
 /// The id of the home this thread works for, if it has one.
-pub(crate) fn current_id() -> Option<String> {
+pub fn current_id() -> Option<String> {
     ID.with(|slot| slot.borrow().clone())
 }
 
 /// A worker root opened as a home: the caller's id, or refused when the
 /// request carried none. Nothing is read or written.
-pub(super) fn file(root: &Path) -> Result<HomeFile, SdkRefusal> {
+pub fn file(root: &Path) -> Result<HomeFile, SdkRefusal> {
     match current_id() {
         Some(id) if id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit()) => Ok(HomeFile {
             layout: LAYOUT_VERSION,
@@ -68,10 +68,10 @@ pub(super) fn file(root: &Path) -> Result<HomeFile, SdkRefusal> {
 
 /// The home id a request carried, for as long as it is served on this
 /// thread.
-pub(crate) struct Sent(Option<String>);
+pub struct Sent(Option<String>);
 
 /// Serves one request with `id` (the caller's home id) as this thread's.
-pub(crate) fn sent(id: Option<&str>) -> Sent {
+pub fn sent(id: Option<&str>) -> Sent {
     Sent(ID.with(|slot| slot.replace(id.map(str::to_owned))))
 }
 
@@ -94,7 +94,7 @@ const RETIRED: &str = ".layout-3";
 /// thin: `{ v, name, kind }`). Each deletion is written to the worker's log
 /// (its stderr); one that fails is logged and left. The marker
 /// `.layout-3` keeps it from running again.
-pub(crate) fn retire_layout_2(root: &Path) {
+pub fn retire_layout_2(root: &Path) {
     use super::paths;
     if root.join(RETIRED).exists() {
         return;

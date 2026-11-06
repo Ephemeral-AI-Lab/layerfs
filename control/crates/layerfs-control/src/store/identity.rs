@@ -10,14 +10,15 @@
 //! no record: it is named after its one project, whose entry
 //! `<home>/<project>/` carries the Store's binding. Every Store-level call
 //! is one attempt; nothing is retried.
-use crate::common::outcome::{failed, refused, Outcome};
 use crate::sandbox::files as discovery;
-use crate::sandbox::registry::{random, text, Project};
+use crate::sandbox::registry::Project;
 use crate::store::record::{required, StoreKind, StoreRecord, StoreRef};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bridge::provision::{ProviderKind, StoreManifest, StoreProfile};
 use layerfs_bridge::sdk_values::hex;
 use layerfs_history::{BranchId, HistoryCatalogConfig, HistoryName, LayerStackId};
+use layerfs_home::helpers::{random, text};
+use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_persistence::{PersistenceConfig, SealedStore, SqlitePersistenceProfile};
 use layerfs_project::store::{AddRequest, CreateRequest, InitError, ProjectApi};
 use layerfs_project::{InitCounters, ProjectError};
@@ -52,12 +53,12 @@ pub(crate) fn store_dir(home: &Path, store: &str) -> Result<PathBuf> {
             format!("a Store name is 1-63 lowercase letters, digits, _ . - (not {store:?})"),
         )
     })?;
-    Ok(crate::common::home::paths::store_dir(home, store))
+    Ok(layerfs_home::home::paths::store_dir(home, store))
 }
 
 fn record_path(home: &Path, store: &str) -> Result<PathBuf> {
     store_dir(home, store)?;
-    Ok(crate::common::home::paths::store_record(home, store))
+    Ok(layerfs_home::home::paths::store_record(home, store))
 }
 
 /// Store `store`'s record in `home` (`store/<name>/record.json`).
@@ -344,8 +345,8 @@ pub(crate) fn save_entry(
 /// owner-only, with its parents: `<home>/store/<store>/project/<name>/`.
 pub(crate) fn make_entry(home: &Path, store: &str, name: &str) -> Result<PathBuf> {
     let directory = store_dir(home, store)?;
-    crate::common::home::private_dir(&directory.join("project"))?;
-    let entry = crate::common::home::paths::project_dir(home, store, name);
+    layerfs_home::home::private_dir(&directory.join("project"))?;
+    let entry = layerfs_home::home::paths::project_dir(home, store, name);
     std::fs::create_dir(&entry).map_err(|error| {
         if error.kind() == std::io::ErrorKind::AlreadyExists {
             refused("Exists", format!("project {name} exists in Store {store}"))
@@ -503,7 +504,7 @@ pub(crate) fn remove_project(args: &SdkValue) -> Outcome {
     let name = text(args, "project")?;
     let identity = identity(args)?;
     let own = name == store && legacy(&home, store)?;
-    let entry = crate::common::home::paths::project_dir(&home, store, name);
+    let entry = layerfs_home::home::paths::project_dir(&home, store, name);
     let stack = crate::store::service::with_service(args, |service| {
         let stacks = service
             .store
@@ -528,7 +529,7 @@ pub(crate) fn remove_project(args: &SdkValue) -> Outcome {
     })?;
     // the own project's entry carried the Store's identity until now
     if own {
-        crate::common::home::private_dir(&store_dir(&home, store)?)?;
+        layerfs_home::home::private_dir(&store_dir(&home, store)?)?;
         save_record(&home, store, &identity)?;
     }
     if entry.exists() {

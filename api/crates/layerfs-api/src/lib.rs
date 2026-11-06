@@ -22,13 +22,22 @@ mod workspace;
 
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::calls as machinery;
-use layerfs_control::common::outcome::Outcome;
+use layerfs_home::outcome::Outcome;
 use std::path::Path;
 
 pub use layerfs_control::calls::{
     home, json, keys, size, Arg, Call, CallRef, Calls, Context, Families, Family, Kind, Run, Scope,
 };
-pub use layerfs_control::common::{home, names};
+pub use layerfs_home::names;
+/// The home (`layerfs-home`), with opening and converting it
+/// (`layerfs-control` `migrate`) and the Store leases, as the front ends
+/// used them before the control split (layerfs-project#103).
+pub mod home {
+    pub use layerfs_control::common::lease;
+    pub use layerfs_control::migrate::{import_env, note_failure, open, open_from};
+    pub use layerfs_home::home::*;
+    pub use layerfs_home::process;
+}
 /// `layerfs doctor` (#536 H7): report-only, outside the call table.
 pub use layerfs_control::doctor::{doctor, doctor_json};
 #[cfg(feature = "machine")]

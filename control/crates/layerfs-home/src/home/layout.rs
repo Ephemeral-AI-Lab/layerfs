@@ -5,7 +5,7 @@
 //! machine names its containers with it (O33) and backups record it as
 //! where they were exported from. Reading never changes anything.
 use super::records::{private_dir, read_record, write_record};
-use crate::common::outcome::refused;
+use crate::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::path::Path;
 
@@ -27,7 +27,7 @@ pub struct HomeFile {
 /// The 1.1.0 records at the top of a home; `<p>/project.record` marks one
 /// too. A home with none of them and no `layerfs.json` is new, whatever
 /// else is in it (such as the `layerfs.lock` the first call takes).
-pub(super) const OLD: [&str; 9] = [
+pub const OLD: [&str; 9] = [
     ".stores",
     "stores.json",
     "stores.v1.json",
@@ -134,9 +134,9 @@ pub fn ensure(home: &Path) -> Result<HomeFile, SdkRefusal> {
 }
 
 /// Writes a new `layerfs.json` with a new id.
-pub(crate) fn create(home: &Path) -> Result<HomeFile, SdkRefusal> {
+pub fn create(home: &Path) -> Result<HomeFile, SdkRefusal> {
     private_dir(home)?;
-    let random = crate::sandbox::registry::random()?;
+    let random = crate::helpers::random()?;
     let file = HomeFile {
         layout: LAYOUT_VERSION,
         id: layerfs_bridge::sdk_values::hex(&random[..16]),
@@ -146,7 +146,7 @@ pub(crate) fn create(home: &Path) -> Result<HomeFile, SdkRefusal> {
 }
 
 /// Writes `layerfs.json` as `file` says, replacing it whole.
-pub(crate) fn write(home: &Path, file: &HomeFile) -> Result<(), SdkRefusal> {
+pub fn write(home: &Path, file: &HomeFile) -> Result<(), SdkRefusal> {
     write_record(
         &home.join("layerfs.json"),
         &SdkValue::map([

@@ -1,8 +1,8 @@
 //! One frame: a 4-byte big-endian length, then that many bytes of JSON.
 //! Bytes travel as `{"base64": ...}` so a value keeps its type.
-use crate::common::json;
-use crate::common::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::json;
+use layerfs_home::outcome::refused;
 use std::io::{Read, Write};
 
 /// The largest frame either side accepts.

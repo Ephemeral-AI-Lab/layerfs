@@ -16,13 +16,13 @@
 //! nothing is deleted. An unknown file is left where it is and reported.
 //! `layerfs.json` is written last, so a conversion stopped part way is
 //! continued by the next call, and a second run changes nothing.
-use crate::common::home::layout::OLD;
-use crate::common::home::paths;
-use crate::common::home::records::{now_ms, private_dir, read_record, with_field, write_record};
-use crate::common::outcome::{failed, refused};
 use crate::store::record::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_bucket::backup::{link as state, Provider, Remotes};
+use layerfs_home::home::layout::OLD;
+use layerfs_home::home::paths;
+use layerfs_home::home::records::{now_ms, private_dir, read_record, with_field, write_record};
+use layerfs_home::outcome::{failed, refused};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -244,7 +244,7 @@ fn own_store(home: &Path, name: &str, dir: &Path, report: &mut Report) -> Result
         // the 1.1.0 runtime's record of the project names its Store's volume
         let runtime = home.join(".runtime/projects").join(format!("{name}.json"));
         if let Ok(text) = fs::read_to_string(&runtime) {
-            let value = crate::common::json::parse(&text)
+            let value = layerfs_home::json::parse(&text)
                 .map_err(|e| refused("Failed", format!("{}: {}", runtime.display(), e.0)))?;
             if let Some(volume) = value.get_text("volume") {
                 record = with_field(record, "volume", SdkValue::text(volume));
@@ -304,7 +304,7 @@ fn fold_registry(home: &Path, file: &Path, report: &mut Report) -> Result<()> {
     let Ok(text) = fs::read_to_string(file) else {
         return Ok(());
     };
-    let doc = crate::common::json::parse(&text)
+    let doc = layerfs_home::json::parse(&text)
         .map_err(|e| refused("Failed", format!("{}: {}", file.display(), e.0)))?;
     let Some(SdkValue::List(stores)) = doc.get("stores") else {
         return Ok(());

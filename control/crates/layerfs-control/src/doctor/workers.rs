@@ -5,8 +5,8 @@
 //! a warning naming the calls that fix it.
 use super::report::Findings;
 use super::scan::Scanned;
-use crate::common::home::{paths, read_record};
 use crate::machine::worker::{self, Endpoint};
+use layerfs_home::home::{paths, read_record};
 use std::path::Path;
 
 /// Asks each recorded worker which build it is.

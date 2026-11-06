@@ -12,10 +12,10 @@ use super::record::{MachineRecord, CREATE};
 use super::spec::{self as record, machine_of, refusal, save_running, update as update_record};
 use super::status::home_id;
 use crate::common::context::Context;
-use crate::common::home::{self, lock, paths};
-use crate::common::op::Op;
-use crate::common::outcome::{failed, refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::{self, lock, paths};
+use layerfs_home::op::Op;
+use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_platform::{self as adapters, Code, Platform};
 use std::path::Path;
 
@@ -23,8 +23,8 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// A new machine's name: valid, not built in, not taken.
 pub(super) fn new_name(home: &Path, name: &str) -> Result<()> {
-    crate::common::names::MachineName::parse(name)?;
-    if crate::common::names::BUILT_IN.contains(&name) {
+    layerfs_home::names::MachineName::parse(name)?;
+    if layerfs_home::names::BUILT_IN.contains(&name) {
         return Err(refused(
             "InvalidInput",
             format!("{name} is a built-in machine"),

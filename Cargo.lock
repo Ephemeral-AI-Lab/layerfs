@@ -708,6 +708,7 @@ dependencies = [
  "layerfs-content",
  "layerfs-control",
  "layerfs-history",
+ "layerfs-home",
  "layerfs-isolation",
  "layerfs-overlay",
  "layerfs-persistence",
@@ -767,6 +768,7 @@ dependencies = [
  "layerfs-daemon",
  "layerfs-fuse",
  "layerfs-history",
+ "layerfs-home",
  "layerfs-isolation",
  "layerfs-overlay",
  "layerfs-persistence",
@@ -820,6 +822,16 @@ version = "2.0.0"
 dependencies = [
  "blake3",
  "layerfs-content",
+]
+
+[[package]]
+name = "layerfs-home"
+version = "2.0.0"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-isolation",
+ "libc",
+ "nix",
 ]
 
 [[package]]

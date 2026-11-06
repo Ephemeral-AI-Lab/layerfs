@@ -4,8 +4,8 @@
 //! caller's fields; a record of a removed project of the same name (another
 //! `created`) is replaced.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::common::home::{self, paths, read_record, write_record};
 use layerfs_control::machine::worker::{self, Endpoint};
+use layerfs_home::home::{paths, read_record, write_record};
 use std::path::{Path, PathBuf};
 
 fn tempdir(tag: &str) -> PathBuf {
@@ -67,7 +67,7 @@ fn a_worker_inited_project_keeps_its_manifest() {
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
-    home::open(&scratch.join("home")).unwrap();
+    layerfs_control::migrate::open(&scratch.join("home")).unwrap();
     let manifest = SdkValue::Bytes(vec![1, 2, 3]);
     let path = paths::project_record(&root, "shop", "api");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();

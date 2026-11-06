@@ -9,10 +9,10 @@
 //! `<branch>.<name>`. A scope guards calls; it is not filesystem isolation
 //! (a command can still `cd` anywhere in the mounted tree). Every refusal
 //! comes before dispatch.
-use crate::common::home::with_field;
-use crate::common::outcome::refused;
 use crate::store::calls::NAMESPACE;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::with_field;
+use layerfs_home::outcome::refused;
 use std::path::Path;
 
 /// A checked scope.
@@ -67,7 +67,7 @@ impl Scope {
         }
         let project = value
             .get_text("project")
-            .filter(|p| crate::common::names::project(p).is_ok())
+            .filter(|p| layerfs_home::names::project(p).is_ok())
             .ok_or_else(|| {
                 refused(
                     "InvalidInput",
@@ -249,7 +249,7 @@ impl Scope {
                 .map_or("", |(sandbox, _)| sandbox),
             _ => return Ok(()),
         };
-        if crate::common::names::name("sandbox", sandbox).is_err() {
+        if layerfs_home::names::name("sandbox", sandbox).is_err() {
             return Err(out("sandbox"));
         }
         // one read of the Sandbox's record (layout 3, #536 §5)

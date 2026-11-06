@@ -11,10 +11,10 @@
 //! has and callers take turns on them, each waiting at most [`LEND_WAIT`]
 //! before it is refused `Busy`. Opening a connection is not an attempt
 //! of any operation: nothing is sent before the connection is ready.
-use crate::common::outcome::{failed, refused};
 use crate::internal::Control;
 use layerfs_bridge::control::{DaemonPhase, HelloRequest, Reply, Request, SdkRefusal, SdkValue};
 use layerfs_bridge::duplex::initiate_observed;
+use layerfs_home::outcome::{failed, refused};
 use std::net::SocketAddr;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Condvar, Mutex};

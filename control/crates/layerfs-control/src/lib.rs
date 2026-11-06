@@ -17,6 +17,7 @@ pub mod doctor;
 pub mod inventory;
 #[doc(hidden)]
 pub mod machine;
+pub mod migrate;
 pub mod project;
 pub mod sandbox;
 pub mod store;

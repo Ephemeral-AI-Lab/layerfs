@@ -11,7 +11,7 @@ calls take.
 | | |
 | --- | --- |
 | Family | [workspace](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/workspace/mount.rs`](../../../../../api/crates/layerfs-api/src/workspace/mount.rs) |
+| Library entry | [`workspace/mount.rs`](../../../../../api/crates/layerfs-api/src/workspace/mount.rs) |
 | Implemented in | `layerfs_control::workspace::calls::workspace` → host operation `workspace.mount` → `workspace::serve::mount` ([`workspace/calls.rs`](../../../../../control/crates/layerfs-control/src/workspace/calls.rs), [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs)) |
 | Runs in | the caller's process, the Sandbox's machine (here or its worker) and the Sandbox's daemon |
 
@@ -43,7 +43,7 @@ layerfs workspace mount <sandbox> <branch> [--name NAME]
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `name` | Name | none | `WorkspaceName::parse`; unique among the Sandbox's Workspaces; `ws` becomes `<sandbox>:<name>` | [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs) |
+| `name` | Name | none | `WorkspaceName::parse`; unique among the Sandbox's Workspaces; `ws` becomes `<sandbox>:<name>` | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 
 ## Returns
 

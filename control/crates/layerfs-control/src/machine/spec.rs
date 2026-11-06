@@ -3,9 +3,9 @@
 //! live forward; 0600, while the worker runs). Nothing in the adapters
 //! reads the home.
 use super::record::MachineRecord;
-use crate::common::home::{self, paths, write_record};
-use crate::common::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::{self, paths, write_record};
+use layerfs_home::outcome::refused;
 use layerfs_platform::{
     Endpoint, HostOs, Lasting, MachineError, Platform, Running, Spec, SshSpec, Tools,
 };
@@ -50,14 +50,14 @@ pub fn ensure_built_ins(home: &Path, id: &str) -> Result<()> {
 
 fn write_built_ins(home: &Path) -> Result<()> {
     let missing = |name: &str| -> Result<bool> { Ok(MachineRecord::read(home, name)?.is_none()) };
-    if !crate::common::names::BUILT_IN
+    if !layerfs_home::names::BUILT_IN
         .iter()
         .any(|name| missing(name).unwrap_or(true))
     {
         return Ok(());
     }
     let _lock = home::lock::take(home)?;
-    for name in crate::common::names::BUILT_IN {
+    for name in layerfs_home::names::BUILT_IN {
         if missing(name)? {
             MachineRecord::built_in(name).write(home)?;
         }
@@ -167,7 +167,7 @@ pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> 
 
 /// The endpoint in `worker.json`, if the machine has one.
 pub fn worker(home: &Path, name: &str) -> Result<Option<Endpoint>> {
-    let worker = crate::common::secrets::worker_secret(home, name)?;
+    let worker = layerfs_home::secrets::worker_secret(home, name)?;
     Ok(worker.map(|worker| Endpoint {
         address: worker.address,
         secret: worker.secret,

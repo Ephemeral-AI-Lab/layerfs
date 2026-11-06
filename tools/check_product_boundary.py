@@ -43,6 +43,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-bridge",
     "layerfs-cli",
     "layerfs-platform",
+    "layerfs-home",
 )
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
@@ -64,6 +65,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-isolation": "#![deny(unsafe_code)]",
     "layerfs-cli": "#![forbid(unsafe_code)]",
     "layerfs-platform": "#![forbid(unsafe_code)]",
+    "layerfs-home": "#![forbid(unsafe_code)]",
 }
 
 
@@ -148,8 +150,9 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-persistence",
         "layerfs-telemetry",
     },
-    # The SDK call surface (#536): the call table over the management library.
-    "layerfs-api": {"layerfs-control", "layerfs-bridge"},
+    # The SDK call surface (#536): the call table over the control crates
+    # (#101: layerfs-api may call any control crate).
+    "layerfs-api": {"layerfs-control", "layerfs-home", "layerfs-bridge"},
     # The management library (#536): home records, machines and workers,
     # Stores, projects, Sandboxes, Workspaces and backups.
     "layerfs-control": {
@@ -160,11 +163,15 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-telemetry",
         "layerfs-bridge",
         "layerfs-project",
+        "layerfs-home",
         "layerfs-isolation",
         "layerfs-platform",
         "layerfs-store-service",
         "layerfs-bucket",
     },
+    # The home and its records (#103): knows no entity. The isolation driver
+    # names this process (pid, kernel start time, boot) for an op's owner.
+    "layerfs-home": {"layerfs-bridge", "layerfs-isolation"},
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
     # The drivers (#101 D-5): isolation (was layerfs-sandbox), platform (was
     # layerfs-machine) and bucket (was layerfs-store-backup).
@@ -200,6 +207,7 @@ LAYER = {
     "layerfs-platform": CONTROL,
     "layerfs-bucket": CONTROL,
     "layerfs-control": CONTROL,
+    "layerfs-home": CONTROL,
     # The public surface under api/crates: the call surface and the 2.0 front
     # ends (#533), the `layerfs` binary, the Node binding and the PyO3 module.
     "layerfs-api": API,

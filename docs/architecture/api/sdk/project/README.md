@@ -9,7 +9,7 @@ The `project` calls.
 | | |
 | --- | --- |
 | Component | [Call table](../../call-table/README.md) |
-| Source | [`api/crates/layerfs-api/src/project`](../../../../../api/crates/layerfs-api/src/project), [`control/crates/layerfs-control/src/project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
+| Source | [`api/crates/layerfs-api/src/project`](../../../../../api/crates/layerfs-api/src/project), [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
 
 ## Calls
 
@@ -69,7 +69,7 @@ The summary is `ProjectRecord::to_sdk`
 | `NoSuchStore`, `NoSuchProject` | `get` or `remove` of a missing Store or project | [`store/resolve.rs`](../../../../../control/crates/layerfs-control/src/store/resolve.rs) |
 | `Exists` | `init` of a project the home already records | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
 | `InUse` | `remove` while a Sandbox of the project runs (`detail.related`) | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) |
-| `Busy`, `Unresolved` | the Store's record holds another operation's `op` | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs) |
+| `Busy`, `Unresolved` | the Store's record holds another operation's `op` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
 | `Capacity` | the worker's machine has no room for the folder copy | [`project/send.rs`](../../../../../control/crates/layerfs-control/src/project/send.rs) |
 | `Unsupported` | `remove` on a PostgreSQL Store ("not built") | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
 | `Unavailable` | the Store's machine records no worker, or the worker does not answer | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |

@@ -3,10 +3,8 @@
 //! `<root>/sandbox/<name>/` holds its record (`record.json`, with what
 //! reopens it under `daemon`), its daemon keys (`control.json`) and one
 //! record per Workspace (`workspace/<id>.json`). No mutation replay.
-use crate::common::home::{paths, read_record, write_entity};
-use crate::common::outcome::{failed, refused};
 use crate::sandbox::recorded::{gone, recorded, Recorded};
-use crate::sandbox::registry::{self, Mount, Project, SandboxState};
+use crate::sandbox::registry::{Mount, Project, SandboxState};
 #[cfg(target_os = "linux")]
 use crate::sandbox::runtime::NAMESPACES;
 use crate::sandbox::runtime::{LOCAL, NATIVE};
@@ -15,6 +13,9 @@ use layerfs_bridge::{
     control::{Reply, SdkRefusal, SdkValue},
     provision::StoreManifest,
 };
+use layerfs_home::helpers;
+use layerfs_home::home::{paths, read_record, write_entity};
+use layerfs_home::outcome::{failed, refused};
 use layerfs_isolation::LocalRecord;
 #[cfg(target_os = "linux")]
 use layerfs_isolation::SandboxRecord;
@@ -44,14 +45,14 @@ pub(crate) fn home(args: &SdkValue) -> Result<PathBuf> {
 }
 /// `path` is this user's and nobody else may read or change it. A folder
 /// may let others pass through by name (o+x), as the folders above a
-/// namespaces Sandbox's local root must ([`crate::common::home::traversable`]).
+/// namespaces Sandbox's local root must ([`layerfs_home::home::traversable`]).
 pub(crate) fn private(path: &Path, dir: bool) -> Result<()> {
     let meta = fs::symlink_metadata(path).map_err(failed)?;
     let others = if dir { 0o076 } else { 0o077 };
     if meta.file_type().is_symlink()
         || meta.is_dir() != dir
         || (!dir && !meta.is_file())
-        || meta.uid() != crate::common::home::flock::euid()
+        || meta.uid() != layerfs_home::home::flock::euid()
         || meta.mode() & others != 0
     {
         return Err(refused(
@@ -73,8 +74,8 @@ pub(crate) fn directory(path: &Path) -> Result<()> {
 /// identity (its commands run as this user).
 pub(crate) fn user() -> (u32, u32) {
     (
-        crate::common::home::flock::euid(),
-        crate::common::home::flock::egid(),
+        layerfs_home::home::flock::euid(),
+        layerfs_home::home::flock::egid(),
     )
 }
 /// The folder of the Sandbox a call names (`sandbox`, its name):
@@ -82,7 +83,7 @@ pub(crate) fn user() -> (u32, u32) {
 /// whose daemon the home reaches directly (#535 G4), and under a worker's
 /// root on every other machine.
 pub(crate) fn sandbox_dir(args: &SdkValue) -> Result<PathBuf> {
-    let name = crate::common::names::SandboxName::parse(registry::text(args, "sandbox")?)?;
+    let name = layerfs_home::names::SandboxName::parse(helpers::text(args, "sandbox")?)?;
     Ok(paths::sandbox_dir(&home(args)?, &name))
 }
 /// What reopens the Sandbox recorded in `directory` (its record's
@@ -107,13 +108,13 @@ pub(crate) fn project_dir(args: &SdkValue) -> Result<PathBuf> {
 
 /// [`project_dir`]'s path, not checked to exist.
 pub(crate) fn project_entry(args: &SdkValue) -> Result<PathBuf> {
-    let name = registry::text(args, "project")?;
+    let name = helpers::text(args, "project")?;
     layerfs_history::HistoryName::new(name).map_err(failed)?;
     let home = home(args)?;
     // 2.0 (#533 step 4): every project is named with its Store
     let store = args.get_text("store").unwrap_or(name);
     crate::store::identity::store_dir(&home, store)?;
-    Ok(crate::common::home::paths::project_dir(&home, store, name))
+    Ok(layerfs_home::home::paths::project_dir(&home, store, name))
 }
 /// Calls take turns on one directory: in this process before its OS lock,
 /// and between processes on the lock itself. The wait is readiness, bounded,
@@ -138,7 +139,7 @@ impl Drop for Guard {
         // The lock belongs to the open file description, which a child forked
         // meanwhile shares until its exec: closing only this descriptor would
         // leave it held (F-053). Unlock explicitly; the close follows.
-        crate::common::home::flock::unlock(&self.file);
+        layerfs_home::home::flock::unlock(&self.file);
         let mut held = HELD.lock().unwrap_or_else(|error| error.into_inner());
         held.remove(&self.directory);
         FREED.notify_all();
@@ -150,7 +151,7 @@ impl Drop for Guard {
 /// which is not retried.
 pub(crate) fn guard(directory: &Path) -> Result<Guard> {
     let deadline = std::time::Instant::now() + IN_PROCESS_WAIT;
-    let mut held = registry::lock(&HELD)?;
+    let mut held = helpers::lock(&HELD)?;
     while held.contains(directory) {
         let remaining = deadline.saturating_duration_since(std::time::Instant::now());
         if remaining.is_zero() {
@@ -198,7 +199,7 @@ fn os_lock(directory: &Path, deadline: std::time::Instant) -> Result<File> {
         .open(&path)
         .map_err(failed)?;
     private(&path, false)?;
-    while !crate::common::home::flock::try_lock(&file, true).map_err(failed)? {
+    while !layerfs_home::home::flock::try_lock(&file, true).map_err(failed)? {
         if std::time::Instant::now() >= deadline {
             return Err(refused(
                 "Busy",
@@ -228,7 +229,7 @@ pub(crate) fn save(path: &Path, value: SdkValue) -> Result<()> {
     let temp = path.with_extension(format!(
         "{}-{}",
         std::process::id(),
-        layerfs_bridge::sdk_values::hex(&registry::random()?[..8])
+        layerfs_bridge::sdk_values::hex(&helpers::random()?[..8])
     ));
     let mut file = OpenOptions::new()
         .write(true)
@@ -268,8 +269,8 @@ pub(crate) fn save_project(path: &Path, project: &Project) -> Result<()> {
         .ancestors()
         .nth(4)
         .filter(|_| path.parent().and_then(Path::file_name) == Some("project".as_ref()));
-    let _lock = home.map(crate::common::home::lock::take).transpose()?;
-    let old = crate::common::home::read_record(&path.join("record.json"))?.unwrap_or_default();
+    let _lock = home.map(layerfs_home::home::lock::take).transpose()?;
+    let old = layerfs_home::home::read_record(&path.join("record.json"))?.unwrap_or_default();
     let mut record = SdkValue::map([
         (
             "manifest",
@@ -290,15 +291,15 @@ pub(crate) fn save_project(path: &Path, project: &Project) -> Result<()> {
     if let SdkValue::Map(fields) = old {
         for (name, value) in fields {
             if name != "manifest" && name != "installed" {
-                record = crate::common::home::with_field(record, &name, value);
+                record = layerfs_home::home::with_field(record, &name, value);
             }
         }
     }
-    crate::common::home::write_entity(&path.join("record.json"), &record)
+    layerfs_home::home::write_entity(&path.join("record.json"), &record)
 }
 pub(crate) fn project(args: &SdkValue) -> Result<Project> {
     let path = project_dir(args)?;
-    let value = crate::common::home::read_record(&path.join("record.json"))?
+    let value = layerfs_home::home::read_record(&path.join("record.json"))?
         .ok_or_else(|| refused("NoSuchProject", "no project record"))?;
     let decode = |name| match value.get(name) {
         Some(SdkValue::Bytes(bytes)) => StoreManifest::decode(bytes).map_err(failed),
@@ -365,7 +366,7 @@ pub(crate) fn save_sandbox(
         Sandbox::Docker(runtime) => {
             let record = runtime.request();
             fields.extend([
-                ("docker", SdkValue::text(registry::text(deploy, "docker")?)),
+                ("docker", SdkValue::text(helpers::text(deploy, "docker")?)),
                 ("image", SdkValue::text(&record.image)),
                 ("volume", SdkValue::opt_text(record.store_volume.clone())),
                 ("labels", label_values(&record.labels)),
@@ -399,7 +400,7 @@ pub(crate) fn save_sandbox(
             .collect(),
     );
     // the keys first: a record with `daemon` is a started Sandbox
-    crate::common::secrets::save_daemon_keys(
+    layerfs_home::secrets::save_daemon_keys(
         directory,
         &SdkValue::map([
             (
@@ -430,7 +431,7 @@ pub(crate) fn save_sandbox(
         ("runtime_id", SdkValue::text(runtime.identity().to_string())),
         ("daemon", daemon),
     ] {
-        record = crate::common::home::with_field(record, field, value);
+        record = layerfs_home::home::with_field(record, field, value);
     }
     write_entity(&directory.join("record.json"), &record)
 }
@@ -483,7 +484,7 @@ fn local_fields(
 /// and its keys, its runtime observed running once, then a control
 /// connection and its Workspace records.
 pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
-    let id = registry::text(args, "sandbox")?;
+    let id = helpers::text(args, "sandbox")?;
     let directory = sandbox_dir(args)?;
     let Some(value) = started(&directory)? else {
         return Err(refused(
@@ -492,9 +493,9 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
         ));
     };
     private(&directory, true)?;
-    let keys = crate::common::secrets::daemon_keys(&directory)?
+    let keys = layerfs_home::secrets::daemon_keys(&directory)?
         .ok_or_else(|| refused("NoSuchSandbox", format!("Sandbox {id} has no daemon keys")))?;
-    let project = registry::text(args, "project")?;
+    let project = helpers::text(args, "project")?;
     // a Sandbox in a machine whose daemon's port is forwarded here (#535
     // G4): only its forward is checked; its runtime is the machine's
     let (runtime, endpoint, host) = match crate::sandbox::direct::forward_of(&value) {
@@ -511,9 +512,9 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
     let dial = crate::daemon::pool::Dial {
         endpoint,
         host,
-        secret: crate::common::secrets::key(&keys, "secret")?,
-        peer: crate::common::secrets::key(&keys, "peer")?,
-        instance: crate::common::secrets::key(&keys, "instance")?,
+        secret: layerfs_home::secrets::key(&keys, "secret")?,
+        peer: layerfs_home::secrets::key(&keys, "peer")?,
+        instance: layerfs_home::secrets::key(&keys, "instance")?,
     };
     let forwarded = runtime.is_none();
     let control = dial.open_waiting().map_err(|refusal| match forwarded {
@@ -536,7 +537,7 @@ pub(crate) fn reopen(args: &SdkValue) -> Result<Arc<SandboxState>> {
 /// The runtime a Sandbox record's `daemon` names, observed running once,
 /// and the host this process dials its daemon at.
 fn observed(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(Box<Sandbox>, Option<String>)> {
-    let container = registry::text(value, "container")?;
+    let container = helpers::text(value, "container")?;
     let recorded = recorded(args, id, value)?;
     // a local daemon listens on this kernel's loopback; no other host reaches it
     let host = match recorded {
@@ -574,13 +575,13 @@ pub(crate) fn refresh(state: &SandboxState) -> Result<()> {
 pub(crate) fn refresh_except(state: &SandboxState, retained: &[String]) -> Result<()> {
     let mut mounts = std::collections::BTreeMap::new();
     for (_, value) in workspaces(&state.directory)? {
-        let path = registry::text(&value, "path")?;
+        let path = helpers::text(&value, "path")?;
         if retained.iter().any(|kept| kept == path) {
             continue;
         }
         let token = token_of(&value)?;
         let status =
-            match workspace(&mut *crate::common::trace::control(&state.controls)?).status(token) {
+            match workspace(&mut *crate::daemon::trace::control(&state.controls)?).status(token) {
                 Ok(status) => status,
                 // Unmounted by the daemon; its owner removes the record next.
                 Err(failure) if absent(&failure) => continue,
@@ -603,11 +604,11 @@ pub(crate) fn refresh_except(state: &SandboxState, retained: &[String]) -> Resul
                     },
                     ready,
                 },
-                branch: registry::text(&value, "branch")?.to_owned(),
+                branch: helpers::text(&value, "branch")?.to_owned(),
             },
         );
     }
-    *registry::lock(&state.mounts)? = mounts;
+    *helpers::lock(&state.mounts)? = mounts;
     Ok(())
 }
 /// The Workspace records in Sandbox folder `directory`
@@ -633,7 +634,7 @@ pub(crate) fn workspaces(directory: &Path) -> Result<Vec<(PathBuf, SdkValue)>> {
 }
 /// A Workspace record's token: its id (64 hex digits) and namespace.
 fn token_of(value: &SdkValue) -> Result<layerfs_bridge::control::WorkspaceToken> {
-    let id = registry::text(value, "id")?;
+    let id = helpers::text(value, "id")?;
     let bytes: Vec<u8> = (0..id.len())
         .step_by(2)
         .map(|i| {
@@ -685,7 +686,7 @@ pub(crate) fn save_workspace(
         ("branch", SdkValue::text(branch)),
         ("path", SdkValue::text(&mount.ready.directory)),
         ("namespace", SdkValue::Int(token.namespace)),
-        ("created", SdkValue::Int(crate::common::home::now_ms())),
+        ("created", SdkValue::Int(layerfs_home::home::now_ms())),
     ]);
     let _sandbox = crate::sandbox::record::lock_in(&state.directory, &state.id)?;
     write_entity(

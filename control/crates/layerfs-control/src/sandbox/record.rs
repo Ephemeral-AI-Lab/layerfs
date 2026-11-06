@@ -7,11 +7,11 @@
 //! adds what reopens it (`daemon`) to the same file; its daemon keys are in
 //! `control.json` beside it. The name is the folder's: one read finds it.
 //! No state is stored: [`SandboxRecord::state`] derives it (§7.2).
-use crate::common::home::entity_lock::{self, EntityLock};
-use crate::common::home::{self, paths, read_record, with_field, write_entity};
-use crate::common::op::{self, Op, Standing};
-use crate::common::outcome::View;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::entity_lock::{self, EntityLock};
+use layerfs_home::home::{self, paths, read_record, with_field, write_entity};
+use layerfs_home::op::{self, Op, Standing};
+use layerfs_home::outcome::View;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

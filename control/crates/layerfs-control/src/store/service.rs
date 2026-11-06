@@ -15,9 +15,9 @@
 //! service; a process that ends without closing leaves its own. Each call
 //! runs once: a refused or failed call returns its own error, nothing is sent
 //! again.
-use crate::common::outcome::{failed, refused, Outcome};
-use crate::sandbox::registry::lock;
 use layerfs_bridge::control::{SdkCall, SdkRefusal, SdkValue};
+use layerfs_home::helpers::lock;
+use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_store_service::{telemetry, OpenRefusal, StoreService};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -50,7 +50,7 @@ fn open(store: &Path, args: &SdkValue) -> Result<Opened, SdkRefusal> {
     let directory = std::env::temp_dir().join(format!(
         "layerfs-store-{}-{}",
         std::process::id(),
-        layerfs_bridge::sdk_values::hex(&crate::sandbox::registry::random()?[..12])
+        layerfs_bridge::sdk_values::hex(&layerfs_home::helpers::random()?[..12])
     ));
     std::fs::create_dir(&directory).map_err(failed)?;
     let template = directory.join("overlay.sqlite");
@@ -176,7 +176,7 @@ pub(crate) fn call(method: &str, args: SdkValue) -> Outcome {
         args,
     };
     let run = || layerfs_store_service::methods::call(&service, &call);
-    if !crate::common::trace::traced() {
+    if !layerfs_home::trace::traced() {
         return run();
     }
     // A traced call records its own timing, SQL and delta work, as a daemon
@@ -192,7 +192,7 @@ pub(crate) fn call(method: &str, args: SdkValue) -> Outcome {
     for (name, value) in [("sql", sql), ("delta", delta)] {
         fields.extend(value.map(|value| (name.to_owned(), value)));
     }
-    crate::common::trace::collect(SdkValue::Map(fields));
+    layerfs_home::trace::collect(SdkValue::Map(fields));
     outcome
 }
 

@@ -9,13 +9,13 @@ The LayerFS home and its records.
 | | |
 | --- | --- |
 | Component | [Control](README.md) |
-| Source | [`control/crates/layerfs-control/src/common`](../../../../control/crates/layerfs-control/src/common), [`control/crates/layerfs-control/src/inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
+| Source | [`control/crates/layerfs-control/src/common`](../../../../control/crates/layerfs-control/src/common), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
 
 ## Home layout
 
 The home is `LAYERFS_HOME`, else `~/.layerfs`; it must be absolute
 ([`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs)).
-Layout 3, from [`home/paths.rs`](../../../../control/crates/layerfs-control/src/common/home/paths.rs):
+Layout 3, from [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs):
 
 ```text
 <home>/
@@ -47,12 +47,12 @@ Layout 3, from [`home/paths.rs`](../../../../control/crates/layerfs-control/src/
 
 | Entity | Identity | Children | Source |
 | --- | --- | --- | --- |
-| Machine | folder name | worker record | [`paths.rs`](../../../../control/crates/layerfs-control/src/common/home/paths.rs) |
-| Store | folder name | projects, leases | [`paths.rs`](../../../../control/crates/layerfs-control/src/common/home/paths.rs) |
-| Project | `<store>/<project>` | none | [`paths.rs`](../../../../control/crates/layerfs-control/src/common/home/paths.rs) |
-| Sandbox | folder name, unique in the home | Workspaces | [`paths.rs`](../../../../control/crates/layerfs-control/src/common/home/paths.rs) |
-| Workspace | `<sandbox>:<path>` or `<sandbox>:<name>` | none | [`names.rs`](../../../../control/crates/layerfs-control/src/common/names.rs) |
-| Bucket | folder name | none | [`paths.rs`](../../../../control/crates/layerfs-control/src/common/home/paths.rs) |
+| Machine | folder name | worker record | [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs) |
+| Store | folder name | projects, leases | [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs) |
+| Project | `<store>/<project>` | none | [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs) |
+| Sandbox | folder name, unique in the home | Workspaces | [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs) |
+| Workspace | `<sandbox>:<path>` or `<sandbox>:<name>` | none | [`names.rs`](../../../../control/crates/layerfs-home/src/names.rs) |
+| Bucket | folder name | none | [`home/paths.rs`](../../../../control/crates/layerfs-home/src/home/paths.rs) |
 
 Relationships (machine to its Stores and Sandboxes, Store to its
 Sandboxes, project to its Sandboxes) are derived by
@@ -64,7 +64,7 @@ call and are never removed (`ensure_built_ins` in
 A machine's worker keeps the same paths under its own root (the machine's
 `/layerfs/data`), but that root is not a home: it is never converted, has no
 id and uses the caller's home id sent with each request
-([`home/guest.rs`](../../../../control/crates/layerfs-control/src/common/home/guest.rs)).
+([`home/guest.rs`](../../../../control/crates/layerfs-home/src/home/guest.rs)).
 
 ## Records
 
@@ -77,12 +77,12 @@ id and uses the caller's home id sent with each request
 
 | Rule | Source |
 | --- | --- |
-| One JSON value per file, replaced whole by one rename | [`home/records.rs`](../../../../control/crates/layerfs-control/src/common/home/records.rs) |
-| Entity records carry `"v": 1` first (`RECORD_VERSION`) | [`home/records.rs`](../../../../control/crates/layerfs-control/src/common/home/records.rs) |
-| A record holds facts and at most one `op` intent; states such as `running` are derived when read | [`op.rs`](../../../../control/crates/layerfs-control/src/common/op.rs), [`sandbox/record.rs`](../../../../control/crates/layerfs-control/src/sandbox/record.rs) |
-| Logs are appended JSON lines in `log/` (0600) | [`home/records.rs`](../../../../control/crates/layerfs-control/src/common/home/records.rs) `log_line` |
+| One JSON value per file, replaced whole by one rename | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) |
+| Entity records carry `"v": 1` first (`RECORD_VERSION`) | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) |
+| A record holds facts and at most one `op` intent; states such as `running` are derived when read | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs), [`sandbox/record.rs`](../../../../control/crates/layerfs-control/src/sandbox/record.rs) |
+| Logs are appended JSON lines in `log/` (0600) | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) `log_line` |
 
-The `op` intent, from [`op.rs`](../../../../control/crates/layerfs-control/src/common/op.rs):
+The `op` intent, from [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs):
 
 ```text
  op: { id: "op-<16 hex>", name, phase, args,
@@ -102,17 +102,17 @@ The `op` intent, from [`op.rs`](../../../../control/crates/layerfs-control/src/c
 | no | false | `Stale` | proceeds; the intent holds nothing |
 
 Liveness compares pid, kernel start time and boot id, so a reused pid is
-not the owner ([`home/lease.rs`](../../../../control/crates/layerfs-control/src/common/home/lease.rs) `recorded_alive`).
+not the owner ([`common/lease.rs`](../../../../control/crates/layerfs-control/src/common/lease.rs) `recorded_alive`).
 
 ### Locks and leases
 
 | Lock or file | Guards | Wait | Source |
 | --- | --- | --- | --- |
-| `layerfs.lock` | record writes, name claims, Sandbox-name uniqueness | 120 s, then `Unavailable` | [`home/lock.rs`](../../../../control/crates/layerfs-control/src/common/home/lock.rs) |
+| `layerfs.lock` | record writes, name claims, Sandbox-name uniqueness | 120 s, then `Unavailable` | [`home/lock.rs`](../../../../control/crates/layerfs-home/src/home/lock.rs) |
 | `machine/<m>/start.lock` | a start, stop, create or remove | 600 s | [`machine/endpoint.rs`](../../../../control/crates/layerfs-control/src/machine/endpoint.rs) |
-| `store/<s>/lock` | leases, `op` and phase writes, the record | 120 s | [`home/entity_lock.rs`](../../../../control/crates/layerfs-control/src/common/home/entity_lock.rs) |
+| `store/<s>/lock` | leases, `op` and phase writes, the record | 120 s | [`home/entity_lock.rs`](../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
 | `sandbox/<n>/lock` | the Sandbox and Workspace records | 120 s | [`sandbox/record.rs`](../../../../control/crates/layerfs-control/src/sandbox/record.rs) |
-| `store/<s>/open/<pid>` | a lease: this process uses the Store | taken under the Store lock | [`home/lease.rs`](../../../../control/crates/layerfs-control/src/common/home/lease.rs) |
+| `store/<s>/open/<pid>` | a lease: this process uses the Store | taken under the Store lock | [`common/lease.rs`](../../../../control/crates/layerfs-control/src/common/lease.rs) |
 
 Order is home, start, store, sandbox. No lock is held across a worker
 call, a VM boot or a byte transfer, except `start.lock` across its start.
@@ -124,10 +124,10 @@ next lease taker or by push, pull, remove and disconnect, and logged to
 
 | Kind | Rule | Type | Source |
 | --- | --- | --- | --- |
-| machine, Store, project, Sandbox, bucket, Workspace name | 1–63 of `a-z 0-9 _ . -`, first and last a letter or digit, not a Windows device name (`con`, `nul`, `com1`…) | `MachineName`, `StoreName`, `ProjectName`, `SandboxName`, `BucketName`, `WorkspaceName` | [`names.rs`](../../../../control/crates/layerfs-control/src/common/names.rs) |
-| project | always `<store>/<project>`; a bare name is refused | `ProjectRef` | [`names.rs`](../../../../control/crates/layerfs-control/src/common/names.rs) |
-| Workspace | `<sandbox>:<absolute path>` or `<sandbox>:<name>` | `WorkspaceRef` | [`names.rs`](../../../../control/crates/layerfs-control/src/common/names.rs) |
-| built-in machines | `native`, `docker`; refused as new machine or Sandbox names | `BUILT_IN` | [`names.rs`](../../../../control/crates/layerfs-control/src/common/names.rs) |
+| machine, Store, project, Sandbox, bucket, Workspace name | 1–63 of `a-z 0-9 _ . -`, first and last a letter or digit, not a Windows device name (`con`, `nul`, `com1`…) | `MachineName`, `StoreName`, `ProjectName`, `SandboxName`, `BucketName`, `WorkspaceName` | [`names.rs`](../../../../control/crates/layerfs-home/src/names.rs) |
+| project | always `<store>/<project>`; a bare name is refused | `ProjectRef` | [`names.rs`](../../../../control/crates/layerfs-home/src/names.rs) |
+| Workspace | `<sandbox>:<absolute path>` or `<sandbox>:<name>` | `WorkspaceRef` | [`names.rs`](../../../../control/crates/layerfs-home/src/names.rs) |
+| built-in machines | `native`, `docker`; refused as new machine or Sandbox names | `BUILT_IN` | [`names.rs`](../../../../control/crates/layerfs-home/src/names.rs) |
 
 A bad name is `InvalidInput`. Each name is checked once by its type's
 `parse`; `listed` takes a folder name the home already holds.
@@ -136,10 +136,10 @@ A bad name is `InvalidInput`. Each name is checked once by its type's
 
 | Secret | Where it lives | Source |
 | --- | --- | --- |
-| PostgreSQL password | never stored; the record holds the URL without it and a reference `env:NAME` or `file:/abs/path`, resolved on each call | [`secrets.rs`](../../../../control/crates/layerfs-control/src/common/secrets.rs), [`store/connect.rs`](../../../../control/crates/layerfs-control/src/store/connect.rs) |
+| PostgreSQL password | never stored; the record holds the URL without it and a reference `env:NAME` or `file:/abs/path`, resolved on each call | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs), [`store/connect.rs`](../../../../control/crates/layerfs-control/src/store/connect.rs) |
 | Bucket key | a reference in `backup/<bucket>/record.json`, never the key | [`backup/record.rs`](../../../../control/crates/layerfs-control/src/backup/record.rs) |
-| Worker secret | `machine/<m>/worker.json` (0600) | [`secrets.rs`](../../../../control/crates/layerfs-control/src/common/secrets.rs) `worker_secret` |
-| Sandbox daemon keys | `sandbox/<n>/control.json` (0600) | [`secrets.rs`](../../../../control/crates/layerfs-control/src/common/secrets.rs) `daemon_keys` |
+| Worker secret | `machine/<m>/worker.json` (0600) | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) `worker_secret` |
+| Sandbox daemon keys | `sandbox/<n>/control.json` (0600) | [`secrets.rs`](../../../../control/crates/layerfs-home/src/secrets.rs) `daemon_keys` |
 
 ```text
  store.connect(name, url, {password: "env:PG_PW"})
@@ -158,9 +158,9 @@ a password that is not a reference is `InvalidInput`.
 
 | Trace | Written when | Source |
 | --- | --- | --- |
-| `LAYERFS_TRACE` file | each connection to a machine's worker appends `{at, event: "worker.connection", op, worker, sent, ms}`; unset, nothing is written | [`trace.rs`](../../../../control/crates/layerfs-control/src/common/trace.rs) `connection` |
-| SDK trace scope | a call's `observe` argument (32 bytes hex) makes its daemon exchanges traced observations; at most 64 telemetry values per call are kept | [`trace.rs`](../../../../control/crates/layerfs-control/src/common/trace.rs) |
-| `<home>/trace/` | holds 1.1.0's `traces/` after a conversion; this build writes nothing there | [`migrate/v110.rs`](../../../../control/crates/layerfs-control/src/common/home/migrate/v110.rs) |
+| `LAYERFS_TRACE` file | each connection to a machine's worker appends `{at, event: "worker.connection", op, worker, sent, ms}`; unset, nothing is written | [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs) `connection` |
+| SDK trace scope | a call's `observe` argument (32 bytes hex) makes its daemon exchanges traced observations; at most 64 telemetry values per call are kept | [`trace.rs`](../../../../control/crates/layerfs-home/src/trace.rs) |
+| `<home>/trace/` | holds 1.1.0's `traces/` after a conversion; this build writes nothing there | [`migrate/v110.rs`](../../../../control/crates/layerfs-control/src/migrate/v110.rs) |
 
 A trace that cannot be written changes no outcome.
 
@@ -183,14 +183,14 @@ A trace that cannot be written changes no outcome.
 
 | Conversion | What it does | Source |
 | --- | --- | --- |
-| 1.1.0 to layout 2 | moves `.stores/`, project folders, `stores.json`, `remotes`, `remote-state`, `.runtime/` and `traces/` into `store/`, `backup/`, `log/` and `trace/`; old files kept under `log/1.1.0/`; `layerfs.json` written last | [`migrate/v110.rs`](../../../../control/crates/layerfs-control/src/common/home/migrate/v110.rs) |
-| sqlite Store files from Docker volumes | linked where readable, else copied and sha256-checked; a file with a WAL is not placed | [`migrate/volume.rs`](../../../../control/crates/layerfs-control/src/common/home/migrate/volume.rs) |
-| layout 2 to 3 | refused `InUse` while anything is live; writes Sandbox records to `sandbox/<name>/`, adds `"v": 1`, writes `log/layout-3.pending`, flips `layerfs.json`, then deletes the layout 2 paths and writes `log/migration-2.json` | [`migrate/v2.rs`](../../../../control/crates/layerfs-control/src/common/home/migrate/v2.rs) |
-| 1.1.0 environment | `layerfs import-env` records settings from `LAYERFS_*` variables once; never writes a secret, makes a VM or connects a host; logs to `log/import-env.jsonl` | [`home/import_env.rs`](../../../../control/crates/layerfs-control/src/common/home/import_env.rs) |
+| 1.1.0 to layout 2 | moves `.stores/`, project folders, `stores.json`, `remotes`, `remote-state`, `.runtime/` and `traces/` into `store/`, `backup/`, `log/` and `trace/`; old files kept under `log/1.1.0/`; `layerfs.json` written last | [`migrate/v110.rs`](../../../../control/crates/layerfs-control/src/migrate/v110.rs) |
+| sqlite Store files from Docker volumes | linked where readable, else copied and sha256-checked; a file with a WAL is not placed | [`migrate/volume.rs`](../../../../control/crates/layerfs-control/src/migrate/volume.rs) |
+| layout 2 to 3 | refused `InUse` while anything is live; writes Sandbox records to `sandbox/<name>/`, adds `"v": 1`, writes `log/layout-3.pending`, flips `layerfs.json`, then deletes the layout 2 paths and writes `log/migration-2.json` | [`migrate/v2.rs`](../../../../control/crates/layerfs-control/src/migrate/v2.rs) |
+| 1.1.0 environment | `layerfs import-env` records settings from `LAYERFS_*` variables once; never writes a secret, makes a VM or connects a host; logs to `log/import-env.jsonl` | [`migrate/import_env.rs`](../../../../control/crates/layerfs-control/src/migrate/import_env.rs) |
 
 A worker clears what an earlier bundle left under its root on its first
 start from a layout 3 bundle (`retire_layout_2`, marker `.layout-3`,
-[`home/guest.rs`](../../../../control/crates/layerfs-control/src/common/home/guest.rs)).
+[`home/guest.rs`](../../../../control/crates/layerfs-home/src/home/guest.rs)).
 
 ## Related
 

@@ -11,7 +11,7 @@ its record removed; it is also the call that clears an uncertain
 | | |
 | --- | --- |
 | Family | [sandbox](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/sandbox/close.rs`](../../../../../api/crates/layerfs-api/src/sandbox/close.rs) |
+| Library entry | [`sandbox/close.rs`](../../../../../api/crates/layerfs-api/src/sandbox/close.rs) |
 | Implemented in | `layerfs_control::sandbox::family::sandbox` → `close::close` ([`sandbox/close.rs`](../../../../../control/crates/layerfs-control/src/sandbox/close.rs)), then `serve::close` on the machine ([`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs)) |
 | Runs in | the caller's process (records, locks), then the caller's process for a local machine or the machine's worker (`sandbox.host`) |
 
@@ -88,7 +88,7 @@ Under a folder scope the call is refused `InvalidInput`
 
 | Outcome on the machine | Home record | Source |
 | --- | --- | --- |
-| `Closed` | removed; forward ended | [`close.rs`](../../../../../control/crates/layerfs-control/src/sandbox/close.rs) |
+| `Closed` | removed; forward ended | [`sandbox/close.rs`](../../../../../control/crates/layerfs-control/src/sandbox/close.rs) |
 | `NoSuchSandbox` (already gone) | removed; answer `was_gone` | `close.rs` |
 | `Unknown` | kept, `op` marked uncertain, logged | `close.rs` |
 | any other refusal | kept, `op` dropped: the Sandbox is as it was | `close.rs` |
@@ -99,13 +99,13 @@ See the [routing table](../../../control/routing/routing-table.md).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad name; folder scope | no | [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs) |
-| `NoSuchSandbox` | no record of that name | no | [`family.rs`](../../../../../control/crates/layerfs-control/src/sandbox/family.rs) |
-| `Busy` | another live operation's `op` holds the Sandbox (`detail {entity, phase, op}`); an unmount is in progress | no | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs), [`workspace/unmount_guard.rs`](../../../../../control/crates/layerfs-control/src/workspace/unmount_guard.rs) |
-| `MountsActive` | without `force`, Workspaces are mounted; `detail.workspaces` lists their paths | no | [`serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
+| `InvalidInput` | bad name; folder scope | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
+| `NoSuchSandbox` | no record of that name | no | [`sandbox/family.rs`](../../../../../control/crates/layerfs-control/src/sandbox/family.rs) |
+| `Busy` | another live operation's `op` holds the Sandbox (`detail {entity, phase, op}`); an unmount is in progress | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), [`workspace/unmount_guard.rs`](../../../../../control/crates/layerfs-control/src/workspace/unmount_guard.rs) |
+| `MountsActive` | without `force`, Workspaces are mounted; `detail.workspaces` lists their paths | no | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
 | `Unavailable` | the machine's worker is not recorded or does not answer (nothing sent); a lock held too long | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
 | `Failed` | the stop or delete failed (a failed stop is not followed by a delete); the Sandbox stays as it was | no | `serve.rs` |
-| `Unknown` | **the machine's answer was lost after the request was sent: the Sandbox may be stopped or not** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs), `close.rs` |
+| `Unknown` | **the machine's answer was lost after the request was sent: the Sandbox may be stopped or not** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs), `close.rs` |
 
 After `Unknown`, read [`sandbox.get`](get.md) (its `state` is
 `unresolved`), then call `close` again: it clears the uncertain intent.

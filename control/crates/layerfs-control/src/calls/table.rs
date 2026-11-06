@@ -10,8 +10,8 @@
 //! other inputs, an optional Commit last (D7). Options say how. A shell
 //! option is the option's name with `-` for `_` (`--start-line`).
 use crate::common::context::Context;
-use crate::common::outcome::Outcome;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::outcome::Outcome;
 
 /// What one argument accepts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -199,5 +199,5 @@ pub fn table_json(families: &'static [Family]) -> String {
             ])
         })
         .collect();
-    crate::common::json::print(&SdkValue::List(calls))
+    layerfs_home::json::print(&SdkValue::List(calls))
 }

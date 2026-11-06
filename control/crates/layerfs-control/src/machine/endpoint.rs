@@ -22,7 +22,7 @@ pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> 
     let record = machine_of(home, name)?;
     let kind = record.platform()?;
     if let Some(reason) = layerfs_isolation::platform_policy::disabled_reason(kind.name()) {
-        return Err(crate::common::outcome::refused("Unsupported", reason));
+        return Err(layerfs_home::outcome::refused("Unsupported", reason));
     }
     if kind.route(HostOs::current()) == Route::InProcess {
         return Ok(None);
@@ -53,7 +53,7 @@ fn host_first(home: &Path, record: &MachineRecord) -> Result<(), SdkRefusal> {
 /// Starts machine `name` (its `record`) and records its worker; under its
 /// start lock.
 fn start(home: &Path, name: &str, record: &MachineRecord) -> Result<Option<Endpoint>, SdkRefusal> {
-    let id = crate::common::home::open(home)?.id;
+    let id = crate::migrate::open(home)?.id;
     let mut spec = record::spec(home, &id, record)?;
     let bundle = super::bundle::bundle()?;
     // the docker worker's container runs the bundle's image when the
@@ -65,7 +65,7 @@ fn start(home: &Path, name: &str, record: &MachineRecord) -> Result<Option<Endpo
         return Ok(None);
     };
     {
-        let _lock = crate::common::home::lock::take(home)?;
+        let _lock = layerfs_home::home::lock::take(home)?;
         save_running(home, name, &running)?;
     }
     let endpoint = endpoint_of(&running.endpoint);
@@ -84,12 +84,12 @@ fn start(home: &Path, name: &str, record: &MachineRecord) -> Result<Option<Endpo
 /// removing a machine take it, always before the home lock, so a start
 /// never runs beside a create or a remove of the same VM.
 /// A wait for it, at most [`START_WAIT`], is not a retry.
-pub(crate) type StartLock = crate::common::home::entity_lock::EntityLock;
+pub(crate) type StartLock = layerfs_home::home::entity_lock::EntityLock;
 
 pub(crate) fn start_lock(home: &Path, name: &str) -> Result<StartLock, SdkRefusal> {
-    let path = crate::common::home::paths::machine_dir(home, name).join("start.lock");
+    let path = layerfs_home::home::paths::machine_dir(home, name).join("start.lock");
     let held = format!("machine {name} was being started, made or removed by another process");
-    crate::common::home::entity_lock::take(&path, START_WAIT, &held)
+    layerfs_home::home::entity_lock::take(&path, START_WAIT, &held)
 }
 
 fn endpoint_of(endpoint: &adapters::Endpoint) -> Endpoint {

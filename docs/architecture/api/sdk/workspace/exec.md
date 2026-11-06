@@ -11,7 +11,7 @@ does not commit.
 | | |
 | --- | --- |
 | Family | [workspace](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/workspace/exec.rs`](../../../../../api/crates/layerfs-api/src/workspace/exec.rs) |
+| Library entry | [`workspace/exec.rs`](../../../../../api/crates/layerfs-api/src/workspace/exec.rs) |
 | Implemented in | `layerfs_control::workspace::calls::workspace` → host operation `workspace.exec` → `sandbox::exec::exec` ([`sandbox/exec.rs`](../../../../../control/crates/layerfs-control/src/sandbox/exec.rs)) |
 | Runs in | the Sandbox's runtime on its machine (here, or through its worker); never the daemon |
 
@@ -36,7 +36,7 @@ layerfs workspace exec <ws> <command> [--stream] [--message TEXT]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `ws` | Text | `<sandbox>:<path>` or `<sandbox>:<name>` from [workspace.mount](mount.md) | [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs) `WorkspaceRef` |
+| `ws` | Text | `<sandbox>:<path>` or `<sandbox>:<name>` from [workspace.mount](mount.md) | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) `WorkspaceRef` |
 | `command` | Text | run as `bash -c <command>` as the Sandbox's command identity, `HOME` its scratch folder, in the Workspace directory | [`sandbox/exec.rs`](../../../../../control/crates/layerfs-control/src/sandbox/exec.rs) |
 
 ## Options
@@ -116,7 +116,7 @@ A non-zero exit is not an error: it is `kind: "exit:<code>"`.
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad `ws` or option; out of scope | no | [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs) |
+| `InvalidInput` | a bad `ws` or option; out of scope | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 | `NoSuchSandbox`, `NotMounted` | no such Sandbox; the path or name is not mounted | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
 | `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox | no | [`sandbox/record.rs`](../../../../../control/crates/layerfs-control/src/sandbox/record.rs) |
 | `Unavailable` | the worker is not recorded or does not answer | no | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |

@@ -26,16 +26,16 @@ use super::get::get;
 use super::list::list;
 use super::record::SandboxRecord;
 use crate::common::context::Context;
-use crate::common::outcome::{refused, Outcome};
 use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::{refused, Outcome};
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// The Sandbox named `name`, or `NoSuchSandbox`.
 pub(crate) fn sandbox_of(home: &Path, name: &str) -> Result<SandboxRecord> {
-    crate::common::names::SandboxName::parse(name)?;
+    layerfs_home::names::SandboxName::parse(name)?;
     inventory::sandbox(home, name)?.ok_or_else(|| {
         refused(
             "NoSuchSandbox",

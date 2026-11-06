@@ -4,7 +4,7 @@
 //! calls take turns before the file lock, since `flock` is held per open
 //! file description. A thread that holds it takes it again at once, so a
 //! record writer can take it whether or not its caller already holds it.
-use crate::common::outcome::{failed, refused};
+use crate::outcome::{failed, refused};
 use layerfs_bridge::control::SdkRefusal;
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
@@ -31,7 +31,7 @@ pub struct HomeLock {
 impl Drop for HomeLock {
     fn drop(&mut self) {
         if let Some(file) = &self.file {
-            crate::common::home::flock::unlock(file);
+            crate::home::flock::unlock(file);
         }
         release(&self.home);
     }
@@ -94,7 +94,7 @@ pub fn take(home: &Path) -> Result<HomeLock, SdkRefusal> {
         }
     };
     loop {
-        match crate::common::home::flock::try_lock(&file, true) {
+        match crate::home::flock::try_lock(&file, true) {
             Ok(true) => {
                 return Ok(HomeLock {
                     file: Some(file),

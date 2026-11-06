@@ -2,10 +2,10 @@
 //! machine, here or in its worker (`sandbox.host`): the Sandbox and
 //! Workspace operations (`call`) and the Workspace status read (`backend`).
 //! The 1.1 `runtime.*` and `backend.*` tables are gone (#536 step 2).
-use crate::common::outcome::{self, refused, Outcome};
 use crate::sandbox::{exec, registry};
 use crate::workspace::serve as workspace;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::outcome::{self, refused, Outcome};
 
 /// Runs one Sandbox or Workspace operation once.
 pub fn call(op: &str, args: SdkValue) -> Outcome {
@@ -60,8 +60,8 @@ fn listed(answer: SdkValue, directory: &std::path::Path) -> Outcome {
     let named = |item: SdkValue| {
         let path = item.get("directory").cloned().unwrap_or_default();
         let name = name_at(item.get_text("directory"));
-        let item = crate::common::home::with_field(item, "path", path);
-        crate::common::home::with_field(item, "name", name)
+        let item = layerfs_home::home::with_field(item, "path", path);
+        layerfs_home::home::with_field(item, "name", name)
     };
     Ok(SdkValue::Map(
         fields
@@ -96,7 +96,7 @@ fn daemon_backend(op: &str, args: SdkValue) -> Outcome {
         other => other,
     };
     let answer = crate::daemon::operator::call(
-        &mut *crate::common::trace::control(&state.controls)?,
+        &mut *crate::daemon::trace::control(&state.controls)?,
         op,
         args,
     );

@@ -4,8 +4,8 @@
 //! outside every home, `<cache>/layerfs/bundle/<version>/linux-<arch>/`,
 //! with its hash in `bundle.json`; `tools/linux_bundle.py` builds and places
 //! it. `LAYERFS_BUNDLE` (internal) names another folder.
-use crate::common::outcome::refused;
 use layerfs_bridge::control::SdkRefusal;
+use layerfs_home::outcome::refused;
 use layerfs_platform::Bundle;
 
 /// The bundle of this build, or `Unsupported` naming where it is expected.

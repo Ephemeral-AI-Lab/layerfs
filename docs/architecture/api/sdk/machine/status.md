@@ -11,7 +11,7 @@ an `op` in flight. It starts nothing.
 | | |
 | --- | --- |
 | Family | [machine](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/machine/status.rs`](../../../../../api/crates/layerfs-api/src/machine/status.rs) |
+| Library entry | [`machine/status.rs`](../../../../../api/crates/layerfs-api/src/machine/status.rs) |
 | Implemented in | [`layerfs_control::machine::status`](../../../../../control/crates/layerfs-control/src/machine/status.rs) |
 | Runs in | the caller's process (host build with the `machine` feature) |
 
@@ -36,7 +36,7 @@ layerfs machine status <name> [--text]
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | a machine name (see [`get`](get.md#arguments)) | [`record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `of` |
+| `name` | Name | a machine name (see [`get`](get.md#arguments)) | [`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `of` |
 
 ## Options
 
@@ -55,12 +55,12 @@ None.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `state` | text | `running`, `stopped`, `failed`, `missing` from the provider; `creating`, `removing`, `unresolved` while an `op` holds the machine | [`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs) `State`, [`record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `state` |
+| `state` | text | `running`, `stopped`, `failed`, `missing` from the provider; `creating`, `removing`, `unresolved` while an `op` holds the machine | [`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs) `State`, [`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `state` |
 | `free_disk` | int or null | free bytes of the data disk as the guest sees them | `setup/calls.rs` `Status` |
 | `tool_version` | text or null | the provider tool's version | `Status` |
-| `down_reason` | text or null | why the machine is down; on `native`, `missing: host:root, ...` when a Linux host lacks something | [`native/observe.rs`](../../../../../control/crates/layerfs-platform/src/platforms/native/observe.rs) |
+| `down_reason` | text or null | why the machine is down; on `native`, `missing: host:root, ...` when a Linux host lacks something | [`platforms/native/observe.rs`](../../../../../control/crates/layerfs-platform/src/platforms/native/observe.rs) |
 | `stores` | list | sqlite Stores on the machine | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `stores_on` |
-| `op` | map | present while the record holds a create, connect, remove or disconnect: its id, call name, phase, start time and `uncertain` | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs) `to_sdk` |
+| `op` | map | present while the record holds a create, connect, remove or disconnect: its id, call name, phase, start time and `uncertain` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) `to_sdk` |
 
 `native` always answers `running` (unlike `list` and `get`, which show
 `ready`), with nulls for disk and version.
@@ -84,11 +84,11 @@ stopped VM answers `stopped` without being started.
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput`, `NotFound` | bad name; no such machine | no | [`record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `of` |
-| `Unavailable`, `Denied`, `Failed` | the provider or guest does not answer; ssh refuses the login or host key; the probe failed | no: a read changes nothing | [`spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `refusal` |
+| `InvalidInput`, `NotFound` | bad name; no such machine | no | [`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `of` |
+| `Unavailable`, `Denied`, `Failed` | the provider or guest does not answer; ssh refuses the login or host key; the probe failed | no: a read changes nothing | [`machine/spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `refusal` |
 | `Unknown` | a provider command did not end in time and was stopped | no: a read changes nothing | [`setup/tool.rs`](../../../../../control/crates/layerfs-platform/src/setup/tool.rs) |
-| `Busy`, `Unresolved` | a firecracker machine whose Lima host is held by an `op` | no | [`spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `machine_of` |
-| `Unsupported` | a build without the `machine` feature | no | [`layerfs-api/src/machine/status.rs`](../../../../../api/crates/layerfs-api/src/machine/status.rs) |
+| `Busy`, `Unresolved` | a firecracker machine whose Lima host is held by an `op` | no | [`machine/spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `machine_of` |
+| `Unsupported` | a build without the `machine` feature | no | [`machine/status.rs`](../../../../../api/crates/layerfs-api/src/machine/status.rs) |
 
 Unlike `list` and `get`, a failed probe is the call's error. An
 `unresolved` state is cleared by [`machine.remove`](remove.md) (VM) or

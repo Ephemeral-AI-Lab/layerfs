@@ -7,10 +7,11 @@
 //! and a copy a push or pull did not retire (from the record).
 use super::report::Findings;
 use super::scan::Scanned;
-use crate::common::home::{lease, paths};
-use crate::common::op::{Op, Standing};
+use crate::common::lease;
 use crate::store::record::{Placement, StoreRecord, StoreRef};
 use layerfs_bridge::control::SdkRefusal;
+use layerfs_home::home::paths;
+use layerfs_home::op::{Op, Standing};
 use std::path::Path;
 
 /// `native` and `docker` exist with or without a record.

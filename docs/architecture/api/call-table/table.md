@@ -151,7 +151,7 @@ confine the process `workspace.exec` starts.
    2 check(spec, args)             names, required, kinds; sizes -> bytes
    3 scope.apply                   (when scoped)
    4 home(explicit | LAYERFS_HOME | $HOME/.layerfs), must be absolute
-   5 common::home::open            refusals noted by note_failure
+   5 migrate::open                 refusals noted by note_failure
    6 machine::ensure_built_ins     native, docker (feature "machine")
    7 scope.owns                    (when scoped)
    8 (spec.run)(Context{home, events}, args)

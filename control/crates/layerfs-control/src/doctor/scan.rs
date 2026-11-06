@@ -4,12 +4,12 @@
 //! files (0600). A Store folder with projects and no Store record is
 //! reported here too.
 use super::report::Findings;
-use crate::common::home::{paths, read_record, RECORD_VERSION};
-use crate::common::outcome::failed;
 use crate::machine::record::MachineRecord;
 use crate::sandbox::record::SandboxRecord;
 use crate::store::record::StoreRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::home::{paths, read_record, RECORD_VERSION};
+use layerfs_home::outcome::failed;
 use std::collections::BTreeSet;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -173,7 +173,7 @@ fn record(
     if versioned && value.get_int("v") != Some(RECORD_VERSION) {
         let v = value
             .get("v")
-            .map_or("none".to_owned(), crate::common::json::print);
+            .map_or("none".to_owned(), layerfs_home::json::print);
         findings.error(
             entity,
             format!(

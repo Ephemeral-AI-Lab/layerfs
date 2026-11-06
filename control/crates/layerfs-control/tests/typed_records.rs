@@ -3,10 +3,10 @@
 //! byte as JSON text, and reads past a layout-3 `v`.
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::backup::record::BucketRecord;
-use layerfs_control::common::json::{parse, print};
-use layerfs_control::common::outcome::View;
 use layerfs_control::project::record::ProjectRecord;
 use layerfs_control::store::record::{StoreDerived, StoreRecord, StoreState};
+use layerfs_home::json::{parse, print};
+use layerfs_home::outcome::View;
 
 fn value(text: &str) -> SdkValue {
     parse(text).unwrap()
@@ -281,7 +281,7 @@ mod machines {
 
 #[test]
 fn a_store_state_is_busy_unresolved_down_idle_or_in_use() {
-    use layerfs_control::common::op::Op;
+    use layerfs_home::op::Op;
     let idle = StoreRecord::from_record("s", value(r#"{"kind":"sqlite"}"#));
     assert_eq!(idle.state(false, &[]), StoreState::Idle);
     assert_eq!(idle.state(false, &[42]), StoreState::InUse);

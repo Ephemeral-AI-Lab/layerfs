@@ -9,15 +9,16 @@
 //! recorded in its Sandbox's folder, `workspace/<id>.json`, with the name
 //! its mount gave it, if any (unique in the Sandbox; the other calls take
 //! it in place of the path, [`by_name`]).
-use crate::common::names::WorkspaceName;
-use crate::common::outcome::{failed, Outcome};
 use crate::daemon::values;
 use crate::internal::workspace;
-use crate::sandbox::registry::{lock, random, sandbox, sandbox_live, text, Mount};
+use crate::sandbox::registry::{sandbox, sandbox_live, Mount};
 use crate::sandbox::serve::{operation, WORKSPACES};
 use crate::Unmounted;
 use layerfs_bridge::control::{CommitControl, SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId, WorkspaceId};
+use layerfs_home::helpers::{lock, random, text};
+use layerfs_home::names::WorkspaceName;
+use layerfs_home::outcome::{failed, Outcome};
 
 /// A mount's `NoSuchSandbox`: `refusal` (its detail kept) with the next
 /// step in its message, which agents read.
@@ -51,7 +52,7 @@ pub(crate) fn mount_with(
     let sandbox = match args.get_text("sandbox") {
         Some(id) if !id.is_empty() => id,
         _ => {
-            return Err(crate::common::outcome::refused(
+            return Err(layerfs_home::outcome::refused(
                 "InvalidInput",
                 "workspace.mount names its Sandbox: workspace.mount(sandbox, branch), with a Sandbox from `sandbox.create()` or `project.list_sandboxes()`",
             ))
@@ -59,14 +60,14 @@ pub(crate) fn mount_with(
     };
     if branch == "main" {
         // main is the project's line of Layers, not a Branch (#535 terminal pass)
-        return Err(crate::common::outcome::refused(
+        return Err(layerfs_home::outcome::refused(
             "InvalidInput",
             "main is the project's published line, not a Branch, and is not mounted: fork a Branch from it with `branch.fork(project, name, \"main\")` and mount that",
         ));
     }
     let directory = crate::sandbox::files::sandbox_dir(args)?;
     let missing = || {
-        no_sandbox(crate::common::outcome::refused(
+        no_sandbox(layerfs_home::outcome::refused(
             "NoSuchSandbox",
             format!("no Sandbox {sandbox} runs on this machine"),
         ))
@@ -94,7 +95,7 @@ pub(crate) fn mount_with(
     // checked again under the guard, where it holds
     free(sandbox, &workspaces, name.as_ref())?;
     if workspaces.len() >= WORKSPACES as usize {
-        return Err(crate::common::outcome::refused(
+        return Err(layerfs_home::outcome::refused(
             "Capacity",
             format!(
                 "Sandbox {sandbox} already holds {WORKSPACES} Workspaces. Create a new Sandbox with `sandbox.create()` and mount there, or list this one's Workspaces with `sandbox.list_workspaces(\"{sandbox}\")` and unmount the ones you are done with (`workspace.unmount(ws)`)"
@@ -105,7 +106,7 @@ pub(crate) fn mount_with(
     // The Branch is found by name; the daemon binds its id.
     let branch_id = branch_of(branch)?;
     let mounted = {
-        let mut control = crate::common::trace::control(&state.controls)?;
+        let mut control = crate::daemon::trace::control(&state.controls)?;
         workspace(&mut control).mount(id, branch_id)
     };
     let mounted = mounted.map_err(failed)?;
@@ -153,7 +154,7 @@ fn free(
         return Ok(());
     };
     if (records.iter()).any(|(_, record)| record.get_text("name") == Some(name.as_str())) {
-        return Err(crate::common::outcome::refused(
+        return Err(layerfs_home::outcome::refused(
             "Exists",
             format!("Sandbox {sandbox} already has a Workspace named {name}: pick another name, or unmount `{sandbox}:{name}` first"),
         ));
@@ -175,13 +176,13 @@ pub(crate) fn by_name(args: SdkValue) -> Result<SdkValue, SdkRefusal> {
         .find(|(_, record)| record.get_text("name") == Some(name.as_str()));
     let Some((_, record)) = found else {
         let sandbox = args.get_text("sandbox").unwrap_or("");
-        return Err(crate::common::outcome::refused(
+        return Err(layerfs_home::outcome::refused(
             "NotMounted",
             format!("{sandbox}:{name} is not mounted"),
         ));
     };
     let path = text(&record, "path")?.to_owned();
-    Ok(crate::common::home::with_field(
+    Ok(layerfs_home::home::with_field(
         args,
         "path",
         SdkValue::Text(path),
@@ -211,7 +212,7 @@ pub(crate) type HeadOf<'a> = dyn FnMut(BranchId, Option<&str>) -> Option<Option<
 pub(crate) fn status_with(args: &SdkValue, head_of: &mut HeadOf<'_>) -> Outcome {
     let state = sandbox(args)?;
     let token = state.token(text(args, "path")?)?;
-    let mut control = crate::common::trace::control(&state.controls)?;
+    let mut control = crate::daemon::trace::control(&state.controls)?;
     let status = workspace(&mut control).status(token).map_err(operation)?;
     drop(control);
     let branch = lock(&state.mounts)?
@@ -229,7 +230,7 @@ pub(crate) fn status_with(args: &SdkValue, head_of: &mut HeadOf<'_>) -> Outcome 
 pub(crate) fn commit(args: &SdkValue) -> Outcome {
     let state = sandbox(args)?;
     let token = state.token(text(args, "path")?)?;
-    let reply = workspace(&mut *crate::common::trace::control(&state.controls)?)
+    let reply = workspace(&mut *crate::daemon::trace::control(&state.controls)?)
         .commit_with(CommitControl {
             token,
             force: args.get_bool("force"),
@@ -261,7 +262,7 @@ pub(crate) fn unmount(args: &SdkValue) -> Outcome {
     // processes can take Sandbox ownership while the daemon helper waits.
     let mut sent = false;
     let outcome = (|| {
-        let mut control = crate::common::trace::control(&state.controls)?;
+        let mut control = crate::daemon::trace::control(&state.controls)?;
         sent = true;
         let mut api = workspace(&mut control);
         // Forced: one abort write ends the connection, also after a normal

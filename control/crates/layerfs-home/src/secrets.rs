@@ -2,9 +2,8 @@
 //! `file:/path`, resolved on each call; the full URL is never written
 //! down), worker secrets in `worker.json` and Sandbox daemon keys in
 //! `control.json`.
-use crate::common::home::{paths, read_record, write_record};
-use crate::common::outcome::{failed, refused};
-use crate::store::record::StoreRecord;
+use crate::home::{paths, read_record, write_record};
+use crate::outcome::{failed, refused};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::net::SocketAddr;
 use std::path::Path;
@@ -12,7 +11,7 @@ use std::path::Path;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 /// `(scheme://, userinfo, rest)` of a PostgreSQL URL.
-pub(crate) fn parts(url: &str) -> Result<(&str, Option<&str>, &str)> {
+pub fn parts(url: &str) -> Result<(&str, Option<&str>, &str)> {
     let (scheme, after) = url
         .split_once("://")
         .filter(|(scheme, _)| matches!(*scheme, "postgresql" | "postgres"))
@@ -41,7 +40,7 @@ fn percent(text: &str) -> String {
 }
 
 /// A password reference's value: `env:NAME` or `file:/absolute/path`.
-pub(crate) fn resolve(reference: &str) -> Result<String> {
+pub fn resolve(reference: &str) -> Result<String> {
     if let Some(name) = reference.strip_prefix("env:") {
         return std::env::var(name)
             .ok()
@@ -67,18 +66,8 @@ pub(crate) fn resolve(reference: &str) -> Result<String> {
     ))
 }
 
-/// The full URL of a PostgreSQL Store's record, its password resolved now.
-pub(crate) fn url(record: &StoreRecord) -> Result<String> {
-    let url = record.text("url").ok_or_else(|| {
-        refused(
-            "Failed",
-            format!("PostgreSQL Store {}'s record has no url", record.name()),
-        )
-    })?;
-    with_password(url, record.text("password"))
-}
-
-fn with_password(url: &str, password: Option<&str>) -> Result<String> {
+/// `url` with the password reference `password` resolved into it now.
+pub fn with_password(url: &str, password: Option<&str>) -> Result<String> {
     let Some(reference) = password else {
         return Ok(url.to_owned());
     };
@@ -97,17 +86,19 @@ fn with_password(url: &str, password: Option<&str>) -> Result<String> {
 
 /// What a machine's `worker.json` records: its worker's address and
 /// secret, and the process of an ssh forward to it.
-pub(crate) struct WorkerSecret {
-    pub(crate) address: SocketAddr,
-    pub(crate) secret: String,
-    // read by the machine adapters only (`machine/spec.rs`)
-    #[cfg_attr(not(feature = "machine"), allow(dead_code))]
-    pub(crate) forward_pid: Option<u32>,
+pub struct WorkerSecret {
+    /// The worker's loopback address.
+    pub address: SocketAddr,
+    /// The worker's secret.
+    pub secret: String,
+    /// The process of an ssh forward to the worker; read by the machine
+    /// adapters only (`machine/spec.rs`).
+    pub forward_pid: Option<u32>,
 }
 
 /// Machine `machine`'s `worker.json`, if it has one; one without an
 /// address is refused `Failed`.
-pub(crate) fn worker_secret(home: &Path, machine: &str) -> Result<Option<WorkerSecret>> {
+pub fn worker_secret(home: &Path, machine: &str) -> Result<Option<WorkerSecret>> {
     let Some(value) = read_record(&paths::worker_record(home, machine))? else {
         return Ok(None);
     };
@@ -129,17 +120,17 @@ pub(crate) fn worker_secret(home: &Path, machine: &str) -> Result<Option<WorkerS
 
 /// The daemon keys in Sandbox folder `directory`'s `control.json`
 /// (`endpoint`, `secret`, `peer`, `instance`), if it has them.
-pub(crate) fn daemon_keys(directory: &Path) -> Result<Option<SdkValue>> {
+pub fn daemon_keys(directory: &Path) -> Result<Option<SdkValue>> {
     read_record(&directory.join("control.json"))
 }
 
 /// Writes `keys` as Sandbox folder `directory`'s `control.json` (0600).
-pub(crate) fn save_daemon_keys(directory: &Path, keys: &SdkValue) -> Result<()> {
+pub fn save_daemon_keys(directory: &Path, keys: &SdkValue) -> Result<()> {
     write_record(&directory.join("control.json"), keys)
 }
 
 /// One `N`-byte key from daemon keys `keys`.
-pub(crate) fn key<const N: usize>(keys: &SdkValue, name: &str) -> Result<[u8; N]> {
+pub fn key<const N: usize>(keys: &SdkValue, name: &str) -> Result<[u8; N]> {
     match keys.get(name) {
         Some(SdkValue::Bytes(bytes)) => bytes.as_slice().try_into().map_err(failed),
         _ => Err(refused("InvalidInput", format!("discovery {name}"))),

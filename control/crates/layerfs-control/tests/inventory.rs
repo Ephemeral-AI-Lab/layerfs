@@ -4,10 +4,10 @@
 //! Sandbox is read from `sandbox/<name>/` alone; a layout 2 folder under a
 //! machine is never read.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::common::home::{paths, write_record};
-use layerfs_control::common::json::parse;
 use layerfs_control::inventory;
 use layerfs_control::store::record::StoreRecord;
+use layerfs_home::home::{paths, write_record};
+use layerfs_home::json::parse;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 

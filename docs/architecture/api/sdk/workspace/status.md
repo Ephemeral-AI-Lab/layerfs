@@ -10,7 +10,7 @@ mount, what it is doing, and how many changes it holds, changing nothing.
 | | |
 | --- | --- |
 | Family | [workspace](README.md) |
-| Library entry | [`api/crates/layerfs-api/src/workspace/status.rs`](../../../../../api/crates/layerfs-api/src/workspace/status.rs) |
+| Library entry | [`workspace/status.rs`](../../../../../api/crates/layerfs-api/src/workspace/status.rs) |
 | Implemented in | `layerfs_control::workspace::calls::workspace` → host operation `backend.daemon.workspace.status` → `workspace::serve::status` ([`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs)) |
 | Runs in | the Sandbox's daemon (status, reads no Store) and one head read on the Store's own route |
 
@@ -35,7 +35,7 @@ layerfs workspace status <ws>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `ws` | Text | a mounted Workspace | [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs) |
+| `ws` | Text | a mounted Workspace | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 
 ## Options
 
@@ -81,7 +81,7 @@ Sandbox, and it starts no machine (P4). See the
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad `ws` | no | [`common/names.rs`](../../../../../control/crates/layerfs-control/src/common/names.rs) |
+| `InvalidInput` | a bad `ws` | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs) |
 | `NoSuchSandbox`, `NotMounted` | no such Sandbox or Workspace | no | [`workspace/serve.rs`](../../../../../control/crates/layerfs-control/src/workspace/serve.rs) |
 | `Unavailable` | the machine is stopped or its worker gone | no | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) `reach` |
 | daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) |

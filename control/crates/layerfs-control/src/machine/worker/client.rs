@@ -1,8 +1,8 @@
 //! The caller's side: one request per connection, sent once.
 use super::frame::{frame_bytes, read_frame, read_frame_within, write_frame, MAX_HELLO};
 use super::hello::Hello;
-use crate::common::outcome::{refused, Outcome};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::{refused, Outcome};
 use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
 use std::time::{Duration, Instant};
@@ -55,8 +55,8 @@ pub struct Unreached(pub SdkRefusal);
 pub fn request(op: &str, args: SdkValue) -> Result<Vec<u8>, SdkRefusal> {
     let mut request = SdkValue::map([("op", SdkValue::text(op)), ("args", args)]);
     // the caller's home id: the worker's root has none of its own (O33)
-    if let Some(id) = crate::common::home::guest::current_id() {
-        request = crate::common::home::with_field(request, "home_id", SdkValue::Text(id));
+    if let Some(id) = layerfs_home::home::guest::current_id() {
+        request = layerfs_home::home::with_field(request, "home_id", SdkValue::Text(id));
     }
     frame_bytes(&request)
 }
@@ -76,7 +76,7 @@ pub fn send(
     let started = Instant::now();
     let sent = send_once(endpoint, op, request, events, answer_within);
     let worker = endpoint.address.to_string();
-    crate::common::trace::connection(&worker, op, sent.is_ok(), started);
+    layerfs_home::trace::connection(&worker, op, sent.is_ok(), started);
     sent
 }
 
@@ -156,7 +156,7 @@ fn greet(endpoint: &Endpoint) -> Result<(TcpStream, Hello), Greeting> {
 pub fn hello(endpoint: &Endpoint) -> Result<Hello, SdkRefusal> {
     let started = Instant::now();
     let greeted = greet(endpoint);
-    crate::common::trace::connection(&endpoint.address.to_string(), "hello", false, started);
+    layerfs_home::trace::connection(&endpoint.address.to_string(), "hello", false, started);
     match greeted {
         Ok((_, hello)) => Ok(hello),
         Err(Greeting::Refused(refusal)) => Err(refusal),

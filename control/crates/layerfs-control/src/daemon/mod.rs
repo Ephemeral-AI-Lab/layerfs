@@ -8,5 +8,6 @@ pub mod internal;
 #[doc(hidden)]
 pub mod operator;
 pub(crate) mod pool;
+pub(crate) mod trace;
 pub mod values;
 pub mod workspace;

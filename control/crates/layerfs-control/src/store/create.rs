@@ -1,14 +1,14 @@
 //! `store.create`: an empty sqlite Store on `native`.
 use super::family::public;
-use crate::common::home::{self, paths};
-use crate::common::outcome::{refused, Outcome, View};
 use crate::store::record::StoreRecord;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::home::{self, paths};
+use layerfs_home::outcome::{refused, Outcome, View};
 use std::path::Path;
 
 /// `store.create`: an empty sqlite Store on `native`.
 pub(super) fn create(home: &Path, name: &str) -> Outcome {
-    crate::common::names::StoreName::parse(name)?;
+    layerfs_home::names::StoreName::parse(name)?;
     let _lock = home::lock::take(home)?;
     if paths::store_record(home, name).exists() {
         return Err(refused("Exists", format!("a Store named {name} exists")));
@@ -17,8 +17,8 @@ pub(super) fn create(home: &Path, name: &str) -> Outcome {
     home::private_dir(&directory)?;
     let identity = crate::store::identity::Identity {
         kind: crate::store::identity::Kind::Sqlite,
-        binding: crate::sandbox::registry::random()?.to_vec(),
-        cursor_key: crate::sandbox::registry::random()?,
+        binding: layerfs_home::helpers::random()?.to_vec(),
+        cursor_key: layerfs_home::helpers::random()?,
     };
     let file = paths::store_file(home, name);
     let policy = layerfs_storage::StoragePolicy::frozen_default();

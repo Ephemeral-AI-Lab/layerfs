@@ -3,9 +3,9 @@
 //! no findings; a layout 2 home reports what refuses its conversion; and
 //! the doctor writes nothing in the home.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::common::home::{self, paths, private_dir, write_entity, write_record};
 use layerfs_control::doctor::doctor;
 use layerfs_control::machine::worker::{read_frame, read_frame_within, write_frame, MAX_HELLO};
+use layerfs_home::home::{paths, private_dir, write_entity, write_record};
 use std::collections::BTreeMap;
 use std::net::TcpListener;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -119,7 +119,7 @@ fn old_worker() -> (String, mpsc::Receiver<Option<SdkValue>>) {
 #[test]
 fn a_clean_home_is_ok_with_no_findings() {
     let home = new_home("clean");
-    home::open(&home).unwrap();
+    layerfs_control::migrate::open(&home).unwrap();
     store(&home, "shop", sqlite("shop", "native"));
     let project = SdkValue::map([("name", t("api"))]);
     write_entity(&paths::project_record(&home, "shop", "api"), &project).unwrap();
@@ -151,7 +151,7 @@ fn a_home_that_does_not_exist_is_ok_and_stays_absent() {
 #[test]
 fn each_problem_gives_one_finding_naming_its_fix() {
     let home = new_home("problems");
-    home::open(&home).unwrap();
+    layerfs_control::migrate::open(&home).unwrap();
     // a record that does not parse
     let bad = paths::store_record(&home, "bad");
     private_dir(bad.parent().unwrap()).unwrap();

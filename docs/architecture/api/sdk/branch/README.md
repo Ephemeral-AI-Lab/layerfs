@@ -9,7 +9,7 @@ The `branch` calls.
 | | |
 | --- | --- |
 | Component | [Call table](../../call-table/README.md) |
-| Source | [`api/crates/layerfs-api/src/branch`](../../../../../api/crates/layerfs-api/src/branch), [`control/crates/layerfs-control/src/store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs), [`engine/crates/layerfs-store-service/src/methods`](../../../../../engine/crates/layerfs-store-service/src/methods) |
+| Source | [`api/crates/layerfs-api/src/branch`](../../../../../api/crates/layerfs-api/src/branch), [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs), [`engine/crates/layerfs-store-service/src/methods`](../../../../../engine/crates/layerfs-store-service/src/methods) |
 
 ## Calls
 
@@ -85,7 +85,7 @@ and [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/r
 | `ReservedName`, `NameTaken` | `fork` or `merge` to `main` or to an existing name | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `Conflict`, `NoMergeBase` | `merge` conflicts (nothing is created), or the sides share no history | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
 | `NoCommit` | `publish` of a Branch with no saved Commit | [`history/branch.rs`](../../../../../engine/crates/layerfs-store-service/src/history/branch.rs) |
-| `Busy`, `Unresolved` | the Store's record holds another operation's `op` | [`common/op.rs`](../../../../../control/crates/layerfs-control/src/common/op.rs) |
+| `Busy`, `Unresolved` | the Store's record holds another operation's `op` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
 | `Unavailable` | the Store's worker is not recorded or does not answer | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
 | `Failed` | a list made no progress | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
 | `Unknown` | **uncertain:** a worker's answer was lost, or the Store reported an unknown outcome | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |

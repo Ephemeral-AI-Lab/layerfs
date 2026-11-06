@@ -3,7 +3,7 @@
 //! the project's Sandboxes, and another process's lease on the Store.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_control::common::context::Context;
-use layerfs_control::common::home::{paths, private_dir, write_entity, write_record};
+use layerfs_home::home::{paths, private_dir, write_entity, write_record};
 use std::path::{Path, PathBuf};
 
 fn t(s: &str) -> SdkValue {
@@ -31,7 +31,7 @@ fn related(refusal: &SdkRefusal) -> Vec<(String, String)> {
 
 fn refused(
     home: &Path,
-    run: fn(&mut Context<'_>, &str, &SdkValue) -> layerfs_control::common::outcome::Outcome,
+    run: fn(&mut Context<'_>, &str, &SdkValue) -> layerfs_home::outcome::Outcome,
     call: &str,
     args: SdkValue,
 ) -> SdkRefusal {

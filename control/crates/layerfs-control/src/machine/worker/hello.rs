@@ -3,8 +3,8 @@
 //! of the sealed bundle it runs from. The caller compares both with its own
 //! before it sends anything: a worker of another build is refused, and its
 //! machine is stopped and started again to run this build's worker.
-use crate::common::outcome::refused;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::refused;
 use std::path::Path;
 
 /// The worker protocol this build speaks. The first worker answered its
@@ -142,7 +142,7 @@ pub fn replace_with(machine: &str) -> String {
 
 /// The hash `bundle.json` in `dir` names, if there is one.
 pub(crate) fn sealed_hash(dir: &Path) -> Result<Option<String>, SdkRefusal> {
-    let manifest = crate::common::home::read_record(&dir.join("bundle.json"))?;
+    let manifest = layerfs_home::home::read_record(&dir.join("bundle.json"))?;
     Ok(manifest.and_then(|m| m.get_text("hash").map(str::to_owned)))
 }
 

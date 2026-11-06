@@ -6,10 +6,10 @@
 //! another bundle's image is loaded again. A load is one attempt.
 use super::spec::{self as record, machine_of, refusal};
 use super::status::home_id;
-use crate::common::home::lock;
-use crate::common::outcome::refused;
 use crate::sandbox::deploy::IMAGE_ARCHIVE;
 use layerfs_bridge::control::SdkRefusal;
+use layerfs_home::home::lock;
+use layerfs_home::outcome::refused;
 use layerfs_platform as adapters;
 use std::path::Path;
 

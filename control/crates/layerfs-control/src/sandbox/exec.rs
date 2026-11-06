@@ -5,10 +5,11 @@
 //! daemon is not involved. A local Sandbox
 //! (`layerfs_isolation::Sandbox::HostProcess`) runs the same commands as
 //! processes of this kernel.
-use crate::common::outcome::Outcome;
 use crate::sandbox::output::Spool;
-use crate::sandbox::registry::{sandbox, text, SandboxState};
+use crate::sandbox::registry::{sandbox, SandboxState};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::helpers::text;
+use layerfs_home::outcome::Outcome;
 
 /// One command to its end: exit code, stdout, stderr. `spool` sends every
 /// non-empty stream to its file instead of keeping it inline. Its home is

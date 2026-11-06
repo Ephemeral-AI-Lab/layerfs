@@ -157,7 +157,7 @@ fn leases_are_held_counted_and_stale_ones_removed() {
     // a lease of a process that is gone is stale: removed and logged
     let dead = paths::lease_dir(&home, "shop").join("2147483646");
     std::fs::write(&dead, "1\n").unwrap();
-    assert!(!lease::alive(2147483646));
+    assert!(!layerfs_home::process::alive(2147483646));
     assert_eq!(lease::holders(&home, "shop").unwrap(), Vec::<u32>::new());
     assert!(!dead.exists());
     let log = std::fs::read_to_string(home.join("log/leases.jsonl")).unwrap();
@@ -169,7 +169,7 @@ fn leases_are_held_counted_and_stale_ones_removed() {
 fn a_lease_names_its_process_so_a_reused_or_group_pid_never_holds() {
     // ids 0 and above i32::MAX are process groups to kill(2): never alive
     for pid in [0, i32::MAX as u32 + 1, u32::MAX] {
-        assert!(!lease::alive(pid), "{pid}");
+        assert!(!layerfs_home::process::alive(pid), "{pid}");
     }
     let home = home_with(sqlite_record(t("native")));
     let dir = paths::lease_dir(&home, "shop");

@@ -2,10 +2,10 @@
 //! one project's Branches, Commits and files, each translated to the Store
 //! method that does it and run on the route its Store's records choose.
 use crate::common::context::Context;
-use crate::common::outcome::{refused, Outcome};
 use crate::store::call::store_call;
 use crate::store::resolve::target;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::outcome::{refused, Outcome};
 
 /// The argument a scoped `branch.list` carries to its family: the Branch
 /// namespace, which only a scope sets (the table has no such argument).
@@ -216,7 +216,7 @@ fn branches_in(context: &mut Context<'_>, args: &SdkValue, namespace: &str) -> O
                 more = true;
                 break 'pages;
             } else {
-                kept.push(crate::common::home::with_field(item, "name", name));
+                kept.push(layerfs_home::home::with_field(item, "name", name));
             }
         }
         match next {

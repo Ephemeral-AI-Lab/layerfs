@@ -3,10 +3,10 @@
 //! admission and shared-record cleanup, never during the daemon's helper wait.
 //! Mount paths are unique within one daemon lifetime; Sandbox removal clears
 //! the terminal records before that directory can be reused.
-use crate::common::outcome::{failed, refused, Outcome};
 use crate::sandbox::files as discovery;
 use crate::sandbox::registry::SandboxState;
 use layerfs_bridge::control::{SdkRefusal, SdkValue, WorkspaceToken};
+use layerfs_home::outcome::{failed, refused, Outcome};
 use std::{
     fs::{File, OpenOptions},
     os::unix::fs::OpenOptionsExt,
@@ -27,7 +27,7 @@ fn record(state: &SandboxState, token: WorkspaceToken) -> PathBuf {
 struct Lease(File);
 impl Drop for Lease {
     fn drop(&mut self) {
-        crate::common::home::flock::unlock(&self.0);
+        layerfs_home::home::flock::unlock(&self.0);
     }
 }
 fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRefusal> {
@@ -40,7 +40,7 @@ fn lease(path: &std::path::Path, exclusive: bool) -> Result<Option<Lease>, SdkRe
         .open(path)
         .map_err(failed)?;
     discovery::private(path, false)?;
-    if crate::common::home::flock::try_lock(&file, exclusive).map_err(failed)? {
+    if layerfs_home::home::flock::try_lock(&file, exclusive).map_err(failed)? {
         Ok(Some(Lease(file)))
     } else {
         Ok(None)
@@ -163,7 +163,7 @@ pub(crate) fn check(state: &SandboxState, path: &str) -> Result<(), SdkRefusal> 
 pub(crate) fn find(state: &SandboxState, path: &str) -> Result<Option<SdkValue>, SdkRefusal> {
     // Steady-state token/directory lookups already have a token: avoid a
     // directory scan proportional to the lifetime's completed unmounts.
-    let known = crate::sandbox::registry::lock(&state.mounts)?
+    let known = layerfs_home::helpers::lock(&state.mounts)?
         .get(path)
         .map(|mount| mount.workspace.bound.token);
     if let Some(token) = known {
@@ -213,7 +213,7 @@ pub(crate) fn check_all(state: &SandboxState) -> Result<Vec<String>, SdkRefusal>
             }
             if let Some(value) = inspect(&entry.path())? {
                 if value.get_text("state") == Some("Retained") {
-                    recoverable.push(crate::sandbox::registry::text(&value, "path")?.to_owned());
+                    recoverable.push(layerfs_home::helpers::text(&value, "path")?.to_owned());
                 }
             }
         }

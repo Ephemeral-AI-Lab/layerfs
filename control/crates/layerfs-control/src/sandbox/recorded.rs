@@ -1,12 +1,12 @@
 //! What a Sandbox's record says runs it (#536 §9.2): a Docker container,
 //! a local daemon process (native) or a namespaces Sandbox, read from the
 //! record alone and reopened or deleted through its backend.
-use crate::common::outcome::{failed, refused};
-use crate::sandbox::registry;
 #[cfg(target_os = "linux")]
 use crate::sandbox::runtime::NAMESPACES;
 use crate::sandbox::runtime::NATIVE;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::helpers;
+use layerfs_home::outcome::{failed, refused};
 use layerfs_isolation::docker::{Docker, DockerProvider, SandboxRequest};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use layerfs_isolation::host_process;
@@ -44,8 +44,8 @@ fn labels(value: &SdkValue) -> Result<Vec<(String, String)>> {
             .iter()
             .map(|item| {
                 Ok((
-                    registry::text(item, "key")?.to_owned(),
-                    registry::text(item, "value")?.to_owned(),
+                    helpers::text(item, "key")?.to_owned(),
+                    helpers::text(item, "value")?.to_owned(),
                 ))
             })
             .collect(),
@@ -55,15 +55,15 @@ fn labels(value: &SdkValue) -> Result<Vec<(String, String)>> {
 /// The Engine, container and deployment a Docker Sandbox record names.
 fn runtime(value: &SdkValue) -> Result<(DockerProvider, ContainerId, SandboxRecord)> {
     let docker =
-        Docker::new(registry::text(value, "docker")?, Duration::from_secs(30)).map_err(failed)?;
+        Docker::new(helpers::text(value, "docker")?, Duration::from_secs(30)).map_err(failed)?;
     let request = SandboxRequest {
-        image: registry::text(value, "image")?.to_owned(),
+        image: helpers::text(value, "image")?.to_owned(),
         // a PostgreSQL Store's Sandbox mounts no volume (#506)
         store_volume: value.get_text("volume").map(str::to_owned),
         port: 30421,
         labels: labels(value)?,
     };
-    let container = ContainerId::parse(registry::text(value, "container")?).map_err(failed)?;
+    let container = ContainerId::parse(helpers::text(value, "container")?).map_err(failed)?;
     let provider = DockerProvider::new(docker);
     Ok((provider, container, SandboxRecord::Docker(request.into())))
 }
@@ -126,7 +126,7 @@ fn local_record(args: &SdkValue, id: &str, value: &SdkValue) -> Result<Recorded>
 fn local(directory: PathBuf, record: LocalRecord, value: &SdkValue) -> Result<Recorded> {
     Ok(Recorded::Local {
         directory,
-        id: ContainerId::parse(registry::text(value, "container")?).map_err(failed)?,
+        id: ContainerId::parse(helpers::text(value, "container")?).map_err(failed)?,
         process: LocalProcess {
             pid: record.pid,
             start: record.start_time,
@@ -144,10 +144,10 @@ fn local(directory: PathBuf, record: LocalRecord, value: &SdkValue) -> Result<Re
 /// ([`crate::sandbox::launch::local::owned`]).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathBuf, LocalRecord)> {
-    let directory = PathBuf::from(registry::text(value, "directory")?);
+    let directory = PathBuf::from(helpers::text(value, "directory")?);
     let expected = crate::sandbox::launch::local::directory(args, id, directory.parent())?;
     // the Sandbox's own directory name, exactly as this deployment names it
-    let name = registry::text(value, "name")?;
+    let name = helpers::text(value, "name")?;
     if directory != expected || expected.file_name().and_then(|n| n.to_str()) != Some(name) {
         return Err(refused(
             "InvalidInput",
@@ -174,8 +174,8 @@ fn local_record_of(args: &SdkValue, id: &str, value: &SdkValue) -> Result<(PathB
 /// A local record's directory and physical facts, unchecked.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn local_parts(value: &SdkValue) -> Result<(PathBuf, LocalRecord)> {
-    let directory = PathBuf::from(registry::text(value, "directory")?);
-    let name = registry::text(value, "name")?;
+    let directory = PathBuf::from(helpers::text(value, "directory")?);
+    let name = helpers::text(value, "name")?;
     let process = recorded_process(value)?;
     let port = value
         .get_int("port")
@@ -208,7 +208,7 @@ fn recorded_process(value: &SdkValue) -> Result<LocalProcess> {
     };
     Ok(LocalProcess {
         pid: u32::try_from(pid).map_err(failed)?,
-        start: registry::text(value, "start")?
+        start: helpers::text(value, "start")?
             .parse::<u64>()
             .map_err(failed)?,
         boot,
@@ -231,7 +231,7 @@ fn namespaces(
     value: &SdkValue,
 ) -> Result<Recorded> {
     let image =
-        layerfs_isolation::Image::parse(registry::text(value, "image")?).map_err(|error| {
+        layerfs_isolation::Image::parse(helpers::text(value, "image")?).map_err(|error| {
             refused(
                 "InvalidInput",
                 format!(
@@ -255,7 +255,7 @@ fn namespaces(
         })?;
     Ok(Recorded::Namespaces(
         layerfs_isolation::Runtime::Namespaces(provider),
-        ContainerId::parse(registry::text(value, "container")?).map_err(failed)?,
+        ContainerId::parse(helpers::text(value, "container")?).map_err(failed)?,
         SandboxRecord::Namespaces(record),
     ))
 }
