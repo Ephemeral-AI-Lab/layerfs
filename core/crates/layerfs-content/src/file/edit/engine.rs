@@ -94,10 +94,9 @@ impl<'a> Engine<'a> {
         if !object.predecessors().is_empty() {
             return Ok(object);
         }
-        let found =
-            crate::file::mapping::page_at(&base, level, start, &mut |id, root| {
-                self.read_page(id, root)
-            })?;
+        let found = crate::file::mapping::page_at(&base, level, start, &mut |id, root| {
+            self.read_page(id, root)
+        })?;
         match found {
             Some(hint) if hint != object.id() => {
                 let mut predecessors = crate::object::AdvisoryPredecessors::new();

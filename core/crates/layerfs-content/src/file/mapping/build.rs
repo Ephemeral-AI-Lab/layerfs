@@ -107,7 +107,9 @@ impl ExtentBuilder {
             self.starts.push(0);
         }
         let start = self.starts[level];
-        let span = pages.checked_mul(bytes).ok_or(ContentError::LengthOverflow)?;
+        let span = pages
+            .checked_mul(bytes)
+            .ok_or(ContentError::LengthOverflow)?;
         self.starts[level] = add(start, span)?;
         Ok(start)
     }

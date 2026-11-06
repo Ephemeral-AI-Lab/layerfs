@@ -138,8 +138,11 @@ pub fn construct_runs_with_predecessor(
             }
             if chunked && used < length {
                 if zero {
-                    let processed =
-                        chunks.zero(length - used, &mut |s, l, i| hints.offer(s, l, i), consumer)?;
+                    let processed = chunks.zero(
+                        length - used,
+                        &mut |s, l, i| hints.offer(s, l, i),
+                        consumer,
+                    )?;
                     zeros_processed = add(zeros_processed, processed)?;
                 } else {
                     chunks.data(
