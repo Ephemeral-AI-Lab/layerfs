@@ -96,22 +96,38 @@ live and retired, as on SQLite
 | --- | --- | --- | --- | --- |
 | `Read` | `REPEATABLE READ READ ONLY` | no | history reads, policy, signatures | [`profile.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/profile.rs) |
 | `Write` | `READ COMMITTED` + `synchronous_commit` | `FOR UPDATE`, unless nested in the held lane | history writes, location rows, allocation | same |
-| `Stage` | `READ COMMITTED` + `synchronous_commit` | no | schema create, pack bodies, merge records | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
+| `Stage` | `READ COMMITTED` + `synchronous_commit` | no | schema create, merge records | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
+| `Publish` | `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | `FOR UPDATE` after the pack bodies, unless nested in the held lane | one Save publication wave | same |
 | `Immutable` | none; autocommit statements | no | locates, pack reads, inode values | same |
+| `Statement` | none; exactly one autocommit statement (a second is refused before it is sent) | no | `branch_snapshot` | same |
+
+A single PostgreSQL statement sees one snapshot, so `Statement` reads a Branch
+and the rows it resolves to coherently without `BEGIN`/`COMMIT`. Statements run
+outside a transaction name the schema (`{s}` in
+[`queries/history`](../../../../engine/crates/layerfs-persistence/sql/postgresql/queries/history)),
+since no `SET LOCAL search_path` applies to them.
 
 Every setting is `SET LOCAL` in the same round trip as `BEGIN`, so a
 transaction-pooling proxy never carries one session's settings to another.
 Writes are never `SERIALIZABLE` and never retried.
 
 ```text
- PostgresStorage::publish(batch)
+ PostgresStorage::publish(batch)                  one Publish transaction
    validate(batch)                                (shared bounds)
-   tx 1  Stage: COPY BINARY pack bodies           ids were reserved: no
-                                                  other writer touches them
-   tx 2  Write: lane row; locations, inode values,
-                signatures, totals
-   tx 2 fails -> packs stay unreferenced; ids are never reused
+   BEGIN; SET LOCAL ... lock_timeout              1 round trip
+   COPY BINARY pack bodies                        2 (prepare cached); ids were
+                                                  reserved: no other writer
+                                                  touches them, so no lane yet
+   SELECT 1 FROM store_lane ... FOR UPDATE        1 (skipped if nested)
+   WITH ins AS (INSERT locations ... RETURNING),  1: one data-modifying
+        totals, inode values, released ordinals,     statement; totals count
+        signatures  SELECT inserted ids               the inserted locations
+   COMMIT                                         1
+   any failure -> the whole publication rolls back; ids are never reused
 ```
+
+The lane row is held only for the rows statement and the COMMIT; the body
+upload happens before it.
 
 Source: [`objects/publish.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/publish.rs),
 [`storage/provider.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/storage/provider.rs).
@@ -149,7 +165,7 @@ closed for the call, with no retry
 
 Source: [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs).
 The value is chosen per Store in `PostgresSelection` and applied with
-`SET LOCAL` to every `Write` and `Stage` transaction. The SQLite Disposable
+`SET LOCAL` to every `Write`, `Stage` and `Publish` transaction. The SQLite Disposable
 profile is unaffected.
 
 ## Related

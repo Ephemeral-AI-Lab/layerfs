@@ -101,14 +101,9 @@ impl PackPersistence for PostgresStorage {
     }
     fn publish(&self, batch: &Publication) -> Result<Published, PersistenceError> {
         publication::validate(batch)?;
-        if !batch.packs.is_empty() {
-            self.session
-                .run_as::<_, PersistenceError>(Mode::Stage, |tx| {
-                    objects::publish::packs(tx, &batch.packs).map_err(Into::into)
-                })?;
-        }
-        self.session.run(true, |tx| {
-            objects::publish::rows(tx, batch).map_err(PersistenceError::from)
-        })
+        self.session
+            .run_as::<_, PersistenceError>(Mode::Publish, |tx| {
+                objects::publish::run(tx, batch).map_err(Into::into)
+            })
     }
 }

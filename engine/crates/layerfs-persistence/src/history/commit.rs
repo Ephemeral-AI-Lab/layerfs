@@ -81,15 +81,17 @@ pub(crate) fn ancestry_contains(
     }
 }
 
-/// Publishes one candidate against the expected Branch head.
+/// Publishes one candidate against the expected Branch head. The Branch, its
+/// LayerStack, base root and head Commit come from one statement; only a
+/// forced overwrite reads the Commit it expected separately.
 pub(crate) fn commit_branch(
     tx: &Transaction<'_>,
     request: &CommitRequest,
 ) -> HistoryResult<CommitOutcome> {
-    let branch =
-        super::branch::branch(tx, request.branch)?.ok_or(HistoryError::Missing(Missing::Branch))?;
-    let stack = super::layerstack::layer_stack(tx, branch.stack)?
-        .ok_or(HistoryError::Integrity("LayerStack"))?;
+    let rows = super::branch::snapshot_rows(tx, request.branch)?
+        .ok_or(HistoryError::Missing(Missing::Branch))?;
+    let branch = rows.branch.clone();
+    let stack = rows.stack()?.ok_or(HistoryError::Integrity("LayerStack"))?;
     if stack.profile != request.profile || stack.scope != request.scope {
         return Err(HistoryError::Integrity("Commit context"));
     }
@@ -103,11 +105,19 @@ pub(crate) fn commit_branch(
             actual_base: branch.base_layer,
         })));
     }
-    let base_root = super::layerstack::layer_root(tx, request.expected_base)?;
+    // Past the check above the expected base is the Branch's own.
+    let base_root = rows
+        .base_root()?
+        .ok_or(HistoryError::Missing(Missing::Layer))?;
     let root_of = |head: Option<CommitId>| -> HistoryResult<_> {
         match head {
             Some(head) => {
-                let record = commit(tx, head)?.ok_or(HistoryError::Integrity("Branch Commit"))?;
+                let record = if Some(head) == branch.head_commit {
+                    rows.head()?
+                } else {
+                    commit(tx, head)?
+                };
+                let record = record.ok_or(HistoryError::Integrity("Branch Commit"))?;
                 if record.stack != branch.stack || record.base_layer != branch.base_layer {
                     return Err(HistoryError::Integrity("Branch Commit ownership"));
                 }
@@ -196,8 +206,9 @@ pub(crate) fn new_commit(
         second_parent,
         meta,
     };
-    if !verify_commit(tx, &record)? {
-        tx.execute(
+    // The insert names a new identity; an existing one is then verified.
+    let inserted = tx
+        .execute(
             INSERT_COMMIT,
             params![
                 record.id.as_slice(),
@@ -224,10 +235,14 @@ pub(crate) fn new_commit(
             ],
         )
         .map_err(sql)?;
+    if inserted == 1 {
         super::lineage::record_commit(tx, &record)?;
         return Ok(record);
     }
     // An identical Commit already exists: it keeps its own recorded time.
+    if !verify_commit(tx, &record)? {
+        return Err(HistoryError::Integrity("Commit identity"));
+    }
     commit(tx, record.id)?.ok_or(HistoryError::Integrity("Commit identity"))
 }
 

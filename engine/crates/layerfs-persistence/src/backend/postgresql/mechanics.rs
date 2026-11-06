@@ -17,7 +17,10 @@ use postgres::types::ToSql;
 
 impl HistoryStatements for Transaction<'_> {
     fn history(&self, key: &str, params: Vec<Param>) -> Result<Vec<Record>, BackendError> {
-        self.query(history::statements::statement(key)?, params)
+        match history::statements::qualified(key) {
+            Some(sql) => self.query(&sql.replace("{s}", self.schema), params),
+            None => self.query(history::statements::statement(key)?, params),
+        }
     }
     fn history_arrays(
         &self,
@@ -58,6 +61,9 @@ impl Mechanics for Transaction<'_> {
     }
     fn advance_allocation(&self, pack: i64, ordinal: i64) -> Result<(), BackendError> {
         metadata::writes::advance(self, pack, ordinal)
+    }
+    fn allocate(&self, packs: i64, ordinals: i64) -> Result<(i64, i64), BackendError> {
+        metadata::writes::allocate(self, packs, ordinals)
     }
     fn locate(
         &self,

@@ -63,7 +63,7 @@ impl HistoryCatalog for HistoryProvider {
     }
 
     fn branch_snapshot(&self, id: BranchId) -> HistoryResult<Option<BranchSnapshot>> {
-        self.read(|tx| branch::branch_snapshot(tx, id))
+        self.read_statement(|tx| branch::branch_snapshot(tx, id))
     }
 
     fn branches(
