@@ -83,8 +83,8 @@ fn write_record(home: &Path, name: &str, value: &SdkValue) {
     fs::write(dir.join("record.json"), print(value)).unwrap();
 }
 
-/// A gone record: no id, no intent, so its state is derived as `gone`.
-fn gone(home: &Path, name: &str, machine: &str, generation: u64) -> PathBuf {
+/// A closed record: no id and no intent, so its state is derived as `Closed`.
+fn closed(home: &Path, name: &str, machine: &str, generation: u64) -> PathBuf {
     let root = root(home, name);
     seed(&root);
     write_record(
@@ -104,6 +104,19 @@ fn running(home: &Path, name: &str, machine: &str, generation: u64) -> PathBuf {
         name,
         &record_value(name, machine, Some(name), None, &root, generation),
     );
+    root
+}
+
+/// A lost record: an id and `lost: true`, so its state is `Lost`.
+fn lost(home: &Path, name: &str, machine: &str, generation: u64) -> PathBuf {
+    let root = root(home, name);
+    seed(&root);
+    let value = record_value(name, machine, Some(name), None, &root, generation);
+    let SdkValue::Map(mut fields) = value else {
+        unreachable!()
+    };
+    fields.push(("lost".to_owned(), SdkValue::Bool(true)));
+    write_record(home, name, &SdkValue::Map(fields));
     root
 }
 
@@ -310,10 +323,10 @@ fn a_running_sandbox_keeps_its_scratch_during_a_sweep() {
 }
 
 #[test]
-fn a_settled_gone_record_is_swept_and_nothing_else_is_deleted() {
+fn a_settled_closed_record_is_swept_and_nothing_else_is_deleted() {
     let home = fresh_home();
     seed_bystanders(&home);
-    let root = gone(&home, "b", "native", 9);
+    let root = closed(&home, "b", "native", 9);
     let report = scratch::sweep(&home, "native", Mode::Apply).unwrap();
     assert_eq!(report.deleted, vec![Owned::new("b", root.clone())]);
     assert!(!root.exists());
@@ -321,10 +334,34 @@ fn a_settled_gone_record_is_swept_and_nothing_else_is_deleted() {
 }
 
 #[test]
+fn a_sweep_removes_closed_and_lost_scratch_and_keeps_a_live_one() {
+    let home = fresh_home();
+    let closed = closed(&home, "a", "native", 1);
+    let lost = lost(&home, "b", "native", 2);
+    let live = running(&home, "c", "native", 3);
+    let report = scratch::sweep(&home, "native", Mode::Apply).unwrap();
+    assert_eq!(
+        report.deleted,
+        vec![
+            Owned::new("a", closed.clone()),
+            Owned::new("b", lost.clone())
+        ],
+        "{report:?}"
+    );
+    assert!(!closed.exists(), "a Closed Sandbox's scratch is swept");
+    assert!(!lost.exists(), "a Lost Sandbox's scratch is swept");
+    assert!(
+        live.join("commands-left-this").is_file(),
+        "a Live Sandbox's scratch is kept"
+    );
+    assert_eq!(report.kept, vec![(Owned::new("c", live), Kept::Live)]);
+}
+
+#[test]
 fn dry_run_lists_exactly_what_apply_deletes() {
     let home = fresh_home();
-    let a = gone(&home, "a", "native", 1);
-    let b = gone(&home, "b", "native", 2);
+    let a = closed(&home, "a", "native", 1);
+    let b = closed(&home, "b", "native", 2);
     let live = running(&home, "c", "native", 3);
     let stuck = unresolved(&home, "d", "native", 4);
     let dry = scratch::sweep(&home, "native", Mode::DryRun).unwrap();
@@ -350,7 +387,7 @@ fn dry_run_lists_exactly_what_apply_deletes() {
 #[test]
 fn a_sweep_is_keyed_by_machine_never_by_isolation_class() {
     let home = fresh_home();
-    let root = gone(&home, "b", "dev", 5);
+    let root = closed(&home, "b", "dev", 5);
     let elsewhere = scratch::sweep(&home, "native", Mode::Apply).unwrap();
     assert!(
         elsewhere.deleted.is_empty(),
@@ -366,7 +403,7 @@ fn a_sweep_is_keyed_by_machine_never_by_isolation_class() {
 fn a_clean_failure_is_recorded_and_never_changes_a_successful_close() {
     let home = fresh_home();
     seed_bystanders(&home);
-    let root = gone(&home, "b", "native", 9);
+    let root = closed(&home, "b", "native", 9);
     let inside = root.join("commands-left-this");
     let record = SandboxRecord::from_record("b", record_value("b", "native", None, None, &root, 9));
     // the generation re-read before the delete cannot be parsed, so the
@@ -391,9 +428,9 @@ fn a_sweep_reaches_a_settled_record_past_more_than_a_batch_of_unrelated_ones() {
     // reached `zzz`
     let mut others = Vec::new();
     for index in 0..70 {
-        others.push(gone(&home, &format!("a{index:03}"), "elsewhere", 1));
+        others.push(closed(&home, &format!("a{index:03}"), "elsewhere", 1));
     }
-    let mine = gone(&home, "zzz", "native", 2);
+    let mine = closed(&home, "zzz", "native", 2);
     let report = scratch::sweep(&home, "native", Mode::Apply).unwrap();
     assert_eq!(report.deleted, vec![Owned::new("zzz", mine.clone())]);
     assert!(!mine.exists());
@@ -410,7 +447,7 @@ fn a_sweep_reaches_a_settled_record_past_more_than_a_batch_of_unrelated_ones() {
 fn a_pass_is_bounded_and_the_next_pass_reaches_the_next_batch() {
     let home = fresh_home();
     for index in 0..67 {
-        gone(&home, &format!("s{index:03}"), "native", 1);
+        closed(&home, &format!("s{index:03}"), "native", 1);
     }
     let first = scratch::sweep(&home, "native", Mode::Apply).unwrap();
     assert_eq!(first.deleted.len(), 64, "one pass is bounded");

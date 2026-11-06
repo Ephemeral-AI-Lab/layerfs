@@ -3,7 +3,7 @@
 > **Status:** implemented on `fix/549-scratch-lifecycle`, including its
 > operator surface (`sandbox.scratch`, `--dry-run`). Not on `main`.
 > Code: `api/crates/layerfs-control/src/sandbox/{scratch,clean,close,serve,record,runtime}.rs`.
-> Tests: `api/crates/layerfs-control/tests/scratch_lifecycle.rs` (14 cases),
+> Tests: `api/crates/layerfs-control/tests/scratch_lifecycle.rs` (15 cases),
 > `api/crates/layerfs-api/tests/sandbox_scratch.rs` (2 cases) and
 > `api/crates/layerfs-cli/tests/scratch.rs` (1 case).
 
@@ -68,10 +68,11 @@ Then, immediately before the delete, `clean`/`sweep` re-reads the record: if
 its `generation` is no longer the one the plan was made with, the plan aborts
 (`Kept::Stale`) and the rebuilt Sandbox keeps its scratch.
 
-`Owner::Sweep` keeps `running`, `creating`, `closing` and `unresolved`
-records; only a settled `gone` record is swept. `Owner::Close` is the explicit
-owner: a close that clears an uncertain intent may remove its scratch. A TTL is
-never treated as ownership.
+`Owner::Sweep` keeps every non-settled state (`creating`, `provisioning`,
+`starting`, `ready`, `busy`, `draining`, `unresolved`); only a settled
+`Closed` or `Lost` record is swept. `Owner::Close` is the explicit owner: a
+close that clears an uncertain intent may remove its scratch. A TTL is never
+treated as ownership.
 
 ## Close never fails because the cleaner failed
 
@@ -134,7 +135,7 @@ second policy, no second traversal, no trait.
 
 ## Tests
 
-`api/crates/layerfs-control/tests/scratch_lifecycle.rs`, 14 cases; every case
+`api/crates/layerfs-control/tests/scratch_lifecycle.rs`, 15 cases; every case
 that can delete seeds Store, Workspace, overlay, mount and daemon-log
 bystanders and asserts they survive.
 
@@ -145,8 +146,9 @@ bystanders and asserts they survive.
 | `the_host_tmp_is_never_a_scratch_root` | `/tmp`, `/private/tmp` and `/var/tmp` are refused as roots |
 | `a_stale_generation_aborts_before_deleting_a_rebuilt_sandbox` | a changed token keeps the new Sandbox's scratch |
 | `an_unresolved_sandbox_is_not_swept_but_an_explicit_close_cleans_it` | a sweep keeps `unresolved`; the explicit close removes it |
-| `a_running_sandbox_keeps_its_scratch_during_a_sweep` | a sweep keeps a `running` record |
-| `a_settled_gone_record_is_swept_and_nothing_else_is_deleted` | a sweep deletes a `gone` root only |
+| `a_running_sandbox_keeps_its_scratch_during_a_sweep` | a sweep keeps a `ready` (Live) record |
+| `a_settled_closed_record_is_swept_and_nothing_else_is_deleted` | a sweep deletes a `Closed` root only |
+| `a_sweep_removes_closed_and_lost_scratch_and_keeps_a_live_one` | `Closed` and `Lost` are swept; a Live (`ready`) Sandbox is kept |
 | `dry_run_lists_exactly_what_apply_deletes` | `Mode::DryRun` plans exactly what `Mode::Apply` deletes, and deletes nothing |
 | `a_sweep_is_keyed_by_machine_never_by_isolation_class` | another machine's pass leaves the root; its own machine's pass removes it |
 | `a_clean_failure_is_recorded_and_never_changes_a_successful_close` | a failed generation re-read is logged to `log/scratch.jsonl`; `clean_on_close` cannot fail and deletes nothing |
@@ -160,7 +162,7 @@ front end calls (`layerfs_api::call`, and the shell):
 
 | test | asserts |
 | --- | --- |
-| `api/crates/layerfs-api/tests/sandbox_scratch.rs::dry_run_lists_exactly_what_the_real_pass_deletes` | `sandbox.scratch`'s dry run plans exactly what its real pass deletes, each root with its record; a `running`, an `unresolved` and another machine's settled root survive both |
+| `api/crates/layerfs-api/tests/sandbox_scratch.rs::dry_run_lists_exactly_what_the_real_pass_deletes` | `sandbox.scratch`'s dry run plans exactly what its real pass deletes, each root with its record; a Live (`ready`), an `unresolved` and another machine's settled root survive both |
 | `api/crates/layerfs-api/tests/sandbox_scratch.rs::the_pass_needs_a_machine_name` | a call without a machine is refused `InvalidInput` |
 | `api/crates/layerfs-cli/tests/scratch.rs::dry_run_lists_and_the_real_run_deletes_the_same_roots` | the shell's `--dry-run` lists the same set the real run deletes and deletes nothing; a wrong option is exit 2, before any call |
 
@@ -170,7 +172,7 @@ Verified with cargo 1.85.1 on 2026-11-04 (guest `aarch64`,
 ```console
 $ cargo test --locked --no-fail-fast -p layerfs-control --test scratch_lifecycle \
     -p layerfs-api --test calls_table --test sandbox_scratch -p layerfs-cli --test scratch
-32 passed; 0 failed   # 14 control, 15 table, 2 surface, 1 shell
+33 passed; 0 failed   # 15 control, 15 table, 2 surface, 1 shell
 ```
 
 ## Acceptance (#549)
@@ -225,12 +227,13 @@ surface test files; the figures above are not re-measured for it.
   `sandbox.scratch`, as above. Nothing schedules it for you.
 - A provider backend's scratch on a worker machine: `sandbox.scratch` reads
   the home it runs in. B7 defines the contract a remote backend must satisfy.
-- #548 (B5) record generation/CAS, `Draining`/`Lost` and the Sandbox state
-  machine: this change uses its own scratch token and does not bind cleanup to
-  that state machine.
-- A TTL or age-based cleanup: a settled `gone` record and an explicit close
-  are the only owners, and `createdAt` is kept for a future report rather than
-  used as an ownership decision.
+- #548 (B5) record generation/CAS: the scratch token is still its own space,
+  separate from the record's generation. Cleanup *does* read B5's
+  `SandboxState`: an automatic pass removes only a `Closed` or `Lost`
+  Sandbox's scratch, and keeps `Unresolved` and every live state.
+- A TTL or age-based cleanup: a settled `Closed` or `Lost` record and an
+  explicit close are the only owners, and `createdAt` is kept for a future
+  report rather than used as an ownership decision.
 - The create-then-record window (`serve::create` returns the scratch before
   `record.started` persists it): a record-write failure there is a separate
   follow-up, unchanged by this PR.
@@ -242,6 +245,7 @@ surface test files; the figures above are not re-measured for it.
 - [#545](https://github.com/Ephemeral-AI-Lab/layerfs/issues/545) — the Sandbox
   compute plane.
 - [#548](https://github.com/Ephemeral-AI-Lab/layerfs/issues/548) — B5 record
-  generation and `Lost`/`Unresolved` semantics: a different generation space.
+  generation and `Closed`/`Lost`/`Unresolved` state machine: the scratch
+  token stays a separate generation space, but cleanup reads B5's state.
 - [#536](https://github.com/Ephemeral-AI-Lab/layerfs/issues/536) — the Sandbox
   record, `op` intents and the close contract.

@@ -93,8 +93,8 @@ fn record(
     root
 }
 
-/// A settled record: no id and no intent, so its state is `gone`.
-fn gone(home: &Path, name: &str, machine: &str, generation: u64) -> PathBuf {
+/// A settled record: no id and no intent, so its state is `closed`.
+fn closed(home: &Path, name: &str, machine: &str, generation: u64) -> PathBuf {
     record(home, name, machine, None, None, generation)
 }
 
@@ -191,12 +191,12 @@ fn dry_run_lists_exactly_what_the_real_pass_deletes() {
     let home = tempdir("pass");
     home::open(&home).unwrap();
     seed_bystanders(&home);
-    let a = gone(&home, "a", "native", 1);
-    let b = gone(&home, "b", "native", 2);
+    let a = closed(&home, "a", "native", 1);
+    let b = closed(&home, "b", "native", 2);
     let live = running(&home, "c", "native");
     let stuck = unresolved(&home, "d", "native");
     // another machine's settled scratch is not this pass's to delete
-    let elsewhere = gone(&home, "e", "dev", 5);
+    let elsewhere = closed(&home, "e", "dev", 5);
 
     let dry = ok(
         &home,

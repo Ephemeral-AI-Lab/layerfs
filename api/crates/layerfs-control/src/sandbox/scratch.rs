@@ -28,6 +28,7 @@
 use super::record::SandboxRecord;
 use crate::common::home;
 use crate::common::outcome::{failed, refused};
+use crate::sandbox::lifecycle::SandboxState;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use std::ffi::OsStr;
 use std::fs;
@@ -150,8 +151,10 @@ pub enum Owner {
     /// when the record is `unresolved` (the close is the explicit owner
     /// that clears the intent).
     Close,
-    /// A periodic pass: it deletes only a settled (`gone`) record's scratch
-    /// and keeps `running`, `creating`, `closing` and `unresolved` ones.
+    /// A periodic pass: it deletes only a settled (`closed` or `lost`)
+    /// record's scratch, and keeps every other state (`creating`,
+    /// `provisioning`, `starting`, `ready`, `busy`, `draining`,
+    /// `unresolved`).
     Sweep,
 }
 
@@ -165,7 +168,7 @@ pub enum Kept {
     /// The root is not a scratch directory: not `tmp`, under a Store or
     /// under a Workspace, or reached through a symbolic link.
     NotScratch,
-    /// The Sandbox may still be running.
+    /// The Sandbox is not settled: it may still be creating or running.
     Live,
     /// Its outcome is not known (`Unresolved`): an automatic pass keeps it.
     Unresolved,
@@ -267,7 +270,7 @@ pub fn clean(home: &Path, record: &SandboxRecord, owner: Owner) -> Result<Cleane
     let root = scratch.root().to_path_buf();
     // nothing at the root is already the desired state, even when the path
     // would no longer pass the checks (a removed run directory); any other
-    // error is not "gone" and must not be reported as deleted
+    // error is not "already removed" and must not be reported as deleted
     match fs::symlink_metadata(&root) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(Cleaned::Deleted(root))
@@ -324,8 +327,8 @@ pub fn clean_on_close(home: &Path, record: &SandboxRecord) {
 /// class; records of other machines are left for that machine's pass, and
 /// they are filtered out before the bounded batch so they cannot crowd a
 /// settled record out of it. The batch is charged only for a root this pass
-/// may remove: a kept record and an already-gone root do not consume it.
-/// Since a removed root is gone next pass, a home with more than [`MAX_SWEEP`]
+/// may remove: a kept record and an already-removed root do not consume it.
+/// Since a removed root is absent next pass, a home with more than [`MAX_SWEEP`]
 /// settled records is covered over successive passes. The report lists
 /// exactly what [`Mode::DryRun`] would delete and what [`Mode::Apply`] did.
 pub fn sweep(home: &Path, machine: &str, mode: Mode) -> Result<Report, SdkRefusal> {
@@ -346,7 +349,7 @@ pub fn sweep(home: &Path, machine: &str, mode: Mode) -> Result<Report, SdkRefusa
     names.sort();
     // Filter by machine before the bounded batch, and charge the batch only
     // for a root this pass may remove. Another machine's records, a record
-    // this pass must keep and an already-gone root cannot use up the batch,
+    // this pass must keep and an already-removed root cannot use up the batch,
     // so the settled record past them is still reached (#549).
     let mut removing = 0;
     for name in names {
@@ -407,7 +410,7 @@ pub fn sweep(home: &Path, machine: &str, mode: Mode) -> Result<Report, SdkRefusa
 
 /// `Some(reason)` when `owner` must keep `root`, `None` when it may remove
 /// it. This is the one predicate both [`clean`] and [`sweep`] use.
-fn keep(home: &Path, root: &Path, state: &str, owner: Owner) -> Option<Kept> {
+fn keep(home: &Path, root: &Path, state: SandboxState, owner: Owner) -> Option<Kept> {
     if !owns(home, root) {
         return Some(match root.starts_with(home) {
             true => Kept::NotScratch,
@@ -419,8 +422,13 @@ fn keep(home: &Path, root: &Path, state: &str, owner: Owner) -> Option<Kept> {
         // call that clears an uncertain intent too
         Owner::Close => None,
         Owner::Sweep => match state {
-            "gone" => None,
-            "unresolved" => Some(Kept::Unresolved),
+            // a settled Sandbox no longer runs: its scratch is the only
+            // thing left to remove
+            SandboxState::Closed | SandboxState::Lost => None,
+            // an uncertain outcome is kept: only its explicit owner (a
+            // later close) may remove it
+            SandboxState::Unresolved => Some(Kept::Unresolved),
+            // anything else may still be creating, starting or running
             _ => Some(Kept::Live),
         },
     }
