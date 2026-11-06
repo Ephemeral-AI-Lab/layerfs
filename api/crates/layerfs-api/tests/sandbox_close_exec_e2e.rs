@@ -289,6 +289,7 @@ fn a_live_sandbox_on_docker_closes_only_after_its_exec_lease_ends() {
         "machine.update",
         &[("name", t("docker")), ("image", t(&image))],
     );
+    ok(&home, "machine.start", &[("name", t("docker"))]);
     ok(&home, "store.create", &[("name", t("shop"))]);
     ok(
         &home,
@@ -322,7 +323,11 @@ fn a_live_sandbox_on_docker_closes_only_after_its_exec_lease_ends() {
             "lane",
             "cat readme.txt && echo docker.txt > docker.txt",
         );
-        let container = record(&home, "d").get_text("id").unwrap().to_owned();
+        // the record `id` is the Sandbox name: `d`; `runtime_id` is the container
+        let container = record(&home, "d")
+            .get_text("runtime_id")
+            .unwrap()
+            .to_owned();
         assert!(
             docker(&["inspect", &container]),
             "a live container {container}"
