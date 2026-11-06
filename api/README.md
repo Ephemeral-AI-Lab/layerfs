@@ -43,18 +43,26 @@ Each function takes its positional arguments in the table's order and then an
 options object. Function options (`on_progress`, `stdout`, `stderr`) receive
 the call's events. A refusal throws `LayerFSError` with `code`, `message` and
 `detail`; results are plain objects with snake_case keys, and bytes are
-`Buffer`s. Where a call runs (in this process, or in a machine's worker) is
-decided by the home's records, not by the package.
+`Buffer`s. Whole numbers are exact: a `bigint` is sent as its digits, and a
+result is a `number` when it is a safe integer and a `bigint` when it is not;
+an unsafe `number`, `NaN`, a `Map`, a `Set` or text with a lone surrogate is
+refused (`InvalidInput`) before the call. The package needs Node 22 and ships
+TypeScript typings generated from the call table. Where a call runs (in this
+process, or in a machine's worker) is decided by the home's records, not by
+the package. A runnable flow is
+[`node/examples/file-history.mjs`](node/examples/file-history.mjs).
 
 ## Builds
 
 Run `npm --prefix api run build:native` on the macOS/Linux host that loads the
 addon. It uses Cargo +1.85.1, `--offline --locked --release`, and the repository
 ARM64 inputs. `-- --debug` selects dev. The artifact is atomically renamed into
-place. `CARGO_TARGET_DIR` must stay inside this worktree; `LAYERFS_NATIVE_OUTPUT`
-can select a separate platform artifact. The package looks for the addon beside
-itself (`node/layerfs.node`, when installed), at a worktree build bundle's root,
-and then beside its crate.
+place at `node/layerfs.node`, beside the package's `src`. `CARGO_TARGET_DIR` must
+stay inside this worktree; `LAYERFS_NATIVE_OUTPUT` can select a separate platform
+artifact. The package loads that file, or the one `LAYERFS_NATIVE` names, and
+nothing else: it does not look in the source tree, and a missing addon is an
+error that says how to build it. `npm --prefix api run gen:types` regenerates
+`node/src/index.d.ts` after a change to the call table.
 
 Disposable/WAL/synchronous=OFF only. Durable execution is NOT_RUN — disabled by
 owner until explicit reauthorization. One attempted operation; no retry or replay.

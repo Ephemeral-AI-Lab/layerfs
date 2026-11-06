@@ -88,7 +88,10 @@ method (`fs.read`, `branch.fork`, …) and runs through `store_call`
 process or in the machine's worker
 ([Routing table](../routing/routing-table.md)). Open Stores are cached
 per process and closed after 60 s idle
-([`store/open.rs`](../../../../api/crates/layerfs-control/src/store/open.rs)).
+([`store/open.rs`](../../../../api/crates/layerfs-control/src/store/open.rs)). When the last call on an open
+SQLite Store returns, or a Sandbox on it closes, its write-ahead log is
+checkpointed and truncated once while it stays open (#86), so a quiesced
+Store's size is its file.
 
 ## project
 

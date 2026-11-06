@@ -1,4 +1,22 @@
 //! Fixed statement templates shared by ordinary jobs and plan diagnostics.
+
+/// The `LIMIT` of every statement that reads one owner window: [`crate::PAGE_ROWS`].
+macro_rules! page_limit {
+    () => {
+        "1024"
+    };
+}
+const _: () = assert!(crate::PAGE_ROWS == 1024, "page_limit! must equal PAGE_ROWS");
+/// The `LIMIT` of every operation-record key or entry page: [`crate::RECORD_ROWS`].
+macro_rules! record_limit {
+    () => {
+        "64"
+    };
+}
+const _: () = assert!(
+    crate::RECORD_ROWS == 64,
+    "record_limit! must equal RECORD_ROWS"
+);
 /// The latest local row of one serial, with the generation that holds it and
 /// its payload-layer columns: a job that publishes the serial reads no layer
 /// row again.
@@ -6,8 +24,11 @@ pub(crate) const INODE_LOOKUP: &str =
     "SELECT inode,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries,subdirs,generation,epoch,height,referenced,sequence
     FROM fs_inode WHERE inode=?1 AND generation<=?2 AND generation>?3 ORDER BY generation DESC LIMIT 1";
 pub(crate) const INODE_CAPTURE: &str =
+    concat!(
     "SELECT inode,kind,mode,mtime_seconds,mtime_nanoseconds,nlink,size,inherited_cutoff,born,entries,subdirs
-    FROM fs_inode INDEXED BY fs_inode_capture WHERE generation=?1 AND inode>?2 ORDER BY inode LIMIT 64";
+    FROM fs_inode INDEXED BY fs_inode_capture WHERE generation=?1 AND inode>?2 ORDER BY inode LIMIT ",
+    page_limit!()
+);
 /// The last row at or before cell ?4 in its slot, which starts at ?3. A row
 /// of one cell at ?4 returns its bytes and mask; any other row only its
 /// shape, so a wide row is never loaded to learn that it is there.
@@ -114,20 +135,28 @@ pub(crate) const LAYER_LOWER: &str = "SELECT size FROM fs_inode
 pub(crate) const NAME_LAYERS: &str = "SELECT generation,inode,inherited FROM fs_entry
     WHERE parent=?1 AND name=?2 AND generation<=?3 AND generation>?4 ORDER BY generation DESC LIMIT 2";
 pub(crate) const DIRECTORY_ENTRY_LOOKUP:&str="SELECT inode,inherited FROM fs_entry WHERE parent=?1 AND name=?2 AND generation<=?3 AND generation>?4 ORDER BY generation DESC LIMIT 1";
-pub(crate) const DIRECTORY_ENTRY_CAPTURE: &str = "SELECT parent,name,inode,inherited
+pub(crate) const DIRECTORY_ENTRY_CAPTURE: &str = concat!(
+    "SELECT parent,name,inode,inherited
     FROM fs_entry INDEXED BY fs_entry_capture WHERE generation=?1
-    AND (parent,name)>(?2,?3) ORDER BY parent,name LIMIT 64";
-pub(crate) const SOURCE_NAMES: &str =
+    AND (parent,name)>(?2,?3) ORDER BY parent,name LIMIT ",
+    page_limit!()
+);
+pub(crate) const SOURCE_NAMES: &str = concat!(
     "SELECT parent,name,inode,inherited FROM fs_entry INDEXED BY fs_entry_capture
-    WHERE generation=?1 AND parent=?2 AND name>?3 ORDER BY name LIMIT 64";
+    WHERE generation=?1 AND parent=?2 AND name>?3 ORDER BY name LIMIT ",
+    page_limit!()
+);
 /// The same window with the kind of each bound name's latest local inode
 /// row at the current view, or NULL when the inode has none: one seek per
 /// returned name inside this one statement.
 pub(crate) const SOURCE_NAMES_KINDS: &str =
+    concat!(
     "SELECT e.parent,e.name,e.inode,e.inherited,(SELECT i.kind FROM fs_inode i
     WHERE i.inode=e.inode AND i.generation<=?4 AND i.generation>?5 ORDER BY i.generation DESC LIMIT 1)
     FROM fs_entry e INDEXED BY fs_entry_capture
-    WHERE e.generation=?1 AND e.parent=?2 AND e.name>?3 ORDER BY e.name LIMIT 64";
+    WHERE e.generation=?1 AND e.parent=?2 AND e.name>?3 ORDER BY e.name LIMIT ",
+    page_limit!()
+);
 pub(crate) const CAPTURED_DIRECTORY_ENTRY: &str =
     "SELECT inode,inherited FROM fs_entry WHERE parent=?1 AND name=?2 AND generation=?3";
 /// The first row of a serial in a generation. A row that already exists is a
@@ -156,23 +185,37 @@ pub(crate) const INDEXED_OPERATION_RECORD_PUT: &str =
     ON CONFLICT(operation,file_scope,kind,key) DO UPDATE SET value=excluded.value";
 pub(crate) const INDEXED_OPERATION_RECORD_DELETE: &str = "DELETE FROM commit_record
     WHERE operation=?1 AND file_scope=?2 AND kind=?3 AND key=?4";
-pub(crate) const INDEXED_OPERATION_RECORD_KEYS: &str = "SELECT key FROM commit_record
+pub(crate) const INDEXED_OPERATION_RECORD_KEYS: &str = concat!(
+    "SELECT key FROM commit_record
     WHERE operation=?1 AND file_scope=?2 AND kind=?3 AND key<>?4
-    ORDER BY key LIMIT 64";
-pub(crate) const INDEXED_OPERATION_RECORD_ALL_KEYS: &str = "SELECT key FROM commit_record
+    ORDER BY key LIMIT ",
+    record_limit!()
+);
+pub(crate) const INDEXED_OPERATION_RECORD_ALL_KEYS: &str = concat!(
+    "SELECT key FROM commit_record
     WHERE operation=?1 AND file_scope=?2 AND kind=?3
-    ORDER BY key LIMIT 64";
-pub(crate) const INDEXED_OPERATION_RECORD_KEYS_AFTER: &str = "SELECT key FROM commit_record
+    ORDER BY key LIMIT ",
+    record_limit!()
+);
+pub(crate) const INDEXED_OPERATION_RECORD_KEYS_AFTER: &str = concat!(
+    "SELECT key FROM commit_record
     WHERE operation=?1 AND file_scope=?2 AND kind=?3 AND key>?4
-    ORDER BY key LIMIT 64";
+    ORDER BY key LIMIT ",
+    record_limit!()
+);
 /// Keys with their values in key order: one window of a sealed sequence.
-pub(crate) const INDEXED_OPERATION_RECORD_ENTRIES: &str = "SELECT key,value FROM commit_record
+pub(crate) const INDEXED_OPERATION_RECORD_ENTRIES: &str = concat!(
+    "SELECT key,value FROM commit_record
     WHERE operation=?1 AND file_scope=?2 AND kind=?3
-    ORDER BY key LIMIT 64";
-pub(crate) const INDEXED_OPERATION_RECORD_ENTRIES_AFTER: &str =
+    ORDER BY key LIMIT ",
+    record_limit!()
+);
+pub(crate) const INDEXED_OPERATION_RECORD_ENTRIES_AFTER: &str = concat!(
     "SELECT key,value FROM commit_record
     WHERE operation=?1 AND file_scope=?2 AND kind=?3 AND key>?4
-    ORDER BY key LIMIT 64";
+    ORDER BY key LIMIT ",
+    record_limit!()
+);
 /// Every record of one operation up to one key, in one statement.
 pub(crate) const INDEXED_OPERATION_RECORD_DELETE_OPERATION: &str = "DELETE FROM commit_record
     WHERE operation=?1 AND (file_scope,kind,key)<=(?2,?3,?4)";

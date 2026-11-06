@@ -4,6 +4,12 @@
 
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
+Firecracker and SSH are **permanently disabled for new work**. Their code
+and records remain for inspection and explicit cleanup. See the
+[platform restriction](../../connect/support-matrix/disabled-platforms.md) for refusals, existing-resource handling and
+the source change required for re-enabling. Descriptions of their adapter
+mechanics below are retained implementation details, not selectable features.
+
 The management library under the call table: the home and its records, machines and workers, Stores, projects, Sandboxes, Workspaces and backups.
 
 | | |
@@ -88,6 +94,7 @@ buckets.
 | Rule | Enforced by |
 | --- | --- |
 | A call's arguments are checked against the table before any effect | [`calls/check.rs`](../../../../api/crates/layerfs-control/src/calls/check.rs) |
+| A folder scope checks call arguments, not processes: `workspace.exec` is a `cd` prefix, not confinement; Commit and Layer ids and a Workspace's Branch are not confined ([open gaps](../call-table/table.md#scopes)) | [`calls/scope.rs`](../../../../api/crates/layerfs-control/src/calls/scope.rs) |
 | Every call opens (creates or converts) its home first | [`calls/dispatch.rs`](../../../../api/crates/layerfs-control/src/calls/dispatch.rs), [`common/home/migrate/open.rs`](../../../../api/crates/layerfs-control/src/common/home/migrate/open.rs) |
 | LayerFS reads `LAYERFS_*` settings only and names no plugin; `HOME` and `XDG_CACHE_HOME` are read only as fallback folders | [`calls/dispatch.rs`](../../../../api/crates/layerfs-control/src/calls/dispatch.rs) (`LAYERFS_HOME`, else `~/.layerfs`), [`common/trace.rs`](../../../../api/crates/layerfs-control/src/common/trace.rs) (`LAYERFS_TRACE`), [`sandbox/deploy.rs`](../../../../api/crates/layerfs-control/src/sandbox/deploy.rs) (bundle cache) |
 | Records never hold a PostgreSQL password: the URL is stored without it and the password as `env:NAME` or `file:/path`, resolved per call | [`store/connect.rs`](../../../../api/crates/layerfs-control/src/store/connect.rs) (`refuse_password`), [`common/secrets.rs`](../../../../api/crates/layerfs-control/src/common/secrets.rs) |
@@ -114,6 +121,7 @@ buckets.
 | Push, pull, remove or disconnect a Store with a live lease or a recorded Sandbox | `InUse` | [`common/home/lease.rs`](../../../../api/crates/layerfs-control/src/common/home/lease.rs), [`store/family.rs`](../../../../api/crates/layerfs-control/src/store/family.rs) |
 | An operation runs on the entity | `Busy`; after a gone owner's uncertain outcome, `Unresolved` | [`common/op.rs`](../../../../api/crates/layerfs-control/src/common/op.rs) |
 | An open Store unused | closed after 60 s (`IDLE`) by a reaper thread | [`store/open.rs`](../../../../api/crates/layerfs-control/src/store/open.rs) |
+| The last call on an open SQLite Store returns, or a Sandbox on it closes | one `wal_checkpoint(TRUNCATE)` on its open session (#86): after a call, on its own thread once the call is answered; after `sandbox.close`, before the close is answered. The Store stays open. Left, never retried, when another process holds the writer lane or a reader is in the log. A close (`close_idle`, the CLI's close before it exits, or `close`) waits for a running one, then closes the Store, so SQLite folds any log left at that close | [`store/open.rs`](../../../../api/crates/layerfs-control/src/store/open.rs), [`sandbox/route.rs`](../../../../api/crates/layerfs-control/src/sandbox/route.rs) |
 
 The full code list is in [Errors](../call-table/errors.md#error-kinds).
 

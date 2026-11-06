@@ -25,9 +25,61 @@ impl Writer {
         }
     }
 }
+/// A reader session whose SQL counters can be read.
+trait Observed: Send + Sync {
+    fn work(&self) -> Result<SqlWork, PersistenceError>;
+}
+impl Observed for StorageProvider {
+    fn work(&self) -> Result<SqlWork, PersistenceError> {
+        self.diagnostics()
+    }
+}
+#[cfg(feature = "postgresql")]
+impl Observed for layerfs_persistence::PostgresStorage {
+    fn work(&self) -> Result<SqlWork, PersistenceError> {
+        self.diagnostics()
+    }
+}
 struct ReaderObservations {
-    live: BTreeMap<usize, Weak<StorageProvider>>,
+    live: BTreeMap<usize, Weak<dyn Observed>>,
     retired: Option<SqlWork>,
+}
+type Registry = Arc<Mutex<ReaderObservations>>;
+fn registry() -> Registry {
+    Arc::new(Mutex::new(ReaderObservations {
+        live: BTreeMap::new(),
+        retired: Some(SqlWork::default()),
+    }))
+}
+/// Registers reader `index`'s session and folds its counters into the
+/// retired total when the reader closes. Weak observation never keeps the
+/// SQL connection open after unmount.
+fn observe(
+    registry: &Registry,
+    index: usize,
+    provider: Weak<dyn Observed>,
+    reader: StoreReader,
+) -> StorageResult<StoreReader> {
+    registry
+        .lock()
+        .map_err(|_| StorageError::Integrity("reader observations poisoned"))?
+        .live
+        .insert(index, provider.clone());
+    let observed = registry.clone();
+    Ok(reader.on_close(move || {
+        let mut rows = observed.lock().unwrap_or_else(|poison| poison.into_inner());
+        if let Some(provider) = provider.upgrade() {
+            match provider.work() {
+                Ok(work) => {
+                    if let Some(total) = &mut rows.retired {
+                        total.accumulate(&work);
+                    }
+                }
+                Err(_) => rows.retired = None,
+            }
+        }
+        rows.live.remove(&index);
+    }))
 }
 pub struct OpenedStore {
     pub store: Arc<Store>,
@@ -51,7 +103,7 @@ impl SqlSessions {
         let readers = self.readers.lock().ok().and_then(|readers| {
             let mut total = readers.retired?;
             for provider in readers.live.values().filter_map(Weak::upgrade) {
-                total.accumulate(&provider.diagnostics().ok()?);
+                total.accumulate(&provider.work().ok()?);
             }
             Some(total)
         });
@@ -100,7 +152,7 @@ impl OpenedStore {
             .live
             .get(&index)
             .and_then(Weak::upgrade)
-            .map(|provider| provider.diagnostics().map_err(StorageError::from))
+            .map(|provider| provider.work().map_err(StorageError::from))
             .transpose()
     }
     pub fn sql_sessions(&self) -> SqlSessions {
@@ -175,37 +227,14 @@ pub fn open_store_observed(
     };
     let writer = SqliteHandles::open_writable(config.clone(), binding, cursor_key)?;
     let sqlite_version = writer.profile().sqlite_version.clone();
-    let observations = Arc::new(Mutex::new(ReaderObservations {
-        live: BTreeMap::new(),
-        retired: Some(SqlWork::default()),
-    }));
+    let observations = registry();
     let binding = binding.to_vec();
     let registry = observations.clone();
     let factory: crate::store::ReaderFactory = Arc::new(move |index| {
         let opened = SqliteHandles::open_read_only(config.clone(), &binding, cursor_key)?;
-        let provider = Arc::downgrade(&opened.storage);
+        let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
         let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history));
-        registry
-            .lock()
-            .map_err(|_| StorageError::Integrity("reader observations poisoned"))?
-            .live
-            .insert(index, provider.clone());
-        let observed = registry.clone();
-        Ok(reader.on_close(move || {
-            // Weak observation never keeps the SQL connection open after unmount.
-            let mut rows = observed.lock().unwrap_or_else(|poison| poison.into_inner());
-            if let Some(provider) = provider.upgrade() {
-                match provider.diagnostics() {
-                    Ok(work) => {
-                        if let Some(total) = &mut rows.retired {
-                            total.accumulate(&work);
-                        }
-                    }
-                    Err(_) => rows.retired = None,
-                }
-            }
-            rows.live.remove(&index);
-        }))
+        observe(&registry, index, provider, reader)
     });
     let control = factory(0)?;
     let store = Arc::new(
@@ -228,9 +257,14 @@ pub fn open_store_observed(
     })
 }
 
-/// A PostgreSQL Store (#506): one writer session and one read-only session
-/// per Workspace reader. A merge's records live in the writer connection's
-/// temporary tables (#506 d); reader counters are not observed.
+/// A PostgreSQL Store (#506): one writer session, checked as `selection`
+/// says, and read-only sessions with the light check (#63), each observed as
+/// on SQLite. Readers are shared (#64): the control reader opens at its first
+/// use, and an unmounted Workspace's healthy reader serves the next mount,
+/// so the daemon holds at most the writer, its lane connection, the control
+/// reader, one reader per mounted Workspace and `IDLE_READERS` idle ones.
+/// A merge's records live in the writer connection's temporary tables
+/// (#506 d).
 #[cfg(feature = "postgresql")]
 fn open_postgres(
     selection: &layerfs_persistence::PostgresSelection,
@@ -243,20 +277,22 @@ fn open_postgres(
     use layerfs_persistence::PostgresHandles;
     let writer = PostgresHandles::open_writable(selection, binding, cursor_key)?;
     let version = format!("postgresql {}", writer.storage.server_version());
-    let (selection, binding) = (selection.clone(), binding.to_vec());
-    let factory: crate::store::ReaderFactory = Arc::new(move |_| {
+    let selection = (selection.clone()).with_check(layerfs_persistence::PostgresCheck::Light);
+    let binding = binding.to_vec();
+    let observations = registry();
+    let registry = observations.clone();
+    let factory: crate::store::ReaderFactory = Arc::new(move |index| {
         let opened = PostgresHandles::open_read_only(&selection, &binding, cursor_key)?;
-        Ok(StoreReader::new(
-            Storage::new(opened.storage)?,
-            Arc::new(opened.history),
-        ))
+        let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
+        let session = opened.storage.clone();
+        let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history))
+            .with_usable(move || session.usable());
+        observe(&registry, index, provider, reader)
     });
-    let control = factory(0)?;
     let store = Arc::new(
-        Store::new(
+        Store::with_shared_readers(
             writer.storage.clone(),
             Arc::new(writer.history),
-            control,
             factory,
             cache_bytes,
             reservations,
@@ -268,9 +304,6 @@ fn open_postgres(
         store,
         sqlite_version: version,
         writer: Writer::Postgres(writer.storage),
-        readers: Arc::new(Mutex::new(ReaderObservations {
-            live: BTreeMap::new(),
-            retired: Some(SqlWork::default()),
-        })),
+        readers: observations,
     })
 }

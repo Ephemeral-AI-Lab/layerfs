@@ -5,7 +5,9 @@
 //! base file of its own to offer its chunks as delta bases. The rename records
 //! the replaced serial here instead, for that construction. It is advisory: it
 //! offers a delta base, says nothing about bytes, and a predecessor that is
-//! gone by Commit offers nothing.
+//! gone by Commit offers nothing. A file of any size asks for it (#88). A
+//! file replaced without a rename (`rm f` then writing `f`) records nothing
+//! here: Commit offers it the file the base holds at its path instead.
 //!
 //! When the replaced file is itself fresh (created since the installed base)
 //! and a rename put it in place, its own predecessor is inherited, so a chain

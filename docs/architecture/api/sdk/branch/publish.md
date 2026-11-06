@@ -77,7 +77,12 @@ None.
 
 The expected heads make the publish a compare-and-set. See the
 [routing table](../../routing/routing-table.md). Under a folder scope
-`branch` is composed as `<ns>.<branch>`.
+`branch` is composed as `<ns>.<branch>` and `commit` is checked like any
+Commit or Branch reference (a 66-character hex id stays as given; any other
+value is treated as a Branch name and composed into the namespace, and the
+Store decides whether that Branch exists; a name that cannot be composed, or
+a scope without `branch`, is refused before any effect); see
+[Scopes](../../call-table/table.md#scopes) for the ids that stay unconfined.
 
 ## Errors
 

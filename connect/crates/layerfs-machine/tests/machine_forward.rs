@@ -12,6 +12,7 @@
 #[path = "support/standin.rs"]
 mod standin;
 use layerfs_machine::{self as machine, Code, Forward, Platform, Spec};
+use layerfs_sandbox::platform_policy::disabled_reason;
 use standin::Scratch;
 use std::net::SocketAddr;
 use std::process::Command;
@@ -112,6 +113,7 @@ fn native_answers_the_daemons_port_and_has_nothing_to_close() {
 }
 
 #[test]
+#[ignore = "retained adapter qualification; platform permanently disabled by layerfs-project#7"]
 fn ssh_forwards_a_free_port_to_the_daemon_and_close_ends_exactly_it() {
     let scratch = Scratch::new("forward-ssh");
     scratch.tool("ssh", FORWARDING);
@@ -148,6 +150,7 @@ fn ssh_forwards_a_free_port_to_the_daemon_and_close_ends_exactly_it() {
 }
 
 #[test]
+#[ignore = "retained adapter qualification; platform permanently disabled by layerfs-project#7"]
 fn a_forward_that_ends_at_once_fails_once_and_leaves_nothing() {
     let scratch = Scratch::new("forward-ssh-busy");
     scratch.tool(
@@ -210,6 +213,12 @@ fn the_other_platforms_refuse_before_any_tool_runs() {
             spec.host = Some(Box::new(host));
         }
         let error = machine::forward(&spec, 40006).unwrap_err();
+        if let Some(reason) = disabled_reason(kind.name()) {
+            assert_eq!(error.code, Code::Unsupported);
+            assert_eq!(error.message, reason);
+            assert!(!error.vm_exists);
+            continue;
+        }
         let (code, why) = match kind {
             Platform::Docker => (Code::InvalidInput, "each docker Sandbox publishes its daemon's port on the host's loopback when it is created, and that published address is its endpoint"),
             Platform::AppleContainer => (Code::Unsupported, "the container CLI publishes a port only when the machine's container is created, so a Sandbox daemon's port cannot be published later; its Workspace calls go through the worker"),
@@ -235,7 +244,15 @@ fn port_zero_is_refused_before_any_tool_runs() {
     scratch.tool("ssh", FORWARDING);
     for kind in [Platform::Native, Platform::Ssh] {
         let error = machine::forward(&scratch.spec(kind), 0).unwrap_err();
-        assert_eq!(error.code, Code::InvalidInput, "{kind:?}");
+        assert_eq!(
+            error.code,
+            if disabled_reason(kind.name()).is_some() {
+                Code::Unsupported
+            } else {
+                Code::InvalidInput
+            },
+            "{kind:?}"
+        );
     }
     assert!(scratch.log().is_empty(), "{}", scratch.log());
 }

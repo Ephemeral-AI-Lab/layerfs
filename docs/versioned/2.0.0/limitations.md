@@ -2,6 +2,11 @@
 
 > **Status:** Proposal; target LayerFS 2.0.0; not a released contract.
 
+Firecracker and SSH are permanently disabled for new work on every host.
+Their code, records and historical evidence remain. See
+[disabled platforms](../../architecture/connect/support-matrix/disabled-platforms.md)
+for inspection, explicit cleanup and the transfer verification selection.
+
 Part of the [2.0.0 manual](README.md). This page lists what is not built,
 what the code refuses as `Unsupported`, and what was not verified on branch
 `issue533-v2`. Sources: the "Implementation choices" of

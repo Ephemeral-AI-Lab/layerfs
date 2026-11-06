@@ -9,7 +9,7 @@ use layerfs_content::{
 };
 use layerfs_overlay::{
     IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope,
-    OperationRecordExpectedValue, OPERATION_RECORD_BYTES, PAGE_ROWS,
+    OperationRecordExpectedValue, OPERATION_RECORD_BYTES, RECORD_ROWS,
 };
 use std::fmt;
 
@@ -174,24 +174,15 @@ impl<P: OverlayOperationRecords + ?Sized> IndexedEditBacking for IndexedEditReco
     }
     fn get_many(&mut self, records: &[EditRecordKey]) -> ContentResult<Vec<Option<Vec<u8>>>> {
         self.ready()?;
-        if records.len() > PAGE_ROWS {
+        if records.len() > RECORD_ROWS {
             return Err(ContentError::BoundedCapacityExceeded {
                 what: "indexed record key list",
-                limit: PAGE_ROWS as u64,
+                limit: RECORD_ROWS as u64,
                 actual: records.len() as u64,
             });
         }
-        let mut keys = [key(EditRecordKey {
-            kind: 0,
-            key: [0; 32],
-        }); PAGE_ROWS];
-        for (slot, record) in keys.iter_mut().zip(records) {
-            *slot = key(*record);
-        }
-        self.observe(
-            self.provider
-                .operation_record_get_many(self.scope, &keys[..records.len()]),
-        )
+        let keys: Vec<_> = records.iter().map(|record| key(*record)).collect();
+        self.observe(self.provider.operation_record_get_many(self.scope, &keys))
     }
     fn apply(&mut self, changes: Vec<EditRecordChange>) -> ContentResult<EditRecordApply> {
         self.ready()?;

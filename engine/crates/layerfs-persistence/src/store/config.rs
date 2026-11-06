@@ -28,6 +28,27 @@ impl SynchronousCommit {
         }
     }
 }
+/// How much of a PostgreSQL schema an open checks before serving (#63).
+/// Both run in one round trip and refuse a wrong binding, catalog,
+/// incarnation, identity format or schema version, or a policy row that
+/// does not validate, with `Integrity`/`Malformed`, exactly as before.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PostgresCheck {
+    /// The whole contract: the exact table set and the live column
+    /// definition against the recorded source and definition, read from
+    /// `information_schema` in one REPEATABLE READ snapshot. Init, Store
+    /// connect and the host's Store service open with it.
+    #[default]
+    Full,
+    /// The schema-version and incarnation check of a session opened after
+    /// the schema was fully checked once (a Sandbox daemon's writer, every
+    /// Workspace and control reader, the host's Sandbox reach check): the
+    /// `history_meta` and policy rows, the recorded source's length and the
+    /// acquisition tables' presence by name. It does not scan
+    /// `information_schema`, so a column changed by hand after Store
+    /// connect is found by the statement that uses it, not at open.
+    Light,
+}
 /// One PostgreSQL Store: server, schema and write settings.
 #[derive(Clone, Eq, PartialEq)]
 pub struct PostgresSelection {
@@ -41,6 +62,8 @@ pub struct PostgresSelection {
     /// `lock_timeout` while a write waits for the publication lane, in
     /// milliseconds; a wait that reaches it fails `Busy`, never retried.
     pub lock_timeout_ms: u32,
+    /// What an open checks; see [`PostgresCheck`].
+    pub check: PostgresCheck,
 }
 impl PostgresSelection {
     /// A selection with `synchronous_commit=off` and a 30 s lane wait.
@@ -50,7 +73,13 @@ impl PostgresSelection {
             schema: schema.into(),
             synchronous_commit: SynchronousCommit::Off,
             lock_timeout_ms: 30_000,
+            check: PostgresCheck::Full,
         }
+    }
+    /// Selects what an open checks.
+    pub fn with_check(mut self, check: PostgresCheck) -> Self {
+        self.check = check;
+        self
     }
     /// Selects `synchronous_commit` for every write transaction.
     pub fn with_synchronous_commit(mut self, setting: SynchronousCommit) -> Self {
@@ -65,6 +94,7 @@ impl std::fmt::Debug for PostgresSelection {
             .field("schema", &self.schema)
             .field("synchronous_commit", &self.synchronous_commit)
             .field("lock_timeout_ms", &self.lock_timeout_ms)
+            .field("check", &self.check)
             .finish()
     }
 }

@@ -20,7 +20,7 @@ impl HistoryCatalog for HistoryProvider {
         self.write(|tx| super::digests::record(tx, rows))
     }
     fn file_roots(&self, contents: &[([u8; 32], u64)]) -> HistoryResult<Vec<Option<[u8; 32]>>> {
-        self.read(|tx| super::digests::roots(tx, contents))
+        self.read_statement(|tx| super::digests::roots(tx, contents))
     }
     fn catalog_id(&self) -> CatalogId {
         self.catalog_id
@@ -63,7 +63,7 @@ impl HistoryCatalog for HistoryProvider {
     }
 
     fn branch_snapshot(&self, id: BranchId) -> HistoryResult<Option<BranchSnapshot>> {
-        self.read(|tx| branch::branch_snapshot(tx, id))
+        self.read_statement(|tx| branch::branch_snapshot(tx, id))
     }
 
     fn branches(

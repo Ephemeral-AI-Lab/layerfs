@@ -7,23 +7,25 @@ mod harness;
 mod oracle;
 mod producer;
 use harness::{create, rename, unlink, write, Bench};
+use layerfs_overlay::PAGE_ROWS;
 use layerfs_workspace::{Operation, Time};
 use producer::{
     build_over, build_taken, evidence, take, Call, Drive, Recording, FRESH, HEADER, VALUE,
 };
 use std::collections::BTreeSet;
 
-const WINDOW: usize = 64;
+const WINDOW: usize = PAGE_ROWS;
 
 #[test]
 fn each_captured_page_is_applied_before_the_next_page_is_requested() {
     let b = Bench::new("co-pages");
     let mut d = Drive::new(&b);
-    // 20 new directories of 10 files each: several full pages of names, with
-    // many parents finishing inside each page, and several pages of inodes.
+    // 20 new directories of `PAGE_ROWS / 9` files each: several full pages
+    // of names, with many parents finishing inside each page, and several
+    // pages of inodes.
     for directory in 0..20 {
         d.mkdir(&format!("d{directory:02}"), 0o755);
-        for file in 0..10 {
+        for file in 0..PAGE_ROWS / 9 {
             d.create(&format!("d{directory:02}/f{file}"), 0o644);
         }
     }
@@ -125,16 +127,17 @@ fn mutations_published_between_producer_passes_do_not_reach_the_captured_root() 
     let directory = d.mkdir("dir", 0o755);
     // More than one page of captured inodes: the files created last, and
     // `top` after them, are constructed after the second inode page.
-    for file in 0..70 {
+    let last_name = format!("dir/f{:02}", PAGE_ROWS + 5);
+    for file in 0..PAGE_ROWS + 6 {
         d.create(&format!("dir/f{file:02}"), 0o644);
     }
-    d.write("dir/f69", 0, &[0x69; 9000]);
+    d.write(&last_name, 0, &[0x69; 9000]);
     let top = d.create("top", 0o644);
     d.write("top", 0, b"the captured bytes of top");
     d.write(".git/index", 1000, &[9; 5000]);
     d.remove("alias");
     d.rename("cache/state", "output/moved");
-    let last = d.serial("dir/f69");
+    let last = d.serial(&last_name);
     let first = d.serial("dir/f00");
 
     let taken = take(&b);
@@ -184,7 +187,7 @@ fn mutations_published_between_producer_passes_do_not_reach_the_captured_root() 
     assert_ne!(b.content(top), captured.bytes("top"));
     // The root is the capture: names, serials and bytes as they were.
     assert_eq!(built.walked.serial("top"), top);
-    assert_eq!(built.walked.serial("dir/f69"), last);
+    assert_eq!(built.walked.serial(&last_name), last);
     assert_eq!(built.walked.serial("dir/f00"), first);
     assert!(!built.walked.has("alias"));
     evidence(format_args!(

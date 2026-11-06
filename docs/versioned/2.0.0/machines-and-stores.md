@@ -14,6 +14,15 @@ a copy of a sqlite Store in a bucket.
 
 ## Machines
 
+Firecracker and SSH are permanently disabled for new work. Their records and
+adapter code remain; see [disabled platforms](../../architecture/connect/support-matrix/disabled-platforms.md).
+Create, connect, start, update, new Sandbox/Workspace work and transfers involving
+them return `Unsupported` before platform effects. Machine inspection shows
+recorded state and the disabled reason without probing or starting them. Explicit
+cleanup remains available with its existing ownership checks. No runtime override
+exists. The platform-specific mechanics below are retained reference only.
+
+
 | Kind | How many | Made by | Sandboxes run as | Tool |
 | --- | --- | --- | --- | --- |
 | `native` | one, built in | — | macOS: host processes with a loopback NFS mount. Linux: namespaces (needs root). Windows: none; `native` holds only records (O5) | — |
@@ -21,8 +30,8 @@ a copy of a sqlite Store in a bucket.
 | `apple-container` | many | `machine create` | namespaces inside the VM | `container` |
 | `microsandbox` | many | `machine create` | namespaces inside the VM | `msb` |
 | `lima` | many | `machine create` | namespaces inside the VM | `limactl` |
-| `firecracker` | many, inside a `lima` host | `machine create --host <lima>` | namespaces inside the VM | `limactl` |
-| `ssh` | one per remote host | `machine connect` | namespaces on the host | `ssh` |
+| `firecracker` | existing records only | disabled | no new Sandboxes | retained `limactl` adapter |
+| `ssh` | existing records only | disabled | no new Sandboxes | retained `ssh` adapter |
 
 - "Platform" is only a machine's kind. A caller never chooses how a
   Sandbox runs; the kind decides.
@@ -50,7 +59,7 @@ a copy of a sqlite Store in a bucket.
 # not run
 layerfs machine create dev lima --cpus 4 --memory 8G --disk 40G
 layerfs machine create host1 lima --nested
-layerfs machine create fc1 firecracker --host host1
+# Permanently refused: layerfs machine create fc1 firecracker --host host1
 ```
 
 - Defaults: 2 CPUs, 4 GiB memory, 20 GiB disk. Sizes are bytes, or text
@@ -96,11 +105,11 @@ layerfs machine create fc1 firecracker --host host1
   name is already there (as `apple-container` does), so its cleanup after a
   failure never deletes a volume it did not make.
 
-### Connecting an ssh host
+### SSH connections (disabled)
 
 ```bash
 # not run
-layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
+# Permanently refused: layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
 ```
 
 - `user` defaults to `root`, `port` to 22.
@@ -148,7 +157,11 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   machine, and a running machine, its worker and its Sandboxes stay up
   however long they are unused. A Store is still closed after a quiet
   minute (the worker's and the caller's Store connection reaper); that
-  closes a file, not a machine.
+  closes a file, not a machine. Before that, when the last call on a
+  sqlite Store returns or a Sandbox on it closes, its write-ahead log is
+  checkpointed into the file and truncated (#86): `store status` right
+  after the last Sandbox closes shows `wal_bytes` 0, unless another process
+  was still writing or reading it then.
 - A call that needs a stopped machine is refused `Unavailable`, naming the
   start command: "machine <m> is not running; start it with `layerfs
   machine start <m>`". It dials the worker `worker.json` records once, with
@@ -178,9 +191,8 @@ layerfs machine connect ec2 10.0.0.5 --identity ~/.ssh/id_ed25519
   also take. The second waits up to 600 s, then is refused `Unavailable`.
   The lock is always taken before the home lock, and the start re-reads the
   record once it holds it.
-- `machine start` on a `firecracker` machine starts its `lima` host the
-  same way (its `start.lock`, readiness wait and `worker.json`) before the
-  microVM, within that one call.
+- `machine start` on a Firecracker or SSH machine is refused even when its
+  saved worker answers. It does not start Firecracker's Lima host.
 - `machine status` answers `state`, `free_disk`, `tool_version` and
   `down_reason` (O34). A stopped VM answers without being started. While a
   record holds an `op`, it also answers `op` (`id`, `name`, `phase`,
@@ -412,8 +424,7 @@ layerfs project init pg-main/load ./load
 - PostgreSQL needs a build with the `postgresql` feature; without it these
   calls are `Unsupported`.
 - A PostgreSQL Store's Sandboxes run on every machine: `native` (macOS
-  and Linux), `docker`, ssh, `lima`, `apple-container`, `microsandbox` and
-  `firecracker` (the daemon and the worker are built with `postgresql`),
+  and Linux), `docker`, `lima`, `apple-container` and `microsandbox` (the daemon and the worker are built with `postgresql`),
   started where the machine starts Sandboxes. The caller
   resolves the password and rewrites a loopback host for the machine
   (`docker`: `host.docker.internal`, given to the containers on a Linux

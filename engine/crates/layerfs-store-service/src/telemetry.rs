@@ -35,6 +35,33 @@ thread_local! {
     /// Wait already reported by a node on this thread, by kind.
     static ATTRIBUTED: Cell<[u64; WAITS]> = const { Cell::new([0; WAITS]) };
     static FINISHED: RefCell<Vec<TimingReport>> = const { RefCell::new(Vec::new()) };
+    /// The caller's SQL counter reader, while it attributes SQL work to phases.
+    static SQL_PROBE: RefCell<Option<SqlProbe>> = const { RefCell::new(None) };
+    /// Each finished phase's SQL work, in finishing order.
+    static PHASE_SQL: RefCell<Vec<(&'static str, SqlWork)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Reads the counters a caller attributes to phases, such as its Store's
+/// session totals.
+pub type SqlProbe = Box<dyn Fn() -> SqlWork>;
+
+/// While this thread records ([`Recording`]), every [`phase`] it runs reads
+/// `probe` before and after and keeps the difference; [`phase_sql`] takes
+/// them. Nested phases are each inclusive. The probe sees whatever its
+/// counters count: a caller that reads session totals must keep other work
+/// off those sessions to read one phase's cost. `None` stops attribution.
+pub fn attribute_sql(probe: Option<SqlProbe>) {
+    SQL_PROBE.set(probe);
+    PHASE_SQL.with_borrow_mut(Vec::clear);
+}
+
+/// The SQL work of each phase finished since the last call, by phase name.
+pub fn phase_sql() -> Vec<(&'static str, SqlWork)> {
+    PHASE_SQL.with_borrow_mut(std::mem::take)
+}
+
+fn probe() -> Option<SqlWork> {
+    SQL_PROBE.with_borrow(|probe| probe.as_ref().map(|probe| probe()))
 }
 
 /// Recording for one traced request on this thread, one at a time; dropping
@@ -135,7 +162,13 @@ pub fn phase<T, E>(
         let mark = phase
             .is_recording()
             .then(|| (FINISHED.with_borrow(Vec::len), WaitMark::now()));
+        // Attributed while the thread records, even past the timing tree's
+        // node bound, which stops recording late phases of large Commits.
+        let sql = recording().then(probe).flatten();
         let result = operation();
+        if let (Some(before), Some(after)) = (sql, sql.and_then(|_| probe())) {
+            PHASE_SQL.with_borrow_mut(|done| done.push((name, after.since(&before))));
+        }
         if let Some((mark, waited)) = mark {
             let inner =
                 FINISHED.with_borrow_mut(|finished| finished.split_off(mark.min(finished.len())));
@@ -255,9 +288,10 @@ pub fn delta(before: SaveCounters, after: SaveCounters) -> Option<SdkValue> {
     Some(SdkValue::Map(fields))
 }
 
-/// The scalar `SqlWork` counters, in `SQL_FIELDS` order (observation
-/// sections 13 and 14 begin with them).
-pub fn sql_values(w: &SqlWork) -> [u64; 27] {
+/// The scalar `SqlWork` counters, in `SQL_FIELDS` order. Observation
+/// sections 13 and 14 begin with the first `SQL_PHASED` of them, then the
+/// phase pairs, then the rest (PostgreSQL wire counters).
+pub fn sql_values(w: &SqlWork) -> [u64; 30] {
     [
         w.statements,
         w.vm_steps,
@@ -286,8 +320,14 @@ pub fn sql_values(w: &SqlWork) -> [u64; 27] {
         w.blob_read_bytes,
         w.blob_read_ns,
         w.blob_close_calls,
+        w.round_trips,
+        w.prepares,
+        w.connects,
     ]
 }
+
+/// How many `sql_values` precede the phase pairs in observation rows.
+pub const SQL_PHASED: usize = 27;
 
 pub fn named(names: &[&str], values: &[u64]) -> SdkValue {
     SdkValue::Map(
@@ -370,7 +410,7 @@ fn flatten(
 }
 
 /// The scalar Store SQL work counters, `SqlWork` names.
-pub const SQL_FIELDS: [&str; 27] = [
+pub const SQL_FIELDS: [&str; 30] = [
     "statements",
     "vm_steps",
     "fullscan_steps",
@@ -398,4 +438,7 @@ pub const SQL_FIELDS: [&str; 27] = [
     "blob_read_bytes",
     "blob_read_ns",
     "blob_close_calls",
+    "round_trips",
+    "prepares",
+    "connects",
 ];

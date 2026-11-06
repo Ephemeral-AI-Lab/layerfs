@@ -13,6 +13,7 @@ use super::{lock, log_line, now_ms, paths, read_record, with_field, write_entity
 use crate::common::outcome::{failed, refused, Outcome};
 use crate::store::record::{kind_of, StoreKind};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_sandbox::platform_policy::disabled_reason;
 use std::path::Path;
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -142,7 +143,12 @@ fn machines(home: &Path, env: &[(String, String)], report: &mut Report) -> Resul
                 command.push_str(&format!(" {option} {value}"));
             }
         }
-        Report::line(&mut report.commands, "LAYERFS_SSH_HOST", command);
+        match disabled_reason("ssh") {
+            Some(reason) => {
+                Report::line(&mut report.ignored, "LAYERFS_SSH_HOST", reason.to_owned())
+            }
+            None => Report::line(&mut report.commands, "LAYERFS_SSH_HOST", command),
+        }
     }
     for setting in ["LAYERFS_SANDBOX", "LAYERFS_PLACEMENT"] {
         if let Some(kind) = get(env, setting).and_then(|v| v.strip_prefix("vm:")) {
@@ -157,7 +163,10 @@ fn machines(home: &Path, env: &[(String, String)], report: &mut Report) -> Resul
                     command.push_str(&format!(" {option} {value}"));
                 }
             }
-            Report::line(&mut report.commands, setting, command);
+            match disabled_reason(kind) {
+                Some(reason) => Report::line(&mut report.ignored, setting, reason.to_owned()),
+                None => Report::line(&mut report.commands, setting, command),
+            }
         }
     }
     Ok(())

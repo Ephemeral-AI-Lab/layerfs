@@ -4,11 +4,17 @@
 //! cutoffs: 512 KiB canonical and 256 KiB encoded at the default cutoff) and
 //! fails the read when that object's own chain exceeds them. Under its own
 //! policy a Store never holds such a chain, since the largest whole file fits
-//! alone (#472); a base whose chain exceeds them anyway is refused, not fatal: the
-//! new object is stored independently and counted as `work_exceeded`, exactly as
-//! for a chain that outgrows the budget. A base whose own chain fits is acquired
-//! and authenticated before the dependent is judged against the budget, so a
-//! corrupt one fails the Save even when the dependent then tips the chain over.
+//! alone (#472); a FULL base whose chain exceeds them anyway is refused, not
+//! fatal: the new object is stored independently and counted as `work_exceeded`,
+//! exactly as for a FULL base the dependent tips over the budget. A FULL base whose
+//! own chain fits is acquired and authenticated before the dependent is judged
+//! against the budget, so a corrupt one fails the Save even when the dependent
+//! then tips the chain over.
+//!
+//! A declared base that is itself a delta, and whose chain the dependent would
+//! tip over a budget, is replaced by the FULL root of that chain (#89): the one
+//! trial runs against the root, which is acquired and authenticated, and the
+//! dependent is stored at depth one in the PREFIX form every reader accepts.
 #[path = "support/memory_metadata.rs"]
 mod metadata;
 mod support;
@@ -130,6 +136,27 @@ impl Chain {
         );
     }
 
+    /// Save `index` re-based its declared base onto the chain root, tried exactly
+    /// one delta against it and stored the dependent at depth one.
+    fn assert_rebased(&self, index: usize, what: &str) {
+        let outcome = self.save(index, what);
+        assert_eq!(outcome.delta.rebased, 1, "{what}: {outcome:?}");
+        assert_eq!(outcome.delta.trials, 1, "{what}: {outcome:?}");
+        assert_eq!(outcome.delta.work_exceeded, 0, "{what}: {outcome:?}");
+        assert_eq!(outcome.delta.depth_capped, 0, "{what}: {outcome:?}");
+        assert_eq!(
+            (outcome.full_records, outcome.prefix_records),
+            (0, 1),
+            "{what}: {outcome:?}"
+        );
+        let depths = outcome.delta.whole_file_depths;
+        assert_eq!(
+            depths.iter().position(|n| *n == 1),
+            Some(1),
+            "{what}: {depths:?}"
+        );
+    }
+
     /// Save `index` tried a delta against its base.
     fn assert_admitted(&self, index: usize, what: &str) {
         let outcome = self.save(index, what);
@@ -192,13 +219,17 @@ fn a_dependent_that_fills_the_canonical_budget_exactly_is_admitted() {
     let depth = fits.save(2, "third version").delta.whole_file_depths;
     assert_eq!(depth.iter().position(|n| *n == 1), Some(2), "{depth:?}");
     fits.assert_admitted(3, "canonical budget filled exactly");
+    assert_eq!(fits.save(3, "fourth version").delta.rebased, 0);
     fits.assert_reads_back();
 
+    // One dependent byte more does not fit on the third version's chain; it fits
+    // on that chain's root, the first version, and is stored against it (#89).
     let over = chain(
         default_cutoff(),
         &[(len, true), (len, true), (len, true), (len + 1, true)],
     );
-    over.assert_refused_by_budget(3, "one canonical byte past the budget");
+    over.assert_rebased(3, "one canonical byte past the budget");
+    over.assert_reads_back();
 }
 
 #[test]
@@ -219,7 +250,9 @@ fn a_chain_built_inside_one_save_is_judged_like_one_built_over_several() {
     // Four 130,000-byte versions, then a fifth, at the default cutoff. While the
     // Save still holds the fourth, its chain cost is the one the Save recorded
     // when it chose its record; once it is stored, the cost is read back from the
-    // stored record. Both must put the fifth version's refusal at the same size.
+    // stored record. Both must put the size at which the fifth version no longer
+    // fits on the fourth's chain, and is re-based onto the root (#89), at the
+    // same place.
     let refused = |len: usize, together: bool| {
         let versions = [
             (130_000, true),
@@ -228,17 +261,15 @@ fn a_chain_built_inside_one_save_is_judged_like_one_built_over_several() {
             (130_000, true),
             (len, true),
         ];
-        let work_exceeded = if together {
-            chain_in_one_save(default_cutoff(), &versions)
-                .delta
-                .work_exceeded
+        let delta = if together {
+            chain_in_one_save(default_cutoff(), &versions).delta
         } else {
             chain(default_cutoff(), &versions)
                 .save(4, "fifth version")
                 .delta
-                .work_exceeded
         };
-        work_exceeded == 1
+        assert_eq!(delta.work_exceeded, 0, "{len} {together}: {delta:?}");
+        delta.rebased == 1
     };
     let (mut fits, mut over) = (1_000, 10_000);
     assert!(!refused(fits, false) && refused(over, false));
@@ -349,6 +380,41 @@ fn a_corrupt_base_that_fits_is_authenticated_even_when_the_dependent_tips_the_ch
     corrupt_payload(&metadata, first.id(), &raw[50_000..50_064]);
     let second = version(131_065, false, 1, Some(first.id()));
     let error = save_one(&metadata, second).unwrap_err();
+    assert!(
+        matches!(error, StorageError::Integrity("dependency identity")),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn a_rebased_dependent_is_one_trial_against_the_authenticated_root() {
+    // Incompressible versions whose canonical object is exactly one cutoff: the
+    // root is stored verbatim (131,050 record bytes), and 131,050 + 131,072 fits
+    // the 262,144-byte encoded budget, so the second version is a delta on it.
+    // The third does not fit on the second's chain (its delta record adds a few
+    // dozen bytes) and is re-based onto the root instead of being stored FULL.
+    let len = 131_072 - ENVELOPE;
+    let saved = chain(default_cutoff(), &[(len, false); 4]);
+    saved.assert_admitted(1, "second version");
+    assert_eq!(saved.save(1, "second version").delta.rebased, 0);
+    saved.assert_rebased(2, "third version");
+    saved.assert_rebased(3, "fourth version");
+    let trials: u64 = (0..4).map(|i| saved.save(i, "trials").delta.trials).sum();
+    assert_eq!(trials, 3, "one trial per dependent, none for the re-base");
+    saved.assert_reads_back();
+
+    // The root is the base actually used, so it is acquired and authenticated: a
+    // corrupt root fails the Save rather than becoming a base.
+    let metadata = store(default_cutoff());
+    let first = version(len, false, 0, None);
+    save_one(&metadata, first.clone()).unwrap();
+    let second = version(len, false, 1, Some(first.id()));
+    let outcome = save_one(&metadata, second.clone()).unwrap();
+    assert_eq!(outcome.prefix_records, 1, "{outcome:?}");
+    let raw = support::noise(len);
+    corrupt_payload(&metadata, first.id(), &raw[50_000..50_064]);
+    let third = version(len, false, 2, Some(second.id()));
+    let error = save_one(&metadata, third).unwrap_err();
     assert!(
         matches!(error, StorageError::Integrity("dependency identity")),
         "{error:?}"

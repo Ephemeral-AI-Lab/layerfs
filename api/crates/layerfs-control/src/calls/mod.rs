@@ -5,6 +5,7 @@
 mod check;
 mod dispatch;
 pub mod keys;
+mod platform_policy;
 pub mod scope;
 pub mod table;
 mod text;

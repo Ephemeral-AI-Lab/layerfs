@@ -1,1 +1,1 @@
-SELECT k.i, f.root FROM unnest($1::bytea[], $2::bigint[]) WITH ORDINALITY AS k(digest, length, i) LEFT JOIN (file_digest f JOIN object_location o ON o.object_id = f.root) ON f.digest = k.digest AND f.length = k.length ORDER BY k.i;
+SELECT k.i, f.root FROM unnest($1::bytea[], $2::bigint[]) WITH ORDINALITY AS k(digest, length, i) LEFT JOIN ({s}.file_digest f JOIN {s}.object_location o ON o.object_id = f.root) ON f.digest = k.digest AND f.length = k.length ORDER BY k.i;

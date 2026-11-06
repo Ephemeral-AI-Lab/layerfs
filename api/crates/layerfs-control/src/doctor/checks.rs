@@ -53,7 +53,7 @@ pub(super) fn check(
                     findings.error(
                         entity,
                         format!("Store {name} is on machine {machine}, which has no record"),
-                        format!("no call reaches it: make machine {machine} again (`layerfs machine create {machine} …` or `layerfs machine connect {machine} …`), or delete {} by hand", paths::store_dir(home, name).display()),
+                        format!("no call reaches it: restore machine {machine}'s record for inspection and explicit cleanup, or delete {} by hand", paths::store_dir(home, name).display()),
                     );
                 }
                 // a transfer running now owns its partial copy

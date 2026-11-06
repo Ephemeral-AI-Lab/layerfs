@@ -18,8 +18,10 @@ fn length(value: u64) -> HistoryResult<i64> {
 
 /// Records the root built for each content; a recorded content takes the
 /// newer root, so a row whose root the Store lost is replaced.
-/// An engine with an array form takes one statement per window, the last
-/// row of a repeated content winning as it would one row at a time.
+/// A repeated content keeps only its last root, as it would one row at a
+/// time; an engine with an array form then takes one statement per window,
+/// any other one statement per distinct content (a window of 1,000 empty
+/// files is one row, not 1,000).
 pub(crate) fn record(tx: &Transaction<'_>, rows: &[FileDigest]) -> HistoryResult<()> {
     for part in rows.chunks(super::hints::ARRAY_ROWS) {
         let mut last = BTreeMap::new();
@@ -27,9 +29,9 @@ pub(crate) fn record(tx: &Transaction<'_>, rows: &[FileDigest]) -> HistoryResult
             last.insert((row.digest, row.length), row.root);
         }
         let mut columns = (Vec::new(), Vec::new(), Vec::new());
-        for ((digest, bytes), root) in last {
+        for ((digest, bytes), root) in &last {
             columns.0.push(digest.to_vec());
-            columns.1.push(length(bytes)?);
+            columns.1.push(length(*bytes)?);
             columns.2.push(root.to_vec());
         }
         let columns = vec![
@@ -41,19 +43,16 @@ pub(crate) fn record(tx: &Transaction<'_>, rows: &[FileDigest]) -> HistoryResult
             Some(done) => {
                 done?;
             }
-            None => one_by_one(tx, part)?,
+            None => {
+                for ((digest, bytes), root) in last {
+                    tx.execute(
+                        INSERT,
+                        params![digest.to_vec(), length(bytes)?, root.to_vec()],
+                    )
+                    .map_err(sql)?;
+                }
+            }
         }
-    }
-    Ok(())
-}
-
-fn one_by_one(tx: &Transaction<'_>, rows: &[FileDigest]) -> HistoryResult<()> {
-    for row in rows {
-        tx.execute(
-            INSERT,
-            params![row.digest.to_vec(), length(row.length)?, row.root.to_vec()],
-        )
-        .map_err(sql)?;
     }
     Ok(())
 }
@@ -94,19 +93,27 @@ pub(crate) fn roots(
             })
             .collect();
     }
+    // One statement per distinct content; a repeated one reuses the answer.
+    let mut known = BTreeMap::new();
     contents
         .iter()
         .map(|(digest, bytes)| {
+            if let Some(root) = known.get(&(*digest, *bytes)) {
+                return Ok(*root);
+            }
             let rows = many(tx, OF, params![digest.to_vec(), length(*bytes)?], |row| {
                 cell::<Vec<u8>>(row, 0)
             })?;
-            rows.into_iter()
+            let root = rows
+                .into_iter()
                 .next()
                 .map(|root| {
                     <[u8; 32]>::try_from(root)
                         .map_err(|_| HistoryError::Integrity("file digest root"))
                 })
-                .transpose()
+                .transpose()?;
+            known.insert((*digest, *bytes), root);
+            Ok(root)
         })
         .collect()
 }

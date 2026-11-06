@@ -10,17 +10,25 @@ pub(crate) struct GroupPlan<'a> {
     id: i64,
     groups: &'a [usize],
     whole_for_reuse: bool,
+    whole_bytes: usize,
     pub(crate) error: Option<StorageError>,
     pub(crate) selected_info: Option<PackInfo>,
     pub(crate) selected_choice: Option<PackReadChoice>,
     pub(crate) whole_reason: Option<&'static str>,
 }
 impl<'a> GroupPlan<'a> {
-    pub(crate) fn new(id: i64, groups: &'a [usize], whole_for_reuse: bool) -> Self {
+    /// `whole_bytes` is the provider's [`whole_pack_bytes`](crate::port::PackPersistence::whole_pack_bytes).
+    pub(crate) fn new(
+        id: i64,
+        groups: &'a [usize],
+        whole_for_reuse: bool,
+        whole_bytes: usize,
+    ) -> Self {
         Self {
             id,
             groups,
             whole_for_reuse,
+            whole_bytes,
             error: None,
             selected_info: None,
             selected_choice: None,
@@ -67,7 +75,7 @@ impl<'a> GroupPlan<'a> {
         }
         self.whole_reason = if header.lane == PackLane::Singleton {
             Some("singleton")
-        } else if info.length <= crate::port::PACK_READ_PREFIX_BYTES {
+        } else if info.length <= self.whole_bytes.max(crate::port::PACK_READ_PREFIX_BYTES) {
             Some("small")
         } else if useful >= info.length.div_ceil(2) || ranges.len() > 4 {
             Some("density")

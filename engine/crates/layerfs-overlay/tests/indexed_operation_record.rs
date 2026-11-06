@@ -38,7 +38,7 @@ fn maintain(db: &Overlay, limit: usize) {
         let Some(step) = db.maintain(cursor).unwrap() else {
             return;
         };
-        assert!(step.work.rows <= PAGE_ROWS as u64);
+        assert!(step.work.rows <= RECORD_ROWS as u64);
         assert!(step.work.data_bytes <= OPERATION_RECORD_BYTES as u64);
         cursor = step.cursor;
     }

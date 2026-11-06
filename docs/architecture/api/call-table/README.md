@@ -113,6 +113,8 @@ this page. They need a Unix host and no Docker or root.
 | --- | --- | --- |
 | [`calls_table.rs`](../../../../api/crates/layerfs-api/tests/calls_table.rs) | `layerfs-api` | 62 calls in nine families; unknown calls and arguments refused before any effect; one test per family that a valid call reaches its family function and a wrong one is refused; JSON round trips; sizes and keys; a relative home refused; one source file per call. |
 | [`calls_scope.rs`](../../../../api/crates/layerfs-api/tests/calls_scope.rs) | `layerfs-api` | A folder scope names its project, refuses every call it does not cover, needs a Sandbox of its project for `workspace` calls, and a scoped `branch.list` reads every page. |
+| [`scope_references.rs`](../../../../api/crates/layerfs-api/tests/scope_references.rs) | `layerfs-api` | `branch.fork` (`from_commit`, `from_branch`, `name`) and `branch.publish` (`commit`) outside the namespace are refused before any effect; inside it they work; the JSON form refuses the same. |
+| [`list_pages.rs`](../../../../api/crates/layerfs-api/tests/list_pages.rs) | `layerfs-api` | `branch.list`, plain and scoped, pages past 64 and the default 50 across sizes; the last page ends the list; bad `page_size` or `page_pos` refused; a page past the end is empty. |
 | [`project_family.rs`](../../../../api/crates/layerfs-api/tests/project_family.rs) | `layerfs-api` | End to end on this host: `project.init` refused without a Store (`NotFound`), `store.create`, Init in process with `check`, `install`, `record` progress, file and Branch calls, a push to a stand-in worker on a `lima` machine and reads there, then `project.remove`. |
 
 ```text

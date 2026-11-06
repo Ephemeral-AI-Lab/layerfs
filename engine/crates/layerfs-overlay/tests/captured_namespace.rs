@@ -290,15 +290,16 @@ fn parent_cursor_and_name_point_answer_exactly_the_sealed_rows_of_each_parent() 
     let mut world = World::new(&db, source);
     // Parent 10 spans more than two full windows. Parents 9 and 11 hold names
     // sorting below, between and above them, so a parent-crossing cursor shows.
-    for n in 0..200_u64 {
-        world.name(10, format!("n{n:04}").as_bytes(), Some(1000 + n));
+    let wide = 3 * PAGE_ROWS as u64 + 8;
+    for n in 0..wide {
+        world.name(10, format!("n{n:04}").as_bytes(), Some(100_000 + n));
     }
     for name in [&b"a"[..], b"n0100", b"n0100x", b"zz", b"\x00", b"\xff\xff"] {
         world.name(9, name, Some(20));
         world.name(11, name, Some(21));
     }
     // Removals: a whiteout where the base binds the name, no row otherwise.
-    for n in (0..200_u64).step_by(7) {
+    for n in (0..wide).step_by(7) {
         world.name(10, format!("n{n:04}").as_bytes(), None);
     }
     world.name(10, b"never-bound-a", None);
@@ -308,19 +309,17 @@ fn parent_cursor_and_name_point_answer_exactly_the_sealed_rows_of_each_parent() 
     // that prefix and its 254-byte extension as shorter neighbours.
     let prefix = vec![b'x'; 253];
     let long = |tail: [u8; 2]| [prefix.as_slice(), tail.as_slice()].concat();
-    for tail in 0..70_u16 {
-        let name = long([(tail * 37 % 256) as u8, (tail * 101 % 256) as u8]);
+    // Distinct two-byte tails in a scrambled order, never [0xff, 0xff].
+    let tail_bytes = |tail: u16| [(tail >> 8) as u8, (tail * 37 % 256) as u8];
+    for tail in 0..PAGE_ROWS as u16 + 70 {
+        let name = long(tail_bytes(tail));
         world.name(12, &name, Some(2000 + u64::from(tail)));
     }
     world.name(12, &long([0xff, 0xff]), Some(2100));
     world.name(12, &prefix, Some(2101));
     world.name(12, &[prefix.as_slice(), b"\x00"].concat(), Some(2102));
     for tail in [3_u16, 4, 5, 6, 7, 8] {
-        world.name(
-            12,
-            &long([(tail * 37 % 256) as u8, (tail * 101 % 256) as u8]),
-            None,
-        );
+        world.name(12, &long(tail_bytes(tail)), None);
     }
     db.release_base_source(source).unwrap();
     let capture = db.capture().unwrap();
@@ -402,14 +401,15 @@ fn parent_cursor_and_name_point_answer_exactly_the_sealed_rows_of_each_parent() 
     // Names the capture does not hold, each one byte away from a held one.
     assert!(world.names.contains_key(&(12, long([0, 0]))));
     for (parent, name) in [
-        (10, b"n0200".to_vec()),
+        (10, format!("n{wide:04}").into_bytes()),
         (10, b"n010".to_vec()),
         (10, b"n0100x".to_vec()),
         (10, b"a".to_vec()),
         (8, b"a".to_vec()),
         (13, b"n0100".to_vec()),
         (10, Vec::new()),
-        (12, long([0, 1])),
+        // Above every held tail's high byte.
+        (12, long([9, 0])),
         (12, prefix[..252].to_vec()),
         (12, [prefix.as_slice(), b"\x01"].concat()),
         (12, long([b'x', b'y'])),
@@ -578,6 +578,9 @@ fn later_active_rows_install_and_close_leave_reader_answers_until_exact_release(
     ));
 }
 
+/// First serial of the bulk files that give the inode test more than two
+/// windows, above every serial it names on its own.
+const BULK: u64 = 10_000;
 #[test]
 fn inode_page_and_point_agree_and_a_folded_failed_capture_is_read_by_the_next_reader() {
     let temp = Temp::new();
@@ -588,7 +591,7 @@ fn inode_page_and_point_agree_and_a_folded_failed_capture_is_read_by_the_next_re
     let first = world.born();
     // More than two inode windows: base files with a metadata row, fresh
     // files, removed ones, directories and symlinks.
-    for serial in 1..=150_u64 {
+    for serial in (1..=150_u64).chain(BULK..=BULK + 2 * PAGE_ROWS as u64) {
         let mut inode = node(serial, InodeKind::File, 0, (serial % 2) * first);
         inode.nlink = u64::from(serial % 9 != 0);
         world.inode(inode, None);
@@ -618,7 +621,7 @@ fn inode_page_and_point_agree_and_a_folded_failed_capture_is_read_by_the_next_re
     db.release_base_source(source).unwrap();
     let failed = db.capture().unwrap();
     let reader = db.acquire_captured_reader(failed, 1).unwrap();
-    let sealed = page_and_point(&db, reader, 1..=400);
+    let sealed = page_and_point(&db, reader, 1..=BULK + 2 * PAGE_ROWS as u64 + 50);
     assert!(sealed.len() > 2 * PAGE_ROWS);
     assert_eq!(sealed, world.inodes.values().cloned().collect::<Vec<_>>());
     let sealed_names = check_names(&db, reader, &world);
@@ -677,7 +680,10 @@ fn inode_page_and_point_agree_and_a_folded_failed_capture_is_read_by_the_next_re
     db.resolve_failed_capture(failed).unwrap();
     drain(&db);
     assert_eq!(db.state().unwrap().consolidating, Some(failed.generation));
-    assert_eq!(page_and_point(&db, reader, 1..=400), sealed);
+    assert_eq!(
+        page_and_point(&db, reader, 1..=BULK + 2 * PAGE_ROWS as u64 + 50),
+        sealed
+    );
     assert_eq!(check_names(&db, reader, &sealed_world), sealed_names);
     for serial in 300..=303_u64 {
         assert_eq!(
@@ -696,7 +702,7 @@ fn inode_page_and_point_agree_and_a_folded_failed_capture_is_read_by_the_next_re
     // The next capture seals the folded generation: one row per touched key.
     let capture = db.capture().unwrap();
     let reader = db.acquire_captured_reader(capture, 2).unwrap();
-    let folded = page_and_point(&db, reader, 1..=400);
+    let folded = page_and_point(&db, reader, 1..=BULK + 2 * PAGE_ROWS as u64 + 50);
     // The engine maintains the fall-through cutoff; every other field is the
     // caller's final value, from whichever generation last wrote the inode.
     let plain = |mut inode: Inode| {
@@ -830,7 +836,7 @@ fn reader_name_and_symlink_jobs_seek_their_sealed_domain_while_the_active_genera
     db.open_workspace([211; 32]).unwrap();
     let source = db.acquire_base_source(1).unwrap();
     let mut world = World::new(&db, source);
-    for n in 0..130_u64 {
+    for n in 0..2 * PAGE_ROWS as u64 + 2 {
         world.name(10, format!("n{n:04}").as_bytes(), Some(1000 + n));
     }
     world.symlink(50, b"sealed/target");
@@ -885,7 +891,7 @@ fn reader_name_and_symlink_jobs_seek_their_sealed_domain_while_the_active_genera
         let missed = db.diagnostics();
         let target = db.reader_symlink(reader, 50).unwrap();
         let linked = db.diagnostics();
-        assert_eq!(window, sealed[64..128]);
+        assert_eq!(window, sealed[64..64 + PAGE_ROWS]);
         assert_eq!(point.as_ref(), Some(&sealed[64]));
         assert_eq!(absent, None);
         assert_eq!(target, b"sealed/target");
@@ -916,7 +922,10 @@ fn reader_name_and_symlink_jobs_seek_their_sealed_domain_while_the_active_genera
             capture_family(&work[1]),
             capture_family(&work[2]),
         );
-        assert_eq!((cursor.executions, cursor.rows_returned), (1, 64));
+        assert_eq!(
+            (cursor.executions, cursor.rows_returned),
+            (1, PAGE_ROWS as u64)
+        );
         assert_eq!((hit.executions, hit.rows_returned), (1, 1));
         assert_eq!((miss.executions, miss.rows_returned), (1, 0));
         let inode = work[3].statements[StatementKind::Inode as usize];
@@ -939,11 +948,11 @@ fn reader_name_and_symlink_jobs_seek_their_sealed_domain_while_the_active_genera
         }
         steps = Some(current);
         evidence(format_args!(
-            "READER_NAMESPACE_WORK later_active_rows={population} cursor_vm={} cursor_rows=64 \
+            "READER_NAMESPACE_WORK later_active_rows={population} cursor_vm={} cursor_rows={} \
              point_vm={} point_rows=1 absent_point_vm={} absent_rows=0 symlink_layers_vm={} \
              symlink_cells_vm={} job_total_vm={:?} job_statements={:?} fullscan=0 sorts=0 \
              autoindex=0 reprepare=0",
-            current.0, current.1, current.2, current.3, current.4, current.5, current.6
+            current.0, PAGE_ROWS, current.1, current.2, current.3, current.4, current.5, current.6
         ));
     }
     assert_eq!(db.state().unwrap().dirty_inodes, 4097);

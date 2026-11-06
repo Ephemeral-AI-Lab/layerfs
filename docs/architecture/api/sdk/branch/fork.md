@@ -82,7 +82,14 @@ One short write through the Store's single writer; no tree is read. See
 the [routing table](../../routing/routing-table.md) and
 [Store: History publication](../../../engine/store/history-publication.md).
 Under a folder scope `name` and `from_branch` are composed as
-`<ns>.<name>`; a `from_commit` id stays as given.
+`<ns>.<name>`, and `from_commit` (which the Store reads before
+`from_branch`) is checked like any Commit or Branch reference: a 66-character hex id
+stays as given; any other value is treated as a Branch name and composed
+into the namespace (the Store then decides whether that Branch exists); a
+name that cannot be composed, or a scope without `branch`, is refused
+before any effect. An id of a Commit outside the
+namespace is therefore not confined (an open gap,
+[Scopes](../../call-table/table.md#scopes)).
 
 ## Errors
 

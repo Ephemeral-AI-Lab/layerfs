@@ -15,6 +15,12 @@ Store is backed up. Layers are `core < engine < connect < api`; nothing in
 | `layerfs-sandbox` | *How* does a Sandbox run on that machine's kernel? | backend: `src/backend/<backend>/` |
 | `layerfs-store-backup` | *How* is a Store backed up to a bucket? | provider: `src/bucket/<provider>/` |
 
+Firecracker and SSH are **permanently disabled for new product work**. Their
+adapters remain compiled; inspection and explicit cleanup remain available.
+The [restriction contract](../docs/architecture/connect/support-matrix/disabled-platforms.md)
+defines existing-resource handling and re-enablement. Platform profiles below
+describe retained mechanics; `SUPPORT.json` decides availability.
+
 ## Reading the tree
 
 - `layerfs-machine/src/platform.rs` is the `Platform` enum and its `Profile`
@@ -54,6 +60,8 @@ Store is backed up. Layers are `core < engine < connect < api`; nothing in
   `Unsupported`, and their Workspace calls stay on the worker.
 - `layerfs-machine/src/support.rs` is the one support table:
   platform × host × Store kind → supported, or a refusal with its reason.
+  It consumes the fixed restrictions in `layerfs-sandbox/src/platform_policy.rs`,
+  also used by the API dispatcher in builds without machine adapters.
 - `layerfs-machine/src/platforms/<p>/`: `profile.rs` holds its `PROFILE`
   and `adapter.rs` its `ADAPTER` (the guard keeps both out of `mod.rs`);
   `observe.rs`, `create.rs` (create and remove), `power.rs` (start and
@@ -95,7 +103,8 @@ host without its live fields (`ready`, `missing`, `version`):
   its `kind` (`int`, `size`, `text`, `bool`, `name`);
 - `description`: the platform and how its Sandboxes run.
 
-The table encodes what is allowed. #535 phase 5a enabled PostgreSQL
+The table encodes what is allowed; Firecracker and SSH now refuse new work.
+Historical enablements remain evidence only: #535 phase 5a enabled PostgreSQL
 Sandboxes on `native` (macOS and Linux), `docker` and `ssh`; the G7 live
 receipts (`core/docs/issues/535/receipts/g7-live/`) enabled them on `lima`,
 `apple-container`, `microsandbox` and `firecracker`. `layerfs machine platforms` (the call `machine.platforms`)

@@ -144,6 +144,7 @@ fn microsandbox_remove_takes_the_record_then_the_volume() {
 }
 
 #[test]
+#[ignore = "retained adapter qualification; platform permanently disabled by layerfs-project#7"]
 fn firecracker_names_what_its_lima_host_lacks() {
     let scratch = Scratch::new("fc-check");
     scratch.tool(
@@ -190,6 +191,7 @@ fn firecracker_names_what_its_lima_host_lacks() {
 }
 
 #[test]
+#[ignore = "retained adapter qualification; platform permanently disabled by layerfs-project#7"]
 fn firecracker_on_a_stopped_host_is_unavailable() {
     let scratch = Scratch::new("fc-host-down");
     scratch.tool(
@@ -211,6 +213,7 @@ fn firecracker_on_a_stopped_host_is_unavailable() {
 }
 
 #[test]
+#[ignore = "retained adapter qualification; platform permanently disabled by layerfs-project#7"]
 fn a_microvm_chooses_its_huge_pages_at_each_boot() {
     // the terminal pass: a host's huge pages do not outlive its reboot, so
     // a choice made at create made a restarted microVM fail to load

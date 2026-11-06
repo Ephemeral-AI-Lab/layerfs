@@ -65,7 +65,7 @@ driver.
   ViewListing { entries, continuation = last visited name, visited <= 64 }
 ```
 
-`SourceView::list` visits at most 64 distinct keys per window, whiteouts
+`SourceView::list` visits at most `PAGE_ROWS` (1,024) distinct keys per window, whiteouts
 included, so a window can be empty and still continue. A name bound for the
 whole enumeration is returned exactly once; names changed meanwhile may or
 may not appear ([`namespace/list.rs`](../../../../engine/crates/layerfs-workspace/src/operations/namespace/list.rs)).

@@ -19,50 +19,45 @@ pub(crate) fn read(
     let mut ids = ids.to_vec();
     ids.sort_unstable();
     ids.dedup();
-    let descriptors = tx.typed(
+    let budget = policy::DEPENDENCY_PACK_CACHE_BYTES as i64;
+    let singleton = policy::SINGLETON_PACK_LIMIT as i64;
+    // Descriptors and bodies in one statement. The server sends the bodies
+    // only when every id is present and their total is within the read
+    // budget, so the budget is still checked before any body is read.
+    let found = tx.typed(
         &format!(
-            "SELECT pack_id,domain,digest,length FROM {}.pack WHERE pack_id = ANY($1::bigint[]) ORDER BY pack_id",
-            tx.schema
+            "WITH d AS (SELECT count(*) AS n, coalesce(sum(length),0) AS total FROM {s}.pack WHERE pack_id = ANY($1::bigint[])) \
+             SELECT p.pack_id,p.domain,p.digest,p.length,\
+             CASE WHEN d.n = cardinality($1::bigint[]) AND (d.total <= $2::bigint OR (d.n = 1 AND d.total <= $3::bigint)) THEN p.body END \
+             FROM {s}.pack p, d WHERE p.pack_id = ANY($1::bigint[]) ORDER BY p.pack_id",
+            s = tx.schema
         ),
-        &[&ids],
-        ids.len() as u64 * 8,
+        &[&ids, &budget, &singleton],
+        ids.len() as u64 * 8 + 16,
     )?;
-    let mut infos = Vec::with_capacity(descriptors.len());
+    if found.len() != ids.len() {
+        return Err(PersistenceError::Missing);
+    }
+    let mut infos = Vec::with_capacity(found.len());
     let mut total = 0usize;
-    for row in descriptors {
-        let descriptor = info(&rows::record(&row)?)?;
+    for row in &found {
+        let descriptor = info(&rows::record_first(row, 4)?)?;
         total = total
             .checked_add(descriptor.length)
             .ok_or(BackendError::Capacity)?;
         infos.push(descriptor);
-    }
-    if infos.len() != ids.len() {
-        return Err(PersistenceError::Missing);
     }
     if total > policy::DEPENDENCY_PACK_CACHE_BYTES
         && !(ids.len() == 1 && total <= policy::SINGLETON_PACK_LIMIT)
     {
         return Err(BackendError::Capacity.into());
     }
-    // Every checked body in one statement, in pack id order.
-    let bodies = tx.typed(
-        &format!(
-            "SELECT pack_id,body FROM {}.pack WHERE pack_id = ANY($1::bigint[]) ORDER BY pack_id",
-            tx.schema
-        ),
-        &[&ids],
-        ids.len() as u64 * 8,
-    )?;
-    if bodies.len() != infos.len() {
-        return Err(PersistenceError::Missing);
-    }
-    for (info, row) in infos.into_iter().zip(bodies) {
-        let id: i64 = row.try_get(0).map_err(|e| rows::error(&e))?;
-        let body: Vec<u8> = row.try_get(1).map_err(|e| rows::error(&e))?;
-        if id != info.pack_id {
-            return Err(PersistenceError::Malformed);
-        }
-        out.push(PersistedPack::authenticate(info, body)?);
+    for (info, row) in infos.into_iter().zip(found) {
+        let body: Option<Vec<u8>> = row.try_get(4).map_err(|e| rows::error(&e))?;
+        out.push(PersistedPack::authenticate(
+            info,
+            body.ok_or(PersistenceError::Malformed)?,
+        )?);
     }
     Ok(())
 }
@@ -90,8 +85,11 @@ pub(crate) fn scoped(
 type OffsetRead<'a> = dyn FnMut(usize, &mut [u8]) -> Result<(), PersistenceError> + 'a;
 
 /// Bytes from the start of a body fetched with its descriptor: the header
-/// and directory reads that open every acquisition then cost no round trip.
-const HEAD_BYTES: i32 = 64 * 1024;
+/// and directory reads that open every acquisition then cost no round trip,
+/// and a pack up to the pack limit, which this provider takes whole
+/// ([`whole_pack_bytes`](layerfs_storage::port::PackPersistence::whole_pack_bytes)),
+/// arrives complete in that one statement.
+const HEAD_BYTES: i32 = policy::PACK_LIMIT as i32;
 
 /// Exact ranges of one body: the body is stored uncompressed out of line
 /// (`STORAGE EXTERNAL`), so `substring` fetches only the chunks it covers.
@@ -114,7 +112,7 @@ fn read_with<T>(
         12,
     )?;
     let row = found.first().ok_or(PersistenceError::Missing)?;
-    let descriptor = info(&rows::record(row)?)?;
+    let descriptor = info(&rows::record_first(row, 4)?)?;
     if found.len() != 1 || descriptor.pack_id != id {
         return Err(PersistenceError::Malformed);
     }

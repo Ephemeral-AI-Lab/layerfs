@@ -196,6 +196,11 @@ impl Scope {
                     let given = args.get_text(field).unwrap_or("").to_owned();
                     set(&mut args, field, self.compose(&given)?);
                 }
+                // `from_commit` takes precedence in the Store: it passes the
+                // same check as every other reference
+                if let Some(given) = args.get_text("from_commit").map(str::to_owned) {
+                    set(&mut args, "from_commit", self.reference(&given)?);
+                }
             }
             ("branch", "merge") => {
                 bound(&args)?;
@@ -208,6 +213,9 @@ impl Scope {
                 bound(&args)?;
                 let given = args.get_text("branch").unwrap_or("").to_owned();
                 set(&mut args, "branch", self.compose(&given)?);
+                if let Some(given) = args.get_text("commit").map(str::to_owned) {
+                    set(&mut args, "commit", self.reference(&given)?);
+                }
             }
             ("workspace", "mount") => {
                 if args.get_text("branch").is_some_and(|b| b != "main") {

@@ -18,10 +18,7 @@ pub fn main(words: Vec<String>) -> ExitCode {
             let topic: Vec<&str> = words.iter().skip(1).map(String::as_str).collect();
             help::print(&topic)
         }
-        Some("--version") => {
-            println!("layerfs {}", env!("CARGO_PKG_VERSION"));
-            ExitCode::SUCCESS
-        }
+        Some("--version") => output::print(&format!("layerfs {}\n", env!("CARGO_PKG_VERSION"))),
         Some("worker") if words.len() == 1 => worker::main(),
         Some("import-env") if words.len() == 1 => import_env(),
         Some("doctor") => doctor(&words[1..]),
@@ -60,6 +57,7 @@ fn doctor(words: &[String]) -> ExitCode {
     let text = match words {
         [] => false,
         [flag] if flag == "--text" => true,
+        [flag] if flag == "-h" || flag == "--help" => return help::print(&["doctor"]),
         _ => return wrong("`layerfs doctor` takes only `--text`".to_owned()),
     };
     match layerfs_api::home(None).and_then(|home| layerfs_api::doctor(&home)) {
@@ -69,8 +67,8 @@ fn doctor(words: &[String]) -> ExitCode {
     }
 }
 
-fn wrong(message: String) -> ExitCode {
-    eprintln!("layerfs: {message}");
+pub fn wrong(message: String) -> ExitCode {
+    output::diagnostic(&format!("layerfs: {message}"));
     ExitCode::from(USAGE)
 }
 

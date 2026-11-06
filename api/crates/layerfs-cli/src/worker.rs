@@ -33,7 +33,9 @@ fn run() -> Result<(), String> {
     let listener =
         TcpListener::bind(&listen).map_err(|why| format!("cannot listen on {listen}: {why}"))?;
     let root = setting("LAYERFS_WORKER_ROOT").unwrap_or_else(|_| ROOT.to_owned());
-    eprintln!("layerfs worker: listening on {listen}, root {root}");
+    crate::output::diagnostic(&format!(
+        "layerfs worker: listening on {listen}, root {root}"
+    ));
     serve(listener, secret, PathBuf::from(root))
         .map_err(|why| format!("the worker stopped: {why}"))?;
     Ok(())
@@ -42,7 +44,7 @@ fn run() -> Result<(), String> {
 /// Serves until the process is ended or its listener fails.
 pub fn main() -> ExitCode {
     if let Err(why) = run() {
-        eprintln!("layerfs worker: {why}");
+        crate::output::diagnostic(&format!("layerfs worker: {why}"));
         return ExitCode::from(crate::run::REFUSED);
     }
     ExitCode::SUCCESS

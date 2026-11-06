@@ -3,7 +3,7 @@ use crate::{WorkspaceError, WorkspaceResult};
 use layerfs_overlay::{
     indexed_operation_record_changes_bytes, IndexedOperationRecordApply,
     IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope, Overlay,
-    OverlayError, OPERATION_RECORD_BYTES, PAGE_ROWS,
+    OverlayError, OPERATION_RECORD_BYTES, RECORD_ROWS,
 };
 use std::fmt;
 
@@ -148,7 +148,7 @@ pub trait OverlayOperationRecords {
         after: Option<[u8; 32]>,
     ) -> WorkspaceResult<OperationRecordReply<OperationRecordWindow>> {
         let keys = self.operation_record_keys_after(scope, kind, after)?.value;
-        let mut ended = keys.len() < PAGE_ROWS;
+        let mut ended = keys.len() < RECORD_ROWS;
         let (mut entries, mut bytes) = (Vec::with_capacity(keys.len()), 0_usize);
         for key in keys {
             let value = self

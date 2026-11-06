@@ -9,6 +9,7 @@ use crate::options::OptSpec;
 use crate::platform::{ExecutorKind, HostOs, How, KernelRoute, Platform};
 pub use layerfs_bridge::StoreKind;
 use layerfs_sandbox::json::quoted;
+use layerfs_sandbox::platform_policy::disabled_reason;
 use layerfs_sandbox::Backend;
 
 /// Where a Store's calls run for a machine.
@@ -65,6 +66,9 @@ const NO_BACKEND: &str = "no Sandbox backend on Windows (O5)";
 
 /// Why `platform` cannot be on `host`, or `None` where it can.
 fn host_refusal(platform: Platform, host: HostOs) -> Option<&'static str> {
+    if let Some(reason) = disabled_reason(platform.name()) {
+        return Some(reason);
+    }
     if host == HostOs::Other {
         return Some(OTHER_HOST);
     }
@@ -133,10 +137,15 @@ pub fn support(platform: Platform, host: HostOs) -> SupportRow {
             sandbox: postgresql.is_ok(),
             reason: postgresql.err(),
         },
-        options: profile.options,
-        description: match backend {
-            Some(backend) => format!("{}; {}", profile.description, backend.description()),
-            None => profile.description.to_owned(),
+        options: if disabled_reason(platform.name()).is_some() {
+            &[]
+        } else {
+            profile.options
+        },
+        description: match (disabled_reason(platform.name()), backend) {
+            (Some(reason), _) => reason.to_owned(),
+            (None, Some(backend)) => format!("{}; {}", profile.description, backend.description()),
+            (None, None) => profile.description.to_owned(),
         },
     }
 }

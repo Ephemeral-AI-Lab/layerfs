@@ -239,13 +239,24 @@ were stored FULL. The replaced file is now offered as their delta base.
   Store I/O.
   [namespace/predecessor.rs](../../crates/layerfs-overlay/src/namespace/predecessor.rs).
 - **Inodes pass.** Per captured inode page, one overlay job reads the
-  predecessors of the fresh live files at or above the chunking cutoff
-  (`captured_predecessors`). `CapturedFileEdits::construct_new` binds the
+  predecessors of the fresh live files (`captured_predecessors`; every size
+  since #88, F-063 asked only at or above the chunking cutoff). `CapturedFileEdits::construct_new` binds the
   base's regular file of that serial and calls Content
   `construct_runs_with_predecessor`. The base root is read at the first
   chunk, then its mapping pages as the edit route's `Aligner` walks forward,
   never a payload. A serial the base does not hold, or holds as another kind,
   offers nothing; any other base failure is the Commit's own.
+
+- **Same path (#88).** A fresh file with no recorded predecessor is offered
+  the regular file the base held at its path. The names pass asks the base
+  (`BaseView::child`) for each captured name bound over a binding the lower
+  view held (`inherited`), at most 65,536 per attempt, and keeps the
+  (serial, base serial) pairs sorted for the values pass. A name the base
+  does not bind, or binds to another kind or to the same serial, offers
+  nothing; any other base failure is the attempt's own.
+- **Whole-file results (#88).** Below the chunking cutoff the base root is
+  declared whole as the object's explicit advisory predecessor, without a
+  read; Storage judges its role and depth as for a whole-file edit.
 
 The hint is advisory: the constructed root is the one a plain fresh build
 gives. Storage still makes one PREFIX trial per chunk, under the chunk depth

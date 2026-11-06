@@ -58,6 +58,20 @@ impl Settings {
         sql
     }
 
+    /// A publication: like `write_begin(false)` with the lane's
+    /// `lock_timeout`; the body takes the lane row itself, after its pack
+    /// bodies are sent, with [`Self::LANE_ROW`].
+    pub(crate) fn publish_begin(&self) -> String {
+        format!(
+            "{}; SET LOCAL lock_timeout TO {}",
+            self.write_begin(false),
+            self.lock_timeout_ms
+        )
+    }
+
+    /// The statement that waits for and locks the Store's lane row.
+    pub(crate) const LANE_ROW: &'static str = "SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE";
+
     /// The held publication lane: one open transaction owning the lane row.
     pub(crate) fn lane_begin(&self) -> String {
         format!(
@@ -69,8 +83,9 @@ impl Settings {
 
     fn lane_lock(&self) -> String {
         format!(
-            "; SET LOCAL lock_timeout TO {}; SELECT 1 FROM store_lane WHERE id = 1 FOR UPDATE",
-            self.lock_timeout_ms
+            "; SET LOCAL lock_timeout TO {}; {}",
+            self.lock_timeout_ms,
+            Self::LANE_ROW
         )
     }
 }

@@ -16,6 +16,17 @@ pub(crate) fn statement(key: &str) -> Result<&'static str, BackendError> {
     }
 }
 
+/// Statements that name the Store's schema (`{s}`), so each also runs alone
+/// outside a transaction: one statement, one snapshot, no `BEGIN`/`COMMIT`.
+pub(crate) fn qualified(key: &str) -> Option<&'static str> {
+    match key {
+        "branch_snapshot" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/branch_snapshot.sql"
+        )),
+        _ => None,
+    }
+}
+
 /// The array form of a per-row statement, where one exists.
 pub(crate) fn arrays(key: &str) -> Option<&'static str> {
     match key {

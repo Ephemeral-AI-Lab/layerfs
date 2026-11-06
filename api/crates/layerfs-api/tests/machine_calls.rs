@@ -67,6 +67,20 @@ fn machines_over_records() {
     };
     assert_eq!(rows.len(), 7);
     for row in rows {
+        if let Some(reason) =
+            layerfs_sandbox::platform_policy::disabled_reason(row.get_text("platform").unwrap())
+        {
+            assert_eq!(row.get("ready"), Some(&SdkValue::Bool(false)));
+            assert_eq!(row.get("backend"), Some(&SdkValue::Null));
+            assert_eq!(row.get("kernel"), Some(&SdkValue::Null));
+            assert_eq!(row.get("sqlite"), Some(&SdkValue::Null));
+            assert_eq!(row.get("options"), Some(&SdkValue::List(vec![])));
+            assert_eq!(
+                row.get("postgresql").unwrap().get_text("reason"),
+                Some(reason)
+            );
+            assert_eq!(row.get("missing"), Some(&SdkValue::List(vec![t(reason)])));
+        }
         let created = row.get_text("how") != Some("built_in");
         if created && row.get("backend") != Some(&SdkValue::Null) {
             // no provider tool on PATH: a platform that needs one is not ready
@@ -107,7 +121,7 @@ fn machines_over_records() {
         "machine.create",
         &[("name", t("dev")), ("platform", t("ssh"))],
     );
-    assert_eq!(made.unwrap_err().0, "InvalidInput", "ssh is connected");
+    assert_eq!(made.unwrap_err().0, "Unsupported", "ssh is disabled");
 
     // a create that cannot start leaves nothing behind
     let made = call(

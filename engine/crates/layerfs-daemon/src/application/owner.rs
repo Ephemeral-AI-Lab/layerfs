@@ -296,7 +296,9 @@ impl Application {
 }
 
 /// The PostgreSQL Store selected (#506): Store reads and writes go to the
-/// server.
+/// server. A Sandbox daemon opens it with the light check (#63): the schema
+/// was fully checked when its Store was connected, and the caller's reach
+/// check read its binding just before this daemon started.
 fn postgres(url: &str, schema: &str, synchronous_commit: &str) -> PostgresSelection {
     let setting = match synchronous_commit {
         "local" => SynchronousCommit::Local,
@@ -305,5 +307,7 @@ fn postgres(url: &str, schema: &str, synchronous_commit: &str) -> PostgresSelect
         "remote_apply" => SynchronousCommit::RemoteApply,
         _ => SynchronousCommit::Off,
     };
-    PostgresSelection::new(url.to_string(), schema.to_string()).with_synchronous_commit(setting)
+    PostgresSelection::new(url.to_string(), schema.to_string())
+        .with_synchronous_commit(setting)
+        .with_check(layerfs_persistence::PostgresCheck::Light)
 }

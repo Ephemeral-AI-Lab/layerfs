@@ -85,7 +85,7 @@ Nothing converts a Store from one kind to the other.
 | PostgreSQL without the feature | `BackendUnavailable` | [`selection.rs`](../../../../engine/crates/layerfs-persistence/src/store/selection.rs) |
 | PostgreSQL lane wait | `lock_timeout_ms`, default 30 s; then `Busy` | [`config.rs`](../../../../engine/crates/layerfs-persistence/src/store/config.rs) |
 | Rows per transaction | `TRANSACTION_ROW_LIMIT` 8 191 | [`publication.rs`](../../../../engine/crates/layerfs-persistence/src/storage/publication.rs) |
-| Bytes per publication | 4 MiB − 1 canonical and physical (one large payload object exempt) | same |
+| Bytes per publication | The provider's `publication_bytes`: 4 MiB − 1 canonical and physical on SQLite, 16 MiB − 1 on PostgreSQL (`PUBLICATION_BYTES_MAX`); one large payload object exempt | same |
 | Disk margin | `STORE_HEADROOM_BYTES` 64 MiB after a pack batch; else `Capacity` | [`headroom.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lifecycle/headroom.rs) |
 | Unknown outcome | `Uncertain` / `UnknownOutcome`; session refuses all later calls | [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/records.rs) |
 | Work in the lane that grows with tree size, history or Branch count | A defect by owner rule; lineage walks follow runs, not history length | [History publication](history-publication.md#the-publish-lane) |

@@ -85,7 +85,7 @@ A wait is readiness, not a retry: the capture job runs once when ready.
 | `OverlayCapturedRuns` | `OwnerClient` | [`captured_runs.rs`](../../../../engine/crates/layerfs-workspace/src/ports/captured_runs.rs), [`captured_run_port.rs`](../../../../engine/crates/layerfs-store-service/src/overlay/captured_run_port.rs) |
 
 Every captured read is checked against the reader (`checked_capture`,
-`check_captured_reader`); a page is at most `PAGE_ROWS` = 64 rows in key
+`check_captured_reader`); a page is at most `PAGE_ROWS` = 1,024 rows in key
 order, and the next page resumes after the last key. Later active writes cannot
 change a captured page. Each port call is one short job under the Workspace
 lock, run on the Commit thread, never on a kernel request worker.

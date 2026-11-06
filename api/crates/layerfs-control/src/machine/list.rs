@@ -40,6 +40,12 @@ pub(super) fn live(home: &Path, records: &[MachineRecord]) -> Result<Vec<Live>> 
     // so a late probe is reported as late, not as its stopped command
     let stop = until + Duration::from_millis(200);
     for (index, record) in records.iter().enumerate() {
+        if let Some(reason) =
+            layerfs_sandbox::platform_policy::disabled_reason(record.platform()?.name())
+        {
+            out[index] = Some((record.state(None)?.to_owned(), Some(reason.to_owned())));
+            continue;
+        }
         if record.platform()? == adapters::Platform::Native || record.in_flight() {
             continue;
         }
