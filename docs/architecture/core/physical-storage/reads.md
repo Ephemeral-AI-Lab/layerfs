@@ -75,6 +75,13 @@ the mark was taken (F-036).
 | `read_packs` | whole metadata packs and payload packs by id | length and SHA-256 checked by `PersistedPack::authenticate`, then header, declared length and domain | same, [`port/read_pack.rs`](../../../../core/crates/layerfs-storage/src/port/read_pack.rs) |
 | `read_pack_selection` | strict selected reads: the whole pack is scanned and hashed, only chosen ranges are kept | SHA-256 over every byte | [`port/read_selection.rs`](../../../../core/crates/layerfs-storage/src/port/read_selection.rs) |
 
+When the provider takes packs whole (`whole_pack_bytes` above the control
+prefix, as PostgreSQL does), a demand reads its uncached packs that are no
+larger than that and fit the 2 MiB pack cache together in one `read_packs`
+call, if there are at least two, before acquiring groups
+([`Fetch::whole_packs`](../../../../core/crates/layerfs-storage/src/read/fetch.rs));
+the demand's kept packs are reserved first so the read does not evict them.
+
 The reply must match the plan: the same descriptor, the same choice (whole or
 ranges) and the same extents, else `Integrity("selected strategy/extent reply")`.
 A provider that does not implement a selected read returns
@@ -92,7 +99,7 @@ sees the pack's control area and directory, then chooses before body I/O:
 | Choice | When | Diagnostics counter |
 | --- | --- | --- |
 | Whole | singleton lane | `whole_due_singleton` |
-| Whole | pack length ≤ 4,120 bytes (`PACK_READ_PREFIX_BYTES`) | `whole_due_small` |
+| Whole | pack length ≤ the provider's `whole_pack_bytes`: 4,120 bytes (`PACK_READ_PREFIX_BYTES`) by default, the 256 KiB pack limit on PostgreSQL, where each ranged read is a round trip | `whole_due_small` |
 | Whole | wanted groups cover at least half the pack, or need more than 4 ranges | `whole_due_density` |
 | Whole | this owner already kept another group of the pack | `whole_due_reuse` |
 | Ranges | otherwise; adjacent groups coalesce into one range | `range_selected` |

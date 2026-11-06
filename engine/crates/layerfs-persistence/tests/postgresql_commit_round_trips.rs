@@ -1,6 +1,7 @@
 //! layerfs-project #67: the fixed statements and transactions of a Commit's
 //! Store calls on SQLite and PostgreSQL: a Branch snapshot, a reservation, a
-//! Save's publication and the lane-held head check and publication.
+//! Save's publication and the lane-held head check and publication, and
+//! whole-pack reads by id (#70).
 //! Each line printed `COUNT` is one call's counter delta on one session.
 //!
 //! Needs `LAYERFS_TEST_POSTGRES_URL` for the PostgreSQL half; NOT_RUN
@@ -19,7 +20,7 @@ use layerfs_persistence::{
     SqlitePersistenceProfile,
 };
 use layerfs_storage::{
-    port::{PackPersistence, Reserve},
+    port::{PackPersistence, PersistenceError, Reserve},
     Storage, StoragePolicy,
 };
 use layerfs_telemetry::timer::Timing;
@@ -219,8 +220,8 @@ fn run(engine: &Engine<'_>, branch: BranchId) -> Vec<(&'static str, Delta)> {
         assert!(matches!(outcome, CommitOutcome::Committed { .. }));
     };
     commit(warm);
-    let warm = save(&engine.storage, &[bytes(2, 5000)]);
-    commit(warm);
+    let second = save(&engine.storage, &[bytes(2, 5000)]);
+    commit(second);
 
     let (snapshot, delta) = engine.measure("branch_snapshot", || {
         engine.history.branch_snapshot(branch).unwrap().unwrap()
@@ -272,6 +273,40 @@ fn run(engine: &Engine<'_>, branch: BranchId) -> Vec<(&'static str, Delta)> {
         (now, again)
     });
     out.push(("snapshot + 1 file save", delta));
+    // #70: whole packs by id are one statement; a missing id is refused
+    // before any body is sent.
+    let mut located = Vec::new();
+    engine
+        .persistence
+        .locate(&[genesis, second], &mut located)
+        .unwrap();
+    let mut ids: Vec<i64> = located.iter().map(|row| row.location.pack_id).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    assert_eq!(ids.len(), 2, "two Saves, two packs");
+    // Warm the statement so its prepare does not count below.
+    engine
+        .persistence
+        .read_packs(&ids, &mut Vec::new())
+        .unwrap();
+    let mut packs = Vec::new();
+    let (_, delta) = engine.measure("read_packs 2", || {
+        engine.persistence.read_packs(&ids, &mut packs).unwrap()
+    });
+    assert_eq!(packs.len(), 2);
+    out.push(("read_packs 2", delta));
+    let mut none = Vec::new();
+    let (missing, delta) = engine.measure("read_packs missing", || {
+        engine
+            .persistence
+            .read_packs(&[ids[0], i64::MAX], &mut none)
+    });
+    assert!(
+        matches!(missing, Err(PersistenceError::Missing)),
+        "{missing:?}"
+    );
+    assert!(none.is_empty());
+    out.push(("read_packs missing", delta));
     out
 }
 
@@ -331,6 +366,9 @@ fn commit_store_calls_are_counted_on_both_engines() {
     // snapshot, Commit insert, parent line, lineage insert, advance and
     // COMMIT, and the lane's ROLLBACK.
     assert_eq!(pg("lane + head + commit_branch").round_trips, 10);
+    // #70: descriptors and bodies in one statement, found or missing.
+    assert_eq!(pg("read_packs 2").round_trips, 1);
+    assert_eq!(pg("read_packs missing").round_trips, 1);
     let sqlite = |phase: &str| sqlite_counts.iter().find(|(p, _)| *p == phase).unwrap().1;
     // SQLite runs the same joined statement inside BEGIN/COMMIT.
     assert_eq!(sqlite("branch_snapshot").statements, 3);

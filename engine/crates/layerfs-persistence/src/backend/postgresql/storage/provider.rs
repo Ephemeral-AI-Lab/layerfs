@@ -93,6 +93,11 @@ impl PackPersistence for PostgresStorage {
         self.session
             .run(true, |tx| metadata::allocation::reserve(tx, request))
     }
+    /// Every ranged read is a round trip, so a pack up to the pack limit is
+    /// taken whole in one statement and kept for the next demands.
+    fn whole_pack_bytes(&self) -> usize {
+        layerfs_storage::policy::PACK_LIMIT
+    }
     fn publication_pack_cost(
         &self,
         pack: &PublishedPack,

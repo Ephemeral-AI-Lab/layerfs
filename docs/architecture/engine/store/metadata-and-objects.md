@@ -90,6 +90,10 @@ group, so a selected group is read without the rest of the pack
 ([`units_read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/objects/units_read.rs)).
 PostgreSQL reads ranges of the `EXTERNAL` body with `substring`
 ([`postgresql/objects/read.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/objects/read.rs)).
+Its first statement returns the descriptor with the first 256 KiB of the body,
+and it takes packs up to that size whole (`whole_pack_bytes`), so such a pack
+costs one statement. `read_packs` is one statement too: the server returns the
+bodies only when every id is present and their total is within the read budget.
 All of these run without `BEGIN` because the rows they read never change once
 visible ([SQLite: Sessions](sqlite.md#sessions)).
 

@@ -320,6 +320,51 @@ impl Fetch {
         }
         Ok(())
     }
+    /// Takes the uncached packs of one demand in one `read_packs` call when
+    /// the provider takes packs whole ([`PackPersistence::whole_pack_bytes`]
+    /// above the control prefix) and there are at least two of them; one
+    /// pack goes through its own acquisition at the same cost. Only packs
+    /// whose descriptors the demand located and that the provider would take
+    /// whole are read, within the pack cache's byte bound, so the cache keeps
+    /// every one; the others are acquired as before.
+    pub(crate) fn whole_packs(
+        &self,
+        ids: &[i64],
+        packs: &mut crate::encoding::PackCache,
+    ) -> StorageResult<()> {
+        let limit = self.metadata.whole_pack_bytes();
+        if limit <= crate::port::PACK_READ_PREFIX_BYTES {
+            return Ok(());
+        }
+        // The demand's whole packs, kept or wanted, within the cache bound;
+        // reserving them first keeps a kept one from being evicted by the read.
+        let mut cohort = Vec::new();
+        let mut wanted = Vec::new();
+        let mut bytes = 0usize;
+        {
+            let descriptors = self.descriptors.borrow();
+            for id in ids.iter().copied().collect::<BTreeSet<_>>() {
+                let Some(info) = descriptors.get(&id) else {
+                    continue;
+                };
+                if info.length > limit.min(crate::policy::PACK_LIMIT)
+                    || bytes + info.length > DEPENDENCY_PACK_CACHE_BYTES
+                {
+                    continue;
+                }
+                bytes += info.length;
+                cohort.push((id, info.length));
+                if !packs.contains_key(&id) {
+                    wanted.push(id);
+                }
+            }
+        }
+        if wanted.len() < 2 {
+            return Ok(());
+        }
+        packs.reserve(&cohort)?;
+        self.metadata_packs(&wanted, packs)
+    }
     fn payload(&self, info: PackInfo) -> StorageResult<Vec<u8>> {
         self.note(|c| {
             c.payload_reads += 1;
@@ -385,7 +430,12 @@ impl Source for Fetch {
             c.read_pack_selections += 1;
             c.pack_misses += 1;
         });
-        let mut plan = super::units::GroupPlan::new(id, groups, whole_for_reuse);
+        let mut plan = super::units::GroupPlan::new(
+            id,
+            groups,
+            whole_for_reuse,
+            self.metadata.whole_pack_bytes(),
+        );
         let reply = self.metadata.read_scoped_pack(id, &mut plan);
         if let Some(error) = plan.error {
             return Err(error);
