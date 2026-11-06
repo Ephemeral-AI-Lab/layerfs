@@ -185,9 +185,11 @@ fn largest_file_at_each_cutoff_saves_its_next_version() {
 }
 
 #[test]
-fn a_chain_restarts_at_the_scaled_canonical_budget() {
+fn a_chain_re_bases_onto_its_root_at_the_scaled_canonical_budget() {
     // 600,000-byte versions at a 1 MiB cutoff: the 4 MiB canonical budget holds
-    // six of them, the base chain and the dependent together.
+    // six of them, the base chain and the dependent together. The seventh would
+    // tip its predecessor's chain over, so it is a delta against the chain root
+    // instead (#89), and the eighth chains on it.
     let cutoff = 1024 * KIB;
     let len = 600_000;
     let canonical = (len + ENVELOPE) as u64;
@@ -195,17 +197,18 @@ fn a_chain_restarts_at_the_scaled_canonical_budget() {
     assert_eq!(fit, 6);
     let saved = chain(cutoff, &vec![(len, true); fit + 2]);
     let mut expected: Vec<usize> = (0..fit).collect();
-    expected.extend([0, 1]);
+    expected.extend([1, 2]);
     assert_eq!(saved.depths(), expected);
-    assert_eq!(saved.outcomes[fit].delta.work_exceeded, 1);
-    assert_eq!(
-        saved
-            .outcomes
-            .iter()
-            .map(|o| o.delta.work_exceeded)
-            .sum::<u64>(),
-        1
-    );
+    assert_eq!(saved.outcomes[fit].delta.rebased, 1);
+    assert_eq!(saved.outcomes[fit].delta.trials, 1);
+    for (index, outcome) in saved.outcomes.iter().enumerate() {
+        assert_eq!(outcome.delta.work_exceeded, 0, "{index}: {outcome:?}");
+        assert_eq!(outcome.delta.rebased, u64::from(index == fit), "{index}");
+        assert!(
+            outcome.stored_bytes < 4 * KIB || index == 0,
+            "{index}: {outcome:?}"
+        );
+    }
     // The deepest version reconstructs six objects, far above the fixed 512 KiB,
     // and within the scaled budget the reader enforces.
     assert!(fit as u64 * canonical > 512 * KIB);

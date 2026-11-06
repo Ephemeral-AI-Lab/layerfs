@@ -185,6 +185,40 @@ first, so a released or foreign operation is `Stale` before any row is read.
 A schema without the acquisition tables refuses every unit. Source:
 [`acquisition/`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/acquisition).
 
+Deleted working rows stay behind as dead tuples until autovacuum, and B-tree
+pages are never returned, so on its own a Store would be several MB larger
+right after an Init than a minute later, and keep the emptied indexes for
+good. The transaction that releases the last operation therefore empties the
+three tables (#87):
+
+```text
+ release (or the dispose job that removes the last row)   one Write transaction
+   SELECT 1 FROM store_lane ... FOR UPDATE                  every acquisition write
+   WITH gone AS (DELETE the record) SELECT no other record   one statement
+   if no other record:
+     SAVEPOINT; SET LOCAL lock_timeout 2 s
+     LOCK init_operation, init_entry, init_host_file          ACCESS EXCLUSIVE, record first
+     TRUNCATE ... CONTINUE IDENTITY; RELEASE SAVEPOINT        one script, one round trip
+     a definite refusal -> ROLLBACK TO SAVEPOINT; keep the dead rows
+   COMMIT
+```
+
+| Concern | Why it holds |
+| --- | --- |
+| A live operation of another session | Its record is committed before its first row. The check runs after the lane row is held and reads every committed record. |
+| An Init starting concurrently | `begin` is a lane-ordered write, so it waits for the lane row until this transaction commits. Its record goes into the emptied table. |
+| Readers | Only a live operation's units read working rows, and each unit reads the record first. The locks are taken in that order, so a reader that already holds a table blocks the compaction rather than deadlocking with it. |
+| Autovacuum on a table | It is cancelled after `deadlock_timeout` (1 s by default). The 2 s wait covers that. |
+| A refusal (lock wait, privilege) | The savepoint keeps the release's outcome unchanged. The dead rows are left for autovacuum, as before. Nothing is retried. A lost reply stays uncertain. |
+| Operation identity and epochs | `CONTINUE IDENTITY`: an id is never reused. |
+
+So a Store's size right after an Init is a never-used Store's size for the
+acquisition tables, and autovacuum later finds nothing there to reclaim
+([`postgresql_acquisition_compaction.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_acquisition_compaction.rs)).
+Constructed file roots are still recorded by an `UPDATE` of each host-file
+row, which doubles that table's pages while an Init runs. Removing that `UPDATE`
+needs a change to the acquisition schema.
+
 `postgresql_status(url, schemas)` reports a server's version, one
 round trip's latency and each named schema's size, on a connection opened and
 closed for the call, with no retry

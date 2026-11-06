@@ -67,6 +67,12 @@ pub struct CapturedNamespaceWork {
     pub digests_recorded: u64,
     /// Fresh files that reused a saved root with the same bytes (#364).
     pub files_reused: u64,
+    /// Base name lookups for names bound over a lower binding: each asks
+    /// which regular file the base held at that path (#88).
+    pub same_path_lookups: u64,
+    /// Fresh files constructed with a predecessor offered as their delta
+    /// base: one a rename recorded or the base file at the same path.
+    pub predecessors_offered: u64,
     /// Record jobs of this adapter's normalization and cursor: a point the
     /// cursor answers from its retained window is not a job. Content's own
     /// state jobs in the same scope are in the records custody.

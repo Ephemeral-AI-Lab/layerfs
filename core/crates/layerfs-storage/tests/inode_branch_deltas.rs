@@ -5,8 +5,9 @@
 //! changes per Save, as a small Commit does. Each Save rewrites the root branch
 //! and one child branch. The proofs:
 //!
-//! * chains grow 1..8 and reset to whole at the metadata depth cap, and every
-//!   table, old and new, reads back value for value;
+//! * chains grow 1..8 and, at the metadata depth cap, restart at depth one
+//!   against the whole branch at their root instead of storing the branch whole
+//!   (#89), and every table, old and new, reads back value for value;
 //! * a Store first written with whole branches only (the form every Store
 //!   before this change holds) keeps reading identically once delta branches
 //!   join it;
@@ -162,7 +163,7 @@ fn initial(storage: &Storage) -> (ObjectId, Vec<u64>) {
 }
 
 #[test]
-fn branch_chains_grow_to_the_cap_reset_whole_and_read_back() {
+fn branch_chains_grow_to_the_cap_re_base_onto_their_root_and_read_back() {
     let (_, storage) = storage(StoragePolicy::default());
     let (mut root, mut versions) = initial(&storage);
     let reader = storage.reader().unwrap();
@@ -190,10 +191,18 @@ fn branch_chains_grow_to_the_cap_reset_whole_and_read_back() {
         total.accumulate(&branch);
         roots.push((root, versions.clone()));
     }
-    // The root branch's chain: depth 1..8, refused at the cap, whole, then
-    // 1..8 again; whole branches (depth 0) appear exactly at the resets.
+    // The root branch's chain: depth 1..8, then at the cap a program against the
+    // whole branch at the chain's root (depth 1 again), then 2..8 again; no
+    // branch is stored whole after the initial table (#89).
     assert!(total.depth_capped >= 2, "{total:?}");
+    assert_eq!(total.rebased, total.depth_capped, "{total:?}");
     assert_eq!(total.work_exceeded, 0, "{total:?}");
+    assert_eq!(total.full_branches, 0, "{total:?}");
+    assert_eq!(total.depths[0], 0, "{total:?}");
+    assert_eq!(
+        total.trials, total.branches,
+        "one trial per branch: {total:?}"
+    );
     assert!(total.delta_branches >= 30, "{total:?}");
     for depth in 1..=8 {
         assert!(total.depths[depth] >= 2, "depth {depth}: {total:?}");

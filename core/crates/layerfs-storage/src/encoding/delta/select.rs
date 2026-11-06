@@ -4,12 +4,18 @@
 //! trial happens only when exactly one eligible candidate is acquired under the
 //! role's depth, work and memory policy, and the selection compares the complete
 //! framed record cost including the base identity. A candidate that is absent or
-//! ineligible selects FULL by policy, and so does one whose chain exceeds the
-//! work budgets: alone, which is judged from the chain's stored sizes before
-//! dependency reconstruction/authentication, or with the new object on it, which
-//! is judged once the candidate is acquired and authenticated. A codec,
-//! allocation or read failure is returned as a failure and never becomes an
-//! alternative representation.
+//! ineligible selects FULL by policy.
+//!
+//! A candidate whose chain is at the role's depth cap, or would exceed a work
+//! budget with the new object on it (judged from the chain's stored sizes), is
+//! replaced by the FULL root of that chain (#89): the one trial runs against the
+//! root, so a chain that outgrows its limits restarts at depth one instead of
+//! storing FULL again. Only the base changes; every stored record is the PREFIX
+//! form a reader already accepts, under the same budgets. A base that is itself
+//! FULL and still does not fit stores FULL: alone, judged from its stored size
+//! before reconstruction, or with the new object on it, judged once it is
+//! acquired and authenticated. A codec, allocation or read failure is returned as
+//! a failure and never becomes an alternative representation.
 
 use std::collections::BTreeMap;
 
@@ -51,8 +57,13 @@ pub struct DeltaCounters {
     pub ineligible_candidates: u64,
     /// Candidates refused because the resulting chain would exceed its budget.
     pub work_exceeded: u64,
-    /// Candidates refused because their chain already reached the role's depth cap.
+    /// Candidates whose chain already reached the role's depth cap. Their chain
+    /// root is the base instead (`rebased`).
     pub depth_capped: u64,
+    /// Candidates replaced by the FULL root of their chain, because that chain
+    /// reached the depth cap or would exceed a work budget with the new object on
+    /// it (#89). The one trial runs against the root.
+    pub rebased: u64,
     /// Whole-file objects stored, by chain depth (FULL is 0).
     pub whole_file_depths: DepthHistogram,
     /// Chunk objects stored, by chain depth (FULL is 0).
@@ -80,6 +91,7 @@ impl DeltaCounters {
             (&mut self.ineligible_candidates, other.ineligible_candidates),
             (&mut self.work_exceeded, other.work_exceeded),
             (&mut self.depth_capped, other.depth_capped),
+            (&mut self.rebased, other.rebased),
         ] {
             *total = total.saturating_add(value);
         }
@@ -350,9 +362,11 @@ pub fn prepare_full(
 ///
 /// `advisory` is the caller's bounded, explicitly declared candidate list in
 /// preference order. A `WHOLE_FILE` object considers that list first and falls
-/// back to the admitted-FULL winner cache only when no listed candidate is
-/// acquired. A `CHUNK` object considers the first eligible listed candidate and
-/// never the cache: its correspondence is already known by the caller.
+/// back to the winner cache only when no listed candidate is acquired. The cache
+/// admits every FULL winner and every PREFIX winner whose base it proposed from
+/// an earlier Save (#88).
+/// A `CHUNK` object considers the first eligible listed candidate and never the
+/// cache: its correspondence is already known by the caller.
 ///
 /// `id` is the canonical bytes' identity, which the caller already holds on the
 /// finalized object it is admitting. Deriving it here instead would re-hash the
@@ -423,19 +437,23 @@ pub fn select(
         return Ok(full);
     }
     let raw = raw_payload(canonical, role)?;
+    // The ring's proposal and the payload's signature when the similarity ring
+    // proposed the candidate: such an object that wins as PREFIX may join the
+    // ring itself (#88).
+    let mut from_ring: Option<(ObjectId, [u64; 8])> = None;
     let candidate = match role {
         // The caller already knows the correspondence, so exactly the first
         // supplied candidate is considered - but only after the same eligibility
         // decision the whole-file lane applies. An absent or ineligible one
         // selects FULL by policy; it is never acquired and never fails the save.
         ObjectRole::Chunk => match advisory.first().copied() {
-            Some(id) => match probe(input, id, role, depth_cap)? {
+            Some(id) => match probe(input, id, role)? {
                 true => Some(id),
                 false => None,
             },
             None => None,
         },
-        _ => match acquisition(input, role, advisory, depth_cap)? {
+        _ => match acquisition(input, role, advisory)? {
             Some(id) => Some(id),
             // A payload no PREFIX record can beat asks the ring nothing: the
             // answer is FULL, as a trial would find (`prefix_cannot_win`).
@@ -443,10 +461,13 @@ pub fn select(
             None => {
                 let sig = prehashed.unwrap_or_else(|| signature(raw));
                 input.candidates.ensure_loaded(input.connection)?;
-                let found = input.candidates.find(id, &sig);
+                let found = input.candidates.propose(id, &sig);
                 match found {
-                    Some(id) => match probe(input, id, role, depth_cap)? {
-                        true => Some(id),
+                    Some(id) => match probe(input, id, role)? {
+                        true => {
+                            from_ring = Some((id, sig));
+                            Some(id)
+                        }
                         false => None,
                     },
                     None => None,
@@ -465,26 +486,25 @@ pub fn select(
         return Ok(full);
     };
     // Acquiring a base charges the work budgets for its whole chain, the base
-    // included, and fails the Save when they are exceeded. A base whose own chain
-    // cannot fit them is therefore refused from the stored sizes of its records,
-    // before dependency reconstruction/authentication, and stores FULL by policy.
-    let mut bases = ChainBases::new(input.packs);
-    let started = Instant::now();
-    let base_cost = input.depths.cost_of(
-        input.connection,
-        input.decode,
-        base_id,
-        |connection, workspace, location| bases.edge(connection, workspace, location),
-    );
-    SaveProfile::charge(&mut input.profile.resolve.cost_ns, started);
-    let base_cost = base_cost?.ok_or(StorageError::Integrity("selected base is not stored"))?;
+    // included, and fails the Save when they are exceeded. A candidate whose chain
+    // is at the depth cap or cannot take this object within them is replaced by its
+    // chain root, judged from the stored sizes of its records before any of it is
+    // reconstructed (#89). A FULL base that cannot fit them alone is refused from
+    // its stored size, before reconstruction/authentication, and stores FULL.
+    let base_cost = chain_cost(input, base_id)?;
+    let Some((base_id, base_cost)) =
+        trial_base(input, base_id, base_cost, canonical.len() as u64, depth_cap)?
+    else {
+        return refused_by_budget(input, id, role, raw, prehashed, full);
+    };
     if base_cost.canonical > input.capacities.chain_canonical_limit
         || base_cost.encoded > input.capacities.chain_encoded_limit
     {
         return refused_by_budget(input, id, role, raw, prehashed, full);
     }
     // Exactly one trial: the acquired base is read once, authenticated, and used
-    // for one prefix frame. Nothing here retries with another candidate.
+    // for one prefix frame. Nothing here retries with another candidate; a
+    // re-based selection never acquired the candidate it replaced.
     let base = acquire(input, base_id)?;
     // A dependency that could not be reconstructed is never created: the chain
     // budget covers the base chain *and* the dependent. Refusing here stores FULL
@@ -532,6 +552,20 @@ pub fn select(
         );
         input.counters.note_depth(role, depth);
         input.counters.prefix_selected = input.counters.prefix_selected.saturating_add(1);
+        if let (Some((proposal, sig)), PackLane::WholeFile) = (from_ring, lane) {
+            // A PREFIX winner the ring proposed a base for joins the ring when
+            // that proposal came from an earlier Save, so the next version at a
+            // new path finds this one rather than the first (#88). Proposals of
+            // this Save's own objects (an Init of similar files) admit nothing: a
+            // pending PREFIX winner would otherwise be proposed and sealed early,
+            // and the ring would fill with intermediate versions. A winner this
+            // Save admits is never proposed back to it (`Candidates::propose`).
+            // An object whose declared base was used never enters the ring.
+            input.candidates.ensure_loaded(input.connection)?;
+            if input.candidates.admitted_before_save(proposal) {
+                input.candidates.admit(id, sig, proposal);
+            }
+        }
         Ok(prefix)
     } else {
         input.counters.full_losses = input.counters.full_losses.saturating_add(1);
@@ -563,6 +597,87 @@ fn refused_by_budget(
     Ok(full)
 }
 
+/// Depth and work cost of a stored candidate's chain, from its records' sizes.
+fn chain_cost(input: &mut SelectInput<'_>, id: ObjectId) -> StorageResult<ChainCost> {
+    let mut bases = ChainBases::new(input.packs);
+    let started = Instant::now();
+    let cost = input.depths.cost_of(
+        input.connection,
+        input.decode,
+        id,
+        |connection, workspace, location| bases.edge(connection, workspace, location),
+    );
+    SaveProfile::charge(&mut input.profile.resolve.cost_ns, started);
+    cost?.ok_or(StorageError::Integrity("selected base is not stored"))
+}
+
+/// The base the one trial runs against, and its chain cost (#89).
+///
+/// The candidate itself when its chain is below the role's depth cap and can take
+/// a `target`-byte object within both work budgets; otherwise the FULL root of
+/// that chain. The budget test is the one acquisition applies afterwards, made
+/// here from the chain's stored sizes, so a candidate that will not fit is never
+/// reconstructed. A FULL candidate is its own root and is returned as it is, for
+/// the budget checks to decide. `None` stores FULL by policy: a root this Save's
+/// view does not see below the cap, which only a concurrent winner can cause.
+fn trial_base(
+    input: &mut SelectInput<'_>,
+    id: ObjectId,
+    cost: ChainCost,
+    target: u64,
+    depth_cap: u8,
+) -> StorageResult<Option<(ObjectId, ChainCost)>> {
+    let capped = cost.depth >= depth_cap;
+    if capped {
+        input.counters.depth_capped = input.counters.depth_capped.saturating_add(1);
+    }
+    let fits = cost.canonical.saturating_add(target) <= input.capacities.chain_canonical_limit
+        && cost.encoded.saturating_add(target) <= input.capacities.chain_encoded_limit;
+    if cost.depth == 0 || (fits && !capped) {
+        return Ok(Some((id, cost)));
+    }
+    let started = Instant::now();
+    let root = chain_root(input.connection, input.packs, input.decode, id);
+    SaveProfile::charge(&mut input.profile.resolve.cost_ns, started);
+    let root = root?.object_id;
+    let root_cost = chain_cost(input, root)?;
+    if root_cost.depth >= depth_cap {
+        return Ok(None);
+    }
+    input.counters.rebased = input.counters.rebased.saturating_add(1);
+    Ok(Some((root, root_cost)))
+}
+
+/// Location of the FULL record at the bottom of `id`'s stored chain.
+///
+/// The walk follows the bases the stored records name, through the caller's pack
+/// cache, as a read does, and is bounded by the profile maximum depth; a longer
+/// chain, a cycle or a base of another role is corrupt and is reported.
+pub(super) fn chain_root(
+    connection: &dyn Source,
+    packs: &mut crate::encoding::PackCache,
+    workspace: &mut DecompressionWorkspace,
+    id: ObjectId,
+) -> StorageResult<ObjectLocation> {
+    let mut bases = ChainBases::new(packs);
+    let mut location = connection
+        .location(id, i64::MAX)?
+        .ok_or(StorageError::Integrity("selected base is not stored"))?;
+    for _ in 0..=MAXIMUM_DELTA_MAX_DEPTH {
+        let Some(base) = bases.base_of(connection, workspace, &location)? else {
+            return Ok(location);
+        };
+        let next = connection
+            .base_location(base, i64::MAX)?
+            .ok_or(StorageError::ObjectMissing(base))?;
+        if next.role != location.role {
+            return Err(StorageError::Integrity("dependency role"));
+        }
+        location = next;
+    }
+    Err(StorageError::Integrity("stored dependency chain depth"))
+}
+
 /// Counts one record the encoder stored verbatim, read from its own tag.
 ///
 /// The count is taken where the record is made rather than inside the encoder, so
@@ -576,17 +691,13 @@ fn note_stored(profile: &mut SaveProfile, record: &EncodedRecord) {
     }
 }
 
-/// Decides one supplied candidate: present, of this role, and under the cap.
+/// Decides one supplied candidate: present and of this role.
 ///
 /// Every rejected candidate is counted, whether it was absent or present but
-/// ineligible; neither ever becomes a failure of the operation.
-fn probe(
-    input: &mut SelectInput<'_>,
-    id: ObjectId,
-    role: ObjectRole,
-    depth_cap: u8,
-) -> StorageResult<bool> {
-    if eligible(input, id, role, depth_cap)? {
+/// ineligible; neither ever becomes a failure of the operation. A candidate at
+/// the depth cap is eligible: selection re-bases it onto its chain root (#89).
+fn probe(input: &mut SelectInput<'_>, id: ObjectId, role: ObjectRole) -> StorageResult<bool> {
+    if eligible(input, id, role)? {
         return Ok(true);
     }
     input.counters.ineligible_candidates = input.counters.ineligible_candidates.saturating_add(1);
@@ -597,22 +708,16 @@ fn acquisition(
     input: &mut SelectInput<'_>,
     role: ObjectRole,
     advisory: &[ObjectId],
-    depth_cap: u8,
 ) -> StorageResult<Option<ObjectId>> {
     for id in advisory {
-        if probe(input, *id, role, depth_cap)? {
+        if probe(input, *id, role)? {
             return Ok(Some(*id));
         }
     }
     Ok(None)
 }
 
-fn eligible(
-    input: &mut SelectInput<'_>,
-    id: ObjectId,
-    role: ObjectRole,
-    depth_cap: u8,
-) -> StorageResult<bool> {
+fn eligible(input: &mut SelectInput<'_>, id: ObjectId, role: ObjectRole) -> StorageResult<bool> {
     let Some(location) = input.connection.location(id, i64::MAX)? else {
         input.counters.absent_candidates = input.counters.absent_candidates.saturating_add(1);
         return Ok(false);
@@ -629,13 +734,8 @@ fn eligible(
         |connection, workspace, location| bases.edge(connection, workspace, location),
     );
     SaveProfile::charge(&mut input.profile.resolve.eligible_ns, started);
-    let depth = depth?;
-    let Some(depth) = depth else {
+    if depth?.is_none() {
         input.counters.absent_candidates = input.counters.absent_candidates.saturating_add(1);
-        return Ok(false);
-    };
-    if depth >= depth_cap {
-        input.counters.depth_capped = input.counters.depth_capped.saturating_add(1);
         return Ok(false);
     }
     Ok(true)

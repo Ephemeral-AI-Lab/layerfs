@@ -34,6 +34,12 @@ pub trait StoreFile {
     ) -> Result<crate::SealedStore, PersistenceError>;
     /// The history heads digest of this Store's own file.
     fn heads_digest(&self) -> Result<[u8; 32], PersistenceError>;
+    /// One `wal_checkpoint(TRUNCATE)` of this live Store when its last
+    /// caller in the process releases it (#86); the session stays open.
+    /// `Ok(true)`: the write-ahead log is empty. `Ok(false)`: it could not
+    /// complete now (a held lane, another process's writer, a reader in the
+    /// log) and is left for the last close; it is never retried.
+    fn checkpoint(&self) -> Result<bool, PersistenceError>;
 }
 impl StoreFile for StorageProvider {
     fn snapshot(
@@ -45,6 +51,9 @@ impl StoreFile for StorageProvider {
     }
     fn heads_digest(&self) -> Result<[u8; 32], PersistenceError> {
         crate::heads_digest(&self.session.path)
+    }
+    fn checkpoint(&self) -> Result<bool, PersistenceError> {
+        self.session.checkpoint_idle().map_err(Into::into)
     }
 }
 /// One Store session's handles, SQLite or PostgreSQL.

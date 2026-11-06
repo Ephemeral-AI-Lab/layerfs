@@ -322,12 +322,22 @@ candidate for file-payload delta encoding.
 
 Whole-file selection considers declared advisory predecessors first. When no eligible advisory candidate
 is selected, it can consult the bounded content-signature index of admitted
-independent winners. This allows proposals based on content similarity, not only
-on a caller's explicit predecessor identity.
+winners: every independent winner, and every PREFIX winner whose base the index
+proposed from an entry an earlier Save admitted (#88), so the next version of a
+file at a new path finds the newest such version rather than the first. A
+proposal of the same Save's own objects admits nothing, so an Init of many
+similar files proposes, seals and records only independent winners, as before.
+A winner a Save admits is never proposed back to that Save: the index answers
+it with the earlier-Save entry it was stored against, so no unpublished object
+is proposed and sealed early (`Candidates::propose`; at most 1,024 admissions
+per Save). An object stored against its declared base never enters the index.
+This allows proposals based on content similarity, not only on a caller's
+explicit predecessor identity.
 
 Chunk selection considers the first supplied advisory candidate under its
-eligibility checks (same role, located, base depth strictly below the target role's
-cap); it does not search that whole-file similarity index. With no
+eligibility checks (same role, located); a candidate whose chain is at the role's
+depth cap is replaced by that chain's root, as below. It does not search that
+whole-file similarity index. With no
 advisory chunk correspondence, exact CAS reuse still works, but new chunks do
 not automatically receive a similarity-index delta base.
 
@@ -337,7 +347,7 @@ chunk the base payload covering its byte range:
 | Producer | Base offered | Source |
 | --- | --- | --- |
 | Localized edit of a file the base holds (#352 F-005) | the same file's base mapping, through the edit's `Aligner` | [edit apply](../../core/crates/layerfs-content/src/file/edit/apply.rs) |
-| Workspace Commit of a fresh file that a rename put in place of another (#352 F-063) | the replaced file, through the same `Aligner`, via `construct_runs_with_predecessor` | [run constructor](../../core/crates/layerfs-content/src/file/construction/runs.rs), [captured file](../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
+| Workspace Commit of a fresh file that a rename put in place of another (#352 F-063), or that took a path where the base held a file (#88) | the replaced file, through the same `Aligner`, via `construct_runs_with_predecessor` | [run constructor](../../core/crates/layerfs-content/src/file/construction/runs.rs), [captured file](../../engine/crates/layerfs-workspace/src/construction/captured/owner.rs) |
 | `construct_bytes_with_predecessor` with a caller's base | the supplied root, positionally | [byte constructor](../../core/crates/layerfs-content/src/file/construction/bytes.rs) |
 
 The F-063 route exists because git, editors and package managers save by
@@ -345,7 +355,29 @@ writing a new file and renaming it over the old one: the result is a new
 inode, so the edit route never sees it. The rename records the replaced file in
 the Workspace overlay (`fs_predecessor`); a chain of renames before one Commit
 ends at the file the base holds. A predecessor the base no longer holds offers
-nothing. Only fresh files at or above the chunking cutoff ask for one.
+nothing. Every fresh live file asks for one (#88; F-063 asked only at or above
+the chunking cutoff).
+
+A fresh file with no recorded predecessor is offered the regular file the base
+held at its path (#88): `rm f` then writing `f`, as `git checkout` does,
+replaces a file without a rename. Commit's names pass asks the base, for each
+captured name bound over a binding the lower view held, which file it bound
+there (one base name lookup per such name, at most 65,536 per Commit; past
+that a file gets no hint).
+
+**Whole-file results take the predecessor whole.** A result below the
+chunking cutoff has no chunks to align, so the constructor declares the base
+root itself as the object's explicit advisory predecessor
+(`AdvisoryPredecessors::explicit`, as the whole-file edit route does) without
+reading it. Storage probes it like any declared whole-file candidate: a base of
+another role (a file that shrank below the cutoff) is ineligible and selection
+falls back to the similarity index; one at the depth cap is re-based onto its
+chain root (#89). Before #88 such a
+file had no declared base and every version found the first stored version
+through the index, so each delta covered every edit since.
+
+The similarity index breaks an equal-overlap tie toward the newer entry
+(#88), so of several versions of one content the latest admitted is proposed.
 
 ```text
   prepare independent FULL/STORED alternative
@@ -361,7 +393,12 @@ nothing. Only fresh files at or above the chunking cutoff ask for one.
                        |
                     eligible
                        |
-         base chain alone exceeds budget? --> independent result
+     candidate chain at the depth cap, or base chain
+     + target over a budget (stored sizes)? --yes--> base := FULL root
+                       |                              of that chain (#89)
+                       |  <---------------------------------+
+                       |
+       FULL base alone exceeds budget? --> independent result
                        |
              acquire/authenticate base chain
                        |
@@ -377,6 +414,25 @@ nothing. Only fresh files at or above the chunking cutoff ask for one.
                  |                                  |
              store PREFIX                    store independent
 ```
+
+**Chain-root re-base (#89).** A chain that reaches its limits does not restart
+with a new independent record. When the candidate's chain is at the role's depth
+cap, or the candidate's chain plus the target would exceed a work budget (judged
+from the stored sizes of the chain's records, the same sums acquisition charges),
+the base becomes the independent (FULL) record at the bottom of that chain. The
+candidate itself is then neither reconstructed nor authenticated; the root is,
+and the one PREFIX trial runs against it, so the dependent restarts at depth one.
+Only the base choice changes: the record is the ordinary PREFIX form, the root
+plus the target is held to the same budgets, and a reader of any earlier Store
+reads it unchanged. A candidate that is itself independent has no other root, so
+it still yields an independent result when it does not fit. The root is found by
+walking the stored chain through the selection's own view (located bases,
+including this Save's registered packs), exactly as the cost walk does. A root
+grows older as the file drifts from it; once a PREFIX record against it no longer
+beats the independent record, the comparison stores the independent record and
+that becomes the next chain's root. `DeltaCounters.rebased` counts re-based
+selections; `depth_capped` counts candidates found at the cap (all re-based), and
+`work_exceeded` counts only the budget refusals that stored an independent record.
 
 The comparison is encoded **record length**, not a guarantee of lower CPU,
 lower read latency, or fewer transactions. Ties retain the independent record.
@@ -423,6 +479,13 @@ program only when program bytes are strictly smaller than FULL bytes; a tie keep
 FULL. Metadata match-budget exhaustion is a declared no-program selection, while
 actual provider/format failures propagate. Metadata depth defaults to eight,
 with its own chain budgets; payload chain limits must not be substituted for them.
+An inode-table branch may likewise be stored as a COPY/INSERT program against the
+branch it replaces (#360 item 3). When that predecessor's chain is at the metadata
+depth cap, or with the new branch would exceed the metadata chain budgets, the
+program is built against the whole branch at the root of that chain instead
+(#89), so the branch chain restarts at depth one rather than storing the branch
+whole every ninth Commit; the root must fit the same budgets
+([branch selection](../../core/crates/layerfs-storage/src/encoding/delta/branch.rs)).
 Value pooling, full-object CAS, and leaf delta encoding are three distinct reuse
 mechanisms. This guide's FULL/PREFIX selection diagram describes payloads only.
 
@@ -483,14 +546,27 @@ first. Payload selection conservatively tests:
 
 The second test adds target canonical length, not a predicted delta frame size.
 This bounds prospective dependency work before storing a dependent. Both tests are
-applied once the base is acquired and authenticated. A base whose own chain already
-exceeds either budget is decided earlier, from the stored sizes of its records and
-before dependency reconstruction/authentication, because reading it as a dependency
-charges the same budgets and fails when the chain alone exceeds them: such a base is
-an independent result, not a failed Save, and is neither reconstructed nor
-authenticated; with budgets scaled to the cutoff a Store's own producer never
-stores such a chain. A base whose chain fits is authenticated first, so a corrupt one
-fails the Save even when the dependent then tips the chain over. Reader also
+first made from the stored sizes of the candidate chain's records: a candidate that
+is itself a delta and does not fit is replaced by its chain's independent root
+(#89, section 5.3), which is never more work than the candidate. Both tests are
+then applied again once the chosen base is acquired and authenticated. An
+independent base whose own record already exceeds either budget is decided
+earlier, from its stored size and before reconstruction/authentication, because
+reading it as a dependency charges the same budgets and fails when it alone exceeds
+them: such a base is an independent result, not a failed Save, and is neither
+reconstructed nor authenticated; with budgets scaled to the cutoff a Store's own
+producer never stores such a record. An independent base that fits alone is
+authenticated first, so a corrupt one fails the Save even when the dependent then
+tips the chain over.
+
+Re-basing trades read work for storage: a version written after a re-base reads
+its root plus the deltas since, so the average reconstruction grows while the
+maximum stays inside the same budgets. A diagnostic over the Storage save path
+with the in-memory fixture, on the storage suite's in-place edit sequence (M03: 100
+text files of 16–64 KiB, 20 edits of 1% of their lines, one Save per Commit),
+measured 2,585,612 → 1,201,562 published pack bytes for the 20 edit Commits, final
+versions reconstructing 212,662 → 260,555 canonical bytes on average (the object
+included) and at most 515,583 → 520,575, inside the 524,288-byte budget. Reader also
 enforces its own declared chain limits. These are dependency-work constraints,
 not a blanket 512 KiB maximum on every standalone FULL object; the larger canonical
 object limit is a separate bound. Caches can avoid some

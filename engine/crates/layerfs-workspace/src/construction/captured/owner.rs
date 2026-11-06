@@ -171,9 +171,10 @@ impl<'a, P: OverlayCapturedRuns + OverlayOperationRecords + ?Sized> CapturedFile
     /// original custody, as `construct` does.
     ///
     /// `predecessor` is the file a rename put this one in place of (#352
-    /// F-063). When the base holds it as a regular file, its chunks are
-    /// offered as the new chunks' delta bases; a predecessor the base no
-    /// longer holds, or holds as another kind, offers nothing.
+    /// F-063), or the file the base held at its path (#88). When the base
+    /// holds it as a regular file, its chunks are offered as the new chunks'
+    /// delta bases, or its root as a whole-file result's; a predecessor the
+    /// base no longer holds, or holds as another kind, offers nothing.
     #[allow(clippy::too_many_arguments)]
     pub fn construct_new(
         workspace: &Workspace,

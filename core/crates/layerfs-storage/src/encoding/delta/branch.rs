@@ -2,20 +2,24 @@
 //! against its predecessor (#360 item 3).
 //!
 //! The candidate is the first advisory predecessor the construction carries (the
-//! page this branch replaces). It is used only when it is a stored
-//! `InodeBranch` whose chain is below the metadata depth cap and whose chain
-//! work plus this branch stays within the metadata chain budgets. Exactly one
-//! trial runs, with the pooled producer and its match budget; the program is
-//! kept only when it is shorter than the whole record. Every refusal stores the
-//! branch whole, which is what every Store before this form holds.
+//! page this branch replaces), when it is a stored `InodeBranch`. Its chain must
+//! be below the metadata depth cap and, with this branch on it, within the
+//! metadata chain budgets; otherwise the base is the whole branch at the root of
+//! that chain (#89), so a chain at its limits restarts at depth one instead of
+//! storing the branch whole. The root must fit the budgets in the same way.
+//! Exactly one trial runs, with the pooled producer and its match budget; the
+//! program is kept only when it is shorter than the whole record. Every refusal
+//! stores the branch whole, which is what every Store before this form holds.
 
 use layerfs_content::{ObjectId, ObjectRole};
 
-use crate::encoding::delta::select::{note_depth, SelectInput};
+use crate::encoding::delta::select::{self, note_depth, SelectInput};
 use crate::encoding::full::EncodedRecord;
-use crate::encoding::pool::delta;
+use crate::encoding::pool::{branch::BranchChain, delta};
 use crate::error::StorageResult;
+use crate::location::ObjectLocation;
 use crate::pack::layout::PackLane;
+use crate::policy::StorageCapacities;
 use crate::save::SaveProfile;
 use std::time::Instant;
 
@@ -30,10 +34,12 @@ pub struct BranchCounters {
     pub full_branches: u64,
     /// Programs built.
     pub trials: u64,
-    /// Predecessors refused at the depth cap.
+    /// Predecessors whose chain reached the depth cap; their root is the base.
     pub depth_capped: u64,
-    /// Predecessors refused for the chain budgets.
+    /// Bases refused for the chain budgets.
     pub work_exceeded: u64,
+    /// Predecessors replaced by the whole branch at the root of their chain (#89).
+    pub rebased: u64,
     /// Branches stored, by chain depth (whole is 0).
     pub depths: super::select::DepthHistogram,
 }
@@ -48,6 +54,7 @@ impl BranchCounters {
             (&mut self.trials, other.trials),
             (&mut self.depth_capped, other.depth_capped),
             (&mut self.work_exceeded, other.work_exceeded),
+            (&mut self.rebased, other.rebased),
         ] {
             *total = total.saturating_add(value);
         }
@@ -88,31 +95,32 @@ fn trial(
         return Ok(None);
     }
     let capacities = input.capacities;
-    let started = Instant::now();
-    let mut groups = crate::encoding::GroupCache::new();
-    let base = input.pool.branch_canonical_with_caches(
-        input.connection,
-        capacities,
-        i64::MAX,
-        input.decode,
-        location,
-        Some(crate::encoding::pool::read::PooledCaches {
-            encoded: input.packs,
-            decoded: &mut groups,
-        }),
-    );
-    SaveProfile::charge(&mut input.profile.resolve.acquire_ns, started);
-    let (base, chain) = base?;
-    let branch = &mut input.counters.branch;
-    if chain.depth >= capacities.metadata_delta_max_depth {
+    let mut base_id = base_id;
+    let (mut base, mut chain) = acquire(input, location)?;
+    let capped = chain.depth >= capacities.metadata_delta_max_depth;
+    if capped {
+        let branch = &mut input.counters.branch;
         branch.depth_capped = branch.depth_capped.saturating_add(1);
+    }
+    if (capped || !fits(capacities, chain, canonical, full)) && chain.depth > 0 {
+        // The predecessor's chain is at its limits: the one trial runs against the
+        // whole branch at its root instead (#89).
+        let started = Instant::now();
+        let root = select::chain_root(input.connection, input.packs, input.decode, base_id);
+        SaveProfile::charge(&mut input.profile.resolve.cost_ns, started);
+        let root = root?;
+        (base, chain) = acquire(input, root)?;
+        if chain.depth != 0 {
+            return Err(crate::error::StorageError::Integrity("branch chain root"));
+        }
+        base_id = root.object_id;
+        let branch = &mut input.counters.branch;
+        branch.rebased = branch.rebased.saturating_add(1);
+    } else if capped {
         return Ok(None);
     }
-    if chain.canonical.saturating_add(canonical.len() as u64)
-        > capacities.metadata_chain_canonical_limit
-        || chain.encoded.saturating_add(full.record.len() as u64)
-            > capacities.metadata_chain_encoded_limit
-    {
+    let branch = &mut input.counters.branch;
+    if !fits(capacities, chain, canonical, full) {
         branch.work_exceeded = branch.work_exceeded.saturating_add(1);
         return Ok(None);
     }
@@ -136,4 +144,39 @@ fn trial(
         raw_length: canonical.len(),
         base: Some(base_id),
     }))
+}
+
+/// The authenticated page of one stored branch and the chain work it charged.
+fn acquire(
+    input: &mut SelectInput<'_>,
+    location: ObjectLocation,
+) -> StorageResult<(Vec<u8>, BranchChain)> {
+    let started = Instant::now();
+    let mut groups = crate::encoding::GroupCache::new();
+    let base = input.pool.branch_canonical_with_caches(
+        input.connection,
+        input.capacities,
+        i64::MAX,
+        input.decode,
+        location,
+        Some(crate::encoding::pool::read::PooledCaches {
+            encoded: input.packs,
+            decoded: &mut groups,
+        }),
+    );
+    SaveProfile::charge(&mut input.profile.resolve.acquire_ns, started);
+    base
+}
+
+/// True when `chain` with this branch on it stays within the metadata budgets.
+fn fits(
+    capacities: &StorageCapacities,
+    chain: BranchChain,
+    canonical: &[u8],
+    full: &EncodedRecord,
+) -> bool {
+    chain.canonical.saturating_add(canonical.len() as u64)
+        <= capacities.metadata_chain_canonical_limit
+        && chain.encoded.saturating_add(full.record.len() as u64)
+            <= capacities.metadata_chain_encoded_limit
 }

@@ -230,7 +230,7 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Attempt<'_,
         let initial = begin(shared, facts)?;
         // Normalize names: one header per changed parent that survives.
         let started = Instant::now();
-        let headers = names(self.provider, shared, facts)?;
+        let (headers, same) = names(self.provider, shared, facts, &base)?;
         elapsed(shared, started, |work| &mut work.normalize_ns);
         // Normalize inodes: typed values and dense fresh ranks, one file at a
         // time through the existing changed-file constructor.
@@ -249,7 +249,7 @@ impl<P: OverlayCapturedNamespace + OverlayOperationRecords + ?Sized> Attempt<'_,
         let started = Instant::now();
         let mut timed = Timed { consumer, ns: 0 };
         let recorded = shared.borrow().record_ns;
-        let totals = values(&builder, &mut timed, timing, headers);
+        let totals = values(&builder, &mut timed, timing, headers, &same);
         elapsed(shared, started, |work| &mut work.values_ns);
         {
             let mut owner = shared.borrow_mut();
