@@ -530,9 +530,12 @@ tips the chain over.
 
 Re-basing trades read work for storage: a version written after a re-base reads
 its root plus the deltas since, so the average reconstruction grows while the
-maximum stays inside the same budgets. On the 64 KiB-class in-place edit sequence
-of the storage suite (M03) an offline model gave edit payload 2.78 → 0.90 MB and
-average final-version reconstruction 197 → 254 KiB with the maximum ≤ 512 KiB. Reader also
+maximum stays inside the same budgets. A diagnostic over the Storage save path
+with the in-memory fixture, on the storage suite's in-place edit sequence (M03: 100
+text files of 16–64 KiB, 20 edits of 1% of their lines, one Save per Commit),
+measured 2,585,612 → 1,201,562 published pack bytes for the 20 edit Commits, final
+versions reconstructing 212,662 → 260,555 canonical bytes on average (the object
+included) and at most 515,583 → 520,575, inside the 524,288-byte budget. Reader also
 enforces its own declared chain limits. These are dependency-work constraints,
 not a blanket 512 KiB maximum on every standalone FULL object; the larger canonical
 object limit is a separate bound. Caches can avoid some
