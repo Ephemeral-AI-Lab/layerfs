@@ -285,12 +285,12 @@ For Rust projects, follow the [Cargo workflow](references/rules/cargo.md).
 
 ## Calls
 
-61 calls in nine families. Each family's page has arguments, results, refusals
+62 calls in nine families. Each family's page has arguments, results, refusals
 and examples.
 
 | Family | Calls |
 | --- | --- |
-| [project](references/methods/project.md) | `init(project, folder, { timeout, on_progress })`, `list(store?, { page_size, page_pos })`, `get(project)`, `remove(project)` |
+| [project](references/methods/project.md) | `init(project, folder, { timeout, on_progress })`, `list(store?, { page_size, page_pos })`, `get(project)`, `export(project, destination, { branch, on_progress })`, `remove(project)` |
 | [branch](references/methods/branch.md) | `list(project)`, `get(project, branch)`, `fork(project, name, from_branch, from_commit?)`, `merge(project, name, a, b, { message, units })`, `publish(project, branch, commit?)`, `diff(project, from_branch, to_branch, { paths_only, page_size, page_pos, cursor })` |
 | [commit](references/methods/commit.md) | `list(project, branch)`, `get(project, branch, commit)`, `diff(project, from_commit, to_commit, { paths_only, … })` |
 | [file](references/methods/file.md) | reads `read`, `stat`, `list`, `glob`, `grep`, `blame`, `diff`; writes `write`, `edit`, `rm`, `mkdir`, `mv`, `cp`, `apply` |

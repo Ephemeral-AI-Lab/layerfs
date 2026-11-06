@@ -70,6 +70,7 @@ be served at once; each connection still carries one request.
 | `sandbox.host` | a Sandbox or Workspace host operation on the machine's own `native` | [`sandbox/route.rs`](../../../../api/crates/layerfs-control/src/sandbox/route.rs) `in_worker` |
 | `project.stage` | writes or discards one part of a caller's folder copy | [`project/staged.rs`](../../../../api/crates/layerfs-control/src/project/staged.rs) |
 | `project.init` | adds the staged copy as a new project | [`project/init.rs`](../../../../api/crates/layerfs-control/src/project/init.rs) |
+| `project.export` | pins one Branch snapshot and streams bounded tree records to the caller | [`project/export.rs`](../../../../api/crates/layerfs-control/src/project/export.rs) |
 | `project.remove` | drops one project from a Store under the root | [`store/identity.rs`](../../../../api/crates/layerfs-control/src/store/identity.rs) |
 | anything else | `InvalidInput` "the worker has no operation" | `server.rs` |
 

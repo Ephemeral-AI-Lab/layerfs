@@ -57,6 +57,7 @@ unused (`IDLE`), never while a call runs on it.
 | Call | Caller's process does | A worker does (when the Store's machine is not local) | Source |
 | --- | --- | --- | --- |
 | `project.init` | checks, copies the folder to the machine | `project.stage` (each part), then `project.init` | [`project/family.rs`](../../../../api/crates/layerfs-control/src/project/family.rs), [`project/send.rs`](../../../../api/crates/layerfs-control/src/project/send.rs) |
+| `project.export` | destination checks, local staging and atomic rename (`LocalWriter`) | `project.export` (streams pinned tree records back) | [`project/export.rs`](../../../../api/crates/layerfs-control/src/project/export.rs) |
 | `project.remove` | record and lock work | `project.remove` | `project/family.rs` |
 | `store.push`, `store.pull` | phases, records, locks | `store.file` steps on the source and target machine | [`store/transfer/phases.rs`](../../../../api/crates/layerfs-control/src/store/transfer/phases.rs) |
 | `store.remove` | records and locks | `store.file` step `remove` | [`store/remove.rs`](../../../../api/crates/layerfs-control/src/store/remove.rs) |
