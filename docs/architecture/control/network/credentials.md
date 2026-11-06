@@ -89,7 +89,7 @@ the machine and the host it tried, never the URL (`reach_check` in
 | `Debug` of the daemon setup | `DaemonStore` prints `url` as `[redacted]`; `LaunchRequest` prints only `config_bytes`. | [`store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs), [`types/options.rs`](../../../../control/crates/layerfs-isolation/src/types/options.rs) |
 | `Debug` of a parsed URL | `PostgresUrl` has no `Debug`. | [`postgres_url.rs`](../../../../control/crates/layerfs-isolation/src/postgres_url.rs) |
 | Reach and forward errors | Messages name the platform, machine and reason only. | [`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs) |
-| Worker trace | A connection trace records the worker's address, the operation and timing. | `send` in [`machine/worker/client.rs`](../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| Worker trace | A connection trace records the worker's address, the operation and timing. | `send` in [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | Container command line | The daemon runs `--config /layerfs-local/config/daemon.setup`; the setup is not in `Env` or `Cmd`. | `encode` in [`backend/docker/create.rs`](../../../../control/crates/layerfs-isolation/src/backend/docker/create.rs) |
 | Namespaces init spec | `HelperSpec` names only paths, the cgroup and binds; the helper never reads the setup file. | [`helper_spec.rs`](../../../../control/crates/layerfs-isolation/src/helper_spec.rs) |
 

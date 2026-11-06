@@ -15,9 +15,7 @@
 //! checked here. Create, close and a machine with no forward use the
 //! worker as before.
 use super::record::SandboxRecord;
-use crate::common::context::Context;
 use crate::common::lease;
-use crate::machine::worker::Unreached;
 use crate::sandbox::registry::{self, SandboxState, SANDBOXES};
 use crate::sandbox::{dispatch, files};
 use crate::store::call::store_call;
@@ -25,9 +23,11 @@ use crate::store::resolve::{self, Target};
 use crate::workspace::{serve, unmount_guard};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId};
+use layerfs_home::context::Context;
 use layerfs_home::helpers;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_machine::worker::Unreached;
 use std::net::SocketAddr;
 use std::path::Path;
 
@@ -234,17 +234,17 @@ fn carried(
     endpoint: SocketAddr,
 ) -> Result<Option<(SocketAddr, Option<u32>)>> {
     use layerfs_platform::{Code, Platform};
-    let record = crate::machine::record::MachineRecord::of(home, machine)?;
+    let record = layerfs_machine::record::MachineRecord::of(home, machine)?;
     // a docker Sandbox publishes its daemon's port on the host's loopback,
     // which this host reaches as it is (macOS through Docker Desktop)
     if record.platform()? == Platform::Docker {
         return Ok(Some((endpoint, None)));
     }
-    let spec = crate::machine::machine_spec(home, &crate::migrate::open(home)?.id, &record)?;
+    let spec = layerfs_machine::machine_spec(home, &crate::migrate::open(home)?.id, &record)?;
     match layerfs_platform::forward(&spec, endpoint.port()) {
         Ok(forward) => Ok(Some((forward.address, forward.pid))),
         Err(error) if error.code == Code::Unsupported => Ok(None),
-        Err(error) => Err(crate::machine::machine_refusal(error)),
+        Err(error) => Err(layerfs_machine::machine_refusal(error)),
     }
 }
 
@@ -272,8 +272,8 @@ fn end(home: &Path, machine: &str, daemon: &SdkValue) {
         let Some(address) = forward_of(daemon) else {
             return;
         };
-        let spec = crate::machine::record::MachineRecord::of(home, machine).and_then(|record| {
-            crate::machine::machine_spec(home, &crate::migrate::open(home)?.id, &record)
+        let spec = layerfs_machine::record::MachineRecord::of(home, machine).and_then(|record| {
+            layerfs_machine::machine_spec(home, &crate::migrate::open(home)?.id, &record)
         });
         if let Ok(spec) = spec {
             let forward = layerfs_platform::Forward {

@@ -99,7 +99,7 @@ an intent. See the [routing table](../../../control/routing/routing-table.md) an
 | `InvalidInput` | bad name; folder scope | no | [`names.rs`](../../../../../control/crates/layerfs-home/src/names.rs), [`calls/scope.rs`](../../../../../control/crates/layerfs-control/src/calls/scope.rs) |
 | `NoSuchSandbox` | no record of that name | no | [`sandbox/family.rs`](../../../../../control/crates/layerfs-control/src/sandbox/family.rs) |
 | `Busy`, `StaleSandbox` | a forwarded daemon admits no connection in time; a saved daemon is not `ControlReady` | no | [`daemon/pool.rs`](../../../../../control/crates/layerfs-control/src/daemon/pool.rs) |
-| `Unknown` | **the worker's answer was lost after the request was sent; harmless for a read, but the answer is missing** | **yes (no effect expected)** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **the worker's answer was lost after the request was sent; harmless for a read, but the answer is missing** | **yes (no effect expected)** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | `Failed` | the daemon's list failed or was not a record | no effect (a read) | [`sandbox/dispatch.rs`](../../../../../control/crates/layerfs-control/src/sandbox/dispatch.rs) |
 
 A machine that is down is not an error here: it is `down_reason`. A

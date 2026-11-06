@@ -3,7 +3,7 @@
 //! refused before a large body is read; reads are bounded in time; a
 //! refusal before the request was sent is a plain refusal, not `Unknown`.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::machine::worker::{self, read_frame_within, write_frame, Endpoint, MAX_HELLO};
+use layerfs_machine::worker::{self, read_frame_within, write_frame, Endpoint, MAX_HELLO};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::time::{Duration, Instant};
@@ -20,7 +20,9 @@ fn worker(tag: &str, secret: &str) -> (Endpoint, std::path::PathBuf) {
     let address = listener.local_addr().unwrap();
     let dir = root(tag);
     let (secret_owned, served) = (secret.to_owned(), dir.clone());
-    std::thread::spawn(move || worker::serve(listener, secret_owned, served));
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, secret_owned, served)
+    });
     let endpoint = Endpoint {
         address,
         secret: secret.to_owned(),

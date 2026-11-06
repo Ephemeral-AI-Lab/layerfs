@@ -100,7 +100,7 @@ worker (`store.call`), with nothing started. See the
 | `Unavailable` | the Store's worker is not recorded or does not answer; an unreachable PostgreSQL server | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
 | `NoSuchPath`, `NotFile`, `IsDirectory` | the path is missing or not a regular file | no | [`read/snapshot.rs`](../../../../../engine/crates/layerfs-store-service/src/read/snapshot.rs) |
 | `Binary` | the file is not text | no | [`read/window.rs`](../../../../../engine/crates/layerfs-store-service/src/read/window.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 To read a whole file, call again with `start_line: next_line` until `next_line` is null.
 

@@ -59,7 +59,7 @@ Sandboxes, project to its Sandboxes) are derived by
 [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs),
 never stored. `machine/native/` and `machine/docker/` exist from the first
 call and are never removed (`ensure_built_ins` in
-[`machine/spec.rs`](../../../../control/crates/layerfs-control/src/machine/spec.rs)).
+[`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs)).
 
 A machine's worker keeps the same paths under its own root (the machine's
 `/layerfs/data`), but that root is not a home: it is never converted, has no
@@ -109,7 +109,7 @@ not the owner ([`common/lease.rs`](../../../../control/crates/layerfs-control/sr
 | Lock or file | Guards | Wait | Source |
 | --- | --- | --- | --- |
 | `layerfs.lock` | record writes, name claims, Sandbox-name uniqueness | 120 s, then `Unavailable` | [`home/lock.rs`](../../../../control/crates/layerfs-home/src/home/lock.rs) |
-| `machine/<m>/start.lock` | a start, stop, create or remove | 600 s | [`machine/endpoint.rs`](../../../../control/crates/layerfs-control/src/machine/endpoint.rs) |
+| `machine/<m>/start.lock` | a start, stop, create or remove | 600 s | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | `store/<s>/lock` | leases, `op` and phase writes, the record | 120 s | [`home/entity_lock.rs`](../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
 | `sandbox/<n>/lock` | the Sandbox and Workspace records | 120 s | [`sandbox/record.rs`](../../../../control/crates/layerfs-control/src/sandbox/record.rs) |
 | `store/<s>/open/<pid>` | a lease: this process uses the Store | taken under the Store lock | [`common/lease.rs`](../../../../control/crates/layerfs-control/src/common/lease.rs) |

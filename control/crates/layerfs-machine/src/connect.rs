@@ -4,15 +4,16 @@ use super::create::{finish, new_name};
 use super::record::{MachineRecord, CONNECT};
 use super::spec::{self as record, refusal, update as update_record};
 use super::status::home_id;
-use crate::common::context::Context;
+use crate::Related;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::context::Context;
 use layerfs_home::home::{self, lock, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_platform::{self as adapters, Platform};
 
 /// `machine.connect(name, host, { user, port, identity, known_hosts, root })`.
-pub fn connect(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+pub fn connect(context: &mut Context<'_>, args: &SdkValue, related: Related) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("").to_owned();
     let host = args.get_text("host").unwrap_or("");
@@ -107,5 +108,5 @@ pub fn connect(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         }
         update_record(&home, &name, |r| r.with_host_id(&identity).with_op(&op))?;
     }
-    finish(&home, &name, op, adapters::connect(&spec, &bundle))
+    finish(&home, &name, op, adapters::connect(&spec, &bundle), related)
 }

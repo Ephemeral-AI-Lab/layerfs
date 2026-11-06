@@ -86,7 +86,7 @@ Under a folder scope, `mount` takes only `main`, mounted as
 | `StaleSandbox` | a saved daemon that is not `ControlReady` | [`daemon/pool.rs`](../../../../../control/crates/layerfs-control/src/daemon/pool.rs) |
 | `TooLarge` | a request over one control record | [`daemon/call.rs`](../../../../../control/crates/layerfs-control/src/daemon/call.rs) |
 | `Unavailable` | the machine's worker is not recorded or does not answer | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
-| `Unknown` | **uncertain:** the worker's answer was lost after the request was sent | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **uncertain:** the worker's answer was lost after the request was sent | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | `Failed` | a daemon exchange that failed; the message carries the original `OperationFailure`, whose `attempted` flag says the request may have had effects (**may be uncertain**) | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs), [`daemon/failure.rs`](../../../../../control/crates/layerfs-control/src/daemon/failure.rs) |
 
 A daemon control refusal keeps its own code (`values::refusal`); any other

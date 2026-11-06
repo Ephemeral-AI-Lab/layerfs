@@ -25,9 +25,9 @@ use super::create::create;
 use super::get::get;
 use super::list::list;
 use super::record::SandboxRecord;
-use crate::common::context::Context;
 use crate::inventory;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::context::Context;
 use layerfs_home::outcome::{refused, Outcome};
 use std::path::Path;
 

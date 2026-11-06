@@ -100,7 +100,7 @@ side is `main`, else `a`'s base. See the
 | `HeadMoved` | the catalog moved under the publish | no | same, [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
 | `Failed` | a Store without merge scratch (`BackendUnavailable`); other failures | no | [`store/open.rs`](../../../../../engine/crates/layerfs-store-service/src/store/open.rs) |
-| `Unknown` | **the worker's answer was lost, or the publish outcome is unknown** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **the worker's answer was lost, or the publish outcome is unknown** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After `Unknown`**, read [branch.get](get.md) for `name` before merging
 again.

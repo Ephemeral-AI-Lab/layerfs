@@ -77,7 +77,7 @@ read budget `REPLY_BUDGET` (48 KiB) and reports `has_more`
 | `Failed` | a page position that does not move on | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
 | `Busy`, `Unresolved` | the Store's record holds another operation's `op` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
 | `Unavailable` | the Store's worker is not recorded or does not answer | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
-| `Unknown` | **uncertain:** a worker's answer was lost | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **uncertain:** a worker's answer was lost | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 These calls only read, so an `Unknown` here leaves no Store change behind.
 LayerFS does not resend it. See

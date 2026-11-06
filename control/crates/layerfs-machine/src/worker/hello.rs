@@ -141,13 +141,13 @@ pub fn replace_with(machine: &str) -> String {
 }
 
 /// The hash `bundle.json` in `dir` names, if there is one.
-pub(crate) fn sealed_hash(dir: &Path) -> Result<Option<String>, SdkRefusal> {
+pub fn sealed_hash(dir: &Path) -> Result<Option<String>, SdkRefusal> {
     let manifest = layerfs_home::home::read_record(&dir.join("bundle.json"))?;
     Ok(manifest.and_then(|m| m.get_text("hash").map(str::to_owned)))
 }
 
 /// The hash of the bundle this build deploys to a machine, if it is there.
 fn deployed() -> Option<String> {
-    let dir = crate::sandbox::deploy::bundle_dir("linux").ok()?;
+    let dir = crate::bundle::bundle_dir("linux").ok()?;
     sealed_hash(&dir).ok().flatten()
 }

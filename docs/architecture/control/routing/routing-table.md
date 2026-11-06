@@ -46,7 +46,7 @@ the address in `machine/<name>/worker.json`
 | --- | --- | --- | --- |
 | PostgreSQL | any (none recorded) | the caller's process; the Store record holds the URL and a password reference, resolved per call | `place::plan`, `store/call.rs` `postgresql` |
 | SQLite | a machine whose platform's executor is `Local` on this host | the caller's process, on `store/<name>/store.sqlite` | `place::plan`, `place::local` |
-| SQLite | any other machine | that machine's worker; the worker holds the Store's lease under its root | `place::Worker::call`, [`worker/server.rs`](../../../../control/crates/layerfs-control/src/machine/worker/server.rs) `store.call` |
+| SQLite | any other machine | that machine's worker; the worker holds the Store's lease under its root | `place::Worker::call`, [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) `store.call` |
 
 The same open-Store cache ([`store/open.rs`](../../../../control/crates/layerfs-control/src/store/open.rs))
 serves both sides: a Store is opened once per process and closed after 60 s

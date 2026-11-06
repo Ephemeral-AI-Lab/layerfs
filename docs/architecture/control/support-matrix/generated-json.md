@@ -43,7 +43,7 @@ for what a diagram or table cannot say.
 | Producer | `support_json()`, a hand-written renderer: fixed key order, fixed indentation, strings quoted by `layerfs_isolation::json::quoted` | [`support.rs`](../../../../control/crates/layerfs-platform/src/support.rs) |
 | Hosts | `macos`, `linux`, `windows` (`HostOs::NAMED`); `other` is never written | [`platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs) |
 | Rows | `platforms(host)` for each host | `support.rs` |
-| Live fields | none: `ready`, `missing` and `version` are added only by `machine.platforms` | [`machine/platforms.rs`](../../../../control/crates/layerfs-control/src/machine/platforms.rs) |
+| Live fields | none: `ready`, `missing` and `version` are added only by `machine.platforms` | [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs) |
 | Option kinds | `int`, `size`, `text`, `bool`, `name` (`OptKind::as_str`) | [`options.rs`](../../../../control/crates/layerfs-platform/src/options.rs) |
 
 The field meanings are in [Table](table.md#fields).

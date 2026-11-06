@@ -2,7 +2,7 @@
 //! `detail.related` with `{kind, name}` entries (#536 §10b refusal detail):
 //! the project's Sandboxes, and another process's lease on the Store.
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
-use layerfs_control::common::context::Context;
+use layerfs_home::context::Context;
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
 use std::path::{Path, PathBuf};
 

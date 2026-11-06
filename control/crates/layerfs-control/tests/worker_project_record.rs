@@ -4,8 +4,8 @@
 //! caller's fields; a record of a removed project of the same name (another
 //! `created`) is replaced.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::machine::worker::{self, Endpoint};
 use layerfs_home::home::{paths, read_record, write_record};
+use layerfs_machine::worker::{self, Endpoint};
 use std::path::{Path, PathBuf};
 
 fn tempdir(tag: &str) -> PathBuf {
@@ -60,7 +60,9 @@ fn a_worker_inited_project_keeps_its_manifest() {
         secret: "k".to_owned(),
     };
     let guest = root.clone();
-    std::thread::spawn(move || worker::serve(listener, "k".to_owned(), guest));
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "k".to_owned(), guest)
+    });
     for _ in 0..200 {
         if worker::ping(&endpoint).is_ok() {
             break;

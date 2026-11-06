@@ -73,7 +73,7 @@ The summary is `ProjectRecord::to_sdk`
 | `Capacity` | the worker's machine has no room for the folder copy | [`project/send.rs`](../../../../../control/crates/layerfs-control/src/project/send.rs) |
 | `Unsupported` | `remove` on a PostgreSQL Store ("not built") | [`project/family.rs`](../../../../../control/crates/layerfs-control/src/project/family.rs) |
 | `Unavailable` | the Store's machine records no worker, or the worker does not answer | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
-| `Unknown` | **uncertain:** the worker's answer to `project.init` or `project.remove` was lost | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **uncertain:** the worker's answer to `project.init` or `project.remove` was lost | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 After an `Unknown` `init` the home writes no project record, so
 `project list` does not show the project, though the Store may hold it.
@@ -105,7 +105,7 @@ A PostgreSQL Store runs in the caller's process. A sqlite Store runs in the
 caller's process when its machine's platform executes locally on this host
 (`native`, except on Windows), else in that machine's worker. The folder is
 always read on the caller's host. The worker operations are in
-[`machine/worker/server.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/server.rs).
+[`worker_server.rs`](../../../../../control/crates/layerfs-control/src/worker_server.rs).
 See the [routing table](../../../control/routing/routing-table.md).
 
 ## Example

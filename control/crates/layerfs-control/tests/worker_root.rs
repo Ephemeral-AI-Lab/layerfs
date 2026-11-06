@@ -3,7 +3,7 @@
 //! root is never converted or given an id of its own, even when it holds
 //! files a 1.1.0 home would.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::machine::worker::{self, Endpoint};
+use layerfs_machine::worker::{self, Endpoint};
 use std::path::{Path, PathBuf};
 
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -59,7 +59,9 @@ fn a_worker_root_is_not_converted_and_uses_the_callers_home_id() {
         secret: "k".to_owned(),
     };
     let guest = root.clone();
-    std::thread::spawn(move || worker::serve(listener, "k".to_owned(), guest));
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "k".to_owned(), guest)
+    });
     // the worker is up once it answers
     for _ in 0..200 {
         if worker::ping(&endpoint).is_ok() {
@@ -105,7 +107,9 @@ fn the_retired_host_ops_are_refused() {
         secret: "k".to_owned(),
     };
     let guest = root.clone();
-    std::thread::spawn(move || worker::serve(listener, "k".to_owned(), guest));
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "k".to_owned(), guest)
+    });
     for _ in 0..200 {
         if worker::ping(&endpoint).is_ok() {
             break;

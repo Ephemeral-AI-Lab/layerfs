@@ -42,8 +42,13 @@ pub mod home {
 pub use layerfs_control::doctor::{doctor, doctor_json};
 #[cfg(feature = "machine")]
 #[doc(hidden)]
-pub use layerfs_control::machine::running;
-pub use layerfs_control::machine::worker;
+pub use layerfs_machine::running;
+/// The worker protocol (`layerfs-machine`) and its server (`layerfs-control`),
+/// as the front ends used them before the control split (layerfs-project#104).
+pub mod worker {
+    pub use layerfs_control::worker_server::{serve, Served, REQUEST_WAIT};
+    pub use layerfs_machine::worker::*;
+}
 pub use layerfs_control::store::close_idle;
 pub use layerfs_control::{
     daemon, projects, AddFailure, AddRequest, AddedProject, CreateRequest, InitCounters,

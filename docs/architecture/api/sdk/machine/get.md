@@ -11,7 +11,7 @@ and Sandboxes. It starts nothing.
 | --- | --- |
 | Family | [machine](README.md) |
 | Library entry | [`machine/get.rs`](../../../../../api/crates/layerfs-api/src/machine/get.rs) |
-| Implemented in | [`layerfs_control::machine::get`](../../../../../control/crates/layerfs-control/src/machine/get.rs) |
+| Implemented in | [`layerfs_control::machine::get`](../../../../../control/crates/layerfs-machine/src/get.rs) |
 | Runs in | the caller's process (host build with the `machine` feature) |
 
 ## Signature
@@ -52,7 +52,7 @@ None.
 The same summary as one item of [`machine.list`](list.md#returns); the
 field and `state` tables are there. `start`, `stop`, `create`, `connect`
 and `update` answer the same shape
-([`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `to_sdk`).
+([`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) `to_sdk`).
 
 ## Where it runs
 
@@ -73,7 +73,7 @@ All in the caller ([routing table](../../../control/routing/routing-table.md)).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | `name` is not a machine name | no | [`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `of` |
+| `InvalidInput` | `name` is not a machine name | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) `of` |
 | `NotFound` | no machine of that name | no | `record.rs` `of` |
 | `Failed` | the record names no known platform | no | `record.rs` `platform` |
 | `Unsupported` | a build without the `machine` feature | no | [`machine/get.rs`](../../../../../api/crates/layerfs-api/src/machine/get.rs) |

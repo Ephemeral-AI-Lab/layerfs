@@ -7,12 +7,17 @@ Read [repository instructions](../AGENTS.md) first. The control layer holds
 the management code and everything that reaches a machine or the network on
 behalf of the engine:
 
+- `crates/layerfs-home`: the home and its records, knowing no entity
+  (#103): layout, paths, record files, locks, the `op` intent, typed names,
+  outcomes, secrets, the call trace and the process identity.
+- `crates/layerfs-machine`: machine records, their lifecycle, the sealed
+  bundle and the worker protocol and client (#104). What a machine holds
+  comes from its caller (`Related`).
 - `crates/layerfs-control`: the management library (#536; moved here from
-  `api/crates` by #101 D-2): the home and its records, machines and the
-  worker protocol, Stores, projects, Sandboxes and their Workspaces, and
-  backups. #101 splits it by concern into `layerfs-home`, `layerfs-machine`,
-  `layerfs-store` and `layerfs-sandbox`, leaving `layerfs-control` with what
-  spans entities (worker server, doctor, inventory, migrate).
+  `api/crates` by #101 D-2): Stores, projects, Sandboxes and their
+  Workspaces, and backups, and what spans entities (the worker server,
+  `inventory`, `doctor`, `migrate`). #101 continues the split into
+  `layerfs-store` and `layerfs-sandbox`.
 - `crates/layerfs-platform` (was `layerfs-machine`): *where* Sandboxes can
   run. One folder per platform under `src/platforms/` (`native`, `docker`,
   `apple_container`, `microsandbox`, `lima`, `firecracker`, `ssh`). Host
@@ -37,9 +42,11 @@ design and the [compute plane 2.0 spec](../core/docs/proposals/compute-plane-2.0
   **Nothing in `engine/` or `core/` may depend on `control/`**; the
   [boundary guard](../tools/check_product_boundary.py) refuses the edge, and
   unknown crates fail closed. `api/` depends on control, never the reverse.
-- Inside control: `layerfs-control ──► layerfs-isolation, layerfs-bucket,
-  layerfs-platform` (the last only through its optional `machine` feature,
-  which `layerfs-api` passes through); `layerfs-platform ──►
+- Inside control: `layerfs-control ──► layerfs-machine ──► layerfs-home`;
+  `layerfs-control ──► layerfs-isolation, layerfs-bucket`; `layerfs-machine
+  ──► layerfs-platform` only through its optional `machine` feature, which
+  `layerfs-control` and `layerfs-api` pass through; `layerfs-home ──►
+  layerfs-isolation` (the process identity records name); `layerfs-platform ──►
   layerfs-isolation ──► layerfs-bridge`; `layerfs-bucket ──►
   layerfs-store-service, layerfs-persistence, layerfs-storage`.
 - Drivers take every input as arguments, know nothing of the home and write

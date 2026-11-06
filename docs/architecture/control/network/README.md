@@ -10,7 +10,7 @@ How callers, workers and daemons reach each other: worker setup, PostgreSQL reac
 | --- | --- |
 | Layer | [Control](../README.md) |
 | Crates | `layerfs-platform` |
-| Source | [`control/crates/layerfs-platform/src/reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs), [`control/crates/layerfs-platform/src/setup`](../../../../control/crates/layerfs-platform/src/setup); the worker's server and client are in [`control/crates/layerfs-control/src/machine/worker`](../../../../control/crates/layerfs-control/src/machine/worker) |
+| Source | [`control/crates/layerfs-platform/src/reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs), [`control/crates/layerfs-platform/src/setup`](../../../../control/crates/layerfs-platform/src/setup); the worker's server and client are in [`worker`](../../../../control/crates/layerfs-machine/src/worker) |
 | Uses | — |
 | Used by | [Machines](../machines/README.md), [Control: Routing and workers](../routing/README.md) |
 | Flows | [A call, end to end](../../flows/call.md), [A Workspace session](../../flows/workspace.md) |
@@ -56,7 +56,7 @@ URL a daemon dials for a PostgreSQL Store. See the
 | Question | Answer | Source |
 | --- | --- | --- |
 | Where does a worker listen? | The caller always dials a host loopback address (`Endpoint::address`). In the guest the worker binds port 7070 on the platform's `worker_bind`; the provider's port publish, Lima's port forward or an `ssh -L` carries it to the host's `127.0.0.1`. | [`spec.rs`](../../../../control/crates/layerfs-platform/src/spec.rs), [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
-| How does a call reach it? | One new TCP connection per request: the secret first, alone, then one request frame, then events and one answer. | [`client.rs`](../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| How does a call reach it? | One new TCP connection per request: the secret first, alone, then one request frame, then events and one answer. | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | How does a Sandbox daemon dial the caller's PostgreSQL server? | `machine::reach` keeps any non-loopback host and rewrites a loopback host to the platform's alias, or refuses. | [`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs) |
 | When do Workspace calls skip the worker? | When `machine::forward` answers an address: `native` (the daemon's own port), `ssh` and `lima` (a detached `ssh -L`). Elsewhere they go through the worker. | [`calls.rs`](../../../../control/crates/layerfs-platform/src/setup/calls.rs) |
 
@@ -64,8 +64,8 @@ URL a daemon dials for a PostgreSQL Store. See the
 
 | Rule | Enforced by |
 | --- | --- |
-| Workers are reached on a host loopback address, behind a 256-bit secret in a 0600 guest file. | `tool::secret`, `Guest::write_file`, `worker::launch` ([`tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs), [`guest.rs`](../../../../control/crates/layerfs-platform/src/setup/guest.rs), [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs)); the server compares the secret before it reads a request ([`server.rs`](../../../../control/crates/layerfs-control/src/machine/worker/server.rs)) |
-| One attempt per call: no retry, no replay. A request whose answer is lost is `Unknown`, never resent. | `send_once`, `answer`, `lost` in [`client.rs`](../../../../control/crates/layerfs-control/src/machine/worker/client.rs); `tool::run` runs a host command once ([`tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs)) |
+| Workers are reached on a host loopback address, behind a 256-bit secret in a 0600 guest file. | `tool::secret`, `Guest::write_file`, `worker::launch` ([`tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs), [`guest.rs`](../../../../control/crates/layerfs-platform/src/setup/guest.rs), [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs)); the server compares the secret before it reads a request ([`server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs)) |
+| One attempt per call: no retry, no replay. A request whose answer is lost is `Unknown`, never resent. | `send_once`, `answer`, `lost` in [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs); `tool::run` runs a host command once ([`tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs)) |
 | Readiness waits are waits, not retries. | `worker::ready` ([`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs)) |
 | A PostgreSQL password is resolved only in the caller and travels only in one worker request and the Sandbox's private daemon setup file. | [Credentials](credentials.md) |
 | No reach or forward message holds any part of a PostgreSQL URL. | `reach::refuse`; `PostgresUrl` has no `Debug` ([`reach.rs`](../../../../control/crates/layerfs-platform/src/reach.rs), [`postgres_url.rs`](../../../../control/crates/layerfs-isolation/src/postgres_url.rs)) |
@@ -75,11 +75,11 @@ URL a daemon dials for a PostgreSQL Store. See the
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| Requests per worker connection | One; the connection then closes. | [`server.rs`](../../../../control/crates/layerfs-control/src/machine/worker/server.rs) |
-| Largest frame / first frame | 512 MiB (`MAX_FRAME`) / 4 KiB (`MAX_HELLO`); a larger request is `TooLarge` before anything is sent. | [`frame.rs`](../../../../control/crates/layerfs-control/src/machine/worker/frame.rs) |
+| Requests per worker connection | One; the connection then closes. | [`server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
+| Largest frame / first frame | 512 MiB (`MAX_FRAME`) / 4 KiB (`MAX_HELLO`); a larger request is `TooLarge` before anything is sent. | [`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs) |
 | Worker readiness wait | 60 s (`READY`), looking every 200 ms. | [`worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs) |
-| Worker not reached, wrong secret, other build | `Unavailable` / `Denied` / `Unavailable`; the request was not sent. | [`client.rs`](../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
-| Answer lost after the request was sent | `Unknown`: "it may have run, and was not resent". | [`client.rs`](../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| Worker not reached, wrong secret, other build | `Unavailable` / `Denied` / `Unavailable`; the request was not sent. | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| Answer lost after the request was sent | `Unknown`: "it may have run, and was not resent". | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 | `ssh` machine and a loopback PostgreSQL URL | `Unsupported`: "an ssh machine cannot reach the caller's loopback". | [`ssh/adapter.rs`](../../../../control/crates/layerfs-platform/src/platforms/ssh/adapter.rs) |
 | Network facts verified live | The G7 live receipt covers `lima`, `apple-container`, `microsandbox` and `firecracker` reaching a PostgreSQL server, at an earlier commit with the support rows lifted locally. No G7 receipt covers `docker` or `ssh`. | [G7 live receipt](../../../../core/docs/issues/535/receipts/g7-live/RECEIPT.md) |
 

@@ -111,7 +111,7 @@ mounted or shared. See the [routing table](../../../control/routing/routing-tabl
 | `HeadMoved`, `Busy`, `Capacity`, `Failed` | the Commit failed and was settled locally | no | same |
 | `Unresolved`, `Unavailable` | the Store's `op`, or its worker not reached | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
 | any change refusal (`NoSuchPath`, `Exists`, `NoMatch`, `Binary`, …) | that change was refused; `detail.index` names it; nothing committed | no | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
-| `Unknown` | **a change or the Commit ended with an unknown outcome (the private Workspace is kept), or the worker's answer was lost** | **yes** | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs), [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **a change or the Commit ended with an unknown outcome (the private Workspace is kept), or the worker's answer was lost** | **yes** | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs), [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After `Unknown`** the Commit may exist. Read [branch.get](../branch/get.md)
 or [commit.list](../commit/list.md) for the Branch's head before writing

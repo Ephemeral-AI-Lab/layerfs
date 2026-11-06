@@ -105,7 +105,7 @@ See the [routing table](../../../control/routing/routing-table.md).
 | `MountsActive` | without `force`, Workspaces are mounted; `detail.workspaces` lists their paths | no | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
 | `Unavailable` | the machine's worker is not recorded or does not answer (nothing sent); a lock held too long | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
 | `Failed` | the stop or delete failed (a failed stop is not followed by a delete); the Sandbox stays as it was | no | `serve.rs` |
-| `Unknown` | **the machine's answer was lost after the request was sent: the Sandbox may be stopped or not** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs), `close.rs` |
+| `Unknown` | **the machine's answer was lost after the request was sent: the Sandbox may be stopped or not** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), `close.rs` |
 
 After `Unknown`, read [`sandbox.get`](get.md) (its `state` is
 `unresolved`), then call `close` again: it clears the uncertain intent.

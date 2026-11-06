@@ -11,7 +11,7 @@ LayerFS installed on the host. The host's data root stays.
 | --- | --- |
 | Family | [machine](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/machine/disconnect.rs`](../../../../../api/crates/layerfs-api/src/machine/disconnect.rs) |
-| Implemented in | `layerfs_control::machine::disconnect` → `take_down` ([`machine/remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs)), then `layerfs_platform::remove` |
+| Implemented in | `layerfs_control::machine::disconnect` → `take_down` ([`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs)), then `layerfs_platform::remove` |
 | Runs in | the caller's process; `ssh` to the host |
 
 ## Signature
@@ -36,7 +36,7 @@ layerfs machine disconnect <name>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | an `ssh` machine; a VM is removed with [machine.remove](remove.md) | [`machine/remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs) `removable` |
+| `name` | Name | an `ssh` machine; a VM is removed with [machine.remove](remove.md) | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) `removable` |
 
 ## Options
 
@@ -74,12 +74,12 @@ intent. See the [routing table](../../../control/routing/routing-table.md).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad name; a built-in machine; a VM ("use machine remove"); a folder-scoped client | no | [`machine/remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs) |
-| `NotFound` | no machine of that name | no | [`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) |
+| `InvalidInput` | a bad name; a built-in machine; a VM ("use machine remove"); a folder-scoped client | no | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) |
+| `NotFound` | no machine of that name | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) |
 | `Busy` | a live process's operation holds it | no | same |
 | `InUse` | sqlite Stores or Sandboxes are on it (`detail.related`) | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_machine` |
 | `Denied`, `Unavailable`, `Failed` | the host refuses, does not answer or a step fails; record put back | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
-| `Unknown` | **a step timed out or lost its answer** | **yes** | [`machine/remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs) |
+| `Unknown` | **a step timed out or lost its answer** | **yes** | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) |
 
 **After `Unknown`**, read [machine.status](status.md) and call
 `machine disconnect` again.

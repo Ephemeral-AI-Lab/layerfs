@@ -4,8 +4,8 @@
 //! bundle left (numbered Sandbox state, `machine/*/sandbox/`, old local
 //! Sandbox directories; the image cache kept under `machine/native/run/`).
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::machine::worker::{self, Endpoint};
 use layerfs_home::home::{self, paths, read_record, write_record};
+use layerfs_machine::worker::{self, Endpoint};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -24,7 +24,9 @@ fn worker(root: &Path) -> Endpoint {
         secret: "k".to_owned(),
     };
     let guest = root.to_owned();
-    std::thread::spawn(move || worker::serve(listener, "k".to_owned(), guest));
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "k".to_owned(), guest)
+    });
     for _ in 0..200 {
         if worker::ping(&endpoint).is_ok() {
             return endpoint;

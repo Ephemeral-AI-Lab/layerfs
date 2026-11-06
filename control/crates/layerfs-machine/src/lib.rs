@@ -1,11 +1,16 @@
 //! The `machine` family (H §7.1, §7.2): records in `machine/<name>/`, the
 //! built-in `native` and `docker`, VMs created by name and ssh hosts
-//! connected. The adapters that make and start machines are
-//! `layerfs-isolation`'s `machine/` layer; this module writes the records and
-//! keeps `Exists`, `InUse` and each record's `op` (`Busy`, `Unresolved`). Without the `machine` feature (the guest
-//! worker's build) every machine call is `Unsupported`.
-#[cfg(feature = "machine")]
-mod bundle;
+//! connected, and the worker client (cut from `layerfs-control` by
+//! layerfs-project#104). The adapters that make and start machines are the
+//! `layerfs-platform` driver; this crate writes the records and keeps
+//! `Exists`, `InUse` and each record's `op` (`Busy`, `Unresolved`). What a
+//! machine holds (its Stores and Sandboxes) comes from the caller
+//! ([`Related`]). Without the `machine` feature (the guest worker's build)
+//! the machine calls are not built.
+#![forbid(unsafe_code)]
+#![deny(missing_docs)]
+
+pub mod bundle;
 #[cfg(feature = "machine")]
 mod connect;
 #[cfg(feature = "machine")]
@@ -24,6 +29,7 @@ mod platforms;
 mod power;
 #[doc(hidden)]
 pub mod record;
+mod related;
 #[cfg(feature = "machine")]
 mod remove;
 #[cfg(feature = "machine")]
@@ -35,7 +41,8 @@ mod update;
 pub mod worker;
 
 #[cfg(feature = "machine")]
-pub(crate) use bundle::bundle;
+pub use bundle::bundle;
+pub use bundle::{bundle_dir, IMAGE_ARCHIVE};
 #[cfg(feature = "machine")]
 pub use connect::connect;
 #[cfg(feature = "machine")]
@@ -45,19 +52,20 @@ pub use endpoint::running;
 #[cfg(feature = "machine")]
 pub use get::get;
 #[cfg(feature = "machine")]
-pub(crate) use image::docker_default;
+pub use image::docker_default;
 #[cfg(feature = "machine")]
 pub use list::list;
 #[cfg(feature = "machine")]
 pub use platforms::platforms;
 #[cfg(feature = "machine")]
 pub use power::{start, stop};
+pub use related::Related;
 #[cfg(feature = "machine")]
 pub use remove::{disconnect, remove};
 #[cfg(feature = "machine")]
 pub use spec::{ensure_built_ins, machine_of, vm_name};
 #[cfg(feature = "machine")]
-pub(crate) use spec::{refusal as machine_refusal, spec as machine_spec};
+pub use spec::{refusal as machine_refusal, spec as machine_spec};
 #[cfg(feature = "machine")]
 pub use status::status;
 #[cfg(feature = "machine")]

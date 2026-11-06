@@ -64,11 +64,13 @@ The [Doctor](doctor.md) reads the same records and changes nothing.
 | Folder | What it owns | Source |
 | --- | --- | --- |
 | `calls/` | Table shape, argument checks, folder scope, snake_case keys, the one dispatcher | [`calls/`](../../../../control/crates/layerfs-control/src/calls) |
-| `layerfs-home` | Its own crate, knowing no entity (layerfs-project#103): `layerfs.json`, record files, the home lock, entity locks (`home/`); names, the `op` intent, outcomes, secrets, the call trace, JSON, the process identity records name and the general helpers | [`layerfs-home/src/`](../../../../control/crates/layerfs-home/src) |
-| `common/` | A call's context, placement and Store leases | [`common/`](../../../../control/crates/layerfs-control/src/common) |
+| `layerfs-home` | Its own crate, knowing no entity (layerfs-project#103): `layerfs.json`, record files, the home lock, entity locks (`home/`); names, the `op` intent, outcomes, secrets, the call trace, JSON, the process identity records name, the general helpers and, until #107 moves it to `layerfs-api`, a running call's `Context` | [`layerfs-home/src/`](../../../../control/crates/layerfs-home/src) |
+| `common/` | Placement and Store leases | [`common/`](../../../../control/crates/layerfs-control/src/common) |
 | `migrate/` | Opening the home: its conversions from 1.1.0 and layout 2, and `import-env`; above the entities because they read every entity's old layout | [`migrate/`](../../../../control/crates/layerfs-control/src/migrate) |
 | `inventory.rs` | Reads by name and the relationships no record stores | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
-| `machine/` | Machine records, `worker.json`, start/stop, the worker client and server | [`machine/`](../../../../control/crates/layerfs-control/src/machine) |
+| `layerfs-machine` | Its own crate (layerfs-project#104): machine records, `worker.json`, start/stop, the sealed bundle and the worker protocol and client; what a machine holds (its Stores and Sandboxes) is passed in as `Related` | [`layerfs-machine/src/`](../../../../control/crates/layerfs-machine/src) |
+| `machine.rs` | The machine calls with `Related` read from `inventory` | [`machine.rs`](../../../../control/crates/layerfs-control/src/machine.rs) |
+| `worker_server.rs` | The worker's server: it runs every entity's operations | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
 | `store/` | Store records, Store calls (`branch`, `commit`, `file`), push, pull, remove, PostgreSQL connect | [`store/`](../../../../control/crates/layerfs-control/src/store) |
 | `project/` | Project records, `project.init` on each route, folder copy to a worker | [`project/`](../../../../control/crates/layerfs-control/src/project) |
 | `sandbox/` | Sandbox records, create/close, host operations, direct daemon calls | [`sandbox/`](../../../../control/crates/layerfs-control/src/sandbox) |
@@ -85,7 +87,7 @@ request and keeps its own root, which is not a home.
 
 The `machine` feature turns on the machine adapters. The guest worker is
 built without it, so every machine call there is `Unsupported`
-([`machine/mod.rs`](../../../../control/crates/layerfs-control/src/machine/mod.rs),
+([`lib.rs`](../../../../control/crates/layerfs-machine/src/lib.rs),
 [`Cargo.toml`](../../../../control/crates/layerfs-control/Cargo.toml)). The
 `postgresql` and `tls` features add PostgreSQL Stores and `https://`
 buckets.
@@ -102,8 +104,8 @@ buckets.
 | Bucket records hold a key reference, never a secret | [`backup/record.rs`](../../../../control/crates/layerfs-control/src/backup/record.rs) |
 | A record is replaced whole by one rename; files 0600, folders 0700 | [`home/records.rs`](../../../../control/crates/layerfs-home/src/home/records.rs) |
 | At most one `op` intent per entity; a live owner refuses others `Busy`, a gone owner's uncertain intent `Unresolved` | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |
-| One attempt per call; a lost worker answer is `Unknown`, never resent | [`common/place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs), [`machine/worker/client.rs`](../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
-| Nothing but `machine.start` starts a machine (#535 D11) | [`common/place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs), [`machine/endpoint.rs`](../../../../control/crates/layerfs-control/src/machine/endpoint.rs) |
+| One attempt per call; a lost worker answer is `Unknown`, never resent | [`common/place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs), [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| Nothing but `machine.start` starts a machine (#535 D11) | [`common/place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs), [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | Locks are taken home, start, store, sandbox, never the reverse; none is held across a worker call or a transfer | [`home/entity_lock.rs`](../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
 | A guest never reads the home; a worker's root is never converted and has no id of its own | [`home/guest.rs`](../../../../control/crates/layerfs-home/src/home/guest.rs) |
 
@@ -117,7 +119,7 @@ buckets.
 | Layout 2 home with anything live | `InUse`, `detail.related` | [`migrate/v2.rs`](../../../../control/crates/layerfs-control/src/migrate/v2.rs) |
 | Relative `LAYERFS_HOME` | `InvalidInput` | [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) |
 | Home lock, Store lock, Sandbox lock wait | 120 s, then `Unavailable` (a readiness wait, not a retry) | [`home/lock.rs`](../../../../control/crates/layerfs-home/src/home/lock.rs), [`home/entity_lock.rs`](../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |
-| Machine `start.lock` wait | 600 s | [`machine/endpoint.rs`](../../../../control/crates/layerfs-control/src/machine/endpoint.rs) |
+| Machine `start.lock` wait | 600 s | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) |
 | Removing, stopping or changing a machine that holds Stores or Sandboxes | `InUse`, `detail.related` | [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
 | Push, pull, remove or disconnect a Store with a live lease or a recorded Sandbox | `InUse` | [`common/lease.rs`](../../../../control/crates/layerfs-control/src/common/lease.rs), [`store/family.rs`](../../../../control/crates/layerfs-control/src/store/family.rs) |
 | An operation runs on the entity | `Busy`; after a gone owner's uncertain outcome, `Unresolved` | [`op.rs`](../../../../control/crates/layerfs-home/src/op.rs) |

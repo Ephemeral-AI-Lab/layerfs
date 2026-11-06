@@ -1,4 +1,6 @@
-//! What one running call can reach (moved from layerfs-api `calls/dispatch.rs`).
+//! What one running call can reach (moved from layerfs-api `calls/dispatch.rs`;
+//! held here while the entities still take it, layerfs-project#104, until
+//! #107 moves it back to layerfs-api).
 use layerfs_bridge::control::SdkValue;
 use std::path::PathBuf;
 

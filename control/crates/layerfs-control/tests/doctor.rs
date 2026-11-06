@@ -4,8 +4,8 @@
 //! the doctor writes nothing in the home.
 use layerfs_bridge::control::SdkValue;
 use layerfs_control::doctor::doctor;
-use layerfs_control::machine::worker::{read_frame, read_frame_within, write_frame, MAX_HELLO};
 use layerfs_home::home::{paths, private_dir, write_entity, write_record};
+use layerfs_machine::worker::{read_frame, read_frame_within, write_frame, MAX_HELLO};
 use std::collections::BTreeMap;
 use std::net::TcpListener;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};

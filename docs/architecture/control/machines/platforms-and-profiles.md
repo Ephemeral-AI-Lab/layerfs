@@ -121,7 +121,7 @@ answers even on a host the platform is not on (`docker` on Windows answers
 `nested`, `host` and the ssh options are declared with `opt()` in their
 profile. The crate declares options; it does not parse them. The call table
 reads them by `kind`, and `layerfs-control`'s
-[`machine/spec.rs`](../../../../control/crates/layerfs-control/src/machine/spec.rs)
+[`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs)
 turns a record into a `Spec`. There an absolute-path `image` becomes
 `Spec::image` (the Sandbox image archive), while `Spec::os_image` comes from
 the record's `os_image` or, on `docker` only, from `image`.

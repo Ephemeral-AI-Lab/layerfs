@@ -11,6 +11,7 @@ layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 # The management library every call runs in (#536).
 layerfs-control = { path = "../../../control/crates/layerfs-control" }
 layerfs-home = { path = "../../../control/crates/layerfs-home" }
+layerfs-machine = { path = "../../../control/crates/layerfs-machine" }
 
 [features]
 # PostgreSQL Stores (#506, #533): open, attach, create and Init.
@@ -21,7 +22,7 @@ postgresql = ["layerfs-control/postgresql"]
 tls = ["layerfs-control/tls"]
 # The machine calls (2.0, #533): host builds only. The guest worker is built
 # without it, so no machine adapter runs inside a machine.
-machine = ["layerfs-control/machine"]
+machine = ["layerfs-control/machine", "layerfs-machine/machine"]
 
 [dev-dependencies]
 nix = { version = "=0.31.3", features = ["fs", "user", "process"] }

@@ -17,7 +17,7 @@ starts its worker, so Stores and Sandboxes can be placed on it.
 | --- | --- |
 | Family | [machine](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/machine/create.rs`](../../../../../api/crates/layerfs-api/src/machine/create.rs) |
-| Implemented in | `layerfs_control::machine::create` ([`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs)), then `layerfs_platform::create` ([`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs)) |
+| Implemented in | `layerfs_control::machine::create` ([`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs)), then `layerfs_platform::create` ([`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs)) |
 | Runs in | the caller's process (host build with the `machine` feature); the provider's CLI makes the VM |
 
 ## Signature
@@ -44,7 +44,7 @@ layerfs machine create <name> <platform> [--cpus N] [--memory SIZE] \
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | `MachineName::parse`; not `native` or `docker`; not taken | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) `new_name` |
+| `name` | Name | `MachineName::parse`; not `native` or `docker`; not taken | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) `new_name` |
 | `platform` | Name | an enabled created platform: `apple-container`, `microsandbox`, `lima` | [`platform.rs`](../../../../../control/crates/layerfs-platform/src/platform.rs) `created` |
 
 Which platform this host may create comes from the support table
@@ -65,11 +65,11 @@ Which platform this host may create comes from the support table
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `cpus` | Int | 2 | the VM's CPUs | [`machine/spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `DEFAULT_CPUS` |
+| `cpus` | Int | 2 | the VM's CPUs | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `DEFAULT_CPUS` |
 | `memory` | Size | 4 GiB | bytes, or `K`/`M`/`G` text (powers of 1024) | same, `DEFAULT_MEMORY` |
 | `disk` | Size | 20 GiB | the data disk mounted at `/layerfs/data` | same, `DEFAULT_DISK` |
-| `image` | Text | none | recorded as given; see below | [`machine/spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `spec` |
-| `nested` | Bool | false | `lima` only: a VM that can host `firecracker` | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) |
+| `image` | Text | none | recorded as given; see below | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `spec` |
+| `nested` | Bool | false | `lima` only: a VM that can host `firecracker` | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) |
 | `host` | Name | none | `firecracker` only, and required: a `lima` machine made with `nested` | same |
 
 `image` means two things. The platform profiles declare it as the VM's own
@@ -119,7 +119,7 @@ on [machine.list](list.md#returns). The record also keeps `vm_name`
 
 | Outcome of the adapter | Record afterwards | Source |
 | --- | --- | --- |
-| running | `state: running`, `op` dropped, `worker.json` written | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) `finish` |
+| running | `state: running`, `op` dropped, `worker.json` written | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) `finish` |
 | failed before the VM existed | the machine folder is removed | same |
 | failed after (`detail.vm_exists: true`) | `state: failed` with `error`; VM kept for inspection | same |
 | `Unknown` | everything kept; `op` uncertain with `error`; logged to `log/uncertain.jsonl` | same |
@@ -131,13 +131,13 @@ See the [routing table](../../../control/routing/routing-table.md).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad name; a built-in name; unknown platform; a built-in or `ssh` platform; `nested` off lima; firecracker without `host` or with a host that is not a nested lima; a folder-scoped client | no | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) |
+| `InvalidInput` | bad name; a built-in name; unknown platform; a built-in or `ssh` platform; `nested` off lima; firecracker without `host` or with a host that is not a nested lima; a folder-scoped client | no | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) |
 | `Exists` | a machine of that name exists | no | same, `new_name` |
-| `NotFound` | `host` names no machine | no | [`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) |
-| `Busy` / `Unresolved` | `host` is held by another operation | no | [`machine/spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `machine_of` |
-| `Unsupported` | the platform is not supported on this host; its tool is missing (`detail.missing`); no sealed bundle; a build without the `machine` feature | no | same, [`machine/bundle.rs`](../../../../../control/crates/layerfs-control/src/machine/bundle.rs) |
+| `NotFound` | `host` names no machine | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) |
+| `Busy` / `Unresolved` | `host` is held by another operation | no | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `machine_of` |
+| `Unsupported` | the platform is not supported on this host; its tool is missing (`detail.missing`); no sealed bundle; a build without the `machine` feature | no | same, [`bundle.rs`](../../../../../control/crates/layerfs-machine/src/bundle.rs) |
 | `Unavailable`, `Denied`, `Failed` | the provider refused or failed; `detail.vm_exists` says whether the VM is kept | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
-| `Unknown` | **the provider timed out or its answer was lost** | **yes** | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) `finish` |
+| `Unknown` | **the provider timed out or its answer was lost** | **yes** | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) `finish` |
 
 **After `Unknown`**, read [machine.status](status.md) (its `op` and
 `error`) and the provider's own listing; clear the machine with

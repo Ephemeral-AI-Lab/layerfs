@@ -7,7 +7,7 @@
 //! same call.
 use super::record::MachineRecord;
 use super::spec::{self as record, machine_of, refusal, save_running};
-use crate::machine::worker::Endpoint;
+use crate::worker::Endpoint;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_platform::{self as adapters, HostOs, Platform, Route};
 use std::path::Path;
@@ -21,7 +21,7 @@ const START_WAIT: Duration = Duration::from_secs(600);
 pub fn running(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> {
     let record = machine_of(home, name)?;
     let kind = record.platform()?;
-    if let Some(reason) = layerfs_isolation::platform_policy::disabled_reason(kind.name()) {
+    if let Some(reason) = layerfs_platform::platform_policy::disabled_reason(kind.name()) {
         return Err(layerfs_home::outcome::refused("Unsupported", reason));
     }
     if kind.route(HostOs::current()) == Route::InProcess {
@@ -53,7 +53,7 @@ fn host_first(home: &Path, record: &MachineRecord) -> Result<(), SdkRefusal> {
 /// Starts machine `name` (its `record`) and records its worker; under its
 /// start lock.
 fn start(home: &Path, name: &str, record: &MachineRecord) -> Result<Option<Endpoint>, SdkRefusal> {
-    let id = crate::migrate::open(home)?.id;
+    let id = layerfs_home::home::opened(home)?.id;
     let mut spec = record::spec(home, &id, record)?;
     let bundle = super::bundle::bundle()?;
     // the docker worker's container runs the bundle's image when the
@@ -71,7 +71,7 @@ fn start(home: &Path, name: &str, record: &MachineRecord) -> Result<Option<Endpo
     let endpoint = endpoint_of(&running.endpoint);
     // a worker of another build just started means the bundle is older than
     // this build: a stop and start would start it again (it stays recorded)
-    if let Ok(hello) = crate::machine::worker::hello(&endpoint) {
+    if let Ok(hello) = crate::worker::hello(&endpoint) {
         let address = endpoint.address.to_string();
         if let Some(stale) = hello.stale_bundle(name, &bundle.dir, &address) {
             return Err(stale);
@@ -84,9 +84,9 @@ fn start(home: &Path, name: &str, record: &MachineRecord) -> Result<Option<Endpo
 /// removing a machine take it, always before the home lock, so a start
 /// never runs beside a create or a remove of the same VM.
 /// A wait for it, at most [`START_WAIT`], is not a retry.
-pub(crate) type StartLock = layerfs_home::home::entity_lock::EntityLock;
+pub type StartLock = layerfs_home::home::entity_lock::EntityLock;
 
-pub(crate) fn start_lock(home: &Path, name: &str) -> Result<StartLock, SdkRefusal> {
+pub fn start_lock(home: &Path, name: &str) -> Result<StartLock, SdkRefusal> {
     let path = layerfs_home::home::paths::machine_dir(home, name).join("start.lock");
     let held = format!("machine {name} was being started, made or removed by another process");
     layerfs_home::home::entity_lock::take(&path, START_WAIT, &held)
@@ -107,7 +107,5 @@ fn answering(home: &Path, name: &str) -> Result<Option<Endpoint>, SdkRefusal> {
         return Ok(None);
     };
     let endpoint = endpoint_of(&recorded);
-    Ok(crate::machine::worker::hello(&endpoint)
-        .is_ok()
-        .then_some(endpoint))
+    Ok(crate::worker::hello(&endpoint).is_ok().then_some(endpoint))
 }

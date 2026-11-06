@@ -94,7 +94,7 @@ a scope without `branch`, is refused before any effect); see
 | `HeadMoved` | `main`'s head or the Branch's base moved since they were read | no | same |
 | `NotInHistory` | the Commit is not on the Branch's history | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
-| `Unknown` | **the worker's answer was lost, or the add's outcome is unknown** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **the worker's answer was lost, or the add's outcome is unknown** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After `Unknown`**, read [branch.get](get.md) for `main`: its `base` is the
 head Layer. Publishing the same Commit again answers `UpToDate` if it

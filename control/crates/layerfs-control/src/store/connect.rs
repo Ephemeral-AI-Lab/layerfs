@@ -3,11 +3,11 @@
 //! forgets it (its data stays). The record keeps the URL without a password
 //! and the password as a reference (`env:NAME` or `file:/path`), resolved on
 //! each call; the full URL is never written down.
-use crate::common::context::Context;
 use crate::project::record::ProjectRecord;
 use crate::store::record::url;
 use crate::store::record::{StoreKind, StoreRecord};
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::context::Context;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
 use layerfs_home::secrets::{parts, resolve};

@@ -6,7 +6,7 @@
 //! another bundle's image is loaded again. A load is one attempt.
 use super::spec::{self as record, machine_of, refusal};
 use super::status::home_id;
-use crate::sandbox::deploy::IMAGE_ARCHIVE;
+use crate::bundle::IMAGE_ARCHIVE;
 use layerfs_bridge::control::SdkRefusal;
 use layerfs_home::home::lock;
 use layerfs_home::outcome::refused;
@@ -16,7 +16,7 @@ use std::path::Path;
 /// The image a docker Sandbox, or the docker machine's worker, runs when
 /// none is named: the bundle's Sandbox image, loaded into Docker the first
 /// time and recorded.
-pub(crate) fn docker_default(home: &Path) -> Result<String, SdkRefusal> {
+pub fn docker_default(home: &Path) -> Result<String, SdkRefusal> {
     let bundle = super::bundle::bundle()?;
     let record = machine_of(home, "docker")?;
     if let Some((id, of)) = record.loaded_image() {

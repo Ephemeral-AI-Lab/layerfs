@@ -72,7 +72,7 @@ inside the library are on [Table](../call-table/table.md).
 | exec output (`workspace.exec`) | `{ stream, bytes }` | `--stream`: bytes to stdout or stderr | the `stdout` and `stderr` functions; `stream: true` without them writes to the process's own streams |
 
 Events come from the call's one event stream
-([`Context`](../../../../control/crates/layerfs-control/src/common/context.rs)).
+([`Context`](../../../../control/crates/layerfs-home/src/context.rs)).
 `workspace.exec` sends its output after the command ends: an inline stream
 as one event ([`workspace/calls.rs`](../../../../control/crates/layerfs-control/src/workspace/calls.rs)),
 a stream over 1 MiB as 1 MiB pages from the host's spool, with the result

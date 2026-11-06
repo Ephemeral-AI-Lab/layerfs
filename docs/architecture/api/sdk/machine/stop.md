@@ -12,7 +12,7 @@ Sandboxes run on the machine.
 | --- | --- |
 | Family | [machine](README.md) |
 | Library entry | [`machine/stop.rs`](../../../../../api/crates/layerfs-api/src/machine/stop.rs) |
-| Implemented in | [`layerfs_control::machine::stop`](../../../../../control/crates/layerfs-control/src/machine/power.rs) |
+| Implemented in | [`layerfs_control::machine::stop`](../../../../../control/crates/layerfs-machine/src/power.rs) |
 | Runs in | the caller's process (host build with the `machine` feature) |
 
 ## Signature
@@ -36,7 +36,7 @@ layerfs machine stop <name>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | an existing machine not held by an `op`, with no Sandbox recorded on it | [`machine/power.rs`](../../../../../control/crates/layerfs-control/src/machine/power.rs) |
+| `name` | Name | an existing machine not held by an `op`, with no Sandbox recorded on it | [`power.rs`](../../../../../control/crates/layerfs-machine/src/power.rs) |
 
 ## Options
 
@@ -63,7 +63,7 @@ caller's process                                   machine
 
 | Platform | What stop ends | Source |
 | --- | --- | --- |
-| `native` | nothing | [`machine/power.rs`](../../../../../control/crates/layerfs-control/src/machine/power.rs) |
+| `native` | nothing | [`power.rs`](../../../../../control/crates/layerfs-machine/src/power.rs) |
 | `docker` | its worker container only | [`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs) `stop` |
 | `lima`, `apple-container`, `microsandbox`, `firecracker` | the worker and the VM; disks stay | `setup/calls.rs` |
 | `ssh` | its worker and `ssh -L` forward | `setup/calls.rs` |
@@ -78,7 +78,7 @@ All in the caller ([routing table](../../../control/routing/routing-table.md)).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput`, `NotFound` | bad name; no such machine | no | [`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) `of` |
+| `InvalidInput`, `NotFound` | bad name; no such machine | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) `of` |
 | `Busy`, `Unresolved` | an `op` holds the machine | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
 | `InUse` | Sandboxes are recorded on it, or on a firecracker machine it hosts; `detail.related` lists `{kind: "sandbox", name}` | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_stop_machine` |
 | `Unavailable` | `start.lock` held for 600 s; nothing changed | no | [`home/entity_lock.rs`](../../../../../control/crates/layerfs-home/src/home/entity_lock.rs) |

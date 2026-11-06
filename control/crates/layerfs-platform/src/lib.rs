@@ -24,6 +24,7 @@ mod setup;
 mod spec;
 mod support;
 pub use error::{Code, MachineError};
+pub use layerfs_isolation::platform_policy;
 pub use layerfs_isolation::Backend;
 pub use options::{OptKind, OptSpec};
 pub use platform::{ExecutorKind, HostOs, How, KernelRoute, Platform, Profile, Route};

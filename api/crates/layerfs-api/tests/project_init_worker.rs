@@ -79,7 +79,9 @@ fn home_with_box(tag: &str, listener: &TcpListener) -> PathBuf {
 
 fn serve(listener: TcpListener, root: &Path) {
     let root = root.to_owned();
-    std::thread::spawn(move || worker::serve(listener, "k".to_owned(), root));
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "k".to_owned(), root)
+    });
 }
 
 fn store_call(home: &Path, name: &str, project: &str, path: &str) -> SdkValue {

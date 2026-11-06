@@ -12,14 +12,16 @@
 //! another build is sent nothing. A refusal or a lost connection before the
 //! request is sent is a plain refusal; a lost answer after it is `Unknown`,
 //! never resent.
+//!
+//! This is the protocol and its client; the worker's server, which runs
+//! every entity's operations, is `layerfs-control` `worker_server`
+//! (layerfs-project#104).
 mod client;
 mod frame;
 mod hello;
-mod server;
 
 pub use client::{call, hello, ping, request, send, Endpoint, Unreached, HELLO_WAIT, PING_WAIT};
 pub use frame::{frame_bytes, read_frame, read_frame_within, write_frame, MAX_FRAME, MAX_HELLO};
 #[cfg(feature = "machine")]
 pub(crate) use hello::sealed_hash;
 pub use hello::{is_mismatch, replace_with, Hello, PROTOCOL};
-pub use server::{serve, Served, REQUEST_WAIT};

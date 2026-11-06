@@ -19,7 +19,7 @@ It starts nothing.
 | --- | --- |
 | Family | [machine](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/machine/platforms.rs`](../../../../../api/crates/layerfs-api/src/machine/platforms.rs) |
-| Implemented in | [`layerfs_control::machine::platforms`](../../../../../control/crates/layerfs-control/src/machine/platforms.rs) |
+| Implemented in | [`layerfs_control::machine::platforms`](../../../../../control/crates/layerfs-machine/src/platforms.rs) |
 | Runs in | the caller's process (host build with the `machine` feature) |
 
 ## Signature
@@ -105,14 +105,14 @@ caller's process
 
 All in the caller ([routing table](../../../control/routing/routing-table.md)). The
 docker probe uses the socket the `docker` machine's record names
-([`spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `tools`).
+([`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `tools`).
 
 ## Errors
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
 | `Unsupported` | a build without the `machine` feature | no | [`layerfs-api/src/machine/platforms.rs`](../../../../../api/crates/layerfs-api/src/machine/platforms.rs) |
-| `Failed` | the docker machine's record cannot be read | no | [`spec.rs`](../../../../../control/crates/layerfs-control/src/machine/spec.rs) `tools` |
+| `Failed` | the docker machine's record cannot be read | no | [`spec.rs`](../../../../../control/crates/layerfs-machine/src/spec.rs) `tools` |
 
 A missing tool is not an error: the row has `ready: false`.
 

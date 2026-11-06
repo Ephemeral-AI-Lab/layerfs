@@ -102,7 +102,7 @@ the Store's lane. See the [routing table](../../../control/routing/routing-table
 | other daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) `refusal` |
 | `Unavailable` | the worker is not recorded or does not answer | no | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
 | `Failed` | **a daemon exchange failed; `attempted` in the message says whether it may have published** | **maybe** | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) `operation` |
-| `Unknown` | **the worker's answer was lost** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **the worker's answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After an uncertain Commit**, read [commit.list](../commit/list.md) for the
 Branch (did a new head appear?) and [workspace.status](status.md) (its

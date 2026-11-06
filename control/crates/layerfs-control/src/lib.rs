@@ -15,12 +15,13 @@ pub mod daemon;
 pub mod doctor;
 #[doc(hidden)]
 pub mod inventory;
-#[doc(hidden)]
+#[cfg(feature = "machine")]
 pub mod machine;
 pub mod migrate;
 pub mod project;
 pub mod sandbox;
 pub mod store;
+pub mod worker_server;
 pub mod workspace;
 pub use daemon::call::{SdkError, SdkResult};
 pub use daemon::failure::{OperationCause, OperationFailure};

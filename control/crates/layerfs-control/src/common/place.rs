@@ -6,10 +6,10 @@
 //! else in that machine's worker, `docker` on every host included (G8).
 //! A Sandbox's daemon reached directly (G4) is not an executor here: its
 //! Workspace calls take that route in `sandbox/direct.rs`.
-use crate::machine::worker::{self, Endpoint, Unreached};
 use crate::store::record::StoreRef;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_machine::worker::{self, Endpoint, Unreached};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -138,7 +138,7 @@ fn local(home: &Path, machine: &str) -> Result<bool> {
     use layerfs_platform::{ExecutorKind, HostOs, Platform};
     let platform = match machine {
         "native" => Platform::Native,
-        _ => crate::machine::record::MachineRecord::of(home, machine)?.platform()?,
+        _ => layerfs_machine::record::MachineRecord::of(home, machine)?.platform()?,
     };
     Ok(platform.executor(HostOs::current()) == ExecutorKind::Local)
 }

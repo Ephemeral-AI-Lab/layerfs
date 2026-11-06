@@ -5,8 +5,8 @@
 //! needs no Docker is seen: it makes the Store's folder and file the
 //! container root user's alone (0700, 0600) before anything else runs.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::machine::worker::{self, Endpoint};
 use layerfs_home::home::paths;
+use layerfs_machine::worker::{self, Endpoint};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -39,7 +39,9 @@ fn the_worker_resolves_a_docker_sandbox_s_store_folder() {
         secret: "k".to_owned(),
     };
     let guest = root.clone();
-    std::thread::spawn(move || worker::serve(listener, "k".to_owned(), guest));
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "k".to_owned(), guest)
+    });
     for _ in 0..200 {
         if worker::ping(&endpoint).is_ok() {
             break;

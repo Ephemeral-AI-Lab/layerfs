@@ -121,7 +121,7 @@ A non-zero exit is not an error: it is `kind: "exit:<code>"`.
 | `Busy`, `Unresolved` | a `sandbox.create` or `close` holds the Sandbox | no | [`sandbox/record.rs`](../../../../../control/crates/layerfs-control/src/sandbox/record.rs) |
 | `Unavailable` | the worker is not recorded or does not answer | no | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
 | `Failed` | the runtime could not run the command, or spooling or draining failed | no | [`sandbox/exec.rs`](../../../../../control/crates/layerfs-control/src/sandbox/exec.rs) |
-| `Unknown` | **the worker's answer was lost; the command may have run, in full or in part** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **the worker's answer was lost; the command may have run, in full or in part** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After `Unknown`**, the command's file changes may be in the Workspace.
 Read [workspace.status](status.md) before running it again. A lost reply

@@ -9,7 +9,7 @@ Machine workers and how calls reach them.
 | | |
 | --- | --- |
 | Component | [Network](README.md) |
-| Source | [`control/crates/layerfs-platform/src/setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`control/crates/layerfs-platform/src/setup/guest.rs`](../../../../control/crates/layerfs-platform/src/setup/guest.rs), [`control/crates/layerfs-platform/src/setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs), [`control/crates/layerfs-platform/src/setup/vm.rs`](../../../../control/crates/layerfs-platform/src/setup/vm.rs); server and client in [`control/crates/layerfs-control/src/machine/worker`](../../../../control/crates/layerfs-control/src/machine/worker); the binary in [`api/crates/layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
+| Source | [`control/crates/layerfs-platform/src/setup/worker.rs`](../../../../control/crates/layerfs-platform/src/setup/worker.rs), [`control/crates/layerfs-platform/src/setup/guest.rs`](../../../../control/crates/layerfs-platform/src/setup/guest.rs), [`control/crates/layerfs-platform/src/setup/tool.rs`](../../../../control/crates/layerfs-platform/src/setup/tool.rs), [`control/crates/layerfs-platform/src/setup/vm.rs`](../../../../control/crates/layerfs-platform/src/setup/vm.rs); server and client in [`worker`](../../../../control/crates/layerfs-machine/src/worker); the binary in [`api/crates/layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
 
 A worker is one `layerfs worker` process per machine. It runs the calls
 that must run on the machine's kernel: sqlite Store calls (`store.call`,
@@ -78,7 +78,7 @@ The secret is 32 bytes from `/dev/urandom` as 64 hex digits
 (`tool::secret`). It is written through stdin into a 0600 file, so it is
 never on a command line (`Guest::write_file`). The server reads it from
 that file and compares it in constant time (`same` in
-[`server.rs`](../../../../control/crates/layerfs-control/src/machine/worker/server.rs)).
+[`server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs)).
 
 ## One request per connection
 
@@ -96,15 +96,15 @@ that file and compares it in constant time (`same` in
 ```
 
 A frame is a 4-byte big-endian length then JSON; bytes travel as
-`{"base64": ...}` ([`frame.rs`](../../../../control/crates/layerfs-control/src/machine/worker/frame.rs)).
+`{"base64": ...}` ([`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs)).
 
 | Outcome | Error | Request sent? | Source |
 | --- | --- | --- | --- |
-| Connect, secret or hello fails | `Unavailable` (`Unreached`) | No | [`client.rs`](../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
-| Wrong secret | `Denied` (`Unreached`) | No | [`server.rs`](../../../../control/crates/layerfs-control/src/machine/worker/server.rs) |
-| Worker of another build | `Hello::mismatch` refusal (`Unreached`) | No | [`hello.rs`](../../../../control/crates/layerfs-control/src/machine/worker/hello.rs) |
-| Write of the request fails part way | `Unknown`, "it was not resent" | Maybe | [`client.rs`](../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
-| Answer lost | `Unknown`, "it may have run, and was not resent" | Yes | [`client.rs`](../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| Connect, secret or hello fails | `Unavailable` (`Unreached`) | No | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| Wrong secret | `Denied` (`Unreached`) | No | [`server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
+| Worker of another build | `Hello::mismatch` refusal (`Unreached`) | No | [`worker/hello.rs`](../../../../control/crates/layerfs-machine/src/worker/hello.rs) |
+| Write of the request fails part way | `Unknown`, "it was not resent" | Maybe | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| Answer lost | `Unknown`, "it may have run, and was not resent" | Yes | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 Only `Unreached` may lead the caller to start a machine before it sends the
 request once (#535 R1). A ping waits at most 10 s for its answer; other

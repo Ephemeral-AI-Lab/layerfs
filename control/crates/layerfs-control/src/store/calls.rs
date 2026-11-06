@@ -1,10 +1,10 @@
 //! The `branch`, `commit` and `file` families (#533 step 7): Store calls on
 //! one project's Branches, Commits and files, each translated to the Store
 //! method that does it and run on the route its Store's records choose.
-use crate::common::context::Context;
 use crate::store::call::store_call;
 use crate::store::resolve::target;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::context::Context;
 use layerfs_home::outcome::{refused, Outcome};
 
 /// The argument a scoped `branch.list` carries to its family: the Branch

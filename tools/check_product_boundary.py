@@ -44,6 +44,7 @@ UNSAFE_FREE_CRATES = (
     "layerfs-cli",
     "layerfs-platform",
     "layerfs-home",
+    "layerfs-machine",
 )
 UNSAFE_ROOT_ATTR = {
     "layerfs-storage": "#![deny(unsafe_code)]",
@@ -66,6 +67,7 @@ UNSAFE_ROOT_ATTR = {
     "layerfs-cli": "#![forbid(unsafe_code)]",
     "layerfs-platform": "#![forbid(unsafe_code)]",
     "layerfs-home": "#![forbid(unsafe_code)]",
+    "layerfs-machine": "#![forbid(unsafe_code)]",
 }
 
 
@@ -152,7 +154,7 @@ ALLOWED_DEPENDENCIES = {
     },
     # The SDK call surface (#536): the call table over the control crates
     # (#101: layerfs-api may call any control crate).
-    "layerfs-api": {"layerfs-control", "layerfs-home", "layerfs-bridge"},
+    "layerfs-api": {"layerfs-control", "layerfs-home", "layerfs-machine", "layerfs-bridge"},
     # The management library (#536): home records, machines and workers,
     # Stores, projects, Sandboxes, Workspaces and backups.
     "layerfs-control": {
@@ -164,6 +166,7 @@ ALLOWED_DEPENDENCIES = {
         "layerfs-bridge",
         "layerfs-project",
         "layerfs-home",
+        "layerfs-machine",
         "layerfs-isolation",
         "layerfs-platform",
         "layerfs-store-service",
@@ -172,6 +175,9 @@ ALLOWED_DEPENDENCIES = {
     # The home and its records (#103): knows no entity. The isolation driver
     # names this process (pid, kernel start time, boot) for an op's owner.
     "layerfs-home": {"layerfs-bridge", "layerfs-isolation"},
+    # Machine records, lifecycle and the worker client (#104), over the
+    # platform driver (host builds only, through its `machine` feature).
+    "layerfs-machine": {"layerfs-bridge", "layerfs-home", "layerfs-platform"},
     "layerfs-bridge": {"layerfs-content", "layerfs-history"},
     # The drivers (#101 D-5): isolation (was layerfs-sandbox), platform (was
     # layerfs-machine) and bucket (was layerfs-store-backup).
@@ -208,6 +214,7 @@ LAYER = {
     "layerfs-bucket": CONTROL,
     "layerfs-control": CONTROL,
     "layerfs-home": CONTROL,
+    "layerfs-machine": CONTROL,
     # The public surface under api/crates: the call surface and the 2.0 front
     # ends (#533), the `layerfs` binary, the Node binding and the PyO3 module.
     "layerfs-api": API,

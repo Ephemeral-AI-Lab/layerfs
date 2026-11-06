@@ -11,8 +11,9 @@ use super::list::summary;
 use super::record::{MachineRecord, CREATE};
 use super::spec::{self as record, machine_of, refusal, save_running, update as update_record};
 use super::status::home_id;
-use crate::common::context::Context;
+use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::context::Context;
 use layerfs_home::home::{self, lock, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -37,7 +38,7 @@ pub(super) fn new_name(home: &Path, name: &str) -> Result<()> {
 }
 
 /// `machine.create(name, platform, { cpus, memory, disk, image, nested, host })`.
-pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+pub fn create(context: &mut Context<'_>, args: &SdkValue, related: Related) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("").to_owned();
     let platform = args.get_text("platform").unwrap_or("");
@@ -139,7 +140,7 @@ pub fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
     ]));
     // a `machine start` waits for its create
     let _start = super::endpoint::start_lock(&home, &name)?;
-    finish(&home, &name, op, adapters::create(&spec, &bundle))
+    finish(&home, &name, op, adapters::create(&spec, &bundle), related)
 }
 
 /// Records the outcome of a create or connect (H §7.1.1 step 5) that `op`
@@ -150,13 +151,14 @@ pub(super) fn finish(
     name: &str,
     op: Op,
     outcome: std::result::Result<adapters::Running, adapters::MachineError>,
+    related: Related,
 ) -> Outcome {
     let _lock = lock::take(home)?;
     match outcome {
         Ok(running) => {
             save_running(home, name, &running)?;
             let record = machine_of(home, name)?;
-            summary(home, &record, None)
+            summary(home, &record, None, related)
         }
         Err(error) if error.code == Code::Unknown => {
             let op = op.as_uncertain();

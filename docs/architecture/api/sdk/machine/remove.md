@@ -11,7 +11,7 @@ machine is on it. It also clears an unresolved create or remove.
 | --- | --- |
 | Family | [machine](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/machine/remove.rs`](../../../../../api/crates/layerfs-api/src/machine/remove.rs) |
-| Implemented in | `layerfs_control::machine::remove` → `take_down` ([`machine/remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs)), then `layerfs_platform::remove` |
+| Implemented in | `layerfs_control::machine::remove` → `take_down` ([`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs)), then `layerfs_platform::remove` |
 | Runs in | the caller's process; the provider's CLI deletes the VM |
 
 ## Signature
@@ -36,7 +36,7 @@ layerfs machine remove <name>
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | a created VM machine; built-ins are never removed; an `ssh` machine is disconnected instead | [`machine/remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs) `removable` |
+| `name` | Name | a created VM machine; built-ins are never removed; an `ssh` machine is disconnected instead | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) `removable` |
 
 ## Options
 
@@ -50,7 +50,7 @@ None.
 
 | Field | Kind | Meaning | Source |
 | --- | --- | --- | --- |
-| `name` | text | the machine | [`machine/remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs) |
+| `name` | text | the machine | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) |
 | `removed` | bool | always true on success; `machine/<name>/` is gone | same |
 
 ## Where it runs
@@ -69,7 +69,7 @@ None.
 
 | Adapter outcome | Record afterwards | Source |
 | --- | --- | --- |
-| removed | folder gone | [`machine/remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs) `take_down` |
+| removed | folder gone | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) `take_down` |
 | refused or failed | put back as it was | same |
 | `Unknown` | `op` kept, uncertain, with `error`; logged to `log/uncertain.jsonl` | same |
 
@@ -82,13 +82,13 @@ need not be stopped first. See the
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | a bad name; a built-in machine; an `ssh` machine ("use machine disconnect"); a folder-scoped client | no | [`machine/remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs) |
-| `NotFound` | no machine of that name | no | [`machine/record.rs`](../../../../../control/crates/layerfs-control/src/machine/record.rs) |
+| `InvalidInput` | a bad name; a built-in machine; an `ssh` machine ("use machine disconnect"); a folder-scoped client | no | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) |
+| `NotFound` | no machine of that name | no | [`record.rs`](../../../../../control/crates/layerfs-machine/src/record.rs) |
 | `Busy` | a live process's create, connect or remove holds it | no | same, `not_running` |
 | `InUse` | sqlite Stores, Sandboxes or firecracker machines it hosts are on it (`detail.related`) | no | [`inventory.rs`](../../../../../control/crates/layerfs-control/src/inventory.rs) `can_remove_machine` |
 | `Unsupported` | a build without the `machine` feature | no | [`machine/create.rs` (api)](../../../../../api/crates/layerfs-api/src/machine/create.rs) |
 | `Unavailable`, `Failed` | the provider refused or failed; the record is put back | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
-| `Unknown` | **the provider timed out or lost its answer** | **yes** | [`machine/remove.rs`](../../../../../control/crates/layerfs-control/src/machine/remove.rs) |
+| `Unknown` | **the provider timed out or lost its answer** | **yes** | [`remove.rs`](../../../../../control/crates/layerfs-machine/src/remove.rs) |
 
 **After `Unknown`**, read [machine.status](status.md), then call
 `machine remove` again.

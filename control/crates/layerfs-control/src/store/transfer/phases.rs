@@ -4,7 +4,6 @@
 //! to a machine's worker, a pull from its machine's worker to `native`:
 //! the phases are the same, only the sides swap. Between two machines the
 //! caller pulls, then pushes; each half is its own operation.
-use crate::common::context::Context;
 use crate::common::place::{self, Executor};
 use crate::inventory;
 use crate::store::family::{advance, begin, ended, of_store, progress, record_of, settle, step};
@@ -12,6 +11,7 @@ use crate::store::record::{self, StoreRecord};
 use crate::store::transfer::resolve::retired;
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::context::Context;
 use layerfs_home::home::{self, with_field};
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{refused, Outcome};

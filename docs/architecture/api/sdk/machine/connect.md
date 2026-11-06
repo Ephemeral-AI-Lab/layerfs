@@ -17,7 +17,7 @@ before home creation or platform effects. The adapter code below is disabled.
 | --- | --- |
 | Family | [machine](README.md) |
 | Library entry | [`api/crates/layerfs-api/src/machine/connect.rs`](../../../../../api/crates/layerfs-api/src/machine/connect.rs) |
-| Implemented in | `layerfs_control::machine::connect` ([`machine/connect.rs`](../../../../../control/crates/layerfs-control/src/machine/connect.rs)), then `layerfs_platform::connect` ([`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs)) |
+| Implemented in | `layerfs_control::machine::connect` ([`connect.rs`](../../../../../control/crates/layerfs-machine/src/connect.rs)), then `layerfs_platform::connect` ([`setup/calls.rs`](../../../../../control/crates/layerfs-platform/src/setup/calls.rs)) |
 | Runs in | the caller's process; `ssh` to the host |
 
 ## Signature
@@ -43,8 +43,8 @@ layerfs machine connect <name> <host> [--user U] [--port N] \
 
 | Name | Kind | Rule | Source |
 | --- | --- | --- | --- |
-| `name` | Name | `MachineName::parse`; not built in; not taken | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) `new_name` |
-| `host` | Text | the ssh host name or address | [`machine/connect.rs`](../../../../../control/crates/layerfs-control/src/machine/connect.rs) |
+| `name` | Name | `MachineName::parse`; not built in; not taken | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) `new_name` |
+| `host` | Text | the ssh host name or address | [`connect.rs`](../../../../../control/crates/layerfs-machine/src/connect.rs) |
 
 `ssh` is disabled on macOS, Linux, Windows and every other host
 ([`SUPPORT.json`](../../../../../control/SUPPORT.json)); see the
@@ -54,10 +54,10 @@ layerfs machine connect <name> <host> [--user U] [--port N] \
 
 | Name | Kind | Default | Rule | Source |
 | --- | --- | --- | --- | --- |
-| `user` | Text | `root` | the login user | [`machine/connect.rs`](../../../../../control/crates/layerfs-control/src/machine/connect.rs) |
+| `user` | Text | `root` | the login user | [`connect.rs`](../../../../../control/crates/layerfs-machine/src/connect.rs) |
 | `port` | Int | 22 | the ssh port | same |
 | `identity` | Text | none (ssh's own) | a private key path, passed as `-i` | same, [`ssh/observe.rs`](../../../../../control/crates/layerfs-platform/src/platforms/ssh/observe.rs) |
-| `known_hosts` | Text | `$HOME/.ssh/known_hosts` | copied into `machine/<name>/known_hosts`; the host key is checked strictly against it | [`machine/connect.rs`](../../../../../control/crates/layerfs-control/src/machine/connect.rs) |
+| `known_hosts` | Text | `$HOME/.ssh/known_hosts` | copied into `machine/<name>/known_hosts`; the host key is checked strictly against it | [`connect.rs`](../../../../../control/crates/layerfs-machine/src/connect.rs) |
 | `root` | Text | `/layerfs/data` | the data root on the host for Stores | [`spec.rs`](../../../../../control/crates/layerfs-platform/src/spec.rs) `DATA` |
 
 ## Retained success result (unreachable while disabled)
@@ -93,12 +93,12 @@ See the [routing table](../../../control/routing/routing-table.md).
 
 | Code | When | Uncertain? | Source |
 | --- | --- | --- | --- |
-| `InvalidInput` | bad or built-in name; `known_hosts` unset with no `HOME`, or unreadable; a folder-scoped client | no | [`machine/connect.rs`](../../../../../control/crates/layerfs-control/src/machine/connect.rs) |
+| `InvalidInput` | bad or built-in name; `known_hosts` unset with no `HOME`, or unreadable; a folder-scoped client | no | [`connect.rs`](../../../../../control/crates/layerfs-machine/src/connect.rs) |
 | `Exists` | the name is taken; another machine is the same host | no | same |
-| `Unsupported` | `ssh` not usable here (`detail.missing`); no sealed bundle; no `machine` feature | no | same, [`machine/bundle.rs`](../../../../../control/crates/layerfs-control/src/machine/bundle.rs) |
+| `Unsupported` | `ssh` not usable here (`detail.missing`); no sealed bundle; no `machine` feature | no | same, [`bundle.rs`](../../../../../control/crates/layerfs-machine/src/bundle.rs) |
 | `Denied` | the host refuses the login or its key is not the known one | no | [`error.rs`](../../../../../control/crates/layerfs-platform/src/error.rs) |
 | `Unavailable`, `Failed` | the host does not answer; a setup step failed | no | same |
-| `Unknown` | **a setup step timed out or its answer was lost** | **yes** | [`machine/create.rs`](../../../../../control/crates/layerfs-control/src/machine/create.rs) `finish` |
+| `Unknown` | **a setup step timed out or its answer was lost** | **yes** | [`create.rs`](../../../../../control/crates/layerfs-machine/src/create.rs) `finish` |
 
 **After `Unknown`**, read [machine.status](status.md), then clear it with
 [machine.disconnect](disconnect.md).

@@ -111,7 +111,7 @@ guess. See [error kinds](../../call-table/errors.md#error-kinds) and
 `family::step` runs a step with `transfer::steps::run` in this process for
 `Executor::Local`, else sends it as `store.file`
 ([`store/family.rs`](../../../../../control/crates/layerfs-control/src/store/family.rs),
-[`machine/worker/server.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/server.rs)).
+[`worker_server.rs`](../../../../../control/crates/layerfs-control/src/worker_server.rs)).
 A PostgreSQL Store has no machine. The Store calls on a Store's projects
 are the `branch`, `commit` and `file` families. See the
 [routing table](../../../control/routing/routing-table.md).

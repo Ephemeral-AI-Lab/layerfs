@@ -68,8 +68,8 @@ itself is the [Routing table](routing-table.md).
 caller cannot open a SQLite Store on: every VM and ssh host, `docker` on
 every host, and `native` on Windows. Only `machine.start` starts it; it
 serves until `machine.stop` ends it
-([`machine/worker/mod.rs`](../../../../control/crates/layerfs-control/src/machine/worker/mod.rs),
-[`machine/endpoint.rs`](../../../../control/crates/layerfs-control/src/machine/endpoint.rs)).
+([`worker/mod.rs`](../../../../control/crates/layerfs-machine/src/worker/mod.rs),
+[`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs)).
 
 ## Invariants
 
@@ -78,20 +78,20 @@ serves until `machine.stop` ends it
 | SQLite Store calls run on the Store's kernel: in process on `native` (macOS, Linux), else in that machine's worker. | [`place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs) `plan`, `local`; executor per platform in [`layerfs-platform` `platform.rs`](../../../../control/crates/layerfs-platform/src/platform.rs) |
 | PostgreSQL Store calls run in the caller's process; the password is resolved per call and never written to a record. | `place::plan` (`StoreRef::Postgres` → `Local`); [`store/call.rs`](../../../../control/crates/layerfs-control/src/store/call.rs) `postgresql` |
 | Workspace calls go to the daemon; the daemon serves no Store calls. | [`daemon/call.rs`](../../../../control/crates/layerfs-control/src/daemon/call.rs) ("Store calls are not daemon calls"); [`daemon/operator.rs`](../../../../control/crates/layerfs-control/src/daemon/operator.rs) admits one read-model method |
-| A worker gets one attempt per call; nothing is resent. A lost answer after the request was sent is `Unknown`. | [`worker/client.rs`](../../../../control/crates/layerfs-control/src/machine/worker/client.rs) `send_once`, `answer`, `lost` |
+| A worker gets one attempt per call; nothing is resent. A lost answer after the request was sent is `Unknown`. | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `send_once`, `answer`, `lost` |
 | No call starts a machine except `machine.start`; an unreached worker is `Unavailable` naming it. | `place.rs` `recorded`, `stopped` (#535 D11) |
-| A guest worker never reads the caller's home: each request carries the records it needs. | [`worker/server.rs`](../../../../control/crates/layerfs-control/src/machine/worker/server.rs) `with_home`; `sandbox/route.rs` `host_op` |
+| A guest worker never reads the caller's home: each request carries the records it needs. | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) `with_home`; `sandbox/route.rs` `host_op` |
 | LayerFS reads `LAYERFS_*` settings only (`LAYERFS_HOME`, `LAYERFS_WORKER_LISTEN`, `LAYERFS_WORKER_SECRET`, `LAYERFS_DAEMON_HOST`, …) and names no plugin. | [`calls/dispatch.rs`](../../../../control/crates/layerfs-control/src/calls/dispatch.rs) `home`, [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs) |
 
 ## Limits and failures
 
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
-| Worker of another protocol or bundle | `Unavailable` with `detail {worker, expected}`; nothing sent; replace it with `machine stop`, then `machine start` | [`worker/hello.rs`](../../../../control/crates/layerfs-control/src/machine/worker/hello.rs) |
-| Requests per worker connection | one, after the secret frame | [`worker/server.rs`](../../../../control/crates/layerfs-control/src/machine/worker/server.rs) |
-| Worker frame size | 512 MiB (`MAX_FRAME`); first frame 4 KiB (`MAX_HELLO`); larger is `TooLarge` | [`worker/frame.rs`](../../../../control/crates/layerfs-control/src/machine/worker/frame.rs) |
-| Worker connect and secret-answer waits | 10 s each (`CONNECT`, `HELLO_WAIT`), then `Unavailable` | [`worker/client.rs`](../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
-| Worker wait between request bytes | 30 s (`REQUEST_WAIT`) | [`worker/server.rs`](../../../../control/crates/layerfs-control/src/machine/worker/server.rs) |
+| Worker of another protocol or bundle | `Unavailable` with `detail {worker, expected}`; nothing sent; replace it with `machine stop`, then `machine start` | [`worker/hello.rs`](../../../../control/crates/layerfs-machine/src/worker/hello.rs) |
+| Requests per worker connection | one, after the secret frame | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
+| Worker frame size | 512 MiB (`MAX_FRAME`); first frame 4 KiB (`MAX_HELLO`); larger is `TooLarge` | [`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs) |
+| Worker connect and secret-answer waits | 10 s each (`CONNECT`, `HELLO_WAIT`), then `Unavailable` | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) |
+| Worker wait between request bytes | 30 s (`REQUEST_WAIT`) | [`worker_server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) |
 | Machine with no `worker.json` | `Unavailable`: "start it with `layerfs machine start`" | [`place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs) |
 | Daemon connections per process per Sandbox | 6 (`CONNECTIONS`); the daemon admits 8 (`DAEMON_CONNECTIONS`) | [`daemon/pool.rs`](../../../../control/crates/layerfs-control/src/daemon/pool.rs), [`sandbox/serve.rs`](../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
 | Wait for a free daemon connection | 60 s (`LEND_WAIT`), then `Busy`; nothing attempted | `daemon/pool.rs` |

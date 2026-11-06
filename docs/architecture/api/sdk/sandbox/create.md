@@ -129,7 +129,7 @@ Nothing starts a stopped machine. See the
 | `Busy`, `Unresolved` | the Store holds an `op` (push, pull, remove) | no | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
 | `Unavailable` | worker not recorded or not answering (nothing sent); a lock held too long; PostgreSQL server not reached | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs), [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
 | `Failed` | the start failed and every effect is known: the container was stopped and deleted, `detail {container, removed, log}` | no | `serve.rs` `abandon` |
-| `Unknown` | **the worker's answer was lost; or the start's effect on the Store volume or Engine is unknown; or it started but could not be recorded** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs), `serve.rs` `abandon`, `unrecorded` |
+| `Unknown` | **the worker's answer was lost; or the start's effect on the Store volume or Engine is unknown; or it started but could not be recorded** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), `serve.rs` `abandon`, `unrecorded` |
 
 After `Unknown` the record keeps its `op` with `uncertain: true`, a line
 goes to `log/uncertain.jsonl`, and the state is `unresolved`. Read

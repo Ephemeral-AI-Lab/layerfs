@@ -65,11 +65,11 @@ reads the rows.
 
 `machine.platforms` returns `platforms(HostOs::current())` with three live
 fields added from `probe`: `ready`, `missing` and `version`
-([`machine/platforms.rs`](../../../../control/crates/layerfs-control/src/machine/platforms.rs)).
+([`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs)).
 `machine.list` and `machine.get` give each machine its row's `supports`.
 `machine create` and `sandbox create` call `sandbox_allowed` and refuse
 `Unsupported` with its reason
-([`machine/create.rs`](../../../../control/crates/layerfs-control/src/machine/create.rs),
+([`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs),
 [`sandbox/create.rs`](../../../../control/crates/layerfs-control/src/sandbox/create.rs)).
 
 ## Invariants

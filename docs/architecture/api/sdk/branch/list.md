@@ -98,7 +98,7 @@ A read: it never takes the publication lane. A stopped machine is
 | `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) |
 | `Unavailable` | the machine's worker is not recorded or does not answer; an unreachable PostgreSQL server | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
 | `Failed` | a scoped list made no progress | no | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 ## Examples
 

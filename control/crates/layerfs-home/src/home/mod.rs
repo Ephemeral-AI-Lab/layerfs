@@ -9,7 +9,7 @@ pub mod lock;
 pub mod paths;
 pub mod records;
 
-pub use layout::{detect, ensure, HomeFile, Layout, LAYOUT_VERSION};
+pub use layout::{detect, ensure, opened, HomeFile, Layout, LAYOUT_VERSION};
 pub use records::{
     log_line, now_ms, private_dir, read_record, traversable, versioned, with_field, write_entity,
     write_record, RECORD_VERSION,

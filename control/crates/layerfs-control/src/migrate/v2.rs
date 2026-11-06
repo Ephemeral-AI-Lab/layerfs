@@ -28,7 +28,6 @@
 //! write is idempotent); after it, the next open finds the marker and
 //! finishes step 3 ([`finish`]).
 use crate::common::lease;
-use crate::machine::record::MachineRecord;
 use crate::sandbox::record::SandboxRecord;
 use crate::sandbox::recorded::{unchecked, Recorded};
 use crate::store::record::StoreRecord;
@@ -37,6 +36,7 @@ use layerfs_home::home::layout::{write, HomeFile, LAYOUT_VERSION};
 use layerfs_home::home::{paths, read_record, with_field, write_entity, write_record};
 use layerfs_home::op::{self, Op};
 use layerfs_home::outcome::{failed, refused};
+use layerfs_machine::record::MachineRecord;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;

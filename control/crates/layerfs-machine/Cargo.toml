@@ -1,0 +1,17 @@
+[package]
+name = "layerfs-machine"
+description = "Machine records, their lifecycle and the worker client (layerfs-project#104): machine/<name>/ records, the built-in native and docker, VMs created by name, ssh hosts connected, and the worker protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
+layerfs-home = { path = "../layerfs-home" }
+layerfs-platform = { path = "../layerfs-platform", optional = true }
+
+[features]
+# The machine calls (2.0, #533): host builds only. The guest worker is built
+# without it, so no machine adapter runs inside a machine.
+machine = ["dep:layerfs-platform"]

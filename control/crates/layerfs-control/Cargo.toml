@@ -11,6 +11,7 @@ layerfs-bridge = { path = "../../../engine/crates/layerfs-bridge" }
 layerfs-content = { path = "../../../core/crates/layerfs-content" }
 layerfs-history = { path = "../../../core/crates/layerfs-history" }
 layerfs-home = { path = "../layerfs-home" }
+layerfs-machine = { path = "../layerfs-machine" }
 layerfs-persistence = { path = "../../../engine/crates/layerfs-persistence" }
 layerfs-storage = { path = "../../../core/crates/layerfs-storage" }
 layerfs-telemetry = { path = "../../../core/crates/layerfs-telemetry" }
@@ -36,7 +37,7 @@ postgresql = [
 tls = ["layerfs-bucket/tls"]
 # The machine calls (2.0, #533): host builds only. The guest worker is built
 # without it, so no machine adapter runs inside a machine.
-machine = ["dep:layerfs-platform"]
+machine = ["dep:layerfs-platform", "layerfs-machine/machine"]
 
 [dev-dependencies]
 nix = { version = "=0.31.3", features = ["fs", "user", "process"] }

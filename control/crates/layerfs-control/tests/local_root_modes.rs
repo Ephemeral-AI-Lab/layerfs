@@ -6,8 +6,8 @@
 //! more, is covered through `project.init` in layerfs-api's
 //! `project_family`.)
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::machine::worker;
 use layerfs_home::home;
+use layerfs_machine::worker;
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -60,7 +60,9 @@ fn a_worker_s_root_is_passable_and_private() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let served = root.clone();
-    std::thread::spawn(move || worker::serve(listener, "s".to_owned(), served));
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "s".to_owned(), served)
+    });
     let endpoint = worker::Endpoint {
         address,
         secret: "s".to_owned(),

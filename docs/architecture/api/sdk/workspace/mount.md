@@ -108,7 +108,7 @@ scope only `main` is accepted and is mounted as the Branch `<ns>.main`
 | `Unavailable` | the machine's worker is not recorded or does not answer | no | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
 | daemon refusal codes | the daemon refused before effect; its own code and `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) `refusal` |
 | `Failed` | **a daemon exchange failed; the message carries the `OperationFailure`, whose `attempted` says whether the mount may have taken effect** | **maybe** | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) `operation` |
-| `Unknown` | **the worker's answer was lost** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **the worker's answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After an uncertain mount**, read [sandbox.get](../sandbox/get.md) for the
 Sandbox's Workspaces before mounting again; a mount that landed takes one

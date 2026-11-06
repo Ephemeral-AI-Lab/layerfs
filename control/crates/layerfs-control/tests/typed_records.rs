@@ -124,7 +124,7 @@ fn a_sandbox_shows_its_record() {
 #[cfg(feature = "machine")]
 mod machines {
     use super::*;
-    use layerfs_control::machine::record::{MachineDerived, MachineRecord};
+    use layerfs_machine::record::{MachineDerived, MachineRecord};
 
     fn keys(value: &SdkValue) -> Vec<&str> {
         match value {

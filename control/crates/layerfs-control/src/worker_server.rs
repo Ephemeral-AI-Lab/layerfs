@@ -1,4 +1,7 @@
 //! The worker's side: `layerfs worker` serves one request per connection.
+//! It runs every entity's operations, so it sits above them in
+//! `layerfs-control` (layerfs-project#104); the protocol is
+//! `layerfs-machine` `worker`.
 //!
 //! A connection starts with a small frame `{ secret }`: the worker reads at
 //! most [`MAX_HELLO`] bytes, waiting at most [`HELLO_WAIT`], and answers
@@ -15,11 +18,11 @@
 //! A request may carry `home_id`, the caller's home id: the root is not a
 //! home and has no id of its own (O33), so host code that asks for one
 //! gets the caller's, and the root is never converted or written as a home.
-use super::client::HELLO_WAIT;
-use super::frame::{read_frame, read_frame_within, write_frame, MAX_HELLO};
-use super::hello::Hello;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::outcome::{refused, Outcome};
+use layerfs_machine::worker::{
+    read_frame, read_frame_within, write_frame, Hello, HELLO_WAIT, MAX_HELLO,
+};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};

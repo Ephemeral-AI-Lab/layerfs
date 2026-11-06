@@ -88,7 +88,7 @@ and [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/r
 | `Busy`, `Unresolved` | the Store's record holds another operation's `op` | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs) |
 | `Unavailable` | the Store's worker is not recorded or does not answer | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
 | `Failed` | a list made no progress | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
-| `Unknown` | **uncertain:** a worker's answer was lost, or the Store reported an unknown outcome | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
+| `Unknown` | **uncertain:** a worker's answer was lost, or the Store reported an unknown outcome | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 
 An `Unknown` `fork`, `merge` or `publish` may have published. Read the
 Branch with `branch.get` or `branch.list` before acting again. See

@@ -83,7 +83,7 @@ See the [routing table](../../../control/routing/routing-table.md).
 | `InvalidInput` | a side is not a saved Commit; bad paging; a folder-scoped client | no | [`read/compare.rs`](../../../../../engine/crates/layerfs-store-service/src/read/compare.rs) |
 | `NoSuchCommit` | a Commit is missing | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 ## Examples
 

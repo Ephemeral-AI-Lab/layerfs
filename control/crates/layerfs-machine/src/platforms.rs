@@ -3,8 +3,8 @@
 //! (`ready`, `missing`, `version`). It starts no machine (P4). Also the
 //! per-machine `supports` of `machine.list` and `machine.get` (P3).
 use super::spec as record;
-use crate::common::context::Context;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::context::Context;
 use layerfs_home::outcome::Outcome;
 use layerfs_platform::{self as adapters, HostOs, Platform, Probe, SupportRow, Supports};
 
@@ -23,7 +23,7 @@ pub fn platforms(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
 }
 
 /// A machine's `supports`: its platform's row on this host.
-pub(crate) fn supports(platform: Platform) -> SdkValue {
+pub fn supports(platform: Platform) -> SdkValue {
     let Supports {
         sqlite,
         postgresql_sandbox,

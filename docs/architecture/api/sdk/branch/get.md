@@ -76,7 +76,7 @@ Under a folder scope `branch` is composed as `<ns>.<branch>`.
 | `NoSuchBranch` | no Branch of that name | no | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
 | `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) |
 | `Unavailable` | the worker or server does not answer | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 `branch.get` is the read to make after an uncertain
 [fork](fork.md), [merge](merge.md) or [publish](publish.md).

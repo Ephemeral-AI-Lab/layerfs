@@ -90,7 +90,7 @@ A read reply is bounded by `REPLY_BUDGET` (48 KiB); `truncated`,
 | `ReadOnly` | a write to `main`, which changes only through `branch.publish` | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `Conflict` | the head moved and paths conflict; nothing was committed | [`write/files.rs`](../../../../../engine/crates/layerfs-store-service/src/write/files.rs) |
 | `Busy`, `Unresolved`, `Unavailable` | the Store's `op`, or its worker not reached | [`op.rs`](../../../../../control/crates/layerfs-home/src/op.rs), [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
-| `Unknown` | **uncertain:** a worker's answer was lost, or the Store reported an unknown outcome | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
+| `Unknown` | **uncertain:** a worker's answer was lost, or the Store reported an unknown outcome | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs), [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 
 After an `Unknown` write the Commit may exist. Read the Branch head with
 `branch.get` or `commit.list` before writing again. See

@@ -3,7 +3,7 @@
 //! JSON line naming its request and whether it was sent; one worker call is
 //! one line.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::machine::worker::{
+use layerfs_machine::worker::{
     self, read_frame, read_frame_within, write_frame, Endpoint, Hello, MAX_HELLO, PROTOCOL,
 };
 use std::net::TcpListener;

@@ -5,13 +5,13 @@
 //! is not running. The caller sends the worker the Store's record with the
 //! call, so a guest never reads the home; the worker finds the Store file
 //! under its own root.
-use crate::common::context::Context;
 use crate::common::lease;
 use crate::common::place::{plan, Executor};
 use crate::store::open;
 use crate::store::record::{StoreRecord, StoreRef};
 use crate::store::resolve::Target;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::context::Context;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::Outcome;
 use std::path::Path;

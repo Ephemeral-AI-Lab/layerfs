@@ -155,3 +155,24 @@ pub fn write(home: &Path, file: &HomeFile) -> Result<(), SdkRefusal> {
         ]),
     )
 }
+
+/// The `layerfs.json` of a home a call has already opened: a worker's root
+/// answers its caller's id (`guest`), a current home its file. The entities
+/// read their home's id here; opening (creating or converting) a home is
+/// `layerfs-control` `migrate::open`, which every call runs first
+/// (layerfs-project#104).
+pub fn opened(home: &Path) -> Result<HomeFile, SdkRefusal> {
+    if crate::home::guest::is_root(home) {
+        return crate::home::guest::file(home);
+    }
+    match detect(home)? {
+        Layout::Current(file) => Ok(file),
+        _ => Err(refused(
+            "InvalidInput",
+            format!(
+                "{} is not an open LayerFS home; a call opens (creates or converts) it first",
+                home.display()
+            ),
+        )),
+    }
+}

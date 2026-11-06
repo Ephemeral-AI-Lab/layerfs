@@ -128,7 +128,7 @@ Store calls hide that Branch: they treat `main` as the line of Layers (see
 | `Unsupported` | the kernel guard refuses the Store's filesystem; the Store has no acquisition tables; PostgreSQL in a build without `postgresql` | no | `store/identity.rs`, [`kernel_guard.rs`](../../../../../engine/crates/layerfs-store-service/src/kernel_guard.rs) |
 | `NoStore` | no Store file at the Store's path | no | `store/identity.rs` |
 | `Failed` | deadline passed, read error, or any engine failure, **including an Init whose outcome is unknown** | **may be** | `store/identity.rs` `add_failure` |
-| `Unknown` | **worker route: a stage or the `project.init` answer was lost** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **worker route: a stage or the `project.init` answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **An uncertain Init in the add reaches the caller as `Failed`, not
 `Unknown`:** `add_failure` maps only `Exists`, `NoAcquisition`, `Busy` and a

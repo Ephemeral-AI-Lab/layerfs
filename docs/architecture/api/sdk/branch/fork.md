@@ -102,7 +102,7 @@ namespace is therefore not confined (an open gap,
 | `NoSuchBranch`, `NoSuchCommit`, `NotFound` | the source Branch, Commit or Layer is missing | no | [`history/lookup.rs`](../../../../../engine/crates/layerfs-store-service/src/history/lookup.rs) |
 | `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`store/record.rs`](../../../../../control/crates/layerfs-control/src/store/record.rs) |
 | `Unavailable` | the worker or server does not answer before the call is sent | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
-| `Unknown` | **the worker's answer was lost, or the Store reports an unknown outcome** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **the worker's answer was lost, or the Store reports an unknown outcome** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After `Unknown`**, read [branch.get](get.md) for `name`: it exists if the
 fork published. Do not fork again blindly; a second fork is `NameTaken`.

@@ -8,16 +8,14 @@
 //! This process resolves from the home's records and the sealed bundle in
 //! the user cache (O16); a machine's worker from its own bundle folder (a
 //! guest never reads the home, H §7.7).
-use crate::machine::record::MachineRecord;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused};
+use layerfs_machine::record::MachineRecord;
+use layerfs_machine::{bundle_dir, IMAGE_ARCHIVE};
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
-
-/// The Sandbox image archive (a docker-archive) a Linux bundle carries.
-pub(crate) const IMAGE_ARCHIVE: &str = "sandbox-image.tar";
 
 /// Where a guest holds a machine's own Sandbox image archive, copied in at
 /// start (`layerfs_platform::IMAGE`).
@@ -39,34 +37,6 @@ pub(super) enum Side<'a> {
     /// A machine's worker, with its root at the path and its bundle beside
     /// its own executable.
     Worker(&'a Path),
-}
-
-/// The sealed bundle's folder for `os` on this host's architecture (O16):
-/// `<cache>/layerfs/bundle/<version>/<os>-<arch>/`, the cache being
-/// `XDG_CACHE_HOME` or `~/.cache`; for Linux, `LAYERFS_BUNDLE` (internal)
-/// names another folder.
-pub(crate) fn bundle_dir(os: &str) -> Result<PathBuf> {
-    if os == "linux" {
-        if let Some(dir) = std::env::var_os("LAYERFS_BUNDLE").filter(|d| !d.is_empty()) {
-            return Ok(PathBuf::from(dir));
-        }
-    }
-    let cache = match std::env::var_os("XDG_CACHE_HOME").filter(|d| !d.is_empty()) {
-        Some(dir) => PathBuf::from(dir),
-        None => std::env::var_os("HOME")
-            .map(|home| PathBuf::from(home).join(".cache"))
-            .ok_or_else(|| {
-                refused(
-                    "InvalidInput",
-                    "HOME is unset, so the user cache is unknown",
-                )
-            })?,
-    };
-    Ok(cache
-        .join("layerfs")
-        .join("bundle")
-        .join(env!("CARGO_PKG_VERSION"))
-        .join(format!("{os}-{}", std::env::consts::ARCH)))
 }
 
 /// What machine `machine`'s record chooses for a Sandbox of a Store
@@ -273,7 +243,7 @@ fn beside_self(name: &str) -> Result<PathBuf> {
 fn docker_vm(home: &Path, record: &MachineRecord) -> Result<String> {
     Ok(match record.text("vm_name") {
         Some(name) => name.to_owned(),
-        None => crate::machine::vm_name(&crate::migrate::open(home)?.id, "docker"),
+        None => layerfs_machine::vm_name(&crate::migrate::open(home)?.id, "docker"),
     })
 }
 
@@ -289,7 +259,7 @@ fn docker_vm(_: &Path, _: &MachineRecord) -> Result<String> {
 /// image, loaded into Docker once (P5).
 #[cfg(feature = "machine")]
 fn docker_default(home: &Path) -> Result<String> {
-    crate::machine::docker_default(home)
+    layerfs_machine::docker_default(home)
 }
 
 #[cfg(not(feature = "machine"))]
@@ -303,7 +273,7 @@ fn docker_default(_: &Path) -> Result<String> {
 /// The sealed bundle's Linux daemon.
 #[cfg(feature = "machine")]
 fn bundle_daemon() -> Result<String> {
-    let bundle = crate::machine::bundle()?;
+    let bundle = layerfs_machine::bundle()?;
     Ok(bundle.dir.join("layerfs-daemon").display().to_string())
 }
 

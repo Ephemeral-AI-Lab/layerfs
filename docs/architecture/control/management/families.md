@@ -9,11 +9,11 @@ How control implements each call family.
 | | |
 | --- | --- |
 | Component | [Control](README.md) |
-| Source | [`control/crates/layerfs-control/src/machine`](../../../../control/crates/layerfs-control/src/machine), [`control/crates/layerfs-control/src/store`](../../../../control/crates/layerfs-control/src/store), [`control/crates/layerfs-control/src/project`](../../../../control/crates/layerfs-control/src/project), [`control/crates/layerfs-control/src/sandbox`](../../../../control/crates/layerfs-control/src/sandbox), [`control/crates/layerfs-control/src/workspace`](../../../../control/crates/layerfs-control/src/workspace), [`control/crates/layerfs-control/src/backup`](../../../../control/crates/layerfs-control/src/backup) |
+| Source | [`control/crates/layerfs-control/src/machine`](../../../../control/crates/layerfs-machine/src), [`control/crates/layerfs-control/src/store`](../../../../control/crates/layerfs-control/src/store), [`control/crates/layerfs-control/src/project`](../../../../control/crates/layerfs-control/src/project), [`control/crates/layerfs-control/src/sandbox`](../../../../control/crates/layerfs-control/src/sandbox), [`control/crates/layerfs-control/src/workspace`](../../../../control/crates/layerfs-control/src/workspace), [`control/crates/layerfs-control/src/backup`](../../../../control/crates/layerfs-control/src/backup) |
 
 Every family function takes the running call's `Context` (its home and
 its event stream) and the checked arguments, and answers one `Outcome`
-([`common/context.rs`](../../../../control/crates/layerfs-control/src/common/context.rs),
+([`context.rs`](../../../../control/crates/layerfs-home/src/context.rs),
 [`outcome.rs`](../../../../control/crates/layerfs-home/src/outcome.rs)). The call table's entries
 name these functions ([Table](../../api/call-table/table.md)).
 
@@ -44,19 +44,19 @@ The multi-step operations share one shape, the `op` intent
 Records in `machine/<name>/`, adapters from `layerfs-platform`
 ([Machines](../machines/README.md)). Built without the
 `machine` feature, every call is `Unsupported`
-([`machine/mod.rs`](../../../../control/crates/layerfs-control/src/machine/mod.rs)).
+([`machine/mod.rs`](../../../../control/crates/layerfs-machine/src/lib.rs)).
 
 | Call | Does | Intent / lock | Source |
 | --- | --- | --- | --- |
-| `list`, `get` | records with live probes and `supports`; start nothing | none | [`machine/list.rs`](../../../../control/crates/layerfs-control/src/machine/list.rs), [`machine/get.rs`](../../../../control/crates/layerfs-control/src/machine/get.rs) |
-| `platforms` | the support table rows for this host and build, each with its probe | none | [`machine/platforms.rs`](../../../../control/crates/layerfs-control/src/machine/platforms.rs) |
-| `status` | live state, free disk, tool version | none | [`machine/status.rs`](../../../../control/crates/layerfs-control/src/machine/status.rs) |
-| `start` | the only call that starts a machine: dials `worker.json`'s worker, else starts the VM and worker, waits for readiness, rewrites `worker.json` | `start.lock` | [`machine/endpoint.rs`](../../../../control/crates/layerfs-control/src/machine/endpoint.rs), [`machine/power.rs`](../../../../control/crates/layerfs-control/src/machine/power.rs) |
-| `stop` | stops worker and VM; disks and Stores stay; `InUse` while Sandboxes are recorded on it | `start.lock` | [`machine/power.rs`](../../../../control/crates/layerfs-control/src/machine/power.rs) |
-| `create` | claims the name with `op` `machine.create`, makes the VM outside the home lock, records `running`, `failed` or an uncertain `op` | `op`, `start.lock` | [`machine/create.rs`](../../../../control/crates/layerfs-control/src/machine/create.rs) |
-| `connect` | an ssh host; host key checked strictly; `op` `machine.connect` | `op` | [`machine/connect.rs`](../../../../control/crates/layerfs-control/src/machine/connect.rs) |
-| `remove`, `disconnect` | delete a VM and its disk, or forget an ssh host (its root stays); `InUse` while it holds Stores, Sandboxes or hosted machines | `op`, `start.lock` | [`machine/remove.rs`](../../../../control/crates/layerfs-control/src/machine/remove.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
-| `update` | resize a VM, or set a built-in machine's image, Docker socket, `wsl` setting or daemon; `InUse` while Sandboxes run | home lock | [`machine/update.rs`](../../../../control/crates/layerfs-control/src/machine/update.rs) |
+| `list`, `get` | records with live probes and `supports`; start nothing | none | [`list.rs`](../../../../control/crates/layerfs-machine/src/list.rs), [`get.rs`](../../../../control/crates/layerfs-machine/src/get.rs) |
+| `platforms` | the support table rows for this host and build, each with its probe | none | [`platforms.rs`](../../../../control/crates/layerfs-machine/src/platforms.rs) |
+| `status` | live state, free disk, tool version | none | [`status.rs`](../../../../control/crates/layerfs-machine/src/status.rs) |
+| `start` | the only call that starts a machine: dials `worker.json`'s worker, else starts the VM and worker, waits for readiness, rewrites `worker.json` | `start.lock` | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs), [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs) |
+| `stop` | stops worker and VM; disks and Stores stay; `InUse` while Sandboxes are recorded on it | `start.lock` | [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs) |
+| `create` | claims the name with `op` `machine.create`, makes the VM outside the home lock, records `running`, `failed` or an uncertain `op` | `op`, `start.lock` | [`create.rs`](../../../../control/crates/layerfs-machine/src/create.rs) |
+| `connect` | an ssh host; host key checked strictly; `op` `machine.connect` | `op` | [`connect.rs`](../../../../control/crates/layerfs-machine/src/connect.rs) |
+| `remove`, `disconnect` | delete a VM and its disk, or forget an ssh host (its root stays); `InUse` while it holds Stores, Sandboxes or hosted machines | `op`, `start.lock` | [`remove.rs`](../../../../control/crates/layerfs-machine/src/remove.rs), [`inventory.rs`](../../../../control/crates/layerfs-control/src/inventory.rs) |
+| `update` | resize a VM, or set a built-in machine's image, Docker socket, `wsl` setting or daemon; `InUse` while Sandboxes run | home lock | [`update.rs`](../../../../control/crates/layerfs-machine/src/update.rs) |
 
 `machine/worker/` holds the worker client and server; see
 [Workers](../routing/workers.md).

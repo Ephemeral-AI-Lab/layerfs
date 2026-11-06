@@ -710,6 +710,7 @@ dependencies = [
  "layerfs-history",
  "layerfs-home",
  "layerfs-isolation",
+ "layerfs-machine",
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-platform",
@@ -770,6 +771,7 @@ dependencies = [
  "layerfs-history",
  "layerfs-home",
  "layerfs-isolation",
+ "layerfs-machine",
  "layerfs-overlay",
  "layerfs-persistence",
  "layerfs-platform",
@@ -839,6 +841,15 @@ name = "layerfs-isolation"
 version = "2.0.0"
 dependencies = [
  "nix",
+]
+
+[[package]]
+name = "layerfs-machine"
+version = "2.0.0"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-home",
+ "layerfs-platform",
 ]
 
 [[package]]

@@ -99,7 +99,7 @@ worker (`store.call`), with nothing started. See the
 | `Busy`, `Unresolved` | a push, pull or remove holds the Store | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
 | `Unavailable` | the Store's worker is not recorded or does not answer; an unreachable PostgreSQL server | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
 | `NoSuchPath` | `path` is missing | no | [`read/snapshot.rs`](../../../../../engine/crates/layerfs-store-service/src/read/snapshot.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 ## Examples
 

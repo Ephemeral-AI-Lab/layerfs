@@ -1,9 +1,9 @@
 //! `machine.status` and the home id the machine specs use.
 use super::record::MachineRecord;
 use super::spec::{self as record, refusal};
-use crate::common::context::Context;
-use crate::inventory::stores_on;
+use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::context::Context;
 use layerfs_home::outcome::Outcome;
 use layerfs_platform as adapters;
 use std::path::Path;
@@ -11,7 +11,7 @@ use std::path::Path;
 type Result<T> = std::result::Result<T, SdkRefusal>;
 
 pub(super) fn home_id(home: &Path) -> Result<String> {
-    Ok(crate::migrate::open(home)?.id)
+    Ok(layerfs_home::home::opened(home)?.id)
 }
 
 /// `machine.status(name)`: live state, free disk, the tool's version and
@@ -19,12 +19,12 @@ pub(super) fn home_id(home: &Path) -> Result<String> {
 /// read: while an `op` holds the machine it probes nothing, answers the
 /// state the record derives (`creating`, `removing`, `unresolved`) and
 /// shows the `op` (#536 H6), which it never clears.
-pub fn status(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+pub fn status(context: &mut Context<'_>, args: &SdkValue, related: Related) -> Outcome {
     let home = &context.home;
     let name = args.get_text("name").unwrap_or("");
     let record = MachineRecord::of(home, name)?;
     let kind = record.platform()?;
-    let disabled = layerfs_isolation::platform_policy::disabled_reason(kind.name());
+    let disabled = layerfs_platform::platform_policy::disabled_reason(kind.name());
     let (state, free_disk, tool_version, down_reason) = match (disabled, record.in_flight()) {
         (Some(reason), _) => (
             record.state(None)?.to_owned(),
@@ -61,7 +61,7 @@ pub fn status(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         (
             "stores",
             SdkValue::List(
-                stores_on(home, name)?
+                (related.stores_on)(home, name)?
                     .into_iter()
                     .map(SdkValue::Text)
                     .collect(),

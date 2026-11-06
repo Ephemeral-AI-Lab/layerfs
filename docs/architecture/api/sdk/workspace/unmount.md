@@ -97,7 +97,7 @@ answers `Busy` while a process still holds the mount. See the
 | other daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) |
 | `Unavailable` | the worker is not recorded or does not answer | no | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) |
 | `Failed` | **a daemon exchange failed; `attempted` says whether teardown may have begun** | **maybe** | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
-| `Unknown` | **the worker's answer was lost** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **the worker's answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 **After an uncertain unmount**, call `workspace.unmount` again: a recorded
 outcome is answered as it was, and a Workspace already gone is

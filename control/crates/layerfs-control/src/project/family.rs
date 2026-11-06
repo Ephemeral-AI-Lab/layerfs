@@ -7,7 +7,6 @@
 //! caller's host: for a worker this process copies it to the machine
 //! first (H11a). Records in the home list projects; `remove` drops one
 //! project's history from its Store.
-use crate::common::context::Context;
 use crate::common::lease;
 use crate::common::place::{self, Executor};
 use crate::project::record::ProjectRecord;
@@ -15,6 +14,7 @@ use crate::store::family::progress;
 use crate::store::record::{StoreRecord, StoreRef};
 use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::context::Context;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, refused, Outcome, View};
 use std::path::Path;

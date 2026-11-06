@@ -2,9 +2,9 @@
 use super::record::{MachineDerived, MachineRecord};
 use super::spec::{self as record, refusal};
 use super::status::home_id;
-use crate::common::context::Context;
-use crate::inventory::{sandboxes_on, stores_on};
+use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::context::Context;
 use layerfs_home::home::paths;
 use layerfs_home::outcome::{failed, Outcome, View};
 use layerfs_platform as adapters;
@@ -41,7 +41,7 @@ pub(super) fn live(home: &Path, records: &[MachineRecord]) -> Result<Vec<Live>> 
     let stop = until + Duration::from_millis(200);
     for (index, record) in records.iter().enumerate() {
         if let Some(reason) =
-            layerfs_isolation::platform_policy::disabled_reason(record.platform()?.name())
+            layerfs_platform::platform_policy::disabled_reason(record.platform()?.name())
         {
             out[index] = Some((record.state(None)?.to_owned(), Some(reason.to_owned())));
             continue;
@@ -77,18 +77,23 @@ pub(super) fn live(home: &Path, records: &[MachineRecord]) -> Result<Vec<Live>> 
     Ok(out)
 }
 
-pub(super) fn summary(home: &Path, record: &MachineRecord, live: Live) -> Result<SdkValue> {
+pub(super) fn summary(
+    home: &Path,
+    record: &MachineRecord,
+    live: Live,
+    related: Related,
+) -> Result<SdkValue> {
     let derived = MachineDerived {
         live,
-        stores: stores_on(home, record.name())?,
-        sandboxes: sandboxes_on(home, record.name())?,
+        stores: (related.stores_on)(home, record.name())?,
+        sandboxes: (related.sandboxes_on)(home, record.name())?,
     };
     record.to_sdk(View::Full, &derived)
 }
 
 /// `machine.list()`: every machine with its live state and what it
 /// supports; `machine.platforms` answers what could be created here.
-pub fn list(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
+pub fn list(context: &mut Context<'_>, _args: &SdkValue, related: Related) -> Outcome {
     let home = &context.home;
     let mut records = Vec::new();
     for name in paths::names(&home.join("machine")).map_err(failed)? {
@@ -99,7 +104,7 @@ pub fn list(context: &mut Context<'_>, _args: &SdkValue) -> Outcome {
     let states = live(home, &records)?;
     let mut machines = Vec::new();
     for (record, state) in records.iter().zip(states) {
-        machines.push(summary(home, record, state)?);
+        machines.push(summary(home, record, state, related)?);
     }
     Ok(SdkValue::map([("machines", SdkValue::List(machines))]))
 }

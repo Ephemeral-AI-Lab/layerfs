@@ -72,7 +72,7 @@ A new option also needs its entry in the call table
 ([`layerfs-api/src/machine/create.rs`](../../../../api/crates/layerfs-api/src/machine/create.rs)
 or [`connect.rs`](../../../../api/crates/layerfs-api/src/machine/connect.rs))
 and its `Spec` mapping in
-[`machine/spec.rs`](../../../../control/crates/layerfs-control/src/machine/spec.rs).
+[`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs).
 A new Store kind or kernel route is an engine change, not a platform
 (#535 §9).
 

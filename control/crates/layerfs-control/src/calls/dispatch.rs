@@ -8,8 +8,8 @@
 //! output and the progress of `project.init`, `store.push`, `store.pull`, `backup.create`
 //! and `backup.restore`. Result keys are snake_case in every front end.
 use super::{check, table, table::Family};
-pub use crate::common::context::Context;
 use layerfs_bridge::control::SdkValue;
+pub use layerfs_home::context::Context;
 use layerfs_home::outcome::{refused, Outcome};
 use std::path::{Path, PathBuf};
 
@@ -70,7 +70,7 @@ pub fn call_scoped(
     // `machine/native/` and `machine/docker/` exist from the first call;
     // checked once per process for each home (R6)
     #[cfg(feature = "machine")]
-    crate::machine::ensure_built_ins(&home, &id)?;
+    layerfs_machine::ensure_built_ins(&home, &id)?;
     #[cfg(not(feature = "machine"))]
     let _ = id;
     if let Some(scope) = scope {

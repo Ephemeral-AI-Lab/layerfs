@@ -1,8 +1,9 @@
 //! `machine.update`.
 use super::list::summary;
 use super::spec::machine_of;
-use crate::common::context::Context;
+use crate::Related;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::context::Context;
 use layerfs_home::home::lock;
 use layerfs_home::outcome::{refused, Outcome};
 use layerfs_platform::HostOs;
@@ -12,7 +13,7 @@ use layerfs_platform::HostOs;
 /// and the daemon their Sandboxes run (an absolute path to a file; it
 /// replaces what `import-env` recorded). Resizing a VM is refused while
 /// Sandboxes run on it.
-pub fn update(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
+pub fn update(context: &mut Context<'_>, args: &SdkValue, related: Related) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
     let _lock = lock::take(&home)?;
@@ -45,7 +46,7 @@ pub fn update(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         return Err(refused("InvalidInput", "wsl is a Windows host's setting"));
     }
     // a running Sandbox keeps the image and settings it started with
-    crate::inventory::can_change_machine(&home, name)?;
+    (related.can_change)(&home, name)?;
     if resize {
         return Err(refused(
             "Unsupported",
@@ -62,5 +63,5 @@ pub fn update(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         }
     }
     record.write(&home)?;
-    summary(&home, &record, None)
+    summary(&home, &record, None, related)
 }

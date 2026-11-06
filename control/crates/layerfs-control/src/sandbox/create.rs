@@ -3,11 +3,11 @@
 //! result recorded with the intent dropped in one write.
 use super::direct;
 use super::record::{self, SandboxRecord};
-use crate::common::context::Context;
 use crate::sandbox::route::on_machine;
 use crate::store::record::StoreRef;
 use crate::store::resolve;
 use layerfs_bridge::control::SdkValue;
+use layerfs_home::context::Context;
 use layerfs_home::home::{self, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{refused, Outcome, View};
@@ -43,7 +43,7 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         // where a Sandbox of this Store's kind may run is the support
         // table's answer, word for word (#535 §7.3)
         use layerfs_platform::{sandbox_allowed, HostOs};
-        let platform = crate::machine::machine_of(&home, machine)?.platform()?;
+        let platform = layerfs_machine::machine_of(&home, machine)?.platform()?;
         sandbox_allowed(platform, HostOs::current(), target.store_ref.kind()).map_err(
             |reason| {
                 refused(
@@ -59,7 +59,7 @@ pub(super) fn create(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
         )?;
     }
     #[cfg(not(feature = "machine"))]
-    if crate::machine::record::MachineRecord::read(&home, machine)?.is_none() {
+    if layerfs_machine::record::MachineRecord::read(&home, machine)?.is_none() {
         return Err(refused("NotFound", format!("no machine named {machine}")));
     }
     // a PostgreSQL Store is on no machine: its daemon dials the server from

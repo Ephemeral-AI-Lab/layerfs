@@ -2,8 +2,9 @@
 use super::record::{MachineRecord, DISCONNECT, REMOVE};
 use super::spec::{self as record, refusal};
 use super::status::home_id;
-use crate::common::context::Context;
+use crate::Related;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::context::Context;
 use layerfs_home::home::{lock, paths};
 use layerfs_home::op::Op;
 use layerfs_home::outcome::{failed, refused, Outcome};
@@ -19,14 +20,14 @@ type Result<T> = std::result::Result<T, SdkRefusal>;
 /// one's unresolved intent. A refused delete puts the record back as it
 /// was; one whose outcome is unknown keeps its `op`, uncertain, with the
 /// `error`, and is logged.
-fn take_down(context: &mut Context<'_>, args: &SdkValue, ssh: bool) -> Outcome {
+fn take_down(context: &mut Context<'_>, args: &SdkValue, ssh: bool, related: Related) -> Outcome {
     let home = context.home.clone();
     let name = args.get_text("name").unwrap_or("");
     MachineRecord::of(&home, name)?.not_running()?;
     let _start = super::endpoint::start_lock(&home, name)?;
     let (record, spec, op) = {
         let _lock = lock::take(&home)?;
-        let (record, spec) = removable(&home, name, ssh)?;
+        let (record, spec) = removable(&home, name, ssh, related)?;
         let op = Op::begin(
             if ssh { DISCONNECT } else { REMOVE },
             "delete",
@@ -58,7 +59,12 @@ fn take_down(context: &mut Context<'_>, args: &SdkValue, ssh: bool) -> Outcome {
 
 /// The checks before a remove or disconnect, under the home lock: the
 /// machine's record and spec.
-fn removable(home: &Path, name: &str, ssh: bool) -> Result<(MachineRecord, adapters::Spec)> {
+fn removable(
+    home: &Path,
+    name: &str,
+    ssh: bool,
+    related: Related,
+) -> Result<(MachineRecord, adapters::Spec)> {
     let record = MachineRecord::of(home, name)?;
     record.not_running()?;
     let kind = record.platform()?;
@@ -79,17 +85,17 @@ fn removable(home: &Path, name: &str, ssh: bool) -> Result<(MachineRecord, adapt
             format!("{name} is a {} machine; use {call}", kind.name()),
         ));
     }
-    crate::inventory::can_remove_machine(home, name)?;
+    (related.can_remove)(home, name)?;
     let spec = record::spec(home, &home_id(home)?, &record)?;
     Ok((record, spec))
 }
 
 /// `machine.remove(name)`: deletes a VM and its disk.
-pub fn remove(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    take_down(context, args, false)
+pub fn remove(context: &mut Context<'_>, args: &SdkValue, related: Related) -> Outcome {
+    take_down(context, args, false, related)
 }
 
 /// `machine.disconnect(name)`: forgets an ssh host; its data root stays.
-pub fn disconnect(context: &mut Context<'_>, args: &SdkValue) -> Outcome {
-    take_down(context, args, true)
+pub fn disconnect(context: &mut Context<'_>, args: &SdkValue, related: Related) -> Outcome {
+    take_down(context, args, true, related)
 }

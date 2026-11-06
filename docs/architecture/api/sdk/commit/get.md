@@ -76,7 +76,7 @@ Refused under a folder scope. See the
 | `NoSuchCommit` | not on this Branch's history | no | [`store/calls.rs`](../../../../../control/crates/layerfs-control/src/store/calls.rs) |
 | `Failed` | a page made no progress | no | same, `page_of` |
 | `NoSuchStore`, `NoSuchProject`, `Busy`, `Unresolved`, `Unavailable` | as for every Store call | no | [`store/call.rs`](../../../../../control/crates/layerfs-control/src/store/call.rs) |
-| `Unknown` | a worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | a worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 ## Examples
 

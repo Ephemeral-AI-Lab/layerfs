@@ -2,8 +2,8 @@
 //! `store.get` leave a stale lease and `log/leases.jsonl` as they were and
 //! take no lock, while their answers still ignore the dead holder.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::common::context::Context;
 use layerfs_control::store::family::run;
+use layerfs_home::context::Context;
 use layerfs_home::home::{paths, private_dir, write_entity};
 use std::collections::BTreeMap;
 use std::os::unix::fs::MetadataExt;

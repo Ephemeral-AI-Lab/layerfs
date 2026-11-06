@@ -3,7 +3,7 @@
 //! nothing to a worker of another protocol or bundle (an old worker, whose
 //! hello names no protocol, included); the matching worker answers.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::machine::worker::{
+use layerfs_machine::worker::{
     self, read_frame, read_frame_within, write_frame, Endpoint, Hello, MAX_HELLO, PROTOCOL,
 };
 use std::net::TcpListener;
@@ -161,7 +161,9 @@ fn the_library_worker_says_its_protocol_and_answers() {
     let address = listener.local_addr().unwrap();
     let root = std::env::temp_dir().join(format!("layerfs-hello-root-{}", std::process::id()));
     let served = root.clone();
-    std::thread::spawn(move || worker::serve(listener, "k".to_owned(), served));
+    std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "k".to_owned(), served)
+    });
     let endpoint = Endpoint {
         address,
         secret: "k".to_owned(),

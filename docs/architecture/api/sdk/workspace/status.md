@@ -86,7 +86,7 @@ Sandbox, and it starts no machine (P4). See the
 | `Unavailable` | the machine is stopped or its worker gone | no | [`sandbox/route.rs`](../../../../../control/crates/layerfs-control/src/sandbox/route.rs) `reach` |
 | daemon refusal codes | refused with `detail.phase` | no | [`daemon/values.rs`](../../../../../control/crates/layerfs-control/src/daemon/values.rs) |
 | `Failed` | a daemon exchange failed | read-only | [`sandbox/serve.rs`](../../../../../control/crates/layerfs-control/src/sandbox/serve.rs) |
-| `Unknown` | the worker's answer was lost | read-only; call again | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | the worker's answer was lost | read-only; call again | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 `workspace.status` is the read to make after an uncertain
 [exec](exec.md) or [commit](commit.md): `activity` other than `Idle`, a new

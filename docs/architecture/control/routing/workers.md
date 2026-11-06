@@ -9,12 +9,12 @@ The `layerfs worker` process and its protocol.
 | | |
 | --- | --- |
 | Component | [Routing and workers](README.md) |
-| Source | [`api/crates/layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs), [`control/crates/layerfs-control/src/machine/worker`](../../../../control/crates/layerfs-control/src/machine/worker), [`machine/endpoint.rs`](../../../../control/crates/layerfs-control/src/machine/endpoint.rs), [`machine/power.rs`](../../../../control/crates/layerfs-control/src/machine/power.rs), [`machine/bundle.rs`](../../../../control/crates/layerfs-control/src/machine/bundle.rs) |
+| Source | [`api/crates/layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs), [`worker`](../../../../control/crates/layerfs-machine/src/worker), [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs), [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs), [`bundle.rs`](../../../../control/crates/layerfs-machine/src/bundle.rs) |
 
 A worker is the one LayerFS process on a machine whose kernel the caller
 cannot open a SQLite Store on. It runs the library's host operations for the
 calls a caller sends it, behind a secret, on a TCP port the caller reaches on
-its own loopback ([`worker/mod.rs`](../../../../control/crates/layerfs-control/src/machine/worker/mod.rs)).
+its own loopback ([`worker/mod.rs`](../../../../control/crates/layerfs-machine/src/worker/mod.rs)).
 Where the worker sits on each platform and how its port is carried is in
 [Control: Network, Workers](../network/workers.md).
 
@@ -32,8 +32,8 @@ Where the worker sits on each platform and how its port is carried is in
 
 | Frame | Sender | Shape | Source |
 | --- | --- | --- | --- |
-| secret | caller | `{secret}` | [`client.rs`](../../../../control/crates/layerfs-control/src/machine/worker/client.rs) `greet` |
-| hello | worker | `{ready: true, protocol, bundle}`, or `{refused}` for a wrong secret | [`hello.rs`](../../../../control/crates/layerfs-control/src/machine/worker/hello.rs) `to_frame`, [`server.rs`](../../../../control/crates/layerfs-control/src/machine/worker/server.rs) `answer` |
+| secret | caller | `{secret}` | [`worker/client.rs`](../../../../control/crates/layerfs-machine/src/worker/client.rs) `greet` |
+| hello | worker | `{ready: true, protocol, bundle}`, or `{refused}` for a wrong secret | [`worker/hello.rs`](../../../../control/crates/layerfs-machine/src/worker/hello.rs) `to_frame`, [`server.rs`](../../../../control/crates/layerfs-control/src/worker_server.rs) `answer` |
 | request | caller | `{op, args, home_id?}` | `client.rs` `request` |
 | event | worker | `{event}`, zero or more: progress, command output | `server.rs` `answer` |
 | answer | worker | `{value}` or `{refused: {code, message, detail}}` | `server.rs` `refusal_frame` |
@@ -58,7 +58,7 @@ Where the worker sits on each platform and how its port is carried is in
 ```
 
 A frame larger than allowed is refused `TooLarge` from its length, before any
-of its body is read ([`frame.rs`](../../../../control/crates/layerfs-control/src/machine/worker/frame.rs)).
+of its body is read ([`worker/frame.rs`](../../../../control/crates/layerfs-machine/src/worker/frame.rs)).
 The worker serves each connection on its own thread, so several callers can
 be served at once; each connection still carries one request.
 
@@ -81,7 +81,7 @@ every request, whatever the caller sent (`with_home`). The root is not a home:
 
 | Field | Meaning | Source |
 | --- | --- | --- |
-| `ready` | always `true` in a hello | [`hello.rs`](../../../../control/crates/layerfs-control/src/machine/worker/hello.rs) |
+| `ready` | always `true` in a hello | [`worker/hello.rs`](../../../../control/crates/layerfs-machine/src/worker/hello.rs) |
 | `protocol` | the worker protocol it speaks; this build is `PROTOCOL = 2`; the first workers sent none | `hello.rs` |
 | `bundle` | the hash from `bundle.json` beside the worker's executable, or null when run from no sealed bundle | `Hello::own`, `sealed_hash` |
 
@@ -113,9 +113,9 @@ without a request; `machine.start` and doctor use it
 
 | Step | What happens | Source |
 | --- | --- | --- |
-| Find the bundle | `bundle()` reads `bundle.json`; none is `Unsupported` naming `tools/linux_bundle.py` | [`machine/bundle.rs`](../../../../control/crates/layerfs-control/src/machine/bundle.rs), [`sandbox/deploy.rs`](../../../../control/crates/layerfs-control/src/sandbox/deploy.rs) `bundle_dir` |
-| Start | the machine adapter starts the machine and its worker from the bundle; a `docker` machine with no image uses the bundle's default image | [`machine/endpoint.rs`](../../../../control/crates/layerfs-control/src/machine/endpoint.rs) `start` |
-| Record | `worker.json` is written under the home lock; the machine's state becomes `running` | [`machine/spec.rs`](../../../../control/crates/layerfs-control/src/machine/spec.rs) `save_running` |
+| Find the bundle | `bundle()` reads `bundle.json`; none is `Unsupported` naming `tools/linux_bundle.py` | [`bundle.rs`](../../../../control/crates/layerfs-machine/src/bundle.rs), [`sandbox/deploy.rs`](../../../../control/crates/layerfs-control/src/sandbox/deploy.rs) `bundle_dir` |
+| Start | the machine adapter starts the machine and its worker from the bundle; a `docker` machine with no image uses the bundle's default image | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) `start` |
+| Record | `worker.json` is written under the home lock; the machine's state becomes `running` | [`spec.rs`](../../../../control/crates/layerfs-machine/src/spec.rs) `save_running` |
 | Check | the new worker's hello is compared; a stale bundle is refused (see below) | `endpoint.rs` `start` |
 | Serve | `layerfs worker` reads its two settings, binds, makes its root `0701` and serves | [`layerfs-cli/src/worker.rs`](../../../../api/crates/layerfs-cli/src/worker.rs), `server.rs` `serve` |
 
@@ -125,9 +125,9 @@ without a request; `machine.start` and doctor use it
 
 | Event | Effect | Source |
 | --- | --- | --- |
-| `machine.start` | dials the recorded worker; if it answers its secret, done; else starts the machine and worker under `machine/<name>/start.lock` (wait up to 600 s) and waits until ready | [`endpoint.rs`](../../../../control/crates/layerfs-control/src/machine/endpoint.rs) `running` |
+| `machine.start` | dials the recorded worker; if it answers its secret, done; else starts the machine and worker under `machine/<name>/start.lock` (wait up to 600 s) and waits until ready | [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs) `running` |
 | any other call | dials `worker.json` once; no worker recorded, or no answer, is `Unavailable` naming `layerfs machine start`; nothing is started | [`place.rs`](../../../../control/crates/layerfs-control/src/common/place.rs) |
-| `machine.stop` | refused `InUse` while Sandboxes run on it; else stops worker and VM under `start.lock` and removes `worker.json` | [`power.rs`](../../../../control/crates/layerfs-control/src/machine/power.rs) |
+| `machine.stop` | refused `InUse` while Sandboxes run on it; else stops worker and VM under `start.lock` and removes `worker.json` | [`power.rs`](../../../../control/crates/layerfs-machine/src/power.rs) |
 | idle | nothing: there is no idle stop (#535 D11) | `worker/mod.rs`, `layerfs-cli/src/worker.rs` |
 | `native` on macOS or Linux | no worker; `start` and `stop` answer at once | `endpoint.rs` `running`, `power.rs` |
 
@@ -145,7 +145,7 @@ remove) the endpoint read first is reused for later steps (`Worker::ready`).
 
 `machine.start` never starts over a worker of another build: a recorded
 worker that answers its secret counts as running, whatever its build
-(`answering` in [`endpoint.rs`](../../../../control/crates/layerfs-control/src/machine/endpoint.rs)).
+(`answering` in [`endpoint.rs`](../../../../control/crates/layerfs-machine/src/endpoint.rs)).
 The refusal names the stop-then-start pair instead. `place::stopped` adds the
 same advice to a mismatch met by any other call.
 

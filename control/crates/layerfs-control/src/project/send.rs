@@ -12,14 +12,14 @@
 //! once: a certain failure discards the copy with one more request; a lost
 //! answer is `Unknown`, naming the copy it may leave on the machine.
 use super::tree::{header, Record};
-use crate::common::context::Context;
 use crate::common::place::Worker;
-use crate::machine::worker::Unreached;
 use crate::store::transfer::steps::CHUNK;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
 use layerfs_content::filesystem::symlink::SymlinkTarget;
 use layerfs_content::PathName;
+use layerfs_home::context::Context;
 use layerfs_home::outcome::refused;
+use layerfs_machine::worker::Unreached;
 use layerfs_project::SourceRefusal;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, Metadata};

@@ -83,7 +83,7 @@ None.
 The Store-side work is in
 [`store/identity.rs`](../../../../../control/crates/layerfs-control/src/store/identity.rs)
 `remove_project`; the worker op is in
-[`machine/worker/server.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/server.rs).
+[`worker_server.rs`](../../../../../control/crates/layerfs-control/src/worker_server.rs).
 The lookup and the removal both go through the Store's open service, so
 other daemons and SDK processes keep reading meanwhile. See the
 [routing table](../../../control/routing/routing-table.md).
@@ -99,7 +99,7 @@ other daemons and SDK processes keep reading meanwhile. See the
 | `Unsupported` | a PostgreSQL Store; or the kernel guard refuses the Store's filesystem when the Store is opened | no | `project/family.rs`, [`store/service.rs`](../../../../../control/crates/layerfs-control/src/store/service.rs) |
 | `Unavailable` | worker route: no worker recorded, or not reached | no | [`common/place.rs`](../../../../../control/crates/layerfs-control/src/common/place.rs) |
 | `Failed` | **the Store write failed, its outcome included**: `remove_layerstack` errors are all `Failed` | **may be** | `store/identity.rs` `remove_project` |
-| `Unknown` | **worker route: the answer was lost** | **yes** | [`machine/worker/client.rs`](../../../../../control/crates/layerfs-control/src/machine/worker/client.rs) |
+| `Unknown` | **worker route: the answer was lost** | **yes** | [`worker/client.rs`](../../../../../control/crates/layerfs-machine/src/worker/client.rs) |
 
 After **`Failed` or `Unknown`** the caller's home entry is kept (it is
 removed only after success), so `project.get` still answers. Read the

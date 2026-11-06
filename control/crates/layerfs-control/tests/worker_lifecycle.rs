@@ -4,7 +4,7 @@
 //! observable part: after its connections close the server keeps serving,
 //! and `serve` takes no idle period.
 use layerfs_bridge::control::SdkValue;
-use layerfs_control::machine::worker::{self, Endpoint};
+use layerfs_machine::worker::{self, Endpoint};
 use std::net::TcpListener;
 
 #[test]
@@ -15,7 +15,9 @@ fn a_worker_with_no_requests_keeps_serving() {
     let address = listener.local_addr().unwrap();
     let served = root.clone();
     // `serve` has no idle parameter: only the process ending stops it
-    let server = std::thread::spawn(move || worker::serve(listener, "s".to_owned(), served));
+    let server = std::thread::spawn(move || {
+        layerfs_control::worker_server::serve(listener, "s".to_owned(), served)
+    });
     let endpoint = Endpoint {
         address,
         secret: "s".to_owned(),

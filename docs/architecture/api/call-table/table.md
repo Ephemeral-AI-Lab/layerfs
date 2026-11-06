@@ -169,7 +169,7 @@ confine the process `workspace.exec` starts.
 Checked arguments are kept in the table's order. The call then runs once
 with a `Context` that holds the home and the one event stream: progress
 (`{progress}`), worker events, and command output (`{stream, bytes}`)
-([`common/context.rs`](../../../../control/crates/layerfs-control/src/common/context.rs)).
+([`context.rs`](../../../../control/crates/layerfs-home/src/context.rs)).
 Nothing in the dispatcher retries.
 
 ## Help text

@@ -4,15 +4,15 @@
 //! streamed back as events.
 use super::deploy::{self, Deploy, Side};
 use super::record::SandboxRecord;
-use crate::common::context::Context;
 use crate::common::place::{self, Executor};
-use crate::machine::worker::Unreached;
 use crate::project::record::ProjectRecord;
 use crate::store::record::{StoreKind, StoreRecord};
 use crate::store::resolve;
 use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_home::context::Context;
 use layerfs_home::home::{self, paths};
 use layerfs_home::outcome::{failed, refused, Outcome};
+use layerfs_machine::worker::Unreached;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, SdkRefusal>;
@@ -112,11 +112,11 @@ fn reached(
     let (url, hint) = {
         let id = crate::migrate::open(home)?.id;
         let spec =
-            crate::machine::machine_spec(home, &id, &crate::machine::machine_of(home, machine)?)?;
+            layerfs_machine::machine_spec(home, &id, &layerfs_machine::machine_of(home, machine)?)?;
         let hint = (spec.kind == layerfs_platform::Platform::AppleContainer).then_some(
             "an apple-container machine reaches a server on this host only when it listens on the container network's bridge (0.0.0.0, as Docker Desktop publishes a port), not on 127.0.0.1 alone",
         );
-        let url = layerfs_platform::reach(&spec, &url).map_err(crate::machine::machine_refusal)?;
+        let url = layerfs_platform::reach(&spec, &url).map_err(layerfs_machine::machine_refusal)?;
         (url, hint)
     };
     #[cfg(not(feature = "machine"))]
