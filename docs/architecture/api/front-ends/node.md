@@ -150,7 +150,7 @@ missing). Run one file at a time under a wall limit, for example
 
 | Test | Sets up | Checks | Needs |
 | --- | --- | --- | --- |
-| [`calls.mjs`](../../../../api/node/test/calls.mjs) | temporary homes, a folder with `README.md` | nine families and 61 functions; every call with a required argument is refused `InvalidInput` "is required"; empty lists; built-in machines `docker`, `native`; a Store, Init with progress, file and Branch calls, bytes, a folder scope | the addon |
+| [`calls.mjs`](../../../../api/node/test/calls.mjs) | temporary homes, a folder with `README.md` | nine families and 62 functions; every call with a required argument is refused `InvalidInput` "is required"; empty lists; built-in machines `docker`, `native`; a Store, Init with progress, file and Branch calls, bytes, a folder scope | the addon |
 | [`shell.mjs`](../../../../api/node/test/shell.mjs) | the `layerfs` debug binary beside the package | every call refused the same by the command and the package; exit 2 for a wrong line; a live Store read both ways; `--progress` lines | addon and command |
 | [`events.mjs`](../../../../api/node/test/events.mjs) | a `layerfs worker` started on loopback | a throwing `on_progress` does not stop a `store.push`, and every event arrives before the call settles; exec output through functions and `stream: true` | command; the exec half needs `LAYERFS_DAEMON`, else skipped `NOT_RUN` |
 | [`close.mjs`](../../../../api/node/test/close.mjs) | a Store and Init | `close()` drops this process's leases; a later call opens the Store again | the addon |

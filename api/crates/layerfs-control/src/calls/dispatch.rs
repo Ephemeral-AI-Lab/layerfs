@@ -5,8 +5,9 @@
 //! A call runs once. Its arguments are checked against the table before any
 //! effect, then its family's function runs with a [`Context`]: the home and
 //! the call's one event stream (O22), which carries `workspace.exec`'s
-//! output and the progress of `project.init`, `store.push`, `store.pull`, `backup.create`
-//! and `backup.restore`. Result keys are snake_case in every front end.
+//! output and the progress of `project.init`, `project.export`, `store.push`,
+//! `store.pull`, `backup.create` and `backup.restore`. Result keys are
+//! snake_case in every front end.
 use super::{check, table, table::Family};
 pub use crate::common::context::Context;
 use crate::common::outcome::{refused, Outcome};

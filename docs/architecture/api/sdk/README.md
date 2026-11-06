@@ -5,8 +5,8 @@
 > **Status:** Current architecture guide for LayerFS 2.0.0; maintained with the source.
 
 Every call a program can make, one family per folder and one page per call:
-61 calls in 9 families. The same call has the same name and
-arguments in JavaScript, Python and the `layerfs` command.
+62 calls in 9 families. The same call has the same name and arguments in
+JavaScript, Python and the `layerfs` command.
 
 | | |
 | --- | --- |
@@ -20,7 +20,7 @@ arguments in JavaScript, Python and the `layerfs` command.
 
 | Family | Calls | Pages |
 | --- | --- | --- |
-| [`project`](project/README.md) | 4 | [`init`](project/init.md), [`list`](project/list.md), [`get`](project/get.md), [`remove`](project/remove.md) |
+| [`project`](project/README.md) | 5 | [`init`](project/init.md), [`list`](project/list.md), [`get`](project/get.md), [`export`](project/export.md), [`remove`](project/remove.md) |
 | [`branch`](branch/README.md) | 6 | [`list`](branch/list.md), [`get`](branch/get.md), [`fork`](branch/fork.md), [`merge`](branch/merge.md), [`publish`](branch/publish.md), [`diff`](branch/diff.md) |
 | [`commit`](commit/README.md) | 3 | [`list`](commit/list.md), [`get`](commit/get.md), [`diff`](commit/diff.md) |
 | [`file`](file/README.md) | 14 | [`read`](file/read.md), [`stat`](file/stat.md), [`list`](file/list.md), [`glob`](file/glob.md), [`grep`](file/grep.md), [`blame`](file/blame.md), [`diff`](file/diff.md), [`write`](file/write.md), [`edit`](file/edit.md), [`rm`](file/rm.md), [`mkdir`](file/mkdir.md), [`mv`](file/mv.md), [`cp`](file/cp.md), [`apply`](file/apply.md) |
@@ -156,7 +156,7 @@ the caller. See [Errors](../call-table/errors.md), in particular
 | --- | --- | --- | --- |
 | `machine` | every call (records, provider CLIs, ssh) | — (the worker is what `start` starts) | — |
 | `store` | records, locks, PostgreSQL, sqlite on `native` | `store.file` steps for sqlite on another machine | — |
-| `project` | records; `init`/`remove` for PostgreSQL and sqlite on `native` | `init`, `remove` for sqlite on another machine | — |
+| `project` | records; Init/remove for local sqlite; Init for PostgreSQL; export reads both and always writes on the caller’s host | Init/remove and export reader for sqlite on another machine | — |
 | `branch`, `commit`, `file` | PostgreSQL; sqlite on `native` | sqlite on another machine (`store.call`) | — (no daemon serves Store calls) |
 | `sandbox` | records; `create`/`close` on `native` | `sandbox.host` on other machines | the daemon it starts and ends |
 | `workspace` | records, `ws` parsing | `sandbox.host` (exec runs the command here) | mount, commit, unmount, status |

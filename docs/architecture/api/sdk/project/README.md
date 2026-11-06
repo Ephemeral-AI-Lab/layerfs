@@ -21,13 +21,15 @@ The `project` calls.
         |
         +--> list [store]   get <store>/<project>   (home records only)
         |
+        +--> export <store>/<project> <destination> [--branch <name>]
+        |
         +--> branch.*, commit.*, file.*, sandbox.create ...
         |
         v
  remove <store>/<project>   (no Sandbox of it may run)
 ```
 
-Four calls, in help order
+Five calls, in help order
 ([`project/mod.rs`](../../../../../api/crates/layerfs-api/src/project/mod.rs)).
 Every entry runs `layerfs_control::project::family::run`. Result keys are
 snake_case after the dispatcher's
@@ -38,6 +40,7 @@ snake_case after the dispatcher's
 | [`init`](init.md) | `project` (Project), `folder` (Text) | `timeout` (Int), `on_progress` (Function) | the project summary plus `layer` and `root` of the new project | where the Store's calls run |
 | [`list`](list.md) | `store?` (Name) | `page_size`, `page_pos` (Int) | `{ items: [summary], next_page_pos }` | caller's process, home records only |
 | [`get`](get.md) | `project` (Project) | — | the project summary | caller's process, home records only |
+| [`export`](export.md) | `project` (Project), `destination` (Text) | `branch` (Name, default `main`), `on_progress` (Function) | pinned snapshot identity and local output counts | reader at the Store, writer on the caller’s host |
 | [`remove`](remove.md) | `project` (Project) | — | `{ stack, packs_kept: true, project }` | caller's process, or `project.remove` in the Store's worker |
 
 The summary is `ProjectRecord::to_sdk`
@@ -58,7 +61,9 @@ The summary is `ProjectRecord::to_sdk`
 
 `init` reports `{ progress: { phase, done, total } }` with the phases
 `check`, `send` (bytes, only when the folder is copied to a worker),
-`install` and `record`.
+`install` and `record`. [`export`](export.md) reports `prepare`,
+`export`, `finalize`, with monotonic local output counters and `total: null`;
+it accepts no `commit` selector.
 
 ## Errors
 
@@ -103,8 +108,10 @@ See [error kinds](../../call-table/errors.md#error-kinds) and
 ([`common/place.rs`](../../../../../api/crates/layerfs-control/src/common/place.rs)).
 A PostgreSQL Store runs in the caller's process. A sqlite Store runs in the
 caller's process when its machine's platform executes locally on this host
-(`native`, except on Windows), else in that machine's worker. The folder is
-always read on the caller's host. The worker operations are in
+(`native`, except on Windows), else in that machine's worker. The Init folder is
+always read on the caller's host. Export's destination is also always local
+to the caller; SQLite workers stream the pinned tree back to that host.
+The worker operations are in
 [`machine/worker/server.rs`](../../../../../api/crates/layerfs-control/src/machine/worker/server.rs).
 See the [routing table](../../routing/routing-table.md).
 

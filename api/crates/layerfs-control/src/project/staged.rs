@@ -62,51 +62,57 @@ pub(crate) fn run(root: &Path, args: &SdkValue) -> Outcome {
 }
 
 /// Writes every record of `part` under `dir`; answers how many.
-fn apply(dir: &Path, part: &[u8]) -> Result<u64> {
+pub(crate) fn apply(dir: &Path, part: &[u8]) -> Result<u64> {
     let mut reader = Reader::new(part);
     let mut count = 0;
     while let Some(record) = reader.next_record()? {
-        one(dir, record).map_err(|error| refused("Failed", format!("folder copy: {error}")))?;
+        write_one(dir, record)
+            .map_err(|r| refused("Failed", format!("folder copy: {}", r.message)))?;
         count += 1;
     }
     Ok(count)
 }
 
-fn one(dir: &Path, record: Record<'_>) -> std::result::Result<(), String> {
+/// Writes one `record` under `dir`, mapping raw I/O errors so callers can
+/// distinguish `AlreadyExists` (`Conflict`) and `StorageFull` (`Capacity`).
+pub(crate) fn write_one(dir: &Path, record: Record<'_>) -> Result<()> {
     match record {
         Record::Directory { path } => {
-            let at = place(dir, path, false)?;
+            let at = place(dir, path, false).map_err(|e| refused("Failed", e))?;
             fs::DirBuilder::new()
                 .mode(0o700)
                 .create(&at)
-                .map_err(|e| format!("{}: {e}", at.display()))
+                .map_err(|e| io_refusal(&at, e))
         }
         Record::Write {
             path,
             offset,
             bytes,
         } => {
-            let at = place(dir, path, false)?;
-            let shown = |e: std::io::Error| format!("{}: {e}", at.display());
+            let at = place(dir, path, false).map_err(|e| refused("Failed", e))?;
             let mut options = OpenOptions::new();
             options.write(true).custom_flags(libc::O_NOFOLLOW);
             if offset == 0 {
                 options.create_new(true).mode(0o600);
             }
-            let mut file = options.open(&at).map_err(shown)?;
-            if file.metadata().map_err(shown)?.len() != offset {
-                return Err(format!(
-                    "{}: a piece at {offset} does not follow the file's length",
-                    at.display()
+            let mut file = options.open(&at).map_err(|e| io_refusal(&at, e))?;
+            if file.metadata().map_err(|e| io_refusal(&at, e))?.len() != offset {
+                return Err(refused(
+                    "Failed",
+                    format!(
+                        "{}: a piece at {offset} does not follow the file's length",
+                        at.display()
+                    ),
                 ));
             }
-            file.seek(SeekFrom::Start(offset)).map_err(shown)?;
-            file.write_all(bytes).map_err(shown)
+            file.seek(SeekFrom::Start(offset))
+                .map_err(|e| io_refusal(&at, e))?;
+            file.write_all(bytes).map_err(|e| io_refusal(&at, e))
         }
         Record::Link { path, target } => {
-            let at = place(dir, path, false)?;
+            let at = place(dir, path, false).map_err(|e| refused("Failed", e))?;
             std::os::unix::fs::symlink(OsStr::from_bytes(target), &at)
-                .map_err(|e| format!("{}: {e}", at.display()))
+                .map_err(|e| io_refusal(&at, e))
         }
         Record::Meta {
             path,
@@ -114,12 +120,13 @@ fn one(dir: &Path, record: Record<'_>) -> std::result::Result<(), String> {
             seconds,
             nanoseconds,
         } => {
-            let at = place(dir, path, true)?;
-            let shown = |e: &dyn std::fmt::Display| format!("{}: {e}", at.display());
-            let meta = fs::symlink_metadata(&at).map_err(|e| shown(&e))?;
+            let at = place(dir, path, true).map_err(|e| refused("Failed", e))?;
+            let shown =
+                |e: &dyn std::fmt::Display| refused("Failed", format!("{}: {e}", at.display()));
+            let meta = fs::symlink_metadata(&at).map_err(|e| io_refusal(&at, e))?;
             if !meta.file_type().is_symlink() {
                 fs::set_permissions(&at, fs::Permissions::from_mode(mode & 0o7777))
-                    .map_err(|e| shown(&e))?;
+                    .map_err(|e| io_refusal(&at, e))?;
             }
             let mtime = TimeSpec::new(seconds, i64::from(nanoseconds) as _);
             utimensat(
@@ -132,6 +139,17 @@ fn one(dir: &Path, record: Record<'_>) -> std::result::Result<(), String> {
             .map_err(|e| shown(&e))
         }
     }
+}
+
+fn io_refusal(at: &Path, error: std::io::Error) -> SdkRefusal {
+    let code = if error.kind() == std::io::ErrorKind::AlreadyExists {
+        "Conflict"
+    } else if error.raw_os_error() == Some(libc::ENOSPC) {
+        "Capacity"
+    } else {
+        "Failed"
+    };
+    refused(code, format!("{}: {error}", at.display()))
 }
 
 /// `path` under `dir`: plain names only (no `.`, `..` or empty one), each

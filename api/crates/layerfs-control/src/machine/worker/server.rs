@@ -7,7 +7,8 @@
 //! build sends nothing more and closes. Then a request `{ op, args }`, read with at most
 //! [`REQUEST_WAIT`] between bytes. `worker.ping` answers who it is;
 //! `store.call`, `store.file`, `sandbox.host`, `project.stage`,
-//! `project.init` and `project.remove` run one operation on this machine,
+//! `project.init`, `project.export` and `project.remove` run one operation on
+//! this machine,
 //! with `home` set to the worker's own root (the machine's data disk),
 //! never a path the caller sends. Answers are
 //! `{ value }` or `{ refused }`, after any `{ event }` frames.
@@ -113,7 +114,8 @@ fn answer(mut stream: TcpStream, secret: &str, ready: &SdkValue, root: &Path) ->
         request.get("args").cloned().unwrap_or_default(),
         root,
         &mut |event| {
-            let _ = write_frame(&mut stream, &SdkValue::map([("event", event)]));
+            write_frame(&mut stream, &SdkValue::map([("event", event)]))
+                .map_err(|e| refused("Failed", format!("worker event stream closed: {e}")))
         },
     );
     let frame = match outcome {
@@ -134,7 +136,12 @@ fn refusal_frame(refusal: SdkRefusal) -> SdkValue {
     )])
 }
 
-fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) -> Outcome {
+fn run(
+    op: &str,
+    args: SdkValue,
+    root: &Path,
+    events: &mut dyn FnMut(SdkValue) -> std::result::Result<(), SdkRefusal>,
+) -> Outcome {
     match op {
         "worker.ping" => Ok(SdkValue::map([
             ("kind", SdkValue::text("worker")),
@@ -176,7 +183,9 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
             )
         }
         // a Sandbox or Workspace operation on this machine's own native
-        "sandbox.host" => crate::sandbox::route::in_worker(root, &args, events),
+        "sandbox.host" => crate::sandbox::route::in_worker(root, &args, &mut |event| {
+            let _ = events(event);
+        }),
         // drops one project from the Store under this worker's root (2.0):
         // `{ store, project, store_record }`
         "project.remove" => crate::store::identity::remove_project(&with_home(args, root)),
@@ -186,6 +195,9 @@ fn run(op: &str, args: SdkValue, root: &Path, events: &mut dyn FnMut(SdkValue)) 
         // adds a folder copy the caller sent as a new project of a Store
         // under this worker's root (#536 H11, H11a)
         "project.init" => crate::project::init::in_worker(&with_home(args, root)),
+        // streams one project's snapshot from a Store under this worker's
+        // root as folder-copy parts (#53)
+        "project.export" => crate::project::export::in_worker(root, &with_home(args, root), events),
         _ => Err(refused(
             "InvalidInput",
             format!("the worker has no operation {op}"),

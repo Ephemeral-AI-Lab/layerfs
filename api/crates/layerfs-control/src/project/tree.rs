@@ -19,7 +19,7 @@ use crate::common::outcome::refused;
 use layerfs_bridge::control::SdkRefusal;
 
 /// One entry's record.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Record<'a> {
     Directory {
         path: &'a [u8],

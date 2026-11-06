@@ -73,7 +73,7 @@ enforces it.
 | [API](api/README.md) | [Control](api/control/README.md) | The management library under the call table: the home and its records, machines and workers, Stores, projects, Sandboxes, Workspaces and backups. |
 |  | [Routing and workers](api/routing/README.md) | Where each call runs: in the caller's process, in a machine's worker, or in a Sandbox daemon. |
 |  | [Call table](api/call-table/README.md) | The nine call families and the one dispatcher every front end goes through. |
-|  | [SDK](api/sdk/README.md) | Every call a program can make: 61 calls in nine families, one page per call. |
+|  | [SDK](api/sdk/README.md) | Every call a program can make: 62 calls in nine families, one page per call. |
 |  | [Front ends](api/front-ends/README.md) | The `layerfs` command, the Node addon and the Python module: one call each, over the call table. |
 
 ## Flows across layers

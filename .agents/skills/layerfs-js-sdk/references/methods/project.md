@@ -12,6 +12,7 @@ always named with its Store: `<store>/<project>`, such as `shop/api`. A bare
 project.init(project, folder, { timeout, on_progress })
 project.list(store?, { page_size, page_pos })
 project.get(project)
+project.export(project, destination, { branch, on_progress })
 project.remove(project)
 ```
 
