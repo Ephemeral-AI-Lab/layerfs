@@ -210,10 +210,11 @@ impl<'a> Resolver<'a> {
             self.counters.pooled = self.caches.pool.counters().since(before);
             return Ok((canonical, id));
         }
-        if root.role == layerfs_content::ObjectRole::InodeBranch {
-            // An inode-table branch may be a COPY/INSERT chain against its
-            // predecessors (#360 item 3). The pooled reader walks it under the
-            // metadata depth cap and chain budgets, through this caller's caches.
+        if crate::encoding::pool::branch::is_program_role(root.role) {
+            // An inode-table branch (#360 item 3) or a directory or extent page
+            // (#92) may be a COPY/INSERT chain against its predecessors. The
+            // pooled reader walks it under the metadata depth cap and chain
+            // budgets, through this caller's caches.
             let before = self.caches.pool.counters();
             let (canonical, chain) = self.caches.pool.branch_canonical_with_caches(
                 self.connection,

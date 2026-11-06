@@ -93,9 +93,9 @@ pub fn construct_runs_with_predecessor(
         let mut hints = Hints {
             base,
             aligner: None,
+            state: None,
             active,
         };
-        let mut hint = |start: u64, len: u64, id: ObjectId| hints.offer(start, len, id);
         let cutoff = policy.small_file_threshold_bytes() as usize;
         let mut prefix = Vec::with_capacity(cutoff);
         let mut input = [0; MAXIMUM_CHUNK_BYTES];
@@ -126,17 +126,27 @@ pub fn construct_runs_with_predecessor(
                     prefix.extend_from_slice(&input[..used as usize]);
                 }
                 if prefix.len() == cutoff {
-                    chunks.data(&prefix, &mut hint, consumer)?;
+                    // The result is chunked: its mapping pages are offered the
+                    // base's pages at the same positions (#92), collected once.
+                    if let Some(pages) = hints.page_hints()? {
+                        chunks.set_page_hints(pages);
+                    }
+                    chunks.data(&prefix, &mut |s, l, i| hints.offer(s, l, i), consumer)?;
                     prefix.clear();
                     chunked = true;
                 }
             }
             if chunked && used < length {
                 if zero {
-                    let processed = chunks.zero(length - used, &mut hint, consumer)?;
+                    let processed =
+                        chunks.zero(length - used, &mut |s, l, i| hints.offer(s, l, i), consumer)?;
                     zeros_processed = add(zeros_processed, processed)?;
                 } else {
-                    chunks.data(&input[used as usize..length as usize], &mut hint, consumer)?;
+                    chunks.data(
+                        &input[used as usize..length as usize],
+                        &mut |s, l, i| hints.offer(s, l, i),
+                        consumer,
+                    )?;
                 }
             }
         }
@@ -160,7 +170,7 @@ pub fn construct_runs_with_predecessor(
                 peak_pending: 0,
             });
         }
-        let build = chunks.finish(&mut hint, consumer)?;
+        let build = chunks.finish(&mut |s, l, i| hints.offer(s, l, i), consumer)?;
         let summary = build
             .root
             .ok_or(ContentError::InvalidRecord("empty run mapping"))?;
@@ -189,11 +199,15 @@ pub fn construct_runs_with_predecessor(
 struct Hints<'b, 's, 'r> {
     base: Option<PredecessorBase<'b>>,
     aligner: Option<Aligner>,
+    state: Option<crate::file::mapping::FileState>,
     active: &'s TimingScope<'r, Active>,
 }
 impl Hints<'_, '_, '_> {
     fn offer(&mut self, start: u64, len: u64, id: ObjectId) -> ContentResult<Option<ObjectId>> {
-        let Some(base) = self.base else {
+        if !self.open()? {
+            return Ok(None);
+        }
+        let (Some(base), Some(aligner)) = (self.base, self.aligner.as_mut()) else {
             return Ok(None);
         };
         let active = self.active;
@@ -201,22 +215,49 @@ impl Hints<'_, '_, '_> {
             base.reader()
                 .read_canonical_scoped(page, active.child("mapping.predecessor"))
         };
-        let aligner = match &mut self.aligner {
-            Some(aligner) => aligner,
-            None => {
-                // The first chunk opens the base: a whole-file base offers no
-                // chunk anything, and is not read again.
-                let canonical = read(base.root(), true)?;
-                match crate::file::classify(&canonical)? {
-                    FileContent::Chunked(state) => self.aligner.insert(Aligner::new(state)),
-                    FileContent::WholeFile { .. } => {
-                        self.base = None;
-                        return Ok(None);
-                    }
-                }
-            }
-        };
         aligner.offer(start, len, id, read)
+    }
+
+    /// Opens the base once: true when it is chunked. A whole-file base offers
+    /// nothing, and is not read again.
+    fn open(&mut self) -> ContentResult<bool> {
+        let Some(base) = self.base else {
+            return Ok(false);
+        };
+        if self.aligner.is_some() {
+            return Ok(true);
+        }
+        let canonical = base
+            .reader()
+            .read_canonical_scoped(base.root(), self.active.child("mapping.predecessor"))?;
+        match crate::file::classify(&canonical)? {
+            FileContent::Chunked(state) => {
+                self.state = Some(state);
+                self.aligner = Some(Aligner::new(state));
+                Ok(true)
+            }
+            FileContent::WholeFile { .. } => {
+                self.base = None;
+                Ok(false)
+            }
+        }
+    }
+
+    /// The chunked base's branch levels for positional page hints (#92), or
+    /// `None` for no base or a whole-file one.
+    fn page_hints(&mut self) -> ContentResult<Option<crate::file::mapping::PageHints>> {
+        if !self.open()? {
+            return Ok(None);
+        }
+        let (Some(base), Some(state)) = (self.base, self.state) else {
+            return Ok(None);
+        };
+        let active = self.active;
+        crate::file::mapping::PageHints::collect(&state, &mut |page, _| {
+            base.reader()
+                .read_canonical_scoped(page, active.child("mapping.predecessor"))
+        })
+        .map(Some)
     }
 }
 

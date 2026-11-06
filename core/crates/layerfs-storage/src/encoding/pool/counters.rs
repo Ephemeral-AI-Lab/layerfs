@@ -33,6 +33,21 @@ pub struct PoolReadCounters {
     pub branch_chain_edges: u64,
     /// Branch delta programs applied.
     pub branch_delta_applies: u64,
+    /// Directory and extent pages reconstructed: one chain each (#92). The
+    /// `branch_*` counts above stay inode-table branches only.
+    pub page_requests: u64,
+    /// Dependency edges those page chains followed.
+    pub page_chain_edges: u64,
+    /// Page delta programs applied.
+    pub page_delta_applies: u64,
+    /// Canonical bytes every program-page chain rebuilt (inode branches,
+    /// directory and extent pages), every element included: divided by the
+    /// requests, the decode bytes per page read (#92).
+    pub program_chain_canonical: u64,
+    /// Stored record bytes every program-page chain read, every element included.
+    pub program_chain_encoded: u64,
+    /// Deepest program-page chain reconstructed.
+    pub program_max_depth: u64,
 }
 
 impl PoolReadCounters {
@@ -54,6 +69,12 @@ impl PoolReadCounters {
             branch_requests: 0,
             branch_chain_edges: 0,
             branch_delta_applies: 0,
+            page_requests: 0,
+            page_chain_edges: 0,
+            page_delta_applies: 0,
+            program_chain_canonical: 0,
+            program_chain_encoded: 0,
+            program_max_depth: 0,
         }
     }
 
@@ -96,6 +117,21 @@ impl PoolReadCounters {
             branch_delta_applies: self
                 .branch_delta_applies
                 .saturating_sub(before.branch_delta_applies),
+            page_requests: self.page_requests.saturating_sub(before.page_requests),
+            page_chain_edges: self
+                .page_chain_edges
+                .saturating_sub(before.page_chain_edges),
+            page_delta_applies: self
+                .page_delta_applies
+                .saturating_sub(before.page_delta_applies),
+            program_chain_canonical: self
+                .program_chain_canonical
+                .saturating_sub(before.program_chain_canonical),
+            program_chain_encoded: self
+                .program_chain_encoded
+                .saturating_sub(before.program_chain_encoded),
+            // A maximum has no difference; the later reading is the bound.
+            program_max_depth: self.program_max_depth,
         }
     }
 
@@ -130,5 +166,17 @@ impl PoolReadCounters {
         self.branch_delta_applies = self
             .branch_delta_applies
             .saturating_add(other.branch_delta_applies);
+        self.page_requests = self.page_requests.saturating_add(other.page_requests);
+        self.page_chain_edges = self.page_chain_edges.saturating_add(other.page_chain_edges);
+        self.page_delta_applies = self
+            .page_delta_applies
+            .saturating_add(other.page_delta_applies);
+        self.program_chain_canonical = self
+            .program_chain_canonical
+            .saturating_add(other.program_chain_canonical);
+        self.program_chain_encoded = self
+            .program_chain_encoded
+            .saturating_add(other.program_chain_encoded);
+        self.program_max_depth = self.program_max_depth.max(other.program_max_depth);
     }
 }

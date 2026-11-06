@@ -70,6 +70,10 @@ pub struct DeltaCounters {
     pub chunk_depths: DepthHistogram,
     /// Inode-table branch selection, apart from the payload counts above.
     pub branch: super::branch::BranchCounters,
+    /// Directory leaf and branch selection (#92), apart from the payload counts.
+    pub directory: super::branch::BranchCounters,
+    /// Extent leaf and branch selection (#92), apart from the payload counts.
+    pub extent: super::branch::BranchCounters,
 }
 
 /// Stored objects by dependency-chain depth: slot `d` counts depth `d`, and the
@@ -98,6 +102,8 @@ impl DeltaCounters {
         add_depths(&mut self.whole_file_depths, &other.whole_file_depths);
         add_depths(&mut self.chunk_depths, &other.chunk_depths);
         self.branch.accumulate(&other.branch);
+        self.directory.accumulate(&other.directory);
+        self.extent.accumulate(&other.extent);
     }
 
     /// Counts one stored payload object of `role` at chain `depth`.
@@ -394,18 +400,19 @@ pub fn select(
             | ObjectRole::Symlink
     ) {
         // Tree roles are ordinary framed bytes: they are stored whole inside their
-        // group and never choose a payload delta base. The advisory predecessor an
-        // unchanged subtree carries stays a physical placement hint, except for an
-        // inode-table branch, which may take a COPY/INSERT program against it
-        // (#360 item 3, `branch`); that program never competes with payload
-        // deltas, whose counts above it does not touch.
+        // group and never choose a payload delta base. The advisory predecessor a
+        // page carries is a physical placement hint, except for a program page -
+        // an inode-table branch (#360 item 3) or a directory or extent page (#92)
+        // - which may take a COPY/INSERT program against it (`branch`); that
+        // program never competes with payload deltas, whose counts above it does
+        // not touch.
         let started = Instant::now();
         let record = encode_full(canonical, role, input.capacities, encode, input.profile);
         SaveProfile::charge(&mut input.profile.full_ns, started);
         let record = record?;
         note_stored(input.profile, &record);
-        if role == ObjectRole::InodeBranch {
-            return super::branch::select(input, canonical, advisory, record);
+        if crate::encoding::pool::branch::is_program_role(role) {
+            return super::branch::select(input, role, canonical, advisory, record);
         }
         return Ok(record);
     }
