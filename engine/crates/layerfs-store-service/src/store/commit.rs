@@ -223,11 +223,13 @@ impl BoundWorkspace {
                 retained.saved = Some(saved);
                 // Count only after finish has proved the root's references
                 // closed, so a missing dependency stays a Storage refusal.
+                // One reader continues the Save for both phases, so they
+                // share its caches and the bodies and values it published.
+                let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
                 let logical = phase(timing, "logical.count", || {
-                    self.logical_after(&storage, current.effective_root, root, known)
+                    self.logical_after(&reader, current.effective_root, root, known)
                 })?;
                 phase(timing, "bindings", || {
-                    let reader = storage.reader().map_err(CommitError::Storage)?;
                     super::hints::record_new_bindings(
                         &reader,
                         &*self.store.history,
@@ -235,6 +237,7 @@ impl BoundWorkspace {
                         root,
                     )
                 })?;
+                drop(reader);
                 // The candidate is validated and its install prepared before
                 // the lane: they read only immutable published objects. Only
                 // an in-lane merge step, which changes the candidate, is
@@ -285,11 +288,11 @@ impl BoundWorkspace {
                             saved.stored_bytes += step_saved.stored_bytes;
                             saved.metadata_bytes += step_saved.metadata_bytes;
                         }
+                        let reader = storage.reader_after_save().map_err(CommitError::Storage)?;
                         let logical = phase(timing, "logical.lane", || {
-                            self.logical_after(&storage, root.0, stepped, logical)
+                            self.logical_after(&reader, root.0, stepped, logical)
                         })?;
                         phase(timing, "bindings.lane", || {
-                            let reader = storage.reader().map_err(CommitError::Storage)?;
                             super::hints::record_new_bindings(
                                 &reader,
                                 &*self.store.history,
@@ -501,15 +504,14 @@ impl BoundWorkspace {
     /// Storage refusal keeps its original error.
     fn logical_after(
         &self,
-        storage: &layerfs_storage::Storage,
+        reader: &layerfs_storage::Reader<'_>,
         before: layerfs_content::ObjectId,
         after: FilesystemRootId,
         known: u64,
     ) -> Result<u64, CommitError> {
-        let reader = storage.reader().map_err(CommitError::Storage)?;
         let mut refused = None;
         let counted = layerfs_content::filesystem::statistics::logical_size_after_with(
-            &reader,
+            reader,
             FilesystemRootId(before),
             after,
             known,

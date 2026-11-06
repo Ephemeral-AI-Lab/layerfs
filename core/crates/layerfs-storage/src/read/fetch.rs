@@ -12,9 +12,66 @@ use crate::{
 use layerfs_content::{inode_leaf::INODE_VALUE_BYTES, ObjectId};
 use std::{
     cell::{Cell, RefCell},
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::Arc,
 };
+
+/// Metadata pack bodies the latest Save published, newest last, so the
+/// readers that continue its operation ([`crate::Storage::reader_after_save`]:
+/// a Commit's logical count and binding hints) need not fetch them back.
+/// Bounded by [`DEPENDENCY_PACK_CACHE_BYTES`]; the bodies are the published
+/// `Arc`s themselves, and a new Save clears them. Any other reader still
+/// acquires every body it needs.
+#[derive(Default)]
+struct Published {
+    bodies: VecDeque<(PackInfo, Arc<Vec<u8>>)>,
+    bytes: usize,
+    /// Pooled inode values it published, oldest first, at most
+    /// [`PUBLISHED_VALUES`] of them.
+    values: BTreeMap<u32, [u8; INODE_VALUE_BYTES]>,
+    order: VecDeque<u32>,
+}
+
+/// Published inode values kept: [`crate::policy::POOLED_VALUE_CACHE_BYTES`]
+/// of value bytes.
+const PUBLISHED_VALUES: usize = crate::policy::POOLED_VALUE_CACHE_BYTES / INODE_VALUE_BYTES;
+
+impl Published {
+    fn value(&mut self, ordinal: u32, value: [u8; INODE_VALUE_BYTES]) {
+        if self.values.insert(ordinal, value).is_none() {
+            self.order.push_back(ordinal);
+        }
+        while self.order.len() > PUBLISHED_VALUES {
+            if let Some(old) = self.order.pop_front() {
+                self.values.remove(&old);
+            }
+        }
+    }
+    fn get(&self, id: i64) -> Option<&(PackInfo, Arc<Vec<u8>>)> {
+        self.bodies.iter().find(|(info, _)| info.pack_id == id)
+    }
+    fn insert(&mut self, info: PackInfo, body: Arc<Vec<u8>>) {
+        if body.len() > DEPENDENCY_PACK_CACHE_BYTES {
+            return;
+        }
+        while self.bytes + body.len() > DEPENDENCY_PACK_CACHE_BYTES {
+            let Some((_, old)) = self.bodies.pop_front() else {
+                break;
+            };
+            self.bytes -= old.len();
+        }
+        self.bytes += body.len();
+        self.bodies.push_back((info, body));
+    }
+}
+
+/// Restores the earlier serving state when a continuing reader's call ends.
+pub(crate) struct ServePublished<'a>(&'a Cell<bool>, bool);
+impl Drop for ServePublished<'_> {
+    fn drop(&mut self) {
+        self.0.set(self.1);
+    }
+}
 
 pub(crate) struct Fetch {
     pub(crate) metadata: Arc<dyn PackPersistence>,
@@ -22,6 +79,9 @@ pub(crate) struct Fetch {
     absent: RefCell<BTreeSet<ObjectId>>,
     descriptors: RefCell<BTreeMap<i64, PackInfo>>,
     signatures: RefCell<Option<Vec<SignatureRow>>>,
+    published: RefCell<Published>,
+    /// Set while a reader that continues the latest Save reads.
+    serve_published: Cell<bool>,
     counters: Cell<Diagnostics>,
 }
 impl Fetch {
@@ -32,6 +92,8 @@ impl Fetch {
             absent: RefCell::new(BTreeSet::new()),
             descriptors: RefCell::new(BTreeMap::new()),
             signatures: RefCell::new(None),
+            published: RefCell::new(Published::default()),
+            serve_published: Cell::new(false),
             counters: Cell::new(Diagnostics::default()),
         }
     }
@@ -50,6 +112,88 @@ impl Fetch {
             cache.remove(id);
             absent.remove(id);
         }
+    }
+    /// After an acknowledged publication: the locations this Save won are
+    /// the Store's winners, so they are kept instead of located again; lost
+    /// ones were invalidated by the caller and are located again. Its
+    /// metadata pack bodies are kept for its own later reads (bounded).
+    pub(crate) fn published(
+        &self,
+        batch: &crate::port::Publication,
+        lost: &BTreeSet<ObjectId>,
+    ) -> StorageResult<()> {
+        let infos: BTreeMap<i64, PackInfo> = batch
+            .packs
+            .iter()
+            .map(|pack| (pack.info.pack_id, pack.info))
+            .collect();
+        for row in &batch.objects {
+            let id = row.object_id;
+            self.absent.borrow_mut().remove(&id);
+            let Some(pack) = infos
+                .get(&row.pack_id)
+                .copied()
+                .filter(|_| !lost.contains(&id))
+            else {
+                self.locators.borrow_mut().remove(&id);
+                continue;
+            };
+            check_info(pack)?;
+            self.remember_pack(pack)?;
+            let mut cache = self.locators.borrow_mut();
+            if cache.len() >= READ_OBJECT_LIMIT {
+                let work = cache.make_room(1, &[]);
+                self.note(|c| {
+                    c.locator_evictions += work.removed;
+                    c.locator_eviction_probes += work.probes;
+                    c.locator_second_chances += work.second_chances;
+                });
+            }
+            if cache.len() >= READ_OBJECT_LIMIT {
+                self.note(|c| c.locator_evictions += cache.len() as u64);
+                cache.clear();
+            }
+            cache.insert(
+                id,
+                crate::location::LocatedObject {
+                    location: *row,
+                    pack,
+                },
+            );
+        }
+        let mut published = self.published.borrow_mut();
+        for pack in &batch.packs {
+            if pack.info.domain == PackDomain::Metadata {
+                published.insert(pack.info, pack.body.clone());
+            }
+        }
+        for row in &batch.inode_values {
+            published.value(row.ordinal, row.value);
+        }
+        Ok(())
+    }
+    /// A new Save starts without an earlier Save's published bodies.
+    pub(crate) fn forget_published(&self) {
+        *self.published.borrow_mut() = Published::default();
+    }
+    /// Serves the latest Save's published bodies until the guard drops.
+    pub(crate) fn serving_published(&self) -> ServePublished<'_> {
+        ServePublished(&self.serve_published, self.serve_published.replace(true))
+    }
+    /// A body the latest Save published, to a reader that continues it,
+    /// validated as a fetched one would be.
+    fn published_body(&self, id: i64) -> StorageResult<Option<(PackInfo, Vec<u8>)>> {
+        if !self.serve_published.get() {
+            return Ok(None);
+        }
+        let found = self.published.borrow().get(id).cloned();
+        let Some((info, body)) = found else {
+            return Ok(None);
+        };
+        validate_frame(info, &body)?;
+        self.remember_pack(info)?;
+        self.note(|c| c.pack_hits += 1);
+        Ok(Some((info, body.as_ref().clone())))
     }
     pub(crate) fn invalidate_signatures(&self) {
         *self.signatures.borrow_mut() = None;
@@ -139,6 +283,14 @@ impl Fetch {
         ids: &[i64],
         packs: &mut crate::encoding::PackCache,
     ) -> StorageResult<()> {
+        let mut fetched = Vec::with_capacity(ids.len());
+        for id in ids {
+            match self.published_body(*id)? {
+                Some((info, body)) => packs.insert(info.pack_id, body)?,
+                None => fetched.push(*id),
+            }
+        }
+        let ids = fetched.as_slice();
         if ids.is_empty() {
             return Ok(());
         }
@@ -223,6 +375,12 @@ impl Source for Fetch {
         groups: &[usize],
         whole_for_reuse: bool,
     ) -> StorageResult<crate::encoding::PackAcquisition> {
+        if let Some((info, body)) = self.published_body(id)? {
+            return Ok(crate::encoding::PackAcquisition::Whole {
+                info: Some(info),
+                body,
+            });
+        }
         self.note(|c| {
             c.read_pack_selections += 1;
             c.pack_misses += 1;
@@ -313,6 +471,21 @@ impl Source for Fetch {
             .into_iter()
             .collect();
         let mut found = BTreeMap::new();
+        let wanted: Vec<u32> = if self.serve_published.get() {
+            let published = self.published.borrow();
+            wanted
+                .into_iter()
+                .filter(|ordinal| match published.values.get(ordinal) {
+                    Some(value) => {
+                        found.insert(*ordinal, *value);
+                        false
+                    }
+                    None => true,
+                })
+                .collect()
+        } else {
+            wanted
+        };
         let mut rows = Vec::new();
         for page in wanted.chunks(READ_OBJECT_LIMIT) {
             self.note(|c| c.value_groups += 1);

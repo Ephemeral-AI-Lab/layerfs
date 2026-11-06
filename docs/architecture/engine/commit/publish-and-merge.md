@@ -28,6 +28,8 @@ is a telemetry child named below.
  merge (if moved) --------------------------> merge into same Save
  logical.known, finish, logical.count, bindings
                  ---------------------------> Save::finish, hints
+                 (one reader_after_save serves both: no read-back of
+                  what the Save just published)
  validate        checked_base, prepare_base_install (before the lane)
  lane            ---------------------------------------------> HOLD
  head.lane       ---------------------------> branch_snapshot      |
