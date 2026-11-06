@@ -114,6 +114,7 @@ Every gap has an owner. None is fixed by this report.
 | **Plugins** in `plugins/` still describe the 1.1.0 packages | `grep -l "@layerfs/agent" plugins/*/README.md` | no issue named |
 | **Base fails `clippy -D warnings`**: `unused import: ORDINAL_END` at `engine/crates/layerfs-persistence/src/backend/mod.rs:10` (verified on the merge head, see Checks) | below | no issue named; one import in `layerfs-persistence` |
 | **Three tests fail on the base** in CI: `layerfs-api` `tests/workspace_names.rs` (`a_name_is_unique_in_its_sandbox`, `every_workspace_call_takes_the_name_or_the_path`, both need a built daemon) and `layerfs-persistence` `tests/sqlite_publication.rs:63` (`wal_full_settings_and_unavailable_engine_are_explicit`). Recorded for baseline `d4304741` in the CI note of the interface PRs; **not re-run here** | the interface review of #30 (a CI run of the four PRs, reproduced on the unmodified baseline); not in the repository | no issue named |
+| **The `tools/` unit test `test_decode_observations.py::test_every_named_section_matches_its_source_width` fails on the base** (`AssertionError: 58 != 55 : 13`; the `fmt and guards` CI job runs `python3 -B -m unittest discover -s tools` and goes red; reproduced on a tree whose `tools/` is untouched; the decoder's source was last changed by `68c24f530`, "count PostgreSQL round trips, prepares and connects") | below | no issue named; owner of that change |
 
 ## NOT RUN
 
