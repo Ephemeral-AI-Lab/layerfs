@@ -16,6 +16,10 @@
 //! `logical.count`, `bindings`, `lane`, `head.lane`, `validate`, `publish`),
 //! read from the Store's session totals at each phase's start and end.
 //!
+//! Each Commit also prints `STORAGE <json>`: the Save's new objects, packs,
+//! canonical, stored and metadata bytes, record kinds, and the process's
+//! resident high-water mark so far.
+//!
 //! Run with `--test-threads=1 --nocapture` so the two Stores' timings do not
 //! overlap. Cache state: the Commits run on one Store opened once (a warm
 //! process, as a daemon serving one Workspace is); the reads reopen the Store
@@ -114,12 +118,47 @@ fn postgresql_round_trip_counts() {
         run.scenarios(&dir, || StoreSelection::Postgres(selection.clone()), branch);
     });
     if let Ok(mut client) = postgres::Client::connect(&url, postgres::NoTls) {
+        print_sizes(&mut client, &schema);
         let _ = client.batch_execute(&format!("DROP SCHEMA IF EXISTS {schema} CASCADE"));
     }
     let _ = std::fs::remove_dir_all(&dir);
     if let Err(panic) = result {
         std::panic::resume_unwind(panic);
     }
+}
+
+/// The Store's running totals and each table's size with its indexes and
+/// TOAST (`pg_total_relation_size`), heap and TOAST, after every scenario.
+fn print_sizes(client: &mut postgres::Client, schema: &str) {
+    if let Ok(row) = client.query_one(
+        &format!("SELECT logical,canonical,stored,metadata FROM {schema}.store_totals"),
+        &[],
+    ) {
+        let (logical, canonical, stored, metadata): (i64, i64, i64, i64) =
+            (row.get(0), row.get(1), row.get(2), row.get(3));
+        println!(
+            "PG_TOTALS {{\"logical\":{logical},\"canonical\":{canonical},\"stored\":{stored},\"metadata\":{metadata}}}"
+        );
+    }
+    let Ok(rows) = client.query(
+        "SELECT c.relname::text, pg_total_relation_size(c.oid), pg_relation_size(c.oid), \
+         coalesce(pg_total_relation_size(nullif(c.reltoastrelid, 0)), 0) \
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
+         WHERE c.relkind = 'r' AND n.nspname = $1 ORDER BY 2 DESC",
+        &[&schema],
+    ) else {
+        return;
+    };
+    let mut total = 0_i64;
+    for row in rows {
+        let (name, all, heap, toast): (String, i64, i64, i64) =
+            (row.get(0), row.get(1), row.get(2), row.get(3));
+        total += all;
+        println!(
+            "PG_SIZE {{\"table\":\"{name}\",\"total\":{all},\"heap\":{heap},\"toast\":{toast}}}"
+        );
+    }
+    println!("PG_SIZE {{\"table\":\"*\",\"total\":{total}}}");
 }
 
 fn scratch(label: &str) -> PathBuf {
@@ -478,9 +517,22 @@ impl Run {
             phase.phase_sql.entry(name).or_default().accumulate(&work);
         }
         attribute_sql(None);
-        if let Err(failure) = &outcome {
-            panic!("{name}: {failure}");
-        }
+        let saved = match &outcome {
+            Err(failure) => panic!("{name}: {failure}"),
+            Ok(success) => success.saved,
+        };
+        println!(
+            "STORAGE {{\"backend\":\"{}\",\"scenario\":\"{name}\",\"inserted\":{},\"packs\":{},\"canonical\":{},\"stored\":{},\"metadata\":{},\"full\":{},\"prefix\":{},\"vm_hwm_kb\":{}}}",
+            self.backend,
+            saved.inserted,
+            saved.packs,
+            saved.canonical_bytes,
+            saved.stored_bytes,
+            saved.metadata_bytes,
+            saved.full_records,
+            saved.prefix_records,
+            vm_hwm_kb(),
+        );
         for report in &reports {
             if let Some(root) = report.root() {
                 flatten(root, String::new(), 0, &mut phase.phases_us);
@@ -520,6 +572,19 @@ fn work_json(w: &SqlWork) -> String {
         w.returned_rows,
         w.bound_bytes
     )
+}
+
+/// This process's resident high-water mark so far (`VmHWM`), in KiB: a
+/// lifetime peak, never one phase's own.
+fn vm_hwm_kb() -> String {
+    std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|text| {
+            text.lines()
+                .find_map(|line| line.strip_prefix("VmHWM:"))
+                .and_then(|rest| rest.split_whitespace().next().map(str::to_owned))
+        })
+        .unwrap_or_else(|| "null".to_owned())
 }
 
 fn load1() -> String {
