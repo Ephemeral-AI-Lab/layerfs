@@ -61,6 +61,41 @@ impl Writer {
         }
     }
 
+    /// One non-blocking attempt at the same lane, for work that is skipped
+    /// rather than waited for (#86: the idle WAL checkpoint). `Ok(None)`:
+    /// another holder has it now (EWOULDBLOCK) and the caller skips its work.
+    /// This is a single attempt, never a retry: no loop, sleep or busy handler
+    /// follows it here, and a caller must not wrap it in one.
+    pub(crate) fn try_acquire(path: &Path) -> Result<Option<Self>, BackendError> {
+        #[cfg(target_os = "linux")]
+        {
+            // The same independent directory description as `acquire`.
+            let directory = path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            let file = File::open(directory).map_err(|_| BackendError::Integrity)?;
+            if !file
+                .metadata()
+                .map_err(|_| BackendError::Integrity)?
+                .is_dir()
+            {
+                return Err(BackendError::Integrity);
+            }
+            match Flock::lock(file, FlockArg::LockExclusiveNonblock) {
+                Ok(lock) => Ok(Some(Self { lock })),
+                Err((_, Errno::EWOULDBLOCK)) => Ok(None),
+                Err((_, Errno::EINTR)) => Err(BackendError::Cancelled),
+                Err(_) => Err(BackendError::Integrity),
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            // As `acquire`: no advisory lane off Linux.
+            Self::acquire(path).map(Some)
+        }
+    }
+
     pub(crate) fn release(self) -> Result<(), Self> {
         #[cfg(target_os = "linux")]
         {

@@ -117,6 +117,34 @@ SqliteHandles::seal(self)
   -> SealedStore { path, profile, sqlite_version, bytes }
 ```
 
+## Idle checkpoint (#86)
+
+```text
+StoreFile::checkpoint(&self)                  (live shared session; stays open)
+  Session::checkpoint_idle
+    read-only session? ----------------------> Refused "ReadOnly"
+    -wal empty or absent? ------------------------------------> Ok(true), no SQL
+    FIFO turn (Writer); this thread holds the lane? ----------> Ok(false)
+    quarantined or open transaction? ---------------------------> Unknown
+    Writer::try_acquire: Linux directory lane, one attempt
+      another holder (EWOULDBLOCK) ----------------------------> Ok(false)
+    PRAGMA wal_checkpoint(TRUNCATE), once; release the lane
+      busy (a reader still in the log) ------------------------> Ok(false)
+  -> Ok(true): the -wal is 0 bytes
+```
+
+The control layer's open-Store cache runs it when the last call on a SQLite
+Store returns, or a Sandbox on it closes, with no other call running in that
+process ([`store/open.rs`](../../../../api/crates/layerfs-control/src/store/open.rs)). The Store stays open: a
+live daemon still keeps its Store across Saves and Commits, and the 60 s idle
+close is unchanged. A checkpoint left by `Ok(false)` is never retried; its
+frames stay valid and the last close checkpoints them. The lane is taken
+first because a TRUNCATE checkpoint holds SQLite's WAL write lock, which a
+writer of another process would otherwise meet as `Busy`; off Linux there is
+no lane, and concurrent writers keep exact `Busy`, as for any write there.
+Sources: [`session/checkpoint.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/session/checkpoint.rs),
+[`writer_admission.rs`](../../../../engine/crates/layerfs-persistence/src/backend/sqlite/lane/writer_admission.rs).
+
 Seal consumes the sole session of a Store that one process created (host
 Init) and hands one closed file to install. It never runs on a live shared
 Store: a daemon keeps its Store open across Saves and Commits. The live-Store
