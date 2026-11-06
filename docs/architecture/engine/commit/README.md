@@ -102,7 +102,7 @@ Project Init keeps its own parallel profile ([Project Init: Construction](../pro
 | Limit or failure | Value or error | Source |
 | --- | --- | --- |
 | Second Commit on the same Workspace | `CommitError::InFlight` (control code `Busy`) | [`commit.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit.rs), [`failure.rs`](../../../../engine/crates/layerfs-daemon/src/control/failure.rs) |
-| Captured page and record window | `PAGE_ROWS` = 64 rows | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs) |
+| Captured page and record window | `PAGE_ROWS` = 1,024 rows | [`types.rs`](../../../../engine/crates/layerfs-overlay/src/contract/types.rs) |
 | Moved again after the merge | In-lane merge up to `LANE_MERGE_PATHS` = 1,024 serials, else `CommitError::LaneMerge` | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
 | Paths listed for a conflict | 4,096 (`written_truncated` when cut) | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |
 | Conflict markers still present | `CommitError::Markers`; nothing published | [`commit_merge.rs`](../../../../engine/crates/layerfs-store-service/src/store/commit_merge.rs) |

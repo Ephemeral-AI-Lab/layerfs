@@ -28,7 +28,18 @@ impl Save<'_> {
             });
         }
         state.storage.source.begin_demand();
-        state.storage.source.locate(ids)?;
+        // This Save's own pending and sealed objects are read from it; only
+        // the rest are located in the Store.
+        let stored: Vec<ObjectId> = ids
+            .iter()
+            .copied()
+            .filter(|id| {
+                !state.packer.pending(*id)
+                    && state.pending.pending_canonical(*id).is_none()
+                    && state.packer.location(*id).is_none()
+            })
+            .collect();
+        state.storage.source.locate(&stored)?;
         if ids.iter().any(|id| state.packer.pending(*id)) {
             let required = state.packer.finish_pack_bound();
             state.reserve_packs(required)?;
@@ -46,12 +57,15 @@ impl Save<'_> {
             let length = if let Some(value) = state.pending.pending_canonical(*id) {
                 value.len()
             } else {
-                state
-                    .packer
-                    .location(*id)
-                    .or(state.storage.source.location(*id, i64::MAX)?)
-                    .ok_or(StorageError::ObjectMissing(*id))?
-                    .canonical_length
+                match state.packer.location(*id) {
+                    Some(location) => location,
+                    None => state
+                        .storage
+                        .source
+                        .location(*id, i64::MAX)?
+                        .ok_or(StorageError::ObjectMissing(*id))?,
+                }
+                .canonical_length
             };
             bytes
                 .checked_add(length)

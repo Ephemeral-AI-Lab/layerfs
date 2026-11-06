@@ -12,9 +12,13 @@ pub type ReaderFactory = Arc<dyn Fn(usize) -> StorageResult<StoreReader> + Send 
 /// Readers of closed SDK private Workspaces kept for the next one (#352
 /// F-025 fix 4): an SDK file call binds a private Workspace per call, and
 /// opening its reader (a read-only SQLite connection and Storage) was a fixed
-/// cost. A mounted Workspace's reader still opens at mount and closes at
-/// unmount.
-const IDLE_READERS: usize = 4;
+/// cost. On SQLite a mounted Workspace's reader still opens at mount and
+/// closes at unmount; a Store opened with shared readers (PostgreSQL, #64)
+/// keeps every Workspace's healthy reader here, so a mount after an unmount
+/// opens no connection. At most this many stay idle: with the writer, its
+/// lane connection, the control reader and one per mounted Workspace, they
+/// bound a daemon's PostgreSQL connections.
+pub const IDLE_READERS: usize = 4;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReadAdmissionError {
     Capacity,
@@ -58,19 +62,25 @@ pub(super) struct ReadSet {
     counts: Arc<Counts>,
     capacity: usize,
     policy: StoragePolicy,
+    /// Every Workspace takes and returns idle readers, not only pooled ones.
+    shared: bool,
+    /// Serializes the one open of a control reader not opened at start.
+    opening_control: Mutex<()>,
 }
 impl ReadSet {
+    /// `control`, when given, is the control reader opened at start; without
+    /// one, it opens at its first use ([`Self::control`]). `shared` makes
+    /// every Workspace's reader come from and return to the idle readers.
     pub fn new(
-        control: StoreReader,
+        control: Option<StoreReader>,
         factory: ReaderFactory,
         counts: Arc<Counts>,
-        capacity: usize,
-        policy: StoragePolicy,
+        (capacity, policy, shared): (usize, StoragePolicy, bool),
     ) -> Arc<Self> {
-        let control = Arc::new(ReadSession::new(0, control, counts.clone()));
+        let control = control.map(|control| Arc::new(ReadSession::new(0, control, counts.clone())));
         Arc::new(Self {
             state: Mutex::new(State {
-                sessions: BTreeMap::from([(None, Some(control))]),
+                sessions: BTreeMap::from_iter(control.map(|control| (None, Some(control)))),
                 next: 1,
                 stopping: false,
                 retired_requests: 0,
@@ -83,12 +93,14 @@ impl ReadSet {
             counts,
             capacity,
             policy,
+            shared,
+            opening_control: Mutex::new(()),
         })
     }
     /// Opens `workspace`'s reader; a `pooled` (SDK private) Workspace takes
     /// an idle one first and gives it back at close.
     pub fn mount(&self, workspace: WorkspaceId, pooled: bool) -> Result<(), Arc<PortError>> {
-        let index = {
+        let candidate = {
             let mut state = self
                 .state
                 .lock()
@@ -98,42 +110,61 @@ impl ReadSet {
                     ReadAdmissionError::Stopped,
                 )));
             }
-            if state.sessions.len() > self.capacity {
+            if state.sessions.keys().flatten().count() >= self.capacity {
                 return Err(Arc::new(PortError::ReadAdmission(
                     ReadAdmissionError::Capacity,
                 )));
             }
-            if pooled {
-                state.pooled.insert(workspace);
-                if let Some((index, reader)) = state.idle.pop() {
-                    self.counts.readers_reused.fetch_add(1, Ordering::Relaxed);
-                    let session = ReadSession::new(index, reader, self.counts.clone());
-                    state
-                        .sessions
-                        .insert(Some(workspace), Some(Arc::new(session)));
-                    return Ok(());
-                }
-            }
-            let index = state.next;
-            state.next = index.checked_add(1).ok_or_else(|| {
-                Arc::new(PortError::Storage(StorageError::Integrity(
-                    "reader identity exhausted",
-                )))
-            })?;
             state.sessions.insert(Some(workspace), None);
-            index
-        };
-        self.counts.readers_opened.fetch_add(1, Ordering::Relaxed);
-        let result = (self.factory)(index).and_then(|reader| {
-            if reader.storage.policy() != self.policy {
-                return Err(StorageError::Integrity("Workspace reader policy"));
+            match pooled || self.shared {
+                true => {
+                    state.pooled.insert(workspace);
+                    state.idle.pop()
+                }
+                false => None,
             }
-            Ok(Arc::new(ReadSession::new(
-                index,
-                reader,
-                self.counts.clone(),
-            )))
-        });
+        };
+        // An idle reader is checked outside the lock (a PostgreSQL one with
+        // one round trip, #64); one that cannot serve is dropped, never
+        // handed to this Workspace, and a new reader opens instead.
+        let (index, result) = match candidate.filter(|(_, reader)| reader.usable()) {
+            Some((index, reader)) => {
+                self.counts.readers_reused.fetch_add(1, Ordering::Relaxed);
+                let session = ReadSession::new(index, reader, self.counts.clone());
+                (index, Ok(Arc::new(session)))
+            }
+            None => {
+                let index = {
+                    let mut state = self
+                        .state
+                        .lock()
+                        .map_err(|_| Arc::new(PortError::Poisoned))?;
+                    let index = state.next;
+                    match index.checked_add(1) {
+                        Some(next) => state.next = next,
+                        None => {
+                            state.sessions.remove(&Some(workspace));
+                            return Err(Arc::new(PortError::Storage(StorageError::Integrity(
+                                "reader identity exhausted",
+                            ))));
+                        }
+                    }
+                    index
+                };
+                self.counts.readers_opened.fetch_add(1, Ordering::Relaxed);
+                let result = (self.factory)(index).and_then(|reader| {
+                    if reader.storage.policy() != self.policy {
+                        return Err(StorageError::Integrity("Workspace reader policy"));
+                    }
+                    Ok(Arc::new(ReadSession::new(
+                        index,
+                        reader,
+                        self.counts.clone(),
+                    )))
+                });
+                (index, result)
+            }
+        };
         let mut state = self
             .state
             .lock()
@@ -175,6 +206,44 @@ impl ReadSet {
         } else {
             Ok(())
         }
+    }
+    /// The control reader (session 0), opened here at its first use when
+    /// the Store did not open it at start (#64). That open is the calling
+    /// operation's one attempt: its failure is that operation's, nothing is
+    /// kept, and a later operation opens it again. A read-only open changes
+    /// nothing on the server, so an unknown outcome leaves no custody.
+    pub fn control(&self) -> Result<Arc<ReadSession>, Arc<PortError>> {
+        let admission = |error| Arc::new(PortError::ReadAdmission(error));
+        match self.session(None) {
+            Err(ReadAdmissionError::NoReaders) => {}
+            other => return other.map_err(admission),
+        }
+        let _opening = self
+            .opening_control
+            .lock()
+            .map_err(|_| Arc::new(PortError::Poisoned))?;
+        match self.session(None) {
+            Err(ReadAdmissionError::NoReaders) => {}
+            other => return other.map_err(admission),
+        }
+        let reader = (self.factory)(0).map_err(|error| Arc::new(PortError::Storage(error)))?;
+        if reader.storage.policy() != self.policy {
+            return Err(Arc::new(PortError::Storage(StorageError::Integrity(
+                "control reader policy",
+            ))));
+        }
+        let session = Arc::new(ReadSession::new(0, reader, self.counts.clone()));
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| Arc::new(PortError::Poisoned))?;
+        if state.stopping {
+            drop(state);
+            session.close()?;
+            return Err(admission(ReadAdmissionError::Stopped));
+        }
+        state.sessions.insert(None, Some(session.clone()));
+        Ok(session)
     }
     pub fn session(
         &self,

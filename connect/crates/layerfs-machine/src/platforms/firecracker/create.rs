@@ -83,6 +83,7 @@ pub(crate) fn create(spec: &Spec, bundle: &Bundle) -> Result<Running, MachineErr
     let lasting = Lasting {
         port: Some(new_port(spec)?),
         network: Some(network),
+        gateway: None,
     };
     kept(boot_and_bring_up(spec, bundle, &host, lasting))
 }

@@ -3,7 +3,7 @@ use crate::{
     db::integer, indexed_operation_record_changes_bytes, sql, IndexedOperationRecordApply,
     IndexedOperationRecordChange, IndexedOperationRecordKey, IndexedOperationRecordScope,
     OperationRecordExpectedValue, Overlay, OverlayError, OverlayResult, StatementKind,
-    OPERATION_RECORD_BYTES, PAGE_ROWS,
+    OPERATION_RECORD_BYTES, RECORD_ROWS,
 };
 
 /// Key-ordered (key, value) rows and whether the kind ends after them.
@@ -45,14 +45,14 @@ impl Overlay {
         self.indexed_value(scope, key)
     }
 
-    /// Reads the bounded raw values of at most `PAGE_ROWS` keys under one
+    /// Reads the bounded raw values of at most `RECORD_ROWS` keys under one
     /// fence, in the order asked. Together they stay inside one record envelope.
     pub fn indexed_operation_record_get_many(
         &self,
         scope: IndexedOperationRecordScope,
         keys: &[IndexedOperationRecordKey],
     ) -> OverlayResult<Vec<Option<Vec<u8>>>> {
-        if keys.len() > PAGE_ROWS {
+        if keys.len() > RECORD_ROWS {
             return Err(OverlayError::Invalid("indexed operation_record key list"));
         }
         self.fence_operation(scope.owner, false)?;
@@ -226,7 +226,7 @@ impl Overlay {
     }
 
     /// Keys after `after` (None: from the first) with their values, in key
-    /// order: at most `PAGE_ROWS` rows, stopped before the row that would take
+    /// order: at most `RECORD_ROWS` rows, stopped before the row that would take
     /// the window past one record envelope. The first row is always returned,
     /// so a window pages and never refuses; the caller continues after its
     /// last key. The flag says no row of the kind follows the window.
@@ -276,7 +276,7 @@ impl Overlay {
                 decode,
             )?,
         };
-        let ended = rows.len() < PAGE_ROWS && !stopped;
+        let ended = rows.len() < RECORD_ROWS && !stopped;
         let entries = rows.into_iter().map_while(|row| row).collect();
         Ok((entries, ended))
     }

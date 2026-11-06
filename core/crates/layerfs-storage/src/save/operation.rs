@@ -20,6 +20,7 @@ impl<'a> Save<'a> {
     pub(crate) fn new(storage: &'a Storage) -> StorageResult<Self> {
         let work_start = storage.work.snapshot().total;
         let _work = storage.work.span(super::Stage::Begin);
+        storage.source.forget_published();
         Ok(Self {
             work_start,
             state: RefCell::new(State::new(storage)?),

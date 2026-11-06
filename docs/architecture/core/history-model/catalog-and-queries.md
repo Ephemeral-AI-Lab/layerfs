@@ -31,7 +31,7 @@ which runs each method as one read or one write transaction.
 | Ancestry | `merge_base`, `is_ancestor` |
 | Writes | `initialize_layerstack`, `fork`, `commit_branch`, `add_layer`, `merge_branch`, `remove_layerstack`, `reserve_inodes` |
 | Lane | `publish_lane` returns a `PublishLane` hold, released on drop |
-| Facts and hints | `statistics`, `record_init`, `record_bindings`, `bindings_of`, `record_file_digests`, `file_roots` (up to `FILE_DIGEST_WINDOW` = 64 pairs) |
+| Facts and hints | `statistics`, `record_init`, `record_bindings`, `bindings_of`, `record_file_digests`, `file_roots` (up to `FILE_DIGEST_WINDOW` = 1,024 pairs, one overlay page; 64 before layerfs-project #69) |
 
 Default trait bodies make some methods optional: `overwritten`, `statistics`,
 `record_init` and `remove_layerstack` return `Unsupported`; the binding and

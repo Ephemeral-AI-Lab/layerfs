@@ -84,10 +84,10 @@ the next.
 
 | Rule | Value | Source |
 | --- | --- | --- |
-| Changes per guarded job | At most `PAGE_ROWS` = 64, ordered by kind then serial | [`normalize.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/normalize.rs) |
-| Cursor windows held | 16 per record kind, each at most 64 rows | [`cursor.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/cursor.rs) |
+| Changes per guarded job | At most `RECORD_ROWS` = 64 (the operation-record window), ordered by kind then serial | [`normalize.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/normalize.rs) |
+| Cursor windows held | 16 per record kind, each at most `PAGE_ROWS` (1,024) rows | [`cursor.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/cursor.rs) |
 | Second attempt in the same scope | Refused by the existing `CONTEXT` record | [`normalize.rs`](../../../../engine/crates/layerfs-workspace/src/construction/namespace/normalize.rs) |
-| Digest rows per Store call | `FILE_DIGEST_WINDOW` = 64 | [`digests.rs`](../../../../engine/crates/layerfs-workspace/src/ports/digests.rs) |
+| Digest rows per Store call | `FILE_DIGEST_WINDOW` = 1,024, one captured inode page: one `file_roots` and one `record_file_digests` call per page of up to 1,024 new files | [`digests.rs`](../../../../engine/crates/layerfs-workspace/src/ports/digests.rs) |
 
 Records live in the Workspace's overlay file as operation records
 ([Overlay: Operation records](../overlay/operation-records.md)). No

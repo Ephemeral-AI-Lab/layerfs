@@ -73,10 +73,12 @@ written down.
 | 3 | `DaemonStore::Postgres { url, … }` in the daemon setup. | `sandbox_store` in [`store/postgres.rs`](../../../../api/crates/layerfs-control/src/store/postgres.rs), [`layerfs-bridge/src/store.rs`](../../../../engine/crates/layerfs-bridge/src/store.rs) |
 | 4 | The setup file: 0600 in a 0700 directory, written once. | `prepare` in [`local/create.rs`](../../../../connect/crates/layerfs-sandbox/src/local/create.rs) and [`namespaces/create.rs`](../../../../connect/crates/layerfs-sandbox/src/backend/namespaces/create.rs); `upload` in [`docker/upload.rs`](../../../../connect/crates/layerfs-sandbox/src/backend/docker/upload.rs) |
 
-The worker's reach check, before the launch, opens one connection to the
-server with the rewritten URL to read the schema's binding; a failure names
+The worker's reach check, before the launch, reads the schema's binding and
+finds the project on one session to the server with the rewritten URL (the
+process's held host session, #65, opened if none is held); a failure names
 the machine and the host it tried, never the URL (`reach_check` in
-[`route.rs`](../../../../api/crates/layerfs-control/src/sandbox/route.rs)).
+[`route.rs`](../../../../api/crates/layerfs-control/src/sandbox/route.rs),
+[`store/reader.rs`](../../../../api/crates/layerfs-control/src/store/reader.rs)).
 
 ## Where it never appears
 

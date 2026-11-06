@@ -39,7 +39,7 @@ publishes the rest and returns a `WriteOutcome`.
 | Bound | Value | Source |
 | --- | --- | --- |
 | Objects per pending batch | 512 (`BATCH_OBJECT_LIMIT`) | [`store/policy.rs`](../../../../core/crates/layerfs-storage/src/store/policy.rs) |
-| Canonical bytes per batch (and per wave) | 4 MiB − 1 (`WAVE_CANONICAL_BYTES_LIMIT`) | same |
+| Canonical bytes per batch (and per wave) | The provider's `publication_bytes`: 4 MiB − 1 (`WAVE_CANONICAL_BYTES_LIMIT`) by default and on SQLite, 16 MiB − 1 (`PUBLICATION_BYTES_MAX`) on PostgreSQL; `StorageCapacities::with_publication_bytes` refuses anything outside that range | same |
 | Object larger than the byte bound | accepted alone into an empty batch | [`batch.rs`](../../../../core/crates/layerfs-storage/src/save/batch.rs) |
 
 One wave ([`wave.rs`](../../../../core/crates/layerfs-storage/src/save/wave.rs)):
@@ -51,6 +51,16 @@ One wave ([`wave.rs`](../../../../core/crates/layerfs-storage/src/save/wave.rs))
 | Exact reuse | Already stored with the same role and length: counted as reused and not read back. A role or length mismatch is `Collision`. A corrupt stored copy fails at its first read. |
 | New object | Check every reference is stored, pending or sealed (else `MissingDependency`), select a representation ([Encoding](encoding.md#full-and-delta-encoding)) and add the record to its lane's open group. |
 | Flush | Write signature-ring changes, then publish every ready pack. |
+
+A whole-file object whose ring proposal is still held by this Save (pending
+or sealed, not published) would first seal and publish it, so selection can
+charge the winner's chain. When no PREFIX record can be narrower than the
+object's FULL record (`delta::record::prefix_cannot_win`: the PREFIX adds the
+32-byte base id and a zstd frame of at least 14 bytes), the proposal is dropped
+instead: selection would answer FULL whatever the base. The FULL record is
+prepared once and handed to selection. Before this, 1,000 similar 23-byte
+files cost 1,000 publications and 1,000 one-object packs; now one wave
+(layerfs-project #67).
 
 A Storage handle runs one Save at a time: a second `begin_save` while one is
 open fails with `Integrity("one save per storage handle")`. Separate handles
@@ -108,7 +118,7 @@ is released, at finish.
 | External references | Locate references outside the ready set; one that is not stored is `MissingDependency`. |
 | Order | Topological: an object follows everything it references. A cycle is `Integrity("registration reference cycle")`. |
 | Batch contents | Inode values first, then packs with their locators, then signature changes; at finish the unused ordinal tail. |
-| Split | Start a new batch before one would pass 8,191 rows, 4 MiB − 1 canonical bytes or 4 MiB − 1 sealed pack bytes. An item larger than a bound goes alone. |
+| Split | Start a new batch before one would pass 8,191 rows, `publication_bytes` canonical bytes or `publication_bytes` sealed pack bytes (4 MiB − 1 on SQLite, 16 MiB − 1 on PostgreSQL). An item larger than a bound goes alone. |
 | Publish | One `publish` call per batch: one attempt, one atomic unit in the backend. |
 | First writer wins | `Published.lost` lists locators already present. Each lost id is read back from the winner and compared with this Save's bytes and role; a difference is `Collision`. |
 

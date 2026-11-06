@@ -162,6 +162,7 @@ SQL = (
     ]
     + [f"statement_{p}_{f}" for p in SQL_PHASES for f in ("calls", "wall_ns")]
     + [f"commit_{p}_{f}" for p in SQL_PHASES for f in ("calls", "wall_ns")]
+    + ["round_trips", "prepares", "connects"]
 )
 STORAGE = [
     "policy",

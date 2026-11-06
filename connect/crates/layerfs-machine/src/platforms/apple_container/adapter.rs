@@ -48,9 +48,16 @@ impl Adapter for AppleContainer {
     fn host_identity(&self, spec: &Spec) -> Result<String, MachineError> {
         Err(refused(spec, "has no ssh host"))
     }
-    /// A loopback URL becomes the container network's gateway (G7 receipt).
+    /// A loopback URL becomes the container network's gateway (G7 receipt):
+    /// the one its last start recorded (#66), else read from the machine
+    /// (a record from before #66, or a start that could not read it). A
+    /// recorded gateway that went stale is dialled as recorded and fails
+    /// there, explicitly; nothing looks it up again.
     fn reach(&self, spec: &Spec, url: &str) -> Result<String, MachineError> {
-        dial(spec, url, Loopback::Lookup(&|| gateway(spec)))
+        match spec.state.gateway {
+            Some(recorded) => dial(spec, url, Loopback::Alias(&recorded.to_string())),
+            None => dial(spec, url, Loopback::Lookup(&|| gateway(spec))),
+        }
     }
     fn forward(&self, spec: &Spec, _guest_port: u16) -> Result<Forward, MachineError> {
         Err(refuse(spec, Code::Unsupported, FORWARD))

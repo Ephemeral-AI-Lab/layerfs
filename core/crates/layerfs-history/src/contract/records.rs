@@ -584,8 +584,12 @@ pub struct StoreStatistics {
     pub init: Option<InitStatistics>,
 }
 
-/// Contents one `file_roots` demand asks about.
-pub const FILE_DIGEST_WINDOW: usize = 64;
+/// Contents one `file_roots` demand asks about, and the digest rows a
+/// Commit's construction records per call: one overlay page (1,024 rows).
+/// An engine with an array form answers or records a window in one
+/// statement (layerfs-project #69: 64 cost about four round trips per 64
+/// new files on PostgreSQL).
+pub const FILE_DIGEST_WINDOW: usize = 1024;
 
 /// The whole-content digest of one saved regular-file root (#364): BLAKE3
 /// of its `length` bytes, recorded by the Commit that built the root from

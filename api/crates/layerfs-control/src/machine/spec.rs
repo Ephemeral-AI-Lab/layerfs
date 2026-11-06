@@ -155,6 +155,9 @@ pub fn spec(home: &Path, home_id: &str, record: &MachineRecord) -> Result<Spec> 
         state: Lasting {
             port: lasting.and_then(|l| l.get_int("port")).map(|p| p as u16),
             network: lasting.and_then(|l| l.get_int("network")).map(|n| n as u8),
+            gateway: lasting
+                .and_then(|l| l.get_text("gateway"))
+                .and_then(|g| g.parse().ok()),
         },
         worker: worker(home, name)?,
         work_dir: paths::machine_dir(home, name),
@@ -198,6 +201,9 @@ pub fn save_running(home: &Path, name: &str, running: &Running) -> Result<()> {
     }
     if let Some(network) = running.lasting.network {
         lasting.push(("network".to_owned(), SdkValue::Int(i64::from(network))));
+    }
+    if let Some(gateway) = running.lasting.gateway {
+        lasting.push(("gateway".to_owned(), SdkValue::text(gateway.to_string())));
     }
     update(home, name, |record| {
         let record = record.with("lasting", SdkValue::Map(lasting));

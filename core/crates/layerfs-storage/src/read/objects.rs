@@ -131,6 +131,8 @@ impl ReadState {
                 actual: bytes as u64,
             });
         }
+        let located: Vec<i64> = roots.iter().map(|row| row.pack_id).collect();
+        source.whole_packs(&located, &mut self.packs)?;
         let prefetch =
             prefetch::chains(source, &roots, &mut self.packs, workspace, &mut self.groups)?;
         self.prefetch_pool.accumulate(prefetch);

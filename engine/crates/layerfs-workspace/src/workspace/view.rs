@@ -144,7 +144,12 @@ impl SourceView {
             return Err(ContentError::PathNotFound.into());
         }
         let inherited = match self.base.child(parent, name) {
-            Ok(value) => Some(value.serial),
+            Ok(value) => {
+                // A walk stats names in listing order: remember the lengths
+                // of the files listed after this one with its own (F-032).
+                self.base.sibling_lengths_for(parent, name, &value)?;
+                Some(value.serial)
+            }
             Err(ContentError::PathNotFound) => None,
             Err(error) => return Err(error.into()),
         };

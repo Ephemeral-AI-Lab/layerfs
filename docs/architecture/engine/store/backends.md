@@ -36,7 +36,7 @@ The backend seam shared by SQLite and PostgreSQL.
 | --- | --- | --- |
 | `Engine` | The opened session behind a `HistoryProvider`: `Sqlite` or `Postgres`. | [`seam.rs`](../../../../engine/crates/layerfs-persistence/src/backend/seam.rs) |
 | `HistoryStatements` | Runs a named history statement (`key`, `Vec<Param>`) in the open transaction. `history_arrays` binds whole columns where the engine can (PostgreSQL); `None` means run the per-row form. | [`seam.rs`](../../../../engine/crates/layerfs-persistence/src/backend/seam.rs) |
-| `Mechanics` | Engine statements under shared Metadata and Objects bounds: `policy`, `allocation_cursor`, `advance_allocation`, `locate`, `inode_values`, `signatures`, `read_packs`. | [`seam.rs`](../../../../engine/crates/layerfs-persistence/src/backend/seam.rs) |
+| `Mechanics` | Engine statements under shared Metadata and Objects bounds: `policy`, `allocation_cursor`, `advance_allocation`, `allocate` (cursor and advance; PostgreSQL overrides it with one `UPDATE … RETURNING`), `locate`, `inode_values`, `signatures`, `read_packs`. | [`seam.rs`](../../../../engine/crates/layerfs-persistence/src/backend/seam.rs) |
 | `Param`, `Value`, `Record` | Owned scalars in and rows out, independent of the driver. | [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/records.rs) |
 | `pack_info` | One checked pack descriptor from stored columns, on either engine. | [`records.rs`](../../../../engine/crates/layerfs-persistence/src/backend/records.rs) |
 

@@ -9,6 +9,9 @@ use layerfs_storage::{
 };
 use std::sync::Arc;
 
+/// One past the last pooled ordinal a cursor may reach.
+pub(crate) const ORDINAL_END: i64 = 4_294_967_296;
+
 /// One opened engine session behind a history provider.
 #[derive(Clone)]
 pub(crate) enum Engine {
@@ -47,6 +50,22 @@ pub(crate) trait Mechanics {
     /// Next unreserved pack id and inode-value ordinal.
     fn allocation_cursor(&self) -> Result<(i64, i64), BackendError>;
     fn advance_allocation(&self, pack: i64, ordinal: i64) -> Result<(), BackendError>;
+    /// Takes `packs` pack ids and `ordinals` ordinals from the cursor and
+    /// returns where each block starts. `Capacity` when either would pass
+    /// its bound; nothing is taken then.
+    fn allocate(&self, packs: i64, ordinals: i64) -> Result<(i64, i64), BackendError> {
+        let (pack, ordinal) = self.allocation_cursor()?;
+        let end_pack = pack
+            .checked_add(packs)
+            .filter(|v| *v > 0)
+            .ok_or(BackendError::Capacity)?;
+        let end_ordinal = ordinal
+            .checked_add(ordinals)
+            .filter(|v| *v <= ORDINAL_END)
+            .ok_or(BackendError::Capacity)?;
+        self.advance_allocation(end_pack, end_ordinal)?;
+        Ok((pack, ordinal))
+    }
     fn locate(
         &self,
         ids: &[ObjectId],

@@ -60,6 +60,23 @@ pub fn record_width(lane: PackLane, base: Option<ObjectId>, frame_length: usize)
     }
 }
 
+/// Fewest bytes a PREFIX frame can have. The payload codec writes a standard
+/// zstd frame (RFC 8878) with a content size and a checksum: magic (4), frame
+/// header descriptor (1), at least one byte of window descriptor or content
+/// size, a block header (3), at least one block content byte for a nonempty
+/// payload, and the checksum (4).
+pub const PREFIX_FRAME_MIN: usize = 4 + 1 + 1 + 3 + 1 + 4;
+
+/// True when no PREFIX record can be narrower than `full_width`, the width of
+/// the FULL record already chosen for the same payload in `lane`, so a delta
+/// base is never worth acquiring. Both records share the lane's header; a
+/// PREFIX record adds the base identity and a frame of at least
+/// [`PREFIX_FRAME_MIN`] bytes. The selector keeps PREFIX only when it is
+/// strictly narrower, so its answer is FULL whatever base it would try.
+pub fn prefix_cannot_win(lane: PackLane, full_width: usize) -> bool {
+    full_width <= record_width(lane, None, PREFIX_FRAME_MIN) + ID_BYTES
+}
+
 /// Encodes one whole-file or chunk lane record.
 pub fn encode(
     lane: PackLane,

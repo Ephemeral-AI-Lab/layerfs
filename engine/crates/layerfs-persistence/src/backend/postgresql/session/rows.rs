@@ -36,8 +36,14 @@ fn state(code: &str) -> BackendError {
 
 /// One result row as owned engine-neutral values.
 pub(crate) fn record(row: &Row) -> Result<Record, BackendError> {
-    let mut cells = Vec::with_capacity(row.len());
-    for (index, column) in row.columns().iter().enumerate() {
+    record_first(row, row.len())
+}
+
+/// The first `count` columns of one row, so a large trailing column (a pack
+/// body) is not copied with them.
+pub(crate) fn record_first(row: &Row, count: usize) -> Result<Record, BackendError> {
+    let mut cells = Vec::with_capacity(count.min(row.len()));
+    for (index, column) in row.columns().iter().enumerate().take(count) {
         let failed = |e: postgres::Error| error(&e);
         let ty = column.type_();
         let value = if *ty == Type::INT8 {

@@ -1,5 +1,5 @@
 //! `apple_container` power: see `mod.rs`.
-use super::observe::{guest, observe, CLI};
+use super::observe::{gateway, guest, observe, CLI};
 use crate::error::MachineError;
 use crate::setup::vm::{checked, not_found, recorded_port, CREATE};
 use crate::setup::worker;
@@ -25,12 +25,18 @@ pub(crate) fn stop(spec: &Spec) -> Result<(), MachineError> {
     Ok(())
 }
 
+/// Brings the worker up and records the container network's gateway, read
+/// once here (#66): every start replaces it, and a Sandbox's PostgreSQL
+/// reach uses it without running `container inspect`. A gateway this start
+/// could not read is recorded as none; the reach then looks it up itself,
+/// and refuses as before when the machine reports none.
 pub(super) fn bring_up(spec: &Spec, bundle: &Bundle, port: u16) -> Result<Running, MachineError> {
     let endpoint = worker::bring_up(spec, &guest(spec), bundle, port, None)?;
     Ok(Running {
         endpoint,
         lasting: Lasting {
             port: Some(port),
+            gateway: gateway(spec).ok().and_then(|g| g.parse().ok()),
             ..spec.state
         },
     })

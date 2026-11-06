@@ -12,6 +12,23 @@ const CANONICAL_BYTES: usize = 16 * 1024 * 1024;
 /// job; a larger object is left to the ordinary demand outside it.
 const RESIDENT_BYTES: usize = 64 * 1024;
 
+/// Bytes a sequential base read reads past its window, so the following
+/// windows find their objects in the cache instead of demanding them one
+/// window at a time.
+const READ_AHEAD: u64 = 2 * 1024 * 1024;
+/// Smallest cache allowance that reads ahead; a smaller cache would evict
+/// what it read ahead before the next window asked for it.
+const READ_AHEAD_CACHE: usize = 4 * READ_AHEAD as usize;
+
+/// The last base read of this client: a read of the same content that starts
+/// where it ended is sequential. `until` is how far it has read.
+#[derive(Clone, Copy)]
+struct Ahead {
+    root: ObjectId,
+    next: u64,
+    until: u64,
+}
+
 /// Bounded cumulative object observations; no hidden namespace inventory.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ClientWork {
@@ -56,6 +73,8 @@ pub struct CanonicalClient {
     lengths: Option<Arc<dyn crate::FileLengths + Send + Sync>>,
     /// Answers only from the cache: no upstream demand is ever made.
     resident: bool,
+    /// One slot: the read-ahead state of the latest base read.
+    ahead: std::sync::Mutex<Option<Ahead>>,
 }
 /// The upstream of a memory-only client. It is never asked.
 struct NoUpstream;
@@ -78,6 +97,7 @@ impl CanonicalClient {
             cache,
             lengths: None,
             resident: true,
+            ahead: std::sync::Mutex::new(None),
         }
     }
     /// Selects a cache allowance. A large object can bypass cache without refusal.
@@ -113,6 +133,7 @@ impl CanonicalClient {
             cache,
             lengths,
             resident: false,
+            ahead: std::sync::Mutex::new(None),
         }
     }
     /// The length provider's own answer, asked every time: nothing is
@@ -168,6 +189,41 @@ impl CanonicalClient {
     /// Bounded cumulative acquisition counters and logical cache charge.
     pub fn diagnostics(&self) -> ContentResult<ClientWork> {
         self.cache.diagnostics()
+    }
+    /// Where a base read of `start..end` of chunked content `root` (of
+    /// `length` bytes) should stop reading. A read that continues the
+    /// previous one and passes what was already read ahead reads up to
+    /// [`READ_AHEAD`] bytes further, so the windows after it are served from
+    /// the cache; any other read stops at `end`. Only one stream is followed:
+    /// another read restarts the detection, and what is read ahead is cached
+    /// like any other object, within the allowance.
+    pub(crate) fn read_through(&self, root: ObjectId, start: u64, end: u64, length: u64) -> u64 {
+        if self.resident {
+            return end;
+        }
+        let Ok(mut slot) = self.ahead.lock() else {
+            return end;
+        };
+        let read = match *slot {
+            Some(last) if last.root == root && last.next == start => Some(last.until),
+            _ => None,
+        };
+        let through = match read {
+            Some(until) if end > until && self.read_ahead_fits() => {
+                end.saturating_add(READ_AHEAD).min(length).max(end)
+            }
+            _ => end,
+        };
+        *slot = Some(Ahead {
+            root,
+            next: end,
+            until: through.max(read.unwrap_or(end)),
+        });
+        through
+    }
+    fn read_ahead_fits(&self) -> bool {
+        self.state()
+            .is_ok_and(|state| state.cache.capacity() >= READ_AHEAD_CACHE)
     }
     /// Whether this client answers from memory only.
     pub(crate) const fn is_resident(&self) -> bool {
