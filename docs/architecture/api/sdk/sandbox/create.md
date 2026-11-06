@@ -114,6 +114,13 @@ same session serves a mount's Branch lookup and a status's head; exec,
 Commit, unmount and close open none. The caller's Store lease covers each
 call; the session holds none and closes after 60 s unused, or when the Store
 is disconnected in that process.
+The new daemon opens its own Store session, with the light check (one
+statement on one connection), before it reports ready
+([`application/owner.rs`](../../../../../engine/crates/layerfs-daemon/src/application/owner.rs)),
+so a create makes 6 statements on 2 connections, or 5 on 1 when the
+launching side already holds the session. Each create starts a new daemon
+process; with `sslmode=disable` it builds no TLS connector (#96, see
+[PostgreSQL](../../../engine/store/postgresql.md)).
 Nothing starts a stopped machine. See the
 [routing table](../../routing/routing-table.md).
 
