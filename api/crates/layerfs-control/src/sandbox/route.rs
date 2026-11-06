@@ -128,14 +128,16 @@ fn reached(
 }
 
 /// The reach check of a PostgreSQL Sandbox's create (#535 §7.4 step 4), on
-/// the side that launches it: one connection to the server it will dial
-/// reads the LayerFS schema's binding, which must be the Store record's.
-/// It proves the server is reached and is the same Store; a failure names
-/// the machine and the host it tried, never the URL, and adds `hint`. A
-/// build without the PostgreSQL engine says so, not that it cannot reach.
+/// the side that launches it: one session to the server it will dial (this
+/// process's held host session for the Store at `key`, #65) reads the
+/// LayerFS schema's binding, which must be the Store record's, and finds
+/// `project` there. It proves the server is reached and is the same Store;
+/// a failure names the machine and the host it tried, never the URL, and
+/// adds `hint`. A build without the PostgreSQL engine says so, not that it
+/// cannot reach. A project the schema does not hold is `NoSuchProject`.
 fn reach_check(
     who: &str,
-    store: &StoreRecord,
+    (store, key, project): (&StoreRecord, &Path, &str),
     postgresql: &SdkValue,
     hint: Option<&str>,
 ) -> Result<()> {
@@ -143,37 +145,44 @@ fn reach_check(
     let host = layerfs_sandbox::PostgresUrl::parse(url)
         .map(|url| url.host().to_owned())
         .unwrap_or_default();
-    let probe = SdkValue::map([("postgresql", postgresql.clone())]);
-    let binding = crate::store::postgres::read_binding(&probe).map_err(|refusal| {
-        let name = store.name();
-        let message = match (refusal.code.as_str(), hint) {
-            ("Unsupported", _) => {
-                return refused(
-                    "Unsupported",
-                    format!(
-                        "{who} cannot check PostgreSQL Store {name}'s server: {}",
-                        refusal.message
-                    ),
-                )
-            }
-            (_, Some(hint)) => format!("{}; {hint}", refusal.message),
-            (_, None) => refusal.message,
-        };
-        refused(
-            "Unavailable",
-            format!("{who} cannot reach PostgreSQL Store {name}'s server at {host}: {message}"),
-        )
-    })?;
-    if store.binding() != Some(binding.as_slice()) {
-        return Err(refused(
+    let reached =
+        crate::store::reader::reach(key, store, postgresql, project).map_err(|refusal| {
+            let name = store.name();
+            let message = match (refusal.code.as_str(), hint) {
+                ("Unsupported", _) => {
+                    return refused(
+                        "Unsupported",
+                        format!(
+                            "{who} cannot check PostgreSQL Store {name}'s server: {}",
+                            refusal.message
+                        ),
+                    )
+                }
+                (_, Some(hint)) => format!("{}; {hint}", refusal.message),
+                (_, None) => refusal.message,
+            };
+            refused(
+                "Unavailable",
+                format!("{who} cannot reach PostgreSQL Store {name}'s server at {host}: {message}"),
+            )
+        })?;
+    match reached {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(refused(
+            "NoSuchProject",
+            format!(
+                "no project {project} in the PostgreSQL Store's schema {}",
+                postgresql.get_text("schema").unwrap_or("")
+            ),
+        )),
+        Err(crate::store::reader::OtherStore) => Err(refused(
             "Unavailable",
             format!(
                 "the PostgreSQL server {who} reaches at {host} holds another Store than {}",
                 store.name()
             ),
-        ));
+        )),
     }
-    Ok(())
 }
 
 /// The path the open-Store cache keys `store` by: its file, or for a
@@ -266,14 +275,16 @@ fn host_op(
     )?;
     match executor {
         Executor::Local => {
+            let key = store_path(&home, &target.store, &target.record, kind);
             if let (Some(postgresql), "sandbox.create") = (&postgresql, op) {
                 reach_check(
                     &format!("machine {machine}"),
-                    &target.record,
+                    (&target.record, &key, &target.project),
                     postgresql,
                     hint,
                 )?;
             }
+            let held = postgresql.is_some();
             let how = deploy::resolve(&Side::Home(&home), &target.store, &choice)?;
             let args = host_args(
                 &home,
@@ -283,9 +294,19 @@ fn host_op(
                 more,
             )?;
             // the host code reads the project's Branches through its open
-            // Store, which this process leases, PostgreSQL ones too
+            // Store, which this process leases. A PostgreSQL Store opens no
+            // Store service (#65): the lease covers this call, and a read
+            // (a create's reach check, a mount's Branch, a status's head)
+            // runs on the process's one held read session, opened when one
+            // is needed; exec, Commit, unmount and close open nothing.
             let lease = crate::common::home::lease::hold(&home, &target.store)?;
-            crate::store::open::hold(&args, Some(lease))?;
+            let _lease = match held {
+                true => Some(lease),
+                false => {
+                    crate::store::open::hold(&args, Some(lease))?;
+                    None
+                }
+            };
             if op == "backend.daemon.workspace.status" {
                 return crate::sandbox::dispatch::backend(op.to_owned(), args);
             }
@@ -415,13 +436,20 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
         })?),
         StoreKind::Sqlite => None,
     };
+    let key = store_path(root, store, &record, kind);
     if let (Some(postgresql), "sandbox.create") = (&postgresql, op) {
         let who = match args.get_text("machine") {
             Some(machine) => format!("machine {machine}"),
             None => "the worker's machine".to_owned(),
         };
-        reach_check(&who, &record, postgresql, args.get_text("reach_hint"))?;
+        reach_check(
+            &who,
+            (&record, &key, project),
+            postgresql,
+            args.get_text("reach_hint"),
+        )?;
     }
+    let held = postgresql.is_some();
     let host = host_args(
         root,
         (store, project, &record),
@@ -429,7 +457,11 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
         how,
         more,
     )?;
-    crate::store::open::hold(&host, None)?;
+    // a PostgreSQL Store opens no Store service here (#65); its reads run
+    // on the held read session
+    if !held {
+        crate::store::open::hold(&host, None)?;
+    }
     if op == "backend.daemon.workspace.status" {
         return crate::sandbox::dispatch::backend(op.to_owned(), host);
     }

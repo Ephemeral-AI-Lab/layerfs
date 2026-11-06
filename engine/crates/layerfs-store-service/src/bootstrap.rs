@@ -257,9 +257,14 @@ pub fn open_store_observed(
     })
 }
 
-/// A PostgreSQL Store (#506): one writer session and one read-only session
-/// per Workspace reader, each observed as on SQLite. A merge's records live
-/// in the writer connection's temporary tables (#506 d).
+/// A PostgreSQL Store (#506): one writer session, checked as `selection`
+/// says, and read-only sessions with the light check (#63), each observed as
+/// on SQLite. Readers are shared (#64): the control reader opens at its first
+/// use, and an unmounted Workspace's healthy reader serves the next mount,
+/// so the daemon holds at most the writer, its lane connection, the control
+/// reader, one reader per mounted Workspace and `IDLE_READERS` idle ones.
+/// A merge's records live in the writer connection's temporary tables
+/// (#506 d).
 #[cfg(feature = "postgresql")]
 fn open_postgres(
     selection: &layerfs_persistence::PostgresSelection,
@@ -272,21 +277,22 @@ fn open_postgres(
     use layerfs_persistence::PostgresHandles;
     let writer = PostgresHandles::open_writable(selection, binding, cursor_key)?;
     let version = format!("postgresql {}", writer.storage.server_version());
-    let (selection, binding) = (selection.clone(), binding.to_vec());
+    let selection = (selection.clone()).with_check(layerfs_persistence::PostgresCheck::Light);
+    let binding = binding.to_vec();
     let observations = registry();
     let registry = observations.clone();
     let factory: crate::store::ReaderFactory = Arc::new(move |index| {
         let opened = PostgresHandles::open_read_only(&selection, &binding, cursor_key)?;
         let provider: Weak<dyn Observed> = Arc::downgrade(&opened.storage) as Weak<_>;
-        let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history));
+        let session = opened.storage.clone();
+        let reader = StoreReader::new(Storage::new(opened.storage)?, Arc::new(opened.history))
+            .with_usable(move || session.usable());
         observe(&registry, index, provider, reader)
     });
-    let control = factory(0)?;
     let store = Arc::new(
-        Store::new(
+        Store::with_shared_readers(
             writer.storage.clone(),
             Arc::new(writer.history),
-            control,
             factory,
             cache_bytes,
             reservations,

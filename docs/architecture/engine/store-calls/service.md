@@ -116,9 +116,23 @@ ReadSession (one Mutex per session; held for one demand)
 
 | Handle | Opened | Closed | Cache |
 | --- | --- | --- | --- |
-| Control reader (session 0) | At Store open | Whole-Store `stop_reads` | None: each demand reads through a fresh reader |
-| Mounted Workspace reader | `mount_reader` at mount | `close_reader` at unmount | `KeptReads` kept while mounted, dropped after a failed demand or above `KeptReads::ORDINARY_BYTES` |
+| Control reader (session 0) | At Store open; with shared readers, at its first use (`ReadSet::control`) | Whole-Store `stop_reads` | None: each demand reads through a fresh reader |
+| Mounted Workspace reader | `mount_reader` at mount; with shared readers, reuses an idle reader first | `close_reader` at unmount; with shared readers, returned to idle (up to 4) if it served without failure | `KeptReads` kept while mounted, dropped after a failed demand or above `KeptReads::ORDINARY_BYTES` |
 | SDK private reader | `bind_private`; reuses an idle reader first | Returned to idle (up to 4) if it served without failure | As a mounted reader |
+
+A PostgreSQL Store opens with shared readers (`Store::with_shared_readers`,
+#64); a SQLite Store keeps the rows above without them. Its readers open
+with the light check ([PostgreSQL](../store/postgresql.md)), so a new one costs
+a connection and one round trip. An idle reader is checked before a mount
+takes it (`StoreReader::usable`: one empty query, outside the `ReadSet`
+lock); one that is quarantined or does not answer is dropped and a new
+reader opens, so no operation runs on it and none is retried. A control
+reader opened at first use is that operation's one attempt: a failure is
+returned to it and the next use opens again. With shared readers a daemon
+holds at most the writer, its lane connection (opened in the first Commit),
+the control reader (in practice opened by the first Commit, which reads the
+published tree through it), one reader per mounted Workspace and
+`IDLE_READERS` = 4 idle ones.
 
 All SDK published-history lookups (`Store::published`) go through session 0,
 the read-only control session, so they never queue behind a Commit that holds

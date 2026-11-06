@@ -74,7 +74,7 @@ impl std::error::Error for PortError {
 pub struct StorePorts {
     store: Arc<Store>,
     scope: ObjectId,
-    reader: Result<Arc<ReadSession>, ReadAdmissionError>,
+    reader: Result<Arc<ReadSession>, Arc<PortError>>,
     failure: Mutex<Option<Arc<PortError>>>,
     attempting: AtomicBool,
 }
@@ -93,7 +93,13 @@ impl Store {
         Arc::new(StorePorts {
             store: self.clone(),
             scope,
-            reader: self.reader(workspace),
+            // the control reader may open here, at its first use (#64)
+            reader: match workspace {
+                None => self.readers.control(),
+                Some(_) => self
+                    .reader(workspace)
+                    .map_err(|e| Arc::new(PortError::ReadAdmission(e))),
+            },
             failure: Mutex::new(None),
             attempting: AtomicBool::new(false),
         })
@@ -168,9 +174,7 @@ impl StorePorts {
             .readers
             .admit()
             .map_err(|e| Arc::new(PortError::ReadAdmission(e)))?;
-        self.reader
-            .as_ref()
-            .map_err(|e| Arc::new(PortError::ReadAdmission(*e)))
+        self.reader.as_ref().map_err(Arc::clone)
     }
     /// Bounded grouped metadata demand, with original cardinality/order.
     pub fn file_lengths(&self, ids: &[ObjectId]) -> Result<Vec<u64>, Arc<PortError>> {

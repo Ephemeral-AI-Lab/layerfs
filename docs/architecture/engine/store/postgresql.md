@@ -49,8 +49,22 @@ Without it, selecting a PostgreSQL Store fails `BackendUnavailable`.
 schema (`Refused "schema exists"`) before writing. It then creates the
 schema, the Store and acquisition tables, the policy row and the
 `history_meta` row in one transaction. Open never creates or migrates a
-schema; it checks the exact table set (19 tables, or 22 with acquisition),
-the recorded source and definition, and the binding.
+schema; it checks the schema in one unprepared simple-query round trip, as
+the selection's `PostgresCheck` says (#63):
+
+| Check | Reads | Opened with it |
+| --- | --- | --- |
+| `Full` (default) | one `REPEATABLE READ` snapshot: the exact table set (19 tables, or 22 with acquisition) and the live column definition from `information_schema`, compared with the recorded source and definition; then the `history_meta` and policy rows and `server_version` | Init (`PostgresHandles::create`, always), Store connect and the host's Store service |
+| `Light` | one autocommit statement: the `history_meta` and policy rows, the recorded source's length, the three acquisition tables by name (`to_regclass`) and `server_version`; no `information_schema` scan | a Sandbox daemon's writer and every Workspace and control reader (#64), and a selection that asks for it (`with_check`), and `attach_read_only` |
+
+Both refuse a wrong binding, catalog id, incarnation, identity format or
+schema version (`Integrity`), and a policy row that does not validate
+(`Malformed`). Only `Full` finds a column changed by hand after the schema
+was checked; under `Light` the statement that uses it fails instead. The
+session keeps the frozen policy and the server version the check read, so
+`PackPersistence::policy` costs no round trip afterwards
+([`schema.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/schema.rs),
+[`postgresql_open_check.rs`](../../../../engine/crates/layerfs-persistence/tests/postgresql_open_check.rs)).
 
 ## Connection and session
 
@@ -63,7 +77,8 @@ the recorded source and definition, and the binding.
  | lane: Mutex<Option<Client>>   second connection, opened on   |
  |                               first hold_lane                |
  | settings: schema, synchronous_commit, lock_timeout_ms        |
- | connector: Config + TLS (sslmode from the connection string) |
+ | connector: Config + the process's one TLS connector          |
+ |            (sslmode from the connection string, as given)    |
  +--------------------------------------------------------------+
 ```
 
@@ -80,12 +95,20 @@ counters (zero on SQLite):
 
 | Counter | Counts | Source |
 | --- | --- | --- |
-| `round_trips` | each exchange that waits for the server: a prepare, a statement execution, a simple-query script (`BEGIN` with its `SET LOCAL`s, `COMMIT`, `ROLLBACK`, schema scripts), a binary COPY's start and finish, `SHOW server_version` at open (two), and the lane's `BEGIN … FOR UPDATE` and `ROLLBACK` | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/connection.rs), [`lane.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/lane/lane.rs) |
-| `prepares` | statement-cache misses, the open's `SHOW server_version`, and each COPY's unnamed statement | same |
+| `round_trips` | each exchange that waits for the server: a prepare, a statement execution, a simple-query script (`BEGIN` with its `SET LOCAL`s, `COMMIT`, `ROLLBACK`, schema scripts), a binary COPY's start and finish, the open's check (one), and the lane's `BEGIN … FOR UPDATE` and `ROLLBACK` | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs), [`connection.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/connection.rs), [`lane.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/lane/lane.rs) |
+| `prepares` | statement-cache misses and each COPY's unnamed statement | same |
 | `connects` | new connections: the session's own and its lane connection | same |
 
 A connection's handshake (TCP, the SSL probe of `sslmode=prefer`, startup
-and authentication) is one `connects`, not part of `round_trips`. The Store
+and authentication) is one `connects`, not part of `round_trips`.
+
+The connection string's `sslmode` is used exactly as given; nothing changes
+it. The driver's default, `prefer`, sends an SSLRequest first and costs one
+more round trip per connection on a server without TLS. On a loopback or
+private network route (a server on the same host, a Docker network) give
+`sslmode=disable` to skip it; on any other route give `require` or
+`verify-full`. The TLS connector, which loads the system's trust roots, is
+built once per process. The Store
 service reports the writer session and every Workspace reader session,
 live and retired, as on SQLite
 ([`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs)).

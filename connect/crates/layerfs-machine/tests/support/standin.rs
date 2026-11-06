@@ -93,6 +93,7 @@ impl Scratch {
             state: Lasting {
                 port: Some(45678),
                 network: None,
+                gateway: None,
             },
             worker: None,
             work_dir: self.dir.join("work"),

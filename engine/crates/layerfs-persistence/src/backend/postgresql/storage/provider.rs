@@ -31,14 +31,38 @@ impl PostgresStorage {
             ),
         }
     }
+    /// Whether this idle session can still serve (#64): it was not
+    /// quarantined and its connection answers an empty query within 5 s (one
+    /// round trip, counted). A session that does not is never handed to a
+    /// mount; its caller drops it and opens a new one. This check runs
+    /// before any operation uses the session, so no operation is retried.
+    pub fn usable(&self) -> bool {
+        let Ok(mut state) = self.session.state.lock() else {
+            return false;
+        };
+        if state.quarantined {
+            return false;
+        }
+        state.work.round_trips += 1;
+        let alive = state.client.is_valid(std::time::Duration::from_secs(5));
+        if alive.is_err() {
+            state.quarantined = true;
+        }
+        alive.is_ok()
+    }
     /// The server's reported version.
     pub fn server_version(&self) -> &str {
-        &self.session.server_version
+        self.session.server_version.get().map_or("", String::as_str)
     }
 }
 
 impl PackPersistence for PostgresStorage {
+    /// The frozen policy the open's check read (#63), with no round trip;
+    /// read in a transaction only by a session opened without one.
     fn policy(&self) -> Result<StoragePolicy, PersistenceError> {
+        if let Some(policy) = self.session.policy.get() {
+            return Ok(*policy);
+        }
         self.session.run(false, |tx| metadata::policy::read(tx))
     }
     fn locate(
