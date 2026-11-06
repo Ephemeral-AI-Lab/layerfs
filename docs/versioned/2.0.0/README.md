@@ -50,6 +50,12 @@ Commit, merge, and publish to `main`.
    errors, progress and folder scope.
 6. [Limitations](limitations.md): what is not built, not verified or refused
    as `Unsupported`.
+7. [Migrating from 1.1.0 and #521](migration.md): each old package,
+   constructor, method and behaviour mapped to its 2.0 replacement, or to
+   why it is gone.
+8. [Examples](examples/README.md): runnable Node, Python (sync and async) and
+   shell flows, each run from an installed artifact, with their output; the
+   Workspace route is written out and marked not run.
 
 ## Sources
 
@@ -71,7 +77,8 @@ The code wins over every document below where they differ.
 
 ## Compatibility with 1.1.0
 
-2.0 does not keep the 1.1.0 surface:
+2.0 does not keep the 1.1.0 surface ([migration](migration.md) has a row for
+each old name):
 
 - **Packages.** The four 1.1.0 packages (`@layerfs/agent`, `@layerfs/cli`,
   `@layerfs/backend`, `@layerfs/runtime`) are removed. Their last source is
