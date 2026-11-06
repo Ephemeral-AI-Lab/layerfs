@@ -163,7 +163,7 @@ pub(crate) fn check(
                  SELECT h.schema_source,h.schema_definition,{} ; COMMIT",
                 meta_columns("")
             );
-            let mut groups = session.simple(&sql, 3, true)?;
+            let mut groups = session.simple(&sql, true)?;
             if groups.len() != 6 {
                 return Err(BackendError::Integrity.into());
             }
@@ -197,7 +197,7 @@ pub(crate) fn check(
                 "SELECT octet_length(h.schema_source),{present},{}",
                 meta_columns(&format!("{s}."))
             );
-            let groups = session.simple(&sql, 1, false)?;
+            let groups = session.simple(&sql, false)?;
             let row = single(groups.into_iter().next().unwrap_or_default())?;
             let acquisition = match int(&row, 1)? {
                 0 => false,

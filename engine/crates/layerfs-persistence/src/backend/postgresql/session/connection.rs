@@ -149,12 +149,12 @@ impl Session {
     /// One unprepared simple-query string, in one round trip: its rows, one
     /// list per statement in order. Used only by an open's check, before
     /// the session serves anything; a failure leaves the session unusable
-    /// (it is dropped), so nothing here rolls back. `statements` and
-    /// `transaction` say what to count.
+    /// (it is dropped), so nothing here rolls back. Counted as one statement,
+    /// as a script is (`Transaction::batch`); `transaction` says whether it
+    /// was one.
     pub(crate) fn simple(
         &self,
         sql: &str,
-        statements: u64,
         transaction: bool,
     ) -> Result<Vec<Vec<SimpleQueryRow>>, BackendError> {
         let start = Instant::now();
@@ -162,7 +162,7 @@ impl Session {
         let result = state.client.simple_query(sql);
         let elapsed = start.elapsed().as_nanos() as u64;
         let work = &mut state.work;
-        work.statements += statements;
+        work.statements += 1;
         work.round_trips += 1;
         work.statement_ns += elapsed;
         let messages = result.map_err(|e| rows::error(&e))?;
