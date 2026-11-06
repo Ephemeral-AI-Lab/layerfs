@@ -356,49 +356,27 @@ impl BaseRead {
         self.end - self.start
     }
     /// Streams the already planned range; a failed sink may contain partial data.
-    /// A sequential read of chunked content also reads ahead in the same
-    /// demand ([`CanonicalClient::read_through`]); those bytes are not
-    /// written, their objects stay in the cache. A failure there fails this
-    /// read like any other Store failure.
+    /// A sequential read of chunked content first fetches ahead into the
+    /// cache ([`CanonicalClient::read_through`],
+    /// [`CanonicalClient::read_ahead`]); those bytes are not written. A
+    /// failure there fails this read like any other Store failure.
     pub fn emit(&self, sink: &mut dyn Write) -> ContentResult<()> {
-        let through = if self.start < self.end && matches!(self.file.file_state(), Ok(Some(_))) {
-            self.client.read_through(
-                self.file.root(),
-                self.start,
-                self.end,
-                self.file.logical_len(),
-            )
-        } else {
-            self.end
-        };
-        let mut sink = Window {
-            sink,
-            left: self.end - self.start,
-        };
+        if self.start < self.end {
+            if let Ok(Some(state)) = self.file.file_state() {
+                if let Some(ahead) = self.client.read_through(
+                    self.file.root(),
+                    self.start,
+                    self.end,
+                    self.file.logical_len(),
+                ) {
+                    self.client.read_ahead(state, ahead)?;
+                }
+            }
+        }
         Timing::disabled("base.read", |scope| {
             self.file
-                .read_range(self.client.as_ref(), self.start..through, &mut sink, scope)
+                .read_range(self.client.as_ref(), self.start..self.end, sink, scope)
         })
         .0
-    }
-}
-/// Passes the first `left` bytes to `sink` and drops the rest.
-struct Window<'a> {
-    sink: &'a mut dyn Write,
-    left: u64,
-}
-impl Write for Window<'_> {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        let take = bytes
-            .len()
-            .min(usize::try_from(self.left).unwrap_or(usize::MAX));
-        if take > 0 {
-            self.sink.write_all(&bytes[..take])?;
-            self.left -= take as u64;
-        }
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.sink.flush()
     }
 }

@@ -46,8 +46,9 @@ impl HistoryCatalog for HistoryProvider {
         })
     }
 
+    // One statement (#96): a Sandbox create's reach check finds its project.
     fn layer_stack_named(&self, name: &HistoryName) -> HistoryResult<Option<LayerStackRecord>> {
-        self.read(|tx| layerstack::layer_stack_named(tx, name))
+        self.read_statement(|tx| layerstack::layer_stack_named(tx, name))
     }
 
     fn branch(&self, id: BranchId) -> HistoryResult<Option<BranchRecord>> {
@@ -64,6 +65,14 @@ impl HistoryCatalog for HistoryProvider {
 
     fn branch_snapshot(&self, id: BranchId) -> HistoryResult<Option<BranchSnapshot>> {
         self.read_statement(|tx| branch::branch_snapshot(tx, id))
+    }
+
+    fn branch_snapshot_named(
+        &self,
+        stack: &HistoryName,
+        branch: &HistoryName,
+    ) -> HistoryResult<NamedSnapshot> {
+        self.read_statement(|tx| branch::branch_snapshot_named(tx, stack, branch))
     }
 
     fn branches(
@@ -83,12 +92,13 @@ impl HistoryCatalog for HistoryProvider {
         })
     }
 
+    // One statement each (#95): a Commit's `logical.known` reads one row.
     fn commit(&self, id: CommitId) -> HistoryResult<Option<CommitRecord>> {
-        self.read(|tx| commit::commit(tx, id))
+        self.read_statement(|tx| commit::commit(tx, id))
     }
 
     fn layer(&self, id: LayerId) -> HistoryResult<Option<LayerRecord>> {
-        self.read(|tx| layerstack::layer(tx, id))
+        self.read_statement(|tx| layerstack::layer(tx, id))
     }
 
     fn commit_history(

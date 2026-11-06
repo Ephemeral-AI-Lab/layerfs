@@ -454,7 +454,9 @@ impl BoundWorkspace {
     }
 
     /// Checks the candidate root as the next base of `target` and prepares
-    /// its local install; reads only immutable published objects.
+    /// its local install; reads only immutable published objects, through
+    /// the Workspace's own reader, opened at bind (#95: a Commit opens no
+    /// control reader for them).
     fn validate_candidate(
         &self,
         target: &BranchSnapshot,
@@ -464,7 +466,7 @@ impl BoundWorkspace {
     ) -> Result<layerfs_workspace::PreparedBase, CommitError> {
         let mut next = target.clone();
         next.effective_root = candidate.0;
-        let ports = self.store.ports(target.scope);
+        let ports = self.store.ports_for(target.scope, self.identity);
         let client = ports.client();
         let checked =
             checked_base(client.clone(), &next).map_err(|error| CommitError::Content {

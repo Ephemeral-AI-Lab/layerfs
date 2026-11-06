@@ -1,8 +1,13 @@
 //! Authenticated canonical acquisition and exact immutable cache keys.
 use crate::cache::CanonicalCache;
+use layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES;
+use layerfs_content::file::mapping::{
+    chunk_canonical_len, decode_node_with_context, ExtentNode, FileState, READ_NAVIGATION_WAVE,
+};
 use layerfs_content::filesystem::attributes::{read_portable, AttributeReadWork, PortableMetadata};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeMetadata};
 use layerfs_content::{AuthenticatedObjects, ContentError, ContentResult, ObjectId};
+use std::ops::Range;
 use std::sync::Arc;
 
 const DEMAND_IDS: usize = 4096;
@@ -12,21 +17,84 @@ const CANONICAL_BYTES: usize = 16 * 1024 * 1024;
 /// job; a larger object is left to the ordinary demand outside it.
 const RESIDENT_BYTES: usize = 64 * 1024;
 
-/// Bytes a sequential base read reads past its window, so the following
-/// windows find their objects in the cache instead of demanding them one
-/// window at a time.
-const READ_AHEAD: u64 = 2 * 1024 * 1024;
-/// Smallest cache allowance that reads ahead; a smaller cache would evict
-/// what it read ahead before the next window asked for it.
-const READ_AHEAD_CACHE: usize = 4 * READ_AHEAD as usize;
+/// Bytes a sequential base read fetches past its window (layerfs-project
+/// #97, owner-approved 2026-11-06), so the following windows find their
+/// objects in the cache. The chunks a window lacks are demanded in one
+/// upstream batch, not one read wave at a time.
+const READ_AHEAD: u64 = 8 * 1024 * 1024;
+/// Smallest cache allowance that reads ahead: two windows, the one being
+/// read and the one fetched ahead, so a fetch never evicts the window it
+/// fetched. Read-ahead fetches only when the reader has passed the previous
+/// window, so it never holds more than these two windows per reader (owner
+/// cap: 16 MiB); an allowance follows at most one stream per two windows.
+const READ_AHEAD_CACHE: usize = 2 * READ_AHEAD as usize;
+/// Most chunks one read-ahead demand names: within [`DEMAND_IDS`] and, at
+/// the largest chunk, within [`DEMAND_BYTES`]. A window with more extents is
+/// fetched up to this many; the rest is read on demand.
+const AHEAD_IDS: usize = {
+    let by_bytes = DEMAND_BYTES / chunk_canonical_len(MAXIMUM_CHUNK_BYTES);
+    if by_bytes < DEMAND_IDS {
+        by_bytes
+    } else {
+        DEMAND_IDS
+    }
+};
+/// Mapping pages one level of a read-ahead walk demands at most; the window
+/// is cut at the first page past them.
+const AHEAD_PAGES: usize = READ_NAVIGATION_WAVE;
 
-/// The last base read of this client: a read of the same content that starts
-/// where it ended is sequential. `until` is how far it has read.
+/// One mapping page a read-ahead walk reaches: its identity, whether it is
+/// the root, where it starts and the summary its parent recorded.
+struct Page {
+    id: ObjectId,
+    root: bool,
+    base: u64,
+    bytes: u64,
+    extents: u64,
+    level: u8,
+}
+
+/// One followed stream: a read of content `root` that starts at `next`
+/// continues it. `until` is how far it has fetched.
 #[derive(Clone, Copy)]
 struct Ahead {
     root: ObjectId,
     next: u64,
     until: u64,
+}
+
+/// The sequential streams one cache allowance follows, least recently read
+/// first. They live with the cache, not with a client: the daemon gives each
+/// kernel request its own operation client, so a stream must outlive the
+/// client that read it (layerfs-project #97). At most allowance / two
+/// windows are followed, so every followed stream's two windows fit the
+/// allowance together; another read takes the least recently read slot.
+#[derive(Default)]
+pub(crate) struct Streams(Vec<Ahead>);
+impl Streams {
+    /// Records a read of `start..end` of `root` and returns how far its
+    /// stream had fetched when it continues one.
+    fn follow(&mut self, root: ObjectId, start: u64, end: u64, most: usize) -> Option<u64> {
+        let found = self
+            .0
+            .iter()
+            .position(|last| last.root == root && last.next == start);
+        let until = found.map(|index| self.0.remove(index).until);
+        self.0.push(Ahead {
+            root,
+            next: end,
+            until: until.unwrap_or(end).max(end),
+        });
+        let excess = self.0.len().saturating_sub(most.max(1));
+        self.0.drain(..excess);
+        until
+    }
+    /// The latest read's stream has fetched up to `until`.
+    fn fetched(&mut self, until: u64) {
+        if let Some(last) = self.0.last_mut() {
+            last.until = last.until.max(until);
+        }
+    }
 }
 
 /// Bounded cumulative object observations; no hidden namespace inventory.
@@ -73,8 +141,6 @@ pub struct CanonicalClient {
     lengths: Option<Arc<dyn crate::FileLengths + Send + Sync>>,
     /// Answers only from the cache: no upstream demand is ever made.
     resident: bool,
-    /// One slot: the read-ahead state of the latest base read.
-    ahead: std::sync::Mutex<Option<Ahead>>,
 }
 /// The upstream of a memory-only client. It is never asked.
 struct NoUpstream;
@@ -97,7 +163,6 @@ impl CanonicalClient {
             cache,
             lengths: None,
             resident: true,
-            ahead: std::sync::Mutex::new(None),
         }
     }
     /// Selects a cache allowance. A large object can bypass cache without refusal.
@@ -133,7 +198,6 @@ impl CanonicalClient {
             cache,
             lengths,
             resident: false,
-            ahead: std::sync::Mutex::new(None),
         }
     }
     /// The length provider's own answer, asked every time: nothing is
@@ -190,40 +254,194 @@ impl CanonicalClient {
     pub fn diagnostics(&self) -> ContentResult<ClientWork> {
         self.cache.diagnostics()
     }
-    /// Where a base read of `start..end` of chunked content `root` (of
-    /// `length` bytes) should stop reading. A read that continues the
-    /// previous one and passes what was already read ahead reads up to
-    /// [`READ_AHEAD`] bytes further, so the windows after it are served from
-    /// the cache; any other read stops at `end`. Only one stream is followed:
-    /// another read restarts the detection, and what is read ahead is cached
-    /// like any other object, within the allowance.
-    pub(crate) fn read_through(&self, root: ObjectId, start: u64, end: u64, length: u64) -> u64 {
+    /// What a base read of `start..end` of chunked content `root` (of
+    /// `length` bytes) should fetch ahead, if anything. A read that continues
+    /// a followed stream ([`Streams`]) and passes what it already fetched
+    /// fetches the rest of its own range and up to [`READ_AHEAD`] bytes past
+    /// it ([`Self::read_ahead`]), so the windows after it are served from the
+    /// cache; any other read fetches nothing ahead and starts a stream. What
+    /// is fetched ahead is cached like any other object, within the allowance.
+    pub(crate) fn read_through(
+        &self,
+        root: ObjectId,
+        start: u64,
+        end: u64,
+        length: u64,
+    ) -> Option<Range<u64>> {
         if self.resident {
-            return end;
+            return None;
         }
-        let Ok(mut slot) = self.ahead.lock() else {
-            return end;
-        };
-        let read = match *slot {
-            Some(last) if last.root == root && last.next == start => Some(last.until),
-            _ => None,
-        };
-        let through = match read {
-            Some(until) if end > until && self.read_ahead_fits() => {
-                end.saturating_add(READ_AHEAD).min(length).max(end)
-            }
-            _ => end,
-        };
-        *slot = Some(Ahead {
-            root,
-            next: end,
-            until: through.max(read.unwrap_or(end)),
-        });
-        through
+        let mut state = self.state().ok()?;
+        let capacity = state.cache.capacity();
+        if capacity < READ_AHEAD_CACHE {
+            return None;
+        }
+        let until = state
+            .streams
+            .follow(root, start, end, capacity / READ_AHEAD_CACHE)?;
+        if end <= until {
+            return None;
+        }
+        let through = end.saturating_add(READ_AHEAD).min(length).max(end);
+        state.streams.fetched(through);
+        // At most one window of the read itself: a larger read fetches the
+        // rest of its own range on demand.
+        Some(until.max(start).max(end.saturating_sub(READ_AHEAD))..through)
     }
-    fn read_ahead_fits(&self) -> bool {
-        self.state()
-            .is_ok_and(|state| state.cache.capacity() >= READ_AHEAD_CACHE)
+    /// Places the chunks of `range` of chunked content `state` that the
+    /// cache lacks in the cache, demanded in one upstream batch. The mapping
+    /// pages on the way are demanded a level at a time, at most
+    /// [`AHEAD_PAGES`] per level, and at most [`AHEAD_IDS`] chunks are
+    /// fetched; the window is cut there and the rest is read on demand.
+    /// Nothing is written anywhere and no fetched byte is held past the call
+    /// except in the cache. A failure fails the read that asked for it.
+    pub(crate) fn read_ahead(&self, state: FileState, range: Range<u64>) -> ContentResult<()> {
+        let mut level = vec![Page {
+            id: state.mapping_root,
+            root: true,
+            base: 0,
+            bytes: state.logical_len,
+            extents: state.extent_count,
+            level: state.tree_level,
+        }];
+        let mut end = range.end;
+        let mut chunks = Vec::new();
+        while !level.is_empty() {
+            let mut pages = Vec::with_capacity(level.len().min(AHEAD_PAGES));
+            for page in level {
+                let page_end = page
+                    .base
+                    .checked_add(page.bytes)
+                    .ok_or(ContentError::LengthOverflow)?;
+                if page_end <= range.start || page.base >= end {
+                    continue;
+                }
+                if pages.len() == AHEAD_PAGES {
+                    end = page.base;
+                    break;
+                }
+                pages.push(page);
+            }
+            let ids: Vec<ObjectId> = pages.iter().map(|page| page.id).collect();
+            let values = self.read_canonical_batch(&ids)?;
+            level = Vec::new();
+            for (page, value) in pages.iter().zip(values) {
+                let node = decode_node_with_context(&value, page.root)?;
+                if node.level() != page.level
+                    || node.logical_len() != page.bytes
+                    || node.extent_count() != page.extents
+                {
+                    return Err(ContentError::InvalidRecord("mapping page summary"));
+                }
+                match node {
+                    ExtentNode::Leaf { extents, .. } => {
+                        let mut at = page.base;
+                        for extent in extents {
+                            let next = at
+                                .checked_add(u64::from(extent.logical_length()))
+                                .ok_or(ContentError::LengthOverflow)?;
+                            if at < end && next > range.start {
+                                chunks.push(extent.payload_object_id());
+                            }
+                            at = next;
+                        }
+                    }
+                    ExtentNode::Branch { children, .. } => {
+                        let child_level = page
+                            .level
+                            .checked_sub(1)
+                            .ok_or(ContentError::MappingDepthExceeded)?;
+                        let (mut bytes, mut extents) = (0_u64, 0_u64);
+                        for child in children {
+                            level.push(Page {
+                                id: child.child_object_id,
+                                root: false,
+                                base: page
+                                    .base
+                                    .checked_add(bytes)
+                                    .ok_or(ContentError::LengthOverflow)?,
+                                bytes: child
+                                    .cumulative_logical_end
+                                    .checked_sub(bytes)
+                                    .ok_or(ContentError::InvalidRecord("mapping branch order"))?,
+                                extents: child
+                                    .cumulative_extent_end
+                                    .checked_sub(extents)
+                                    .ok_or(ContentError::InvalidRecord("mapping branch order"))?,
+                                level: child_level,
+                            });
+                            bytes = child.cumulative_logical_end;
+                            extents = child.cumulative_extent_end;
+                        }
+                    }
+                }
+            }
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        chunks.retain(|id| seen.insert(*id));
+        chunks.truncate(AHEAD_IDS);
+        self.fetch_ahead(&chunks)
+    }
+    /// Demands the `ids` the cache lacks in one upstream batch and caches
+    /// them, checked as any demanded object is; a failed batch caches none.
+    fn fetch_ahead(&self, ids: &[ObjectId]) -> ContentResult<()> {
+        let wanted: Vec<ObjectId> = {
+            let mut state = self.state()?;
+            let wanted: Vec<ObjectId> = ids
+                .iter()
+                .copied()
+                .filter(|id| !state.cache.within(*id, usize::MAX))
+                .collect();
+            if !wanted.is_empty() {
+                state.work.cache_misses =
+                    state.work.cache_misses.saturating_add(wanted.len() as u64);
+                state.work.upstream_batches = state.work.upstream_batches.saturating_add(1);
+            }
+            wanted
+        };
+        if wanted.is_empty() {
+            return Ok(());
+        }
+        // No cache lock spans transport, provider service or authentication.
+        let fetched = self.source.read_canonical_batch(&wanted)?;
+        if fetched.len() != wanted.len() {
+            return Err(ContentError::BatchCardinality {
+                requested: wanted.len(),
+                returned: fetched.len(),
+            });
+        }
+        let mut bytes = 0_usize;
+        for (id, value) in wanted.iter().zip(&fetched) {
+            if value.len() > CANONICAL_BYTES {
+                return Err(ContentError::ObjectLimitExceeded {
+                    limit: CANONICAL_BYTES,
+                    actual: value.len(),
+                });
+            }
+            bytes = bytes
+                .checked_add(value.len())
+                .ok_or(ContentError::LengthOverflow)?;
+            if bytes > DEMAND_BYTES {
+                return Err(ContentError::BoundedCapacityExceeded {
+                    what: "base read-ahead bytes",
+                    limit: DEMAND_BYTES as u64,
+                    actual: bytes as u64,
+                });
+            }
+            if ObjectId::for_bytes(value) != *id {
+                return Err(ContentError::IdentityMismatch);
+            }
+        }
+        let mut state = self.state()?;
+        for (id, value) in wanted.into_iter().zip(fetched) {
+            let evictions = state.cache.insert(id, &value);
+            state.work.evictions = state.work.evictions.saturating_add(evictions);
+            state.work.authenticated_bytes = state
+                .work
+                .authenticated_bytes
+                .saturating_add(value.len() as u64);
+        }
+        Ok(())
     }
     /// Whether this client answers from memory only.
     pub(crate) const fn is_resident(&self) -> bool {

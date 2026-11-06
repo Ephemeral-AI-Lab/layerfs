@@ -136,7 +136,10 @@ impl PoolReader {
         let counters = &mut self.counters;
         let inode = root.role == ObjectRole::InodeBranch;
         let (requests, edges) = match inode {
-            true => (&mut counters.branch_requests, &mut counters.branch_chain_edges),
+            true => (
+                &mut counters.branch_requests,
+                &mut counters.branch_chain_edges,
+            ),
             false => (&mut counters.page_requests, &mut counters.page_chain_edges),
         };
         *requests = requests.saturating_add(1);

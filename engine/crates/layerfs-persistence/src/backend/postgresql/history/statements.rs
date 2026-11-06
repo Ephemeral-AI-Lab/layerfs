@@ -23,6 +23,18 @@ pub(crate) fn qualified(key: &str) -> Option<&'static str> {
         "branch_snapshot" => Some(include_str!(
             "../../../../sql/postgresql/queries/history/branch_snapshot.sql"
         )),
+        "branch_snapshot_named" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/branch_snapshot_named.sql"
+        )),
+        "commit_commit_by_id" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/commit_commit_by_id.sql"
+        )),
+        "layerstack_layer_by_id" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/layerstack_layer_by_id.sql"
+        )),
+        "layerstack_stack_by_name" => Some(include_str!(
+            "../../../../sql/postgresql/queries/history/layerstack_stack_by_name.sql"
+        )),
         _ => None,
     }
 }

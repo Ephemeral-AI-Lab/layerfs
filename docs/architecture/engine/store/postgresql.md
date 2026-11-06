@@ -80,8 +80,8 @@ session keeps the frozen policy and the server version the check read, so
  | lane: Mutex<Option<Client>>   second connection, opened on   |
  |                               first hold_lane                |
  | settings: schema, synchronous_commit, lock_timeout_ms        |
- | connector: Config + the process's one TLS connector          |
- |            (sslmode from the connection string, as given)    |
+ | connector: Config + the process's one TLS connector, or none |
+ |            for sslmode=disable (sslmode as given)            |
  +--------------------------------------------------------------+
 ```
 
@@ -105,13 +105,27 @@ counters (zero on SQLite):
 A connection's handshake (TCP, the SSL probe of `sslmode=prefer`, startup
 and authentication) is one `connects`, not part of `round_trips`.
 
+Each statement waits for its reply before the next is sent; nothing is
+pipelined. The session uses the synchronous `postgres` client, which does not
+expose the `tokio_postgres` client inside it, so pipelining independent
+statements would mean rewriting the session layer on `tokio-postgres` with
+its own runtime. That was left out of layerfs-project #95; it reduced round
+trips by batching instead (a Commit validates through its Workspace's reader,
+reads a Commit or Layer by id in one statement, and difference walks read
+the pages they expand in batched demands). A fresh daemon's first Commit
+still opens the lazy lane connection (owner decision 2026-11-06: every
+Commit holds the lane; the connection is not opened eagerly).
+
 The connection string's `sslmode` is used exactly as given; nothing changes
 it. The driver's default, `prefer`, sends an SSLRequest first and costs one
 more round trip per connection on a server without TLS. On a loopback or
 private network route (a server on the same host, a Docker network) give
 `sslmode=disable` to skip it; on any other route give `require` or
 `verify-full`. The TLS connector, which loads the system's trust roots, is
-built once per process. The Store
+built once per process, at the first connection whose `sslmode` may
+negotiate TLS; a connection string with `sslmode=disable` never builds it
+(#96). On Linux the build costs a process about 40–70 ms, and every Sandbox
+create starts a new daemon process. The Store
 service reports the writer session and every Workspace reader session,
 live and retired, as on SQLite
 ([`bootstrap.rs`](../../../../engine/crates/layerfs-store-service/src/bootstrap.rs)).
@@ -125,7 +139,7 @@ live and retired, as on SQLite
 | `Stage` | `READ COMMITTED` + `synchronous_commit` | no | schema create, merge records | [`transaction.rs`](../../../../engine/crates/layerfs-persistence/src/backend/postgresql/session/transaction.rs) |
 | `Publish` | `READ COMMITTED` + `synchronous_commit` + `lock_timeout` | `FOR UPDATE` after the pack bodies, unless nested in the held lane | one Save publication wave, up to 16 MiB − 1 (`publication_bytes`; SQLite keeps 4 MiB − 1) | same |
 | `Immutable` | none; autocommit statements | no | locates, pack reads, inode values | same |
-| `Statement` | none; exactly one autocommit statement (a second is refused before it is sent) | no | `branch_snapshot`, `file_roots` (`digest_roots`, one statement for up to `FILE_DIGEST_WINDOW` = 1,024 contents) | same |
+| `Statement` | none; exactly one autocommit statement (a second is refused before it is sent) | no | `branch_snapshot`, `commit` and `layer` by id (a Commit's `logical.known`, #95), a LayerStack by name (a Sandbox create's reach check finds its project, #96), `file_roots` (`digest_roots`, one statement for up to `FILE_DIGEST_WINDOW` = 1,024 contents) | same |
 
 A single PostgreSQL statement sees one snapshot, so `Statement` reads a Branch
 and the rows it resolves to coherently without `BEGIN`/`COMMIT`. Statements run

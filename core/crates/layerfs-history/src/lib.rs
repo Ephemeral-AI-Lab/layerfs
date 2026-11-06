@@ -24,7 +24,7 @@ pub use contract::identity;
 pub use contract::query;
 pub use contract::records;
 
-pub use catalog::{HistoryCatalog, HistoryCatalogConfig, PublishLane};
+pub use catalog::{HistoryCatalog, HistoryCatalogConfig, NamedSnapshot, PublishLane};
 pub use error::{HistoryError, HistoryResult};
 pub use identity::{
     BranchId, CatalogId, CommitId, HistoryName, LayerId, LayerStackId, NodeId, WorkspaceId,

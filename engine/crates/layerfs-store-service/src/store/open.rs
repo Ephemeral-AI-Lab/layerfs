@@ -29,6 +29,9 @@ pub struct ReuseWork {
     pub readers_reused: u64,
     /// Producer Storage handles made (each reads the policy and hints).
     pub producers: u64,
+    /// Idle readers opened after readiness (#64), and such opens that failed.
+    pub readers_prefilled: u64,
+    pub prefill_failures: u64,
 }
 #[derive(Default)]
 pub(super) struct Counts {
@@ -40,6 +43,8 @@ pub(super) struct Counts {
     pub readers_opened: AtomicU64,
     pub readers_reused: AtomicU64,
     pub producers: AtomicU64,
+    pub readers_prefilled: AtomicU64,
+    pub prefill_failures: AtomicU64,
 }
 /// Delta selection outcomes of every Save this daemon finished, payload and
 /// pooled metadata: stored depths and why candidates were refused.
@@ -321,7 +326,15 @@ impl Store {
             readers_opened: self.counts.readers_opened.load(Ordering::Relaxed),
             readers_reused: self.counts.readers_reused.load(Ordering::Relaxed),
             producers: self.counts.producers.load(Ordering::Relaxed),
+            readers_prefilled: self.counts.readers_prefilled.load(Ordering::Relaxed),
+            prefill_failures: self.counts.prefill_failures.load(Ordering::Relaxed),
         }
+    }
+    /// Opens one idle Store reader ahead of the first mount, once, on a
+    /// Store with shared readers (PostgreSQL); the reader set's `prefill`.
+    /// The daemon calls it after it reported ready, on a thread of its own.
+    pub fn prefill_reader(&self) -> Option<StorageResult<()>> {
+        self.readers.prefill()
     }
     pub fn mount_reader(&self, workspace: WorkspaceId) -> Result<(), Arc<PortError>> {
         self.readers.mount(workspace, false)

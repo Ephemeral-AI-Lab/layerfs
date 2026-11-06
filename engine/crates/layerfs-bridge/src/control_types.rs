@@ -45,6 +45,19 @@ pub enum Request {
         /// Selected Branch.
         branch: BranchId,
     },
+    /// [`Request::Mount`] of the Branch a project and Branch name select
+    /// (#64): the daemon finds it on the new Workspace's own Store reader, so
+    /// the caller reads no Store. A missing project or Branch is answered
+    /// [`crate::control::Reply::SdkRefused`] `NoSuchProject` or
+    /// `NoSuchBranch`, as the Store service's lookup refuses it.
+    MountNamed {
+        /// New authority incarnation.
+        workspace: WorkspaceId,
+        /// The project's name, as the caller gave it.
+        project: String,
+        /// The Branch's name in that project, as the caller gave it.
+        branch: String,
+    },
     /// One SDK call answered by a value or a typed SDK refusal.
     Sdk(crate::control_sdk::SdkCall),
     /// Capture the published frontier, construct it in the daemon, merge it

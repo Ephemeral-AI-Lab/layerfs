@@ -19,6 +19,11 @@ use std::time::{Duration, Instant};
 
 /// Captured output kept per stream; a provider's answers are far smaller.
 const KEEP: usize = 1 << 20;
+/// Exit checks start [`FIRST_POLL`] apart and grow with the command's run
+/// (an eighth of it) up to [`POLL`]: a command is seen soon after it ends,
+/// not at the next fixed 20 ms step, which added about 17 ms to a 26 ms
+/// provider call (#66).
+const FIRST_POLL: Duration = Duration::from_millis(1);
 const POLL: Duration = Duration::from_millis(20);
 
 thread_local! {
@@ -194,6 +199,7 @@ pub(crate) fn wait(child: &mut Child, deadline: Instant) -> io::Result<Option<Ex
 
 /// [`wait`]; `group` kills the child's whole process group (it leads one).
 fn wait_for(child: &mut Child, deadline: Instant, group: bool) -> io::Result<Option<ExitStatus>> {
+    let started = Instant::now();
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(Some(status));
@@ -206,7 +212,7 @@ fn wait_for(child: &mut Child, deadline: Instant, group: bool) -> io::Result<Opt
             child.wait()?;
             return Ok(None);
         }
-        thread::sleep(POLL);
+        thread::sleep((started.elapsed() / 8).clamp(FIRST_POLL, POLL));
     }
 }
 

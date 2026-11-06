@@ -267,6 +267,28 @@ impl Fetch {
         }
         Ok(())
     }
+    /// How many of `packs` (pack ids in physical order, repeated per object)
+    /// form the next cohort: at least one, and while their distinct located
+    /// lengths fit [`DEPENDENCY_PACK_CACHE_BYTES`] together. A pack whose
+    /// length is not located counts as the whole bound.
+    pub(crate) fn cohort(&self, packs: impl Iterator<Item = i64>) -> usize {
+        let descriptors = self.descriptors.borrow();
+        let (mut count, mut bytes, mut last) = (0, 0_usize, None);
+        for id in packs {
+            if last != Some(id) {
+                let length = descriptors
+                    .get(&id)
+                    .map_or(DEPENDENCY_PACK_CACHE_BYTES, |info| info.length);
+                if count > 0 && bytes.saturating_add(length) > DEPENDENCY_PACK_CACHE_BYTES {
+                    break;
+                }
+                bytes = bytes.saturating_add(length);
+                last = Some(id);
+            }
+            count += 1;
+        }
+        count
+    }
     fn remember_pack(&self, info: PackInfo) -> StorageResult<()> {
         let mut cache = self.descriptors.borrow_mut();
         if cache.get(&info.pack_id).is_some_and(|old| *old != info) {

@@ -258,6 +258,56 @@ fn one_handle_reads_any_number_of_leaves_at_one_lookup_each() {
     assert_eq!(value_lookups(&metadata) as u64, LEAVES);
 }
 
+/// layerfs-project #95: one demand of many pooled leaves looks up their
+/// stored values together, a bounded window at a time (at most 128 leaves),
+/// not once per leaf; a wrong value in one of them still fails the read.
+#[test]
+fn one_demand_of_many_leaves_looks_up_their_values_together() {
+    const LEAVES: u64 = 300;
+    let metadata = Arc::new(metadata::MemoryMetadata::default());
+    let mut last = Vec::new();
+    for rewrites in [0, 1] {
+        let store = Storage::new(metadata.clone()).unwrap();
+        let save = store.begin_save().unwrap();
+        let objects: Vec<_> = (0..LEAVES)
+            .map(|index| {
+                let object = leaf(1 + index * ROWS, rewrites);
+                match last.get(index as usize) {
+                    Some(replaced) => successor(object, replaced),
+                    None => object,
+                }
+            })
+            .collect();
+        for object in &objects {
+            save.accept(object.clone()).unwrap();
+        }
+        save.finish().unwrap();
+        last = objects;
+    }
+    let ids: Vec<_> = last.iter().map(FinalizedObject::id).collect();
+    let expected: Vec<_> = last.iter().map(|o| o.canonical().to_vec()).collect();
+    let handle = Storage::new(metadata.clone()).unwrap();
+    metadata.calls.lock().unwrap().clear();
+    assert_eq!(
+        handle.reader().unwrap().read_objects(&ids).unwrap(),
+        expected
+    );
+    let lookups = value_lookups(&metadata) as u64;
+    assert!(
+        (1..=LEAVES.div_ceil(128)).contains(&lookups),
+        "{lookups} value lookups for {LEAVES} leaves"
+    );
+    // A wrong stored value under one leaf of the demand fails the read.
+    let other = metadata.state.lock().unwrap().values[&2];
+    metadata.state.lock().unwrap().values.insert(1, other);
+    let fresh = Storage::new(metadata.clone()).unwrap();
+    let refused = fresh.reader().unwrap().read_objects(&ids).unwrap_err();
+    assert!(
+        refused.to_string().contains("pooled canonical identity"),
+        "{refused}"
+    );
+}
+
 /// A leaf of `ROWS` files of one content and mode whose mtime differs from
 /// `mtime` only in its low bytes and nanoseconds by `bump`.
 fn inline_leaf(first_serial: u64, bump: u32) -> FinalizedObject {

@@ -16,11 +16,11 @@
 //!   depth 0, the form every Store before this change holds), which still reads
 //!   identically once programs join it;
 //! * the read cost: one page read reconstructs one chain of at most nine records.
-#[path = "support/memory_metadata.rs"]
-mod metadata;
 #[allow(dead_code)]
 #[path = "support/edits.rs"]
 mod edits;
+#[path = "support/memory_metadata.rs"]
+mod metadata;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -179,7 +179,9 @@ fn directory_history(storage: &Storage) -> (Vec<(DirectoryRoot, Listing)>, Vec<W
     let (mut root, initial) = directory_commit(
         storage,
         None,
-        (1..=NAMES).map(|serial| (name(serial), Some(serial))).collect(),
+        (1..=NAMES)
+            .map(|serial| (name(serial), Some(serial)))
+            .collect(),
     );
     assert_eq!(initial.delta.directory.delta_branches, 0);
     let mut versions = vec![(root, listing.clone())];
@@ -282,7 +284,11 @@ fn directory_programs_cut_metadata_and_an_old_store_still_reads() {
     let added = 90_000;
     listing.insert(name(added).as_bytes().to_vec(), added);
     let (next, outcome) = directory_commit(&reopened, Some(root), vec![(name(added), Some(added))]);
-    assert!(outcome.delta.directory.delta_branches >= 1, "{:?}", outcome.delta);
+    assert!(
+        outcome.delta.directory.delta_branches >= 1,
+        "{:?}",
+        outcome.delta
+    );
     assert_eq!(list_all(&reopened, next), listing);
 }
 
@@ -355,10 +361,7 @@ fn edit(
         )
     });
     drop(reader);
-    bytes.splice(
-        change.start() as usize..change.end() as usize,
-        replacement,
-    );
+    bytes.splice(change.start() as usize..change.end() as usize, replacement);
     (file.root, save(storage, emitted))
 }
 
@@ -384,7 +387,13 @@ fn extent_history(storage: &Storage) -> (Vec<(ObjectId, Vec<u8>)>, Vec<WriteOutc
         outcomes.push(outcome);
     }
     let len = bytes.len() as u64;
-    let (next, outcome) = edit(storage, root, &mut bytes, Edit::insert(len, 256 << 10), noise(256 << 10, 3));
+    let (next, outcome) = edit(
+        storage,
+        root,
+        &mut bytes,
+        Edit::insert(len, 256 << 10),
+        noise(256 << 10, 3),
+    );
     root = next;
     versions.push((root, bytes.clone()));
     outcomes.push(outcome);

@@ -59,11 +59,12 @@ fn bounded_hash_order_demand_does_not_reacquire_one_pack_for_each_object() {
         .filter(|(name, _)| *name == "read_packs" || *name == "read_scoped_pack")
         .map(|(_, count)| count)
         .sum();
-    // Bounded acquisition consumes each cohort during dependency inspection;
-    // reconstruction is the second physical pass.
+    // The demand is served one pack-cache-sized cohort at a time, so each
+    // pack is acquired once: dependency inspection and reconstruction share
+    // it (layerfs-project #97).
     eprintln!("locality: {bodies} body acquisitions for {pack_count} packs");
     assert!(
-        bodies <= 2 * pack_count,
+        bodies <= pack_count,
         "{bodies}body acquisitions for{pack_count}packs"
     );
 }

@@ -110,13 +110,25 @@ pub fn project_in(
         Ok(name) => find(&name)?,
         Err(_) => None,
     };
-    found.ok_or_else(|| {
-        refuse(
-            "NoSuchProject",
-            format!("project {wanted} does not exist"),
-            SdkValue::Null,
-        )
-    })
+    found.ok_or_else(|| no_project(wanted))
+}
+
+/// The refusal of project `wanted`, which does not exist.
+pub fn no_project(wanted: &str) -> SdkRefusal {
+    refuse(
+        "NoSuchProject",
+        format!("project {wanted} does not exist"),
+        SdkValue::Null,
+    )
+}
+
+/// The refusal of Branch `wanted`, which its project does not have.
+pub fn no_branch(wanted: &str) -> SdkRefusal {
+    refuse(
+        "NoSuchBranch",
+        format!("Branch {wanted} does not exist"),
+        SdkValue::Null,
+    )
 }
 
 /// One Branch by name, through the stack's name index.
@@ -141,13 +153,7 @@ pub fn branch_in(
         Ok(name) if wanted != super::MAIN => find(&name)?,
         _ => None,
     };
-    found.ok_or_else(|| {
-        refuse(
-            "NoSuchBranch",
-            format!("Branch {wanted} does not exist"),
-            SdkValue::Null,
-        )
-    })
+    found.ok_or_else(|| no_branch(wanted))
 }
 
 /// A Branch's newest node: its head Commit, else its base Layer.

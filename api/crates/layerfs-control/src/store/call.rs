@@ -13,7 +13,8 @@ use crate::common::place::{plan, Executor};
 use crate::store::open;
 use crate::store::record::{StoreRecord, StoreRef};
 use crate::store::resolve::Target;
-use layerfs_bridge::control::SdkValue;
+use layerfs_bridge::control::{SdkRefusal, SdkValue};
+use layerfs_history::{BranchId, CommitId};
 use std::path::Path;
 
 /// Runs Store method `op` with `args` on the Store of `target`.
@@ -51,6 +52,35 @@ pub(crate) fn store_call(
             worker.call("store.call", request, &mut |event| context.event(event))
         }
     }
+}
+
+/// The id and head of Branch `name` of `target`'s project when `target`
+/// is a PostgreSQL Store this process holds no Store service of: read on
+/// the process's held read session (#64), under the Store's lease as
+/// [`store_call`] takes it. A per-call caller (a new CLI process each
+/// time) then opens one light-checked connection for a status instead of a
+/// Store service's writer and control reader (a mount reads none: its
+/// daemon finds the Branch). `None` for a
+/// sqlite Store and for one whose Store service this process already holds
+/// open: [`store_call`] reads it there, opening nothing.
+pub(crate) fn held_branch(
+    home: &Path,
+    target: &Target,
+    name: &str,
+) -> Result<Option<(BranchId, Option<CommitId>)>, SdkRefusal> {
+    let StoreRef::Postgres { .. } = target.store_ref else {
+        return Ok(None);
+    };
+    let key = target.record.postgresql_key(home, &target.store);
+    if open::holds(&key) {
+        return Ok(None);
+    }
+    target.record.unblocked()?;
+    let (_lease, record) = lease::claim(home, &target.store)?;
+    let postgresql = crate::store::connect::selection(&record)?;
+    let key = record.postgresql_key(home, &target.store);
+    let read = (target.project.as_str(), name);
+    crate::store::reader::branch(&key, &record, &postgresql, read).map(Some)
 }
 
 /// A call's arguments with its project, Store and Store record.
