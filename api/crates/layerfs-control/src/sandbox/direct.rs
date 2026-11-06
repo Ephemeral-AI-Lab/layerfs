@@ -365,12 +365,16 @@ pub(crate) fn list(
 }
 
 /// The id and head of Branch `name` of `target`'s project, read through
-/// the Store's own route (in this process, or its machine's worker).
+/// the Store's own route (in this process, or its machine's worker); a
+/// PostgreSQL Store's on this process's held read session (#64).
 fn branch_of(
     context: &mut Context<'_>,
     target: &Target,
     name: &str,
 ) -> Result<(BranchId, Option<CommitId>)> {
+    if let Some(found) = crate::store::call::held_branch(&context.home, target, name)? {
+        return Ok(found);
+    }
     let listed = store_call(
         context,
         target,

@@ -89,8 +89,17 @@ The Workspace is recorded as `workspace/<id>.json` in the Sandbox's folder.
 The Branch is looked up through the Store's route, not the daemon; the
 daemon binds its id. For a PostgreSQL Store it is looked up on the
 process's one held read session for that Store, not a Store service (#65,
-[`store/reader.rs`](../../../../../api/crates/layerfs-control/src/store/reader.rs)):
-at most one connection per process, reused by later calls within 60 s. See the [routing table](../../routing/routing-table.md)
+[`store/reader.rs`](../../../../../api/crates/layerfs-control/src/store/reader.rs)),
+on every route: in a machine's worker, here, and for a forwarded Sandbox
+in the caller's process (#64, `store::call::held_branch`; a process that
+already holds the Store's service open reads it there and opens nothing).
+That session is at most one light-checked connection per process, reused by
+later calls within 60 s; a new CLI process per call opens it once per
+mount. The daemon then reads the Branch's snapshot and root on the
+Workspace's own Store reader: a PostgreSQL daemon takes an idle reader
+left by an earlier unmount (no connection) and opens one only when it has
+none, as on its first mount
+([Store service](../../../engine/store-calls/service.md)). See the [routing table](../../routing/routing-table.md)
 and the [daemon channel](../../routing/daemon-channel.md). Under a folder
 scope only `main` is accepted and is mounted as the Branch `<ns>.main`
 ([`calls/scope.rs`](../../../../../api/crates/layerfs-control/src/calls/scope.rs)).
