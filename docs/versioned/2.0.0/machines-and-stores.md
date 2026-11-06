@@ -157,7 +157,11 @@ layerfs machine create host1 lima --nested
   machine, and a running machine, its worker and its Sandboxes stay up
   however long they are unused. A Store is still closed after a quiet
   minute (the worker's and the caller's Store connection reaper); that
-  closes a file, not a machine.
+  closes a file, not a machine. Before that, when the last call on a
+  sqlite Store returns or a Sandbox on it closes, its write-ahead log is
+  checkpointed into the file and truncated (#86): `store status` right
+  after the last Sandbox closes shows `wal_bytes` 0, unless another process
+  was still writing or reading it then.
 - A call that needs a stopped machine is refused `Unavailable`, naming the
   start command: "machine <m> is not running; start it with `layerfs
   machine start <m>`". It dials the worker `worker.json` records once, with

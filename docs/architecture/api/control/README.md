@@ -121,6 +121,7 @@ buckets.
 | Push, pull, remove or disconnect a Store with a live lease or a recorded Sandbox | `InUse` | [`common/home/lease.rs`](../../../../api/crates/layerfs-control/src/common/home/lease.rs), [`store/family.rs`](../../../../api/crates/layerfs-control/src/store/family.rs) |
 | An operation runs on the entity | `Busy`; after a gone owner's uncertain outcome, `Unresolved` | [`common/op.rs`](../../../../api/crates/layerfs-control/src/common/op.rs) |
 | An open Store unused | closed after 60 s (`IDLE`) by a reaper thread | [`store/open.rs`](../../../../api/crates/layerfs-control/src/store/open.rs) |
+| The last call on an open SQLite Store returns, or a Sandbox on it closes | one `wal_checkpoint(TRUNCATE)` on its open session (#86): after a call, on its own thread once the call is answered; after `sandbox.close`, before the close is answered. The Store stays open. Left, never retried, when another process holds the writer lane or a reader is in the log | [`store/open.rs`](../../../../api/crates/layerfs-control/src/store/open.rs), [`sandbox/route.rs`](../../../../api/crates/layerfs-control/src/sandbox/route.rs) |
 
 The full code list is in [Errors](../call-table/errors.md#error-kinds).
 

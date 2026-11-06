@@ -300,18 +300,17 @@ fn host_op(
             // runs on the process's one held read session, opened when one
             // is needed; exec, Commit, unmount and close open nothing.
             let lease = crate::common::home::lease::hold(&home, &target.store)?;
-            let _lease = match held {
-                true => Some(lease),
-                false => {
-                    crate::store::open::hold(&args, Some(lease))?;
-                    None
-                }
+            let (_lease, opened) = match held {
+                true => (Some(lease), None),
+                false => (None, Some(crate::store::open::hold(&args, Some(lease))?)),
             };
             if op == "backend.daemon.workspace.status" {
                 return crate::sandbox::dispatch::backend(op.to_owned(), args);
             }
             let out = crate::sandbox::dispatch::call(op, args)?;
-            drain(out, &mut |event| context.event(event))
+            let out = drain(out, &mut |event| context.event(event));
+            closed(op, opened.as_deref(), &out);
+            out
         }
         Executor::Worker(mut worker) => {
             // the guest runs the same call on its own native machine, with
@@ -459,19 +458,30 @@ pub(crate) fn in_worker(root: &Path, args: &SdkValue, events: &mut dyn FnMut(Sdk
     )?;
     // a PostgreSQL Store opens no Store service here (#65); its reads run
     // on the held read session
-    if !held {
-        crate::store::open::hold(&host, None)?;
-    }
+    let opened = match held {
+        true => None,
+        false => Some(crate::store::open::hold(&host, None)?),
+    };
     if op == "backend.daemon.workspace.status" {
         return crate::sandbox::dispatch::backend(op.to_owned(), host);
     }
     let name = host.get_text("sandbox").unwrap_or("").to_owned();
-    let out = drain(crate::sandbox::dispatch::call(op, host)?, events)?;
+    let out = drain(crate::sandbox::dispatch::call(op, host)?, events);
+    closed(op, opened.as_deref(), &out);
+    let out = out?;
     // the caller reaches the new Sandbox's daemon directly where its
     // machine forwards the port (#535 G4): the answer carries its keys
     match op {
         "sandbox.create" => crate::sandbox::direct::with_keys(root, &name, out),
         _ => Ok(out),
+    }
+}
+
+/// A closed Sandbox's sqlite Store, held open here at `opened`: its log is
+/// checkpointed and truncated before the close is answered (#86).
+fn closed(op: &str, opened: Option<&Path>, out: &Outcome) {
+    if let (Some(path), "sandbox.close", true) = (opened, op, out.is_ok()) {
+        let _ = crate::store::open::released(path);
     }
 }
 
