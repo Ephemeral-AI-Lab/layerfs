@@ -7,6 +7,57 @@ from the installed files, and what did not run. Issue #39 (parent #30). Raw
 logs were kept outside the repository; commands are given so each row can be
 repeated. Anything not listed as RAN was not run.
 
+## Re-run on the current base (2026-11-06)
+
+The first run (the sections below) used artifacts built from `ce9cd4144`, which is the baseline `d4304741` plus four
+PRs and does not contain later upstream changes such as #577. This section repeats the qualification on artifacts built
+from the current base. **Where it differs from the sections below, this section governs**; the older sections are kept
+as history.
+
+| Item | Value |
+| --- | --- |
+| Base | `e20c6a2f7` (`e20c6a2f73f50f73780b76bad28b1ef118c7e5cf`), `origin/layerfs_v2_0_0` after PR #595 (2026-11-06 23:29 +08); contains `b919f50ea` (the Firecracker/SSH policy, #577) |
+| Tree built | `6f38f361f16b01b94fdee9982b86fd4acaa7b55f` = the base plus `1f739ac17` (`build-native.mjs --features`) and `6f38f361f` (`prepack`); the documentation commits do not change a build |
+| Host and tools | Ubuntu 26.04.1 under WSL2, x86_64, glibc 2.43; rustc/cargo 1.85.1; Node 24.22.2 and 22.23.4; npm 11.19.1; Python 3.14.4, and 3.10.22, 3.11.18, 3.12.16, 3.13.18 from `uv`; maturin 1.16.0; patchelf 0.19.3 |
+| Profile | `--release`, `--locked --offline`; PostgreSQL builds in their own target directory with OpenSSL 3.0.15 headers and link stubs from the `rust:1.85.1-bookworm` image (`OPENSSL_DIR`; the host has no `libssl-dev`) |
+
+| Artifact | sha256 | Bytes |
+| --- | --- | --- |
+| `layerfs` command, default | `6c6e660ed017bc25e68ff6525bb8b1a89214282bb0b6f6c0d6d6c07507a1e069` | 16,068,632 |
+| Python wheel, default (`cp310-abi3-manylinux_2_39_x86_64`) | `9bf7255ae8e93718d7eceec330fc8c464b7d00c0a2039c0a9381b76a0d9a016d` | 6,630,233 |
+| Node tarball `layerfs-2.0.0.tgz`, default (8 files) | `d5f01099346e8c8b6aacf2307ac2f9f6d92ac88b3ea671eadc9a1f4a38287186` | 6,555,835 |
+| `layerfs` command, `--features postgresql` | `357520342d8e8a77daf2f1ec7f3c237019254056afb7ae46ca576af9ed6571ba` | 18,285,432 |
+| Python wheel, `--features postgresql` | `e9bb08a341236aa29f9c2571ad3d1ba53b5db5dc1dddb8344d58332295619ec7` | 10,729,134 |
+| Node tarball, `--features postgresql` (8 files) | `a04b50d18f5f7dc257f837cf9c7a99ac088a7f1a20b7235a0596d00d00f68def` | 7,428,344 |
+
+The three PostgreSQL artifacts differ from the default ones (hash, and the command links `libssl`; the default command
+does not). A first attempt of this build silently reused the default files because a step failed (no OpenSSL headers)
+and was not checked; it was discarded, and the build script now stops on any failed step and proves the difference.
+
+| Case | Result |
+| --- | --- |
+| Hashes still match after the install runs | RAN, `sha256sum -c` OK for the three default artifacts |
+| Tarball contents, licence | RAN: 8 files (`LICENSE`, `layerfs.node`, `package.json`, `src/{errors,index,native,values}.js`, `src/index.d.ts`); `license` MIT, `engines.node >=22`, `LICENSE` identical to the repository's |
+| Native dependencies, default | RAN: addon and command need only `libgcc_s`, `libm`, `libc`; highest symbol `GLIBC_2.39` in both |
+| Node 24.22.2: `npm install <tgz>`, the example | RAN, install exit 0, one `layerfs.node` on disk (`node_modules/layerfs/`), the 15-line example exits 0 |
+| Node 22.23.4 (own toolchain), same tarball | RAN: `JSON.rawJSON` is a function and the `JSON.parse` reviver receives the source text of `9223372036854775807`; install exit 0, the example exits 0 and prints the same as Node 24 (ids masked) |
+| Node, addon deleted, decoys planted in the old fallback paths | RAN: `import "layerfs"` is refused with "the LayerFS native addon is missing: <package path> (the package's own; this is linux/x64, Node v24.22.2); build it with ..."; no fallback was used |
+| Python wheel in clean venvs: 3.14, 3.10, 3.11, 3.12, 3.13 | RAN: install exit 0 in each; the sync and the async example exit 0 and print the same (ids masked); `py.typed` and 5 `.pyi` installed under `site-packages`; `License-Expression: MIT` |
+| The command copied alone to an empty directory | RAN: `layerfs 2.0.0`; the 104-line example exits 0 |
+| Policy of layerfs-project#7 on the installed default command | RAN: `machine platforms` reports `firecracker` and `ssh` `ready=False` ("permanently disabled by product policy (layerfs-project#7)"); `machine create demo ssh`, `machine create demo firecracker` and `machine connect demo example.invalid` answer `Unsupported`, exit 125; the machine list (`docker`, `native`) and the number of files in the home are the same before and after |
+| PostgreSQL command, tarball and wheel install and load | RAN: no missing shared library; the wheel bundles `libssl`, `libcrypto`, `libzstd` in `layerfs.libs/` (the default wheel has none); the tarball has 8 files |
+| PostgreSQL builds against a port nothing listens on | RAN, all three front ends: `Unavailable` ("no connection to the server was made"), exit 125 for the command: the engine is present and tries to connect |
+| Default builds against the same port | RAN, all three front ends: `Unsupported` ("this LayerFS build has no PostgreSQL engine; build it with --features postgresql"), exit 125, refused before any connection |
+| Python without its native module | RAN: the message is `cannot import name '_native' from 'layerfs' (consider renaming ...)`; the clearer error of PR #598 is not in this tree |
+
+**NOT RUN in this re-run:** the PostgreSQL builds against a **real server**. The throwaway `postgres:17-alpine`
+container could not be started: the Docker engine did not answer any command within 20-30 s (the host had about 0.6 GB
+of physical memory free). The first run did exercise a real PostgreSQL 17.11 with the PostgreSQL command, addon and
+wheel, but on the older tree (`ce9cd4144`), so it is not evidence for the current base. Also not repeated: the
+documented setup commands of the section below, the `tls` build, and everything listed under NOT RUN.
+
+The sections below are the first run (the older tree), kept as history.
+
 ## Source and tools
 
 | Item | Value |
