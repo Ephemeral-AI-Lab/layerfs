@@ -11,12 +11,13 @@
 //!   `store/reader.rs`): attach with the light check, find the project.
 //! - `create.daemon_open`: the daemon's Store (daemon `application/owner.rs`
 //!   selection, light check) and, timed apart, its overlay template.
-//! - `mount.caller_open`: the CLI process's Store service for the Branch
-//!   lookup (control `store/call.rs` → `store/service.rs`): full check
-//!   writer and, timed apart, its overlay template.
-//! - `mount.caller_lookup`: `project.list_branches { name }` on it.
-//! - `mount.daemon_bind`, `mount.daemon_serials`: the daemon's bind and the
-//!   initial serial window its kernel attach prepares (`control/attach.rs`).
+//! - `create.daemon_idle_reader`: the one idle Store reader the daemon opens
+//!   after it reported ready, on its own thread (#64), which the mount takes.
+//! - The mount's caller reads no Store (#64 option B: the daemon finds the
+//!   Branch by its project's name and its own).
+//! - `mount.daemon_bind`, `mount.daemon_serials`: the daemon's named bind
+//!   (its Workspace reader, the by-name snapshot, the root) and the initial
+//!   serial window its kernel attach prepares (`control/attach.rs`).
 //! - `commit.*`: one Commit; each top-level phase carries the product's SQL
 //!   counters and the server's `pg_stat_statements` calls by statement.
 //!
@@ -28,7 +29,6 @@
 //! parts. Needs `LAYERFS_TEST_POSTGRES_URL`; NOT_RUN without it. Run with
 //! `--test-threads=1 --nocapture`.
 #![cfg(feature = "postgresql")]
-use layerfs_bridge::control::{SdkCall, SdkValue};
 use layerfs_history::{
     BranchId, ForkRequest, ForkSource, HistoryCatalog, HistoryCatalogConfig, HistoryName,
     LayerStackId, WorkspaceId,
@@ -37,7 +37,7 @@ use layerfs_persistence::{PostgresCheck, PostgresHandles, PostgresSelection, Sql
 use layerfs_project::{init, InitRequest};
 use layerfs_storage::{ReservationBlocks, Storage, StoragePolicy};
 use layerfs_store_service::bootstrap::{open_store_observed, OpenedStore};
-use layerfs_store_service::store::{BindRequest, BoundWorkspace, CommitOptions};
+use layerfs_store_service::store::{BoundWorkspace, CommitOptions, NamedBindRequest};
 use layerfs_store_service::telemetry::{attribute_sql, mark_phases, phase_sql, Recording};
 use layerfs_store_service::write::mutation::Mutation;
 use layerfs_store_service::{Owner, OwnerConfig, StoreService};
@@ -86,7 +86,8 @@ fn postgresql_case_attribution() {
     let schema = format!("lfs94_attr_{}", std::process::id());
     let selection = PostgresSelection::new(&url, &schema);
     let result = std::panic::catch_unwind(|| {
-        let branch = initialize(&dir, &selection);
+        // the Branch the cases mount by name (`BRANCH`)
+        initialize(&dir, &selection);
         let server = Rc::new(RefCell::new(Server::connect(&url)));
         server.borrow_mut().calibrate();
         connect_anatomy(&url, &selection);
@@ -94,7 +95,6 @@ fn postgresql_case_attribution() {
             dir: dir.clone(),
             selection: selection.clone(),
             server,
-            branch,
         };
         run.case("C01", &[files(1000)]);
         run.case("C13", &[one("a", b"1\n"), one("b", b"2\n")]);
@@ -267,7 +267,6 @@ struct Run {
     dir: PathBuf,
     selection: PostgresSelection,
     server: Rc<RefCell<Server>>,
-    branch: BranchId,
 }
 
 /// One process's opened Store with its overlay owner.
@@ -423,51 +422,23 @@ impl Run {
                 ("readers", work_json(&readers)),
             ],
         );
-        // mount: the CLI process's Store service and its Branch lookup
-        let caller = self.step(
-            case,
-            "mount.caller_open",
-            &none,
-            || {
-                Process::open(
-                    &self.dir,
-                    &format!("{case}-caller"),
-                    self.selection.clone(),
-                    layerfs_store_service::CALLS,
-                )
-            },
-            vec![],
-        );
-        self.emit(
-            case,
-            "mount.caller_open.split",
-            &[
-                ("store_open_ms", format!("{:.2}", caller.open_ms)),
-                ("overlay_owner_ms", format!("{:.2}", caller.owner_ms)),
-            ],
-        );
-        let caller_work = || caller.work();
+        // create, after the daemon reported ready: its one idle reader, on a
+        // thread of its own (#64 eager reader; not part of the create reply)
+        let daemon_work = || daemon.work();
         self.step(
             case,
-            "mount.caller_lookup",
-            &caller_work,
+            "create.daemon_idle_reader",
+            &daemon_work,
             || {
-                let call = SdkCall {
-                    method: "project.list_branches".to_owned(),
-                    args: SdkValue::map([
-                        ("project", SdkValue::text(PROJECT)),
-                        ("name", SdkValue::text(BRANCH)),
-                    ]),
-                };
-                let answer = layerfs_store_service::methods::call(&caller.service, &call).unwrap();
-                assert!(
-                    matches!(answer.get("items"), Some(SdkValue::List(items)) if items.len() == 1)
-                );
+                assert!(matches!(
+                    daemon.service.store.prefill_reader(),
+                    Some(Ok(()))
+                ))
             },
             vec![],
         );
-        caller.close(None);
-        let daemon_work = || daemon.work();
+        // mount: the caller reads no Store (#64 option B); the daemon finds
+        // the Branch by name on the idle reader it took
         let workspace = self.step(
             case,
             "mount.daemon_bind",
@@ -476,11 +447,12 @@ impl Run {
                 daemon
                     .service
                     .store
-                    .bind(
+                    .bind_named(
                         daemon.owner.client(),
-                        BindRequest {
-                            branch: self.branch,
+                        NamedBindRequest {
                             workspace: WorkspaceId::from_authority([7; 32]).unwrap(),
+                            project: PROJECT.to_owned(),
+                            branch: BRANCH.to_owned(),
                         },
                     )
                     .unwrap()

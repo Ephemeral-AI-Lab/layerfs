@@ -130,14 +130,24 @@ reader opens, so no operation runs on it and none is retried. A control
 reader opened at first use is that operation's one attempt: a failure is
 returned to it and the next use opens again. With shared readers a daemon
 holds at most the writer, its lane connection (opened in the first Commit),
-the control reader (opened by the first call that
-reads through it; a Commit validates through its Workspace's reader, #95),
-one reader per mounted Workspace and
-`IDLE_READERS` = 4 idle ones. A fresh daemon's first mount therefore opens
-its reader: the writer is then its only connection, and it serves no
-Workspace reads (its admission is the one writer's, and a read's unknown
-outcome would quarantine it). Opening a reader at readiness instead would
-be an eager connection, which needs the owner's approval (#64).
+the control reader (opened by the first call that reads through it; a
+Commit validates through its Workspace's reader, #95), one reader per mounted Workspace and
+`IDLE_READERS` = 4 idle ones. The writer serves no Workspace reads (its
+admission is the one writer's, and a read's unknown outcome would
+quarantine it), so a fresh daemon needs a reader for its first mount. It
+opens that one eagerly (#64, owner decision 2026-11-06): after it reported
+ready (a `Hello` answered ControlReady was sent), a thread of its own calls
+`Store::prefill_reader`, which opens one reader into the idle readers,
+once per Store and only with shared readers (PostgreSQL). It never delays
+readiness. A failure is written to the daemon's log and counted
+(`ReuseWork::prefill_failures`), and nothing opens it again: the first mount
+then opens its own reader. A mount that arrives before the idle reader is
+open also opens its own; the late one joins the idle readers under their
+cap. So an idle PostgreSQL daemon holds 2 server connections after create
+(its writer and the idle reader; before #64's eager reader, 1), and its
+first mount opens none. At most it holds the writer, the lane connection,
+the control reader, one reader per mounted Workspace and 4 idle ones, as
+before.
 
 All SDK published-history lookups (`Store::published`) go through session 0,
 the read-only control session, so they never queue behind a Commit that holds

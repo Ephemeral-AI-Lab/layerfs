@@ -333,9 +333,7 @@ pub(crate) fn call(
     let _lease = lease::hold(&home, &target.store)?;
     let args = args(&home, record, &target, more);
     match op {
-        "workspace.mount" => serve::mount_with(&args, &mut |branch| {
-            Ok(branch_of(context, &target, branch)?.0)
-        }),
+        "workspace.mount" => serve::mount(&args),
         "workspace.commit" => serve::commit(&serve::by_name(args)?),
         "workspace.unmount" => serve::unmount(&serve::by_name(args)?),
         "backend.daemon.workspace.status" => {
@@ -364,9 +362,9 @@ pub(crate) fn list(
     }
 }
 
-/// The id and head of Branch `name` of `target`'s project, read through
-/// the Store's own route (in this process, or its machine's worker); a
-/// PostgreSQL Store's on this process's held read session (#64).
+/// The id and head of Branch `name` of `target`'s project (a status's),
+/// read through the Store's own route (in this process, or its machine's
+/// worker); a PostgreSQL Store's on this process's held read session.
 fn branch_of(
     context: &mut Context<'_>,
     target: &Target,

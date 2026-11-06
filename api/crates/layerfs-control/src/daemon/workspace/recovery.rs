@@ -18,6 +18,25 @@ impl WorkspaceApi<'_> {
             reply => Err(OperationFailure::unexpected(request, reply)),
         }
     }
+    /// [`Self::bind`] of Branch `branch` of project `project`, found by the
+    /// daemon on the Workspace's own Store reader (#64). A missing project or
+    /// Branch is the daemon's `SdkRefused` answer, kept as it came.
+    pub(crate) fn bind_named(
+        &mut self,
+        workspace: WorkspaceId,
+        project: &str,
+        branch: &str,
+    ) -> Result<BoundWorkspace, Box<OperationFailure>> {
+        let request = Request::MountNamed {
+            workspace,
+            project: project.to_owned(),
+            branch: branch.to_owned(),
+        };
+        match self.exchange(request.clone())? {
+            Reply::Bound { token, binding } => Ok(BoundWorkspace { token, binding }),
+            reply => Err(OperationFailure::unexpected(request, reply)),
+        }
+    }
 }
 
 impl WorkspaceApi<'_> {

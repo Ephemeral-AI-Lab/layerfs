@@ -12,6 +12,7 @@ use layerfs_history::identity::{BranchId, CatalogId, HistoryName, LayerStackId};
 use layerfs_history::records::{
     BranchRecord, BranchSnapshot, ForkRequest, ForkSource, Page, PageResult,
 };
+use layerfs_history::NamedSnapshot;
 
 use super::query::{self, Context, Cursor, Range};
 use super::rows::{branch_row, commit_row, many, one, sql, stack_row};
@@ -85,12 +86,18 @@ impl SnapshotRows {
 
 const SNAPSHOT: &str = "branch_snapshot";
 
+const SNAPSHOT_NAMED: &str = "branch_snapshot_named";
+
 /// Reads one Branch and the rows its snapshot resolves to in one statement.
 pub(crate) fn snapshot_rows(
     tx: &Transaction<'_>,
     id: BranchId,
 ) -> HistoryResult<Option<SnapshotRows>> {
-    let mut rows = tx.query(SNAPSHOT, [id.as_slice()])?;
+    snapshot_of(tx.query(SNAPSHOT, [id.as_slice()])?)
+}
+
+/// The one snapshot row of `rows`, decoded, if any.
+fn snapshot_of(mut rows: Vec<Row>) -> HistoryResult<Option<SnapshotRows>> {
     if rows.len() > 1 {
         return Err(HistoryError::Integrity("catalog row count"));
     }
@@ -112,9 +119,29 @@ pub(crate) fn branch_snapshot(
     tx: &Transaction<'_>,
     id: BranchId,
 ) -> HistoryResult<Option<BranchSnapshot>> {
-    let Some(rows) = snapshot_rows(tx, id)? else {
-        return Ok(None);
-    };
+    snapshot_rows(tx, id)?.map(resolve).transpose()
+}
+
+/// The snapshot of Branch `branch` of the stack named `stack`, found by both
+/// names in one statement: no row is no such stack, a row without a Branch
+/// is no such Branch.
+pub(crate) fn branch_snapshot_named(
+    tx: &Transaction<'_>,
+    stack: &HistoryName,
+    branch: &HistoryName,
+) -> HistoryResult<NamedSnapshot> {
+    let rows = tx.query(SNAPSHOT_NAMED, params![stack.as_str(), branch.as_str()])?;
+    match rows.first().map(|row| row.cells.first()) {
+        None => return Ok(NamedSnapshot::NoStack),
+        Some(Some(Value::Null)) if rows.len() == 1 => return Ok(NamedSnapshot::NoBranch),
+        Some(_) => {}
+    }
+    let rows = snapshot_of(rows)?.ok_or(HistoryError::Integrity("catalog row"))?;
+    resolve(rows).map(|snapshot| NamedSnapshot::Found(Box::new(snapshot)))
+}
+
+/// The snapshot one Branch's rows resolve to, checked.
+fn resolve(rows: SnapshotRows) -> HistoryResult<BranchSnapshot> {
     let stack = rows
         .stack()?
         .ok_or(HistoryError::Integrity("Branch LayerStack"))?;
@@ -134,14 +161,14 @@ pub(crate) fn branch_snapshot(
         }
         None => None,
     };
-    Ok(Some(BranchSnapshot {
+    Ok(BranchSnapshot {
         branch: record,
         head_root,
         base_root,
         effective_root: head_root.unwrap_or(base_root),
         scope: stack.scope,
         profile: stack.profile,
-    }))
+    })
 }
 
 /// Reads one stack's Branches in name order, one bounded page at a time.

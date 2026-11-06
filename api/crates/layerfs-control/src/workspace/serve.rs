@@ -15,8 +15,9 @@ use crate::daemon::values;
 use crate::internal::workspace;
 use crate::sandbox::registry::{lock, random, sandbox, sandbox_live, text, Mount};
 use crate::sandbox::serve::{operation, WORKSPACES};
+use crate::OperationCause;
 use crate::Unmounted;
-use layerfs_bridge::control::{CommitControl, SdkRefusal, SdkValue};
+use layerfs_bridge::control::{CommitControl, Reply, SdkRefusal, SdkValue};
 use layerfs_history::{BranchId, CommitId, WorkspaceId};
 
 /// A mount's `NoSuchSandbox`: `refusal` (its detail kept) with the next
@@ -34,19 +35,12 @@ fn no_sandbox(mut refusal: SdkRefusal) -> SdkRefusal {
 /// `runtime`. Refused `NoSuchSandbox` (no such Sandbox, or it closed
 /// itself), `Exists` (a Workspace of that name is mounted there) and
 /// `Capacity` (full), each naming the calls to make instead. Only the Sandbox's own
-/// guard is taken; its record and count are checked under it.
+/// guard is taken; its record and count are checked under it. The daemon
+/// finds the Branch by its project's name and its own on the Workspace's
+/// Store reader (#64): this process reads no Store, on every route, and a
+/// missing project or Branch is the daemon's `NoSuchProject` or
+/// `NoSuchBranch`, as the Store service's lookup refuses it.
 pub(crate) fn mount(args: &SdkValue) -> Outcome {
-    mount_with(args, &mut |branch| {
-        crate::store::service::branch_id(args, branch)
-    })
-}
-
-/// [`mount`], its Branch's id found by `branch_of` (in this process, or
-/// for a Sandbox reached directly through the Store's own route, #535 G4).
-pub(crate) fn mount_with(
-    args: &SdkValue,
-    branch_of: &mut dyn FnMut(&str) -> Result<BranchId, SdkRefusal>,
-) -> Outcome {
     let branch = text(args, "branch")?;
     let sandbox = match args.get_text("sandbox") {
         Some(id) if !id.is_empty() => id,
@@ -101,14 +95,17 @@ pub(crate) fn mount_with(
             ),
         ));
     }
+    let project = text(args, "project")?;
     let id = WorkspaceId::from_authority(random()?).map_err(failed)?;
-    // The Branch is found by name; the daemon binds its id.
-    let branch_id = branch_of(branch)?;
     let mounted = {
         let mut control = crate::common::trace::control(&state.controls)?;
-        workspace(&mut control).mount(id, branch_id)
+        workspace(&mut control).mount_named(id, (project, branch))
     };
-    let mounted = mounted.map_err(failed)?;
+    let mounted = mounted.map_err(|failure| match (&failure.bound, &failure.failure.cause) {
+        // the daemon's lookup refusal, nothing bound: the call's answer
+        (None, OperationCause::Unexpected(Reply::SdkRefused(refusal))) => refusal.clone(),
+        _ => failed(failure),
+    })?;
     let mut value = values::mounted(&mounted, branch);
     if let SdkValue::Map(fields) = &mut value {
         fields.push(("sandbox".to_owned(), SdkValue::text(state.id.as_str())));

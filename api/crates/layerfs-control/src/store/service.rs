@@ -196,20 +196,6 @@ pub(crate) fn call(method: &str, args: SdkValue) -> Outcome {
     outcome
 }
 
-/// The Branch id of `name` in the project a call names, read in this process.
-pub(crate) fn branch_id(
-    args: &SdkValue,
-    name: &str,
-) -> Result<layerfs_history::BranchId, SdkRefusal> {
-    // a PostgreSQL Sandbox call's: on the Store's held host session (#65)
-    if args.get("postgresql").is_some() {
-        return crate::store::reader::branch_id(args, name);
-    }
-    let service = service(args)?;
-    let stack = layerfs_store_service::operator::args::project(&service.store, args)?;
-    Ok(layerfs_store_service::history::lookup::branch(&service.store, &stack, name)?.id)
-}
-
 /// The newest Commit of `branch`, read in this process; `None` when it has none.
 pub(crate) fn head(
     args: &SdkValue,

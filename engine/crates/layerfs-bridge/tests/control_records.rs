@@ -51,6 +51,12 @@ fn commands_are_bounded_exact_and_reject_every_truncated_prefix() {
             workspace: token.workspace,
             branch: binding.branch.id,
         },
+        // #64: names travel as given, an invalid one too
+        Request::MountNamed {
+            workspace: token.workspace,
+            project: "project".into(),
+            branch: "Not A Name".into(),
+        },
         Request::Commit(CommitControl {
             token,
             force: false,
