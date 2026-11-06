@@ -114,6 +114,10 @@ pub(crate) struct Page<K, V> {
     pub widths: usize,
     /// Stored origin of this page, when it was materialized from one.
     pub origin: Option<ObjectId>,
+    /// The stored page this one was split from or merged into, offered as its
+    /// advisory delta base when it has no origin of its own (#92). Never an
+    /// identity: unlike `origin` it does not make the node a stored one.
+    pub hint: Option<ObjectId>,
     /// Rows whose stored child has not been read.
     pub unread: usize,
     /// Subtree entries and bytes the unread rows hold together: what the stored
@@ -212,6 +216,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
             entries: Vec::new(),
             widths: 0,
             origin: None,
+            hint: None,
             unread: 0,
             carried: None,
             lease,
@@ -458,7 +463,7 @@ impl<'o, 'e, F: Format> Engine<'o, 'e, F> {
             let references = rows.iter().filter_map(|row| row.child).collect();
             let mut object = FinalizedObject::new(page_role::<F>(page.level), canonical)?
                 .with_references(references);
-            if let Some(origin) = page.origin {
+            if let Some(origin) = page.origin.or(page.hint) {
                 let mut predecessors = crate::object::AdvisoryPredecessors::new();
                 let _ = predecessors.push(
                     origin,

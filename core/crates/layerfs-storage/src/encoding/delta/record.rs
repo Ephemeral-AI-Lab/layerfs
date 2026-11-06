@@ -304,8 +304,8 @@ fn parse_framed(record: &[u8]) -> StorageResult<ParsedRecord<'_>> {
 ///
 /// An `Ordinary` locator is ambiguous by grammar alone: the lane holds plain
 /// canonical objects, whose records are always FULL, pooled inode leaves, whose
-/// records are pooled ones, and inode-table branches, whose records are whole or
-/// a COPY/INSERT program. The role recorded with the locator decides, the same
+/// records are pooled ones, and program pages (inode-table branches, directory
+/// and extent pages), whose records are whole or a COPY/INSERT program. The role recorded with the locator decides, the same
 /// way it decides for the decoder.
 pub fn stored_base(
     lane: PackLane,
@@ -319,9 +319,10 @@ pub fn stored_base(
             crate::encoding::pool::leaf::PooledRecord::Delta { base, .. } => Some(base),
         });
     }
-    if lane == PackLane::Ordinary && role == ObjectRole::InodeBranch {
-        // An inode-table branch may be stored against its predecessor (#360
-        // item 3); its record keeps that base, as a pooled leaf's does.
+    if lane == PackLane::Ordinary && crate::encoding::pool::branch::is_program_role(role) {
+        // An inode-table branch (#360 item 3) or a directory or extent page (#92)
+        // may be stored against its predecessor; its record keeps that base, as a
+        // pooled leaf's does.
         return crate::encoding::pool::branch::stored_base(record);
     }
     Ok(parse(lane, record, canonical_length)?.base)
